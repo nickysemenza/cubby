@@ -30,14 +30,14 @@ function CollectionDetailLoading() {
   return (
     <Stack gap="lg" aria-label="Loading Collection">
       <Skeleton className="h-10 w-full" />
-      <div className="grid gap-px border border-border bg-border sm:grid-cols-2 xl:grid-cols-3">
-        {[0, 1, 2].map((key) => (
+      <div className="grid gap-px border border-border bg-border sm:grid-cols-2">
+        {[0, 1].map((key) => (
           <Skeleton key={key} className="h-20" />
         ))}
       </div>
-      <div className="space-y-px border-border border-y bg-border">
+      <div className="border-border border-y">
         {[0, 1, 2, 3].map((key) => (
-          <Skeleton key={key} className="h-[4.5rem]" />
+          <Skeleton key={key} className="h-24 border-border border-b" />
         ))}
       </div>
     </Stack>
@@ -117,7 +117,7 @@ export function CollectionDetailPage({
           </span>
         </div>
         {data.roots.length ? (
-          <div className="grid gap-px border border-border bg-border sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-px border border-border bg-border sm:grid-cols-2">
             {data.roots.map((root) => {
               const parentPath = root.path.slice(0, -1).join(" / ");
               return (
@@ -202,107 +202,117 @@ export function CollectionDetailPage({
 
         {data.products.length ? (
           <div className="border-border border-y">
-            {data.products.map((product) => (
-              <article
-                key={product.id}
-                className="grid grid-cols-[3.5rem_minmax(0,1fr)] gap-x-2 gap-y-2 border-border border-b p-2 transition-colors last:border-b-0 hover:bg-muted/30 lg:grid-cols-[3.5rem_minmax(12rem,0.85fr)_minmax(14rem,1.15fr)_minmax(10rem,0.8fr)] lg:items-center"
-              >
-                <EntityCover
-                  images={
-                    product.imageUrl
-                      ? [{ id: product.id, url: product.imageUrl }]
-                      : []
-                  }
-                  entity="product"
-                  alt={`${product.name} cover`}
-                  size={56}
-                  preview
-                  lazyPreview
-                  className="border border-border bg-card"
-                />
+            <div className="hidden grid-cols-[3.5rem_minmax(12rem,0.85fr)_minmax(14rem,1.15fr)_minmax(10rem,0.8fr)] items-center gap-x-2 border-border border-b bg-card px-2 py-1 font-mono text-2xs text-muted-foreground uppercase tracking-wider lg:grid">
+              <span aria-hidden />
+              <span>Product</span>
+              <span>Current locations</span>
+              <span>Purchase history</span>
+            </div>
+            <div>
+              {data.products.map((product) => (
+                <article
+                  key={product.id}
+                  className="grid grid-cols-[3.5rem_minmax(0,1fr)] gap-x-2 gap-y-2 border-border border-b p-2 transition-colors last:border-b-0 odd:bg-card hover:bg-muted/30 lg:grid-cols-[3.5rem_minmax(12rem,0.85fr)_minmax(14rem,1.15fr)_minmax(10rem,0.8fr)] lg:items-center"
+                >
+                  <EntityCover
+                    images={
+                      product.imageUrl
+                        ? [{ id: product.id, url: product.imageUrl }]
+                        : []
+                    }
+                    entity="product"
+                    alt={`${product.name} cover`}
+                    size={56}
+                    preview
+                    lazyPreview
+                    className="border border-border bg-card"
+                  />
 
-                <div className="min-w-0 self-center">
-                  <Link
-                    to="/products/$shortcode"
-                    params={{ shortcode: product.id }}
-                    title={product.name}
-                    className="line-clamp-2 font-medium leading-tight hover:text-primary hover:underline"
-                  >
-                    {product.name}
-                  </Link>
-                  {product.manufacturer && (
-                    <p className="mt-1 truncate text-muted-foreground text-xs">
-                      {product.manufacturer}
-                    </p>
-                  )}
-                  <div className="mt-1 flex flex-wrap items-center gap-1">
-                    <CopyableShortcode code={product.id} />
-                    {product.direct && <Badge variant="outline">Direct</Badge>}
-                    {product.inherited && (
-                      <Badge variant="secondary">From location</Badge>
+                  <div className="min-w-0 self-center">
+                    <Link
+                      to="/products/$shortcode"
+                      params={{ shortcode: product.id }}
+                      title={product.name}
+                      className="line-clamp-2 font-medium leading-tight hover:text-primary hover:underline"
+                    >
+                      {product.name}
+                    </Link>
+                    {product.manufacturer && (
+                      <p className="mt-1 truncate text-muted-foreground text-xs">
+                        {product.manufacturer}
+                      </p>
                     )}
-                  </div>
-                </div>
-
-                <div className="col-start-2 min-w-0 lg:col-start-auto">
-                  <p className="mb-1 font-mono text-2xs text-muted-foreground uppercase tracking-wider">
-                    Current placements
-                  </p>
-                  {product.placements.length ? (
-                    <div className="flex flex-col items-start gap-1">
-                      {product.placements.slice(0, 2).map((placement) => (
-                        <Link
-                          key={placement.id}
-                          to="/locations/$shortcode"
-                          params={{ shortcode: placement.id }}
-                          title={placement.path.join(" / ")}
-                          className="inline-flex min-w-0 items-center gap-1 text-xs hover:text-primary hover:underline"
-                        >
-                          <MapPin
-                            className="size-3 shrink-0 text-muted-foreground"
-                            aria-hidden
-                          />
-                          <span className="line-clamp-1">
-                            {placement.path.join(" / ")}
-                          </span>
-                        </Link>
-                      ))}
-                      {product.placements.length > 2 && (
-                        <ProductPlacementsPopover
-                          placements={product.placements}
-                        />
+                    <div className="mt-1 flex flex-wrap items-center gap-1">
+                      <CopyableShortcode code={product.id} />
+                      {product.direct && (
+                        <Badge variant="outline">Direct</Badge>
+                      )}
+                      {product.inherited && (
+                        <Badge variant="secondary">From location</Badge>
                       )}
                     </div>
-                  ) : (
-                    <p className="text-muted-foreground text-xs">
-                      Not currently placed
-                    </p>
-                  )}
-                </div>
+                  </div>
 
-                <div className="col-start-2 min-w-0 lg:col-start-auto">
-                  <p className="mb-1 font-mono text-2xs text-muted-foreground uppercase tracking-wider">
-                    Purchase provenance
-                  </p>
-                  <ProductPurchasesPopover purchases={product.purchases} />
-                  {product.purchases.some(
-                    (purchase) => purchase.trades.length > 0,
-                  ) && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {[
-                        ...new Set(
-                          product.purchases.flatMap(
-                            (purchase) => purchase.trades,
+                  <div className="col-start-2 min-w-0 lg:col-start-auto">
+                    <p className="mb-1 font-mono text-2xs text-muted-foreground uppercase tracking-wider lg:sr-only">
+                      Current locations
+                    </p>
+                    {product.placements.length ? (
+                      <div className="flex flex-col items-start gap-1">
+                        {product.placements.slice(0, 2).map((placement) => (
+                          <Link
+                            key={placement.id}
+                            to="/locations/$shortcode"
+                            params={{ shortcode: placement.id }}
+                            title={placement.path.join(" / ")}
+                            className="inline-flex min-w-0 items-center gap-1 text-xs hover:text-primary hover:underline"
+                          >
+                            <MapPin
+                              className="size-3 shrink-0 text-muted-foreground"
+                              aria-hidden
+                            />
+                            <span className="line-clamp-1">
+                              {placement.path.join(" / ")}
+                            </span>
+                          </Link>
+                        ))}
+                        {product.placements.length > 2 && (
+                          <ProductPlacementsPopover
+                            placements={product.placements}
+                          />
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground text-xs">
+                        Not currently placed
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="col-start-2 min-w-0 lg:col-start-auto">
+                    <p className="mb-1 font-mono text-2xs text-muted-foreground uppercase tracking-wider lg:sr-only">
+                      Purchase history
+                    </p>
+                    <ProductPurchasesPopover purchases={product.purchases} />
+                    {product.purchases.some(
+                      (purchase) => purchase.trades.length > 0,
+                    ) && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {[
+                          ...new Set(
+                            product.purchases.flatMap(
+                              (purchase) => purchase.trades,
+                            ),
                           ),
-                        ),
-                      ].map((trade) => (
-                        <TradeBadge key={trade} trade={trade} />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </article>
-            ))}
+                        ].map((trade) => (
+                          <TradeBadge key={trade} trade={trade} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </article>
+              ))}
+            </div>
           </div>
         ) : (
           <div className="border-border border-y py-6 text-center">

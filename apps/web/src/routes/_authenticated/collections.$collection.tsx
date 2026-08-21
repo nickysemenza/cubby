@@ -36,7 +36,7 @@ function CollectionRoute() {
     <Page
       title={formatCollectionLabel(collection)}
       eyebrow="Collections"
-      layout="full"
+      layout="contained"
     >
       <CollectionDetailPage
         collection={collection}
