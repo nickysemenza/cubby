@@ -598,6 +598,31 @@ async function runManifestHandlers(
   return batches;
 }
 
+/**
+ * Problem counts are a derived, stale-safe snapshot. A failed refresh enqueue
+ * must not turn an already-committed entity mutation into an apparent failure;
+ * the daily safety refresh remains the repair path.
+ */
+async function enqueueProblemCountsRefreshBestEffort(
+  db: Database,
+  source: string,
+): Promise<BackgroundBatchRef | null> {
+  try {
+    const dispatched = await dispatchProblemCountsRefresh(
+      db,
+      "mutation",
+      source,
+    );
+    return dispatched?.batch ?? null;
+  } catch (error) {
+    console.error("problems.counts.refresh.enqueue.failed", {
+      source,
+      error,
+    });
+    return null;
+  }
+}
+
 export async function runMutationSideEffects(
   db: Database,
   event: MutationSideEffectEvent,
@@ -612,12 +637,11 @@ export async function runMutationSideEffects(
     );
     batches.push(dispatched.batch);
   }
-  const problemCounts = await dispatchProblemCountsRefresh(
+  const problemCounts = await enqueueProblemCountsRefreshBestEffort(
     db,
-    "mutation",
     parsed.source,
   );
-  if (problemCounts) batches.push(problemCounts.batch);
+  if (problemCounts) batches.push(problemCounts);
   return batches;
 }
 
@@ -682,12 +706,11 @@ export async function runMutationSideEffectsForEntities(
     batches.push(dispatched.batch);
   }
   if (parsed.length > 0) {
-    const problemCounts = await dispatchProblemCountsRefresh(
+    const problemCounts = await enqueueProblemCountsRefreshBestEffort(
       db,
-      "mutation",
       parsed[0]?.source ?? "mutation.bulk",
     );
-    if (problemCounts) batches.push(problemCounts.batch);
+    if (problemCounts) batches.push(problemCounts);
   }
   return batches;
 }
