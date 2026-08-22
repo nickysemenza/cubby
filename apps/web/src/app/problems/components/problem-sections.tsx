@@ -30,6 +30,7 @@ import {
   ListFilter,
   type LucideIcon,
   Network,
+  Scale,
   ScanBarcode,
   Sparkles,
   Store,
@@ -647,6 +648,23 @@ function renderUnitCoverageItem(item: UnitCoverageItem): RenderedProblemItem {
     };
   }
 
+  if (item.kind === "titleSize") {
+    // Show the exact substring the proposal came from. The reader is being
+    // asked to confirm a machine reading of their own product name, so the
+    // evidence belongs on the card rather than one click away — and a wrong
+    // parse is only obvious next to the words it came from.
+    return {
+      ...base,
+      badges: [
+        <Badge key="proposed" variant="outline" className="w-fit font-mono">
+          {`1 each = ${item.proposed.value} ${item.proposed.unit}`}
+        </Badge>,
+      ],
+      details: [`Read from the title: “${item.token}”`],
+      inlineFix: inlineFix("Add this size"),
+    };
+  }
+
   if (item.kind === "none" && item.isIngredient) {
     // Bare ingredient product → the workbench creates/links it properly.
     return {
@@ -1049,6 +1067,29 @@ const DECLARED_SECTIONS = [
       "Products that can't fully convert between their units (including to price). Link a USDA food, set a price, or bridge disconnected groups.",
     emptyMessage: "All products can fully convert between their units.",
     groupBy: (items) => groupBy(items, unitCoverageGroup),
+    renderItem: renderUnitCoverageItem,
+  }),
+  section({
+    id: "title-derived-sizes",
+    label: "Size in the title",
+    // Its own section rather than a fourth kind inside "Unit coverage", even
+    // though it shares that section's item type and inline fix: these rows are
+    // classed `coverage` and those three are `defect`, and a section must
+    // render one class — mixing them puts rows in a group that contradicts how
+    // they are counted.
+    select: (p) =>
+      buildUnitCoverageItems([], [], [], p.productsWithTitleDerivableSize),
+    problemKeys: ["productsWithTitleDerivableSize"],
+    totalKey: "productsWithTitleDerivableSize",
+    // No meter: the denominator would be "every product that could ever state a
+    // size in its name", which is not a knowable population.
+    coverage: { keys: ["productsWithTitleDerivableSize"] },
+    icon: Scale,
+    title: "Sizes stated in the title but not recorded",
+    description:
+      "The product name already says how big it is, but nothing records it — so no comparable unit price can be shown. Check each one describes ONE unit before accepting: titles carrying a pack count are excluded, because they read 6-12x too small.",
+    emptyMessage:
+      "Every product that states a size in its name has it recorded.",
     renderItem: renderUnitCoverageItem,
   }),
   section({

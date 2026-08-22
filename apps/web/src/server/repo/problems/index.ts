@@ -78,6 +78,7 @@ export {
   findDuplicateProductIdentities,
   findLinkedProductIds,
   findOrphanedProducts,
+  findProductsWithoutUnitMappings,
   findProductsWithUpcGaps,
   findToolsUsedOutsideOwnership,
   loadProductsForCoverage,

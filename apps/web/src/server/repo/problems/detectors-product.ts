@@ -38,6 +38,7 @@ import {
 import { uniq } from "es-toolkit";
 import { householdLocalDate } from "~/lib/household-date";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
+import { sizeUnitAlternation } from "~/lib/title-unit-size";
 import { toolTimelineConflict, UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import type { Database, DrizzleClient } from "~/server/db";
@@ -768,6 +769,93 @@ export const loadProductsForCoverage = async (
     ...row,
     price: pricing.get(row.id)?.effectivePrice ?? null,
   }));
+};
+
+/**
+ * DB-only prefilter for the title-derived unit-size proposals: live, non-misc
+ * products with NO conversion edge whose name plausibly states a size.
+ *
+ * ⚠️ THE SIZE PREDICATE IS LOAD-BEARING FOR COST, NOT FOR CORRECTNESS. Without
+ * it this hands every mapping-less product (~5,500 rows) to JS to be parsed —
+ * the exact shape that took the Worker down once: `findStaleIngredientParses`
+ * re-parsed ~4,000 recipe lines through WASM on every Problems load and
+ * produced p99 CPU ~38s with OOM kills, and the post-mortem found the heap
+ * pressure was **JS-side row marshalling, not the WASM crate**. Filtering in
+ * Postgres cuts the crossing to ~1,500.
+ *
+ * ⚠️ It MUST stay a strict SUPERSET of `proposeSizeFromTitle`'s own matching.
+ * It exists only to avoid hauling obviously-sizeless rows across the boundary;
+ * `proposeSizeFromTitle` remains the sole authority on what a title says and
+ * re-checks every row this returns. Broadening it is always safe; narrowing it
+ * silently hides candidates.
+ *
+ * Same repo/service split as `findProductsWithUpcGaps`: the repo identifies
+ * candidates, the service builds the proposal.
+ */
+export const findProductsWithoutUnitMappings = async (
+  db: Database,
+): Promise<
+  {
+    shortcode: ProductShortcode;
+    name: string;
+    manufacturer: string;
+    category: string | null;
+  }[]
+> => {
+  const dbClient = getDb(db);
+  const rows = await dbClient
+    .select({
+      shortcode: product.shortcode,
+      name: product.name,
+      manufacturer: product.manufacturer,
+      category: product.category,
+    })
+    .from(product)
+    .where(
+      and(
+        notDeleted(product),
+        // The unit spellings come from the GRAMMAR (`wasm.size_unit_aliases()`,
+        // via `sizeUnitAlternation`), not from a list kept here. When they were
+        // hand-copied this predicate carried singular spellings only, and
+        // Postgres's `\M` word-end anchor then rejected "5 pounds" on the
+        // trailing "s" — rows the parser would have accepted never reached it.
+        //
+        // Matching the parser's vocabulary exactly is what keeps this a
+        // superset: `~*` is case-insensitive here, while the parser narrows
+        // single-letter units to lowercase. Looser than the parser in every
+        // other respect too — no fraction, pack, multiplier or compatibility
+        // exclusion and no unit-kind check. All of those are the refinement's
+        // job.
+        //
+        // ⚠️ `[[:space:]]*`, not `[ ]?`. The parser separates the digits from
+        // the unit with `\s*` — ANY run of ANY whitespace — so the narrower
+        // form dropped `"Bag of Sugar, 5  lb"` (two spaces) and any tab-
+        // separated title: accepted by `proposeSizeFromTitle`, never
+        // shortlisted, therefore never proposed. Same silent-narrowing failure
+        // as the singular-spellings bug above, one character wide.
+        sql.raw(
+          `"Product"."name" ~* '[0-9][[:space:]]*(${sizeUnitAlternation()})\\M'`,
+        ),
+        notExists(
+          dbClient
+            .select({ id: sql`1` })
+            .from(productUnitMappings)
+            .where(
+              and(
+                eq(productUnitMappings.productId, product.id),
+                notDeleted(productUnitMappings),
+              ),
+            ),
+        ),
+      ),
+    );
+
+  return rows
+    .filter((row) => !isMiscProduct(row.name))
+    .map((row) => ({
+      ...row,
+      shortcode: unsafeProductShortcode(row.shortcode),
+    }));
 };
 
 // Ids of an ingredient's non-deleted, linked products. Used by the

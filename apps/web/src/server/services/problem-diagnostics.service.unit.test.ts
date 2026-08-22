@@ -21,6 +21,7 @@ describe("Problem diagnostic adapters", () => {
       "duplicate-financial-account-source-aliases",
       "invalid-financial-json",
       "incomplete-statement-imports",
+      "title-derivable-unit-size",
       "project-date-window-drift",
     ] as const satisfies readonly DiagnosticKey[];
 

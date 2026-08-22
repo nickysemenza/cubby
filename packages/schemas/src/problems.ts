@@ -264,6 +264,24 @@ export const productWithoutMappingsSchema = z.object({
   ingredientId: ingredientShortcode.nullable(),
 });
 
+/**
+ * A product whose own NAME states a pack size it has no unit mapping for —
+ * "Bagged Yellow Onions, 32 OZ" with no `1 each = 32 oz` edge, so it can show
+ * no comparable unit price.
+ *
+ * `proposed` is the parsed amount, pre-computed server-side by the Rust
+ * grammar, and `token` is the exact substring it came from so the card can show
+ * its own evidence rather than asking the reader to trust it. Accepting is a
+ * human act: titles that carry a pack count are refused upstream precisely
+ * because they parse to a per-each size 6-12x too small.
+ */
+export const productWithTitleDerivableSizeSchema = z.object({
+  ...productProblemFields,
+  category: z.string().nullable(),
+  proposed: z.object({ value: z.number(), unit: z.string() }),
+  token: z.string(),
+});
+
 export const ingredientWithPartialCoverageSchema = z.object({
   ...productProblemFields,
   coverage: z.object(coverageFields),
@@ -884,9 +902,17 @@ export const problemsFastSchema = z.object({
 });
 
 // USDA-coverage detectors — share one product scan + USDA enrichment.
+//
+// `productsWithTitleDerivableSize` needs no USDA and no network, but it does
+// run WASM per candidate, which is exactly what the `fast` lane's "DB-only,
+// no WASM/network" contract excludes. It lives here rather than there because
+// this is the lane that already tolerates a per-product WASM call, and because
+// a WASM sweep on the cheap hot path is the specific mistake that took the
+// Worker down once (see the parse-sweep note above `sectionTotalsSchema`).
 const problemsCoverageShape = {
   ingredientsWithPartialCoverage: z.array(ingredientWithPartialCoverageSchema),
   productsWithIslandedMappings: z.array(productWithIslandedMappingsSchema),
+  productsWithTitleDerivableSize: z.array(productWithTitleDerivableSizeSchema),
 };
 
 const conversionCoverageFreshnessSchema = z.object({
@@ -1161,6 +1187,11 @@ export const PROBLEM_CLASS = {
   // deleting the edge would bury the real defect.
   toolsUsedOutsideOwnership: "defect",
   productsWithoutMappings: "defect",
+  // COVERAGE, not defect, and the distinction is load-bearing: only `defect`
+  // rows reach `totalProblems` and the navbar badge, and there are ~1,400 of
+  // these. It is also genuinely never-zero — new products keep arriving with a
+  // size in the title — which is the definition of coverage here.
+  productsWithTitleDerivableSize: "coverage",
   unusedIngredientsWithProduct: "defect",
   unusedIngredientsWithoutProduct: "defect",
   locationsWithoutAiDescription: "defect",
@@ -1465,6 +1496,9 @@ export type DuplicateVendor = z.infer<typeof duplicateVendorSchema>;
 export type VendorWithoutLogo = z.infer<typeof vendorWithoutLogoSchema>;
 export type ProductWithIslandedMappings = z.infer<
   typeof productWithIslandedMappingsSchema
+>;
+export type ProductWithTitleDerivableSize = z.infer<
+  typeof productWithTitleDerivableSizeSchema
 >;
 export type LocationWithoutAiDescription = z.infer<
   typeof locationWithoutAiDescriptionSchema

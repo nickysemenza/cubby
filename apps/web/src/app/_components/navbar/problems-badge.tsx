@@ -47,6 +47,7 @@ const PROBLEM_LABELS: Record<
   unusedIngredientsWithProduct: (n) => `${n} unused (has product)`,
   unusedIngredientsWithoutProduct: (n) => `${n} unused`,
   productsWithIslandedMappings: (n) => pl(n, "islanded mapping"),
+  productsWithTitleDerivableSize: (n) => `${n} with a size in the title`,
   emptyLocations: (n) => pl(n, "empty location"),
   staleLocations: (n) => `${n} overdue for a recount`,
   neverVerifiedInventory: (n) => pl(n, "never-verified item"),

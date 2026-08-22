@@ -79,7 +79,93 @@ export function UnitCoverageInlineFix({
     .with({ kind: "none", isIngredient: false }, (i) => (
       <PriceFix id={i.id} close={close} />
     ))
+    .with({ kind: "titleSize" }, (i) => (
+      <TitleSizeFix
+        id={i.id}
+        proposed={i.proposed}
+        token={i.token}
+        close={close}
+      />
+    ))
     .otherwise(() => null);
+}
+
+/**
+ * Accept a size the product's own title already states.
+ *
+ * The amount is pre-parsed server-side by the Rust grammar, so this form only
+ * confirms it — but it stays EDITABLE, because the one thing a human can see
+ * that the parser cannot is whether the number belongs to this product at all.
+ * Titles carrying a pack count are refused upstream (they parse 6-12x too
+ * small); this is the last line for the rest.
+ */
+function TitleSizeFix({
+  id,
+  proposed,
+  token,
+  close,
+}: {
+  id: string;
+  proposed: { value: number; unit: string };
+  token: string;
+  close: () => void;
+}) {
+  const api = useTRPC();
+  const [value, setValue] = useState(String(proposed.value));
+  const { data: product } = useQuery(api.product.getByID.queryOptions({ id }));
+  const update = useProblemCardMutation({
+    mutationFn: api.product.update.mutationOptions,
+    success: "Size saved",
+    invalidateKeys: [
+      ...productMutationInvalidateKeys,
+      api.product.getByID.queryKey({ id }),
+    ],
+    onSuccess: close,
+  });
+
+  const save = () => {
+    const parsed = parsePositive(value);
+    if (parsed == null) {
+      toast.error("Enter a size greater than 0");
+      return;
+    }
+    // `product.update` REPLACES the whole mapping set, so the existing edges
+    // have to be resent — same trap `DisconnectedFix` documents above.
+    const merged = withExistingMappings(product, [
+      {
+        a: { value: 1, unit: "each" },
+        b: { value: parsed, unit: proposed.unit },
+        source: `title: "${token}"`,
+      },
+    ]);
+    if (!merged) {
+      toast.error("Couldn't load current conversions — try again");
+      return;
+    }
+    update.mutate({ id, data: { unitMappings: merged } });
+  };
+
+  return (
+    <Stack gap="sm">
+      <p className="text-muted-foreground text-xs">
+        Read “{token}” from the product name. Check it describes one unit of
+        this product, not a multi-pack.
+      </p>
+      <Row align="center" gap="sm" className="text-sm">
+        <span>1 each =</span>
+        <NumberInput
+          step="0.01"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className="w-24"
+        />
+        <span className="font-mono">{proposed.unit}</span>
+        <Button size="sm" onClick={save} disabled={update.isPending}>
+          Save size
+        </Button>
+      </Row>
+    </Stack>
+  );
 }
 
 /** Non-food product: a price is the whole fix. */
