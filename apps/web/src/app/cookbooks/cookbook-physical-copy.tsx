@@ -202,7 +202,15 @@ function ProductPickerDialog({
           placeholder="Search products…"
         />
         <div className="max-h-96 overflow-y-auto">
-          {items.length === 0 ? (
+          {/* Pending is NOT the empty state: the search prefills with the
+              cookbook's name, so the first render always has a query in
+              flight, and showing "No products found" there reads as "this
+              book isn't on the shelf" when it simply hasn't answered yet. */}
+          {searchQuery.isPending ? (
+            <Description size="xs" className="px-2 py-6">
+              Searching…
+            </Description>
+          ) : items.length === 0 ? (
             <Empty variant="minimal" className="py-6">
               <EmptyTitle>No products found</EmptyTitle>
               <EmptyDescription>
