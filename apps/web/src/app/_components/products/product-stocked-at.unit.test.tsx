@@ -62,9 +62,15 @@ vi.mock("~/app/_components/hooks/useClientEntityList", () => ({
     mocks.rows.current = opts.data;
     mocks.rowIsEntity.current = opts.rowIsEntity ?? null;
     return {
-      table: { getRowModel: () => ({ rows: [] }), resetRowSelection: vi.fn() },
-      bulkActionBar: null,
-      deleteDialog: null,
+      workbench: {
+        entity: "inventory",
+        table: {
+          getRowModel: () => ({ rows: [] }),
+          resetRowSelection: vi.fn(),
+        },
+        bulkActionBar: null,
+        deleteDialog: null,
+      },
       requestDelete: vi.fn(),
     };
   },

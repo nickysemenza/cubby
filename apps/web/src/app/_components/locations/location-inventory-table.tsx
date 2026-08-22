@@ -19,8 +19,8 @@ import {
   createEditableAmountColumn,
   createSingleEntityInlineLinkColumn,
 } from "../data-table/columnHelpers";
+import { ListWorkbench } from "../data-table/ListWorkbench";
 import type { ShelfView } from "../data-table/shelf";
-import RTable from "../data-table/Table";
 import { createCubbyColumnHelper } from "../data-table/table-features";
 import { useEntityList } from "../hooks/useEntityList";
 import { useUpdateMutation } from "../hooks/useUpdateMutation";
@@ -235,7 +235,7 @@ export function LocationInventoryTable({
       [api, locationId, placement],
     );
 
-  const { table, data, isLoading, error, bulkActionBar } = useEntityList<
+  const { workbench, data } = useEntityList<
     InventoryItem,
     Record<string, never>
   >({
@@ -279,7 +279,7 @@ export function LocationInventoryTable({
     bulkActions,
   });
 
-  const items = table.getRowModel().rows.map((r) => r.original);
+  const items = workbench.table.getRowModel().rows.map((r) => r.original);
   const productIds = useMemo(() => data.map((item) => item.product.id), [data]);
 
   useEffect(() => {
@@ -291,16 +291,13 @@ export function LocationInventoryTable({
   return (
     <ProductImageSummariesProvider productIds={productIds}>
       {view === "shelf" ? (
-        <InventoryShelf items={items} isLoading={isLoading} error={error} />
-      ) : (
-        <RTable
-          table={table}
-          isLoading={isLoading}
-          error={error}
-          entity="inventory"
-          bulkActionBar={bulkActionBar}
-          embedded
+        <InventoryShelf
+          items={items}
+          isLoading={workbench.isLoading}
+          error={workbench.error}
         />
+      ) : (
+        <ListWorkbench model={workbench} mode="embedded" />
       )}
 
       {/* Move dialog */}
@@ -313,7 +310,7 @@ export function LocationInventoryTable({
         sourceLocationId={locationId}
         onSuccess={() => {
           setDialogState({ type: null, items: [] });
-          table.resetRowSelection();
+          workbench.table.resetRowSelection();
         }}
       />
 
@@ -337,7 +334,7 @@ export function LocationInventoryTable({
         items={dialogState.items}
         onSuccess={() => {
           setDialogState({ type: null, items: [] });
-          table.resetRowSelection();
+          workbench.table.resetRowSelection();
         }}
       />
     </ProductImageSummariesProvider>

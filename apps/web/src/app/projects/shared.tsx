@@ -50,6 +50,7 @@ import {
 import { EditableCell } from "~/app/_components/data-table/editable-cell";
 import { EditableEntityCell } from "~/app/_components/data-table/editable-entity-cell";
 import { InventoryEntriesCell } from "~/app/_components/data-table/inventory-entries-cell";
+import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
 import RTable from "~/app/_components/data-table/Table";
 import {
@@ -1653,18 +1654,7 @@ export function ProjectTable({
   );
 
   const tableStateOptions = useMemo(() => ({ initialSort: "startDate" }), []);
-  const {
-    table,
-    data,
-    totalCount,
-    bulkActionBar,
-    deleteDialog,
-    infiniteScroll,
-    refreshControls,
-    isLoading,
-    error,
-    timing,
-  } = useEntityList({
+  const { workbench, data, totalCount } = useEntityList({
     entity: "project",
     queryOptions: isTree
       ? api.project.tree.queryOptions
@@ -1678,6 +1668,7 @@ export function ProjectTable({
     tableStateOptions,
     tree: isTree ? PROJECT_TREE_CONFIG : undefined,
   });
+  const { table } = workbench;
 
   // Hydrate covers for the loaded page/tree only. The previous project-options
   // roster pulled every project id before the table had rendered one row.
@@ -1715,18 +1706,11 @@ export function ProjectTable({
           onValueChange={onModeChange}
         />
       </Row>
-      <RTable
-        table={table}
-        isLoading={isLoading}
-        error={error}
+      <ListWorkbench
+        model={workbench}
         ariaLabel="Projects Table"
-        timing={timing}
-        entity="project"
         onRowClick={onRowClick}
         onRowHover={onRowHover}
-        bulkActionBar={bulkActionBar}
-        infiniteScroll={infiniteScroll}
-        refreshControls={refreshControls}
       />
       {isTree && (
         <TreePaginationNote
@@ -1739,7 +1723,6 @@ export function ProjectTable({
         />
       )}
       <PreviewSheet />
-      {deleteDialog}
     </div>
   );
 }

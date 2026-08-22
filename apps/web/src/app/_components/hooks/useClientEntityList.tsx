@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from "react";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
+import type { ListWorkbenchModel } from "../data-table/ListWorkbench";
 import type { CubbyRow as Row } from "../data-table/table-features";
 import { useTableConfig } from "../data-table/useTableConfig";
 import type {
@@ -59,6 +60,9 @@ interface UseClientEntityListOptions<TData extends BaseListRow>
   extends SharedListOptions<TData> {
   /** Caller-provided rows (already filtered/assembled). No query is run. */
   data: TData[];
+  /** Query state when the caller-provided rows still come from an async read. */
+  isLoading?: boolean;
+  error?: unknown;
   /** Filter definitions (optional; defaults to none). */
   filters?: FilterInput[];
   /** Opt-in expandable tree (TanStack getSubRows/getExpandedRowModel). */
@@ -82,11 +86,11 @@ interface UseClientEntityListOptions<TData extends BaseListRow>
   bulkActions?: BulkActionsConfig<TData>;
 }
 
-/** Subset of `useEntityList`'s return relevant to the client-data variant. */
-type UseClientEntityListReturn<TData extends BaseListRow> = Pick<
-  UseEntityListReturn<TData>,
-  "table" | "bulkActionBar" | "deleteDialog" | "requestDelete"
->;
+/** Client rows produce the same rendering module as server-backed lists. */
+interface UseClientEntityListReturn<TData extends BaseListRow> {
+  workbench: ListWorkbenchModel<TData>;
+  requestDelete: UseEntityListReturn<TData>["requestDelete"];
+}
 
 /**
  * Client-data sibling of `useEntityList`: renders a caller-provided `TData[]`
@@ -102,6 +106,8 @@ type UseClientEntityListReturn<TData extends BaseListRow> = Pick<
 export function useClientEntityList<TData extends BaseListRow>({
   entity,
   data,
+  isLoading,
+  error,
   columns: customColumns,
   filters,
   hiddenFilterColumns,
@@ -206,9 +212,14 @@ export function useClientEntityList<TData extends BaseListRow>({
   ) : null;
 
   return {
-    table,
-    bulkActionBar,
-    deleteDialog: presentationState.deleteDialog,
+    workbench: {
+      entity,
+      table,
+      isLoading,
+      error,
+      bulkActionBar,
+      deleteDialog: presentationState.deleteDialog,
+    },
     requestDelete: presentationState.requestDelete,
   };
 }

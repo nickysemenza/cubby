@@ -14,11 +14,11 @@ import {
   summarizeListState,
 } from "~/entities/filters";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
-import type { QueryTiming } from "~/lib/query-timing";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
 import type { RowLinkResolver } from "../data-table/columnHelpers";
+import type { ServerListWorkbenchModel } from "../data-table/ListWorkbench";
 import { problemWorklistState } from "../data-table/problem-worklist";
-import type { CubbyColumnDef, CubbyTable } from "../data-table/table-features";
+import type { CubbyColumnDef } from "../data-table/table-features";
 import type { GroupConfig } from "../data-table/useGroupedList";
 import { useTableConfig } from "../data-table/useTableConfig";
 import type {
@@ -30,10 +30,7 @@ import {
   useEntityListPresentation,
   useEntityListPresentationState,
 } from "./useEntityListPresentation";
-import {
-  type InfiniteScrollControls,
-  useInfiniteTableList,
-} from "./useInfiniteTableList";
+import { useInfiniteTableList } from "./useInfiniteTableList";
 import { ListBulkActionBar } from "./useListBulkActions";
 import type { TRPCQueryOptionsFn } from "./usePaginatedTableCore";
 import type { FilterInput } from "./useStandardColumns";
@@ -214,7 +211,8 @@ export interface UseEntityListReturn<
   TFilters = unknown,
   TRow = TData,
 > {
-  table: CubbyTable<TData>;
+  /** Complete page/embedded rendering model consumed by ListWorkbench. */
+  workbench: ServerListWorkbenchModel<TData>;
   /**
    * The filter object the list query is running with (manifest-derived state
    * plus `scopeFilters`). For a page that must call a second procedure over
@@ -229,26 +227,8 @@ export interface UseEntityListReturn<
    * the table renders.
    */
   data: TRow[];
-  isLoading: boolean;
-  error: Error | null;
-  timing: QueryTiming;
-  bulkActionBar: ReactNode | null;
-  deleteDialog: ReactNode | null;
   /** Opens the delete confirmation for one item (e.g. mobile swipe actions) */
   requestDelete: (item: TData) => void;
-  /** Infinite scroll controls for the server-backed list. */
-  infiniteScroll: InfiniteScrollControls;
-  /** Pull-to-refresh controls for mobile views */
-  refreshControls: {
-    onRefresh: () => Promise<void>;
-    isRefreshing: boolean;
-  };
-  /** Whether grouping is currently active */
-  grouped: boolean;
-  /** Toggle grouping on/off */
-  onGroupedChange: (value: boolean) => void;
-  /** Group config (passed through for Table.tsx) */
-  groupConfig?: GroupConfig<TData>;
   /**
    * The true server-side filtered total — in infinite mode this is the
    * server total, NOT the number of rows loaded/accumulated so far (`data.length`).
@@ -553,21 +533,24 @@ export function useEntityList<
   ) : null;
 
   return {
-    table,
+    workbench: {
+      entity,
+      table,
+      isLoading,
+      error,
+      timing,
+      bulkActionBar,
+      deleteDialog: presentationState.deleteDialog,
+      infiniteScroll: infiniteResult.infiniteScroll,
+      refreshControls,
+      grouped,
+      onGroupedChange,
+      groupConfig,
+    },
     currentFilters,
     mappingsMap,
     data,
-    isLoading,
-    error,
-    timing,
-    bulkActionBar,
-    deleteDialog: presentationState.deleteDialog,
     requestDelete: presentationState.requestDelete,
-    infiniteScroll: infiniteResult.infiniteScroll,
-    refreshControls,
-    grouped,
-    onGroupedChange,
-    groupConfig,
     // Withhold until the first response lands — the underlying query hooks
     // default totalCount to 0 pre-response, which would otherwise flash
     // "0 …" in the eyebrow before the real count arrives.

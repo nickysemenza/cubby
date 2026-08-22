@@ -9,6 +9,7 @@ import {
   createCurrencyColumn,
   createTimestampColumn,
 } from "~/app/_components/data-table/columnHelpers";
+import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
 import RTable from "~/app/_components/data-table/Table";
 import {
@@ -155,25 +156,24 @@ export function ProductProjectUses({ productId }: { productId: string }) {
     [helper, category],
   );
 
-  const { table, bulkActionBar, deleteDialog } =
-    useClientEntityList<ProjectUseRow>({
-      entity: "project",
-      data: rows,
-      columns,
-      tableStateOptions: EMBEDDED_TABLE_STATE,
-      layoutKey: "project:product-uses",
-      initialColumnVisibility: HIDDEN_RELATED_COLUMNS,
-      extraActions: (row) => (
-        <VerbMenuItem
-          verb="removeFromProject"
-          disabled={detach.isPending}
-          onSelect={(event) => {
-            event.stopPropagation();
-            detach.mutate({ projectId: row.id, productId, used: false });
-          }}
-        />
-      ),
-    });
+  const { workbench } = useClientEntityList<ProjectUseRow>({
+    entity: "project",
+    data: rows,
+    columns,
+    tableStateOptions: EMBEDDED_TABLE_STATE,
+    layoutKey: "project:product-uses",
+    initialColumnVisibility: HIDDEN_RELATED_COLUMNS,
+    extraActions: (row) => (
+      <VerbMenuItem
+        verb="removeFromProject"
+        disabled={detach.isPending}
+        onSelect={(event) => {
+          event.stopPropagation();
+          detach.mutate({ projectId: row.id, productId, used: false });
+        }}
+      />
+    ),
+  });
 
   if (query.isPending) {
     return <Description>Loading project uses…</Description>;
@@ -233,14 +233,11 @@ export function ProductProjectUses({ productId }: { productId: string }) {
         <div className="ml-auto">{editButton}</div>
       </Row>
 
-      <RTable
-        table={table}
-        entity="project"
+      <ListWorkbench
+        model={workbench}
         ariaLabel="Projects this was used on"
-        embedded
-        bulkActionBar={bulkActionBar}
+        mode="embedded"
       />
-      {deleteDialog}
 
       {editing && (
         <ProjectUsesDialog

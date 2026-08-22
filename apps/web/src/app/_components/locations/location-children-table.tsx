@@ -22,7 +22,7 @@ import {
   createNameColumn,
   createSingleEntityInlineLinkColumn,
 } from "../data-table/columnHelpers";
-import RTable from "../data-table/Table";
+import { ListWorkbench } from "../data-table/ListWorkbench";
 import { createCubbyColumnHelper } from "../data-table/table-features";
 import { useClientEntityList } from "../hooks/useClientEntityList";
 import { LocationTypeLabel } from "./LocationTypeLabel";
@@ -150,9 +150,11 @@ export function LocationChildrenTable({
     [helper],
   );
 
-  const { table, bulkActionBar } = useClientEntityList<LocationTreeRow>({
+  const { workbench } = useClientEntityList<LocationTreeRow>({
     entity: "location",
     data: rows,
+    isLoading,
+    error,
     columns,
     tree: TREE_CONFIG,
     // One URL writer per page — the detail page's other embedded table does the
@@ -163,6 +165,7 @@ export function LocationChildrenTable({
     layoutKey: "location:contents",
     legacyLayoutVisibilityKey: "location:location-contents",
   });
+  const { table } = workbench;
 
   // Reveal deep matches while filtering by name, then collapse back — the
   // projects WBS tree does the same.
@@ -175,14 +178,10 @@ export function LocationChildrenTable({
   const allExpanded = table.getIsAllRowsExpanded();
 
   return (
-    <RTable
-      table={table}
-      isLoading={isLoading}
-      error={error}
+    <ListWorkbench
+      model={workbench}
       ariaLabel="Sub-locations"
-      entity="location"
-      bulkActionBar={bulkActionBar}
-      embedded
+      mode="embedded"
       actions={
         table.getCanSomeRowsExpand() ? (
           <Button
