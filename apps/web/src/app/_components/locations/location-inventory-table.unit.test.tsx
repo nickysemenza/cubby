@@ -24,11 +24,14 @@ vi.mock("../data-table/Table", () => ({
 }));
 vi.mock("../hooks/useEntityList", () => ({
   useEntityList: () => ({
-    table: { getRowModel: () => ({ rows: [] }) },
+    workbench: {
+      entity: "inventory",
+      table: { getRowModel: () => ({ rows: [] }) },
+      isLoading: false,
+      error: null,
+      bulkActionBar: null,
+    },
     data: [],
-    isLoading: false,
-    error: null,
-    bulkActionBar: null,
   }),
 }));
 vi.mock("../hooks/useUpdateMutation", () => ({

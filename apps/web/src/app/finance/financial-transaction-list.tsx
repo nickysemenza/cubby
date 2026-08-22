@@ -19,7 +19,7 @@ import {
   createTextColumn,
   renderOptionCell,
 } from "../_components/data-table/columnHelpers";
-import RTable from "../_components/data-table/Table";
+import { ListWorkbench } from "../_components/data-table/ListWorkbench";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
@@ -187,19 +187,6 @@ export function FinancialTransactionList() {
     },
   });
   return (
-    <>
-      <RTable
-        table={list.table}
-        isLoading={list.isLoading}
-        error={list.error}
-        timing={list.timing}
-        entity="financialTransaction"
-        ariaLabel="Financial transactions"
-        bulkActionBar={list.bulkActionBar}
-        infiniteScroll={list.infiniteScroll}
-        refreshControls={list.refreshControls}
-      />
-      {list.deleteDialog}
-    </>
+    <ListWorkbench model={list.workbench} ariaLabel="Financial transactions" />
   );
 }

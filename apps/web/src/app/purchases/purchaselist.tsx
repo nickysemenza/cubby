@@ -22,7 +22,7 @@ import {
   createTextColumn,
   renderOptionCell,
 } from "../_components/data-table/columnHelpers";
-import RTable from "../_components/data-table/Table";
+import { ListWorkbench } from "../_components/data-table/ListWorkbench";
 import { useDeferredFilterOptions } from "../_components/hooks/useDeferredFilterOptions";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
@@ -285,18 +285,10 @@ export function PurchaseList() {
 
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("purchase");
 
-  const {
-    table,
-    data,
-    isLoading,
-    error,
-    timing,
-    bulkActionBar,
-    deleteDialog,
-    infiniteScroll,
-    refreshControls,
-    totalCount,
-  } = useEntityList<PurchaseOut, PurchaseFilters>({
+  const { workbench, data, totalCount } = useEntityList<
+    PurchaseOut,
+    PurchaseFilters
+  >({
     entity: "purchase",
     queryOptions: api.purchase.list.queryOptions,
     filterOptions,
@@ -333,21 +325,13 @@ export function PurchaseList() {
           {formatCurrency(loadedTotal, 0)}
         </StatTile>
       </Grid>
-      <RTable
-        table={table}
-        isLoading={isLoading}
-        error={error}
+      <ListWorkbench
+        model={workbench}
         ariaLabel="Purchases Table"
-        timing={timing}
-        entity="purchase"
         onRowClick={onRowClick}
         onRowHover={onRowHover}
-        bulkActionBar={bulkActionBar}
-        infiniteScroll={infiniteScroll}
-        refreshControls={refreshControls}
       />
       <PreviewSheet />
-      {deleteDialog}
     </div>
   );
 }

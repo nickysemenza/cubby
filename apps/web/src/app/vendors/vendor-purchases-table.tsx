@@ -7,7 +7,7 @@ import {
   createTextColumn,
 } from "~/app/_components/data-table/columnHelpers";
 import { EditableCell } from "~/app/_components/data-table/editable-cell";
-import RTable from "~/app/_components/data-table/Table";
+import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
@@ -152,19 +152,13 @@ export function VendorPurchasesTable({ vendor }: { vendor: VendorOut }) {
     hiddenFilterColumns: ["vendor"],
   });
 
-  if (!list.isLoading && list.data.length === 0) return <NoneValue />;
   return (
-    <RTable
-      table={list.table}
-      isLoading={list.isLoading}
-      error={list.error}
-      timing={list.timing}
+    <ListWorkbench
+      model={list.workbench}
       ariaLabel={`${vendor.name} purchases`}
-      bulkActionBar={list.bulkActionBar}
-      embedded
+      mode="embedded"
       showColumnMenu
-      infiniteScroll={list.infiniteScroll}
-      refreshControls={list.refreshControls}
+      emptyState={<NoneValue />}
     />
   );
 }

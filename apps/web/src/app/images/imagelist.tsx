@@ -6,7 +6,7 @@ import {
   createNameColumn,
   renderOptionCell,
 } from "~/app/_components/data-table/columnHelpers";
-import RTable from "~/app/_components/data-table/Table";
+import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
@@ -114,17 +114,7 @@ export default function ImageList() {
     [columnHelper, nameEditable],
   );
 
-  const {
-    table,
-    isLoading,
-    error,
-    timing,
-    bulkActionBar,
-    deleteDialog,
-    infiniteScroll,
-    refreshControls,
-    totalCount,
-  } = useEntityList({
+  const { workbench, totalCount } = useEntityList({
     entity: "image",
     queryOptions: (params) => api.image.list.queryOptions(params),
     columns,
@@ -134,21 +124,13 @@ export default function ImageList() {
 
   return (
     <div>
-      <RTable
-        table={table}
-        isLoading={isLoading}
-        error={error}
+      <ListWorkbench
+        model={workbench}
         ariaLabel="Images Table"
-        timing={timing}
-        entity="image"
         onRowClick={onRowClick}
         onRowHover={onRowHover}
         actions={<UploadImageDialog />}
-        bulkActionBar={bulkActionBar}
-        infiniteScroll={infiniteScroll}
-        refreshControls={refreshControls}
       />
-      {deleteDialog}
       <PreviewSheet />
     </div>
   );
