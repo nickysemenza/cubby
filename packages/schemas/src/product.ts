@@ -28,6 +28,7 @@ import {
 } from "./external-id";
 import { isbn } from "./isbn";
 import {
+  cookbookShortcode,
   expenseShortcode,
   ingredientShortcode,
   inventoryShortcode,
@@ -917,6 +918,15 @@ const productLocationAncestorOut = z.object({
  * Same reasoning as `productLocationAncestorOut`: `locationPathRefOut` is
  * shared with pickers and suggestion payloads that draw no thumbnail.
  */
+// The Cookbook this product IS — a shelf copy of a book whose recipes were
+// imported. At most one; `recipeCount` is what makes the panel worth drawing.
+export const productCookbookRefOut = z.object({
+  id: cookbookShortcode,
+  name: z.string(),
+  recipeCount: z.number().int().nonnegative(),
+});
+export type ProductCookbookRefOut = z.infer<typeof productCookbookRefOut>;
+
 const productLocationRefOut = z.object({
   ...locationPathRefFields,
   displayImage: imageUrlSummary.nullable(),
@@ -1032,6 +1042,12 @@ export const productWithIngredientAndInventoryAndMappingsOut = z.object({
    * would contradict the Kit Components table while it loaded.
    */
   componentCount: z.number().int().nonnegative(),
+  /**
+   * The cookbook whose physical copy this product is, when it has one. Embedded
+   * on the detail read for the same reason `servingAsLocations` is — one query,
+   * so the section can't contradict the page around it mid-load.
+   */
+  cookbook: productCookbookRefOut.nullable(),
   ...productQuantityFields,
 });
 
@@ -1100,6 +1116,12 @@ export const productWithFoodOut = z.object({
   componentCount: z.number().int().nonnegative(),
   food: foodSummary.nullable(),
   recipeUsages: z.array(recipeUsageOut),
+  /**
+   * The cookbook whose physical copy this product is, when it has one. Embedded
+   * on the detail read for the same reason `servingAsLocations` is — one query,
+   * so the section can't contradict the page around it mid-load.
+   */
+  cookbook: productCookbookRefOut.nullable(),
   ...productQuantityFields,
 });
 export type ProductWithFoodOut = z.infer<typeof productWithFoodOut>;

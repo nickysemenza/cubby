@@ -225,6 +225,13 @@ export const ENTITY_EDGE_SEMANTICS = {
         "A Location that IS an instance of this Product — the bin, tote or rack itself, not stock held in it. Deleting the Product would leave those locations with neither a type nor an identity, since a linked location stops carrying its own `type`.",
       liveness: { kind: "must-target-live" },
     },
+    "Cookbook.productId": {
+      role: "reference",
+      label: "cookbooks",
+      description:
+        "A Cookbook whose physical copy this Product is — the book on the shelf behind the imported EPUB. Deleting the Product leaves the cookbook and its recipes intact; only the shelf link goes.",
+      liveness: { kind: "must-target-live" },
+    },
     "ProductComponent.parentProductId": {
       role: "composition",
       label: "kit components",

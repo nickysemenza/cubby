@@ -6,6 +6,7 @@ import type { DataQuality } from "@cubby/schemas/data-quality";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import type { LocationAncestorOut } from "@cubby/schemas/location";
 import type {
+  cookbook,
   ingredient,
   inventoryEntry,
   location,
@@ -75,6 +76,10 @@ export type ProductDeepDB = ProductSelect & {
   quantityLedger: QuantityLedger;
   /** Live `ProductComponent` edges where this product is the parent. */
   componentCount: number;
+  /** The cookbook this product is the physical copy of; 0 or 1 in practice. */
+  cookbooks?: Array<typeof cookbook.$inferSelect>;
+  /** Live recipes reachable through {@link cookbooks}, counted in SQL. */
+  cookbookRecipeCount: number;
 };
 
 export type ProductListDB = ProductSelect & {

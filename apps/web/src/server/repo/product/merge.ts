@@ -145,6 +145,7 @@ import { sumBy, uniq } from "es-toolkit";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
+  cookbook,
   expense,
   inventoryEntry,
   location,
@@ -253,6 +254,12 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
     effect: "move-dedupe",
     description:
       "Kits that listed a merged product as a part now list the survivor; where one kit listed both, the two quantities are summed into the survivor's row and the absorbed one is soft-deleted.",
+  },
+  "Cookbook.productId": {
+    code: "repoint-to-survivor",
+    effect: "repoint",
+    description:
+      "A Cookbook whose physical copy was merged away re-points onto the survivor, the same plain repoint as a Location. Nothing dedupes: a survivor claimed by two cookbooks is odd but not destructive, and refusing the merge over it would be worse than letting the operator unlink one.",
   },
   "ProductConversionCoverage.productId": {
     code: "discard-rebuildable-projection",
@@ -365,6 +372,8 @@ interface ProductMergeSummary {
   tasksMoved: number;
   /** Locations that ARE a merged-away product, re-pointed onto the survivor. */
   locationsMoved: number;
+  /** Cookbooks whose physical copy was merged away, re-pointed onto the survivor. */
+  cookbooksMoved: number;
   projectUsesMoved: number;
   purchaseLinksMoved: number;
   wishCandidatesMoved: number;
@@ -778,6 +787,7 @@ interface ProductMergePlan {
   expenses: ProductAssociationRow[];
   tasks: ProductAssociationRow[];
   locations: ProductAssociationRow[];
+  cookbooks: ProductAssociationRow[];
   conversionCoverage: ProductAssociationRow[];
   survivorImageIds: string[];
   aliases: string[];
@@ -950,6 +960,12 @@ async function buildProductMergePlan(
     .where(
       and(inArray(location.productId, liveLoserIds), notDeleted(location)),
     )) as ProductAssociationRow[];
+  const cookbooks = (await db
+    .select({ id: cookbook.id, productId: cookbook.productId })
+    .from(cookbook)
+    .where(
+      and(inArray(cookbook.productId, liveLoserIds), notDeleted(cookbook)),
+    )) as ProductAssociationRow[];
   const conversionCoverage = (await db
     .select({
       id: productConversionCoverage.productId,
@@ -1035,6 +1051,7 @@ async function buildProductMergePlan(
     expenses,
     tasks,
     locations,
+    cookbooks,
     conversionCoverage,
     survivorImageIds: imageRows
       .filter((row) => row.productId === input.keepId)
@@ -1446,6 +1463,14 @@ export const mergeProducts = async (
       )
       .returning({ id: location.id });
     summary.locationsMoved = movedLocations.length;
+    const movedCookbooks = await tx
+      .update(cookbook)
+      .set({ productId: keepId })
+      .where(
+        and(inArray(cookbook.productId, plan.loserIds), notDeleted(cookbook)),
+      )
+      .returning({ id: cookbook.id });
+    summary.cookbooksMoved = movedCookbooks.length;
     // Money moving between products is an AUDITED change, exactly as it is on
     // `updateExpense` and in `foldChargeInto`'s purchaseId re-point — net cost
     // and the owned/sold window are derived from these rows.
@@ -1547,6 +1572,7 @@ const emptySummary = (
   unitMappingsDiscarded: [],
   tasksMoved: 0,
   locationsMoved: 0,
+  cookbooksMoved: 0,
   projectUsesMoved: 0,
   purchaseLinksMoved: 0,
   wishCandidatesMoved: 0,
@@ -1950,6 +1976,12 @@ export const previewMergeProducts = async (
       edgeKey: "Location.productId",
       label: "locations re-pointed",
       byTargetId: byProduct(plan.locations),
+    }),
+    impact({
+      disposition: PRODUCT_MERGE_EDGE_POLICY["Cookbook.productId"],
+      edgeKey: "Cookbook.productId",
+      label: "cookbooks re-pointed",
+      byTargetId: byProduct(plan.cookbooks),
     }),
     impact({
       disposition:

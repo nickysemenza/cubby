@@ -98,6 +98,11 @@ describe("incoming-edge operation policies", () => {
  */
 describe("product retaining edges", () => {
   const RETAINING: readonly string[] = [
+    // A book Product a Cookbook claims as its physical copy. Retaining, like
+    // Location.productId, because the policy vocabulary has no set-null effect
+    // and the only non-blocking alternatives would soft-delete the cookbook
+    // along with every recipe it imported.
+    "Cookbook.productId",
     "Expense.productId",
     "InventoryEntry.productId",
     "Location.productId",

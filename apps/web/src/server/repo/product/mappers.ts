@@ -3,6 +3,7 @@ import {
   GTIN_SOURCE,
 } from "@cubby/schemas/external-id";
 import {
+  unsafeCookbookShortcode,
   unsafeIngredientShortcode,
   unsafeInventoryShortcode,
   unsafeLocationShortcode,
@@ -471,6 +472,15 @@ export const dbProductToAPI = (
     // Counts edges, not units: a 4-pack held as one edge with `quantity: 4`
     // reads as 1. Non-zero is what makes this product a kit.
     componentCount: Number(productData.componentCount ?? 0),
+    // At most one cookbook claims a given product, but `mapRelation` still
+    // drops soft-deleted rows first — a deleted cookbook must not resurrect
+    // its shelf link on the product page.
+    cookbook:
+      mapRelation(productData.cookbooks ?? [], (cb) => ({
+        id: unsafeCookbookShortcode(cb.shortcode),
+        name: cb.name,
+        recipeCount: Number(productData.cookbookRecipeCount ?? 0),
+      }))[0] ?? null,
     ...deriveProductQuantityShape(
       mappedInventoryEntry,
       productData.quantityLedger,

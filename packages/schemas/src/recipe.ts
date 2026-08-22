@@ -13,6 +13,7 @@ import {
   cookbookShortcode,
   id,
   ingredientShortcode,
+  productShortcode,
   recipeShortcode,
 } from "./identifiers";
 import { imageOut } from "./image";
@@ -228,6 +229,17 @@ export const cookbookSummary = z.object({
   // could still be added from source.
   coverUrl: z.string().nullable(),
   sourceRecipeCount: z.number().int().nonnegative(),
+  // The physical copy on the shelf, when one is linked. Deliberately thin —
+  // this summary feeds the browse gallery, the cookbook picker, the hover
+  // preview and MCP, so the detail page fetches the full Product separately
+  // rather than making every one of those carry price and inventory joins.
+  product: z
+    .object({
+      id: productShortcode,
+      name: z.string(),
+      coverUrl: z.string().nullable(),
+    })
+    .nullable(),
 });
 export type CookbookSummary = z.infer<typeof cookbookSummary>;
 

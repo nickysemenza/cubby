@@ -208,6 +208,9 @@ export const relations = {
         // `inventoryEntry`, which is stock held somewhere. Scalar columns only;
         // the detail table renders a name, a type and a link.
         locations: true,
+        // The cookbook this product is the physical copy of. At most one in
+        // practice; Drizzle models the reverse of a nullable FK as a list.
+        cookbooks: true,
         inventoryEntry: {
           with: {
             location: {
@@ -236,6 +239,13 @@ export const relations = {
       // as `productIdsWithComponents` in product/crud.ts — the filter, the
       // cell and the hero must select the same rows.
       extras: {
+        // Live recipes reachable through the linked cookbook. Counted here, not
+        // in the mapper, because `cookbooks: true` is a scalar row read — and
+        // the count is the only reason the product page draws the panel at all.
+        cookbookRecipeCount:
+          sql<number>`(SELECT count(*) FROM "Recipe" r JOIN "Cookbook" cb ON cb."id" = r."cookbookId" WHERE cb."productId" = "product"."id" AND cb."deletedAt" IS NULL AND r."deletedAt" IS NULL)`.as(
+            "cookbookRecipeCount",
+          ),
         componentCount:
           sql<number>`(SELECT count(*) FROM "ProductComponent" pc WHERE pc."parentProductId" = "product"."id" AND pc."deletedAt" IS NULL)`.as(
             "componentCount",

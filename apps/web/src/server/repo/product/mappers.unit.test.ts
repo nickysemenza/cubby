@@ -79,6 +79,7 @@ const baseProduct = {
   stockTracked: null,
   expenseCount: 0,
   componentCount: 0,
+  cookbookRecipeCount: 0,
   expenseTotal: 42.5,
   purchaseDate: null,
   quantityLedger: EMPTY_QUANTITY_LEDGER,

@@ -151,6 +151,7 @@ export const INCOMING_EDGES = {
     "PurchaseProduct.productId": { column: purchaseProduct.productId },
     "WishCandidate.productId": { column: wishCandidate.productId },
     "Location.productId": { column: location.productId },
+    "Cookbook.productId": { column: cookbook.productId },
     "ProductComponent.parentProductId": {
       column: productComponent.parentProductId,
     },

@@ -16,15 +16,17 @@ import type {
 import {
   type CookbookId,
   type CookbookShortcode,
+  type ProductId,
   type RecipeId,
   unsafeCookbookShortcode,
+  unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { cookbook, image, recipe } from "~/server/db/schema";
+import { cookbook, image, product, recipe } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { runWithConflictRecovery } from "~/server/errors/db-errors";
 import { logAuditEntry } from "~/server/repo/audit-log";
@@ -39,6 +41,7 @@ import {
   type CookbookImportContext,
   upsertCookbookRecipeFromCookbook,
 } from "~/server/repo/import-recipe-convert";
+import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product";
 import {
   deleteRecipesByCookbookTx,
   getCookbookRecipeIdsByTitle,
@@ -189,6 +192,9 @@ export const listCookbooks = async (
       recipeCount: sql<number>`count(${recipe.id})::int`,
       coverUrl: image.url,
       sourceRecipeCount: sql<number>`coalesce(jsonb_array_length(${cookbook.rawJson}), 0)::int`,
+      productId: cookbook.productId,
+      productShortcode: product.shortcode,
+      productName: product.name,
     })
     .from(cookbook)
     .leftJoin(
@@ -196,14 +202,86 @@ export const listCookbooks = async (
       and(eq(recipe.cookbookId, cookbook.id), notDeleted(recipe)),
     )
     .leftJoin(image, eq(image.id, cookbook.coverImageId))
+    .leftJoin(
+      product,
+      and(eq(product.id, cookbook.productId), notDeleted(product)),
+    )
     .where(notDeleted(cookbook))
-    .groupBy(cookbook.id, image.url)
+    .groupBy(cookbook.id, image.url, product.id)
     .orderBy(cookbook.name);
-  return rows.map((r) => ({
+
+  // The linked product's own cover, via the shared batched reader rather than a
+  // third join — ProductImage carries the cover flag, so inlining it here would
+  // mean duplicating that resolution.
+  const productCovers = await getProductCoverImageUrlsByProductIds(
+    db,
+    rows.flatMap((r) => (r.productId ? [r.productId] : [])),
+  );
+
+  return rows.map(({ productId, productShortcode, productName, ...r }) => ({
     ...r,
     id: unsafeCookbookShortcode(r.shortcode),
     coverUrl: r.coverUrl ?? null,
+    product:
+      productId && productShortcode && productName
+        ? {
+            id: unsafeProductShortcode(productShortcode),
+            name: productName,
+            coverUrl: productCovers.get(productId) ?? null,
+          }
+        : null,
   }));
+};
+
+/**
+ * Point a cookbook at the physical copy on the shelf, or clear the link
+ * (`productId: null`). Always operator-driven and always one book at a time:
+ * matching by title is unsafe (see the `Cookbook.productId` column comment —
+ * "Tartine Book No. 3" and "Tartine: A Classic Revisited" are different books),
+ * so nothing in the codebase writes this without a human choosing the product.
+ *
+ * No uniqueness guard on the product side. Two cookbooks claiming one copy is
+ * odd but harmless — nothing derives money or stock from this edge — and a
+ * partial unique index would not survive `db:push` anyway.
+ */
+export const setCookbookProduct = async (
+  db: Database,
+  actor: ActorContext,
+  id: CookbookId,
+  productId: ProductId | null,
+): Promise<CookbookSummary> => {
+  const shortcode = await withTransaction(db, async (tx) => {
+    const before = await tx.query.cookbook.findFirst({
+      where: and(eq(cookbook.id, id), notDeleted(cookbook)),
+      columns: { productId: true },
+    });
+    if (!before) {
+      throw createAppError("COOKBOOK_NOT_FOUND", `Cookbook ${id} not found`);
+    }
+    const updated = await updateAndReturn(
+      tx,
+      cookbook,
+      { productId },
+      and(eq(cookbook.id, id), notDeleted(cookbook)),
+    );
+    await logAuditEntry(tx, actor, {
+      entityType: "cookbook",
+      entityId: id,
+      action: "update",
+      changes: { productId: { from: before.productId, to: productId } },
+    });
+    return unsafeCookbookShortcode(updated.shortcode);
+  });
+
+  // Re-read through the list query — outside the transaction, since
+  // `listCookbooks` takes the branded `Database` — so the caller gets the same
+  // hydrated shape (cover url, recipe counts, product) the browse index and
+  // the detail page already render, not a second subtly different one.
+  const summary = (await listCookbooks(db)).find((cb) => cb.id === shortcode);
+  if (!summary) {
+    throw createAppError("COOKBOOK_NOT_FOUND", `Cookbook ${id} not found`);
+  }
+  return summary;
 };
 
 /**

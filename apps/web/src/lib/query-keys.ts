@@ -280,6 +280,15 @@ export const recipeCookbookMutationInvalidateKeys = [
   queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 
+// Linking or unlinking a cookbook's physical copy moves data on BOTH detail
+// pages: the cookbook page reads the link off `listCookbooks`, and the product
+// page reads the reverse embedded in its own detail payload. Invalidating only
+// the cookbook side leaves a stale "Cookbook" panel on the product.
+export const cookbookProductLinkInvalidateKeys = [
+  queryKeys.recipe.listCookbooks,
+  queryKeys.product.all,
+] as const satisfies readonly QueryKey[];
+
 export const recipeAllMutationInvalidateKeys = [
   queryKeys.recipe.all,
   // Recipe totals changed → refresh meal cost/calorie rollups.

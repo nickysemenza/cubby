@@ -44,6 +44,7 @@ import { toolTimelineConflict, UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import type { Database, DrizzleClient } from "~/server/db";
 import {
+  cookbook,
   expense,
   image,
   inventoryEntry,
@@ -205,6 +206,13 @@ const PRODUCT_RETAINING_NOT_EXISTS: Record<
         .select({ id: sql`1` })
         .from(location)
         .where(and(eq(location.productId, product.id), notDeleted(location))),
+    ),
+  "Cookbook.productId": (dbClient) =>
+    notExists(
+      dbClient
+        .select({ id: sql`1` })
+        .from(cookbook)
+        .where(and(eq(cookbook.productId, product.id), notDeleted(cookbook))),
     ),
   "ProductComponent.componentProductId": (dbClient) =>
     notExists(

@@ -7,6 +7,7 @@ import { isNonFoodCategory } from "@cubby/shared";
 import { isCollectionTag } from "@cubby/shared/collection-tag";
 import {
   Apple,
+  BookOpen,
   Boxes,
   ChefHat,
   FileText,
@@ -52,6 +53,7 @@ import { RelationshipSummaryTable } from "../relationships/relationship-summary-
 import { UnitCoveragePanel } from "../units/UnitCoveragePanel";
 import { ProductAddToInventoryDialog } from "./product-add-to-inventory-dialog";
 import { ProductBasicInfo } from "./product-basic-info";
+import { ProductCookbook } from "./product-cookbook";
 import { ProductDiscardDialog } from "./product-discard-dialog";
 import { ProductExpenseHistory } from "./product-expense-history";
 import { ProductForm } from "./product-form";
@@ -260,6 +262,20 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
             icon: Link2,
             placement: "supporting" as const,
             content: <ProductTagSiblings product={product} />,
+          },
+        ]
+      : []),
+    // The book behind the book: this product is a cookbook's physical copy.
+    // Gated on the link existing, so it never draws on the ~3,000 products
+    // that aren't books.
+    ...(product.cookbook
+      ? [
+          {
+            id: "cookbook",
+            title: "Cookbook",
+            icon: BookOpen,
+            placement: "supporting" as const,
+            content: <ProductCookbook cookbook={product.cookbook} />,
           },
         ]
       : []),
