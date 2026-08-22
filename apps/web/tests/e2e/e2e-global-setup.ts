@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -338,6 +338,7 @@ async function globalSetup(config: FullConfig): Promise<void> {
   authState.cookies = authState.cookies.filter(
     (cookie) => !cookie.name.endsWith("session_data"),
   );
+  mkdirSync(path.dirname(authFile), { recursive: true });
   writeFileSync(authFile, JSON.stringify(authState, null, 2));
   // The server runs with INSECURE_AUTH_COOKIES=true (see the wrangler --var
   // above), so the session cookies are already plain (no Secure attribute, no
