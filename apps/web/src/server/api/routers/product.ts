@@ -32,6 +32,7 @@ import {
   productExternalIdCollisionsOut,
   productExternalIdSourceOptionsOut,
   productFiltersSchema,
+  productFindOrCreateByCodeInput,
   productFindOrCreateByUPCInput,
   productFindOrCreateByUPCOut,
   productInventoryEntriesBatchInput,
@@ -141,6 +142,7 @@ import {
   applyUpcDataWithSideEffects,
   backfillUPCImages as backfillUPCImagesService,
   createProductWithSideEffects,
+  findOrCreateByCode as findOrCreateByCodeService,
   findOrCreateByUPC as findOrCreateByUPCService,
   lookupUPC as lookupUPCService,
   updateProductWithSideEffects,
@@ -508,6 +510,19 @@ const findOrCreateByUPC = protectedProcedure
       ctx.actorContext,
     );
   });
+
+const findOrCreateByCode = protectedProcedure
+  .input(productFindOrCreateByCodeInput)
+  .output(strictOutput(productFindOrCreateByUPCOut))
+  .mutation(({ ctx, input }) =>
+    findOrCreateByCodeService(
+      ctx.db,
+      ctx.usdaClient,
+      ctx.upcLookupClient,
+      input,
+      ctx.actorContext,
+    ),
+  );
 
 // Backfill UPC images for products that have a UPC but no images — streamed
 // (per batch of 10) with a final scalar summary. The per-product `details` array
@@ -1037,6 +1052,7 @@ export const productRouter = createTRPCRouter({
   delete: deleteItem,
   discard,
   quickCreate,
+  findOrCreateByCode,
   findOrCreateByUPC,
   lookupUpc,
   backfillUPCImages,

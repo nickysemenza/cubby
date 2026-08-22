@@ -42,6 +42,12 @@ export const BARCODE_FORMATS: BarcodeFormat[] = [
 
 export const QR_CODE_FORMATS: BarcodeFormat[] = ["qr_code"];
 
+/** QR labels plus every linear product-code format Cubby accepts. */
+export const UNIVERSAL_SCAN_FORMATS: BarcodeFormat[] = [
+  ...BARCODE_FORMATS,
+  ...QR_CODE_FORMATS,
+];
+
 type ScannerStatus = "loading" | "scanning" | "error" | "permission_denied";
 
 /** Reticle used when the consumer renders no guide element to measure. */

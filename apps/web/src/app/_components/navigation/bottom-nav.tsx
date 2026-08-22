@@ -107,8 +107,9 @@ export function BottomNav() {
               <BottomNavItem
                 key={item.to}
                 to={item.to}
-                // `search` can't be correlated to the union `to` here; only
-                // the Scan shortcut sets it (see nav-items). Cast is local.
+                // `search` can't be correlated to the union `to` here. Keep
+                // the local cast so manifest-backed shortcuts can add static
+                // search state without widening every bottom-tab route.
                 search={item.search as never}
                 icon={item.icon}
                 label={item.label}

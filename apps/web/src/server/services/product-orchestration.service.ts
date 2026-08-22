@@ -16,8 +16,10 @@ import {
   unsafeIngredientId,
 } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
+import { isbnFromGtin } from "@cubby/schemas/isbn";
 import type {
   ProductCreateInput,
+  ProductFindOrCreateByCodeInput,
   ProductTopLevelOut,
   ProductUpdateInput,
   ProductWithFoodAndSideEffectsOut,
@@ -434,6 +436,102 @@ export async function findOrCreateByUPC(
       return { product: winner, created: false };
     },
   );
+}
+
+/**
+ * Find or create the physical-book Product named by an ISBN.
+ *
+ * ISBNs are EAN barcodes, but they are not food identities: skip USDA and
+ * create through `isbn` so the repository both stores the canonical GTIN and
+ * applies the `books` category invariant. The general UPC provider can still
+ * supply the edition's title, publisher/manufacturer, price, and cover.
+ */
+async function findOrCreateByISBN(
+  db: Database,
+  upcLookupClient: UPCLookupClient,
+  canonicalGtin: string,
+  actor: ActorContext,
+): Promise<FindOrCreateByUPCResult> {
+  const normalized = isbnFromGtin(canonicalGtin);
+  if (!normalized) {
+    throw new Error(`Invalid canonical ISBN: ${canonicalGtin}`);
+  }
+
+  const existing = await findProductByGtin(db, canonicalGtin);
+  if (existing) return { product: existing, created: false };
+
+  const emitCreated = async (
+    product: ProductTopLevelOut,
+  ): Promise<FindOrCreateByUPCResult> => {
+    const entityId = await resolveCreatedOrInvariant(db, "product", product.id);
+    await runMutationSideEffects(db, {
+      action: "created",
+      entity: { entityType: "product", entityId },
+      source: "product.findOrCreateByCode",
+    });
+    return { product, created: true };
+  };
+
+  return runWithConflictRecovery(
+    async () => {
+      const external = await upcLookupClient.lookup(normalized.isbn13);
+      const product = await quickCreateProduct(
+        db,
+        {
+          ...(external
+            ? externalIdentity(external)
+            : {
+                name: `Book ISBN ${normalized.isbn13}`,
+                manufacturer: UNSPECIFIED_MANUFACTURER,
+              }),
+          isbn: canonicalGtin,
+          expectedQuantity: null,
+          model: null,
+        },
+        actor,
+      );
+
+      if (external?.imageUrl) {
+        try {
+          await importImageFromUPC(
+            db,
+            upcLookupClient,
+            normalized.isbn13,
+            await resolveCreatedOrInvariant(db, "product", product.id),
+          );
+        } catch (error) {
+          console.error(`[findOrCreateByISBN] Image import failed:`, error);
+        }
+      }
+
+      return await emitCreated(product);
+    },
+    async (error) => {
+      const winner = await findProductByGtin(db, canonicalGtin);
+      if (!winner) throw error;
+      return { product: winner, created: false };
+    },
+  );
+}
+
+/** Universal-scanner product resolution without changing UPC callers. */
+export function findOrCreateByCode(
+  db: Database,
+  usdaClient: USDAClient,
+  upcLookupClient: UPCLookupClient,
+  input: ProductFindOrCreateByCodeInput,
+  actor: ActorContext,
+): Promise<FindOrCreateByUPCResult> {
+  return input.kind === "isbn"
+    ? findOrCreateByISBN(db, upcLookupClient, input.value, actor)
+    : findOrCreateByUPC(
+        db,
+        usdaClient,
+        upcLookupClient,
+        input.value,
+        undefined,
+        actor,
+      );
 }
 
 interface BackfillResult {

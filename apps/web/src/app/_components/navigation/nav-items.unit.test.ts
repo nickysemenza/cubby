@@ -2,6 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { describe, expect, it } from "vitest";
 import { entities } from "~/entities/entities";
 import {
+  bottomNavItems,
   completeNavLeaves,
   desktopLeaves,
   desktopNav,
@@ -50,12 +51,20 @@ describe("workspace navigation contract", () => {
     ]);
     expect(mobileHouseholdItems.map((item) => item.label)).toEqual([
       "Home",
+      "Recount",
       "Locations",
       "Calendar",
       "Meals",
       "Projects",
       "Expenses",
       "Problems",
+    ]);
+    expect(bottomNavItems.map((item) => item.label)).toEqual([
+      "Scan",
+      "Inventory",
+      "Shopping",
+      "Recipes",
+      "Search",
     ]);
   });
 
@@ -84,6 +93,9 @@ describe("workspace navigation contract", () => {
     if (!more || !isNavGroup(more)) return;
 
     expect(more.children).toContain(settingsNavItem);
+    expect(more.children.map((item) => item.label)).toEqual(
+      expect.arrayContaining(["Scan", "Recount"]),
+    );
     expect(getSidebarGroupItems(more)).not.toContain(settingsNavItem);
   });
 });
