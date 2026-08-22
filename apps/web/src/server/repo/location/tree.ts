@@ -251,10 +251,22 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
 // `Record<string, unknown>`, which an interface can't satisfy implicitly.
 type AncestorRow = {
   root: LocationId;
+  /** The rung's own private id, for batch helpers that key on uuid. */
+  locationId: LocationId;
   depth: number;
   shortcode: string;
   name: string;
   type: string;
+};
+
+/**
+ * An ancestor rung plus its private id. `LocationAncestorOut` is the wire shape
+ * and deliberately carries only the public shortcode, but a caller that wants
+ * to batch-resolve something per rung — `resolveEntityDisplayImages` keys on
+ * uuid — needs the id the CTE already has in hand.
+ */
+export type LocationAncestorRung = LocationAncestorOut & {
+  locationId: LocationId;
 };
 
 type BreakdownLocationRow = {
@@ -381,11 +393,11 @@ export const getLocationInventoryBreakdown = async (
  * (`buildLocationTree` does filter deleted rows — going DOWN, a soft-deleted
  * node must not appear as a row at all. Different question.)
  */
-export const loadLocationAncestors = async (
+export const loadLocationAncestorsWithIds = async (
   db: Database,
   ids: LocationId[],
-): Promise<Map<LocationId, LocationAncestorOut[]>> => {
-  const byId = new Map<LocationId, LocationAncestorOut[]>();
+): Promise<Map<LocationId, LocationAncestorRung[]>> => {
+  const byId = new Map<LocationId, LocationAncestorRung[]>();
   if (ids.length === 0) return byId;
 
   const res = await getDb(db).execute<AncestorRow>(sql`
@@ -396,6 +408,7 @@ export const loadLocationAncestors = async (
       -- hand-rolled \`IN \${ids}\` would be the row-constructor trap.
       SELECT
         ${location.id} AS root,
+        ${location.id} AS "locationId",
         ${location.parentId} AS "parentId",
         0 AS depth,
         ${location.shortcode},
@@ -410,6 +423,7 @@ export const loadLocationAncestors = async (
       -- see the doc comment: this has to match getLocationById's walk.
       SELECT
         a.root,
+        l."id" AS "locationId",
         l."parentId" AS "parentId",
         a.depth + 1 AS depth,
         l."shortcode",
@@ -419,7 +433,7 @@ export const loadLocationAncestors = async (
       INNER JOIN ancestors a ON l."id" = a."parentId"
       WHERE a.depth < ${MAX_TREE_DEPTH}
     )
-    SELECT root, depth, "shortcode", "name", "type"
+    SELECT root, "locationId", depth, "shortcode", "name", "type"
     FROM ancestors
     WHERE depth > 0
     ORDER BY root, depth DESC
@@ -429,7 +443,8 @@ export const loadLocationAncestors = async (
   // root → immediate parent in arrival order.
   for (const row of res.rows) {
     const chain = byId.get(row.root);
-    const rung: LocationAncestorOut = {
+    const rung: LocationAncestorRung = {
+      locationId: row.locationId,
       id: unsafeLocationShortcode(row.shortcode),
       name: row.name,
       type: parseLocationType(row.type, {
@@ -441,6 +456,26 @@ export const loadLocationAncestors = async (
     else byId.set(row.root, [rung]);
   }
   return byId;
+};
+
+/**
+ * {@link loadLocationAncestorsWithIds} narrowed to the wire shape.
+ *
+ * Most callers render a breadcrumb and nothing more, and handing them a private
+ * uuid they would then have to remember not to serialize is a worse default
+ * than one strip here.
+ */
+export const loadLocationAncestors = async (
+  db: Database,
+  ids: LocationId[],
+): Promise<Map<LocationId, LocationAncestorOut[]>> => {
+  const withIds = await loadLocationAncestorsWithIds(db, ids);
+  return new Map(
+    [...withIds].map(([root, chain]) => [
+      root,
+      chain.map(({ locationId: _locationId, ...rung }) => rung),
+    ]),
+  );
 };
 
 /**

@@ -43,11 +43,13 @@ import {
   ImageStatus,
   ImageStorageStatus,
 } from "./image";
+import { imageUrlSummary } from "./image-summary";
 import {
+  locationAncestorFields,
   locationAncestorOut,
   locationListRefOut,
   locationOutFields,
-  locationPathRefOut,
+  locationPathRefFields,
 } from "./location";
 import {
   createPaginatedResponseSchema,
@@ -867,12 +869,46 @@ const productInventoryFields = {
   ...timestampedFields,
 };
 
+/**
+ * An ancestor rung on the product detail read, carrying the thumbnail the
+ * breadcrumb draws.
+ *
+ * A product-side extension rather than a widening of the shared
+ * `locationAncestorOut`, because that schema is also what
+ * `locationParentOptions` returns — a 500-row picklist that documents
+ * (location/crud.ts) that it deliberately declines to pay for cover images. A
+ * nullable field there would have to mean both "no photo" and "not requested".
+ */
+const productLocationAncestorOut = z.object({
+  ...locationAncestorFields,
+  displayImage: imageUrlSummary.nullable(),
+});
+
+/**
+ * A location that IS this product, with its breadcrumb and thumbnail.
+ *
+ * Same reasoning as `productLocationAncestorOut`: `locationPathRefOut` is
+ * shared with pickers and suggestion payloads that draw no thumbnail.
+ */
+const productLocationRefOut = z.object({
+  ...locationPathRefFields,
+  displayImage: imageUrlSummary.nullable(),
+  ancestors: z.array(productLocationAncestorOut),
+});
+
 const productInventoryWithLocationOut = z.object({
   ...productInventoryFields,
   location: z.object({
     ...locationOutFields,
+    /**
+     * Own first displayable photo, else the cover of the SKU this location IS.
+     * Resolved server-side through the same helper search and the enriched
+     * entity-link reads use, so every surface on this page agrees; `images` and
+     * `product.coverImage` beside it are the raw inputs, not the policy.
+     */
+    displayImage: imageUrlSummary.nullable(),
     /** Root → immediate parent, hydrated once for the whole detail read. */
-    ancestors: z.array(locationAncestorOut),
+    ancestors: z.array(productLocationAncestorOut),
   }),
 });
 
@@ -958,7 +994,7 @@ export const productWithIngredientAndInventoryAndMappingsOut = z.object({
    * count and the rows in the table cannot disagree while one of two queries is
    * still in flight.
    */
-  servingAsLocations: z.array(locationPathRefOut),
+  servingAsLocations: z.array(productLocationRefOut),
   /**
    * Live `ProductComponent` edges where this product is the parent — non-zero
    * means it is a kit or multi-pack. Counts distinct components, not units.
@@ -1024,7 +1060,7 @@ export const productWithFoodOut = z.object({
   ingredient: productIngredientOut.nullable(),
   unitMappings: z.array(unitMappingOut),
   inventoryEntry: z.array(productInventoryWithLocationOut),
-  servingAsLocations: z.array(locationPathRefOut),
+  servingAsLocations: z.array(productLocationRefOut),
   /**
    * Live `ProductComponent` edges where this product is the parent — non-zero
    * means it is a kit or multi-pack. Counts distinct components, not units.
@@ -1046,7 +1082,7 @@ export const productWithFoodAndSideEffectsOut = z.object({
   ingredient: productIngredientOut.nullable(),
   unitMappings: z.array(unitMappingOut),
   inventoryEntry: z.array(productInventoryWithLocationOut),
-  servingAsLocations: z.array(locationPathRefOut),
+  servingAsLocations: z.array(productLocationRefOut),
   food: foodSummary.nullable(),
   recipeUsages: z.array(recipeUsageOut),
   sideEffects: mutationSideEffectsSchema,

@@ -143,10 +143,10 @@ describe("HierarchyDrilldown", () => {
     const utilityRow = screen.getByText("Utility Room").closest("li");
 
     expect(
-      workshopRow?.querySelector('[aria-hidden="true"][style]'),
+      workshopRow?.querySelector('[data-slot="contribution-bar"]'),
     ).toHaveStyle({ width: `${(10 / 12) * 100}%` });
     expect(
-      utilityRow?.querySelector('[aria-hidden="true"][style]'),
+      utilityRow?.querySelector('[data-slot="contribution-bar"]'),
     ).toHaveStyle({ width: `${(2 / 12) * 100}%` });
   });
 
@@ -175,7 +175,7 @@ describe("HierarchyDrilldown", () => {
     expect(screen.getByText("2 each")).toBeInTheDocument();
     expect(screen.getByText("100 g")).toBeInTheDocument();
     expect(
-      document.querySelectorAll('[aria-hidden="true"][style*="width"]').length,
+      document.querySelectorAll('[data-slot="contribution-bar"]').length,
     ).toBe(0);
   });
 
@@ -195,6 +195,38 @@ describe("HierarchyDrilldown", () => {
         screen.getByRole("list", { name: "Workshop breakdown" }),
       ).getByText("4 each"),
     ).toBeInTheDocument();
+  });
+
+  it("marks each rung with its own thumbnail and leaves the rest on icons", () => {
+    const withImages: HierarchyDrilldownNode = {
+      ...tree,
+      displayImage: { url: "https://img.test/home.jpg" },
+      children: [
+        {
+          ...tree.children![0]!,
+          displayImage: { url: "https://img.test/utility.jpg" },
+        },
+        tree.children![1]!,
+      ],
+    };
+    const { container } = renderDrilldown(withImages);
+
+    const sources = [...container.querySelectorAll("img")].map((img) =>
+      img.getAttribute("src"),
+    );
+    // The focused root's mark rides on its breadcrumb rung and on the
+    // "Directly here" row it synthesizes; the Workshop row has no image and
+    // must not borrow one.
+    expect(sources.some((src) => src?.includes("utility.jpg"))).toBe(true);
+    expect(sources.some((src) => src?.includes("home.jpg"))).toBe(true);
+    expect(sources).toHaveLength(2);
+
+    // The box is reserved either way, so the imageless row still aligns.
+    expect(
+      within(
+        screen.getByRole("button", { name: /Drill into Workshop/ }),
+      ).queryByRole("img"),
+    ).toBeNull();
   });
 
   it("keeps the focused branch live when refreshed data replaces the tree", () => {

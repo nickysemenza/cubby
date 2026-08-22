@@ -1,5 +1,6 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
+import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import type {
   LocationAncestorOut,
   LocationType,
@@ -11,11 +12,23 @@ interface LocationPathRef {
   id: LocationShortcode;
   name: string;
   type: LocationType | null;
+  /**
+   * Resolved server-side: own photo, else the cover of the SKU this location
+   * IS. Ancestors carry it too, so a whole path flattens to one rung shape.
+   */
+  displayImage: ImageUrlSummary | null;
   /** Root -> immediate parent; the location itself is appended by the adapter. */
-  ancestors: readonly LocationAncestorOut[];
+  ancestors: readonly LocationPathAncestor[];
 }
 
-type LocationRung = Pick<LocationPathRef, "id" | "name" | "type">;
+type LocationPathAncestor = LocationAncestorOut & {
+  displayImage: ImageUrlSummary | null;
+};
+
+type LocationRung = Pick<
+  LocationPathRef,
+  "id" | "name" | "type" | "displayImage"
+>;
 
 export interface ProductLocationBreakdownInput {
   inventoryEntry: ReadonlyArray<{
@@ -36,6 +49,7 @@ interface MutableNode {
   id: string;
   label: string;
   locationShortcode?: LocationShortcode;
+  displayImage?: ImageUrlSummary;
   directByUnit: Map<string, number>;
   annotations: Set<string>;
   children: Map<string, MutableNode>;
@@ -111,6 +125,7 @@ const finalizeNode = (
       ...(node.locationShortcode
         ? { locationShortcode: node.locationShortcode }
         : {}),
+      ...(node.displayImage ? { displayImage: node.displayImage } : {}),
       ...(node.annotations.size > 0
         ? { annotations: [...node.annotations].sort() }
         : {}),
@@ -184,11 +199,18 @@ export const buildProductLocationBreakdown = (
           id: rung.id,
           label: rung.name,
           locationShortcode: rung.id,
+          ...(rung.displayImage ? { displayImage: rung.displayImage } : {}),
           directByUnit: new Map(),
           annotations: new Set(),
           children: new Map(),
         };
         current.children.set(rung.id, child);
+      } else if (!child.displayImage && rung.displayImage) {
+        // Every rung with this id names the SAME location, so whichever
+        // contribution reaches it first must not decide whether it has a
+        // picture. A stock entry and an identity row arrive from two payload
+        // branches; only one of them is guaranteed to carry the thumbnail.
+        child.displayImage = rung.displayImage;
       }
       current = child;
     }

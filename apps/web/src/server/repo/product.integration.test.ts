@@ -8,6 +8,7 @@ import {
   image,
   inventoryEntry,
   location,
+  locationImage,
   productExternalId,
   productImage,
   productUnitMappings,
@@ -3279,6 +3280,11 @@ describe("product detail: where the product is", () => {
       makeProductInput({ name: "Detail Serving Tote" }),
       ctx.actor,
     );
+    const cover = await createImageFixture(ctx.db, "detail-serving-cover");
+    await insertAndReturn(ctx.db, productImage, {
+      productId: prod.entityId,
+      imageId: cover.id,
+    });
     await createLocation(
       ctx.db,
       {
@@ -3294,12 +3300,84 @@ describe("product detail: where the product is", () => {
 
     expect(detail?.servingAsLocations).toHaveLength(1);
     expect(detail?.servingAsLocations[0]?.name).toBe("detail serving bin");
+    // This row's select carries no image columns on purpose, so the hydrated
+    // thumbnail is the only visual it can have — here, the cover of the SKU
+    // the bin IS, which is this very product.
+    expect(detail?.servingAsLocations[0]?.displayImage?.url).toBe(cover.url);
     // The two numbers the page shows side by side must come from the same set.
     expect(detail?.quantityLedger.locationCount).toBe(1);
     // No shelf row, but a real unit — this is the shape that rendered
     // "ON HAND 0 / NOT STOCKED" over a bin you own.
     expect(detail?.inventoryEntry).toHaveLength(0);
     expect(detail?.onHandUnits).toBe(1);
+  });
+
+  it("resolves a thumbnail for every location the card names", async () => {
+    const prod = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Detail Mark Product" }),
+      ctx.actor,
+    );
+    // The bin the stock sits on IS a SKU of its own — a photographed metal
+    // rack whose picture lives on that product, never on the location. This is
+    // the case the card used to render as a bare placeholder glyph.
+    const rackSku = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Detail Mark Rack SKU" }),
+      ctx.actor,
+    );
+    const rackPhoto = await createImageFixture(ctx.db, "detail-mark-rack");
+    await insertAndReturn(ctx.db, productImage, {
+      productId: rackSku.entityId,
+      imageId: rackPhoto.id,
+    });
+
+    const roomPhoto = await createImageFixture(ctx.db, "detail-mark-room");
+    const room = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Detail Mark Room", type: "room" }),
+      ctx.actor,
+    );
+    await insertAndReturn(ctx.db, locationImage, {
+      locationId: room.entityId,
+      imageId: roomPhoto.id,
+    });
+    const rack = await createLocation(
+      ctx.db,
+      makeLocationInput({
+        name: "Detail Mark Rack",
+        productId: rackSku.id,
+        parentId: room.id,
+      }),
+      ctx.actor,
+    );
+    await createInventoryEntry(
+      ctx.db,
+      {
+        productId: prod.id,
+        locationId: rack.id,
+        amount: { value: 2, unit: "each" },
+      },
+      ctx.actor,
+    );
+
+    const detail = await getProductByID(ctx.db, prod.entityId);
+    const stockRow = detail?.inventoryEntry[0];
+
+    // Stock row: the location has no photo, so the SKU it IS supplies one.
+    expect(stockRow?.location.name).toBe("Detail Mark Rack");
+    expect(stockRow?.location.displayImage?.url).toBe(rackPhoto.url);
+    // Breadcrumb rungs resolve too, and a rung with nothing to draw reads
+    // null — proof the field is a real projection, not a constant.
+    expect(
+      stockRow?.location.ancestors.map((a) => [
+        a.name,
+        a.displayImage?.url ?? null,
+      ]),
+    ).toEqual([
+      ["Home", null],
+      ["Detail Mark Room", roomPhoto.url],
+    ]);
   });
 
   it("hydrates root-first paths for both stock and identity locations", async () => {

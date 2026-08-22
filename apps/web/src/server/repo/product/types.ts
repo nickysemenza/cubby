@@ -3,6 +3,7 @@
  */
 
 import type { DataQuality } from "@cubby/schemas/data-quality";
+import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import type { LocationAncestorOut } from "@cubby/schemas/location";
 import type {
   ingredient,
@@ -27,6 +28,14 @@ type LocationSelect = RowWithOptionalAliasesAndTags<
 >;
 
 /**
+ * A breadcrumb rung on the detail read, carrying the thumbnail its link draws.
+ * Both attached by `hydrateProductLocationBreadcrumbs`, never selected.
+ */
+type ProductLocationAncestor = LocationAncestorOut & {
+  displayImage: ImageUrlSummary | null;
+};
+
+/**
  * Type for deeply nested product query results.
  * Used when fetching products with full relations.
  */
@@ -38,7 +47,9 @@ export type ProductDeepDB = ProductSelect & {
   inventoryEntry: Array<
     typeof inventoryEntry.$inferSelect & {
       location: LocationSelect & {
-        ancestors?: LocationAncestorOut[];
+        ancestors?: ProductLocationAncestor[];
+        /** Own photo, else the SKU it IS — hydrated, not selected. */
+        displayImage?: ImageUrlSummary | null;
         // The holding location's own identity SKU — the bin itself, not this
         // product's stock in it.
         product?: LocationIdentityProductRow | null;
@@ -49,9 +60,12 @@ export type ProductDeepDB = ProductSelect & {
       };
     }
   >;
-  /** Locations that ARE this product; scalar columns only. */
+  /** Locations that ARE this product; scalar columns plus hydrated display. */
   locations?: Array<
-    typeof location.$inferSelect & { ancestors?: LocationAncestorOut[] }
+    typeof location.$inferSelect & {
+      ancestors?: ProductLocationAncestor[];
+      displayImage?: ImageUrlSummary | null;
+    }
   >;
   images: Array<{
     image: MappableImageRecord;
