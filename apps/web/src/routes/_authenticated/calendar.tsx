@@ -44,6 +44,7 @@ function CalendarRoute() {
   return (
     <Page
       variant="list"
+      listChrome="workbench"
       title="Calendar"
       layout="full"
       actions={<CalendarSubscribeDialog />}

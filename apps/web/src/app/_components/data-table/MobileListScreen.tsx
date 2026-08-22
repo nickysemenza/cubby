@@ -38,15 +38,9 @@ interface MobileListScreenProps<TItem extends RowData> {
   /** Toggle grouping on/off (controlled from parent) */
   onGroupedChange?: (value: boolean) => void;
   isTransitioning?: boolean;
-  /**
-   * Carry the page's identity on the mobile toolbar. Mirrors the desktop
-   * pane's flag: `Page` drops its header for `headerInToolbar` at EVERY
-   * viewport, and after hydration the desktop pane is not in the DOM, so
-   * without this a phone renders the page with no name and no `<h1>` at all.
-   */
-  ownsPageIdentity?: boolean;
   /** External cell-render state snapshot; see useTableConfig. */
   rowContentVersion?: unknown;
+  portalWorkbenchUtilities?: boolean;
 }
 
 export function MobileListScreen<TItem extends RowData>({
@@ -63,8 +57,8 @@ export function MobileListScreen<TItem extends RowData>({
   grouped = false,
   onGroupedChange,
   isTransitioning = false,
-  ownsPageIdentity = false,
   rowContentVersion,
+  portalWorkbenchUtilities = false,
 }: MobileListScreenProps<TItem>) {
   const listRef = useRef<HTMLDivElement>(null);
   // `useIsMobile` reports false until hydration (its server snapshot has to, to
@@ -116,8 +110,9 @@ export function MobileListScreen<TItem extends RowData>({
         additionalContent={toolbarContent}
         actions={actions}
         bulkActionBar={bulkActionBar}
-        showViewOptions={false}
-        ownsPageIdentity={ownsPageIdentity}
+        showViewOptions={portalWorkbenchUtilities}
+        portalWorkbenchUtilities={portalWorkbenchUtilities}
+        workbenchUtilityViewport="mobile"
         className="mb-2 flex-wrap overflow-x-hidden"
         isTransitioning={isTransitioning}
       />

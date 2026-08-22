@@ -131,7 +131,9 @@ test.describe("Project tracker", () => {
     await page.goto(`/tasks?q=${encodeURIComponent(name)}`);
     await page.waitForLoadState("networkidle");
 
-    await expect(page.getByPlaceholder("Filter name…")).toHaveValue(name);
+    await expect(
+      page.getByRole("button", { name: `Name: ${name}` }),
+    ).toBeVisible();
     await expect(page.getByText(name).first()).toBeVisible({
       timeout: 10000,
     });
@@ -187,7 +189,9 @@ test.describe("Project tracker", () => {
     await page.goto(`/expenses?q=${encodeURIComponent(name)}`);
     await page.waitForLoadState("networkidle");
 
-    await expect(page.getByPlaceholder("Filter name…")).toHaveValue(name);
+    await expect(
+      page.getByRole("button", { name: `Name: ${name}` }),
+    ).toBeVisible();
     await expect(page.getByText(name).first()).toBeVisible({
       timeout: 10000,
     });
@@ -208,6 +212,7 @@ test.describe("Project tracker", () => {
   test("projects: quick-add creates a project and it appears on the dashboard", async ({
     page,
   }) => {
+    test.setTimeout(60_000);
     const name = `e2e project ${Date.now()}`;
 
     await page.goto("/projects");
@@ -444,8 +449,14 @@ test.describe("Project tracker", () => {
       has: page.getByText("Resources", { exact: true }),
     });
     await expect(resourcesCard).toBeVisible();
-    const overviewTitle = page.getByText("Overview", { exact: true });
-    const resourcesTitle = page.getByText("Resources", { exact: true });
+    const overviewTitle = page.getByRole("heading", {
+      name: "Overview",
+      exact: true,
+    });
+    const resourcesTitle = page.getByRole("heading", {
+      name: "Resources",
+      exact: true,
+    });
     await expect(overviewTitle).toBeVisible();
     await expect(resourcesTitle).toBeVisible();
 

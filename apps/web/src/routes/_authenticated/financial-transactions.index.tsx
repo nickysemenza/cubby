@@ -37,7 +37,7 @@ export const Route = createFileRoute("/_authenticated/financial-transactions/")(
     component: () => (
       <Page
         variant="list"
-        headerInToolbar
+        listChrome="workbench"
         title="Transactions"
         entity="financialTransaction"
         layout="full"

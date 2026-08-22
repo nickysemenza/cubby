@@ -37,15 +37,18 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
     // the valuation rollup in the header. Basic info / AI description /
     // history are the metadata row below.
     {
+      id: "contents",
       title: "Contents",
       icon: Package,
-      zone: "full",
+      placement: "full",
       headerAction: <LocationContentsValuation location={location} />,
       content: <LocationContents location={location} />,
     },
     editableDetailSection({
+      id: "basic-information",
       title: "Basic Information",
       icon: Info,
+      placement: "supporting",
       editMode,
       Form: LocationForm,
       entity: location,
@@ -54,8 +57,10 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
       ),
     }),
     {
+      id: "ai-description",
       title: "AI Description",
       icon: Eye,
+      placement: "supporting",
       content: (
         <AiDescriptionSection
           locationId={location.id}

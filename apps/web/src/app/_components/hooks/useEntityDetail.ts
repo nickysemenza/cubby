@@ -92,8 +92,10 @@ export function useEntityDetail<
     switch (sectionType) {
       case "images":
         commonSections.push({
+          id: "images",
           title: "Images",
           icon: ImageIcon,
+          placement: "supporting",
           content: createElement(EntityImageList, {
             images: data.images ?? [],
           }),
@@ -102,8 +104,10 @@ export function useEntityDetail<
 
       case "unit-mappings":
         commonSections.push({
+          id: "unit-mappings",
           title: "Unit Mappings",
           icon: Scale,
+          placement: "supporting",
           content: createElement(UnitMappingDisplay, {
             mappings,
             title: "",
@@ -114,8 +118,10 @@ export function useEntityDetail<
       case "history": {
         if (isAuditableEntity(entity)) {
           commonSections.push({
+            id: "history",
             title: "History",
             icon: Clock,
+            placement: "supporting",
             content: createElement(AuditLogList, {
               entityType: entity,
               entityId: data.id,

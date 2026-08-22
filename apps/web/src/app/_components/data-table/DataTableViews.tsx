@@ -125,7 +125,7 @@ export function SavedViewsMenu({
         }
       >
         <Bookmark className="size-3.5" />
-        Views
+        Saved views
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[240px]">
         <DropdownMenuGroup>

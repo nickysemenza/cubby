@@ -1,10 +1,11 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { RowData } from "@tanstack/react-table";
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Row } from "~/components/layout";
-import { usePageIdentity } from "~/components/page/Page";
+import { usePageWorkbenchTarget } from "~/components/page/Page";
 import { Spinner } from "~/components/ui/spinner";
-import { cn, formatCount } from "~/lib/utils";
+import { cn } from "~/lib/utils";
 import { DataTableViews } from "./DataTableViews";
 import { DataTableViewOptions } from "./data-table-view-options";
 import { LedgerFilters } from "./LedgerFilters";
@@ -28,48 +29,14 @@ interface DataTableToolbarProps<TData extends RowData> {
   className?: string;
   /** Previous-query rows remain visible while the next first page is loading. */
   isTransitioning?: boolean;
-  /**
-   * Carry the page's identity (name, count, actions) on this bar. Set only for
-   * the page-level table; an embedded table sits under a section heading that
-   * already names it.
-   */
-  ownsPageIdentity?: boolean;
   /** Server-side facet count hints forwarded to the mounted filter controls. */
   filterOptionHints?: Readonly<
     Record<string, Readonly<Record<string, string>>>
   >;
-}
-
-/**
- * The page's name and record count, laid onto the toolbar's left.
- *
- * `h1` because this IS the page heading once the header block above is gone —
- * folding the title into the bar must not cost the document its top-level
- * landmark. Space Grotesk at title scale (not display) so it sits on the bar's
- * 28px control rhythm, with the count in mono as a measurement.
- */
-function ToolbarIdentity() {
-  const identity = usePageIdentity();
-  if (!identity) return null;
-  return (
-    <Row align="baseline" gap="sm" className="min-w-0 shrink">
-      <h1 className="min-w-0 truncate font-bold font-heading text-base tracking-tight">
-        {identity.title}
-      </h1>
-      {identity.count !== undefined && (
-        <span className="shrink-0 font-mono text-2xs text-slate uppercase tabular-nums tracking-wider">
-          {formatCount(identity.count)}
-        </span>
-      )}
-    </Row>
-  );
-}
-
-/** The page's own actions, which the removed header block used to carry. */
-function PageIdentityActions() {
-  const identity = usePageIdentity();
-  if (!identity?.actions) return null;
-  return <>{identity.actions}</>;
+  /** Hoist Display/Saved views into the stable page-workbench first tier. */
+  portalWorkbenchUtilities?: boolean;
+  /** CSS gate used while desktop and phone table branches coexist pre-hydration. */
+  workbenchUtilityViewport?: "all" | "desktop" | "mobile";
 }
 
 export function DataTableToolbar<TData extends RowData>({
@@ -81,58 +48,79 @@ export function DataTableToolbar<TData extends RowData>({
   showViewOptions = true,
   className,
   isTransitioning = false,
-  ownsPageIdentity = false,
   filterOptionHints,
+  portalWorkbenchUtilities = false,
+  workbenchUtilityViewport = "all",
 }: DataTableToolbarProps<TData>) {
+  const workbenchTarget = usePageWorkbenchTarget();
+  const utilities = (
+    <>
+      {showViewOptions && <DataTableViewOptions table={table} />}
+      <DataTableViews table={table} entity={entity} />
+    </>
+  );
+  const utilityClass =
+    workbenchUtilityViewport === "desktop"
+      ? "hidden md:flex"
+      : workbenchUtilityViewport === "mobile"
+        ? "flex md:hidden"
+        : "flex";
   return (
-    <Row align="center" justify="between" gap="sm" className={className}>
-      <Row align="center" gap="sm" className="min-w-0">
-        {ownsPageIdentity && <ToolbarIdentity />}
-        {entity && (
-          <ProblemWorklistStatus
-            entity={entity}
-            filters={table.state.columnFilters}
-            sorting={table.state.sorting}
-          />
+    <>
+      {portalWorkbenchUtilities &&
+        workbenchTarget &&
+        createPortal(
+          <div className={`${utilityClass} items-center gap-1`}>
+            {utilities}
+          </div>,
+          workbenchTarget,
         )}
-        {showViewOptions && <DataTableViewOptions table={table} />}
-        <DataTableViews table={table} entity={entity} />
-        <fieldset disabled={isTransitioning} className="contents">
-          {bulkActionBar}
-        </fieldset>
-        {isTransitioning && (
-          <Row
-            align="center"
-            gap="xs"
-            aria-live="polite"
-            className="text-muted-foreground text-xs"
-          >
-            <Spinner size="sm" />
-            Updating…
-          </Row>
-        )}
-      </Row>
-
-      <Row
-        align="center"
-        gap="sm"
-        wrap
+      <div
         className={cn(
-          "min-w-0 flex-1",
-          showViewOptions || bulkActionBar ? "justify-end" : "justify-start",
+          "flex min-h-10 min-w-0 flex-wrap items-center gap-2 bg-card px-2 py-1",
+          className,
         )}
       >
-        {additionalContent}
+        <Row align="center" gap="xs" className="shrink-0">
+          {entity && (
+            <ProblemWorklistStatus
+              entity={entity}
+              filters={table.state.columnFilters}
+              sorting={table.state.sorting}
+            />
+          )}
+          {!portalWorkbenchUtilities && utilities}
+          {isTransitioning && (
+            <Row
+              align="center"
+              gap="xs"
+              aria-live="polite"
+              className="text-muted-foreground text-xs"
+            >
+              <Spinner size="sm" />
+              Updating…
+            </Row>
+          )}
+        </Row>
 
-        <div className="order-last w-full min-w-0 lg:order-none lg:w-auto">
-          <LedgerFilters table={table} optionHints={filterOptionHints} />
+        <div className="min-w-0 flex-1">
+          <fieldset
+            disabled={isTransitioning}
+            className="data-table-query-tier contents"
+          >
+            <div data-query-bulk className="contents">
+              {bulkActionBar}
+            </div>
+            <Row data-query-rest align="center" justify="end" gap="sm" wrap>
+              {additionalContent}
+              <div className="min-w-0 flex-1">
+                <LedgerFilters table={table} optionHints={filterOptionHints} />
+              </div>
+              {actions}
+            </Row>
+          </fieldset>
         </div>
-
-        <fieldset disabled={isTransitioning} className="contents">
-          {actions}
-          {ownsPageIdentity && <PageIdentityActions />}
-        </fieldset>
-      </Row>
-    </Row>
+      </div>
+    </>
   );
 }

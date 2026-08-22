@@ -560,6 +560,19 @@
     @apply bg-background;
   }
 }
+
+/* The bulk-action component subscribes directly to TanStack's row-selection
+   atom and returns null at rest. This lives outside Tailwind's cascade layers
+   so it can deliberately override the query row's `flex` utility. */
+.data-table-query-tier:not(:has([data-bulk-action-bar])) [data-query-bulk],
+.data-table-query-tier:has([data-bulk-action-bar]) [data-query-rest] {
+  display: none;
+}
+
+body:has([data-bulk-action-bar]) [data-mobile-sort-trigger] {
+  display: none;
+}
+
 @media (pointer: coarse) {
   :where(
     [data-slot="button"],

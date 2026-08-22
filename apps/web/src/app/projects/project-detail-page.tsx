@@ -919,9 +919,10 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   // Edit action keep the section discoverable without eating the wide column.
   const hasNotesContent = isEditingNotes || !!project.notes?.trim();
   const notesSection: DetailSection = {
+    id: "notes",
     title: "Notes",
     icon: FileText,
-    zone: hasNotesContent ? "main" : "aside",
+    placement: hasNotesContent ? "primary" : "supporting",
     headerAction: isEditingNotes ? undefined : (
       <Button
         type="button"
@@ -972,9 +973,10 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   };
 
   const budgetSection: DetailSection = {
+    id: "budget",
     title: "Budget",
     icon: Wallet,
-    zone: "main",
+    placement: "primary",
     content: (
       <BudgetStrip estimate={budgetEstimate} split={subtreeSpendSplit} />
     ),
@@ -986,10 +988,11 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   const visibleTaskCount = topLevelTasks.length;
 
   const tasksSection: DetailSection = {
+    id: "tasks",
     title: "Tasks",
     icon: ListChecks,
     // The board needs the full width; the list is happy in the main column.
-    zone: tasksView === "board" ? "full" : "main",
+    placement: tasksView === "board" ? "full" : "primary",
     headerAction: (
       <Row align="center" gap="sm">
         {visibleTaskCount > 0 && (
@@ -1037,21 +1040,26 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   };
 
   const overviewSection: DetailSection = {
+    id: "overview",
     title: "Overview",
     icon: Info,
+    placement: "supporting",
     content: <BasicInfo fields={fields} />,
   };
 
   const reusableResourcesSection: DetailSection = {
+    id: "reusable-resources",
     title: "Reusable resources",
     icon: Wrench,
-    zone: "main",
+    placement: "primary",
     content: <ProjectResourcesSection projectId={project.id} />,
   };
 
   const resourcesSection: DetailSection = {
+    id: "resources",
     title: "Resources",
     icon: ExternalLink,
+    placement: "supporting",
     content: (
       <BasicInfo
         fields={[
@@ -1093,8 +1101,10 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   };
 
   const dependenciesSection: DetailSection = {
+    id: "dependencies",
     title: "Dependencies",
     icon: Link2,
+    placement: "supporting",
     content: (
       <Stack gap="sm">
         <Stack gap="xs">
@@ -1133,8 +1143,10 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   };
 
   const subProjectsSection: DetailSection = {
+    id: "sub-projects",
     title: "Sub-projects",
     icon: FolderTree,
+    placement: "supporting",
     headerAction:
       childProjects.length > 0 ? (
         <Badge variant="outline">{childProjects.length}</Badge>
@@ -1152,9 +1164,10 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   // subtree projects keep the ledger as a full-width band and show the project
   // column since rows span multiple sub-projects.
   const expensesSection: DetailSection = {
+    id: "expenses",
     title: "Expenses",
     icon: ShoppingCart,
-    zone: hasSubtree ? "full" : "main",
+    placement: hasSubtree ? "full" : "primary",
     headerAction: (
       <Row align="center" gap="sm">
         {sortedSubtreeExpenses.length > 0 && (
@@ -1186,9 +1199,10 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   // The vendor charges behind the ledger above, each twirling open to its own
   // lines. Exact project, not the subtree — same scope as the Vendors card.
   const purchasesSection: DetailSection = {
+    id: "purchases",
     title: "Purchases",
     icon: Receipt,
-    zone: hasSubtree ? "full" : "main",
+    placement: hasSubtree ? "full" : "primary",
     content: (
       <ProjectPurchasesTable
         projectId={project.id}
@@ -1198,9 +1212,10 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   };
 
   const purchasedProductsSection: DetailSection = {
+    id: "purchased-products",
     title: "Purchased products",
     icon: ShoppingCart,
-    zone: hasSubtree ? "full" : "main",
+    placement: hasSubtree ? "full" : "primary",
     content: (
       <RelationshipSummaryTable
         relationKey="project.purchasedProducts"
@@ -1225,8 +1240,10 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   };
 
   const vendorsSection: DetailSection = {
+    id: "vendors",
     title: "Vendors",
     icon: ShoppingCart,
+    placement: "primary",
     content: (
       <RelationshipSummaryTable
         relationKey="project.vendors"
@@ -1257,8 +1274,10 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   // `imagesByProjectIds` query and already ride the hero), so it would render
   // an always-empty Images card. Same content the helper produces.
   const historySection: DetailSection = {
+    id: "history",
     title: "History",
     icon: Clock,
+    placement: "supporting",
     content: (
       <AuditLogList
         entityType="project"
@@ -1385,7 +1404,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
         tone: project.status === "done" ? "green" : "ink",
       }}
       heroStats={heroStats}
-      actions={deleteButton}
+      heroActions={{ secondary: deleteButton }}
     >
       <DetailSections
         sections={sections}

@@ -9,6 +9,7 @@ import {
 import { Edit, X } from "lucide-react";
 import { z } from "zod";
 import { VerbButton } from "~/app/_components/actions/action-verb-ui";
+import { DetailAnchorIndex } from "~/app/_components/data-table/detail-page";
 import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
 import { CopyRecipeParseButton } from "~/app/_components/recipe/copy-corpus-button";
 import EditRecipeForm from "~/app/_components/recipe/edit-recipe";
@@ -185,6 +186,8 @@ function RecipeDetailBody({ recipe }: { recipe: RecipeOut }) {
   const stopEditing = () => {
     navigate({ to: ".", search: { edit: undefined } });
   };
+  const availabilitySectionId = `${recipe.id}-availability`;
+  const recipeLedgerSectionId = `${recipe.id}-recipe-ledger`;
 
   return (
     <Page
@@ -194,48 +197,72 @@ function RecipeDetailBody({ recipe }: { recipe: RecipeOut }) {
       rawData={recipe}
       heroNo={recipe.id}
       heroStats={heroStats.length > 0 ? heroStats : undefined}
-      actions={
-        !isEditing ? (
-          <>
-            <AddToMeal recipeId={recipe.id} />
-            <CopyRecipeParseButton recipe={recipe} />
-            <VerbButton
-              verb="duplicate"
-              disabled={isDuplicating}
-              onClick={() => duplicateRecipe(recipe.id)}
-            />
-            <Button onClick={startEditing} variant="outline" size="sm">
-              <Edit />
-              Edit Recipe
-            </Button>
-            {deleteButton}
-          </>
-        ) : (
-          <Button onClick={stopEditing} variant="outline" size="sm">
-            <X />
-            Cancel
-          </Button>
-        )
+      heroActions={
+        !isEditing
+          ? {
+              primary: <AddToMeal recipeId={recipe.id} />,
+              secondary: (
+                <>
+                  <CopyRecipeParseButton recipe={recipe} />
+                  <VerbButton
+                    verb="duplicate"
+                    disabled={isDuplicating}
+                    onClick={() => duplicateRecipe(recipe.id)}
+                  />
+                  <Button onClick={startEditing} variant="outline" size="sm">
+                    <Edit />
+                    Edit Recipe
+                  </Button>
+                  {deleteButton}
+                </>
+              ),
+            }
+          : {
+              primary: (
+                <Button onClick={stopEditing} variant="outline" size="sm">
+                  <X />
+                  Cancel
+                </Button>
+              ),
+            }
       }
     >
       {isEditing ? (
         <EditRecipeForm recipe={recipe} onCancel={stopEditing} />
       ) : (
         <Stack gap="lg">
+          <DetailAnchorIndex
+            sections={[
+              { id: availabilitySectionId, title: "Availability" },
+              { id: recipeLedgerSectionId, title: "Recipe" },
+            ]}
+          />
           {/* Inventory cross-check — its own query/skeleton, so the recipe
               never waits on the availability engine. Lives here rather than in
               RecipeDetail so the search hover-preview (which embeds
               RecipeDetail) doesn't fire it. */}
-          <RecipeAvailabilityPanel recipeId={recipe.id} />
-          <RecipeDetail
-            recipe={recipe}
-            view={recipeView}
-            onViewChange={setRecipeView}
-            scale={scale}
-            onScaleChange={setScale}
-            flowLayout={flowLayout}
-            onFlowLayoutChange={setFlowLayout}
-          />
+          <section
+            id={availabilitySectionId}
+            tabIndex={-1}
+            className="scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none"
+          >
+            <RecipeAvailabilityPanel recipeId={recipe.id} />
+          </section>
+          <section
+            id={recipeLedgerSectionId}
+            tabIndex={-1}
+            className="scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none"
+          >
+            <RecipeDetail
+              recipe={recipe}
+              view={recipeView}
+              onViewChange={setRecipeView}
+              scale={scale}
+              onScaleChange={setScale}
+              flowLayout={flowLayout}
+              onFlowLayoutChange={setFlowLayout}
+            />
+          </section>
         </Stack>
       )}
 

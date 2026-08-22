@@ -10,6 +10,7 @@ import {
 import { ListLoadingSkeleton } from "~/components/feedback/loading-skeletons";
 import { type PageLayout, PageWrapper } from "~/components/layout/page-wrapper";
 import {
+  type DetailHeroActions,
   type DetailHeroStat,
   PageHeader,
 } from "~/components/layouts/page-hero";
@@ -25,12 +26,12 @@ const PageCountContext = createContext<
 
 /**
  * Page identity handed DOWN to a page-level table so its toolbar can carry the
- * page's name, count and actions instead of a separate header block above it.
+ * page's name, count and actions from a stable workbench above it.
  *
  * Provided at render time rather than registered by the table in an effect: a
  * table that claimed the header after paint would make the H1 appear and then
- * vanish on every navigation. `headerInToolbar` is therefore the route's
- * explicit statement, and the pages without a table keep their header.
+ * vanish on every navigation. `listChrome` is therefore the route's explicit
+ * statement, and pages without an operating surface keep their hero.
  */
 export interface PageIdentity {
   title: ReactNode;
@@ -41,6 +42,17 @@ export interface PageIdentity {
 }
 
 const PageIdentityContext = createContext<PageIdentity | null>(null);
+
+/** Portal target for table-owned Display and Saved views controls. */
+export function usePageWorkbenchTarget(): HTMLDivElement | null {
+  const [target, setTarget] = useState<HTMLDivElement | null>(null);
+  useEffect(() => {
+    setTarget(
+      document.querySelector<HTMLDivElement>("[data-workbench-utilities]"),
+    );
+  }, []);
+  return target;
+}
 
 /**
  * Read the page's identity from a page-level table's toolbar. `null` on an
@@ -84,7 +96,6 @@ export function usePageCount(totalCount: number | undefined) {
 interface PageBaseProps {
   title: ReactNode;
   eyebrow?: ReactNode;
-  actions?: ReactNode;
   layout?: PageLayout;
   children: ReactNode;
 }
@@ -103,21 +114,18 @@ interface PageBareProps {
 interface PageListProps extends PageBaseProps {
   variant?: "list";
   entity?: Entity;
+  actions?: ReactNode;
   compact?: boolean;
   decoration?: "accent" | "none";
   /**
-   * Fold the page header into the body's table toolbar: no header block is
-   * rendered, and the title, eyebrow, count and actions travel down through
-   * {@link PageIdentityContext} for the toolbar to lay out on one bar.
-   *
-   * Only for a page whose body renders a page-level table in EVERY state and
-   * at EVERY viewport. The header is dropped at all widths, so a body that
-   * renders its table only past a breakpoint, only once a query exists, or
-   * only in one of several view modes leaves the page with no name and no
-   * `<h1>` — and nothing on screen says so. `header-in-toolbar.unit.test.ts`
-   * holds the reviewed list.
+   * List pages that are durable operating surfaces use a compact ruled
+   * workbench header instead of the editorial page hero. The header remains
+   * mounted while the body swaps between table, shelf, board, chart, or other
+   * renderers, so page identity and primary actions never jump with the view.
    */
-  headerInToolbar?: boolean;
+  listChrome?: "hero" | "workbench";
+  /** View/mode control rendered in the workbench's first tier. */
+  workbenchControls?: ReactNode;
 }
 
 interface PageDetailProps extends PageBaseProps {
@@ -133,6 +141,8 @@ interface PageDetailProps extends PageBaseProps {
    * attachment owned by this record.
    */
   heroMedia?: ReactNode;
+  /** One visible primary action plus secondary actions that collapse on phone. */
+  heroActions?: DetailHeroActions;
   rawData?: unknown;
 }
 
@@ -157,7 +167,7 @@ export function Page(props: PageProps) {
 }
 
 function PageWithHeader(props: PageListProps | PageDetailProps) {
-  const { title, eyebrow, actions, layout, children } = props;
+  const { title, eyebrow, layout, children } = props;
   const variant = props.variant ?? "list";
   // List pages can omit `entity` — derive it from the route so the eyebrow/accent
   // still render. Detail pages always pass it explicitly (TS-required).
@@ -167,38 +177,41 @@ function PageWithHeader(props: PageListProps | PageDetailProps) {
   const detail = props.variant === "detail" ? props : undefined;
   // List-only header options, narrowed off the union.
   const list = props.variant !== "detail" ? props : undefined;
+  const actions = list?.actions;
   // Reported by a descendant list via usePageCount; undefined until a client
   // effect fires (or on pages with no list, or non-list variants).
   const [count, setCount] = useState<number | undefined>(undefined);
-  const headerInToolbar = list?.headerInToolbar === true;
+  const listChrome = list?.listChrome ?? "hero";
   const loadingLabel =
     typeof title === "string"
       ? `Loading ${title.toLocaleLowerCase()}${variant === "detail" ? " details" : " records"}…`
       : "Loading records…";
-  const identity: PageIdentity | null = headerInToolbar
-    ? { title, eyebrow, entity, count, actions }
-    : null;
+  const identity: PageIdentity | null =
+    listChrome === "workbench"
+      ? { title, eyebrow, entity, count, actions }
+      : null;
   return (
     <PageWrapper layout={layout}>
       <div className={variant === "detail" ? "space-y-2" : undefined}>
-        {!headerInToolbar && (
-          <PageHeader
-            variant={variant}
-            title={title}
-            eyebrow={eyebrow}
-            entity={entity}
-            actions={actions}
-            compact={list?.compact}
-            decoration={list?.decoration}
-            heroStamp={detail?.heroStamp}
-            heroStats={detail?.heroStats}
-            heroNo={detail?.heroNo}
-            heroImages={detail?.heroImages}
-            heroMedia={detail?.heroMedia}
-            rawData={detail?.rawData}
-            count={variant === "list" ? count : undefined}
-          />
-        )}
+        <PageHeader
+          variant={variant}
+          title={title}
+          eyebrow={eyebrow}
+          entity={entity}
+          actions={actions}
+          heroActions={detail?.heroActions}
+          compact={list?.compact}
+          decoration={list?.decoration}
+          listChrome={listChrome}
+          workbenchControls={list?.workbenchControls}
+          heroStamp={detail?.heroStamp}
+          heroStats={detail?.heroStats}
+          heroNo={detail?.heroNo}
+          heroImages={detail?.heroImages}
+          heroMedia={detail?.heroMedia}
+          rawData={detail?.rawData}
+          count={variant === "list" ? count : undefined}
+        />
         <PageIdentityContext.Provider value={identity}>
           <PageDetailContext.Provider
             value={

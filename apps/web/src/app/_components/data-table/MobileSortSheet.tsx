@@ -108,6 +108,7 @@ export function MobileSortSheet<TItem extends RowData>({
     <>
       {onScreen && !disabled && (
         <div
+          data-mobile-sort-trigger
           // Clears the fixed bottom nav (a 3.5rem bar plus its safe-area pad)
           // so the control sits in the thumb zone without covering navigation.
           className="fixed right-2 bottom-[calc(3.5rem+env(safe-area-inset-bottom)+0.5rem)] z-40 md:hidden print:hidden"

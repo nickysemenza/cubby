@@ -40,12 +40,10 @@ export function FinancialTransactionDetail({
         transaction.merchant || transaction.rawDescription || "Transaction"
       }
       rawData={transaction}
-      actions={
-        <>
-          <DetailEditAction onClick={() => setEditOpen(true)} />
-          {deleteButton}
-        </>
-      }
+      heroActions={{
+        primary: <DetailEditAction onClick={() => setEditOpen(true)} />,
+        secondary: deleteButton,
+      }}
       heroStats={[
         { label: "Amount", value: formatCurrency(transaction.amount) },
         { label: "Status", value: transaction.status },
@@ -55,8 +53,10 @@ export function FinancialTransactionDetail({
         rawData={transaction}
         sections={[
           {
+            id: "overview",
             title: "Overview",
             icon: Info,
+            placement: "primary",
             content: (
               <BasicInfo
                 fields={[
@@ -179,8 +179,10 @@ export function FinancialTransactionDetail({
             ),
           },
           {
+            id: "history",
             title: "History",
             icon: Clock,
+            placement: "supporting",
             content: (
               <AuditLogList
                 entityType="financialTransaction"

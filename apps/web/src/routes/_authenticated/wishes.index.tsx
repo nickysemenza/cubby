@@ -44,7 +44,7 @@ function WishesPage() {
   return (
     <Page
       variant="list"
-      headerInToolbar
+      listChrome="workbench"
       entity="wish"
       title="Wishlist"
       layout="full"

@@ -41,9 +41,20 @@ export function LedgerFilters<TData extends RowData>({
   /** Server facet counts by mounted column id then option value. */
   optionHints?: Readonly<Record<string, Readonly<Record<string, string>>>>;
 }) {
+  // TanStack v9 materializes leaf columns after the first table render. The
+  // table/options references stay stable across that boundary, so they cannot
+  // by themselves invalidate this memo; include the resolved filter-column
+  // signature so an initially empty query strip hydrates as soon as the
+  // manifest-bearing leaf columns exist.
+  const filterColumnsKey = table
+    .getAllLeafColumns()
+    .filter((column) => column.columnDef.meta?.filterConfig)
+    .map((column) => column.id)
+    .join("|");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: filterColumnsKey is the late-materializing TanStack v9 signal described above
   const fields = useMemo(
     () => getLedgerFields(table, optionHints),
-    [table, table.options.columns, optionHints],
+    [table, table.options.columns, optionHints, filterColumnsKey],
   );
   const externalColumnFilters = table.state.columnFilters;
   const externalFilters = useMemo(

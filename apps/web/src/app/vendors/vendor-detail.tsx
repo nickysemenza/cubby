@@ -165,21 +165,25 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
 
   const sections: DetailSection[] = [
     {
+      id: "overview",
       title: "Overview",
       icon: Info,
+      placement: "supporting",
       content: <BasicInfo fields={fields} />,
     },
     {
+      id: "purchases",
       title: "Purchases",
       icon: Receipt,
       // The page's primary content — everything else is metadata.
-      zone: "main",
+      placement: "primary",
       content: <VendorPurchasesTable vendor={vendor} />,
     },
     {
+      id: "purchased-products",
       title: "Purchased products",
       icon: Receipt,
-      zone: "main",
+      placement: "primary",
       content: (
         <RelationshipSummaryTable
           relationKey="vendor.products"
@@ -202,8 +206,10 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
       ),
     },
     {
+      id: "projects",
       title: "Projects",
       icon: Receipt,
+      placement: "primary",
       content: (
         <RelationshipSummaryTable
           relationKey="vendor.projects"
@@ -254,7 +260,7 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
       }
       heroStats={heroStats}
       heroMedia={heroMedia}
-      actions={deleteButton}
+      heroActions={{ secondary: deleteButton }}
     >
       <DetailSections sections={sections} rawData={vendor} />
       {deleteDialog}

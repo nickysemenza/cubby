@@ -98,8 +98,10 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
 
   const sections: DetailSection[] = [
     editableDetailSection({
+      id: "basic-information",
       title: "Basic Information",
       icon: Info,
+      placement: "supporting",
       editMode,
       Form: ProductForm,
       entity: product,
@@ -116,9 +118,10 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     // content of the page (the hero's On hand / Locations stats are the
     // glanceable summary of this table).
     {
+      id: "stocked-at",
       title: "Stocked At",
       icon: MapPin,
-      zone: "main" as const,
+      placement: "primary" as const,
       headerAction: (
         <Button
           variant="outline"
@@ -135,9 +138,10 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     // product (arrivals and dispositions), the primary way cost basis gets
     // tracked over time.
     {
+      id: "expense-history",
       title: "Expense History",
       icon: Receipt,
-      zone: "main" as const,
+      placement: "primary" as const,
       // Sale and discard are siblings: both record a unit leaving, and they
       // differ only in whether money came back.
       headerAction: (
@@ -169,9 +173,10 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     // carry a product at all). Distinct from "Vendors" below: that's the
     // derived vendor/spend rollup, this is per-order provenance.
     {
+      id: "purchases",
       title: "Purchases",
       icon: ReceiptText,
-      zone: "main" as const,
+      placement: "primary" as const,
       content: <ProductPurchases productId={product.id} />,
     },
     // Custom section: Kit Components — what this Product is made of via
@@ -179,14 +184,17 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     // listed inside (if it's a part). This edge carries no money: the kit
     // keeps its own Expense History above, never split per component.
     {
+      id: "kit-components",
       title: "Kit Components",
       icon: Boxes,
-      zone: "main" as const,
+      placement: "primary" as const,
       content: <ProductKitComponents productId={product.id} />,
     },
     {
+      id: "vendors",
       title: "Vendors",
       icon: Receipt,
+      placement: "supporting",
       content: (
         <RelationshipSummaryTable
           relationKey="product.vendors"
@@ -212,9 +220,10 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     ...(product.category === "tools" || product.category === "software"
       ? [
           {
+            id: "project-uses",
             title: "Used on projects",
             icon: Wrench,
-            zone: "main" as const,
+            placement: "primary" as const,
             content: <ProductProjectUses productId={product.id} />,
           },
         ]
@@ -222,9 +231,10 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     ...(isNonFood
       ? [
           {
+            id: "tasks",
             title: "Tasks",
             icon: ListChecks,
-            zone: "main" as const,
+            placement: "primary" as const,
             headerAction: (
               <Button
                 variant="outline"
@@ -245,8 +255,10 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     ...(product.tags.some((tag) => !isCollectionTag(tag))
       ? [
           {
+            id: "fits-with",
             title: "Fits With",
             icon: Link2,
+            placement: "supporting" as const,
             content: <ProductTagSiblings product={product} />,
           },
         ]
@@ -255,9 +267,10 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     ...(documents.length > 0
       ? [
           {
+            id: "manuals",
             title: "Manuals",
             icon: FileText,
-            zone: "main" as const,
+            placement: "primary" as const,
             content: (
               <DocumentViewerList documents={documents} target={manualTarget} />
             ),
@@ -273,8 +286,10 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     ...(product.food?.nutritionInfo
       ? [
           {
+            id: "nutrition-information",
             title: "Nutrition Information",
             icon: Apple,
+            placement: "supporting" as const,
             content: (
               <Stack gap="md">
                 <ProductNutritionLabel
@@ -308,9 +323,10 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     ...(isNonFood && mappings.length === 0
       ? [
           {
+            id: "unit-mappings",
             title: "Unit Mappings",
             icon: Scale,
-            zone: "main" as const,
+            placement: "primary" as const,
             content: (
               <Description>
                 No unit conversions — not needed for non-food items.
@@ -320,9 +336,10 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
         ]
       : [
           {
+            id: "unit-mappings",
             title: "Unit Mappings",
             icon: Scale,
-            zone: "main" as const,
+            placement: "primary" as const,
             content: (
               <Stack gap="sm">
                 <UnitCoveragePanel
@@ -343,9 +360,10 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     ...(product.ingredient
       ? [
           {
+            id: "recipe-appearances",
             title: "Appears In Recipes",
             icon: ChefHat,
-            zone: "full" as const,
+            placement: "full" as const,
             content:
               product.recipeUsages.length > 0 ? (
                 <RecipeUsagesTable

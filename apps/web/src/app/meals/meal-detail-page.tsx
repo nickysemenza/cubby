@@ -188,7 +188,7 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
         label: format(parseISO(meal.date), "EEE, MMM d"),
         tone: "ink",
       }}
-      actions={deleteButton}
+      heroActions={{ secondary: deleteButton }}
     >
       {deleteDialog}
       <Card>

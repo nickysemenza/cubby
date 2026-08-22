@@ -34,37 +34,41 @@ export const Route = createFileRoute("/_authenticated/recipes/")({
 
 function RecipesPage() {
   return (
-    <Page variant="list" headerInToolbar title="Recipes" layout="full">
-      <RecipeList
-        actions={
-          <>
-            <Link to="/entities" search={{ tab: "recipes" }}>
-              <Button variant="outline">
-                <Share2 />
-                Graph
-              </Button>
-            </Link>
-            <Link to="/recipes/new" search={{ scrape: true }}>
-              <Button variant="outline">
-                <Link2 />
-                Import from URL
-              </Button>
-            </Link>
-            <Link to="/recipes/import">
-              <Button variant="outline">
-                <BookOpen />
-                Import
-              </Button>
-            </Link>
-            <Link to="/recipes/new">
-              <Button>
-                <Plus />
-                New
-              </Button>
-            </Link>
-          </>
-        }
-      />
+    <Page
+      variant="list"
+      listChrome="workbench"
+      title="Recipes"
+      layout="full"
+      actions={
+        <>
+          <Link to="/entities" search={{ tab: "recipes" }}>
+            <Button variant="outline">
+              <Share2 />
+              Graph
+            </Button>
+          </Link>
+          <Link to="/recipes/new" search={{ scrape: true }}>
+            <Button variant="outline">
+              <Link2 />
+              Import from URL
+            </Button>
+          </Link>
+          <Link to="/recipes/import">
+            <Button variant="outline">
+              <BookOpen />
+              Import
+            </Button>
+          </Link>
+          <Link to="/recipes/new">
+            <Button>
+              <Plus />
+              New
+            </Button>
+          </Link>
+        </>
+      }
+    >
+      <RecipeList />
     </Page>
   );
 }

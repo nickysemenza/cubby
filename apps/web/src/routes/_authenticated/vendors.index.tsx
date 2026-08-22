@@ -49,7 +49,7 @@ function VendorsPage() {
   return (
     <Page
       variant="list"
-      headerInToolbar
+      listChrome="workbench"
       title="Vendors"
       layout="full"
       actions={

@@ -257,9 +257,10 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
   const sections: DetailSection[] = [
     // The lines ARE the purchase's money, so they lead the wide column.
     {
+      id: "expenses",
       title: "Expenses",
       icon: ReceiptText,
-      zone: "main",
+      placement: "primary",
       headerAction: (
         <Row align="center" gap="sm">
           {purchase.expenseCount > 0 && (
@@ -287,9 +288,10 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
       ),
     },
     {
+      id: "products",
       title: "Products",
       icon: Package,
-      zone: "main",
+      placement: "primary",
       headerAction: (
         <Row align="center" gap="sm">
           {linkedProducts.length > 0 && (
@@ -321,9 +323,10 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
       ),
     },
     {
+      id: "project-allocation",
       title: "Project allocation",
       icon: ReceiptText,
-      zone: "main",
+      placement: "primary",
       content: (
         <RelationshipSummaryTable
           relationKey="purchase.projects"
@@ -339,19 +342,24 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
       ),
     },
     {
+      id: "documents",
       title: "Documents",
       icon: FileText,
-      zone: "main",
+      placement: "primary",
       content: <PurchaseDocuments purchase={purchase} />,
     },
     {
+      id: "overview",
       title: "Overview",
       icon: Info,
+      placement: "supporting",
       content: <BasicInfo fields={fields} />,
     },
     {
+      id: "reconciliation",
       title: "Reconciliation",
       icon: Scale,
+      placement: "supporting",
       content: (
         <Stack gap="sm">
           <Row align="center" justify="between" gap="sm">
@@ -383,8 +391,10 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
       ),
     },
     {
+      id: "financial-settlement",
       title: "Financial settlement",
       icon: Scale,
+      placement: "supporting",
       content: (
         <FinancialSettlement
           purchase={
@@ -400,8 +410,10 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
       // so a filed PDF invoice would render as a broken thumbnail, in a second
       // card duplicating Documents above. This is the same content the helper
       // produces for `history`, minus that.
+      id: "history",
       title: "History",
       icon: Clock,
+      placement: "supporting",
       content: (
         <AuditLogList
           entityType="purchase"
@@ -463,8 +475,8 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
               : { label: "Needs review", tone: "ink" }
       }
       heroStats={heroStats}
-      actions={
-        <>
+      heroActions={{
+        primary: (
           <Button
             variant="outline"
             size="sm"
@@ -473,9 +485,9 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
             <Merge />
             Merge purchases
           </Button>
-          {deleteButton}
-        </>
-      }
+        ),
+        secondary: deleteButton,
+      }}
     >
       <DetailSections sections={sections} rawData={purchase} />
       <MergePurchasesDialog

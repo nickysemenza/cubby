@@ -52,9 +52,10 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
 
   const sections: DetailSection[] = [
     editableDetailSection({
+      id: "inventory-details",
       title: "Inventory Item Details",
       icon: Package,
-      zone: "main",
+      placement: "primary",
       editMode,
       Form: InventoryForm,
       entity: inventoryitem,
@@ -67,9 +68,8 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
   // Page-level action cluster on the hero plate. Edit/Move/Delete are disabled
   // while a delete is in flight so the row reads as "deleting" before the
   // redirect lands.
-  const actions = (
+  const secondaryActions = (
     <>
-      <DetailEditAction onClick={editMode.startEditing} disabled={isPending} />
       <Button
         variant="outline"
         size="sm"
@@ -90,7 +90,15 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
         entity="inventory"
         title={inventoryitem.product.name}
         rawData={inventoryitem}
-        actions={actions}
+        heroActions={{
+          primary: (
+            <DetailEditAction
+              onClick={editMode.startEditing}
+              disabled={isPending}
+            />
+          ),
+          secondary: secondaryActions,
+        }}
       >
         <DetailSections sections={sections} rawData={inventoryitem} />
       </Page>

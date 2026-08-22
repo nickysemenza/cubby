@@ -65,6 +65,7 @@ function ProjectToolMatrixRoute() {
   return (
     <Page
       variant="list"
+      listChrome="workbench"
       title="Tool usage matrix"
       eyebrow="Projects"
       layout="full"

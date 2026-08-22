@@ -34,79 +34,47 @@ function renderBar(filters: Filter[]) {
   return { onChange, ...result };
 }
 
-describe("FilterBar", () => {
-  it("keeps deferred option queries dormant until a filter is activated", () => {
+function openAddFilter() {
+  fireEvent.click(screen.getByRole("button", { name: "Filter" }));
+}
+
+describe("FilterQueryStrip", () => {
+  it("keeps deferred options dormant until their field is added", async () => {
     const onActivate = vi.fn();
-    const deferredFields: FilterBarField[] = [
-      {
-        key: "project",
-        label: "Project",
-        type: "multiselect",
-        options: [],
-        onActivate,
-      },
-    ];
     const onChange = vi.fn();
-    const { rerender } = render(
-      <FilterBar filters={[]} fields={deferredFields} onChange={onChange} />,
+    render(
+      <FilterBar
+        filters={[]}
+        fields={[
+          {
+            key: "project",
+            label: "Project",
+            type: "multiselect",
+            options: [],
+            onActivate,
+          },
+        ]}
+        onChange={onChange}
+      />,
     );
 
     expect(onActivate).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByRole("combobox", { name: "Add filter" }), {
-      target: { value: "project" },
-    });
-    expect(onActivate).toHaveBeenCalledWith();
+    openAddFilter();
+    fireEvent.click(await screen.findByRole("button", { name: "Project" }));
 
-    rerender(
-      <FilterBar
-        filters={[
-          {
-            id: "filter-project",
-            field: "project",
-            operator: "is_any_of",
-            values: ["PRJ-ONE"],
-          },
-        ]}
-        fields={deferredFields}
-        onChange={onChange}
-      />,
-    );
-    expect(onActivate).toHaveBeenLastCalledWith(["PRJ-ONE"]);
+    expect(onActivate).toHaveBeenCalledWith();
+    expect(onChange).toHaveBeenCalledWith([
+      {
+        id: "filter-project",
+        field: "project",
+        operator: "is_any_of",
+        values: [],
+      },
+    ]);
   });
 
-  it("adds searchable select fields and preserves facet hints", async () => {
-    const { onChange, rerender } = renderBar([]);
-
-    const addFilter = screen.getByRole("combobox", { name: "Add filter" });
-    expect(addFilter).toHaveAccessibleName("Add filter");
-    fireEvent.change(addFilter, { target: { value: "status" } });
-
-    expect(onChange).toHaveBeenCalledWith([
-      { id: "filter-status", field: "status", operator: "is", values: [] },
-    ]);
-
-    rerender(
-      <FilterBar
-        filters={[
-          {
-            id: "filter-status",
-            field: "status",
-            operator: "is",
-            values: [],
-          },
-        ]}
-        fields={fields}
-        onChange={onChange}
-      />,
-    );
-    const status = screen.getByRole("combobox", { name: "Filter Status" });
-    fireEvent.click(screen.getByRole("button", { name: "Open Filter Status" }));
-    fireEvent.change(status, { target: { value: "ope" } });
-    const openOption = await screen.findByRole("option", {
-      name: /open.*3 items/i,
-    });
-    fireEvent.click(openOption);
-    expect(onChange).toHaveBeenLastCalledWith([
+  it("edits a filter by opening its compact label/value chip", async () => {
+    const { onChange } = renderBar([
       {
         id: "filter-status",
         field: "status",
@@ -114,9 +82,24 @@ describe("FilterBar", () => {
         values: ["open"],
       },
     ]);
+
+    fireEvent.click(screen.getByRole("button", { name: /status: open/i }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Open Filter Status" }),
+    );
+    fireEvent.click(await screen.findByRole("option", { name: /done/i }));
+
+    expect(onChange).toHaveBeenLastCalledWith([
+      {
+        id: "filter-status",
+        field: "status",
+        operator: "is",
+        values: ["done"],
+      },
+    ]);
   });
 
-  it("immediately clears select and multiselect values without removing their chips", () => {
+  it("uses one remove affordance per chip and clears the whole query", () => {
     const { onChange } = renderBar([
       {
         id: "filter-status",
@@ -132,17 +115,13 @@ describe("FilterBar", () => {
       },
     ]);
 
-    const clearButtons = screen.getAllByRole("button", {
-      name: "Clear filter",
-    });
-    fireEvent.click(clearButtons[0]!);
+    expect(
+      screen.getAllByRole("button", { name: /^Remove .* filter$/ }),
+    ).toHaveLength(2);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove Status filter" }),
+    );
     expect(onChange).toHaveBeenLastCalledWith([
-      {
-        id: "filter-status",
-        field: "status",
-        operator: "is",
-        values: [],
-      },
       {
         id: "filter-tags",
         field: "tags",
@@ -151,24 +130,11 @@ describe("FilterBar", () => {
       },
     ]);
 
-    fireEvent.click(clearButtons[1]!);
-    expect(onChange).toHaveBeenLastCalledWith([
-      {
-        id: "filter-status",
-        field: "status",
-        operator: "is",
-        values: ["open"],
-      },
-      {
-        id: "filter-tags",
-        field: "tags",
-        operator: "is_any_of",
-        values: [],
-      },
-    ]);
+    fireEvent.click(screen.getByRole("button", { name: "Clear all" }));
+    expect(onChange).toHaveBeenLastCalledWith([]);
   });
 
-  it("surfaces an invalid entity link filter instead of rendering a blank value", () => {
+  it("surfaces an invalid entity filter as readable chip text", () => {
     renderBar([
       {
         id: "filter-status",
@@ -178,9 +144,11 @@ describe("FilterBar", () => {
       },
     ]);
 
-    expect(screen.getByRole("combobox", { name: "Filter Status" })).toHaveValue(
-      "Invalid link filter",
-    );
+    expect(
+      screen.getByRole("button", {
+        name: /status: invalid link filter/i,
+      }),
+    ).toBeVisible();
     expect(
       screen.getByRole("button", { name: "Remove Status filter" }),
     ).toBeVisible();

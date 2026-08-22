@@ -27,6 +27,7 @@ function InventoryPage() {
   return (
     <Page
       variant="list"
+      listChrome="workbench"
       title="Inventory"
       layout="full"
       actions={
