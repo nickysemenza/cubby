@@ -1731,7 +1731,7 @@ export const setProductsStockTracked = async (
   const { stockTracked } = input;
 
   const updatedShortcodes = await withTransaction(db, async (tx) => {
-    const ids = await resolveAllPresent(db, "product", input.ids);
+    const ids = await resolveAllPresent(tx, "product", input.ids);
     const before = await tx.query.product.findMany({
       where: and(inArray(product.id, ids), notDeleted(product)),
       columns: { id: true, shortcode: true, stockTracked: true },
