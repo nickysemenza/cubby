@@ -446,11 +446,20 @@ export const findToolsUsedOutsideOwnership = async (
 // same item differently ("DeWalt DCD791D2" vs "DEWALT 20V MAX XR Drill Kit").
 //
 // **The signal is `(manufacturer, model)` with external ids from different
-// sources**, and the reason it is worth encoding rather than guessing is that
-// it was measured on the live 2,472-product catalog: it found all 5 real
-// duplicates with ~6 false positives, and every false positive was a legitimate
-// variant that a distinct identifier separates. Two rows carrying the same maker
-// part number, entered from two different retailers, are one thing.
+// sources**, and the reason it is worth encoding rather than guessing is that it
+// was measured: on the then-2,472-product catalog it found all 5 real duplicates
+// with ~6 false positives, and every false positive was a legitimate variant
+// that a distinct identifier separates. Two rows carrying the same maker part
+// number, entered from two different retailers, are one thing.
+//
+// Those numbers are the RECORD OF THE CHOICE, not a current reading. The
+// catalog is 5,708 live products as of 2026-08-22 and the detector flags
+// nothing — the duplicates that measurement found have since been merged.
+// Re-measured when barcodes became `gtin` identifier rows (PR #853), because
+// that makes `gtin` count toward the "different sources" gate below and could
+// have widened recall: groups reaching suppression and groups flagged were
+// identical with and without it. If you change the gate or the suppression,
+// re-measure rather than reasoning from these figures.
 //
 // **Trigram name similarity was near-useless here and must not be re-tried.**
 // The same measurement that validated the model key rejected the fuzzy one:
