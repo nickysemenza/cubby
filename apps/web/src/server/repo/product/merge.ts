@@ -9,14 +9,14 @@
  *
  * ## Why this is harder than the other three merges
  *
- * Product has **nine** incoming edges, and six of them sit under a partial
- * unique index, so a blind re-point aborts the transaction rather than
- * producing a wrong answer:
+ * Product has **thirteen** declared incoming edges. Six association shapes sit
+ * under a partial unique index, so a blind re-point aborts the transaction
+ * rather than producing a wrong answer:
  *
  *  | edge                          | index                          |
  *  |-------------------------------|--------------------------------|
  *  | `ProductExternalId.productId` | `(productId, source, kind)`    |
- *  | `InventoryEntry.productId`    | `(productId, locationId)`      |
+ *  | `InventoryEntry.productId`    | `(productId, locationId, placement)` |
  *  | `ProductImage.productId`      | `(productId, imageId)`         |
  *  | `ProjectToolUsage.productId`  | `(projectId, productId)`       |
  *  | `PurchaseProduct.productId`   | `(purchaseId, productId)`      |
@@ -26,8 +26,9 @@
  * an *absorbed* row is per-edge and deliberately not shared (see below).
  * `ProductUnitMappings` is planned through it too, for a different reason — it
  * has NO unique index, so nothing would have refused a duplicate (see the fourth
- * rule). The remaining two — `Expense` and `Task.subjectProductId` — are plain
- * re-points.
+ * rule). ProductComponent is the seventh slotted relationship and is treated
+ * as a graph below. `Expense`, `Task.subjectProductId`, and `Location` are
+ * plain re-points; conversion coverage is a rebuildable projection.
  *
  * ### The two rules worth writing down
  *
@@ -36,14 +37,14 @@
  * products fill the same slot with *different* values (they cannot fill it with
  * the same value: the global `(source, kind, externalId)` unique index already
  * forbids two live rows sharing a triple), that is a genuine conflict, and the
- * keeper is the row the operator chose to keep, so its identifier stands. The
- * loser's row is soft-deleted and named in the audit entry rather than
- * vanishing — the same shape `foldChargeInto` uses for a discarded
- * `statedTotal`. A "richer row wins" rule was rejected: richness is not
- * evidence of correctness, and silently swapping a verified ASIN for a stale
- * one is the worse failure. The one thing that *is* carried is a `url` the
- * keeper's row lacks — fill-never-overwrite, the house rule from
- * `planVendorMerge` and `foldChargeInto`.
+ * keeper is the row the operator chose to keep, so its identifier stays
+ * primary. The loser's row moves onto the survivor as a secondary identifier
+ * and is named in the audit entry rather than vanishing. A "richer row wins"
+ * rule was rejected: richness is not evidence of correctness, and silently
+ * swapping a verified ASIN for a stale one is the worse failure. The one thing
+ * that *is* carried is a `url` the keeper's row lacks —
+ * fill-never-overwrite, the house rule from `planVendorMerge` and
+ * `foldChargeInto`.
  *
  * Re-pointing can never violate the *global* `(source, kind, externalId)` index:
  * a re-point changes only `productId`, and two live rows can't already share the
@@ -166,19 +167,14 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import {
-  countByTarget,
-  impact,
-  present,
-  sideEffect,
-} from "~/server/repo/impact";
+import { impact, present, sideEffect } from "~/server/repo/impact";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import {
   finalizeMerge,
   foldAssociation,
   planSlotCollisions,
-  repointEdge,
   resolveMergeTargets,
+  type SlotCollisionPlan,
 } from "~/server/repo/merge";
 import { cascadeRemoval } from "~/server/repo/removal";
 import { markProductConversionCoverageInputStale } from "./conversion-coverage";
@@ -291,6 +287,18 @@ const CARRIED_COLUMNS = [
   "stockTracked",
 ] as const;
 type CarriedColumn = (typeof CARRIED_COLUMNS)[number];
+
+const CARRIED_FIELD_LABELS: Record<CarriedColumn, string> = {
+  upc: "barcode",
+  fdc_id: "USDA food identity",
+  model: "model",
+  price: "price",
+  notes: "notes",
+  category: "category",
+  ingredientId: "linked ingredient",
+  expectedQuantity: "expected quantity",
+  stockTracked: "stock-tracking decision",
+};
 
 type ProductMergeRow = {
   id: ProductId;
@@ -714,6 +722,323 @@ const describeProductPath = async (
   return path.map((id) => byId.get(id) ?? "?").join(" → ");
 };
 
+type ExternalIdRow = {
+  id: string;
+  productId: ProductId;
+  source: string;
+  kind: string;
+  externalId: string;
+  url: string | null;
+  isPrimary: boolean;
+};
+
+type ProductAssociationRow = {
+  id: string;
+  productId: ProductId;
+};
+
+type ProductImageAssociationRow = ProductAssociationRow & {
+  imageId: string;
+  sortOrder: number;
+  createdAt: Date;
+};
+
+type ProjectUseAssociationRow = ProductAssociationRow & { projectId: string };
+type PurchaseAssociationRow = ProductAssociationRow & { purchaseId: string };
+type WishAssociationRow = ProductAssociationRow & { wishId: string };
+
+interface PlannedAssociation<Row extends ProductAssociationRow> {
+  rows: Row[];
+  collision: SlotCollisionPlan<Row>;
+}
+
+interface ProductMergePlan {
+  loserIds: ProductId[];
+  keeper: ProductMergeRow;
+  losers: ProductMergeRow[];
+  inventory: ReturnType<typeof planInventoryFold> & { rows: InventoryRow[] };
+  components: ComponentMergePlan;
+  unitMappings: ReturnType<typeof planUnitMappingFold>;
+  externalIds: {
+    rows: ExternalIdRow[];
+    collision: SlotCollisionPlan<ExternalIdRow>;
+  };
+  images: PlannedAssociation<ProductImageAssociationRow>;
+  projectUses: PlannedAssociation<ProjectUseAssociationRow>;
+  purchases: PlannedAssociation<PurchaseAssociationRow>;
+  wishes: PlannedAssociation<WishAssociationRow>;
+  expenses: ProductAssociationRow[];
+  tasks: ProductAssociationRow[];
+  locations: ProductAssociationRow[];
+  conversionCoverage: ProductAssociationRow[];
+  survivorImageIds: string[];
+  aliases: string[];
+  aliasesAdded: string[];
+  tags: string[];
+  carried: Record<string, unknown>;
+}
+
+const planAssociation = <Row extends ProductAssociationRow>(args: {
+  rows: Row[];
+  keepId: ProductId;
+  slotKey: (row: Row) => string;
+}): PlannedAssociation<Row> => ({
+  rows: args.rows,
+  collision: planSlotCollisions({
+    keeperRows: args.rows.filter((row) => row.productId === args.keepId),
+    loserRows: args.rows.filter((row) => row.productId !== args.keepId),
+    slotKey: args.slotKey,
+  }),
+});
+
+/**
+ * Load and decide every Product-merge consequence without writing.
+ *
+ * This is the Product merge module's single deep interface. Advisory preview
+ * presents this plan; mutation rebuilds it after locking the products inside
+ * its transaction and executes these exact decisions. UUIDs remain internal to
+ * the module and are translated to shortcodes by the operation-preview router.
+ */
+async function buildProductMergePlan(
+  db: DrizzleClient | DrizzleTransaction,
+  input: { keepId: ProductId; loserIds: ProductId[] },
+): Promise<ProductMergePlan>;
+async function buildProductMergePlan(
+  db: DrizzleClient | DrizzleTransaction,
+  input: { keepId: ProductId; loserIds: ProductId[] },
+  options: { allowMissingKeeper: true },
+): Promise<ProductMergePlan | null>;
+async function buildProductMergePlan(
+  db: DrizzleClient | DrizzleTransaction,
+  input: { keepId: ProductId; loserIds: ProductId[] },
+  options?: { allowMissingKeeper?: boolean },
+): Promise<ProductMergePlan | null> {
+  const requestedIds = [input.keepId, ...input.loserIds];
+  // Deliberately sequential: this function also runs on one transaction
+  // client, and pg deprecates submitting another query while that client is
+  // already executing one.
+  const productRows = (await db.query.product.findMany({
+    where: and(inArray(product.id, requestedIds), notDeleted(product)),
+    columns: {
+      id: true,
+      shortcode: true,
+      name: true,
+      aliases: true,
+      tags: true,
+      upc: true,
+      fdc_id: true,
+      model: true,
+      price: true,
+      notes: true,
+      category: true,
+      ingredientId: true,
+      expectedQuantity: true,
+      stockTracked: true,
+    },
+  })) as ProductMergeRow[];
+  const keeper = productRows.find((row) => row.id === input.keepId);
+  if (!keeper) {
+    if (options?.allowMissingKeeper) return null;
+    throw createAppError(
+      "PRODUCT_NOT_FOUND",
+      `Product not found: ${input.keepId}`,
+    );
+  }
+  const productById = new Map(productRows.map((row) => [row.id, row]));
+  const losers = uniq(input.loserIds).flatMap((id) => {
+    const row = productById.get(id);
+    return row && row.id !== input.keepId ? [row] : [];
+  });
+  const liveLoserIds = losers.map((row) => row.id);
+  const ids = [input.keepId, ...liveLoserIds];
+  const inventoryRows = (await db.query.inventoryEntry.findMany({
+    where: and(
+      inArray(inventoryEntry.productId, ids),
+      notDeleted(inventoryEntry),
+    ),
+    columns: {
+      id: true,
+      productId: true,
+      locationId: true,
+      placement: true,
+      amount: true,
+    },
+  })) as InventoryRow[];
+  const componentRows = await loadComponentRows(db);
+  const unitMappingRows = (await db.query.productUnitMappings.findMany({
+    where: and(
+      inArray(productUnitMappings.productId, ids),
+      notDeleted(productUnitMappings),
+    ),
+    columns: { id: true, productId: true, a: true, b: true, source: true },
+    orderBy: [asc(productUnitMappings.createdAt), asc(productUnitMappings.id)],
+  })) as UnitMappingRow[];
+  const externalIdRows = (await db.query.productExternalId.findMany({
+    where: and(
+      inArray(productExternalId.productId, ids),
+      notDeleted(productExternalId),
+    ),
+    columns: {
+      id: true,
+      productId: true,
+      source: true,
+      kind: true,
+      externalId: true,
+      url: true,
+      isPrimary: true,
+    },
+    orderBy: [
+      desc(productExternalId.isPrimary),
+      asc(productExternalId.createdAt),
+      asc(productExternalId.id),
+    ],
+  })) as ExternalIdRow[];
+  const imageRows = (await db.query.productImage.findMany({
+    where: and(inArray(productImage.productId, ids), notDeleted(productImage)),
+    columns: {
+      id: true,
+      productId: true,
+      imageId: true,
+      sortOrder: true,
+      createdAt: true,
+    },
+    orderBy: [asc(productImage.sortOrder), asc(productImage.createdAt)],
+  })) as ProductImageAssociationRow[];
+  const projectUseRows = (await db.query.projectToolUsage.findMany({
+    where: and(
+      inArray(projectToolUsage.productId, ids),
+      notDeleted(projectToolUsage),
+    ),
+    columns: { id: true, productId: true, projectId: true },
+  })) as ProjectUseAssociationRow[];
+  const purchaseRows = (await db.query.purchaseProduct.findMany({
+    where: and(
+      inArray(purchaseProduct.productId, ids),
+      notDeleted(purchaseProduct),
+    ),
+    columns: { id: true, productId: true, purchaseId: true },
+  })) as PurchaseAssociationRow[];
+  const wishRows = (await db.query.wishCandidate.findMany({
+    where: and(
+      inArray(wishCandidate.productId, ids),
+      notDeleted(wishCandidate),
+    ),
+    columns: { id: true, productId: true, wishId: true },
+  })) as WishAssociationRow[];
+  const expenses = (await db
+    .select({ id: expense.id, productId: expense.productId })
+    .from(expense)
+    .where(
+      and(inArray(expense.productId, liveLoserIds), notDeleted(expense)),
+    )) as ProductAssociationRow[];
+  const tasks = (await db
+    .select({ id: task.id, productId: task.subjectProductId })
+    .from(task)
+    .where(
+      and(inArray(task.subjectProductId, liveLoserIds), notDeleted(task)),
+    )) as ProductAssociationRow[];
+  const locations = (await db
+    .select({ id: location.id, productId: location.productId })
+    .from(location)
+    .where(
+      and(inArray(location.productId, liveLoserIds), notDeleted(location)),
+    )) as ProductAssociationRow[];
+  const conversionCoverage = (await db
+    .select({
+      id: productConversionCoverage.productId,
+      productId: productConversionCoverage.productId,
+    })
+    .from(productConversionCoverage)
+    .where(
+      inArray(productConversionCoverage.productId, liveLoserIds),
+    )) as ProductAssociationRow[];
+  const aliases = uniq([
+    ...keeper.aliases,
+    ...losers.map((row) => row.name),
+    ...losers.flatMap((row) => row.aliases ?? []),
+  ]).filter((alias) => alias !== keeper.name);
+  const existingAliases = new Set(keeper.aliases);
+  const carried: Record<string, unknown> = {};
+  for (const column of CARRIED_COLUMNS) {
+    if (keeper[column] != null) continue;
+    const donor = losers.find((row) => row[column] != null);
+    if (donor) carried[column] = donor[column];
+  }
+
+  return {
+    loserIds: liveLoserIds,
+    keeper,
+    losers,
+    inventory: {
+      rows: inventoryRows,
+      ...planInventoryFold({
+        keeperRows: inventoryRows.filter(
+          (row) => row.productId === input.keepId,
+        ),
+        loserRows: inventoryRows.filter(
+          (row) => row.productId !== input.keepId,
+        ),
+      }),
+    },
+    components: planProductComponentMerge({
+      keepId: input.keepId,
+      loserIds: liveLoserIds,
+      rows: componentRows,
+    }),
+    unitMappings: planUnitMappingFold({
+      keeperRows: unitMappingRows.filter(
+        (row) => row.productId === input.keepId,
+      ),
+      loserRows: unitMappingRows.filter(
+        (row) => row.productId !== input.keepId,
+      ),
+    }),
+    externalIds: {
+      rows: externalIdRows,
+      collision: planSlotCollisions({
+        keeperRows: externalIdRows.filter(
+          (row) => row.productId === input.keepId,
+        ),
+        loserRows: externalIdRows.filter(
+          (row) => row.productId !== input.keepId,
+        ),
+        slotKey: externalIdSlot,
+      }),
+    },
+    images: planAssociation({
+      rows: imageRows,
+      keepId: input.keepId,
+      slotKey: (row) => row.imageId,
+    }),
+    projectUses: planAssociation({
+      rows: projectUseRows,
+      keepId: input.keepId,
+      slotKey: (row) => row.projectId,
+    }),
+    purchases: planAssociation({
+      rows: purchaseRows,
+      keepId: input.keepId,
+      slotKey: (row) => row.purchaseId,
+    }),
+    wishes: planAssociation({
+      rows: wishRows,
+      keepId: input.keepId,
+      slotKey: (row) => row.wishId,
+    }),
+    expenses,
+    tasks,
+    locations,
+    conversionCoverage,
+    survivorImageIds: imageRows
+      .filter((row) => row.productId === input.keepId)
+      .map((row) => row.id),
+    aliases,
+    aliasesAdded: aliases.filter((alias) => !existingAliases.has(alias)),
+    tags: uniq([...keeper.tags, ...losers.flatMap((row) => row.tags)]),
+    carried,
+  };
+}
+
 /**
  * Merge `mergeIds` into `keepId`.
  *
@@ -743,33 +1068,10 @@ export const mergeProducts = async (
       "Product",
     );
 
-    const rows = (await tx.query.product.findMany({
-      where: and(
-        inArray(product.id, [keepId, ...loserIds]),
-        notDeleted(product),
-      ),
-      columns: {
-        id: true,
-        shortcode: true,
-        name: true,
-        aliases: true,
-        tags: true,
-        upc: true,
-        fdc_id: true,
-        model: true,
-        price: true,
-        notes: true,
-        category: true,
-        ingredientId: true,
-        expectedQuantity: true,
-        stockTracked: true,
-      },
-    })) as unknown as ProductMergeRow[];
-    const keeper = rows.find((row) => row.id === keepId);
-    if (!keeper) {
-      throw createAppError("PRODUCT_NOT_FOUND", `Product not found: ${keepId}`);
-    }
-    const losers = rows.filter((row) => row.id !== keepId);
+    // Rebuild after the locks: preview is advisory, while this is the plan the
+    // executor is allowed to trust.
+    const plan = await buildProductMergePlan(tx, { keepId, loserIds });
+    const { keeper, losers } = plan;
     if (losers.length === 0) {
       return emptySummary(keeper.shortcode, keepId);
     }
@@ -781,23 +1083,7 @@ export const mergeProducts = async (
     );
     summary.deletedEntityIds = losers.map((row) => row.id);
 
-    const inventoryRows = (await tx.query.inventoryEntry.findMany({
-      where: and(
-        inArray(inventoryEntry.productId, [keepId, ...loserIds]),
-        notDeleted(inventoryEntry),
-      ),
-      columns: {
-        id: true,
-        productId: true,
-        locationId: true,
-        placement: true,
-        amount: true,
-      },
-    })) as InventoryRow[];
-    const inventoryPlan = planInventoryFold({
-      keeperRows: inventoryRows.filter((row) => row.productId === keepId),
-      loserRows: inventoryRows.filter((row) => row.productId !== keepId),
-    });
+    const inventoryPlan = plan.inventory;
     if (inventoryPlan.mismatches.length > 0) {
       const detail = inventoryPlan.mismatches
         .map(({ row, into }) => `${row.amount.unit} vs ${into.amount.unit}`)
@@ -812,11 +1098,7 @@ export const mergeProducts = async (
     // transaction would roll back either way, but a preview and a mutation that
     // refuse for the same reason at the same point are much easier to keep
     // honest than one that discovers it halfway through.
-    const componentPlan = planProductComponentMerge({
-      keepId,
-      loserIds,
-      rows: await loadComponentRows(tx),
-    });
+    const componentPlan = plan.components;
     if (componentPlan.cycle) {
       throw createAppError(
         "PRODUCT_MERGE_COMPONENT_CYCLE",
@@ -840,37 +1122,8 @@ export const mergeProducts = async (
       );
     }
 
-    const externalIdRows = await tx.query.productExternalId.findMany({
-      where: and(
-        inArray(productExternalId.productId, [keepId, ...loserIds]),
-        notDeleted(productExternalId),
-      ),
-      columns: {
-        id: true,
-        productId: true,
-        source: true,
-        kind: true,
-        externalId: true,
-        url: true,
-        isPrimary: true,
-      },
-      // `planSlotCollisions` takes the FIRST row it sees per slot as the
-      // occupant, and is `isPrimary`-unaware. Without an order that is whatever
-      // the heap returns, so a secondary could win the slot and the real
-      // primary get demoted — or, where the keeper does not hold the slot at
-      // all, the loser's secondary re-points as-is and its primary is demoted,
-      // leaving the slot with no primary and nothing to say so.
-      orderBy: [
-        desc(productExternalId.isPrimary),
-        asc(productExternalId.createdAt),
-        asc(productExternalId.id),
-      ],
-    });
-    const externalIdPlan = planSlotCollisions({
-      keeperRows: externalIdRows.filter((row) => row.productId === keepId),
-      loserRows: externalIdRows.filter((row) => row.productId !== keepId),
-      slotKey: externalIdSlot,
-    });
+    const externalIdRows = plan.externalIds.rows;
+    const externalIdPlan = plan.externalIds.collision;
 
     if (externalIdPlan.repoint.length > 0) {
       await tx
@@ -993,24 +1246,15 @@ export const mergeProducts = async (
     // survivor's cover. (A barcode scan hijacked a product's cover exactly this
     // way.) Read the survivor's own rows in their current order first, then
     // renumber survivor-first once the fold has moved everything across.
-    const survivorImagesBefore = await tx.query.productImage.findMany({
-      where: and(eq(productImage.productId, keepId), notDeleted(productImage)),
-      columns: { id: true },
-      orderBy: [asc(productImage.sortOrder), asc(productImage.createdAt)],
-    });
+    const survivorImagesBefore = plan.survivorImageIds.map((id) => ({ id }));
     summary.imagesMoved = await foldAssociation(tx, {
       column: "productId",
       table: productImage,
-      rows: await tx.query.productImage.findMany({
-        where: and(
-          inArray(productImage.productId, [keepId, ...loserIds]),
-          notDeleted(productImage),
-        ),
-        columns: { id: true, productId: true, imageId: true },
-      }),
+      rows: plan.images.rows,
       keepId,
       slotKey: (row) => row.imageId,
       now,
+      plan: plan.images.collision,
     });
     if (summary.imagesMoved > 0 && survivorImagesBefore.length > 0) {
       const survivorFirst = new Set(survivorImagesBefore.map((row) => row.id));
@@ -1038,44 +1282,29 @@ export const mergeProducts = async (
     summary.projectUsesMoved = await foldAssociation(tx, {
       column: "productId",
       table: projectToolUsage,
-      rows: await tx.query.projectToolUsage.findMany({
-        where: and(
-          inArray(projectToolUsage.productId, [keepId, ...loserIds]),
-          notDeleted(projectToolUsage),
-        ),
-        columns: { id: true, productId: true, projectId: true },
-      }),
+      rows: plan.projectUses.rows,
       keepId,
       slotKey: (row) => row.projectId,
       now,
+      plan: plan.projectUses.collision,
     });
     summary.purchaseLinksMoved = await foldAssociation(tx, {
       column: "productId",
       table: purchaseProduct,
-      rows: await tx.query.purchaseProduct.findMany({
-        where: and(
-          inArray(purchaseProduct.productId, [keepId, ...loserIds]),
-          notDeleted(purchaseProduct),
-        ),
-        columns: { id: true, productId: true, purchaseId: true },
-      }),
+      rows: plan.purchases.rows,
       keepId,
       slotKey: (row) => row.purchaseId,
       now,
+      plan: plan.purchases.collision,
     });
     summary.wishCandidatesMoved = await foldAssociation(tx, {
       column: "productId",
       table: wishCandidate,
-      rows: await tx.query.wishCandidate.findMany({
-        where: and(
-          inArray(wishCandidate.productId, [keepId, ...loserIds]),
-          notDeleted(wishCandidate),
-        ),
-        columns: { id: true, productId: true, wishId: true },
-      }),
+      rows: plan.wishes.rows,
       keepId,
       slotKey: (row) => row.wishId,
       now,
+      plan: plan.wishes.collision,
     });
 
     // Composition, both directions. Nothing here needs its own audit entry:
@@ -1139,25 +1368,7 @@ export const mergeProducts = async (
     }
     summary.kitLinksSummed = kitLinksSummed;
 
-    const unitMappingRows = await tx.query.productUnitMappings.findMany({
-      where: and(
-        inArray(productUnitMappings.productId, [keepId, ...loserIds]),
-        notDeleted(productUnitMappings),
-      ),
-      columns: { id: true, productId: true, a: true, b: true, source: true },
-      // `planSlotCollisions` takes the FIRST row per slot as the occupant, so
-      // without an order that is whatever the heap returns — and which of two
-      // disagreeing densities survives would vary run to run. Oldest-first
-      // makes the keeper's longest-standing edge the one that stands.
-      orderBy: [
-        asc(productUnitMappings.createdAt),
-        asc(productUnitMappings.id),
-      ],
-    });
-    const unitMappingPlan = planUnitMappingFold({
-      keeperRows: unitMappingRows.filter((row) => row.productId === keepId),
-      loserRows: unitMappingRows.filter((row) => row.productId !== keepId),
-    });
+    const unitMappingPlan = plan.unitMappings;
 
     if (unitMappingPlan.repoint.length > 0) {
       await tx
@@ -1205,38 +1416,37 @@ export const mergeProducts = async (
         );
       }
     }
-    summary.tasksMoved = (
-      await repointEdge(tx, "product", "Task.subjectProductId", {
-        from: loserIds,
-        to: keepId,
-        liveOnly: true,
-      })
-    ).length;
-    summary.locationsMoved = (
-      await repointEdge(tx, "product", "Location.productId", {
-        from: loserIds,
-        to: keepId,
-        liveOnly: true,
-      })
-    ).length;
+    const movedTasks = await tx
+      .update(task)
+      .set({ subjectProductId: keepId })
+      .where(
+        and(inArray(task.subjectProductId, plan.loserIds), notDeleted(task)),
+      )
+      .returning({ id: task.id });
+    summary.tasksMoved = movedTasks.length;
+    const movedLocations = await tx
+      .update(location)
+      .set({ productId: keepId })
+      .where(
+        and(inArray(location.productId, plan.loserIds), notDeleted(location)),
+      )
+      .returning({ id: location.id });
+    summary.locationsMoved = movedLocations.length;
     // Money moving between products is an AUDITED change, exactly as it is on
     // `updateExpense` and in `foldChargeInto`'s purchaseId re-point — net cost
     // and the owned/sold window are derived from these rows.
-    const movedExpenses = await repointEdge(
-      tx,
-      "product",
-      "Expense.productId",
-      {
-        from: loserIds,
-        to: keepId,
-        liveOnly: true,
-      },
-    );
+    const movedExpenses = await tx
+      .update(expense)
+      .set({ productId: keepId })
+      .where(
+        and(inArray(expense.productId, plan.loserIds), notDeleted(expense)),
+      )
+      .returning({ id: expense.id });
     summary.expensesMoved = movedExpenses.length;
     await logAuditEntries(
       tx,
       actor,
-      movedExpenses.map((id) => ({
+      movedExpenses.map(({ id }) => ({
         entityType: "expense" as const,
         entityId: id,
         action: "update" as const,
@@ -1244,30 +1454,13 @@ export const mergeProducts = async (
       })),
     );
 
-    const folded = uniq([
-      ...keeper.aliases,
-      ...losers.map((row) => row.name),
-      ...losers.flatMap((row) => row.aliases ?? []),
-    ]).filter((alias) => alias !== keeper.name);
-    const existingAliases = new Set(keeper.aliases);
-    summary.aliasesAdded = folded.filter(
-      (alias) => !existingAliases.has(alias),
-    );
-    const tags = uniq([...keeper.tags, ...losers.flatMap((row) => row.tags)]);
+    const folded = plan.aliases;
+    summary.aliasesAdded = plan.aliasesAdded;
+    const tags = plan.tags;
 
     // The audit captures a UPC carry-over now, but its physical write waits
     // until the losers release the partial-unique slot below.
-    const carried: Record<string, unknown> = {};
-    for (const column of CARRIED_COLUMNS) {
-      if (column === "upc") continue;
-      if (keeper[column] != null) continue;
-      const donor = losers.find((row) => row[column] != null);
-      if (donor) carried[column] = donor[column];
-    }
-    if (keeper.upc == null) {
-      const donor = losers.find((row) => row.upc != null);
-      if (donor) carried.upc = donor.upc;
-    }
+    const carried = plan.carried;
     summary.carriedFields = Object.keys(carried);
 
     const { upc: adoptedUpc, ...carriedBeforeDelete } = carried;
@@ -1280,9 +1473,14 @@ export const mergeProducts = async (
       })
       .where(eq(product.id, keepId));
 
-    await tx
-      .delete(productConversionCoverage)
-      .where(inArray(productConversionCoverage.productId, loserIds));
+    if (plan.conversionCoverage.length > 0) {
+      await tx.delete(productConversionCoverage).where(
+        inArray(
+          productConversionCoverage.productId,
+          plan.conversionCoverage.map((row) => row.id as ProductId),
+        ),
+      );
+    }
 
     await finalizeMerge(tx, {
       entity: "product",
@@ -1384,43 +1582,17 @@ export const previewMergeProducts = async (
     return { blockers: [], changes: [], sideEffects: [] };
   }
   const dbClient = getDb(db);
-
-  const inventoryRows = (await dbClient.query.inventoryEntry.findMany({
-    where: and(
-      inArray(inventoryEntry.productId, [keepId, ...losers]),
-      notDeleted(inventoryEntry),
-    ),
-    columns: {
-      id: true,
-      productId: true,
-      locationId: true,
-      placement: true,
-      amount: true,
-    },
-  })) as InventoryRow[];
-  const inventoryPlan = planInventoryFold({
-    keeperRows: inventoryRows.filter((row) => row.productId === keepId),
-    loserRows: inventoryRows.filter((row) => row.productId !== keepId),
-  });
-
-  const unitMappingRows = (await dbClient.query.productUnitMappings.findMany({
-    where: and(
-      inArray(productUnitMappings.productId, [keepId, ...losers]),
-      notDeleted(productUnitMappings),
-    ),
-    columns: { id: true, productId: true, a: true, b: true, source: true },
-    orderBy: [asc(productUnitMappings.createdAt), asc(productUnitMappings.id)],
-  })) as UnitMappingRow[];
-  const unitMappingPlan = planUnitMappingFold({
-    keeperRows: unitMappingRows.filter((row) => row.productId === keepId),
-    loserRows: unitMappingRows.filter((row) => row.productId !== keepId),
-  });
-
-  const componentPlan = planProductComponentMerge({
-    keepId,
-    loserIds: losers,
-    rows: await loadComponentRows(dbClient),
-  });
+  const plan = await buildProductMergePlan(
+    dbClient,
+    { keepId, loserIds: losers },
+    { allowMissingKeeper: true },
+  );
+  if (plan === null) {
+    return { blockers: [], changes: [], sideEffects: [] };
+  }
+  const inventoryPlan = plan.inventory;
+  const unitMappingPlan = plan.unitMappings;
+  const componentPlan = plan.components;
   // Blockers are labelled, not just described: `ImpactRow` renders
   // total/label/code and never `description`, so naming the cycle or the
   // disagreeing quantities anywhere else would make them invisible in the UI.
@@ -1480,6 +1652,58 @@ export const previewMergeProducts = async (
 
   const changes = present([
     impact({
+      disposition: {
+        code: "soft-delete-merged-product",
+        effect: "soft-delete",
+        description:
+          "Each merged-away Product becomes a permanent shortcode tombstone after its consequences are folded into the survivor.",
+      },
+      label: "products merged into the survivor",
+      byTargetId: Object.fromEntries(plan.loserIds.map((id) => [id, 1])),
+    }),
+    impact({
+      disposition: {
+        code: "carry-product-aliases",
+        effect: "preserve",
+        description:
+          "Merged names and aliases are added to the survivor so old descriptions remain searchable.",
+      },
+      label: "names or aliases added to the survivor",
+      byTargetId:
+        plan.aliasesAdded.length > 0
+          ? { [keepId]: plan.aliasesAdded.length }
+          : {},
+    }),
+    impact({
+      disposition: {
+        code: "carry-product-fields",
+        effect: "preserve",
+        description: `Empty survivor fields filled without overwriting existing values: ${
+          Object.keys(plan.carried)
+            .map((field) => CARRIED_FIELD_LABELS[field as CarriedColumn])
+            .join(", ") || "none"
+        }.`,
+      },
+      label: "empty survivor fields filled",
+      byTargetId:
+        Object.keys(plan.carried).length > 0
+          ? { [keepId]: Object.keys(plan.carried).length }
+          : {},
+    }),
+    impact({
+      disposition: {
+        code: "carry-product-tags",
+        effect: "preserve",
+        description:
+          "Tags present only on merged-away Products are added to the survivor.",
+      },
+      label: "tags added to the survivor",
+      byTargetId: {
+        [keepId]: plan.tags.filter((tag) => !plan.keeper.tags.includes(tag))
+          .length,
+      },
+    }),
+    impact({
       disposition: PRODUCT_MERGE_EDGE_POLICY["InventoryEntry.productId"],
       edgeKey: "InventoryEntry.productId",
       label: "stock entries moved",
@@ -1499,24 +1723,27 @@ export const previewMergeProducts = async (
     impact({
       disposition: PRODUCT_MERGE_EDGE_POLICY["ProductExternalId.productId"],
       edgeKey: "ProductExternalId.productId",
-      label: "external ids moved or discarded",
-      byTargetId: await countByTarget(
-        dbClient,
-        productExternalId,
-        productExternalId.productId,
-        losers,
+      label: "external ids moved",
+      byTargetId: byProduct(plan.externalIds.collision.repoint),
+    }),
+    impact({
+      disposition: {
+        code: "demote-conflicting-external-id",
+        effect: "move-dedupe",
+        description:
+          "The survivor already fills this source and kind slot. The merged identifier is retained as a secondary while the survivor's identifier stays primary.",
+      },
+      edgeKey: "ProductExternalId.productId",
+      label: "conflicting external ids kept as secondary",
+      byTargetId: byProduct(
+        plan.externalIds.collision.absorb.flatMap(({ rows }) => rows),
       ),
     }),
     impact({
       disposition: PRODUCT_MERGE_EDGE_POLICY["Expense.productId"],
       edgeKey: "Expense.productId",
       label: "ledger lines re-pointed",
-      byTargetId: await countByTarget(
-        dbClient,
-        expense,
-        expense.productId,
-        losers,
-      ),
+      byTargetId: byProduct(plan.expenses),
     }),
     impact({
       disposition: PRODUCT_MERGE_EDGE_POLICY["ProductUnitMappings.productId"],
@@ -1562,55 +1789,82 @@ export const previewMergeProducts = async (
       disposition: PRODUCT_MERGE_EDGE_POLICY["ProductImage.productId"],
       edgeKey: "ProductImage.productId",
       label: "image associations moved",
-      byTargetId: await countByTarget(
-        dbClient,
-        productImage,
-        productImage.productId,
-        losers,
+      byTargetId: byProduct(plan.images.collision.repoint),
+    }),
+    impact({
+      disposition: {
+        code: "drop-duplicate-image-association",
+        effect: "move-dedupe",
+        description:
+          "The survivor already has this image, so the duplicate association is soft-deleted and the survivor's existing image order wins.",
+      },
+      edgeKey: "ProductImage.productId",
+      label: "duplicate image associations dropped",
+      byTargetId: byProduct(
+        plan.images.collision.absorb.flatMap(({ rows }) => rows),
       ),
     }),
     impact({
       disposition: PRODUCT_MERGE_EDGE_POLICY["Task.subjectProductId"],
       edgeKey: "Task.subjectProductId",
       label: "tasks re-pointed",
-      byTargetId: await countByTarget(
-        dbClient,
-        task,
-        task.subjectProductId,
-        losers,
-      ),
+      byTargetId: byProduct(plan.tasks),
     }),
     impact({
       disposition: PRODUCT_MERGE_EDGE_POLICY["ProjectToolUsage.productId"],
       edgeKey: "ProjectToolUsage.productId",
       label: "project uses moved",
-      byTargetId: await countByTarget(
-        dbClient,
-        projectToolUsage,
-        projectToolUsage.productId,
-        losers,
+      byTargetId: byProduct(plan.projectUses.collision.repoint),
+    }),
+    impact({
+      disposition: {
+        code: "drop-duplicate-project-use",
+        effect: "move-dedupe",
+        description:
+          "The project already lists the survivor, so the duplicate Product use is soft-deleted.",
+      },
+      edgeKey: "ProjectToolUsage.productId",
+      label: "duplicate project uses dropped",
+      byTargetId: byProduct(
+        plan.projectUses.collision.absorb.flatMap(({ rows }) => rows),
       ),
     }),
     impact({
       disposition: PRODUCT_MERGE_EDGE_POLICY["PurchaseProduct.productId"],
       edgeKey: "PurchaseProduct.productId",
       label: "purchase links moved",
-      byTargetId: await countByTarget(
-        dbClient,
-        purchaseProduct,
-        purchaseProduct.productId,
-        losers,
+      byTargetId: byProduct(plan.purchases.collision.repoint),
+    }),
+    impact({
+      disposition: {
+        code: "drop-duplicate-purchase-link",
+        effect: "move-dedupe",
+        description:
+          "The Purchase already links the survivor, so the duplicate Product link is soft-deleted.",
+      },
+      edgeKey: "PurchaseProduct.productId",
+      label: "duplicate purchase links dropped",
+      byTargetId: byProduct(
+        plan.purchases.collision.absorb.flatMap(({ rows }) => rows),
       ),
     }),
     impact({
       disposition: PRODUCT_MERGE_EDGE_POLICY["WishCandidate.productId"],
       edgeKey: "WishCandidate.productId",
       label: "wishlist candidacies moved",
-      byTargetId: await countByTarget(
-        dbClient,
-        wishCandidate,
-        wishCandidate.productId,
-        losers,
+      byTargetId: byProduct(plan.wishes.collision.repoint),
+    }),
+    impact({
+      disposition: {
+        code: "drop-duplicate-wish-candidate",
+        effect: "move-dedupe",
+        description:
+          "The Wish already names the survivor as a candidate, so the duplicate candidacy is soft-deleted.",
+      },
+      edgeKey: "WishCandidate.productId",
+      label: "duplicate wishlist candidacies dropped",
+      byTargetId: byProduct(
+        plan.wishes.collision.absorb.flatMap(({ rows }) => rows),
       ),
     }),
     impact({
@@ -1669,25 +1923,14 @@ export const previewMergeProducts = async (
       disposition: PRODUCT_MERGE_EDGE_POLICY["Location.productId"],
       edgeKey: "Location.productId",
       label: "locations re-pointed",
-      byTargetId: await countByTarget(
-        dbClient,
-        location,
-        location.productId,
-        losers,
-      ),
+      byTargetId: byProduct(plan.locations),
     }),
     impact({
       disposition:
         PRODUCT_MERGE_EDGE_POLICY["ProductConversionCoverage.productId"],
       edgeKey: "ProductConversionCoverage.productId",
       label: "conversion coverage projections discarded",
-      byTargetId: await countByTarget(
-        dbClient,
-        productConversionCoverage,
-        productConversionCoverage.productId,
-        losers,
-        { includeDeleted: true },
-      ),
+      byTargetId: byProduct(plan.conversionCoverage),
     }),
   ]);
 
@@ -1696,10 +1939,30 @@ export const previewMergeProducts = async (
       code: "resync-inventory-valuations",
       label: "stock entries re-valued",
       description:
-        "Every entry that moves re-values at the surviving product's effective price.",
-      total: inventoryPlan.repoint.length + inventoryPlan.absorb.length,
+        "Every surviving stock entry re-values at the surviving Product's effective price.",
+      total:
+        inventoryPlan.rows.length -
+        inventoryPlan.absorb.reduce((sum, group) => sum + group.rows.length, 0),
     }),
-  ];
+    sideEffect({
+      code: "rebuild-conversion-coverage",
+      label: "survivor conversion coverage marked for rebuild",
+      description:
+        "Moved mappings, carried food identity, and kit composition can change the survivor's conversion graph, so its rebuildable projection is marked stale.",
+      total: 1,
+    }),
+    sideEffect({
+      code: "preserve-survivor-image-order",
+      label: "survivor image order retained ahead of moved images",
+      description:
+        "Existing survivor images keep their relative priority so an older merged image cannot silently become the cover.",
+      total:
+        plan.images.collision.repoint.length > 0 &&
+        plan.survivorImageIds.length > 0
+          ? plan.survivorImageIds.length
+          : 0,
+    }),
+  ].filter((item) => item.total > 0);
 
   return { blockers, changes, sideEffects };
 };

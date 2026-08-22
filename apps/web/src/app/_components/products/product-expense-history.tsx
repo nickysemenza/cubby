@@ -10,7 +10,7 @@ import {
   createProjectLinkColumn,
   createTextColumn,
 } from "~/app/_components/data-table/columnHelpers";
-import RTable from "~/app/_components/data-table/Table";
+import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
@@ -282,21 +282,21 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
     [helper, quantityEditorExpenseId, rowProjectOptions, rowVendorOptions],
   );
 
-  const { table, bulkActionBar, deleteDialog } =
-    useClientEntityList<ExpenseOut>({
-      entity: "expense",
-      data: expenses,
-      columns,
-      nameEditable,
-      deletable,
-      bulkActions: bulkActions.config,
-      tableStateOptions: EMBEDDED_TABLE_STATE,
-      // Distinct column set from the /expenses ledger, so it needs its own
-      // persisted View settings rather than sharing `table-columns:expense`.
-      layoutKey: "expense:product-detail",
-      initialColumnVisibility: INITIAL_COLUMN_VISIBILITY,
-      hiddenFilterColumns: SELF_FILTERED_COLUMNS,
-    });
+  const { workbench } = useClientEntityList<ExpenseOut>({
+    entity: "expense",
+    data: expenses,
+    columns,
+    nameEditable,
+    deletable,
+    bulkActions: bulkActions.config,
+    tableStateOptions: EMBEDDED_TABLE_STATE,
+    // Distinct column set from the /expenses ledger, so it needs its own
+    // persisted View settings rather than sharing `table-columns:expense`.
+    layoutKey: "expense:product-detail",
+    initialColumnVisibility: INITIAL_COLUMN_VISIBILITY,
+    hiddenFilterColumns: SELF_FILTERED_COLUMNS,
+  });
+  const { table } = workbench;
 
   if (isPending) return <Description>Loading expenses…</Description>;
   if (expenses.length === 0) {
@@ -389,12 +389,10 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
   return (
     <>
       <Stack gap="sm">
-        <RTable
-          table={table}
+        <ListWorkbench
+          model={workbench}
           ariaLabel={`${product.name} expense history`}
-          entity="expense"
-          bulkActionBar={bulkActionBar}
-          embedded
+          mode="embedded"
           showColumnMenu
         />
         {hasProjects && (
@@ -472,7 +470,6 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
           See all in ledger →
         </Link>
       </Stack>
-      {deleteDialog}
       <ExpenseBulkActionDialogs
         controller={bulkActions}
         onComplete={() => table.resetRowSelection()}

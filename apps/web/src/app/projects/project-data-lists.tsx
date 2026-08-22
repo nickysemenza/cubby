@@ -11,7 +11,7 @@ import {
   createProductLinkColumn,
   createProjectLinkColumn,
 } from "~/app/_components/data-table/columnHelpers";
-import RTable from "~/app/_components/data-table/Table";
+import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
@@ -130,23 +130,16 @@ export function ProjectDataTaskList({
 
   return (
     <>
-      <RTable
-        table={list.table}
-        isLoading={list.isLoading}
-        error={list.error}
+      <ListWorkbench
+        model={list.workbench}
         ariaLabel="Project-scoped Tasks Table"
-        timing={list.timing}
         onRowClick={onRowClick}
         onRowHover={onRowHover}
-        bulkActionBar={list.bulkActionBar}
-        infiniteScroll={list.infiniteScroll}
-        refreshControls={list.refreshControls}
       />
       <PreviewSheet />
-      {list.deleteDialog}
       <TaskBulkActionDialogs
         controller={bulk}
-        onComplete={() => list.table.resetRowSelection()}
+        onComplete={() => list.workbench.table.resetRowSelection()}
       />
     </>
   );
@@ -231,23 +224,16 @@ export function ProjectDataExpenseList({
 
   return (
     <>
-      <RTable
-        table={list.table}
-        isLoading={list.isLoading}
-        error={list.error}
+      <ListWorkbench
+        model={list.workbench}
         ariaLabel="Project-scoped Expenses Table"
-        timing={list.timing}
         onRowClick={onRowClick}
         onRowHover={onRowHover}
-        bulkActionBar={list.bulkActionBar}
-        infiniteScroll={list.infiniteScroll}
-        refreshControls={list.refreshControls}
       />
       <PreviewSheet />
-      {list.deleteDialog}
       <ExpenseBulkActionDialogs
         controller={bulk}
-        onComplete={() => list.table.resetRowSelection()}
+        onComplete={() => list.workbench.table.resetRowSelection()}
       />
     </>
   );

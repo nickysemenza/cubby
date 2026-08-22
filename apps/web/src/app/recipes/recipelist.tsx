@@ -24,7 +24,7 @@ import {
   tagsCellData,
 } from "../_components/data-table/cell-data";
 import { EditableCell } from "../_components/data-table/editable-cell";
-import RTable from "../_components/data-table/Table";
+import { ListWorkbench } from "../_components/data-table/ListWorkbench";
 import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { useCookbookOptions } from "../_components/hooks/useCookbookOptions";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
@@ -510,17 +510,7 @@ export function RecipeList({
     [duplicateRecipe, isDuplicating],
   );
 
-  const {
-    table,
-    isLoading,
-    error,
-    timing,
-    bulkActionBar,
-    deleteDialog,
-    infiniteScroll,
-    refreshControls,
-    totalCount,
-  } = useEntityList({
+  const { workbench, totalCount } = useEntityList({
     entity: "recipe",
     queryOptions: api.recipe.list.queryOptions,
     // Constant scope when rendered on a cookbook page; merged over the
@@ -551,22 +541,14 @@ export function RecipeList({
 
   return (
     <div>
-      <RTable
-        table={table}
-        isLoading={isLoading}
-        error={error}
+      <ListWorkbench
+        model={workbench}
         ariaLabel="Recipes Table"
-        timing={timing}
-        entity="recipe"
         onRowClick={onRowClick}
         onRowHover={onRowHover}
         actions={actions}
-        bulkActionBar={bulkActionBar}
-        infiniteScroll={infiniteScroll}
-        refreshControls={refreshControls}
       />
       <PreviewSheet />
-      {deleteDialog}
     </div>
   );
 }

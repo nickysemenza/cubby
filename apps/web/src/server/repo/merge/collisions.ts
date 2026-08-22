@@ -30,7 +30,7 @@ import type { DrizzleTransaction } from "~/server/db";
  * `into` on an absorbed row is the row already holding that slot — the keeper's
  * own row when it had one, otherwise the first loser row that claimed it.
  */
-interface SlotCollisionPlan<Row> {
+export interface SlotCollisionPlan<Row> {
   /** Loser rows whose slot is free — safe to re-point onto the survivor. */
   repoint: Row[];
   /**
@@ -131,13 +131,21 @@ export const foldAssociation = async <
     keepId: string;
     slotKey: (row: Row) => string;
     now: Date;
+    /**
+     * A caller-owned plan built from the same rows. Product merge uses this to
+     * make its advisory presentation and transactional executor consume one
+     * collision decision instead of independently re-planning the edge.
+     */
+    plan?: SlotCollisionPlan<Row>;
   },
 ): Promise<number> => {
-  const plan = planSlotCollisions({
-    keeperRows: args.rows.filter((row) => row[args.column] === args.keepId),
-    loserRows: args.rows.filter((row) => row[args.column] !== args.keepId),
-    slotKey: args.slotKey,
-  });
+  const plan =
+    args.plan ??
+    planSlotCollisions({
+      keeperRows: args.rows.filter((row) => row[args.column] === args.keepId),
+      loserRows: args.rows.filter((row) => row[args.column] !== args.keepId),
+      slotKey: args.slotKey,
+    });
   if (plan.repoint.length > 0) {
     await tx
       .update(args.table)

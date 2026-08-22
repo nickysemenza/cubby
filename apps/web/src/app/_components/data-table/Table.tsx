@@ -57,7 +57,7 @@ function ghostRowsStyle(rowHeight: number): React.CSSProperties {
   };
 }
 
-interface TTableProps<TItem extends RowData> {
+export interface RTableProps<TItem extends RowData> {
   table: ITable<TItem>;
   /** Slot for additional toolbar content like summaries (e.g., "Value: $5,845.91") */
   additionalToolbarContent?: ReactNode;
@@ -142,7 +142,7 @@ interface TTableProps<TItem extends RowData> {
 }
 
 export default function RTable<TItem extends RowData>(
-  props: TTableProps<TItem>,
+  props: RTableProps<TItem>,
 ) {
   const {
     table,

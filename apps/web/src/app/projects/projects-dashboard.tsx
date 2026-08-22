@@ -759,12 +759,13 @@ function ServerProjectGallery({
     enabled: ids.length > 0,
   });
 
-  if (list.isLoading) return <Skeleton className="h-[400px] w-full" />;
-  if (list.error) {
+  if (list.workbench.isLoading)
+    return <Skeleton className="h-[400px] w-full" />;
+  if (list.workbench.error) {
     return (
       <DashboardErrorState
-        error={list.error}
-        onRetry={() => void list.refreshControls.onRefresh()}
+        error={list.workbench.error}
+        onRetry={() => void list.workbench.refreshControls.onRefresh()}
       />
     );
   }
@@ -772,14 +773,14 @@ function ServerProjectGallery({
   return (
     <Stack>
       <ProjectCards projects={list.data} coverImages={images} />
-      {list.infiniteScroll.hasNextPage && (
+      {list.workbench.infiniteScroll.hasNextPage && (
         <Button
           type="button"
           variant="outline"
-          disabled={list.infiniteScroll.isFetchingNextPage}
-          onClick={list.infiniteScroll.fetchNextPage}
+          disabled={list.workbench.infiniteScroll.isFetchingNextPage}
+          onClick={list.workbench.infiniteScroll.fetchNextPage}
         >
-          {list.infiniteScroll.isFetchingNextPage
+          {list.workbench.infiniteScroll.isFetchingNextPage
             ? "Loading…"
             : "Load more projects"}
         </Button>

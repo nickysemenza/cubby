@@ -25,7 +25,7 @@ import {
   createTextColumn,
   createTimestampColumn,
 } from "../_components/data-table/columnHelpers";
-import RTable from "../_components/data-table/Table";
+import { ListWorkbench } from "../_components/data-table/ListWorkbench";
 import type { GroupConfig } from "../_components/data-table/useGroupedList";
 import { useDeferredFilterOptions } from "../_components/hooks/useDeferredFilterOptions";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
@@ -277,19 +277,7 @@ export function LocationList() {
     [groupKeyFn, groupColorFn],
   );
 
-  const {
-    table,
-    isLoading,
-    error,
-    timing,
-    bulkActionBar,
-    deleteDialog,
-    infiniteScroll,
-    refreshControls,
-    grouped,
-    onGroupedChange,
-    totalCount,
-  } = useEntityList({
+  const { workbench, totalCount } = useEntityList({
     entity: "location",
     queryOptions: api.location.list.queryOptions,
     filterOptions,
@@ -309,24 +297,13 @@ export function LocationList() {
 
   return (
     <>
-      <RTable
-        table={table}
-        isLoading={isLoading}
-        error={error}
+      <ListWorkbench
+        model={workbench}
         ariaLabel="Locations Table"
-        timing={timing}
-        entity="location"
         onRowClick={onRowClick}
         onRowHover={onRowHover}
-        bulkActionBar={bulkActionBar}
-        infiniteScroll={infiniteScroll}
-        refreshControls={refreshControls}
-        groupConfig={groupConfig}
-        grouped={grouped}
-        onGroupedChange={onGroupedChange}
       />
       <PreviewSheet />
-      {deleteDialog}
       <BulkReparentLocationsDialog
         open={reparentLocations.length > 0}
         onOpenChange={(open) => {
@@ -335,7 +312,7 @@ export function LocationList() {
         locations={reparentLocations}
         onSuccess={() => {
           setReparentLocations([]);
-          table.resetRowSelection();
+          workbench.table.resetRowSelection();
         }}
       />
     </>
