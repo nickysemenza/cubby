@@ -100,7 +100,14 @@ function FilterEditor({
   );
 }
 
-/** Compact, manifest-backed expression of the table's active query. */
+/**
+ * Compact, manifest-backed expression of the table's active query.
+ *
+ * This intentionally supports only the three filter shapes emitted by
+ * `barFieldFromConfig`. The old copy-owned ReUI component advertised async
+ * loaders, custom renderers, nested groups, arbitrary operators and shortcut
+ * handling, none of which Cubby's two production filter bars supplied.
+ */
 export function FilterBar({
   filters,
   fields,
