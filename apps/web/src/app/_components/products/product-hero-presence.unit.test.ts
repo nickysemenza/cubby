@@ -13,6 +13,7 @@ describe("heroPresence", () => {
       entryUnit: undefined,
       onHandUnits: 1,
       locationCount: 1,
+      componentCount: 0,
     });
 
     expect(result.onHand).toEqual({
@@ -22,7 +23,7 @@ describe("heroPresence", () => {
       amount: { value: 1, unit: "each" },
     });
     expect(result.presenceCount).toBe(1);
-    expect(result.inStock).toBe(true);
+    expect(result.stamp).toEqual({ label: "In stock", tone: "green" });
   });
 
   it("sums loose stock and bins in service", () => {
@@ -31,6 +32,7 @@ describe("heroPresence", () => {
       entryUnit: "each",
       onHandUnits: 3,
       locationCount: 2,
+      componentCount: 0,
     });
     expect(result.onHand).toMatchObject({ amount: { value: 3, unit: "each" } });
     expect(result.presenceCount).toBe(3);
@@ -42,6 +44,7 @@ describe("heroPresence", () => {
       entryUnit: "lb",
       onHandUnits: 5,
       locationCount: 0,
+      componentCount: 0,
     });
     expect(result.onHand).toMatchObject({ amount: { value: 5, unit: "lb" } });
   });
@@ -54,6 +57,7 @@ describe("heroPresence", () => {
       entryUnit: "lb",
       onHandUnits: null,
       locationCount: 0,
+      componentCount: 0,
     });
     expect(result.onHand).toEqual({
       kind: "entries",
@@ -61,7 +65,7 @@ describe("heroPresence", () => {
       count: 2,
     });
     // Still present — "we can't total it" is not "we don't have it".
-    expect(result.inStock).toBe(true);
+    expect(result.stamp).toEqual({ label: "In stock", tone: "green" });
   });
 
   it("is unstocked only when neither a shelf nor a bin holds it", () => {
@@ -70,8 +74,59 @@ describe("heroPresence", () => {
       entryUnit: undefined,
       onHandUnits: null,
       locationCount: 0,
+      componentCount: 0,
     });
     expect(result.presenceCount).toBe(0);
-    expect(result.inStock).toBe(false);
+    expect(result.stamp).toEqual({ label: "Not stocked", tone: "ink" });
+  });
+
+  /**
+   * The second shape that read wrong: PRD-DHXW, a 2-piece nightstand set split
+   * into a composition record. It keeps the Expense (`EXPECTED 1`) and holds
+   * nothing under its own name, while both nightstands sit on the component.
+   * "Not stocked" over `EXPECTED 1` read as a deficit on a set that is fully
+   * accounted for.
+   *
+   * The ledger is right and stays: that `1` is what the projection multiplies
+   * by each edge's quantity to give the parts their expected counts.
+   */
+  it("says a decomposed kit is stocked as its parts, not unstocked", () => {
+    const result = heroPresence({
+      entryCount: 0,
+      entryUnit: undefined,
+      onHandUnits: null,
+      locationCount: 0,
+      componentCount: 1,
+    });
+    expect(result.stamp).toEqual({ label: "Stocked as parts", tone: "green" });
+    // Presence is untouched: nothing is on a shelf under THIS name, and the
+    // stat row must keep saying so.
+    expect(result.presenceCount).toBe(0);
+  });
+
+  /**
+   * A kit still sealed in its box is stocked as itself. Its own shelf row is
+   * the more specific fact, so it outranks the components.
+   */
+  it("prefers a kit's own stock over its components", () => {
+    const result = heroPresence({
+      entryCount: 1,
+      entryUnit: "each",
+      onHandUnits: 1,
+      locationCount: 0,
+      componentCount: 3,
+    });
+    expect(result.stamp).toEqual({ label: "In stock", tone: "green" });
+  });
+
+  it("stamps a plain stocked product in stock", () => {
+    const result = heroPresence({
+      entryCount: 2,
+      entryUnit: "each",
+      onHandUnits: 2,
+      locationCount: 0,
+      componentCount: 0,
+    });
+    expect(result.stamp).toEqual({ label: "In stock", tone: "green" });
   });
 });

@@ -6,7 +6,9 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ImpactItem } from "@cubby/schemas/entity-integrity";
 import {
+  displayGtin,
   type ExternalIdKind,
+  GTIN_SOURCE,
   storedExternalIdUrl,
 } from "@cubby/schemas/external-id";
 import type { IngredientId, ProductId } from "@cubby/schemas/identifiers";
@@ -118,6 +120,11 @@ import {
   type ProductRetainingEdgeKey,
 } from "./edge-roles";
 import {
+  loadPrimaryGtins,
+  productHasGtin,
+  productMatchesGtinTerm,
+} from "./gtin";
+import {
   dbProductToAPI,
   dbProductToListAPI,
   dbProductToPickerItemAPI,
@@ -147,6 +154,8 @@ import {
   assertNoCanonicalPriceMapping,
   ensureSlotPrimaries,
   externalIdSlotUnchanged,
+  foldGtinIntoExternalIds,
+  syncPrimaryGtin,
   syncProductExternalIds,
   syncProductImages,
   syncProductUnitMappings,
@@ -253,10 +262,30 @@ const resolveProductSort = (sort: SortParams) => {
     ];
   }
 
+  if (sort.orderBy === "primaryGtin") {
+    // Sorting on a derived value, so it has to be the same derivation the
+    // mappers use: the slot's primary, falling back to the oldest live barcode
+    // for a slot a replace-payload left with no primary.
+    return [
+      sql.raw(
+        `(SELECT pei."externalId" FROM "ProductExternalId" pei ` +
+          `WHERE pei."productId" = "product"."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL ` +
+          `ORDER BY pei."isPrimary" DESC, pei."createdAt", pei."id" LIMIT 1) ${dirSql}`,
+      ),
+    ];
+  }
+
   if (sort.orderBy === "identity_strength") {
     return [
+      // A barcode outranks other external ids because this sort IS the
+      // enrichment worklist: a barcode resolves to USDA and to the UPC
+      // provider, and an ASIN resolves to neither. Two EXISTS rather than one
+      // aggregate — CASE is sequential, so the second only runs for products
+      // with no barcode. The `<> ''` guard the scalar needed is gone:
+      // `externalId` is notNull and the gtin CHECK makes an empty value
+      // unrepresentable.
       sql.raw(`CASE
-        WHEN "product"."upc" IS NOT NULL AND "product"."upc" <> '' THEN 0
+        WHEN EXISTS (SELECT 1 FROM "ProductExternalId" pei WHERE pei."productId" = "product"."id" AND pei."deletedAt" IS NULL AND pei."source" = 'gtin') THEN 0
         WHEN EXISTS (SELECT 1 FROM "ProductExternalId" pei WHERE pei."productId" = "product"."id" AND pei."deletedAt" IS NULL) THEN 1
         WHEN lower(trim("product"."manufacturer")) NOT IN ('', 'generic', '(unspecified)') AND coalesce(trim("product"."model"), '') <> '' THEN 2
         WHEN coalesce(trim("product"."model"), '') <> '' THEN 3
@@ -346,14 +375,18 @@ export const getProductsForFoodLookup = async (
   ids: ProductId[],
 ) => {
   if (ids.length === 0) return [];
-  return await getDb(db).query.product.findMany({
+  const rows = await getDb(db).query.product.findMany({
     where: and(inArray(product.id, ids), notDeleted(product)),
-    columns: {
-      id: true,
-      upc: true,
-      fdc_id: true,
-    },
+    columns: { id: true, fdc_id: true },
   });
+  const gtins = await loadPrimaryGtins(
+    db,
+    rows.map((row) => row.id),
+  );
+  return rows.map((row) => ({
+    ...row,
+    primaryGtin: gtins.get(row.id) ?? null,
+  }));
 };
 
 export const getProductImagesByProductIds = async (
@@ -647,20 +680,39 @@ export const productList = async (
       ),
     );
 
+  // Barcode presence and barcode text-search both go through the identifier
+  // table now. Same shape as `productIdsWithExternalIds` above, narrowed to the
+  // `gtin` source; `idSetPresence` then reads it exactly as it reads that one.
+  const gtinRows = dbClient
+    .select({ productId: productExternalId.productId })
+    .from(productExternalId)
+    .where(
+      and(
+        notDeleted(productExternalId),
+        eq(productExternalId.source, GTIN_SOURCE),
+      ),
+    );
+  const productIdsWithGtin = gtinRows;
+
   const selectedDataGaps = filters.dataGap ? [filters.dataGap].flat() : [];
   const needsData = productNeedsDataCondition();
 
   // Mirrors `foodLookupParamFromProduct` returning null: no explicit fdc_id AND
-  // no upc to auto-match. This is the closest pure-SQL predicate — it cannot
-  // know whether the USDA worker resolves a food for that key, which is why the
-  // filter is labelled "USDA key". Passed as `presenceCondition`'s `emptyWhen`
-  // so "has" is derived as not(this) and the two branches can't drift.
+  // no barcode to auto-match. This is the closest pure-SQL predicate — it
+  // cannot know whether the USDA worker resolves a food for that key, which is
+  // why the filter is labelled "USDA key". Passed as `presenceCondition`'s
+  // `emptyWhen` so "has" is derived as not(this) and the two branches can't
+  // drift.
   // The outer parens are load-bearing, same as TAGS_ARE_EMPTY in recipe/crud.ts:
   // `presenceCondition` derives "has" as `not(this)`, and drizzle's `not()`
-  // doesn't add its own. Unparenthesized, `NOT a IS NULL AND b IS NULL` binds as
-  // `(NOT a IS NULL) AND (b IS NULL)` — i.e. "has fdc_id AND has no upc", which
-  // silently drops every UPC-only product from "has".
-  const NO_USDA_KEY = sql`(${product.fdc_id} IS NULL AND ${product.upc} IS NULL)`;
+  // doesn't add its own. Unparenthesized, `NOT a IS NULL AND NOT EXISTS ...`
+  // binds as `(NOT a IS NULL) AND (NOT EXISTS ...)` — i.e. "has fdc_id AND has
+  // no barcode", which silently drops every barcode-only product from "has".
+  const NO_USDA_KEY = sql`(${product.fdc_id} IS NULL AND NOT EXISTS (
+    SELECT 1 FROM "ProductExternalId" pei
+    WHERE pei."productId" = ${product.id}
+      AND pei."source" = ${GTIN_SOURCE}
+      AND pei."deletedAt" IS NULL))`;
 
   // Untagged. Outer parens load-bearing for the same `not()` reason as above.
   const NO_TAGS = sql`(cardinality(${product.tags}) = 0)`;
@@ -671,7 +723,6 @@ export const productList = async (
     [
       { column: product.name, term: filters.nameFilter },
       { column: product.manufacturer, term: filters.manufacturerFilter },
-      { column: product.upc, term: filters.upcFilter },
       { column: product.model, term: filters.modelFilter },
       { column: product.notes, term: filters.notesFilter },
     ],
@@ -852,7 +903,8 @@ export const productList = async (
         productIdsWithExternalIds,
       ),
       presenceCondition(product.model, filters.modelPresenceFilter),
-      presenceCondition(product.upc, filters.upcPresenceFilter),
+      idSetPresence(product.id, filters.upcPresenceFilter, productIdsWithGtin),
+      filters.upcFilter ? productMatchesGtinTerm(filters.upcFilter) : undefined,
       presenceCondition(product.notes, filters.notesPresenceFilter),
       presenceCondition(
         product.stockTracked,
@@ -1078,7 +1130,7 @@ export const productSearch = async (
         )
       : undefined,
     formatSearchTerm(product.manufacturer, filters.manufacturerFilter),
-    formatSearchTerm(product.upc, filters.upcFilter),
+    filters.upcFilter ? productMatchesGtinTerm(filters.upcFilter) : undefined,
     eqAny(product.category, filters.categoryFilter),
   );
 
@@ -1199,14 +1251,20 @@ async function throwIfDuplicateProduct(
   if (!violation) return;
   const { constraint } = violation;
 
-  if (constraint.includes("upc") && data.upc) {
+  // Retargeted from `Product_upc_key` to the identifier table's global unique,
+  // which is now what stops two live products claiming one barcode. This is not
+  // redundant with `assertExternalIdsAvailable` — that is a pre-check, and this
+  // is the backstop `findOrCreateByGtin` recovers a concurrent scan on. It also
+  // catches strictly more: the old index compared 12 digits to 13, so two
+  // encodings of one barcode both got through.
+  if (constraint.includes("source_kind_externalId") && data.upc) {
     const existing = await getDb(db).query.product.findFirst({
-      where: and(eq(product.upc, data.upc), notDeleted(product)),
+      where: and(productHasGtin(data.upc), notDeleted(product)),
       columns: { name: true, shortcode: true },
     });
     throw createAppError(
       "PRODUCT_ALREADY_EXISTS",
-      `UPC ${data.upc} is already used by ${
+      `Barcode ${displayGtin(data.upc)} is already used by ${
         existing
           ? `${existing.shortcode} “${existing.name}”`
           : "another product"
@@ -1319,13 +1377,21 @@ export const createProduct = async (
   if (unitMappings) assertNoCanonicalPriceMapping(unitMappings);
 
   // Use a transaction to ensure atomicity. On a unique violation (e.g. another
-  // product already links this USDA food/UPC), translate the raw DB error into a
+  // product already claims this barcode), translate the raw DB error into a
   // clear CONFLICT message — the lookups run on `db` because the tx is aborted.
   try {
     const created = await withTransaction(db, async (tx) => {
-      await assertExternalIdsAvailable(tx, externalIds ?? []);
+      // A bare `upc` becomes a `gtin` identifier row rather than a column, and
+      // is folded into the payload so it cannot be lost to (or lose to) an
+      // explicit `externalIds` on the same call.
+      const { upc: incomingGtin, ...columnData } = productData;
+      const desiredExternalIds =
+        incomingGtin === undefined || incomingGtin === null
+          ? (externalIds ?? [])
+          : foldGtinIntoExternalIds(externalIds ?? [], incomingGtin);
+      await assertExternalIdsAvailable(tx, desiredExternalIds);
       const newProduct = await insertWithShortcode(tx, "product", {
-        ...productData,
+        ...columnData,
         manufacturer: await resolveEstablishedManufacturer(
           tx,
           productData.manufacturer,
@@ -1345,9 +1411,9 @@ export const createProduct = async (
         );
       }
 
-      if (externalIds && externalIds.length > 0) {
+      if (desiredExternalIds.length > 0) {
         await tx.insert(productExternalId).values(
-          externalIds.map((eid) => ({
+          desiredExternalIds.map((eid) => ({
             productId: newProduct.id,
             source: eid.source.trim().toLowerCase(),
             kind: eid.kind,
@@ -1381,7 +1447,7 @@ export const createProduct = async (
       });
 
       const createdExternalIds =
-        externalIds && externalIds.length > 0
+        desiredExternalIds.length > 0
           ? await tx.query.productExternalId.findMany({
               where: eq(productExternalId.productId, newProduct.id),
             })
@@ -1449,29 +1515,38 @@ export const updateProduct = async (
         throw createAppError("PRODUCT_NOT_FOUND", `Product ${id} not found`);
       }
 
+      const beforeExternalIds = await tx.query.productExternalId.findMany({
+        where: and(
+          eq(productExternalId.productId, id),
+          notDeleted(productExternalId),
+        ),
+      });
+
       effectiveIdentity = {
         name: productData.name ?? beforeProduct.name,
         manufacturer: productData.manufacturer ?? beforeProduct.manufacturer,
-        upc: productData.upc ?? beforeProduct.upc,
+        upc: productData.upc ?? undefined,
       };
 
       // A canonical "1 each = $X" mapping duplicates the price column; reject it.
       if (unitMappings !== undefined)
         assertNoCanonicalPriceMapping(unitMappings);
 
+      // `upc` is deliberately split out of the column write: a barcode is a
+      // `gtin` identifier row now, applied below alongside `externalIds`.
+      const { upc: incomingGtin, ...columnData } = productData;
       const updateData: {
         name?: string;
         aliases?: string[];
         tags?: string[];
         manufacturer?: string;
         category?: ProductCategory | null;
-        upc?: string | null;
         fdc_id?: number | null;
         model?: string | null;
         expectedQuantity?: number | null;
         ingredientId?: IngredientId | null;
         price?: number | null;
-      } = { ...productData };
+      } = { ...columnData };
 
       if (ingredientId !== undefined) {
         updateData.ingredientId = ingredientId;
@@ -1525,7 +1600,7 @@ export const updateProduct = async (
         data.price !== undefined ||
         ingredientId !== undefined ||
         data.fdc_id !== undefined ||
-        data.upc !== undefined
+        incomingGtin !== undefined
       ) {
         await markProductConversionCoverageInputStale(tx, [id]);
       }
@@ -1538,9 +1613,19 @@ export const updateProduct = async (
       if (data.price !== undefined || unitMappings !== undefined) {
         await syncInventoryValuationsForProduct(tx, id);
       }
+      // Both inputs can arrive on one update and `syncProductExternalIds`
+      // REPLACES the set, so a bare `upc` has to be folded into that payload
+      // rather than applied after it — otherwise whichever ran second would
+      // silently discard the other.
       if (externalIds !== undefined) {
-        await assertExternalIdsAvailable(tx, externalIds, id);
-        await syncProductExternalIds(tx, id, externalIds);
+        const desired =
+          incomingGtin === undefined
+            ? externalIds
+            : foldGtinIntoExternalIds(externalIds, incomingGtin);
+        await assertExternalIdsAvailable(tx, desired, id);
+        await syncProductExternalIds(tx, id, desired);
+      } else if (incomingGtin !== undefined) {
+        await syncPrimaryGtin(tx, id, incomingGtin);
       }
       detachedImageKeys = await syncProductImages(
         tx,
@@ -1563,19 +1648,34 @@ export const updateProduct = async (
         orderBy: [asc(productImage.sortOrder), asc(productImage.createdAt)],
       });
 
-      const changes = computeChanges(beforeProduct, updated, [
-        "name",
-        "aliases",
-        "tags",
-        "manufacturer",
-        "category",
-        "upc",
-        "fdc_id",
-        "model",
-        "expectedQuantity",
-        "ingredientId",
-        "price",
-      ]);
+      const currentExternalIdRows = await tx.query.productExternalId.findMany({
+        where: and(
+          eq(productExternalId.productId, updated.id),
+          notDeleted(productExternalId),
+        ),
+      });
+
+      // `externalIds` is in the list because the barcode moved into it. Without
+      // that, a barcode edit through this path would be silently unaudited —
+      // `computeChanges` diffs DB ROWS, so it can no longer see one, and only
+      // `patchProductExternalIds` audited identifier changes before now.
+      const changes = computeChanges(
+        { ...beforeProduct, externalIds: beforeExternalIds },
+        { ...updated, externalIds: currentExternalIdRows },
+        [
+          "name",
+          "aliases",
+          "tags",
+          "manufacturer",
+          "category",
+          "externalIds",
+          "fdc_id",
+          "model",
+          "expectedQuantity",
+          "ingredientId",
+          "price",
+        ],
+      );
 
       if (changes) {
         await logAuditEntry(tx, actor, {
@@ -1586,13 +1686,6 @@ export const updateProduct = async (
         });
       }
 
-      const currentExternalIds = await tx.query.productExternalId.findMany({
-        where: and(
-          eq(productExternalId.productId, updated.id),
-          notDeleted(productExternalId),
-        ),
-      });
-
       const pricing = await loadProductPricing(tx, [updated]);
       const qualities = await loadProductDataQualities(tx, [updated.id]);
       return dbProductToTopLevelAPI({
@@ -1601,7 +1694,7 @@ export const updateProduct = async (
           pricing.get(updated.id) ?? resolveProductPricing(updated.price),
         dataQuality: qualities.get(updated.id)!,
         images: productImages,
-        externalIds: currentExternalIds,
+        externalIds: currentExternalIdRows,
       });
     });
     return { product: updatedProduct, detachedImageKeys };
@@ -1918,7 +2011,6 @@ export const quickCreateProduct = async (
       db,
       data.manufacturer ?? UNSPECIFIED_MANUFACTURER,
     ),
-    upc: data.upc ?? null,
     fdc_id: data.fdc_id ?? null,
     model: data.model ?? null,
     expectedQuantity: data.expectedQuantity ?? null,
@@ -1930,21 +2022,38 @@ export const quickCreateProduct = async (
     ...(data.updatedAt && { updatedAt: data.updatedAt }),
   };
 
-  // An explicit `shortcode` only comes from the import/restore path, which is
-  // replaying a code that already exists; everything else mints one through
-  // `insertWithShortcode` so it gets the collision retry.
-  const newProduct = data.shortcode
-    ? await insertAndReturn(db, product, {
-        ...values,
-        shortcode: data.shortcode,
-      })
-    : await insertWithShortcode(db, "product", values);
+  // Transactional because the barcode is a SECOND row now. This used to be one
+  // INSERT, and `findOrCreateByGtin`'s cross-request race recovery leaned on
+  // that: a losing racer must commit nothing, or it leaves a barcode-less
+  // Product behind for the recovery to find instead of the winner.
+  const { newProduct, externalIds } = await withTransaction(db, async (tx) => {
+    // An explicit `shortcode` only comes from the import/restore path, which is
+    // replaying a code that already exists; everything else mints one through
+    // `insertWithShortcode` so it gets the collision retry.
+    const inserted = data.shortcode
+      ? await insertAndReturn(tx, product, {
+          ...values,
+          shortcode: data.shortcode,
+        })
+      : await insertWithShortcode(tx, "product", values);
 
-  // Log audit entry
-  await logAuditEntry(db, actor, {
-    entityType: "product",
-    entityId: newProduct.id,
-    action: "create",
+    if (data.upc != null) {
+      await syncPrimaryGtin(tx, inserted.id, data.upc);
+    }
+
+    await logAuditEntry(tx, actor, {
+      entityType: "product",
+      entityId: inserted.id,
+      action: "create",
+    });
+
+    const rows =
+      data.upc == null
+        ? []
+        : await tx.query.productExternalId.findMany({
+            where: eq(productExternalId.productId, inserted.id),
+          });
+    return { newProduct: inserted, externalIds: rows };
   });
 
   const qualities = await loadProductDataQualities(db, [newProduct.id]);
@@ -1953,7 +2062,7 @@ export const quickCreateProduct = async (
     pricing: resolveProductPricing(newProduct.price),
     dataQuality: qualities.get(newProduct.id)!,
     images: [],
-    externalIds: [],
+    externalIds,
   });
 };
 

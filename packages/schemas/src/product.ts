@@ -24,6 +24,7 @@ import {
   externalIdOut,
   externalIdSource,
   externalIdValues,
+  gtin,
 } from "./external-id";
 import {
   expenseShortcode,
@@ -121,12 +122,17 @@ const productCreateShape = {
     .describe(
       'Free-form compatibility/grouping tags, e.g. "grinder-4.5in" or "M18". Tag the tool AND the consumables that fit it with the same value; `category` says which side each is. Replaces the existing list when provided.',
     ),
-  upc: upc.nullable(),
+  /**
+   * A barcode to record as this product's PRIMARY one. Normalized to GTIN-14
+   * and upserted onto the `gtin` external-id slot; it does not disturb the
+   * product's other identifiers. Pass `externalIds` to manage the full set.
+   */
+  upc: gtin.nullable(),
   fdc_id: fdcId
     .nullable()
     .optional()
     .describe(
-      "USDA FoodData Central id — links the product to any USDA food (takes precedence over the product's UPC). null to unlink.",
+      "USDA FoodData Central id — links the product to any USDA food (takes precedence over the product's barcode). null to unlink.",
     ),
   manufacturer: z
     .string()
@@ -286,7 +292,10 @@ export const productFilterFields = {
   nameFilter: z.string().optional().describe("Filter by product name"),
   manufacturerFilter: z.string().optional().describe("Filter by manufacturer"),
   manufacturerExact: oneOrMany(z.string()).optional(),
-  upcFilter: z.string().optional().describe("Filter by UPC code"),
+  upcFilter: z
+    .string()
+    .optional()
+    .describe("Filter by UPC/barcode — matches ANY of the product's barcodes"),
   upcPresenceFilter: presenceFilter,
   modelFilter: z
     .string()
@@ -431,9 +440,10 @@ export const productFilterFields = {
   /**
    * A *key* filter, not a resolution filter. The USDA link is resolved at read
    * time by `foodLookupParamFromProduct` — explicit `fdc_id` first, else the
-   * `upc` is auto-matched against USDA branded foods, which may find nothing.
-   * SQL can only see whether a key exists. `usdaUnavailable` is deliberately
-   * NOT folded in: setting it doesn't clear `fdc_id`/`upc`, so a product can be
+   * primary barcode is auto-matched against USDA branded foods, which may find
+   * nothing. SQL can only see whether a key exists. `usdaUnavailable` is
+   * deliberately NOT folded in: setting it doesn't clear the `fdc_id` or the
+   * barcode, so a product can be
    * both "has key" and "confirmed unavailable", and conflating them would make
    * neither recoverable.
    */
@@ -575,7 +585,7 @@ export const productSortableFields = [
   "name",
   "manufacturer",
   "model",
-  "upc",
+  "primaryGtin",
   "category",
   "fdc_id",
   "price",
@@ -724,11 +734,16 @@ const productTopLevelFields = {
     .describe(
       'Free-form compatibility/grouping tags, e.g. "grinder-4.5in", "M18"',
     ),
-  upc: upc.nullable(),
+  /**
+   * The barcode that stands for this product — DERIVED from its primary `gtin`
+   * external-id row, not stored. The full set is in `externalIds`; a product
+   * routinely carries more than one.
+   */
+  primaryGtin: gtin.nullable(),
   fdc_id: fdcId
     .nullable()
     .describe(
-      "USDA FoodData Central id — links the product to any USDA food (takes precedence over the product's UPC). null to unlink.",
+      "USDA FoodData Central id — links the product to any USDA food (takes precedence over the product's barcode). null to unlink.",
     ),
   manufacturer: z
     .string()
@@ -932,6 +947,16 @@ export const productWithIngredientAndInventoryAndMappingsOut = z.object({
    * still in flight.
    */
   servingAsLocations: z.array(locationPathRefOut),
+  /**
+   * Live `ProductComponent` edges where this product is the parent — non-zero
+   * means it is a kit or multi-pack. Counts distinct components, not units.
+   *
+   * Embedded here rather than read from `product.components` beside it, for the
+   * reason `servingAsLocations` gives above: the hero decides its presence
+   * stamp from this, and a stamp that flipped when a second query resolved
+   * would contradict the Kit Components table while it loaded.
+   */
+  componentCount: z.number().int().nonnegative(),
   ...productQuantityFields,
 });
 
@@ -988,6 +1013,16 @@ export const productWithFoodOut = z.object({
   unitMappings: z.array(unitMappingOut),
   inventoryEntry: z.array(productInventoryWithLocationOut),
   servingAsLocations: z.array(locationPathRefOut),
+  /**
+   * Live `ProductComponent` edges where this product is the parent — non-zero
+   * means it is a kit or multi-pack. Counts distinct components, not units.
+   *
+   * Embedded here rather than read from `product.components` beside it, for the
+   * reason `servingAsLocations` gives above: the hero decides its presence
+   * stamp from this, and a stamp that flipped when a second query resolved
+   * would contradict the Kit Components table while it loaded.
+   */
+  componentCount: z.number().int().nonnegative(),
   food: foodSummary.nullable(),
   recipeUsages: z.array(recipeUsageOut),
   ...productQuantityFields,
@@ -1141,7 +1176,7 @@ export const productCategoryDistributionOut = z.array(
 export const productQuickCreatePayload = z.object({
   name: requiredName("Product name"),
   manufacturer: z.string().default(UNSPECIFIED_MANUFACTURER),
-  upc: upc.nullable().optional(),
+  upc: gtin.nullable().optional(),
   expectedQuantity: z.number().int().positive().nullable().optional(),
   model: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
@@ -1164,7 +1199,7 @@ export const mcpProductCreateInput = z.object({
   // ordinary case for a kit parent or a retailer composite, neither of which
   // carries a barcode. `mcpProductUpdateInput` already had both fields
   // optional; create is what diverged.
-  upc: upc.nullish(),
+  upc: gtin.nullish(),
   manufacturer: z
     .string()
     .describe("Manufacturer or 'generic'")
@@ -1249,7 +1284,7 @@ export const mcpProductUpdateInput = z.object({
     .describe(
       "Retailer/vendor identifiers. Pass the COMPLETE desired set: it replaces the existing list. A (source, kind) slot takes one PRIMARY plus any number of secondaries — mark the extras isPrimary: false.",
     ),
-  upc: upc.nullable().optional(),
+  upc: gtin.nullable().optional(),
   fdc_id: fdcId.nullable().optional(),
   manufacturer: z
     .string()
@@ -1295,7 +1330,8 @@ const productMcpFields = {
   manufacturer: z.string(),
   model: z.string().nullable(),
   notes: z.string().nullable(),
-  upc: upc.nullable(),
+  /** Derived from the primary `gtin` external-id row; see `externalIds`. */
+  primaryGtin: gtin.nullable(),
   category: productCategory.nullable(),
   tags: z.array(z.string()),
   price: z.number().nullable().describe("Effective valuation/costing price"),

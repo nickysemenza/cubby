@@ -1,5 +1,6 @@
 import { locationTypeValues, productCategoryValues } from "@cubby/shared";
-import { fdcId, upc } from "@cubby/usda-schemas";
+import { fdcId } from "@cubby/usda-schemas";
+import { gtin } from "./external-id";
 import { z } from "zod";
 import { locationRelatedFilterFields } from "./related-view";
 import {
@@ -398,7 +399,7 @@ const locationProductCategory = z.enum(productCategoryValues);
 const locationInventoryProductOut = z.object({
   id: productShortcode,
   name: z.string(),
-  upc: upc.nullable(),
+  primaryGtin: gtin.nullable(),
   fdc_id: fdcId.nullable(),
   manufacturer: z.string(),
   model: z.string().nullable(),

@@ -125,7 +125,7 @@ describe("findOrCreateByUPC", () => {
     expect(result.created).toBe(true);
     expect(result.product.name).toBe("Store Brand Salt");
     expect(result.product.manufacturer).toBe("Acme");
-    expect(result.product.upc).toBe(upc);
+    expect(result.product.primaryGtin).toBe(upc.padStart(14, "0"));
     expect(upcLookupClient.lookup).not.toHaveBeenCalled();
   });
 
@@ -173,7 +173,7 @@ describe("findOrCreateByUPC", () => {
     expect(result.created).toBe(true);
     expect(result.product.name).toBe("Fallback Name");
     expect(result.product.manufacturer).toBe(UNSPECIFIED_MANUFACTURER);
-    expect(result.product.upc).toBe(upc);
+    expect(result.product.primaryGtin).toBe(upc.padStart(14, "0"));
   });
 
   it("branch 4: defaults the name to 'Product <upc>' when no defaultName is given", async () => {

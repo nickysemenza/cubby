@@ -362,14 +362,18 @@ describe("the unlocated views stay one question at three widths", () => {
   const durables = productViews.find((v) => v.id === "unlocated-durables");
   const consumed = productViews.find((v) => v.id === "consumed-on-projects");
 
-  // `servingAsLocations: none` is the half that keeps this disjoint from
-  // `shelf-disagrees`: presence has two forms now, and "nowhere" means neither.
-  it("selects on expected-quantity, BOTH kinds of presence, and undecided stock tracking", () => {
+  // Presence has three forms — stock on a shelf, the bin itself, and stock held
+  // by a kit's parts — and "nowhere" has to mean none of them.
+  // `servingAsLocations: none` is what keeps this disjoint from
+  // `shelf-disagrees`; `components: none` is what keeps a decomposed kit out,
+  // since its shelf claim moved to parts that match this view on their own.
+  it("selects on expected-quantity, ALL THREE kinds of presence, and undecided stock tracking", () => {
     expect(broad?.filters).toEqual([
       { id: "expectedQuantity", value: "positive" },
       { id: "location", value: [FILTER_NONE] },
       { id: "servingAsLocations", value: "none" },
       { id: "stockTracked", value: "none" },
+      { id: "components", value: "none" },
     ]);
   });
 

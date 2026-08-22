@@ -267,13 +267,12 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
  * and `planVendorMerge` apply: the keeper is the record the operator chose, so
  * its values stand, and only its GAPS get filled.
  *
- * `upc` is in the list but is written LAST, after the losers are soft-deleted:
- * `Product_upc_key` is partial on `deletedAt IS NULL`, so adopting a live
- * loser's UPC would put two live rows on one code and abort the merge. Same
- * ordering trap `mergePurchases` hits with `(vendorId, orderId)`.
+ * Barcodes are NOT here and must not be: a product carries a set of them, and
+ * folding a set into a "fill the keeper's null" rule is what made every merge
+ * of two barcoded products destroy one. They ride the external-id fold instead,
+ * where the loser's `gtin` row survives as a demoted secondary.
  */
 const CARRIED_COLUMNS = [
-  "upc",
   "fdc_id",
   "model",
   "price",
@@ -289,7 +288,6 @@ const CARRIED_COLUMNS = [
 type CarriedColumn = (typeof CARRIED_COLUMNS)[number];
 
 const CARRIED_FIELD_LABELS: Record<CarriedColumn, string> = {
-  upc: "barcode",
   fdc_id: "USDA food identity",
   model: "model",
   price: "price",
@@ -825,7 +823,6 @@ async function buildProductMergePlan(
       name: true,
       aliases: true,
       tags: true,
-      upc: true,
       fdc_id: true,
       model: true,
       price: true,
@@ -1458,18 +1455,15 @@ export const mergeProducts = async (
     summary.aliasesAdded = plan.aliasesAdded;
     const tags = plan.tags;
 
-    // The audit captures a UPC carry-over now, but its physical write waits
-    // until the losers release the partial-unique slot below.
     const carried = plan.carried;
     summary.carriedFields = Object.keys(carried);
 
-    const { upc: adoptedUpc, ...carriedBeforeDelete } = carried;
     await tx
       .update(product)
       .set({
         aliases: folded,
         tags,
-        ...buildPartialUpdateValues(carriedBeforeDelete),
+        ...buildPartialUpdateValues(carried),
       })
       .where(eq(product.id, keepId));
 
@@ -1502,15 +1496,6 @@ export const mergeProducts = async (
           : {}),
       },
     });
-
-    // Only now is the loser's UPC slot free — `Product_upc_key` is partial on
-    // `deletedAt IS NULL`, so this must follow the soft-delete above.
-    if (adoptedUpc != null) {
-      await tx
-        .update(product)
-        .set({ upc: adoptedUpc as string })
-        .where(eq(product.id, keepId));
-    }
 
     // Every moved entry now values at the KEEPER's effective price; without
     // this a re-pointed row keeps a valuation derived from a product that no

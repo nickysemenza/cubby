@@ -220,7 +220,7 @@ describe("inventory mappers", () => {
         price: 4.5,
         usdaUnavailable: null,
         name: "Flour",
-        upc: null,
+        primaryGtin: null,
         fdc_id: null,
         manufacturer: "Generic",
         model: "5lb",

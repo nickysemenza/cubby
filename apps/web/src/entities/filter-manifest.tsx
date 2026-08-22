@@ -1284,10 +1284,12 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       placeholder: "Search manufacturer...",
     },
     {
-      columnId: "upc",
+      // Labelled UPC, keyed on the derived barcode column. Matches ANY of the
+      // product's barcodes, not just the primary one shown in the cell.
+      columnId: "primaryGtin",
       field: "upcFilter",
       kind: "text",
-      placeholder: "Filter by upc...",
+      placeholder: "Filter by UPC...",
     },
     {
       // Model number is a tool's real identity when the name is generic
@@ -1457,8 +1459,9 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
     },
     {
       // "USDA key", not "USDA food" — the predicate is `fdc_id IS NOT NULL OR
-      // upc IS NOT NULL`, and SQL can't know whether the usda worker actually
-      // resolves a food for that key. See `usdaPresenceFilter`'s schema doc.
+      // a gtin identifier row EXISTS`, and SQL can't know whether the usda
+      // worker actually resolves a food for that key. See
+      // `usdaPresenceFilter`'s schema doc.
       columnId: "food",
       field: "usdaPresenceFilter",
       kind: "presence",

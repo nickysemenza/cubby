@@ -130,7 +130,10 @@ async function getSearchDocumentSources(
     product: sql`
       SELECT 'product'::text AS "entityType", p."id"::text AS "entityId", p."shortcode",
         p."name" AS title, p."manufacturer" AS subtitle, p."category" AS "typeHint",
-        p."aliases" AS aliases, ARRAY[p."upc", p."model", p."manufacturer"]::text[] AS keywords
+        p."aliases" AS aliases,
+        COALESCE((SELECT array_agg(pei."externalId") FROM "ProductExternalId" pei
+                  WHERE pei."productId" = p."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL),
+                 ARRAY[]::text[]) || ARRAY[p."model", p."manufacturer"]::text[] AS keywords
       FROM "Product" p WHERE p."deletedAt" IS NULL AND 'product' IN (${types}) AND ${requested(sql`p."id"`)}`,
     recipe: sql`
       SELECT 'recipe', r."id"::text, r."shortcode", r."name", NULL, NULL, ARRAY[]::text[], ARRAY[]::text[]
@@ -147,7 +150,11 @@ async function getSearchDocumentSources(
         l."type", l."aliases", ARRAY[l."type"]::text[]
       FROM "Location" l WHERE l."deletedAt" IS NULL AND 'location' IN (${types}) AND ${requested(sql`l."id"`)}`,
     inventory: sql`
-      SELECT 'inventory', ie."id"::text, ie."shortcode", p."name", l."name", p."category", p."aliases", ARRAY[l."name", l."type", p."manufacturer", p."upc"]::text[]
+      SELECT 'inventory', ie."id"::text, ie."shortcode", p."name", l."name", p."category", p."aliases",
+        ARRAY[l."name", l."type", p."manufacturer"]::text[] ||
+        COALESCE((SELECT array_agg(pei."externalId") FROM "ProductExternalId" pei
+                  WHERE pei."productId" = p."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL),
+                 ARRAY[]::text[])
       FROM "InventoryEntry" ie JOIN "Product" p ON p."id" = ie."productId" AND p."deletedAt" IS NULL JOIN "Location" l ON l."id" = ie."locationId" AND l."deletedAt" IS NULL
       WHERE ie."deletedAt" IS NULL AND 'inventory' IN (${types}) AND ${requested(sql`ie."id"`)}`,
     meal: sql`

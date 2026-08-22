@@ -30,6 +30,7 @@ import { stockOnly } from "~/server/repo/inventory/placement";
 // through it would close an import cycle. `location/tree` imports no product
 // code.
 import { loadLocationAncestors } from "~/server/repo/location/tree";
+import { loadPrimaryGtins } from "./gtin";
 
 export const findDuplicateUniqueProducts = async (
   db: Database,
@@ -71,7 +72,7 @@ export const findProductsWithNoImages = async (
     shortcode: string;
     name: string;
     manufacturer: string;
-    upc: string | null;
+    primaryGtin: string | null;
   }>
 > => {
   const dbClient = getDb(db);
@@ -89,7 +90,6 @@ export const findProductsWithNoImages = async (
       shortcode: product.shortcode,
       name: product.name,
       manufacturer: product.manufacturer,
-      upc: product.upc,
     })
     .from(product)
     .leftJoin(
@@ -104,7 +104,16 @@ export const findProductsWithNoImages = async (
     .groupBy(product.id)
     .having(sql`count(${image.id}) = 0`);
 
-  return results;
+  // The barcode is what the image backfill looks the product up BY, so it is
+  // carried on the row rather than re-fetched per candidate downstream.
+  const gtins = await loadPrimaryGtins(
+    db,
+    results.map((row) => row.id),
+  );
+  return results.map((row) => ({
+    ...row,
+    primaryGtin: gtins.get(row.id) ?? null,
+  }));
 };
 
 /**

@@ -303,7 +303,8 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
     {
       id: "unlocated",
       label: "Not on a shelf",
-      description: "Bought, never sold, but stocked nowhere",
+      description:
+        "Bought, never sold, and held nowhere — not on a shelf, not a bin, not inside a kit",
       // The other half of `shelf-disagrees`, and the half that view cannot
       // reach: `quantityVarianceFilter` is scoped to products that are BOTH
       // stocked and in the ledger, and `onHandUnitsSql` returns NULL for a
@@ -323,23 +324,35 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       // shortcut, not the answer.
       //
       // `servingAsLocations: none` is what keeps this DISJOINT from
-      // `shelf-disagrees`. Presence has two forms now — stock on a shelf, and
-      // the bin itself — and this view means neither. Without it the HDX totes
-      // appeared here under "stocked nowhere" while three of them were bins in
-      // daily use, and the same rows showed in both views telling different
-      // stories.
+      // `shelf-disagrees`. Presence has THREE forms — stock on a shelf, the bin
+      // itself, and stock held by a kit's parts — and this view means none of
+      // them. Without the second the HDX totes appeared here under "stocked
+      // nowhere" while three of them were bins in daily use, and the same rows
+      // showed in both views telling different stories.
+      //
+      // `components: none` is the third, and the same argument one step out. A
+      // kit that has been split into a composition record keeps the Expense and
+      // holds no stock of its own — the shelf claim moved to its parts — so a
+      // decomposed kit is not "stocked nowhere", it is stocked as its
+      // components. The parts are also the ACTIONABLE rows: an unstocked
+      // component carries its own projected `expectedQuantity` (the kit's units
+      // reach it through `ProductComponent`) and matches this view by itself, so
+      // admitting the parent too reports one gap twice and less precisely.
+      // Verified on production: all 25 kit parents leave, and every genuinely
+      // unaccounted component stays.
       filters: [
         { id: "expectedQuantity", value: "positive" },
         { id: "location", value: [FILTER_NONE] },
         { id: "servingAsLocations", value: "none" },
         { id: "stockTracked", value: "none" },
+        { id: "components", value: "none" },
       ],
       sort: [{ id: "price", desc: true }],
-      // All three halves of the signal: a filled Expected beside an empty
-      // Location, still undecided on stock tracking. `quantityVariance` is
-      // deliberately NOT revealed — on-hand units are NULL for this entire
-      // cohort, so it renders `—` on every row, and a dash reads as "unknown"
-      // when the actual fact is "none".
+      // Every half of the signal: a filled Expected beside an empty Location,
+      // not a bin, not a kit, still undecided on stock tracking.
+      // `quantityVariance` is deliberately NOT revealed — on-hand units are
+      // NULL for this entire cohort, so it renders `—` on every row, and a dash
+      // reads as "unknown" when the actual fact is "none".
       layout: {
         ...DEFAULT_CURATED_LAYOUT,
         columnVisibility: {
@@ -347,6 +360,7 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
           location: true,
           servingAsLocations: true,
           stockTracked: true,
+          components: true,
         },
       },
     },
@@ -369,6 +383,7 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
         { id: "location", value: [FILTER_NONE] },
         { id: "servingAsLocations", value: "none" },
         { id: "stockTracked", value: "none" },
+        { id: "components", value: "none" },
         { id: "category", value: ["tools", "tool-accessories", "storage"] },
       ],
       sort: [{ id: "price", desc: true }],
@@ -379,6 +394,7 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
           location: true,
           servingAsLocations: true,
           stockTracked: true,
+          components: true,
           category: true,
         },
       },
@@ -411,6 +427,7 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
         { id: "location", value: [FILTER_NONE] },
         { id: "servingAsLocations", value: "none" },
         { id: "stockTracked", value: "none" },
+        { id: "components", value: "none" },
         { id: "related:product.projects", value: [FILTER_ANY] },
       ],
       sort: [{ id: "price", desc: true }],
@@ -424,6 +441,7 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
           location: true,
           servingAsLocations: true,
           stockTracked: true,
+          components: true,
           "related:product.projects": true,
         },
       },

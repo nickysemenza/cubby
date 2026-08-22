@@ -1640,6 +1640,12 @@ export function createExternalLinkColumn<
     className?: string;
     mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
+    /**
+     * Rewrite the stored value for display and for the route param — when the
+     * canonical form is not the one a human reads. A barcode stores as GTIN-14
+     * but is printed (and looked up) in its shortest encoding.
+     */
+    display?: (value: string) => string;
     /** Enable inline editing */
     editable?: {
       onSave: (newValue: string | null, row: T) => Promise<void>;
@@ -1648,6 +1654,7 @@ export function createExternalLinkColumn<
 ) {
   const paramName = options?.paramName ?? "code";
   const variant = options?.variant ?? "mono";
+  const display = options?.display ?? ((value: string) => value);
 
   const cellData = textCellData<T>(
     "text",
@@ -1691,13 +1698,14 @@ export function createExternalLinkColumn<
                 if (v === null || v === undefined || v === "") {
                   return <NoneValue />;
                 }
+                const shown = display(String(v));
                 return (
                   <TableLink
                     to={linkTo as "/usda/upc/$code"}
-                    params={{ [paramName]: String(v) } as { code: string }}
+                    params={{ [paramName]: shown } as { code: string }}
                     variant={variant}
                   >
-                    {v}
+                    {shown}
                   </TableLink>
                 );
               }}
@@ -1706,13 +1714,14 @@ export function createExternalLinkColumn<
         }
 
         if (value === null || value === undefined) return <NoneValue />;
+        const shown = display(String(value));
         return (
           <TableLink
             to={linkTo as "/usda/upc/$code"}
-            params={{ [paramName]: String(value) } as { code: string }}
+            params={{ [paramName]: shown } as { code: string }}
             variant={variant}
           >
-            {value}
+            {shown}
           </TableLink>
         );
       },

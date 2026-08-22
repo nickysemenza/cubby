@@ -1,3 +1,4 @@
+import { displayGtin } from "@cubby/schemas/external-id";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import {
   type LocationIdentityProductOut,
@@ -393,7 +394,10 @@ export function ProductPreviewContent({ productId }: { productId: string }) {
                   .join(" · ") || undefined,
               nutrients: data.food?.nutritionInfo.nutrientsPer100,
               price: data.pricing.effectivePrice ?? undefined,
-              upc: data.upc ?? undefined,
+              upc:
+                data.primaryGtin === null
+                  ? undefined
+                  : displayGtin(data.primaryGtin),
               thumbUrl: data.images.find(isDisplayableImageFile)?.url,
               usdaFdcId: data.food?.fdc_id ?? data.fdc_id ?? undefined,
               onHandUnits: data.onHandUnits,

@@ -39,7 +39,9 @@ const productSearchTextInputSchema = z.object({
   manufacturer: nullableText,
   category: nullableText,
   model: nullableText,
-  upc: nullableText,
+  // Every barcode, not just the primary: a product carries a set, and a second
+  // barcode exists precisely so the item can be found by it.
+  gtins: nullableTextList,
   notes: nullableText,
   aliases: nullableTextList,
 });
@@ -52,7 +54,7 @@ export function buildProductEmbeddingText(product: ProductSearchTextInput) {
     field("manufacturer", parsed.manufacturer),
     field("category", parsed.category),
     field("model", parsed.model),
-    field("upc", parsed.upc),
+    listField("barcode", parsed.gtins),
     listField("aliases", parsed.aliases),
     field("notes", parsed.notes),
   ]);

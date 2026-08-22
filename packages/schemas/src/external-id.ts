@@ -16,45 +16,74 @@ export const externalIdKind = z.enum([
   "internet_number",
   "item_number",
   "catalog_number",
-  // Barcodes, by digit length. They live here rather than in a scalar column
-  // because a product routinely carries more than one — a manufacturer
-  // reissues a SKU, a retailer relabels, two listings of one item disagree —
-  // and `Product.upc` could hold exactly one, so every merge of two barcoded
-  // products destroyed a real identifier.
-  "upc_a",
-  "ean_13",
-  "ean_8",
+  // Barcodes. They live here rather than in a scalar column because a product
+  // routinely carries more than one — a manufacturer reissues a SKU, a retailer
+  // relabels, two listings of one item disagree — and `Product.upc` could hold
+  // exactly one, so every merge of two barcoded products destroyed a real
+  // identifier.
+  //
+  // ONE kind, not one per encoding: a 12-digit UPC-A and its 13-digit EAN-13
+  // reprint are the same barcode, and storing them under different kinds put
+  // them in different slots, where neither the unique index nor duplicate
+  // detection could see they were the same. Values are normalized to GTIN-14 on
+  // the write boundary (`gtin` below), so the encoding is a presentation
+  // concern (`displayGtin`) rather than an identity one.
   "gtin_14",
   "legacy_unspecified",
 ]);
 export type ExternalIdKind = z.infer<typeof externalIdKind>;
 
-/** The slug barcodes are recorded under, regardless of which encoding. */
+/** The slug barcodes are recorded under. */
 export const GTIN_SOURCE = "gtin";
 
-const GTIN_KIND_BY_LENGTH: Record<number, ExternalIdKind> = {
-  8: "ean_8",
-  12: "upc_a",
-  13: "ean_13",
-  14: "gtin_14",
-};
+/** The single kind recorded under {@link GTIN_SOURCE}. */
+export const GTIN_KIND = "gtin_14" satisfies ExternalIdKind;
+
+/** True for the kind recorded under `GTIN_SOURCE`. */
+export const isGtinKind = (kind: ExternalIdKind): boolean => kind === GTIN_KIND;
 
 /**
- * Which barcode kind a digit string is, by length.
+ * The canonical GTIN-14 form — the identity every encoding of one barcode
+ * shares.
  *
- * Returns null for anything that is not a recognized GTIN length — the caller
- * decides whether that is a rejection or a `legacy_unspecified` row, because
- * the backfill has to keep values the current input schema would refuse.
+ * Returns null for anything that is not 8-14 digits. That guard is
+ * load-bearing on the SQL side: Postgres `lpad(x, 14, '0')` TRUNCATES longer
+ * input rather than erroring, so a silently-truncated value would collide with
+ * a real barcode under the global `(source, kind, externalId)` unique.
  */
-export const gtinKindForValue = (value: string): ExternalIdKind | null =>
-  /^\d+$/.test(value) ? (GTIN_KIND_BY_LENGTH[value.length] ?? null) : null;
+export const normalizeGtin = (value: string): string | null =>
+  /^\d{8,14}$/.test(value) ? value.padStart(14, "0") : null;
 
-/** True for the kinds recorded under `GTIN_SOURCE`. */
-export const isGtinKind = (kind: ExternalIdKind): boolean =>
-  kind === "upc_a" ||
-  kind === "ean_13" ||
-  kind === "ean_8" ||
-  kind === "gtin_14";
+/**
+ * The shortest standard encoding — what to render next to a package, and what
+ * to hand USDA.
+ *
+ * `usda-api`'s own `normalizeUpc` left-pads to TWELVE and its
+ * `branded_food.gtin_upc` index is an exact string match, so a GTIN-14 lookup
+ * misses nearly every branded food.
+ */
+export const displayGtin = (value: string): string =>
+  value.replace(/^0+/, "").padStart(12, "0");
+
+/**
+ * A barcode on the WRITE boundary: any encoding in, canonical GTIN-14 out, so
+ * a 12-digit UPC-A and its 13-digit reprint cannot become two rows.
+ *
+ * `.transform()` rather than `.default()`: a zod default makes the parsed
+ * output type wider than the input and react-hook-form's resolver requires the
+ * two to agree (see `externalIdValueFields.isPrimary`). A transform from string
+ * to string leaves them identical, so the form resolver is unaffected.
+ *
+ * Distinct from `upc` in `@cubby/usda-schemas`, which is the barcode being
+ * LOOKED UP against USDA and the UPC provider — those index their own
+ * encodings and must not be normalized.
+ */
+export const gtin = z
+  .string()
+  .trim()
+  .regex(/^\d{8,14}$/, "a barcode is 8-14 digits")
+  .transform((value) => value.padStart(14, "0"))
+  .describe("Barcode (UPC/EAN/GTIN); stored canonically as GTIN-14");
 
 export const canonicalExternalIdUrl = (value: {
   source: string;
