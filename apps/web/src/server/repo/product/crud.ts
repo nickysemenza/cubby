@@ -4,6 +4,7 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
+import { entityRefKey } from "@cubby/schemas/entity";
 import type { ImpactItem } from "@cubby/schemas/entity-integrity";
 import {
   displayGtin,
@@ -11,7 +12,11 @@ import {
   GTIN_SOURCE,
   storedExternalIdUrl,
 } from "@cubby/schemas/external-id";
-import type { IngredientId, ProductId } from "@cubby/schemas/identifiers";
+import type {
+  IngredientId,
+  LocationId,
+  ProductId,
+} from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import {
   buildTakeSkip,
@@ -102,11 +107,12 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
+import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import { resolveEstablishedManufacturer } from "~/server/repo/label-canonical";
-import { loadLocationAncestors } from "~/server/repo/location/tree";
+import { loadLocationAncestorsWithIds } from "~/server/repo/location/tree";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
@@ -318,7 +324,7 @@ const fetchProductById = async (
   // The detail page shows Expected beside On hand, so it needs the same ledger
   // the list does — one grouped query for the single row.
   return (
-    await hydrateProductLocationAncestors(
+    await hydrateProductLocationBreadcrumbs(
       db,
       await enrichProductRowsWithQuantityLedger(db, priced),
     )
@@ -327,10 +333,22 @@ const fetchProductById = async (
 
 /**
  * Detail products can mention a holding location and a location whose identity
- * is the product. Resolve every breadcrumb in one recursive query for the
- * entire result set, rather than one parent walk per row in the mapper.
+ * is the product. Resolve every breadcrumb — and every thumbnail the page draws
+ * for a location, rung or leaf — in two queries for the entire result set,
+ * rather than one parent walk per row in the mapper.
+ *
+ * The thumbnail policy is NOT reimplemented here: `resolveEntityDisplayImages`
+ * is the same helper search and the enriched entity-link reads use, and it
+ * already ranks a location's own photo above the cover of the SKU it IS. That
+ * matters because the two ranks land on different rows of one table — a shelf
+ * holding stock has its own photo, a bin that IS a photographed tote has only
+ * its SKU's — and resolving them by two different rules is what left the whole
+ * card drawing placeholder glyphs.
+ *
+ * Ancestors come back with their private ids attached because the resolver keys
+ * on uuid and the wire rung carries only a shortcode.
  */
-const hydrateProductLocationAncestors = async (
+const hydrateProductLocationBreadcrumbs = async (
   db: Database,
   rows: ProductDeepDB[],
 ): Promise<ProductDeepDB[]> => {
@@ -340,19 +358,38 @@ const hydrateProductLocationAncestors = async (
       ...(row.locations ?? []).map((loc) => loc.id),
     ]),
   );
-  const ancestorsById = await loadLocationAncestors(db, locationIds);
+  const ancestorsById = await loadLocationAncestorsWithIds(db, locationIds);
+  const displayImages = await resolveEntityDisplayImages(
+    db,
+    uniq([
+      ...locationIds,
+      ...[...ancestorsById.values()].flatMap((chain) =>
+        chain.map((rung) => rung.locationId),
+      ),
+    ]).map((entityId) => ({ entityType: "location" as const, entityId })),
+  );
+  const displayImageOf = (id: LocationId) =>
+    displayImages.get(entityRefKey("location", id)) ?? null;
+  const breadcrumbOf = (id: LocationId) =>
+    (ancestorsById.get(id) ?? []).map(({ locationId, ...rung }) => ({
+      ...rung,
+      displayImage: displayImageOf(locationId),
+    }));
+
   return rows.map((row) => ({
     ...row,
     inventoryEntry: row.inventoryEntry.map((entry) => ({
       ...entry,
       location: {
         ...entry.location,
-        ancestors: ancestorsById.get(entry.location.id) ?? [],
+        ancestors: breadcrumbOf(entry.location.id),
+        displayImage: displayImageOf(entry.location.id),
       },
     })),
     locations: row.locations?.map((loc) => ({
       ...loc,
-      ancestors: ancestorsById.get(loc.id) ?? [],
+      ancestors: breadcrumbOf(loc.id),
+      displayImage: displayImageOf(loc.id),
     })),
   }));
 };
@@ -449,7 +486,7 @@ export const getProductsByShortcodes = async (
     results.map((row) => row.id),
   );
   const priced = await enrichProductRowsWithPricing(db, results);
-  const ledgered = await hydrateProductLocationAncestors(
+  const ledgered = await hydrateProductLocationBreadcrumbs(
     db,
     await enrichProductRowsWithQuantityLedger(db, priced),
   );

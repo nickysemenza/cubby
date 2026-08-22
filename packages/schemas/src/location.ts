@@ -298,21 +298,25 @@ export type LocationListRefOut = z.infer<typeof locationListRefOut>;
  * includes the location itself, so a dropdown row can disambiguate the many
  * legitimately-repeated names in the tree ("shelf 1" exists in four rooms).
  */
-export const locationAncestorOut = z.object({
+export const locationAncestorFields = {
   id: locationShortcode,
   name: z.string(),
   type: locationType.nullable(),
-});
+};
+export const locationAncestorOut = z.object(locationAncestorFields);
 export type LocationAncestorOut = z.infer<typeof locationAncestorOut>;
 
 /**
  * Small location identity plus its root-first breadcrumb.  Detail reads use
  * this instead of making consumers reconstruct a path from unrelated rows.
  */
-export const locationPathRefOut = z.object({
+export const locationPathRefFields = {
   id: locationShortcode,
   name: z.string(),
   type: locationType.nullable(),
+};
+export const locationPathRefOut = z.object({
+  ...locationPathRefFields,
   ancestors: z.array(locationAncestorOut),
 });
 export type LocationPathRefOut = z.infer<typeof locationPathRefOut>;

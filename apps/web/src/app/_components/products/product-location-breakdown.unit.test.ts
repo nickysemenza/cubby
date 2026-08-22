@@ -9,10 +9,12 @@ const loc = (
   id: string,
   name: string,
   ancestors: ProductLocationBreakdownInput["servingAsLocations"][number]["ancestors"] = [],
+  displayImage: { url: string } | null = null,
 ) => ({
   id: unsafeLocationShortcode(id),
   name,
   type: "area" as const,
+  displayImage,
   ancestors,
 });
 
@@ -132,6 +134,28 @@ describe("buildProductLocationBreakdown", () => {
     expect(child(result!, "Left")?.metricValue).toBeNull();
     expect(child(result!, "Right")?.metricValue).toBeNull();
     expect(left.id).not.toBe(right.id);
+  });
+
+  it("carries each rung's resolved thumbnail onto its node, and only where one resolved", () => {
+    const homeCover = { url: "https://img.test/home.jpg" };
+    const rackCover = { url: "https://img.test/rack.jpg" };
+    const home = loc("LOC-HOME", "Home", [], homeCover);
+    const result = buildProductLocationBreakdown({
+      inventoryEntry: [
+        entry("LOC-RACK", "Rack", 2, [home]),
+        entry("LOC-SHLF", "Shelf", 1, [home]),
+      ],
+      servingAsLocations: [loc("LOC-RACK", "Rack", [home], rackCover)],
+    });
+
+    expect(result).toMatchObject({ label: "Home", displayImage: homeCover });
+    // The rack is a bin that IS this product: it has no photo of its own, so
+    // the server resolved its SKU's cover. The stock entry for the same
+    // location arrives first and carries none — the later rung must still win.
+    expect(child(result!, "Rack")?.displayImage).toEqual(rackCover);
+    // A location that resolved to nothing omits the key entirely rather than
+    // carrying a null, so the mark falls back to the entity icon.
+    expect(child(result!, "Shelf")).not.toHaveProperty("displayImage");
   });
 
   it("returns null for a product with no presence", () => {

@@ -1,7 +1,9 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
+import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { Link } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, MapPin } from "lucide-react";
 import { useMemo, useState } from "react";
+import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
 import { cn } from "~/lib/utils";
 
 /**
@@ -21,6 +23,13 @@ export interface HierarchyDrilldownNode {
   directMetricValue?: number | null;
   /** Enables a leaf link to this real location. */
   locationShortcode?: LocationShortcode;
+  /**
+   * The thumbnail this rung draws. Absent on aggregate nodes that stand for no
+   * single location, and on adapters whose payload carries no image — the mark
+   * reserves its box either way, so a hierarchy that never sets this looks the
+   * same as it did before the field existed.
+   */
+  displayImage?: ImageUrlSummary;
   /** Short supporting labels, for example `installed`. */
   annotations?: readonly string[];
   children?: readonly HierarchyDrilldownNode[];
@@ -39,6 +48,7 @@ interface DrilldownRow {
   metricLabel: string;
   metricValue: number | null;
   annotations?: readonly string[];
+  displayImage?: ImageUrlSummary;
   node?: HierarchyDrilldownNode;
 }
 
@@ -49,6 +59,7 @@ function sortedRows(node: HierarchyDrilldownNode): DrilldownRow[] {
     metricLabel: child.metricLabel,
     metricValue: child.metricValue,
     annotations: child.annotations,
+    displayImage: child.displayImage,
     node: child,
   }));
 
@@ -58,6 +69,9 @@ function sortedRows(node: HierarchyDrilldownNode): DrilldownRow[] {
       label: "Directly here",
       metricLabel: node.directMetricLabel,
       metricValue: node.directMetricValue ?? null,
+      // This row IS the focused location, counted without its children, so it
+      // wears the same mark rather than a lone placeholder among real ones.
+      displayImage: node.displayImage,
     });
   }
 
@@ -154,6 +168,17 @@ export function HierarchyDrilldown({
                           className="hidden size-3.5 shrink-0 text-muted-foreground sm:block"
                         />
                       )}
+                      {/* Conditional, unlike the rows below: the list reserves
+                          the box so labels stay aligned down a column, but a
+                          breadcrumb is a horizontal trail where placeholders
+                          for image-less rungs read as noise. */}
+                      {node.displayImage && (
+                        <EntityIdentityMark
+                          entity="location"
+                          displayImage={node.displayImage}
+                          size="inline"
+                        />
+                      )}
                       {isCurrent ? (
                         <span className="min-w-0">
                           <span
@@ -204,6 +229,11 @@ export function HierarchyDrilldown({
             const metricDescription = `${row.label}: ${row.metricLabel}${row.annotations?.length ? `, ${row.annotations.join(", ")}` : ""}`;
             const content = (
               <>
+                <EntityIdentityMark
+                  entity="location"
+                  displayImage={row.displayImage ?? null}
+                  size="inline"
+                />
                 <span className="min-w-0 flex-1">
                   <span
                     className="block truncate font-medium"
@@ -224,6 +254,7 @@ export function HierarchyDrilldown({
                 {barWidth && (
                   <span
                     aria-hidden="true"
+                    data-slot="contribution-bar"
                     className="absolute bottom-0 left-0 h-0.5 bg-foreground/25 transition-[width] duration-100 ease-cozy motion-reduce:transition-none"
                     style={{ width: barWidth }}
                   />

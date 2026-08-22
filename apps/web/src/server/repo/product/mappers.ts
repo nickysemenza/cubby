@@ -418,6 +418,8 @@ export const dbProductToAPI = (
         lastBulkInventory: entry.location.lastBulkInventory,
         aiDescription: entry.location.aiDescription,
         images: mapImages(entry.location.images),
+        // The resolved thumbnail, beside the raw inputs it was chosen from.
+        displayImage: entry.location.displayImage ?? null,
         valuation: entry.location.valuation,
         ancestors: entry.location.ancestors ?? [],
         createdAt: entry.location.createdAt,
@@ -461,6 +463,9 @@ export const dbProductToAPI = (
       id: unsafeLocationShortcode(loc.shortcode),
       name: loc.name,
       type: parseLocationType(loc.type, { id: loc.id, name: loc.name }),
+      // This row carries no image columns — the select is scalar-only on
+      // purpose — so the hydrated thumbnail is the only visual it has.
+      displayImage: loc.displayImage ?? null,
       ancestors: loc.ancestors ?? [],
     })),
     // Counts edges, not units: a 4-pack held as one edge with `quantity: 4`

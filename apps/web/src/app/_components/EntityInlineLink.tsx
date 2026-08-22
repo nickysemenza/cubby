@@ -1,3 +1,4 @@
+import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import type { LocationType } from "@cubby/schemas/location";
 import type { ProductCategory } from "@cubby/schemas/product";
@@ -52,9 +53,17 @@ type EntityInlineLinkProps = {
   | { entity: "meal"; data: MinimalEntityData & { date?: string | null } }
   | {
       entity: "location";
+      // `images` and `product.coverImage` are declared for the same reason
+      // `product.category` already is: the component reads them. A location
+      // draws its own photo first and the cover of the SKU it IS second, so
+      // both have to be visible to a caller rather than sniffed blind.
       data: MinimalEntityData & {
         type?: LocationType | null;
-        product?: { category: ProductCategory | null } | null;
+        images?: ReadonlyArray<{ url: string; contentType?: string }>;
+        product?: {
+          category: ProductCategory | null;
+          coverImage?: { url: string; contentType?: string } | null;
+        } | null;
       };
     }
   | { entity: "inventory"; data: MinimalEntityData }
@@ -439,6 +448,37 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
     .exhaustive();
 };
 
+/**
+ * A candidate is only a thumbnail if it is a displayable PHOTO.
+ *
+ * `mapImages` deliberately keeps PDF manuals and failed renders in `images` —
+ * they are real attachments — so an unfiltered `[0]` drew a location's PDF
+ * manual as its identity mark. Same guard `createImageColumn` applies to row
+ * thumbnails. A candidate with no `contentType` came from a narrow projection
+ * that carries only a url, which is displayable by construction.
+ */
+function asDisplayableUrl(candidate: unknown): ImageUrlSummary | null {
+  if (!candidate || typeof candidate !== "object") return null;
+  const file = candidate as {
+    url?: unknown;
+    contentType?: unknown;
+    renderStatus?: unknown;
+    storageStatus?: unknown;
+  };
+  if (typeof file.url !== "string") return null;
+  if (
+    typeof file.contentType === "string" &&
+    !isDisplayableImageFile({
+      contentType: file.contentType,
+      renderStatus: file.renderStatus as never,
+      storageStatus: file.storageStatus as never,
+    })
+  ) {
+    return null;
+  }
+  return { url: file.url };
+}
+
 /** Normalize established enriched projections while DTOs converge on one field. */
 function displayImageFromData(data: unknown): ImageUrlSummary | null {
   if (!data || typeof data !== "object") return null;
@@ -450,25 +490,26 @@ function displayImageFromData(data: unknown): ImageUrlSummary | null {
     value.vendorLogo,
   ];
   for (const candidate of direct) {
-    if (
-      candidate &&
-      typeof candidate === "object" &&
-      "url" in candidate &&
-      typeof candidate.url === "string"
-    ) {
-      return { url: candidate.url };
-    }
+    const summary = asDisplayableUrl(candidate);
+    if (summary) return summary;
   }
   for (const key of ["coverImageUrl", "coverUrl", "imageUrl"] as const) {
     if (typeof value[key] === "string") return { url: value[key] };
   }
   const images = value.images;
   if (Array.isArray(images)) {
-    const first = images.find(
-      (image) =>
-        image && typeof image === "object" && typeof image.url === "string",
-    );
-    if (first) return { url: first.url as string };
+    for (const image of images) {
+      const summary = asDisplayableUrl(image);
+      if (summary) return summary;
+    }
+  }
+  // A location's own photo wins; the SKU it IS is the fallback — the client
+  // half of `locationCoverImage`. Deliberately AFTER the `images` scan rather
+  // than in `direct` above, or a photographed bin would render its SKU's stock
+  // photo instead of a picture of itself.
+  const identity = value.product;
+  if (identity && typeof identity === "object") {
+    return asDisplayableUrl((identity as Record<string, unknown>).coverImage);
   }
   return null;
 }
