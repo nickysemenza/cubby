@@ -5,6 +5,7 @@
  * Extracted from trpc.ts to avoid circular dependencies with repo files.
  */
 
+import type { PublicImpactItem } from "@cubby/schemas/entity-integrity";
 import { type AppErrorReason, AppErrors } from "@cubby/shared";
 import { TRPCError } from "@trpc/server";
 import type { TRPC_ERROR_CODE_KEY } from "@trpc/server/rpc";
@@ -55,6 +56,40 @@ export function createAppError(
     code,
     message,
     cause: { reason, originalError },
+  });
+}
+
+/**
+ * A refusal that can name what blocked it.
+ *
+ * `createAppError` carries only `{reason, originalError}`, so a guard that knew
+ * exactly which rows blocked — and how many dependents each had — could only
+ * render that into a sentence and drop the structure. The preview path has
+ * expressed the same facts as `ImpactItem`s for a while; this is the mutation
+ * path finally being able to say the same thing in the same vocabulary.
+ *
+ * A separate function rather than a fourth parameter on `createAppError`: a
+ * blocked refusal always has blockers, and threading an optional past
+ * `originalError` at 229 existing call sites would make the common case read
+ * worse to serve the rare one.
+ *
+ * `blockers` must be PUBLIC items — `toPublicImpact` output, keyed by shortcode.
+ * The branded type is what enforces that; a uuid-keyed `InternalImpactItem`
+ * will not compile here, which is the whole point of the two brands.
+ */
+export function createBlockedError(
+  reason: AppErrorReason,
+  message: string,
+  blockers: readonly PublicImpactItem[],
+): TRPCError {
+  const error = createAppError(reason, message);
+  // Rebuilt rather than mutated: `cause` is readonly on TRPCError, and
+  // reconstructing keeps `createAppError` the single place that derives the
+  // code, logs, and annotates the span.
+  return new TRPCError({
+    code: error.code,
+    message,
+    cause: { reason, blockers },
   });
 }
 

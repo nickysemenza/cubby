@@ -98,7 +98,15 @@ export function DuplicateVendorMergeFix({
   const api = useTRPC();
   const merge = useProblemCardMutation({
     mutationFn: api.vendor.merge.mutationOptions,
-    success: (vendor) => `Merged into ${vendor.name}`,
+    // Now that the merge reports what it moved, say so: "Merged into Amazon"
+    // gave no way to tell a no-op merge from one that repointed 40 purchases.
+    success: ({ vendor, mergeSummary }) => {
+      const moved =
+        mergeSummary.purchasesRepointed + mergeSummary.purchasesFolded;
+      return moved === 0
+        ? `Merged into ${vendor.name}`
+        : `Merged into ${vendor.name} — ${moved} purchase(s) moved`;
+    },
     invalidateKeys: purchaseMutationInvalidateKeys,
     onSuccess: close,
   });

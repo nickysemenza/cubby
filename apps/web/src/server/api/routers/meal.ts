@@ -92,8 +92,12 @@ const {
     },
     delete: async (services, shortcodes: MealShortcode[]) => {
       const ids = await mealShortcodes.all(services.db, shortcodes);
-      await deleteMeals(services.db, ids, services.actorContext);
-      return undefined;
+      const { deleted } = await deleteMeals(
+        services.db,
+        ids,
+        services.actorContext,
+      );
+      return { deleted };
     },
   },
   entityName: "meal",

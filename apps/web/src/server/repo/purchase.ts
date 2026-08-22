@@ -1862,12 +1862,15 @@ const deletePurchasesWithPolicy = async (
   financialTransactionIds: FinancialTransactionId[];
   /** R2 objects the image cascade reaped; drop them after this commit. */
   detachedImageKeys: string[];
+  /** Rows actually removed, measured by `removeEntity` rather than assumed. */
+  deleted: number;
 }> => {
   if (shortcodes.length === 0)
     return {
       expenseIds: [],
       financialTransactionIds: [],
       detachedImageKeys: [],
+      deleted: 0,
     };
 
   const ids = await resolveAllOrThrow(db, "purchase", shortcodes);
@@ -1893,9 +1896,37 @@ const deletePurchasesWithPolicy = async (
       policy === "require-empty" &&
       (detaching.length > 0 || affectedTransactionIds.length > 0)
     ) {
+      // `detaching` already carries `purchaseId` per row, so the refusal can
+      // name WHICH purchases are non-empty and with how many expenses. The old
+      // message could not: one non-empty purchase anywhere in the batch refused
+      // every purchase in the call and left the caller to guess which.
+      const expensesByPurchase: Record<string, number> = {};
+      for (const row of detaching) {
+        if (row.purchaseId)
+          expensesByPurchase[row.purchaseId] =
+            (expensesByPurchase[row.purchaseId] ?? 0) + 1;
+      }
+      const blockedDetail = Object.entries(expensesByPurchase)
+        .map(([purchaseId, n]) => `${purchaseId} (${n} expense(s))`)
+        .join(", ");
+      // Settlement allocations are keyed by transaction, not by purchase, so
+      // that half stays a count — attributing a split allocation back to one
+      // purchase is exactly the ambiguity `transactionIdsAllocatedTo` exists to
+      // avoid asserting.
+      const transactionDetail =
+        affectedTransactionIds.length > 0
+          ? `${affectedTransactionIds.length} linked Financial Transaction(s) hold settlement allocations`
+          : "";
       throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "Cannot delete non-empty Purchases through MCP: delete linked Expenses first and unlink or delete linked Financial Transactions and their settlement allocations.",
+        "PURCHASE_NOT_EMPTY",
+        [
+          "Cannot delete non-empty Purchases through MCP.",
+          blockedDetail && `Still carrying expenses: ${blockedDetail}.`,
+          transactionDetail && `${transactionDetail}.`,
+          "Delete linked Expenses first and unlink or delete linked Financial Transactions and their settlement allocations.",
+        ]
+          .filter(Boolean)
+          .join(" "),
       );
     }
 
@@ -1951,7 +1982,7 @@ const deletePurchasesWithPolicy = async (
 
     // `{actor}`, not a caller-owned buffer: the detach `update` entries above
     // were already flushed, and the delete entries must follow them.
-    const { detachedImageKeys } = await removeEntity(tx, {
+    const { detachedImageKeys, deleted } = await removeEntity(tx, {
       entity: "purchase",
       ids,
       removal: "soft",
@@ -1977,6 +2008,7 @@ const deletePurchasesWithPolicy = async (
       // carries the vendor and order id resolved through its purchase.
       financialTransactionIds: affectedTransactionIds,
       detachedImageKeys,
+      deleted,
     };
   });
 };

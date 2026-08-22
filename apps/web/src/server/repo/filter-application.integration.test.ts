@@ -121,9 +121,19 @@ const UNRESOLVABLE_BODY = "9999";
  * accepts, never from a hand-written per-field table — a field whose schema
  * changes shape is re-classified automatically.
  */
+/**
+ * Every shortcoded entity a filter probe can target — i.e. all of them except
+ * `image`, which carries an `IMG-` code so it stops being a raw-uuid carve-out
+ * elsewhere, but declares no filter fields and has no list probe here.
+ */
+type ProbeableTarget = Exclude<ShortcodeType, "image">;
+const PROBEABLE_TARGETS = (
+  Object.keys(SHORTCODE_PREFIX) as ShortcodeType[]
+).filter((t): t is ProbeableTarget => t !== "image");
+
 type Probe =
   /** A shortcode-typed id. Gets the full #591 battery. */
-  | { kind: "id"; target: ShortcodeType }
+  | { kind: "id"; target: ProbeableTarget }
   /** Free text (search, substring, exact free-form id). */
   | { kind: "text"; value: unknown }
   /** A `YYYY-MM-DD` bound. */
@@ -188,7 +198,7 @@ const classify = (field: string, schema: z.ZodType): Probe => {
     return { kind: "skip:bounded-max" };
   }
 
-  for (const target of Object.keys(SHORTCODE_PREFIX) as ShortcodeType[]) {
+  for (const target of PROBEABLE_TARGETS) {
     if (accepts(schema, `${SHORTCODE_PREFIX[target]}${UNRESOLVABLE_BODY}`)) {
       return { kind: "id", target };
     }
@@ -201,7 +211,10 @@ const classify = (field: string, schema: z.ZodType): Probe => {
 
 type Seeded = {
   /** One live shortcode per entity, for the "real id" and wrong-prefix probes. */
-  codes: Record<ShortcodeType, string>;
+  // Excludes `image`: it has a shortcode so it stops being a raw-uuid carve-out
+  // elsewhere, but it declares no filter fields and has no list probe, so there
+  // is nothing here for a sample code to exercise.
+  codes: Record<ProbeableTarget, string>;
 };
 
 /**
@@ -557,9 +570,9 @@ describe("every declared filter field is applied by its repo", () => {
 
         // The entity guard: a code of the wrong entity must resolve to nothing,
         // never widen. Picks any other seeded entity's live code.
-        const otherTarget = (
-          Object.keys(SHORTCODE_PREFIX) as ShortcodeType[]
-        ).find((candidate) => candidate !== probe.target);
+        const otherTarget = PROBEABLE_TARGETS.find(
+          (candidate) => candidate !== probe.target,
+        );
         if (otherTarget) {
           const wrongPrefix = await list(ctx.db, {
             [field]: world.codes[otherTarget],

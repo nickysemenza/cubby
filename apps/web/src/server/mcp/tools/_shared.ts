@@ -33,6 +33,7 @@ import { type PurchaseOut, purchaseOut } from "@cubby/schemas/purchase";
 import { type RecipeTopLevel, recipeMcpOut } from "@cubby/schemas/recipe";
 import type { mcpUnitMappingInput } from "@cubby/schemas/unitmapping";
 import { type VendorOut, vendorOut } from "@cubby/schemas/vendor";
+import { type AppErrorReason, AppErrors } from "@cubby/shared";
 import type { foodSummary } from "@cubby/usda-schemas";
 import type {
   McpServer,
@@ -45,6 +46,7 @@ import type {
 } from "@modelcontextprotocol/sdk/types.js";
 import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { TRPCError } from "@trpc/server";
+import type { TRPC_ERROR_CODE_KEY } from "@trpc/server/rpc";
 import { omitBy } from "es-toolkit";
 import { z } from "zod";
 import type { DomainCaller } from "~/server/api/domain";
@@ -440,15 +442,46 @@ export function getCaller(extra: ToolExtra): Caller {
   return caller as Caller;
 }
 
-export function formatToolError(error: unknown): string {
+/**
+ * A tool failure, decomposed.
+ *
+ * `formatToolError` renders this to prose for the single-tool error path, where
+ * the MCP envelope carries one text block and nothing else. Batch results keep
+ * the parts: `error` alone forced a caller wanting to branch on *why* item 3
+ * failed to substring-match a sentence, since `code` and `reason` were both
+ * present at the throw site and then flattened into it.
+ */
+export interface ToolErrorDetail {
+  /** The tRPC code, when the failure came through one. */
+  code?: TRPC_ERROR_CODE_KEY;
+  /** The `AppErrorReason` `createAppError` stamped onto `cause`. */
+  reason?: AppErrorReason;
+  message: string;
+}
+
+export function describeToolError(error: unknown): ToolErrorDetail {
   if (error instanceof TRPCError) {
     const reason = (error.cause as { reason?: string })?.reason;
-    return reason
-      ? `${error.code}: ${error.message} (${reason})`
-      : `${error.code}: ${error.message}`;
+    return {
+      code: error.code,
+      // Narrowed on the way out rather than trusted on the way in: `cause` is
+      // typed `unknown`, and a TRPCError thrown by tRPC itself (input parsing,
+      // say) carries no reason at all.
+      ...(isAppErrorReason(reason) ? { reason } : {}),
+      message: error.message,
+    };
   }
-  if (error instanceof Error) return error.message;
-  return String(error);
+  if (error instanceof Error) return { message: error.message };
+  return { message: String(error) };
+}
+
+const isAppErrorReason = (value: unknown): value is AppErrorReason =>
+  typeof value === "string" && value in AppErrors;
+
+export function formatToolError(error: unknown): string {
+  const { code, reason, message } = describeToolError(error);
+  if (!code) return message;
+  return reason ? `${code}: ${message} (${reason})` : `${code}: ${message}`;
 }
 
 export function toUnitMappingInput(m: z.infer<typeof mcpUnitMappingInput>) {
@@ -944,7 +977,16 @@ function batchMutationOut(item: z.ZodType) {
         z.object({
           index: z.number().int().nonnegative(),
           status: z.literal("failed"),
+          /**
+           * The rendered sentence, unchanged — still the thing a human reads.
+           * `code` and `reason` are the same failure decomposed, so a caller can
+           * branch on WHY item 3 failed without substring-matching this.
+           */
           error: z.string(),
+          /** tRPC code. Absent when the item threw something that wasn't a TRPCError. */
+          code: z.string().optional(),
+          /** The `AppErrorReason` behind the refusal, when there was one. */
+          reason: z.string().optional(),
         }),
       ]),
     ),
@@ -1003,7 +1045,13 @@ type BatchResult =
       id?: string;
       entityId?: string;
     }
-  | { index: number; status: "failed"; error: string };
+  | {
+      index: number;
+      status: "failed";
+      error: string;
+      code?: TRPC_ERROR_CODE_KEY;
+      reason?: AppErrorReason;
+    };
 
 /**
  * Register a best-effort `{items: [...]}` tool over a per-item operation.
@@ -1085,10 +1133,18 @@ export function registerBatchTool<TItem extends z.ZodType>(
               : summarizeBatchItem(produced)),
           });
         } catch (error) {
+          // `error` keeps the rendered sentence a human reads; `code`/`reason`
+          // carry the same failure in a form a caller can branch on. The
+          // message is not repeated as a third field — it is already inside
+          // `error`, and a near-duplicate string per failed item is the
+          // envelope bloat the compact result exists to avoid.
+          const { code, reason } = describeToolError(error);
           results.push({
             index,
             status: "failed",
             error: formatToolError(error),
+            ...(code ? { code } : {}),
+            ...(reason ? { reason } : {}),
           });
         }
       }

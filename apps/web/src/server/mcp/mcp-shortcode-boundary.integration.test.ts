@@ -936,7 +936,9 @@ describe("specialized tools round-trip on shortcodes", () => {
       caller,
     );
     expectOk(merged);
-    expect(structured(merged).merged).toBe(1);
+    expect(
+      (structured(merged).summary as { succeeded: number }).succeeded,
+    ).toBe(1);
 
     const aliasAfter = await callTool(
       "get_ingredient",
@@ -1245,7 +1247,10 @@ describe("specialized tools round-trip on shortcodes", () => {
       caller,
     );
     expectOk(merged);
-    expect(structured(merged).id).toBe(keepCode);
+    // `{ vendor, mergeSummary }` — the merge now reports what it moved.
+    expect((structured(merged) as { vendor: { id: string } }).vendor.id).toBe(
+      keepCode,
+    );
 
     // The loser's code is a permanent tombstone — it resolves to nothing, not
     // to the keeper.

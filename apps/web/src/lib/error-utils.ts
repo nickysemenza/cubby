@@ -1,6 +1,11 @@
+import {
+  type PublicImpactItem,
+  publicImpactItemSchema,
+} from "@cubby/schemas/entity-integrity";
 import type { AppErrorReason } from "@cubby/shared";
 import { getErrorMessage } from "@cubby/shared";
 import type { TRPCClientErrorLike } from "@trpc/client";
+import { z } from "zod";
 import type { AppRouter } from "~/server/api/root";
 
 // Re-export from shared for convenience (22+ consumers)
@@ -64,20 +69,30 @@ type AppErrorDetails = {
   message: string;
   code?: string;
   reason?: AppErrorReason;
+  /**
+   * Present when the server refused and could say what blocked it. Until now
+   * the UI had to run a separate `previewOperation` query to learn this, then
+   * show the mutation's flattened sentence when it threw anyway — so the two
+   * could disagree. These come from the refusal itself.
+   */
+  blockers?: PublicImpactItem[];
 };
 
 export function getAppErrorDetails(error: unknown): AppErrorDetails {
   if (isTRPCClientError(error)) {
     const code = error.data?.code as string | undefined;
-    const reason = (() => {
-      const d = error.data as Record<string, unknown> | undefined;
-      const r = d?.reason;
-      return typeof r === "string" ? (r as AppErrorReason) : undefined;
-    })();
+    const d = error.data as Record<string, unknown> | undefined;
+    const reason = typeof d?.reason === "string" ? d.reason : undefined;
+    // Re-validated on arrival: `error.data` is server-shaped but untyped here,
+    // and a malformed payload should read as "no blockers", not crash a toast.
+    const parsedBlockers = z
+      .array(publicImpactItemSchema)
+      .safeParse(d?.blockers);
     return {
       message: error.message,
       code,
-      reason,
+      reason: reason as AppErrorReason | undefined,
+      ...(parsedBlockers.success ? { blockers: parsedBlockers.data } : {}),
     };
   }
   return {

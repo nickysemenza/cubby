@@ -327,14 +327,14 @@ const getByShortcodes = protectedProcedure
 const deleteItem = createDeleteProcedure<LocationShortcode>(
   async (services, shortcodes) => {
     const ids = uniq(await locationShortcodes.all(services.db, shortcodes));
-    const { detachedImageKeys } = await deleteLocations(
+    const { detachedImageKeys, deleted } = await deleteLocations(
       services.db,
       ids,
       services.actorContext,
     );
     // After the commit, never inside it: an R2 delete has no rollback.
     await deleteStoredObjects(detachedImageKeys);
-    return await runMutationSideEffectsForEntities(
+    const backgroundBatches = await runMutationSideEffectsForEntities(
       services.db,
       ids.map((id) => ({
         action: "deleted" as const,
@@ -342,6 +342,7 @@ const deleteItem = createDeleteProcedure<LocationShortcode>(
         source: "location.delete",
       })),
     );
+    return { deleted, backgroundBatches };
   },
   locationShortcode,
 );

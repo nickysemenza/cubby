@@ -13,6 +13,7 @@ import {
 import {
   fetchVendorLogoInput,
   mergeVendorsInput,
+  mergeVendorsOut,
   vendorCreateInput,
   vendorFiltersSchema,
   vendorOptionsOut,
@@ -68,13 +69,13 @@ const procedures = createSearchableEntityCrudProcedures({
         ctx.actorContext,
       ),
     delete: async (ctx, ids) => {
-      const { detachedImageKeys } = await deleteVendors(
+      const { detachedImageKeys, deleted } = await deleteVendors(
         ctx.db,
         ids.map(unsafeVendorShortcode),
         ctx.actorContext,
       );
       await deleteStoredObjects(detachedImageKeys);
-      return [];
+      return { deleted };
     },
   },
   entityName: "vendor",
@@ -96,15 +97,15 @@ const options = protectedProcedure
  */
 const merge = protectedProcedure
   .input(mergeVendorsInput)
-  .output(strictOutput(vendorOut))
+  .output(strictOutput(mergeVendorsOut))
   .mutation(async ({ ctx, input }) => {
-    const { output, detachedImageKeys } = await mergeVendors(
+    const { vendor, detachedImageKeys, mergeSummary } = await mergeVendors(
       ctx.db,
       input,
       ctx.actorContext,
     );
     await deleteStoredObjects(detachedImageKeys);
-    const entityId = await resolveLiveShortcode(ctx.db, output.id, "vendor");
+    const entityId = await resolveLiveShortcode(ctx.db, vendor.id, "vendor");
     if (entityId) {
       await runMutationSideEffects(ctx.db, {
         action: "updated",
@@ -112,7 +113,7 @@ const merge = protectedProcedure
         source: "vendor.merge",
       });
     }
-    return output;
+    return { vendor, mergeSummary };
   });
 
 /** Explicitly source one missing logo from the vendor website on record. */

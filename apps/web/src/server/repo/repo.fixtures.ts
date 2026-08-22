@@ -22,8 +22,7 @@ import type { ExpenseCreateInput } from "@cubby/schemas/project";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { mock } from "~/lib/test/mock-schema";
 import type { Database } from "~/server/db";
-import { image } from "~/server/db/schema";
-import { insertAndReturn } from "./database-helpers";
+import type { image } from "~/server/db/schema";
 import { createIngredient, findOrCreateIngredient } from "./ingredient";
 import { createInventoryEntry } from "./inventory";
 import { createLocation } from "./location";
@@ -31,6 +30,7 @@ import { createMeal } from "./meal";
 import { createProduct } from "./product";
 import { createRecipe } from "./recipe";
 import { resolveLiveShortcode } from "./shortcode-resolver";
+import { insertWithShortcode } from "./shortcode-utils";
 
 // Shared fixture builders for the repo integration tests. Each factory states
 // the irrelevant scaffolding fields once so a test only spells out the values
@@ -409,9 +409,9 @@ export const seedIngredientWithStock = async (
 export const createImageFixture = async (
   db: Database,
   name: string,
-  overrides: Partial<typeof image.$inferInsert> = {},
+  overrides: Partial<Omit<typeof image.$inferInsert, "shortcode">> = {},
 ) =>
-  await insertAndReturn(db, image, {
+  await insertWithShortcode(db, "image", {
     key: `fixture-${name}`,
     url: `https://example.com/${name}.png`,
     filename: `${name}.png`,

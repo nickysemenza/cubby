@@ -374,15 +374,47 @@ export const ingredientMergeBatchInput = z.object({
     ),
 });
 
+/**
+ * `merge_ingredients`' batch envelope.
+ *
+ * Bespoke rather than the shared `registerBatchTool`/`batchMutationOut`
+ * contract in `mcp/tools/_shared.ts`: this tool's `dryRun` is a single
+ * call-level flag that applies to every cluster in the batch, a shape
+ * `registerBatchTool`'s `{items, resultDetail}` input has no slot for (moving
+ * it onto each item would be a real, and worse, contract change — every
+ * cluster in a call would have to repeat the same flag). It otherwise follows
+ * the SAME contract as `batchMutationOut`: `index` + a literal-union
+ * `status: "succeeded" | "failed"` discriminant rather than a bare `ok`
+ * boolean, and `code`/`reason` alongside the rendered `error` string on a
+ * failure. `target` is kept on both branches (`batchMutationOut` has no
+ * equivalent, since its items are keyed by index alone) because a merge
+ * cluster's own id is the natural thing a caller re-checks a failure against.
+ */
 export const ingredientMergeBatchOut = z.object({
-  merged: z.number().int().nonnegative(),
-  total: z.number().int().nonnegative(),
+  summary: z.object({
+    requested: z.number().int().nonnegative(),
+    succeeded: z.number().int().nonnegative(),
+    failed: z.number().int().nonnegative(),
+  }),
   results: z.array(
-    z.object({
-      target: ingredientShortcode,
-      ok: z.boolean(),
-      summary: mergeSummary.optional(),
-      error: z.string().optional(),
-    }),
+    z.discriminatedUnion("status", [
+      z.object({
+        index: z.number().int().nonnegative(),
+        status: z.literal("succeeded"),
+        target: ingredientShortcode,
+        summary: mergeSummary,
+      }),
+      z.object({
+        index: z.number().int().nonnegative(),
+        status: z.literal("failed"),
+        target: ingredientShortcode,
+        error: z.string(),
+        /** tRPC code. Absent when the item threw something that wasn't a TRPCError. */
+        code: z.string().optional(),
+        /** The `AppErrorReason` behind the refusal, when there was one. */
+        reason: z.string().optional(),
+      }),
+    ]),
   ),
 });
+export type IngredientMergeBatchOut = z.infer<typeof ingredientMergeBatchOut>;

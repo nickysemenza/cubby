@@ -43,12 +43,12 @@ const procedures = createSearchableEntityCrudProcedures({
         ctx.actorContext,
       ),
     delete: async (ctx, ids) => {
-      await deleteWishes(
+      const { deleted } = await deleteWishes(
         ctx.db,
         ids.map(unsafeWishShortcode),
         ctx.actorContext,
       );
-      return [];
+      return { deleted };
     },
   },
   entityName: "wish",

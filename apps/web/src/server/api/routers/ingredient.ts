@@ -353,8 +353,12 @@ const getManyByIDs = protectedProcedure
 const deleteItem = createDeleteProcedure<IngredientShortcode>(
   async (services, shortcodes) => {
     const ids = await ingredientShortcodes.all(services.db, shortcodes);
-    await deleteIngredients(services.db, ids, services.actorContext);
-    return await runMutationSideEffectsForEntities(
+    const { deleted } = await deleteIngredients(
+      services.db,
+      ids,
+      services.actorContext,
+    );
+    const backgroundBatches = await runMutationSideEffectsForEntities(
       services.db,
       ids.map((id) => ({
         action: "deleted" as const,
@@ -362,6 +366,7 @@ const deleteItem = createDeleteProcedure<IngredientShortcode>(
         source: "ingredient.delete",
       })),
     );
+    return { deleted, backgroundBatches };
   },
   ingredientShortcode,
 );

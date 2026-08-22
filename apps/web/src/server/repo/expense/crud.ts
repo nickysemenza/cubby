@@ -910,7 +910,12 @@ export const deleteExpensesWithPurchaseEffects = async (
       pricingProductIds(qualityTargets.map((row) => row.productId)),
     );
 
-    await removeEntity(tx, { entity: "expense", ids, removal: "soft", actor });
+    const { deleted } = await removeEntity(tx, {
+      entity: "expense",
+      ids,
+      removal: "soft",
+      actor,
+    });
 
     await touchDataQualityTargets(tx, {
       productIds: qualityTargets
@@ -966,7 +971,11 @@ export const deleteExpensesWithPurchaseEffects = async (
         pricesBefore,
       ),
       result: {
-        deleted: qualityTargets.length,
+        // Measured off `removeEntity`'s return, not `qualityTargets.length` —
+        // expense has no cascade expansion so the two always agree, but
+        // reading the actual count keeps this in step with every other
+        // delete path rather than being the one exception that still asserts.
+        deleted,
         deletedIds: qualityTargets.map((row) =>
           unsafeExpenseShortcode(row.shortcode),
         ),
@@ -1011,7 +1020,7 @@ export const deleteExpenses = async (
  * here is a lock or a permission.
  */
 export const previewDeleteExpenses = async (
-  db: Database,
+  db: Database | DrizzleTransaction,
   ids: ExpenseId[],
 ): Promise<{
   blockers: ImpactItem[];
@@ -1020,7 +1029,7 @@ export const previewDeleteExpenses = async (
 }> => {
   if (ids.length === 0) return { blockers: [], changes: [], sideEffects: [] };
 
-  const dbClient = getDb(db);
+  const dbClient = unwrapDb(db);
 
   const sideEffects = present([
     impact({

@@ -30,14 +30,38 @@ export const plainDate = z
   .meta({ mockValue: "2024-01-15" })
   .describe('Calendar day as "YYYY-MM-DD"');
 
-/** Inclusive calendar-day bounds for the audit timestamps every entity carries. */
-const auditDate = plainDate;
+type DateRangeFields<Prefix extends string> = {
+  [K in `${Prefix}From`]: z.ZodOptional<typeof plainDate>;
+} & {
+  [K in `${Prefix}To`]: z.ZodOptional<typeof plainDate>;
+};
+
+/**
+ * Inclusive `{prefix}From`/`{prefix}To` calendar-day filter bounds. Same
+ * generator shape as `trio()` in related-view.ts — a spreadable field-map
+ * factory — specialized to the date-range-pair pattern instead of the
+ * relation-filter-triple one.
+ *
+ * Only covers the plain, undecorated pair: `plainDate.optional()` on both
+ * ends, nothing else. A pair that also carries a `.describe()` (several
+ * filter fields do, for MCP tool prose) or that isn't optional (an output
+ * shape's resolved range, not a filter) is a deliberate divergence, not an
+ * oversight — leave those hand-declared rather than forcing them through
+ * this generator and losing the description or the optionality.
+ */
+export const dateRangeFields = <Prefix extends string>(
+  prefix: Prefix,
+): DateRangeFields<Prefix> => {
+  const bound = plainDate.optional();
+  return {
+    [`${prefix}From`]: bound,
+    [`${prefix}To`]: bound,
+  } as DateRangeFields<Prefix>;
+};
 
 export const auditDateFilterFields = {
-  createdFrom: auditDate.optional(),
-  createdTo: auditDate.optional(),
-  updatedFrom: auditDate.optional(),
-  updatedTo: auditDate.optional(),
+  ...dateRangeFields("created"),
+  ...dateRangeFields("updated"),
 } as const;
 
 type StripDefault<F> =
@@ -101,6 +125,41 @@ export function deriveUpdateData<
   return z.object(deriveUpdateFields(createShape, opts)) as z.ZodObject<
     UpdateShape<T, OmitK, E>
   >;
+}
+
+type McpInputShape<T extends z.ZodRawShape> = {
+  [K in keyof T]: T[K] extends z.ZodNullable<infer Inner extends z.ZodType>
+    ? z.ZodOptional<z.ZodNullable<Inner>>
+    : T[K];
+};
+
+/**
+ * Mechanically re-derive an MCP write shape from a plain `*CreateShape`
+ * sibling: every field that is bare `.nullable()` (nullable but NOT also
+ * `.optional()`) becomes `.nullish()`. Every other field passes through
+ * unchanged — this does not touch `.describe()` text, add/remove fields, or
+ * reorder them.
+ *
+ * This exists because of one concrete, previously-shipped bug: a bare
+ * `.nullable()` field still makes its KEY required, so an MCP client with no
+ * value for it (as opposed to an explicit `null`) cannot omit it — that's what
+ * made a Product with no UPC uncreatable over MCP (`productCreateShape.upc:
+ * gtin.nullable()`; hand-fixed on `mcpProductCreateInput` as
+ * `upc: gtin.nullish()`). The narrow scope is deliberate: because it changes
+ * nothing else, `toMcpInput(createShape)` only reproduces today's hand-written
+ * MCP shape when that shape's field set and prose ALREADY match the plain
+ * shape's — an MCP shape that omits fields, adds MCP-only ones, or carries
+ * rewritten tool-facing descriptions needs its own hand-written declaration,
+ * same as before this helper existed.
+ */
+export function toMcpInput<T extends z.ZodRawShape>(
+  shape: T,
+): McpInputShape<T> {
+  const result: Record<string, z.ZodType> = {};
+  for (const [key, field] of Object.entries(shape) as [string, z.ZodType][]) {
+    result[key] = field instanceof z.ZodNullable ? field.optional() : field;
+  }
+  return result as McpInputShape<T>;
 }
 
 /**

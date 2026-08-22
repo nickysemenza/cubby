@@ -1,7 +1,12 @@
 import { readFileSync } from "node:fs";
 import type { Entity } from "@cubby/schemas/entity";
 import { previewOperationInputSchema } from "@cubby/schemas/entity-integrity";
-import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
+import {
+  allEntities,
+  entityManifest,
+  mcpEntityPlural,
+  mcpToolName,
+} from "@cubby/schemas/entity-manifest";
 import { FINANCIAL_STATEMENT_IMPORT_MAX_ROWS } from "@cubby/schemas/financial-transaction";
 import { unsafeExpenseShortcode } from "@cubby/schemas/identifiers";
 import { problemsCountSchema } from "@cubby/schemas/mcp";
@@ -142,46 +147,6 @@ describe("list_problems focused routing", () => {
     expect(getCounts).not.toHaveBeenCalled();
   });
 });
-
-/**
- * Tool-name slugs per entity: `[singular, plural, overrides]`. Shared by the
- * manifest-alignment test and the get/router-input agreement test below, which
- * both need to name a tool from an entity.
- */
-const MCP_ENTITY_SLUGS: Record<
-  Entity,
-  [
-    singular: string,
-    plural: string,
-    overrides?: Partial<Record<Operation, string>>,
-  ]
-> = {
-  product: ["product", "products", { list: "search_products" }],
-  recipe: ["recipe", "recipes", { delete: "delete_recipe" }],
-  ingredient: ["ingredient", "ingredients", { list: "search_ingredients" }],
-  cookbook: ["cookbook", "cookbooks"],
-  location: ["location", "locations"],
-  inventory: [
-    "inventory_entry",
-    "inventory_entries",
-    { list: "list_inventory" },
-  ],
-  meal: ["meal", "meals"],
-  project: ["project", "projects"],
-  task: ["task", "tasks"],
-  expense: ["expense", "expenses"],
-  financialAccount: ["financial_account", "financial_accounts"],
-  financialTransaction: ["financial_transaction", "financial_transactions"],
-  wish: ["wish", "wishes"],
-  // vendor/purchase expose get/list/create/update but NOT delete, so the
-  // manifest loop never asks for delete_vendors / delete_purchases. Note that
-  // `purchase` here is the vendor transaction, not the old flat ledger row —
-  // that one is `expense` above, and it is the one that owns money.
-  vendor: ["vendor", "vendors"],
-  purchase: ["purchase", "purchases"],
-  "usda-food": ["usda_food", "usda_foods", { list: "search_usda_foods" }],
-  image: ["image", "images"],
-};
 
 describe("MCP tool-call telemetry", () => {
   const identity = {
@@ -1115,7 +1080,6 @@ describe("listMcpToolCatalog", () => {
   });
 
   it("keeps manifest MCP operations aligned with registered tools", async () => {
-    const slugs = MCP_ENTITY_SLUGS;
     const catalog = new Set(
       (await listMcpToolCatalog()).tools.map(({ name }) => name),
     );
@@ -1129,16 +1093,16 @@ describe("listMcpToolCatalog", () => {
     ];
 
     for (const entity of allEntities) {
-      const [singular, plural, overrides = {}] = slugs[entity];
       const declared = new Set<Operation>(entityManifest[entity].mcp);
       // Both directions: a declared op must be registered, and an UNDECLARED op
       // must not be. The negative half is what guards the deliberate omissions —
       // vendor/purchase have no delete tool on purpose (see the manifest), and
       // without this a stray registration would pass unnoticed.
       for (const operation of OPERATIONS) {
-        const defaultSlug =
-          operation === "list" || operation === "delete" ? plural : singular;
-        const toolName = overrides[operation] ?? `${operation}_${defaultSlug}`;
+        // Derived from the manifest, not from a table kept beside this test.
+        // The hand-kept copy could drift from the manifest silently; now the
+        // manifest is the only source and this asserts it against the catalog.
+        const toolName = mcpToolName(entity, operation);
         expect({
           entity,
           operation,
@@ -1190,7 +1154,7 @@ describe("listMcpToolCatalog", () => {
     );
 
     for (const entity of allEntities) {
-      const [, plural] = MCP_ENTITY_SLUGS[entity];
+      const plural = mcpEntityPlural(entity);
       const declared = new Set<Operation>(entityManifest[entity].mcp);
       for (const operation of ["create", "update"] as const) {
         const toolName = `${operation}_${plural}`;
@@ -1386,8 +1350,7 @@ describe("listMcpToolCatalog", () => {
 
     for (const entity of entities) {
       const prefix = SHORTCODE_PREFIX[entity as keyof typeof SHORTCODE_PREFIX];
-      const [singular, , overrides = {}] = MCP_ENTITY_SLUGS[entity];
-      const toolName = overrides.get ?? `get_${singular}`;
+      const toolName = mcpToolName(entity, "get");
       const procedure = procedures[`${entity}.getByID`];
       expect(procedure, `${entity}.getByID is missing`).toBeDefined();
       const declaredInput = procedure?._def.inputs[0] as z.ZodType | undefined;
@@ -1906,7 +1869,7 @@ describe("merge_ingredients partial-success aggregation", () => {
   const TARGET_B_CODE = "ING-2224";
   const ALIAS_B_CODE = "ING-2225";
 
-  it("reports merged/total/results and leaves isError unset when at least one merge succeeds", async () => {
+  it("reports summary/results by index and leaves isError unset when at least one merge succeeds", async () => {
     const mergeSummary = {
       aliasesAdded: ["Cherry"],
       recipesMoved: 2,
@@ -1936,16 +1899,29 @@ describe("merge_ingredients partial-success aggregation", () => {
 
     expect(result.isError).not.toBe(true);
     expect(result.structuredContent).toEqual({
-      merged: 1,
-      total: 2,
+      summary: { requested: 2, succeeded: 1, failed: 1 },
       results: [
-        { target: TARGET_A_CODE, ok: true, summary: mergeSummary },
-        { target: TARGET_B_CODE, ok: false, error: "target not found" },
+        {
+          index: 0,
+          status: "succeeded",
+          target: TARGET_A_CODE,
+          summary: mergeSummary,
+        },
+        {
+          index: 1,
+          status: "failed",
+          target: TARGET_B_CODE,
+          error: "target not found",
+        },
       ],
     });
   });
 
-  it("sets isError only when every merge in the batch fails", async () => {
+  // Same doctrine `registerBatchTool` documents for every other batch tool
+  // (`_shared.ts`): a wholly-failed batch is still `isError: false` — the
+  // per-item errors are the payload, and flagging the envelope would hide
+  // them behind a bare string.
+  it("stays isError: false even when every merge in the batch fails", async () => {
     const caller = {
       ingredient: {
         merge: vi.fn().mockRejectedValue(new Error("boom")),
@@ -1964,13 +1940,12 @@ describe("merge_ingredients partial-success aggregation", () => {
       caller,
     );
 
-    expect(result.isError).toBe(true);
+    expect(result.isError).not.toBe(true);
     expect(result.structuredContent).toEqual({
-      merged: 0,
-      total: 2,
+      summary: { requested: 2, succeeded: 0, failed: 2 },
       results: [
-        { target: TARGET_A_CODE, ok: false, error: "boom" },
-        { target: TARGET_B_CODE, ok: false, error: "boom" },
+        { index: 0, status: "failed", target: TARGET_A_CODE, error: "boom" },
+        { index: 1, status: "failed", target: TARGET_B_CODE, error: "boom" },
       ],
     });
   });
@@ -1997,9 +1972,15 @@ describe("merge_ingredients partial-success aggregation", () => {
 
     expect(result.isError).not.toBe(true);
     expect(result.structuredContent).toEqual({
-      merged: 1,
-      total: 1,
-      results: [{ target: TARGET_A_CODE, ok: true, summary: mergeSummary }],
+      summary: { requested: 1, succeeded: 1, failed: 0 },
+      results: [
+        {
+          index: 0,
+          status: "succeeded",
+          target: TARGET_A_CODE,
+          summary: mergeSummary,
+        },
+      ],
     });
   });
 });
@@ -2780,7 +2761,16 @@ describe("purchase restructuring tools (split/link/merge)", () => {
     const VENDOR_A = "VEN-9992";
     const VENDOR_B = "VEN-9993";
     const kept = mock(vendorOut, { seed: 14, overrides: { id: VENDOR_A } });
-    const merge = vi.fn().mockResolvedValue(kept);
+    const merge = vi.fn().mockResolvedValue({
+      vendor: kept,
+      mergeSummary: {
+        keepId: VENDOR_A,
+        deletedIds: [VENDOR_B],
+        purchasesRepointed: 0,
+        purchasesFolded: 0,
+        carriedFields: [],
+      },
+    });
 
     const input = { keepId: VENDOR_A, mergeIds: [VENDOR_B] };
     const result = await callTool(server, "merge_vendors", input, {
@@ -2789,7 +2779,11 @@ describe("purchase restructuring tools (split/link/merge)", () => {
 
     expect(merge).toHaveBeenCalledWith(input);
     expect(result.isError).not.toBe(true);
-    expect((result.structuredContent as { id: string }).id).toBe(VENDOR_A);
+    // `{ vendor, mergeSummary }` now — the merge reports what it moved rather
+    // than handing back only the keeper.
+    expect(
+      (result.structuredContent as { vendor: { id: string } }).vendor.id,
+    ).toBe(VENDOR_A);
   });
 });
 

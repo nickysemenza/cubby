@@ -53,6 +53,7 @@ import {
   notDeleted,
   relations,
   replaceDependencyEdges,
+  unwrapDb,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
@@ -819,18 +820,23 @@ export const deleteTasks = async (
   db: Database,
   shortcodes: TaskShortcode[],
   actor: ActorContext,
-): Promise<void> => {
-  if (shortcodes.length === 0) return;
+): Promise<{ deleted: number }> => {
+  if (shortcodes.length === 0) return { deleted: 0 };
 
-  await withTransaction(db, async (tx) => {
+  return await withTransaction(db, async (tx) => {
     const ids = await resolveLiveTaskIds(tx, shortcodes);
     await lockAndValidateForDelete(tx, task, ids, "Task");
 
     const liveSubtasks = await fetchLiveSubtasks(tx, ids);
     const allIds = [...ids, ...liveSubtasks.map((t) => t.id)];
 
-    // Over `allIds`, not `ids`: the cascaded subtasks are removals too.
-    await removeEntity(tx, {
+    // Over `allIds`, not `ids`: the cascaded subtasks are removals too. Read
+    // `deleted` off `removeEntity`'s return rather than `shortcodes.length` (or
+    // even `allIds.length`, which is trivially the same number here) — this is
+    // the one delete in the entity manifest that removes MORE rows than were
+    // requested, which is exactly the case that makes a caller-asserted count
+    // wrong. See `removeEntity`'s note on its own return.
+    const { deleted } = await removeEntity(tx, {
       entity: "task",
       ids: allIds,
       removal: "soft",
@@ -848,6 +854,7 @@ export const deleteTasks = async (
         },
       ],
     });
+    return { deleted };
   });
 };
 
@@ -867,12 +874,12 @@ export const deleteTasks = async (
  * transaction; nothing here is a lock or a permission.
  */
 export const previewDeleteTasks = async (
-  db: Database,
+  db: Database | DrizzleTransaction,
   ids: TaskId[],
 ): Promise<{ blockers: ImpactItem[]; changes: ImpactItem[] }> => {
   if (ids.length === 0) return { blockers: [], changes: [] };
 
-  const dbClient = getDb(db);
+  const dbClient = unwrapDb(db);
 
   const liveSubtasks = await fetchLiveSubtasks(dbClient, ids);
   const allIds = [...ids, ...liveSubtasks.map((t) => t.id)];

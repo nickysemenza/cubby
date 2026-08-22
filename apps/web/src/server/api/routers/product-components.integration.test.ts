@@ -47,7 +47,8 @@ describe("product component procedures", () => {
         { productId: battery.id, quantity: 2 },
       ],
     });
-    expect(attached).toEqual({ changed: 2, attached: 2 });
+    // `alreadySatisfied` names the no-op bucket: 0 here, since both links are new.
+    expect(attached).toEqual({ changed: 2, attached: 2, alreadySatisfied: 0 });
 
     const components = await caller.components({ parentProductId: kit.id });
     expect(
@@ -77,7 +78,7 @@ describe("product component procedures", () => {
       parentProductId: kit.id,
       componentProductIds: [battery.id],
     });
-    expect(detached).toEqual({ changed: 1, attached: 1 });
+    expect(detached).toEqual({ changed: 1, attached: 1, alreadySatisfied: 0 });
 
     // Idempotent: detaching an already-gone link reports nothing changed,
     // not an error.
@@ -85,7 +86,13 @@ describe("product component procedures", () => {
       parentProductId: kit.id,
       componentProductIds: [battery.id],
     });
-    expect(detachedAgain).toEqual({ changed: 0, attached: 1 });
+    // The point of `alreadySatisfied`: `changed: 0` alone could not distinguish
+    // "already detached" from "refused". Now it says which.
+    expect(detachedAgain).toEqual({
+      changed: 0,
+      attached: 1,
+      alreadySatisfied: 1,
+    });
 
     expect(await caller.kitMembership({ productId: battery.id })).toEqual([]);
   });

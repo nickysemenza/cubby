@@ -9,7 +9,6 @@ import {
 } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import {
-  image,
   inventoryEntry,
   location,
   locationImage,
@@ -36,6 +35,7 @@ import {
 import { createProduct } from "./product";
 import { makeLocationInput, makeProductInput } from "./repo.fixtures";
 import { resolveLiveShortcode } from "./shortcode-resolver";
+import { insertWithShortcode } from "./shortcode-utils";
 
 describe("findOrCreateLocationByName", () => {
   const ctx = withTestDb();
@@ -636,7 +636,7 @@ describe("deleteLocations hierarchy", () => {
   it("protects Home from deletion", async () => {
     await expect(
       deleteLocations(ctx.db, [TEST_HOME_ID], ctx.actor),
-    ).rejects.toThrow("Home cannot be deleted");
+    ).rejects.toMatchObject({ cause: { reason: "LOCATION_IS_ROOT" } });
   });
 });
 
@@ -762,7 +762,7 @@ describe("locationSearch picker rows", () => {
       sortOrder: number,
       overrides: { contentType?: string; renderStatus?: "failed" } = {},
     ) => {
-      const img = await insertAndReturn(ctx.db, image, {
+      const img = await insertWithShortcode(ctx.db, "image", {
         key,
         url: `https://example.com/${key}.png`,
         filename: `${key}.png`,
@@ -811,7 +811,7 @@ describe("locationSearch picker rows", () => {
     const vesselId = unsafeProductId(
       (await resolveLiveShortcode(ctx.db, vessel.id, "product"))!,
     );
-    const productCover = await insertAndReturn(ctx.db, image, {
+    const productCover = await insertWithShortcode(ctx.db, "image", {
       key: "picker-vessel-cover",
       url: "https://example.com/picker-vessel-cover.png",
       filename: "picker-vessel-cover.png",
@@ -836,7 +836,7 @@ describe("locationSearch picker rows", () => {
       productCover.id,
     );
 
-    const ownPhoto = await insertAndReturn(ctx.db, image, {
+    const ownPhoto = await insertWithShortcode(ctx.db, "image", {
       key: "picker-location-cover",
       url: "https://example.com/picker-location-cover.png",
       filename: "picker-location-cover.png",
@@ -861,7 +861,7 @@ describe("locationSearch picker rows", () => {
   it("omits coverImage entirely from the breadcrumb-only roster", async () => {
     const [, leaf] = await makeChain(["Optioned Room", "Optioned Bin"]);
     const entityId = await idOf(leaf!.id);
-    const img = await insertAndReturn(ctx.db, image, {
+    const img = await insertWithShortcode(ctx.db, "image", {
       key: "optioned-bin",
       url: "https://example.com/optioned-bin.png",
       filename: "optioned-bin.png",
@@ -904,7 +904,7 @@ describe("buildLocationTree identity product hydration", () => {
     const vesselId = unsafeProductId(
       (await resolveLiveShortcode(ctx.db, vessel.id, "product"))!,
     );
-    const cover = await insertAndReturn(ctx.db, image, {
+    const cover = await insertWithShortcode(ctx.db, "image", {
       key: "tree-vessel-cover",
       url: "https://example.com/tree-vessel-cover.png",
       filename: "tree-vessel-cover.png",
@@ -1143,7 +1143,7 @@ describe("locationList imagePresenceFilter", () => {
     const entityId = unsafeLocationId(
       (await resolveLiveShortcode(ctx.db, created.id, "location"))!,
     );
-    const img = await insertAndReturn(ctx.db, image, {
+    const img = await insertWithShortcode(ctx.db, "image", {
       key: `location-presence-${name}`,
       url: "https://example.com/location-presence.png",
       filename: "location-presence.png",
@@ -1218,7 +1218,7 @@ describe("attaching a photo as the new cover", () => {
   const ctx = withTestDb();
 
   const pendingImage = async (name: string) =>
-    await insertAndReturn(ctx.db, image, {
+    await insertWithShortcode(ctx.db, "image", {
       key: `cover-${name}`,
       url: `https://example.com/cover-${name}.png`,
       filename: `${name}.png`,

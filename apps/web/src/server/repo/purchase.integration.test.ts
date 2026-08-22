@@ -1147,7 +1147,7 @@ describe("purchase repository — mergePurchases", () => {
     label: string,
   ) => {
     const purchaseIdUuid = await purchaseUuid(ctx.db, purchaseShortcodeId);
-    const img = await insertAndReturn(ctx.db, image, {
+    const img = await insertWithShortcode(ctx.db, "image", {
       key: `test-documents/${label}.pdf`,
       url: `https://example.com/${label}.pdf`,
       filename: `${label}.pdf`,
@@ -1639,7 +1639,7 @@ describe("purchase repository — deletion cascades", () => {
       ctx.actor,
     );
     const purchaseId = await purchaseUuid(ctx.db, emptyPurchase.id);
-    const document = await insertAndReturn(ctx.db, image, {
+    const document = await insertWithShortcode(ctx.db, "image", {
       key: "test-documents/empty-delete.pdf",
       url: "https://example.com/empty-delete.pdf",
       filename: "empty-delete.pdf",
@@ -1722,7 +1722,7 @@ describe("purchase repository — deletion cascades", () => {
         [emptyPurchase.id, line.purchaseId!],
         ctx.actor,
       ),
-    ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });
+    ).rejects.toMatchObject({ cause: { reason: "PURCHASE_NOT_EMPTY" } });
 
     await expect(
       getPurchaseByShortcode(ctx.db, emptyPurchase.id),
@@ -1779,7 +1779,7 @@ describe("purchase repository — deletion cascades", () => {
 
     await expect(
       deleteEmptyPurchases(ctx.db, [purchaseWithSettlement.id], ctx.actor),
-    ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });
+    ).rejects.toMatchObject({ cause: { reason: "PURCHASE_NOT_EMPTY" } });
 
     // The refusal must leave the settlement evidence exactly as it was — which
     // now means its allocation, the mirror column being gone.
@@ -1811,7 +1811,7 @@ describe("purchase repository — deletion cascades", () => {
     const chargeId = line.purchaseId!;
     const chargeUuid = await purchaseUuid(ctx.db, chargeId);
 
-    const img = await insertAndReturn(ctx.db, image, {
+    const img = await insertWithShortcode(ctx.db, "image", {
       key: "test-documents/deleted-charge.pdf",
       url: "https://example.com/deleted-charge.pdf",
       filename: "deleted-charge.pdf",

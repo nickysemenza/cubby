@@ -721,17 +721,18 @@ export const deleteInventoryEntries = async (
   db: Database,
   ids: InventoryId[],
   actor: ActorContext,
-): Promise<void> => {
-  if (ids.length === 0) return;
+): Promise<{ deleted: number }> => {
+  if (ids.length === 0) return { deleted: 0 };
 
-  await withTransaction(db, async (tx) => {
+  return await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, inventoryEntry, ids, "Inventory");
-    await removeEntity(tx, {
+    const { deleted } = await removeEntity(tx, {
       entity: "inventory",
       ids,
       removal: "soft",
       actor,
     });
+    return { deleted };
   });
 };
 
@@ -763,7 +764,7 @@ export const deleteInventoryEntries = async (
  * nothing here is a lock or a permission.
  */
 export const previewDeleteInventoryEntries = async (
-  db: Database,
+  db: Database | DrizzleTransaction,
   ids: InventoryId[],
 ): Promise<{
   blockers: ImpactItem[];
@@ -772,7 +773,7 @@ export const previewDeleteInventoryEntries = async (
 }> => {
   if (ids.length === 0) return { blockers: [], changes: [], sideEffects: [] };
 
-  const dbClient = getDb(db);
+  const dbClient = unwrapDb(db);
 
   const sideEffects = present([
     impact({

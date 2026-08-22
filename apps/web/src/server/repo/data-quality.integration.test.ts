@@ -7,7 +7,6 @@ import { describe, expect, it } from "vitest";
 import {
   financialTransaction,
   financialTransactionAllocation,
-  image,
   productExternalId,
   productImage,
   purchaseImage,
@@ -66,7 +65,7 @@ describe("computed purchase and product data quality", () => {
     purchaseId: PurchaseId,
     documentKind?: typeof purchaseImage.$inferInsert.documentKind,
   ) => {
-    const stored = await insertAndReturn(ctx.db, image, {
+    const stored = await insertWithShortcode(ctx.db, "image", {
       key: `test/${crypto.randomUUID()}.pdf`,
       url: `https://example.test/${crypto.randomUUID()}.pdf`,
       filename: "evidence.pdf",

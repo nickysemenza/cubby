@@ -5,6 +5,7 @@ import {
   timestampedFields,
   uniqueBy,
 } from "./base-entity";
+import { relationMutationOut } from "./common";
 import { dataCheck, dataQuality, dataQualityStatus } from "./data-quality";
 import {
   expenseShortcode,
@@ -24,7 +25,7 @@ import {
   oneOrMany,
   presenceFilter,
 } from "./pagination";
-import { wholeCentAmount } from "./money";
+import { money, moneyNullable, wholeCentAmount } from "./money";
 import {
   costTypeSchema,
   plainDate,
@@ -240,7 +241,7 @@ export const purchaseOut = z.object({
    * `statedTotal` is only what the paperwork claimed. They may legitimately
    * disagree — see the reconciliation note on `statedTotal`.
    */
-  expenseTotal: z.number(),
+  expenseTotal: money,
   /** Shared stated-total verdict, including posted-refund explanations. */
   reconciliation: purchaseReconciliation,
   /** Settlement evidence only; never participates in spend rollups. */
@@ -375,7 +376,11 @@ export const splitExpenseInput = z.object({
     .array(
       z.object({
         name: z.string().min(1),
-        cost: z.number(),
+        // Deliberately unconstrained, not `positiveMoney` — a split part can
+        // carry a negative cost (e.g. splitting off a refund/credit line),
+        // matching the parent Expense.cost it divides. See
+        // negative-expenses-family-contributions in memory.
+        cost: money,
         lineKind: expenseLineKindSchema.optional(),
         costType: costTypeSchema,
         trade: tradeSchema,
@@ -483,10 +488,9 @@ export const purchaseProductMutationInput = z.object({
   productIds: z.array(productShortcode).min(1).max(100),
 });
 
-export const purchaseProductMutationOut = z.object({
-  changed: z.number().int().nonnegative(),
-  attached: z.number().int().nonnegative(),
-});
+/** See `relationMutationOut` (`./common`) for what `changed` / `attached` /
+ * `alreadySatisfied` mean — this family's edge is `PurchaseProduct`. */
+export const purchaseProductMutationOut = relationMutationOut;
 export type PurchaseProductMutationOut = z.infer<
   typeof purchaseProductMutationOut
 >;
@@ -522,10 +526,9 @@ export const purchaseProductOut = z.object({
   productId: productShortcode,
   productName: z.string(),
   manufacturer: z.string(),
-  price: z
-    .number()
-    .nullable()
-    .describe("Effective valuation/costing price — display only, not spend."),
+  price: moneyNullable.describe(
+    "Effective valuation/costing price — display only, not spend.",
+  ),
   coverImageUrl: z.url().nullable(),
   source: purchaseProductSource,
   linkAttachedAt,

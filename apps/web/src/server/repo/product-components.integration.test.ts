@@ -97,16 +97,18 @@ describe("product ⟷ product component links (kit composition)", () => {
       ],
       ctx.actor,
     );
-    expect(first).toEqual({ changed: 2, attached: 2 });
+    expect(first).toEqual({ changed: 2, attached: 2, alreadySatisfied: 0 });
 
     // Idempotent: the partial unique absorbs the repeat rather than erroring.
+    // `alreadySatisfied: 1` is the substantiation for that idempotency claim —
+    // the one requested id that needed no write because it was already live.
     const repeat = await attachProductComponents(
       ctx.db,
       kit.entityId,
       [{ productId: drill.entityId, quantity: 1 }],
       ctx.actor,
     );
-    expect(repeat).toEqual({ changed: 0, attached: 2 });
+    expect(repeat).toEqual({ changed: 0, attached: 2, alreadySatisfied: 1 });
 
     const components = await listProductComponents(ctx.db, kit.entityId);
     expect(
@@ -130,17 +132,19 @@ describe("product ⟷ product component links (kit composition)", () => {
       [battery.entityId],
       ctx.actor,
     );
-    expect(detached).toEqual({ changed: 1, attached: 1 });
+    expect(detached).toEqual({ changed: 1, attached: 1, alreadySatisfied: 0 });
     expect(await livePairs(kit.entityId)).toHaveLength(1);
 
-    // Detaching something already gone is a no-op, not an error.
+    // Detaching something already gone is a no-op, not an error — and now
+    // `alreadySatisfied` says exactly that, rather than leaving `changed: 0`
+    // to stand for both "no-op" and "rejected".
     const again = await detachProductComponents(
       ctx.db,
       kit.entityId,
       [battery.entityId],
       ctx.actor,
     );
-    expect(again.changed).toBe(0);
+    expect(again).toEqual({ changed: 0, attached: 1, alreadySatisfied: 1 });
   });
 
   it("allows re-attaching a detached pair — the unique index is partial", async () => {
@@ -174,7 +178,11 @@ describe("product ⟷ product component links (kit composition)", () => {
       ctx.actor,
     );
 
-    expect(reattached).toEqual({ changed: 1, attached: 1 });
+    expect(reattached).toEqual({
+      changed: 1,
+      attached: 1,
+      alreadySatisfied: 0,
+    });
     const rows = await livePairs(kit.entityId);
     expect(rows).toHaveLength(1);
 
@@ -461,7 +469,7 @@ describe("product ⟷ product component links (kit composition)", () => {
         ctx.actor,
       );
 
-      expect(result).toEqual({ changed: 1, attached: 1 });
+      expect(result).toEqual({ changed: 1, attached: 1, alreadySatisfied: 0 });
       const components = await listProductComponents(ctx.db, middle.entityId);
       expect(components[0]?.quantity).toBe(3);
     });

@@ -80,8 +80,12 @@ const {
     update: async (services, shortcode: TaskShortcode, data) =>
       updateTask(services.db, shortcode, data, services.actorContext),
     delete: async (services, ids: TaskShortcode[]) => {
-      await deleteTasks(services.db, ids, services.actorContext);
-      return undefined;
+      const { deleted } = await deleteTasks(
+        services.db,
+        ids,
+        services.actorContext,
+      );
+      return { deleted };
     },
   },
   entityName: "task",

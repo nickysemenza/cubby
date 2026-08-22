@@ -444,8 +444,9 @@ const normalizeFinancialTransaction = (patch: Record<string, unknown>) => ({
  * fragments. A Calendar and a detail page can therefore share `schedule`
  * without sharing a form shell; a cell has no power to widen its patch.
  */
-const semanticFields: Partial<
-  Record<EditableEntity, Record<string, readonly string[]>>
+const semanticFields: Record<
+  EditableEntity,
+  Record<string, readonly string[]>
 > = {
   product: {
     capture: ["name", "manufacturer"],
@@ -677,7 +678,7 @@ const semanticFields: Partial<
 };
 
 const fieldsFor = (entity: EditableEntity, semanticIntent: string) =>
-  semanticFields[entity]?.[semanticIntent] ?? [];
+  semanticFields[entity][semanticIntent] ?? [];
 
 /**
  * The data-only registry of Cubby's standard entity editing semantics.

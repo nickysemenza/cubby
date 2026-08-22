@@ -2,7 +2,6 @@ import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import {
-  image,
   location,
   locationImage,
   product,
@@ -20,6 +19,7 @@ import {
   getSearchDocumentDiagnostics,
   refreshSearchDocument,
 } from "~/server/repo/search-document";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
   findSearchHits,
   inspectSearchDocumentHealth,
@@ -151,14 +151,14 @@ describe("SearchDocument indexed retrieval", () => {
       makeProductInput({ name: "Thumbnail Search Product" }),
       ctx.actor,
     );
-    const pdf = await insertAndReturn(ctx.db, image, {
+    const pdf = await insertWithShortcode(ctx.db, "image", {
       key: `test/${crypto.randomUUID()}.pdf`,
       url: "https://example.com/ignored.pdf",
       filename: "ignored.pdf",
       contentType: "application/pdf",
       size: 123,
     });
-    const cover = await insertAndReturn(ctx.db, image, {
+    const cover = await insertWithShortcode(ctx.db, "image", {
       key: `test/${crypto.randomUUID()}.jpg`,
       url: "https://example.com/cover.jpg",
       filename: "cover.jpg",
@@ -189,7 +189,7 @@ describe("SearchDocument indexed retrieval", () => {
       makeProductInput({ name: "Search thumbnail vessel" }),
       ctx.actor,
     );
-    const productCover = await insertAndReturn(ctx.db, image, {
+    const productCover = await insertWithShortcode(ctx.db, "image", {
       key: `test/${crypto.randomUUID()}.jpg`,
       url: "https://example.com/location-product-cover.jpg",
       filename: "location-product-cover.jpg",
@@ -218,7 +218,7 @@ describe("SearchDocument indexed retrieval", () => {
       });
     expect((await search())[0]).toMatchObject({ imageUrl: productCover.url });
 
-    const ownPhoto = await insertAndReturn(ctx.db, image, {
+    const ownPhoto = await insertWithShortcode(ctx.db, "image", {
       key: `test/${crypto.randomUUID()}.jpg`,
       url: "https://example.com/location-own-cover.jpg",
       filename: "location-own-cover.jpg",

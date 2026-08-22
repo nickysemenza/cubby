@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { mutationSideEffectsSchema } from "./background-jobs";
+import { moneyNullable } from "./money";
 import {
   ingredientShortcode,
   inventoryShortcode,
@@ -318,7 +319,7 @@ export const aiUsageEntrySchema = z.object({
   ...aiUsageGroupFields,
   inputTokens: z.number().int().nullable(),
   outputTokens: z.number().int().nullable(),
-  estimatedCost: z.number().nullable(),
+  estimatedCost: moneyNullable,
   durationMs: z.number().int(),
   entityType: z.string().nullable(),
   entityId: z.string().nullable(),
@@ -339,7 +340,7 @@ export const aiUsageSummaryRowSchema = z.object({
   count: z.number().int(),
   inputTokens: z.number().int(),
   outputTokens: z.number().int(),
-  estimatedCost: z.number().nullable(),
+  estimatedCost: moneyNullable,
   durationMs: z.number().int(),
 });
 

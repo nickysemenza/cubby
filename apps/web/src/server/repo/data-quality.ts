@@ -1027,7 +1027,12 @@ const mutateException = async (
       `${input.entityId} is not a Purchase or Product.`,
     );
   }
-  assertCheckApplies(parsed.type, input.check);
+  // Captured after the guard above: the narrowing to purchase|product is lost
+  // inside the transaction closure below, and that only started mattering once
+  // `image` joined ShortcodeType without being auditable — so the un-narrowed
+  // type no longer satisfies the audit entity union.
+  const entityType: "purchase" | "product" = parsed.type;
+  assertCheckApplies(entityType, input.check);
   if ("reason" in input) {
     const allowed = EXCEPTION_REASONS[input.check];
     if (!allowed?.includes(input.reason)) {
@@ -1177,7 +1182,7 @@ const mutateException = async (
     );
     if (changes) {
       await logAuditEntry(tx, actor, {
-        entityType: parsed.type,
+        entityType,
         entityId:
           parsed.type === "purchase"
             ? unsafePurchaseId(resolved)

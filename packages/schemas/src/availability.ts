@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { amount } from "./codec";
 import { ingredientShortcode, recipeShortcode } from "./identifiers";
+import { moneyNullable } from "./money";
 
 export const ingredientAvailabilityStatus = z.enum([
   "ok",
@@ -68,7 +69,7 @@ export const aggregatedNeedOut = z.object({
    * zero would sum into a trip total and quietly understate it, which is the
    * same lie `shortfall: null` exists to avoid.
    */
-  estimatedCost: z.number().nullable(),
+  estimatedCost: moneyNullable,
   sources: z.array(
     z.object({
       lineIndex: z.number().int(),

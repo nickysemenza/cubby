@@ -9,6 +9,7 @@ import {
   timestampedFields,
 } from "./base-entity";
 import { amount } from "./codec";
+import { money, moneyNullable } from "./money";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import { requiredName } from "./common";
 import {
@@ -161,16 +162,16 @@ const pricingCounts = z.object({
  * not been recomputed since.
  */
 export const locationValuation = z.object({
-  directValuation: z.number(),
-  totalValuation: z.number(),
+  directValuation: money,
+  totalValuation: money,
   directItemCount: z.number().int().nonnegative(),
   totalItemCount: z.number().int().nonnegative(),
   direct: pricingCounts,
   total: pricingCounts,
   installed: z
     .object({
-      directValuation: z.number(),
-      totalValuation: z.number(),
+      directValuation: money,
+      totalValuation: money,
       directItemCount: z.number().int().nonnegative(),
       totalItemCount: z.number().int().nonnegative(),
     })
@@ -187,8 +188,8 @@ export const locationValuation = z.object({
    */
   container: z
     .object({
-      directValuation: z.number(),
-      totalValuation: z.number(),
+      directValuation: money,
+      totalValuation: money,
       directItemCount: z.number().int().nonnegative(),
       totalItemCount: z.number().int().nonnegative(),
     })
@@ -198,12 +199,12 @@ export type LocationValuation = z.infer<typeof locationValuation>;
 
 /** Compact persisted-valuation projection for the Home dashboard. */
 export const locationValuationSummaryOut = z.object({
-  total: z.number(),
+  total: money,
   locations: z.array(
     z.object({
       id: locationShortcode,
       name: z.string(),
-      value: z.number(),
+      value: money,
     }),
   ),
 });
@@ -226,7 +227,7 @@ export const locationIdentityProductOut = z.object({
   model: z.string().nullable(),
   category: z.enum(productCategoryValues).nullable(),
   coverImage: imageOut.nullable(),
-  price: z.number().nullable(),
+  price: moneyNullable,
 });
 export type LocationIdentityProductOut = z.infer<
   typeof locationIdentityProductOut
@@ -410,7 +411,7 @@ const locationInventoryProductOut = z.object({
   notes: z.string().nullable(),
   expectedQuantity: z.number().int().positive().nullable(),
   category: locationProductCategory.nullable(),
-  price: z.number().nullable(),
+  price: moneyNullable,
   usdaUnavailable: z.boolean().nullable(),
   ...timestampedFields,
 });
@@ -418,7 +419,7 @@ const locationInventoryProductOut = z.object({
 const locationInventoryWithProductOut = z.object({
   id: inventoryShortcode,
   amount,
-  valuation: z.number().nullable(),
+  valuation: moneyNullable,
   ...timestampedFields,
   product: locationInventoryProductOut,
 });

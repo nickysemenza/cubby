@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createTestTRPCContext } from "~/server/api/trpc";
 import {
   auditLog,
-  image,
   ingredient,
   mealRecipe,
   recipe,
@@ -347,13 +346,9 @@ describe("recipe crud repo", () => {
     });
 
     it("copies image associations as new join rows pointing at the SAME Image row", async () => {
-      const cover = await insertAndReturn(ctx.db, image, {
+      const cover = await createImageFixture(ctx.db, "cover", {
         key: "test-recipes/cover.png",
-        url: "https://example.com/cover.png",
-        filename: "cover.png",
-        contentType: "image/png",
         size: 10,
-        status: "UPLOADED",
       });
       const source = await createRecipe(
         ctx.db,

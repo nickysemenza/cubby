@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { amount } from "./codec";
+import { money, moneyNullable } from "./money";
 import { shortcodeEntities, type ShortcodeEntity } from "./entity-manifest";
 import { referentialLivenessViolationSchema } from "./entity-integrity";
 import {
@@ -210,7 +211,7 @@ export const unlinkedExitExpenseSchema = z.object({
   id: expenseShortcode,
   name: z.string(),
   /** Negative, as stored. */
-  cost: z.number(),
+  cost: money,
   date: plainDate.nullable(),
   /** The disposal Purchase this line sits on. */
   purchaseId: purchaseShortcode,
@@ -233,7 +234,7 @@ export const purchaselessExitExpenseSchema = z.object({
   id: expenseShortcode,
   name: z.string(),
   /** Negative, as stored. */
-  cost: z.number(),
+  cost: money,
   date: plainDate.nullable(),
   /** Present on most rows; the closest thing to a hint about what this was. */
   projectName: z.string().nullable(),
@@ -313,7 +314,10 @@ export const productWithoutMappingsSchema = z.object({
 export const productWithTitleDerivableSizeSchema = z.object({
   ...productProblemFields,
   category: z.string().nullable(),
-  proposed: z.object({ value: z.number(), unit: z.string() }),
+  // `amount` — the Rust title grammar that produces `proposed` always parses
+  // a real unit token (that's the substring `token` echoes), so the added
+  // `unit.min(1)` can't reject it.
+  proposed: amount,
   token: z.string(),
 });
 
@@ -447,7 +451,7 @@ export const inventoryWithoutPricePathSchema = z.object({
   id: inventoryShortcode,
   amount,
   /** What the unit would be worth against, if it could reach it. */
-  effectivePrice: z.number(),
+  effectivePrice: money,
   product: z.object({
     id: productShortcode,
     name: z.string(),
@@ -682,7 +686,7 @@ export const productWithBetterUpcDataSchema = z.object({
   // non-null field. `imageUrl` is an absolute URL ready to render.
   proposed: z.object({
     manufacturer: z.string().nullable(),
-    price: z.number().nullable(), // dollars, matches product.price + lookup.priceDollars
+    price: moneyNullable, // dollars, matches product.price + lookup.priceDollars
     imageUrl: z.string().nullable(),
   }),
 });
@@ -710,28 +714,28 @@ export const purchaseNotReconcilingSchema = z.object({
   orderUrl: z.url().nullable(),
   date: plainDate.nullable(),
   /** What the paperwork claimed. Never spend. */
-  statedTotal: z.number(),
+  statedTotal: money,
   /** `SUM(cost)` over the purchase's live expenses — its real spend. */
-  expenseTotal: z.number(),
+  expenseTotal: money,
   expenseCount: z.number().int(),
   unpricedExpenseCount: z.number().int(),
   /** Posted refund evidence used to distinguish explained differences. */
-  postedRefundTotal: z.number(),
+  postedRefundTotal: money,
 });
 
 export const purchaseFinancialSettlementMismatchSchema = z.object({
   id: purchaseShortcode,
   vendorName: z.string().nullable(),
-  expenseTotal: z.number(),
+  expenseTotal: money,
   financialReconciliation: z.object({
     status: z.literal("mismatch"),
     transactionCount: z.number().int(),
     postedTransactionCount: z.number().int(),
     outstandingTransactionCount: z.number().int(),
-    postedTotal: z.number(),
-    projectedTotal: z.number(),
-    postedRefundTotal: z.number(),
-    delta: z.number(),
+    postedTotal: money,
+    projectedTotal: money,
+    postedRefundTotal: money,
+    delta: money,
   }),
 });
 
@@ -759,7 +763,7 @@ export const duplicateSpendCandidateSchema = z.object({
   /** The unlinked Expense — the row to act on. */
   id: expenseShortcode,
   expenseName: z.string(),
-  cost: z.number(),
+  cost: money,
   expenseDate: plainDate.nullable(),
   /** The itemized purchase that appears to already cover this money. */
   purchaseId: purchaseShortcode,
@@ -767,9 +771,9 @@ export const duplicateSpendCandidateSchema = z.object({
   vendorName: z.string().nullable(),
   purchaseDate: plainDate.nullable(),
   /** `SUM(cost)` over the purchase's live expenses. */
-  purchaseExpenseTotal: z.number(),
+  purchaseExpenseTotal: money,
   /** What the paperwork claimed. Never spend. Null if none recorded. */
-  purchaseStatedTotal: z.number().nullable(),
+  purchaseStatedTotal: moneyNullable,
   purchaseExpenseCount: z.number().int(),
   /** Which total the expense's cost equalled. */
   matchedOn: z.enum(["expense_total", "stated_total"]),
@@ -862,9 +866,9 @@ export const financialTransactionAllocationDefectSchema = z.object({
   postedDate: plainDate.nullable(),
   reasons: z.array(financialTransactionAllocationDefectReason).min(1),
   kind: z.string(),
-  amount: z.number(),
+  amount: money,
   allocationCount: z.number().int(),
-  allocatedTotal: z.number(),
+  allocatedTotal: money,
   purchaseIds: z.array(purchaseShortcode),
 });
 

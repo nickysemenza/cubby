@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Entity } from "./entity";
+import { money } from "./money";
 import { entitySchema } from "./entity";
 import type { RelationshipPathStep } from "./entity-integrity";
 import { imageUrlSummary } from "./image-summary";
@@ -661,7 +662,7 @@ const relatedSummaryRow = z
     expenseCount: z.number().int().nonnegative(),
     purchaseCount: z.number().int().nonnegative(),
     unpricedExpenseCount: z.number().int().nonnegative(),
-    netSpend: z.number(),
+    netSpend: money,
     latestActivity: z.string().nullable(),
     knownAcquiredUnits: z.number().int().nonnegative(),
     unknownAcquisitionQuantityCount: z.number().int().nonnegative(),
@@ -672,7 +673,7 @@ const relatedSummaryTotals = z
     expenseCount: z.number().int().nonnegative(),
     purchaseCount: z.number().int().nonnegative(),
     unpricedExpenseCount: z.number().int().nonnegative(),
-    netSpend: z.number(),
+    netSpend: money,
     knownAcquiredUnits: z.number().int().nonnegative(),
     unknownAcquisitionQuantityCount: z.number().int().nonnegative(),
   })

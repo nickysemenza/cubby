@@ -1,4 +1,5 @@
 import {
+  type IngredientMergeBatchOut,
   ingredientFilterFields,
   ingredientMcpListOut,
   ingredientMcpOut,
@@ -7,18 +8,17 @@ import {
   ingredientResolvableNamesInput,
   ingredientResolveOrCreateResponseOut,
   ingredientUpdateData,
-  type MergeSummaryOut,
   mcpIngredientCreateInput,
 } from "@cubby/schemas/ingredient";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
+  describeToolError,
   formatToolError,
   getCaller,
   registerEntityCrudToolset,
   registerMcpTool,
   registerRouterTool,
   slimIngredient,
-  structuredSuccessWithError,
   WRITE_CLOSED,
   WRITE_DESTRUCTIVE_CLOSED,
 } from "./_shared";
@@ -76,13 +76,8 @@ export function registerIngredientTools(server: McpServer) {
       const caller = getCaller(extra);
       const merges = params.merges;
       const dryRun = params.dryRun;
-      const results: Array<{
-        target: (typeof merges)[number]["target"];
-        ok: boolean;
-        summary?: MergeSummaryOut;
-        error?: string;
-      }> = [];
-      for (const { target, aliases } of merges) {
+      const results: IngredientMergeBatchOut["results"] = [];
+      for (const [index, { target, aliases }] of merges.entries()) {
         try {
           const result = await caller.ingredient.merge({
             target,
@@ -90,26 +85,38 @@ export function registerIngredientTools(server: McpServer) {
             dryRun,
           });
           results.push({
+            index,
+            status: "succeeded",
             target,
-            ok: true,
             summary: result.mergeSummary,
           });
         } catch (error) {
+          // `error` keeps the rendered sentence a human reads; `code`/`reason`
+          // carry the same failure in a form a caller can branch on — the same
+          // split `registerBatchTool` makes for every other batch tool.
+          const { code, reason } = describeToolError(error);
           results.push({
+            index,
+            status: "failed",
             target,
-            ok: false,
             error: formatToolError(error),
+            ...(code ? { code } : {}),
+            ...(reason ? { reason } : {}),
           });
         }
       }
-      const payload = {
-        merged: results.filter((r) => r.ok).length,
-        total: results.length,
+      const succeeded = results.filter((r) => r.status === "succeeded").length;
+      // A wholly-failed batch is still `isError: false` — see the doctrine on
+      // `registerBatchTool` in `_shared.ts`. The per-item errors are the
+      // payload; flagging the envelope would hide them behind a bare string.
+      return {
+        summary: {
+          requested: results.length,
+          succeeded,
+          failed: results.length - succeeded,
+        },
         results,
       };
-      return payload.merged === 0
-        ? structuredSuccessWithError(payload, ingredientMergeBatchOut)
-        : payload;
     },
   });
 }

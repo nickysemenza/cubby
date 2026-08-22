@@ -2,10 +2,15 @@ import { inventoryPlacementValues } from "@cubby/shared";
 import { fdcId } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { inventoryRelatedFilterFields } from "./related-view";
-import { auditDateFilterFields, timestampedFields } from "./base-entity";
+import {
+  auditDateFilterFields,
+  dateRangeFields,
+  timestampedFields,
+} from "./base-entity";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import { amount, positiveAmount } from "./codec";
 import { externalIdOut, gtin } from "./external-id";
+import { moneyNullable } from "./money";
 import { imageOut } from "./image";
 import {
   inventoryShortcode,
@@ -14,7 +19,6 @@ import {
 } from "./identifiers";
 import { locationOut, locationType } from "./location";
 import { productCategory } from "./product";
-import { plainDate } from "./project";
 import { duplicateUniqueProductSchema } from "./problems";
 import {
   createItemsResponseSchema,
@@ -101,8 +105,7 @@ export const inventoryFilterFields = {
   valuationStatus: z
     .enum(["valued", "missing", "missing_with_priced_product"])
     .optional(),
-  verifiedFrom: plainDate.optional(),
-  verifiedTo: plainDate.optional(),
+  ...dateRangeFields("verified"),
 };
 
 export const inventoryFiltersSchema = z.object(inventoryFilterFields);
@@ -126,10 +129,9 @@ export const inventoryEntryFields = {
   id: inventoryShortcode,
   // inventory entries do not have a name, just ID
   amount: amount.describe("Quantity on hand"),
-  valuation: z
-    .number()
-    .nullable()
-    .describe("Precomputed value: amount × product price"),
+  valuation: moneyNullable.describe(
+    "Precomputed value: amount × product price",
+  ),
   verifiedAt: z
     .date()
     .nullable()
@@ -152,7 +154,7 @@ const productInventoryEmbedFields = {
   notes: z.string().nullable(),
   expectedQuantity: z.number().int().positive().nullable(),
   category: productCategory.nullable(),
-  price: z.number().nullable(),
+  price: moneyNullable,
   usdaUnavailable: z.boolean().nullable(),
   ...timestampedFields,
 };
@@ -179,7 +181,7 @@ export const inventoryListProductOut = z.object({
   category: productCategory.nullable(),
   expectedQuantity: z.number().int().positive().nullable(),
   model: z.string().nullable(),
-  price: z.number().nullable(),
+  price: moneyNullable,
   usdaUnavailable: z.boolean().nullable(),
 });
 export type InventoryListProductOut = z.infer<typeof inventoryListProductOut>;
@@ -404,7 +406,7 @@ const inventoryMcpLocationFields = {
 export const inventoryMcpOut = z.object({
   id: inventoryShortcode,
   amount,
-  valuation: z.number().nullable(),
+  valuation: moneyNullable,
   // Without this an agent can SET placement but never see it, so it cannot tell
   // a fixture from stock when deciding what to recount, move, or discard.
   placement: inventoryPlacement,

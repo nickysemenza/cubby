@@ -37,7 +37,6 @@ import {
 import type { USDAClient } from "~/server/clients/usda";
 import {
   financialTransaction,
-  image,
   inventoryEntry,
   location as locationTable,
   product,
@@ -1739,35 +1738,29 @@ describe("problems repo", () => {
     const UPC_MISC = "044000031091";
 
     const attachImage = async (productId: ProductId) => {
-      const [img] = await getDb(ctx.db)
-        .insert(image)
-        .values({
-          url: "https://example.com/i.jpg",
-          key: `key-${productId}`,
-          filename: "i.jpg",
-          size: 1,
-          contentType: "image/jpeg",
-        })
-        .returning();
+      const img = await insertWithShortcode(ctx.db, "image", {
+        url: "https://example.com/i.jpg",
+        key: `key-${productId}`,
+        filename: "i.jpg",
+        size: 1,
+        contentType: "image/jpeg",
+      });
       await getDb(ctx.db)
         .insert(productImage)
-        .values({ productId, imageId: img!.id });
+        .values({ productId, imageId: img.id });
     };
 
     const attachPdf = async (productId: ProductId) => {
-      const [img] = await getDb(ctx.db)
-        .insert(image)
-        .values({
-          url: "https://example.com/manual.pdf",
-          key: `pdf-key-${productId}`,
-          filename: "manual.pdf",
-          size: 1,
-          contentType: PDF_CONTENT_TYPE,
-        })
-        .returning();
+      const img = await insertWithShortcode(ctx.db, "image", {
+        url: "https://example.com/manual.pdf",
+        key: `pdf-key-${productId}`,
+        filename: "manual.pdf",
+        size: 1,
+        contentType: PDF_CONTENT_TYPE,
+      });
       await getDb(ctx.db)
         .insert(productImage)
-        .values({ productId, imageId: img!.id });
+        .values({ productId, imageId: img.id });
     };
 
     it("flags each fillable gap and skips fully-populated products without a lookup", async () => {
@@ -2744,7 +2737,7 @@ describe("problems — duplicate vendors", () => {
     if (!row) throw new Error("expected a duplicate-vendor row");
     expect(row.value).toBe("Lowe's");
 
-    const { output: keeper } = await mergeVendors(
+    const { vendor: keeper } = await mergeVendors(
       ctx.db,
       {
         keepId: row.canonicalSampleId,
@@ -2884,19 +2877,16 @@ describe("problems — vendor mini-logo coverage", () => {
   it("excludes a vendor with a persisted logo image", async () => {
     await seedLine("Logo-backed Vendor", "M-1");
     const vendorId = await findOrCreateVendor(ctx.db, "Logo-backed Vendor");
-    const [logo] = await getDb(ctx.db)
-      .insert(image)
-      .values({
-        url: "https://example.com/vendor-logo.png",
-        key: `vendor-logo-${vendorId}`,
-        filename: "vendor-logo.png",
-        size: 1,
-        contentType: "image/png",
-      })
-      .returning({ id: image.id });
+    const logo = await insertWithShortcode(ctx.db, "image", {
+      url: "https://example.com/vendor-logo.png",
+      key: `vendor-logo-${vendorId}`,
+      filename: "vendor-logo.png",
+      size: 1,
+      contentType: "image/png",
+    });
     await getDb(ctx.db)
       .update(vendorTable)
-      .set({ logoImageId: logo!.id })
+      .set({ logoImageId: logo.id })
       .where(eq(vendorTable.id, vendorId));
 
     const { vendorsWithoutLogos } = await findFastProblems(ctx.db);

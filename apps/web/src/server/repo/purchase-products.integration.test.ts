@@ -298,16 +298,18 @@ describe("purchase ↔ product links", () => {
       [range.entityId, fridge.entityId],
       ctx.actor,
     );
-    expect(first).toEqual({ changed: 2, attached: 2 });
+    expect(first).toEqual({ changed: 2, attached: 2, alreadySatisfied: 0 });
 
     // Idempotent: the partial unique absorbs the repeat rather than erroring.
+    // `alreadySatisfied: 1` is the substantiation for that idempotency claim —
+    // the one requested id that needed no write because it was already live.
     const repeat = await attachPurchaseProducts(
       ctx.db,
       order.id,
       [range.entityId],
       ctx.actor,
     );
-    expect(repeat).toEqual({ changed: 0, attached: 2 });
+    expect(repeat).toEqual({ changed: 0, attached: 2, alreadySatisfied: 1 });
 
     const products = await listPurchaseProducts(ctx.db, order.id);
     expect(products.map((p) => p.productName)).toEqual([
@@ -325,17 +327,19 @@ describe("purchase ↔ product links", () => {
       [fridge.entityId],
       ctx.actor,
     );
-    expect(detached).toEqual({ changed: 1, attached: 1 });
+    expect(detached).toEqual({ changed: 1, attached: 1, alreadySatisfied: 0 });
     expect(await livePairs(order.id)).toHaveLength(1);
 
-    // Detaching something already gone is a no-op, not an error.
+    // Detaching something already gone is a no-op, not an error — and now
+    // `alreadySatisfied` says exactly that, rather than leaving `changed: 0`
+    // to stand for both "no-op" and "rejected".
     const again = await detachPurchaseProducts(
       ctx.db,
       order.id,
       [fridge.entityId],
       ctx.actor,
     );
-    expect(again.changed).toBe(0);
+    expect(again).toEqual({ changed: 0, attached: 1, alreadySatisfied: 1 });
   });
 
   it("allows re-attaching a detached pair — the unique index is partial", async () => {
@@ -355,7 +359,11 @@ describe("purchase ↔ product links", () => {
       ctx.actor,
     );
 
-    expect(reattached).toEqual({ changed: 1, attached: 1 });
+    expect(reattached).toEqual({
+      changed: 1,
+      attached: 1,
+      alreadySatisfied: 0,
+    });
     expect(await livePairs(order.id)).toHaveLength(1);
   });
 

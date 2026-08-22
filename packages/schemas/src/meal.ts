@@ -11,6 +11,7 @@ import {
   subRecipeBlockReason,
 } from "./availability";
 import { amount } from "./codec";
+import { money, moneyNullable } from "./money";
 import {
   ingredientShortcode,
   mealRecipeId,
@@ -185,8 +186,8 @@ export type MealRecipeOut = z.infer<typeof mealRecipeOut>;
 
 /** Roll-up across a meal's recipes. `pending` means at least one recipe lacked totals. */
 export const mealTotals = z.object({
-  costTotal: z.number(),
-  costTotalUpper: z.number().optional(),
+  costTotal: money,
+  costTotalUpper: money.optional(),
   caloriesTotal: z.number(),
   caloriesTotalUpper: z.number().optional(),
   pending: z.boolean(),
@@ -306,7 +307,7 @@ export const shoppingListItem = z.object({
   shortfall: z.number().nullable(),
   status: ingredientAvailabilityStatus,
   /** Cost of the shortfall; null when no price path exists. See `aggregatedNeedOut`. */
-  estimatedCost: z.number().nullable(),
+  estimatedCost: moneyNullable,
   perMeal: z.array(shoppingListContribution),
 });
 export type ShoppingListItem = z.infer<typeof shoppingListItem>;
@@ -326,7 +327,7 @@ export const shoppingListOut = z.object({
    * Sum of the priced shortfalls. `pricedItems` vs `items.length` is what makes
    * it honest — a total over half the list must not read as the trip's cost.
    */
-  estimatedTotal: z.number(),
+  estimatedTotal: money,
   pricedItems: z.number().int(),
   /** Sub-recipes whose ingredients this list could NOT account for. */
   unexpanded: z.array(unexpandedSubRecipeOut),

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { money, moneyNullable } from "./money";
 import {
   mealShortcode,
   projectShortcode,
@@ -56,7 +57,7 @@ export const calendarMealItem = z.object({
   recipeNames: z.array(z.string()),
   /** First displayable cover among the meal's ordered recipes. */
   coverImageUrl: z.url().nullable(),
-  cost: z.number(),
+  cost: money,
   calories: z.number(),
   nutritionPending: z.boolean(),
 });
@@ -85,7 +86,7 @@ export const calendarExpenseItem = z.object({
   ...calendarItemDates,
   interaction: calendarInteraction,
   future: z.boolean(),
-  cost: z.number().nullable(),
+  cost: moneyNullable,
   vendor: z.string().nullable(),
   trade: tradeSchema,
   projectName: z.string().nullable(),
@@ -180,8 +181,8 @@ export const calendarRangeInput = z
 export type CalendarRangeInput = z.infer<typeof calendarRangeInput>;
 
 export const calendarDaySummary = z.object({
-  actualSpend: z.number(),
-  plannedSpend: z.number(),
+  actualSpend: money,
+  plannedSpend: money,
   calories: z.number(),
   nutritionPending: z.boolean(),
   taskCount: z.number().int(),

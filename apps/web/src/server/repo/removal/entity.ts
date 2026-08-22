@@ -218,9 +218,9 @@ export const removeEntity = async <E extends RemovableEntity>(
     /** Counts the caller computed itself, merged over the derived ones. */
     extraCounts?: CascadeCounts;
   },
-): Promise<{ detachedImageKeys: string[] }> => {
+): Promise<{ detachedImageKeys: string[]; deleted: number }> => {
   const { entity, ids, removal, actor, children = [], extraCounts } = args;
-  if (ids.length === 0) return { detachedImageKeys: [] };
+  if (ids.length === 0) return { detachedImageKeys: [], deleted: 0 };
 
   return await withTransactionOn(dbOrTx, async (tx) => {
     // Every count is taken before any statement runs: counting between removals
@@ -273,6 +273,11 @@ export const removeEntity = async <E extends RemovableEntity>(
     // every id against the full edge set, so an image another entity still
     // shows survives.
     const reaped = await reapUnreferencedImages(tx, cascadingImageIds);
-    return { detachedImageKeys: reaped.deletedKeys };
+    // `ids` is what was ACTUALLY removed, which is not always what the caller
+    // asked for: `deleteTasks` passes `[...ids, ...liveSubtasks]`, so a request
+    // to delete one parent task can remove several rows. Reporting the caller's
+    // input length instead understates those cascades — see `deleteHandler`,
+    // which had no measured count to report and asserted `ids.length`.
+    return { detachedImageKeys: reaped.deletedKeys, deleted: ids.length };
   });
 };

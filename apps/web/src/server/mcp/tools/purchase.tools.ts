@@ -60,6 +60,7 @@ import {
 } from "@cubby/schemas/purchase";
 import {
   mergeVendorsInput,
+  mergeVendorsOut,
   vendorCreateInput,
   vendorFilterFields,
   vendorListResponse,
@@ -126,6 +127,19 @@ const purchaseMcpCreateInput = purchaseCreateInput.omit({
 const purchaseMcpUpdateShape = purchaseUpdateData.omit({
   pendingImageIds: true,
 }).shape;
+
+/**
+ * `merge_vendors` over an MCP-safe vendor shape.
+ *
+ * `vendorOut.logo` is a full `imageOut`, whose `id` is a raw uuid — and a uuid
+ * must never cross this boundary. A merge result has no use for the logo's
+ * storage metadata anyway: what an agent needs back is which vendor survived
+ * and what moved. Same reason `merge_products` publishes `mergeProductsMcpOut`
+ * rather than the router's own output.
+ */
+const mergeVendorsMcpOut = mergeVendorsOut.extend({
+  vendor: vendorOut.omit({ logo: true }),
+});
 
 export function registerPurchaseTools(server: McpServer) {
   registerEntityCrudToolset(server, {
@@ -246,7 +260,11 @@ export function registerPurchaseTools(server: McpServer) {
       "Each merged-away Vendor is then SOFT-DELETED. It keeps its OWN `VEN-` shortcode as a permanent tombstone — shortcodes are never reassigned or reused, so that code will never resolve to the keeper; if you need to look up which vendor a stale code named, use preview_entity_operation or a shortcode resolver, not a guess. " +
       "There is deliberately no inverse operation. Call preview_entity_operation first with operation=merge and entity=vendor to see which purchases would repoint vs. fold before committing; never guess a merge.",
     inputSchema: mergeVendorsInput.shape,
-    outputSchema: vendorOut,
+    // `mergeVendorsOut`, not bare `vendorOut`: the merge already computed a
+    // plan describing what repointed, what folded, and which fields carried,
+    // and used to discard it — so an agent got the keeper back and no account
+    // of what the merge had actually done to the ledger.
+    outputSchema: mergeVendorsMcpOut,
     annotations: WRITE_DESTRUCTIVE_CLOSED,
     call: (caller, params) => caller.vendor.merge(params),
   });

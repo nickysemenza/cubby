@@ -20,6 +20,7 @@
  * with the audit diff.
  */
 
+import type { RelationMutationOut } from "@cubby/schemas/common";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import {
@@ -460,7 +461,7 @@ export async function attachProductComponents(
   parentProductId: ProductId,
   components: ProductComponentEntry[],
   actor: ActorContext,
-): Promise<{ changed: number; attached: number }> {
+): Promise<RelationMutationOut> {
   const uniqueComponents = uniqBy(components, (c) => c.productId);
   const componentProductIds = uniqueComponents.map((c) => c.productId);
 
@@ -540,7 +541,14 @@ export async function attachProductComponents(
         changes: { componentProductIds: { from: before, to: after } },
       });
     }
-    return { changed: inserted.length, attached: after.length };
+    // Every id in `uniqueComponents` was already confirmed live above, so the
+    // only reason one wouldn't land in `inserted` is `onConflictDoNothing`
+    // skipping an edge that was already there — the no-op bucket.
+    return {
+      changed: inserted.length,
+      attached: after.length,
+      alreadySatisfied: uniqueComponents.length - inserted.length,
+    };
   });
 }
 
@@ -549,7 +557,7 @@ export async function detachProductComponents(
   parentProductId: ProductId,
   componentProductIds: ProductId[],
   actor: ActorContext,
-): Promise<{ changed: number; attached: number }> {
+): Promise<RelationMutationOut> {
   const uniqueComponentIds = uniq(componentProductIds);
   return withTransaction(db, async (tx) => {
     const before = await liveComponentShortcodes(tx, parentProductId);
@@ -575,6 +583,15 @@ export async function detachProductComponents(
         changes: { componentProductIds: { from: before, to: after } },
       });
     }
-    return { changed: removed.length, attached: after.length };
+    // Unlike attach, a requested id here was never confirmed live — it may
+    // never have been attached at all. Either way (never attached, or
+    // attached and already removed), the outcome is the same "no live edge",
+    // so the arithmetic still holds: whatever wasn't removed was already in
+    // the detached state being asked for.
+    return {
+      changed: removed.length,
+      attached: after.length,
+      alreadySatisfied: uniqueComponentIds.length - removed.length,
+    };
   });
 }

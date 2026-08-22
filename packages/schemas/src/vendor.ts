@@ -1,9 +1,11 @@
 import { z } from "zod";
 import { imageOut } from "./image";
+import { money } from "./money";
 import { imageUrlSummary } from "./image-summary";
 import { vendorRelatedFilterFields } from "./related-view";
 import {
   auditDateFilterFields,
+  dateRangeFields,
   deriveUpdateData,
   timestampedFields,
 } from "./base-entity";
@@ -67,8 +69,7 @@ export const vendorFilterFields = {
   spendMin: z.coerce.number().optional(),
   spendMax: z.coerce.number().optional(),
   latestPurchaseDatePresenceFilter: presenceFilter,
-  latestPurchaseDateFrom: plainDate.optional(),
-  latestPurchaseDateTo: plainDate.optional(),
+  ...dateRangeFields("latestPurchaseDate"),
   logoPresenceFilter: presenceFilter,
 };
 export const vendorFiltersSchema = z.object(vendorFilterFields);
@@ -96,7 +97,7 @@ export const vendorOut = z.object({
    * blended net, same convention as `projectRollups.spent`. Never derived from
    * `purchase.statedTotal`, which is not spend.
    */
-  spend: z.number(),
+  spend: money,
   latestPurchaseDate: plainDate.nullable(),
   /** A displayable vendor brand mark, or null when the monogram is intentional. */
   logo: imageOut.nullable(),
@@ -136,6 +137,39 @@ export const mergeVendorsInput = z.object({
   mergeIds: z.array(vendorShortcode).min(1),
 });
 export type MergeVendorsInput = z.infer<typeof mergeVendorsInput>;
+
+/**
+ * What a vendor merge actually moved or carried — populated straight from the
+ * merge's own `VendorMergePlan` (`repo/vendor.ts`'s `planVendorMerge`), never
+ * computed fresh for reporting. Mirrors the `{ product, mergeSummary }` shape
+ * `mergeProductsOut` uses.
+ */
+export const vendorMergeSummaryOut = z.object({
+  keepId: vendorShortcode,
+  /** Merged-away vendor rows, now soft-deleted tombstones. */
+  deletedIds: z.array(vendorShortcode),
+  /** Live purchases that simply adopted the keeper — no same-order collision. */
+  purchasesRepointed: z.number().int().nonnegative(),
+  /**
+   * Purchases folded into a same-order survivor instead of re-pointed — their
+   * expenses and documents moved with them, and the loser purchase was
+   * soft-deleted. Reported as a count, not per-purchase: the plan tracks
+   * folded pairs by internal purchase id, and turning those into the
+   * `PUR-` shortcodes a caller could act on would need a lookup the plan
+   * doesn't already carry (see `previewMergeVendors`'s own transitive counts
+   * for a finer breakdown, computed separately for that read-only preview).
+   */
+  purchasesFolded: z.number().int().nonnegative(),
+  /** Keeper fields (website/notes/logo) filled in from a source vendor. */
+  carriedFields: z.array(z.string()),
+});
+export type VendorMergeSummaryOut = z.infer<typeof vendorMergeSummaryOut>;
+
+export const mergeVendorsOut = z.object({
+  vendor: vendorOut,
+  mergeSummary: vendorMergeSummaryOut,
+});
+export type MergeVendorsOut = z.infer<typeof mergeVendorsOut>;
 
 /** The token a `vendor.orderUrlTemplate` substitutes the order id into. */
 const ORDER_ID_TOKEN = "{orderId}";

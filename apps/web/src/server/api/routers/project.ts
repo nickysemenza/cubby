@@ -107,14 +107,14 @@ const {
     update: async (services, shortcode: ProjectShortcode, data) =>
       updateProject(services.db, shortcode, data, services.actorContext),
     delete: async (services, ids: ProjectShortcode[]) => {
-      const { detachedImageKeys } = await deleteProjects(
+      const { detachedImageKeys, deleted } = await deleteProjects(
         services.db,
         ids,
         services.actorContext,
       );
       // After the commit, never inside it: an R2 delete has no rollback.
       await deleteStoredObjects(detachedImageKeys);
-      return undefined;
+      return { deleted };
     },
   },
   entityName: "project",

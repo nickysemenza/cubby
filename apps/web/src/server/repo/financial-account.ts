@@ -20,11 +20,16 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { buildTakeSkip } from "@cubby/schemas/pagination";
-import { and, asc, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
+import type { AppErrorReason } from "@cubby/shared";
+import { and, asc, desc, eq, type SQL, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { financialAccount, financialTransaction } from "~/server/db/schema";
+import {
+  financialAccount,
+  financialTransaction,
+  statementRow,
+} from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import {
@@ -366,40 +371,72 @@ export async function deleteFinancialAccounts(
   db: Database,
   shortcodes: FinancialAccountShortcode[],
   actor: ActorContext,
-) {
+): Promise<{ deleted: number }> {
   const ids = uniq(await resolveAllOrThrow(db, "financialAccount", shortcodes));
-  await withTransaction(db, async (tx) => {
+  return await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(
       tx,
       financialAccount,
       ids,
       "FinancialAccount",
     );
-    const [liveTransaction] = await tx
-      .select({ id: financialTransaction.id })
-      .from(financialTransaction)
-      .where(
-        and(
-          inArray(financialTransaction.accountId, ids),
-          notDeleted(financialTransaction),
-        ),
-      )
-      .limit(1);
-    if (liveTransaction)
-      throw createAppError(
-        "FINANCIAL_ACCOUNT_HAS_TRANSACTIONS",
-        "Cannot delete a financial account while live transactions reference it.",
-      );
-    await removeEntity(tx, {
+    // `countByTarget` rather than a `.limit(1)` existence probe: the probe knew
+    // only THAT something blocked, so the refusal could not name which account
+    // or how many rows. It is also the same call the preview makes, so the two
+    // can no longer disagree about what blocks.
+    const [transactionsByTarget, statementRowsByTarget] = [
+      await countByTarget(
+        tx,
+        financialTransaction,
+        financialTransaction.accountId,
+        ids,
+      ),
+      // `StatementRow.accountId` has been declared `effect: "block"` in
+      // FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY all along with nothing enforcing
+      // it — neither this guard nor the preview queried the table.
+      await countByTarget(tx, statementRow, statementRow.accountId, ids),
+    ];
+    assertNoBlockingCounts(
+      transactionsByTarget,
+      "FINANCIAL_ACCOUNT_HAS_TRANSACTIONS",
+      "live transactions",
+    );
+    assertNoBlockingCounts(
+      statementRowsByTarget,
+      "FINANCIAL_ACCOUNT_HAS_STATEMENT_ROWS",
+      "live statement rows",
+    );
+    const { deleted } = await removeEntity(tx, {
       entity: "financialAccount",
       ids,
       removal: "soft",
       actor,
     });
+    return { deleted };
   });
 }
 
-/** Advisory delete impact using the same live-transaction predicate as delete. */
+/**
+ * Refuse when any target still has dependents, naming the targets and their
+ * counts. `countByTarget` keys by account id, so the message can say WHICH
+ * account blocked and with how many rows — the thing the old existence probe
+ * threw away.
+ */
+function assertNoBlockingCounts(
+  byTargetId: Record<string, number>,
+  reason: AppErrorReason,
+  noun: string,
+): void {
+  const blocked = Object.entries(byTargetId).filter(([, n]) => n > 0);
+  if (blocked.length === 0) return;
+  const detail = blocked.map(([id, n]) => `${id} (${n})`).join(", ");
+  throw createAppError(
+    reason,
+    `Cannot delete a financial account while ${noun} reference it: ${detail}.`,
+  );
+}
+
+/** Advisory delete impact using the same predicates as delete. */
 export async function previewDeleteFinancialAccounts(
   db: Database,
   ids: FinancialAccountId[],
@@ -409,10 +446,17 @@ export async function previewDeleteFinancialAccounts(
   sideEffects: ImpactItem[];
 }> {
   if (ids.length === 0) return { blockers: [], changes: [], sideEffects: [] };
-  const byTargetId = await countByTarget(
-    getDb(db),
+  const client = getDb(db);
+  const transactionsByTarget = await countByTarget(
+    client,
     financialTransaction,
     financialTransaction.accountId,
+    ids,
+  );
+  const statementRowsByTarget = await countByTarget(
+    client,
+    statementRow,
+    statementRow.accountId,
     ids,
   );
   return {
@@ -424,7 +468,14 @@ export async function previewDeleteFinancialAccounts(
           ],
         edgeKey: "FinancialTransaction.accountId",
         label: "live transactions still pointing at this account",
-        byTargetId,
+        byTargetId: transactionsByTarget,
+      }),
+      impact({
+        disposition:
+          FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY["StatementRow.accountId"],
+        edgeKey: "StatementRow.accountId",
+        label: "live statement rows assigned to this account",
+        byTargetId: statementRowsByTarget,
       }),
     ]),
     changes: [],

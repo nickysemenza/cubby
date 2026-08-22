@@ -1,4 +1,9 @@
-import type { PreviewOperation } from "@cubby/schemas/entity-integrity";
+import type {
+  ImpactItem,
+  PreviewOperation,
+  PublicImpactItem,
+} from "@cubby/schemas/entity-integrity";
+import { publicImpactItemSchema } from "@cubby/schemas/entity-integrity";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { OperationImpact } from "./operation-impact";
@@ -32,16 +37,19 @@ const preview = (over: Partial<PreviewOperation> = {}): PreviewOperation => ({
   ...over,
 });
 
-const item = (over: Partial<PreviewOperation["blockers"][number]> = {}) => ({
-  code: "block-live-inventory",
-  effect: "block" as const,
-  edgeKey: "InventoryEntry.productId",
-  label: "inventory entries",
-  description: "A product still on a shelf can't be deleted.",
-  total: 3,
-  byTargetId: { p1: 3 },
-  ...over,
-});
+// Parsed rather than cast: `blockers[]` is the branded wire type, so a fixture
+// has to arrive the same way real data does. This also validates the fixture.
+const item = (over: Partial<ImpactItem> = {}): PublicImpactItem =>
+  publicImpactItemSchema.parse({
+    code: "block-live-inventory",
+    effect: "block" as const,
+    edgeKey: "InventoryEntry.productId",
+    label: "inventory entries",
+    description: "A product still on a shelf can't be deleted.",
+    total: 3,
+    byTargetId: { p1: 3 },
+    ...over,
+  });
 
 describe("OperationImpact", () => {
   it("shows a loading state without claiming anything is blocked", () => {

@@ -5,10 +5,12 @@ import type {
   PreviewOperation,
   PreviewOperationInput,
   PreviewOperationRequest,
+  PublicImpactItem,
 } from "@cubby/schemas/entity-integrity";
 import {
   narrowPreviewOperationInput,
   previewOperationSchema,
+  toPublicImpact,
 } from "@cubby/schemas/entity-integrity";
 import {
   unsafeCookbookId,
@@ -364,15 +366,11 @@ const needsKeeperBlocker = (entity: string): ImpactItem => ({
   byTargetId: {},
 });
 
+/**
+ * A preview is advisory, so an unmappable target is dropped rather than fatal —
+ * see `UnmappedTargetPolicy`. Mutation results must pass `"throw"` instead.
+ */
 const publicImpact = (
   item: ImpactItem,
   publicIdByEntityId: ReadonlyMap<string, string>,
-): ImpactItem => ({
-  ...item,
-  byTargetId: Object.fromEntries(
-    Object.entries(item.byTargetId).flatMap(([id, count]) => {
-      const publicId = publicIdByEntityId.get(id);
-      return publicId ? [[publicId, count]] : [];
-    }),
-  ),
-});
+): PublicImpactItem => toPublicImpact(item, publicIdByEntityId, "drop");

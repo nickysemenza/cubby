@@ -1210,8 +1210,8 @@ export const deleteRecipes = async (
   dbOrTx: Database | DrizzleTransaction,
   ids: RecipeId[],
   actor: ActorContext,
-): Promise<{ detachedImageKeys: string[] }> => {
-  if (ids.length === 0) return { detachedImageKeys: [] };
+): Promise<{ detachedImageKeys: string[]; deleted: number }> => {
+  if (ids.length === 0) return { detachedImageKeys: [], deleted: 0 };
 
   return await withTransactionOn(dbOrTx, async (tx) => {
     // Row-level locks: proves the ids exist and aren't already deleted, and

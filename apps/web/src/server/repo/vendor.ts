@@ -31,13 +31,14 @@ import {
 import type {
   VendorCreateInput,
   VendorFilters,
+  VendorMergeSummaryOut,
   VendorOptionsOut,
   VendorOut,
   VendorUpdateInput,
 } from "@cubby/schemas/vendor";
 import { vendorSortableFields } from "@cubby/schemas/vendor";
 import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
-import type { Database, DrizzleTransaction } from "~/server/db";
+import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   expense,
@@ -58,10 +59,10 @@ import {
   countWhere,
   formatSearchTerm,
   getDb,
-  insertAndReturn,
   type ListReadIntent,
   lockAndValidateForDelete,
   notDeleted,
+  unwrapDb,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
@@ -557,7 +558,8 @@ export const replaceVendorLogo = async (
   input: {
     id: VendorShortcode;
     expectedWebsite: string;
-    image: Omit<typeof image.$inferInsert, "id" | "status">;
+    // `shortcode` too: it is minted here rather than supplied by the caller.
+    image: Omit<typeof image.$inferInsert, "id" | "status" | "shortcode">;
   },
   actor: ActorContext,
 ): Promise<{
@@ -590,7 +592,7 @@ export const replaceVendorLogo = async (
         );
       }
 
-      const created = await insertAndReturn(tx, image, {
+      const created = await insertWithShortcode(tx, "image", {
         ...input.image,
         status: "UPLOADED",
         targetType: "vendor",
@@ -625,6 +627,9 @@ export const replaceVendorLogo = async (
 
 /** What `mergeVendors` (and `previewMergeVendors`) does with one live charge. */
 type VendorMergePlan = {
+  /** Merged-away vendor rows, as shortcodes — ready for the merge summary
+   *  `mergeVendors` reports without a further query. */
+  deletedIds: VendorShortcode[];
   /** Live purchases that simply adopt `keepId` — no same-order collision. */
   repointed: Array<{ id: PurchaseId; vendorId: VendorId }>;
   /** Live purchases folded into a same-order survivor (dead -> survivor pairs). */
@@ -653,7 +658,7 @@ type VendorMergePlan = {
  * re-pointed, never folded.
  */
 const planVendorMerge = async (
-  tx: DrizzleTransaction,
+  dbClient: DrizzleClient | DrizzleTransaction,
   keepId: VendorId,
   losers: VendorId[],
 ): Promise<VendorMergePlan> => {
@@ -663,7 +668,7 @@ const planVendorMerge = async (
   // history silently discards it — which is the common shape, because the
   // better-populated duplicate is rarely the one with more charges. The real
   // first case was `B&H` (website, 1 charge) vs `B&H Photo` (none, 4 charges).
-  const [keeperRow] = await tx
+  const [keeperRow] = await dbClient
     .select({
       website: vendor.website,
       notes: vendor.notes,
@@ -672,14 +677,18 @@ const planVendorMerge = async (
     .from(vendor)
     .where(eq(vendor.id, keepId))
     .limit(1);
-  const loserRows = await tx
+  const loserRows = await dbClient
     .select({
+      shortcode: vendor.shortcode,
       website: vendor.website,
       notes: vendor.notes,
       logoImageId: vendor.logoImageId,
     })
     .from(vendor)
     .where(inArray(vendor.id, losers));
+  // Already fetched above for the carry-over check — just read back out as
+  // shortcodes rather than a second query, for `mergeVendors`' summary.
+  const deletedIds = loserRows.map((r) => unsafeVendorShortcode(r.shortcode));
 
   const carried: VendorMergePlan["carried"] = {};
   if (keeperRow?.website == null) {
@@ -697,7 +706,7 @@ const planVendorMerge = async (
 
   // Every live charge across the merge set, so collisions can be resolved
   // against the whole group rather than pairwise.
-  const allPurchases = await tx
+  const allPurchases = await dbClient
     .select({
       id: purchase.id,
       vendorId: purchase.vendorId,
@@ -734,7 +743,7 @@ const planVendorMerge = async (
     vendorId: p.vendorId,
   }));
 
-  return { repointed, folded, carried };
+  return { deletedIds, repointed, folded, carried };
 };
 
 /**
@@ -767,20 +776,46 @@ export const mergeVendors = async (
   db: Database,
   input: { keepId: VendorShortcode; mergeIds: VendorShortcode[] },
   actor: ActorContext,
-): Promise<{ output: VendorOut; detachedImageKeys: string[] }> => {
+): Promise<{
+  vendor: VendorOut;
+  detachedImageKeys: string[];
+  mergeSummary: VendorMergeSummaryOut;
+}> => {
   const { keepId, loserIds: losers } = await resolveMergeTargets(db, {
     entity: "vendor",
     keepId: input.keepId,
     mergeIds: input.mergeIds,
   });
   if (losers.length === 0) {
-    return { output: await getVendorByID(db, keepId), detachedImageKeys: [] };
+    const output = await getVendorByID(db, keepId);
+    return {
+      vendor: output,
+      detachedImageKeys: [],
+      mergeSummary: {
+        keepId: output.id,
+        deletedIds: [],
+        purchasesRepointed: 0,
+        purchasesFolded: 0,
+        carriedFields: [],
+      },
+    };
   }
+
+  // Filled in from `plan` below — the same plan the transaction executes —
+  // rather than computed separately, so the summary can't disagree with what
+  // actually moved.
+  let planSummary: Omit<VendorMergeSummaryOut, "keepId"> | undefined;
 
   const detachedImageKeys = await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, vendor, [keepId, ...losers], "Vendor");
 
     const plan = await planVendorMerge(tx, keepId, losers);
+    planSummary = {
+      deletedIds: plan.deletedIds,
+      purchasesRepointed: plan.repointed.length,
+      purchasesFolded: plan.folded.length,
+      carriedFields: Object.keys(plan.carried),
+    };
 
     if (Object.keys(plan.carried).length > 0) {
       await tx.update(vendor).set(plan.carried).where(eq(vendor.id, keepId));
@@ -839,7 +874,15 @@ export const mergeVendors = async (
     return (await reapUnreferencedImages(tx, loserLogos)).deletedKeys;
   });
 
-  return { output: await getVendorByID(db, keepId), detachedImageKeys };
+  const output = await getVendorByID(db, keepId);
+  // `planSummary` is always set by the time the transaction above returns —
+  // the `losers.length === 0` short-circuit above is the only path that skips
+  // building the plan, and it returns early on its own.
+  return {
+    vendor: output,
+    detachedImageKeys,
+    mergeSummary: { keepId: output.id, ...planSummary! },
+  };
 };
 
 /**
@@ -860,8 +903,8 @@ export const deleteVendors = async (
   db: Database,
   shortcodes: VendorShortcode[],
   actor: ActorContext,
-): Promise<{ detachedImageKeys: string[] }> => {
-  if (shortcodes.length === 0) return { detachedImageKeys: [] };
+): Promise<{ detachedImageKeys: string[]; deleted: number }> => {
+  if (shortcodes.length === 0) return { detachedImageKeys: [], deleted: 0 };
 
   const ids = await resolveAllOrThrow(db, "vendor", shortcodes);
 
@@ -895,9 +938,14 @@ export const deleteVendors = async (
       .update(vendor)
       .set({ logoImageId: null })
       .where(inArray(vendor.id, ids));
-    await removeEntity(tx, { entity: "vendor", ids, removal: "soft", actor });
+    const { deleted } = await removeEntity(tx, {
+      entity: "vendor",
+      ids,
+      removal: "soft",
+      actor,
+    });
     const reaped = await reapUnreferencedImages(tx, logoIds);
-    return { detachedImageKeys: reaped.deletedKeys };
+    return { detachedImageKeys: reaped.deletedKeys, deleted };
   });
 };
 
@@ -912,7 +960,7 @@ export const deleteVendors = async (
  * transaction; nothing here is a lock or a permission.
  */
 export const previewDeleteVendors = async (
-  db: Database,
+  db: Database | DrizzleTransaction,
   ids: VendorId[],
 ): Promise<{
   blockers: ImpactItem[];
@@ -921,7 +969,7 @@ export const previewDeleteVendors = async (
 }> => {
   if (ids.length === 0) return { blockers: [], changes: [], sideEffects: [] };
 
-  const dbClient = getDb(db);
+  const dbClient = unwrapDb(db);
   const byTargetId = await countByTarget(
     dbClient,
     purchase,
@@ -963,7 +1011,7 @@ export const previewDeleteVendors = async (
  * transaction; nothing here is a lock or a permission.
  */
 export const previewMergeVendors = async (
-  db: Database,
+  db: Database | DrizzleTransaction,
   input: { keepId: VendorId; mergeIds: VendorId[] },
 ): Promise<{
   blockers: ImpactItem[];
@@ -975,14 +1023,8 @@ export const previewMergeVendors = async (
   if (losers.length === 0)
     return { blockers: [], changes: [], sideEffects: [] };
 
-  const dbClient = getDb(db);
-  // Same cast the product preview makes to hand a plain client to a helper
-  // typed for `DrizzleTransaction` — see `previewDeleteProducts`.
-  const plan = await planVendorMerge(
-    dbClient as unknown as DrizzleTransaction,
-    keepId,
-    losers,
-  );
+  const dbClient = unwrapDb(db);
+  const plan = await planVendorMerge(dbClient, keepId, losers);
 
   const repointedByVendor: Record<string, number> = {};
   for (const p of plan.repointed) {

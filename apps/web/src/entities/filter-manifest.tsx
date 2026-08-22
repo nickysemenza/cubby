@@ -2264,7 +2264,7 @@ const relatedFilterSpecs = Object.fromEntries(
     }
     return [entity, generated] as const;
   }),
-) as Partial<Record<Entity, readonly FilterSpec[]>>;
+) satisfies Partial<Record<Entity, readonly FilterSpec[]>>;
 
 const filterSpecCache = new Map<Entity, readonly FilterSpec[]>();
 export const getEntityFilters = (entity: Entity): readonly FilterSpec[] => {

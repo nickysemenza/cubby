@@ -702,11 +702,11 @@ export async function deleteFinancialTransactions(
   db: Database,
   shortcodes: FinancialTransactionShortcode[],
   actor: ActorContext,
-) {
+): Promise<{ deleted: number }> {
   const ids = uniq(
     await resolveAllOrThrow(db, "financialTransaction", shortcodes),
   );
-  await withTransaction(db, async (tx) => {
+  return await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(
       tx,
       financialTransaction,
@@ -724,7 +724,7 @@ export async function deleteFinancialTransactions(
         ),
         columns: { purchaseId: true },
       });
-    await removeEntity(tx, {
+    const { deleted } = await removeEntity(tx, {
       entity: "financialTransaction",
       ids,
       removal: "soft",
@@ -740,6 +740,7 @@ export async function deleteFinancialTransactions(
     await touchDataQualityTargets(tx, {
       purchaseIds: uniq(allocationTargets.map((row) => row.purchaseId)),
     });
+    return { deleted };
   });
 }
 
@@ -748,14 +749,14 @@ export async function deleteFinancialTransactions(
  * dependents with a claim on it — but they do go with it, so the preview says so.
  */
 export async function previewDeleteFinancialTransactions(
-  db: Database,
+  db: Database | DrizzleTransaction,
   ids: FinancialTransactionId[],
 ): Promise<{
   blockers: ImpactItem[];
   changes: ImpactItem[];
   sideEffects: ImpactItem[];
 }> {
-  const dbClient = getDb(db);
+  const dbClient = unwrapDb(db);
   return {
     blockers: [],
     changes: present([

@@ -36,7 +36,6 @@ import { vendorOptionsOut } from "@cubby/schemas/vendor";
 import { z } from "zod";
 import {
   createExpense,
-  deleteExpenses,
   deleteExpensesWithPurchaseEffects,
   expenseAnalytics,
   expenseAnalyze,
@@ -136,17 +135,23 @@ const {
       return result;
     },
     delete: async (services, ids: ExpenseShortcode[]) => {
-      const affected = await deleteExpenses(
-        services.db,
-        ids,
-        services.actorContext,
-      );
-      return await recomputeRecipesForPriceAffectedProducts(
+      // The richer sibling of `deleteExpenses`, not the wrapper itself — this
+      // is the one call site that needs `result.deleted` (measured off
+      // `removeEntity`, not asserted from `ids.length`) alongside the
+      // price-affected product ids the legacy wrapper already returned.
+      const { priceAffectedProductIds, result } =
+        await deleteExpensesWithPurchaseEffects(
+          services.db,
+          ids,
+          services.actorContext,
+        );
+      const backgroundBatches = await recomputeRecipesForPriceAffectedProducts(
         services.db,
         services.services.recipeCosting,
-        affected,
+        priceAffectedProductIds,
         "expense.delete",
       );
+      return { deleted: result.deleted, backgroundBatches };
     },
   },
   entityName: "expense",

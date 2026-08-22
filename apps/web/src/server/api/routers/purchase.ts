@@ -123,21 +123,25 @@ const procedures = createSearchableEntityCrudProcedures({
       );
       // After the commit, never inside it: an R2 delete has no rollback.
       await deleteStoredObjects(detached.detachedImageKeys);
-      return runMutationSideEffectsForEntities(ctx.db, [
-        ...detached.expenseIds.map((entityId) => ({
-          action: "updated" as const,
-          entity: { entityType: "expense" as const, entityId },
-          source: "purchase.delete",
-        })),
-        ...detached.financialTransactionIds.map((entityId) => ({
-          action: "updated" as const,
-          entity: {
-            entityType: "financialTransaction" as const,
-            entityId,
-          },
-          source: "purchase.delete",
-        })),
-      ]);
+      const backgroundBatches = await runMutationSideEffectsForEntities(
+        ctx.db,
+        [
+          ...detached.expenseIds.map((entityId) => ({
+            action: "updated" as const,
+            entity: { entityType: "expense" as const, entityId },
+            source: "purchase.delete",
+          })),
+          ...detached.financialTransactionIds.map((entityId) => ({
+            action: "updated" as const,
+            entity: {
+              entityType: "financialTransaction" as const,
+              entityId,
+            },
+            source: "purchase.delete",
+          })),
+        ],
+      );
+      return { deleted: detached.deleted, backgroundBatches };
     },
   },
   entityName: "purchase",

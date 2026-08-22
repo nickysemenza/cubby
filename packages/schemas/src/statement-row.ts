@@ -1,11 +1,12 @@
 import { z } from "zod";
 import { externalIdSource } from "./external-id";
+import { money } from "./money";
 import { createSortPaginationFields } from "./pagination";
 import {
   financialAccountShortcode,
   financialTransactionShortcode,
 } from "./identifiers";
-import { plainDate } from "./base-entity";
+import { dateRangeFields, plainDate } from "./base-entity";
 
 /**
  * The provider-statement ledger: what the card statements said, stored verbatim
@@ -122,8 +123,7 @@ export const statementRowFilters = z.object({
    * is one filtered write rather than thousands of ids.
    */
   sourceCategory: z.string().optional(),
-  dateFrom: plainDate.optional(),
-  dateTo: plainDate.optional(),
+  ...dateRangeFields("date"),
   amountMin: z.number().optional(),
   amountMax: z.number().optional(),
   search: z.string().optional(),
@@ -357,8 +357,7 @@ export type StatementRowDriftCandidate = z.infer<
 
 export const findStatementRowDriftInput = z.object({
   source: z.string().optional(),
-  dateFrom: plainDate.optional(),
-  dateTo: plainDate.optional(),
+  ...dateRangeFields("date"),
   /** Fingerprint of one export, to scope the sweep to a chunk just ingested. */
   importFingerprint: z.string().optional(),
   /**
@@ -421,8 +420,8 @@ export const statementRowSummaryOut = z.object({
   unmatched: z.number().int(),
   ignored: z.number().int(),
   superseded: z.number().int(),
-  amountTotal: z.number(),
-  unmatchedAmount: z.number(),
+  amountTotal: money,
+  unmatchedAmount: money,
 });
 
 export const statementImportListOut = z.object({

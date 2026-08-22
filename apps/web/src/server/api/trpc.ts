@@ -1,10 +1,14 @@
 import { type AuditSource, buildActorContext } from "@cubby/schemas/context";
+import {
+  type PublicImpactItem,
+  publicImpactItemSchema,
+} from "@cubby/schemas/entity-integrity";
 import { type UserId, unsafeUserId } from "@cubby/schemas/identifiers";
 import * as Sentry from "@sentry/tanstackstart-react";
 import { initTRPC, type TRPCRouterRecord } from "@trpc/server";
 import { flatten } from "flat";
 import superjson from "superjson";
-import { ZodError, type ZodType, type z } from "zod";
+import { ZodError, type ZodType, z } from "zod";
 import { env } from "~/env";
 import { auth as betterAuth } from "~/lib/auth";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -154,10 +158,21 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
 
     // Pull a structured reason out of error.cause if present
     let reason: string | undefined;
+    // Blockers ride alongside it for a refusal built by `createBlockedError`.
+    // `cause` itself never crosses the wire — this formatter is the whitelist,
+    // so anything a client needs has to be lifted onto `shape.data` explicitly.
+    // Parsed rather than passed through: `cause` is `unknown`, and a malformed
+    // payload must not become the client's problem.
+    let blockers: PublicImpactItem[] | undefined;
     const cause = (error as { cause?: unknown }).cause;
     if (cause && typeof cause === "object") {
       const r = (cause as Record<string, unknown>).reason;
       if (typeof r === "string") reason = r;
+      const b = (cause as Record<string, unknown>).blockers;
+      if (Array.isArray(b)) {
+        const parsed = z.array(publicImpactItemSchema).safeParse(b);
+        if (parsed.success) blockers = parsed.data;
+      }
     }
 
     return {
@@ -166,6 +181,7 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
         ...shape.data,
         zodError: null,
         reason,
+        ...(blockers ? { blockers } : {}),
       },
     };
   },

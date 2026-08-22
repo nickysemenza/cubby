@@ -30,6 +30,7 @@ import {
 } from "./image";
 import { createProject, deleteProjects, getProjectByID } from "./project";
 import { createPurchase } from "./purchase";
+import { insertWithShortcode } from "./shortcode-utils";
 import { findOrCreateVendor, getVendorByID } from "./vendor";
 
 describe("image repository", () => {
@@ -154,14 +155,14 @@ describe("image repository", () => {
       projectCreateInput.parse({ name: "Project covers" }),
       ctx.actor,
     );
-    const pdf = await insertAndReturn(ctx.db, image, {
+    const pdf = await insertWithShortcode(ctx.db, "image", {
       key: `test/${crypto.randomUUID()}.pdf`,
       url: "https://example.com/project.pdf",
       filename: "project.pdf",
       contentType: "application/pdf",
       size: 1024,
     });
-    const failed = await insertAndReturn(ctx.db, image, {
+    const failed = await insertWithShortcode(ctx.db, "image", {
       key: `test/${crypto.randomUUID()}-failed.jpg`,
       url: "https://example.com/failed.jpg",
       filename: "failed.jpg",
@@ -169,7 +170,7 @@ describe("image repository", () => {
       size: 1024,
       renderStatus: "failed",
     });
-    const cover = await insertAndReturn(ctx.db, image, {
+    const cover = await insertWithShortcode(ctx.db, "image", {
       key: `test/${crypto.randomUUID()}-cover.jpg`,
       url: "https://example.com/cover.jpg",
       filename: "cover.jpg",
