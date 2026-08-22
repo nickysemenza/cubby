@@ -16,6 +16,7 @@ import {
   ExpenseBulkActionDialogs,
   useExpenseBulkActions,
 } from "~/app/_components/tracker/expense-bulk-actions";
+import { useExpenseRowActions } from "~/app/_components/tracker/expense-row-actions";
 import {
   createExpenseProductImageColumn,
   ExpenseProductImages,
@@ -150,10 +151,18 @@ function PurchaseExpenseRows({
       }),
     ];
   }, [helper, kind]);
+  // Adjustments are tax/shipping/discount/fee/tip lines the domain keeps out of
+  // cost-type and trade analytics — but `SettleExpenseDialog` requires both, so
+  // settling one would force a classification that is withheld on purpose.
+  const rowActions = useExpenseRowActions({
+    settleDisabledReason:
+      kind === "adjustment" ? "Adjustments aren't classified" : undefined,
+  });
   const list = useEntityList<ExpenseOut, ExpenseFilters>({
     entity: "expense",
     queryOptions: api.expense.list.queryOptions,
     scopeFilters: scope,
+    extraActions: rowActions.extraActions,
     columns,
     tableStateOptions: EMBEDDED_TABLE_STATE,
     layoutKey: `expense:purchase-detail:${kind}`,
@@ -184,6 +193,7 @@ function PurchaseExpenseRows({
         mode="embedded"
         showColumnMenu
       />
+      {rowActions.dialogs}
       <ExpenseBulkActionDialogs
         controller={bulkActions}
         onComplete={() => list.workbench.table.resetRowSelection()}

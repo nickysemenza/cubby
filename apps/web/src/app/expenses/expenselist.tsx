@@ -2,8 +2,7 @@ import type { ExpenseFilters, ExpenseOut } from "@cubby/schemas/project";
 import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
-import { useCallback, useMemo, useState } from "react";
-import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
+import { useCallback, useMemo } from "react";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { ExternalLinkIcon } from "~/app/_components/ExternalLink";
 import {
@@ -41,13 +40,12 @@ import {
   ExpenseBulkActionDialogs,
   useExpenseBulkActions,
 } from "../_components/tracker/expense-bulk-actions";
-import { MoveToProjectDialog } from "../_components/tracker/move-to-project-dialog";
+import { useExpenseRowActions } from "../_components/tracker/expense-row-actions";
 import {
   createExpenseProductImageColumn,
   ExpenseProductImages,
 } from "./expense-product-image-column";
 import { ExpenseSummaryStrip } from "./expense-summary-strip";
-import { SettleExpenseDialog } from "./settle-expense-dialog";
 
 // Scoped rather than a plain `useNavigate()` so `search` stays typed to this
 // route's schema (which is where `productId` is declared) without importing
@@ -91,8 +89,6 @@ export function ExpenseList() {
   // summary interpolate, and what the type-ahead matches on.
   const vendorOptions = useDeferredFilterOptions("vendor");
   const expenseBulkActions = useExpenseBulkActions();
-  const [moveTarget, setMoveTarget] = useState<ExpenseOut | null>(null);
-  const [settleTarget, setSettleTarget] = useState<ExpenseOut | null>(null);
 
   const updateExpenseMutation = useUpdateMutation({
     mutationFn: api.expense.update.mutationOptions,
@@ -111,42 +107,7 @@ export function ExpenseList() {
     entity: "expense",
   });
 
-  const moveMutation = useUpdateMutation({
-    mutationFn: api.expense.update.mutationOptions,
-    entity: "expense",
-    invalidateKeys: expenseMutationInvalidateKeys,
-  });
-
-  // Settle a planned expense without leaving the table, and move a single one
-  // to a project. Reschedule / change-estimate aren't duplicated here — the
-  // Date and Cost columns are already inline-editable.
-  //
-  // Keyed on the ROW, not the view: "mark purchased" / "move to project" are
-  // meaningful for any planned expense, whichever filters got you to it.
-  // They used to be gated on the `planned` tab, which meant the same row
-  // offered different actions depending on how you'd navigated to it.
-  const extraActions = useCallback(
-    (row: ExpenseOut) =>
-      row.future ? (
-        <>
-          <VerbMenuItem
-            verb="markPurchased"
-            onSelect={(e) => {
-              e.stopPropagation();
-              setSettleTarget(row);
-            }}
-          />
-          <VerbMenuItem
-            verb="moveToProject"
-            onSelect={(e) => {
-              e.stopPropagation();
-              setMoveTarget(row);
-            }}
-          />
-        </>
-      ) : null,
-    [],
-  );
+  const { extraActions, dialogs: rowActionDialogs } = useExpenseRowActions();
 
   // Runtime picklists for the manifest's `project`/`vendor` specs (optionsKey).
   const projectFilterOptions = useFilterOptions({
@@ -520,33 +481,7 @@ export function ExpenseList() {
         controller={expenseBulkActions}
         onComplete={() => workbench.table.resetRowSelection()}
       />
-      {moveTarget && (
-        <MoveToProjectDialog
-          open={moveTarget !== null}
-          onOpenChange={(open) => {
-            if (!open) setMoveTarget(null);
-          }}
-          items={[moveTarget]}
-          entityLabel="Expense"
-          isPending={moveMutation.isPending}
-          onConfirm={async (projectId) => {
-            await moveMutation.mutateAsync({
-              id: moveTarget.id,
-              data: { projectId },
-            });
-            setMoveTarget(null);
-          }}
-        />
-      )}
-      {settleTarget && (
-        <SettleExpenseDialog
-          open={settleTarget !== null}
-          onOpenChange={(open) => {
-            if (!open) setSettleTarget(null);
-          }}
-          expense={settleTarget}
-        />
-      )}
+      {rowActionDialogs}
     </div>
   );
 }

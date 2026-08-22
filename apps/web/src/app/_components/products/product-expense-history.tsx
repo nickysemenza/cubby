@@ -20,6 +20,7 @@ import {
   ExpenseBulkActionDialogs,
   useExpenseBulkActions,
 } from "~/app/_components/tracker/expense-bulk-actions";
+import { useExpenseRowActions } from "~/app/_components/tracker/expense-row-actions";
 import {
   expenseCostColumn,
   expenseCostTypeColumn,
@@ -282,12 +283,14 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
     [helper, quantityEditorExpenseId, rowProjectOptions, rowVendorOptions],
   );
 
+  const rowActions = useExpenseRowActions();
   const { workbench } = useClientEntityList<ExpenseOut>({
     entity: "expense",
     data: expenses,
     columns,
     nameEditable,
     deletable,
+    extraActions: rowActions.extraActions,
     bulkActions: bulkActions.config,
     tableStateOptions: EMBEDDED_TABLE_STATE,
     // Distinct column set from the /expenses ledger, so it needs its own
@@ -470,6 +473,7 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
           See all in ledger →
         </Link>
       </Stack>
+      {rowActions.dialogs}
       <ExpenseBulkActionDialogs
         controller={bulkActions}
         onComplete={() => table.resetRowSelection()}

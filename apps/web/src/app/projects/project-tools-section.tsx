@@ -1,3 +1,4 @@
+import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import type {
   ProjectResourceOut,
   ProjectToolSuggestionOut,
@@ -24,6 +25,7 @@ import {
   useCubbyTable,
 } from "~/app/_components/data-table/table-features";
 import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
+import { ProductAddToInventoryDialog } from "~/app/_components/products/product-add-to-inventory-dialog";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -58,7 +60,8 @@ const EMPTY_RESOURCES: ProjectResourceOut[] = [];
 const EMPTY_SUGGESTIONS: ProjectToolSuggestionOut[] = [];
 
 type ResourceRow = {
-  id: string;
+  /** Branded: every construction site feeds this a product shortcode. */
+  id: ProductShortcode;
   name: string;
   manufacturer: string;
   category: string;
@@ -116,6 +119,8 @@ function ResourcesTable({
     onSettled: () =>
       invalidateTRPCQueries(queryClient, projectResourceMutationInvalidateKeys),
   });
+  const [addToInventoryRow, setAddToInventoryRow] =
+    useState<ResourceRow | null>(null);
   const helper = useMemo(() => createCubbyColumnHelper<ResourceRow>(), []);
   const columns = useMemo<CubbyColumnDef<ResourceRow>[]>(
     () => [
@@ -159,14 +164,23 @@ function ResourcesTable({
       }),
       createActionsColumn(helper, "product", {
         extraActions: (row) => (
-          <VerbMenuItem
-            verb="removeFromProject"
-            disabled={detach.isPending}
-            onSelect={(event) => {
-              event.stopPropagation();
-              detach.mutate({ projectId, productIds: [row.id] });
-            }}
-          />
+          <>
+            <VerbMenuItem
+              verb="addToInventory"
+              onSelect={(event) => {
+                event.stopPropagation();
+                setAddToInventoryRow(row);
+              }}
+            />
+            <VerbMenuItem
+              verb="removeFromProject"
+              disabled={detach.isPending}
+              onSelect={(event) => {
+                event.stopPropagation();
+                detach.mutate({ projectId, productIds: [row.id] });
+              }}
+            />
+          </>
         ),
       }),
     ],
@@ -182,24 +196,35 @@ function ResourcesTable({
     initialState: { pagination: { pageIndex: 0, pageSize: 50 } },
   });
   return (
-    <RTable
-      table={table}
-      entity="product"
-      ariaLabel="Reusable project resources"
-      embedded
-      isLoading={isLoading}
-      emptyState={
-        <Empty variant="minimal" className="py-6">
-          <EmptyHeader>
-            <EmptyTitle>No reusable resources recorded</EmptyTitle>
-            <EmptyDescription>
-              Add meaningful durable tools and shared software. Small
-              consumables do not need to become project-use records.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      }
-    />
+    <>
+      <RTable
+        table={table}
+        entity="product"
+        ariaLabel="Reusable project resources"
+        embedded
+        isLoading={isLoading}
+        emptyState={
+          <Empty variant="minimal" className="py-6">
+            <EmptyHeader>
+              <EmptyTitle>No reusable resources recorded</EmptyTitle>
+              <EmptyDescription>
+                Add meaningful durable tools and shared software. Small
+                consumables do not need to become project-use records.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        }
+      />
+      {addToInventoryRow && (
+        <ProductAddToInventoryDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setAddToInventoryRow(null);
+          }}
+          product={addToInventoryRow}
+        />
+      )}
+    </>
   );
 }
 

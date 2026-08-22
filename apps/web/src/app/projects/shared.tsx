@@ -80,6 +80,7 @@ import {
   ExpenseBulkActionDialogs,
   useExpenseBulkActions,
 } from "~/app/_components/tracker/expense-bulk-actions";
+import { useExpenseRowActions } from "~/app/_components/tracker/expense-row-actions";
 import {
   TaskBulkActionDialogs,
   useTaskBulkActions,
@@ -1159,8 +1160,20 @@ export function ExpenseList({
     invalidateKeys: expenseMutationInvalidateKeys,
     entity: "expense",
   });
+  // On a leaf project every row already belongs to this project, so moving one
+  // off the page you are standing on is a footgun. On a parent, rows span the
+  // subtree and the move IS the move-to-sub-project affordance — the same
+  // reasoning that gates the Project column, so it reuses the same flag.
+  const rowActions = useExpenseRowActions({
+    moveDisabledReason: showProjectColumn
+      ? undefined
+      : "Already in this project",
+  });
   const { deleteBulkAction, combinedExtraActions, deleteDialog } =
-    useOptimisticDelete<ExpenseOut>({ deletable: deletableConfig });
+    useOptimisticDelete<ExpenseOut>({
+      deletable: deletableConfig,
+      extraActions: rowActions.extraActions,
+    });
 
   const expenseBulkActions = useExpenseBulkActions();
   // See TaskList: `useListBulkActions` is what supplies "Copy codes" + Delete.
@@ -1397,6 +1410,7 @@ export function ExpenseList({
         bulkActionBar={bulkActionBar}
       />
       {deleteDialog}
+      {rowActions.dialogs}
       <ExpenseBulkActionDialogs
         controller={expenseBulkActions}
         onComplete={() => table.resetRowSelection()}

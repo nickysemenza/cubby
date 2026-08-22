@@ -24,6 +24,7 @@ import {
   ExpenseBulkActionDialogs,
   useExpenseBulkActions,
 } from "~/app/_components/tracker/expense-bulk-actions";
+import { useExpenseRowActions } from "~/app/_components/tracker/expense-row-actions";
 import {
   TaskBulkActionDialogs,
   useTaskBulkActions,
@@ -208,6 +209,9 @@ export function ProjectDataExpenseList({
     [helper],
   );
 
+  // The Data view spans several projects, so a move is a real relocation
+  // rather than a no-op — but the moved row leaves this scoped table on success.
+  const rowActions = useExpenseRowActions();
   const list = useEntityList<ExpenseOut, ExpenseFilters>({
     entity: "expense",
     queryOptions: api.expense.list.queryOptions,
@@ -216,6 +220,7 @@ export function ProjectDataExpenseList({
     filterOptions,
     deletable,
     nameEditable,
+    extraActions: rowActions.extraActions,
     bulkActions: bulk.config,
     tableStateOptions: EMBEDDED_TABLE_STATE,
     layoutKey: "expense:projects-data",
@@ -231,6 +236,7 @@ export function ProjectDataExpenseList({
         onRowHover={onRowHover}
       />
       <PreviewSheet />
+      {rowActions.dialogs}
       <ExpenseBulkActionDialogs
         controller={bulk}
         onComplete={() => list.workbench.table.resetRowSelection()}
