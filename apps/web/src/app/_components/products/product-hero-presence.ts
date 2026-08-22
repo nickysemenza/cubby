@@ -9,6 +9,12 @@ import type { Amount } from "@cubby/schemas/codec";
  * shelves the product sat on while the section below counted locations it IS,
  * and the stamp keyed on shelf rows so a rack in service read "NOT STOCKED".
  *
+ * "Locations" then flipped the other way: counting only locations it IS made a
+ * product sitting on a shelf read "LOCATIONS 0" above a table listing that
+ * shelf. Both readings are half the answer, so the stat is now the union and
+ * it is decided HERE — the one decision this module did not own is the one
+ * that broke twice.
+ *
  * Returns data, not nodes, so the rules are unit-testable.
  */
 export interface HeroPresenceInput {
@@ -26,8 +32,19 @@ export interface HeroPresenceInput {
    * what let the list and the detail disagree twice.
    */
   onHandUnits: number | null;
-  /** Locations that ARE this product, from `quantityLedger`. */
-  locationCount: number;
+  /**
+   * Locations holding loose stock of this product — one id per InventoryEntry
+   * row, so duplicates are expected and deduped here.
+   */
+  stockedLocationIds: readonly string[];
+  /**
+   * Locations that ARE this product: `servingAsLocations`, the same live
+   * population `quantityLedger.locationCount` counts. Taken as ids rather than
+   * that count because the stat below needs to know WHICH ones, and both ride
+   * the same detail read — embedded there precisely so the hero cannot
+   * disagree with the table beneath it mid-flight.
+   */
+  identityLocationIds: readonly string[];
   /**
    * Live `ProductComponent` edges where this product is the parent. Non-zero
    * means it is a kit, and a kit that has been split into a composition record
@@ -47,6 +64,20 @@ export type HeroPresence = {
     | { kind: "entries"; label: "Entries"; count: number };
   /** Anywhere it is: loose stock plus bins in service. */
   presenceCount: number;
+  /**
+   * The hero's "Locations" stat: every distinct place this product can be
+   * found, whether it sits there or IS there.
+   *
+   * A set, not a sum. The two populations are ordinarily disjoint — a 4-pack
+   * of racks with one in service as a shelf and the rest boxed in the main area
+   * is genuinely findable in two places — but a bin holding loose stock of its
+   * own SKU is one place, and adding would claim two.
+   *
+   * `quantityLedger.locationCount` deliberately stays narrow: on-hand adds it
+   * to the inventory sum, so widening it there would double-count every
+   * container promoted to a Location. This is a display figure only.
+   */
+  locationCount: number;
   /**
    * The hero stamp. Three states, not two, because "no stock under this name"
    * and "nothing to find anywhere" are different facts and the hero used to
@@ -68,10 +99,13 @@ export const heroPresence = ({
   entryCount,
   entryUnit,
   onHandUnits,
-  locationCount,
+  stockedLocationIds,
+  identityLocationIds,
   componentCount,
 }: HeroPresenceInput): HeroPresence => {
-  const presenceCount = entryCount + locationCount;
+  const presenceCount = entryCount + identityLocationIds.length;
+  const locationCount = new Set([...stockedLocationIds, ...identityLocationIds])
+    .size;
   // Own stock wins: a kit still sealed in its box is stocked as itself, and
   // saying "stocked as parts" over a shelf row would be the wrong fact.
   const stamp: HeroPresence["stamp"] =
@@ -82,6 +116,7 @@ export const heroPresence = ({
         : { label: "Not stocked", tone: "ink" };
   return {
     stamp,
+    locationCount,
     onHand:
       onHandUnits !== null
         ? {

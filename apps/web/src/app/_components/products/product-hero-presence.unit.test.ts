@@ -12,7 +12,8 @@ describe("heroPresence", () => {
       entryCount: 0,
       entryUnit: undefined,
       onHandUnits: 1,
-      locationCount: 1,
+      stockedLocationIds: [],
+      identityLocationIds: ["LOC-RACK"],
       componentCount: 0,
     });
 
@@ -31,7 +32,8 @@ describe("heroPresence", () => {
       entryCount: 1,
       entryUnit: "each",
       onHandUnits: 3,
-      locationCount: 2,
+      stockedLocationIds: ["LOC-SHELF"],
+      identityLocationIds: ["LOC-BIN-A", "LOC-BIN-B"],
       componentCount: 0,
     });
     expect(result.onHand).toMatchObject({ amount: { value: 3, unit: "each" } });
@@ -43,7 +45,8 @@ describe("heroPresence", () => {
       entryCount: 2,
       entryUnit: "lb",
       onHandUnits: 5,
-      locationCount: 0,
+      stockedLocationIds: ["LOC-SHELF-A", "LOC-SHELF-B"],
+      identityLocationIds: [],
       componentCount: 0,
     });
     expect(result.onHand).toMatchObject({ amount: { value: 5, unit: "lb" } });
@@ -56,7 +59,8 @@ describe("heroPresence", () => {
       entryCount: 2,
       entryUnit: "lb",
       onHandUnits: null,
-      locationCount: 0,
+      stockedLocationIds: ["LOC-SHELF-A", "LOC-SHELF-B"],
+      identityLocationIds: [],
       componentCount: 0,
     });
     expect(result.onHand).toEqual({
@@ -73,7 +77,8 @@ describe("heroPresence", () => {
       entryCount: 0,
       entryUnit: undefined,
       onHandUnits: null,
-      locationCount: 0,
+      stockedLocationIds: [],
+      identityLocationIds: [],
       componentCount: 0,
     });
     expect(result.presenceCount).toBe(0);
@@ -95,7 +100,8 @@ describe("heroPresence", () => {
       entryCount: 0,
       entryUnit: undefined,
       onHandUnits: null,
-      locationCount: 0,
+      stockedLocationIds: [],
+      identityLocationIds: [],
       componentCount: 1,
     });
     expect(result.stamp).toEqual({ label: "Stocked as parts", tone: "green" });
@@ -113,7 +119,8 @@ describe("heroPresence", () => {
       entryCount: 1,
       entryUnit: "each",
       onHandUnits: 1,
-      locationCount: 0,
+      stockedLocationIds: ["LOC-SHELF"],
+      identityLocationIds: [],
       componentCount: 3,
     });
     expect(result.stamp).toEqual({ label: "In stock", tone: "green" });
@@ -124,9 +131,118 @@ describe("heroPresence", () => {
       entryCount: 2,
       entryUnit: "each",
       onHandUnits: 2,
-      locationCount: 0,
+      stockedLocationIds: ["LOC-SHELF-A", "LOC-SHELF-B"],
+      identityLocationIds: [],
       componentCount: 0,
     });
     expect(result.stamp).toEqual({ label: "In stock", tone: "green" });
+  });
+});
+
+/**
+ * The "Locations" stat, which has now broken in both directions — once
+ * counting only shelves it sits on, once only locations it IS. Every case
+ * below is the same invariant from a different side: the stat may never read 0
+ * while the Stocked At table beneath it renders a row.
+ *
+ * All three populations live in one suite deliberately. Fixing one direction
+ * is what broke the other, so a test covering only one flips the bug back.
+ */
+describe("heroPresence location stat", () => {
+  const base = {
+    entryUnit: "each" as string | undefined,
+    componentCount: 0,
+  };
+
+  // The reported shape: PRD-H3M4, a length of square tube with one STOCK row
+  // at `metal rack` and no location of its own. Read "LOCATIONS 0" directly
+  // above that row.
+  it("counts a shelf the product merely sits on", () => {
+    const result = heroPresence({
+      ...base,
+      entryCount: 1,
+      onHandUnits: 1,
+      stockedLocationIds: ["LOC-T8HE"],
+      identityLocationIds: [],
+    });
+    expect(result.locationCount).toBe(1);
+  });
+
+  // The mirror shape, and the reason the narrow count was introduced:
+  // PRD-HSDX, a wire rack in service as a shelf with no loose stock.
+  it("counts a location the product IS", () => {
+    const result = heroPresence({
+      ...base,
+      entryCount: 0,
+      entryUnit: undefined,
+      onHandUnits: 1,
+      stockedLocationIds: [],
+      identityLocationIds: ["LOC-HSDX"],
+    });
+    expect(result.locationCount).toBe(1);
+  });
+
+  // PRD-2C4Q, a 4-pack of racks: one is in service as `metal rack`, the rest
+  // are boxed in `main area`. Two genuinely different places, and the narrow
+  // count reported only one of them.
+  it("counts both populations when a product has each", () => {
+    const result = heroPresence({
+      ...base,
+      entryCount: 1,
+      onHandUnits: 2,
+      stockedLocationIds: ["LOC-2T7V"],
+      identityLocationIds: ["LOC-T8HE"],
+    });
+    expect(result.locationCount).toBe(2);
+  });
+
+  it("counts one place once when a bin holds loose stock of its own SKU", () => {
+    const result = heroPresence({
+      ...base,
+      entryCount: 1,
+      onHandUnits: 2,
+      stockedLocationIds: ["LOC-TOTE"],
+      identityLocationIds: ["LOC-TOTE"],
+    });
+    expect(result.locationCount).toBe(1);
+  });
+
+  it("counts places, not rows, when one shelf holds several entries", () => {
+    const result = heroPresence({
+      ...base,
+      entryCount: 3,
+      onHandUnits: 3,
+      stockedLocationIds: ["LOC-SHELF", "LOC-SHELF", "LOC-SHELF"],
+      identityLocationIds: [],
+    });
+    expect(result.locationCount).toBe(1);
+  });
+
+  it("reads 0 only when the product is nowhere", () => {
+    const result = heroPresence({
+      ...base,
+      entryCount: 0,
+      entryUnit: undefined,
+      onHandUnits: null,
+      stockedLocationIds: [],
+      identityLocationIds: [],
+    });
+    expect(result.locationCount).toBe(0);
+    expect(result.stamp).toEqual({ label: "Not stocked", tone: "ink" });
+  });
+
+  // The narrow count feeds the on-hand sum, where widening it would
+  // double-count every container promoted to a Location. Presence must keep
+  // reading the identity population alone.
+  it("leaves presenceCount on the identity population", () => {
+    const result = heroPresence({
+      ...base,
+      entryCount: 1,
+      onHandUnits: 1,
+      stockedLocationIds: ["LOC-SHELF-A", "LOC-SHELF-B"],
+      identityLocationIds: [],
+    });
+    expect(result.locationCount).toBe(2);
+    expect(result.presenceCount).toBe(1);
   });
 });
