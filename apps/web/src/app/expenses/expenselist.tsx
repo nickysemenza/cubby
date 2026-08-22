@@ -28,8 +28,8 @@ import {
   createProductLinkColumn,
   createProjectLinkColumn,
 } from "../_components/data-table/columnHelpers";
+import { ListWorkbench } from "../_components/data-table/ListWorkbench";
 import { ScopeChip } from "../_components/data-table/ScopeChip";
-import RTable from "../_components/data-table/Table";
 import { useDeferredFilterOptions } from "../_components/hooks/useDeferredFilterOptions";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
@@ -438,19 +438,10 @@ export function ExpenseList() {
   // whose input is a union with tRPC's `skipToken` symbol, so it would land on
   // `unknown` — and `currentFilters` goes straight to `expense.analytics`,
   // which wants the real shape.
-  const {
-    table,
-    currentFilters,
-    isLoading,
-    error,
-    timing,
-    bulkActionBar,
-    deleteDialog,
-    infiniteScroll,
-    refreshControls,
-    totalCount,
-    data,
-  } = useEntityList<ExpenseOut, ExpenseFilters>({
+  const { workbench, currentFilters, totalCount, data } = useEntityList<
+    ExpenseOut,
+    ExpenseFilters
+  >({
     entity: "expense",
     queryOptions: api.expense.list.queryOptions,
     filterOptions: projectFilterOptions,
@@ -509,19 +500,12 @@ export function ExpenseList() {
         className="mb-4"
       />
       <ExpenseProductImages rows={data}>
-        <RTable
-          table={table}
-          additionalToolbarContent={scopeChips}
-          isLoading={isLoading}
-          error={error}
+        <ListWorkbench
+          model={workbench}
+          contextualStatus={scopeChips}
           ariaLabel="Expenses Table"
-          timing={timing}
-          entity="expense"
           onRowClick={onRowClick}
           onRowHover={onRowHover}
-          bulkActionBar={bulkActionBar}
-          infiniteScroll={infiniteScroll}
-          refreshControls={refreshControls}
           showCellSelectionStats
           filterOptionHints={facetOptionHints}
           getRowClassName={(row) =>
@@ -532,10 +516,9 @@ export function ExpenseList() {
         />
       </ExpenseProductImages>
       <PreviewSheet />
-      {deleteDialog}
       <ExpenseBulkActionDialogs
         controller={expenseBulkActions}
-        onComplete={() => table.resetRowSelection()}
+        onComplete={() => workbench.table.resetRowSelection()}
       />
       {moveTarget && (
         <MoveToProjectDialog

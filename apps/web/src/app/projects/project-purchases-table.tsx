@@ -7,7 +7,7 @@ import {
   createPlainDateColumn,
   type RowLinkResolver,
 } from "~/app/_components/data-table/columnHelpers";
-import RTable from "~/app/_components/data-table/Table";
+import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { Row } from "~/components/layout";
@@ -167,18 +167,11 @@ export function ProjectPurchasesTable({
   });
 
   return (
-    <RTable
-      table={list.table}
-      isLoading={list.isLoading}
-      error={list.error}
-      timing={list.timing}
-      entity="purchase"
+    <ListWorkbench
+      model={list.workbench}
       ariaLabel="Purchases charged to this project"
-      bulkActionBar={list.bulkActionBar}
-      embedded
+      mode="embedded"
       showColumnMenu
-      infiniteScroll={list.infiniteScroll}
-      refreshControls={list.refreshControls}
       emptyState="No vendor charges have been linked to this project's expenses yet."
     />
   );

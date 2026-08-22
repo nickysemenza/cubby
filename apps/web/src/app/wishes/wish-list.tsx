@@ -4,7 +4,7 @@ import { uniq } from "es-toolkit";
 import { ImageIcon } from "lucide-react";
 import { useMemo } from "react";
 import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
-import RTable from "~/app/_components/data-table/Table";
+import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
@@ -262,18 +262,11 @@ export function WishList() {
   // Neither `buildFilters` nor `filters` is passed: the `wish` entry in
   // `entities/filter-manifest.tsx` drives the Name search box, the server
   // `WishFilters` object, and the `?q=` URL round-trip.
-  const {
-    table,
-    data,
-    isLoading,
-    error,
-    timing,
-    bulkActionBar,
-    deleteDialog,
-    infiniteScroll,
-    refreshControls,
-    totalCount,
-  } = useEntityList<WishRow, WishFilters, WishOut>({
+  const { workbench, data, totalCount } = useEntityList<
+    WishRow,
+    WishFilters,
+    WishOut
+  >({
     entity: "wish",
     queryOptions: api.wish.list.queryOptions,
     columns,
@@ -296,16 +289,9 @@ export function WishList() {
   return (
     <div>
       <ProductImageSummariesProvider productIds={candidateProductIds}>
-        <RTable
-          table={table}
-          isLoading={isLoading}
-          error={error}
+        <ListWorkbench
+          model={workbench}
           ariaLabel="Wishlist Table"
-          timing={timing}
-          entity="wish"
-          bulkActionBar={bulkActionBar}
-          infiniteScroll={infiniteScroll}
-          refreshControls={refreshControls}
           actions={
             <CreateDialogAction request={wishCreateRequest()}>
               New wish
@@ -313,7 +299,6 @@ export function WishList() {
           }
         />
       </ProductImageSummariesProvider>
-      {deleteDialog}
     </div>
   );
 }

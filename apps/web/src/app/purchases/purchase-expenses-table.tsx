@@ -6,7 +6,7 @@ import {
   createProductLinkColumn,
   createProjectLinkColumn,
 } from "~/app/_components/data-table/columnHelpers";
-import RTable from "~/app/_components/data-table/Table";
+import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
@@ -174,26 +174,19 @@ function PurchaseExpenseRows({
   });
   const table = (
     <>
-      <RTable
-        table={list.table}
-        isLoading={list.isLoading}
-        error={list.error}
-        timing={list.timing}
+      <ListWorkbench
+        model={list.workbench}
         ariaLabel={
           kind === "principal"
             ? "Purchase principal expenses"
             : "Purchase receipt adjustments"
         }
-        embedded
+        mode="embedded"
         showColumnMenu
-        bulkActionBar={list.bulkActionBar}
-        infiniteScroll={list.infiniteScroll}
-        refreshControls={list.refreshControls}
       />
-      {list.deleteDialog}
       <ExpenseBulkActionDialogs
         controller={bulkActions}
-        onComplete={() => list.table.resetRowSelection()}
+        onComplete={() => list.workbench.table.resetRowSelection()}
       />
     </>
   );
