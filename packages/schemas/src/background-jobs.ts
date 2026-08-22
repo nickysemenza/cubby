@@ -223,6 +223,28 @@ export const backgroundBatchIdInputSchema = z.object({
   batchId: z.string(),
 });
 
+export const backgroundBatchJobsInputSchema = z.object({
+  batchId: z.string(),
+  pageIndex: z.number().int().nonnegative().default(0),
+  pageSize: z.number().int().min(1).max(100).default(100),
+  failedOnly: z.boolean().default(false),
+});
+
+export type BackgroundBatchJobsInput = z.infer<
+  typeof backgroundBatchJobsInputSchema
+>;
+
+export const backgroundBatchJobsOutSchema = z.object({
+  jobs: z.array(backgroundJobSummarySchema),
+  totalCount: z.number().int().nonnegative(),
+  pageIndex: z.number().int().nonnegative(),
+  pageSize: z.number().int().min(1).max(100),
+});
+
+export type BackgroundBatchJobsOut = z.infer<
+  typeof backgroundBatchJobsOutSchema
+>;
+
 export const backgroundJobIdInputSchema = z.object({
   jobId: z.string(),
 });

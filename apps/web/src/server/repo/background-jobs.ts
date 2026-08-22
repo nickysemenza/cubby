@@ -1,5 +1,7 @@
 import type {
   BackgroundBatchDetail,
+  BackgroundBatchJobsInput,
+  BackgroundBatchJobsOut,
   BackgroundBatchProcessor,
   BackgroundBatchRef,
   BackgroundBatchSource,
@@ -9,10 +11,11 @@ import type {
   BackgroundJobSummary,
 } from "@cubby/schemas/background-jobs";
 import { getErrorMessage } from "@cubby/shared";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { backgroundBatch, backgroundJob } from "~/server/db/schema";
 import {
+  countWhere,
   getDb,
   insertAndReturn,
   notDeleted,
@@ -209,6 +212,42 @@ export async function getBackgroundBatchDetail(
     orderBy: desc(backgroundJob.createdAt),
   });
   return { ...toBatchSummary(batch), jobs: jobs.map(toJobSummary) };
+}
+
+export async function getBackgroundBatchSummary(
+  db: Database,
+  batchId: string,
+): Promise<BackgroundBatchSummary | null> {
+  const batch = await getDb(db).query.backgroundBatch.findFirst({
+    where: and(eq(backgroundBatch.id, batchId), notDeleted(backgroundBatch)),
+  });
+  return batch ? toBatchSummary(batch) : null;
+}
+
+export async function listBackgroundBatchJobs(
+  db: Database,
+  input: BackgroundBatchJobsInput,
+): Promise<BackgroundBatchJobsOut> {
+  const where = and(
+    eq(backgroundJob.batchId, input.batchId),
+    notDeleted(backgroundJob),
+    input.failedOnly ? eq(backgroundJob.status, "failed") : undefined,
+  );
+  const [rows, totalCount] = await Promise.all([
+    getDb(db).query.backgroundJob.findMany({
+      where,
+      orderBy: [asc(backgroundJob.createdAt), asc(backgroundJob.id)],
+      limit: input.pageSize,
+      offset: input.pageIndex * input.pageSize,
+    }),
+    countWhere(db, backgroundJob, where),
+  ]);
+  return {
+    jobs: rows.map(toJobSummary),
+    totalCount,
+    pageIndex: input.pageIndex,
+    pageSize: input.pageSize,
+  };
 }
 
 export async function getBackgroundJob(

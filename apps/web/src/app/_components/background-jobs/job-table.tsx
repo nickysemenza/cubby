@@ -3,7 +3,6 @@ import {
   backgroundJobPayloadSchema as parseBackgroundJobPayload,
 } from "@cubby/schemas/background-jobs";
 import { RotateCcw } from "lucide-react";
-import { useMemo } from "react";
 import { match } from "ts-pattern";
 import { EntityInlineLinkById } from "~/app/_components/EntityInlineLinkById";
 import {
@@ -161,17 +160,6 @@ function JobTable({
   showFailedOnly: boolean;
   onRetryJob: (jobId: string) => void;
 }) {
-  const displayedJobs = useMemo(() => {
-    const filtered = showFailedOnly
-      ? jobs.filter((job) => job.status === "failed")
-      : jobs;
-    return [...filtered].sort((a, b) => {
-      if (a.status === "failed" && b.status !== "failed") return -1;
-      if (a.status !== "failed" && b.status === "failed") return 1;
-      return b.createdAt.getTime() - a.createdAt.getTime();
-    });
-  }, [jobs, showFailedOnly]);
-
   return (
     <Table className="table-auto">
       <TableHeader>
@@ -187,7 +175,7 @@ function JobTable({
         </TableRow>
       </TableHeader>
       <TableBody>
-        {displayedJobs.map((job) => (
+        {jobs.map((job) => (
           <TableRow key={job.id}>
             <TableCell className="whitespace-normal">
               <Stack gap="tight">
@@ -262,7 +250,7 @@ function JobTable({
             </TableCell>
           </TableRow>
         ))}
-        {displayedJobs.length === 0 ? (
+        {jobs.length === 0 ? (
           <TableRow>
             <TableCell colSpan={8} className="text-muted-foreground">
               {showFailedOnly ? "No failed jobs" : "No jobs"}

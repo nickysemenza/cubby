@@ -1,6 +1,8 @@
-import type { BackgroundBatchDetail } from "@cubby/schemas/background-jobs";
+import type {
+  BackgroundBatchSummary,
+  BackgroundJobSummary,
+} from "@cubby/schemas/background-jobs";
 import { AlertTriangle, RotateCcw, Square } from "lucide-react";
-import { useState } from "react";
 import { EntityInlineLinkById } from "~/app/_components/EntityInlineLinkById";
 import { CopyJsonButton } from "~/app/_components/recipe/copy-debug-button";
 import { Row, Stack } from "~/components/layout";
@@ -66,16 +68,33 @@ function MetadataTable({ value }: { value: unknown }) {
 
 function BatchDetail({
   batch,
+  jobs,
+  pageIndex,
+  pageSize,
+  totalCount,
+  showFailedOnly,
+  onFailedOnlyChange,
+  onPageChange,
   onRetry,
   onCancel,
   onRetryJob,
 }: {
-  batch: BackgroundBatchDetail;
+  batch: BackgroundBatchSummary;
+  jobs: BackgroundJobSummary[];
+  pageIndex: number;
+  pageSize: number;
+  totalCount: number;
+  showFailedOnly: boolean;
+  onFailedOnlyChange: (showFailedOnly: boolean) => void;
+  onPageChange: (pageIndex: number) => void;
   onRetry: () => void;
   onCancel: () => void;
   onRetryJob: (jobId: string) => void;
 }) {
-  const [showFailedOnly, setShowFailedOnly] = useState(false);
+  const firstJob = totalCount === 0 ? 0 : pageIndex * pageSize + 1;
+  const lastJob = Math.min((pageIndex + 1) * pageSize, totalCount);
+  const canGoBack = pageIndex > 0;
+  const canGoForward = lastJob < totalCount;
 
   return (
     <Stack gap="sm" className="border border-border bg-card p-4">
@@ -88,7 +107,7 @@ function BatchDetail({
           <Button
             type="button"
             variant={showFailedOnly ? "default" : "outline"}
-            onClick={() => setShowFailedOnly((value) => !value)}
+            onClick={() => onFailedOnlyChange(!showFailedOnly)}
           >
             <AlertTriangle />
             Failed only
@@ -138,10 +157,35 @@ function BatchDetail({
         </Stack>
       </details>
       <JobTable
-        jobs={batch.jobs}
+        jobs={jobs}
         showFailedOnly={showFailedOnly}
         onRetryJob={onRetryJob}
       />
+      <Row align="center" justify="between" gap="sm" wrap>
+        <span className="text-muted-foreground text-sm">
+          Jobs {firstJob}–{lastJob} of {totalCount}
+        </span>
+        <Row gap="sm">
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            disabled={!canGoBack}
+            onClick={() => onPageChange(pageIndex - 1)}
+          >
+            Previous
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            disabled={!canGoForward}
+            onClick={() => onPageChange(pageIndex + 1)}
+          >
+            Next
+          </Button>
+        </Row>
+      </Row>
     </Stack>
   );
 }

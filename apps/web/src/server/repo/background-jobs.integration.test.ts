@@ -1,4 +1,4 @@
-import { withTestDb } from "tooling/test-setup";
+import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { dispatchBackgroundJobs } from "~/server/background-dispatch";
 import {
@@ -6,6 +6,8 @@ import {
   failOrRetryBackgroundJob,
   finishBackgroundJob,
   getBackgroundBatchDetail,
+  getBackgroundBatchSummary,
+  listBackgroundBatchJobs,
   markBackgroundJobRunning,
 } from "~/server/repo/background-jobs";
 import { createLocation } from "~/server/repo/location";
@@ -46,6 +48,111 @@ describe("background job persistence", () => {
     expect(detail?.status).toBe("succeeded");
     expect(detail?.skippedJobs).toBe(1);
     expect(detail?.wallDurationMs).not.toBeNull();
+  });
+
+  it("reads a batch summary without loading jobs", async () => {
+    const { batchId } = await createBackgroundBatchWithJobs(ctx.db, {
+      kind: "entity-embedding.refresh",
+      source: "backfill",
+      jobs: [
+        {
+          kind: "entity-embedding.refresh",
+          dedupeKey: "test:summary-only",
+          payload: { entityType: "product", entityId: crypto.randomUUID() },
+        },
+      ],
+    });
+
+    const { result, queryCount } = await countTestDbQueries(() =>
+      getBackgroundBatchSummary(ctx.db, batchId),
+    );
+
+    expect(queryCount).toBe(1);
+    expect(result).toMatchObject({ id: batchId, totalJobs: 1 });
+    expect(result).not.toHaveProperty("jobs");
+  });
+
+  it("bounds large batch reads to 100 jobs and returns a stable next page", async () => {
+    const totalJobs = 8_001;
+    const { batchId } = await createBackgroundBatchWithJobs(ctx.db, {
+      kind: "entity-embedding.refresh",
+      source: "backfill",
+      jobs: Array.from({ length: totalJobs }, (_, index) => ({
+        kind: "entity-embedding.refresh" as const,
+        dedupeKey: `test:large-page:${index}`,
+        payload: { entityType: "product", entityId: crypto.randomUUID() },
+      })),
+    });
+
+    const { result: firstPage, queryCount } = await countTestDbQueries(() =>
+      listBackgroundBatchJobs(ctx.db, {
+        batchId,
+        pageIndex: 0,
+        pageSize: 100,
+        failedOnly: false,
+      }),
+    );
+    const secondPage = await listBackgroundBatchJobs(ctx.db, {
+      batchId,
+      pageIndex: 1,
+      pageSize: 100,
+      failedOnly: false,
+    });
+
+    expect(queryCount).toBe(2);
+    expect(firstPage).toMatchObject({
+      totalCount: totalJobs,
+      pageIndex: 0,
+      pageSize: 100,
+    });
+    expect(firstPage.jobs).toHaveLength(100);
+    expect(secondPage.jobs).toHaveLength(100);
+    expect(secondPage.jobs[0]?.id).not.toBe(firstPage.jobs.at(-1)?.id);
+    const ordered = [...firstPage.jobs, ...secondPage.jobs].sort((a, b) => {
+      const created = a.createdAt.getTime() - b.createdAt.getTime();
+      return created === 0 ? a.id.localeCompare(b.id) : created;
+    });
+    expect([...firstPage.jobs, ...secondPage.jobs]).toEqual(ordered);
+
+    const [summary, previousDetail] = await Promise.all([
+      getBackgroundBatchSummary(ctx.db, batchId),
+      getBackgroundBatchDetail(ctx.db, batchId),
+    ]);
+    const boundedPayloadBytes = Buffer.byteLength(
+      JSON.stringify({ summary, jobPage: firstPage }),
+    );
+    const previousPayloadBytes = Buffer.byteLength(
+      JSON.stringify(previousDetail),
+    );
+    expect(boundedPayloadBytes).toBeLessThan(previousPayloadBytes * 0.1);
+  });
+
+  it("filters failed jobs before counting and paginating", async () => {
+    const { batchId, jobIds } = await createBackgroundBatchWithJobs(ctx.db, {
+      kind: "location-ai.description.refresh",
+      source: "backfill",
+      jobs: Array.from({ length: 3 }, (_, index) => ({
+        kind: "location-ai.description.refresh" as const,
+        dedupeKey: `test:failed-page:${index}`,
+        payload: { locationId: crypto.randomUUID() },
+        maxAttempts: 1,
+      })),
+    });
+    for (const jobId of [jobIds[0]!, jobIds[2]!]) {
+      await markBackgroundJobRunning(ctx.db, jobId);
+      await failOrRetryBackgroundJob(ctx.db, jobId, new Error("failed"));
+    }
+
+    const page = await listBackgroundBatchJobs(ctx.db, {
+      batchId,
+      pageIndex: 0,
+      pageSize: 100,
+      failedOnly: true,
+    });
+
+    expect(page.totalCount).toBe(2);
+    expect(page.jobs).toHaveLength(2);
+    expect(page.jobs.every((job) => job.status === "failed")).toBe(true);
   });
 
   it("marks a batch failed when a max-attempt job fails", async () => {
