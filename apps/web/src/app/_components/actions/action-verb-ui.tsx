@@ -15,12 +15,39 @@ import { type ActionVerbId, verbDef } from "./action-verbs";
  *
  * The label, icon and tone come from the registry, and no size is applied:
  * `DropdownMenuItem` already sizes its icon slot.
+ *
+ * ## Why `disabledReason` renders inline rather than in a tooltip
+ *
+ * A row menu whose items appear and disappear per row is unreadable — an action
+ * missing because it does not apply looks identical to one that was never
+ * built. So an inapplicable verb stays listed and explains itself.
+ *
+ * The explanation is text on the row, NOT a tooltip: `DropdownMenuItem` carries
+ * `data-disabled:pointer-events-none`, so a disabled item never receives the
+ * hover that would open one. Two "why is it disabled" tooltips in this codebase
+ * are already dead for exactly that reason (`ai-suggest`,
+ * `with-usda-food-search`). Inline text also survives the mobile card
+ * projection, where there is no hover at all. This mirrors `disabledReason` on
+ * picker rows (`combobox-types.ts`), down to folding the reason into
+ * `aria-label` so it is not sighted-only.
+ *
+ * The stock `data-disabled:opacity-50` is overridden when a reason is present:
+ * at 50% the explanation is too faint to read, which would defeat the point.
+ * Shelf Ink (`text-muted-foreground`) plus a not-allowed cursor carries
+ * "unavailable" instead — a whole disabled item drops one tier from the Ink
+ * that enabled items sit at. Not an opacity-derived tone: DESIGN.md allows
+ * exactly three prose tiers and rules out inventing a fourth with opacity.
+ *
+ * A disabled item also drops its `render`: the anchor would otherwise stay
+ * focusable and followable by keyboard even though pointer events are
+ * suppressed.
  */
 export function VerbMenuItem({
   verb,
   render,
   onSelect,
   disabled,
+  disabledReason,
 }: {
   verb: ActionVerbId;
   /** A typed `<Link>`, for a verb that navigates. */
@@ -28,17 +55,40 @@ export function VerbMenuItem({
   /** Handler, for a verb that acts on the current page. */
   onSelect?: (event: React.MouseEvent<HTMLDivElement>) => void;
   disabled?: boolean;
+  /**
+   * Why this verb does not apply to this row. Presence implies `disabled` —
+   * there is no state where a reason shows on an actionable item.
+   */
+  disabledReason?: string;
 }) {
   const { label, icon: Icon, tone } = verbDef(verb);
+  const isDisabled = disabled === true || disabledReason != null;
   return (
     <DropdownMenuItem
       variant={tone === "destructive" ? "destructive" : "default"}
-      disabled={disabled}
-      {...(render ? { render } : {})}
-      onClick={onSelect}
+      disabled={isDisabled}
+      {...(disabledReason != null
+        ? {
+            "aria-label": `${label}, ${disabledReason}`,
+            className:
+              "data-disabled:cursor-not-allowed data-disabled:text-muted-foreground data-disabled:opacity-100",
+          }
+        : {})}
+      {...(render && !isDisabled ? { render } : {})}
+      onClick={isDisabled ? undefined : onSelect}
     >
       <Icon />
-      {label}
+      {disabledReason == null ? (
+        label
+      ) : (
+        // Stacked, not pushed right: the menu popup is only as wide as its
+        // widest label, so a reason on the same line gets clipped at the
+        // viewport edge rather than read.
+        <span className="flex flex-col items-start">
+          <span>{label}</span>
+          <span>{disabledReason}</span>
+        </span>
+      )}
     </DropdownMenuItem>
   );
 }

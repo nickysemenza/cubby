@@ -1,7 +1,8 @@
+import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import type { KitComponentRowOut } from "@cubby/schemas/product-components";
 import type { PurchaseProductOut } from "@cubby/schemas/purchase";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
 import {
   createActionsColumn,
@@ -17,6 +18,7 @@ import {
 } from "~/app/_components/data-table/table-features";
 import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { ProductAddToInventoryDialog } from "~/app/_components/products/product-add-to-inventory-dialog";
 import { groupComponentsByParent } from "~/app/products/product-kit-rows";
 import { Badge } from "~/components/ui/badge";
 import {
@@ -39,7 +41,7 @@ type PurchaseProductRow = {
    * mutation keeps working; only `getRowId` reads this. See the note on
    * `ProductTreeRow.rowKey` for why that split matters.
    */
-  id: string;
+  id: ProductShortcode;
   rowKey: string;
   name: string;
   manufacturer: string;
@@ -124,6 +126,8 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
     success: "Link removed — any itemized expense still relates these",
     invalidateKeys: purchaseProductMutationInvalidateKeys,
   });
+  const [addToInventoryRow, setAddToInventoryRow] =
+    useState<PurchaseProductRow | null>(null);
   const helper = useMemo(
     () => createCubbyColumnHelper<PurchaseProductRow>(),
     [],
@@ -169,17 +173,27 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
       createActionsColumn(helper, "product", {
         // Expense-derived rows have no link to remove; detach would no-op and
         // leave the row in place. Clear the Expense's product instead.
-        extraActions: (row) =>
-          !row.linked ? null : (
+        extraActions: (row) => (
+          <>
             <VerbMenuItem
-              verb="removeFromPurchase"
-              disabled={detach.isPending}
+              verb="addToInventory"
               onSelect={(event) => {
                 event.stopPropagation();
-                detach.mutate({ purchaseId, productIds: [row.id] });
+                setAddToInventoryRow(row);
               }}
             />
-          ),
+            {row.linked && (
+              <VerbMenuItem
+                verb="removeFromPurchase"
+                disabled={detach.isPending}
+                onSelect={(event) => {
+                  event.stopPropagation();
+                  detach.mutate({ purchaseId, productIds: [row.id] });
+                }}
+              />
+            )}
+          </>
+        ),
       }),
     ],
     [detach, helper, purchaseId],
@@ -197,24 +211,35 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
   });
 
   return (
-    <RTable
-      table={table}
-      entity="product"
-      ariaLabel="Products linked to this purchase"
-      embedded
-      isLoading={query.isPending}
-      emptyState={
-        <Empty variant="minimal" className="py-6">
-          <EmptyHeader>
-            <EmptyTitle>No products recorded</EmptyTitle>
-            <EmptyDescription>
-              No expense on this order names a product, and none has been
-              attached directly. Attaching is most useful for lump-sum or
-              installment orders whose expenses can&apos;t carry a product.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      }
-    />
+    <>
+      <RTable
+        table={table}
+        entity="product"
+        ariaLabel="Products linked to this purchase"
+        embedded
+        isLoading={query.isPending}
+        emptyState={
+          <Empty variant="minimal" className="py-6">
+            <EmptyHeader>
+              <EmptyTitle>No products recorded</EmptyTitle>
+              <EmptyDescription>
+                No expense on this order names a product, and none has been
+                attached directly. Attaching is most useful for lump-sum or
+                installment orders whose expenses can&apos;t carry a product.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        }
+      />
+      {addToInventoryRow && (
+        <ProductAddToInventoryDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setAddToInventoryRow(null);
+          }}
+          product={addToInventoryRow}
+        />
+      )}
+    </>
   );
 }
