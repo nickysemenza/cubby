@@ -107,6 +107,16 @@ Before pushing:
 - Run `db:push` interactively. If Drizzle asks whether a change is a rename, create, or drop, cancel the push; never choose an option or accept a default until the intent is made unambiguous and its data impact is verified.
 - Use expand → backfill/migrate → deploy → cleanup for incompatible changes.
 
+**Before a `DROP COLUMN`, the question is whether the DEPLOYED build still
+SELECTS it — and with drizzle's relational query builder, the declaration in
+`schema.ts` IS the select.** `db.query.<table>.findMany` emits every declared
+column, so a column no line of application code mentions is still selected on
+every read. Leaving it declared "until the drop lands" therefore guarantees the
+drop breaks production. The order is: remove the declaration → deploy → drop the
+column. Verified 2026-08-22, when `Product.upc` was dropped while the deployed
+build still declared it and every product read 500'd with
+`select ... "product"."upc" ... from "Product"`.
+
 **`drizzle-kit push` does not diff CHECK constraints, nor a partial index's
 `WHERE` clause.** Editing a `check(...)` — or the `.where(...)` on a
 `uniqueIndex(...)` — in `schema.ts` and pushing reports `Changes applied` and

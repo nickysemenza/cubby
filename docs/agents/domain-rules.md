@@ -7,7 +7,10 @@ push overlaps another session. Inspect constraints/data, run relevant checks,
 keep deployed and prepared code compatible, and use expand → backfill → deploy
 → cleanup for incompatible work. `db:push` is interactive: cancel ambiguous
 rename/drop prompts. It does not diff CHECK constraints or partial-index WHERE
-clauses; apply those deliberately and read the resulting schema back.
+clauses; apply those deliberately and read the resulting schema back. Before a
+`DROP COLUMN`, remove the `schema.ts` declaration and DEPLOY first — the
+relational query builder selects every declared column, so the declaration is
+the read (see agent validation reference).
 
 ## Data, layers, and deletion
 
