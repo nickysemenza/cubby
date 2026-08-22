@@ -143,6 +143,24 @@ export const discardProductUnits = async (
         );
       }
 
+      // Over-discard is ALLOWED, unlike the sibling subtraction in
+      // repo/inventory/bulk.ts, which throws CONSTRAINT_VIOLATION when a move
+      // exceeds what the source holds. The deviation is deliberate:
+      //
+      //  - A move refuses because moving more than exists corrupts a
+      //    *destination*. A discard is terminal; there is nothing downstream.
+      //  - Tenet 1 makes the shelf a ballpark — "a stale-tolerant estimate".
+      //    Shelf says 3, there were really 5, all 5 went in the bin is a real
+      //    and common discard, and refusing it would make a knowingly-approximate
+      //    number authoritative over the operator standing at the bin.
+      //  - Nothing here can tell a stale shelf from a fat finger. The human can,
+      //    which is why that check lives in ProductDiscardDialog as a warning at
+      //    the moment of entry rather than as a guard here.
+      //
+      // So `remaining < 0` intentionally lands in the same branch as `=== 0`:
+      // the entry empties, and the Expense keeps the quantity the operator
+      // stated. Covered by "empties the entry when more is discarded than the
+      // shelf holds" in discard.integration.test.ts.
       const remaining = entry.amount.value - Math.abs(input.quantity);
       if (remaining > 0) {
         // The whole Amount, unit included — the scalar this used to pass made a

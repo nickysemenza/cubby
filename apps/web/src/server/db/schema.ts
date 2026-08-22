@@ -1962,8 +1962,19 @@ export const expense = pgTable(
       .references(() => product.id),
     // Number of units of `productId` covered by this ledger line. Nullable is
     // intentional: old receipts frequently prove the cost but not the count,
-    // and unknown must never be silently treated as one. Whole product units
-    // only; measured package conversions belong on Product unit mappings.
+    // and unknown must never be silently treated as one. Measured package
+    // conversions still belong on Product unit mappings, not here.
+    //
+    // FRACTIONAL since 2026-08-22, and `double precision` rather than integer
+    // for the same reason `cost` is. `InventoryEntry.amount` has always been a
+    // free float, so a shelf could hold `0.5 each` while this column could only
+    // ever say `1` — half a conduit coil installed and the rest binned had no
+    // representable exit, and every partially-used product sat in "Shelf
+    // disagrees" forever because the variance could not reach zero. The unit
+    // this counts is the shelf's unit, so it is divisible exactly when the
+    // shelf's is. Contrast `ProductComponent.quantity` (kit cardinality) and
+    // `Product.expectedQuantity` (a one-of-a-kind flag, tested only as `= 1`),
+    // both of which stay integral on purpose.
     //
     // SIGNED — money direction wins, and the quantity's own sign is consulted
     // only when there is no money:
@@ -1994,7 +2005,7 @@ export const expense = pgTable(
     // is the only direction where 'money without units' is a real event: on a
     // positive line it would be a fee or an allocation (neither carries a
     // product), and on a $0 line it would say nothing at all.
-    productQuantity: integer("productQuantity"),
+    productQuantity: doublePrecision("productQuantity"),
     // The charge this line belongs to. Nullable: the 193 rows with no vendor
     // recorded have nothing to attach to, and forcing a synthetic charge on them
     // would invent a transaction that never happened. `vendor` and `orderId`

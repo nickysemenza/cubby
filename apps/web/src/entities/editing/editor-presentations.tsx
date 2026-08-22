@@ -207,7 +207,7 @@ function ExpenseCaptureFields({ form, context }: EntityEditorFieldsProps) {
           name="productQuantity"
           label="Product quantity"
           placeholder="Unknown"
-          step="1"
+          step="any"
         />
       ) : null}
       <Controller

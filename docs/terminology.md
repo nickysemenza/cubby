@@ -214,8 +214,9 @@ FinancialAccount ──< FinancialTransaction >──< Allocation >──< Purch
     remainder separately.
   - Non-principal rows cannot link `productId` or `productQuantity`. Historical
     `costType`, trade, and project values remain valid allocation context.
-  - `productQuantity` is **signed and never zero**. Money direction wins, and
-    the quantity's own sign is consulted only when there is no money:
+  - `productQuantity` is **signed**, and may be **fractional** — the unit is the
+    shelf's unit, so half a conduit coil binned is `-0.5`. Money direction wins,
+    and the quantity's own sign is consulted only when there is no money:
 
     | `cost` | reads as | example |
     | --- | --- | --- |
@@ -223,7 +224,13 @@ FinancialAccount ──< FinancialTransaction >──< Allocation >──< Purch
     | `< 0` | exit of `−\|qty\|` | returned 8, sold one tool |
     | `= 0`, `qty > 0` | free acquisition | promo battery, bundled accessory |
     | `= 0`, `qty < 0` | discard / write-off | thrown away, given away |
+    | `< 0`, `qty = 0` | price concession, item KEPT | Amazon "Account adjustment", partial refund for shipping damage |
     | `NULL` | unknown; contributes nothing, reported as uncertainty | old receipt with no count |
+
+    Zero is legal **only** on a negative-cost line — the one direction where
+    "money without units" is a real event. It was banned outright until
+    2026-08-17, which forced that class to borrow `NULL` and report a known
+    quantity as data-entry debt.
 
     A discard carries **no Purchase** — there is no vendor charge behind
     throwing something away, so `purchaseId` stays null rather than attaching

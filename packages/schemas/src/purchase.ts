@@ -386,7 +386,6 @@ export const splitExpenseInput = z.object({
         // `assertQuantitySignMatchesCost` on the write path.
         productQuantity: z
           .number()
-          .int()
           .nullable()
           .default(null)
           .describe(PRODUCT_QUANTITY_DESCRIPTION),
