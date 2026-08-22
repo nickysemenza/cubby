@@ -823,9 +823,19 @@ export const findProductsWithoutUnitMappings = async (
         // Matching the parser's vocabulary exactly is what keeps this a
         // superset: `~*` is case-insensitive here, while the parser narrows
         // single-letter units to lowercase. Looser than the parser in every
-        // other respect too — no fraction, pack or compatibility exclusion and
-        // no unit-kind check. All of those are the refinement's job.
-        sql.raw(`"Product"."name" ~* '[0-9][ ]?(${sizeUnitAlternation()})\\M'`),
+        // other respect too — no fraction, pack, multiplier or compatibility
+        // exclusion and no unit-kind check. All of those are the refinement's
+        // job.
+        //
+        // ⚠️ `[[:space:]]*`, not `[ ]?`. The parser separates the digits from
+        // the unit with `\s*` — ANY run of ANY whitespace — so the narrower
+        // form dropped `"Bag of Sugar, 5  lb"` (two spaces) and any tab-
+        // separated title: accepted by `proposeSizeFromTitle`, never
+        // shortlisted, therefore never proposed. Same silent-narrowing failure
+        // as the singular-spellings bug above, one character wide.
+        sql.raw(
+          `"Product"."name" ~* '[0-9][[:space:]]*(${sizeUnitAlternation()})\\M'`,
+        ),
         notExists(
           dbClient
             .select({ id: sql`1` })

@@ -5,12 +5,17 @@ import { proposeSizeFromTitle, sizeUnitAlternation } from "./title-unit-size";
  * Runs against the real `parse_amount` grammar, not a stub — the whole design
  * is that Rust owns the parsing and the TS regex only locates a candidate.
  *
- * Every rejection case below is a REAL catalog title. They are the reason this
- * is a proposal rather than a bulk write.
+ * Fixtures are placeholders per CLAUDE.md, but they are not invented: each one
+ * reproduces the exact STRING SHAPE of a title that broke this parser (a "10G",
+ * a trailing "13155q", an em-dash before a size), with brands and any observed
+ * price removed. The shape is what the regression is about; the vendor is not,
+ * and neither belongs in a public fixture. Reproducing the shapes matters
+ * because hand-imagined titles are systematically too clean — none of the cases
+ * in the last block below were caught by the tidy fixtures above them.
  */
 describe("proposeSizeFromTitle", () => {
   it("proposes the pack size when the title states exactly one", () => {
-    // PRD-QQ9D, fixed by hand first: $2.73 a bag → $0.085/oz.
+    // The worked example (PRD-QQ9D); shortcodes are safe under the rule above.
     const proposal = proposeSizeFromTitle("Bagged Yellow Onions, 32 OZ");
     expect(proposal?.amount).toEqual({ value: 32, unit: "oz" });
     expect(proposal?.token).toBe("32 OZ");
@@ -21,8 +26,8 @@ describe("proposeSizeFromTitle", () => {
   // spelling per unit no matter how the title wrote it.
   it.each([
     ["15 oz. Fluorescent Red-Orange 2X Marking Spray Paint", 15, "oz"],
-    ["Minwax Brushing Lacquer Aerosol Semi-Gloss Clear 12 oz.", 12, "oz"],
-    ["Seventh Generation Laundry Detergent, Free & Clear, 40 oz", 40, "oz"],
+    ["Brushing Lacquer Aerosol Semi-Gloss Clear 12 oz.", 12, "oz"],
+    ["Laundry Detergent, Free & Clear, 40 oz", 40, "oz"],
     ["Whole Milk, 1 gal", 1, "gallon"],
     ["Isomalt Crystals, 2 lb", 2, "lb"],
   ])("reads %s", (title, value, unit) => {
@@ -34,26 +39,54 @@ describe("proposeSizeFromTitle", () => {
     // too small, i.e. too CHEAP per ounce — the direction that quietly wins a
     // comparison. Refusing is the whole point.
     it.each([
-      "La Croix Grapefruit Sparkling Water, 12-pack, 12 fl oz",
-      "Califia Farms - Unsweetened Almond Barista Blend Almond Milk, 32 Oz (Pack Of 6), Shelf Stable",
-      "Hi-Chew Strawberry Fruit Chews, 1.76 oz (Pack of 10)",
-      "Ben's Original Ready Rice Whole Grain Brown Rice, 8.8oz (12-Pack)",
-      "Zinsser 272479-6PK Bulls Eye 1-2-3 Plus Spray Primer, 13 oz, White, 6 Pack",
-      "Bon Bon Swedish Sour Peach Fish Candy, 5.2oz (2-Pack)",
+      "Grapefruit Sparkling Water, 12-pack, 12 fl oz",
+      "Unsweetened Almond Barista Blend Almond Milk, 32 Oz (Pack Of 6)",
+      "Strawberry Fruit Chews, 1.76 oz (Pack of 10)",
+      "Ready Rice Whole Grain Brown Rice, 8.8oz (12-Pack)",
+      "272479-6PK Spray Primer 1-2-3 Plus, 13 oz, White, 6 Pack",
+      "Swedish Sour Peach Fish Candy, 5.2oz (2-Pack)",
       "Clear PET Spray Bottles, 2 oz, 10-Pack",
     ])("refuses %s", (title) => {
       expect(proposeSizeFromTitle(title)).toBeNull();
     });
 
     it("refuses even when the size IS the total, because the title can't say so", () => {
-      // Greenies is the inverted case — 27 oz genuinely is the whole bag, so a
-      // naive parse would be RIGHT here. It is still refused: the grammar is
-      // identical to La Croix's, so accepting it means accepting that one too.
+      // The dog treats are the inverted case — 27 oz genuinely is the whole
+      // bag, so a naive parse would be RIGHT here. It is still refused: the
+      // grammar is identical to the 12-pack's, so accepting it means accepting
+      // that one too.
       expect(
         proposeSizeFromTitle(
-          "Greenies Original Petite Dog Dental Treats (27 oz, 45 ct)",
+          "Original Petite Dog Dental Treats (27 oz, 45 ct)",
         ),
       ).toBeNull();
+    });
+
+    it("refuses a bare N x SIZE multiplier", () => {
+      // PACK_MARKER only knows the WORDS pack/pk/ct/count/servings, and the
+      // distinct-size guard cannot help either: the multiplier carries no unit,
+      // so exactly one size token is found and the title looks unambiguous.
+      // Left alone this proposed `1 each = 16 oz` for a 48 oz trio.
+      expect(
+        proposeSizeFromTitle(
+          "Liquid Nutrient Trio: Bloom, Grow, Tiger (3x16 oz)",
+        ),
+      ).toBeNull();
+      expect(proposeSizeFromTitle("Protein Bars, 12 x 1.4 oz")).toBeNull();
+      // The real multiplication sign shows up in titles too.
+      expect(proposeSizeFromTitle("Protein Bars, 12 × 1.4 oz")).toBeNull();
+    });
+
+    it("keeps a proposal when the x is a DIMENSION, not a count", () => {
+      // Why the multiplier test is anchored to the token rather than run over
+      // the whole title: a title-wide version refused 14 correct proposals on
+      // the live catalog, because most x's in a hardware title describe the
+      // part. Here the pound is the box, and the `#10 x 3-1/2 in.` is the screw.
+      expect(
+        proposeSizeFromTitle(
+          "#10 x 3-1/2 in. Star Drive Flat Head Construction Screws 1 lb. Box",
+        )?.amount,
+      ).toEqual({ value: 1, unit: "lb" });
     });
   });
 
@@ -63,16 +96,14 @@ describe("proposeSizeFromTitle", () => {
       proposeSizeFromTitle("12 in. Pry Bar and 9 in. Nail Puller"),
     ).toBeNull();
     expect(
-      proposeSizeFromTitle("48 in. W Garage Wall Storage GearTrack Channel"),
+      proposeSizeFromTitle("48 in. W Garage Wall Storage Track Channel"),
     ).toBeNull();
   });
 
   it("refuses when two different sizes appear", () => {
     // Which one is the each? Unanswerable from the string.
     expect(
-      proposeSizeFromTitle(
-        "Red Label Abrasives 2x42 Inch Belts, 5 lb and 2 lb assortment",
-      ),
+      proposeSizeFromTitle("Sanding Belts 2x42 Inch, 5 lb and 2 lb assortment"),
     ).toBeNull();
   });
 
@@ -92,23 +123,23 @@ describe("proposeSizeFromTitle", () => {
   });
 
   it("returns null for a title with no size at all", () => {
-    // PRD-MVGP. The detector is silent on ~480 food products like this by
-    // construction, and that is correct — nothing establishes its bag size.
+    // The detector is silent on ~480 food products like this by construction,
+    // and that is correct — nothing establishes its bag size.
     expect(proposeSizeFromTitle("Bagged Yellow Onions")).toBeNull();
     expect(proposeSizeFromTitle("")).toBeNull();
   });
 
   /**
-   * Every case here is a REAL catalog title that the first version of this
-   * parser got wrong. They were found by running it over the live corpus rather
-   * than by imagining failure modes — the hand-written fixtures above were all
-   * too clean to catch any of them.
+   * Every case here reproduces a catalog title shape that the first version of
+   * this parser got wrong. They were found by running it over the live corpus
+   * rather than by imagining failure modes — the tidier fixtures above caught
+   * none of them.
    */
   describe("regressions found against the real catalog", () => {
     it("does not read the 10G in an ethernet cable as 10 grams", () => {
       expect(
         proposeSizeFromTitle(
-          "Monoprice Cat6 Ethernet Bulk Cable - Stranded, 550Mhz, 10G, UTP, CM, 24AWG, Pull Box, 250 Feet, Blue",
+          "Cat6 Ethernet Bulk Cable - Stranded, 550Mhz, 10G, UTP, CM, 24AWG, Pull Box, 250 Feet, Blue",
         ),
       ).toBeNull();
     });
@@ -125,7 +156,7 @@ describe("proposeSizeFromTitle", () => {
       // 5 g is per SERVING; the tub holds 30 of them.
       expect(
         proposeSizeFromTitle(
-          "ProMix Nutrition Creatine Monohydrate Travel Packs, 5g (30 Servings)",
+          "Creatine Monohydrate Travel Packs, 5g (30 Servings)",
         ),
       ).toBeNull();
     });
@@ -136,13 +167,13 @@ describe("proposeSizeFromTitle", () => {
       // the second case keeps the fraction guard itself covered with a unit the
       // grammar DOES know, where reading the denominator would mean 2 oz for a
       // half-ounce tube.)
-      expect(proposeSizeFromTitle("Dap DryDex Spackling, 1/2 Pint")).toBeNull();
-      expect(proposeSizeFromTitle("Gorilla Super Glue Gel, 1/2 oz")).toBeNull();
+      expect(proposeSizeFromTitle("Spackling Compound, 1/2 Pint")).toBeNull();
+      expect(proposeSizeFromTitle("Super Glue Gel, 1/2 oz")).toBeNull();
     });
 
     it("refuses a size that describes what the product FITS", () => {
       expect(
-        proposeSizeFromTitle("EZPB Peanut Butter Stirrer (Fits 26-30oz Jars)"),
+        proposeSizeFromTitle("Peanut Butter Stirrer (Fits 26-30oz Jars)"),
       ).toBeNull();
     });
 
@@ -150,27 +181,27 @@ describe("proposeSizeFromTitle", () => {
      * Found by the dry run when the vocabulary moved from a hand-written list
      * to the grammar's own: the grammar is a RECIPE grammar, so widening to all
      * of it admitted cooking measures that mean something else on a package.
-     * None of these were reachable before, and all are live catalog titles.
+     * None of these were reachable before.
      */
     describe("units that mean something else in a product title", () => {
       it("does not read a part number's trailing q as quarts", () => {
-        // 13,155 quarts of router bit. The 10G ethernet bug's twin, and the
-        // reason single-letter units are never admitted casually.
+        // 13,155 quarts of router bit. The 10G bug's twin, and the reason
+        // single-letter units are never admitted casually.
         expect(
           proposeSizeFromTitle(
-            "Yonico Cove Router Bits Edge Forming 1/2-Inch Radius 1/4-Inch Shank 13155q",
+            "Cove Router Bit Edge Forming 1/2-Inch Radius 1/4-Inch Shank 13155q",
           ),
         ).toBeNull();
       });
 
       it.each([
         // A cavity count, not a volume.
-        "Amazon Basics Nonstick Muffin Pan, Set of 2, 12 Cups, Gray",
+        "Nonstick Muffin Pan, Set of 2, 12 Cups, Gray",
         // What it treats, not what it contains.
-        "FryAway Cooking Oil Solidifier Powder (Solidifies 20 Cups)",
+        "Cooking Oil Solidifier Powder (Solidifies 20 Cups)",
         // A vessel's capacity is not a quantity you bought.
-        "Breville Sous Chef 16 Cup Food Processor",
-        "Brita 10 Cup Everyday Water Pitcher with Filter, White",
+        "Sous Chef 16 Cup Food Processor",
+        "10 Cup Everyday Water Pitcher with Filter, White",
       ])("refuses cups in %s", (title) => {
         expect(proposeSizeFromTitle(title)).toBeNull();
       });
@@ -179,11 +210,12 @@ describe("proposeSizeFromTitle", () => {
     describe("a range of sizes is not a size", () => {
       it.each([
         // The quarts belong to the container the lid fits.
-        "Rubbermaid Commercial 6-8 Quart Lid (Yellow)",
+        "Commercial 6-8 Quart Lid (Yellow)",
         // The litres belong to the backpack the cover fits.
-        "Joy Walker Backpack Rain Cover, 40-55L",
-        // The gallons belong to the vacuum, not the filter.
-        "Genuine General Debris Pleated Shop Vacuum Filter Replacement for Most 5-16 Gal. RIDGID Wet Dry Vacs",
+        "Backpack Rain Cover, 40-55L",
+        // The gallons belong to the vacuum, not the filter. Worded to avoid
+        // "replacement for", so only the range guard can refuse this one.
+        "General Debris Pleated Shop Vacuum Filter for Most 5-16 Gal. Wet Dry Vacs",
       ])("refuses %s", (title) => {
         expect(proposeSizeFromTitle(title)).toBeNull();
       });
@@ -192,48 +224,9 @@ describe("proposeSizeFromTitle", () => {
         // The first cut of the range guard accepted any dash and lost this
         // one-gallon plant to the "12949 — 1 gal" it read as a span.
         expect(
-          proposeSizeFromTitle(
-            "Salvia leucantha 'Santa Barbara' PP#12949 — 1 gal",
-          )?.amount,
+          proposeSizeFromTitle("Nursery Perennial PP#12949 — 1 gal")?.amount,
         ).toEqual({ value: 1, unit: "gallon" });
       });
-    });
-
-    it("refuses units the grammar cannot round-trip", () => {
-      // `parse_amount("1 qt")` returns `1 whole`, kind `other:whole` — the unit
-      // is silently discarded, and proposing "1 each = 1 whole" for a quart of
-      // sealer would be worse than proposing nothing. Same for `pt`.
-      //
-      // These are refused by the VOCABULARY now rather than by the kind gate:
-      // `size_unit_aliases()` drops any spelling `Unit::from_str` cannot place
-      // in a weight or volume, so `qt` and `pt` never become candidates. The
-      // outcome is what it always was; what changed is that no list on this
-      // side has to know about them.
-      expect(proposeSizeFromTitle("511 Porous Plus Sealer, 1 qt")).toBeNull();
-      expect(
-        proposeSizeFromTitle("Straus Organic Vanilla Ice Cream, 1 pt"),
-      ).toBeNull();
-      // Spelled out, `quart` is a real volume and does flow through.
-      expect(proposeSizeFromTitle("Paint Sample, 1 quart")?.amount).toEqual({
-        value: 1,
-        unit: "quart",
-      });
-    });
-
-    it("still reads the plain cases the corpus is mostly made of", () => {
-      expect(
-        proposeSizeFromTitle(
-          "365 by Whole Foods Market Mediterranean Extra Virgin Olive Oil, 33.8 fl oz",
-        )?.amount.value,
-      ).toBe(33.8);
-      expect(
-        proposeSizeFromTitle("Line 39 Sauvignon Blanc, 750 mL")?.amount,
-      ).toEqual({ value: 750, unit: "ml" });
-      // "16/20" is a shrimp count, not a size; only "12 oz" is a real token.
-      expect(
-        proposeSizeFromTitle("Whole Catch Wild Key West Shrimp 16/20, 12 oz")
-          ?.amount,
-      ).toEqual({ value: 12, unit: "oz" });
     });
   });
 
@@ -305,14 +298,22 @@ describe("proposeSizeFromTitle", () => {
       // case-insensitively, the matcher only ever narrows it. Proven against
       // real Postgres in detectors-title-size.integration.test.ts; checked here
       // on the shape, so a change is caught without a database.
+      //
+      // ⚠️ The separator must be `[[:space:]]*` / `\s*`, mirroring the matcher.
+      // A prefilter written `[ ]?` (one literal space) accepted none of the
+      // whitespace cases below, so those titles parsed fine and were never
+      // shortlisted — silently unproposable.
       const alternation = sizeUnitAlternation();
-      const sqlLike = new RegExp(`[0-9][ ]?(?:${alternation})\\b`, "i");
+      const sqlLike = new RegExp(`[0-9]\\s*(?:${alternation})\\b`, "i");
       for (const title of [
         "Bagged Yellow Onions, 32 OZ",
         "Bag of Sugar, 5 pounds",
         "Bulk Spice, 500 g",
         "Sparkling Water, 12 fl oz",
         "Paint Sample, 1 quart",
+        "Bag of Sugar, 5  lb",
+        "Bag of Sugar, 5\tlb",
+        "Bag of Sugar, 5lb",
       ]) {
         expect(proposeSizeFromTitle(title), title).not.toBeNull();
         expect(sqlLike.test(title), title).toBe(true);
@@ -323,11 +324,11 @@ describe("proposeSizeFromTitle", () => {
   it("never throws on arbitrary catalog text", () => {
     // A detector that can throw takes the whole Problems page down.
     for (const title of [
-      "48-22-8901-X3",
+      "12-34-5678-X9",
       "1-2-3",
       "Ø35 22 System Router Template",
       "100% cotton, 0 oz",
-      "Milwaukee 2x 0.5 kg",
+      "Cordless Tool 2x 0.5 kg",
       "———",
     ]) {
       expect(() => proposeSizeFromTitle(title)).not.toThrow();

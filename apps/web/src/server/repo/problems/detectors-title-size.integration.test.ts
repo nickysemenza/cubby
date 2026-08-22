@@ -82,6 +82,13 @@ describe("findProductsWithoutUnitMappings", () => {
       "Superset Check Bulk, 750 grams",
       "Superset Check Thinner, 4 quarts",
       "Superset Check Rice, 3 lbs",
+      // The whitespace the SQL used to get wrong. The matcher separates digits
+      // from unit with `\s*` — any run of any whitespace — while the predicate
+      // was written `[ ]?`, exactly one optional literal space. Both of these
+      // parsed fine and were never shortlisted.
+      "Superset Check Sugar, 5  lb",
+      "Superset Check Salt,\t2 kg",
+      "Superset Check Beans, 3lb",
     ];
     for (const [index, name] of accepted.entries()) {
       await seed(name, { model: `TS-SUP-${index}` });

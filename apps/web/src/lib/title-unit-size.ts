@@ -6,9 +6,9 @@ import { wasm } from "~/lib/wasm";
  * title says it unambiguously.
  *
  * Most of the catalog states its size in the title and carries no unit mapping,
- * so it can show no comparable unit price: "Bagged Yellow Onions, 32 OZ" at
- * $2.73 could not report $0.085/oz. This turns that title into a PROPOSED
- * `1 each = <size>` edge for a human to accept.
+ * so it can show no comparable unit price at all: "Bagged Yellow Onions, 32 OZ"
+ * knows what a bag costs but not what an ounce costs. This turns that title
+ * into a PROPOSED `1 each = <size>` edge for a human to accept.
  *
  * ## Why this refuses so much
  *
@@ -18,14 +18,15 @@ import { wasm } from "~/lib/wasm";
  * size-plus-count grammar means opposite things and the string cannot settle
  * it:
  *
- * - `La Croix Sparkling Water, 12-pack, 12 fl oz` → one `each` is 144 fl oz,
+ * - `Sparkling Water, 12-pack, 12 fl oz` → one `each` is 144 fl oz,
  *   not 12. Taking the token at face value is **12x too cheap**.
- * - `Califia Almond Milk, 32 Oz (Pack Of 6)` → 192 oz, not 32.
- * - `Greenies Dog Treats (27 oz, 45 ct)` → here 27 oz genuinely IS the total.
+ * - `Almond Milk, 32 Oz (Pack Of 6)` → 192 oz, not 32.
+ * - `Dog Dental Treats (27 oz, 45 ct)` → here 27 oz genuinely IS the total.
  *
- * Greenies and La Croix are the same shape with inverted meaning, so anything
- * carrying a pack marker is refused outright rather than guessed at. Silence is
- * cheap here (the row just keeps no mapping); a confident wrong number is not.
+ * The treats and the sparkling water are the same shape with inverted meaning,
+ * so anything carrying a pack marker is refused outright rather than guessed
+ * at. Silence is cheap here (the row just keeps no mapping); a confident wrong
+ * number is not.
  *
  * ## Where the unit vocabulary comes from
  *
@@ -57,8 +58,33 @@ const PACK_MARKER =
   /\b(?:pack\s+of\s+\d+|case\s+of\s+\d+|box\s+of\s+\d+|\d+\s*-?\s*(?:pack|pk)s?\b|\d+\s*(?:ct|count)\b|\d+\s*servings?\b)/i;
 
 /**
+ * A bare multiplier sitting IMMEDIATELY before a size: the `3x` of `(3x16 oz)`.
+ *
+ * {@link PACK_MARKER} anchors on the WORDS pack/pk/ct/count/servings, so this
+ * shape slipped past it, and then past the distinct-size guard too — the `3`
+ * carries no unit, so only one size token is ever found and the title looks
+ * unambiguous. The result was `1 each = 16 oz` for a 48 oz trio: the same
+ * cheaper-per-ounce error the pack marker exists to refuse.
+ *
+ * ⚠️ Tested against the text immediately before the matched token, NOT against
+ * the whole title. A title-wide version cost 14 CORRECT proposals on the live
+ * catalog, because an `x` elsewhere in a title is usually a dimension, not a
+ * count: "#10 x 3-1/2 in. Star Drive … Screws 1 lb. Box" is a one-pound box of
+ * screws whose `x` describes the screw, and paper is "8.5 x 11". Anchoring to
+ * the token keeps those while still refusing "(3x16 oz)".
+ *
+ * The one knowing cost is marketing copy: a "2X coverage" spray paint labelled
+ * "2X 12 oz" is refused even though 12 oz is the can. Net on the catalog is one
+ * proposal, and it errs toward silence, which is the direction this module
+ * always takes — see the class doc.
+ *
+ * Both the ASCII `x` and the real multiplication sign appear in titles.
+ */
+const MULTIPLIER_PREFIX = /\d+(?:\.\d+)?\s*[x×]\s*$/i;
+
+/**
  * The size belongs to something else the product FITS, not to the product.
- * "EZPB Peanut Butter Stirrer (Fits 26-30oz Jars)" would otherwise propose
+ * "Peanut Butter Stirrer (Fits 26-30oz Jars)" would otherwise propose
  * 30 oz for a stirrer. Found by running this over the real catalog, not by
  * imagining cases.
  */
@@ -74,14 +100,13 @@ const COMPATIBILITY_MARKER =
  * unit is doubtful. The grammar is a RECIPE grammar, and its cooking measures
  * mean something else on a package:
  *
- * - `q` read the part number in "Yonico Cove Router Bits … 1/4-Inch Shank
- *   13155q" as **13,155 quarts**. Same shape as the 10G ethernet cable below,
- *   and the reason single letters can never be admitted casually.
- * - `cup` is a CAVITY on "Amazon Basics Nonstick Muffin Pan, Set of 2, 12
- *   Cups" and a THROUGHPUT on "FryAway Cooking Oil Solidifier (Solidifies 20
- *   Cups)"; on "Breville Sous Chef 16 Cup Food Processor" and "Brita 10 Cup
- *   Everyday Water Pitcher" it is the vessel's capacity, which is not a
- *   quantity of anything you bought.
+ * - `q` read the part number in "Cove Router Bit … 1/4-Inch Shank 13155q" as
+ *   **13,155 quarts**. Same shape as the 10G ethernet cable below, and the
+ *   reason single letters can never be admitted casually.
+ * - `cup` is a CAVITY on "Nonstick Muffin Pan, Set of 2, 12 Cups" and a
+ *   THROUGHPUT on "Cooking Oil Solidifier (Solidifies 20 Cups)"; on "16 Cup
+ *   Food Processor" and "10 Cup Water Pitcher" it is the vessel's capacity,
+ *   which is not a quantity of anything you bought.
  * - `tsp`/`tbsp` produced nothing either way across the whole catalog; they are
  *   excluded with the rest so the rule is "recipe measures don't size retail
  *   packages" rather than a per-unit judgement call.
@@ -106,8 +131,8 @@ const stemOf = (alias: string) => alias.replace(/s$/, "");
  * A single-letter unit, or the plural the grammar derives from one.
  *
  * These and only these match case-SENSITIVELY: `g` read case-insensitively
- * turns the "10G" in "Monoprice Cat6 … 550Mhz, 10G, UTP" into ten grams. Real
- * title, found by running this over the catalog.
+ * turns the "10G" in "Cat6 Ethernet Cable … 550Mhz, 10G, UTP" into ten grams —
+ * a title shape found by running this over the catalog, not by imagining it.
  *
  * The rule is a fact about the alias's own shape rather than a list of letters,
  * so a single-letter unit the grammar learns later lands in the case-sensitive
@@ -161,16 +186,17 @@ const getVocabulary = () => {
       "gi",
     ),
     bare: sizeToken(matched.filter(isBareAlias), "g"),
-    // A span, not a size: the gallons in "HEPA Filter for Most 5-16 Gal. RIDGID
-    // Wet Dry Vacs" belong to the vacuum, and "Rubbermaid Commercial 6-8 Quart
-    // Lid" otherwise proposes 8 quarts for a lid. "Fits 26-30oz Jars" only
-    // escaped this class because it happened to say "Fits".
+    // A span, not a size: the gallons in "Shop Vacuum Filter for Most 5-16
+    // Gal. Wet Dry Vacs" belong to the vacuum, and "Commercial 6-8 Quart Lid"
+    // otherwise proposes 8 quarts for a lid. "Fits 26-30oz Jars" only escaped
+    // this class because it happened to say "Fits".
     //
     // Two deliberate narrowings, both because the wider version misfired on
     // real titles: the separator is a plain HYPHEN only (an em-dash is
-    // punctuation — "Salvia … PP#12949 — 1 gal" is a one-gallon plant, not a
-    // range), and the units are the MATCHED vocabulary, not the full one (with
-    // `c` included, the part number in "Dewalt DPG82-11C" reads as a range).
+    // punctuation — "Nursery Perennial PP#12949 — 1 gal" is a one-gallon
+    // plant, not a range), and the units are the MATCHED vocabulary, not the
+    // full one (with `c` included, the part number in "DPG82-11C" reads as
+    // a range).
     range: new RegExp(
       `\\d+\\s*-\\s*\\d+\\s*(?:${alternationOf(matched)})\\b`,
       "i",
@@ -226,9 +252,28 @@ export const proposeSizeFromTitle = (
   const matches = [...name.matchAll(worded), ...name.matchAll(bare)];
   if (matches.length === 0) return null;
 
+  // `some`, not a test on the first match: the same size can appear twice with
+  // different context, and a multiplier in front of ANY occurrence means we
+  // cannot attribute the size to one `each`. Refusing is the safe direction.
+  if (
+    matches.some(
+      (match) =>
+        match.index !== undefined &&
+        MULTIPLIER_PREFIX.test(name.slice(0, match.index)),
+    )
+  ) {
+    return null;
+  }
+
   // More than one DISTINCT size is the tell that we cannot say which one is
-  // per-each ("2 x 42 inch", "12-pack, 12 fl oz" once the pack marker is gone).
-  // Repeats of the same size are harmless and collapse here.
+  // per-each ("5 lb and 2 lb assortment", "12-pack, 12 fl oz" once the pack
+  // marker is gone). Repeats of the same size are harmless and collapse here.
+  //
+  // This does NOT catch a bare multiplier — `12 x 1.4 oz` yields exactly one
+  // size token, because the 12 carries no unit — which is why
+  // {@link MULTIPLIER_MARKER} refuses that shape at the gate instead. An
+  // earlier comment here credited this guard with covering "2 x 42 inch"; it
+  // only ever did so because that title happens to carry a second real size.
   const distinct = new Set(matches.map((m) => normalize(m[0])));
   if (distinct.size !== 1) return null;
 
