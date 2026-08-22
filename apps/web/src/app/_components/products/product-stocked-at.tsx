@@ -32,6 +32,7 @@ import { Badge } from "~/components/ui/badge";
 import { useTRPC } from "~/integrations/trpc/react";
 import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
 import { ShelfEmpty } from "../data-table/shelf";
+import { EntityInlineLink } from "../EntityInlineLink";
 import { ProductDiscardDialog } from "./product-discard-dialog";
 import { buildProductLocationBreakdown } from "./product-location-breakdown";
 
@@ -57,13 +58,16 @@ const HeldAsComponents: FC<{ productId: ProductShortcode }> = ({
         <span key={component.productId} className="flex items-center gap-1">
           {index > 0 && <span aria-hidden>·</span>}
           <span className="tabular-nums">{component.quantity}×</span>
-          <Link
-            to="/products/$shortcode"
-            params={{ shortcode: component.productId }}
-            className="underline underline-offset-2 hover:text-foreground"
-          >
-            {component.productName}
-          </Link>
+          <EntityInlineLink
+            displayImage={undefined}
+            entity="product"
+            data={{
+              id: component.productId,
+              name: component.productName,
+              manufacturer: component.manufacturer,
+            }}
+            compact
+          />
         </span>
       ))}
     </div>
