@@ -10,7 +10,13 @@ import {
 } from "~/components/ui/collapsible";
 import { entities } from "~/entities/entities";
 import { getEntityFilters } from "~/entities/filter-manifest";
-import { encodeFilters, humanize, sortToParam } from "~/entities/filters";
+import {
+  encodeFilters,
+  FILTER_ANY,
+  FILTER_NONE,
+  humanize,
+  sortToParam,
+} from "~/entities/filters";
 import type { ProblemQuery } from "~/entities/problem-query";
 import { cn } from "~/lib/utils";
 
@@ -75,17 +81,37 @@ type ProblemAssemblyProps = {
   projectionFreshness?: ProblemsCoverage["freshness"];
 };
 
+/**
+ * How one filter value reads as a chip in this strip.
+ *
+ * A chip stands alone, which is why it can't just reuse every control label. In
+ * a dropdown next to "Has cost", an option labeled "(none)" is unambiguous; on
+ * its own in a row of chips it says nothing. So the `meta` presence options are
+ * deliberately re-phrased here rather than reused.
+ */
 const optionLabel = (entity: Entity, id: string, value: string): string => {
   const spec = getEntityFilters(entity).find(
     (candidate) => candidate.columnId === id,
   );
   const option = spec?.options?.find((candidate) => candidate.value === value);
-  if (option) return option.label;
-  if (value === "none")
-    return `No ${humanize(id.replace(/Presence$/, "")).toLowerCase()}`;
-  if (value === "has")
-    return `Has ${humanize(id.replace(/Presence$/, "")).toLowerCase()}`;
-  return value;
+  // `meta` marks the generic presence pair, whose labels only work in context.
+  if (option && !("meta" in option && option.meta)) return option.label;
+  // The noun this filter is about. Column ids end in various combinations of
+  // "Presence"/"Filter" that name the mechanism, not the thing being filtered.
+  const noun = (
+    spec?.nullable?.label ?? humanize(id.replace(/(Presence)?(Filter)?$/, ""))
+  ).toLowerCase();
+  // Presence is expressed two ways in this codebase: the `__none__`/`__any__`
+  // sentinels a nullable picklist stores, and the bare "none"/"has" a presence
+  // filter declares. Both mean the same thing and both reach this strip, so both
+  // get the same words — the sentinels used to fall through to `return value`
+  // and render the raw `__none__` on the page.
+  if (value === FILTER_NONE || value === "none") return `No ${noun}`;
+  if (value === FILTER_ANY || value === "has") return `Has ${noun}`;
+  // A url-only filter with no declared options (e.g. the expense `dateRelative`
+  // twin of the task `dueRelative`) still reaches the page, and its raw
+  // camelCase value was rendering verbatim as "beforeToday".
+  return humanize(value);
 };
 
 const assemblyChips = (query: ProblemQuery): string[] => {
@@ -226,7 +252,7 @@ export function ProblemAssembly({
                     : "."}
                 </span>
               )}
-              <span>{freshnessDetail(query)}</span>
+              <span> {freshnessDetail(query)}</span>
               {isBranching &&
                 listLocations
                   .filter((entry) => entry.query.key === query.key)

@@ -415,7 +415,7 @@ const MAINTENANCE_TOOLS: {
   {
     label: "Re-parse recipe lines",
     description:
-      "Re-run the ingredient parser over imported lines (rawLine). Reverts manual structured edits — intended. Dry run before applying.",
+      "Re-run the ingredient parser over each recipe line as it was originally written. Reverts manual structured edits — intended. Dry run before applying.",
     action: <ReparseAction />,
   },
   {

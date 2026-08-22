@@ -35,8 +35,8 @@ export const basicProblemQueries = [
     freshness: { kind: "live" },
     title: "Unreferenced uploaded files",
     description:
-      "Uploaded files older than the grace window that no live incoming edge references.",
-    emptyMessage: "Every uploaded file is referenced.",
+      "Uploaded files that nothing points at any more — no product, location or record uses them, and they are old enough that an in-progress upload isn't the explanation.",
+    emptyMessage: "Every uploaded file is in use somewhere.",
     source: {
       kind: "entity",
       entity: "image",

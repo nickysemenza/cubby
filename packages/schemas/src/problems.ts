@@ -818,6 +818,13 @@ export const financialTransactionAllocationDefectReason = z.enum([
 
 export const financialTransactionAllocationDefectSchema = z.object({
   id: financialTransactionShortcode,
+  /**
+   * How the transaction identifies itself to a person — merchant, else its raw
+   * bank descriptor. Null only when the row carries neither, which is why the
+   * card falls back to the shortcode rather than assuming a name exists.
+   */
+  name: z.string().nullable(),
+  postedDate: plainDate.nullable(),
   reasons: z.array(financialTransactionAllocationDefectReason).min(1),
   kind: z.string(),
   amount: z.number(),

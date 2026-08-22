@@ -888,7 +888,7 @@ const standaloneEntityProblems = [
     freshness: { kind: "live" as const },
     title: "Financial transaction allocation defects",
     description:
-      "Settlement allocations whose amount, kind, or sign violates the transaction's integrity rules.",
+      "A transaction's settlement split doesn't add up, or points the wrong way — the amounts don't match the transaction, or a credit is recorded as a charge.",
     emptyMessage: "Every settlement allocation is internally consistent.",
     source: {
       kind: "entity" as const,
@@ -905,7 +905,7 @@ const standaloneEntityProblems = [
     freshness: { kind: "live" as const },
     title: "Purchases whose totals do not reconcile",
     description:
-      "Purchase paperwork and its live expense lines disagree beyond the reconciliation tolerance.",
+      "What a receipt says it totalled and what its recorded lines add up to differ by more than rounding.",
     emptyMessage: "Every purchase reconciles with its expense lines.",
     source: {
       kind: "entity" as const,
@@ -944,8 +944,8 @@ const standaloneEntityProblems = [
     freshness: { kind: "live" as const },
     title: "Possible exits without a purchase",
     description:
-      "Negative actual principal item lines with neither a product nor a purchase.",
-    emptyMessage: "No purchase-less exit candidates remain.",
+      "Money that came back in — a sale or refund — recorded against neither a product nor an order, so there's no telling what left the house.",
+    emptyMessage: "Every recorded sale or refund traces back to an order.",
     source: {
       kind: "entity" as const,
       entity: "expense" as const,

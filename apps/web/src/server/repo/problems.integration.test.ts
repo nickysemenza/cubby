@@ -43,6 +43,7 @@ import {
   product,
   productComponent,
   productImage,
+  project as projectTable,
   projectToolUsage,
   upcLookupCache,
   vendor as vendorTable,
@@ -64,6 +65,7 @@ import { addRecipeToMeal, updateMeal } from "./meal";
 import { findCoverageTotals, findStaleIngredientParses } from "./problems";
 import { deleteProducts, productList, updateProduct } from "./product";
 import { createProject, deleteProjects } from "./project";
+import { computeAttentionItems } from "./project/attention";
 import { detachProjectResources } from "./project/tools";
 import { updatePurchase } from "./purchase";
 import { deleteRecipes } from "./recipe";
@@ -2004,6 +2006,98 @@ describe("problems service — tracker slice", () => {
       type: "past_due_planned_expense",
       entityType: "expense",
     });
+
+    // The rows the Problems page renders are the RULE ENGINE's rows, not a
+    // second set rebuilt from generic list columns. That rebuild is what this
+    // change removed, and it is what silently dropped every measurement and
+    // flipped severities. Assert the presented row carries its name and the
+    // facts the rule actually tested.
+    const presentedOverdue = tracker.overdueTasks.find(
+      (i) => i.entityId === overdue.id,
+    );
+    expect(presentedOverdue?.name).toBe("tracker overdue task");
+    expect(presentedOverdue?.severity).toBe("critical");
+    expect(
+      presentedOverdue?.type === "overdue_task" && presentedOverdue.facts,
+    ).toMatchObject({ due: householdDaysAgo(3), daysOverdue: 3 });
+
+    const presentedPlanned = tracker.pastDuePlannedExpenses.find(
+      (i) => i.entityId === pastDuePlanned.id,
+    );
+    expect(presentedPlanned?.name).toBe("tracker past-due planned expense");
+    expect(
+      presentedPlanned?.type === "past_due_planned_expense" &&
+        presentedPlanned.facts,
+    ).toMatchObject({
+      plannedFor: householdDaysAgo(5),
+      daysPastDue: 5,
+      // Carried through from the expense, so the card can lead with the money.
+      cost: 250,
+    });
+
+    // Every presented row matches what `computeAttentionItems` says, field for
+    // field. This is the invariant the old presenter broke.
+    const ruleRows = await computeAttentionItems(ctx.db);
+    for (const presented of [
+      ...tracker.overdueTasks,
+      ...tracker.pastDuePlannedExpenses,
+      ...tracker.blockedWorkProjects,
+      ...tracker.stalledProjects,
+      ...tracker.projectsMissingBudget,
+      ...tracker.unclassifiedExpenses,
+    ]) {
+      const rule = ruleRows.find((r) => r.key === presented.key);
+      expect(rule, `no rule row for ${presented.key}`).toBeDefined();
+      expect(presented).toEqual(rule);
+    }
+  });
+
+  it("dates a stalled project by its real activity, never by updatedAt", async () => {
+    // `project.updatedAt` is the value `attention.ts` documents at length as
+    // meaningless here — on production it dates every project to one Notion
+    // import. The old presenter used it anyway, and via `.toISOString()`, which
+    // is a UTC day in a household-local app. Both are locked out.
+    const lastWork = householdDaysAgo(120);
+    const { output: project, entityId } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "tracker stalled project",
+        status: "in_progress",
+      }),
+      ctx.actor,
+    );
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "tracker stalled task",
+        projectId: project.id,
+        dueDate: lastWork,
+      }),
+      ctx.actor,
+    );
+    // `updatedAt` is one of the candidates the rule maxes over, so a row written
+    // seconds ago is never stalled. Push it back further than the task's due
+    // date, leaving the task as the real last-activity signal — which is the
+    // whole point of the assertion below.
+    await getDb(ctx.db)
+      .update(projectTable)
+      .set({ updatedAt: new Date(`${householdDaysAgo(200)}T12:00:00Z`) })
+      .where(eq(projectTable.id, entityId));
+
+    const tracker = await findTrackerProblems(ctx.db);
+    const stalled = tracker.stalledProjects.find(
+      (i) => i.entityId === project.id,
+    );
+    expect(stalled?.name).toBe("tracker stalled project");
+    expect(stalled?.severity).toBe("warning");
+    expect(stalled?.type === "stalled_project" && stalled.facts).toMatchObject({
+      lastActivity: lastWork,
+      thresholdDays: 30,
+    });
+    // The project row was written seconds ago; dating it by `updatedAt` would
+    // report today and make the card contradict its own section.
+    expect(stalled?.date).toBe(lastWork);
   });
 
   it("excludes rows belonging to a deleted project", async () => {

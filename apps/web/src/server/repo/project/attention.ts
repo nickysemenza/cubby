@@ -20,7 +20,9 @@
  */
 import { type ProjectId, unsafeProjectId } from "@cubby/schemas/identifiers";
 import {
+  describeAttentionItem,
   isLiveProjectStatus,
+  type ProjectAttentionDescribable,
   type ProjectAttentionItem,
   type ProjectAttentionType,
 } from "@cubby/schemas/project";
@@ -37,7 +39,11 @@ import {
   sql,
 } from "drizzle-orm";
 import { uniq } from "es-toolkit";
-import { householdDaysAgo, householdLocalDate } from "~/lib/household-date";
+import {
+  householdDaysAgo,
+  householdLocalDate,
+  plainDateDaysBetween,
+} from "~/lib/household-date";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import type { Database } from "~/server/db";
 import { expense, project, task } from "~/server/db/schema";
@@ -80,6 +86,37 @@ const attentionKey = (
   discriminator
     ? `${type}:${entityId}:${discriminator}`
     : `${type}:${entityId}`;
+
+/**
+ * Build one row. Exists so `description` is never hand-written at a rule site:
+ * every sentence comes from the shared `describeAttentionItem`, which is what
+ * keeps the Problems page, the projects dashboard and the MCP tools reading the
+ * same words. Rule sites supply identity plus the measurements they tested.
+ */
+const attentionItem = <T extends ProjectAttentionType>(
+  row: ProjectAttentionDescribable & { type: T } & {
+    severity: ProjectAttentionItem["severity"];
+    entityType: ProjectAttentionItem["entityType"];
+    entityId: string;
+    date: string | null;
+    amount: number | null;
+    href: string;
+    discriminator?: string;
+  },
+): ProjectAttentionItem =>
+  ({
+    key: attentionKey(row.type, row.entityId, row.discriminator),
+    type: row.type,
+    severity: row.severity,
+    name: row.name,
+    description: describeAttentionItem(row),
+    entityType: row.entityType,
+    entityId: row.entityId,
+    date: row.date,
+    amount: row.amount,
+    href: row.href,
+    facts: row.facts,
+  }) as ProjectAttentionItem;
 
 export async function computeAttentionItems(
   db: Database,
@@ -160,6 +197,9 @@ export async function computeAttentionItems(
         name: expense.name,
         projectId: expense.projectId,
         date: expense.date,
+        // What the line was planned to cost — the card leads with the money,
+        // which is the whole reason an un-logged plan matters.
+        cost: expense.cost,
       })
       .from(expense)
       .where(
@@ -198,17 +238,22 @@ export async function computeAttentionItems(
   for (const row of overdueTaskRows) {
     const effectiveDue = effectiveTaskDueDate(row);
     if (!effectiveDue || effectiveDue >= today) continue;
-    items.push({
-      key: attentionKey("overdue_task", row.shortcode),
-      type: "overdue_task",
-      severity: "critical",
-      description: `"${row.name}" was due ${effectiveDue} and is still open`,
-      entityType: "task",
-      entityId: row.shortcode,
-      date: effectiveDue,
-      amount: null,
-      href: `/tasks/${row.shortcode}`,
-    });
+    items.push(
+      attentionItem({
+        type: "overdue_task",
+        severity: "critical",
+        name: row.name,
+        entityType: "task",
+        entityId: row.shortcode,
+        date: effectiveDue,
+        amount: null,
+        href: `/tasks/${row.shortcode}`,
+        facts: {
+          due: effectiveDue,
+          daysOverdue: plainDateDaysBetween(effectiveDue, today),
+        },
+      }),
+    );
   }
 
   // 2. stalled_project — in_progress project with no project/task/expense
@@ -279,17 +324,23 @@ export async function computeAttentionItems(
       d > latest ? d : latest,
     );
     if (lastActivityDate >= activityCutoff) continue;
-    items.push({
-      key: attentionKey("stalled_project", row.shortcode),
-      type: "stalled_project",
-      severity: "warning",
-      description: `"${row.name}" has had no project, task, or expense activity in ${STALE_ACTIVITY_DAYS}+ days`,
-      entityType: "project",
-      entityId: row.shortcode,
-      date: lastActivityDate,
-      amount: null,
-      href: `/projects/${row.shortcode}`,
-    });
+    items.push(
+      attentionItem({
+        type: "stalled_project",
+        severity: "warning",
+        name: row.name,
+        entityType: "project",
+        entityId: row.shortcode,
+        date: lastActivityDate,
+        amount: null,
+        href: `/projects/${row.shortcode}`,
+        facts: {
+          lastActivity: lastActivityDate,
+          daysSinceActivity: plainDateDaysBetween(lastActivityDate, today),
+          thresholdDays: STALE_ACTIVITY_DAYS,
+        },
+      }),
+    );
   }
 
   // 3. missing_budget — subtree actual+committed spend > 0, subtree
@@ -308,54 +359,66 @@ export async function computeAttentionItems(
     if (!subtree) continue;
     const spend = subtree.actualSpent + subtree.committedSpent;
     if (spend > 0 && subtree.costEstimate === null) {
-      items.push({
-        key: attentionKey("missing_budget", row.shortcode),
-        type: "missing_budget",
-        severity: "info",
-        // Not `formatCurrency`: that helper lives in `~/lib/utils`, a
-        // client-side module with no existing server import (grep confirms
-        // zero); a whole-digit `$`-prefix here is a deliberate no-cents
-        // summary, not a rendering shortcut.
-        description: `"${row.name}" has $${spend.toFixed(0)} in spend but no budget estimate`,
-        entityType: "project",
-        entityId: row.shortcode,
-        date: null,
-        amount: spend,
-        href: `/projects/${row.shortcode}`,
-      });
+      items.push(
+        attentionItem({
+          type: "missing_budget",
+          severity: "info",
+          name: row.name,
+          entityType: "project",
+          entityId: row.shortcode,
+          date: null,
+          amount: spend,
+          href: `/projects/${row.shortcode}`,
+          facts: {
+            spend,
+            actualSpend: subtree.actualSpent,
+            committedSpend: subtree.committedSpent,
+          },
+        }),
+      );
     }
   }
 
   // 4. past_due_planned_expense
   for (const row of pastDueExpenseRows) {
-    items.push({
-      key: attentionKey("past_due_planned_expense", row.shortcode),
-      type: "past_due_planned_expense",
-      severity: "warning",
-      description: `"${row.name}" was planned for ${row.date} but hasn't been logged as spent`,
-      entityType: "expense",
-      entityId: row.shortcode,
-      date: row.date,
-      amount: null,
-      href: `/expenses/${row.shortcode}`,
-    });
+    // `date` is non-null by the query predicate above (`isNotNull(expense.date)`).
+    const plannedFor = row.date as string;
+    items.push(
+      attentionItem({
+        type: "past_due_planned_expense",
+        severity: "warning",
+        name: row.name,
+        entityType: "expense",
+        entityId: row.shortcode,
+        date: plannedFor,
+        amount: row.cost,
+        href: `/expenses/${row.shortcode}`,
+        facts: {
+          plannedFor,
+          daysPastDue: plainDateDaysBetween(plannedFor, today),
+          cost: row.cost,
+        },
+      }),
+    );
   }
 
   // 5. unclassified_expense — trade left at the catch-all "other" AND no
   // cost logged (costType itself stays a clean 3-value enum — no
   // "uncategorized" value added there).
   for (const row of unclassifiedExpenseRows) {
-    items.push({
-      key: attentionKey("unclassified_expense", row.shortcode),
-      type: "unclassified_expense",
-      severity: "info",
-      description: `"${row.name}" has no trade or cost recorded`,
-      entityType: "expense",
-      entityId: row.shortcode,
-      date: row.date,
-      amount: null,
-      href: `/expenses/${row.shortcode}`,
-    });
+    items.push(
+      attentionItem({
+        type: "unclassified_expense",
+        severity: "info",
+        name: row.name,
+        entityType: "expense",
+        entityId: row.shortcode,
+        date: row.date,
+        amount: null,
+        href: `/expenses/${row.shortcode}`,
+        facts: { date: row.date },
+      }),
+    );
   }
 
   // 6. blocked_work — in_progress project with >=1 blocked task and zero
@@ -384,25 +447,33 @@ export async function computeAttentionItems(
     const projectId = t.projectId ? toProjectUuid(t.projectId) : null;
     if (projectId && inProjectScope(projectId)) projectsWithNext.add(projectId);
   }
-  const projectsWithBlocked = new Set<ProjectId>();
+  // A count, not a Set: the card states how many tasks are blocked, and the
+  // tally is free here — we are already walking every blocked task.
+  const blockedTaskCounts = new Map<ProjectId, number>();
   for (const b of actionable.blocked) {
     const projectId = b.task.projectId ? toProjectUuid(b.task.projectId) : null;
     if (projectId && inProjectScope(projectId))
-      projectsWithBlocked.add(projectId);
+      blockedTaskCounts.set(
+        projectId,
+        (blockedTaskCounts.get(projectId) ?? 0) + 1,
+      );
   }
   for (const row of inProgressProjectRows) {
-    if (projectsWithBlocked.has(row.id) && !projectsWithNext.has(row.id)) {
-      items.push({
-        key: attentionKey("blocked_work", row.shortcode),
-        type: "blocked_work",
-        severity: "warning",
-        description: `"${row.name}" has blocked tasks and no unblocked next action`,
-        entityType: "project",
-        entityId: row.shortcode,
-        date: null,
-        amount: null,
-        href: `/projects/${row.shortcode}`,
-      });
+    const blockedTasks = blockedTaskCounts.get(row.id) ?? 0;
+    if (blockedTasks > 0 && !projectsWithNext.has(row.id)) {
+      items.push(
+        attentionItem({
+          type: "blocked_work",
+          severity: "warning",
+          name: row.name,
+          entityType: "project",
+          entityId: row.shortcode,
+          date: null,
+          amount: null,
+          href: `/projects/${row.shortcode}`,
+          facts: { blockedTasks },
+        }),
+      );
     }
   }
 
@@ -424,34 +495,53 @@ export async function computeAttentionItems(
       window.derivedStart != null &&
       row.startDate > window.derivedStart
     ) {
-      items.push({
-        key: attentionKey("date_window_drift", row.shortcode, "start"),
-        type: "date_window_drift",
-        severity: "info",
-        description: `Start date ${row.startDate} is after the earliest dated work (${window.derivedStart})`,
-        entityType: "project",
-        entityId: row.shortcode,
-        date: window.derivedStart,
-        amount: null,
-        href: `/projects/${row.shortcode}`,
-      });
+      items.push(
+        attentionItem({
+          type: "date_window_drift",
+          severity: "info",
+          name: row.name,
+          entityType: "project",
+          entityId: row.shortcode,
+          date: window.derivedStart,
+          amount: null,
+          href: `/projects/${row.shortcode}`,
+          discriminator: "start",
+          facts: {
+            side: "start",
+            override: row.startDate,
+            derived: window.derivedStart,
+            daysHidden: plainDateDaysBetween(
+              window.derivedStart,
+              row.startDate,
+            ),
+          },
+        }),
+      );
     }
     if (
       row.endDate != null &&
       window.derivedEnd != null &&
       row.endDate < window.derivedEnd
     ) {
-      items.push({
-        key: attentionKey("date_window_drift", row.shortcode, "end"),
-        type: "date_window_drift",
-        severity: "info",
-        description: `End date ${row.endDate} is before the latest dated work (${window.derivedEnd})`,
-        entityType: "project",
-        entityId: row.shortcode,
-        date: window.derivedEnd,
-        amount: null,
-        href: `/projects/${row.shortcode}`,
-      });
+      items.push(
+        attentionItem({
+          type: "date_window_drift",
+          severity: "info",
+          name: row.name,
+          entityType: "project",
+          entityId: row.shortcode,
+          date: window.derivedEnd,
+          amount: null,
+          href: `/projects/${row.shortcode}`,
+          discriminator: "end",
+          facts: {
+            side: "end",
+            override: row.endDate,
+            derived: window.derivedEnd,
+            daysHidden: plainDateDaysBetween(row.endDate, window.derivedEnd),
+          },
+        }),
+      );
     }
   }
 

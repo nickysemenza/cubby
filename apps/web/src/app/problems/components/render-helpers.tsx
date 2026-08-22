@@ -26,5 +26,5 @@ export function createdAgoDetail(createdAt: Date | string | number): ReactNode {
 /** Muted location detail row with the location entity icon. */
 /** Inline monospace chip used for UPCs and raw amounts in badge rows. */
 export function CodeChip({ children }: { children: ReactNode }) {
-  return <code className="rounded bg-muted px-2 py-1 text-sm">{children}</code>;
+  return <code className="bg-muted px-2 py-1 text-sm">{children}</code>;
 }

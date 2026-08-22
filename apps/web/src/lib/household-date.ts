@@ -50,3 +50,24 @@ function shiftHouseholdCalendarDate(from: Date, days: number): string {
     .toISOString()
     .slice(0, 10);
 }
+
+/**
+ * Whole calendar days from `from` to `to`, both household-local plain dates
+ * (`"2026-07-22"`). Positive when `to` is later.
+ *
+ * Safe to do in UTC despite the warnings above: both operands are already
+ * calendar dates with no time component, so `Date.UTC` is being used purely as
+ * a day-number function — there is no instant to misplace across a timezone.
+ * The DST hazard `shiftHouseholdCalendarDate` guards against applies to
+ * shifting a date, not to counting the days between two of them.
+ */
+export function plainDateDaysBetween(from: string, to: string): number {
+  const toUtcDay = (date: string): number => {
+    const [year, month, day] = date.split("-").map(Number);
+    if (year == null || month == null || day == null) {
+      throw new Error(`Not a plain date: "${date}"`);
+    }
+    return Date.UTC(year, month - 1, day);
+  };
+  return Math.round((toUtcDay(to) - toUtcDay(from)) / (24 * 60 * 60 * 1000));
+}

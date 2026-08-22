@@ -24,6 +24,7 @@ import type {
   EntityDetailRoute,
 } from "~/entities/entities";
 import { EntityIcon } from "~/entities/entities";
+import { cn } from "~/lib/utils";
 import { useRecipeUsage } from "./recipe-usage-context";
 
 // Cap each section's initial render so one noisy detector (e.g. 50+ unit-coverage
@@ -46,14 +47,35 @@ type RoutePattern =
 const routeEntityId = (route: RoutePattern): string =>
   "href" in route ? route.href : route.params.shortcode;
 
-// Noun for the "open the full ___" tooltip, keyed by the card's detail route.
+/**
+ * Noun for the "open the full ___" tooltip.
+ *
+ * Keyed by the leading path segment rather than the router pattern, so an
+ * `{ href }` card (every household-tracker row builds its path server-side)
+ * resolves the same noun as a `{ to, params }` one. The old pattern-keyed map
+ * missed href routes entirely and had no entry for expenses, ingredients, meals
+ * or cookbooks, so a large share of the page read "open the full record page".
+ */
 const ROUTE_NOUN: Record<string, string> = {
-  "/products/$shortcode": "product",
-  "/recipes/$shortcode": "recipe",
-  "/inventory/$shortcode": "inventory entry",
-  "/locations/$shortcode": "location",
-  "/purchases/$shortcode": "purchase",
-  "/vendors/$shortcode": "vendor",
+  products: "product",
+  recipes: "recipe",
+  inventory: "inventory entry",
+  locations: "location",
+  purchases: "purchase",
+  vendors: "vendor",
+  expenses: "expense",
+  ingredients: "ingredient",
+  projects: "project",
+  tasks: "task",
+  meals: "meal",
+  cookbooks: "cookbook",
+  financial: "financial record",
+};
+
+/** First path segment of either route shape, e.g. `/expenses/EXP-1` → `expenses`. */
+const routeNoun = (route: RoutePattern): string => {
+  const path = "href" in route ? route.href : route.to;
+  return ROUTE_NOUN[path.split("/").filter(Boolean)[0] ?? ""] ?? "record";
 };
 
 // Icon can be either a LucideIcon component or an entity key
@@ -81,9 +103,27 @@ export type RenderedProblemItem = {
    * that 404s.
    */
   route?: RoutePattern;
+  /**
+   * Label for the navigation button. Defaults to `Open {noun}` derived from
+   * `route`, which is also what the button's tooltip says — so the two cannot
+   * disagree, and a new section gets a correct label for free.
+   *
+   * Only set this to override the noun. It used to default to "Edit", which was
+   * wrong twice over: the button navigates rather than edits, and on the cards
+   * that carry an inline Delete or Merge the pair read as "Edit / Delete".
+   */
   editLabel?: string;
   customActions?: ReactNode;
   imageSlot?: ReactNode;
+  /**
+   * Severity cue, rendered as the card's left spine.
+   *
+   * Deliberately a spine rather than a badge: a stamp reading "INFO" on most of
+   * a section's cards is a row of chrome that repeats what the group heading
+   * already said, and it costs the badge slot that a real measurement wants.
+   * Absent keeps the neutral hairline.
+   */
+  tone?: ProblemTone;
   /**
    * Opt-in inline quick-fix. When set, the card grows a toggle button that
    * expands `render(close)` below the details — resolving the problem without
@@ -92,6 +132,19 @@ export type RenderedProblemItem = {
    * a pure data function with no hooks.
    */
   inlineFix?: { label: string; render: (close: () => void) => ReactNode };
+};
+
+/** How urgently a card wants attention. Mirrors the attention rules' severity. */
+type ProblemTone = "critical" | "warning" | "info";
+
+/**
+ * Tone → spine class. Static strings, not templated: Tailwind scans source
+ * text, so a computed class name would be dropped from the build.
+ */
+const TONE_SPINE: Record<ProblemTone, string> = {
+  critical: "border-l-[length:var(--border-spine-card)] border-l-destructive",
+  warning: "border-l-[length:var(--border-spine-card)] border-l-warning",
+  info: "border-l-[length:var(--border-spine-card)] border-l-slate",
 };
 
 /** A coverage section's denominator — the "M" in "N of M photographed". */
@@ -323,10 +376,11 @@ function ProblemCard({ rendered }: { rendered: RenderedProblemItem }) {
     badges = [],
     details = [],
     route,
-    editLabel = "Edit",
+    editLabel,
     customActions,
     imageSlot,
     inlineFix,
+    tone,
   } = rendered;
 
   // How many recipes use this product (via its ingredient) — a "how much does
@@ -342,7 +396,10 @@ function ProblemCard({ rendered }: { rendered: RenderedProblemItem }) {
       title={title}
       subtitle={subtitle}
       imageSlot={imageSlot}
-      className="border-l border-l-border p-2"
+      className={cn(
+        "p-2",
+        tone ? TONE_SPINE[tone] : "border-l border-l-border",
+      )}
       actions={
         <div className="flex gap-1">
           {inlineFix && (
@@ -385,12 +442,10 @@ function ProblemCard({ rendered }: { rendered: RenderedProblemItem }) {
                 }
               >
                 <ExternalLink className="mr-1 size-3" />
-                {editLabel}
+                {editLabel ?? `Open ${routeNoun(route)}`}
               </TooltipTrigger>
               <TooltipContent>
-                Open the full{" "}
-                {("to" in route ? ROUTE_NOUN[route.to] : undefined) ?? "record"}{" "}
-                page
+                Open the full {routeNoun(route)} page
               </TooltipContent>
             </Tooltip>
           )}

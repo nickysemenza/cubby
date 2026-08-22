@@ -39,8 +39,12 @@ import {
   type ProductWithBetterUpcData,
   type ProductWithIslandedMappings,
   type ProductWithTitleDerivableSize,
+  TRACKER_PROBLEM_KEY_BY_TYPE,
 } from "@cubby/schemas/problems";
-import type { ProjectAttentionItem } from "@cubby/schemas/project";
+import type {
+  ProjectAttentionItem,
+  ProjectAttentionType,
+} from "@cubby/schemas/project";
 import { isMiscProduct, isNonFoodCategory } from "@cubby/shared";
 import { sum, uniq, uniqBy } from "es-toolkit";
 import { problemQueryDeclarations } from "~/entities/problem-registry";
@@ -93,12 +97,14 @@ import {
   writeProductConversionCoverageProjection,
 } from "~/server/repo/product";
 import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
+import { computeAttentionItems } from "~/server/repo/project/attention";
 import { countStaleRecipeTotals } from "~/server/repo/recipe/totals";
 import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/semantic/embeddings";
 import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import {
+  type DiagnosticRunOptions,
   type DiagnosticSampleResult,
   runDiagnostic,
 } from "~/server/services/problem-diagnostics.service";
@@ -554,6 +560,12 @@ const runExactProblemPages = async (
   options?: {
     projectionFreshness?: ProductConversionCoverageFreshness;
     concurrency?: number;
+    /**
+     * Work a derived Problem's diagnostic may reuse instead of recomputing.
+     * Lets a lane compute an expensive shared input (e.g. the attention rules)
+     * once and hand it to every key that needs it.
+     */
+    diagnostic?: DiagnosticRunOptions;
   },
 ): Promise<Partial<Record<ProblemKey, ExactProblemPage>>> => {
   const tasks = Object.fromEntries(
@@ -562,6 +574,7 @@ const runExactProblemPages = async (
       () =>
         executeProblem(db, key, {
           projectionFreshness: options?.projectionFreshness,
+          diagnostic: options?.diagnostic,
         }),
     ]),
   ) as Record<string, () => Promise<ExactProblemPage>>;
@@ -1269,118 +1282,105 @@ type TrackerEntityProblemKey = Exclude<
   "projectsWithDateDrift"
 >;
 
+/** The rule each tracker key selects, derived from the schema's own map. */
+const TRACKER_TYPE_BY_KEY = Object.fromEntries(
+  Object.entries(TRACKER_PROBLEM_KEY_BY_TYPE).map(([type, key]) => [key, type]),
+) as Record<ProblemKey, ProjectAttentionType>;
+
+/**
+ * The attention rows, keyed the way `attentionKey` keys them for rules that
+ * emit at most one row per entity. `date_window_drift` is excluded because it
+ * can emit two rows per project — it is served by its own derived page, which
+ * carries the discriminator.
+ */
+const indexAttentionItems = (
+  items: readonly ProjectAttentionItem[],
+): Map<string, ProjectAttentionItem> =>
+  new Map(
+    items
+      .filter((item) => item.type !== "date_window_drift")
+      .map((item) => [`${item.type}:${item.entityId}`, item]),
+  );
+
+/**
+ * Presentation only. Membership, order and count come from the canonical exact
+ * page; this looks each selected row up in the rule engine's own output so the
+ * Problems page shows the SAME measurements and wording as the projects
+ * dashboard and the MCP tools.
+ *
+ * It used to rebuild the row from the generic list columns instead, which is how
+ * the two drifted: every measurement was dropped, `blocked_work` came out `info`
+ * rather than `warning`, and `stalled_project` reported `project.updatedAt` — a
+ * value `attention.ts` documents at length as meaningless — as a UTC day.
+ */
 const presentTrackerProblem = (
   key: TrackerEntityProblemKey,
   page: ExactProblemPage,
-): ProjectAttentionItem[] =>
-  page.data.map((row) => {
-    const r = row as Record<string, unknown>;
-    const id = String(r.id);
-    const name = String(r.name ?? "Untitled");
-    const isTask = key === "overdueTasks";
-    const isExpense =
-      key === "pastDuePlannedExpenses" || key === "unclassifiedExpenses";
-    const type =
-      key === "overdueTasks"
-        ? "overdue_task"
-        : key === "stalledProjects"
-          ? "stalled_project"
-          : key === "projectsMissingBudget"
-            ? "missing_budget"
-            : key === "pastDuePlannedExpenses"
-              ? "past_due_planned_expense"
-              : key === "unclassifiedExpenses"
-                ? "unclassified_expense"
-                : "blocked_work";
-    const entityType = isTask ? "task" : isExpense ? "expense" : "project";
-    const date = isTask
-      ? ((r.dueEndDate ?? r.dueDate ?? null) as string | null)
-      : isExpense
-        ? ((r.date ?? null) as string | null)
-        : key === "stalledProjects"
-          ? r.updatedAt instanceof Date
-            ? r.updatedAt.toISOString().slice(0, 10)
-            : null
-          : null;
-    const amount =
-      key === "projectsMissingBudget"
-        ? Number(
-            (
-              r.rollup as
-                | {
-                    subtree?: {
-                      actualSpent?: number;
-                      committedSpent?: number;
-                    };
-                  }
-                | undefined
-            )?.subtree?.actualSpent ?? 0,
-          ) +
-          Number(
-            (r.rollup as { subtree?: { committedSpent?: number } } | undefined)
-              ?.subtree?.committedSpent ?? 0,
-          )
-        : null;
-    return {
-      key: `${type}:${id}`,
-      type,
-      severity:
-        key === "overdueTasks"
-          ? "critical"
-          : key === "stalledProjects" || key === "pastDuePlannedExpenses"
-            ? "warning"
-            : "info",
-      description:
-        key === "overdueTasks"
-          ? `"${name}" is overdue and still open`
-          : key === "stalledProjects"
-            ? `"${name}" has had no recent project activity`
-            : key === "projectsMissingBudget"
-              ? `"${name}" has spend but no budget estimate`
-              : key === "pastDuePlannedExpenses"
-                ? `"${name}" is a past-due planned expense`
-                : key === "unclassifiedExpenses"
-                  ? `"${name}" has no trade or cost recorded`
-                  : `"${name}" has blocked work and no next action`,
-      entityType,
-      entityId: id,
-      date,
-      amount,
-      href: `/${entityType === "task" ? "tasks" : entityType === "expense" ? "expenses" : "projects"}/${id}`,
-    };
+  index: Map<string, ProjectAttentionItem>,
+): ProjectAttentionItem[] => {
+  const type = TRACKER_TYPE_BY_KEY[key];
+  return page.data.flatMap((row) => {
+    const id = String((row as { id: unknown }).id);
+    const item = index.get(`${type}:${id}`);
+    // A miss is a benign race, not an invariant break: membership and the rule
+    // engine each evaluate `householdLocalDate()` independently, so a request
+    // straddling local midnight can legitimately disagree about "overdue".
+    // Dropping the row is right — the rule engine is the authority on what the
+    // row would say, and inventing a half-measured card is what the old
+    // presenter did. The count still comes from the page, so a dropped row is
+    // visible as a count/rows mismatch rather than silently wrong prose.
+    return item ? [item] : [];
   });
+};
 
 export const findTrackerProblems = async (
   db: Database,
 ): Promise<ProblemsTracker> => {
   const exactKeys = TRACKER_PROBLEM_KEYS;
-  const exact = await runExactProblemPages(db, exactKeys);
+  // One rule-engine run for the whole lane. Three of these keys resolve their
+  // membership through the `attention` project filter, which calls this itself,
+  // and the drift key's diagnostic calls it again — so hoisting it here and
+  // handing it down is a net reduction in work, not an addition.
+  const attentionItems = await computeAttentionItems(db);
+  const exact = await runExactProblemPages(db, exactKeys, {
+    diagnostic: { attentionItems },
+  });
+  const index = indexAttentionItems(attentionItems);
   const page = (key: (typeof exactKeys)[number]): ExactProblemPage => {
     const result = exact[key];
     if (!result) throw new Error(`Missing canonical Problem result "${key}"`);
     return result;
   };
   return {
-    overdueTasks: presentTrackerProblem("overdueTasks", page("overdueTasks")),
+    overdueTasks: presentTrackerProblem(
+      "overdueTasks",
+      page("overdueTasks"),
+      index,
+    ),
     stalledProjects: presentTrackerProblem(
       "stalledProjects",
       page("stalledProjects"),
+      index,
     ),
     projectsMissingBudget: presentTrackerProblem(
       "projectsMissingBudget",
       page("projectsMissingBudget"),
+      index,
     ),
     pastDuePlannedExpenses: presentTrackerProblem(
       "pastDuePlannedExpenses",
       page("pastDuePlannedExpenses"),
+      index,
     ),
     unclassifiedExpenses: presentTrackerProblem(
       "unclassifiedExpenses",
       page("unclassifiedExpenses"),
+      index,
     ),
     blockedWorkProjects: presentTrackerProblem(
       "blockedWorkProjects",
       page("blockedWorkProjects"),
+      index,
     ),
     // This remains derived because one project may produce two date-window
     // rows.  Its typed adapter computes the complete relation before sampling.
@@ -1501,9 +1501,17 @@ export const findProblemByType = async (
     key !== "projectsWithDateDrift" &&
     (TRACKER_PROBLEM_KEYS as readonly ProblemKey[]).includes(key)
   ) {
+    // MCP-only path (`getByType` has no web client), so the extra rule-engine
+    // run is an agent-frequency cost, not a page-render one — and it buys the
+    // same measurements and wording every other consumer gets.
+    const index = indexAttentionItems(await computeAttentionItems(db));
     return {
       type: key,
-      items: presentTrackerProblem(key as TrackerEntityProblemKey, result),
+      items: presentTrackerProblem(
+        key as TrackerEntityProblemKey,
+        result,
+        index,
+      ),
       total: result.count,
     };
   }

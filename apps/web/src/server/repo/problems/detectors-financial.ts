@@ -108,6 +108,9 @@ export async function findDuplicateFinancialTransactionSourceRefs(
  */
 type AllocationDefectRow = {
   id: string;
+  merchant: string | null;
+  rawDescription: string | null;
+  postedDate: string | null;
   kind: string;
   amount: number;
   allocationCount: number;
@@ -123,6 +126,8 @@ const presentAllocationDefect = (
   row: AllocationDefectRow,
 ): FinancialTransactionAllocationDefect => ({
   id: unsafeFinancialTransactionShortcode(row.id),
+  name: row.merchant ?? row.rawDescription ?? null,
+  postedDate: row.postedDate ?? null,
   kind: row.kind,
   amount: Number(row.amount),
   allocationCount: Number(row.allocationCount),
@@ -177,6 +182,9 @@ async function queryAllocationDefects(
   const result = await getDb(db).execute<AllocationDefectRow>(sql`
     SELECT
       ft.shortcode AS id,
+      ft.merchant AS merchant,
+      ft."rawDescription" AS "rawDescription",
+      ft."postedDate" AS "postedDate",
       ft.kind AS kind,
       ft."amount" AS amount,
       ${allocationCount}::int AS "allocationCount",
