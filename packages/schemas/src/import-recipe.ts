@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { MAX_EXTERNAL_HTML_BYTES } from "@cubby/shared";
-import { cookbookShortcode, recipeShortcode } from "./identifiers";
+import {
+  cookbookShortcode,
+  productShortcode,
+  recipeShortcode,
+} from "./identifiers";
 import { cookbookSummary } from "./recipe";
 
 // The raw "import recipe" carrier: a recipe from any import source (EPUB cookbook
@@ -131,6 +135,17 @@ export const upsertCookbookInput = z.object({
   subjects: z.array(z.string()).optional(),
   sourceLabel: z.string(),
   coverImageId: z.uuid().optional(),
+  /**
+   * The book's ISBN as a canonical GTIN-14, picked out of the EPUB's OPF
+   * `<dc:identifier>` values by `isbnFromEpubIdentifiers`. Absent when the book
+   * declares no valid ISBN (plenty declare only a Calibre UUID).
+   *
+   * Transient: it is NOT stored on the Cookbook. The importer resolves it to a
+   * Product — matching an existing one by barcode, or minting one — and keeps
+   * only `Cookbook.productId`. Barcodes live on `ProductExternalId`, and a
+   * second copy on Cookbook would be a second thing to keep in agreement.
+   */
+  isbn: z.string().optional(),
 });
 
 export const cookbookIdOut = z.object({
@@ -139,6 +154,14 @@ export const cookbookIdOut = z.object({
 
 export const cookbookIdInput = z.object({
   cookbookId: cookbookShortcode,
+});
+
+// Link (or, with a null productId, unlink) a cookbook's physical copy. Always
+// operator-driven: see the `Cookbook.productId` column comment for why nothing
+// resolves a title to a product without a human confirming it.
+export const setCookbookProductInput = z.object({
+  cookbookId: cookbookShortcode,
+  productId: productShortcode.nullable(),
 });
 
 export const cookbookSourceOut = z.object({

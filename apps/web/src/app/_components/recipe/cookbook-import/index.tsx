@@ -8,6 +8,7 @@ import {
   type ImportRecipe,
   importRecipesSchema,
 } from "@cubby/schemas/import-recipe";
+import { isbnFromEpubIdentifiers } from "@cubby/schemas/isbn";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { sum } from "es-toolkit";
 import { AlertTriangle } from "lucide-react";
@@ -216,6 +217,9 @@ export function CookbookImport({
             epubMeta: {
               author: [...meta.authors],
               subjects: [...meta.subjects],
+              // The OPF names one identifier "unique" but that is usually a
+              // Calibre UUID, so scan all of them for a valid ISBN.
+              isbn: isbnFromEpubIdentifiers(meta.identifiers),
             },
             name: title || b.name,
           }));
@@ -600,6 +604,9 @@ export function CookbookImport({
             subjects: book.epubMeta?.subjects ?? [],
             sourceLabel: source,
             coverImageId,
+            // Transient — the server resolves it to a Product and stores only
+            // the link. Omitted, not nulled, when the EPUB declares no ISBN.
+            ...(book.epubMeta?.isbn ? { isbn: book.epubMeta.isbn } : {}),
           });
           cookbookId = cookbook.id;
         } catch (error) {

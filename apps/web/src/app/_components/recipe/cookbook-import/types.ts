@@ -39,7 +39,12 @@ export type Book = {
   name: string;
   recipes: ImportRecipe[];
   /** Book-level OPF metadata read from the EPUB (empty for the JSON path). */
-  epubMeta?: { author: string[]; subjects: string[] };
+  epubMeta?: {
+    author: string[];
+    subjects: string[];
+    /** Canonical GTIN-14 from the OPF's `<dc:identifier>`s; null if none is an ISBN. */
+    isbn: string | null;
+  };
   /** Cover image extracted from the EPUB (empty for JSON / from-source paths). */
   cover?: { bytes: Uint8Array; mime: string };
   /**

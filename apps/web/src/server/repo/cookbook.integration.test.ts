@@ -13,13 +13,19 @@ import {
   getCookbookSource,
   listCookbooks,
   reprocessCookbookStream,
+  setCookbookProduct,
   upsertCookbook,
 } from "./cookbook";
 import { getDb } from "./database-helpers";
 import { findOrphanedEntityEmbeddings } from "./entity-embedding-cleanup";
 import { upsertCookbookRecipeFromCookbook } from "./import-recipe-convert";
 import { findPartiallyImportedCookbooks } from "./problems";
-import { cookbookRecipe } from "./repo.fixtures";
+import { deleteProducts } from "./product";
+import {
+  cookbookRecipe,
+  createProductFixture,
+  makeProductInput,
+} from "./repo.fixtures";
 
 // EPUB importer suite — actor audits as an epub import, not the UI.
 describe("cookbook repository", () => {
@@ -311,5 +317,73 @@ describe("cookbook repository", () => {
     expect(recipeEmbedding?.deletedAt).not.toBeNull();
 
     expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
+  });
+
+  describe("physical copy link", () => {
+    const linkedBook = async () => {
+      const raw = [cookbookRecipe("Pancakes", ["2 cups flour"])];
+      const cb = await upsertCookbook(
+        ctx.db,
+        { name: "Six Seasons", rawJson: raw, sourceLabel: "six.epub" },
+        ctx.actor,
+      );
+      const shelfCopy = await createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Six Seasons: A New Way with Vegetables" }),
+        ctx.actor,
+      );
+      return { cb, shelfCopy };
+    };
+
+    it("links a product, then clears it", async () => {
+      const { cb, shelfCopy } = await linkedBook();
+
+      const linked = await setCookbookProduct(
+        ctx.db,
+        ctx.actor,
+        cb.entityId,
+        shelfCopy.entityId,
+      );
+      expect(linked.product).toEqual({
+        id: shelfCopy.id,
+        name: "Six Seasons: A New Way with Vegetables",
+        coverUrl: null,
+      });
+
+      const cleared = await setCookbookProduct(
+        ctx.db,
+        ctx.actor,
+        cb.entityId,
+        null,
+      );
+      expect(cleared.product).toBeNull();
+    });
+
+    // The link is a RETAINING edge, so the copy can't be deleted out from under
+    // the cookbook. Blocking, not cascading: the policy vocabulary has no
+    // set-null effect, and a soft-delete on this edge would take the cookbook
+    // and every recipe it imported with it.
+    it("blocks deleting a product a cookbook claims, until it is unlinked", async () => {
+      const { cb, shelfCopy } = await linkedBook();
+      await setCookbookProduct(
+        ctx.db,
+        ctx.actor,
+        cb.entityId,
+        shelfCopy.entityId,
+      );
+
+      await expect(
+        deleteProducts(ctx.db, [shelfCopy.entityId], ctx.actor),
+      ).rejects.toMatchObject({ cause: { reason: "PRODUCT_HAS_COOKBOOKS" } });
+
+      await setCookbookProduct(ctx.db, ctx.actor, cb.entityId, null);
+      await expect(
+        deleteProducts(ctx.db, [shelfCopy.entityId], ctx.actor),
+      ).resolves.toBeDefined();
+
+      // The cookbook itself is untouched either way — that is the whole point.
+      const survivors = await listCookbooks(ctx.db);
+      expect(survivors.map((c) => c.id)).toContain(cb.output.id);
+    });
   });
 });

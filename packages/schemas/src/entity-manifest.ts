@@ -261,6 +261,8 @@ export const entityManifest = {
     countable: true,
     relationships: [
       path("cover", "Cover image", "image", out("Cookbook.coverImageId")),
+      // The physical copy on the shelf; null for EPUB-only cookbooks.
+      path("product", "Product", "product", out("Cookbook.productId")),
     ],
     // Non-bulk: deleting a cookbook cascades through every recipe it imported,
     // so it is one at a time and confirmed.

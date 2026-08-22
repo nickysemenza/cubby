@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   isbn,
+  isbnFromEpubIdentifiers,
   isbnFromGtin,
   normalizeIsbn,
   productCodeSearchTerms,
@@ -49,5 +50,46 @@ describe("ISBN identity", () => {
     expect(productCodeSearchTerms("00012345678905")).toEqual([
       "00012345678905",
     ]);
+  });
+});
+
+describe("isbnFromEpubIdentifiers", () => {
+  // A Calibre-produced EPUB declares the UUID first and names IT as the OPF's
+  // `unique-identifier`, so trusting declaration order or that attribute would
+  // pick the wrong value on the most common kind of book in the library.
+  it("finds the ISBN behind a leading Calibre UUID", () => {
+    expect(
+      isbnFromEpubIdentifiers([
+        "urn:uuid:6f2b1a30-1f1e-4f6a-9d5a-000000000000",
+        "urn:isbn:9781579656317",
+      ]),
+    ).toBe("09781579656317");
+  });
+
+  it("strips either scheme prefix, and accepts a bare ISBN", () => {
+    expect(isbnFromEpubIdentifiers(["ISBN:978-1-57965-631-7"])).toBe(
+      "09781579656317",
+    );
+    expect(isbnFromEpubIdentifiers(["9781579656317"])).toBe("09781579656317");
+  });
+
+  // ISBN-10 normalizes to the same identity, so a book can't acquire a second
+  // Product merely because its EPUB printed the older encoding.
+  it("normalizes an ISBN-10 to the same GTIN-14 as its ISBN-13", () => {
+    expect(isbnFromEpubIdentifiers(["0306406152"])).toBe("09780306406157");
+  });
+
+  // The reason scanning every identifier is safe: nothing that isn't an ISBN
+  // can pass the check digit, so a UUID-only book yields null rather than a
+  // wrong match that would link the cookbook to some unrelated product.
+  it("returns null when no identifier is a valid ISBN", () => {
+    expect(
+      isbnFromEpubIdentifiers([
+        "urn:uuid:6f2b1a30-1f1e-4f6a-9d5a-000000000000",
+        "calibre:1234",
+        "9780306406158",
+      ]),
+    ).toBeNull();
+    expect(isbnFromEpubIdentifiers([])).toBeNull();
   });
 });

@@ -71,6 +71,9 @@ export const AppErrors = {
   TOOL_TIMELINE_CONFLICT: "PRECONDITION_FAILED",
   PRODUCT_HAS_WISH_CANDIDATES: "PRECONDITION_FAILED",
   PRODUCT_HAS_LOCATIONS: "PRECONDITION_FAILED",
+  // A book product that a Cookbook claims as its physical copy. Unlink from
+  // the cookbook page first; the cookbook and its recipes outlive the copy.
+  PRODUCT_HAS_COOKBOOKS: "PRECONDITION_FAILED",
   // A product still listed inside a live kit's component list — same shape as
   // PRODUCT_HAS_PURCHASE_LINKS, one hop over into ProductComponent.
   PRODUCT_HAS_KIT_LINKS: "PRECONDITION_FAILED",

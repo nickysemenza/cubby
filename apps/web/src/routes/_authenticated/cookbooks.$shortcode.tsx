@@ -6,6 +6,7 @@ import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
 import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-usage-panel";
+import { CookbookPhysicalCopy } from "~/app/cookbooks/cookbook-physical-copy";
 import { useCookbookDelete } from "~/app/cookbooks/use-cookbook-delete";
 import { RecipeList } from "~/app/recipes/recipelist";
 import { Row } from "~/components/layout";
@@ -201,6 +202,12 @@ function CookbookDetailPage() {
           />
         </figure>
       )}
+
+      <CookbookPhysicalCopy
+        cookbookId={cookbookId}
+        cookbookName={name}
+        product={cookbook?.product ?? null}
+      />
 
       {reprocess.running && (
         <BulkProgressBar

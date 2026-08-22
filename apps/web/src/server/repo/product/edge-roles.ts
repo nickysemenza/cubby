@@ -209,6 +209,14 @@ export const PRODUCT_DELETE_EDGE_POLICY = {
     reason: "PRODUCT_HAS_LOCATIONS",
     label: "locations",
   },
+  "Cookbook.productId": {
+    code: "block-live-cookbook-copy",
+    effect: "block",
+    description:
+      "A product that is a cookbook's physical copy can't be deleted — unlink the cookbook first. Blocking rather than clearing the link because the policy vocabulary has no set-null effect, and a soft-delete here would take the cookbook and every recipe it imported with it.",
+    reason: "PRODUCT_HAS_COOKBOOKS",
+    label: "cookbooks",
+  },
   "ProductImage.productId": {
     code: "soft-delete-association",
     effect: "soft-delete",

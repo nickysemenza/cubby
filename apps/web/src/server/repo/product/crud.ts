@@ -54,6 +54,7 @@ import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
+  cookbook,
   expense,
   image,
   inventoryEntry,
@@ -2230,6 +2231,11 @@ const PRODUCT_RETAINING_DEPENDENTS: Record<
   "Location.productId": (tx, ids) =>
     tx.query.location.findMany({
       where: and(inArray(location.productId, ids), notDeleted(location)),
+      columns: { productId: true },
+    }),
+  "Cookbook.productId": (tx, ids) =>
+    tx.query.cookbook.findMany({
+      where: and(inArray(cookbook.productId, ids), notDeleted(cookbook)),
       columns: { productId: true },
     }),
   "ProductComponent.componentProductId": async (tx, ids) => {

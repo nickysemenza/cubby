@@ -67,14 +67,21 @@ pub struct WCookbookChunk {
 pub struct WCookbookChunks(pub Vec<WCookbookChunk>);
 
 /// Book-level EPUB metadata (mirrors `recipe_epub::EpubMeta`): the OPF title,
-/// authors, and subject tags. Surfaced so the cookbook import can stamp a
-/// `Cookbook` row's metadata without re-running the LLM.
+/// authors, subject tags, and raw identifiers. Surfaced so the cookbook import
+/// can stamp a `Cookbook` row's metadata without re-running the LLM.
 #[derive(Tsify, Serialize, Deserialize)]
 #[tsify(into_wasm_abi)]
 pub struct WEpubMeta {
     pub title: String,
     pub authors: Vec<String>,
     pub subjects: Vec<String>,
+    /// Raw OPF `<dc:identifier>` values, in declaration order and unranked —
+    /// `urn:uuid:...`, `urn:isbn:...`, a bare ISBN, a Calibre id. Deliberately
+    /// NOT narrowed to "the ISBN" here: picking one means knowing ISBN check
+    /// digits, and Cubby already owns that logic in `@cubby/schemas/isbn`
+    /// (which also produces the canonical GTIN-14 barcodes are stored as).
+    /// Normalizing in two languages would be two things to keep agreeing.
+    pub identifiers: Vec<String>,
 }
 
 impl From<EpubMeta> for WEpubMeta {
@@ -83,6 +90,7 @@ impl From<EpubMeta> for WEpubMeta {
             title: m.title,
             authors: m.authors,
             subjects: m.subjects,
+            identifiers: m.identifiers,
         }
     }
 }

@@ -30,8 +30,10 @@ import {
   parseRecipeHtmlInput,
   recipeImportIdOut,
   scrapeRecipeInput,
+  setCookbookProductInput,
   upsertCookbookInput,
 } from "@cubby/schemas/import-recipe";
+import { cookbookSummary } from "@cubby/schemas/recipe";
 import { uniq } from "es-toolkit";
 import {
   type BulkProgressEvent,
@@ -50,6 +52,7 @@ import {
   getCookbookSource,
   listCookbooks,
   reprocessCookbookStream,
+  setCookbookProduct,
   upsertCookbook,
 } from "~/server/repo/cookbook";
 import {
@@ -72,6 +75,7 @@ import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
+import { findOrCreateByUPC } from "~/server/services/product-orchestration.service";
 import { extractCookbookChunk } from "~/server/utils/cookbook-llm";
 import {
   lintImportRecipe,
@@ -84,6 +88,7 @@ import {
 import { protectedProcedure, strictOutput } from "../../trpc";
 
 const cookbookShortcodes = bindShortcodeResolver("cookbook");
+const productShortcodes = bindShortcodeResolver("product");
 
 const scrape = protectedProcedure
   .input(scrapeRecipeInput)
@@ -140,6 +145,42 @@ const upsertCookbookEndpoint = protectedProcedure
       entity: { entityType: "cookbook", entityId: result.entityId },
       source: "cookbook.upsert",
     });
+
+    // Resolve the book's physical copy from its ISBN, which is the ONLY
+    // identity-grade signal available: matching by title is what confuses two
+    // different books that share a name ("Tartine Book No. 3" is not "Tartine:
+    // A Classic Revisited"), so nothing here falls back to one. An exact
+    // barcode match is safe to link without asking; when no Product carries
+    // the barcode, `findOrCreateByUPC` mints the SKU. That is a catalog entry,
+    // not a claim of ownership — owning it is still Expense + InventoryEntry.
+    //
+    // Best-effort: the cookbook and its recipes are already committed, and a
+    // lookup-service hiccup must not fail an import that otherwise succeeded.
+    // The link is re-establishable by hand from the cookbook page.
+    if (input.isbn) {
+      try {
+        const { product } = await findOrCreateByUPC(
+          ctx.db,
+          ctx.usdaClient,
+          ctx.upcLookupClient,
+          input.isbn,
+          input.name,
+          ctx.actorContext,
+        );
+        await setCookbookProduct(
+          ctx.db,
+          ctx.actorContext,
+          result.entityId,
+          await productShortcodes.one(ctx.db, product.id),
+        );
+      } catch (error) {
+        console.error(
+          `[cookbook.upsert] ISBN ${input.isbn} did not resolve to a product; link it by hand:`,
+          error,
+        );
+      }
+    }
+
     return result.output;
   });
 // Hand back a cookbook's stored extraction so the importer can re-open it for
@@ -415,6 +456,25 @@ const listCookbooksEndpoint = protectedProcedure
     return await listCookbooks(ctx.db);
   });
 
+// Link a cookbook to the physical copy on the shelf, or clear the link. The
+// manual counterpart to the ISBN resolution in `upsertCookbookEndpoint`: books
+// whose EPUB declares no ISBN, and the cookbooks imported before that
+// resolution existed, are linked here by hand.
+const setCookbookProductEndpoint = protectedProcedure
+  .input(setCookbookProductInput)
+  .output(strictOutput(cookbookSummary))
+  .mutation(async ({ ctx, input }) => {
+    const cookbookId = await cookbookShortcodes.one(ctx.db, input.cookbookId);
+    return await setCookbookProduct(
+      ctx.db,
+      ctx.actorContext,
+      cookbookId,
+      input.productId
+        ? await productShortcodes.one(ctx.db, input.productId)
+        : null,
+    );
+  });
+
 // Delete a cookbook: every recipe imported from it (cascading to sections,
 // ingredients, and images via the shared deleteRecipes path) AND the Cookbook
 // row itself, in one transaction — a book must not outlive its recipes.
@@ -503,6 +563,7 @@ export const recipeImportProcedures = {
   previewNotionSync,
   importNotionSyncStream,
   listCookbooks: listCookbooksEndpoint,
+  setCookbookProduct: setCookbookProductEndpoint,
   deleteCookbook: deleteCookbookEndpoint,
   reprocessCookbook: reprocessCookbookStreamEndpoint,
   extractCookbookChunk: extractCookbookChunkProc,

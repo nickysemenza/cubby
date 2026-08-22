@@ -331,8 +331,12 @@ export const recipe = pgTable(
 // recipes came from). Holds the full assembled `ImportRecipe[]` JSON so recipes
 // can be re-derived without re-running the LLM, plus OPF metadata. A cookbook is
 // always born from a full import, so every content column is NOT NULL.
-// Not linked to Product/inventory — the digital source and the physical book are
-// deliberately separate (see plan: the EPUB set and the shelf don't overlap).
+// `productId` links the digital source to the physical book on the shelf. This
+// was deliberately absent until 2026-08: the EPUB set and the shelf genuinely
+// didn't overlap when Cookbook was introduced, but the Amazon backfill landed
+// ~50 cookbooks as Products and the populations now intersect. Matching is
+// always human-confirmed — never auto-link on a title prefix, because
+// "Tartine Book No. 3" and "Tartine: A Classic Revisited" are different books.
 export const cookbook = pgTable(
   "Cookbook",
   {
@@ -349,6 +353,15 @@ export const cookbook = pgTable(
     // The book's cover, extracted from the EPUB on import. Nullable: older
     // cookbooks / cover-less EPUBs have none.
     coverImageId: uuid("coverImageId").references(() => image.id),
+    // The physical copy on the shelf, when one is owned. Nullable: most
+    // cookbooks are EPUB-only, and most shelf cookbooks were never imported.
+    // The `AnyPgColumn` annotation is load-bearing, same as `Task.parentTaskId`
+    // below: this FK closes a type-level cycle
+    // (Cookbook → Product → Ingredient → Recipe → Cookbook), and without it
+    // every table in the loop infers as `any` (TS7022).
+    productId: uuid("productId")
+      .$type<ProductId>()
+      .references((): AnyPgColumn => product.id),
     importedAt: timestamp("importedAt", { mode: "date" })
       .notNull()
       .defaultNow(),
@@ -362,6 +375,7 @@ export const cookbook = pgTable(
       .where(sql`${table.deletedAt} IS NULL`),
     index("Cookbook_createdAt_idx").on(table.createdAt),
     index("Cookbook_coverImageId_idx").on(table.coverImageId),
+    index("Cookbook_productId_idx").on(table.productId),
     index("Cookbook_name_gin_idx").using(
       "gin",
       sql`${table.name} gin_trgm_ops`,
@@ -2107,6 +2121,10 @@ export const cookbookRelations = relations(cookbook, ({ one, many }) => ({
     fields: [cookbook.coverImageId],
     references: [image.id],
   }),
+  product: one(product, {
+    fields: [cookbook.productId],
+    references: [product.id],
+  }),
 }));
 
 export const recipeSectionRelations = relations(
@@ -2175,6 +2193,9 @@ export const productRelations = relations(product, ({ one, many }) => ({
   // Locations that ARE an instance of this product (a bin, tote, rack).
   // Distinct from `inventoryEntry`, which is stock held AT a location.
   locations: many(location),
+  // Cookbooks whose physical copy this product is. `many` only because Drizzle
+  // models the reverse of a nullable FK that way — in practice it's 0 or 1.
+  cookbooks: many(cookbook),
   // What's inside this product, when it's a kit — the parent side.
   components: many(productComponent, {
     relationName: "productComponent_parentProduct",

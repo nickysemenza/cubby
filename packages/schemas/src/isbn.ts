@@ -82,6 +82,30 @@ export const isbnFromGtin = (value: string): NormalizedIsbn | null => {
 };
 
 /**
+ * Pick the ISBN out of an EPUB's raw OPF `<dc:identifier>` values.
+ *
+ * A book usually declares several in different schemes, and the OPF's own
+ * `unique-identifier` attribute frequently names a Calibre UUID rather than the
+ * ISBN — so this scans all of them rather than trusting declaration order.
+ * Scheme prefixes (`urn:isbn:`, `ISBN:`) are stripped before validation, and
+ * validation is {@link normalizeIsbn}'s: a `urn:uuid:` value has no chance of
+ * passing an ISBN check digit, which is what makes scanning everything safe.
+ *
+ * Returns the canonical GTIN-14, matching how barcodes are stored, or null when
+ * the book declares no ISBN at all (common for EPUBs built from web sources).
+ */
+export const isbnFromEpubIdentifiers = (
+  identifiers: readonly string[],
+): string | null => {
+  for (const raw of identifiers) {
+    const stripped = raw.trim().replace(/^(urn:)?isbn:/i, "");
+    const normalized = normalizeIsbn(stripped);
+    if (normalized) return normalized.gtin14;
+  }
+  return null;
+};
+
+/**
  * Search spellings for a stored book barcode. The canonical GTIN remains first
  * so callers that do not care about books preserve their existing behavior.
  */
