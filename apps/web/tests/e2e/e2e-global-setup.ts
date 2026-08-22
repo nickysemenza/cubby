@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -329,7 +329,17 @@ async function globalSetup(config: FullConfig): Promise<void> {
   // cookie jar, so the better-auth session cookie set by the sign-in POST above
   // is already captured — no extra page navigations needed to "establish" it
   // (two goto + networkidle round-trips here were pure overhead every run).
-  await context.storageState({ path: authFile });
+  const authState = await context.storageState();
+  // `session_data` is Better Auth's five-minute cookie cache. Persisting it in
+  // a suite-wide storage-state file creates a fixed expiry cliff: a test whose
+  // context starts just before that point authenticates initially, then lands
+  // on Sign In after a reload. Keep only the durable session token so every
+  // browser context obtains its own fresh cache cookie.
+  authState.cookies = authState.cookies.filter(
+    (cookie) => !cookie.name.endsWith("session_data"),
+  );
+  mkdirSync(path.dirname(authFile), { recursive: true });
+  writeFileSync(authFile, JSON.stringify(authState, null, 2));
   // The server runs with INSECURE_AUTH_COOKIES=true (see the wrangler --var
   // above), so the session cookies are already plain (no Secure attribute, no
   // `__Secure-` prefix) and WebKit — including the strict Linux port in CI —

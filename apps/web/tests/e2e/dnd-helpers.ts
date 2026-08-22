@@ -3,9 +3,44 @@ import { expect, type Locator, type Page } from "@playwright/test";
 async function visibleCenter(locator: Locator) {
   await locator.scrollIntoViewIfNeeded();
   await expect(locator).toBeVisible();
+  return currentCenter(locator);
+}
+
+async function currentCenter(locator: Locator) {
   const box = await locator.boundingBox();
   if (!box) throw new Error("Drag endpoint has no bounding box");
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+}
+
+async function nextAnimationFrame(locator: Locator) {
+  await locator.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(fallback);
+          resolve();
+        };
+        // Headless WebKit can suspend RAF while a pressed touch is active.
+        // Keep the frame as the primary cadence signal, with a bounded browser
+        // task fallback so the synthetic finger cannot hang indefinitely.
+        const fallback = setTimeout(finish, 50);
+        requestAnimationFrame(finish);
+      }),
+  );
+}
+
+function stepToward(
+  current: { x: number; y: number },
+  target: { x: number; y: number },
+  remainingSteps: number,
+) {
+  return {
+    x: current.x + (target.x - current.x) / remainingSteps,
+    y: current.y + (target.y - current.y) / remainingSteps,
+  };
 }
 
 /** Drive the same pointer events a person produces, including activation travel. */
@@ -14,17 +49,17 @@ export async function dragByMouse(
   source: Locator,
   target: Locator,
 ) {
-  const from = await visibleCenter(source);
-  const to = await visibleCenter(target);
-  await page.mouse.move(from.x, from.y);
+  let current = await visibleCenter(source);
+  await page.mouse.move(current.x, current.y);
   await page.mouse.down();
-  for (let step = 1; step <= 12; step++) {
-    const progress = step / 12;
-    await page.mouse.move(
-      from.x + (to.x - from.x) * progress,
-      from.y + (to.y - from.y) * progress,
-    );
+  await visibleCenter(target);
+  for (let remaining = 12; remaining > 1; remaining -= 1) {
+    current = stepToward(current, await currentCenter(target), remaining);
+    await page.mouse.move(current.x, current.y);
+    await nextAnimationFrame(source);
   }
+  current = await currentCenter(target);
+  await page.mouse.move(current.x, current.y);
   await page.mouse.up();
 }
 
@@ -38,10 +73,7 @@ export async function dragByKeyboard(
   await source.press("Space");
   // KeyboardSensor attaches its document key listener in a zero-delay task.
   // One frame models human input cadence without a fixed sleep.
-  await source.evaluate(
-    () =>
-      new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
-  );
+  await nextAnimationFrame(source);
   for (const move of moves) await source.press(move);
   await source.press("Space");
 }
@@ -68,11 +100,11 @@ export async function dragByTouch(
 ) {
   const from = await visibleCenter(source);
   const emit = async (
-    type: "touchstart" | "touchmove" | "touchend",
+    eventTypes: readonly ("touchstart" | "touchmove" | "touchend")[],
     point: { x: number; y: number },
   ) => {
     await source.evaluate(
-      (element, { eventType, x, y }) => {
+      (element, { types, x, y }) => {
         // WebKit exposes `Touch` but rejects its constructor. createEvent
         // still returns a real TouchEvent; dnd-kit only reads this public data.
         const touch = {
@@ -89,31 +121,33 @@ export async function dragByTouch(
           rotationAngle: 0,
           force: 1,
         };
-        const ended = eventType === "touchend";
-        const event = document.createEvent("TouchEvent");
-        event.initEvent(eventType, true, true);
-        Object.defineProperties(event, {
-          touches: { value: ended ? [] : [touch] },
-          targetTouches: { value: ended ? [] : [touch] },
-          changedTouches: { value: [touch] },
-        });
-        element.dispatchEvent(event);
+        for (const eventType of types) {
+          const ended = eventType === "touchend";
+          const event = document.createEvent("TouchEvent");
+          event.initEvent(eventType, true, true);
+          Object.defineProperties(event, {
+            touches: { value: ended ? [] : [touch] },
+            targetTouches: { value: ended ? [] : [touch] },
+            changedTouches: { value: [touch] },
+          });
+          element.dispatchEvent(event);
+        }
       },
-      { eventType: type, x: point.x, y: point.y },
+      { types: eventTypes, x: point.x, y: point.y },
     );
   };
 
-  await emit("touchstart", from);
+  await emit(["touchstart"], from);
   await page.waitForTimeout(holdMs);
   // Responsive boards register empty destinations only after activation.
-  const to = await visibleCenter(target);
-  for (let step = 1; step <= 12; step++) {
-    const progress = step / 12;
-    await emit("touchmove", {
-      x: from.x + (to.x - from.x) * progress,
-      y: from.y + (to.y - from.y) * progress,
-    });
-    await page.waitForTimeout(16);
+  await visibleCenter(target);
+  let current = from;
+  for (let remaining = 12; remaining > 1; remaining -= 1) {
+    current = stepToward(current, await currentCenter(target), remaining);
+    await emit(["touchmove"], current);
+    await nextAnimationFrame(source);
   }
-  await emit("touchend", to);
+  // Keep the final move and release in one browser task so autoscroll cannot
+  // move the destination between targeting it and committing the drop.
+  await emit(["touchmove", "touchend"], await currentCenter(target));
 }

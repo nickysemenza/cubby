@@ -3,6 +3,7 @@ import {
   editListCell,
   fillCellEditor,
   openCommandPalette,
+  waitForAppHydration,
 } from "./e2e-helpers";
 
 /**
@@ -100,6 +101,7 @@ test.describe("Project tracker", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Tasks" }),
     ).toBeVisible({ timeout: 15000 });
+    await waitForAppHydration(page);
 
     // `exact` — an empty list also renders its empty-state call-to-action
     // ("New Expense", "New Task"), which a substring match would tie with the
@@ -156,6 +158,7 @@ test.describe("Project tracker", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Expenses" }),
     ).toBeVisible({ timeout: 15000 });
+    await waitForAppHydration(page);
 
     await page.getByRole("button", { name: "New", exact: true }).click();
 
@@ -221,6 +224,7 @@ test.describe("Project tracker", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Projects" }),
     ).toBeVisible({ timeout: 15000 });
+    await waitForAppHydration(page);
 
     await page.getByRole("button", { name: "New Project" }).click();
 
@@ -280,6 +284,7 @@ test.describe("Project tracker", () => {
 
     await page.goto("/tasks");
     await page.waitForLoadState("networkidle");
+    await waitForAppHydration(page);
     await page.getByRole("button", { name: "New", exact: true }).click();
 
     const createDialog = page.getByRole("dialog");
@@ -368,6 +373,7 @@ test.describe("Project tracker", () => {
 
     await page.goto("/projects");
     await page.waitForLoadState("networkidle");
+    await waitForAppHydration(page);
     await page.getByRole("button", { name: "New Project" }).click();
 
     const projectDialog = page.getByRole("dialog");
@@ -385,6 +391,7 @@ test.describe("Project tracker", () => {
     // other quick-add tests avoid).
     await page.goto("/tasks");
     await page.waitForLoadState("networkidle");
+    await waitForAppHydration(page);
     await page.getByRole("button", { name: "New", exact: true }).click();
 
     const taskDialog = page.getByRole("dialog");
@@ -432,6 +439,7 @@ test.describe("Project tracker", () => {
 
     await page.goto("/projects");
     await page.waitForLoadState("networkidle");
+    await waitForAppHydration(page);
     await page.getByRole("button", { name: "New Project" }).click();
 
     const createDialog = page.getByRole("dialog");
@@ -440,7 +448,14 @@ test.describe("Project tracker", () => {
     await expect(createDialog).not.toBeVisible({ timeout: 10000 });
 
     await page.getByRole("button", { name: "Data view" }).click();
-    await page.getByRole("link", { name, exact: true }).last().click();
+    const projectLink = page.getByRole("link", { name, exact: true }).last();
+    await expect(projectLink).toHaveAttribute(
+      "href",
+      /^\/projects\/PRJ-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$/,
+    );
+    const projectPath = await projectLink.getAttribute("href");
+    if (!projectPath) throw new Error("Created project link has no href");
+    await page.goto(projectPath);
     await expect(page.getByRole("heading", { level: 1, name })).toBeVisible({
       timeout: 10000,
     });
@@ -488,14 +503,23 @@ test.describe("Project tracker", () => {
 
     // A provider mismatch is rejected and leaves the last valid anchor intact.
     await driveRow.getByRole("button", { name: "Edit value" }).click();
-    await fillCellEditor(
-      page,
+    const rejectedEditor = page.locator(
+      '[data-slot="cell-editor-overlay"] input',
+    );
+    await expect(rejectedEditor).toBeVisible();
+    await rejectedEditor.fill(
       "https://notion.so/Wrong-provider-0123456789abcdef",
     );
+    await rejectedEditor.press("Enter");
     await expect(
       page.getByText("Enter a valid Google Drive folder URL").first(),
     ).toBeVisible({ timeout: 10000 });
+    // The mutation's toast can render before useEditorCommit's finally block
+    // resets its pending state. Cancel only after the rejected attempt has
+    // completely settled so the next edit cannot overlap that lifecycle.
+    await expect(rejectedEditor).toBeEnabled({ timeout: 10_000 });
     await page.keyboard.press("Escape");
+    await expect(rejectedEditor).toHaveCount(0);
     await expect(driveLink).toHaveAttribute("href", driveUrl);
 
     // Clearing the shared inline text editor removes each optional URL.
@@ -522,6 +546,7 @@ test.describe("Project tracker", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Expenses" }),
     ).toBeVisible({ timeout: 15000 });
+    await waitForAppHydration(page);
 
     await page.getByRole("button", { name: "New", exact: true }).click();
 
