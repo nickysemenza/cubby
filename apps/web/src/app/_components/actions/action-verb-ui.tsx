@@ -33,7 +33,10 @@ import { type ActionVerbId, verbDef } from "./action-verbs";
  *
  * The stock `data-disabled:opacity-50` is overridden when a reason is present:
  * at 50% the explanation is too faint to read, which would defeat the point.
- * Muted foreground plus a not-allowed cursor carries "unavailable" instead.
+ * Shelf Ink (`text-muted-foreground`) plus a not-allowed cursor carries
+ * "unavailable" instead — a whole disabled item drops one tier from the Ink
+ * that enabled items sit at. Not an opacity-derived tone: DESIGN.md allows
+ * exactly three prose tiers and rules out inventing a fourth with opacity.
  *
  * A disabled item also drops its `render`: the anchor would otherwise stay
  * focusable and followable by keyboard even though pointer events are
@@ -68,7 +71,7 @@ export function VerbMenuItem({
         ? {
             "aria-label": `${label}, ${disabledReason}`,
             className:
-              "data-disabled:cursor-not-allowed data-disabled:text-foreground/70 data-disabled:opacity-100",
+              "data-disabled:cursor-not-allowed data-disabled:text-muted-foreground data-disabled:opacity-100",
           }
         : {})}
       {...(render && !isDisabled ? { render } : {})}
@@ -83,7 +86,7 @@ export function VerbMenuItem({
         // viewport edge rather than read.
         <span className="flex flex-col items-start">
           <span>{label}</span>
-          <span className="text-muted-foreground">{disabledReason}</span>
+          <span>{disabledReason}</span>
         </span>
       )}
     </DropdownMenuItem>
