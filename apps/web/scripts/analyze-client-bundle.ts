@@ -45,8 +45,14 @@ import { gzipSync } from "node:zlib";
 // Raised 525 -> 527 KiB for progressive entity identity images. This branch
 // measures 524.1 KiB on macOS and 525.3 KiB on Linux/Node 24; the shared image
 // primitive adds only a small eager cost, and the 145-chunk guard remains.
+//
+// Raised 527 -> 530 KiB for the universal Scan page (#863). The route and
+// camera implementation remain split out of the eager closure; the shared
+// route/schema/navigation contract measures 527.6 KiB on macOS/Node 26 and
+// 528.9 KiB on Linux/Node 24. The closure still fits in 144 chunks, so the
+// 145-chunk guard remains unchanged.
 export const CLIENT_BUNDLE_BUDGET = {
-  gzipBytes: 527 * 1024,
+  gzipBytes: 530 * 1024,
   chunks: 145,
 } as const;
 
