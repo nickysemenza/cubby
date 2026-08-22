@@ -25,7 +25,6 @@
     "test:integration": "pnpm --filter @cubby/web test:integration",
     "test:changed": "pnpm --filter @cubby/web test:changed",
     "test-ui": "pnpm --filter @cubby/web test:watch",
-    "db:traffic-report": "pnpm --filter @cubby/web db:traffic-report",
     "test:e2e": "pnpm -r test:e2e",
     "wasm": "CARGO_TARGET_DIR=\"${CARGO_TARGET_DIR:-$HOME/.cache/cubby/recipebridge-target}\" wasm-pack build --scope cubby --out-dir ../packages/wasm recipebridge",
     "deploy:all": "pnpm --filter @cubby/usda-api run deploy && pnpm --filter @cubby/upc-lookup run deploy && pnpm --filter @cubby/web run deploy:cf",

@@ -16,7 +16,7 @@ const db = drizzle(pool);
 
 try {
   await ensureDbExtensions(db);
-  console.log("Database extensions ready: pg_trgm, vector, pg_stat_statements");
+  console.log("Database extensions ready: pg_trgm, vector");
 } catch (error) {
   const message = getErrorMessage(error);
   console.error(`Could not create required database extensions: ${message}`);

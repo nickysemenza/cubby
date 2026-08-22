@@ -22,7 +22,6 @@
     "check": "biome check && pnpm typecheck",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.sw.json",
     "db:ensure-extensions": "tsx scripts/ensure-db-extensions.ts",
-    "db:traffic-report": "tsx scripts/db-traffic-report.ts",
     "db:push": "pnpm run db:ensure-extensions && drizzle-kit push",
     "db:pull": "drizzle-kit pull",
     "db:rebuild": "pnpm run db:push",
