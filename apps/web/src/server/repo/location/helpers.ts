@@ -27,7 +27,10 @@ import {
 } from "~/server/repo/database-helpers";
 import { requireLoadedProductPricing } from "~/server/repo/inventory/mappers";
 import { parseLocationType } from "~/server/repo/location/parse-type";
-import { dbProductToInventoryEmbedShape } from "~/server/repo/product/mappers";
+import {
+  dbProductToInventoryEmbedShape,
+  primaryGtinOf,
+} from "~/server/repo/product/mappers";
 import type { ProductPricing } from "~/server/repo/product/pricing";
 import { mapLocationIdentityProduct } from "./identity-product";
 import type {
@@ -104,6 +107,7 @@ export const dbLocationToListAPI = (
           pricingByProductId,
           entry.product.id,
         ),
+        primaryGtin: primaryGtinOf(entry.product.externalIds),
       }),
     }),
   ),

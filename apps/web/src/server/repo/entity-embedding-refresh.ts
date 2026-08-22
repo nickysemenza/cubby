@@ -42,6 +42,7 @@ import {
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { solePurchaseForTransaction } from "~/server/repo/financial-transaction-allocations";
+import { loadAllGtins } from "~/server/repo/product/gtin";
 import type { SemanticEmbeddingConfig } from "~/server/semantic/config";
 import { embeddingTextHash } from "~/server/semantic/hash";
 import {
@@ -154,16 +155,22 @@ async function getProductEmbeddingTexts(
       manufacturer: true,
       category: true,
       model: true,
-      upc: true,
       notes: true,
       aliases: true,
     },
     ...(options.limit == null ? {} : { limit: options.limit }),
   });
+  const gtins = await loadAllGtins(
+    db,
+    rows.map((row) => row.id),
+  );
   return rows.map((row) => ({
     entityType: "product",
     entityId: row.id,
-    embeddingText: buildProductEmbeddingText(row),
+    embeddingText: buildProductEmbeddingText({
+      ...row,
+      gtins: gtins.get(row.id) ?? [],
+    }),
   }));
 }
 
@@ -394,7 +401,7 @@ async function getInventoryEmbeddingTexts(
       manufacturer: product.manufacturer,
       category: product.category,
       model: product.model,
-      upc: product.upc,
+      productId: product.id,
       notes: product.notes,
       aliases: product.aliases,
     })
@@ -413,6 +420,10 @@ async function getInventoryEmbeddingTexts(
     );
   const rows =
     options.limit == null ? await query : await query.limit(options.limit);
+  const gtins = await loadAllGtins(
+    db,
+    rows.map((row) => row.productId),
+  );
 
   return rows.map((row) => ({
     entityType: "inventory",
@@ -423,7 +434,7 @@ async function getInventoryEmbeddingTexts(
         manufacturer: row.manufacturer,
         category: row.category,
         model: row.model,
-        upc: row.upc,
+        gtins: gtins.get(row.productId) ?? [],
         notes: row.notes,
         aliases: row.aliases,
       }),

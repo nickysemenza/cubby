@@ -20,21 +20,13 @@ history is the archive. Permanent product constraints live in the
 
 ## Ranked backlog
 
-1. **Retire `Product.upc`.** Barcodes are a scalar column, so a product can hold
-   exactly one — every merge whose survivor already had a different barcode
-   destroyed the other, and 127 soft-deleted products still carry one. The
-   multi-valued half shipped (PR #829: `ProductExternalId.isPrimary`, `gtin`
-   source, `upc_a`/`ean_13`/`ean_8`/`gtin_14` kinds); this is the contract half.
-   Backfill 783 live UPCs into primary `gtin` rows, repoint every reader, then
-   drop the column and `Product_upc_key`. Deliberately deferred, not forgotten:
-   the read fan-out is ~65 files (filter manifest and sortable fields lose a
-   scalar to sort and presence-filter on, `search-document` projects `upc` into
-   `keywords` in TWO places, `semantic/text` embeds it, `detectors-product`
-   groups duplicates by it) and it ends in a `DROP COLUMN` that needs its own
-   deploy window. Rebuild search documents and embeddings after the cutover so
-   the stale `upc` keyword stops doing the finding. `UpcLookupCache`,
-   `packages/upc-contract`, and `routers/upc.ts` are the barcode LOOKUP service
-   and are not affected.
+1. **Drop the `Product.upc` column.** The read/write cutover shipped; barcodes
+   are canonical GTIN-14 `gtin` external-id rows and nothing selects the column.
+   What remains is the post-deploy contract step, and it is gated on the DEPLOY,
+   not on the backfill: re-run the idempotent backfill to catch anything the
+   old build wrote during the deploy window, then by hand `DROP INDEX
+   "Product_upc_key"; ALTER TABLE "Product" DROP COLUMN "upc";` and only then
+   delete the declaration from `schema.ts`, so the next `db:push` is a no-op.
 
 2. **Ingredient detail editing and recipe-usage repair.** Make the ingredient
    detail page self-sufficient: edit `naKinds`, manage its product/USDA and

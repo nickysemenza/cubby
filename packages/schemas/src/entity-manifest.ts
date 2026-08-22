@@ -174,11 +174,12 @@ export const entityManifest = {
         inc("Location.productId"),
       ),
       imageGallery("ProductImage", "productId"),
-      // Not one column: the USDA link resolves UPC-first and falls back to an
-      // explicit fdc_id (see usda-link-resolved-at-query-time), so declaring
-      // only `fdc_id` would understate how a product actually reaches a food.
+      // Not one column: an explicit `fdc_id` wins, and a product with none
+      // still reaches a branded food through its barcode, so declaring only
+      // `fdc_id` would understate how a product actually gets to a food. The
+      // barcode is no longer a Product column — it is a `gtin` external-id row.
       external("usda-food", "USDA food", "usda-food", "usda-api", [
-        "Product.upc",
+        "ProductExternalId.externalId",
         "Product.fdc_id",
       ]),
     ],

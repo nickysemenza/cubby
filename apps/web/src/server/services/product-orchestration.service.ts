@@ -8,6 +8,7 @@
 
 import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
+import { displayGtin } from "@cubby/schemas/external-id";
 import {
   type IngredientId,
   type IngredientShortcode,
@@ -30,7 +31,7 @@ import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { runWithConflictRecovery } from "~/server/errors/db-errors";
 import {
-  findProductByUPC,
+  findProductByGtin,
   findProductsWithNoImages,
   quickCreateProduct,
 } from "~/server/repo/product";
@@ -300,7 +301,7 @@ export async function lookupUPC(
   upc: string,
 ): Promise<LookupUPCResult> {
   const [localProduct, food, external] = await Promise.all([
-    findProductByUPC(db, upc),
+    findProductByGtin(db, upc),
     usdaClient.findFood({ kind: "upc", gtin_upc: upc }),
     upcLookupClient.lookup(upc),
   ]);
@@ -334,7 +335,7 @@ export async function findOrCreateByUPC(
   actor: ActorContext,
 ): Promise<FindOrCreateByUPCResult> {
   // 1. Check if product with this UPC already exists
-  const existing = await findProductByUPC(db, upc);
+  const existing = await findProductByGtin(db, upc);
   if (existing) {
     return { product: existing, created: false };
   }
@@ -428,7 +429,7 @@ export async function findOrCreateByUPC(
       );
     },
     async (error) => {
-      const winner = await findProductByUPC(db, upc);
+      const winner = await findProductByGtin(db, upc);
       if (!winner) throw error;
       return { product: winner, created: false };
     },
@@ -462,8 +463,11 @@ export async function* backfillUPCImages(
   upcLookupClient: UPCLookupClient,
 ): AsyncGenerator<{ done: number; total: number }, BackfillSummary> {
   const allNoImages = await findProductsWithNoImages(db);
-  const productsWithUPC = allNoImages.filter(
-    (p): p is typeof p & { upc: string } => p.upc != null,
+  // The provider is keyed by barcode, so a product without one has nothing to
+  // look up. `displayGtin` because the provider indexes the printed encoding,
+  // not the canonical GTIN-14 the identifier row stores.
+  const productsWithUPC = allNoImages.flatMap((p) =>
+    p.primaryGtin == null ? [] : [{ ...p, upc: displayGtin(p.primaryGtin) }],
   );
 
   const details: BackfillResult[] = [];

@@ -14,6 +14,9 @@ import type {
 type LocationSelect = RowWithOptionalAliasesAndTags<
   typeof location.$inferSelect
 >;
+
+import type { MappableProductExternalId } from "~/server/repo/product/external-id-types";
+
 type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect>;
 
 /**
@@ -33,7 +36,7 @@ export type LocationListDB = LocationSelect & {
   children: Array<LocationSelect>;
   inventoryEntries: Array<
     typeof inventoryEntry.$inferSelect & {
-      product: ProductSelect;
+      product: ProductSelect & { externalIds?: MappableProductExternalId[] };
     }
   >;
   images: Array<{

@@ -369,7 +369,9 @@ export const relations = {
         inventoryEntries: {
           where: notDeleted(inventoryEntry),
           with: {
-            product: true,
+            // See the `inventory.list` note below: the embedded product's
+            // barcode is derived from its primary `gtin` identifier row.
+            product: { with: { externalIds: true } },
           },
         },
         images: {
@@ -404,7 +406,7 @@ export const relations = {
         },
         inventoryEntries: {
           with: {
-            product: true,
+            product: { with: { externalIds: true } },
           },
         },
         images: {
@@ -430,7 +432,10 @@ export const relations = {
   inventory: {
     list: {
       with: {
-        product: true,
+        // `externalIds` is loaded for the LIST too, not only for `full`: a
+        // row's barcode is derived from its primary `gtin` identifier now, so
+        // without it every inventory row would report itself barcode-less.
+        product: { with: { externalIds: true } },
         location: true,
       },
     },

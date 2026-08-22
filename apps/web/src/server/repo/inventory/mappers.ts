@@ -20,6 +20,7 @@ import {
   dbProductToInventoryListShape,
   mapProductExternalIds,
   mapProductUnitMappings,
+  primaryGtinOf,
 } from "~/server/repo/product/mappers";
 import type { ProductPricing } from "~/server/repo/product/pricing";
 import type { InventoryEntryDeepDB, InventoryEntryListDB } from "./types";
@@ -92,6 +93,7 @@ export const dbInventoryEntryToAPI: (
       ...dbProductToInventoryEmbedShape({
         ...product,
         pricing,
+        primaryGtin: primaryGtinOf(product.externalIds),
       }),
       images: mapImages(product.images),
       externalIds: mapProductExternalIds(product.externalIds),
@@ -122,6 +124,7 @@ export const dbInventoryEntryToListAPI: (
     product: dbProductToInventoryListShape({
       ...product,
       pricing,
+      primaryGtin: primaryGtinOf(product.externalIds),
     }),
   };
 };

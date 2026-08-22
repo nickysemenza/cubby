@@ -83,6 +83,12 @@ export const AppErrors = {
   // see findMergeComponentCycle in repo/product/merge.ts, reused (not
   // reimplemented) by attachProductComponents.
   PRODUCT_COMPONENT_CYCLE: "BAD_REQUEST",
+  // A barcode that is not 8-14 digits. The repository refuses it rather than
+  // dropping it, because `lpad(x, 14, '0')` would TRUNCATE an over-long value
+  // into some other product's barcode, and a silently discarded identifier is
+  // invisible downstream. Enforced again by
+  // `ProductExternalId_gtin_digits_check`.
+  PRODUCT_GTIN_INVALID: "BAD_REQUEST",
   INGREDIENT_HAS_PRODUCTS: "PRECONDITION_FAILED",
   INGREDIENT_HAS_RECIPES: "PRECONDITION_FAILED",
   INGREDIENT_MERGE_INVALID: "BAD_REQUEST",

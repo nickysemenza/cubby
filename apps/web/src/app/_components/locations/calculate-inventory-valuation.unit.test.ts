@@ -42,7 +42,7 @@ function makeInventoryItem(params: {
       manufacturer: params.product.manufacturer ?? "Generic",
       category: null,
       model: null,
-      upc: null,
+      primaryGtin: null,
       fdc_id: null,
       expectedQuantity: null,
       price: null,
