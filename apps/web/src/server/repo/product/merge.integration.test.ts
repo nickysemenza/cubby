@@ -129,6 +129,14 @@ describe("mergeProducts", () => {
       notes: "From the retailer import",
     });
 
+    const preview = await previewMergeProducts(ctx.db, {
+      keepId: keeper.id,
+      mergeIds: [loser.id],
+    });
+    const planned = new Map(
+      preview.changes.map((change) => [change.code, change.total]),
+    );
+
     const summary = await mergeProducts(
       ctx.db,
       { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
@@ -136,6 +144,18 @@ describe("mergeProducts", () => {
     );
 
     expect(summary.deletedIds).toEqual([loser.shortcode]);
+    // Presentation and execution are two views of the same ProductMergePlan:
+    // preview presents it, while mutation rebuilds it under lock and executes
+    // its exact carry/fold decisions.
+    expect(planned.get("soft-delete-merged-product")).toBe(
+      summary.deletedIds.length,
+    );
+    expect(planned.get("carry-product-aliases")).toBe(
+      summary.aliasesAdded.length,
+    );
+    expect(planned.get("carry-product-fields")).toBe(
+      summary.carriedFields.length,
+    );
     const rows = await getDb(ctx.db).query.product.findMany({
       where: eq(product.model, "DCD791D2"),
       columns: {
@@ -205,6 +225,14 @@ describe("mergeProducts", () => {
       ],
     });
 
+    const preview = await previewMergeProducts(ctx.db, {
+      keepId: keeper.id,
+      mergeIds: [loser.id],
+    });
+    const planned = new Map(
+      preview.changes.map((change) => [change.code, change.total]),
+    );
+
     const summary = await mergeProducts(
       ctx.db,
       { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
@@ -212,6 +240,12 @@ describe("mergeProducts", () => {
     );
 
     expect(summary.externalIdsMoved).toBe(1);
+    expect(planned.get("repoint-or-discard-conflicting-slot")).toBe(
+      summary.externalIdsMoved,
+    );
+    expect(planned.get("demote-conflicting-external-id")).toBe(
+      summary.externalIdsDemoted.length,
+    );
     // Kept, not discarded. Each identifier is a live retailer listing, so
     // destroying one meant the next order line quoting it re-minted the
     // duplicate the merge had just removed.

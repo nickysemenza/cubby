@@ -16,7 +16,7 @@ import {
   createNameColumn,
   createPlainDateColumn,
 } from "../_components/data-table/columnHelpers";
-import RTable from "../_components/data-table/Table";
+import { ListWorkbench } from "../_components/data-table/ListWorkbench";
 import { EntityInlineLinkList } from "../_components/EntityInlineLinkList";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
@@ -191,16 +191,7 @@ export function MealTable() {
   // Neither `buildFilters` nor `filters` is passed: the `meal` entry in
   // `entities/filter-manifest.tsx` drives the Type/Kind header controls, the
   // server `MealFilters` object, and the URL round-trip at once.
-  const {
-    table,
-    isLoading,
-    error,
-    timing,
-    bulkActionBar,
-    deleteDialog,
-    infiniteScroll,
-    refreshControls,
-  } = useEntityList<MealOut, MealFilters>({
+  const { workbench } = useEntityList<MealOut, MealFilters>({
     entity: "meal",
     queryOptions: api.meal.list.queryOptions,
     columns,
@@ -212,18 +203,7 @@ export function MealTable() {
 
   return (
     <div>
-      <RTable
-        table={table}
-        isLoading={isLoading}
-        error={error}
-        timing={timing}
-        ariaLabel="Meals Table"
-        entity="meal"
-        bulkActionBar={bulkActionBar}
-        infiniteScroll={infiniteScroll}
-        refreshControls={refreshControls}
-      />
-      {deleteDialog}
+      <ListWorkbench model={workbench} ariaLabel="Meals Table" />
     </div>
   );
 }

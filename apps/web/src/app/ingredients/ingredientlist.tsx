@@ -36,7 +36,7 @@ import {
   createImageColumn,
   createNameColumn,
 } from "../_components/data-table/columnHelpers";
-import RTable from "../_components/data-table/Table";
+import { ListWorkbench } from "../_components/data-table/ListWorkbench";
 import { EntityInlineLink } from "../_components/EntityInlineLink";
 import { EntityInlineLinkList } from "../_components/EntityInlineLinkList";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
@@ -250,18 +250,7 @@ export function IngredientList() {
     [columnHelper],
   );
 
-  const {
-    table,
-    data,
-    isLoading,
-    error,
-    timing,
-    bulkActionBar,
-    deleteDialog,
-    infiniteScroll,
-    refreshControls,
-    totalCount,
-  } = useEntityList({
+  const { workbench, data, totalCount } = useEntityList({
     entity: "ingredient",
     queryOptions: api.ingredient.list.queryOptions,
     getMappings: getIngredientListMappings,
@@ -307,7 +296,7 @@ export function IngredientList() {
           `Merged into ${targetName} (${aliasIds.length} ingredient${aliasIds.length === 1 ? "" : "s"})`,
         ),
       );
-      table.resetRowSelection();
+      workbench.table.resetRowSelection();
       setMergeRows(null);
     } catch (err) {
       toast.error(`Merge failed: ${getErrorMessage(err)}`);
@@ -338,18 +327,11 @@ export function IngredientList() {
       productIds={productIds}
       summaries={foodByProductId}
     >
-      <RTable
-        table={table}
-        isLoading={isLoading}
-        error={error}
+      <ListWorkbench
+        model={workbench}
         ariaLabel="Ingredients Table"
-        timing={timing}
-        entity="ingredient"
         onRowClick={onRowClick}
         onRowHover={onRowHover}
-        bulkActionBar={bulkActionBar}
-        infiniteScroll={infiniteScroll}
-        refreshControls={refreshControls}
         actions={
           <Row align="center" gap="sm">
             <Button
@@ -381,7 +363,6 @@ export function IngredientList() {
         }
       />
       <PreviewSheet />
-      {deleteDialog}
       <IngredientMergeDialog
         ingredients={mergeRows ?? []}
         open={mergeRows != null}

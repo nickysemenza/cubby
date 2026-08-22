@@ -22,8 +22,8 @@ import {
   createProjectLinkColumn,
   createSubjectProductLinkColumn,
 } from "../_components/data-table/columnHelpers";
+import { ListWorkbench } from "../_components/data-table/ListWorkbench";
 import { ScopeChip } from "../_components/data-table/ScopeChip";
-import RTable from "../_components/data-table/Table";
 import { useDeferredFilterOptions } from "../_components/hooks/useDeferredFilterOptions";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
@@ -208,17 +208,7 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
       actions
     );
 
-  const {
-    table,
-    isLoading,
-    error,
-    timing,
-    bulkActionBar,
-    deleteDialog,
-    infiniteScroll,
-    refreshControls,
-    totalCount,
-  } = useEntityList({
+  const { workbench, totalCount } = useEntityList({
     entity: "task",
     queryOptions: api.task.list.queryOptions,
     filterOptions: projectFilterOptions,
@@ -233,25 +223,17 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
 
   return (
     <div>
-      <RTable
-        table={table}
-        isLoading={isLoading}
-        error={error}
+      <ListWorkbench
+        model={workbench}
         ariaLabel="Tasks Table"
-        timing={timing}
-        entity="task"
         actions={toolbarActions}
         onRowClick={onRowClick}
         onRowHover={onRowHover}
-        bulkActionBar={bulkActionBar}
-        infiniteScroll={infiniteScroll}
-        refreshControls={refreshControls}
       />
       <PreviewSheet />
-      {deleteDialog}
       <TaskBulkActionDialogs
         controller={taskBulkActions}
-        onComplete={() => table.resetRowSelection()}
+        onComplete={() => workbench.table.resetRowSelection()}
       />
       {createProjectTaskIds && (
         <CreateProjectFromTasksDialog

@@ -11,7 +11,7 @@ import {
   createEditableAmountColumn,
   createSingleEntityInlineLinkColumn,
 } from "~/app/_components/data-table/columnHelpers";
-import RTable from "~/app/_components/data-table/Table";
+import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
@@ -233,7 +233,7 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
     [],
   );
 
-  const { table, bulkActionBar } = useClientEntityList<StockedRow>({
+  const { workbench } = useClientEntityList<StockedRow>({
     entity: "inventory",
     data: rows,
     columns,
@@ -276,6 +276,7 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
         </>
       ),
   });
+  const { table } = workbench;
 
   if (rows.length === 0) {
     return <ShelfEmpty entity="inventory" label="Not stocked anywhere" />;
@@ -296,12 +297,10 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
           />
         )}
 
-        <RTable
-          table={table}
+        <ListWorkbench
+          model={workbench}
           ariaLabel={`${product.name} inventory`}
-          entity="inventory"
-          bulkActionBar={bulkActionBar}
-          embedded
+          mode="embedded"
         />
       </Stack>
 

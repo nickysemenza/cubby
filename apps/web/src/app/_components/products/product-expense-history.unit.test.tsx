@@ -58,14 +58,17 @@ vi.mock("~/integrations/trpc/react", () => ({
 // machinery that a table-shape test elsewhere already covers.
 vi.mock("~/app/_components/hooks/useClientEntityList", () => ({
   useClientEntityList: () => ({
-    table: {
-      getSortedRowModel: () => ({ flatRows: [] }),
-      state: { pagination: { pageSize: 25 } },
-      setPageIndex: vi.fn(),
-      resetRowSelection: vi.fn(),
+    workbench: {
+      entity: "expense",
+      table: {
+        getSortedRowModel: () => ({ flatRows: [] }),
+        state: { pagination: { pageSize: 25 } },
+        setPageIndex: vi.fn(),
+        resetRowSelection: vi.fn(),
+      },
+      bulkActionBar: null,
+      deleteDialog: null,
     },
-    bulkActionBar: null,
-    deleteDialog: null,
   }),
 }));
 

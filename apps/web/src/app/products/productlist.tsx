@@ -56,7 +56,7 @@ import {
 } from "../_components/data-table/columnHelpers";
 import { DataTableToolbar } from "../_components/data-table/data-table-toolbar";
 import { EditableCell } from "../_components/data-table/editable-cell";
-import RTable from "../_components/data-table/Table";
+import { ListWorkbench } from "../_components/data-table/ListWorkbench";
 import type { GroupConfig } from "../_components/data-table/useGroupedList";
 import { EntityInlineLink } from "../_components/EntityInlineLink";
 import { useDeferredFilterOptions } from "../_components/hooks/useDeferredFilterOptions";
@@ -926,21 +926,11 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
     [],
   );
 
-  const {
-    table,
-    data,
-    isLoading,
-    error,
-    timing,
-    bulkActionBar,
-    deleteDialog,
-    infiniteScroll,
-    refreshControls,
-    grouped,
-    onGroupedChange,
-    totalCount,
-    currentFilters,
-  } = useEntityList<ProductTreeRow, ProductFilters, ProductListItem>({
+  const { workbench, data, totalCount, currentFilters } = useEntityList<
+    ProductTreeRow,
+    ProductFilters,
+    ProductListItem
+  >({
     entity: "product",
     queryOptions,
     getMappings: getProductListMappings,
@@ -992,7 +982,7 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
 
   // The Shelf view has no nesting, so it shows products only — a component
   // expanded in the table is not a second thing on the shelf.
-  const items = table
+  const items = workbench.table
     .getRowModel()
     .rows.map((r) => r.original)
     .filter((row) => !isKitComponentRow(row));
@@ -1024,35 +1014,25 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
       <Stack gap="sm">
         {view !== "table" && (
           <DataTableToolbar
-            table={table}
+            table={workbench.table}
             entity="product"
             portalWorkbenchUtilities
           />
         )}
         {view === "table" && (
-          <RTable
-            table={table}
-            isLoading={isLoading}
-            error={error}
+          <ListWorkbench
+            model={workbench}
             ariaLabel="Products Table"
-            timing={timing}
-            entity="product"
             onRowClick={onRowClick}
             onRowHover={onRowHover}
-            bulkActionBar={bulkActionBar}
-            infiniteScroll={infiniteScroll}
-            refreshControls={refreshControls}
-            groupConfig={groupConfig}
-            grouped={grouped}
-            onGroupedChange={onGroupedChange}
           />
         )}
         {view === "shelf" && (
           <ProductShelf
             items={items}
-            isLoading={isLoading}
-            error={error}
-            infiniteScroll={infiniteScroll}
+            isLoading={workbench.isLoading}
+            error={workbench.error}
+            infiniteScroll={workbench.infiniteScroll}
           />
         )}
         {(view === "events" || view === "lifecycles") && (
@@ -1060,7 +1040,7 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
         )}
       </Stack>
       <PreviewSheet />
-      {deleteDialog}
+      {view !== "table" && workbench.deleteDialog}
       {discardProduct && (
         <ProductDiscardDialog
           open

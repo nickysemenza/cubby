@@ -4,7 +4,7 @@ import {
   createCurrencyColumn,
   createPlainDateColumn,
 } from "~/app/_components/data-table/columnHelpers";
-import RTable from "~/app/_components/data-table/Table";
+import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { ExternalLinkText } from "~/app/_components/ExternalLink";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
@@ -116,17 +116,7 @@ export function VendorList() {
   // `entities/filter-manifest.tsx` drives all three surfaces at once — the Name
   // search box, the server `VendorFilters` object, and the `?q=` URL round-trip
   // that makes a filtered roster shareable.
-  const {
-    table,
-    isLoading,
-    error,
-    timing,
-    bulkActionBar,
-    deleteDialog,
-    infiniteScroll,
-    refreshControls,
-    totalCount,
-  } = useEntityList<VendorOut, VendorFilters>({
+  const { workbench, totalCount } = useEntityList<VendorOut, VendorFilters>({
     entity: "vendor",
     queryOptions: api.vendor.list.queryOptions,
     columns,
@@ -147,21 +137,13 @@ export function VendorList() {
 
   return (
     <div>
-      <RTable
-        table={table}
-        isLoading={isLoading}
-        error={error}
+      <ListWorkbench
+        model={workbench}
         ariaLabel="Vendors Table"
-        timing={timing}
-        entity="vendor"
         onRowClick={onRowClick}
         onRowHover={onRowHover}
-        bulkActionBar={bulkActionBar}
-        infiniteScroll={infiniteScroll}
-        refreshControls={refreshControls}
       />
       <PreviewSheet />
-      {deleteDialog}
     </div>
   );
 }

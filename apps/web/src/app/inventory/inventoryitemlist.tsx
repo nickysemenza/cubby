@@ -23,12 +23,12 @@ import {
   createSingleEntityInlineLinkColumn,
   createTimestampColumn,
 } from "../_components/data-table/columnHelpers";
+import { ListWorkbench } from "../_components/data-table/ListWorkbench";
 import { ScopeChip } from "../_components/data-table/ScopeChip";
 import {
   SHELF_VIEW_OPTIONS,
   type ShelfView,
 } from "../_components/data-table/shelf";
-import RTable from "../_components/data-table/Table";
 import { EntityInlineLink } from "../_components/EntityInlineLink";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
@@ -277,18 +277,7 @@ export function InventoryItemList() {
     [columnHelper],
   );
 
-  const {
-    table,
-    data,
-    isLoading,
-    error,
-    timing,
-    bulkActionBar,
-    deleteDialog,
-    infiniteScroll,
-    refreshControls,
-    totalCount,
-  } = useEntityList({
+  const { workbench, data, totalCount } = useEntityList({
     entity: "inventory",
     queryOptions: api.inventory.list.queryOptions,
     // Inventory has custom columns (product image, amount instead of name)
@@ -307,7 +296,7 @@ export function InventoryItemList() {
   usePageCount(totalCount);
 
   const [view, setView] = useState<ShelfView>("table");
-  const items = table.getRowModel().rows.map((r) => r.original);
+  const items = workbench.table.getRowModel().rows.map((r) => r.original);
   const productIds = useMemo(() => data.map((item) => item.product.id), [data]);
   const scopeChips =
     inventorySearch.productId || inventorySearch.locationId ? (
@@ -350,33 +339,26 @@ export function InventoryItemList() {
       {view === "shelf" ? (
         <InventoryShelf
           items={items}
-          isLoading={isLoading}
-          error={error}
-          infiniteScroll={infiniteScroll}
+          isLoading={workbench.isLoading}
+          error={workbench.error}
+          infiniteScroll={workbench.infiniteScroll}
         />
       ) : (
-        <RTable
-          table={table}
-          additionalToolbarContent={
+        <ListWorkbench
+          model={workbench}
+          contextualStatus={
             <InventoryValuationSummary
               items={data as InventoryItem[]}
               variant="compact"
             />
           }
-          isLoading={isLoading}
-          error={error}
           ariaLabel="Inventory Items Table"
-          timing={timing}
-          entity="inventory"
           onRowClick={onRowClick}
           onRowHover={onRowHover}
-          bulkActionBar={bulkActionBar}
-          infiniteScroll={infiniteScroll}
-          refreshControls={refreshControls}
         />
       )}
       <PreviewSheet />
-      {deleteDialog}
+      {view === "shelf" && workbench.deleteDialog}
       {moveTarget && (
         <MoveInventoryDialog
           open={!!moveTarget}
@@ -396,7 +378,7 @@ export function InventoryItemList() {
           items={bulkMoveItems}
           onSuccess={() => {
             setBulkMoveItems([]);
-            table.resetRowSelection();
+            workbench.table.resetRowSelection();
           }}
         />
       )}
