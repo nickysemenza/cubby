@@ -225,7 +225,7 @@ function ProductPickerDialog({
                   type="button"
                   disabled={isPending}
                   onClick={() => onPick(item.id)}
-                  className="flex w-full items-center gap-3 rounded-sm p-2 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                  className="flex w-full items-center gap-2 rounded-sm p-2 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 >
                   {item.coverImageUrl ? (
                     <Image

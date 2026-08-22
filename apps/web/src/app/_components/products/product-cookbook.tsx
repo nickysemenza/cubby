@@ -21,7 +21,7 @@ export function ProductCookbook({
   cookbook: ProductCookbookRefOut;
 }) {
   return (
-    <Row className="items-center justify-between gap-3">
+    <Row className="items-center justify-between gap-2">
       <EntityInlineLink
         displayImage={undefined}
         entity="cookbook"
