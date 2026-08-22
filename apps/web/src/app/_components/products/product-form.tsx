@@ -1,4 +1,4 @@
-import { externalIdInput } from "@cubby/schemas/external-id";
+import { displayGtin, externalIdInput } from "@cubby/schemas/external-id";
 import type { IngredientShortcode } from "@cubby/schemas/identifiers";
 import { type ImageOut, partitionEntityFiles } from "@cubby/schemas/image";
 import {
@@ -244,7 +244,12 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       model: product ? product.model : null,
       notes: product ? product.notes : null,
       category: product?.category ?? null,
-      upc: product ? product.upc : (initialUpc ?? null),
+      // The form edits the PRINTED barcode; the write boundary normalizes it
+      // back to GTIN-14, so a round-trip cannot mint a second row for the same
+      // barcode in another encoding.
+      upc: product
+        ? product.primaryGtin && displayGtin(product.primaryGtin)
+        : (initialUpc ?? null),
       fdc_id: product ? product.fdc_id : (initialFdcId ?? null),
       expectedQuantity: product
         ? product.expectedQuantity
@@ -293,6 +298,10 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       const updates: Partial<ProductCreateInput> = buildUpdateObject(
         {
           ...product,
+          // `upc` is a write-only input; the product carries `primaryGtin`.
+          // Compare in the form's own units so an unchanged barcode isn't
+          // resubmitted as a change on every save.
+          upc: product.primaryGtin && displayGtin(product.primaryGtin),
         },
         { ...values, aliases, tags },
         [

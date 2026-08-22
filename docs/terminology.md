@@ -71,7 +71,7 @@ sometimes wears three different names across layers.
 These four are the most-confused cluster. They sit on a chain:
 
 ```
-USDAFood  ←(loose link, fdc_id/UPC)──  Product  ──(optional FK, ingredientId)→  Ingredient
+USDAFood  ←(loose link, fdc_id/barcode)──  Product  ──(optional FK, ingredientId)→  Ingredient
                                           │
                                           └─(inventoried as)→  InventoryEntry  ──(at)→  Location
 ```
@@ -84,7 +84,7 @@ USDAFood  ←(loose link, fdc_id/UPC)──  Product  ──(optional FK, ingred
   A Product carries the unit mappings (`ProductUnitMappings`: an `a = b` amount
   pair) that drive cross-unit/price conversions. A Product may point to **one**
   Ingredient (`product.ingredientId`) and may be loosely linked to **one** USDA
-  food (`product.fdc_id`, else UPC resolution — `fdc_id` wins).
+  food (`product.fdc_id`, else barcode resolution — `fdc_id` wins).
 
 - **Ingredient** (`Ingredient`) — the canonical recipe-line concept, SKU-free.
   "Flour" is one Ingredient no matter which brand of flour is on the shelf.
@@ -102,7 +102,7 @@ USDAFood  ←(loose link, fdc_id/UPC)──  Product  ──(optional FK, ingred
 - **USDAFood** (`usda_food`) — nutrition reference data from USDA FoodData
   Central, served by the sibling `usda-api` worker (not a row in the main DB).
   Linked to a Product for nutrition/cost intelligence; the link is *loose*
-  (resolved at query time, `fdc_id`-first then UPC) — see the USDA notes in
+  (resolved at query time, `fdc_id`-first then barcode) — see the USDA notes in
   README.
 
 **Rule of thumb:** Recipes reference **Ingredients**; the pantry holds

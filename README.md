@@ -66,7 +66,7 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 
 **USDA**
 - Full USDA FoodData Central database loaded into a sibling service
-- Browse, search, and link products by UPC or NDB code
+- Browse, search, and link products by barcode or FDC id
 
 **Locations**
 - Tree structure (house → room → shelf → bin)
@@ -170,7 +170,7 @@ See [CLAUDE.md](CLAUDE.md) for the prescriptive rules (branded IDs, soft delete,
 
 **Products** have multiple unit mappings (each of which contain 2 amounts). Products can also point to an ingredient.
 
-**USDA Food** database is loaded, loosely linked to products based on the products NDB number or UPC code.
+**USDA Food** database is loaded, loosely linked to products by an explicit `fdc_id` or, failing that, by any of the product's barcodes.
 
 Products can be inventoried — an **Inventory Entry** specifies the amount of a given **Product** at a given **Location**.
 
@@ -225,7 +225,7 @@ erDiagram
     Image ||--o{ Location : "linked to"
     Image ||--o{ Recipe : "linked to"
 
-    Product }o--o| usda_food : "linked by UPC/NDB"
+    Product }o--o| usda_food : "linked by fdc_id/barcode"
 
     Project ||--o{ Task : "has"
     Project ||--o{ Expense : "has"
@@ -543,7 +543,7 @@ Framed as **Now / Next / Later** (no dates — it's a personal project). The can
 
 ### Recently shipped
 
-- **Product merge** — fold duplicate Product rows into one survivor: stock, ledger lines, external identifiers, images, unit mappings, tasks, project uses, and wishlist candidacies move onto the keeper, same-location stock is summed rather than dropped, and every recipe that costs through a merged-away or deleted product recomputes. Exposed as `merge_products` over MCP; `findDuplicateProductIdentities` (Problems) surfaces candidates by shared UPC or retailer-SKU evidence. Built on a shared merge core (`finalizeMerge`) that now underlies all four entity merges (ingredient, vendor, purchase, product) and makes the embedding-cleanup cascade structural rather than a per-merge obligation.
+- **Product merge** — fold duplicate Product rows into one survivor: stock, ledger lines, external identifiers, images, unit mappings, tasks, project uses, and wishlist candidacies move onto the keeper, same-location stock is summed rather than dropped, and every recipe that costs through a merged-away or deleted product recomputes. Exposed as `merge_products` over MCP; `findDuplicateProductIdentities` (Problems) surfaces candidates by shared identifier-slot evidence (a barcode or a retailer SKU). Built on a shared merge core (`finalizeMerge`) that now underlies all four entity merges (ingredient, vendor, purchase, product) and makes the embedding-cleanup cascade structural rather than a per-merge obligation.
 - **Tool wishlist** — a `Wish` entity (`WSH-`) for tracking wanted-but-not-yet-owned items, independent of inventory or projects. Rebuilt on the shared entity/CRUD-factory machinery; the list surfaces each wish's candidate-product cover images and price range, and expands into per-candidate rows the way the Projects Data tab nests sub-projects.
 - **Manufacturer spelling snapped on create** — `create_product`/`create_products` now resolve `manufacturer` to the established spelling already used among live Products, closing the drift that let variant spellings accumulate; `update_product` deliberately does not auto-snap.
 - **Financial accounts & transactions** — a settlement evidence layer, `FinancialAccount ──< FinancialTransaction`, separate from spend: statement activity (pending charges, split tender, installments, refunds), allocated across the Purchases it settles so one card line can cover several orders. `Expense.cost` remains the sole spend source; reconciliation compares linked transactions against Expense lines as `unknown`/`pending`/`match`/`mismatch`. Client-parsed Monarch statement preview drives selective, user-approved creation.

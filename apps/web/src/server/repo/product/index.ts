@@ -8,7 +8,7 @@
  *
  *   CRUD      → `crud.ts`      (create / quick-create / update / delete + by-id
  *                               and by-shortcode reads, list)
- *   LOOKUP    → `lookup.ts`    (find by UPC / fuzzy name+manufacturer / food id)
+ *   LOOKUP    → `lookup.ts`    (find by barcode / fuzzy name+manufacturer / food id)
  *   ANALYTICS → `analytics.ts` (category distribution, duplicate + no-image
  *                               detection, audit summaries)
  *   HELPERS   → `helpers.ts`   (foodLookupParamFromProduct: USDA resolution key)
@@ -57,8 +57,8 @@ export {
 export { discardProductUnits } from "./discard";
 export { foodLookupParamFromProduct } from "./helpers";
 export {
+  findProductByGtin,
   findProductByNameFuzzyManufacturer,
-  findProductByUPC,
   findProductsByFoodIdentifier,
   getFoodLookupsForLinkedProducts,
 } from "./lookup";

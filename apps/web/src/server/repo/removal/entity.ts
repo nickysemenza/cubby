@@ -6,8 +6,7 @@
  *
  * `cascadeRemoval` deliberately never touches the entity's own table, because
  * a handful of paths depend on *when* the row dies relative to something else
- * (`product/merge.ts` must vacate a partial UPC index before the keeper adopts
- * it; `inventory/bulk.ts` hard-deletes emptied sources up front to free slot
+ * (`inventory/bulk.ts` hard-deletes emptied sources up front to free slot
  * keys). Those paths keep calling the tail directly. Everything else is the
  * same five statements in the same order, and that is what this function is.
  *

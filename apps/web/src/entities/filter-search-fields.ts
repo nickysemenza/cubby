@@ -25,7 +25,7 @@ export const entityFilterSemantics = {
     "name",
     "manufacturer",
     "manufacturerSearch",
-    "upc",
+    "primaryGtin",
     "model",
     "modelPresence",
     "upcPresence",

@@ -211,7 +211,7 @@ describe("location mappers", () => {
         product: {
           id: unsafeProductShortcode("PRD-TEST"),
           name: "Flour",
-          upc: null,
+          primaryGtin: null,
           fdc_id: null,
           manufacturer: "Generic",
           model: null,

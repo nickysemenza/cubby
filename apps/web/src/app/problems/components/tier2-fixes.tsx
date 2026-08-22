@@ -1,3 +1,4 @@
+import { displayGtin } from "@cubby/schemas/external-id";
 import type {
   DuplicateProductIdentity,
   DuplicateVendor,
@@ -247,7 +248,9 @@ export function DuplicateProductMergeFix({
                       : "text-muted-foreground",
                   )}
                 >
-                  {p.upc ? `UPC ${p.upc} · ` : ""}
+                  {p.gtins.length > 0
+                    ? `UPC ${p.gtins.map(displayGtin).join(", ")} · `
+                    : ""}
                   {p.sources.join(", ")}
                 </span>
               </span>

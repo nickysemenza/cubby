@@ -1,3 +1,4 @@
+import { displayGtin } from "@cubby/schemas/external-id";
 import type { ImageOut } from "@cubby/schemas/image";
 import type { ProductWithFoodOut } from "@cubby/schemas/product";
 import {
@@ -164,13 +165,16 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
     },
     {
       label: "UPC",
-      value: product.upc ? (
+      // Rendered as the printed encoding, not the stored GTIN-14 — the operator
+      // is comparing this against the barcode on the package, and the USDA page
+      // is keyed the same way.
+      value: product.primaryGtin ? (
         <Link
           to="/usda/upc/$code"
-          params={{ code: product.upc }}
+          params={{ code: displayGtin(product.primaryGtin) }}
           className="text-primary hover:underline"
         >
-          {product.upc}
+          {displayGtin(product.primaryGtin)}
         </Link>
       ) : undefined,
     },

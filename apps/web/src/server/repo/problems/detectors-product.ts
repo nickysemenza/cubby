@@ -7,6 +7,7 @@
  * and linked-product-id lookup the service layer composes.
  */
 
+import { displayGtin, GTIN_SOURCE } from "@cubby/schemas/external-id";
 import type {
   IngredientId,
   ProductId,
@@ -69,6 +70,10 @@ import {
   PRODUCT_EDGE_ROLES,
   type ProductRetainingEdgeKey,
 } from "~/server/repo/product/edge-roles";
+import {
+  loadPrimaryGtins,
+  productHasAnyGtin,
+} from "~/server/repo/product/gtin";
 import {
   loadProductOwnershipTimelines,
   ownershipExitExpensePredicate,
@@ -458,13 +463,20 @@ export const findToolsUsedOutsideOwnership = async (
 // The false-positive class is suppressed with positive evidence of distinctness,
 // never with a similarity threshold:
 //
-//  1. *Distinct UPCs.* Two live rows can't share a UPC (`Product_upc_key`), so
-//     two non-null differing UPCs mean two different retail packages.
-//  2. *Distinct retailer SKU.* Both rows filling the SAME (source, kind)
-//     identifier slot with different values is the retailer itself saying they
-//     are two products. (They cannot fill it with the same value — the global
-//     `(source, kind, externalId)` unique index forbids it — so a shared slot is
-//     always evidence of difference, never of sameness.)
+//  *Distinct identifiers.* Both rows filling the SAME (source, kind) slot with
+//  different values is the issuer itself saying they are two products — a
+//  retailer with two SKUs, or a manufacturer with two barcodes. They cannot
+//  fill it with the same value: the global `(source, kind, externalId)` unique
+//  index forbids it, so a shared slot is always evidence of difference, never
+//  of sameness.
+//
+//  Barcodes used to be a SECOND, separate rule, because `Product.upc` was a
+//  scalar with its own unique index. They are `gtin` identifier rows now and
+//  fall out of the rule above — but only because they are stored in ONE
+//  canonical encoding. Under the old per-length kinds, `077089850017` and
+//  `0077089850017` were different slots, and this rule would have read one
+//  barcode each, found no conflict, and let a real duplicate through. That is
+//  not hypothetical: it is exactly the pair `Product_upc_key` missed.
 //
 // Suppression is per GROUP, not per pair: one distinguishable member is enough
 // to make the whole cluster a variant family rather than a duplicate, which is
@@ -482,7 +494,6 @@ export const findDuplicateProductIdentities = async (
       name: product.name,
       manufacturer: product.manufacturer,
       model: product.model,
-      upc: product.upc,
       // The SAME canonical key `findManufacturerSpellingVariants` and
       // `resolveEstablishedManufacturer` use, so `Ryobi`/`RYOBI` can't split a
       // real duplicate apart before this detector can group it.
@@ -555,9 +566,7 @@ export const findDuplicateProductIdentities = async (
     );
     if (sources.length < 2) continue;
 
-    // Positive evidence of distinctness — see the two rules above.
-    const upcs = uniq(group.flatMap((row) => (row.upc ? [row.upc] : [])));
-    if (upcs.length > 1) continue;
+    // Positive evidence of distinctness — see the rule above.
     const bySlot = new Map<string, Set<string>>();
     for (const row of group) {
       for (const id of byProduct.get(row.id) ?? []) {
@@ -575,7 +584,10 @@ export const findDuplicateProductIdentities = async (
       products: group.map((row) => ({
         id: unsafeProductShortcode(row.shortcode),
         name: row.name,
-        upc: row.upc,
+        gtins: (byProduct.get(row.id) ?? [])
+          .filter((id) => id.source === GTIN_SOURCE)
+          .map((id) => id.externalId)
+          .sort(),
         sources: uniq(
           (byProduct.get(row.id) ?? []).map((id) => id.source),
         ).sort(),
@@ -624,7 +636,6 @@ export const findProductsWithUpcGaps = async (
       shortcode: product.shortcode,
       name: product.name,
       manufacturer: product.manufacturer,
-      upc: product.upc,
       price: product.price,
       // Must agree with `productIdsWithImages` in product/crud.ts, and with
       // findProductsWithNoImages in product/analytics.ts: Image is separately
@@ -651,17 +662,29 @@ export const findProductsWithUpcGaps = async (
       ),
     })
     .from(product)
-    .where(and(notDeleted(product), isNotNull(product.upc)));
+    .where(and(notDeleted(product), productHasAnyGtin()));
+
+  const gtins = await loadPrimaryGtins(
+    db,
+    rows.map((r) => r.id),
+  );
 
   // No-network candidate filter: only gappy, non-misc products need a lookup.
-  const candidates = rows.filter(
-    (r): r is typeof r & { upc: string } =>
-      r.upc != null &&
-      !isMiscProduct(r.name) &&
-      (isUnspecifiedManufacturer(r.manufacturer) ||
-        r.price == null ||
-        !r.hasImage),
-  );
+  // `displayGtin`, not the stored GTIN-14: this value is handed to the UPC
+  // provider, which indexes the printed encoding.
+  const candidates = rows
+    .map((r) => {
+      const stored = gtins.get(r.id) ?? null;
+      return { ...r, upc: stored === null ? null : displayGtin(stored) };
+    })
+    .filter(
+      (r): r is typeof r & { upc: string } =>
+        r.upc != null &&
+        !isMiscProduct(r.name) &&
+        (isUnspecifiedManufacturer(r.manufacturer) ||
+          r.price == null ||
+          !r.hasImage),
+    );
 
   return candidates.map((candidate) => ({
     ...candidate,
@@ -745,7 +768,6 @@ export const loadProductsForCoverage = async (
       name: true,
       manufacturer: true,
       shortcode: true,
-      upc: true,
       fdc_id: true,
       price: true,
       usdaUnavailable: true,
@@ -765,9 +787,16 @@ export const loadProductsForCoverage = async (
   const pricing = await loadProductPricing(db, rows, {
     wholeCatalog: productIds == null,
   });
+  // Carried on the row because `foodLookupParamFromProduct` resolves the USDA
+  // link from it, and the service runs that over this whole scan.
+  const gtins = await loadPrimaryGtins(
+    db,
+    rows.map((row) => row.id),
+  );
   return rows.map((row) => ({
     ...row,
     price: pricing.get(row.id)?.effectivePrice ?? null,
+    primaryGtin: gtins.get(row.id) ?? null,
   }));
 };
 

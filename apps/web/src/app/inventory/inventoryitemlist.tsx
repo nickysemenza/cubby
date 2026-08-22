@@ -1,3 +1,4 @@
+import { displayGtin } from "@cubby/schemas/external-id";
 import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { ImageIcon } from "lucide-react";
@@ -187,7 +188,10 @@ export function InventoryItemList() {
         },
         cell: (info) => {
           const product = info.getValue();
-          const { upc } = product;
+          const upc =
+            product.primaryGtin === null
+              ? null
+              : displayGtin(product.primaryGtin);
           return (
             <div className="flex items-center gap-2">
               <Stack gap="xs" className="min-w-0 flex-1">

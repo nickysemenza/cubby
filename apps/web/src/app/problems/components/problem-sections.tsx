@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { ReferentialLivenessViolation } from "@cubby/schemas/entity-integrity";
+import { displayGtin } from "@cubby/schemas/external-id";
 import {
   type AllProblems,
   type CoverageProblemKey,
@@ -1406,7 +1407,9 @@ const DECLARED_SECTIONS = [
     renderItem: (product) => ({
       title: product.name,
       subtitle: byManufacturer(product.manufacturer),
-      badges: product.upc ? [<CodeChip key="upc">{product.upc}</CodeChip>] : [],
+      badges: product.primaryGtin
+        ? [<CodeChip key="upc">{displayGtin(product.primaryGtin)}</CodeChip>]
+        : [],
       route: entityDetailLink("product", product.id),
     }),
   }),

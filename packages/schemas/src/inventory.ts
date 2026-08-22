@@ -1,11 +1,11 @@
 import { inventoryPlacementValues } from "@cubby/shared";
-import { fdcId, upc } from "@cubby/usda-schemas";
+import { fdcId } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { inventoryRelatedFilterFields } from "./related-view";
 import { auditDateFilterFields, timestampedFields } from "./base-entity";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import { amount, positiveAmount } from "./codec";
-import { externalIdOut } from "./external-id";
+import { externalIdOut, gtin } from "./external-id";
 import { imageOut } from "./image";
 import {
   inventoryShortcode,
@@ -145,7 +145,7 @@ export const inventoryEntryOut = z.object(inventoryEntryFields);
 const productInventoryEmbedFields = {
   id: productShortcode,
   name: z.string(),
-  upc: upc.nullable(),
+  primaryGtin: gtin.nullable(),
   fdc_id: fdcId.nullable(),
   manufacturer: z.string(),
   model: z.string().nullable(),
@@ -174,7 +174,7 @@ export const inventoryListProductOut = z.object({
   id: productShortcode,
   name: z.string(),
   manufacturer: z.string(),
-  upc: upc.nullable(),
+  primaryGtin: gtin.nullable(),
   fdc_id: fdcId.nullable(),
   category: productCategory.nullable(),
   expectedQuantity: z.number().int().positive().nullable(),

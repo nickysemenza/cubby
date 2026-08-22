@@ -18,6 +18,7 @@ import { deleteInventoryEntries } from "./inventory";
 import { updateLocation } from "./location";
 import {
   deleteProducts,
+  findProductByGtin,
   findProductByNameFuzzyManufacturer,
   getProductByID,
   getProductPickerItemsByIds,
@@ -59,7 +60,12 @@ describe("product repository", () => {
     expect(createdProduct.name).toEqual(productData.name);
     expect(createdProduct.manufacturer).toEqual(productData.manufacturer);
     expect(createdProduct.model).toEqual(productData.model);
-    expect(createdProduct.upc).toEqual(productData.upc);
+    // The barcode round-trips through the `gtin` identifier slot and comes
+    // back canonical, so the write input and the read projection differ by the
+    // GTIN-14 padding — that difference IS the migration.
+    expect(createdProduct.primaryGtin).toEqual(
+      productData.upc?.padStart(14, "0") ?? null,
+    );
 
     const retrievedProduct = await getProductByID(
       ctx.db,
@@ -94,6 +100,10 @@ describe("product repository", () => {
       ).rejects.toThrow(new RegExp(`already exists: ${first.id}`));
     });
 
+    // Now raised by `assertExternalIdsAvailable`, the identifier pre-check,
+    // rather than by translating a `Product_upc_key` violation after the fact.
+    // `throwIfDuplicateProduct`'s barcode branch survives as the race backstop:
+    // it only fires when two concurrent creates both pass the pre-check.
     it("names the shortcode on a UPC collision", async () => {
       const first = await createProduct(
         ctx.db,
@@ -107,7 +117,45 @@ describe("product repository", () => {
           makeProductInput({ name: "Different Name", upc: "033287188048" }),
           ctx.actor,
         ),
-      ).rejects.toThrow(new RegExp(`already used by ${first.id}`));
+      ).rejects.toThrow(new RegExp(`already belongs to ${first.id}`));
+    });
+
+    // The bug `Product_upc_key` had: it compared 12 digits to 13, so one item
+    // could exist twice under two encodings of its own barcode. That is exactly
+    // how PRD 774cdbbd and 4182d4c9 both came to hold the Linzer foam brush.
+    it("collides across ENCODINGS of one barcode, not just exact strings", async () => {
+      const first = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Foam Brush", upc: "077089850017" }),
+        ctx.actor,
+      );
+
+      await expect(
+        createProduct(
+          ctx.db,
+          makeProductInput({ name: "Foam Brush 13", upc: "0077089850017" }),
+          ctx.actor,
+        ),
+        // Canonical GTIN-14 in the message: both encodings are ONE identifier
+        // now, which is the whole point.
+      ).rejects.toThrow(
+        new RegExp(
+          `gtin/gtin_14/00077089850017 already belongs to ${first.id}`,
+        ),
+      );
+    });
+
+    it("finds a product by a barcode written in another encoding", async () => {
+      const created = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Scanned Item", upc: "0077089850017" }),
+        ctx.actor,
+      );
+
+      // 12-digit scan of a barcode stored from its 13-digit reprint.
+      const found = await findProductByGtin(ctx.db, "077089850017");
+      expect(found?.id).toBe(created.id);
+      expect(found?.primaryGtin).toBe("00077089850017");
     });
 
     it("names the shortcode when a RENAME collides", async () => {
@@ -930,7 +978,9 @@ describe("product repository", () => {
     expect(updatedProduct.name).toEqual("Updated Product");
     expect(updatedProduct.manufacturer).toEqual("Updated Manufacturer");
     expect(updatedProduct.model).toEqual(productData.model); // Unchanged
-    expect(updatedProduct.upc).toEqual(productData.upc); // Unchanged
+    expect(updatedProduct.primaryGtin).toEqual(
+      productData.upc?.padStart(14, "0") ?? null,
+    ); // Unchanged
 
     const retrievedProduct = await getProductByID(
       ctx.db,
