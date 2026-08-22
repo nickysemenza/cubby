@@ -2,8 +2,15 @@ import { projectKindSchema, projectStatusSchema } from "@cubby/schemas/project";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
-import { ProjectsDashboard } from "~/app/projects/projects-dashboard";
+import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
+import {
+  DASHBOARD_VIEW_OPTIONS,
+  type DashboardView,
+  ProjectsDashboard,
+} from "~/app/projects/projects-dashboard";
 import { Page } from "~/components/page/Page";
+import { ViewSwitcher } from "~/components/ui/view-switcher";
+import { projectCaptureRequest } from "~/entities/editing/editor-requests";
 import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import {
   isValidProjectDateFilter,
@@ -87,8 +94,35 @@ export const Route = createFileRoute("/_authenticated/projects/")({
 });
 
 function ProjectsPage() {
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const view = (search.view ?? "overview") as DashboardView;
+
   return (
-    <Page variant="list" title="Projects" layout="full">
+    <Page
+      variant="list"
+      listChrome="workbench"
+      title="Projects"
+      layout="full"
+      workbenchControls={
+        <ViewSwitcher
+          ariaLabel="Dashboard view"
+          options={DASHBOARD_VIEW_OPTIONS}
+          value={view}
+          onValueChange={(nextView) =>
+            void navigate({
+              search: (previous) => ({ ...previous, view: nextView }),
+              replace: true,
+            })
+          }
+        />
+      }
+      actions={
+        <CreateDialogAction request={projectCaptureRequest()}>
+          New Project
+        </CreateDialogAction>
+      }
+    >
       <ProjectsDashboard />
     </Page>
   );

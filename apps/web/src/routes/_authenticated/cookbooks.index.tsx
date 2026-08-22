@@ -14,6 +14,7 @@ function CookbooksPage() {
   return (
     <Page
       variant="list"
+      listChrome="workbench"
       title="Cookbooks"
       actions={
         <Link to="/recipes/import">

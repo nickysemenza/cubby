@@ -78,8 +78,10 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
 
   const sections: DetailSection[] = [
     editableDetailSection({
+      id: "basic-information",
       title: "Basic Information",
       icon: Info,
+      placement: "supporting",
       editMode,
       Form: IngredientForm,
       entity: ingredient,
@@ -95,8 +97,10 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
     ...(nutritionInfo && nutritionProduct
       ? [
           {
+            id: "nutrition-information",
             title: "Nutrition Information",
             icon: Apple,
+            placement: "supporting" as const,
             content: (
               <Stack gap="md">
                 <NutritionLabel
@@ -125,9 +129,10 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
     // Custom section: Related Products — the products realizing this
     // ingredient, as photo cards (primary content alongside recipe usages).
     {
+      id: "related-products",
       title: "Related Products",
       icon: ShoppingCart,
-      zone: "main" as const,
+      placement: "primary" as const,
       headerAction: (
         <Button variant="outline" size="sm" onClick={startEnriching}>
           <Sparkles className="size-4" />
@@ -140,18 +145,20 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
     // above the source-attributed table (table shows which product/food each
     // mapping came from, since ingredient mappings aggregate across products).
     {
+      id: "unit-mappings",
       title: "Unit Mappings",
       icon: Scale,
-      zone: "main",
+      placement: "primary",
       content: <UnitCoveragePanel mappings={mappings} />,
     },
     // Custom section: Appears In Recipes — one row per usage, with amount,
     // source line, and a read-only parser-drift flag. Full-width so the 5-column
     // table has room (esp. the source line).
     {
+      id: "recipe-appearances",
       title: "Appears In Recipes",
       icon: ChefHat,
-      zone: "full",
+      placement: "full",
       content:
         ingredient.recipeUsages.length > 0 ? (
           <RecipeUsagesTable

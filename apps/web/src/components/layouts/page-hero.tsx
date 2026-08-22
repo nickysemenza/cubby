@@ -1,13 +1,25 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { Link, type LinkProps } from "@tanstack/react-router";
 import { cva, type VariantProps } from "class-variance-authority";
-import { Check, ClipboardCopy, type LucideIcon } from "lucide-react";
+import {
+  Check,
+  ClipboardCopy,
+  type LucideIcon,
+  MoreHorizontal,
+} from "lucide-react";
 import { type CSSProperties, type ReactNode, useState } from "react";
 import { getEntityNavGroup } from "~/app/_components/navigation/nav-items";
 import { ImageGallery } from "~/components/media/image-gallery";
+import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { EYEBROW_CLASS, Eyebrow } from "~/components/ui/eyebrow";
 import { InkStamp } from "~/components/ui/ink-stamp";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTitle,
+  PopoverTrigger,
+} from "~/components/ui/popover";
 import { entities } from "~/entities/entities";
 import { ENTITY_ACCENTS } from "~/entities/entity-accents";
 import { copyShortcodes } from "~/lib/clipboard";
@@ -49,6 +61,14 @@ interface PageHeroMetaItem {
 export interface DetailHeroStat {
   label: string;
   value: ReactNode;
+}
+
+/** Authored action hierarchy for a detail plate. */
+export interface DetailHeroActions {
+  /** The single action that should remain visible on every viewport. */
+  primary?: ReactNode;
+  /** Supporting and destructive actions; collapsed behind Actions on phone. */
+  secondary?: ReactNode;
 }
 
 /** One eyebrow path segment. `to` is set only for the leading nav-group
@@ -234,6 +254,52 @@ interface PageHeroProps extends VariantProps<typeof heroVariants> {
   count?: number;
 }
 
+interface ListWorkbenchProps {
+  title: ReactNode;
+  count?: number;
+  controls?: ReactNode;
+  actions?: ReactNode;
+}
+
+/**
+ * Stable first tier for operational lists. The table owns the query/selection
+ * tier directly below this; alternate renderers keep this identity tier in the
+ * exact same place.
+ */
+function ListWorkbench({
+  title,
+  count,
+  controls,
+  actions,
+}: ListWorkbenchProps) {
+  return (
+    <div className="grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 border-border border-b bg-card px-2 py-1 sm:flex sm:gap-2">
+      <div className="flex min-w-0 items-baseline gap-2">
+        <h1 className="truncate font-bold font-heading text-base tracking-tight sm:text-lg">
+          {title}
+        </h1>
+        {count !== undefined && (
+          <span className="shrink-0 font-mono text-2xs text-slate uppercase tabular-nums tracking-wider">
+            {formatCount(count)}
+          </span>
+        )}
+      </div>
+      <div className="col-span-2 row-start-2 mt-1 flex min-w-0 items-center gap-1 overflow-x-auto overscroll-x-contain [scrollbar-width:none] sm:col-auto sm:row-auto sm:mt-0 sm:flex-1 [&::-webkit-scrollbar]:hidden">
+        {controls}
+        <div
+          className="flex shrink-0 items-center gap-1"
+          data-workbench-utilities
+        />
+      </div>
+      {actions && (
+        <div className="col-start-2 row-start-1 flex shrink-0 items-center gap-2 sm:col-auto sm:row-auto">
+          {actions}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * List / compact page header: eyebrow path, big title, optional meta strip and
  * an entity-inked accent bar. The canonical renderer for every non-detail page
@@ -336,8 +402,8 @@ interface DetailPlateProps {
   heroStamp?: { label: string; tone?: "ink" | "red" | "green" };
   /** Inline ledger stats strip (on hand, value, ...). */
   heroStats?: DetailHeroStat[];
-  /** Page-level action cluster (edit / move / delete) rendered on the plate. */
-  actions?: ReactNode;
+  /** Deliberate page-level action hierarchy rendered on the plate. */
+  heroActions?: DetailHeroActions;
   /** Images shown as a swipeable hero gallery on mobile (above the plate). */
   heroImages?: Array<{ id: string; url: string; filename: string }>;
   /**
@@ -365,7 +431,7 @@ function DetailPlate({
   heroNo,
   heroStamp,
   heroStats,
-  actions,
+  heroActions,
   heroImages,
   heroMedia,
 }: DetailPlateProps) {
@@ -402,13 +468,13 @@ function DetailPlate({
                 </p>
               )}
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-2 sm:shrink-0">
+            <div className="flex flex-wrap items-center justify-between gap-2 sm:shrink-0 sm:justify-end">
               {heroStamp && (
                 <InkStamp tone={heroStamp.tone} className="mt-1">
                   {heroStamp.label}
                 </InkStamp>
               )}
-              {actions}
+              <DetailPlateActions actions={heroActions} />
             </div>
           </div>
           {heroStats && heroStats.length > 0 && (
@@ -437,12 +503,55 @@ function DetailPlate({
   );
 }
 
+function DetailPlateActions({ actions }: { actions?: DetailHeroActions }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  if (!actions?.primary && !actions?.secondary) return null;
+
+  return (
+    <div className="flex items-center gap-2 print:hidden">
+      {actions.primary}
+      {actions.secondary && (
+        <>
+          <div className="hidden flex-wrap items-center gap-2 md:flex">
+            {actions.secondary}
+          </div>
+          <div className="md:hidden">
+            <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+              <PopoverTrigger
+                render={
+                  <Button variant="outline" aria-label="Open detail actions" />
+                }
+              >
+                <MoreHorizontal />
+                Actions
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-56">
+                <PopoverTitle className="font-mono text-2xs text-slate uppercase tracking-wider">
+                  Record actions
+                </PopoverTitle>
+                <div
+                  role="menu"
+                  className="flex flex-col gap-1 [&_[data-slot=button]]:w-full [&_[data-slot=button]]:justify-start"
+                  onClickCapture={() => setMenuOpen(false)}
+                >
+                  {actions.secondary}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 interface PageHeaderProps {
   variant: "list" | "detail";
   title: ReactNode;
   eyebrow?: ReactNode;
   entity?: Entity;
   actions?: ReactNode;
+  heroActions?: DetailHeroActions;
   className?: string;
   compact?: boolean;
   decoration?: "accent" | "none";
@@ -454,6 +563,8 @@ interface PageHeaderProps {
   heroImages?: Array<{ id: string; url: string; filename: string }>;
   heroMedia?: ReactNode;
   count?: number;
+  listChrome?: "hero" | "workbench";
+  workbenchControls?: ReactNode;
 }
 
 /**
@@ -468,6 +579,7 @@ export function PageHeader({
   eyebrow,
   entity,
   actions,
+  heroActions,
   className,
   compact,
   decoration,
@@ -478,6 +590,8 @@ export function PageHeader({
   heroImages,
   heroMedia,
   count,
+  listChrome = "hero",
+  workbenchControls,
 }: PageHeaderProps) {
   if (variant === "detail") {
     if (!entity) {
@@ -491,9 +605,20 @@ export function PageHeader({
         heroNo={heroNo}
         heroStamp={heroStamp}
         heroStats={heroStats}
-        actions={actions}
+        heroActions={heroActions}
         heroImages={heroImages}
         heroMedia={heroMedia}
+      />
+    );
+  }
+
+  if (listChrome === "workbench") {
+    return (
+      <ListWorkbench
+        title={title}
+        count={count}
+        controls={workbenchControls}
+        actions={actions}
       />
     );
   }

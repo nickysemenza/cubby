@@ -60,16 +60,22 @@ export function BulkActionBar<TData extends RowData>({
     if (disabled) return;
     onExecute(action, selectedRows);
   };
+  const orderedActions = [...actions].sort(
+    (a, b) =>
+      Number(a.tone === "destructive") - Number(b.tone === "destructive"),
+  );
 
   return (
     <LayoutRow
+      data-bulk-action-bar
       align="center"
       gap="sm"
-      // Square, paper-and-rule surface (hairline border + Paper Surface tone)
-      // — the ledger has no rounded, tinted slabs.
-      className="border bg-card px-4 py-2"
+      wrap
+      className="bg-card max-md:fixed max-md:inset-x-0 max-md:bottom-[var(--app-chrome-bottom)] max-md:z-40 max-md:min-h-12 max-md:flex-nowrap max-md:overflow-x-auto max-md:overscroll-x-contain max-md:border-foreground max-md:border-t-[3px] max-md:px-2 max-md:py-1 md:px-1 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden"
     >
-      <span className="font-medium text-sm">{selectedCount} selected</span>
+      <span className="shrink-0 font-medium font-mono text-xs uppercase tabular-nums">
+        {selectedCount} selected
+      </span>
 
       {showSelectAll && selectAllMatching && (
         <Button
@@ -88,8 +94,8 @@ export function BulkActionBar<TData extends RowData>({
 
       {/* Wraps because the action count is per-entity and open-ended — Tasks
           already carries five before the shared Copy and Delete. */}
-      <LayoutRow align="center" gap="xs" wrap>
-        {actions.map((action) => (
+      <LayoutRow align="center" gap="xs" wrap className="max-md:flex-nowrap">
+        {orderedActions.map((action) => (
           <Button
             key={action.id}
             variant={action.tone === "destructive" ? "destructive" : "ghost"}
@@ -112,7 +118,7 @@ export function BulkActionBar<TData extends RowData>({
         size="sm"
         onClick={onClearSelection}
         disabled={disabled || isExecuting}
-        className="ml-auto"
+        className="ml-auto max-md:sticky max-md:right-0 max-md:bg-card"
       >
         <X className="size-3" />
         <span className="sr-only">Clear selection</span>

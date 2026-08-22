@@ -527,13 +527,17 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
 
   const sections: DetailSection[] = [
     {
+      id: "overview",
       title: "Overview",
       icon: Info,
+      placement: "primary",
       content: <BasicInfo fields={fields} />,
     },
     {
+      id: "dependencies",
       title: "Dependencies",
       icon: Link2,
+      placement: "supporting",
       content: (
         <Stack gap="sm">
           <Stack gap="xs">
@@ -575,8 +579,10 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
       ? []
       : [
           {
+            id: "subtasks",
             title: "Subtasks",
             icon: ListChecks,
+            placement: "primary",
             headerAction:
               task.subtaskCount > 0 ? (
                 <Badge variant="outline">
@@ -661,15 +667,15 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
               : "ink",
       }}
       heroStats={heroStats}
-      actions={
-        <Row gap="sm">
+      heroActions={{
+        primary: (
           <Button variant="outline" onClick={() => setFollowUpOpen(true)}>
             <CalendarPlus />
             Schedule follow-up
           </Button>
-          {deleteButton}
-        </Row>
-      }
+        ),
+        secondary: deleteButton,
+      }}
     >
       <DetailSections sections={sections} rawData={task} />
       <EntityEditDialog

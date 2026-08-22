@@ -1,16 +1,20 @@
 import {
   createFileRoute,
+  Link,
   stripSearchParams,
   useNavigate,
 } from "@tanstack/react-router";
+import { ShoppingCart } from "lucide-react";
 import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 // Meal planning calendar (month overview and weekly focus).
-import { MealCalendarPage } from "~/app/meals/calendar-page";
+import { MEAL_VIEW_OPTIONS, MealCalendarPage } from "~/app/meals/calendar-page";
 import {
   mealCalendarSearchDefaults,
   mealCalendarSearchSchema,
 } from "~/app/meals/meal-search";
 import { Page } from "~/components/page/Page";
+import { Button } from "~/components/ui/button";
+import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { mealCaptureRequest } from "~/entities/editing/editor-requests";
 import { pageTitle } from "~/lib/page-title";
 
@@ -30,27 +34,42 @@ function MealsIndexRoute() {
   return (
     <Page
       variant="list"
+      listChrome="workbench"
       title="Meals"
       layout="full"
-      actions={<CreateDialogAction request={mealCaptureRequest()} />}
+      workbenchControls={
+        <ViewSwitcher
+          ariaLabel="Meals view"
+          options={MEAL_VIEW_OPTIONS}
+          value={routeView}
+          onValueChange={(nextView) =>
+            void navigate({
+              to: "/meals",
+              search: (prev) => ({
+                ...prev,
+                view: nextView === "calendar" ? undefined : nextView,
+              }),
+              replace: true,
+            })
+          }
+        />
+      }
+      actions={
+        <>
+          <Link to="/meals/shopping-list">
+            <Button type="button" variant="outline" size="sm">
+              <ShoppingCart />
+              Shopping list
+            </Button>
+          </Link>
+          <CreateDialogAction request={mealCaptureRequest()} />
+        </>
+      }
     >
       <MealCalendarPage
         view={routeView}
         period={period ?? "month"}
         week={week}
-        onViewChange={(nextView) =>
-          // Merge, don't replace — a plain object here would drop the Table
-          // view's sort/page/filter search params (and any other in-flight
-          // search state) on every view switch. See tasks.index.tsx.
-          void navigate({
-            to: "/meals",
-            search: (prev) => ({
-              ...prev,
-              view: nextView === "calendar" ? undefined : nextView,
-            }),
-            replace: true,
-          })
-        }
         onWeekChange={(nextWeek) =>
           void navigate({
             to: "/meals",

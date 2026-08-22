@@ -13,13 +13,17 @@ import type { DetailSection } from "./detail-page";
 export function editableDetailSection<TEditData, TEntity>({
   title,
   icon,
-  zone,
+  id,
+  placement,
   headerAction,
   editMode,
   Form,
   entity,
   children,
-}: Pick<DetailSection, "title" | "icon" | "zone" | "headerAction"> & {
+}: Pick<
+  DetailSection,
+  "id" | "title" | "icon" | "placement" | "headerAction"
+> & {
   editMode: EntityDetailController<TEditData>;
   Form: ComponentType<EditModeProps<TEditData, TEntity>>;
   entity: TEntity;
@@ -27,9 +31,10 @@ export function editableDetailSection<TEditData, TEntity>({
   children: ReactNode;
 }): DetailSection {
   return {
+    id,
     title,
     icon,
-    zone,
+    placement,
     headerAction,
     overflowVisible: editMode.isEditing,
     content: editMode.isEditing ? (

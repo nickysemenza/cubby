@@ -24,7 +24,7 @@ export const Route = createFileRoute("/_authenticated/images/")({
 
 function ImagesPage() {
   return (
-    <Page variant="list" headerInToolbar title="Images" layout="full">
+    <Page variant="list" listChrome="workbench" title="Images" layout="full">
       <Suspense fallback={<SimpleLoading text="Loading images..." />}>
         <ImageList />
       </Suspense>

@@ -1,12 +1,20 @@
 import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
-import { X } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { ListFilter, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "~/components/ui/button";
 import {
   FilterableCombobox,
   MultiFilterableCombobox,
 } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTitle,
+  PopoverTrigger,
+} from "~/components/ui/popover";
+import { ResponsiveSheet } from "~/components/ui/responsive-sheet";
+import { useIsMobile } from "~/hooks/useMobile";
 import { cn } from "~/lib/utils";
 import type { Filter, FilterBarField } from "./filter-bar-core";
 
@@ -17,8 +25,83 @@ const INVALID_FILTER_OPTION = {
   meta: true,
 } as const;
 
+function visibleOptions(field: FilterBarField, filter: Filter) {
+  const options = field.options ?? EMPTY_FILTER_OPTIONS;
+  return filter.values.includes(UNRESOLVABLE_ENTITY_FILTER) &&
+    !options.some((option) => option.value === UNRESOLVABLE_ENTITY_FILTER)
+    ? [INVALID_FILTER_OPTION, ...options]
+    : options;
+}
+
+function filterSummary(field: FilterBarField, filter: Filter): string {
+  if (filter.values.length === 0 || filter.values.every((value) => !value)) {
+    return "Choose…";
+  }
+  if (field.type === "text") return filter.values[0] ?? "Choose…";
+  const labels = new Map(
+    visibleOptions(field, filter).map((option) => [option.value, option.label]),
+  );
+  return filter.values.map((value) => labels.get(value) ?? value).join(", ");
+}
+
+function FilterEditor({
+  field,
+  filter,
+  update,
+}: {
+  field: FilterBarField;
+  filter: Filter;
+  update: (values: string[]) => void;
+}) {
+  const options = visibleOptions(field, filter);
+  if (field.type === "text") {
+    return (
+      <Input
+        autoFocus
+        value={filter.values[0] ?? ""}
+        onChange={(event) => update([event.target.value])}
+        placeholder={field.placeholder}
+        aria-label={`Filter ${field.label ?? field.key}`}
+      />
+    );
+  }
+  if (field.type === "multiselect") {
+    return (
+      <MultiFilterableCombobox
+        items={options}
+        value={filter.values}
+        onValueChange={update}
+        placeholder={`Filter ${field.label ?? field.key}`}
+        ariaLabel={`Filter ${field.label ?? field.key}`}
+        className="w-full"
+        onOpenChange={(open) => {
+          if (open) field.onActivate?.(filter.values);
+        }}
+        onSearchChange={field.onSearchChange}
+        isLoading={field.isLoading}
+      />
+    );
+  }
+  return (
+    <FilterableCombobox
+      items={options}
+      value={filter.values[0] ?? null}
+      onValueChange={(value) => update(value === null ? [] : [value])}
+      placeholder={`Filter ${field.label ?? field.key}`}
+      ariaLabel={`Filter ${field.label ?? field.key}`}
+      clearable
+      className="w-full"
+      onOpenChange={(open) => {
+        if (open) field.onActivate?.(filter.values);
+      }}
+      onSearchChange={field.onSearchChange}
+      isLoading={field.isLoading}
+    />
+  );
+}
+
 /**
- * Cubby's small, manifest-backed filter bar.
+ * Compact, manifest-backed expression of the table's active query.
  *
  * This intentionally supports only the three filter shapes emitted by
  * `barFieldFromConfig`. The old copy-owned ReUI component advertised async
@@ -36,27 +119,11 @@ export function FilterBar({
   onChange: (filters: Filter[]) => void;
   className?: string;
 }) {
+  const [addOpen, setAddOpen] = useState(false);
+  const isMobile = useIsMobile();
   const fieldsByKey = useMemo(
     () => new Map(fields.map((field) => [field.key, field])),
     [fields],
-  );
-  const visibleOptionsByFilterId = useMemo(
-    () =>
-      new Map(
-        filters.map((filter) => {
-          const options =
-            fieldsByKey.get(filter.field)?.options ?? EMPTY_FILTER_OPTIONS;
-          const visibleOptions =
-            filter.values.includes(UNRESOLVABLE_ENTITY_FILTER) &&
-            !options.some(
-              (option) => option.value === UNRESOLVABLE_ENTITY_FILTER,
-            )
-              ? [INVALID_FILTER_OPTION, ...options]
-              : options;
-          return [filter.id, visibleOptions] as const;
-        }),
-      ),
-    [filters, fieldsByKey],
   );
   const active = new Set(filters.map((filter) => filter.field));
   const available = fields.filter((field) => !active.has(field.key));
@@ -74,66 +141,90 @@ export function FilterBar({
       ),
     );
 
+  const addField = (field: FilterBarField) => {
+    field.onActivate?.();
+    onChange([
+      ...filters,
+      {
+        id: `filter-${field.key}`,
+        field: field.key,
+        operator:
+          field.type === "text"
+            ? "contains"
+            : field.type === "multiselect"
+              ? "is_any_of"
+              : "is",
+        values: [],
+      },
+    ]);
+    setAddOpen(false);
+  };
+
+  const filterChoices = (
+    <div className="grid gap-px border border-border bg-border">
+      {available.map((field) => (
+        <button
+          key={field.key}
+          type="button"
+          className="min-h-10 bg-card px-2 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-md:min-h-11"
+          onClick={() => addField(field)}
+        >
+          {field.label}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
-    <div className={cn("flex min-w-0 flex-wrap items-center gap-2", className)}>
+    <div
+      className={cn(
+        "flex min-w-0 items-center gap-1 overflow-x-auto overscroll-x-contain md:flex-wrap md:overflow-visible",
+        className,
+      )}
+    >
       {filters.flatMap((filter) => {
         const field = fieldsByKey.get(filter.field);
         if (!field) return [];
-        const visibleOptions =
-          visibleOptionsByFilterId.get(filter.id) ?? EMPTY_FILTER_OPTIONS;
+        const label = field.label ?? field.key;
+        const summary = filterSummary(field, filter);
         return (
           <div
             key={filter.id}
-            className="flex h-7 min-w-0 items-center border border-border bg-muted/20 text-xs"
+            className="group/filter flex h-7 max-w-72 shrink-0 items-stretch border border-border bg-card"
           >
-            <span className="shrink-0 border-border border-r px-2 font-medium text-muted-foreground">
-              {field.label}
-            </span>
-            {field.type === "text" ? (
-              <Input
-                value={filter.values[0] ?? ""}
-                onChange={(event) => update(filter.id, [event.target.value])}
-                placeholder={field.placeholder}
-                className="h-full min-w-28 border-0 bg-transparent px-2 shadow-none focus-visible:ring-0"
-              />
-            ) : field.type === "multiselect" ? (
-              <MultiFilterableCombobox
-                items={visibleOptions}
-                value={filter.values}
-                onValueChange={(values) => update(filter.id, values)}
-                placeholder={`Filter ${field.label ?? field.key}`}
-                ariaLabel={`Filter ${field.label ?? field.key}`}
-                className="min-w-28 border-0 bg-transparent shadow-none"
-                onOpenChange={(open) => {
-                  if (open) field.onActivate?.(filter.values);
-                }}
-                onSearchChange={field.onSearchChange}
-                isLoading={field.isLoading}
-              />
-            ) : (
-              <FilterableCombobox
-                items={visibleOptions}
-                value={filter.values[0] ?? null}
-                onValueChange={(value) =>
-                  update(filter.id, value === null ? [] : [value])
+            <Popover>
+              <PopoverTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label={`${label}: ${summary}`}
+                    className="flex min-w-0 items-center text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    title={`${label}: ${summary}`}
+                  />
                 }
-                placeholder={`Filter ${field.label ?? field.key}`}
-                ariaLabel={`Filter ${field.label ?? field.key}`}
-                clearable
-                className="min-w-28 border-0 bg-transparent shadow-none"
-                onOpenChange={(open) => {
-                  if (open) field.onActivate?.(filter.values);
-                }}
-                onSearchChange={field.onSearchChange}
-                isLoading={field.isLoading}
-              />
-            )}
+              >
+                <span className="border-border border-r px-2 font-mono text-2xs text-slate uppercase tracking-wide">
+                  {label}
+                </span>
+                <span className="min-w-0 truncate px-2 text-xs">{summary}</span>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-80">
+                <PopoverTitle className="font-bold font-heading">
+                  Filter by {label}
+                </PopoverTitle>
+                <FilterEditor
+                  field={field}
+                  filter={filter}
+                  update={(values) => update(filter.id, values)}
+                />
+              </PopoverContent>
+            </Popover>
             <Button
               type="button"
               variant="ghost"
               size="icon-xs"
-              className="shrink-0"
-              aria-label={`Remove ${field.label ?? field.key} filter`}
+              className="h-full shrink-0 border-border border-l"
+              aria-label={`Remove ${label} filter`}
               onClick={() =>
                 onChange(filters.filter((item) => item.id !== filter.id))
               }
@@ -143,39 +234,63 @@ export function FilterBar({
           </div>
         );
       })}
-      {available.length > 0 && (
-        <select
-          aria-label="Add filter"
-          className="h-7 min-w-0 border border-border bg-background px-2 text-xs"
-          value=""
-          onChange={(event) => {
-            const key = event.target.value;
-            const field = fieldsByKey.get(key);
-            if (!field) return;
-            field.onActivate?.();
-            onChange([
-              ...filters,
-              {
-                id: `filter-${key}`,
-                field: key,
-                operator:
-                  field.type === "text"
-                    ? "contains"
-                    : field.type === "multiselect"
-                      ? "is_any_of"
-                      : "is",
-                values: [],
-              },
-            ]);
-          }}
+
+      {available.length > 0 &&
+        (isMobile ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 shrink-0"
+            onClick={() => setAddOpen(true)}
+          >
+            <ListFilter />
+            Filter
+          </Button>
+        ) : (
+          <Popover open={addOpen} onOpenChange={setAddOpen}>
+            <PopoverTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 shrink-0"
+                />
+              }
+            >
+              <ListFilter />
+              Filter
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-64">
+              <PopoverTitle className="font-bold font-heading">
+                Add filter
+              </PopoverTitle>
+              {filterChoices}
+            </PopoverContent>
+          </Popover>
+        ))}
+      {filters.length > 1 && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 shrink-0 text-muted-foreground"
+          onClick={() => onChange([])}
         >
-          <option value="">+ Filter</option>
-          {available.map((field) => (
-            <option key={field.key} value={field.key}>
-              {field.label}
-            </option>
-          ))}
-        </select>
+          Clear all
+        </Button>
+      )}
+
+      {isMobile && (
+        <ResponsiveSheet
+          open={addOpen}
+          onOpenChange={setAddOpen}
+          title="Add filter"
+          description="Choose another field to narrow this ledger."
+        >
+          {filterChoices}
+        </ResponsiveSheet>
       )}
     </div>
   );

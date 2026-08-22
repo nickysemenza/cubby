@@ -69,7 +69,7 @@ function PurchasesPage() {
   return (
     <Page
       variant="list"
-      headerInToolbar
+      listChrome="workbench"
       title="Purchases"
       layout="full"
       actions={<CreateDialogAction request={purchaseCaptureRequest()} />}

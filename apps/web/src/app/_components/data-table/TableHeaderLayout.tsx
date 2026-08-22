@@ -35,9 +35,9 @@ function pinBoundaryClass<TData extends RowData>(
       : header.getContext().table.getEndVisibleLeafColumns();
   const index = columns.findIndex((column) => column.id === header.column.id);
   return pinned === "start" && index === columns.length - 1
-    ? "shadow-[var(--shadow-pin-start)]"
+    ? "border-r-2 border-r-foreground"
     : pinned === "end" && index === 0
-      ? "shadow-[var(--shadow-pin-end)]"
+      ? "border-l-2 border-l-foreground"
       : undefined;
 }
 
@@ -131,7 +131,7 @@ function SortableHeader<TData extends RowData>({
             variant="ghost"
             size="icon-sm"
             aria-label={`Reorder ${header.column.id} column`}
-            className="h-6 w-5 shrink-0 cursor-grab touch-none px-0 text-muted-foreground active:cursor-grabbing"
+            className="h-6 w-5 shrink-0 cursor-grab touch-none px-0 text-muted-foreground opacity-0 pointer-coarse:opacity-100 transition-opacity active:cursor-grabbing group-focus-within/th:opacity-100 group-hover/th:opacity-100"
             {...attributes}
             {...listeners}
           >

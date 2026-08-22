@@ -186,15 +186,18 @@ export function WishDetail({ wish }: { wish: WishOut }) {
 
   const sections: DetailSection[] = [
     {
+      id: "overview",
       title: "Overview",
       icon: Info,
+      placement: "supporting",
       content: <BasicInfo fields={fields} />,
     },
     {
+      id: "tool-alternatives",
       title: "Tool alternatives",
       icon: Heart,
       // The page's primary content — everything else is metadata.
-      zone: "main",
+      placement: "primary",
       content:
         wish.candidates.length === 0 ? (
           <p className="text-muted-foreground">
@@ -232,20 +235,22 @@ export function WishDetail({ wish }: { wish: WishOut }) {
         wish.acquiredAt ? { label: "Acquired", tone: "green" } : undefined
       }
       heroStats={heroStats}
-      actions={
-        <>
-          <DetailEditAction onClick={() => setEditing(true)} />
-          <Button
-            variant="outline"
-            onClick={toggleAcquired}
-            disabled={acquiredMutation.isPending}
-          >
-            <Check />
-            {wish.acquiredAt ? "Still wanted" : "Mark acquired"}
-          </Button>
-          {deleteButton}
-        </>
-      }
+      heroActions={{
+        primary: <DetailEditAction onClick={() => setEditing(true)} />,
+        secondary: (
+          <>
+            <Button
+              variant="outline"
+              onClick={toggleAcquired}
+              disabled={acquiredMutation.isPending}
+            >
+              <Check />
+              {wish.acquiredAt ? "Still wanted" : "Mark acquired"}
+            </Button>
+            {deleteButton}
+          </>
+        ),
+      }}
     >
       <DetailSections sections={sections} rawData={wish} />
       {deleteDialog}

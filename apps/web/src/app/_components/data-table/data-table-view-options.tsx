@@ -71,7 +71,7 @@ export function DataTableViewOptions<TData extends RowData>({
         }
       >
         <Settings2 className="size-3.5" />
-        View
+        Display
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"

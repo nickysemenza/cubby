@@ -46,7 +46,7 @@ export const Route = createFileRoute("/_authenticated/statement-rows/")({
   component: () => (
     <Page
       variant="list"
-      headerInToolbar
+      listChrome="workbench"
       title="Statement Rows"
       layout="full"
       compact

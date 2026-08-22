@@ -40,19 +40,19 @@ export function FinancialAccountDetail({
       entity="financialAccount"
       title={account.name}
       rawData={account}
-      actions={
-        <>
-          <DetailEditAction onClick={() => setEditOpen(true)} />
-          {deleteButton}
-        </>
-      }
+      heroActions={{
+        primary: <DetailEditAction onClick={() => setEditOpen(true)} />,
+        secondary: deleteButton,
+      }}
     >
       <DetailSections
         rawData={account}
         sections={[
           {
+            id: "overview",
             title: "Overview",
             icon: Info,
+            placement: "primary",
             content: (
               <BasicInfo
                 fields={[
@@ -102,13 +102,17 @@ export function FinancialAccountDetail({
             ),
           },
           {
+            id: "transactions",
             title: "Transactions",
             icon: ReceiptText,
+            placement: "primary",
             content: <LinkedTransactions accountId={account.id} />,
           },
           {
+            id: "history",
             title: "History",
             icon: Clock,
+            placement: "supporting",
             content: (
               <AuditLogList
                 entityType="financialAccount"

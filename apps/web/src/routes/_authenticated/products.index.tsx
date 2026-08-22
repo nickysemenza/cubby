@@ -9,9 +9,14 @@ import {
 import { Plus } from "lucide-react";
 import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
-import { ProductList, type ProductListView } from "~/app/products/productlist";
+import {
+  PRODUCT_VIEW_OPTIONS,
+  ProductList,
+  type ProductListView,
+} from "~/app/products/productlist";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
+import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import { pageTitle } from "~/lib/page-title";
 import {
@@ -64,27 +69,36 @@ function ProductsPage() {
   const activeView: ProductListView = view ?? "table";
 
   return (
-    <Page variant="list" title="Products" layout="full">
-      <ProductList
-        initialCategory={category}
-        view={activeView}
-        onViewChange={(nextView) =>
-          navigate({
-            search: (previous) => ({
-              ...previous,
-              view: nextView === "table" ? undefined : nextView,
-            }),
-          })
-        }
-        actions={
-          <Link to="/products/new">
-            <Button>
-              <Plus />
-              New
-            </Button>
-          </Link>
-        }
-      />
+    <Page
+      variant="list"
+      listChrome="workbench"
+      title="Products"
+      layout="full"
+      workbenchControls={
+        <ViewSwitcher
+          ariaLabel="Products view"
+          options={PRODUCT_VIEW_OPTIONS}
+          value={activeView}
+          onValueChange={(nextView) =>
+            navigate({
+              search: (previous) => ({
+                ...previous,
+                view: nextView === "table" ? undefined : nextView,
+              }),
+            })
+          }
+        />
+      }
+      actions={
+        <Link to="/products/new">
+          <Button>
+            <Plus />
+            New
+          </Button>
+        </Link>
+      }
+    >
+      <ProductList initialCategory={category} view={activeView} />
     </Page>
   );
 }

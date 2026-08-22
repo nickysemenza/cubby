@@ -41,12 +41,14 @@ function DesignSmokeTest() {
       rawData={{ createdAt: "2026-01-15T12:00:00Z" }}
       heroStamp={{ label: "In progress" }}
       heroStats={PROJECT_STATS}
-      actions={
-        <Button variant="outline" size="sm">
-          <ClipboardList />
-          Review
-        </Button>
-      }
+      heroActions={{
+        primary: (
+          <Button variant="outline" size="sm">
+            <ClipboardList />
+            Review
+          </Button>
+        ),
+      }}
     >
       <Stack gap="lg">
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

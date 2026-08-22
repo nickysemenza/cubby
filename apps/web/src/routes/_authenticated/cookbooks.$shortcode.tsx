@@ -145,9 +145,9 @@ function CookbookDetailPage() {
       entity="cookbook"
       heroStats={heroStats}
       layout="full"
-      actions={
-        <Row align="center" gap="sm">
-          {notImported > 0 && (
+      heroActions={{
+        primary:
+          notImported > 0 ? (
             <Button
               variant="outline"
               size="sm"
@@ -162,29 +162,34 @@ function CookbookDetailPage() {
               <Plus className="mr-2 size-4" />
               Add from source ({notImported})
             </Button>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void runReprocess(cookbookId)}
-            disabled={reprocess.running}
-            title="Re-derive recipes from the stored extraction (no AI)"
-          >
-            <RefreshCw
-              className={`mr-2 size-4 ${reprocess.running ? "animate-spin" : ""}`}
-            />
-            Reprocess
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => requestDelete({ id: cookbookId, name, recipeCount })}
-          >
-            <Trash className="mr-2 size-4" />
-            Delete cookbook
-          </Button>
-        </Row>
-      }
+          ) : undefined,
+        secondary: (
+          <Row align="center" gap="sm">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void runReprocess(cookbookId)}
+              disabled={reprocess.running}
+              title="Re-derive recipes from the stored extraction (no AI)"
+            >
+              <RefreshCw
+                className={`mr-2 size-4 ${reprocess.running ? "animate-spin" : ""}`}
+              />
+              Reprocess
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() =>
+                requestDelete({ id: cookbookId, name, recipeCount })
+              }
+            >
+              <Trash className="mr-2 size-4" />
+              Delete cookbook
+            </Button>
+          </Row>
+        ),
+      }}
     >
       {coverUrl && (
         <figure className="my-0 mb-4 w-fit shrink-0 rounded-sm border border-[var(--border)] bg-card p-2">

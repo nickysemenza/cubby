@@ -18,7 +18,7 @@ import {
   useProductFoodSummaries,
 } from "~/app/_components/products/product-food-summaries";
 import { UnitPriceLine } from "~/app/_components/units/unit-price-line";
-import { Row, Stack } from "~/components/layout";
+import { Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
@@ -29,10 +29,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import {
-  ViewSwitcher,
-  type ViewSwitcherOption,
-} from "~/components/ui/view-switcher";
+import type { ViewSwitcherOption } from "~/components/ui/view-switcher";
 import { useTRPC } from "~/integrations/trpc/react";
 import { dataQualityOptions } from "~/lib/data-quality-options";
 import {
@@ -89,7 +86,7 @@ import { ProductMovementViews } from "./product-movement-views";
 
 export type ProductListView = "table" | "shelf" | "events" | "lifecycles";
 
-const PRODUCT_VIEW_OPTIONS: ViewSwitcherOption<ProductListView>[] = [
+export const PRODUCT_VIEW_OPTIONS: ViewSwitcherOption<ProductListView>[] = [
   { value: "table", label: "Table", icon: Table2 },
   { value: "shelf", label: "Shelf", icon: Rows3 },
   { value: "events", label: "Events", icon: Clock3 },
@@ -98,9 +95,7 @@ const PRODUCT_VIEW_OPTIONS: ViewSwitcherOption<ProductListView>[] = [
 
 interface ProductListProps {
   initialCategory?: string;
-  actions?: ReactNode;
   view: ProductListView;
-  onViewChange: (view: ProductListView) => void;
 }
 
 // A module-level fallback keeps the runtime options reference stable while the
@@ -202,12 +197,7 @@ function ProductFoodCell({ product }: { product: ProductListItem }) {
   );
 }
 
-export function ProductList({
-  initialCategory,
-  actions,
-  view,
-  onViewChange,
-}: ProductListProps) {
+export function ProductList({ initialCategory, view }: ProductListProps) {
   const api = useTRPC();
   const navigate = useNavigate();
   const columnHelper = useMemo(
@@ -1028,20 +1018,11 @@ export function ProductList({
       summaries={foodByProductId}
     >
       <Stack gap="sm">
-        <Row justify="end">
-          <ViewSwitcher
-            ariaLabel="Products view"
-            options={PRODUCT_VIEW_OPTIONS}
-            value={view}
-            onValueChange={onViewChange}
-          />
-        </Row>
         {view !== "table" && (
           <DataTableToolbar
             table={table}
             entity="product"
-            showViewOptions={false}
-            actions={actions}
+            portalWorkbenchUtilities
           />
         )}
         {view === "table" && (
@@ -1054,7 +1035,6 @@ export function ProductList({
             entity="product"
             onRowClick={onRowClick}
             onRowHover={onRowHover}
-            actions={actions}
             bulkActionBar={bulkActionBar}
             infiniteScroll={infiniteScroll}
             refreshControls={refreshControls}

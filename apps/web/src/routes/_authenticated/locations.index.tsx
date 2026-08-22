@@ -67,11 +67,11 @@ function LocationsPage() {
   return (
     <Page
       variant="list"
+      listChrome="workbench"
       title="Locations"
       actions={<LocationActions />}
       layout="full"
-    >
-      <Stack gap="md">
+      workbenchControls={
         <ViewSwitcher
           ariaLabel="Locations view"
           options={VIEW_SWITCHER_OPTIONS}
@@ -80,7 +80,9 @@ function LocationsPage() {
             navigate({ search: (prev) => ({ ...prev, view: v }) })
           }
         />
-
+      }
+    >
+      <Stack gap="md">
         {view !== "table" && tableFiltersActive && (
           <Description>
             Table filters are preserved in the URL but paused in this whole-tree

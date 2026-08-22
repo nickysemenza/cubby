@@ -8,6 +8,10 @@ import { lazy, type ReactNode, Suspense } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Stack } from "~/components/layout";
+import {
+  usePageIdentity,
+  usePageWorkbenchTarget,
+} from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import {
   Table,
@@ -114,6 +118,11 @@ interface TTableProps<TItem extends RowData> {
    */
   showColumnMenu?: boolean;
   /**
+   * A page workbench owns its query tier outside the bordered table pane.
+   * Embedded/detail tables keep compact internal chrome.
+   */
+  toolbarMode?: "auto" | "external" | "internal";
+  /**
    * Replaces the entity empty state when there are no rows.
    *
    * The stock state is page-level copy that invites creating one of these
@@ -156,10 +165,13 @@ export default function RTable<TItem extends RowData>(
     verticalAlign = "middle",
     embedded = false,
     showColumnMenu = false,
+    toolbarMode = "auto",
     emptyState,
     showCellSelectionStats = false,
     filterOptionHints,
   } = props;
+  const pageIdentity = usePageIdentity();
+  const workbenchTarget = usePageWorkbenchTarget();
   const {
     cellSelectionContainerProps,
     colSpan,
@@ -225,6 +237,11 @@ export default function RTable<TItem extends RowData>(
         hasFilterConfig,
     );
   const showPagination = !embedded || table.getPageCount() > 1;
+  const externalToolbar =
+    !embedded &&
+    (toolbarMode === "external" ||
+      (toolbarMode === "auto" &&
+        (pageIdentity !== null || workbenchTarget !== null)));
 
   // Loading / error / empty content, or null when real rows should render.
   //
@@ -271,6 +288,43 @@ export default function RTable<TItem extends RowData>(
   };
 
   const statusContent = renderStatusContent();
+
+  const desktopToolbar = showToolbar ? (
+    <DataTableToolbar
+      table={table}
+      entity={entity}
+      filterOptionHints={filterOptionHints}
+      additionalContent={
+        <div className="flex flex-wrap items-center gap-2">
+          {additionalToolbarContent}
+          {groupConfig && onGroupedChange && (
+            <Button
+              variant="ghost"
+              size="icon-lg"
+              className="shrink-0"
+              onClick={() => onGroupedChange(!grouped)}
+              aria-label={grouped ? "Show flat list" : "Show grouped list"}
+            >
+              {grouped ? (
+                <List className="size-4" />
+              ) : (
+                <LayoutList className="size-4" />
+              )}
+            </Button>
+          )}
+          {!infiniteScroll && (
+            <RowsPerPageSelect table={table} className="h-7 w-16" />
+          )}
+        </div>
+      }
+      actions={actions}
+      bulkActionBar={bulkActionBar}
+      portalWorkbenchUtilities={externalToolbar}
+      workbenchUtilityViewport="desktop"
+      isTransitioning={isTransitioning}
+      className="px-4 py-1"
+    />
+  ) : null;
 
   const renderTableBody = () => {
     // Status is rendered as a block below the table (see renderStatusContent),
@@ -443,6 +497,11 @@ export default function RTable<TItem extends RowData>(
     // page, sized for its gallery view) would otherwise stretch the table to
     // the viewport and the width-slack spacer into an absurd gutter.
     <Stack className="max-w-[90rem]">
+      {!isMobile && externalToolbar && desktopToolbar && (
+        <div className="hidden shrink-0 border-border border-b bg-background md:block">
+          {desktopToolbar}
+        </div>
+      )}
       {/* Desktop Table View - Unified wrapper. Sets the entity-inked
           --row-accent so hover/selected bars match the section's color. The
           provider tells editable cells (CellEditTrigger) to select-then-edit
@@ -485,46 +544,9 @@ export default function RTable<TItem extends RowData>(
           >
             {/* Toolbar — the column's fixed top end. Holds view options,
               filters reset, the bulk-action bar, and a page-size control. */}
-            {showToolbar && (
+            {showToolbar && !externalToolbar && (
               <div className="shrink-0 border-border border-b bg-background">
-                <DataTableToolbar
-                  table={table}
-                  entity={entity}
-                  ownsPageIdentity={!embedded}
-                  filterOptionHints={filterOptionHints}
-                  additionalContent={
-                    // flex-wrap: an embedded table in the aside rail can't fit
-                    // a search box, a summary, and the View menu on one line —
-                    // without it they overlap instead of stacking.
-                    <div className="flex flex-wrap items-center gap-2">
-                      {additionalToolbarContent}
-                      {groupConfig && onGroupedChange && (
-                        <Button
-                          variant="ghost"
-                          size="icon-lg"
-                          className="shrink-0"
-                          onClick={() => onGroupedChange(!grouped)}
-                          aria-label={
-                            grouped ? "Show flat list" : "Show grouped list"
-                          }
-                        >
-                          {grouped ? (
-                            <List className="size-4" />
-                          ) : (
-                            <LayoutList className="size-4" />
-                          )}
-                        </Button>
-                      )}
-                      {!infiniteScroll && (
-                        <RowsPerPageSelect table={table} className="h-7 w-16" />
-                      )}
-                    </div>
-                  }
-                  actions={actions}
-                  bulkActionBar={bulkActionBar}
-                  isTransitioning={isTransitioning}
-                  className="px-4 py-1"
-                />
+                {desktopToolbar}
               </div>
             )}
 
@@ -624,9 +646,9 @@ export default function RTable<TItem extends RowData>(
                               const boundaryClass =
                                 pinned === "start" &&
                                 pinnedIndex === pinnedColumns.length - 1
-                                  ? "shadow-[var(--shadow-pin-start)]"
+                                  ? "border-r-2 border-r-foreground"
                                   : pinned === "end" && pinnedIndex === 0
-                                    ? "shadow-[var(--shadow-pin-end)]"
+                                    ? "border-l-2 border-l-foreground"
                                     : undefined;
                               return (
                                 <TableCell
@@ -708,7 +730,6 @@ export default function RTable<TItem extends RowData>(
         <MobileListScreen
           table={table}
           entity={entity}
-          ownsPageIdentity={!embedded}
           additionalToolbarContent={additionalToolbarContent}
           actions={actions}
           bulkActionBar={bulkActionBar}
@@ -721,6 +742,7 @@ export default function RTable<TItem extends RowData>(
           onGroupedChange={onGroupedChange}
           isTransitioning={isTransitioning}
           rowContentVersion={rowContentVersion}
+          portalWorkbenchUtilities={externalToolbar}
         />
       )}
 

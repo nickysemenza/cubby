@@ -148,6 +148,24 @@ afterEach(() => {
 });
 
 describe("LedgerFilters synchronization", () => {
+  it("hydrates filter fields when TanStack materializes leaf columns late", () => {
+    const { table } = makeTable();
+    const columns = table.getAllLeafColumns();
+    let materialized = false;
+    const lateTable = {
+      ...table,
+      getAllLeafColumns: () => (materialized ? columns : []),
+    } as CubbyTable<{ id: string }>;
+    const { rerender } = render(<LedgerFilters table={lateTable} />);
+
+    expect(screen.queryByTestId("ledger-filters")).not.toBeInTheDocument();
+
+    materialized = true;
+    rerender(<LedgerFilters table={lateTable} />);
+
+    expect(screen.getByTestId("ledger-filters")).toBeInTheDocument();
+  });
+
   it("mirrors external filters without writing its stale debounced draft back", () => {
     vi.useFakeTimers();
     const { table, setColumnFilters, setExternalFilters } = makeTable();

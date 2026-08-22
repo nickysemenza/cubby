@@ -213,31 +213,48 @@ export const USDAFoodDetail: React.FC<{
   );
 
   const sections: DetailSection[] = [
-    { title: "Food Information", icon: Info, content: foodInfoSection },
     {
+      id: "food-information",
+      title: "Food Information",
+      icon: Info,
+      placement: "supporting",
+      content: foodInfoSection,
+    },
+    {
+      id: "associated-products",
       title: "Associated Products",
       icon: Link2,
+      placement: "supporting",
       content: linkedProductsSection,
     },
     {
+      id: "nutrition-information",
       title: "Nutrition Information",
       icon: Apple,
-      zone: "main",
+      placement: "primary",
       content: nutritionSection,
     },
     {
+      id: "serving-information",
       title: "Serving Information",
       icon: UtensilsCrossed,
-      zone: "main",
+      placement: "primary",
       content: servingInfoSection,
     },
     {
+      id: "branded-ingredients",
       title: "Branded Food Ingredients",
       icon: ScrollText,
-      zone: "main",
+      placement: "primary",
       content: ingredientsSection,
     },
-    { title: "Unit Conversions", icon: Scale, content: unitMappingsSection },
+    {
+      id: "unit-conversions",
+      title: "Unit Conversions",
+      icon: Scale,
+      placement: "supporting",
+      content: unitMappingsSection,
+    },
   ];
 
   return (
@@ -246,7 +263,7 @@ export const USDAFoodDetail: React.FC<{
       entity="usda-food"
       title={foodInfo.description || "Unnamed Food"}
       rawData={food}
-      actions={<UsdaFoodActions food={food} />}
+      heroActions={{ secondary: <UsdaFoodActions food={food} /> }}
     >
       <DetailSections sections={sections} rawData={food} />
     </Page>

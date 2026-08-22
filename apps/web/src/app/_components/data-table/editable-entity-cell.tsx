@@ -106,7 +106,7 @@ export function EditableEntityCell<TId extends string>({
           clipboard={edit.clipboard}
           hidePencilIcon
           aria-label={`Edit ${label}`}
-          className="shrink-0 p-1 opacity-40 pointer-coarse:opacity-100 transition-opacity focus-visible:opacity-100 group-hover/pencil:opacity-100"
+          className="shrink-0 p-1 opacity-0 pointer-coarse:opacity-100 transition-opacity focus-visible:opacity-100 group-hover/pencil:opacity-100"
         >
           <Pencil className="size-3 text-muted-foreground" />
         </CellEditTrigger>

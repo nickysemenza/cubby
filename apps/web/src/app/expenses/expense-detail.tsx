@@ -569,8 +569,10 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
 
   const sections: DetailSection[] = [
     {
+      id: "overview",
       title: "Overview",
       icon: Info,
+      placement: "primary",
       content: (
         <BasicInfo
           fields={fields}
@@ -610,8 +612,10 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
     ...(expense.purchaseId
       ? [
           {
+            id: "purchase",
             title: "Purchase",
             icon: Receipt,
+            placement: "primary" as const,
             content: <ExpensePurchaseSection expense={expense} />,
           },
         ]
@@ -648,32 +652,34 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
         tone: expense.future ? "ink" : "green",
       }}
       heroStats={heroStats}
-      actions={
-        <>
-          {/* A split files its parts under this line's PURCHASE, so a line with no
+      heroActions={{
+        primary: (
+          <>
+            {/* A split files its parts under this line's PURCHASE, so a line with no
               purchase has nothing to file them under — `splitExpense` refuses with
               "record its vendor first". Disabled with that explanation rather
               than surfaced as an error toast: the fix is a field on this page. */}
-          <span
-            title={
-              expense.purchaseId
-                ? undefined
-                : "Record this expense's vendor first — a split files its parts under the same purchase."
-            }
-          >
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!expense.purchaseId}
-              onClick={() => setSplitOpen(true)}
+            <span
+              title={
+                expense.purchaseId
+                  ? undefined
+                  : "Record this expense's vendor first — a split files its parts under the same purchase."
+              }
             >
-              <Split />
-              Split
-            </Button>
-          </span>
-          {deleteButton}
-        </>
-      }
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!expense.purchaseId}
+                onClick={() => setSplitOpen(true)}
+              >
+                <Split />
+                Split
+              </Button>
+            </span>
+          </>
+        ),
+        secondary: deleteButton,
+      }}
     >
       <DetailSections sections={sections} rawData={expense} />
       {expense.purchaseId ? (

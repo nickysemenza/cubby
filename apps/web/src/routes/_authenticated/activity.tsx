@@ -127,7 +127,7 @@ function ActivityPage() {
   const navigate = useNavigate({ from: Route.fullPath });
 
   return (
-    <Page variant="list" title="Activity">
+    <Page variant="list" listChrome="workbench" title="Activity">
       <Stack className="max-w-3xl">
         <Row justify="between" align="center" gap="sm" wrap>
           {/* Every auditable entity writes here (products through projects,

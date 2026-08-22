@@ -278,7 +278,9 @@ export async function createProduct(
   await expect(page.getByRole("heading", { level: 1, name })).toBeVisible({
     timeout: 10000,
   });
-  await expect(page.getByText("Basic Information")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Basic Information" }),
+  ).toBeVisible();
 }
 
 // Asserts the ingredient detail URL and the <h1> name heading, so every spec

@@ -176,22 +176,24 @@ function ExpensesPage() {
   return (
     <Page
       variant="list"
+      listChrome="workbench"
       title="Expenses"
       layout="full"
       actions={<CreateDialogAction request={expenseCaptureRequest()} />}
-    >
-      <Stack gap="md">
+      workbenchControls={
         <ViewSwitcher
           ariaLabel="Expenses view"
           options={VIEW_SWITCHER_OPTIONS}
           value={view}
           onValueChange={(v) =>
-            // Merge, don't replace — a plain object here would drop `q` (and
-            // any table-search/filter params) from the URL on every view switch.
+            // Merge, don't replace: table-search/filter params survive a
+            // renderer switch and stay shareable in the URL.
             navigate({ search: (prev) => ({ ...prev, view: v }) })
           }
         />
-
+      }
+    >
+      <Stack gap="md">
         {view === "ledger" && <ExpenseList />}
 
         {view === "analytics" && (

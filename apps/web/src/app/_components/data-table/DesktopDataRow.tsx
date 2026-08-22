@@ -109,9 +109,9 @@ function DesktopDataRowInner<TItem extends RowData>({
         );
         const boundaryClass =
           pinned === "start" && pinnedIndex === pinnedColumns.length - 1
-            ? "shadow-[var(--shadow-pin-start)]"
+            ? "border-r-2 border-r-foreground"
             : pinned === "end" && pinnedIndex === 0
-              ? "shadow-[var(--shadow-pin-end)]"
+              ? "border-l-2 border-l-foreground"
               : undefined;
         const width = columnWidthValue(cell.column.id);
         return (

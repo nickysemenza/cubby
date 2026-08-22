@@ -136,25 +136,27 @@ function TasksPage() {
     // viewport — only the list views need the full, unconstrained container.
     <Page
       variant="list"
+      listChrome="workbench"
       title="Tasks"
       layout={view !== "board" ? "full" : "contained"}
       // Header-level "New task" so it's reachable from every view (Next/Board
       // have no list toolbar of their own to hang it off).
       actions={<CreateDialogAction request={taskCaptureRequest()} />}
-    >
-      <Stack gap="md">
-        <TasksStatsStrip />
-
+      workbenchControls={
         <ViewSwitcher
           ariaLabel="Tasks view"
           options={VIEW_SWITCHER_OPTIONS}
           value={view}
           onValueChange={(v) =>
-            // Merge, don't replace — a plain object here would drop `q` (and
-            // any table-search params) from the URL on every view switch.
+            // Merge, don't replace: q and the remaining table-search params
+            // survive switching among Next, Board, Timeline, and List.
             navigate({ search: (prev) => ({ ...prev, view: v }) })
           }
         />
+      }
+    >
+      <Stack gap="md">
+        <TasksStatsStrip />
 
         {view === "next" && <NextTasks filters={rendererFilters} />}
 

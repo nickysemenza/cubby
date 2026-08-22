@@ -12,14 +12,18 @@ import type { CubbyTable as Table } from "./table-features";
 
 const table = {} as Table<{ id: string }>;
 
-describe("DataTableToolbar transition state", () => {
-  it("announces an update and disables stale-row actions", () => {
+describe("DataTableToolbar query tier", () => {
+  it("keeps rest and bulk tiers mounted while disabling both during updates", () => {
     render(
       <DataTableToolbar
         table={table}
         isTransitioning
         actions={<button type="button">Create</button>}
-        bulkActionBar={<button type="button">Delete selected</button>}
+        bulkActionBar={
+          <div data-bulk-action-bar>
+            <button type="button">Delete selected</button>
+          </div>
+        }
       />,
     );
 
@@ -28,5 +32,15 @@ describe("DataTableToolbar transition state", () => {
     expect(
       screen.getByRole("button", { name: "Delete selected" }),
     ).toBeDisabled();
+    expect(
+      screen
+        .getByRole("button", { name: "Create" })
+        .closest("[data-query-rest]"),
+    ).toBeInTheDocument();
+    expect(
+      screen
+        .getByRole("button", { name: "Delete selected" })
+        .closest("[data-query-bulk]"),
+    ).toBeInTheDocument();
   });
 });

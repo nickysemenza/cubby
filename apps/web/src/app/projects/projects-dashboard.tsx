@@ -13,7 +13,6 @@ import { lazy, type ReactNode, Suspense, useMemo } from "react";
 import { SavedViewsMenu } from "~/app/_components/data-table/DataTableViews";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
-import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
@@ -41,11 +40,7 @@ import {
 import { Image } from "~/components/ui/image";
 import { Skeleton } from "~/components/ui/skeleton";
 import { StatGrid, StatTile } from "~/components/ui/stat-tile";
-import {
-  ViewSwitcher,
-  type ViewSwitcherOption,
-} from "~/components/ui/view-switcher";
-import { projectCaptureRequest } from "~/entities/editing/editor-requests";
+import type { ViewSwitcherOption } from "~/components/ui/view-switcher";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { type RouterOutputs, useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -110,9 +105,9 @@ const TaskStatusBoard = lazy(() =>
   })),
 );
 
-type DashboardView = "overview" | "analytics" | "data" | "gallery";
+export type DashboardView = "overview" | "analytics" | "data" | "gallery";
 
-const DASHBOARD_VIEW_OPTIONS: ViewSwitcherOption<DashboardView>[] = [
+export const DASHBOARD_VIEW_OPTIONS: ViewSwitcherOption<DashboardView>[] = [
   { value: "overview", label: "Overview" },
   { value: "analytics", label: "Analytics" },
   { value: "data", label: "Data" },
@@ -132,40 +127,17 @@ const route = getRouteApi("/_authenticated/projects/");
 
 export function ProjectsDashboard() {
   const search = route.useSearch();
-  const navigate = route.useNavigate();
   const view: DashboardView = search.view ?? "overview";
 
-  const onViewChange = (v: DashboardView) =>
-    navigate({ search: (prev) => ({ ...prev, view: v }), replace: true });
-
-  return <MainDashboard view={view} onViewChange={onViewChange} />;
+  return <MainDashboard view={view} />;
 }
 
 // -- Toolbar (shared across every view) --
 
-function DashboardToolbar({
-  view,
-  onViewChange,
-  filterControl,
-}: {
-  view: DashboardView;
-  onViewChange: (v: DashboardView) => void;
-  filterControl: ReactNode;
-}) {
+function DashboardToolbar({ filterControl }: { filterControl: ReactNode }) {
   return (
-    <Row justify="between" align="center" wrap gap="sm">
-      <ViewSwitcher
-        ariaLabel="Dashboard view"
-        options={DASHBOARD_VIEW_OPTIONS}
-        value={view}
-        onValueChange={onViewChange}
-      />
-      <Row align="center" gap="sm">
-        {filterControl}
-        <CreateDialogAction request={projectCaptureRequest()}>
-          New Project
-        </CreateDialogAction>
-      </Row>
+    <Row justify="end" align="center" wrap gap="sm">
+      {filterControl}
     </Row>
   );
 }
@@ -204,13 +176,7 @@ function DashboardErrorState({
  * Data's three lists issue their own paginated server reads. The dashboard
  * summary is never used as a browser-side membership oracle for them.
  */
-function MainDashboard({
-  view,
-  onViewChange,
-}: {
-  view: DashboardView;
-  onViewChange: (v: DashboardView) => void;
-}) {
+function MainDashboard({ view }: { view: DashboardView }) {
   const api = useTRPC();
   const search = route.useSearch();
   const navigate = route.useNavigate();
@@ -336,8 +302,6 @@ function MainDashboard({
   return (
     <Stack>
       <DashboardToolbar
-        view={view}
-        onViewChange={onViewChange}
         filterControl={
           <DashboardFilters
             filters={filters}
