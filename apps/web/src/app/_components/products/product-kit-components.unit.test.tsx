@@ -108,6 +108,24 @@ vi.mock("~/app/_components/table/TableLink", () => ({
 
 import { ProductKitComponents } from "./product-kit-components";
 
+/**
+ * One component row. `onHandUnits` defaults to stocked so the existing cases
+ * keep asserting what they were written to assert; the stock cases below pass
+ * it explicitly.
+ */
+const component = (
+  over: Partial<ProductComponentOut> & { productName: string },
+): ProductComponentOut => ({
+  productId: unsafeProductShortcode("PRD-CMP1"),
+  manufacturer: "Milwaukee",
+  quantity: 1,
+  price: null,
+  coverImageUrl: null,
+  onHandUnits: 1,
+  attachedAt: new Date("2026-01-01"),
+  ...over,
+});
+
 const renderWith = (
   components: ProductComponentOut[],
   membership: KitMembershipOut[] = [],
@@ -127,6 +145,7 @@ describe("ProductKitComponents", () => {
         quantity: 1,
         price: 89,
         coverImageUrl: "https://example.com/drill.png",
+        onHandUnits: 1,
         attachedAt: new Date("2026-01-01"),
       },
       {
@@ -136,6 +155,7 @@ describe("ProductKitComponents", () => {
         quantity: 2,
         price: null,
         coverImageUrl: null,
+        onHandUnits: 2,
         attachedAt: new Date("2026-01-01"),
       },
     ]);
@@ -190,5 +210,120 @@ describe("ProductKitComponents", () => {
       "/products/PRD-COMB",
     );
     expect(screen.getByText("×2")).toBeInTheDocument();
+  });
+
+  /**
+   * The three states a component's shelf can be in, and the one asymmetry that
+   * matters: `0` is a real answer (that part is unaccounted for) while `—` means
+   * the count is unanswerable because the entries carry incompatible units.
+   * Collapsing the two would hide exactly the gap this column exists to show.
+   *
+   * Every row is priced so the only `—` on screen is the one under test.
+   */
+  it("renders each component's on-hand units, dashing only unanswerable ones", () => {
+    renderWith([
+      component({
+        productId: unsafeProductShortcode("PRD-STKD"),
+        productName: "Stocked Part",
+        price: 10,
+        onHandUnits: 2,
+      }),
+      component({
+        productId: unsafeProductShortcode("PRD-GONE"),
+        productName: "Unaccounted Part",
+        price: 11,
+        onHandUnits: 0,
+      }),
+      component({
+        productId: unsafeProductShortcode("PRD-MIXD"),
+        productName: "Mixed Unit Part",
+        price: 12,
+        onHandUnits: null,
+      }),
+    ]);
+
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByText("0")).toBeInTheDocument();
+    expect(screen.getAllByText("—")).toHaveLength(1);
+  });
+
+  it("reports a fully-stocked kit as stocked by its components", () => {
+    renderWith([
+      component({
+        productId: unsafeProductShortcode("PRD-NST1"),
+        productName: "Nightstand",
+        quantity: 2,
+        onHandUnits: 2,
+      }),
+    ]);
+
+    expect(screen.getByText("Stocked as its components")).toBeInTheDocument();
+  });
+
+  it("counts the stocked parts when a kit is only partly accounted for", () => {
+    renderWith([
+      component({
+        productId: unsafeProductShortcode("PRD-BRDG"),
+        productName: "Bridge",
+        onHandUnits: 1,
+      }),
+      component({
+        productId: unsafeProductShortcode("PRD-BULB"),
+        productName: "Bulbs",
+        quantity: 3,
+        onHandUnits: 0,
+      }),
+    ]);
+
+    expect(screen.getByText("1 of 2 components stocked")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Stocked as its components"),
+    ).not.toBeInTheDocument();
+  });
+
+  /**
+   * A kit none of whose parts are on a shelf has nothing reassuring to say, and
+   * a "0 of 2" chip would read as a defect badge on a kit that was simply sold
+   * or consumed whole. The existing layout is already the right answer.
+   */
+  it("stays silent when no component is stocked", () => {
+    renderWith([
+      component({
+        productId: unsafeProductShortcode("PRD-DRY1"),
+        productName: "Dust Bags",
+        onHandUnits: 0,
+      }),
+    ]);
+
+    expect(
+      screen.queryByText("Stocked as its components"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/components stocked/)).not.toBeInTheDocument();
+  });
+
+  /**
+   * The membership table lists the KITS this product sits inside. Their own
+   * stock is a different question with a different answer, so the column is off
+   * — `KitMembershipOut` has no on-hand field to render in the first place.
+   */
+  it("never shows an on-hand column on the memberships table", () => {
+    renderWith(
+      [],
+      [
+        {
+          parentProductId: unsafeProductShortcode("PRD-COMB"),
+          parentProductName: "18V Combo Kit",
+          manufacturer: "Milwaukee",
+          quantity: 2,
+          coverImageUrl: null,
+          attachedAt: new Date("2026-01-01"),
+          price: 249,
+          expenseCount: 1,
+          purchase: null,
+        },
+      ],
+    );
+
+    expect(screen.queryByText("On hand")).not.toBeInTheDocument();
   });
 });

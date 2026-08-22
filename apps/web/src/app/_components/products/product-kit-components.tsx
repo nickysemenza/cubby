@@ -26,6 +26,7 @@ import {
 import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row, Stack } from "~/components/layout";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import {
@@ -60,8 +61,39 @@ type ProductRow = {
   manufacturer: string;
   quantity: number;
   price: number | null;
+  /** Live units on shelves; `null` when mixed-unit, so unanswerable. */
+  onHandUnits: number | null;
   images: Array<{ id: string; url: string; filename: string }>;
 };
+
+/**
+ * Where a decomposed kit's stock actually sits, said once above the table.
+ *
+ * A kit that has been split keeps the Expense and holds no stock of its own, so
+ * its own On hand reads `—` — the honest answer for the kit, and a confusing one
+ * for the reader, who wants to know whether the parts are accounted for. This
+ * answers that and nothing more: it deliberately does NOT synthesise a "1
+ * complete set" figure, because the parts can sit in different rooms and the
+ * kit's own on-hand feeds sorting, filtering and the variance gate.
+ *
+ * Null (mixed-unit) is not stocked for this purpose: the count is unknown, and
+ * claiming the part is accounted for would be the one wrong answer.
+ */
+function componentStockSummary(
+  rows: readonly { onHandUnits: number | null }[],
+): { text: string; tone: "positive" | "warning" } | null {
+  if (rows.length === 0) return null;
+  const stocked = rows.filter(
+    (row) => row.onHandUnits !== null && row.onHandUnits > 0,
+  ).length;
+  if (stocked === 0) return null;
+  return stocked === rows.length
+    ? { text: "Stocked as its components", tone: "positive" }
+    : {
+        text: `${stocked} of ${rows.length} components stocked`,
+        tone: "warning",
+      };
+}
 type PickerRow = ProductPickerItemOut & { images: ProductRow["images"] };
 
 function imagesFor(id: string, name: string, url: string | null) {
@@ -76,6 +108,7 @@ function KitTable({
   emptyState,
   nameHeader,
   showPrice,
+  showOnHand,
 }: {
   rows: ProductRow[];
   ariaLabel: string;
@@ -84,6 +117,8 @@ function KitTable({
   emptyState: ReactNode;
   nameHeader: "Product" | "Kit";
   showPrice: boolean;
+  /** Off for the membership table: those rows are kits, not parts. */
+  showOnHand: boolean;
 }) {
   const helper = useMemo(() => createCubbyColumnHelper<ProductRow>(), []);
   const columns = useMemo<CubbyColumnDef<ProductRow>[]>(
@@ -112,6 +147,22 @@ function KitTable({
         },
         cell: (info) => `×${info.getValue()}`,
       }),
+      ...(showOnHand
+        ? [
+            helper.accessor((row) => row.onHandUnits, {
+              id: "onHandUnits",
+              header: "On hand",
+              meta: {
+                className: "w-24",
+                numeric: true,
+                mobile: { slot: "meta", priority: 25, label: "On hand" },
+              },
+              // `—` only for mixed units, where no single number is true. A
+              // zero is a real, load-bearing answer: that part is unaccounted.
+              cell: (info) => info.getValue() ?? "—",
+            }),
+          ]
+        : []),
       ...(showPrice
         ? [
             createCurrencyColumn(helper, "price", {
@@ -123,7 +174,7 @@ function KitTable({
         : []),
       createActionsColumn(helper, "product", { extraActions: action }),
     ],
-    [action, helper, nameHeader, showPrice],
+    [action, helper, nameHeader, showPrice, showOnHand],
   );
   const layout = useCubbyTableLayout({ key: layoutKey, columns });
   const table = useCubbyTable({
@@ -377,6 +428,7 @@ export function ProductKitComponents({ productId }: { productId: string }) {
         manufacturer: item.manufacturer,
         quantity: item.quantity,
         price: item.price,
+        onHandUnits: item.onHandUnits,
         images: imagesFor(item.productId, item.productName, item.coverImageUrl),
       })),
     [components],
@@ -389,6 +441,9 @@ export function ProductKitComponents({ productId }: { productId: string }) {
         manufacturer: item.manufacturer,
         quantity: item.quantity,
         price: item.price,
+        // The membership table lists KITS this product sits inside; their own
+        // stock is a different question, and `showOnHand` keeps it off-screen.
+        onHandUnits: null,
         images: imagesFor(
           item.parentProductId,
           item.parentProductName,
@@ -396,6 +451,11 @@ export function ProductKitComponents({ productId }: { productId: string }) {
         ),
       })),
     [membership],
+  );
+
+  const stockSummary = useMemo(
+    () => componentStockSummary(componentRows),
+    [componentRows],
   );
 
   const detachComponent = useActionMutation({
@@ -449,10 +509,15 @@ export function ProductKitComponents({ productId }: { productId: string }) {
     <Stack gap="md">
       <Stack gap="sm">
         <Row align="center" justify="between" gap="sm">
-          <Description size="xs">
-            What this kit or multi-pack is made of. It keeps its own Expense —
-            components are never split into per-component charges.
-          </Description>
+          <Stack gap="xs">
+            <Description size="xs">
+              What this kit or multi-pack is made of. It keeps its own Expense —
+              components are never split into per-component charges.
+            </Description>
+            {stockSummary && (
+              <Badge variant={stockSummary.tone}>{stockSummary.text}</Badge>
+            )}
+          </Stack>
           <Button variant="outline" size="sm" onClick={() => setAddOpen(true)}>
             <Plus />
             Add component
@@ -465,6 +530,7 @@ export function ProductKitComponents({ productId }: { productId: string }) {
           action={componentAction}
           nameHeader="Product"
           showPrice
+          showOnHand
           emptyState={
             <Empty variant="minimal" className="py-6">
               <EmptyHeader>
@@ -491,6 +557,7 @@ export function ProductKitComponents({ productId }: { productId: string }) {
             action={membershipAction}
             nameHeader="Kit"
             showPrice
+            showOnHand={false}
             emptyState={null}
           />
         </Stack>

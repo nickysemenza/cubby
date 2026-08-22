@@ -81,6 +81,19 @@ export const productComponentOut = z.object({
     .nullable()
     .describe("Effective valuation/costing price — display only, not spend."),
   coverImageUrl: z.url().nullable(),
+  /**
+   * Live units of this component on shelves — how the kit's stock is actually
+   * held once it has been split into a composition record. `0` means genuinely
+   * unaccounted (no entries, not in service as a Location); `null` means
+   * unanswerable, because the component's entries carry incompatible units and
+   * summing them would produce a number that means nothing.
+   *
+   * That `0`/`null` split is deliberately NOT the one `loadProductQuantitySummaries`
+   * uses — it collapses both to null because a variance against an unknown shelf
+   * is unknown either way. Here the two differ: a part at 0 is the gap this
+   * column exists to show.
+   */
+  onHandUnits: z.number().nullable(),
   attachedAt: z.date(),
 });
 export type ProductComponentOut = z.infer<typeof productComponentOut>;
