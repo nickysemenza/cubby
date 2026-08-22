@@ -1865,19 +1865,10 @@ const DECLARED_SECTIONS = [
       ],
       badges: [
         // No "Possible duplicate" stamp — that is the section's own title, on
-        // every card in it. The purchase is linked and labeled instead: a bare
-        // shortcode in a stamp reads as a category, not as somewhere to go.
-        <Badge
-          key="purchase"
-          variant="outline"
-          className="font-sans normal-case tracking-normal"
-          render={
-            <Link
-              to="/purchases/$shortcode"
-              params={{ shortcode: item.purchaseId }}
-            />
-          }
-        >
+        // every card in it. Labeled but deliberately NOT a link: the expense is
+        // the actionable row and the purchase is only context, so every route
+        // out of this card points at the expense (see the section note above).
+        <Badge key="purchase" variant="outline">
           Purchase {item.purchaseId}
         </Badge>,
         ...(item.dayDelta > 0
