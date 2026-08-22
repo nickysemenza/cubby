@@ -10,7 +10,6 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import { locationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
-import { extractShortcodeFromScan } from "@cubby/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { QrCode } from "lucide-react";
 import { useState } from "react";
@@ -31,11 +30,12 @@ import {
 } from "~/components/ui/sheet";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
+import { resolveScanCode } from "~/lib/scan-code";
 
 /**
- * Accept a bare shortcode/uuid or a full scanned URL, returning the location
- * code it names. Private to this component — the only caller is the manual
- * fallback below, for codes `extractShortcodeFromScan` cannot parse.
+ * Bare-UUID fallback for the manual field. `resolveScanCode` deliberately
+ * handles only labels and product codes, so a pasted raw uuid — which no QR
+ * ever carries, but a debugging paste often does — lands here instead.
  */
 function parseLocationIdFromInput(raw: string): LocationShortcode | null {
   const trimmed = raw.trim();
@@ -101,8 +101,8 @@ export function LocationScanButton({
     const trimmed = raw.trim();
     if (!trimmed) return;
 
-    const parsed = extractShortcodeFromScan(raw);
-    if (!parsed) {
+    const parsed = resolveScanCode(raw);
+    if (!parsed.ok) {
       const id = parseLocationIdFromInput(trimmed);
       if (!id) {
         toast.error("Enter a location shortcode or UUID.");
@@ -115,7 +115,7 @@ export function LocationScanButton({
       return;
     }
 
-    if (parsed.type !== "location") {
+    if (parsed.value.kind !== "shortcode" || parsed.value.type !== "location") {
       toast.error("Not a location code.");
       return;
     }
@@ -124,7 +124,7 @@ export function LocationScanButton({
     try {
       const location = await queryClient.fetchQuery(
         api.location.getByShortcode.queryOptions({
-          shortcode: parsed.id,
+          shortcode: parsed.value.shortcode,
         }),
       );
       if (!location) {

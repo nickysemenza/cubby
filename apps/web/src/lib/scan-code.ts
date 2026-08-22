@@ -1,10 +1,16 @@
 import { normalizeIsbn } from "@cubby/schemas/isbn";
 import type { ProductFindOrCreateByCodeInput } from "@cubby/schemas/product";
+import type { ShortcodeType } from "@cubby/shared";
 import { extractShortcodeFromScan } from "@cubby/shared";
 import { upc } from "@cubby/usda-schemas";
 
 export type ResolvedScanCode =
-  | { kind: "shortcode"; shortcode: string }
+  /**
+   * `type` rides along because every caller needs it: a location-only scanner
+   * has to reject a `PRD-` label, and the sweep routes on it. Re-deriving it
+   * from the shortcode string is what spawned the duplicate resolvers.
+   */
+  | { kind: "shortcode"; shortcode: string; type: ShortcodeType }
   | { kind: "product"; code: ProductFindOrCreateByCodeInput };
 
 export type ScanCodeResolution =
@@ -32,7 +38,11 @@ export function resolveScanCode(raw: string): ScanCodeResolution {
   if (shortcode) {
     return {
       ok: true,
-      value: { kind: "shortcode", shortcode: shortcode.shortcode },
+      value: {
+        kind: "shortcode",
+        shortcode: shortcode.shortcode,
+        type: shortcode.type,
+      },
     };
   }
 
