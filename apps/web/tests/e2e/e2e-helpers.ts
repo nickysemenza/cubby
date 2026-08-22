@@ -110,8 +110,8 @@ function cellEditorInput(page: Page): Locator {
 }
 
 /**
- * Edit a LIST table's inline cell: open the editor and commit `value`, as ONE
- * retried unit.
+ * Edit a LIST table's inline cell: open the exact row's editor and commit
+ * `value`, as ONE retried unit.
  *
  * Two separate races sit between "double-click the trigger" and "type into the
  * editor", and both look identical from the outside — the overlay is simply not
@@ -135,10 +135,12 @@ function cellEditorInput(page: Page): Locator {
  *    a forced column-definition rebuild — so the trigger for it is still open.
  *
  * Opening and filling as one retried unit covers both: whatever removed the
- * editor, the next attempt reopens it against a settled table. Retrying is safe
- * because nothing is written until the closing `press("Enter")` — an attempt
- * that dies earlier leaves no partial edit, and a repeated identical value is a
- * no-op commit.
+ * editor, the next attempt reopens it against a settled table. The adapter
+ * emits the trigger's semantic `dblclick` atomically: raw pointer gesture
+ * behavior belongs to CellEditTrigger's unit coverage, while this helper owns
+ * the editor and mutation lifecycle. Retrying is safe because nothing is
+ * written until the closing `press("Enter")` — an attempt that dies earlier
+ * leaves no partial edit, and a repeated identical value is a no-op commit.
  *
  * Detail pages need none of this: they are never in cell-selection mode and have
  * no transition curtain, so a single click opens the editor — they call
@@ -150,12 +152,13 @@ export async function editListCell(
   value: string,
 ) {
   await expect(async () => {
-    await trigger.dblclick();
+    await trigger.dispatchEvent("dblclick");
     const input = cellEditorInput(page);
     await expect(input).toBeVisible({ timeout: 2_000 });
     await expect(input).toBeEnabled({ timeout: 2_000 });
     await input.fill(value);
     await input.press("Enter");
+    await expect(input).toHaveCount(0, { timeout: 10_000 });
   }).toPass({ timeout: 30_000 });
 }
 

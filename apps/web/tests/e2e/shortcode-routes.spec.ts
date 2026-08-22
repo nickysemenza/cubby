@@ -44,7 +44,11 @@ test.describe("shortcode URLs", () => {
     await expect(
       page.getByRole("button", { name: /^(Photo|Retake photo)$/ }),
     ).toBeVisible();
-    await expect(page.getByRole("link", { name: "Recount" })).toBeVisible();
+    await expect(
+      page
+        .getByRole("main")
+        .getByRole("button", { name: "Recount", exact: true }),
+    ).toBeVisible();
     await expect(page.getByRole("button", { name: "Add child" })).toBeVisible();
 
     await page.setViewportSize({ width: 390, height: 844 });
@@ -52,7 +56,11 @@ test.describe("shortcode URLs", () => {
     await expect(
       page.getByRole("button", { name: /^(Photo|Retake photo)$/ }),
     ).toBeVisible();
-    await expect(page.getByRole("link", { name: "Recount" })).toBeVisible();
+    await expect(
+      page
+        .getByRole("main")
+        .getByRole("button", { name: "Recount", exact: true }),
+    ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "More location actions" }),
     ).toBeVisible();

@@ -214,9 +214,9 @@ test.describe("Project tracker", () => {
 
   test("projects: quick-add creates a project and it appears on the dashboard", async ({
     page,
-  }) => {
+  }, testInfo) => {
     test.setTimeout(60_000);
-    const name = `e2e project ${Date.now()}`;
+    const name = `e2e project ${Date.now()}-${testInfo.workerIndex}-${testInfo.repeatEachIndex}`;
 
     await page.goto("/projects");
     await page.waitForLoadState("networkidle");
@@ -255,10 +255,10 @@ test.describe("Project tracker", () => {
     // tasks/expenses. `ProjectPill` (Needs Attention) renders a Link, not a
     // button, so this is unambiguous even before the edit.
     //
-    // Sheets-style select-then-edit: inside the cell-selection grid a single
-    // click only SELECTS the cell; the editor opens on double-click (or Enter).
-    // Scope through the cell's name link, then double-click its separate edit
-    // button. The name itself navigates to the detail page.
+    // Sheets-style select-then-edit: inside the cell-selection grid the editor
+    // opens from the cell's separate edit trigger. Scope through the name link
+    // so the helper targets this exact row; the name itself navigates to the
+    // detail page.
     const editedName = `${name} (edited)`;
     const nameCell = page.getByRole("cell").filter({
       has: page.getByRole("link", { name, exact: true }),
