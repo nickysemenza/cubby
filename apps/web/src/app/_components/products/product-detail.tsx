@@ -403,6 +403,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     entryUnit: entries[0]?.amount.unit,
     onHandUnits,
     locationCount,
+    componentCount: product.componentCount,
   });
   const onHandStat: DetailHeroStat =
     presence.onHand.kind === "amount"
@@ -460,11 +461,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       rawData={product}
       heroImages={images}
       heroNo={product.id ?? undefined}
-      heroStamp={
-        presence.inStock
-          ? { label: "In stock", tone: "green" }
-          : { label: "Not stocked", tone: "ink" }
-      }
+      heroStamp={presence.stamp}
       heroStats={heroStats}
     >
       <DetailSections

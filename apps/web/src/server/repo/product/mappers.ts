@@ -436,6 +436,9 @@ export const dbProductToAPI = (
       type: parseLocationType(loc.type, { id: loc.id, name: loc.name }),
       ancestors: loc.ancestors ?? [],
     })),
+    // Counts edges, not units: a 4-pack held as one edge with `quantity: 4`
+    // reads as 1. Non-zero is what makes this product a kit.
+    componentCount: Number(productData.componentCount ?? 0),
     ...deriveProductQuantityShape(
       mappedInventoryEntry,
       productData.quantityLedger,

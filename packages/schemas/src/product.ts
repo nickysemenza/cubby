@@ -916,6 +916,16 @@ export const productWithIngredientAndInventoryAndMappingsOut = z.object({
    * still in flight.
    */
   servingAsLocations: z.array(locationPathRefOut),
+  /**
+   * Live `ProductComponent` edges where this product is the parent — non-zero
+   * means it is a kit or multi-pack. Counts distinct components, not units.
+   *
+   * Embedded here rather than read from `product.components` beside it, for the
+   * reason `servingAsLocations` gives above: the hero decides its presence
+   * stamp from this, and a stamp that flipped when a second query resolved
+   * would contradict the Kit Components table while it loaded.
+   */
+  componentCount: z.number().int().nonnegative(),
   ...productQuantityFields,
 });
 
@@ -972,6 +982,16 @@ export const productWithFoodOut = z.object({
   unitMappings: z.array(unitMappingOut),
   inventoryEntry: z.array(productInventoryWithLocationOut),
   servingAsLocations: z.array(locationPathRefOut),
+  /**
+   * Live `ProductComponent` edges where this product is the parent — non-zero
+   * means it is a kit or multi-pack. Counts distinct components, not units.
+   *
+   * Embedded here rather than read from `product.components` beside it, for the
+   * reason `servingAsLocations` gives above: the hero decides its presence
+   * stamp from this, and a stamp that flipped when a second query resolved
+   * would contradict the Kit Components table while it loaded.
+   */
+  componentCount: z.number().int().nonnegative(),
   food: foodSummary.nullable(),
   recipeUsages: z.array(recipeUsageOut),
   ...productQuantityFields,
