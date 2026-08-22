@@ -1,7 +1,7 @@
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import type { ProductFilters } from "@cubby/schemas/product";
 import { projectCreateInput, taskCreateInput } from "@cubby/schemas/project";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import {
@@ -12,7 +12,7 @@ import {
   productImage,
   productUnitMappings,
 } from "~/server/db/schema";
-import { getDb, insertAndReturn } from "./database-helpers";
+import { getDb, insertAndReturn, notDeleted } from "./database-helpers";
 import { createExpense, deleteExpenses } from "./expense";
 import { deleteInventoryEntries } from "./inventory";
 import { updateLocation } from "./location";
@@ -156,6 +156,84 @@ describe("product repository", () => {
       const found = await findProductByGtin(ctx.db, "077089850017");
       expect(found?.id).toBe(created.id);
       expect(found?.primaryGtin).toBe("00077089850017");
+    });
+
+    // `syncProductExternalIds` REPLACES the identifier set, so applying a bare
+    // `upc` after it (or before it) would silently discard whichever ran first.
+    // The barcode is folded INTO the replacement payload for exactly this.
+    it("keeps both when one update carries a barcode AND externalIds", async () => {
+      const created = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Both At Once" }),
+        ctx.actor,
+      );
+
+      await updateProduct(
+        ctx.db,
+        created.entityId,
+        {
+          upc: "0012345678905",
+          externalIds: [
+            {
+              source: "amazon",
+              kind: "asin",
+              externalId: "B0TESTBOTH",
+              url: null,
+            },
+          ],
+        },
+        ctx.actor,
+      );
+
+      const live = await getDb(ctx.db).query.productExternalId.findMany({
+        where: and(
+          eq(productExternalId.productId, created.entityId),
+          notDeleted(productExternalId),
+        ),
+        columns: { source: true, externalId: true, isPrimary: true },
+      });
+      expect(live).toEqual(
+        expect.arrayContaining([
+          { source: "gtin", externalId: "00012345678905", isPrimary: true },
+          { source: "amazon", externalId: "B0TESTBOTH", isPrimary: true },
+        ]),
+      );
+      expect(live).toHaveLength(2);
+    });
+
+    // A product holds a SET of barcodes, so `upc: null` retires the one that
+    // stands for it and promotes the oldest survivor — the same rule
+    // patch_product_external_ids documents for removing a primary. Clearing the
+    // whole set means passing an explicit `externalIds` payload.
+    it("clearing the barcode retires the primary and promotes a secondary", async () => {
+      const created = await createProduct(
+        ctx.db,
+        makeProductInput({
+          name: "Two Barcodes",
+          upc: "0012345678905",
+          externalIds: [
+            {
+              source: "gtin",
+              kind: "gtin_14",
+              externalId: "00099999999992",
+              isPrimary: false,
+              url: null,
+            },
+          ],
+        }),
+        ctx.actor,
+      );
+
+      await updateProduct(ctx.db, created.entityId, { upc: null }, ctx.actor);
+
+      const live = await getDb(ctx.db).query.productExternalId.findMany({
+        where: and(
+          eq(productExternalId.productId, created.entityId),
+          notDeleted(productExternalId),
+        ),
+        columns: { externalId: true, isPrimary: true },
+      });
+      expect(live).toEqual([{ externalId: "00099999999992", isPrimary: true }]);
     });
 
     it("names the shortcode when a RENAME collides", async () => {
