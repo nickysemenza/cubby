@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { getEntityFilters } from "./filter-manifest";
 import {
   buildFiltersFromManifest,
+  FILTER_ANY,
   FILTER_NONE,
   isMultiFilterKind,
   partitionFilterSpecs,
@@ -348,16 +349,18 @@ describe("views reveal the columns they select on", () => {
 });
 
 /**
- * `unlocated` and `unlocated-durables` answer the same question at two widths,
- * and the narrow one is only trustworthy as a shortcut if it is a strict
- * narrowing rather than a second, independently-drifting definition. Asserting
- * the superset relation is what keeps them from diverging: edit the broad
- * view's predicate and this fails until the narrow one follows.
+ * `unlocated`, `unlocated-durables` and `consumed-on-projects` answer the same
+ * question at three widths, and the narrow ones are only trustworthy as
+ * shortcuts if each is a strict narrowing rather than a second,
+ * independently-drifting definition. Asserting the superset relation is what
+ * keeps them from diverging: edit the broad view's predicate and this fails
+ * until both narrow ones follow.
  */
-describe("the unlocated views stay one question at two widths", () => {
+describe("the unlocated views stay one question at three widths", () => {
   const productViews = viewManifest.product ?? [];
   const broad = productViews.find((v) => v.id === "unlocated");
   const durables = productViews.find((v) => v.id === "unlocated-durables");
+  const consumed = productViews.find((v) => v.id === "consumed-on-projects");
 
   // Presence has three forms — stock on a shelf, the bin itself, and stock held
   // by a kit's parts — and "nowhere" has to mean none of them.
@@ -395,20 +398,60 @@ describe("the unlocated views stay one question at two widths", () => {
 
   it("narrows the broad view rather than restating it", () => {
     expect(broad).toBeDefined();
-    expect(durables).toBeDefined();
-    for (const filter of broad?.filters ?? []) {
-      expect(
-        durables?.filters,
-        `unlocated-durables dropped ${filter.id}`,
-      ).toContainEqual(filter);
+    for (const narrow of [durables, consumed]) {
+      expect(narrow).toBeDefined();
+      for (const filter of broad?.filters ?? []) {
+        expect(
+          narrow?.filters,
+          `${narrow?.id} dropped ${filter.id}`,
+        ).toContainEqual(filter);
+      }
+      expect(narrow?.filters.length).toBe((broad?.filters.length ?? 0) + 1);
     }
-    expect(durables?.filters.length).toBe((broad?.filters.length ?? 0) + 1);
+  });
+
+  it("consumed-on-projects narrows by project presence, using the sentinel", () => {
+    // The one filter it adds, and the reason it costs no server predicate:
+    // FILTER_ANY on the related-projects column expands to the presence field
+    // `relatedWhereConditions` already implements generically for products. A
+    // hand-written `projectId` here would be an id, not a predicate.
+    expect(consumed?.filters).toContainEqual({
+      id: "related:product.projects",
+      value: [FILTER_ANY],
+    });
+    expect(
+      buildFiltersFromManifest(getEntityFilters("product"), (columnId) =>
+        columnId === "related:product.projects" ? [FILTER_ANY] : undefined,
+      ),
+    ).toEqual({ projectPresenceFilter: "has" });
+  });
+
+  it("reveals the related column it filters on", () => {
+    // `related:product.projects` is `defaultVisible: false` in the related
+    // registry, so without this the view would filter on a column the operator
+    // cannot see — an unexplained row count.
+    expect(
+      consumed?.layout?.columnVisibility?.["related:product.projects"],
+    ).toBe(true);
+  });
+
+  it("decides nothing on its own", () => {
+    // It is a sorting aid over an evidence signal, not a verdict: project
+    // attachment is true of consumed material AND of durables bought for a
+    // project, so the row must still leave only when `stockTracked` is answered
+    // or inventory appears. Pinning anything else here would make the view an
+    // authority it has no basis to be.
+    expect(consumed?.problem).toBeUndefined();
+    expect(consumed?.filters).toContainEqual({
+      id: "stockTracked",
+      value: "none",
+    });
   });
 
   it("never reveals Variance, which is `—` for every row it selects", () => {
     // `onHandUnitsSql` returns NULL on a zero-entry shelf, so the variance
     // subtraction is NULL across the whole cohort by construction.
-    for (const view of [broad, durables]) {
+    for (const view of [broad, durables, consumed]) {
       expect(view?.layout?.columnVisibility?.quantityVariance).toBeUndefined();
     }
   });

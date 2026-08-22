@@ -400,6 +400,53 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       },
     },
     {
+      id: "consumed-on-projects",
+      label: "Consumed on projects",
+      description: "Bought for a project, stocked nowhere — likely built in",
+      // A fast path into `unlocated`, not an authority over it — the same
+      // relationship `unlocated-durables` has, aimed at the opposite half of
+      // the backlog. Where that view narrows to things you could go find, this
+      // one gathers the material that went INTO the house: the drainage
+      // composite buried behind the foundation, the walnut plywood milled into
+      // cabinets, the gas line in the ground.
+      //
+      // Project attachment is the signal, and it is EVIDENCE rather than proof.
+      // The cohort is genuinely mixed — a whole Amazon order attributed to a
+      // project drags its dog treats and socks along, and a Lutron dimmer sits
+      // beside the wire nuts — so this view deliberately does not decide
+      // anything. It sorts the backlog so the decision is cheap, and the row
+      // still leaves only when `stockTracked` is answered or an InventoryEntry
+      // appears. Blanket-sweeping what lands here is the mistake it exists to
+      // make visible, not to automate.
+      //
+      // Costs no new server predicate: `FILTER_ANY` on the related-projects
+      // column expands to `projectPresenceFilter: "has"`, which
+      // `relatedWhereConditions` already implements generically.
+      filters: [
+        { id: "expectedQuantity", value: "positive" },
+        { id: "location", value: [FILTER_NONE] },
+        { id: "servingAsLocations", value: "none" },
+        { id: "stockTracked", value: "none" },
+        { id: "components", value: "none" },
+        { id: "related:product.projects", value: [FILTER_ANY] },
+      ],
+      sort: [{ id: "price", desc: true }],
+      layout: {
+        ...DEFAULT_CURATED_LAYOUT,
+        // `related:product.projects` is `defaultVisible: false` in the related
+        // registry, and a filtered column that cannot be seen reads as an
+        // unexplained row count.
+        columnVisibility: {
+          expectedQuantity: true,
+          location: true,
+          servingAsLocations: true,
+          stockTracked: true,
+          components: true,
+          "related:product.projects": true,
+        },
+      },
+    },
+    {
       id: "kits",
       label: "Kits",
       description: "Products made of other products",

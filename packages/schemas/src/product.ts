@@ -209,6 +209,22 @@ export const productUpdateInput = z.object({
   data: productUpdateData,
 });
 
+/**
+ * Bulk stock-tracking write — the same tri-state as a single
+ * `productUpdateData.stockTracked`, batched over `ids`.
+ *
+ * Nullable on purpose, and the `null` arm is not decoration: it is how a row
+ * that was retired by mistake gets back onto the "Not on a shelf" worklist. A
+ * write-once `false` would make the sweep irreversible in the UI.
+ */
+export const productBulkStockTrackedInput = z.object({
+  ids: z.array(productShortcode).min(1),
+  stockTracked: z.boolean().nullable(),
+});
+export type ProductBulkStockTrackedInput = z.infer<
+  typeof productBulkStockTrackedInput
+>;
+
 // Keep ancillary product hydration batches stricter than the general 1000-row
 // backend ceiling so each summary query has bounded database and serialization
 // work and retains useful cache granularity.

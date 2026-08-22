@@ -59,6 +59,7 @@ import { EditableCell } from "../_components/data-table/editable-cell";
 import { ListWorkbench } from "../_components/data-table/ListWorkbench";
 import type { GroupConfig } from "../_components/data-table/useGroupedList";
 import { EntityInlineLink } from "../_components/EntityInlineLink";
+import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { useDeferredFilterOptions } from "../_components/hooks/useDeferredFilterOptions";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
@@ -75,6 +76,7 @@ import { productCategoryOptionsWithTheme } from "../_components/products/product
 import { ProductDiscardDialog } from "../_components/products/product-discard-dialog";
 import { ProductShelf } from "../_components/products/product-shelf";
 import { TruncatedList } from "../_components/TruncatedList";
+import { SetFieldDialog } from "../_components/tracker/set-field-dialog";
 import {
   buildProductTreeRows,
   groupComponentsByParent,
@@ -112,6 +114,22 @@ const STOCK_TRACKED_OPTIONS = booleanCellOptions({
   true: "Tracked",
   false: "Not tracked",
 });
+
+/** Dialog option value for `stockTracked: null` — `SetFieldDialog` is stringly typed. */
+const UNDECIDED_STOCK_TRACKING = "undecided";
+
+// The bulk dialog's roster is the CELL roster plus an undecided arm. The cell
+// gets its third state from `undecided` on the column, but `SetFieldDialog`
+// takes a flat option list, so the sweep's undo has to be a real option here or
+// a mistaken "Not tracked" over a few hundred rows would be unreachable from
+// the UI that made it.
+const STOCK_TRACKED_BULK_OPTIONS: FilterableComboboxItem[] = [
+  ...STOCK_TRACKED_OPTIONS,
+  { value: UNDECIDED_STOCK_TRACKING, label: "Undecided" },
+];
+
+const parseStockTracked = (value: string): boolean | null =>
+  value === UNDECIDED_STOCK_TRACKING ? null : value === "true";
 
 const MODEL_PRESENCE_OPTIONS = presenceCellOptions("model");
 const UPC_PRESENCE_OPTIONS = presenceCellOptions("UPC");
@@ -284,6 +302,16 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
   );
   const foodByProductId = useProductFoodSummaries(foodHydrationIds);
 
+  const [stockTrackingRows, setStockTrackingRows] = useState<ProductListItem[]>(
+    [],
+  );
+  const stockTrackingMutation = useActionMutation({
+    mutationFn: api.product.bulkSetStockTracked.mutationOptions,
+    invalidateKeys: productMutationInvalidateKeys,
+    success: (data: { items: unknown[] }) =>
+      `Updated ${data.items.length} product${data.items.length !== 1 ? "s" : ""}`,
+    onSuccess: () => setStockTrackingRows([]),
+  });
   const updateProductMutation = useUpdateMutation({
     mutationFn: api.product.update.mutationOptions,
     entity: "product",
@@ -920,6 +948,20 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
             return Promise.resolve({ success: true });
           },
         }),
+        // The burn-down lane for the "Not on a shelf" / "Consumed on projects"
+        // views: those converge only when `stockTracked` is answered, and the
+        // answer is the same for a whole selection often enough that answering
+        // it a row at a time through the inline cell was the bottleneck.
+        // Kit-component rows are projections, not products, so they can't carry
+        // the decision — `rowIsEntity` on the table already keeps them out of
+        // the selection.
+        verbBulkAction<ProductTreeRow>("setStockTracking", {
+          minSelection: 1,
+          onExecute: async (rows) => {
+            setStockTrackingRows(rows.map((row) => row.original));
+            return { success: true };
+          },
+        }),
       ],
       clearSelectionOnComplete: false,
     }),
@@ -1048,6 +1090,25 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
             if (!open) setDiscardProductId(null);
           }}
           product={discardProduct}
+        />
+      )}
+      {stockTrackingRows.length > 0 && (
+        <SetFieldDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setStockTrackingRows([]);
+          }}
+          items={stockTrackingRows}
+          isPending={stockTrackingMutation.isPending}
+          options={STOCK_TRACKED_BULK_OPTIONS}
+          fieldLabel="Stock tracking"
+          itemNoun="Product"
+          onConfirm={async (value) => {
+            await stockTrackingMutation.mutateAsync({
+              ids: stockTrackingRows.map((product) => product.id),
+              stockTracked: parseStockTracked(value),
+            });
+          }}
         />
       )}
       {quickEditProduct && (

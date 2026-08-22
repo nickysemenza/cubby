@@ -22,6 +22,7 @@ import {
   mergeProductsOut,
   patchProductExternalIdsInput,
   productApplyUpcInput,
+  productBulkStockTrackedInput,
   productCategoryDistributionOut,
   productCreateInput,
   productCreateManyInput,
@@ -100,6 +101,7 @@ import {
   productList as productListRepo,
   productSearch,
   quickCreateProduct,
+  setProductsStockTracked,
 } from "~/server/repo/product";
 import { loadProductInventoryEntries } from "~/server/repo/product/lookup";
 import { loadProductQuantitySummaries } from "~/server/repo/product/quantity-ledger";
@@ -145,6 +147,7 @@ import {
 } from "~/server/services/product-orchestration.service";
 import { semanticProductCandidates } from "~/server/services/semantic-search.service";
 import {
+  createBulkUpdatedMutation,
   createDeleteProcedure,
   createEntityDetailReadProcedures,
   createEntityListProcedure,
@@ -351,6 +354,26 @@ const update = protectedProcedure
       ctx.actorContext,
     );
   });
+
+/**
+ * Bulk stock-tracking write, backing the products list's "Set stock tracking"
+ * action — the burn-down lane for the "Not on a shelf" / "Consumed on projects"
+ * views, where the answer for a whole selection is the same.
+ *
+ * `createBulkUpdatedMutation` rather than a loop over `update`: one homogeneous
+ * `updated` event wave for the selection instead of N, and the repo write is
+ * already a single statement (see `setProductsStockTracked` for why this skips
+ * the recompute cascade `update` carries).
+ */
+const bulkSetStockTracked = createBulkUpdatedMutation({
+  input: productBulkStockTrackedInput,
+  itemOutput: productTopLevelOut,
+  entity: "product",
+  source: "product.bulkSetStockTracked",
+  mutate: (ctx, input) =>
+    setProductsStockTracked(ctx.db, input, ctx.actorContext),
+  entityShortcodes: (items) => items.map((item) => item.id),
+});
 
 // One-click "Apply" for the Problems page "Better UPC data available" panel:
 // pull the (cached) UPC lookup and fill ONLY the fields still empty — never
@@ -1034,4 +1057,5 @@ export const productRouter = createTRPCRouter({
   detachComponents,
   merge,
   setProjectUses,
+  bulkSetStockTracked,
 });

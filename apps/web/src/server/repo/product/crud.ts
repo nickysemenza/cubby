@@ -19,6 +19,7 @@ import {
   type SortParams,
 } from "@cubby/schemas/pagination";
 import type {
+  ProductBulkStockTrackedInput,
   ProductFilters,
   ProductPickerItemOut,
 } from "@cubby/schemas/product";
@@ -65,7 +66,12 @@ import {
   wishCandidate,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
-import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
+import {
+  type AuditEntryInput,
+  computeChanges,
+  logAuditEntries,
+  logAuditEntry,
+} from "~/server/repo/audit-log";
 import {
   loadProductDataQualities,
   productAnyDataGapCondition,
@@ -1701,6 +1707,64 @@ export const updateProduct = async (
     }
     throw error;
   }
+};
+
+/**
+ * Bulk stock-tracking write — the shape of `setExpensesCostType`, and
+ * deliberately NOT routed through `updateProduct`.
+ *
+ * `stockTracked` is a pure worklist decision: it feeds no price, no unit
+ * mapping and no quantity, so none of `updateProduct`'s recompute cascade
+ * (recipe costing, location valuation, USDA resync) has anything to react to.
+ * Running that per row over a several-hundred-row sweep would enqueue a
+ * recompute wave for a flag no derivation reads.
+ *
+ * The audit entries are the point of the loop: this is the one write that
+ * makes a product disappear from "Not on a shelf", so a wrong sweep has to be
+ * legible after the fact rather than only reversible.
+ */
+export const setProductsStockTracked = async (
+  db: Database,
+  input: ProductBulkStockTrackedInput,
+  actor: ActorContext,
+): Promise<ProductTopLevelOut[]> => {
+  const { stockTracked } = input;
+
+  const updatedShortcodes = await withTransaction(db, async (tx) => {
+    const ids = await resolveAllPresent(tx, "product", input.ids);
+    const before = await tx.query.product.findMany({
+      where: and(inArray(product.id, ids), notDeleted(product)),
+      columns: { id: true, shortcode: true, stockTracked: true },
+    });
+    if (before.length === 0) return [];
+
+    await tx
+      .update(product)
+      .set({ stockTracked })
+      .where(and(inArray(product.id, ids), notDeleted(product)));
+
+    const auditEntries: AuditEntryInput[] = [];
+    for (const row of before) {
+      const changes = computeChanges(
+        row,
+        { id: row.id, shortcode: row.shortcode, stockTracked },
+        ["stockTracked"],
+      );
+      if (changes) {
+        auditEntries.push({
+          entityType: "product",
+          entityId: row.id,
+          action: "update",
+          changes,
+        });
+      }
+    }
+    await logAuditEntries(tx, actor, auditEntries);
+
+    return before.map((row) => row.shortcode);
+  });
+
+  return getProductsByShortcodes(db, updatedShortcodes);
 };
 
 /** Patch selected external-ID slots without replacing unrelated identifiers. */
