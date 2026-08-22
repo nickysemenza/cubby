@@ -12,6 +12,7 @@ import { LocationValuationService } from "./location-valuation.service";
 import { createProductWriteActions } from "./product.service";
 import {
   applyUpcDataWithSideEffects,
+  findOrCreateByCode,
   findOrCreateByUPC,
 } from "./product-orchestration.service";
 import { RecipeCostingService } from "./recipe-costing.service";
@@ -214,6 +215,106 @@ describe("findOrCreateByUPC", () => {
         upcLookupClient,
         upc,
         "Race Product",
+        ctx.actor,
+      ),
+    ]);
+
+    expect([a.created, b.created].sort()).toEqual([false, true]);
+    expect(a.product.id).toBe(b.product.id);
+  });
+});
+
+describe("findOrCreateByCode", () => {
+  const ctx = withTestDb();
+
+  it("returns an existing ISBN-backed Product without external lookups", async () => {
+    const isbn = "09780131103627";
+    const existing = await quickCreateProduct(
+      ctx.db,
+      { name: "Existing Book", isbn },
+      ctx.actor,
+    );
+    const usdaClient = fakeUsdaClient();
+    const upcLookupClient = fakeUpcLookupClient();
+
+    const result = await findOrCreateByCode(
+      ctx.db,
+      usdaClient,
+      upcLookupClient,
+      { kind: "isbn", value: isbn },
+      ctx.actor,
+    );
+
+    expect(result).toEqual({ product: existing, created: false });
+    expect(usdaClient.findFood).not.toHaveBeenCalled();
+    expect(upcLookupClient.lookup).not.toHaveBeenCalled();
+  });
+
+  it("creates an ISBN provider match as a books Product without querying USDA", async () => {
+    const isbn13 = "9780306406157";
+    const usdaClient = fakeUsdaClient();
+    const upcLookupClient = fakeUpcLookupClient(async () =>
+      upcResponse({
+        upc: isbn13,
+        name: "Theoretical Book",
+        manufacturer: "Example Press",
+        priceDollars: 24.5,
+      }),
+    );
+
+    const result = await findOrCreateByCode(
+      ctx.db,
+      usdaClient,
+      upcLookupClient,
+      { kind: "isbn", value: isbn13.padStart(14, "0") },
+      ctx.actor,
+    );
+
+    expect(result.created).toBe(true);
+    expect(result.product).toMatchObject({
+      name: "Theoretical Book",
+      manufacturer: "Example Press",
+      category: "books",
+      primaryGtin: isbn13.padStart(14, "0"),
+    });
+    expect(usdaClient.findFood).not.toHaveBeenCalled();
+    expect(upcLookupClient.lookup).toHaveBeenCalledWith(isbn13);
+  });
+
+  it("creates a named book placeholder when the provider has no match", async () => {
+    const isbn13 = "9780261103573";
+    const result = await findOrCreateByCode(
+      ctx.db,
+      fakeUsdaClient(),
+      fakeUpcLookupClient(),
+      { kind: "isbn", value: isbn13.padStart(14, "0") },
+      ctx.actor,
+    );
+
+    expect(result.product).toMatchObject({
+      name: `Book ISBN ${isbn13}`,
+      manufacturer: UNSPECIFIED_MANUFACTURER,
+      category: "books",
+      primaryGtin: isbn13.padStart(14, "0"),
+    });
+  });
+
+  it("resolves concurrent ISBN creation to one Product", async () => {
+    const canonical = "09780132350884";
+    const services = [fakeUsdaClient(), fakeUpcLookupClient()] as const;
+    const [a, b] = await Promise.all([
+      findOrCreateByCode(
+        ctx.db,
+        services[0],
+        services[1],
+        { kind: "isbn", value: canonical },
+        ctx.actor,
+      ),
+      findOrCreateByCode(
+        ctx.db,
+        services[0],
+        services[1],
+        { kind: "isbn", value: canonical },
         ctx.actor,
       ),
     ]);

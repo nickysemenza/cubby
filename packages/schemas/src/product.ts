@@ -281,6 +281,18 @@ export const productFindOrCreateByUPCInput = z.object({
   defaultName: z.string().optional(),
 });
 
+/** A product identity captured by the universal scanner. */
+export const productFindOrCreateByCodeInput = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("barcode"), value: upc }),
+  // The ISBN transform makes ISBN-10, ISBN-13, and Cubby's canonical GTIN-14
+  // representation converge before the orchestration layer sees them.
+  z.object({ kind: z.literal("isbn"), value: isbn }),
+]);
+
+export type ProductFindOrCreateByCodeInput = z.infer<
+  typeof productFindOrCreateByCodeInput
+>;
+
 export const productShortcodesInput = z.object({
   shortcodes: z.array(productShortcode),
 });
