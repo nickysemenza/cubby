@@ -1,5 +1,6 @@
 import { displayGtin } from "@cubby/schemas/external-id";
 import type { ImageOut } from "@cubby/schemas/image";
+import { isbnFromGtin } from "@cubby/schemas/isbn";
 import type { ProductWithFoodOut } from "@cubby/schemas/product";
 import {
   collectionSlugFromTag,
@@ -51,6 +52,9 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
   onManualLink,
 }) => {
   const api = useTRPC();
+  const primaryIsbn = product.primaryGtin
+    ? isbnFromGtin(product.primaryGtin)
+    : null;
 
   // Mutation for inline editing (price, category, etc.)
   const updateProductMutation = useActionMutation({
@@ -164,11 +168,13 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
       ) : undefined,
     },
     {
-      label: "UPC",
+      label: primaryIsbn ? "ISBN-13" : "UPC",
       // Rendered as the printed encoding, not the stored GTIN-14 — the operator
       // is comparing this against the barcode on the package, and the USDA page
       // is keyed the same way.
-      value: product.primaryGtin ? (
+      value: primaryIsbn ? (
+        <span className="font-mono tabular-nums">{primaryIsbn.isbn13}</span>
+      ) : product.primaryGtin ? (
         <Link
           to="/usda/upc/$code"
           params={{ code: displayGtin(product.primaryGtin) }}

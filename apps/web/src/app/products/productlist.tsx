@@ -1,4 +1,5 @@
 import { displayGtin } from "@cubby/schemas/external-id";
+import { isbnFromGtin, normalizeIsbn } from "@cubby/schemas/isbn";
 import type { ProductFilters, ProductListItem } from "@cubby/schemas/product";
 import type { KitComponentRowOut } from "@cubby/schemas/product-components";
 import { formatCategoryLabel, getCategoryColor } from "@cubby/shared";
@@ -413,20 +414,51 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
           },
         },
       }),
-      createExternalLinkColumn(columnHelper, "primaryGtin", "/usda/upc/$code", {
-        header: "UPC",
-        className: "w-32",
-        mobile: { interactive: true },
-        // Stored canonically as GTIN-14, shown (and linked) in the encoding
-        // printed on the package.
-        display: displayGtin,
-        editable: {
-          onSave: async (newValue, product) => {
-            await updateProductMutation.mutateAsync({
-              id: product.id,
-              data: { upc: newValue },
-            });
-          },
+      columnHelper.accessor("primaryGtin", {
+        header: "Barcode / ISBN",
+        meta: {
+          className: "w-32 font-mono",
+          mobile: { interactive: true },
+        },
+        cell: (info) => {
+          const value = info.getValue();
+          return (
+            <EditableCell
+              value={value}
+              onSave={async (newValue) => {
+                await updateProductMutation.mutateAsync({
+                  id: info.row.original.id,
+                  data:
+                    newValue != null && normalizeIsbn(newValue) !== null
+                      ? { isbn: newValue }
+                      : { upc: newValue },
+                });
+              }}
+              config={{ type: "text" }}
+              trigger="pencil"
+              renderValue={(current) => {
+                if (!current) return <NoneValue />;
+                const isbn = isbnFromGtin(current);
+                if (isbn) {
+                  return (
+                    <span className="font-mono tabular-nums">
+                      {isbn.isbn13}
+                    </span>
+                  );
+                }
+                const shown = displayGtin(current);
+                return (
+                  <Link
+                    to="/usda/upc/$code"
+                    params={{ code: shown }}
+                    className="text-primary hover:underline"
+                  >
+                    {shown}
+                  </Link>
+                );
+              }}
+            />
+          );
         },
       }),
       createExternalLinkColumn(columnHelper, "fdc_id", "/usda/$id", {

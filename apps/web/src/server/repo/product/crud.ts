@@ -154,7 +154,9 @@ import {
   assertNoCanonicalPriceMapping,
   ensureSlotPrimaries,
   externalIdSlotUnchanged,
+  externalIdsContainIsbn,
   foldGtinIntoExternalIds,
+  resolvePrimaryProductCodeInput,
   syncPrimaryGtin,
   syncProductExternalIds,
   syncProductImages,
@@ -1367,11 +1369,6 @@ export const createProduct = async (
     ...productData
   } = data;
 
-  // Auto-correct category to "food" if product has food indicators
-  const category = hasFoodIndicators({ ...data, ingredientId })
-    ? "food"
-    : (data.category ?? null);
-
   // Per-each price is the scalar `productData.price` column; a canonical
   // "1 each = $X" mapping would duplicate it (per-measure money mappings are OK).
   if (unitMappings) assertNoCanonicalPriceMapping(unitMappings);
@@ -1384,11 +1381,17 @@ export const createProduct = async (
       // A bare `upc` becomes a `gtin` identifier row rather than a column, and
       // is folded into the payload so it cannot be lost to (or lose to) an
       // explicit `externalIds` on the same call.
-      const { upc: incomingGtin, ...columnData } = productData;
+      const { upc, isbn, ...columnData } = productData;
+      const incomingGtin = resolvePrimaryProductCodeInput({ upc, isbn });
       const desiredExternalIds =
         incomingGtin === undefined || incomingGtin === null
           ? (externalIds ?? [])
           : foldGtinIntoExternalIds(externalIds ?? [], incomingGtin);
+      const category = hasFoodIndicators({ ...data, ingredientId })
+        ? "food"
+        : externalIdsContainIsbn(desiredExternalIds)
+          ? "books"
+          : (data.category ?? null);
       await assertExternalIdsAvailable(tx, desiredExternalIds);
       const newProduct = await insertWithShortcode(tx, "product", {
         ...columnData,
@@ -1522,19 +1525,25 @@ export const updateProduct = async (
         ),
       });
 
-      effectiveIdentity = {
-        name: productData.name ?? beforeProduct.name,
-        manufacturer: productData.manufacturer ?? beforeProduct.manufacturer,
-        upc: productData.upc ?? undefined,
-      };
-
       // A canonical "1 each = $X" mapping duplicates the price column; reject it.
       if (unitMappings !== undefined)
         assertNoCanonicalPriceMapping(unitMappings);
 
       // `upc` is deliberately split out of the column write: a barcode is a
       // `gtin` identifier row now, applied below alongside `externalIds`.
-      const { upc: incomingGtin, ...columnData } = productData;
+      const { upc, isbn, ...columnData } = productData;
+      const incomingGtin = resolvePrimaryProductCodeInput({ upc, isbn });
+      const desiredExternalIds =
+        externalIds === undefined
+          ? undefined
+          : incomingGtin === undefined
+            ? externalIds
+            : foldGtinIntoExternalIds(externalIds, incomingGtin);
+      effectiveIdentity = {
+        name: columnData.name ?? beforeProduct.name,
+        manufacturer: columnData.manufacturer ?? beforeProduct.manufacturer,
+        upc: incomingGtin ?? undefined,
+      };
       const updateData: {
         name?: string;
         aliases?: string[];
@@ -1557,11 +1566,22 @@ export const updateProduct = async (
         fdc_id: updateData.fdc_id ?? beforeProduct.fdc_id,
         ingredientId: updateData.ingredientId ?? beforeProduct.ingredientId,
       };
-      if (
-        hasFoodIndicators(resultingProduct) &&
-        beforeProduct.category !== "food"
-      ) {
+      const resultingExternalIds =
+        desiredExternalIds ??
+        (incomingGtin === undefined
+          ? beforeExternalIds
+          : incomingGtin === null
+            ? beforeExternalIds.filter((entry) => !entry.isPrimary)
+            : [
+                ...beforeExternalIds.filter(
+                  (entry) => entry.externalId !== incomingGtin,
+                ),
+                { source: GTIN_SOURCE, externalId: incomingGtin },
+              ]);
+      if (hasFoodIndicators(resultingProduct)) {
         updateData.category = "food";
+      } else if (externalIdsContainIsbn(resultingExternalIds)) {
+        updateData.category = "books";
       }
 
       // Wishlist candidates are tools by domain definition. Check the final
@@ -1618,10 +1638,7 @@ export const updateProduct = async (
       // rather than applied after it — otherwise whichever ran second would
       // silently discard the other.
       if (externalIds !== undefined) {
-        const desired =
-          incomingGtin === undefined
-            ? externalIds
-            : foldGtinIntoExternalIds(externalIds, incomingGtin);
+        const desired = desiredExternalIds!;
         await assertExternalIdsAvailable(tx, desired, id);
         await syncProductExternalIds(tx, id, desired);
       } else if (incomingGtin !== undefined) {
@@ -1989,6 +2006,7 @@ export const quickCreateProduct = async (
     name: string;
     manufacturer?: string;
     upc?: string | null;
+    isbn?: string | null;
     expectedQuantity?: number | null;
     model?: string | null;
     fdc_id?: number | null;
@@ -2002,8 +2020,18 @@ export const quickCreateProduct = async (
   },
   actor: ActorContext,
 ): Promise<ProductTopLevelOut> => {
-  // Auto-correct category to "food" if product has food indicators
-  const category = hasFoodIndicators(data) ? "food" : (data.category ?? null);
+  const incomingGtin = resolvePrimaryProductCodeInput({
+    upc: data.upc,
+    isbn: data.isbn,
+  });
+  const category = hasFoodIndicators(data)
+    ? "food"
+    : incomingGtin != null &&
+        externalIdsContainIsbn([
+          { source: GTIN_SOURCE, externalId: incomingGtin },
+        ])
+      ? "books"
+      : (data.category ?? null);
 
   const values = {
     name: data.name,
@@ -2037,8 +2065,8 @@ export const quickCreateProduct = async (
         })
       : await insertWithShortcode(tx, "product", values);
 
-    if (data.upc != null) {
-      await syncPrimaryGtin(tx, inserted.id, data.upc);
+    if (incomingGtin != null) {
+      await syncPrimaryGtin(tx, inserted.id, incomingGtin);
     }
 
     await logAuditEntry(tx, actor, {
@@ -2048,7 +2076,7 @@ export const quickCreateProduct = async (
     });
 
     const rows =
-      data.upc == null
+      incomingGtin == null
         ? []
         : await tx.query.productExternalId.findMany({
             where: eq(productExternalId.productId, inserted.id),

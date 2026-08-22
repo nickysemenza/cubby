@@ -2,6 +2,11 @@ import { displayGtin, externalIdInput } from "@cubby/schemas/external-id";
 import type { IngredientShortcode } from "@cubby/schemas/identifiers";
 import { type ImageOut, partitionEntityFiles } from "@cubby/schemas/image";
 import {
+  isbnFromGtin,
+  isbn as isbnSchema,
+  normalizeIsbn,
+} from "@cubby/schemas/isbn";
+import {
   type ProductCreateInput,
   type ProductTopLevelOut,
   productCategory,
@@ -59,6 +64,7 @@ const productFormSchema = z
     notes: z.string().nullable(),
     category: productCategory.nullable(),
     upc: upc.nullable(), // Allow empty string and transform to null
+    isbn: isbnSchema.nullable(),
     fdc_id: fdcId.nullable(), // Explicit USDA link (set via search)
     expectedQuantity: z.number().int().positive().nullable(),
     // Price per each ($); own field, not a mapping. 0 is allowed and means
@@ -141,6 +147,15 @@ const ProductLivePreview: FC<{ control: Control<ProductFormValues> }> = ({
         </InfoRow>
         <InfoRow label="UPC">
           {v.upc ? <span className="font-mono">{v.upc}</span> : undefined}
+        </InfoRow>
+        <InfoRow label="ISBN">
+          {v.isbn ? (
+            <span className="font-mono">
+              {normalizeIsbn(v.isbn)?.isbn13 ??
+                isbnFromGtin(v.isbn)?.isbn13 ??
+                v.isbn}
+            </span>
+          ) : undefined}
         </InfoRow>
         <InfoRow label="USDA FDC ID">
           {v.fdc_id ? <span className="font-mono">{v.fdc_id}</span> : undefined}
@@ -229,6 +244,8 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
     mode === "create" ? props.initialManufacturer : undefined;
   const initialUpc = mode === "create" ? props.initialUpc : undefined;
   const initialFdcId = mode === "create" ? props.initialFdcId : undefined;
+  const productIsbn =
+    product?.primaryGtin == null ? null : isbnFromGtin(product.primaryGtin);
 
   // Initialize form with default values or existing product data
   const form = useForm<ProductFormValues>({
@@ -248,8 +265,11 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       // back to GTIN-14, so a round-trip cannot mint a second row for the same
       // barcode in another encoding.
       upc: product
-        ? product.primaryGtin && displayGtin(product.primaryGtin)
+        ? product.primaryGtin && !productIsbn
+          ? displayGtin(product.primaryGtin)
+          : null
         : (initialUpc ?? null),
+      isbn: productIsbn?.isbn13 ?? null,
       fdc_id: product ? product.fdc_id : (initialFdcId ?? null),
       expectedQuantity: product
         ? product.expectedQuantity
@@ -283,6 +303,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         notes: values.notes,
         category: values.category,
         upc: values.upc,
+        isbn: values.isbn,
         fdc_id: values.fdc_id,
         expectedQuantity: values.expectedQuantity,
         price: values.price,
@@ -301,7 +322,11 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
           // `upc` is a write-only input; the product carries `primaryGtin`.
           // Compare in the form's own units so an unchanged barcode isn't
           // resubmitted as a change on every save.
-          upc: product.primaryGtin && displayGtin(product.primaryGtin),
+          upc:
+            product.primaryGtin && !productIsbn
+              ? displayGtin(product.primaryGtin)
+              : null,
+          isbn: productIsbn?.gtin14 ?? null,
         },
         { ...values, aliases, tags },
         [
@@ -313,6 +338,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
           "notes",
           "category",
           "upc",
+          "isbn",
           "fdc_id",
           "expectedQuantity",
           "price",

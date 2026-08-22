@@ -26,6 +26,7 @@ import {
   externalIdValues,
   gtin,
 } from "./external-id";
+import { isbn } from "./isbn";
 import {
   expenseShortcode,
   ingredientShortcode,
@@ -128,6 +129,17 @@ const productCreateShape = {
    * product's other identifiers. Pass `externalIds` to manage the full set.
    */
   upc: gtin.nullable(),
+  /**
+   * A physical book's ISBN. ISBN-10 and ISBN-13 both normalize into the same
+   * primary `gtin` external-id row; this is a write convenience, not a second
+   * stored identifier namespace.
+   */
+  isbn: isbn
+    .nullable()
+    .optional()
+    .describe(
+      "Physical-book ISBN-10 or ISBN-13; stored as the equivalent canonical GTIN-14 and categorizes the Product as books",
+    ),
   fdc_id: fdcId
     .nullable()
     .optional()
@@ -1177,6 +1189,7 @@ export const productQuickCreatePayload = z.object({
   name: requiredName("Product name"),
   manufacturer: z.string().default(UNSPECIFIED_MANUFACTURER),
   upc: gtin.nullable().optional(),
+  isbn: isbn.nullable().optional(),
   expectedQuantity: z.number().int().positive().nullable().optional(),
   model: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
@@ -1200,6 +1213,11 @@ export const mcpProductCreateInput = z.object({
   // carries a barcode. `mcpProductUpdateInput` already had both fields
   // optional; create is what diverged.
   upc: gtin.nullish(),
+  isbn: isbn
+    .nullish()
+    .describe(
+      "Physical-book ISBN-10 or ISBN-13; stored in the canonical GTIN identifier slot",
+    ),
   manufacturer: z
     .string()
     .describe("Manufacturer or 'generic'")
@@ -1285,6 +1303,12 @@ export const mcpProductUpdateInput = z.object({
       "Retailer/vendor identifiers. Pass the COMPLETE desired set: it replaces the existing list. A (source, kind) slot takes one PRIMARY plus any number of secondaries — mark the extras isPrimary: false.",
     ),
   upc: gtin.nullable().optional(),
+  isbn: isbn
+    .nullable()
+    .optional()
+    .describe(
+      "Physical-book ISBN-10 or ISBN-13; null retires the primary book barcode",
+    ),
   fdc_id: fdcId.nullable().optional(),
   manufacturer: z
     .string()

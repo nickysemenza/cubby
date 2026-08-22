@@ -1,4 +1,5 @@
 import { entityRefKey } from "@cubby/schemas/entity";
+import { productCodeSearchTerms } from "@cubby/schemas/isbn";
 import {
   type SearchableEntity,
   searchableEntities,
@@ -230,11 +231,17 @@ async function getSearchDocumentSources(
     )
     SELECT * FROM (${union}) source
   `);
-  return result.rows.map((row) => ({
-    ...row,
-    aliases: textList(row.aliases ?? []),
-    keywords: textList(row.keywords ?? []),
-  }));
+  return result.rows.map((row) => {
+    const keywords = textList(row.keywords ?? []);
+    return {
+      ...row,
+      aliases: textList(row.aliases ?? []),
+      keywords:
+        row.entityType === "product" || row.entityType === "inventory"
+          ? [...new Set(keywords.flatMap(productCodeSearchTerms))]
+          : keywords,
+    };
+  });
 }
 
 export async function refreshSearchDocument(

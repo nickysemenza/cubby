@@ -12,6 +12,7 @@ import {
   storedExternalIdUrl,
 } from "@cubby/schemas/external-id";
 import type { ProductId } from "@cubby/schemas/identifiers";
+import { isbnFromGtin, normalizeIsbn } from "@cubby/schemas/isbn";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { isCanonicalPriceMapping } from "~/lib/price-mapping-utils";
@@ -208,6 +209,61 @@ function requireCanonicalGtin(value: string): string {
     );
   }
   return normalized;
+}
+
+function requireCanonicalIsbn(value: string): string {
+  const normalized = isbnFromGtin(value.trim()) ?? normalizeIsbn(value);
+  if (normalized === null) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      `“${value}” is not a valid ISBN-10 or ISBN-13.`,
+    );
+  }
+  return normalized.gtin14;
+}
+
+/**
+ * Collapse the compatibility barcode input and the explicit ISBN input onto
+ * the one primary GTIN slot they both address.
+ *
+ * `undefined` leaves the slot alone; `null` retires its primary. When both
+ * carry values they must name the same printed identity, otherwise accepting
+ * one would silently discard the other.
+ */
+export function resolvePrimaryProductCodeInput(input: {
+  upc?: string | null;
+  isbn?: string | null;
+}): string | null | undefined {
+  const gtin =
+    input.upc == null ? input.upc : requireCanonicalGtin(input.upc.trim());
+  const bookGtin =
+    input.isbn == null ? input.isbn : requireCanonicalIsbn(input.isbn);
+
+  if (gtin != null && bookGtin != null && gtin !== bookGtin) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "UPC/barcode and ISBN identify different printed products. Keep only the correct one, or make them agree.",
+    );
+  }
+  if (bookGtin != null) return bookGtin;
+  if (gtin != null) return gtin;
+  return input.isbn === null || input.upc === null ? null : undefined;
+}
+
+/** True when the identifier set contains a validated physical-book ISBN. */
+export function externalIdsContainIsbn(
+  externalIds: ReadonlyArray<{
+    source: string;
+    externalId: string;
+    deletedAt?: Date | null;
+  }>,
+): boolean {
+  return externalIds.some(
+    (entry) =>
+      entry.deletedAt == null &&
+      entry.source.trim().toLowerCase() === GTIN_SOURCE &&
+      isbnFromGtin(entry.externalId) !== null,
+  );
 }
 
 /**

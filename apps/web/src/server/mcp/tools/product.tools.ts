@@ -69,7 +69,7 @@ export function registerProductTools(server: McpServer) {
     sort: { orderBy: "name" },
     listSortInput: z.enum(["name", "identity_strength"]).optional(),
     descriptions: {
-      list: "Search products by name, manufacturer, UPC/barcode (upcFilter matches ANY of a product's barcodes, in any encoding), model, category, or computed completeness. Start a product audit with dataStatus=needs_data and optionally dataGap. For enrichment use sort=identity_strength. modelPresenceFilter and externalIdSource/externalIdPresenceFilter expose identity worklists such as Amazon-linked products lacking an Amazon external id. For the stocked product-enrichment worklist, pass inventoryPresenceFilter=has and imagePresenceFilter=none.",
+      list: "Search products by name, manufacturer, UPC/barcode/ISBN (upcFilter matches ANY of a product's barcodes and accepts ISBN-10 or ISBN-13), model, category, or computed completeness. Start a product audit with dataStatus=needs_data and optionally dataGap. For enrichment use sort=identity_strength. modelPresenceFilter and externalIdSource/externalIdPresenceFilter expose identity worklists such as Amazon-linked products lacking an Amazon external id. For the stocked product-enrichment worklist, pass inventoryPresenceFilter=has and imagePresenceFilter=none.",
       get: "Get a detailed product by ID, including identifiers, coverImageId, every attached Product file with integrity metadata/display position, and computed dataQuality. This read does not contact R2; use verify_product_images for an on-demand storage check.",
       create:
         "Create a fully described product. Use for items not found via search_products; include maker model, category, tags, identifiers, and unit mappings when verified. Retailer SKUs belong in externalIds, not model.",
@@ -90,6 +90,7 @@ export function registerProductTools(server: McpServer) {
         // Required (nullable, not optional) on the router's create input.
         expectedQuantity: params.expectedQuantity ?? null,
         upc: params.upc ?? null,
+        isbn: params.isbn ?? null,
         ingredientId: params.ingredientId ?? null,
         unitMappings: (params.unitMappings ?? []).map(toUnitMappingInput),
       }),

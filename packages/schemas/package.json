@@ -28,6 +28,7 @@
     "./image-summary": "./src/image-summary.ts",
     "./unitmapping": "./src/unitmapping.ts",
     "./external-id": "./src/external-id.ts",
+    "./isbn": "./src/isbn.ts",
     "./product": "./src/product.ts",
     "./product-components": "./src/product-components.ts",
     "./location": "./src/location.ts",

@@ -124,6 +124,9 @@ export const AppErrors = {
   // own descendants, or a descendant into its kit). A single-row CHECK only
   // catches the one-hop case; this is the multi-hop one.
   PRODUCT_MERGE_COMPONENT_CYCLE: "BAD_REQUEST",
+  // Different ISBNs name different physical editions or formats. Retaining
+  // both as secondary barcodes would turn two editions into one Product.
+  PRODUCT_MERGE_DISTINCT_ISBNS: "BAD_REQUEST",
   // project.parentProjectId: arbitrary-depth sub-projects (WBS) — a project
   // can't become its own descendant.
   PROJECT_HAS_CHILDREN: "PRECONDITION_FAILED",

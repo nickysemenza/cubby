@@ -106,6 +106,33 @@ describe("mergeProducts", () => {
       columns: { id: true, locationId: true, amount: true },
     });
 
+  it("refuses to merge different ISBN editions", async () => {
+    const keeper = await seedProduct("Edition One", {
+      isbn: "978-0-306-40615-7",
+    });
+    const loser = await seedProduct("Edition Two", {
+      isbn: "978-0-13-110362-7",
+    });
+
+    const preview = await previewMergeProducts(ctx.db, {
+      keepId: keeper.id,
+      mergeIds: [loser.id],
+    });
+    expect(preview.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "block-distinct-isbn-editions" }),
+      ]),
+    );
+
+    await expect(
+      mergeProducts(
+        ctx.db,
+        { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
+        TEST_ACTOR,
+      ),
+    ).rejects.toThrow(/different ISBN editions/);
+  });
+
   const liveUnitMappings = (productId: ProductId) =>
     getDb(ctx.db).query.productUnitMappings.findMany({
       where: and(

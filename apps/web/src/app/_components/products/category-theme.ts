@@ -7,6 +7,7 @@ import {
   AppWindow,
   Archive,
   Bolt,
+  BookOpen,
   Cpu,
   Disc,
   type LucideIcon,
@@ -31,6 +32,7 @@ const categoryIcons: Record<ProductCategory, LucideIcon> = {
   hardware: Bolt,
   electronics: Cpu,
   software: AppWindow,
+  books: BookOpen,
   household: Sofa,
   supplies: Sparkles,
 };

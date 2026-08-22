@@ -4,6 +4,7 @@ import type {
   LocationShortcode,
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
+import { isbn } from "@cubby/schemas/isbn";
 import { productCategory } from "@cubby/schemas/product";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
@@ -70,6 +71,7 @@ const createFormSchema = z
     notes: z.string().nullable(),
     category: productCategory.nullable(),
     upc: upc.nullable(),
+    isbn: isbn.nullable(),
     fdc_id: fdcId.nullable(),
     expectedQuantity: z.number().int().positive().nullable(),
     price: z.number().positive().nullable(),
@@ -133,6 +135,7 @@ export function QuickInventoryAdd({
       notes: null,
       category: null,
       upc: null,
+      isbn: null,
       fdc_id: null,
       expectedQuantity: null,
       price: null,
@@ -162,6 +165,7 @@ export function QuickInventoryAdd({
         notes: values.notes,
         category: values.category,
         upc: values.upc,
+        isbn: values.isbn,
         fdc_id: values.fdc_id,
         expectedQuantity: values.expectedQuantity,
         price: values.price,
@@ -214,6 +218,7 @@ export function QuickInventoryAdd({
         notes: null,
         category: null,
         upc: null,
+        isbn: null,
         fdc_id: null,
         expectedQuantity: null,
         price: null,

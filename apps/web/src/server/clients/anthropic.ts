@@ -95,6 +95,8 @@ export const CATEGORY_DESCRIPTIONS = {
   electronics:
     "Electronic devices and components: raspberry pi, arduino, cables, monitors, adapters, sensors",
   software: "Software licenses, applications, and subscriptions",
+  books:
+    "Physical books: novels, reference books, manuals, art books, and printed cookbooks",
   household:
     "Home items: furniture, cookware, appliances, decor, cleaning equipment, linens",
   supplies:
