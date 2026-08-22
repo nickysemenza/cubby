@@ -70,7 +70,12 @@ function ProductPillWithFood({ product }: { product: IngredientProduct }) {
   const food = useHydratedProductFood(product);
   return (
     <span className="inline-flex min-w-0 items-center gap-1">
-      <EntityInlineLink entity="product" data={product} compact />
+      <EntityInlineLink
+        displayImage={undefined}
+        entity="product"
+        data={product}
+        compact
+      />
       {food ? (
         <Tooltip>
           <TooltipTrigger render={<span className="inline-flex shrink-0" />}>

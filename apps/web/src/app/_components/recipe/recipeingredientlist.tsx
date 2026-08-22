@@ -182,6 +182,7 @@ export const RecipeIngredientList: React.FC<{
               {match(row)
                 .with({ type: "ingredient" }, (r) => (
                   <EntityPreviewLink
+                    displayImage={null}
                     entity="ingredient"
                     id={r.ingredient.id}
                     className={dottedEntityLink}
@@ -191,6 +192,7 @@ export const RecipeIngredientList: React.FC<{
                 ))
                 .with({ type: "recipe" }, (r) => (
                   <EntityPreviewLink
+                    displayImage={null}
                     entity="recipe"
                     id={r.recipe.id}
                     className={dottedEntityLink}

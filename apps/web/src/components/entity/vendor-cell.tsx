@@ -103,7 +103,7 @@ export function VendorMark({
  * field whose value is the name.
  *
  * The compact case hides the name with `sr-only`, not `hidden`. The mark is a
- * decorative `<img alt="">`, so `hidden` would leave the cell with no accessible
+ * decorative image with empty alternative text, so `hidden` would leave the cell with no accessible
  * name at all below `sm` — visually compact, silent to a screen reader. Keeping
  * the text in the a11y tree means the name has exactly one source at every
  * breakpoint, rather than moving into an `alt` that would double-announce on
@@ -166,6 +166,8 @@ export function VendorCell({
     <EntityPreviewLink
       entity="vendor"
       id={vendorId}
+      displayImage={logo?.url ? { url: logo.url } : null}
+      showIdentityMark={false}
       className="group/vendor-link inline-flex min-w-0 max-w-full text-foreground transition-colors hover:text-primary"
     >
       {body}

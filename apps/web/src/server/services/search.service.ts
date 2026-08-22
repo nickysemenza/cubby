@@ -1,3 +1,4 @@
+import { entityRefKey } from "@cubby/schemas/entity";
 import {
   type RelatedSearchOut,
   type RepairSearchDocumentsOut,
@@ -11,7 +12,7 @@ import { type SQL, sql } from "drizzle-orm";
 import { getErrorMessage } from "~/lib/error-utils";
 import { dispatchBackgroundJobs } from "~/server/background-dispatch";
 import type { Database } from "~/server/db";
-import { displayableImageSql } from "~/server/repo/image-displayability";
+import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import {
   executeSearchDocumentSql,
   getSearchDocumentDiagnostics,
@@ -57,65 +58,12 @@ async function hydrateThumbnails(
   db: Database,
   refs: ReadonlyArray<{ entityType: SearchableEntity; entityId: string }>,
 ): Promise<Map<string, string | null>> {
-  if (!refs.length) return new Map();
-  const values = sql.join(
-    refs.map((ref) => sql`(${ref.entityType}::text, ${ref.entityId}::uuid)`),
-    sql`, `,
-  );
-  // Every arm aliases Image as `i`. This used to be seven copies of a bare
-  // `contentType <> 'application/pdf'`, which let search alone surface a
-  // failed-render or missing-in-R2 image that every other surface suppresses.
-  const displayable = displayableImageSql("i");
-  const rows = await executeSearchDocumentSql<{
-    entityType: SearchableEntity;
-    entityId: string;
-    imageUrl: string | null;
-  }>(
-    db,
-    sql`
-    WITH refs("entityType", "entityId") AS (VALUES ${values})
-    SELECT refs."entityType", refs."entityId"::text AS "entityId", (
-      SELECT candidates.url FROM (
-        SELECT i.url, 0 AS priority, pi."sortOrder", pi."createdAt", i.id AS "imageId" FROM "ProductImage" pi JOIN "Image" i ON i.id = pi."imageId"
-        WHERE refs."entityType" IN ('product', 'inventory')
-          AND pi."productId" = CASE WHEN refs."entityType" = 'product' THEN refs."entityId" ELSE (SELECT ie."productId" FROM "InventoryEntry" ie WHERE ie.id = refs."entityId" AND ie."deletedAt" IS NULL) END
-          AND pi."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        SELECT i.url, 0 AS priority, ri."sortOrder", ri."createdAt", i.id AS "imageId" FROM "RecipeImage" ri JOIN "Image" i ON i.id = ri."imageId"
-        WHERE refs."entityType" = 'recipe' AND ri."recipeId" = refs."entityId" AND ri."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        SELECT i.url, 0 AS priority, li."sortOrder", li."createdAt", i.id AS "imageId" FROM "LocationImage" li JOIN "Image" i ON i.id = li."imageId"
-        WHERE refs."entityType" = 'location' AND li."locationId" = refs."entityId" AND li."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        -- priority 1: the SKU a location IS, when the bin has no photo of its own.
-        -- Same resolve-through-a-FK shape the inventory arm above already uses.
-        -- The ORDER BY leads with priority, which is what keeps this a fallback
-        -- rather than a competitor to the location's own photos.
-        SELECT i.url, 1 AS priority, pi."sortOrder", pi."createdAt", i.id AS "imageId" FROM "ProductImage" pi JOIN "Image" i ON i.id = pi."imageId"
-        WHERE refs."entityType" = 'location'
-          AND pi."productId" = (SELECT l."productId" FROM "Location" l WHERE l.id = refs."entityId" AND l."deletedAt" IS NULL)
-          AND pi."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        SELECT i.url, 0 AS priority, 0 AS "sortOrder", c."createdAt", i.id AS "imageId" FROM "Cookbook" c JOIN "Image" i ON i.id = c."coverImageId"
-        WHERE refs."entityType" = 'cookbook' AND c.id = refs."entityId" AND c."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        SELECT i.url, 0 AS priority, pri."sortOrder", pri."createdAt", i.id AS "imageId" FROM "ProjectImage" pri JOIN "Image" i ON i.id = pri."imageId"
-        WHERE refs."entityType" = 'project' AND pri."projectId" = refs."entityId" AND pri."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        SELECT i.url, 0 AS priority, pui."sortOrder", pui."createdAt", i.id AS "imageId" FROM "PurchaseImage" pui JOIN "Image" i ON i.id = pui."imageId"
-        WHERE refs."entityType" = 'purchase' AND pui."purchaseId" = refs."entityId" AND pui."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-        UNION ALL
-        SELECT i.url, 0 AS priority, 0 AS "sortOrder", v."createdAt", i.id AS "imageId" FROM "Vendor" v JOIN "Image" i ON i.id = v."logoImageId"
-        WHERE refs."entityType" = 'vendor' AND v.id = refs."entityId" AND v."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
-      ) candidates
-      ORDER BY candidates.priority, candidates."sortOrder", candidates."createdAt", candidates."imageId"
-      LIMIT 1
-    ) AS "imageUrl"
-    FROM refs
-  `,
-  );
+  const images = await resolveEntityDisplayImages(db, refs);
   return new Map(
-    rows.map((row) => [`${row.entityType}:${row.entityId}`, row.imageUrl]),
+    refs.map((ref) => [
+      entityRefKey(ref.entityType, ref.entityId),
+      images.get(entityRefKey(ref.entityType, ref.entityId))?.url ?? null,
+    ]),
   );
 }
 
@@ -126,7 +74,7 @@ const withThumbnails = async (
   const images = await hydrateThumbnails(db, candidates);
   return candidates.map(({ entityId, ...candidate }) => ({
     ...candidate,
-    imageUrl: images.get(`${candidate.entityType}:${entityId}`) ?? null,
+    imageUrl: images.get(entityRefKey(candidate.entityType, entityId)) ?? null,
   }));
 };
 

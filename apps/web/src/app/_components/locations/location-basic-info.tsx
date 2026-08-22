@@ -56,7 +56,13 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
     location.product
       ? {
           label: "Is a",
-          value: <EntityInlineLink entity="product" data={location.product} />,
+          value: (
+            <EntityInlineLink
+              displayImage={undefined}
+              entity="product"
+              data={location.product}
+            />
+          ),
           filterAction: (
             <EntityFilterLink
               to="/locations"
@@ -79,7 +85,11 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
     {
       label: "Parent Location",
       value: location.parent ? (
-        <EntityInlineLink entity="location" data={location.parent} />
+        <EntityInlineLink
+          displayImage={undefined}
+          entity="location"
+          data={location.parent}
+        />
       ) : undefined,
       filterAction: location.parent ? (
         <EntityFilterLink

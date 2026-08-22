@@ -23,7 +23,7 @@ const page = (relationKey: string) => ({
               entity: relationKey === "project.vendors" ? "vendor" : "product",
               id: "PRD-TEST",
               label: "Brush",
-              image: null,
+              image: { url: "https://example.com/brush.jpg" },
             },
       expenseCount: 2,
       purchaseCount: 1,
@@ -83,8 +83,19 @@ vi.mock("../data-table/Table", () => ({
   },
 }));
 vi.mock("~/app/_components/EntityInlineLink", () => ({
-  EntityInlineLink: ({ data }: { data: { name: string } }) => (
-    <span>{data.name}</span>
+  EntityInlineLink: ({
+    data,
+    showIdentityMark,
+  }: {
+    data: { name: string };
+    showIdentityMark?: boolean;
+  }) => (
+    <span
+      data-testid="summary-target-link"
+      data-show-mark={showIdentityMark === false ? "false" : "true"}
+    >
+      {data.name}
+    </span>
   ),
 }));
 vi.mock("~/app/_components/table/ImageThumbnail", () => ({
@@ -145,6 +156,14 @@ describe("RelationshipSummaryTable", () => {
     expect(screen.getByTestId("summary-thumbnail")).toHaveAttribute(
       "data-entity",
       "product",
+    );
+    expect(screen.getByTestId("summary-thumbnail")).toHaveAttribute(
+      "data-src",
+      "https://example.com/brush.jpg",
+    );
+    expect(screen.getByTestId("summary-target-link")).toHaveAttribute(
+      "data-show-mark",
+      "false",
     );
     expect(screen.getByText("+1?")).toBeInTheDocument();
     expect(mocks.summaryQuery).toHaveBeenLastCalledWith(

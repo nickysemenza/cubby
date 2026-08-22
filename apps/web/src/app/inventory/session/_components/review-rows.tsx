@@ -51,6 +51,7 @@ export function LocationReviewCard({
         <div className="min-w-0 flex-1">
           <Row align="baseline" gap="xs" wrap className="min-w-0">
             <EntityInlineLink
+              displayImage={undefined}
               entity="location"
               data={{
                 id: location.id,
@@ -103,7 +104,12 @@ export function ItemReviewCard({
           />
           <div className="min-w-0 flex-1">
             <Row align="baseline" gap="xs" wrap className="min-w-0">
-              <EntityInlineLink entity="product" data={product} truncate />
+              <EntityInlineLink
+                displayImage={undefined}
+                entity="product"
+                data={product}
+                truncate
+              />
               {badges}
               <Description size="xs" className="shrink-0">
                 {tryFormatAmount(amount)}

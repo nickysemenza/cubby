@@ -77,6 +77,7 @@ function FlowSourceContent({
           </Link>
         ) : (
           <EntityPreviewLink
+            displayImage={null}
             entity="ingredient"
             id={id}
             className={dottedEntityLink}

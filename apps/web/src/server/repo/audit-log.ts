@@ -14,6 +14,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { EDGE_KEY_TARGET_ENTITY } from "~/server/db/entity-incoming-edges";
 import { auditLog } from "~/server/db/schema";
 import { eqAny, unwrapDb } from "~/server/repo/database-helpers";
+import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import {
   type EntityRef,
   lookupEntityLabels,
@@ -400,7 +401,7 @@ export async function getAuditLog(
   // together so the name resolution costs no extra round-trip latency. The
   // shortcode side additionally covers every FK-shaped value inside each
   // entry's `changes` diff; a name is only wanted for the entry's own subject.
-  const [shortcodeByRef, nameByRef] = await Promise.all([
+  const [shortcodeByRef, nameByRef, displayImageByRef] = await Promise.all([
     lookupShortcodes(db, [
       ...entryRefs,
       ...returnEntries.flatMap((entry) =>
@@ -408,6 +409,10 @@ export async function getAuditLog(
       ),
     ]),
     lookupEntityLabels(db, entryRefs),
+    resolveEntityDisplayImages(
+      db,
+      entryRefs.map(({ entity, id }) => ({ entityType: entity, entityId: id })),
+    ),
   ]);
 
   return {
@@ -418,6 +423,8 @@ export async function getAuditLog(
         shortcodeByRef.get(entityRefKey(entry.entityType, entityId)) ?? null,
       entityName:
         nameByRef.get(entityRefKey(entry.entityType, entityId)) ?? null,
+      displayImage:
+        displayImageByRef.get(entityRefKey(entry.entityType, entityId)) ?? null,
       changes: remapChangeShortcodes(entry.entityType, changes, shortcodeByRef),
     })),
     nextCursor,

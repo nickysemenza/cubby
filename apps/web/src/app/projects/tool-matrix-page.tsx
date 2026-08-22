@@ -737,8 +737,10 @@ function MatrixTable({
             >
               <div className="relative h-24 w-11 overflow-visible">
                 <EntityPreviewLink
+                  displayImage={null}
                   entity="project"
                   id={column.projectId}
+                  showIdentityMark={false}
                   className="absolute bottom-2 left-1 z-10 flex w-24 origin-bottom-left rotate-[-60deg] items-center gap-1 truncate text-2xs text-foreground leading-none underline decoration-border/70 decoration-dotted underline-offset-2 transition-colors hover:text-primary hover:decoration-primary hover:decoration-solid"
                 >
                   <ProjectMark icon={column.icon} size={12} />
@@ -799,6 +801,7 @@ function MatrixTable({
               >
                 <div className="w-64 min-w-0">
                   <EntityInlineLink
+                    displayImage={undefined}
                     entity="product"
                     data={{
                       id: row.productId,

@@ -117,6 +117,7 @@ export function ProductTagSiblings({
                         </span>
                       )}
                       <EntityInlineLink
+                        displayImage={undefined}
                         entity="location"
                         data={{ id: loc.id, name: loc.name }}
                         truncate
@@ -140,6 +141,7 @@ export function ProductTagSiblings({
             {siblings.map((sibling) => (
               <Row key={sibling.id} align="center" justify="between" gap="sm">
                 <EntityInlineLink
+                  displayImage={undefined}
                   entity="product"
                   data={{
                     id: sibling.id,

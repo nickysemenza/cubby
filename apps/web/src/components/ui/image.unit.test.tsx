@@ -35,6 +35,19 @@ describe("Image", () => {
     expect(screen.getByText("tile")).toBeInTheDocument();
   });
 
+  it("keeps a supplied semantic fallback visible until the image loads", () => {
+    render(
+      <Image
+        src="https://example.com/loading.jpg"
+        alt="loading"
+        loadingFallback={<span>entity icon</span>}
+      />,
+    );
+    expect(screen.getByText("entity icon")).toBeInTheDocument();
+    fireEvent.load(screen.getByRole("img", { name: "loading" }));
+    expect(screen.queryByText("entity icon")).toBeNull();
+  });
+
   const BUCKET_SRC = "https://foobucket.nicky.fun/cubby/images/a.jpg";
 
   it("requests a CF transform + 2x srcSet when displayWidth is set on a bucket URL", () => {

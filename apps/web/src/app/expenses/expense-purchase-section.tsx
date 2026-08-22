@@ -74,7 +74,12 @@ export const ExpensePurchaseSection: FC<{ expense: ExpenseOut }> = ({
             stated total, and every Expense at once. Its canonical identity comes
             from Purchase, including the purchase date (not this Expense's ledger
             date), so the shared purchase-label ladder stays truthful. */}
-        <EntityInlineLink entity="purchase" data={data.purchase} truncate />
+        <EntityInlineLink
+          displayImage={undefined}
+          entity="purchase"
+          data={data.purchase}
+          truncate
+        />
         {/* Secondary: the rest of this vendor's spend in the ledger. `vendor`
             is the URL key and carries the vendor shortcode (same shape as
             `?project=`), which is what the id-based filter matches on. */}
@@ -94,7 +99,12 @@ export const ExpensePurchaseSection: FC<{ expense: ExpenseOut }> = ({
         <Stack gap="tight">
           {others.map((line) => (
             <Row key={line.id} align="center" justify="between" gap="sm">
-              <EntityInlineLink entity="expense" data={line} truncate />
+              <EntityInlineLink
+                displayImage={undefined}
+                entity="expense"
+                data={line}
+                truncate
+              />
               <Row
                 align="center"
                 gap="sm"

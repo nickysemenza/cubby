@@ -231,6 +231,7 @@ function IngredientRow({
             </>
           ) : isMatched && item.match ? (
             <EntityInlineLink
+              displayImage={undefined}
               entity="ingredient"
               data={{
                 id: item.match.id,

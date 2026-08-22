@@ -197,7 +197,13 @@ function BodyBlockView({ block }: { block: BodyBlock }) {
         <SectionLabel>Product{b.products.length === 1 ? "" : "s"}</SectionLabel>
         <div className="flex flex-col gap-1">
           {b.products.slice(0, 4).map((p) => (
-            <EntityInlineLink key={p.id} entity="product" data={p} compact />
+            <EntityInlineLink
+              displayImage={undefined}
+              key={p.id}
+              entity="product"
+              data={p}
+              compact
+            />
           ))}
           {b.products.length > 4 && (
             <Description as="span" size="2xs">

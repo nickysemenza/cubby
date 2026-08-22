@@ -99,6 +99,7 @@ export function EntityCover({
           src={image.url}
           alt={alt}
           fallback={mediaFallback}
+          loadingFallback={mediaFallback}
           displayWidth={size ?? 64}
           className={cn(
             "absolute inset-0 h-full w-full",

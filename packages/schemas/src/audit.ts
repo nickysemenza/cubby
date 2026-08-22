@@ -3,6 +3,7 @@ import { auditSourceSchema } from "./context";
 import { entitySchema } from "./entity";
 import { auditableEntities, type ShortcodeEntity } from "./entity-manifest";
 import { anyShortcodeSchema } from "./identifiers";
+import { imageUrlSummary } from "./image-summary";
 import { oneOrMany } from "./pagination";
 
 /**
@@ -106,6 +107,7 @@ export const auditLogEntryOut = z.object({
    * gone. Distinct from `user.name`, which names the actor, not the subject.
    */
   entityName: z.string().nullable(),
+  displayImage: imageUrlSummary.nullable(),
   action: auditLogActionSchema,
   changes: z.record(z.string(), auditLogChangeSchema).nullable(),
   userId: z.string(),

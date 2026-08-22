@@ -380,10 +380,13 @@ export function createNameColumn<T extends BaseRow>(
                   )}
                 />
               </Button>
-            ) : (
-              // Equal-width spacer so leaf names align under parent names.
+            ) : row.depth > 0 ? (
+              // Nested leaves keep the disclosure lane so their indentation
+              // remains visually subordinate to the expandable parent. A
+              // top-level leaf has no tree relationship to signal, so it must
+              // start at the cell edge instead of carrying a dead 24px gutter.
               <span aria-hidden className="size-6 shrink-0" />
-            )}
+            ) : null}
             <span className="min-w-0 flex-1 truncate">{content}</span>
           </Row>
         );
@@ -1266,6 +1269,7 @@ export function createSingleEntityInlineLinkColumn<
                 if (item && v.id === currentId) {
                   return (
                     <EntityInlineLink
+                      displayImage={undefined}
                       entity={entity}
                       data={item as never}
                       truncate
@@ -1280,7 +1284,12 @@ export function createSingleEntityInlineLinkColumn<
 
         if (!item) return <NoneValue />;
         return (
-          <EntityInlineLink entity={entity} data={item as never} truncate />
+          <EntityInlineLink
+            displayImage={undefined}
+            entity={entity}
+            data={item as never}
+            truncate
+          />
         );
       },
     },
@@ -2032,7 +2041,12 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
 
         if (!id || !name) return <NoneValue />;
         return (
-          <EntityInlineLink entity="project" data={{ id, name }} truncate />
+          <EntityInlineLink
+            displayImage={undefined}
+            entity="project"
+            data={{ id, name }}
+            truncate
+          />
         );
       },
     },
@@ -2127,6 +2141,7 @@ export function createProductLinkColumn<T extends ProductRefRow>(
               renderValue={(v) =>
                 v ? (
                   <EntityInlineLink
+                    displayImage={undefined}
                     entity="product"
                     data={{ id: v.id, name: v.name }}
                     truncate
@@ -2141,7 +2156,12 @@ export function createProductLinkColumn<T extends ProductRefRow>(
 
         if (!id || !name) return <NoneValue />;
         return (
-          <EntityInlineLink entity="product" data={{ id, name }} truncate />
+          <EntityInlineLink
+            displayImage={undefined}
+            entity="product"
+            data={{ id, name }}
+            truncate
+          />
         );
       },
     },
@@ -2217,6 +2237,7 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
               renderValue={(v) =>
                 v ? (
                   <EntityInlineLink
+                    displayImage={undefined}
                     entity="product"
                     data={{ id: v.id, name: v.name }}
                     truncate
@@ -2231,7 +2252,12 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
 
         if (!id || !name) return <NoneValue />;
         return (
-          <EntityInlineLink entity="product" data={{ id, name }} truncate />
+          <EntityInlineLink
+            displayImage={undefined}
+            entity="product"
+            data={{ id, name }}
+            truncate
+          />
         );
       },
     },
@@ -2287,6 +2313,7 @@ export function createParentLinkColumn<
         if (!id || !name) return <NoneValue />;
         return (
           <EntityInlineLink
+            displayImage={undefined}
             entity={entity}
             data={{ id, name } as never}
             truncate

@@ -120,8 +120,13 @@ export function NutrientDensityStats({
       ) : needsWeightMapping && canSeeStoredMappings ? (
         <Description>
           Needs a weight mapping on{" "}
-          <EntityInlineLink entity="product" data={mappingProduct} compact /> to
-          price per gram protein
+          <EntityInlineLink
+            displayImage={undefined}
+            entity="product"
+            data={mappingProduct}
+            compact
+          />{" "}
+          to price per gram protein
         </Description>
       ) : null}
     </Row>

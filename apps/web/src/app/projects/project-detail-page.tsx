@@ -155,7 +155,14 @@ interface ProjectDetailPageProps {
  * identity list. Status tooltips still require a full `ProjectOut`.
  */
 function DependencyBadge({ id, name }: { id: string; name: string }) {
-  return <EntityInlineLink entity="project" data={{ id, name }} compact />;
+  return (
+    <EntityInlineLink
+      displayImage={undefined}
+      entity="project"
+      data={{ id, name }}
+      compact
+    />
+  );
 }
 
 /**
@@ -447,6 +454,7 @@ function SubProjectsList({
                 <Row align="center" gap="xs">
                   <StatusIcon status={child.status} />
                   <EntityInlineLink
+                    displayImage={undefined}
                     entity="project"
                     data={{
                       id: child.id,
@@ -858,6 +866,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           renderValue={(v) =>
             v && project.parentProjectName && project.parentProjectId ? (
               <EntityInlineLink
+                displayImage={undefined}
                 entity="project"
                 data={{
                   id: project.parentProjectId,
@@ -1295,6 +1304,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
             label: "Sub-project of",
             value: (
               <EntityInlineLink
+                displayImage={undefined}
                 entity="project"
                 data={{
                   id: project.parentProjectId,

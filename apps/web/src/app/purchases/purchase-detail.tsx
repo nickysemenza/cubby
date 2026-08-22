@@ -130,6 +130,7 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
           renderValue={(value) =>
             value ? (
               <EntityInlineLink
+                displayImage={undefined}
                 entity="vendor"
                 data={{
                   id: value.id,
@@ -417,6 +418,7 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
       value:
         purchase.vendorName && purchase.vendorId ? (
           <EntityInlineLink
+            displayImage={undefined}
             entity="vendor"
             data={{
               id: purchase.vendorId,

@@ -143,6 +143,7 @@ export function ProductPurchases({ productId }: { productId: string }) {
         <EmptyDescription>
           This product is a component of{" "}
           <EntityInlineLink
+            displayImage={undefined}
             entity="product"
             data={{
               id: primaryKit.parentProductId,
@@ -159,6 +160,7 @@ export function ProductPurchases({ productId }: { productId: string }) {
       </EmptyHeader>
       {primaryKit.purchase && (
         <EntityInlineLink
+          displayImage={undefined}
           entity="purchase"
           data={{
             id: primaryKit.purchase.purchaseId,

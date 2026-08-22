@@ -78,6 +78,7 @@ export function EntityInlineLinkById({
   if (query.data) {
     return (
       <EntityInlineLink
+        displayImage={undefined}
         entity={entityType as "product" | "location" | "recipe" | "ingredient"}
         data={query.data as never}
         compact={compact}

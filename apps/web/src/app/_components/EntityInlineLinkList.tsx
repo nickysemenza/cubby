@@ -66,6 +66,7 @@ export const EntityInlineLinkList: React.FC<EntityInlineLinkListProps> = (
 
   const renderItem = (item: (typeof items)[number], index: number) => (
     <EntityInlineLink
+      displayImage={undefined}
       key={getKey(item, index)}
       entity={props.entity}
       data={item as never}

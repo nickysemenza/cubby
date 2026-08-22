@@ -63,7 +63,14 @@ interface TaskDetailProps {
 
 /** A blocked-by/blocking dependency link, name-only. */
 function TaskDependencyBadge({ id, name }: { id: string; name: string }) {
-  return <EntityInlineLink entity="task" data={{ id, name }} compact />;
+  return (
+    <EntityInlineLink
+      displayImage={undefined}
+      entity="task"
+      data={{ id, name }}
+      compact
+    />
+  );
 }
 
 // Stable empty array — see CLAUDE.md's "unstable-hook-default" guard: an
@@ -202,6 +209,7 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
                 }
               />
               <EntityInlineLink
+                displayImage={undefined}
                 entity="task"
                 data={{
                   id: subtask.id,
@@ -441,6 +449,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
           renderValue={(value) =>
             value && task.projectId && value.id === task.projectId ? (
               <EntityInlineLink
+                displayImage={undefined}
                 entity="project"
                 data={{
                   id: task.projectId,
@@ -491,6 +500,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
             task.subjectProductId &&
             value.id === task.subjectProductId ? (
               <EntityInlineLink
+                displayImage={undefined}
                 entity="product"
                 data={{
                   id: task.subjectProductId,
@@ -590,6 +600,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
             value: (
               <Row align="center" gap="tight">
                 <EntityInlineLink
+                  displayImage={undefined}
                   entity="task"
                   data={{
                     id: task.parentTaskId,
@@ -620,6 +631,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
       value:
         task.projectId && task.projectName ? (
           <EntityInlineLink
+            displayImage={undefined}
             entity="project"
             data={{
               id: task.projectId,

@@ -1,4 +1,5 @@
 import type { RelatedPreviewGroup } from "@cubby/schemas/related-view";
+import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
 import { NoneValue } from "~/components/ui/none-value";
 import type { EntityDetailRoute } from "~/entities/entities";
 import { entities, entityDetailParams } from "~/entities/entities";
@@ -24,6 +25,10 @@ export function RelatedPreviewCell({
           className="flex min-w-0 items-center gap-1"
         >
           {index > 0 && <span className="text-muted-foreground">·</span>}
+          <EntityIdentityMark
+            entity={item.entity}
+            displayImage={item.displayImage}
+          />
           <TableLink
             to={entities[item.entity].routes.detail as EntityDetailRoute}
             params={entityDetailParams(item.id)}

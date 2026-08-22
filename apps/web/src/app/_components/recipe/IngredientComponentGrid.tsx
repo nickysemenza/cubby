@@ -13,6 +13,7 @@ import {
   flattenComponents,
   fullBatchCostByComponent,
   type RecipeTreeNode,
+  recipeTreeDisplayImage,
 } from "./recipe-tree";
 import { formatMakes, gramText } from "./recipe-utils";
 
@@ -126,6 +127,7 @@ export function IngredientComponentGrid({
           <>
             <div>
               <EntityPreviewLink
+                displayImage={recipeTreeDisplayImage(node.recipe)}
                 entity="recipe"
                 id={node.recipe.id}
                 className={dottedEntityLink}
@@ -143,6 +145,7 @@ export function IngredientComponentGrid({
       }}
       renderRowHeader={({ data: row }) => (
         <EntityPreviewLink
+          displayImage={null}
           entity="ingredient"
           id={row.ingredientShortcode}
           className={dottedEntityLink}

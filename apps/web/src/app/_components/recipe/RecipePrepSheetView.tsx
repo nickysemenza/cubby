@@ -22,6 +22,7 @@ import {
   fullBatchNeeds,
   type RecipeTreeNode,
   type RecipeTreeRow,
+  recipeTreeDisplayImage,
 } from "./recipe-tree";
 import {
   entityRefForRow,
@@ -73,6 +74,7 @@ function ShoppingList({
           >
             <span className="truncate" title={need.name}>
               <EntityPreviewLink
+                displayImage={null}
                 entity="ingredient"
                 id={need.ingredientShortcode}
                 className={dottedEntityLink}
@@ -142,6 +144,11 @@ function PrepRow({
         )}
         {ref ? (
           <EntityPreviewLink
+            displayImage={
+              row.kind === "subrecipe"
+                ? recipeTreeDisplayImage(row.child.recipe)
+                : null
+            }
             entity={ref.entity}
             id={ref.id}
             className={dottedEntityLink}
@@ -202,6 +209,7 @@ function Component({
         </span>
         <h3 className="my-0 font-heading font-medium text-base leading-tight tracking-tight">
           <EntityPreviewLink
+            displayImage={recipeTreeDisplayImage(node.recipe)}
             entity="recipe"
             id={node.recipe.id}
             className={dottedEntityLink}

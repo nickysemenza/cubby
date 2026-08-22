@@ -276,7 +276,10 @@ describe("recipe repository helpers", () => {
 
     expect(result).not.toHaveProperty("images");
     expect(result.sections).toHaveLength(1);
-    expect(recipeGraphOut.parse(result)).toEqual(result);
+    expect(recipeGraphOut.parse({ ...result, displayImage: null })).toEqual({
+      ...result,
+      displayImage: null,
+    });
   });
 
   it("maps recipe usage recipe refs without list-only totals", () => {

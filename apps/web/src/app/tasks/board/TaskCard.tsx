@@ -269,6 +269,7 @@ export function TaskCard({
               title={task.projectName ?? undefined}
             >
               <EntityInlineLink
+                displayImage={undefined}
                 entity="project"
                 truncate
                 data={{

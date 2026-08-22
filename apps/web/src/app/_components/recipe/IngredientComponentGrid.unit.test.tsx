@@ -43,6 +43,7 @@ vi.mock("./recipe-tree", () => ({
     total: 1.5,
     totalUpper: 2.25,
   }),
+  recipeTreeDisplayImage: () => null,
 }));
 
 vi.mock("../EntityPreviewLink", () => ({

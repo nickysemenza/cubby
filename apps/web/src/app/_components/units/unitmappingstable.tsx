@@ -77,7 +77,14 @@ const LazyFoodPillLink: React.FC<{ fdcId: number }> = ({ fdcId }) => {
     foodInfo: { description: `food ${fdcId}${isLoading ? "..." : ""}` },
   };
 
-  return <EntityInlineLink entity="usda-food" data={displayFood} compact />;
+  return (
+    <EntityInlineLink
+      displayImage={undefined}
+      entity="usda-food"
+      data={displayFood}
+      compact
+    />
+  );
 };
 
 // Component for lazy loading product data and rendering ProductPillLink
@@ -115,7 +122,14 @@ const LazyProductPillLink: React.FC<{ productId: string }> = ({
     );
   }
 
-  return <EntityInlineLink entity="product" data={product} compact />;
+  return (
+    <EntityInlineLink
+      displayImage={undefined}
+      entity="product"
+      data={product}
+      compact
+    />
+  );
 };
 
 // Source label + provenance pill, shared by the desktop cell and the mobile card.

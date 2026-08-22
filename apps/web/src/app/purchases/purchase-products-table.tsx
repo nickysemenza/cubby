@@ -95,7 +95,7 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
         return {
           ...row,
           // No `subRows` key at all when empty, so `getCanExpand()` is false and
-          // the name column renders its leaf spacer rather than a dead chevron.
+          // the name column renders no dead chevron.
           subRows: components.map((component) => ({
             id: component.product.id,
             rowKey: `${item.productId}:${component.product.id}`,

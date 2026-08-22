@@ -95,7 +95,11 @@ export function RecipeUsagesTable({
         {rows.map((row) => (
           <TableRow key={row.id}>
             <TableCell className="align-top">
-              <EntityInlineLink entity="recipe" data={row.recipe} />
+              <EntityInlineLink
+                displayImage={undefined}
+                entity="recipe"
+                data={row.recipe}
+              />
             </TableCell>
             <TableCell className="align-top text-muted-foreground">
               {row.sectionName ?? ""}

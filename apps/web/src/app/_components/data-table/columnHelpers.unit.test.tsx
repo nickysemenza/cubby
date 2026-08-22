@@ -11,6 +11,7 @@ import {
   createCurrencyColumn,
   createFilterableSelectColumn,
   createImageColumn,
+  createNameColumn,
   createParentLinkColumn,
   describeProductPricingSource,
   productPriceClearLabel,
@@ -21,6 +22,7 @@ import {
   type CubbyColumnDef as ColumnDef,
   createCubbyColumnHelper,
   cubbyTableFeatures,
+  useCubbyTable,
 } from "./table-features";
 
 /**
@@ -227,6 +229,75 @@ describe("createParentLinkColumn", () => {
     expect(column.id).toBe("wbsParent");
     expect(column.header).toBe("Rolls Up To");
     expect(column.meta?.className).toBe("w-64");
+  });
+});
+
+type TreeNameRow = {
+  id: string;
+  name: string;
+  subRows?: TreeNameRow[];
+};
+
+const treeNameColumns = [
+  createNameColumn(createCubbyColumnHelper<TreeNameRow>(), "product", "name", {
+    expandable: true,
+    rowLink: () => null,
+  }) as ColumnDef<TreeNameRow, unknown>,
+];
+
+function TreeNameHarness() {
+  const table = useCubbyTable({
+    data: [
+      { id: "PRD-PLAIN", name: "Standalone product" },
+      {
+        id: "PRD-KIT",
+        name: "Expandable kit",
+        subRows: [{ id: "PRD-PART", name: "Nested component" }],
+      },
+    ],
+    columns: treeNameColumns,
+    getRowId: (row) => row.id,
+    getSubRows: (row) => row.subRows,
+    initialState: { expanded: true },
+  });
+
+  return (
+    <table>
+      <tbody>
+        {table.getRowModel().rows.map((row) => {
+          const cell = row.getVisibleCells()[0];
+          if (!cell) throw new Error("expected a name cell");
+          return (
+            <tr key={row.id}>
+              <td data-row-id={row.id}>
+                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+describe("createNameColumn expandable layout", () => {
+  it("starts top-level leaves at the cell edge and reserves the lane only for nested leaves", () => {
+    const { container } = render(<TreeNameHarness />);
+    const spacerSelector = "span.size-6.shrink-0";
+
+    expect(
+      container
+        .querySelector('[data-row-id="PRD-PLAIN"]')
+        ?.querySelector(spacerSelector),
+    ).toBeNull();
+    expect(
+      container
+        .querySelector('[data-row-id="PRD-PART"]')
+        ?.querySelector(spacerSelector),
+    ).not.toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Collapse" }),
+    ).toBeInTheDocument();
   });
 });
 

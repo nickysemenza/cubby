@@ -56,7 +56,11 @@ export function ParsedIngredientTable({
               <TableRow className={cn("border-b-0", tint)}>
                 <TableCell className="whitespace-normal align-top">
                   {match ? (
-                    <EntityInlineLink entity="ingredient" data={match} />
+                    <EntityInlineLink
+                      displayImage={undefined}
+                      entity="ingredient"
+                      data={match}
+                    />
                   ) : (
                     <Row as="span" align="center" gap="xs">
                       {isNew && (
