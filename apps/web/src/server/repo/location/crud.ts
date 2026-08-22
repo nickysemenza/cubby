@@ -1375,42 +1375,54 @@ export const getLocationById = async (
   const childCountMap: Record<string, number> = {};
   const inventoryCountMap: Record<string, number> = {};
 
-  if (childIds.length > 0) {
-    const dbClient = unwrapDb(db);
+  const dbClient = unwrapDb(db);
 
-    const [childCountResults, inventoryCountResults] = await Promise.all([
-      dbClient
-        .select({
-          parentId: location.parentId,
-          count: sql<number>`count(*)::int`,
-        })
-        .from(location)
-        .where(and(notDeleted(location), inArray(location.parentId, childIds)))
-        .groupBy(location.parentId),
-      dbClient
-        .select({
-          locationId: inventoryEntry.locationId,
-          count: sql<number>`count(*)::int`,
-        })
-        .from(inventoryEntry)
-        .where(
-          and(
-            notDeleted(inventoryEntry),
-            inArray(inventoryEntry.locationId, childIds),
-            // Rollup feeds directItemCount, a browse/count surface — an
-            // installed fixture doesn't belong in a child's item count.
-            stockOnly(),
-          ),
-        )
-        .groupBy(inventoryEntry.locationId),
-    ]);
+  // The fetched location is counted alongside its children, not just the
+  // children: `buildLocationWithChildren` derives totalItemCount from the
+  // root's own directItemCount, so leaving the root out made every count
+  // surface reading this payload (the location hovercard, the Contents
+  // header's fallback) report 0 for a location that holds stock directly and
+  // has no children to roll up.
+  const inventoryCountIds = [id, ...childIds];
 
-    for (const row of childCountResults) {
-      if (row.parentId) childCountMap[row.parentId] = row.count;
-    }
-    for (const row of inventoryCountResults) {
-      inventoryCountMap[row.locationId] = row.count;
-    }
+  const [childCountResults, inventoryCountResults] = await Promise.all([
+    childIds.length > 0
+      ? dbClient
+          .select({
+            parentId: location.parentId,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(location)
+          .where(
+            and(notDeleted(location), inArray(location.parentId, childIds)),
+          )
+          .groupBy(location.parentId)
+      : [],
+    dbClient
+      .select({
+        locationId: inventoryEntry.locationId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(inventoryEntry)
+      .where(
+        and(
+          notDeleted(inventoryEntry),
+          inArray(inventoryEntry.locationId, inventoryCountIds),
+          // Feeds directItemCount, a browse/count surface — an installed
+          // fixture doesn't belong in an item count. Same predicate the
+          // persisted location.valuation rollup uses, so the hovercard and
+          // the location page's "N items" can't disagree.
+          stockOnly(),
+        ),
+      )
+      .groupBy(inventoryEntry.locationId),
+  ]);
+
+  for (const row of childCountResults) {
+    if (row.parentId) childCountMap[row.parentId] = row.count;
+  }
+  for (const row of inventoryCountResults) {
+    inventoryCountMap[row.locationId] = row.count;
   }
 
   // Attach counts to children
@@ -1426,6 +1438,7 @@ export const getLocationById = async (
     ...res,
     parent: parentChain,
     children: enrichedChildren,
+    directItemCount: inventoryCountMap[id] ?? 0,
     images: res.images,
   };
 

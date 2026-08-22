@@ -343,6 +343,103 @@ describe("getLocationInventoryBreakdown", () => {
   });
 });
 
+describe("getLocationById item counts", () => {
+  const ctx = withTestDb();
+
+  const locationId = async (shortcode: string) =>
+    unsafeLocationId(
+      (await resolveLiveShortcode(ctx.db, shortcode, "location"))!,
+    );
+  const productId = async (shortcode: string) =>
+    unsafeProductId(
+      (await resolveLiveShortcode(ctx.db, shortcode, "product"))!,
+    );
+
+  /**
+   * One entry per (product, location, placement) — the unique constraint — so
+   * every count fixture needs its own product.
+   */
+  const stockAt = async (
+    locationCode: string,
+    productName: string,
+    placement?: "stock" | "installed",
+  ) => {
+    const created = await createProduct(
+      ctx.db,
+      makeProductInput({ name: productName }),
+      ctx.actor,
+    );
+    return createInventoryEntry(
+      ctx.db,
+      {
+        productId: await productId(created.id),
+        locationId: await locationId(locationCode),
+        amount: { value: 1, unit: "each" },
+        ...(placement ? { placement } : {}),
+      },
+      ctx.actor,
+    );
+  };
+
+  // Regression: the counts query only covered the fetched location's CHILDREN,
+  // so a leaf holding stock directly reported `directItemCount: 0` and — since
+  // totalItemCount is derived from it — `totalItemCount: 0`. The location
+  // hovercard read "On hand 0" for a rack with a dozen items on it.
+  it("counts stock held directly by the fetched location, with no children", async () => {
+    const rack = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Counted Metal Rack", type: "shelf" }),
+      ctx.actor,
+    );
+
+    await stockAt(rack.id, "Counted Rack Product A");
+    await stockAt(rack.id, "Counted Rack Product B");
+    const deadEntry = await stockAt(rack.id, "Counted Rack Deleted Product");
+    // Same predicate the persisted valuation rollup uses: a fixture is not
+    // stock on the shelf, so it stays out of the item count.
+    await stockAt(rack.id, "Counted Rack Fixture", "installed");
+
+    await getDb(ctx.db)
+      .update(inventoryEntry)
+      .set({ deletedAt: new Date() })
+      .where(eq(inventoryEntry.shortcode, deadEntry.id));
+
+    const result = await getLocationById(ctx.db, await locationId(rack.id));
+
+    expect(result.children).toEqual([]);
+    expect(result.directItemCount).toBe(2);
+    expect(result.totalItemCount).toBe(2);
+  });
+
+  it("rolls the fetched location's own stock into totalItemCount alongside its children", async () => {
+    const room = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Counted Garage", type: "room" }),
+      ctx.actor,
+    );
+    const shelf = await createLocation(
+      ctx.db,
+      makeLocationInput({
+        name: "Counted Garage Shelf",
+        type: "shelf",
+        parentId: room.id,
+      }),
+      ctx.actor,
+    );
+
+    await stockAt(room.id, "Counted Garage Floor Product");
+    await stockAt(shelf.id, "Counted Garage Shelf Product A");
+    await stockAt(shelf.id, "Counted Garage Shelf Product B");
+
+    const result = await getLocationById(ctx.db, await locationId(room.id));
+
+    expect(result.directItemCount).toBe(1);
+    expect(result.children ?? []).toHaveLength(1);
+    expect(result.children?.[0]?.directItemCount).toBe(2);
+    expect(result.totalItemCount).toBe(3);
+  });
+});
+
 // A duplicate-name error has to name the location that is blocking, not just
 // report that something is. Without the shortcode the only way to find the
 // blocker is a follow-up list_locations scan — which is exactly what the
