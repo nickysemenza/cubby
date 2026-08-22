@@ -54,6 +54,7 @@ describe("PROBLEM_CLASS", () => {
     recipesWithoutInstructions: "defect",
     referentialLivenessViolations: "defect",
     soldButStillStocked: "defect",
+    kitsCountedTwice: "defect",
     staleParentRecipes: "defect",
     stalledProjects: "defect",
     toolsUsedOutsideOwnership: "defect",

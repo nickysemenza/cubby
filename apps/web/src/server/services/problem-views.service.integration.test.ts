@@ -43,7 +43,7 @@ describe("findViewProblems", () => {
       (problem) => problem.source.kind === "entity",
     );
 
-    expect(entityProblems).toHaveLength(34);
+    expect(entityProblems).toHaveLength(35);
     for (const problem of entityProblems) {
       const result = await executeProblem(ctx.db, problem.key, {
         sampleSize: 1,

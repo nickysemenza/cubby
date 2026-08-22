@@ -6,6 +6,7 @@ import {
   type AllProblems,
   type CoverageProblemKey,
   type CoverageTotals,
+  type KitCountedTwice,
   type LabelVariant,
   type NegativeExpectedQuantity,
   type ProblemKey,
@@ -785,6 +786,22 @@ function soldButStockedSubtitle(product: SoldButStillStocked): string {
 }
 
 /**
+ * `by {mfr} · 1 stocked as itself, plus its parts · more than the 1 bought`.
+ *
+ * The arithmetic IS the finding, so it leads. It stops at what the row can
+ * prove: membership already establishes that own stock plus whole kits in parts
+ * EXCEEDS what was acquired, but the exact parts figure is not carried here, so
+ * the copy says "more than" rather than inventing a second number.
+ *
+ * Which side is the mistake is the reader's call — the parent's entry, the
+ * parts', or the ledger — so this names no fix.
+ */
+function kitCountedTwiceSubtitle(product: KitCountedTwice): string {
+  const bought = `${product.expectedUnits} bought`;
+  return `${byManufacturer(product.manufacturer)} · ${product.ownUnits} stocked as itself, plus its parts · more than the ${bought}`;
+}
+
+/**
  * Leads with the arithmetic, because the arithmetic IS the finding — and names
  * the unquantified lines when there are any, since those change which fix
  * applies. Unknown acquisitions usually mean a receipt whose count was never
@@ -1043,6 +1060,18 @@ const DECLARED_SECTIONS = [
       title: product.name,
       subtitle: soldButStockedSubtitle(product),
       badges: locationBadges(product.locations),
+      route: entityDetailLink("product", product.id),
+    }),
+  }),
+  section({
+    id: "kits-counted-twice",
+    label: "Counted twice",
+    select: (p) => p.kitsCountedTwice,
+    problemKeys: ["kitsCountedTwice"],
+    entity: "product",
+    renderItem: (product) => ({
+      title: product.name,
+      subtitle: kitCountedTwiceSubtitle(product),
       route: entityDetailLink("product", product.id),
     }),
   }),
