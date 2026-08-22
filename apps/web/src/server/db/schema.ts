@@ -572,19 +572,6 @@ export const product = pgTable(
     name: text("name").notNull(),
     aliases: text("aliases").array().notNull().default(sql`'{}'::text[]`),
     manufacturer: text("manufacturer").notNull(),
-    /**
-     * DEAD. Nothing reads or writes this column; barcodes live on
-     * `ProductExternalId` rows under source `gtin`, which hold any number of
-     * them. It is declared here only so that `db:push` does not offer to drop
-     * it before the code that stopped selecting it has actually deployed —
-     * dropping a column the running worker still selects is what took
-     * production down when `FinancialTransaction.purchaseId` went.
-     *
-     * TODO(product-multi-identifier): after the deploy, `DROP INDEX
-     * "Product_upc_key"; ALTER TABLE "Product" DROP COLUMN "upc";` by hand and
-     * then delete this declaration, in that order, so the next push is a no-op.
-     */
-    upc: text("upc"),
     // Explicit USDA link by FoodData Central id (the universal PK across all food
     // types). Takes precedence over UPC auto-resolution and can reach
     // Foundation/Survey foods that have no UPC or NDB number. Non-unique: many
@@ -640,9 +627,6 @@ export const product = pgTable(
     index("Product_category_idx").on(table.category),
     uniqueIndex("Product_name_manufacturer_key")
       .on(table.name, table.manufacturer)
-      .where(sql`${table.deletedAt} IS NULL`),
-    uniqueIndex("Product_upc_key")
-      .on(table.upc)
       .where(sql`${table.deletedAt} IS NULL`),
     index("Product_ingredientId_idx").on(table.ingredientId),
     index("Product_createdAt_idx").on(table.createdAt),
