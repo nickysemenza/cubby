@@ -380,10 +380,13 @@ export function createNameColumn<T extends BaseRow>(
                   )}
                 />
               </Button>
-            ) : (
-              // Equal-width spacer so leaf names align under parent names.
+            ) : row.depth > 0 ? (
+              // Nested leaves keep the disclosure lane so their indentation
+              // remains visually subordinate to the expandable parent. A
+              // top-level leaf has no tree relationship to signal, so it must
+              // start at the cell edge instead of carrying a dead 24px gutter.
               <span aria-hidden className="size-6 shrink-0" />
-            )}
+            ) : null}
             <span className="min-w-0 flex-1 truncate">{content}</span>
           </Row>
         );

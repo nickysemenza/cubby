@@ -70,7 +70,7 @@ describe("buildProductTreeRows", () => {
 
   it("omits subRows entirely when a product has no components", () => {
     // Not an empty array: `getCanExpand()` must be false so the name column
-    // renders its leaf spacer instead of a chevron that opens nothing.
+    // renders no chevron that opens nothing.
     const [row] = buildProductTreeRows(
       [productAt("PRD-PLAIN")],
       groupComponentsByParent([]),
