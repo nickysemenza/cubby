@@ -10,7 +10,10 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import {
+  createInventoryFixture,
+  createLocationFixture,
   createProductFixture,
+  makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
 import { createTestCaller } from "../trpc";
@@ -85,6 +88,100 @@ describe("product component procedures", () => {
     expect(detachedAgain).toEqual({ changed: 0, attached: 1 });
 
     expect(await caller.kitMembership({ productId: battery.id })).toEqual([]);
+  });
+
+  /**
+   * A decomposed kit holds no stock of its own — the shelf claim moved to its
+   * parts — so "where did the set go?" is only answerable from the component
+   * rows. This pins the three states they can report.
+   *
+   * `0` and `null` are deliberately different answers: zero is a part that is
+   * genuinely unaccounted for, null is a part whose entries carry incompatible
+   * units so no single number is true. The count itself comes from
+   * `loadProductPickerQuantities`, which is why a bin in service as a Location
+   * counts as a held unit here exactly as it does on the products list.
+   */
+  it("reports each component's on-hand units, including zero and mixed", async () => {
+    const caller = createTestCaller(productRouter, ctx.db);
+    const kit = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Nightstand Set" }),
+      ctx.actor,
+    );
+    const stocked = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "A Stocked Nightstand" }),
+      ctx.actor,
+    );
+    const unaccounted = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "B Unaccounted Drawer Pull" }),
+      ctx.actor,
+    );
+    const mixed = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "C Mixed Unit Filler" }),
+      ctx.actor,
+    );
+
+    // Two rooms, one unit each — the production shape of PRD-SKNH.
+    for (const name of ["Sunroom", "Guest bedroom"]) {
+      const room = await createLocationFixture(
+        ctx.db,
+        makeLocationInput({ name }),
+        ctx.actor,
+      );
+      await createInventoryFixture(
+        ctx.db,
+        {
+          productId: stocked.id,
+          locationId: room.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+    }
+
+    // Incompatible units on one product: summing `each` against `box` yields a
+    // number that means nothing, so the loader refuses to produce one. The two
+    // rows need two locations — `(productId, locationId, placement)` is unique,
+    // so a product cannot hold two differently-united entries in one place.
+    for (const [name, amount] of [
+      ["Shed", { value: 1, unit: "each" }],
+      ["Basement", { value: 2, unit: "box" }],
+    ] as const) {
+      const where = await createLocationFixture(
+        ctx.db,
+        makeLocationInput({ name }),
+        ctx.actor,
+      );
+      await createInventoryFixture(
+        ctx.db,
+        { productId: mixed.id, locationId: where.id, amount },
+        ctx.actor,
+      );
+    }
+
+    await caller.attachComponents({
+      parentProductId: kit.id,
+      components: [
+        { productId: stocked.id, quantity: 2 },
+        { productId: unaccounted.id, quantity: 1 },
+        { productId: mixed.id, quantity: 1 },
+      ],
+    });
+
+    const components = await caller.components({ parentProductId: kit.id });
+    expect(
+      components.map((c) => ({
+        productId: c.productId,
+        onHandUnits: c.onHandUnits,
+      })),
+    ).toEqual([
+      { productId: stocked.id, onHandUnits: 2 },
+      { productId: unaccounted.id, onHandUnits: 0 },
+      { productId: mixed.id, onHandUnits: null },
+    ]);
   });
 
   it("404s on a bad parent shortcode rather than leaking a uuid", async () => {

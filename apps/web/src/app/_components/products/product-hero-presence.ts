@@ -28,6 +28,12 @@ export interface HeroPresenceInput {
   onHandUnits: number | null;
   /** Locations that ARE this product, from `quantityLedger`. */
   locationCount: number;
+  /**
+   * Live `ProductComponent` edges where this product is the parent. Non-zero
+   * means it is a kit, and a kit that has been split into a composition record
+   * holds its stock under its parts' names rather than its own.
+   */
+  componentCount: number;
 }
 
 export type HeroPresence = {
@@ -41,7 +47,21 @@ export type HeroPresence = {
     | { kind: "entries"; label: "Entries"; count: number };
   /** Anywhere it is: loose stock plus bins in service. */
   presenceCount: number;
-  inStock: boolean;
+  /**
+   * The hero stamp. Three states, not two, because "no stock under this name"
+   * and "nothing to find anywhere" are different facts and the hero used to
+   * say the second when it meant the first.
+   *
+   * A decomposed kit keeps the Expense and holds nothing of its own — the shelf
+   * claim moved to its parts — so `EXPECTED 1 / ENTRIES 0` under "Not stocked"
+   * read as a deficit on a set that is fully accounted for. That `1` is not
+   * wrong and must not be zeroed: it is the kit's own acquisition, and the
+   * projection multiplies it by each edge's quantity to give the components
+   * their expected counts. Zero it and the parts' expectations collapse with
+   * it, turning two real nightstands into an unexplained surplus. So the stamp
+   * is what changes, not the ledger.
+   */
+  stamp: { label: string; tone: "green" | "ink" };
 };
 
 export const heroPresence = ({
@@ -49,9 +69,19 @@ export const heroPresence = ({
   entryUnit,
   onHandUnits,
   locationCount,
+  componentCount,
 }: HeroPresenceInput): HeroPresence => {
   const presenceCount = entryCount + locationCount;
+  // Own stock wins: a kit still sealed in its box is stocked as itself, and
+  // saying "stocked as parts" over a shelf row would be the wrong fact.
+  const stamp: HeroPresence["stamp"] =
+    presenceCount > 0
+      ? { label: "In stock", tone: "green" }
+      : componentCount > 0
+        ? { label: "Stocked as parts", tone: "green" }
+        : { label: "Not stocked", tone: "ink" };
   return {
+    stamp,
     onHand:
       onHandUnits !== null
         ? {
@@ -63,6 +93,5 @@ export const heroPresence = ({
           }
         : { kind: "entries", label: "Entries", count: entryCount },
     presenceCount,
-    inStock: presenceCount > 0,
   };
 };

@@ -769,6 +769,81 @@ describe("product.list unlocated cohort", () => {
     const inService = await list({ servingAsLocationPresenceFilter: "has" });
     expect(inService.items.map((item) => item.id)).toContain(tote.id);
   });
+
+  /**
+   * The third form of presence. A kit split into a composition record keeps the
+   * Expense and holds no stock of its own — the shelf claim moved to its parts —
+   * so it is not "stocked nowhere", it is stocked as its components.
+   *
+   * The parts are also the ACTIONABLE rows, which is the real argument for
+   * suppressing the parent rather than merely tidying it away: a component's
+   * expected quantity is the kit's units projected down through
+   * `ProductComponent`, so an unstocked part matches this cohort on its own.
+   * Listing the parent too reports one gap twice and less precisely — it names
+   * the box instead of the missing piece.
+   */
+  it("keeps a decomposed kit out of unlocated, but never its unstocked parts", async () => {
+    const caller = createTestCaller(productRouter, ctx.db);
+    const room = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Kit cohort room" }),
+      ctx.actor,
+    );
+    const mk = (name: string) =>
+      createProductFixture(
+        ctx.db,
+        makeProductInput({ name, category: "household" }),
+        ctx.actor,
+      );
+    const kit = await mk("H Nightstand Set");
+    const stockedPart = await mk("I Nightstand");
+    const missingPart = await mk("J Drawer Pull");
+
+    // The whole cost basis sits on the kit; neither part has an Expense.
+    await seedLine({
+      name: "nightstand set",
+      cost: 172.21,
+      productId: kit.id,
+      productQuantity: 1,
+    });
+    await caller.attachComponents({
+      parentProductId: kit.id,
+      components: [
+        { productId: stockedPart.id, quantity: 2 },
+        { productId: missingPart.id, quantity: 1 },
+      ],
+    });
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: stockedPart.entityId,
+        locationId: room.entityId,
+        amount: { value: 2, unit: "each" },
+      },
+      ctx.actor,
+    );
+
+    const cohort = await list({
+      expectedQuantityMin: 1,
+      inventoryPresenceFilter: "none",
+      componentPresenceFilter: "none",
+    });
+    const ids = cohort.items.map((item) => item.id);
+    // The kit: its stock is on the shelf, under another name.
+    expect(ids).not.toContain(kit.id);
+    // The stocked part: present, so it was never in this cohort anyway.
+    expect(ids).not.toContain(stockedPart.id);
+    // The gap that is actually real, and the row worth acting on.
+    expect(ids).toContain(missingPart.id);
+
+    // The predicate does the work, rather than the kit happening to fall out
+    // for some other reason: drop it and the parent is admitted again.
+    const withoutFilter = await list({
+      expectedQuantityMin: 1,
+      inventoryPresenceFilter: "none",
+    });
+    expect(withoutFilter.items.map((item) => item.id)).toContain(kit.id);
+  });
 });
 
 /**
