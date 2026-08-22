@@ -92,7 +92,7 @@ test.describe("iPhone WebKit smoke", () => {
       }
     });
 
-    await page.goto("/products/new#deploy-skew", {
+    await page.goto("/locations/new#deploy-skew", {
       waitUntil: "networkidle",
     });
     await page.evaluate(() =>
@@ -119,7 +119,7 @@ test.describe("iPhone WebKit smoke", () => {
 
     expect(page.url()).toBe(destination);
     await expect(
-      page.getByRole("heading", { name: "New product" }),
+      page.getByRole("heading", { name: "New location" }),
     ).toBeVisible();
     await expect(page.locator("body")).not.toContainText(
       "Something went wrong",
@@ -129,6 +129,53 @@ test.describe("iPhone WebKit smoke", () => {
         Number(sessionStorage.getItem("cubby:e2e-document-loads")),
       ),
     ).toBe(loadsBefore + 1);
+  });
+
+  test("an intended document navigation wins over preload recovery", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      try {
+        const key = "cubby:e2e-document-loads";
+        sessionStorage.setItem(
+          key,
+          String(Number(sessionStorage.getItem(key) ?? "0") + 1),
+        );
+      } catch {
+        // The initial opaque about:blank document can reject storage access.
+      }
+    });
+
+    await page.goto("/products", { waitUntil: "networkidle" });
+    await page.evaluate(() =>
+      sessionStorage.removeItem("cubby:preload-reload-at"),
+    );
+    const loadsBefore = await page.evaluate(() =>
+      Number(sessionStorage.getItem("cubby:e2e-document-loads")),
+    );
+
+    const navigated = page.waitForNavigation({ waitUntil: "networkidle" });
+    await page.evaluate(() => {
+      const event = new Event("vite:preloadError", { cancelable: true });
+      Object.defineProperty(event, "payload", {
+        value: new TypeError("Load failed"),
+      });
+      window.dispatchEvent(event);
+      window.location.assign("/recipes?deploy-skew-navigation=1");
+    });
+    await navigated;
+
+    await expect(page).toHaveURL(/\/recipes\?deploy-skew-navigation=1$/);
+    expect(
+      await page.evaluate(() =>
+        Number(sessionStorage.getItem("cubby:e2e-document-loads")),
+      ),
+    ).toBe(loadsBefore + 1);
+    expect(
+      await page.evaluate(() =>
+        sessionStorage.getItem("cubby:preload-reload-at"),
+      ),
+    ).toBeNull();
   });
 
   test("navigates inventory, recipes, and forms with usable touch targets", async ({

@@ -3,6 +3,19 @@ import { expect, type Locator, type Page } from "@playwright/test";
 import { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
 
 /**
+ * Wait until React has hydrated the authenticated application shell.
+ *
+ * The account trigger replaces its SSR placeholder only after hydration, so
+ * its presence proves shell-level click handlers are attached without relying
+ * on network timing or retrying an interaction that may already have effects.
+ */
+export async function waitForAppHydration(page: Page) {
+  await expect(page.getByRole("button", { name: "Account menu" })).toBeVisible({
+    timeout: 15000,
+  });
+}
+
+/**
  * Wait for React to hydrate a form after SSR.
  *
  * Uses `networkidle` (not `domcontentloaded`) so that all JS bundles have been
@@ -159,6 +172,10 @@ export async function fillCellEditor(page: Page, value: string) {
   await expect(input).toBeEnabled();
   await input.fill(value);
   await input.press("Enter");
+  // Enter only dispatches the commit. The editor closes after the async save
+  // succeeds, which is the semantic completion boundary for callers that may
+  // immediately open another cell or assert the rendered value.
+  await expect(input).toHaveCount(0, { timeout: 15_000 });
 }
 
 /**
@@ -179,11 +196,7 @@ export async function fillCellEditor(page: Page, value: string) {
  */
 export async function openCommandPalette(page: Page): Promise<Locator> {
   await expect(page.locator('[data-slot="dialog-overlay"]')).toHaveCount(0);
-  // The account trigger replaces its SSR placeholder only after hydration,
-  // so it is a reliable shell-wide signal that click handlers are attached.
-  await expect(
-    page.getByRole("button", { name: "Account menu" }),
-  ).toBeVisible();
+  await waitForAppHydration(page);
   const trigger = page.getByRole("button", { name: "Search", exact: true });
   await expect(trigger).toBeEnabled();
   await trigger.click();
