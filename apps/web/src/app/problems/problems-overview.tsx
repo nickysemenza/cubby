@@ -1,7 +1,7 @@
 import type { AllProblems } from "@cubby/schemas/problems";
 import { useQuery } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
-import { CheckCircle, ChevronRight } from "lucide-react";
+import { AlertTriangle, CheckCircle, ChevronRight } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
@@ -9,6 +9,7 @@ import { Row, Section, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import {
   Card,
+  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
@@ -125,16 +126,11 @@ export function ProblemsOverview() {
   );
 
   if (isLoading) {
-    return <SimpleLoading text="Analyzing data consistency..." />;
+    return <SimpleLoading text="Analyzing data consistency…" />;
   }
 
   if (error && !hasResolvedLane) {
-    return (
-      <ErrorDisplay
-        error={error}
-        className="rounded-md bg-destructive/10 p-4"
-      />
-    );
+    return <ErrorDisplay error={error} className="bg-destructive/10 p-4" />;
   }
 
   const scrollToSection = (id: string, grouped: boolean) => {
@@ -166,15 +162,30 @@ export function ProblemsOverview() {
           laneStates,
         );
         if (state.state === "error") {
+          // Keep the section's identity. A bare ErrorDisplay replaced the whole
+          // card, so a failed lane left an anonymous red box where a named
+          // check used to be — you couldn't tell WHICH check was missing, only
+          // that something was.
           return (
-            <ErrorDisplay
-              error={state.error}
-              className="rounded-md bg-destructive/10 p-4"
-            />
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  <AlertTriangle className="size-5 text-destructive" />
+                  {section.label}
+                </CardTitle>
+                <CardDescription>
+                  This check couldn't run, so its rows aren't included in the
+                  totals above.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ErrorDisplay error={state.error} />
+              </CardContent>
+            </Card>
           );
         }
         if (state.state === "loading") {
-          return <SimpleLoading text={`Checking ${section.label}...`} />;
+          return <SimpleLoading text={`Checking ${section.label}…`} />;
         }
         return section.node(problems, coverageTotals);
       })()}
@@ -194,7 +205,7 @@ export function ProblemsOverview() {
           problems.upcFreshness != null && (
             <div
               role="status"
-              className="rounded-md border border-warning/40 bg-warning/10 px-4 py-2 text-sm text-warning-ink"
+              className="border border-warning/40 bg-warning/10 px-4 py-2 text-sm text-warning-ink"
             >
               {problems.upcFreshness.status === "stale"
                 ? "UPC provider is unavailable; showing the last cached proposals."
@@ -206,7 +217,7 @@ export function ProblemsOverview() {
           problems.conversionCoverageFreshness != null && (
             <div
               role="status"
-              className="rounded-md border border-warning/40 bg-warning/10 px-4 py-2 text-sm text-warning-ink"
+              className="border border-warning/40 bg-warning/10 px-4 py-2 text-sm text-warning-ink"
             >
               {problems.conversionCoverageFreshness.state === "unavailable"
                 ? "Conversion coverage is partially unavailable; exact product worklists omit unavailable rows until enrichment recovers."
@@ -328,7 +339,7 @@ function ProblemsSummary({
               key={cat.id}
               type="button"
               onClick={() => onJump(cat.id, cat.grouped)}
-              className="inline-flex items-center gap-2 rounded-md bg-muted px-2 py-1 text-sm transition-colors hover:bg-muted/80"
+              className="inline-flex items-center gap-2 bg-muted px-2 py-1 text-sm transition-colors hover:bg-muted/80"
             >
               {cat.label}
               <Badge

@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  describeAttentionItem,
   expenseAnalyzeInput,
   expenseCreateInput,
   expenseFiltersSchema,
   expenseSortableFields,
   projectCreateInput,
   projectOut,
+  type ProjectAttentionDescribable,
   projectUpdateData,
 } from "./project";
 
@@ -222,5 +224,125 @@ describe("expense quantity filters", () => {
 
   it("allows direct sorting on the physical quantity column", () => {
     expect(expenseSortableFields).toContain("productQuantity");
+  });
+});
+
+describe("describeAttentionItem", () => {
+  /**
+   * The sentence every prose consumer reads (MCP `get_house_status`,
+   * `list_problems`). Two properties are load-bearing and asserted here:
+   *
+   * 1. Every rule NAMES its entity. The two `date_window_drift` sentences did
+   *    not, so a drift row was unactionable without opening the project.
+   * 2. The sentence stays unformatted — ISO dates, whole dollars. Its readers
+   *    are agents, for whom `2022-06-05` is parseable and `Jun 5` is not, and
+   *    this package deliberately carries no display-locale dependency.
+   */
+  const cases: Array<[string, ProjectAttentionDescribable, string]> = [
+    [
+      "overdue_task",
+      {
+        name: "Order countertop",
+        type: "overdue_task",
+        facts: { due: "2026-06-04", daysOverdue: 78 },
+      },
+      '"Order countertop" was due 2026-06-04 and is still open',
+    ],
+    [
+      "stalled_project",
+      {
+        name: "Garage floor",
+        type: "stalled_project",
+        facts: {
+          lastActivity: "2022-06-04",
+          daysSinceActivity: 1174,
+          thresholdDays: 30,
+        },
+      },
+      '"Garage floor" has had no project, task, or expense activity in 30+ days',
+    ],
+    [
+      "missing_budget",
+      {
+        name: "Backyard fence",
+        type: "missing_budget",
+        facts: { spend: 36291.4, actualSpend: 34120, committedSpend: 2171.4 },
+      },
+      '"Backyard fence" has $36291 in spend but no budget estimate',
+    ],
+    [
+      "past_due_planned_expense",
+      {
+        name: "Quartz deposit",
+        type: "past_due_planned_expense",
+        facts: { plannedFor: "2026-06-04", daysPastDue: 78, cost: 2400 },
+      },
+      '"Quartz deposit" was planned for 2026-06-04 but hasn\'t been logged as spent',
+    ],
+    [
+      "unclassified_expense",
+      {
+        name: "Hardware store run",
+        type: "unclassified_expense",
+        facts: { date: null },
+      },
+      '"Hardware store run" has no trade or cost recorded',
+    ],
+    [
+      "blocked_work singular",
+      {
+        name: "Kitchen remodel",
+        type: "blocked_work",
+        facts: { blockedTasks: 1 },
+      },
+      '"Kitchen remodel" has 1 blocked task and no unblocked next action',
+    ],
+    [
+      "blocked_work plural",
+      {
+        name: "Kitchen remodel",
+        type: "blocked_work",
+        facts: { blockedTasks: 3 },
+      },
+      '"Kitchen remodel" has 3 blocked tasks and no unblocked next action',
+    ],
+    [
+      "date_window_drift start",
+      {
+        name: "Kitchen remodel",
+        type: "date_window_drift",
+        facts: {
+          side: "start",
+          override: "2022-06-05",
+          derived: "2022-06-04",
+          daysHidden: 1,
+        },
+      },
+      '"Kitchen remodel" start date 2022-06-05 is after the earliest dated work (2022-06-04)',
+    ],
+    [
+      "date_window_drift end",
+      {
+        name: "Kitchen remodel",
+        type: "date_window_drift",
+        facts: {
+          side: "end",
+          override: "2022-06-05",
+          derived: "2022-06-20",
+          daysHidden: 15,
+        },
+      },
+      '"Kitchen remodel" end date 2022-06-05 is before the latest dated work (2022-06-20)',
+    ],
+  ];
+
+  it.each(cases)("%s", (_label, item, expected) => {
+    expect(describeAttentionItem(item)).toBe(expected);
+  });
+
+  it("names its entity in every rule's sentence", () => {
+    for (const [label, item] of cases) {
+      expect(describeAttentionItem(item), label).toContain(`"${item.name}"`);
+    }
   });
 });

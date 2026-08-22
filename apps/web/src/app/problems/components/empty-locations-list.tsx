@@ -90,7 +90,6 @@ export function EmptyLocationsList({
             ],
             details,
             route: entityDetailLink("location", location.id),
-            editLabel: "View",
             customActions: (
               <Button size="sm" onClick={() => setAddDialogLocation(location)}>
                 Add Inventory

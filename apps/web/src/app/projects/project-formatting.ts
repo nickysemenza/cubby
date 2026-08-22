@@ -36,7 +36,11 @@ export function monthLabel(key: string): string {
 export const formatDate = (date: string): string =>
   format(parsePlainDate(date), "MMM d");
 
-const formatDateWithYear = (date: string): string =>
+/**
+ * `MMM d, yyyy`. Use instead of {@link formatDate} whenever the value can be
+ * historical: a bare "Jun 4" on a row dated 2022 reads as this year.
+ */
+export const formatDateWithYear = (date: string): string =>
   format(parsePlainDate(date), "MMM d, yyyy");
 
 // NOTE: shared across the app (task due-date ranges, project date ranges,

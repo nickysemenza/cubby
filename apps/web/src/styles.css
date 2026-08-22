@@ -182,6 +182,10 @@
   /* Entity-colored left "spine" on the detail spec-plate (centrally tunable
      instead of an inline border-l-[6px]). */
   --border-spine: 6px;
+  /* Card-scale spine, for a severity cue on a row in a dense grid. The 6px
+     plate spine is tuned for a full-width detail header and reads as a slab at
+     card width; this matches the system's 3px rule weight instead. */
+  --border-spine-card: 3px;
 
   /* Core colors - paper ramp surfaces: paper-alt(muted) < paper(bg) < surface(card).
      Separation is by tone, not elevation. */

@@ -10,10 +10,12 @@ import {
   Clock,
   DollarSign,
   type LucideIcon,
+  Ruler,
   Tag,
 } from "lucide-react";
 import { Row, Stack } from "~/components/layout";
 import { formatCurrency } from "~/lib/utils";
+import { attentionEvidence } from "./attention-presentation";
 import { formatDate } from "./project-formatting";
 
 /**
@@ -67,7 +69,32 @@ const ATTENTION_GROUPS: Array<{
     iconClassName: "size-3.5 text-muted-foreground",
     title: (n) => `${n} unclassified expense${n !== 1 ? "s" : ""}`,
   },
+  {
+    type: "date_window_drift",
+    icon: Ruler,
+    iconClassName: "size-3.5 text-muted-foreground",
+    title: (n) => `${n} project date window${n !== 1 ? "s" : ""} hiding work`,
+  },
 ];
+
+/**
+ * Compile-time proof every rule has a group. This list silently omitted
+ * `date_window_drift`, so drift rows vanished from the panel while still
+ * counting toward the "Needs Attention (N)" header — the header over-counted
+ * and the missing rows were invisible. A new rule now fails here instead.
+ */
+type _AttentionGroupsAreExhaustive =
+  ProjectAttentionType extends (typeof ATTENTION_GROUPS)[number]["type"]
+    ? true
+    : [
+        "ATTENTION_GROUPS is missing",
+        Exclude<
+          ProjectAttentionType,
+          (typeof ATTENTION_GROUPS)[number]["type"]
+        >,
+      ];
+const _attentionGroupsAreExhaustive: _AttentionGroupsAreExhaustive = true;
+void _attentionGroupsAreExhaustive;
 
 /**
  * Server-driven Needs Attention — every item is precomputed by
@@ -105,12 +132,18 @@ export function NeedsAttention({ items }: { items: ProjectAttentionItem[] }) {
           >
             {group.map((item) => (
               <Row key={item.key} align="center" gap="sm" className="text-xs">
+                {/* Name first, evidence after — the sentence in `description`
+                    is kept as the hover title, which is the one place its
+                    prose form still earns its keep. */}
                 <Link
                   to={item.href}
-                  className="truncate hover:underline"
+                  className="min-w-0 truncate hover:underline"
                   title={item.description}
                 >
-                  {item.description}
+                  <span className="font-medium">{item.name}</span>
+                  <span className="ml-2 text-muted-foreground">
+                    {attentionEvidence(item)}
+                  </span>
                 </Link>
                 {item.date && (
                   <span className="shrink-0 text-muted-foreground">

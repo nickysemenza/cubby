@@ -21,7 +21,7 @@ export const derivedProblemQueries = [
     title: "Duplicate product identities",
     description:
       "Products whose normalized identity values resolve to the same cluster.",
-    emptyMessage: "No duplicate product identity clusters remain.",
+    emptyMessage: "Each manufacturer part number belongs to one product.",
     source: {
       kind: "derived",
       diagnostic: "duplicate-product-identities",
@@ -45,8 +45,8 @@ export const derivedProblemQueries = [
     freshness: { kind: "live" },
     title: "Orphaned products",
     description:
-      "Products whose live relationship graph no longer gives them a valid household role.",
-    emptyMessage: "No orphaned products remain.",
+      "Products that aren't stocked anywhere, aren't on a purchase, and aren't used by a recipe or project — nothing in the house refers to them any more.",
+    emptyMessage: "Every product is stocked, bought, or used by something.",
     source: {
       kind: "derived",
       diagnostic: "orphaned-products",
@@ -121,7 +121,8 @@ export const derivedProblemQueries = [
     },
     freshness: { kind: "live" },
     title: "Orphaned entity embeddings",
-    description: "Embeddings whose indexed entity has been removed.",
+    description:
+      "Search index entries for records that no longer exist — they can still surface in results.",
     emptyMessage: "Every embedding has a live entity.",
     source: {
       kind: "derived",
@@ -143,7 +144,8 @@ export const derivedProblemQueries = [
     },
     freshness: { kind: "live" },
     title: "Entities missing embeddings",
-    description: "Searchable live entities not present in the embedding index.",
+    description:
+      "Records that search can't find yet, because they haven't been indexed under the current model.",
     emptyMessage: "Every searchable entity is embedded.",
     source: {
       kind: "derived",
@@ -164,10 +166,10 @@ export const derivedProblemQueries = [
       reason: "A result is a parent-child recipe dependency edge.",
     },
     freshness: { kind: "live" },
-    title: "Stale parent recipes",
+    title: "Recipes built on a deleted sub-recipe",
     description:
-      "Parent recipe costs that have not incorporated changed child recipes.",
-    emptyMessage: "All parent recipe costs are current.",
+      "A recipe still lists a sub-recipe that has been deleted, so its cost and ingredient list are quietly missing that part.",
+    emptyMessage: "Every sub-recipe a recipe references still exists.",
     source: {
       kind: "derived",
       diagnostic: "stale-parent-recipes",
@@ -189,8 +191,9 @@ export const derivedProblemQueries = [
     },
     freshness: { kind: "live" },
     title: "Manufacturer spelling variants",
-    description: "Manufacturer labels that differ only after normalization.",
-    emptyMessage: "No manufacturer spelling variants remain.",
+    description:
+      "The same manufacturer spelled more than one way — different capitalisation, punctuation or spacing on what is one brand.",
+    emptyMessage: "Each manufacturer is spelled one way.",
     source: {
       kind: "derived",
       diagnostic: "manufacturer-spelling-variants",
@@ -213,8 +216,9 @@ export const derivedProblemQueries = [
     },
     freshness: { kind: "live" },
     title: "Duplicate vendors",
-    description: "Vendor roster entries with the same normalized name.",
-    emptyMessage: "No duplicate vendor clusters remain.",
+    description:
+      "Two or more vendor records for what looks like one business, so its purchases and spend are split between them.",
+    emptyMessage: "Each vendor has one record.",
     source: {
       kind: "derived",
       diagnostic: "duplicate-vendors",
@@ -238,8 +242,8 @@ export const derivedProblemQueries = [
     freshness: { kind: "live" },
     title: "Referential liveness violations",
     description:
-      "Live rows whose incoming relation points to a soft-deleted target.",
-    emptyMessage: "All live references point to live targets.",
+      "A record still points at something that has been deleted. Whatever reads that link now sees nothing, silently.",
+    emptyMessage: "Nothing points at a deleted record.",
     source: {
       kind: "derived",
       diagnostic: "referential-liveness-violations",
@@ -286,7 +290,7 @@ export const derivedProblemQueries = [
     title: "Possible duplicate spend",
     description:
       "Expense pairs whose date, amount, and context suggest a manual review.",
-    emptyMessage: "No duplicate-spend candidates remain.",
+    emptyMessage: "No unlinked expense looks like a purchase already recorded.",
     source: {
       kind: "derived",
       diagnostic: "duplicate-spend-candidates",
@@ -309,8 +313,8 @@ export const derivedProblemQueries = [
     freshness: { kind: "live" },
     title: "Duplicate financial transaction source references",
     description:
-      "Financial transactions sharing a normalized provider source reference.",
-    emptyMessage: "No duplicate transaction source references remain.",
+      "One bank or card reference claimed by several transactions — the same charge imported twice, which double-counts it against a purchase.",
+    emptyMessage: "Each provider reference belongs to one transaction.",
     source: {
       kind: "derived",
       diagnostic: "duplicate-financial-transaction-source-refs",
@@ -333,8 +337,8 @@ export const derivedProblemQueries = [
     freshness: { kind: "live" },
     title: "Duplicate financial account source aliases",
     description:
-      "Financial accounts sharing a normalized external source alias.",
-    emptyMessage: "No duplicate account source aliases remain.",
+      "One provider account id claimed by several accounts, so imported rows can land on either of them.",
+    emptyMessage: "Each provider account id belongs to one account.",
     source: {
       kind: "derived",
       diagnostic: "duplicate-financial-account-source-aliases",
@@ -357,7 +361,7 @@ export const derivedProblemQueries = [
     freshness: { kind: "live" },
     title: "Invalid financial JSON",
     description:
-      "Structured provider identity data that no longer matches its schema.",
+      "Stored bank identity or reference data that can no longer be read, so imports and settlement matching skip these records.",
     emptyMessage: "All financial provider data is valid.",
     source: {
       kind: "derived",
@@ -381,7 +385,7 @@ export const derivedProblemQueries = [
     title: "Incomplete statement imports",
     description:
       "Statement imports whose stored transaction count is below the declared row count.",
-    emptyMessage: "Every statement import is complete.",
+    emptyMessage: "Every statement import stored every row it declared.",
     source: {
       kind: "derived",
       diagnostic: "incomplete-statement-imports",

@@ -2175,11 +2175,64 @@ export const projectAttentionTypeSchema = z.enum(projectAttentionTypeValues);
 export type ProjectAttentionType = z.infer<typeof projectAttentionTypeSchema>;
 
 /**
- * One Needs Attention row. `entityId`/`entityType` identify what to link to;
- * `date`/`amount` carry whichever of the two is relevant to `type` (e.g. an
- * overdue task's due date, or a missing-budget project's spend-to-date).
+ * Per-rule measurements. Each rule reports the numbers it actually tested, so
+ * the UI can lay out "name, then labeled evidence" and format dates and money
+ * with the household's own helpers. Before this existed, the only place a
+ * measurement survived was inside `description`, which meant the client could
+ * neither re-format it nor separate it from the entity's name.
+ *
+ * Day counts are computed SERVER-side on purpose. "Today" here is
+ * `householdLocalDate()` in the household's timezone; a browser in another zone
+ * recomputing the difference would disagree with the rule that selected the row.
  */
-export const projectAttentionItemSchema = z.object({
+const attentionFacts = {
+  overdue_task: z.object({
+    /** Effective due date — `dueEndDate ?? dueDate`. */
+    due: plainDate,
+    daysOverdue: z.number().int().positive(),
+  }),
+  stalled_project: z.object({
+    /** Latest of project/task/expense activity — NOT `project.updatedAt`. */
+    lastActivity: plainDate,
+    daysSinceActivity: z.number().int().nonnegative(),
+    /** The rule's no-activity window, so the card can cite its own threshold. */
+    thresholdDays: z.number().int().positive(),
+  }),
+  missing_budget: z.object({
+    /** `actualSpend + committedSpend`, the subtree total the rule tested. */
+    spend: z.number(),
+    actualSpend: z.number(),
+    committedSpend: z.number(),
+  }),
+  past_due_planned_expense: z.object({
+    plannedFor: plainDate,
+    daysPastDue: z.number().int().positive(),
+    /** Null when the planned line never carried a cost. */
+    cost: z.number().nullable(),
+  }),
+  unclassified_expense: z.object({
+    date: plainDate.nullable(),
+  }),
+  blocked_work: z.object({
+    blockedTasks: z.number().int().positive(),
+  }),
+  date_window_drift: z.object({
+    /** Which override was tested; a project can emit one row per side. */
+    side: z.enum(["start", "end"]),
+    /** The manual `startDate`/`endDate` that hides work. */
+    override: plainDate,
+    /** The derived bound it should have reached. */
+    derived: plainDate,
+    daysHidden: z.number().int().positive(),
+  }),
+} as const satisfies Record<ProjectAttentionType, z.ZodType>;
+
+/**
+ * Fields every attention row carries, whatever rule produced it. A private field
+ * map rather than a base schema: it is spread into each union member below, so
+ * consumers that only read identity/severity/link stay untouched by the union.
+ */
+const projectAttentionItemFields = {
   /**
    * Stable unique identity for this row — the React key both renderers use.
    *
@@ -2192,19 +2245,149 @@ export const projectAttentionItemSchema = z.object({
    * per entity append a discriminator (see `attentionKey`).
    */
   key: z.string(),
-  type: projectAttentionTypeSchema,
   severity: z.enum(["info", "warning", "critical"]),
+  /**
+   * The entity's own name — what a card leads with. Distinct from
+   * `description`, which is a whole sentence and cannot be laid out as an
+   * identity line.
+   */
+  name: z.string(),
+  /**
+   * One-sentence rendering of `name` + `facts`, for prose consumers (MCP
+   * `get_house_status`, `list_problems`). Produced ONLY by
+   * {@link describeAttentionItem} — never hand-written at a rule site, which is
+   * how the two builders drifted apart in the first place.
+   */
   description: z.string(),
   entityType: z.enum(["project", "task", "expense"]),
   entityId: anyShortcodeSchema(["project", "task", "expense"] satisfies [
     ShortcodeEntity,
     ...ShortcodeEntity[],
   ]),
+  /**
+   * Generic scalars kept for consumers that sort or chip on "the date" / "the
+   * amount" without knowing the rule. Redundant with `facts`, which says WHICH
+   * date and WHICH amount — prefer `facts` in new code.
+   */
   date: plainDate.nullable(),
   amount: z.number().nullable(),
   href: z.string().describe("Direct link to the corrective view"),
-});
+} as const;
+
+/**
+ * One member of the union: the shared fields, tagged with its rule and carrying
+ * that rule's measurements. Written as a generic helper so `type` and `facts`
+ * cannot disagree — passing a `type` selects its own `facts` schema by
+ * construction.
+ */
+const attentionMember = <T extends ProjectAttentionType>(type: T) =>
+  z.object({
+    ...projectAttentionItemFields,
+    type: z.literal(type),
+    facts: attentionFacts[type],
+  });
+
+/**
+ * One Needs Attention row, discriminated on `type` so `facts` narrows with it.
+ * `facts` deliberately carries no discriminator of its own: a second tag would
+ * have to be kept in sync with `type`, which is the exact class of drift this
+ * union exists to make impossible.
+ *
+ * The members are listed rather than mapped from `projectAttentionTypeValues`
+ * because `z.discriminatedUnion` infers from a literal tuple — a `.map()` erases
+ * the per-member types. `attentionUnionIsExhaustive` below restores the
+ * guarantee that every rule appears.
+ */
+export const projectAttentionItemSchema = z.discriminatedUnion("type", [
+  attentionMember("overdue_task"),
+  attentionMember("stalled_project"),
+  attentionMember("missing_budget"),
+  attentionMember("past_due_planned_expense"),
+  attentionMember("unclassified_expense"),
+  attentionMember("blocked_work"),
+  attentionMember("date_window_drift"),
+]);
+
 export type ProjectAttentionItem = z.infer<typeof projectAttentionItemSchema>;
+
+/**
+ * Compile-time proof the union above lists every rule. Adding a value to
+ * `projectAttentionTypeValues` without a matching `attentionMember(...)` fails
+ * here rather than silently producing a row shape nothing can parse.
+ */
+type _AttentionUnionIsExhaustive =
+  ProjectAttentionType extends ProjectAttentionItem["type"]
+    ? true
+    : [
+        "missing attentionMember for",
+        Exclude<ProjectAttentionType, ProjectAttentionItem["type"]>,
+      ];
+const _attentionUnionIsExhaustive: _AttentionUnionIsExhaustive = true;
+void _attentionUnionIsExhaustive;
+
+/** The measurements for one rule, narrowed by its `type`. */
+export type ProjectAttentionFacts<T extends ProjectAttentionType> = Extract<
+  ProjectAttentionItem,
+  { type: T }
+>["facts"];
+
+/**
+ * `Pick` collapses a union instead of distributing over it, so a plain
+ * `Pick<ProjectAttentionItem, "type" | "facts">` would pair every `type` with
+ * every rule's `facts` and destroy the narrowing. This distributes first.
+ */
+type DistributivePick<T, K extends keyof T> = T extends unknown
+  ? Pick<T, K>
+  : never;
+
+/** The minimum a caller needs to hold to render the sentence. */
+export type ProjectAttentionDescribable = DistributivePick<
+  ProjectAttentionItem,
+  "name" | "type" | "facts"
+>;
+
+/**
+ * The ONE wording source for an attention row's sentence. Every prose consumer
+ * (MCP `get_house_status`, `list_problems`) reads `description`, which is only
+ * ever produced here.
+ *
+ * Deliberately UNFORMATTED — ISO dates and whole dollars. Its readers are
+ * agents, for whom `2022-06-05` is unambiguous and parseable while `Jun 5` is
+ * neither; and this package carries no date-fns or display-locale dependency by
+ * design. The UI formats from `facts` instead, which is why a card can show
+ * "Jun 5, 2022" while the same row's sentence stays machine-readable.
+ */
+export const describeAttentionItem = (
+  item: ProjectAttentionDescribable,
+): string => {
+  const name = `"${item.name}"`;
+  switch (item.type) {
+    case "overdue_task":
+      return `${name} was due ${item.facts.due} and is still open`;
+    case "stalled_project":
+      return `${name} has had no project, task, or expense activity in ${item.facts.thresholdDays}+ days`;
+    case "missing_budget":
+      return `${name} has $${item.facts.spend.toFixed(0)} in spend but no budget estimate`;
+    case "past_due_planned_expense":
+      return `${name} was planned for ${item.facts.plannedFor} but hasn't been logged as spent`;
+    case "unclassified_expense":
+      return `${name} has no trade or cost recorded`;
+    case "blocked_work": {
+      const n = item.facts.blockedTasks;
+      return `${name} has ${n} blocked task${n === 1 ? "" : "s"} and no unblocked next action`;
+    }
+    case "date_window_drift":
+      return item.facts.side === "start"
+        ? `${name} start date ${item.facts.override} is after the earliest dated work (${item.facts.derived})`
+        : `${name} end date ${item.facts.override} is before the latest dated work (${item.facts.derived})`;
+    default: {
+      const exhaustive: never = item;
+      throw new Error(
+        `Unhandled attention type: ${String((exhaustive as { type: string }).type)}`,
+      );
+    }
+  }
+};
 
 export const projectTaskStatusBreakdown = z.object({
   projectId: projectShortcode,

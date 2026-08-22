@@ -2023,14 +2023,31 @@ describe("project dashboard — attention detector + summary", () => {
       `/projects/${project.id}`,
       `/projects/${project.id}`,
     ]);
+    // Both sentences NAME the project. They used to open with a bare "Start
+    // date …", which made a drift row the only attention row that never said
+    // what it was about.
     const startItem = drift.find((d) => d.date === "2024-01-01");
+    expect(startItem?.name).toBe("attention drift both");
     expect(startItem?.description).toBe(
-      "Start date 2024-06-01 is after the earliest dated work (2024-01-01)",
+      '"attention drift both" start date 2024-06-01 is after the earliest dated work (2024-01-01)',
     );
+    expect(startItem?.type === "date_window_drift" && startItem.facts).toEqual({
+      side: "start",
+      override: "2024-06-01",
+      derived: "2024-01-01",
+      daysHidden: 152,
+    });
     const endItem = drift.find((d) => d.date === "2024-12-31");
+    expect(endItem?.name).toBe("attention drift both");
     expect(endItem?.description).toBe(
-      "End date 2024-06-10 is before the latest dated work (2024-12-31)",
+      '"attention drift both" end date 2024-06-10 is before the latest dated work (2024-12-31)',
     );
+    expect(endItem?.type === "date_window_drift" && endItem.facts).toEqual({
+      side: "end",
+      override: "2024-06-10",
+      derived: "2024-12-31",
+      daysHidden: 204,
+    });
 
     // These two rows are the reason `key` exists: same type, same entityId, so
     // a type+entityId React key collided and the list could silently drop one.
