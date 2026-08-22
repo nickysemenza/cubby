@@ -383,11 +383,15 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
 
   const entries = product.inventoryEntry ?? [];
   const { quantityLedger, onHandUnits, quantityVariance } = product;
-  // Locations this product IS, not shelves it sits on. This used to count
+  // "Locations" has broken in both directions here. It first counted
   // `uniq(entries.map(e => e.location.id))` while the section below read
   // `quantityLedger.locationCount` — one word, two meanings, on one page, and
   // a rack in service as a shelf read "LOCATIONS 0" above a list containing it.
-  const { locationCount } = quantityLedger;
+  // Switching to the ledger's count fixed that and broke the mirror image: a
+  // product merely sitting on a shelf read "LOCATIONS 0" above the very row
+  // holding it. Neither population is the answer on its own, so the stat is
+  // the union of both and `heroPresence` owns it — see the rule there.
+  //
   // `onHandUnits` is the SERVER's answer to "do these entries have a
   // meaningful total?" — null when they carry more than one unit ("3 lb + 2
   // each" has no sum) or when nothing is stocked. Read rather than recomputed:
@@ -402,7 +406,8 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     entryCount: entries.length,
     entryUnit: entries[0]?.amount.unit,
     onHandUnits,
-    locationCount,
+    stockedLocationIds: entries.map((entry) => entry.location.id),
+    identityLocationIds: product.servingAsLocations.map((loc) => loc.id),
     componentCount: product.componentCount,
   });
   const onHandStat: DetailHeroStat =
@@ -450,7 +455,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   const heroStats: DetailHeroStat[] = [
     onHandStat,
     expectedStat,
-    { label: "Locations", value: locationCount },
+    { label: "Locations", value: presence.locationCount },
   ];
 
   return (
