@@ -34,7 +34,9 @@ test.describe("shortcode URLs", () => {
       timeout: 15000,
     });
     await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
-    await expect(page.getByText("Contents", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Contents", exact: true }),
+    ).toBeVisible();
     await expect(page.getByText("Full details", { exact: false })).toHaveCount(
       0,
     );
@@ -60,7 +62,9 @@ test.describe("shortcode URLs", () => {
     await expect(page).toHaveURL(new RegExp(`/locations/${code}$`), {
       timeout: 15000,
     });
-    await expect(page.getByText("Contents", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Contents", exact: true }),
+    ).toBeVisible();
     await expect(page.getByText("Full details", { exact: false })).toHaveCount(
       0,
     );
