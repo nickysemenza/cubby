@@ -82,6 +82,83 @@ describe("product repository", () => {
     expect(retrievedProduct.ingredient).toBeNull();
   });
 
+  it("stores an ISBN as the canonical GTIN and categorizes the physical book", async () => {
+    const created = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Theoretical Cookbook",
+        category: "supplies",
+        isbn: "0-306-40615-2",
+        externalIds: [
+          {
+            source: "amazon",
+            kind: "asin",
+            externalId: "0306406152",
+            url: null,
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+
+    expect(created.primaryGtin).toBe("09780306406157");
+    expect(created.category).toBe("books");
+    expect(created.externalIds).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: "gtin",
+          kind: "gtin_14",
+          externalId: "09780306406157",
+        }),
+        expect.objectContaining({
+          source: "amazon",
+          kind: "asin",
+          externalId: "0306406152",
+        }),
+      ]),
+    );
+
+    const byIsbn10 = await productList(
+      ctx.db,
+      { upcFilter: "0-306-40615-2", categoryFilter: "books" },
+      [{ orderBy: "name", direction: "asc" }],
+      { pageIndex: 0, pageSize: 10 },
+    );
+    expect(byIsbn10.data.map((row) => row.id)).toContain(created.id);
+  });
+
+  it("rejects barcode and ISBN inputs that name different products", async () => {
+    await expect(
+      createProduct(
+        ctx.db,
+        makeProductInput({
+          name: "Conflicting Codes",
+          upc: "123456789012",
+          isbn: "0-306-40615-2",
+        }),
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/identify different printed products/);
+  });
+
+  it("reclassifies an existing Product when a verified ISBN is added", async () => {
+    const created = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Reference Manual", category: "supplies" }),
+      ctx.actor,
+    );
+
+    const { product: updated } = await updateProduct(
+      ctx.db,
+      created.entityId,
+      { isbn: "978-0-13-110362-7" },
+      ctx.actor,
+    );
+
+    expect(updated.primaryGtin).toBe("09780131103627");
+    expect(updated.category).toBe("books");
+  });
+
   // A duplicate-identity error has to name the product that is blocking. The
   // name+manufacturer branch used to just echo the caller's own input back,
   // which says a conflict exists without saying what to merge into or skip —

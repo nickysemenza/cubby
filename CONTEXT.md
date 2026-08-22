@@ -8,6 +8,10 @@ Cubby records a household's products, inventory, spending, and project history.
 A named, tag-backed grouping of Products and Location subtrees that are useful to browse together. A Collection is not a physical Location Area, a project Trade, or a Product compatibility tag.
 _Avoid_: work area, trade, category
 
+**Book Product**:
+A physical book cataloged as a Product. Its ISBN is the book's GTIN identifier, editions or formats with distinct ISBNs are distinct Products, and a printed cookbook belongs here when recorded as a possession.
+_Avoid_: Cookbook, EPUB, ebook
+
 **Product movement**:
 A dated acquisition, exit, discard, or uncertain change involving a Product, derived from a product-linked Expense or explicit Purchase provenance.
 _Avoid_: Product purchase, sale event

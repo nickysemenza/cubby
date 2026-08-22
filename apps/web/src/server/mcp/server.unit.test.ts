@@ -1438,6 +1438,7 @@ describe("listMcpToolCatalog", () => {
       aliases: ["passthrough alias"],
       tags: ["passthrough-tag"],
       upc: null,
+      isbn: null,
       fdc_id: null,
       model: "MDL-1",
       notes: "passthrough notes",

@@ -138,6 +138,7 @@ import {
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
+import { isbnFromGtin } from "@cubby/schemas/isbn";
 import type { MergeProductsInput } from "@cubby/schemas/product";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { sumBy, uniq } from "es-toolkit";
@@ -730,6 +731,15 @@ type ExternalIdRow = {
   isPrimary: boolean;
 };
 
+const distinctIsbns = (rows: readonly ExternalIdRow[]): string[] =>
+  uniq(
+    rows.flatMap((row) => {
+      if (row.source !== "gtin") return [];
+      const isbn = isbnFromGtin(row.externalId);
+      return isbn ? [isbn.isbn13] : [];
+    }),
+  );
+
 type ProductAssociationRow = {
   id: string;
   productId: ProductId;
@@ -1081,6 +1091,13 @@ export const mergeProducts = async (
     summary.deletedEntityIds = losers.map((row) => row.id);
 
     const inventoryPlan = plan.inventory;
+    const isbns = distinctIsbns(plan.externalIds.rows);
+    if (isbns.length > 1) {
+      throw createAppError(
+        "PRODUCT_MERGE_DISTINCT_ISBNS",
+        `Cannot merge Products with different ISBN editions (${isbns.join(", ")}). Correct or remove an ISBN first.`,
+      );
+    }
     if (inventoryPlan.mismatches.length > 0) {
       const detail = inventoryPlan.mismatches
         .map(({ row, into }) => `${row.amount.unit} vs ${into.amount.unit}`)
@@ -1578,6 +1595,7 @@ export const previewMergeProducts = async (
   const inventoryPlan = plan.inventory;
   const unitMappingPlan = plan.unitMappings;
   const componentPlan = plan.components;
+  const isbns = distinctIsbns(plan.externalIds.rows);
   // Blockers are labelled, not just described: `ImpactRow` renders
   // total/label/code and never `description`, so naming the cycle or the
   // disagreeing quantities anywhere else would make them invisible in the UI.
@@ -1592,6 +1610,29 @@ export const previewMergeProducts = async (
   };
 
   const blockers = present([
+    impact({
+      disposition: {
+        code: "block-distinct-isbn-editions",
+        effect: "block",
+        description:
+          "Different ISBNs identify different physical editions or formats. Correct or remove an ISBN before merging these Products.",
+      },
+      edgeKey: "ProductExternalId.productId",
+      label:
+        isbns.length > 1
+          ? `distinct ISBN editions (${isbns.join(", ")})`
+          : "distinct ISBN editions",
+      byTargetId:
+        isbns.length > 1
+          ? byProduct(
+              plan.externalIds.rows.filter(
+                (row) =>
+                  row.source === "gtin" &&
+                  isbnFromGtin(row.externalId) !== null,
+              ),
+            )
+          : {},
+    }),
     impact({
       disposition: {
         code: "block-component-cycle",

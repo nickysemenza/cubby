@@ -3,12 +3,13 @@ import {
   externalIdKind,
 } from "@cubby/schemas/external-id";
 import type { IngredientShortcode } from "@cubby/schemas/identifiers";
+import { normalizeIsbn } from "@cubby/schemas/isbn";
 import { hasFoodIndicators } from "@cubby/schemas/product";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { isMiscProduct } from "@cubby/shared";
 import { Search } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
 import { AliasesField } from "~/components/forms/aliases-field";
 import { ArrayFieldManager } from "~/components/forms/array-field-manager";
@@ -134,6 +135,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
   ) as string;
   const fdcValue = form.watch("fdc_id" as Path<TFieldValues>) as number | null;
   const upcValue = form.watch("upc" as Path<TFieldValues>) as string | null;
+  const isbnValue = form.watch("isbn" as Path<TFieldValues>) as string | null;
   const ingredientValue = form.watch("ingredient" as Path<TFieldValues>) as {
     id?: IngredientShortcode;
   } | null;
@@ -143,6 +145,17 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
     fdc_id: fdcValue,
     ingredientId: ingredientValue?.id,
   });
+  const isBookForced =
+    !isFoodForced && isbnValue != null && normalizeIsbn(isbnValue) !== null;
+
+  useEffect(() => {
+    if (!isBookForced) return;
+    form.setValue(
+      "category" as Path<TFieldValues>,
+      "books" as TFieldValues[Path<TFieldValues>],
+      { shouldDirty: true },
+    );
+  }, [form, isBookForced]);
 
   const handleUpcLookup = async () => {
     const upcValue = form.getValues("upc" as Path<TFieldValues>) as
@@ -287,11 +300,13 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
               name={"category" as Path<TFieldValues>}
               productName={nameValue}
               manufacturer={manufacturerValue}
-              disabled={isFoodForced}
+              disabled={isFoodForced || isBookForced}
               description={
                 isFoodForced
                   ? "Forced to 'food' (has USDA link or ingredient)"
-                  : undefined
+                  : isBookForced
+                    ? "Forced to 'books' (has a valid ISBN)"
+                    : undefined
               }
             />
           </SideBySideFields>
@@ -371,6 +386,19 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
             )}
           </FormSection>
 
+          <FormSection title="Identifiers" compact={compact}>
+            <SideBySideFields>
+              <UnifiedTextField
+                form={form}
+                name={"isbn" as Path<TFieldValues>}
+                label="ISBN (Optional)"
+                placeholder="ISBN-10 or ISBN-13"
+                nullable={true}
+              />
+              {upcBlock}
+            </SideBySideFields>
+          </FormSection>
+
           <FormSection title="USDA & nutrition" compact={compact}>
             {!compact && (
               <UsdaFoodSearchField
@@ -379,21 +407,14 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
               />
             )}
 
-            {/* Full form pairs FDC ID beside UPC; compact renders FDC up in
-                "Quantity & price" (hidePrice), so only the UPC block shows here. */}
-            {hidePrice ? (
-              upcBlock
-            ) : (
-              <SideBySideFields>
-                <NullableNumericField
-                  form={form}
-                  step="1"
-                  name={"fdc_id" as Path<TFieldValues>}
-                  label="USDA FDC ID (Optional)"
-                  placeholder="set via USDA search above"
-                />
-                {upcBlock}
-              </SideBySideFields>
+            {!hidePrice && (
+              <NullableNumericField
+                form={form}
+                step="1"
+                name={"fdc_id" as Path<TFieldValues>}
+                label="USDA FDC ID (Optional)"
+                placeholder="set via USDA search above"
+              />
             )}
 
             {/* Which control is the active USDA link. An explicit FDC id wins

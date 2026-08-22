@@ -168,6 +168,8 @@ export function getItemHeight(category: ProductCategory | null): number {
       return 0.65;
     case "electronics":
       return 0.3;
+    case "books":
+      return 0.3;
     case "hardware":
       return 0.4;
     case "storage":

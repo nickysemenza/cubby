@@ -108,6 +108,26 @@ describe("SearchDocument indexed retrieval", () => {
     });
   });
 
+  it("finds a Book Product by either ISBN encoding", async () => {
+    const book = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Indexed Book", isbn: "0-306-40615-2" }),
+      ctx.actor,
+    );
+    await refreshSearchDocument(ctx.db, "product", book.entityId);
+
+    for (const query of ["0306406152", "9780306406157"]) {
+      const hits = await findSearchHits(ctx.db, {
+        query,
+        entityTypes: ["product"],
+        limit: 5,
+      });
+      expect(hits).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: book.id })]),
+      );
+    }
+  });
+
   it("retires a document in the source entity's removal transaction", async () => {
     const product = await createProduct(
       ctx.db,

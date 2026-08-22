@@ -17,6 +17,7 @@ import {
   normalizeGtin,
 } from "@cubby/schemas/external-id";
 import type { ProductId } from "@cubby/schemas/identifiers";
+import { productCodeSearchTerms } from "@cubby/schemas/isbn";
 import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { product, productExternalId } from "~/server/db/schema";
@@ -105,12 +106,20 @@ export const loadAllGtins = async (
  * Substring rather than exact: the operator types the digits they can read off
  * the package, which for a stored GTIN-14 is usually a suffix of it.
  */
-export const productMatchesGtinTerm = (term: string): SQL => sql`EXISTS (
-  SELECT 1 FROM "ProductExternalId" pei
-  WHERE pei."productId" = ${product.id}
-    AND pei."source" = ${GTIN_SOURCE}
-    AND pei."deletedAt" IS NULL
-    AND pei."externalId" ILIKE ${`%${term}%`})`;
+export const productMatchesGtinTerm = (term: string): SQL => {
+  const terms = [...new Set(productCodeSearchTerms(term.trim()))];
+  return sql`EXISTS (
+    SELECT 1 FROM "ProductExternalId" pei
+    WHERE pei."productId" = ${product.id}
+      AND pei."source" = ${GTIN_SOURCE}
+      AND pei."deletedAt" IS NULL
+      AND (${sql.join(
+        terms.map(
+          (candidate) => sql`pei."externalId" ILIKE ${`%${candidate}%`}`,
+        ),
+        sql` OR `,
+      )}))`;
+};
 
 /** Does this product carry any barcode at all? */
 export const productHasAnyGtin = (): SQL => sql`EXISTS (

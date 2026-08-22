@@ -7,6 +7,7 @@ export const productCategoryValues = [
   "hardware", // screws, nails, bolts
   "electronics", // raspberry pi, cables, monitors
   "software", // subscriptions and software licenses
+  "books", // physical books, including cookbooks cataloged as possessions
   "household", // furniture, cookware, appliances
   "supplies", // cleaning products, tape, batteries, cables
 ] as const;
@@ -66,6 +67,8 @@ export const categoryColors: Record<ProductCategory | "uncategorized", string> =
 
     electronics: "var(--chart-7)",
     software: "var(--chart-5)",
+
+    books: "var(--chart-3)",
 
     household: "var(--chart-8)",
     supplies: "var(--chart-6)",
