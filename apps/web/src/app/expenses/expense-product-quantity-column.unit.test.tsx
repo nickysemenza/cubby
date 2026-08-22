@@ -78,25 +78,39 @@ describe("Expense Quantity inline editor", () => {
     expect(screen.queryByRole("button")).toBeNull();
   });
 
-  it("uses whole-unit input and allows clearing an evidenced quantity", async () => {
+  it("uses fractional input and allows clearing an evidenced quantity", async () => {
     const save = renderCell(EXPENSE);
     fireEvent.click(screen.getByRole("button"));
 
     const input = await screen.findByRole("spinbutton");
-    expect(input.getAttribute("step")).toBe("1");
+    // `step="1"` would make the browser reject 0.5 on a field whose unit is the
+    // shelf's unit — see the fractional-quantity note on Expense.productQuantity.
+    expect(input.getAttribute("step")).toBe("any");
     fireEvent.change(input, { target: { value: "" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
     await waitFor(() => expect(save).toHaveBeenCalledWith(null, EXPENSE));
   });
 
-  it("rejects a fractional quantity", async () => {
+  // Fractional since 2026-08-22. The unit is the shelf's unit, and
+  // `InventoryEntry.amount` has always been divisible — half a coil binned is
+  // -0.5. This editor gates every inline quantity edit in the app, so a
+  // whole-number rule here would make fractional rows uneditable everywhere.
+  it("accepts a fractional quantity", async () => {
     const { column, save } = buildColumn();
     const cellData = column.meta?.cellData as ColumnCellData<ExpenseOut>;
 
-    await expect(cellData.applyPaste?.(EXPENSE, { json: 1.5 })).rejects.toThrow(
-      "whole number",
-    );
+    await cellData.applyPaste?.(EXPENSE, { json: 1.5 });
+    expect(save).toHaveBeenCalledWith(1.5, EXPENSE);
+  });
+
+  it("still refuses a quantity on a row with no linked Product", async () => {
+    const { column, save } = buildColumn();
+    const cellData = column.meta?.cellData as ColumnCellData<ExpenseOut>;
+
+    await expect(
+      cellData.applyPaste?.({ ...EXPENSE, productId: null }, { json: 2 }),
+    ).rejects.toThrow("Link a product");
     expect(save).not.toHaveBeenCalled();
   });
 

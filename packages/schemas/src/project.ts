@@ -838,17 +838,19 @@ export type TaskTimelineOut = z.infer<typeof taskTimelineOut>;
  * $0 line carries its direction in the sign — keep it explicit.
  */
 export const PRODUCT_QUANTITY_DESCRIPTION =
-  'Whole product units covered by this expense; null means the receipt does not establish quantity. Signed: money direction wins, so a positive-cost line is an acquisition of |qty| and a negative-cost line is an exit of |qty|. On a $0 line the sign IS the fact — a positive quantity is a free acquisition (promo pack, bundled accessory), a negative quantity is a discard/write-off. Zero is legal ONLY on a negative-cost line and means money came back but no unit left — a price concession with the item kept (Amazon "Account adjustment", a partial refund for shipping damage). Prefer 0 over null there: null says the count is unknown and gets reported as data-entry debt.';
+  'Product units covered by this expense; fractional values are allowed (half a coil thrown away is -0.5). Null means the receipt does not establish quantity. Signed: money direction wins, so a positive-cost line is an acquisition of |qty| and a negative-cost line is an exit of |qty|. On a $0 line the sign IS the fact — a positive quantity is a free acquisition (promo pack, bundled accessory), a negative quantity is a discard/write-off. Zero is legal ONLY on a negative-cost line and means money came back but no unit left — a price concession with the item kept (Amazon "Account adjustment", a partial refund for shipping damage). Prefer 0 over null there: null says the count is unknown and gets reported as data-entry debt.';
 
 /**
- * Whole product units — signed, and zero only where the cost is negative. See
+ * Product units — signed, fractional, and zero only where the cost is negative.
+ * Fractional because the unit is the shelf's unit and `InventoryEntry.amount`
+ * has always been divisible; see `Expense.productQuantity` in schema.ts. See
  * `Expense.productQuantity` in schema.ts for the full ledger rule; the DB CHECK
  * enforces the same pairing. The cross-field half cannot live on this schema
  * (it has no view of `cost`), so `assertQuantitySignMatchesCost` owns it and is
  * what every write path actually calls — this only rejects the value that is
  * wrong regardless of cost.
  */
-const signedProductQuantity = z.number().int();
+const signedProductQuantity = z.number();
 
 const expenseFields = {
   name: z.string().min(1),
@@ -1097,12 +1099,10 @@ export const expenseFilterFields = {
   productQuantityPresenceFilter: presenceFilter,
   productQuantityMin: z.coerce
     .number()
-    .int()
     .optional()
     .describe("Inclusive lower bound on recorded product quantity"),
   productQuantityMax: z.coerce
     .number()
-    .int()
     .optional()
     .describe("Inclusive upper bound on recorded product quantity"),
   /**

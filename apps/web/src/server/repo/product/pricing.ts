@@ -136,7 +136,7 @@ const loadPricingAggregates = async (
   )}
     SELECT ka.target AS "productId",
            COALESCE(${sql.raw(PROJECTED_KNOWN_COST)}, 0)::double precision AS "knownCost",
-           COALESCE(${sql.raw(PROJECTED_KNOWN_UNITS)}, 0)::int AS "knownUnitCount",
+           COALESCE(${sql.raw(PROJECTED_KNOWN_UNITS)}, 0)::double precision AS "knownUnitCount",
            COALESCE(${sql.raw(ownOnly(`"knownExpenseCount"`))}, 0)::int AS "knownExpenseCount",
            COALESCE(${sql.raw(ownOnly(`"unknownExpenseCount"`))}, 0)::int AS "unknownExpenseCount"
       ${sql.raw(PRICING_PROJECTION_FROM)}

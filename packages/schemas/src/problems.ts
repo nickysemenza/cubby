@@ -118,9 +118,9 @@ export const productMissingPriceSchema = z.object({
 export const negativeExpectedQuantitySchema = z.object({
   ...productProblemFields,
   /** Negative by construction — that is the defect. */
-  expectedQuantity: z.number().int(),
-  acquiredUnits: z.number().int(),
-  exitedUnits: z.number().int(),
+  expectedQuantity: z.number(),
+  acquiredUnits: z.number(),
+  exitedUnits: z.number(),
   unknownAcquisitionLines: z.number().int(),
   unknownExitLines: z.number().int(),
 });

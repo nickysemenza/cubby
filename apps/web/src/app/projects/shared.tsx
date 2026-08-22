@@ -718,8 +718,9 @@ export function expenseCostColumn(
   });
 }
 
-/** Whole Product units represented by an Expense. Unknown stays null; a row
- * without a linked Product is deliberately read-only.
+/** Product units represented by an Expense — fractional allowed, since the unit
+ * is the shelf's unit. Unknown stays null; a row without a linked Product is
+ * deliberately read-only.
  *
  * Signed — this one `saveValid` gates every inline quantity edit in the app
  * (expense list, project detail, purchase table, product expense history), so a
@@ -744,9 +745,6 @@ export function expenseProductQuantityColumn(
   const saveValid = async (row: ExpenseOut, quantity: number | null) => {
     if (!row.productId) {
       throw new Error("Link a product before recording its quantity");
-    }
-    if (quantity !== null && !Number.isInteger(quantity)) {
-      throw new Error("Product quantity must be a whole number");
     }
     await save(quantity, row);
   };
@@ -773,7 +771,7 @@ export function expenseProductQuantityColumn(
         <span id={opts?.id?.(row)}>
           <EditableCell
             value={info.getValue()}
-            config={{ type: "number", step: "1", placeholder: "Unknown" }}
+            config={{ type: "number", step: "any", placeholder: "Unknown" }}
             onSave={(quantity) => saveValid(row, quantity)}
             clipboard={specFromCellData(cellData, row)}
             renderValue={(quantity) => quantity ?? <NoneValue />}

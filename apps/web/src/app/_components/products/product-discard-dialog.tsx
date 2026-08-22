@@ -47,7 +47,7 @@ import {
 } from "../form-utils";
 
 const formSchema = z.object({
-  quantity: z.number().int().positive(),
+  quantity: z.number().positive(),
   date: z.string(),
   reason: z.string(),
   adjustInventory: z.boolean(),
@@ -97,10 +97,16 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
   const entries = product.inventoryEntry;
   const soleEntry = entries.length === 1 ? entries[0] : undefined;
 
+  const defaultEntry =
+    entries.find((entry) => entry.id === defaultInventoryEntryId) ?? soleEntry;
+
   const form = useForm<DiscardValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      quantity: 1,
+      // "Threw away the rest" is the common case on a part-used shelf, so a 0.5
+      // entry prefills 0.5 — but a shelf of 12 still prefills 1 rather than
+      // proposing to bin the lot.
+      quantity: Math.min(1, defaultEntry?.amount.value ?? 1),
       date: format(new Date(), "yyyy-MM-dd"),
       reason: "",
       adjustInventory: entries.length > 0,
@@ -116,7 +122,11 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
   const discard = useActionMutation({
     mutationFn: api.product.discard.mutationOptions,
     success: (result) =>
-      `Discarded ${Math.abs(result.storedQuantity)} × ${product.name}`,
+      // `inventory.removed` was dead payload until now: the server reports that
+      // it soft-deleted the shelf row and the toast said nothing about it.
+      `Discarded ${Math.abs(result.storedQuantity)} × ${product.name}${
+        result.inventory?.removed ? " — shelf entry removed" : ""
+      }`,
     invalidateKeys: expenseMutationInvalidateKeys,
     onSuccess: () => close(false),
   });
@@ -132,10 +142,58 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
 
   const adjustInventory = form.watch("adjustInventory");
   const inventoryEntryId = form.watch("inventoryEntryId");
+  const quantity = form.watch("quantity");
+  // Whichever shelf the discard will actually touch. The sole-entry case never
+  // renders the picker, so it has no id to match on.
+  const selectedEntry =
+    soleEntry ?? entries.find((entry) => entry.id === inventoryEntryId);
   // Only blocks when a choice is genuinely owed: several shelves, and the
   // operator has asked for one of them to be decremented.
   const needsEntryChoice =
     adjustInventory && entries.length > 1 && inventoryEntryId === "";
+
+  /**
+   * What the operator cannot see from the numbers alone: that this discard
+   * *removes* the shelf row rather than reducing it, that it removes more than
+   * the row holds, or that declining the checkbox leaves a row claiming stock
+   * that was just written off.
+   *
+   * Warnings, not blocks. Tenet 1 makes the shelf a stale-tolerant ballpark, so
+   * "shelf says 3, all 5 went in the bin" is a legitimate discard — see the note
+   * on the else-branch in repo/product/discard.ts for why this is the one
+   * inventory subtraction that does not refuse over-subtraction server-side.
+   */
+  const warning = ((): {
+    tone: "warning" | "destructive";
+    message: string;
+  } | null => {
+    if (!selectedEntry || typeof quantity !== "number" || quantity <= 0) {
+      return null;
+    }
+    const { value: held, unit } = selectedEntry.amount;
+    const where = selectedEntry.location.name;
+    if (!adjustInventory) {
+      return quantity >= held
+        ? {
+            tone: "warning",
+            message: `${where} will still show ${held} ${unit} even though you are recording these as gone.`,
+          }
+        : null;
+    }
+    if (quantity > held) {
+      return {
+        tone: "destructive",
+        message: `That is more than ${where} holds (${held} ${unit}). The whole entry will be removed, and the ledger will still record −${quantity}.`,
+      };
+    }
+    if (quantity === held) {
+      return {
+        tone: "warning",
+        message: `This empties ${where} — the entry is removed from that shelf, not just reduced.`,
+      };
+    }
+    return null;
+  })();
 
   const submit = form.handleSubmit((values) => {
     discard.mutate({
@@ -167,7 +225,7 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
             name="quantity"
             label="Units discarded"
             placeholder="1"
-            step="1"
+            fraction
           />
           <PlainDateField form={form} name="date" label="Date" />
           <UnifiedTextField
@@ -202,11 +260,23 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
                   </Row>
                 )}
               />
-              {adjustInventory && soleEntry ? (
+              {adjustInventory && selectedEntry ? (
                 <Description>
-                  Removing from {soleEntry.location.name}, which currently holds{" "}
-                  {soleEntry.amount.value} {soleEntry.amount.unit}.
+                  Removing from {selectedEntry.location.name}, which currently
+                  holds {selectedEntry.amount.value} {selectedEntry.amount.unit}
+                  .
                 </Description>
+              ) : null}
+              {warning ? (
+                <div
+                  className={
+                    warning.tone === "destructive"
+                      ? "rounded border-2 border-destructive bg-destructive/10 p-2 text-destructive text-xs"
+                      : "rounded border-2 border-warning bg-warning/10 p-2 text-warning text-xs"
+                  }
+                >
+                  {warning.message}
+                </div>
               ) : null}
               {adjustInventory && entries.length > 1 ? (
                 <SelectField

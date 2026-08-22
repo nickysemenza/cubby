@@ -88,6 +88,40 @@ describe("loadProductQuantityLedgers", () => {
     });
   });
 
+  // The `::int` casts this query used to carry would have rounded 0.5 back to a
+  // whole number at the SELECT boundary, so the column type alone proves
+  // nothing — the ledger has to come back fractional end to end. This is the
+  // half-installed conduit coil: one bought, half of it later binned.
+  it("keeps a fractional exit fractional", async () => {
+    const coil = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Conduit Coil" }),
+      ctx.actor,
+    );
+
+    await seed({
+      name: "bought one coil",
+      cost: 17.96,
+      productId: coil.id,
+      productQuantity: 1,
+    });
+    await seed({
+      name: "binned the rest",
+      cost: 0,
+      productId: coil.id,
+      productQuantity: -0.5,
+    });
+
+    expect(await ledgerFor(coil.entityId)).toEqual({
+      acquiredUnits: 1,
+      exitedUnits: 0.5,
+      expectedQuantity: 0.5,
+      unknownAcquisitionLines: 0,
+      unknownExitLines: 0,
+      locationCount: 0,
+    });
+  });
+
   it("reads a $0 line by its quantity's sign", async () => {
     const freebie = await createProduct(
       ctx.db,

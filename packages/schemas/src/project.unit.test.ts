@@ -152,7 +152,7 @@ describe("project resource URLs", () => {
 });
 
 describe("expense quantity filters", () => {
-  it("coerces positive whole-unit URL/MCP bounds and accepts presence", () => {
+  it("coerces positive URL/MCP bounds and accepts presence", () => {
     expect(
       expenseFiltersSchema.parse({
         productQuantityPresenceFilter: "has",
@@ -166,14 +166,25 @@ describe("expense quantity filters", () => {
     });
   });
 
-  it.each([1.5, "not-a-number"])(
-    "rejects an invalid productQuantityMin of %s",
-    (productQuantityMin) => {
-      expect(
-        expenseFiltersSchema.safeParse({ productQuantityMin }).success,
-      ).toBe(false);
+  // Fractional since 2026-08-22. A bound that could only be whole could not
+  // bracket a fractional quantity at all — half a coil binned is -0.5 — so the
+  // filter would silently exclude the rows it exists to find. The string case
+  // is the URL/MCP path, which coerces.
+  it.each([[1.5, 1.5] as const, ["0.5", 0.5] as const])(
+    "accepts a fractional productQuantityMin of %s",
+    (productQuantityMin, expected) => {
+      expect(expenseFiltersSchema.parse({ productQuantityMin })).toMatchObject({
+        productQuantityMin: expected,
+      });
     },
   );
+
+  it("rejects a productQuantityMin that is not a number at all", () => {
+    expect(
+      expenseFiltersSchema.safeParse({ productQuantityMin: "not-a-number" })
+        .success,
+    ).toBe(false);
+  });
 
   // Signed, like `costMin`/`costMax` — `productQuantityMax: -1` is the
   // "everything written off" worklist, and clamping the bound at zero would

@@ -548,7 +548,7 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
                       value={expense.productQuantity}
                       config={{
                         type: "number",
-                        step: "1",
+                        step: "any",
                         placeholder: "Unknown",
                       }}
                       onSave={async (productQuantity) => {

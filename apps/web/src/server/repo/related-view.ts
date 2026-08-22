@@ -677,7 +677,7 @@ export async function loadRelatedSummary(
         count(DISTINCT "expenseId") FILTER (WHERE "cost" IS NULL)::int AS "unpricedExpenseCount",
         COALESCE(sum("cost"), 0)::float8 AS "netSpend",
         max(COALESCE("purchaseDate", "expenseDate"))::text AS "latestActivity",
-        COALESCE(sum("productQuantity") FILTER (WHERE "cost" > 0 AND NOT "future" AND "productQuantity" IS NOT NULL), 0)::int AS "knownAcquiredUnits",
+        COALESCE(sum("productQuantity") FILTER (WHERE "cost" > 0 AND NOT "future" AND "productQuantity" IS NOT NULL), 0)::double precision AS "knownAcquiredUnits",
         count(DISTINCT "expenseId") FILTER (WHERE "cost" > 0 AND NOT "future" AND "productQuantity" IS NULL)::int AS "unknownAcquisitionQuantityCount"
       FROM targeted
       GROUP BY "targetId", "targetLabel", "imageId", "imageUrl", "imageFilename", "imageContentType"
@@ -687,7 +687,7 @@ export async function loadRelatedSummary(
         count(DISTINCT "purchaseId")::int AS "totalPurchaseCount",
         count(DISTINCT "expenseId") FILTER (WHERE "cost" IS NULL)::int AS "totalUnpricedExpenseCount",
         COALESCE(sum("cost"), 0)::float8 AS "totalNetSpend",
-        COALESCE(sum("productQuantity") FILTER (WHERE "cost" > 0 AND NOT "future" AND "productQuantity" IS NOT NULL), 0)::int AS "totalKnownAcquiredUnits",
+        COALESCE(sum("productQuantity") FILTER (WHERE "cost" > 0 AND NOT "future" AND "productQuantity" IS NOT NULL), 0)::double precision AS "totalKnownAcquiredUnits",
         count(DISTINCT "expenseId") FILTER (WHERE "cost" > 0 AND NOT "future" AND "productQuantity" IS NULL)::int AS "totalUnknownAcquisitionQuantityCount"
       FROM targeted
     ), paged AS (

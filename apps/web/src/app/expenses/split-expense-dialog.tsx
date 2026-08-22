@@ -328,7 +328,7 @@ export function SplitExpenseDialog({
                           })
                         }
                         type="number"
-                        step="1"
+                        step="any"
                         placeholder="Qty unknown"
                         className="w-28"
                         aria-label={`Part ${index + 1} product quantity`}

@@ -396,8 +396,8 @@ export const productFilterFields = {
    * bought" worklist — a real data defect, and the reason this is not clamped
    * at zero.
    */
-  expectedQuantityMin: z.coerce.number().int().optional(),
-  expectedQuantityMax: z.coerce.number().int().optional(),
+  expectedQuantityMin: z.coerce.number().optional(),
+  expectedQuantityMax: z.coerce.number().optional(),
   /**
    * Products whose shelf disagrees with the ledger. Restricted to stocked
    * products on purpose: an unstocked product with no expenses has a variance
@@ -533,8 +533,8 @@ const productMovementLineOut = z.object({
   name: z.string(),
   kind: productMovementKind,
   cost: z.number().nullable(),
-  quantity: z.number().int().nullable(),
-  signedQuantity: z.number().int().nullable(),
+  quantity: z.number().nullable(),
+  signedQuantity: z.number().nullable(),
   expenseDate: plainDate,
   chargedTo: productMovementProjectOut.nullable(),
   provenanceOnly: z.boolean(),
@@ -634,15 +634,15 @@ export type ProductSortField = (typeof productSortableFields)[number];
  */
 export const productQuantityLedgerOut = z.object({
   /** Units acquired: positive-cost lines, plus $0 lines with a positive quantity. */
-  acquiredUnits: z.number().int().nonnegative(),
+  acquiredUnits: z.number().nonnegative(),
   /** Units gone: negative-cost lines (returns, refunds, sales), plus $0 discards. */
-  exitedUnits: z.number().int().nonnegative(),
+  exitedUnits: z.number().nonnegative(),
   /**
    * `acquiredUnits - exitedUnits`. **May be negative** — more units left than
    * the ledger can account for buying, which is a real data defect worth
    * surfacing rather than a number to clamp at zero.
    */
-  expectedQuantity: z.number().int(),
+  expectedQuantity: z.number(),
   /**
    * Lines that carry no quantity, so they contribute nothing to the totals
    * above. Reported rather than guessed at: a receipt that proves the cost but
@@ -674,11 +674,10 @@ export const productDiscardInput = z.object({
   productId: productShortcode,
   quantity: z
     .number()
-    .int()
     .positive()
     .default(1)
     .describe(
-      "Units leaving the household, as a positive count. Stored on the Expense as a NEGATIVE productQuantity.",
+      "Units leaving the household, as a positive count. May be fractional — half a coil is 0.5. Stored on the Expense as a NEGATIVE productQuantity.",
     ),
   date: plainDate,
   reason: z
@@ -708,7 +707,7 @@ export type ProductDiscardInput = z.infer<typeof productDiscardInput>;
 export const productDiscardOut = z.object({
   expenseId: expenseShortcode,
   /** Negative, as stored on the row. */
-  storedQuantity: z.number().int().negative(),
+  storedQuantity: z.number().negative(),
   inventory: z
     .object({
       entryId: inventoryShortcode,

@@ -166,16 +166,18 @@ export const kitProjectionFrom = (ownAggregate: string) =>
 /**
  * Weighted projections of one lateral-aggregate column.
  *
- * `costWeighted` casts through numeric because `Expense.cost` is
- * `double precision` and the weights are `numeric` — Postgres has no
+ * Both cast through numeric because the weights are `numeric` while the
+ * aggregated columns are `double precision` (`Expense.cost` and, since
+ * quantities went fractional, `Expense.productQuantity`) — Postgres has no
  * `double precision * numeric` operator, and the cast is the fix, not a
- * rounding decision.
+ * rounding decision. `unitWeighted` needed no cast while `productQuantity` was
+ * an integer; dropping it again fails at runtime, not at typecheck.
  */
 export const costWeighted = (column: string) =>
   `sum(ko.${column}::numeric * ka."costWeight")`;
 
 export const unitWeighted = (column: string) =>
-  `sum(ko.${column} * ka."unitWeight")`;
+  `sum(ko.${column}::numeric * ka."unitWeight")`;
 
 /** Own-only: a projected row must not inflate a count of THIS product's lines. */
 export const ownOnly = (column: string) =>

@@ -168,7 +168,7 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
             <Row gap="sm" align="center">
               <Input
                 type="number"
-                step="1"
+                step="any"
                 min="0"
                 className="w-24"
                 aria-label="Quantity to add"

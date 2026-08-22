@@ -138,7 +138,7 @@ const QUANTITY_PROJECTION_FROM = kitProjectionFrom(QUANTITY_OWN_AGGREGATE);
 
 const PROJECTED_ACQUIRED = unitWeighted(`"acquiredUnits"`);
 const PROJECTED_EXITED = unitWeighted(`"exitedUnits"`);
-const PROJECTED_EXPECTED = `COALESCE(${PROJECTED_ACQUIRED} - ${PROJECTED_EXITED}, 0)::int`;
+const PROJECTED_EXPECTED = `COALESCE(${PROJECTED_ACQUIRED} - ${PROJECTED_EXITED}, 0)::double precision`;
 
 /**
  * Correlated scalar for Product root-list sorting and filtering.
@@ -302,8 +302,8 @@ export const loadProductQuantityLedgers = async (
 
   const query = sql`${kitAncestorCteSql(kitSeedForProductIds(ids))}
     SELECT ka.target AS "productId",
-           COALESCE(${sql.raw(PROJECTED_ACQUIRED)}, 0)::int AS "acquiredUnits",
-           COALESCE(${sql.raw(PROJECTED_EXITED)}, 0)::int AS "exitedUnits",
+           COALESCE(${sql.raw(PROJECTED_ACQUIRED)}, 0)::double precision AS "acquiredUnits",
+           COALESCE(${sql.raw(PROJECTED_EXITED)}, 0)::double precision AS "exitedUnits",
            COALESCE(${sql.raw(ownOnly(`"unknownAcquisitionLines"`))}, 0)::int AS "unknownAcquisitionLines",
            COALESCE(${sql.raw(ownOnly(`"unknownExitLines"`))}, 0)::int AS "unknownExitLines",
            COALESCE(sum(ko."ledgerLines"), 0)::int AS "ledgerLines"
