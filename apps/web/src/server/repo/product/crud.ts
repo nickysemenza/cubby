@@ -153,6 +153,7 @@ import {
   hasUnknownQuantityLinesSql,
   loadProductPickerQuantities,
   onHandUnitsFilterSql,
+  onHandUnitsSql,
   quantityVarianceSql,
 } from "./quantity-ledger";
 import type { ProductDeepDB } from "./types";
@@ -682,6 +683,25 @@ export const productList = async (
   //
   // `componentCount` in `relations.ts` MUST stay on this same predicate: a
   // filter and a rendered cell that disagree is the #428 failure mode.
+  // How many WHOLE kits this product's live components account for.
+  //
+  // `min` over the components: two batteries and one charger make one starter
+  // kit, not two, and a component missing entirely makes zero. NULL for a
+  // product with no components (min over an empty set), which is what keeps
+  // every non-kit out of the comparison without a second predicate.
+  //
+  // A mixed-unit component has no honest on-hand number, so `onHandUnitsSql`
+  // returns NULL and the COALESCE reads it as zero — the kit then accounts for
+  // nothing and the detector stays silent, which is the right way to fail on a
+  // number nobody can compute.
+  const partsAccountedKitsSql = (productId: PgColumn) =>
+    sql`(SELECT min(floor(COALESCE(${sql.raw(onHandUnitsSql("kac_p"))}, 0) / kac."quantity"))
+           FROM "ProductComponent" kac
+           JOIN "Product" kac_p
+             ON kac_p."id" = kac."componentProductId" AND kac_p."deletedAt" IS NULL
+          WHERE kac."parentProductId" = ${productId}
+            AND kac."deletedAt" IS NULL)`;
+
   const productIdsWithComponents = dbClient
     .select({ productId: productComponent.parentProductId })
     .from(productComponent)
@@ -805,6 +825,19 @@ export const productList = async (
         ? and(
             eq(product.expectedQuantity, 1),
             inArray(product.id, productIdsWithDuplicatePlacement),
+          )
+        : undefined,
+      filters.kitAccounting === "double_counted"
+        ? and(
+            // Stocked under its own name, AND its parts account for whole kits
+            // too. Both halves are required: a kit over-stocked as itself alone
+            // is ordinary variance, and parts alone are the normal decomposed
+            // case this whole feature exists to bless.
+            sql`${onHandUnitsFilterSql(product.id)} > 0`,
+            sql`${partsAccountedKitsSql(product.id)} > 0`,
+            // The defect is arithmetic, not shape: together they claim more
+            // units than the ledger says were acquired.
+            sql`${onHandUnitsFilterSql(product.id)} + ${partsAccountedKitsSql(product.id)} > ${expectedQuantityFilterSql(product.id)}`,
           )
         : undefined,
       filters.ownershipReconciliation === "disposed_still_on_hand"

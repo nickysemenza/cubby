@@ -23,7 +23,7 @@ import {
   Scale,
   Wrench,
 } from "lucide-react";
-import { type FC, useCallback, useState } from "react";
+import { type FC, useCallback, useMemo, useState } from "react";
 import { Row, Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
@@ -405,6 +405,22 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     locationCount,
     componentCount: product.componentCount,
   });
+  // Stable identity: the dialog feeds this straight into a `useMemo`, and a
+  // fresh literal per render would recompute it on every unrelated state change
+  // (each dialog toggle re-renders this whole component).
+  const stockAccounting = useMemo(
+    () => ({
+      expectedQuantity: product.quantityLedger.expectedQuantity,
+      ownOnHandUnits: onHandUnits,
+      componentCount: product.componentCount,
+    }),
+    [
+      product.quantityLedger.expectedQuantity,
+      onHandUnits,
+      product.componentCount,
+    ],
+  );
+
   const onHandStat: DetailHeroStat =
     presence.onHand.kind === "amount"
       ? {
@@ -473,6 +489,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
         open={addToInventoryOpen}
         onOpenChange={setAddToInventoryOpen}
         product={product}
+        accounting={stockAccounting}
       />
       <EntityEditDialog
         open={recordSaleOpen}

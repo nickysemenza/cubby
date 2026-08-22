@@ -192,7 +192,7 @@ export const expectedQuantitySql = (productAlias = '"product"') =>
  * to the sum but never to the distinct-unit test: a mixed-unit shelf is still
  * NULL, and a product with neither entries nor locations is still NULL.
  */
-const onHandUnitsSql = (productAlias = '"product"') =>
+export const onHandUnitsSql = (productAlias = '"product"') =>
   `(SELECT CASE
              WHEN ohu_inv.n = 0 AND ohu_loc.n = 0 THEN NULL
              WHEN ohu_inv.units > 1 THEN NULL

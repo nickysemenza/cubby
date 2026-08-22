@@ -161,6 +161,36 @@ export const soldButStillStockedSchema = z.object({
   ),
 });
 
+// A kit counted in two places at once: stocked under its own name AND by its
+// components, together claiming more units than the ledger says were acquired.
+//
+// Splitting a kit moves its shelf claim to its parts; the parent keeps the
+// Expense and holds nothing. Stocking the parent as well then counts the same
+// physical thing twice, and inventory valuation doubles with it — the same
+// class of silently-invented value as `soldButStillStocked`, arriving by the
+// opposite route.
+//
+// Deliberately NOT "the parent is stocked XOR its parts are". A partially
+// opened multi-pack is legitimately both: two AirTag 4-packs, one opened into
+// four loose singles and one still sealed, is `1 parent + 4 components` and
+// values correctly. Only exceeding what was bought is always wrong, so the
+// predicate is arithmetic rather than shape. Parts count in WHOLE kits — two
+// batteries and one charger make one starter kit, not two — which also keeps a
+// half-present kit out, since a shortfall is variance, not a double count.
+export const kitCountedTwiceSchema = z.object({
+  ...productProblemFields,
+  /** Units on shelves under the kit's OWN name — the half that should not be. */
+  ownUnits: z.number(),
+  /**
+   * Units the LEDGER says were acquired and not disposed of.
+   *
+   * Deliberately not named `expectedQuantity`: that is a manual column on
+   * `Product` ("this should appear exactly once"), and reading it here returns
+   * null on every kit. This is the derived `quantityLedger.expectedQuantity`.
+   */
+  expectedUnits: z.number().int(),
+});
+
 // The exact inverse of `soldButStillStocked`: a disposal line that names no
 // product at all.
 //
@@ -870,6 +900,7 @@ const problemsFastShape = {
   orphanedProducts: z.array(orphanedProductSchema),
   partiallyImportedCookbooks: z.array(partiallyImportedCookbookSchema),
   soldButStillStocked: z.array(soldButStillStockedSchema),
+  kitsCountedTwice: z.array(kitCountedTwiceSchema),
   unlinkedExitExpenses: z.array(unlinkedExitExpenseSchema),
   purchaselessExitExpenses: z.array(purchaselessExitExpenseSchema),
   toolsUsedOutsideOwnership: z.array(toolUsedOutsideOwnershipSchema),
@@ -1169,6 +1200,13 @@ export const PROBLEM_CLASS = {
   // instead mean the disposal was mis-recorded, and deleting inventory has no
   // restore path.
   soldButStillStocked: "defect",
+  // Unambiguously wrong and converges to zero: the same physical thing is on
+  // the books twice and inventory valuation is overstated by a whole kit.
+  // Not `coverage` — there is no denominator, and no reported row is correct as
+  // it stands. No auto-fix: which side is the mistake is the operator's call
+  // (delete the parent's entry, or the parts', or fix the ledger), and deleting
+  // inventory has no restore path.
+  kitsCountedTwice: "defect",
   // Every row is a sale whose product was never identified, so the ledger
   // cannot say what left. Converges: each row is either linked to a product or
   // recorded as an exception. No auto-fix — deciding WHICH product a marketplace
@@ -1468,6 +1506,7 @@ export type DuplicateUniqueProduct = z.infer<
 export type OrphanedProduct = z.infer<typeof orphanedProductSchema>;
 export type ProductMissingPrice = z.infer<typeof productMissingPriceSchema>;
 export type SoldButStillStocked = z.infer<typeof soldButStillStockedSchema>;
+export type KitCountedTwice = z.infer<typeof kitCountedTwiceSchema>;
 export type UnlinkedExitExpense = z.infer<typeof unlinkedExitExpenseSchema>;
 export type PurchaselessExitExpense = z.infer<
   typeof purchaselessExitExpenseSchema

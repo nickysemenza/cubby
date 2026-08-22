@@ -64,6 +64,7 @@ import { ensureGlobalUnknownLocation } from "./location";
 import { addRecipeToMeal, updateMeal } from "./meal";
 import { findCoverageTotals, findStaleIngredientParses } from "./problems";
 import { deleteProducts, productList, updateProduct } from "./product";
+import { attachProductComponents } from "./product-components";
 import { createProject, deleteProjects } from "./project";
 import { computeAttentionItems } from "./project/attention";
 import { detachProjectResources } from "./project/tools";
@@ -3492,5 +3493,88 @@ describe("problems — purchase financial settlement mismatches", () => {
     const rows = await mismatches();
     expect(rows.map((row) => row.id)).toEqual([compared.purchaseId]);
     expect(rows[0]?.financialReconciliation.delta).toBe(35);
+  });
+});
+
+/**
+ * `kitsCountedTwice` — a kit on the books under its own name AND under its
+ * parts', together claiming more units than were bought.
+ *
+ * Asserted through `findFastProblems` rather than the list filter it compiles
+ * to, because the presenter is a separate switch that THROWS on an unregistered
+ * key. A detector whose filter works and whose card presenter is missing fails
+ * only when the first real row appears, which is the worst possible moment.
+ */
+describe("kits counted twice", () => {
+  const ctx = withTestDb();
+
+  it("reports a kit stocked on top of parts that already account for it", async () => {
+    const room = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Twice-counted room" }),
+      ctx.actor,
+    );
+    const kit = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Twice Counted Set" }),
+      ctx.actor,
+    );
+    const half = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Twice Counted Half" }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "one set",
+          cost: 120,
+          productId: kit.id,
+          productQuantity: 1,
+        }),
+      ),
+      ctx.actor,
+    );
+    await attachProductComponents(
+      ctx.db,
+      kit.entityId,
+      [{ productId: half.entityId, quantity: 2 }],
+      ctx.actor,
+    );
+    // Both halves on a shelf: the parts account for the one set that was bought.
+    await createInventoryEntry(
+      ctx.db,
+      {
+        productId: half.entityId,
+        locationId: room.entityId,
+        amount: { value: 2, unit: "each" },
+      },
+      ctx.actor,
+    );
+
+    const clean = await findFastProblems(ctx.db);
+    expect(clean.kitsCountedTwice.some((row) => row.id === kit.id)).toBe(false);
+
+    // Now the set itself is stocked too — two sets claimed, one bought.
+    await createInventoryEntry(
+      ctx.db,
+      {
+        productId: kit.entityId,
+        locationId: room.entityId,
+        amount: { value: 1, unit: "each" },
+      },
+      ctx.actor,
+    );
+
+    const found = await findFastProblems(ctx.db);
+    const flagged = found.kitsCountedTwice.find((row) => row.id === kit.id);
+    // Presence AND shape: reaching this line at all proves the presenter exists.
+    expect(flagged).toBeDefined();
+    expect(flagged?.name).toBe("Twice Counted Set");
+    // One set on the shelf under its own name, one set ever bought — and its
+    // two halves already account for that one.
+    expect(flagged?.ownUnits).toBe(1);
+    expect(flagged?.expectedUnits).toBe(1);
   });
 });

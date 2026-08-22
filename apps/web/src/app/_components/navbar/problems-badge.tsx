@@ -37,6 +37,7 @@ const PROBLEM_LABELS: Record<
   productsMissingPrice: (n) => `${n} stocked without a price`,
   unvaluedBucketProducts: (n) => pl(n, "unvalued bucket"),
   soldButStillStocked: (n) => `${n} sold but still stocked`,
+  kitsCountedTwice: (n) => `${n} ${n === 1 ? "kit" : "kits"} counted twice`,
   unlinkedExitExpenses: (n) => `${n} sold without a product`,
   purchaselessExitExpenses: (n) => `${n} credited without an order`,
   negativeExpectedQuantity: (n) => `${n} sold more than bought`,
