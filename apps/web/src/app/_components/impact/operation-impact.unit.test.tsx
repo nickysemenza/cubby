@@ -91,7 +91,7 @@ describe("OperationImpact", () => {
     expect(screen.getByText("block-live-inventory")).toBeTruthy();
   });
 
-  it("renders changes and side effects when the operation is allowed", () => {
+  it("leads with risky changes and discloses the complete consequence ledger", async () => {
     render(
       <OperationImpact
         preview={preview({
@@ -101,6 +101,14 @@ describe("OperationImpact", () => {
               effect: "soft-delete",
               label: "images",
               total: 2,
+              byTargetId: { "PRD-2222": 2 },
+            }),
+            item({
+              code: "repoint-task",
+              effect: "repoint",
+              label: "tasks re-pointed",
+              total: 1,
+              byTargetId: { "PRD-2222": 1 },
             }),
           ],
           sideEffects: [
@@ -118,8 +126,19 @@ describe("OperationImpact", () => {
       />,
     );
     expect(screen.queryByText("Blocked")).toBeNull();
+    // Risk is visible before opening the ledger; ordinary moves and secondary
+    // effects stay out of the confirmation's first scan.
     expect(screen.getByText("images")).toBeTruthy();
+    expect(screen.queryByText("tasks re-pointed")).toBeNull();
+    expect(screen.queryByText("parent recipes recomputed")).toBeNull();
+
+    screen
+      .getByRole("button", { name: /complete consequence ledger \(3\)/i })
+      .click();
+
+    expect(await screen.findByText("tasks re-pointed")).toBeTruthy();
     expect(screen.getByText("parent recipes recomputed")).toBeTruthy();
+    expect(screen.getByText(/PRD-2222 × 2/)).toBeTruthy();
   });
 
   it("says so plainly when nothing else references the targets", () => {
