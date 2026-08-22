@@ -1490,6 +1490,13 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       ],
     },
     {
+      columnId: "kitAccounting",
+      field: "kitAccounting",
+      kind: "select",
+      placeholder: "Filter kit accounting...",
+      options: [{ value: "double_counted", label: "Counted twice" }],
+    },
+    {
       columnId: "ownershipReconciliation",
       field: "ownershipReconciliation",
       kind: "select",

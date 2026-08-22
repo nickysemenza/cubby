@@ -338,6 +338,22 @@ export const productFilterFields = {
     .describe(
       "Products with a recorded disposal, no remaining known quantity, and a positive single-unit on-hand count.",
     ),
+  /**
+   * Kits accounted for twice: stocked under their own name AND by their parts,
+   * together exceeding what the ledger says was acquired.
+   *
+   * Deliberately NOT "the parent is stocked XOR its parts are". A partially
+   * opened multi-pack is legitimately both — two AirTag 4-packs, one opened
+   * into four singles and one still sealed, is `1 parent + 4 components` and
+   * values correctly. Only accounting for more units than were bought is
+   * always wrong.
+   */
+  kitAccounting: z
+    .enum(["double_counted"])
+    .optional()
+    .describe(
+      "Kits stocked as themselves AND as their components, together accounting for more units than the ledger says were acquired.",
+    ),
   conversionCoverage: z
     .enum(["partial"])
     .optional()

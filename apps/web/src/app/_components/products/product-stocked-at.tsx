@@ -1,6 +1,10 @@
-import type { InventoryShortcode } from "@cubby/schemas/identifiers";
+import type {
+  InventoryShortcode,
+  ProductShortcode,
+} from "@cubby/schemas/identifiers";
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import type { ProductWithFoodOut } from "@cubby/schemas/product";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type FC, useCallback, useMemo, useState } from "react";
 import {
@@ -32,6 +36,39 @@ import { ProductDiscardDialog } from "./product-discard-dialog";
 import { buildProductLocationBreakdown } from "./product-location-breakdown";
 
 type InventoryEntry = ProductWithFoodOut["inventoryEntry"][number];
+
+/**
+ * Where a decomposed kit's stock actually sits. Renders nothing until the
+ * component rows arrive rather than guessing at them — the surrounding empty
+ * state already carries the fact, and this only names the parts.
+ */
+const HeldAsComponents: FC<{ productId: ProductShortcode }> = ({
+  productId,
+}) => {
+  const api = useTRPC();
+  const { data } = useQuery(
+    api.product.components.queryOptions({ parentProductId: productId }),
+  );
+  if (!data || data.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+      <span>Held as</span>
+      {data.map((component, index) => (
+        <span key={component.productId} className="flex items-center gap-1">
+          {index > 0 && <span aria-hidden>·</span>}
+          <span className="tabular-nums">{component.quantity}×</span>
+          <Link
+            to="/products/$shortcode"
+            params={{ shortcode: component.productId }}
+            className="underline underline-offset-2 hover:text-foreground"
+          >
+            {component.productName}
+          </Link>
+        </span>
+      ))}
+    </div>
+  );
+};
 
 /**
  * One table, one question: where is this product?
@@ -330,6 +367,23 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
   const { table } = workbench;
 
   if (rows.length === 0) {
+    // A decomposed kit is not "stocked nowhere" — its shelf claim moved to its
+    // parts. Saying otherwise here contradicts the hero stamp above and the Kit
+    // Components table below, which is the same contradiction this file's
+    // header records for bins in service.
+    //
+    // `componentCount` is embedded on the detail read, so the LABEL never
+    // flashes the wrong answer; only the part names arrive with the query, and
+    // that query is the one the Kit Components section already makes.
+    if (product.componentCount > 0) {
+      return (
+        <ShelfEmpty
+          entity="inventory"
+          label="Not stocked under this name"
+          detail={<HeldAsComponents productId={product.id} />}
+        />
+      );
+    }
     return <ShelfEmpty entity="inventory" label="Not stocked anywhere" />;
   }
 

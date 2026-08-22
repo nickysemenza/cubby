@@ -93,14 +93,23 @@ export function ShelfCard({
 export function ShelfEmpty({
   entity,
   label,
+  detail,
 }: {
   entity: Entity;
   label: string;
+  /**
+   * A second line under the label, for an empty state that can say WHERE the
+   * thing actually is rather than only that it is not here.
+   */
+  detail?: ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground text-sm">
-      <EntityIcon entity={entity} className="size-4 opacity-40" />
-      {label}
+    <div className="flex flex-col items-center justify-center gap-1 py-6 text-muted-foreground text-sm">
+      <div className="flex items-center gap-2">
+        <EntityIcon entity={entity} className="size-4 opacity-40" />
+        {label}
+      </div>
+      {detail}
     </div>
   );
 }

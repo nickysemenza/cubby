@@ -847,6 +847,148 @@ describe("product.list unlocated cohort", () => {
 });
 
 /**
+ * Kits counted twice: stocked under their own name AND by their parts, together
+ * accounting for more units than the ledger says were acquired.
+ *
+ * The tempting rule — "a kit is stocked as itself XOR as its parts" — is wrong,
+ * and the second case here is why. A partially opened multi-pack is legitimately
+ * both, and blocking it would make a real shelf unrepresentable.
+ */
+describe("product.list kits counted twice", () => {
+  const ctx = withTestDb();
+
+  const list = (filters: Record<string, unknown>) =>
+    createTestCaller(productRouter, ctx.db).list({
+      filters,
+      sort: { orderBy: "name", direction: "asc" },
+      pagination: { pageIndex: 0, pageSize: 50 },
+    });
+
+  const doubleCounted = () => list({ kitAccounting: "double_counted" });
+
+  it("flags a kit stocked as itself on top of parts that already account for it", async () => {
+    const caller = createTestCaller(productRouter, ctx.db);
+    const room = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Double count room" }),
+      ctx.actor,
+    );
+    const mk = (name: string) =>
+      createProductFixture(ctx.db, makeProductInput({ name }), ctx.actor);
+
+    // One set bought; its two halves are on shelves. Accounted for exactly once.
+    const kit = await mk("A Counted Twice Set");
+    const half = await mk("B Counted Twice Half");
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "the set",
+          cost: 100,
+          productId: kit.id,
+          productQuantity: 1,
+        }),
+      ),
+      ctx.actor,
+    );
+    await caller.attachComponents({
+      parentProductId: kit.id,
+      components: [{ productId: half.id, quantity: 2 }],
+    });
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: half.entityId,
+        locationId: room.entityId,
+        amount: { value: 2, unit: "each" },
+      },
+      ctx.actor,
+    );
+
+    // Parts account for 1 of the 1 bought, and nothing is on the parent yet.
+    expect((await doubleCounted()).items.map((i) => i.id)).not.toContain(
+      kit.id,
+    );
+
+    // Now stock the set itself as well: 1 + 1 = 2 sets claimed, 1 bought.
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: kit.entityId,
+        locationId: room.entityId,
+        amount: { value: 1, unit: "each" },
+      },
+      ctx.actor,
+    );
+    expect((await doubleCounted()).items.map((i) => i.id)).toContain(kit.id);
+  });
+
+  /**
+   * PRD-M8CV's shape: two AirTag 4-packs bought, one opened into four loose
+   * singles and one still sealed. That is `1 parent + 4 components` = 2 packs
+   * accounted for against 2 bought — legitimate, and the rule must not fire.
+   */
+  it("leaves a partially opened multi-pack alone", async () => {
+    const caller = createTestCaller(productRouter, ctx.db);
+    const drawer = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Partial pack drawer" }),
+      ctx.actor,
+    );
+    const pack = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "C Four Pack" }),
+      ctx.actor,
+    );
+    const single = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "D Single Unit" }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "two packs",
+          cost: 200,
+          productId: pack.id,
+          productQuantity: 2,
+        }),
+      ),
+      ctx.actor,
+    );
+    await caller.attachComponents({
+      parentProductId: pack.id,
+      components: [{ productId: single.id, quantity: 4 }],
+    });
+    // One pack opened into four singles...
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: single.entityId,
+        locationId: drawer.entityId,
+        amount: { value: 4, unit: "each" },
+      },
+      ctx.actor,
+    );
+    // ...the other still sealed.
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: pack.entityId,
+        locationId: drawer.entityId,
+        amount: { value: 1, unit: "each" },
+      },
+      ctx.actor,
+    );
+
+    expect((await doubleCounted()).items.map((i) => i.id)).not.toContain(
+      pack.id,
+    );
+  });
+});
+
+/**
  * The detail page shows Expected beside On hand, so the detail response has to
  * carry the same three fields the list row does — from the same derivation.
  *

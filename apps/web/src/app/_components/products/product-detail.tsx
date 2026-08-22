@@ -473,6 +473,11 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
         open={addToInventoryOpen}
         onOpenChange={setAddToInventoryOpen}
         product={product}
+        accounting={{
+          expectedQuantity: product.quantityLedger.expectedQuantity,
+          ownOnHandUnits: onHandUnits,
+          componentCount: product.componentCount,
+        }}
       />
       <EntityEditDialog
         open={recordSaleOpen}

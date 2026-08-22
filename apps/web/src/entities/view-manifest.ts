@@ -1103,6 +1103,28 @@ const standaloneEntityProblems = [
     },
   }),
   defineProblem({
+    key: "kitsCountedTwice",
+    problemClass: PROBLEM_CLASS.kitsCountedTwice,
+    executionLane: "fast",
+    continuation: { kind: "entity-list" as const },
+    freshness: { kind: "live" as const },
+    title: "Kits counted twice",
+    description:
+      "Stocked under its own name and by its components, together accounting for more units than were bought.",
+    emptyMessage: "No kit is counted twice.",
+    source: {
+      kind: "entity" as const,
+      entity: "product" as const,
+      filters: [{ id: "kitAccounting", value: "double_counted" }],
+      sort: [{ id: "updatedAt", desc: true }],
+      columnVisibility: {
+        expectedQuantity: true,
+        location: true,
+        components: true,
+      },
+    },
+  }),
+  defineProblem({
     key: "unknownParkedItems",
     problemClass: PROBLEM_CLASS.unknownParkedItems,
     executionLane: "fast",

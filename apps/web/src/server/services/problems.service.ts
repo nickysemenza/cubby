@@ -782,6 +782,21 @@ const presentFastExactRows = <T>(
           manufacturer: String(r.manufacturer ?? ""),
           primaryGtin: (r.primaryGtin ?? null) as string | null,
         };
+      // Only the parent is reported. The units it double-counts are named by
+      // its own components table, and repeating them here would make one
+      // physical mistake look like several rows.
+      case "kitsCountedTwice": {
+        // `r.expectedQuantity` is the MANUAL Product column and is null on
+        // every kit; the acquired-units number lives on the derived ledger.
+        const ledger = r.quantityLedger as { expectedQuantity?: number } | null;
+        return {
+          id,
+          name: String(r.name),
+          manufacturer: String(r.manufacturer ?? ""),
+          ownUnits: Number(r.onHandUnits ?? 0),
+          expectedUnits: Number(ledger?.expectedQuantity ?? 0),
+        };
+      }
       case "unreferencedImages":
         return {
           id,
@@ -915,6 +930,7 @@ const presentSingleFastProblem = async (
 const FAST_ENTITY_PROBLEM_KEYS = [
   "duplicateInventory",
   "soldButStillStocked",
+  "kitsCountedTwice",
   "unlinkedExitExpenses",
   "purchaselessExitExpenses",
   "productsWithNoImages",
@@ -1091,6 +1107,10 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       "soldButStillStocked",
       page("soldButStillStocked"),
       hydration,
+    ),
+    kitsCountedTwice: presentFastExactRows(
+      "kitsCountedTwice",
+      page("kitsCountedTwice"),
     ),
     unlinkedExitExpenses: presentFastExactRows(
       "unlinkedExitExpenses",
