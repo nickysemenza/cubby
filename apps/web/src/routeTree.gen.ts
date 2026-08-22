@@ -28,6 +28,7 @@ import { Route as AuthenticatedLabelsRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedMcpRouteImport } from './routes/_authenticated/mcp'
 import { Route as AuthenticatedPantryViewRouteImport } from './routes/_authenticated/pantry-view'
 import { Route as AuthenticatedProblemsRouteImport } from './routes/_authenticated/problems'
+import { Route as AuthenticatedScanRouteImport } from './routes/_authenticated/scan'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as ApiMcpRouteImport } from './routes/api/mcp'
 import { Route as AuthAuthViewRouteImport } from './routes/auth.$authView'
@@ -200,6 +201,11 @@ const AuthenticatedPantryViewRoute = AuthenticatedPantryViewRouteImport.update({
 const AuthenticatedProblemsRoute = AuthenticatedProblemsRouteImport.update({
   id: '/problems',
   path: '/problems',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedScanRoute = AuthenticatedScanRouteImport.update({
+  id: '/scan',
+  path: '/scan',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
@@ -650,6 +656,7 @@ export interface FileRoutesByFullPath {
   '/mcp': typeof AuthenticatedMcpRoute
   '/pantry-view': typeof AuthenticatedPantryViewRoute
   '/problems': typeof AuthenticatedProblemsRoute
+  '/scan': typeof AuthenticatedScanRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/api/mcp': typeof ApiMcpRoute
   '/auth/$authView': typeof AuthAuthViewRoute
@@ -743,6 +750,7 @@ export interface FileRoutesByTo {
   '/mcp': typeof AuthenticatedMcpRoute
   '/pantry-view': typeof AuthenticatedPantryViewRoute
   '/problems': typeof AuthenticatedProblemsRoute
+  '/scan': typeof AuthenticatedScanRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/api/mcp': typeof ApiMcpRoute
   '/auth/$authView': typeof AuthAuthViewRoute
@@ -839,6 +847,7 @@ export interface FileRoutesById {
   '/_authenticated/mcp': typeof AuthenticatedMcpRoute
   '/_authenticated/pantry-view': typeof AuthenticatedPantryViewRoute
   '/_authenticated/problems': typeof AuthenticatedProblemsRoute
+  '/_authenticated/scan': typeof AuthenticatedScanRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/api/mcp': typeof ApiMcpRoute
   '/auth/$authView': typeof AuthAuthViewRoute
@@ -935,6 +944,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/pantry-view'
     | '/problems'
+    | '/scan'
     | '/settings'
     | '/api/mcp'
     | '/auth/$authView'
@@ -1028,6 +1038,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/pantry-view'
     | '/problems'
+    | '/scan'
     | '/settings'
     | '/api/mcp'
     | '/auth/$authView'
@@ -1123,6 +1134,7 @@ export interface FileRouteTypes {
     | '/_authenticated/mcp'
     | '/_authenticated/pantry-view'
     | '/_authenticated/problems'
+    | '/_authenticated/scan'
     | '/_authenticated/settings'
     | '/api/mcp'
     | '/auth/$authView'
@@ -1348,6 +1360,13 @@ declare module '@tanstack/react-router' {
       path: '/problems'
       fullPath: '/problems'
       preLoaderRoute: typeof AuthenticatedProblemsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/scan': {
+      id: '/_authenticated/scan'
+      path: '/scan'
+      fullPath: '/scan'
+      preLoaderRoute: typeof AuthenticatedScanRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/settings': {
@@ -1885,6 +1904,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedMcpRoute: typeof AuthenticatedMcpRoute
   AuthenticatedPantryViewRoute: typeof AuthenticatedPantryViewRoute
   AuthenticatedProblemsRoute: typeof AuthenticatedProblemsRoute
+  AuthenticatedScanRoute: typeof AuthenticatedScanRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedAccountAccountViewRoute: typeof AuthenticatedAccountAccountViewRoute
   AuthenticatedAccountConnectedAppsRoute: typeof AuthenticatedAccountConnectedAppsRoute
@@ -1964,6 +1984,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedMcpRoute: AuthenticatedMcpRoute,
   AuthenticatedPantryViewRoute: AuthenticatedPantryViewRoute,
   AuthenticatedProblemsRoute: AuthenticatedProblemsRoute,
+  AuthenticatedScanRoute: AuthenticatedScanRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedAccountAccountViewRoute: AuthenticatedAccountAccountViewRoute,
   AuthenticatedAccountConnectedAppsRoute:

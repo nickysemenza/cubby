@@ -25,11 +25,12 @@ import {
   BARCODE_FORMATS,
   type BarcodeFormat,
   QR_CODE_FORMATS,
+  UNIVERSAL_SCAN_FORMATS,
   useBarcodeScanner,
   useScanBeep,
 } from "./useBarcodeScanner";
 
-export { BARCODE_FORMATS, QR_CODE_FORMATS };
+export { BARCODE_FORMATS, QR_CODE_FORMATS, UNIVERSAL_SCAN_FORMATS };
 
 /** One recently-scanned item, shown as a chip under the viewfinder. */
 export interface ScanFeedbackEntry {
@@ -116,7 +117,10 @@ export function PersistentScanner({
     return null;
   }
 
-  const isQrMode = formatsToSupport.includes("qr_code");
+  const hasQr = formatsToSupport.includes("qr_code");
+  const hasLinearBarcode = formatsToSupport.some(
+    (format) => format !== "qr_code",
+  );
 
   return (
     <Stack gap="sm">
@@ -165,8 +169,13 @@ export function PersistentScanner({
               ref={reticleRef}
               className={cn(
                 "rounded-lg border-2 shadow-[var(--shadow-scan-scrim)] transition-colors duration-150",
-                // Square guide for QR codes, wide horizontal guide for barcodes
-                isQrMode ? "size-48" : "h-28 w-[85%]",
+                // Mixed mode needs enough height for a QR while retaining the
+                // width a product barcode needs to decode cleanly.
+                hasQr && hasLinearBarcode
+                  ? "h-44 w-[85%]"
+                  : hasQr
+                    ? "size-48"
+                    : "h-28 w-[85%]",
                 scanFlash
                   ? "border-positive shadow-[var(--shadow-scan-flash)]"
                   : "border-white/60",

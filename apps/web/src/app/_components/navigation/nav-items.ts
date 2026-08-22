@@ -104,6 +104,11 @@ const inventory: NavItem = {
   label: "Inventory",
   icon: entities.inventory.lucideIcon,
 };
+const scan: NavItem = {
+  to: "/scan",
+  label: "Scan",
+  icon: ScanBarcode,
+};
 export const settingsNavItem: NavItem = {
   to: "/settings",
   label: "Settings",
@@ -235,6 +240,7 @@ export const desktopNav: NavNode[] = [
     icon: MoreHorizontal,
     tier: "utility",
     children: [
+      scan,
       {
         to: "/inventory/session",
         label: "Recount",
@@ -305,6 +311,7 @@ export const todayNavItems: NavItem[] = [
 /** Secondary phone destinations shown before the deeper taxonomy. */
 export const mobileHouseholdItems: NavItem[] = [
   homeNavItem,
+  leafAt("/inventory/session"),
   leafAt("/locations"),
   leafAt("/calendar"),
   leafAt("/meals"),
@@ -326,11 +333,7 @@ export const workspaceUtilitySections: NavSection[] = [
 
 /** Mobile bottom tabs (primary). `scan`/`search` are mobile-only shortcuts. */
 export const bottomNavItems: NavItem[] = [
-  {
-    to: "/inventory/session",
-    label: "Recount",
-    icon: ScanBarcode,
-  },
+  scan,
   inventory,
   // The phone-first meals→shopping-list loop earns a primary tab over
   // Locations. Locations stays reachable: moreNavSections is derived from
