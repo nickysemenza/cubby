@@ -14,8 +14,8 @@ describe("configureQueryFreshness", () => {
       client.getQueryDefaults(normalizeTRPCQueryKey(queryKeys.product.getByID)),
     ).toMatchObject({
       staleTime: 300_000,
-      refetchOnWindowFocus: "always",
-      refetchOnReconnect: "always",
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
     });
     expect(
       client.getQueryDefaults(

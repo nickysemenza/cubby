@@ -6,8 +6,8 @@ const MINUTE = 60 * 1000;
 /**
  * Freshness is intentionally procedure-specific: reference data stays warm
  * across navigation, while inventory, tasks and finance retain the 60s default.
- * Focus/reconnect always revalidates these longer-lived views in the background
- * because MCP and imports can mutate them outside this tab.
+ * Focus/reconnect revalidates these longer-lived views once they are stale,
+ * bounding repeat reads while still noticing MCP and import changes.
  */
 export function configureQueryFreshness(queryClient: QueryClient): void {
   const stableDetailKeys = [
@@ -29,8 +29,8 @@ export function configureQueryFreshness(queryClient: QueryClient): void {
     queryKeys.ingredient.list,
   ];
   const revalidateOnFocus = {
-    refetchOnWindowFocus: "always" as const,
-    refetchOnReconnect: "always" as const,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   };
   for (const key of stableDetailKeys) {
     queryClient.setQueryDefaults(normalizeTRPCQueryKey(key), {

@@ -1,8 +1,10 @@
 import {
-  backgroundBatchDetailSchema,
   backgroundBatchIdInputSchema,
+  backgroundBatchJobsInputSchema,
+  backgroundBatchJobsOutSchema,
   backgroundBatchListInputSchema,
   backgroundBatchListOutSchema,
+  backgroundBatchSummarySchema,
   backgroundDrainInputSchema,
   backgroundDrainOutSchema,
   backgroundJobIdInputSchema,
@@ -12,8 +14,9 @@ import { drainQueuedBackgroundJobs } from "~/server/background-queue";
 import { createAppError } from "~/server/errors/app-error";
 import {
   cancelQueuedJobsForBatch,
-  getBackgroundBatchDetail,
+  getBackgroundBatchSummary,
   listBackgroundBatches,
+  listBackgroundBatchJobs,
   retryBackgroundJob,
   retryFailedJobsForBatch,
 } from "~/server/repo/background-jobs";
@@ -26,11 +29,11 @@ export const backgroundJobsRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       return await listBackgroundBatches(ctx.db, input.limit);
     }),
-  getBatch: protectedProcedure
+  getBatchSummary: protectedProcedure
     .input(backgroundBatchIdInputSchema)
-    .output(strictOutput(backgroundBatchDetailSchema))
+    .output(strictOutput(backgroundBatchSummarySchema))
     .query(async ({ ctx, input }) => {
-      const batch = await getBackgroundBatchDetail(ctx.db, input.batchId);
+      const batch = await getBackgroundBatchSummary(ctx.db, input.batchId);
       if (!batch) {
         throw createAppError(
           "BACKGROUND_BATCH_NOT_FOUND",
@@ -38,6 +41,12 @@ export const backgroundJobsRouter = createTRPCRouter({
         );
       }
       return batch;
+    }),
+  listBatchJobs: protectedProcedure
+    .input(backgroundBatchJobsInputSchema)
+    .output(strictOutput(backgroundBatchJobsOutSchema))
+    .query(async ({ ctx, input }) => {
+      return await listBackgroundBatchJobs(ctx.db, input);
     }),
   retryBatch: protectedProcedure
     .input(backgroundBatchIdInputSchema)

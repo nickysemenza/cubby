@@ -13,7 +13,7 @@ import {
 } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { StepForward } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -32,11 +32,111 @@ const ALL_FILTER_VALUE = "all";
 // followed from a toast link visibly progresses; slow enough not to hammer the
 // queue tables.
 const BATCH_POLL_MS = 4000;
+const JOB_PAGE_SIZE = 100;
 
 // A batch is "live" (worth polling) until it reaches a terminal state. queued and
 // running are in-flight; succeeded/partial/failed/cancelled are settled.
 function isBatchLive(status: BackgroundBatchStatus): boolean {
   return status === "queued" || status === "running";
+}
+
+export function didBatchSettle(
+  previousStatus: BackgroundBatchStatus | undefined,
+  currentStatus: BackgroundBatchStatus | undefined,
+): boolean {
+  return (
+    previousStatus !== undefined &&
+    currentStatus !== undefined &&
+    isBatchLive(previousStatus) &&
+    !isBatchLive(currentStatus)
+  );
+}
+
+function SelectedBatchDetail({ batchId }: { batchId: string }) {
+  const api = useTRPC();
+  const queryClient = useQueryClient();
+  const [pageIndex, setPageIndex] = useState(0);
+  const [showFailedOnly, setShowFailedOnly] = useState(false);
+  const jobsInput = useMemo(
+    () => ({
+      batchId,
+      pageIndex,
+      pageSize: JOB_PAGE_SIZE,
+      failedOnly: showFailedOnly,
+    }),
+    [batchId, pageIndex, showFailedOnly],
+  );
+  const summaryQuery = useQuery({
+    ...api.backgroundJobs.getBatchSummary.queryOptions({ batchId }),
+    refetchInterval: (query) =>
+      query.state.data && isBatchLive(query.state.data.status)
+        ? BATCH_POLL_MS
+        : false,
+  });
+  const jobsQuery = useQuery(
+    api.backgroundJobs.listBatchJobs.queryOptions(jobsInput),
+  );
+  const previousStatusRef = useRef<BackgroundBatchStatus | undefined>(
+    undefined,
+  );
+  const currentStatus = summaryQuery.data?.status;
+  const refetchJobs = jobsQuery.refetch;
+
+  useEffect(() => {
+    const previousStatus = previousStatusRef.current;
+    previousStatusRef.current = currentStatus;
+    if (didBatchSettle(previousStatus, currentStatus)) {
+      void refetchJobs();
+    }
+  }, [currentStatus, refetchJobs]);
+
+  const invalidateAfterMutation = () => {
+    setPageIndex(0);
+    invalidateTRPCQueries(queryClient, [
+      api.backgroundJobs.listBatches.queryKey(),
+      api.backgroundJobs.getBatchSummary.queryKey({ batchId }),
+      api.backgroundJobs.listBatchJobs.queryKey(),
+    ]);
+  };
+  const retry = useMutation(
+    api.backgroundJobs.retryBatch.mutationOptions({
+      onSuccess: invalidateAfterMutation,
+    }),
+  );
+  const retryJob = useMutation(
+    api.backgroundJobs.retryJob.mutationOptions({
+      onSuccess: invalidateAfterMutation,
+    }),
+  );
+  const cancel = useMutation(
+    api.backgroundJobs.cancelBatch.mutationOptions({
+      onSuccess: invalidateAfterMutation,
+    }),
+  );
+  const summaryLoading = useHydratedLoading(summaryQuery.isLoading);
+  const jobsLoading = useHydratedLoading(jobsQuery.isLoading);
+
+  if (summaryLoading || jobsLoading) return <Spinner />;
+  if (!summaryQuery.data || !jobsQuery.data) return null;
+
+  return (
+    <BatchDetail
+      batch={summaryQuery.data}
+      jobs={jobsQuery.data.jobs}
+      pageIndex={jobsQuery.data.pageIndex}
+      pageSize={jobsQuery.data.pageSize}
+      totalCount={jobsQuery.data.totalCount}
+      showFailedOnly={showFailedOnly}
+      onFailedOnlyChange={(failedOnly) => {
+        setPageIndex(0);
+        setShowFailedOnly(failedOnly);
+      }}
+      onPageChange={setPageIndex}
+      onRetry={() => retry.mutate({ batchId })}
+      onCancel={() => cancel.mutate({ batchId })}
+      onRetryJob={(jobId) => retryJob.mutate({ jobId })}
+    />
+  );
 }
 
 export function BackgroundJobsPage({
@@ -74,50 +174,15 @@ export function BackgroundJobsPage({
         : false;
     },
   });
-  const detailQuery = useQuery({
-    ...api.backgroundJobs.getBatch.queryOptions({
-      batchId: selectedBatchId ?? "",
-    }),
-    enabled: Boolean(selectedBatchId),
-    refetchInterval: (query) =>
-      query.state.data && isBatchLive(query.state.data.status)
-        ? BATCH_POLL_MS
-        : false,
-  });
-
   // Hydration-stable loading gates — see the render below and useHydratedLoading.
   const listLoading = useHydratedLoading(listQuery.isLoading);
-  // `detailQuery` is DISABLED with no batch selected, and a disabled query is
-  // `isPending && !isFetching` — so its `isLoading` is already a stable `false`
-  // on both sides and there is nothing to stabilize. Forcing the gate true until
-  // hydration would flash a spinner in the page's default state. The hook still
-  // has to run unconditionally (it is a hook), so AND the selection in after.
-  const detailHydratedLoading = useHydratedLoading(detailQuery.isLoading);
-  const detailLoading = Boolean(selectedBatchId) && detailHydratedLoading;
 
-  const invalidate = async () => {
+  const invalidateList = () => {
     const keys: QueryKey[] = [api.backgroundJobs.listBatches.queryKey()];
-    if (selectedBatchId) {
-      keys.push(
-        api.backgroundJobs.getBatch.queryKey({
-          batchId: selectedBatchId,
-        }),
-      );
-    }
     invalidateTRPCQueries(queryClient, keys);
   };
-
-  const retry = useMutation(
-    api.backgroundJobs.retryBatch.mutationOptions({ onSuccess: invalidate }),
-  );
-  const retryJob = useMutation(
-    api.backgroundJobs.retryJob.mutationOptions({ onSuccess: invalidate }),
-  );
-  const cancel = useMutation(
-    api.backgroundJobs.cancelBatch.mutationOptions({ onSuccess: invalidate }),
-  );
   const drain = useMutation(
-    api.backgroundJobs.drain.mutationOptions({ onSuccess: invalidate }),
+    api.backgroundJobs.drain.mutationOptions({ onSuccess: invalidateList }),
   );
   // Set by the save toast (?batchIds=…) to scope the list to one mutation's
   // batches. null ⇒ unscoped (show everything).
@@ -258,15 +323,8 @@ export function BackgroundJobsPage({
           selectedBatchId={selectedBatchId}
         />
       ) : null}
-      {detailLoading ? (
-        <Spinner />
-      ) : detailQuery.data ? (
-        <BatchDetail
-          batch={detailQuery.data}
-          onRetry={() => retry.mutate({ batchId: detailQuery.data.id })}
-          onCancel={() => cancel.mutate({ batchId: detailQuery.data.id })}
-          onRetryJob={(jobId) => retryJob.mutate({ jobId })}
-        />
+      {selectedBatchId ? (
+        <SelectedBatchDetail key={selectedBatchId} batchId={selectedBatchId} />
       ) : null}
     </Stack>
   );

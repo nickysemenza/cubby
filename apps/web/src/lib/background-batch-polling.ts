@@ -11,14 +11,15 @@ type Api = ReturnType<typeof useTRPC>;
 
 /**
  * The standard `fetchBatchStatus` poller passed to {@link watchBatchesAndInvalidate}:
- * a fresh `getBatch` query (staleTime 0) reduced to its status. Shared by every
- * mutation hook so the closure isn't hand-rolled per call site.
+ * a fresh summary query (staleTime 0) reduced to its status. It deliberately
+ * never loads the batch's jobs: large mutation batches can contain thousands
+ * of rows, while this watcher needs one status field.
  */
 export function makeBatchStatusFetcher(queryClient: QueryClient, api: Api) {
   return (batchId: string): Promise<BackgroundBatchStatus> =>
     queryClient
       .fetchQuery({
-        ...api.backgroundJobs.getBatch.queryOptions({ batchId }),
+        ...api.backgroundJobs.getBatchSummary.queryOptions({ batchId }),
         staleTime: 0,
       })
       .then((batch) => batch.status);
