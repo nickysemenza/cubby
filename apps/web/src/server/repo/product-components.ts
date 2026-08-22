@@ -69,7 +69,10 @@ import {
   enrichProductRowsWithPricing,
   loadEffectiveProductPricesById,
 } from "~/server/repo/product/pricing";
-import { enrichProductRowsWithQuantityLedger } from "~/server/repo/product/quantity-ledger";
+import {
+  enrichProductRowsWithQuantityLedger,
+  loadProductPickerQuantities,
+} from "~/server/repo/product/quantity-ledger";
 // The one rule for "does this Expense say the order bought the product" —
 // shared rather than restated, so a kit's purchase link and the Purchases panel
 // can never disagree about which orders count.
@@ -217,20 +220,36 @@ export async function listProductComponents(
     .orderBy(asc(product.name));
 
   const componentProductIds = rows.map((row) => row.productId);
-  const [prices, coverImageUrls] = await Promise.all([
+  // `loadProductPickerQuantities` rather than a stock query of our own: it
+  // already owns the live-`Location` join, the identity-location union (a bin
+  // in service IS a unit you hold), and the mixed-unit guard. Those three rules
+  // exist in exactly one place on purpose, so a component's count here cannot
+  // drift from the same product's count on the products list.
+  const [prices, coverImageUrls, quantities] = await Promise.all([
     loadEffectiveProductPricesById(db, componentProductIds),
     getProductCoverImageUrlsByProductIds(db, componentProductIds),
+    loadProductPickerQuantities(db, componentProductIds),
   ]);
 
-  return rows.map((row) => ({
-    productId: unsafeProductShortcode(row.productCode),
-    productName: row.productName,
-    manufacturer: row.manufacturer,
-    quantity: row.quantity,
-    price: prices.get(row.productId) ?? null,
-    coverImageUrl: coverImageUrls.get(row.productId) ?? null,
-    attachedAt: row.attachedAt,
-  }));
+  return rows.map((row) => {
+    const onHand = quantities.get(row.productId)?.onHand;
+    return {
+      productId: unsafeProductShortcode(row.productCode),
+      productName: row.productName,
+      manufacturer: row.manufacturer,
+      quantity: row.quantity,
+      price: prices.get(row.productId) ?? null,
+      coverImageUrl: coverImageUrls.get(row.productId) ?? null,
+      // "none" is a real zero, not missing data — see `onHandUnits`' doc.
+      onHandUnits:
+        onHand?.state === "counted"
+          ? onHand.units
+          : onHand?.state === "none"
+            ? 0
+            : null,
+      attachedAt: row.attachedAt,
+    };
+  });
 }
 
 /**

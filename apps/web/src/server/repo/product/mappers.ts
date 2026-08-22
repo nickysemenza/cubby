@@ -1,4 +1,7 @@
-import { canonicalExternalIdUrl } from "@cubby/schemas/external-id";
+import {
+  canonicalExternalIdUrl,
+  GTIN_SOURCE,
+} from "@cubby/schemas/external-id";
 import {
   unsafeIngredientShortcode,
   unsafeInventoryShortcode,
@@ -57,6 +60,26 @@ type ProductTopLevelDB = RowWithOptionalAliases<typeof product.$inferSelect> & {
   pricing?: ProductPricing;
 };
 
+/**
+ * The barcode that stands for a product, from its already-loaded external ids.
+ *
+ * Derived rather than queried: every caller that emits `primaryGtin` on a
+ * top-level product shape has `externalIds` in hand, so this costs nothing. A
+ * slot can be left with no primary (removing one promotes the oldest survivor,
+ * but a replace-payload can leave the slot empty), so fall back to the first
+ * live barcode rather than reporting none.
+ */
+export const primaryGtinOf = (
+  externalIds: MappableProductExternalId[] | undefined | null,
+): string | null => {
+  const live = (externalIds ?? []).filter(
+    (row) => row.deletedAt === null && row.source === GTIN_SOURCE,
+  );
+  return (
+    live.find((row) => row.isPrimary)?.externalId ?? live[0]?.externalId ?? null
+  );
+};
+
 export const mapProductExternalIds = (
   externalIds: MappableProductExternalId[] | undefined | null,
 ) =>
@@ -105,7 +128,7 @@ export const dbProductToTopLevelShape = (
   name: productData.name,
   aliases: productData.aliases ?? [],
   tags: productData.tags ?? [],
-  upc: productData.upc,
+  primaryGtin: primaryGtinOf(productData.externalIds),
   fdc_id: productData.fdc_id,
   manufacturer: productData.manufacturer,
   model: productData.model,
@@ -177,11 +200,13 @@ export const dbProductToPickerItemAPI = (
 export const dbProductToInventoryEmbedShape = (
   productData: RowWithOptionalAliases<typeof product.$inferSelect> & {
     pricing: ProductPricing;
+    /** Supplied by the caller (`loadPrimaryGtins`); not a Product column. */
+    primaryGtin: string | null;
   },
 ): ProductInventoryEmbedOut => ({
   id: unsafeProductShortcode(productData.shortcode),
   name: productData.name,
-  upc: productData.upc,
+  primaryGtin: productData.primaryGtin,
   fdc_id: productData.fdc_id,
   manufacturer: productData.manufacturer,
   model: productData.model,
@@ -197,12 +222,14 @@ export const dbProductToInventoryEmbedShape = (
 export const dbProductToInventoryListShape = (
   productData: RowWithOptionalAliases<typeof product.$inferSelect> & {
     pricing?: ProductPricing;
+    /** Supplied by the caller (`loadPrimaryGtins`); not a Product column. */
+    primaryGtin: string | null;
   },
 ): InventoryListProductOut => ({
   id: unsafeProductShortcode(productData.shortcode),
   name: productData.name,
   manufacturer: productData.manufacturer,
-  upc: productData.upc,
+  primaryGtin: productData.primaryGtin,
   fdc_id: productData.fdc_id,
   category: productData.category,
   expectedQuantity: productData.expectedQuantity,
@@ -404,7 +431,7 @@ export const dbProductToAPI = (
     name: productData.name,
     aliases: productData.aliases ?? [],
     tags: productData.tags ?? [],
-    upc: productData.upc,
+    primaryGtin: primaryGtinOf(productData.externalIds),
     fdc_id: productData.fdc_id,
     manufacturer: productData.manufacturer,
     model: productData.model,
@@ -436,6 +463,9 @@ export const dbProductToAPI = (
       type: parseLocationType(loc.type, { id: loc.id, name: loc.name }),
       ancestors: loc.ancestors ?? [],
     })),
+    // Counts edges, not units: a 4-pack held as one edge with `quantity: 4`
+    // reads as 1. Non-zero is what makes this product a kit.
+    componentCount: Number(productData.componentCount ?? 0),
     ...deriveProductQuantityShape(
       mappedInventoryEntry,
       productData.quantityLedger,

@@ -229,6 +229,18 @@ export const relations = {
           },
         },
       },
+      // Embedded on the detail read for the same reason `servingAsLocations`
+      // is: the hero reads it, and a hero fed by a second in-flight query
+      // contradicts the Kit Components table beneath it while that query
+      // resolves. Same live-edge predicate as the list's `componentCount` and
+      // as `productIdsWithComponents` in product/crud.ts — the filter, the
+      // cell and the hero must select the same rows.
+      extras: {
+        componentCount:
+          sql<number>`(SELECT count(*) FROM "ProductComponent" pc WHERE pc."parentProductId" = "product"."id" AND pc."deletedAt" IS NULL)`.as(
+            "componentCount",
+          ),
+      },
     },
     list: {
       with: {
@@ -369,7 +381,9 @@ export const relations = {
         inventoryEntries: {
           where: notDeleted(inventoryEntry),
           with: {
-            product: true,
+            // See the `inventory.list` note below: the embedded product's
+            // barcode is derived from its primary `gtin` identifier row.
+            product: { with: { externalIds: true } },
           },
         },
         images: {
@@ -404,7 +418,7 @@ export const relations = {
         },
         inventoryEntries: {
           with: {
-            product: true,
+            product: { with: { externalIds: true } },
           },
         },
         images: {
@@ -430,7 +444,10 @@ export const relations = {
   inventory: {
     list: {
       with: {
-        product: true,
+        // `externalIds` is loaded for the LIST too, not only for `full`: a
+        // row's barcode is derived from its primary `gtin` identifier now, so
+        // without it every inventory row would report itself barcode-less.
+        product: { with: { externalIds: true } },
         location: true,
       },
     },

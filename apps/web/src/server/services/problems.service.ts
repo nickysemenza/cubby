@@ -174,7 +174,7 @@ const findProductCoverageProblems = async (
       !isNonFoodCategory(p.category) &&
       (p.price != null ||
         p.fdc_id != null ||
-        p.upc != null ||
+        p.primaryGtin != null ||
         p.unitMappings.length > 0),
   );
   const islandedCandidates = products.filter(
@@ -447,10 +447,11 @@ export const findMaintenanceCounts = async (
 
   return {
     // Deliberately a SUBSET of the Problems-page productsWithNoImages count:
-    // backfillUPCImages can only act on products that have a UPC to look up, so
-    // this counts just those. Same canonical key, intentionally narrower number.
-    productsWithNoImages: r.productsWithNoImages.filter((p) => p.upc != null)
-      .length,
+    // backfillUPCImages can only act on products that have a barcode to look
+    // up, so this counts just those. Same canonical key, narrower number.
+    productsWithNoImages: r.productsWithNoImages.filter(
+      (p) => p.primaryGtin != null,
+    ).length,
     locationsWithoutAiDescription: r.locationsWithoutAiDescription,
     staleRecipeTotals: r.staleRecipeTotals,
     cullablePendingImages: r.cullablePendingImages,
@@ -779,7 +780,7 @@ const presentFastExactRows = <T>(
           id,
           name: String(r.name),
           manufacturer: String(r.manufacturer ?? ""),
-          upc: (r.upc ?? null) as string | null,
+          primaryGtin: (r.primaryGtin ?? null) as string | null,
         };
       case "unreferencedImages":
         return {

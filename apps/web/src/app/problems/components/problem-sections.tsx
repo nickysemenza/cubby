@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { ReferentialLivenessViolation } from "@cubby/schemas/entity-integrity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { displayGtin } from "@cubby/schemas/external-id";
 import {
   type AllProblems,
   type CoverageProblemKey,
@@ -969,15 +970,19 @@ const DECLARED_SECTIONS = [
       title: `${dupe.manufacturer} ${dupe.model}`,
       subtitle: `${dupe.products.length} products share this part number`,
       badges: dupe.products.map((p) => entityBadge("product", p)),
-      // The UPCs and external-id sources, which are what decide whether merging
-      // is safe — two rows with different UPCs are probably genuinely different
-      // variants. Both were on the wire and neither reached the card, so the
-      // merge button sat next to no evidence for pressing it.
+      // The barcodes and external-id sources, which are what decide whether
+      // merging is safe — two rows carrying different barcodes are probably
+      // genuinely different variants. Both were on the wire and neither reached
+      // the card, so the merge button sat next to no evidence for pressing it.
+      //
+      // Every barcode on the row, not one: a set is exactly what distinguishes
+      // "two encodings of one barcode" (safe to merge) from "two barcodes"
+      // (probably not), which a single scalar could never show.
       details: dupe.products.map((p) => (
         <div key={p.id} className="text-muted-foreground text-sm">
           {[
             p.name,
-            p.upc ? `UPC ${p.upc}` : "no UPC",
+            p.gtins.length ? p.gtins.map(displayGtin).join(", ") : "no barcode",
             p.sources.length ? p.sources.join(", ") : "no external ids",
           ].join(" · ")}
         </div>
@@ -1461,7 +1466,9 @@ const DECLARED_SECTIONS = [
     renderItem: (product) => ({
       title: product.name,
       subtitle: byManufacturer(product.manufacturer),
-      badges: product.upc ? [<CodeChip key="upc">{product.upc}</CodeChip>] : [],
+      badges: product.primaryGtin
+        ? [<CodeChip key="upc">{displayGtin(product.primaryGtin)}</CodeChip>]
+        : [],
       route: entityDetailLink("product", product.id),
     }),
   }),

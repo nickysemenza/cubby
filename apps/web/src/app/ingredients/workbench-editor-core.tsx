@@ -152,7 +152,9 @@ export const blankConvRow = (
 
 /** Whether any of the row's products already resolves to a USDA food. */
 export const hasUsdaLink = (row: EnrichmentRow): boolean =>
-  row.product.some((p) => p.food != null || p.fdc_id != null || p.upc != null);
+  row.product.some(
+    (p) => p.food != null || p.fdc_id != null || p.primaryGtin != null,
+  );
 
 /**
  * An ingredient used only in imported cookbook ("book") recipes — i.e. it has

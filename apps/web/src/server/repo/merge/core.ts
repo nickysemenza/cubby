@@ -228,10 +228,11 @@ export const finalizeMerge = async <E extends RemovableEntity>(
   if (loserIds.length === 0) return;
   const ids = [...loserIds];
 
-  // The row removal stays here: `mergeProducts` depends on the loser vacating
-  // the partial `Product_upc_key` slot BEFORE the keeper adopts the UPC, so
-  // this statement's position relative to the caller's own writes is load-
-  // bearing. Only the tail — cascade plus delete entries — is shared.
+  // The row removal stays here rather than moving into `cascadeRemoval`:
+  // removal differs per entity (soft for products/purchases/vendors, hard for
+  // ingredients) and its position relative to a caller's own writes can be
+  // load-bearing when a partial unique index is involved. Only the tail —
+  // cascade plus delete entries — is shared.
   if (removal === "hard") {
     await tx.delete(table).where(inArray(table.id, ids));
   } else {

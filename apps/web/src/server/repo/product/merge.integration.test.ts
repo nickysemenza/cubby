@@ -1,3 +1,4 @@
+import { GTIN_SOURCE } from "@cubby/schemas/external-id";
 import {
   type ProductId,
   unsafeLocationId,
@@ -8,7 +9,6 @@ import { and, asc, eq } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import {
-  auditLog,
   inventoryEntry,
   product,
   productExternalId,
@@ -161,7 +161,6 @@ describe("mergeProducts", () => {
       columns: {
         id: true,
         aliases: true,
-        upc: true,
         price: true,
         notes: true,
         deletedAt: true,
@@ -175,22 +174,22 @@ describe("mergeProducts", () => {
     expect(survivor?.aliases).toContain("20V MAX Drill Kit");
     expect(survivor?.price).toBe(199);
     expect(survivor?.notes).toBe("From the retailer import");
-    // `upc` is adopted only AFTER the loser is soft-deleted — the partial
-    // unique `Product_upc_key` would abort the merge otherwise.
-    expect(survivor?.upc).toBe("012345678905");
-    expect(summary.carriedFields).toContain("upc");
-    const [audit] = await getDb(ctx.db)
-      .select({ changes: auditLog.changes })
-      .from(auditLog)
-      .where(
-        and(eq(auditLog.entityId, keeper.id), eq(auditLog.action, "update")),
-      );
-    expect(audit?.changes?.carriedOver).toEqual(
-      expect.objectContaining({
-        from: null,
-        to: expect.objectContaining({ upc: "012345678905" }),
-      }),
-    );
+    // The barcode is no longer a carried COLUMN — it rides the external-id
+    // fold, so it lands on the survivor as a `gtin` row instead of overwriting
+    // a scalar. Same guarantee the old `carriedFields` assertion gave (the
+    // loser's identifier is not lost), on the model that can hold two.
+    expect(summary.carriedFields).not.toContain("upc");
+    const survivorGtins = await getDb(ctx.db).query.productExternalId.findMany({
+      where: and(
+        eq(productExternalId.productId, keeper.id),
+        eq(productExternalId.source, GTIN_SOURCE),
+        notDeleted(productExternalId),
+      ),
+      columns: { externalId: true, isPrimary: true },
+    });
+    expect(survivorGtins).toEqual([
+      { externalId: "00012345678905", isPrimary: true },
+    ]);
   });
 
   it("demotes rather than destroys a colliding external-id slot", async () => {

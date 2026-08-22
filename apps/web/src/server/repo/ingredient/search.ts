@@ -179,7 +179,14 @@ export const mergeImpactForIngredients = async (
     .select({
       ingredientId: product.ingredientId,
       productCount: sql<number>`count(*)`,
-      hasUsdaLink: sql<boolean>`bool_or(${product.fdc_id} is not null or ${product.upc} is not null)`,
+      // Mirrors `foodLookupParamFromProduct`: an explicit fdc_id, else a
+      // barcode. `sql.raw` with the outer reference hand-qualified — this is a
+      // joined-through aggregate over a single-table select, where drizzle
+      // strips the table prefix off an interpolated column and the subquery
+      // would silently self-join.
+      hasUsdaLink: sql<boolean>`bool_or(${product.fdc_id} is not null or ${sql.raw(
+        `EXISTS (SELECT 1 FROM "ProductExternalId" pei WHERE pei."productId" = "Product"."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL)`,
+      )})`,
     })
     .from(product)
     .where(and(inArray(product.ingredientId, liveIds), notDeleted(product)))

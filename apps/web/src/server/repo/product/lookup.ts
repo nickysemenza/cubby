@@ -1,6 +1,6 @@
 /**
  * Product lookup and search operations.
- * Find products by various identifiers (UPC, name, manufacturer).
+ * Find products by various identifiers (barcode, name, manufacturer).
  */
 
 import type { ProductId } from "@cubby/schemas/identifiers";
@@ -17,6 +17,8 @@ import type { Database } from "~/server/db";
 import { inventoryEntry, product } from "~/server/db/schema";
 import { enrichProductRowsWithDataQuality } from "~/server/repo/data-quality";
 import { getDb, imageOrder, notDeleted } from "~/server/repo/database-helpers";
+import { loadPrimaryGtins, productHasGtin } from "./gtin";
+import { foodLookupParamFromProduct } from "./helpers";
 import {
   dbProductToTopLevelAPI,
   mapProductListInventoryEntries,
@@ -24,7 +26,7 @@ import {
 import { enrichProductRowsWithPricing } from "./pricing";
 
 /**
- * Find products by UPC or NDB number - used for food items in usda.ts
+ * Find products by barcode or fdc_id - used for food items in usda.ts
  */
 export const findProductsByFoodIdentifier = async (
   db: Database,
@@ -38,11 +40,15 @@ export const findProductsByFoodIdentifier = async (
   const lookup = foodLookupParam.parse(rawLookup);
 
   // Find all matching products (exclude soft-deleted). A product links to a food
-  // by its explicit fdc_id or its barcode (upc). Products no longer store an NDB
-  // number, so an NDB-keyed lookup (still a valid way to identify a USDA food)
-  // matches nothing on the product side.
+  // by its explicit fdc_id or by any of its barcodes. Products no longer store
+  // an NDB number, so an NDB-keyed lookup (still a valid way to identify a USDA
+  // food) matches nothing on the product side.
+  //
+  // `productHasGtin` normalizes, which is a recall FIX as well as a port: USDA
+  // hands us a 12-digit `gtin_upc`, and a product holding the 13- or 14-digit
+  // form of that same barcode never matched the old `eq(product.upc, ...)`.
   const linkCondition = match(lookup)
-    .with({ kind: "upc" }, (l) => eq(product.upc, l.gtin_upc))
+    .with({ kind: "upc" }, (l) => productHasGtin(l.gtin_upc))
     .with({ kind: "fdc" }, (l) => eq(product.fdc_id, l.fdc_id))
     .with({ kind: "ndb" }, () => sql`false`)
     .exhaustive();
@@ -70,20 +76,19 @@ export const getFoodLookupsForLinkedProducts = async (
 ): Promise<FoodLookupParam[]> => {
   const rows = await getDb(db).query.product.findMany({
     where: notDeleted(product),
-    columns: {
-      fdc_id: true,
-      upc: true,
-    },
+    columns: { id: true, fdc_id: true },
   });
+  const gtins = await loadPrimaryGtins(
+    db,
+    rows.filter((row) => row.fdc_id == null).map((row) => row.id),
+  );
 
   return rows.flatMap((row): FoodLookupParam[] => {
-    if (row.fdc_id != null) {
-      return [{ kind: "fdc" as const, fdc_id: row.fdc_id }];
-    }
-    if (row.upc != null) {
-      return [{ kind: "upc" as const, gtin_upc: row.upc }];
-    }
-    return [];
+    const param = foodLookupParamFromProduct({
+      fdc_id: row.fdc_id,
+      primaryGtin: gtins.get(row.id) ?? null,
+    });
+    return param ? [param] : [];
   });
 };
 
@@ -119,12 +124,20 @@ const findProductToAPI = async (
   return qualified ? dbProductToTopLevelAPI(qualified) : null;
 };
 
-// Find a product by UPC code (excludes soft-deleted)
-export const findProductByUPC = (
+/**
+ * The product carrying this barcode, in ANY encoding (excludes soft-deleted).
+ *
+ * A 12-digit scan finds the product stored as the 13-digit reprint, because
+ * both sides go through GTIN-14. Returning a single product stays honest
+ * because `ProductExternalId_source_kind_externalId_key` guarantees one live
+ * owner per barcode — the same guarantee `Product_upc_key` gave, minus the
+ * length-sensitivity that let one item exist twice under two encodings.
+ */
+export const findProductByGtin = (
   db: Database,
-  upcCode: string,
+  barcode: string,
 ): Promise<ProductTopLevelOut | null> =>
-  findProductToAPI(db, and(eq(product.upc, upcCode), notDeleted(product)));
+  findProductToAPI(db, and(productHasGtin(barcode), notDeleted(product)));
 
 // Find a product by name and manufacturer (internal helper, excludes soft-deleted)
 const findProductByNameAndManufacturer = (

@@ -14,7 +14,7 @@ export const sortableFields = {
     "name",
     "manufacturer",
     "model",
-    "upc",
+    "primaryGtin",
     "category",
     "fdc_id",
     "price",

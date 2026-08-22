@@ -14,7 +14,10 @@ describe("productMcpOut", () => {
       manufacturer: "Milwaukee",
       model: "2744-20",
       notes: "Bare tool",
-      upc: "045242593057",
+      // Canonical GTIN-14 — this is a READ projection, derived from the primary
+      // `gtin` identifier row. The write input is the one that accepts any
+      // encoding; see `mcpProductCreateInput` below.
+      primaryGtin: "00045242593057",
       category: "tools",
       tags: ["M18"],
       price: 329,
@@ -51,6 +54,7 @@ describe("productMcpOut", () => {
     expect(parsed).toMatchObject({
       model: "2744-20",
       notes: "Bare tool",
+      primaryGtin: "00045242593057",
       imageCount: 2,
       coverImageUrl: "https://images.example.test/2744-20.webp",
       price: 329,

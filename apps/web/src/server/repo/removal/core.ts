@@ -37,10 +37,10 @@
  * It does not remove the entity's own rows. Removal statements differ per
  * entity (soft vs hard, which children cascade, which unique-index slot has to
  * be vacated first, and in what order) and several sites depend on that order —
- * `product/merge.ts` must vacate a partial UPC index before the keeper adopts
- * it, `inventory/bulk.ts` hard-deletes emptied sources up front to free slot
- * keys. Absorbing the row removal is a separate, deeper front door; this is the
- * tail every one of those paths shares.
+ * `inventory/bulk.ts` hard-deletes emptied sources up front to free slot keys,
+ * and `ingredient/merge.ts` hard-removes where the other merges soft-delete.
+ * Absorbing the row removal is a separate, deeper front door; this is the tail
+ * every one of those paths shares.
  *
  * Consequently the embedding is always *soft*-deleted regardless of how the row
  * died. A soft-deleted embedding is excluded from both semantic search and

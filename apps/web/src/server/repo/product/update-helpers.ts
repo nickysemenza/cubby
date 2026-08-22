@@ -6,6 +6,9 @@
 
 import {
   type ExternalIdInput,
+  GTIN_KIND,
+  GTIN_SOURCE,
+  normalizeGtin,
   storedExternalIdUrl,
 } from "@cubby/schemas/external-id";
 import type { ProductId } from "@cubby/schemas/identifiers";
@@ -181,6 +184,120 @@ export function externalIdSlotUnchanged(
     // silently discard the caller's intent.
     existing.isPrimary === (incoming.isPrimary ?? true)
   );
+}
+
+/**
+ * Canonicalize a barcode on the way into the database.
+ *
+ * The Zod `gtin` schema already transforms at the tRPC/MCP boundary, but the
+ * repository is called directly too — test fixtures, the UPC orchestration
+ * service, importers — and none of those see it. Normalizing again here is what
+ * makes the canonical form an invariant of the TABLE rather than of one entry
+ * point, and `ProductExternalId_gtin_digits_check` is the backstop that proves
+ * it: adding the constraint is how every direct caller was found.
+ *
+ * Throws rather than dropping the value. Silently discarding a barcode is the
+ * worse failure — nothing downstream can tell it happened.
+ */
+function requireCanonicalGtin(value: string): string {
+  const normalized = normalizeGtin(value.trim());
+  if (normalized === null) {
+    throw createAppError(
+      "PRODUCT_GTIN_INVALID",
+      `“${value}” is not a barcode — expected 8-14 digits.`,
+    );
+  }
+  return normalized;
+}
+
+/**
+ * Set (or clear) the barcode that stands for a product, without disturbing its
+ * other identifiers.
+ *
+ * This is what the `upc` write input on create/update lands on.
+ * `syncProductExternalIds` below cannot serve it: that REPLACES the whole set,
+ * so a caller passing only a barcode would wipe every ASIN and retailer SKU.
+ *
+ * `null` retires the PRIMARY barcode, not every barcode — a product can hold
+ * several, and `ensureSlotPrimaries` then promotes the oldest survivor. That is
+ * the same rule `patch_product_external_ids` documents for removing a primary;
+ * to clear the whole set, pass an explicit `externalIds` payload.
+ */
+export async function syncPrimaryGtin(
+  tx: DrizzleTransaction,
+  productId: ProductId,
+  raw: string | null,
+): Promise<void> {
+  const value = raw === null ? null : requireCanonicalGtin(raw);
+  const live = await tx.query.productExternalId.findMany({
+    where: and(
+      eq(productExternalId.productId, productId),
+      eq(productExternalId.source, GTIN_SOURCE),
+      notDeleted(productExternalId),
+    ),
+    orderBy: [asc(productExternalId.createdAt), asc(productExternalId.id)],
+  });
+  const currentPrimary = live.find((row) => row.isPrimary);
+
+  if (value === null) {
+    if (currentPrimary) {
+      await tx
+        .update(productExternalId)
+        .set({ deletedAt: new Date() })
+        .where(eq(productExternalId.id, currentPrimary.id));
+    }
+  } else if (currentPrimary?.externalId !== value) {
+    // Demote BEFORE promoting or inserting: the partial unique is a plain
+    // non-deferrable index, so two primaries exist momentarily otherwise and
+    // the write aborts. Same ordering `syncProductExternalIds` relies on.
+    if (currentPrimary) {
+      await tx
+        .update(productExternalId)
+        .set({ isPrimary: false })
+        .where(eq(productExternalId.id, currentPrimary.id));
+    }
+    const existing = live.find((row) => row.externalId === value);
+    if (existing) {
+      await tx
+        .update(productExternalId)
+        .set({ isPrimary: true })
+        .where(eq(productExternalId.id, existing.id));
+    } else {
+      await tx.insert(productExternalId).values({
+        productId,
+        source: GTIN_SOURCE,
+        kind: GTIN_KIND,
+        externalId: value,
+        isPrimary: true,
+      });
+    }
+  }
+
+  await ensureSlotPrimaries(tx, productId, [
+    { source: GTIN_SOURCE, kind: GTIN_KIND },
+  ]);
+}
+
+/**
+ * Fold a bare `upc` write into an explicit `externalIds` replacement payload.
+ *
+ * Both can arrive on one update, and `syncProductExternalIds` replaces the set
+ * — so without this, whichever ran second would silently discard the other.
+ */
+export function foldGtinIntoExternalIds(
+  externalIds: ExternalIdInput[],
+  raw: string | null,
+): ExternalIdInput[] {
+  const value = raw === null ? null : requireCanonicalGtin(raw);
+  const others = externalIds.filter(
+    (entry) => entry.source !== GTIN_SOURCE || entry.externalId !== value,
+  );
+  const demoted = others.map((entry) =>
+    entry.source === GTIN_SOURCE ? { ...entry, isPrimary: false } : entry,
+  );
+  return value === null
+    ? demoted
+    : [...demoted, { source: GTIN_SOURCE, kind: GTIN_KIND, externalId: value }];
 }
 
 /**

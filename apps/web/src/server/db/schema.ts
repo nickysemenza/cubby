@@ -573,17 +573,16 @@ export const product = pgTable(
     aliases: text("aliases").array().notNull().default(sql`'{}'::text[]`),
     manufacturer: text("manufacturer").notNull(),
     /**
-     * A product's ONE barcode. Scalar, and therefore lossy: a product routinely
-     * carries more than one (a manufacturer reissues, a retailer relabels, two
-     * listings disagree), and every merge whose survivor already held a
-     * different barcode destroyed the other permanently.
+     * DEAD. Nothing reads or writes this column; barcodes live on
+     * `ProductExternalId` rows under source `gtin`, which hold any number of
+     * them. It is declared here only so that `db:push` does not offer to drop
+     * it before the code that stopped selecting it has actually deployed —
+     * dropping a column the running worker still selects is what took
+     * production down when `FinancialTransaction.purchaseId` went.
      *
-     * Superseded by `ProductExternalId` rows under source `gtin`, which hold
-     * any number. This column is retained only until the barcodes are
-     * backfilled onto those rows and every reader is switched over.
-     *
-     * TODO(product-multi-identifier): backfill to `gtin` rows, then drop this
-     * column and `Product_upc_key`.
+     * TODO(product-multi-identifier): after the deploy, `DROP INDEX
+     * "Product_upc_key"; ALTER TABLE "Product" DROP COLUMN "upc";` by hand and
+     * then delete this declaration, in that order, so the next push is a no-op.
      */
     upc: text("upc"),
     // Explicit USDA link by FoodData Central id (the universal PK across all food
@@ -716,6 +715,20 @@ export const productExternalId = pgTable(
     check(
       "ProductExternalId_source_slug_check",
       sql`${table.source} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND ${table.source} = lower(trim(${table.source}))`,
+    ),
+    // Barcodes are stored in ONE canonical encoding (GTIN-14, zero-padded), so
+    // that the global `(source, kind, externalId)` unique above is what stops
+    // two live products claiming one barcode. Storing the encoding as scanned
+    // would put a 12-digit UPC-A and its 13-digit reprint in two different
+    // strings, and the unique would let both through — which is exactly the bug
+    // the partial `Product_upc_key` had.
+    //
+    // A constraint rather than a Zod convention because the normalization is a
+    // `lpad(..., 14, '0')` on the SQL side, and lpad TRUNCATES input longer
+    // than 14 instead of erroring.
+    check(
+      "ProductExternalId_gtin_digits_check",
+      sql`${table.source} <> 'gtin' OR ${table.externalId} ~ '^[0-9]{14}$'`,
     ),
   ],
 );

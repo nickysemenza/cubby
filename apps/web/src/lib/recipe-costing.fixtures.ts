@@ -52,7 +52,7 @@ export const makeProduct = (
   name: idStr,
   aliases: [],
   tags: [],
-  upc: opts.upc ?? null,
+  primaryGtin: opts.upc ?? null,
   fdc_id: opts.fdc ?? null,
   manufacturer: "",
   category: null,

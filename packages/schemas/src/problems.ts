@@ -247,7 +247,12 @@ export const duplicateProductIdentitySchema = z.object({
     z.object({
       id: productShortcode,
       name: z.string(),
-      upc: z.string().nullable(),
+      /**
+       * Every barcode on this row, canonical GTIN-14. A set, not a scalar —
+       * which is the whole reason two encodings of one barcode used to look
+       * like two products. Render with `displayGtin`.
+       */
+      gtins: z.array(z.string()),
       /** Distinct external-id sources on this row (e.g. amazon, homedepot). */
       sources: z.array(z.string()),
     }),
@@ -489,7 +494,7 @@ export const vendorWithoutLogoSchema = z.object({
 
 export const productWithNoImagesSchema = z.object({
   ...productProblemFields,
-  upc: z.string().nullable(),
+  primaryGtin: z.string().nullable(),
 });
 
 export const productWithIslandedMappingsSchema = z.object({

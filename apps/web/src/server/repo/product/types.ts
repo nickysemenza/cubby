@@ -59,6 +59,8 @@ export type ProductDeepDB = ProductSelect & {
   }>;
   /** Attached by `enrichProductRowsWithQuantityLedger`, same as the list shape. */
   quantityLedger: QuantityLedger;
+  /** Live `ProductComponent` edges where this product is the parent. */
+  componentCount: number;
 };
 
 export type ProductListDB = ProductSelect & {

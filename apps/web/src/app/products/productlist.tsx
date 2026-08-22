@@ -1,3 +1,4 @@
+import { displayGtin } from "@cubby/schemas/external-id";
 import type { ProductFilters, ProductListItem } from "@cubby/schemas/product";
 import type { KitComponentRowOut } from "@cubby/schemas/product-components";
 import { formatCategoryLabel, getCategoryColor } from "@cubby/shared";
@@ -384,10 +385,13 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
           },
         },
       }),
-      createExternalLinkColumn(columnHelper, "upc", "/usda/upc/$code", {
+      createExternalLinkColumn(columnHelper, "primaryGtin", "/usda/upc/$code", {
         header: "UPC",
         className: "w-32",
         mobile: { interactive: true },
+        // Stored canonically as GTIN-14, shown (and linked) in the encoding
+        // printed on the package.
+        display: displayGtin,
         editable: {
           onSave: async (newValue, product) => {
             await updateProductMutation.mutateAsync({
@@ -444,7 +448,7 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
             MODEL_PRESENCE_OPTIONS,
           ),
       }),
-      columnHelper.accessor((row) => row.upc, {
+      columnHelper.accessor((row) => row.primaryGtin, {
         id: "upcPresence",
         header: "UPC present",
         enableSorting: false,
