@@ -100,7 +100,18 @@ describe("findViewProblems", () => {
 
     expect(one.result.productsWithNoImages).toHaveLength(1);
     expect(page.result.productsWithNoImages).toHaveLength(12);
-    expect(page.queryCount).toBe(one.queryCount);
+    // Not exact equality, and deliberately not: on CI this lane issues 50 or 51
+    // statements depending on scheduling, and two runs of the SAME commit
+    // disagreed in OPPOSITE directions (51 then 50, then 50 then 51) while
+    // three consecutive local runs stayed flat at 51. One statement in here is
+    // therefore timing-dependent, not page-size-dependent, so pinning the two
+    // measurements to each other tests the scheduler as much as the SQL.
+    //
+    // The guard is unweakened for the bug it exists to catch: a hydration query
+    // per card row would add ELEVEN here, not one. Widen this only with the
+    // same kind of evidence — a tolerance that grows to absorb a real
+    // regression is how this assertion stops meaning anything.
+    expect(Math.abs(page.queryCount - one.queryCount)).toBeLessThanOrEqual(1);
   });
 
   it("does not turn embedding coverage into one round trip per entity type", async () => {
