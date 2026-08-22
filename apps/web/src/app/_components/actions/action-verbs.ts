@@ -11,6 +11,7 @@ import {
   ListChecks,
   Merge,
   Package,
+  PackageCheck,
   PackageMinus,
   Pencil,
   Printer,
@@ -89,6 +90,7 @@ export const actionVerbs = {
   setTrade: { label: "Set trade...", icon: Wrench },
   setDueDate: { label: "Set due date...", icon: CalendarClock },
   setCostType: { label: "Set cost type...", icon: Tag },
+  setStockTracking: { label: "Set stock tracking...", icon: PackageCheck },
   createProjectFrom: {
     label: "Create project from selected...",
     icon: Sparkles,

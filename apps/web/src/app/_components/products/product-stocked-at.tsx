@@ -1,7 +1,8 @@
 import type { InventoryShortcode } from "@cubby/schemas/identifiers";
+import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import type { ProductWithFoodOut } from "@cubby/schemas/product";
 import { Link } from "@tanstack/react-router";
-import { type FC, useMemo, useState } from "react";
+import { type FC, useCallback, useMemo, useState } from "react";
 import {
   VerbMenuItem,
   verbBulkAction,
@@ -12,7 +13,10 @@ import {
   createSingleEntityInlineLinkColumn,
 } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
-import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
+import {
+  type CubbyRow,
+  createCubbyColumnHelper,
+} from "~/app/_components/data-table/table-features";
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { DeleteInventoryDialog } from "~/app/_components/inventory/delete-inventory-dialog";
@@ -199,6 +203,32 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
     [helper, product.unitMappings],
   );
 
+  /**
+   * Move the selection to one placement, skipping rows already there.
+   *
+   * Sequential, NOT `Promise.all` — the same reason the location table spells
+   * out: the slot is `(productId, locationId, placement)`, so flipping a row
+   * whose twin already sits in that room at the target placement is refused. In
+   * parallel that rejection lands after its siblings are already written,
+   * leaving a partial apply; serially it stops at the offending row with
+   * everything before it durably done.
+   */
+  const flipTo = useCallback(
+    async (next: InventoryPlacement, selected: CubbyRow<StockedRow>[]) => {
+      const movable = selected
+        .map((row) => row.original)
+        .filter(
+          (row): row is StockRow =>
+            row.kind === "stock" && row.placement !== next,
+        );
+      for (const row of movable) {
+        await update.mutateAsync({ id: row.id, data: { placement: next } });
+      }
+      return { success: true };
+    },
+    [update],
+  );
+
   const bulkActions = useMemo(
     () => ({
       actions: [
@@ -227,10 +257,31 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
             return { success: true };
           },
         }),
+        // Ported from `location-inventory-table`, which owns the same verb pair
+        // over one room. That table is scoped to a single placement and so can
+        // pick ONE verb from a prop; this one deliberately shows both
+        // placements at once (the discriminator column is the whole point), so
+        // each direction is its own action and `flipTo` filters the selection
+        // rather than assuming it.
+        //
+        // Reaching this from the product side is what makes an install
+        // recordable at all when you are working product-first — walking the
+        // half-used roll of wire, or the fixture that went into the wall, from
+        // the page that told you it was missing.
+        verbBulkAction<StockedRow>("markInstalled", {
+          id: "mark-installed",
+          minSelection: 1,
+          onExecute: (selected) => flipTo("installed", selected),
+        }),
+        verbBulkAction<StockedRow>("markAsStock", {
+          id: "mark-stock",
+          minSelection: 1,
+          onExecute: (selected) => flipTo("stock", selected),
+        }),
       ],
       clearSelectionOnComplete: false,
     }),
-    [],
+    [flipTo],
   );
 
   const { table, bulkActionBar } = useClientEntityList<StockedRow>({

@@ -12,18 +12,21 @@ import {
   productImage,
   productUnitMappings,
 } from "~/server/db/schema";
+import { getAuditLog } from "./audit-log";
 import { getDb, insertAndReturn } from "./database-helpers";
 import { createExpense, deleteExpenses } from "./expense";
-import { deleteInventoryEntries } from "./inventory";
+import { deleteInventoryEntries, inventoryentryList } from "./inventory";
 import { updateLocation } from "./location";
 import {
   deleteProducts,
   findProductByNameFuzzyManufacturer,
   getProductByID,
   getProductPickerItemsByIds,
+  getProductsByShortcodes,
   patchProductExternalIds,
   productList,
   quickCreateProduct,
+  setProductsStockTracked,
   updateProduct,
 } from "./product";
 import { loadProductQuantityLedgers } from "./product/quantity-ledger";
@@ -3204,5 +3207,189 @@ describe("product detail: where the product is", () => {
     // so the same product reported different stock on two surfaces.
     const detail = await getProductByID(ctx.db, prod.entityId);
     expect(detail?.inventoryEntry).toHaveLength(0);
+  });
+});
+
+/**
+ * The one write that makes a product vanish from the "Not on a shelf" /
+ * "Consumed on projects" worklists, applied over a whole selection. Both halves
+ * matter: the flag has to land on exactly the listed rows, and the audit trail
+ * has to show which of them actually moved — a sweep of several hundred is only
+ * reviewable after the fact if the no-op rows are absent from the log.
+ */
+describe("product repository — setProductsStockTracked", () => {
+  const ctx = withTestDb();
+
+  it("writes the tri-state over the listed ids only, auditing just the rows that changed", async () => {
+    const undecided = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "sweep undecided" }),
+      ctx.actor,
+    );
+    // Already carries the target value: written harmlessly, but `computeChanges`
+    // returns null so the `if (changes)` arm must skip the audit entry.
+    const already = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "sweep already false", stockTracked: false }),
+      ctx.actor,
+    );
+    const bystander = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "sweep bystander" }),
+      ctx.actor,
+    );
+
+    const updated = await setProductsStockTracked(
+      ctx.db,
+      { ids: [undecided.id, already.id], stockTracked: false },
+      ctx.actor,
+    );
+
+    expect(updated.map((row) => row.stockTracked)).toEqual([false, false]);
+    // The unlisted row keeps its undecided state — the sweep is scoped by id,
+    // not by the filter that produced the selection.
+    expect(
+      (await getProductsByShortcodes(ctx.db, [bystander.id]))[0]?.stockTracked,
+    ).toBeNull();
+
+    const entriesFor = async (id: string) =>
+      (
+        await getAuditLog(ctx.db, {
+          entityType: "product",
+          entityId: id as never,
+          limit: 50,
+        })
+      ).entries.filter((e) => e.action === "update");
+
+    const changed = await entriesFor(undecided.entityId);
+    expect(
+      (changed[0]?.changes as Record<string, { from: unknown; to: unknown }>)
+        ?.stockTracked,
+    ).toEqual({ from: null, to: false });
+    expect(await entriesFor(already.entityId)).toHaveLength(0);
+  });
+
+  it("takes the decision back to undecided, returning the row to the worklist", async () => {
+    // The undo arm, and the reason the input is nullable rather than a boolean:
+    // a mistaken sweep over a durable silently hides a real object, so putting
+    // it back has to be the same call rather than a manual repair.
+    const retired = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "sweep undo", stockTracked: false }),
+      ctx.actor,
+    );
+
+    const [restored] = await setProductsStockTracked(
+      ctx.db,
+      { ids: [retired.id], stockTracked: null },
+      ctx.actor,
+    );
+
+    expect(restored?.stockTracked).toBeNull();
+  });
+
+  it("is a no-op on a soft-deleted product rather than resurrecting it", async () => {
+    const gone = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "sweep deleted" }),
+      ctx.actor,
+    );
+    await deleteProducts(ctx.db, [gone.entityId], ctx.actor);
+
+    const updated = await setProductsStockTracked(
+      ctx.db,
+      { ids: [gone.id], stockTracked: false },
+      ctx.actor,
+    );
+
+    expect(updated).toEqual([]);
+  });
+});
+
+/**
+ * The half-used roll: one purchase unit that is partly on the shelf and partly
+ * built into the house. The model has no "consumed" quantity, so the honest
+ * record is two rows in the SAME room — `stock` for the remainder, `installed`
+ * for the part that went in — which the `(productId, locationId, placement)`
+ * slot permits by design.
+ *
+ * This is the arrangement the "Consumed on projects" burn-down leans on for
+ * roll and box goods, and it only reconciles because `onHandUnitsSql`
+ * deliberately INCLUDES installed rows. Recording just the 0.5 remainder would
+ * park the product permanently in "Shelf disagrees" instead.
+ */
+describe("product repository — a partly-used roll splits across placements", () => {
+  const ctx = withTestDb();
+
+  it("sums both placements to the ledger quantity, leaving no variance", async () => {
+    const roll = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "500 ft THHN Wire", category: "hardware" }),
+      ctx.actor,
+    );
+    // One roll bought: `expectedQuantity` is 1, and the remainder must be
+    // measured in the SAME unit or `onHandUnitsSql` goes NULL on mixed units.
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "Wire for the rough-in",
+        productId: roll.id,
+        cost: 120,
+        productQuantity: 1,
+      }),
+      ctx.actor,
+    );
+    const shelf = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Wire Shelf" }),
+      ctx.actor,
+    );
+
+    await createInventoryEntry(
+      ctx.db,
+      {
+        productId: roll.id,
+        locationId: shelf.id,
+        amount: { value: 0.5, unit: "each" },
+        placement: "stock",
+      },
+      ctx.actor,
+    );
+    // Same product, same room, other placement — legal precisely because
+    // placement is part of the unique slot.
+    await createInventoryEntry(
+      ctx.db,
+      {
+        productId: roll.id,
+        locationId: shelf.id,
+        amount: { value: 0.5, unit: "each" },
+        placement: "installed",
+      },
+      ctx.actor,
+    );
+
+    const ledger = (
+      await loadProductQuantityLedgers(ctx.db, [roll.entityId])
+    ).get(roll.entityId);
+    expect(ledger?.expectedQuantity).toBe(1);
+
+    const detail = await getProductByID(ctx.db, roll.entityId);
+    // Two distinct rows, not one folded 1.0 — the split is the record.
+    expect(detail?.inventoryEntry).toHaveLength(2);
+    expect(
+      detail?.inventoryEntry
+        .map((entry) => entry.amount.value)
+        .reduce((sum, value) => sum + value, 0),
+    ).toBe(1);
+
+    // Only the remainder is countable: a fixture cannot be walked over and
+    // recounted, which is the whole reason `installed` exists.
+    const stockRows = await inventoryentryList(
+      ctx.db,
+      { productIdFilter: roll.id },
+      [],
+      { pageIndex: 0, pageSize: 50 },
+    );
+    expect(stockRows.data.map((row) => row.amount.value)).toEqual([0.5]);
   });
 });
