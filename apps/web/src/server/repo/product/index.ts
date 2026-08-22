@@ -50,6 +50,7 @@ export {
   productList,
   productSearch,
   quickCreateProduct,
+  setProductsStockTracked,
   updateProduct,
 } from "./crud";
 // Discard (a $0, negative-quantity exit — see the module doc for why it
