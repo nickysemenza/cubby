@@ -1,9 +1,9 @@
-import { expect, test } from "@playwright/test";
 import {
   createLocation,
   selectComboboxItem,
   waitForFormHydration,
 } from "./e2e-helpers";
+import { expect, test } from "./e2e-test";
 
 test.describe("Bulk Move Inventory - Validation", () => {
   test("disables the source location as a target", async ({ page }) => {

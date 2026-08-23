@@ -1,7 +1,8 @@
-import { expect, type Page, type TestInfo, test } from "@playwright/test";
+import type { Page, TestInfo } from "@playwright/test";
 import { dragByKeyboard, dragByMouse, waitForDndMutation } from "./dnd-helpers";
 import { seedLocationPrerequisite, seedTaskPrerequisite } from "./e2e-fixtures";
 import { selectComboboxItem, waitForFormHydration } from "./e2e-helpers";
+import { expect, test } from "./e2e-test";
 
 const fixtureName = (prefix: string, testInfo: TestInfo) =>
   `${prefix} ${Date.now()}-${testInfo.workerIndex}-${testInfo.repeatEachIndex}`;

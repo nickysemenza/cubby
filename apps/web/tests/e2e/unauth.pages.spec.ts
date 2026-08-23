@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./e2e-test";
 
 test.describe("Unauthenticated access", () => {
   test("home page renders and has title", async ({ page }) => {

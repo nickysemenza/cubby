@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { createLocation, createProduct } from "./e2e-helpers";
+import { expect, test } from "./e2e-test";
 
 test.describe("iPhone WebKit smoke", () => {
   test("prewarms and opens the More sheet on touch intent", async ({

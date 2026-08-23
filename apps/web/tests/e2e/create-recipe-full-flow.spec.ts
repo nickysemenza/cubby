@@ -1,5 +1,4 @@
 import { faker } from "@faker-js/faker";
-import { expect, test } from "@playwright/test";
 import {
   createIngredientViaForm,
   createProductWithIngredientMappings,
@@ -7,6 +6,7 @@ import {
   selectComboboxItem,
   waitForFormHydration,
 } from "./e2e-helpers";
+import { expect, test } from "./e2e-test";
 
 test.describe("Create Recipe - Full Flow", () => {
   test("can create ingredient, product, and recipe with cost calculations", async ({

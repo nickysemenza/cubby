@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { waitForFormHydration } from "./e2e-helpers";
+import { expect, test } from "./e2e-test";
 
 test("assigns a Product in the matrix and shows it in the Collection locator", async ({
   page,

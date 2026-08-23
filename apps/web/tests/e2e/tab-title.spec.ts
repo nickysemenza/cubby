@@ -14,8 +14,8 @@
  * is free as long as the tab stays right.
  */
 
-import { expect, test } from "@playwright/test";
 import { createProduct } from "./e2e-helpers";
+import { expect, test } from "./e2e-test";
 
 /** Pull the canonical code out of a detail URL like /products/PRD-4K7M. */
 const codeFromUrl = (url: string): string => {

@@ -1,7 +1,7 @@
-import { expect, test } from "@playwright/test";
 import { waitForDndMutation } from "./dnd-helpers";
 import { seedTaskPrerequisite } from "./e2e-fixtures";
 import { waitForAppHydration } from "./e2e-helpers";
+import { expect, test } from "./e2e-test";
 
 test("calendar events open an anchored editor, save atomically, and restore focus", async ({
   page,

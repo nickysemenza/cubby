@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { createProduct } from "./e2e-helpers";
+import { expect, test } from "./e2e-test";
 
 const hydrationWarning =
   /hydration|hydrating|did not match|server rendered html/i;
