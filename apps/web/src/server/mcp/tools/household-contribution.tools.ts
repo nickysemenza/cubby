@@ -41,7 +41,7 @@ export function registerHouseholdContributionTools(server: McpServer) {
   registerMcpTool(server, {
     name: "apply_household_ledger_changes",
     description:
-      "Atomically apply a reviewed household-ledger change set. First call preview_household_ledger_changes, then pass its exact previewFingerprint, the same normalized changes, and a stable idempotencyKey for safe retries. A completed retry returns already_applied; reusing a key for different changes, stale previews, ambiguous source evidence, unresolved people/funds/accounts, or conflicting transfer evidence returns the structured refused branch and writes nothing. This tool records logical transfers once; FinancialTransaction evidence legs are attached as evidence and never become Expenses or project settlement allocations.",
+      "Atomically apply a reviewed household-ledger change set. First call preview_household_ledger_changes, then pass its exact previewFingerprint, the same normalized changes, and a stable idempotencyKey for safe retries. A completed retry returns already_applied; reusing a key for different changes, stale previews, ambiguous source evidence, unresolved people/funds/accounts, or conflicting transfer evidence returns the structured refused branch and writes nothing. Bootstrap a new shared fund in its own reviewed batch before a later batch maps an account, attribution, or transfer to it. This tool records logical transfers once; FinancialTransaction evidence legs are attached as evidence and never become Expenses or project settlement allocations.",
     inputSchema: applyHouseholdLedgerChangesInput,
     outputSchema: applyHouseholdLedgerChangesOut,
     annotations: WRITE_CLOSED,

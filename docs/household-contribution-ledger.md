@@ -62,3 +62,10 @@ apply_household_ledger_changes
 The server never receives provider credentials, local file paths, raw emails,
 or whole CSV exports. Receipt-total discrepancies and ambiguous transfer pairs
 remain explicit decisions; neither is automatically spread or paired.
+
+Expected domain failures (missing records, evidence conflicts, stale previews,
+or an idempotency-key mismatch) are returned in the structured refusal branch,
+not as a transport failure. A newly created shared fund is deliberately a
+two-batch bootstrap: first create and review the fund, then preview and apply a
+later batch that maps accounts, attribution, or transfers to it. This keeps a
+preview's fingerprint tied to one already-existing funding topology.

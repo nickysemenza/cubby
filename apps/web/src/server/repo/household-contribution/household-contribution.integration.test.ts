@@ -3,7 +3,6 @@ import {
   previewHouseholdLedgerChangesInput,
 } from "@cubby/schemas/household-contribution";
 import {
-  fundingTransferId,
   unsafeExpenseShortcode,
   unsafeFinancialAccountShortcode,
   unsafePersonShortcode,
@@ -83,6 +82,8 @@ describe("household contribution repository", () => {
           type: "claim_expense_source",
           expenseId: row.shortcode,
           sourceRef: { source: "splitwise", externalId: "expense-123" },
+          sourceAmount: 4.25,
+          reconciliation: { decision: "amounts_match" },
         },
       ],
     });
@@ -116,6 +117,8 @@ describe("household contribution repository", () => {
         type: "claim_expense_source",
         expenseId: unsafeExpenseShortcode(row.shortcode),
         sourceRef: { source: "splitwise", externalId: "expense-123-alias" },
+        sourceAmount: 4.25,
+        reconciliation: { decision: "amounts_match" },
       },
       ctx.actor,
     );
@@ -143,6 +146,8 @@ describe("household contribution repository", () => {
         type: "claim_expense_source",
         expenseId: unsafeExpenseShortcode(row.shortcode),
         sourceRef: { source: "splitwise", externalId: "expense-123-alias" },
+        sourceAmount: 4.25,
+        reconciliation: { decision: "amounts_match" },
       },
       ctx.actor,
     );
@@ -157,6 +162,102 @@ describe("household contribution repository", () => {
         ),
       );
     expect(revivedRefs).toHaveLength(1);
+  });
+
+  it("returns expected preview and apply failures as structured refusals", async () => {
+    const missing = previewHouseholdLedgerChangesInput.parse({
+      changes: [
+        {
+          type: "claim_expense_source",
+          expenseId: unsafeExpenseShortcode("EXP-2345"),
+          sourceRef: { source: "splitwise", externalId: "missing-expense" },
+          sourceAmount: 1,
+          reconciliation: { decision: "amounts_match" },
+        },
+      ],
+    });
+    await expect(
+      previewHouseholdLedgerChanges(ctx.db, missing),
+    ).resolves.toMatchObject({
+      changes: [{ status: "conflict" }],
+      refusal: { code: "NOT_FOUND" },
+    });
+
+    const row = await makeExpense(5);
+    const changes = previewHouseholdLedgerChangesInput.parse({
+      changes: [
+        {
+          type: "claim_expense_source",
+          expenseId: row.shortcode,
+          sourceRef: { source: "splitwise", externalId: "stale-source" },
+          sourceAmount: 5,
+          reconciliation: { decision: "amounts_match" },
+        },
+      ],
+    });
+    const preview = await previewHouseholdLedgerChanges(ctx.db, changes);
+    await claimExpenseSource(
+      ctx.db,
+      {
+        type: "claim_expense_source",
+        expenseId: unsafeExpenseShortcode(row.shortcode),
+        sourceRef: { source: "splitwise", externalId: "changed-after-preview" },
+        sourceAmount: 5,
+        reconciliation: { decision: "amounts_match" },
+      },
+      ctx.actor,
+    );
+    const stale = await applyHouseholdLedgerChanges(
+      ctx.db,
+      applyHouseholdLedgerChangesInput.parse({
+        ...changes,
+        previewFingerprint: preview.previewFingerprint,
+        idempotencyKey: "fixture:stale-preview",
+      }),
+      ctx.actor,
+    );
+    expect(stale).toMatchObject({
+      status: "refused",
+      changed: 0,
+      refusal: { reason: "HOUSEHOLD_LEDGER_PREVIEW_STALE" },
+    });
+  });
+
+  it("requires a new shared fund to be bootstrapped before a dependent batch", async () => {
+    await upsertFundingFund(ctx.db, {
+      type: "upsert_funding_fund",
+      key: "existing-fund",
+      name: "Existing fund",
+    });
+    const preview = await previewHouseholdLedgerChanges(
+      ctx.db,
+      previewHouseholdLedgerChangesInput.parse({
+        changes: [
+          {
+            type: "upsert_funding_fund",
+            key: "new-fund",
+            name: "New fund",
+          },
+          {
+            type: "put_funding_transfer",
+            from: { kind: "fund", key: "existing-fund" },
+            to: { kind: "fund", key: "new-fund" },
+            kind: "household_transfer",
+            amount: 1,
+            date: "2026-08-20",
+            sourceRefs: [],
+            evidence: [],
+          },
+        ],
+      }),
+    );
+    expect(preview).toMatchObject({
+      changes: [
+        { status: "ready" },
+        { status: "needs_decision", affectedIds: [] },
+      ],
+      refusal: { reason: "HOUSEHOLD_LEDGER_BOOTSTRAP_REQUIRED" },
+    });
   });
 
   it("reconciles a weighted split to the cent for known parties", async () => {
@@ -340,6 +441,6 @@ describe("household contribution repository", () => {
     expect(ledger.checks.transferNet).toBe(0);
     const transferId = transfer.transferIds[0];
     if (!transferId) throw new Error("transfer id was not returned");
-    await deleteFundingTransfer(ctx.db, fundingTransferId.parse(transferId));
+    await deleteFundingTransfer(ctx.db, transferId);
   });
 });
