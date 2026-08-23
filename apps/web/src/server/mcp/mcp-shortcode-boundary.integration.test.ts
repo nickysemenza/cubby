@@ -844,7 +844,7 @@ describe("a wrong-entity shortcode prefix is rejected before any mutation", () =
     expect(structured(got).name).toBe("Survives Delete Product");
   });
 
-  it("merge_ingredients rejects a PRODUCT shortcode as a target before merging anything", async () => {
+  it("merge_entity rejects a PRODUCT shortcode as an ingredient keeper before merging anything", async () => {
     const caller = createTestCaller(domainRouter, ctx.db);
     const ingredient = await callTool(
       "create_ingredient",
@@ -867,12 +867,26 @@ describe("a wrong-entity shortcode prefix is rejected before any mutation", () =
     expectOk(product);
     const productCode = structured(product).id as string;
 
+    // Not `isError` — a wrong-prefix code fails its own CLUSTER, which is the
+    // point of the batch shape: the envelope stays valid and the failure is
+    // reported per cluster with a typed reason.
     const rejected = await callTool(
-      "merge_ingredients",
-      { merges: [{ target: productCode, aliases: [ingredientCode] }] },
+      "merge_entity",
+      {
+        entity: "ingredient",
+        merges: [{ keepId: productCode, mergeIds: [ingredientCode] }],
+      },
       caller,
     );
-    expect(rejected.isError).toBe(true);
+    expectOk(rejected);
+    const [clusterResult] = (
+      structured(rejected) as {
+        results: Array<{ status: string; code?: string; error?: string }>;
+      }
+    ).results;
+    expect(clusterResult?.status).toBe("failed");
+    expect(clusterResult?.code).toBe("BAD_REQUEST");
+    expect(clusterResult?.error).toContain(productCode);
 
     // The would-be alias survives untouched.
     const stillThere = await callTool(
@@ -884,7 +898,7 @@ describe("a wrong-entity shortcode prefix is rejected before any mutation", () =
     expect(structured(stillThere).name).toBe("Merge Victim Ingredient");
   });
 
-  it("merge_vendors rejects a PRODUCT shortcode as keepId before merging anything", async () => {
+  it("merge_entity rejects a PRODUCT shortcode as a vendor keeper before merging anything", async () => {
     const caller = createTestCaller(domainRouter, ctx.db);
     const vendor = await callTool(
       "create_vendor",
@@ -908,11 +922,18 @@ describe("a wrong-entity shortcode prefix is rejected before any mutation", () =
     const productCode = structured(product).id as string;
 
     const rejected = await callTool(
-      "merge_vendors",
-      { keepId: productCode, mergeIds: [vendorCode] },
+      "merge_entity",
+      {
+        entity: "vendor",
+        merges: [{ keepId: productCode, mergeIds: [vendorCode] }],
+      },
       caller,
     );
-    expect(rejected.isError).toBe(true);
+    expectOk(rejected);
+    expect(
+      (structured(rejected) as { results: Array<{ status: string }> })
+        .results[0]?.status,
+    ).toBe("failed");
 
     // The would-be loser survives untouched.
     const stillThere = await callTool("get_vendor", { id: vendorCode }, caller);
@@ -926,7 +947,7 @@ describe("a wrong-entity shortcode prefix is rejected before any mutation", () =
 describe("specialized tools round-trip on shortcodes", () => {
   const ctx = withTestDb();
 
-  it("merge_ingredients folds an alias into a target, addressed entirely by shortcode", async () => {
+  it("merge_entity folds an ingredient into a keeper, addressed entirely by shortcode", async () => {
     const caller = createTestCaller(domainRouter, ctx.db);
     const target = await callTool(
       "create_ingredient",
@@ -945,14 +966,25 @@ describe("specialized tools round-trip on shortcodes", () => {
     const aliasCode = structured(alias).id as string;
 
     const merged = await callTool(
-      "merge_ingredients",
-      { merges: [{ target: targetCode, aliases: [aliasCode] }] },
+      "merge_entity",
+      {
+        entity: "ingredient",
+        merges: [{ keepId: targetCode, mergeIds: [aliasCode] }],
+      },
       caller,
     );
     expectOk(merged);
-    expect(
-      (structured(merged).summary as { succeeded: number }).succeeded,
-    ).toBe(1);
+    const result = (
+      structured(merged) as {
+        entity: string;
+        results: Array<{ keepId: string; status: string; merged?: number }>;
+      }
+    ).results[0];
+    expect(result?.status).toBe("succeeded");
+    // The keeper is named, not returned — `get_ingredient` fetches it. And the
+    // count is what the DELETE removed, not what the caller asked for.
+    expect(result?.keepId).toBe(targetCode);
+    expect(result?.merged).toBe(1);
 
     const aliasAfter = await callTool(
       "get_ingredient",
@@ -960,6 +992,73 @@ describe("specialized tools round-trip on shortcodes", () => {
       caller,
     );
     expect(aliasAfter.isError).toBe(true);
+  });
+
+  it("merge_entity runs each cluster independently: a self-merge is refused while its neighbour still merges", async () => {
+    const caller = createTestCaller(domainRouter, ctx.db);
+    const make = async (name: string) => {
+      const created = await callTool(
+        "create_ingredient",
+        { name, aliases: [] },
+        caller,
+      );
+      expectOk(created);
+      return structured(created).id as string;
+    };
+    const selfKeeper = await make("Batch Self Keeper");
+    const goodKeeper = await make("Batch Good Keeper");
+    const goodLoser = await make("Batch Good Loser");
+
+    const result = await callTool(
+      "merge_entity",
+      {
+        entity: "ingredient",
+        merges: [
+          // Names its own keeper among the ids to merge away.
+          { keepId: selfKeeper, mergeIds: [selfKeeper] },
+          { keepId: goodKeeper, mergeIds: [goodLoser] },
+        ],
+      },
+      caller,
+    );
+    // The batch envelope is NOT an error even with a failed cluster — the
+    // per-cluster outcomes are the payload.
+    expectOk(result);
+    const { entity, results } = structured(result) as {
+      entity: string;
+      results: Array<{
+        keepId: string;
+        status: string;
+        merged?: number;
+        reason?: string;
+      }>;
+    };
+    expect(entity).toBe("ingredient");
+    expect(results[0]).toMatchObject({
+      keepId: selfKeeper,
+      status: "failed",
+      reason: "MERGE_SELF_REFERENCE",
+    });
+    expect(results[1]).toMatchObject({
+      keepId: goodKeeper,
+      status: "succeeded",
+      merged: 1,
+    });
+
+    // The refused cluster wrote nothing; the successful one did.
+    const keeperAfter = await callTool(
+      "get_ingredient",
+      { id: selfKeeper },
+      caller,
+    );
+    expectOk(keeperAfter);
+    expect(structured(keeperAfter).name).toBe("Batch Self Keeper");
+    const loserAfter = await callTool(
+      "get_ingredient",
+      { id: goodLoser },
+      caller,
+    );
+    expect(loserAfter.isError).toBe(true);
   });
 
   it("move_inventory_entries crosses source locations in one call by shortcode", async () => {
@@ -1202,7 +1301,7 @@ describe("specialized tools round-trip on shortcodes", () => {
     expectOk(split);
   });
 
-  it("merge_purchases takes keepId/mergeIds by shortcode (the intended contract)", async () => {
+  it("merge_entity merges purchases by shortcode (the intended contract)", async () => {
     const caller = createTestCaller(domainRouter, ctx.db);
     const vendor = await callTool(
       "create_vendor",
@@ -1229,15 +1328,29 @@ describe("specialized tools round-trip on shortcodes", () => {
     const loserCode = structured(loser).id as string;
 
     const merged = await callTool(
-      "merge_purchases",
-      { keepId: keepCode, mergeIds: [loserCode] },
+      "merge_entity",
+      {
+        entity: "purchase",
+        merges: [{ keepId: keepCode, mergeIds: [loserCode] }],
+      },
       caller,
     );
     expectOk(merged);
-    expect(structured(merged).id).toBe(keepCode);
+    const result = (
+      structured(merged) as {
+        results: Array<{ keepId: string; status: string; merged?: number }>;
+      }
+    ).results[0];
+    expect(result?.status).toBe("succeeded");
+    expect(result?.keepId).toBe(keepCode);
+    // MEASURED, like the other three. Purchase reads its count from its own
+    // bulk soft-delete's `.returning()` rather than from `finalizeMerge`,
+    // which runs later inside `foldChargeInto` as a no-op — see the note on
+    // `mergeEntityResultOut.merged`. One loser in, one row actually removed.
+    expect(result?.merged).toBe(1);
   });
 
-  it("merge_vendors takes keepId/mergeIds by shortcode and tombstones the loser's own code", async () => {
+  it("merge_entity merges vendors by shortcode and tombstones the loser's own code", async () => {
     const caller = createTestCaller(domainRouter, ctx.db);
     const keep = await callTool(
       "create_vendor",
@@ -1256,15 +1369,28 @@ describe("specialized tools round-trip on shortcodes", () => {
     const loserCode = structured(loser).id as string;
 
     const merged = await callTool(
-      "merge_vendors",
-      { keepId: keepCode, mergeIds: [loserCode] },
+      "merge_entity",
+      {
+        entity: "vendor",
+        merges: [{ keepId: keepCode, mergeIds: [loserCode] }],
+      },
       caller,
     );
     expectOk(merged);
-    // `{ vendor, mergeSummary }` — the merge now reports what it moved.
-    expect((structured(merged) as { vendor: { id: string } }).vendor.id).toBe(
-      keepCode,
-    );
+    const result = (
+      structured(merged) as {
+        results: Array<{
+          keepId: string;
+          status: string;
+          merged?: number;
+          summary: { deletedIds?: string[] };
+        }>;
+      }
+    ).results[0];
+    expect(result?.status).toBe("succeeded");
+    expect(result?.keepId).toBe(keepCode);
+    expect(result?.merged).toBe(1);
+    expect(result?.summary.deletedIds).toEqual([loserCode]);
 
     // The loser's code is a permanent tombstone — it resolves to nothing, not
     // to the keeper.

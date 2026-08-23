@@ -46,7 +46,7 @@ describe("location.create AI-description side-effect", () => {
     const created = await caller.create(
       makeLocationInput({
         name: "Created with photo",
-        pendingImageIds: [image.id],
+        pendingImageIds: [unsafeImageShortcode(image.shortcode)],
       }),
     );
     const entityId = await resolveLiveShortcode(ctx.db, created.id, "location");
@@ -94,7 +94,10 @@ describe("location.create AI-description side-effect", () => {
     const created = await caller.create(
       makeLocationInput({
         name: "Reordered only",
-        pendingImageIds: [first.id, second.id],
+        pendingImageIds: [
+          unsafeImageShortcode(first.shortcode),
+          unsafeImageShortcode(second.shortcode),
+        ],
       }),
     );
     const entityId = await resolveLiveShortcode(ctx.db, created.id, "location");

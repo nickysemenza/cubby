@@ -42,6 +42,7 @@ import type { ExpenseOut } from "@cubby/schemas/project";
 import type {
   LinkExpensesToPurchaseInput,
   MergePurchasesInput,
+  MergePurchasesOut,
   PurchaseCreateInput,
   PurchaseFilters,
   PurchaseOut,
@@ -138,6 +139,7 @@ import { displayableImageSql } from "~/server/repo/image-displayability";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import {
+  assertDistinctMergeTargets,
   finalizeMerge,
   repointEdge,
   resolveMergeTargets,
@@ -430,12 +432,14 @@ const loadPurchaseImages = async (
  * exactly, including applying the order BEFORE the append so new documents always
  * land after the reordered existing set.
  *
- * `removeImageIds`/`imageOrder` arrive as public `IMG-` shortcodes (what
- * `PurchaseOut.images[].id` hands back); `applyImageOrder` and
- * `detachImagesFromEntity` both still take uuids, so this is the boundary
- * that resolves one to the other. A code that doesn't resolve is dropped
- * rather than thrown on — same as today's silent no-op for a uuid naming no
- * live row, since neither helper below errors on an id that doesn't match.
+ * `pendingImageIds`/`removeImageIds`/`imageOrder` all arrive as public `IMG-`
+ * shortcodes (what `PurchaseOut.images[].id` and `create_file_upload` hand
+ * back); `applyImageOrder`, `detachImagesFromEntity`, and
+ * `associatePendingImages` all still take uuids, so this is the boundary that
+ * resolves one to the other. A code that doesn't resolve is dropped rather
+ * than thrown on — same as today's silent no-op for a uuid naming no live
+ * row, since none of the three helpers below errors on an id that doesn't
+ * match.
  */
 const syncPurchaseImages = async (
   tx: DrizzleTransaction,
@@ -468,6 +472,11 @@ const syncPurchaseImages = async (
   }
 
   if (pendingImageIds && pendingImageIds.length > 0) {
+    const resolvedImageIds = await resolveAllPresent(
+      tx,
+      "image",
+      pendingImageIds,
+    );
     const startSortOrder = await nextImageSortOrder(
       tx,
       purchaseImage,
@@ -479,7 +488,7 @@ const syncPurchaseImages = async (
       purchaseImage,
       "purchaseId",
       id,
-      pendingImageIds,
+      resolvedImageIds,
       startSortOrder,
     );
   }
@@ -1762,14 +1771,13 @@ export const mergePurchases = async (
   db: Database,
   input: MergePurchasesInput,
   actor: ActorContext,
-): Promise<PurchaseOut> => {
+): Promise<MergePurchasesOut> => {
   const { keepId, loserIds: losers } = await resolveMergeTargets(db, {
     entity: "purchase",
     keepId: input.keepId,
     mergeIds: input.mergeIds,
   });
-  if (losers.length === 0) return getPurchaseByID(db, keepId);
-
+  let mergedCount = 0;
   await withTransaction(db, async (tx) => {
     // Lock every row first so a concurrent merge can't interleave and leave the
     // unique index deciding the outcome.
@@ -1820,10 +1828,15 @@ export const mergePurchases = async (
     // still live, writing its order id onto the keeper makes two live rows share
     // `(vendorId, orderId)` and the index aborts the whole merge. Deleting first
     // vacates the slot.
-    await tx
+    // MEASURED, not `losers.length`: this statement is the one that actually
+    // removes them, and the `foldChargeInto` calls below re-issue the same
+    // soft-delete as a no-op, so `finalizeMerge` there reports 0.
+    const removed = await tx
       .update(purchase)
       .set({ deletedAt: new Date() })
-      .where(and(inArray(purchase.id, losers), notDeleted(purchase)));
+      .where(and(inArray(purchase.id, losers), notDeleted(purchase)))
+      .returning({ id: purchase.id });
+    mergedCount = removed.length;
 
     // The keeper adopts the single surviving order id, if a loser held it — the
     // common shape, a hand-entered charge later matched to a vendor export.
@@ -1856,7 +1869,14 @@ export const mergePurchases = async (
     ]);
   });
 
-  return getPurchaseByID(db, keepId);
+  return {
+    purchase: await getPurchaseByID(db, keepId),
+    mergeSummary: {
+      keepId: input.keepId,
+      deletedIds: input.mergeIds.filter((code) => code !== input.keepId),
+      merged: mergedCount,
+    },
+  };
 };
 
 /**
@@ -2149,7 +2169,11 @@ export const previewMergePurchases = async (
   sideEffects: ImpactItem[];
 }> => {
   const { keepId } = input;
-  const losers = input.mergeIds.filter((id) => id !== keepId);
+  // Refuses exactly where the mutation refuses — see
+  // `assertDistinctMergeTargets` for why the silent filter this replaces made
+  // preview and mutation agree on the wrong answer.
+  assertDistinctMergeTargets("purchase", keepId, input.mergeIds);
+  const losers = input.mergeIds;
   if (losers.length === 0)
     return { blockers: [], changes: [], sideEffects: [] };
 

@@ -74,6 +74,7 @@ import {
 } from "~/server/repo/image-displayability";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import {
+  assertDistinctMergeTargets,
   finalizeMerge,
   planSlotCollisions,
   repointEdge,
@@ -790,21 +791,6 @@ export const mergeVendors = async (
     keepId: input.keepId,
     mergeIds: input.mergeIds,
   });
-  if (losers.length === 0) {
-    const output = await getVendorByID(db, keepId);
-    return {
-      vendor: output,
-      detachedImageKeys: [],
-      mergeSummary: {
-        keepId: output.id,
-        deletedIds: [],
-        purchasesRepointed: 0,
-        purchasesFolded: 0,
-        carriedFields: [],
-      },
-    };
-  }
-
   // Filled in from `plan` below — the same plan the transaction executes —
   // rather than computed separately, so the summary can't disagree with what
   // actually moved.
@@ -816,6 +802,8 @@ export const mergeVendors = async (
     const plan = await planVendorMerge(tx, keepId, losers);
     planSummary = {
       deletedIds: plan.deletedIds,
+      // Overwritten below with what `finalizeMerge` actually removed.
+      merged: 0,
       purchasesRepointed: plan.repointed.length,
       purchasesFolded: plan.folded.length,
       carriedFields: Object.keys(plan.carried),
@@ -852,7 +840,7 @@ export const mergeVendors = async (
       .set({ logoImageId: null })
       .where(inArray(vendor.id, losers));
 
-    await finalizeMerge(tx, {
+    const { removed } = await finalizeMerge(tx, {
       entity: "vendor",
       table: vendor,
       keepId,
@@ -874,14 +862,16 @@ export const mergeVendors = async (
           : {}),
       },
     });
+    planSummary.merged = removed;
 
     return (await reapUnreferencedImages(tx, loserLogos)).deletedKeys;
   });
 
   const output = await getVendorByID(db, keepId);
-  // `planSummary` is always set by the time the transaction above returns —
-  // the `losers.length === 0` short-circuit above is the only path that skips
-  // building the plan, and it returns early on its own.
+  // `planSummary` is always set by the time the transaction above returns: the
+  // transaction body builds it unconditionally, and `mergeIds` can never
+  // resolve to an empty loser set (it is `min(1)`, duplicates collapse, and a
+  // self-reference is refused by `resolveMergeTargets`).
   return {
     vendor: output,
     detachedImageKeys,
@@ -1023,7 +1013,11 @@ export const previewMergeVendors = async (
   sideEffects: ImpactItem[];
 }> => {
   const { keepId } = input;
-  const losers = input.mergeIds.filter((id) => id !== keepId);
+  // Refuses exactly where the mutation refuses — see
+  // `assertDistinctMergeTargets` for why the silent filter this replaces made
+  // preview and mutation agree on the wrong answer.
+  assertDistinctMergeTargets("vendor", keepId, input.mergeIds);
+  const losers = input.mergeIds;
   if (losers.length === 0)
     return { blockers: [], changes: [], sideEffects: [] };
 

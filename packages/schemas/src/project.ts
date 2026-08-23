@@ -267,7 +267,7 @@ const projectFields = {
   status: projectStatusSchema,
   kind: projectKindSchema.nullable(),
   locations: z.array(z.string()).describe("House/site names, free-form"),
-  costEstimate: moneyNullable.describe("Budget estimate in dollars"),
+  costEstimate: positiveMoneyNullable.describe("Budget estimate in dollars"),
   // Arbitrary-depth sub-projects (WBS) — a sub-project's own `costEstimate`
   // is its budget envelope; expenses/tasks attribute to it via their
   // existing `projectId`. Cycle/self-parent guards live in
@@ -294,7 +294,7 @@ const projectCreateShape = {
   status: projectStatusSchema.default("planning"),
   kind: projectKindSchema.nullable().default(null),
   locations: z.array(z.string()).default([]),
-  costEstimate: moneyNullable.default(null),
+  costEstimate: positiveMoneyNullable.default(null),
   parentProjectId: projectShortcode.nullable().default(null),
   startDate: plainDate.nullable().default(null),
   endDate: plainDate.nullable().default(null),

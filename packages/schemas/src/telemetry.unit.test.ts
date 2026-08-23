@@ -52,4 +52,26 @@ describe("telemetryMessageV1Schema", () => {
         .success,
     ).toBe(false);
   });
+
+  it("accepts a message with no entity — in-flight queue messages minted before this field existed have none", () => {
+    // `mcpEvent` above already carries no `entity` key and parses; this test
+    // pins that down explicitly so a future edit can't silently make it
+    // required (which would reject those in-flight replays).
+    const result = mcpToolCallTelemetrySchema.safeParse(mcpEvent);
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.entity).toBeUndefined();
+  });
+
+  it("accepts a valid entity and rejects a value outside the entity enum", () => {
+    expect(
+      mcpToolCallTelemetrySchema.safeParse({ ...mcpEvent, entity: "product" })
+        .success,
+    ).toBe(true);
+    expect(
+      mcpToolCallTelemetrySchema.safeParse({
+        ...mcpEvent,
+        entity: "not-a-real-entity",
+      }).success,
+    ).toBe(false);
+  });
 });

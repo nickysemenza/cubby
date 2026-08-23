@@ -446,7 +446,11 @@ describe("removal entrypoints reach the shared cascade (no orphans)", () => {
     const alias = await findOrCreateIngredient(ctx.db, "Cascade Alias");
     await seedEmbedding("ingredient", alias.id);
 
-    await mergeIngredients(ctx.db, keeper.id, [alias.id], TEST_ACTOR);
+    await mergeIngredients(
+      ctx.db,
+      { keepId: keeper.shortcode, mergeIds: [alias.shortcode] },
+      TEST_ACTOR,
+    );
 
     expect(await embeddingDeletedAt("ingredient", alias.id)).not.toBeNull();
     expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);

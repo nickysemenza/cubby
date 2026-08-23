@@ -29,8 +29,6 @@ import {
   getIngredientByID as getIngredientByIDRepo,
   getIngredientByName as getIngredientByNameRepo,
   getIngredientsByIDsLean as getIngredientsByIDsLeanRepo,
-  type MergeSummary,
-  mergeIngredients as mergeIngredientsRepo,
   updateIngredient as updateIngredientRepo,
 } from "../repo/ingredient";
 import { foodLookupParamFromProduct } from "../repo/product";
@@ -228,25 +226,4 @@ export const updateIngredient = async (
     ...ingredient,
     product: enrichedProducts,
   };
-};
-
-/**
- * Merge `aliases` into `target` (repoints recipe rows + hard-deletes aliases).
- * Returns the surviving ingredient plus a structured change summary. The
- * absorbed recipes are marked stale in-transaction; the caller dispatches the
- * recompute off the request path (a widely-used target can touch 100+ recipes,
- * which overruns the Workers CPU budget if recomputed inline). `dryRun`
- * validates + counts what would change without writing.
- */
-export const mergeIngredients = async (
-  db: Database,
-  usdaClient: USDAClient,
-  target: IngredientId,
-  aliases: IngredientId[],
-  actor: ActorContext,
-  opts?: { dryRun?: boolean },
-): Promise<{ ingredient: IngredientWithFoodOut; summary: MergeSummary }> => {
-  const summary = await mergeIngredientsRepo(db, target, aliases, actor, opts);
-  const ingredient = await getIngredientByID(db, usdaClient, target);
-  return { ingredient, summary };
 };

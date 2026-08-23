@@ -282,9 +282,11 @@ const HAND_ROLLED_ANY_ARRAY_RE = /\bANY\s*\(\s*\$\{(?!uuidArrayParam\()/g;
 // `.output()` spelling in prose is excluded so comments do not false-positive.
 const LOOSE_ROUTER_OUTPUT_RE = /\.output\((?!\s*(?:\)|strictOutput\())/g;
 
-// Detail routes whose param is a shortcode. `usda` keys on an external fdc id
-// and `images` on a uuid (image is the one entity with no public shortcode), so
-// both are absent here rather than exempted case-by-case below.
+// Detail routes whose param is a shortcode. `usda` keys on an external fdc id,
+// so it is absent here rather than exempted case-by-case below. `images` used
+// to be the other absence (image was the one entity with no public
+// shortcode) — it now mints an `IMG-` code like everything else, so
+// `/images/$shortcode` is a normal member of this list.
 const SHORTCODE_ROUTE_BASES = [
   "products",
   "recipes",
@@ -298,6 +300,7 @@ const SHORTCODE_ROUTE_BASES = [
   "purchases",
   "vendors",
   "cookbooks",
+  "images",
 ].join("|");
 
 // `/products/$id` — the pre-cutover param name, including cookbook's old
@@ -1268,10 +1271,17 @@ function scan(files: string[]): Violation[] {
       // the entity's shortcode. Applies everywhere, including the server —
       // `attention.ts` builds hrefs as plain strings, which no typed router
       // param can protect. routeTree.gen.ts is generated, so it's skipped.
+      // `server/utils/s3.ts`'s `generateImageKey` also matches the
+      // `/images/${...}` shape, but it is an R2 OBJECT KEY
+      // (`cubby/images/<name>-<ts>-<uuid>.<ext>`), not a route href — no
+      // router, no shortcode, nothing this rule protects. `images` only
+      // joined `SHORTCODE_ROUTE_BASES` once `/images/$shortcode` existed to
+      // route to, so this false-positive collision is new; skip that one file.
       if (
         !isTestOrFixture(file) &&
         !isCommentLine(line) &&
         !file.endsWith("routeTree.gen.ts") &&
+        !file.endsWith("server/utils/s3.ts") &&
         (UUID_ROUTE_PARAM_RE.test(line) ||
           UUID_TEMPLATE_HREF_RE.test(line) ||
           UUID_BASEPATH_HREF_RE.test(line))

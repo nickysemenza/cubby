@@ -375,7 +375,7 @@ const entityDefinitions = {
       border: "border-l-muted-foreground",
     }),
     routes: {
-      detail: "/images/$id",
+      detail: "/images/$shortcode",
       list: "/images",
       // no "new" - images are uploaded, not created via form
     },
@@ -414,8 +414,11 @@ export const entities = entityDefinitions as typeof entityDefinitions &
  * manifest card, table name columns) goes through, and keeping the indirection
  * is what would make a future per-entity divergence a one-line change.
  *
- * `usda` and `image` are NOT routed through here — they are the two detail
- * routes that legitimately key on something other than a shortcode.
+ * `usda` is NOT routed through here — it is the one detail route that
+ * legitimately keys on something other than a shortcode (an external USDA
+ * `fdc_id`). `image` used to be the other exception (no public shortcode);
+ * it now mints one like every other entity, so it goes through
+ * {@link entityDetailLink} same as anything else.
  */
 export const entityDetailParams = (
   shortcode: string,
@@ -427,10 +430,10 @@ export const entityDetailParams = (
  * `to` + `params` for a shortcode-bearing entity's detail route, in one call.
  *
  * The `ShortcodeEntity` parameter is doing real work: `Entity` also covers
- * `image` and `usda-food`, whose routes are `/images/$id` and `/usda/$id`, so a
- * lookup widened to `Entity` produces a route union that `{ shortcode }` cannot
- * satisfy. Narrowing here is what lets every generic "link to this entity"
- * surface pass a shortcode without a cast.
+ * `usda-food`, whose route is `/usda/$id`, so a lookup widened to `Entity`
+ * produces a route union that `{ shortcode }` cannot satisfy. Narrowing here
+ * is what lets every generic "link to this entity" surface pass a shortcode
+ * without a cast.
  */
 export const entityDetailLink = (entity: ShortcodeEntity, shortcode: string) =>
   ({

@@ -4,6 +4,7 @@ import {
   expenseId,
   financialAccountId,
   financialTransactionId,
+  imageId,
   ingredientId,
   inventoryId,
   locationId,
@@ -68,7 +69,7 @@ const mutationEntityRefSchema = z.discriminatedUnion("entityType", [
   }),
   z.object({ entityType: z.literal("expense"), entityId: expenseId }),
   z.object({ entityType: z.literal("wish"), entityId: wishId }),
-  z.object({ entityType: z.literal("image"), entityId: z.uuid() }),
+  z.object({ entityType: z.literal("image"), entityId: imageId }),
 ]);
 
 export const mutationSideEffectEventSchema = z.object({

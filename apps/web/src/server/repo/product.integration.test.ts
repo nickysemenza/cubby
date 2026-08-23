@@ -1,3 +1,4 @@
+import { unsafeImageShortcode } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import type { ProductFilters } from "@cubby/schemas/product";
 import { projectCreateInput, taskCreateInput } from "@cubby/schemas/project";
@@ -369,13 +370,18 @@ describe("product repository", () => {
     await updateProduct(
       ctx.db,
       first.entityId,
-      { pendingImageIds: [manual.id, cover.id] },
+      {
+        pendingImageIds: [
+          unsafeImageShortcode(manual.shortcode),
+          unsafeImageShortcode(cover.shortcode),
+        ],
+      },
       ctx.actor,
     );
     await updateProduct(
       ctx.db,
       second.entityId,
-      { pendingImageIds: [missing.id] },
+      { pendingImageIds: [unsafeImageShortcode(missing.shortcode)] },
       ctx.actor,
     );
 
@@ -1513,7 +1519,7 @@ describe("product repository", () => {
         makeProductInput({
           name: "Stocked With Image",
           upc: "700000000011",
-          pendingImageIds: [pendingImage.id],
+          pendingImageIds: [unsafeImageShortcode(pendingImage.shortcode)],
         }),
         ctx.actor,
       );
@@ -3172,7 +3178,7 @@ describe("product repository", () => {
               source: null,
             },
           ],
-          pendingImageIds: [pendingImage.id],
+          pendingImageIds: [unsafeImageShortcode(pendingImage.shortcode)],
         }),
         ctx.actor,
       );

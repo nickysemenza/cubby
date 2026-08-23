@@ -10,6 +10,7 @@ import {
 } from "@cubby/schemas/background-jobs";
 import type { Amount } from "@cubby/schemas/codec";
 import type { DataException } from "@cubby/schemas/data-quality";
+import type { Entity } from "@cubby/schemas/entity-core";
 import {
   expenseLineBasisValues,
   expenseLineKindValues,
@@ -2606,6 +2607,13 @@ export const mcpToolCall = pgTable(
     outcome: text("outcome").notNull().$type<McpToolCallOutcome>(),
     registeredAtCall: boolean("registeredAtCall").notNull(),
     surface: text("surface").notNull().$type<McpToolCallSurface>(),
+    // Nullable: only derivable for CRUD-shaped tools (see mcpToolName inversion
+    // in scripts/backfill-mcp-tool-call-entity.ts) plus attach/detach/merge,
+    // which read it off an argument at the call site instead. Every other tool
+    // family (find_*, patch_*, verify_*, statement/usda/problems workflows)
+    // has no single entity to attribute a call to, so this stays null for them
+    // rather than guessing.
+    entity: text("entity").$type<Entity>(),
     release: text("release").notNull(),
     occurredAt: timestamp("occurredAt", { mode: "date" }).notNull(),
     ingestedAt: timestamp("ingestedAt", { mode: "date" })
@@ -2634,6 +2642,10 @@ export const mcpToolCall = pgTable(
     ),
     index("McpToolCall_outcome_idx").on(table.outcome),
     index("McpToolCall_release_idx").on(table.release),
+    index("McpToolCall_entity_occurredAt_idx").on(
+      table.entity,
+      table.occurredAt.desc(),
+    ),
   ],
 );
 

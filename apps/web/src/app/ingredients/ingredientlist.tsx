@@ -284,8 +284,8 @@ export function IngredientList() {
     setMergePending(true);
     try {
       const result = await trpcClient.ingredient.merge.mutate({
-        target: keepId,
-        aliases: aliasIds,
+        keepId,
+        mergeIds: aliasIds,
       });
       // A merge's blast radius is wide: ingredients are deleted, products
       // repoint, recipe totals are recomputed, and meals read those totals.

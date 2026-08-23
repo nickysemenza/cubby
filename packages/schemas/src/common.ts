@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { timestampedFields } from "./base-entity";
+import { publicImpactItemSchema } from "./entity-integrity";
 import { id } from "./identifiers";
 
 export const dbTimestampsOut = z
@@ -77,6 +78,46 @@ export const relationMutationOut = z.object({
 export type RelationMutationOut = z.infer<typeof relationMutationOut>;
 
 /**
+ * Why an operation REFUSED, as a domain answer rather than a transport error.
+ *
+ * A blocked delete or merge is not a fault: the guard did its job and the
+ * caller needs to know exactly what stood in the way. Over tRPC that structure
+ * rides on the error (`errorFormatter` lifts `reason` and `blockers` onto
+ * `shape.data`), but over MCP an `isError: true` envelope carries text and
+ * nothing a client may rely on — the reference SDK client rejects
+ * `structuredContent` on an errored result, so the refusal has to live INSIDE
+ * the declared output schema to survive the trip. Hence this shape: it is part
+ * of what a delete or a merge RETURNS.
+ *
+ * The four fields are the same ones a refusal has always had, now said once:
+ * `error` is the rendered sentence a human reads, `code`/`reason` are that same
+ * failure decomposed so a caller can branch without substring-matching prose,
+ * and `blockers` names WHICH rows blocked it and how many dependents each had —
+ * the half that used to be flattened into the sentence and lost.
+ *
+ * Both generic tools speak it, in the embedding each one's result calls for:
+ * `delete_entity` NESTS it (one result, so presence is its own discriminator),
+ * while `merge_entity` FLATTENS it onto a per-cluster result that already
+ * carries a `status`. Same field names, same meanings, one definition.
+ */
+export const operationRefusalOut = z.object({
+  /** The rendered sentence a human reads. */
+  error: z.string().min(1),
+  /** tRPC code. Absent when the refusal wasn't thrown as a TRPCError. */
+  code: z.string().optional(),
+  /** The `AppErrorReason` behind the refusal, when there was one. */
+  reason: z.string().optional(),
+  /**
+   * Which rows blocked, and how many dependents each had — keyed by public
+   * shortcode, the same `PublicImpactItem` vocabulary a preview speaks.
+   * EMPTY when the guard refused without attributing it to particular rows;
+   * an empty list means "not attributed", never "nothing blocked".
+   */
+  blockers: z.array(publicImpactItemSchema).default([]),
+});
+export type OperationRefusal = z.infer<typeof operationRefusalOut>;
+
+/**
  * The result of a delete, uniform across every entity.
  *
  * `deleted` is MEASURED (rows actually removed), not the caller's `ids.length` —
@@ -103,5 +144,13 @@ export const deleteEntityOut = z.object({
       }),
     )
     .default([]),
+  /**
+   * Present when the delete was REFUSED — nothing was deleted, and this says
+   * what blocked it. A refusal is a domain answer, so it comes back as a
+   * successful call carrying this branch rather than as a transport error that
+   * an MCP client can only read as prose (see {@link operationRefusalOut}).
+   * Absent on every delete that ran.
+   */
+  refusal: operationRefusalOut.optional(),
 });
 export type DeleteEntityOut = z.infer<typeof deleteEntityOut>;

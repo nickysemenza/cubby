@@ -382,7 +382,10 @@ const recipeWritableShape = {
 
 const recipeCreateShape = {
   ...recipeWritableShape,
-  pendingImageIds: z.array(z.uuid()).optional(),
+  // Public `IMG-` shortcode, like `removeImageIds`/`imageOrder` below —
+  // `Image` mints a shortcode at insert time, so the repo layer resolves this
+  // to a uuid before the join-table write rather than taking a raw uuid.
+  pendingImageIds: z.array(imageShortcode).optional(),
 };
 export const recipeCreateInput = z.object(recipeCreateShape);
 

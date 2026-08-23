@@ -39,20 +39,24 @@ export function useImageState() {
     const imageData: Partial<UpdateInputImages> = {};
 
     // Pending documents merge into pendingImageIds — same association path.
+    // `PendingImage.id` is plain `string` (the same gallery component also
+    // handles existing images), but the value underneath is always the
+    // `IMG-` shortcode `create_file_upload`/`image.uploadImage` hand back —
+    // same reasoning as the `unsafeImageShortcode` casts just below.
     const pendingIds = [...pendingImages, ...pendingDocuments].map(
       (img) => img.id,
     );
     if (pendingIds.length > 0) {
-      imageData.pendingImageIds = pendingIds;
+      imageData.pendingImageIds = pendingIds.map(unsafeImageShortcode);
     }
 
     // `removedImageIds`/`imageOrder` name EXISTING images — ids that came
     // back from the server as `ImageOut.id`, i.e. real `IMG-` shortcodes —
-    // unlike `pendingIds` above, which are raw upload uuids that never round
-    // tripped through an output. The callback props that feed this state
+    // same shortcode shape as `pendingIds` above, both asserted here because
+    // the callback props that feed this state
     // (`onExistingImagesRemove`/`onExistingImagesReorder`) are typed as plain
-    // `string[]` because the same gallery component also handles pending
-    // images, so the brand is asserted here rather than threaded through.
+    // `string[]` since the same gallery component also handles pending
+    // images.
     const removedIds = [...removedImageIds, ...removedDocumentIds];
     if (!isCreate && removedIds.length > 0) {
       imageData.removeImageIds = removedIds.map(unsafeImageShortcode);

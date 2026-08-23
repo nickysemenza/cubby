@@ -344,6 +344,13 @@ export const addRecipeToMeal = async (
 ): Promise<MealOut> => {
   await withTransaction(db, async (tx) => {
     const recipeId = await resolveOrThrow(tx, "recipe", input.recipeId);
+    // Repeats are INTENTIONAL, not a duplicate bug: a meal may serve the same
+    // recipe more than once at different scales, and each occurrence must stay
+    // a distinguishable shopping-list contribution. Guard-backed by
+    // "gives each planned line its own index when a meal repeats a recipe"
+    // (api/routers/meal.integration.test.ts). So no unique index on
+    // (mealId, recipeId) and no upsert — retry-safety for a re-sent MCP call
+    // would need an explicit idempotency key, which this deliberately is not.
     await insertAndReturn(tx, mealRecipe, {
       mealId,
       recipeId,

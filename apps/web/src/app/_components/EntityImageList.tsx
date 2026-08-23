@@ -53,8 +53,8 @@ const EntityImageList: FC<EntityImageListProps> = ({
             {images.map((image) => {
               const tile = (
                 <Link
-                  to="/images/$id"
-                  params={{ id: image.id }}
+                  to="/images/$shortcode"
+                  params={{ shortcode: image.id }}
                   className="group block"
                 >
                   <InteractiveImage

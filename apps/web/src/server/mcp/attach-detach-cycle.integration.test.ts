@@ -1,6 +1,12 @@
 /**
- * The attach → detach → re-attach cycle, and the entity delete, driven through
- * the real MCP server against a real Postgres.
+ * The attach → detach → re-attach cycles driven through the real MCP server
+ * against a real Postgres — both kinds.
+ *
+ * `attach_entity` / `detach_entity` (the RELATION edges: kit components,
+ * project resource uses, purchase provenance links) are exercised at the
+ * bottom; `attach_file` (bytes into R2) is exercised above. They share this file
+ * because they share the property being tested — that the tool's RESPONSE tells
+ * the truth about what the write did.
  *
  * Regression cover for a bug that made `attach_file` lie. Detaching an image
  * hard-deleted only the join row, leaving the `Image` alive with `deletedAt`
@@ -89,6 +95,16 @@ function errorText(result: CallToolResult): string {
 
 function structured(result: CallToolResult): Record<string, unknown> {
   return result.structuredContent as Record<string, unknown>;
+}
+
+/**
+ * The machine-readable half of a FAULT. Rides in `_meta`, not
+ * `structuredContent`, because the reference SDK client validates
+ * `structuredContent` against the declared output schema with no exemption for
+ * `isError` — see `structuredError` in tools/_shared.ts.
+ */
+function errorMeta(result: CallToolResult): Record<string, unknown> {
+  return (result._meta?.["cubby/error"] ?? {}) as Record<string, unknown>;
 }
 
 function expectOk(result: CallToolResult) {
@@ -243,5 +259,237 @@ describe("attach_file / detach cycle", () => {
 
       expect(vi.mocked(deleteS3Object)).toHaveBeenCalledWith(key);
     });
+  });
+});
+
+/**
+ * The three relation families through the two generic tools.
+ *
+ * These assert on `cause.reason` / the structured `refusal`, never on message
+ * text: the whole point of collapsing six tools into two was that a caller can
+ * still branch on WHY without substring-matching a sentence, and a test that
+ * matches prose would pass while that property was broken.
+ */
+describe("attach_entity / detach_entity", () => {
+  const ctx = withTestDb("mcp");
+  const makeCaller = () => createTestCaller(domainRouter, ctx.db);
+
+  const createProductWith = async (
+    caller: DomainCaller,
+    name: string,
+    category?: string,
+  ) => {
+    const created = await callTool(
+      "create_product",
+      {
+        name,
+        manufacturer: "Test Mfg",
+        upc: null,
+        ingredientId: null,
+        ...(category ? { category } : {}),
+      },
+      caller,
+    );
+    expectOk(created);
+    return structured(created).id as string;
+  };
+
+  const createProjectCode = async (caller: DomainCaller, name: string) => {
+    const created = await callTool("create_project", { name }, caller);
+    expectOk(created);
+    return structured(created).id as string;
+  };
+
+  it("attaches kit components with quantity, and is idempotent", async () => {
+    const caller = makeCaller();
+    const kit = await createProductWith(caller, "Generic Kit");
+    const partA = await createProductWith(caller, "Generic Part A");
+    const partB = await createProductWith(caller, "Generic Part B");
+
+    const attached = await callTool(
+      "attach_entity",
+      {
+        parentId: kit,
+        items: [
+          { productId: partA, quantity: 4 },
+          // Omitted quantity is the 1-per-kit default, not a rejection.
+          { productId: partB },
+        ],
+      },
+      caller,
+    );
+    expectOk(attached);
+    expect(structured(attached)).toMatchObject({
+      changed: 2,
+      attached: 2,
+      alreadySatisfied: 0,
+    });
+
+    const again = await callTool(
+      "attach_entity",
+      { parentId: kit, items: [{ productId: partA, quantity: 4 }] },
+      caller,
+    );
+    expectOk(again);
+    expect(structured(again)).toMatchObject({
+      changed: 0,
+      attached: 2,
+      alreadySatisfied: 1,
+    });
+
+    const detached = await callTool(
+      "detach_entity",
+      { parentId: kit, productIds: [partA, partB] },
+      caller,
+    );
+    expectOk(detached);
+    expect(structured(detached)).toMatchObject({
+      changed: 2,
+      attached: 0,
+      alreadySatisfied: 0,
+    });
+
+    // Detaching what is already gone is a no-op, never an error.
+    const detachedAgain = await callTool(
+      "detach_entity",
+      { parentId: kit, productIds: [partA] },
+      caller,
+    );
+    expectOk(detachedAgain);
+    expect(structured(detachedAgain)).toMatchObject({
+      changed: 0,
+      alreadySatisfied: 1,
+    });
+  });
+
+  it("dispatches on the parent prefix: PRJ- records a project use", async () => {
+    const caller = makeCaller();
+    const project = await createProjectCode(caller, "Relation Project");
+    const tool = await createProductWith(caller, "Relation Drill", "tools");
+
+    const attached = await callTool(
+      "attach_entity",
+      { parentId: project, items: [{ productId: tool }] },
+      caller,
+    );
+    expectOk(attached);
+    expect(structured(attached)).toMatchObject({ changed: 1, attached: 1 });
+
+    const listed = await callTool(
+      "list_project_resources",
+      { projectId: project },
+      caller,
+    );
+    expectOk(listed);
+    expect(JSON.stringify(structured(listed))).toContain(tool);
+  });
+
+  /**
+   * The cost of the collapse, asserted.
+   *
+   * Three input schemas became one, so `quantity` now EXISTS on a call whose
+   * relation carries none. It is refused rather than ignored — a silently
+   * dropped quantity is exactly the failure the trade makes possible.
+   */
+  it("REFUSES quantity on a parent whose relation carries none", async () => {
+    const caller = makeCaller();
+    const project = await createProjectCode(caller, "Quantity Project");
+    const tool = await createProductWith(caller, "Quantity Drill", "tools");
+
+    const result = await callTool(
+      "attach_entity",
+      { parentId: project, items: [{ productId: tool, quantity: 3 }] },
+      caller,
+    );
+    expect(result.isError).toBe(true);
+    expect(errorMeta(result)).toMatchObject({
+      reason: "RELATION_QUANTITY_UNSUPPORTED",
+    });
+    // And nothing was written.
+    const listed = await callTool(
+      "list_project_resources",
+      { projectId: project },
+      caller,
+    );
+    expectOk(listed);
+    expect(structured(listed).items).toEqual([]);
+  });
+
+  /**
+   * The B2 defect, end to end: a live product of the wrong category used to come
+   * back as PRODUCT_NOT_FOUND with no ids at all.
+   */
+  it("refuses a wrong-category project resource and NAMES the id", async () => {
+    const caller = makeCaller();
+    const project = await createProjectCode(caller, "Category Project");
+    const lumber = await createProductWith(
+      caller,
+      "Category Lumber",
+      "hardware",
+    );
+
+    const result = await callTool(
+      "attach_entity",
+      { parentId: project, items: [{ productId: lumber }] },
+      caller,
+    );
+    // A refusal is a domain ANSWER, inside the declared output schema — not an
+    // `isError` envelope, which carries prose and nothing a client may rely on.
+    expectOk(result);
+    const body = structured(result);
+    expect(body.changed).toBe(0);
+    const refusal = body.refusal as {
+      reason?: string;
+      blockers?: Array<{ code: string; byTargetId: Record<string, number> }>;
+    };
+    expect(refusal.reason).toBe("PRODUCT_CATEGORY_INELIGIBLE");
+    expect(refusal.blockers?.map((b) => b.code)).toContain(
+      "block-product-category-ineligible",
+    );
+    // The half that used to be computed and discarded: WHICH id blocked.
+    expect(
+      refusal.blockers?.flatMap((b) => Object.keys(b.byTargetId)),
+    ).toContain(lumber);
+  });
+
+  it("previews an attach without committing it", async () => {
+    const caller = makeCaller();
+    const project = await createProjectCode(caller, "Preview Project");
+    const lumber = await createProductWith(
+      caller,
+      "Preview Lumber",
+      "hardware",
+    );
+
+    const preview = await callTool(
+      "preview_entity_operation",
+      {
+        operation: "attach",
+        entity: "project",
+        parentId: project,
+        productIds: [lumber],
+      },
+      caller,
+    );
+    expectOk(preview);
+    const body = structured(preview) as {
+      canProceed: boolean;
+      blockers: Array<{ code: string; byTargetId: Record<string, number> }>;
+    };
+    expect(body.canProceed).toBe(false);
+    expect(body.blockers.map((b) => b.code)).toContain(
+      "block-product-category-ineligible",
+    );
+    expect(body.blockers.flatMap((b) => Object.keys(b.byTargetId))).toContain(
+      lumber,
+    );
+    // Advisory only — the preview wrote nothing.
+    const listed = await callTool(
+      "list_project_resources",
+      { projectId: project },
+      caller,
+    );
+    expectOk(listed);
+    expect(structured(listed).items).toEqual([]);
   });
 });

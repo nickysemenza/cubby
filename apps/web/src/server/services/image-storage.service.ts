@@ -1,4 +1,9 @@
-import { unsafeImageShortcode } from "@cubby/schemas/identifiers";
+import type { ImageShortcode } from "@cubby/schemas/identifiers";
+import {
+  type ImageId,
+  unsafeImageId,
+  unsafeImageShortcode,
+} from "@cubby/schemas/identifiers";
 import type {
   AttachFileResponse,
   CreateFileUploadInput,
@@ -76,7 +81,7 @@ const initiatePendingUpload = async (
 
   return {
     uploadUrl,
-    imageId: createdImage.id,
+    imageId: unsafeImageShortcode(createdImage.shortcode),
     key,
     url,
   };
@@ -137,14 +142,14 @@ export const initiateDocumentUpload = async (
 export const importImageFromUrl = async (
   db: Database,
   params: { sourceUrl: string; filenamePrefix: string },
-): Promise<{ imageId: string; key: string; url: string } | null> => {
+): Promise<{ imageId: ImageShortcode; key: string; url: string } | null> => {
   if (isOurBucketUrl(params.sourceUrl)) {
     const key = extractKeyFromUrl(params.sourceUrl);
     if (key) {
       const existing = await getImageByKey(db, key);
       if (existing) {
         return {
-          imageId: existing.id,
+          imageId: unsafeImageShortcode(existing.shortcode),
           key: existing.key,
           url: existing.url,
         };
@@ -158,7 +163,7 @@ export const importImageFromUrl = async (
         url: params.sourceUrl,
       });
       return {
-        imageId: createdImage.id,
+        imageId: unsafeImageShortcode(createdImage.shortcode),
         key,
         url: params.sourceUrl,
       };
@@ -192,7 +197,7 @@ export const importImageFromUrl = async (
   }
 
   return {
-    imageId: createdImage.id,
+    imageId: unsafeImageShortcode(createdImage.shortcode),
     key: stored.key,
     url: stored.url,
   };
@@ -542,7 +547,10 @@ export const attachFileToEntity = async (
   // rather than leaking them, and must not fail an attachment that succeeded.
   if (input.uploadId) {
     try {
-      const { deletedKeys } = await deleteImages(db, [input.uploadId]);
+      // The staging handle is a genuine raw `Image.id` uuid, not a shortcode.
+      const { deletedKeys } = await deleteImages(db, [
+        unsafeImageId(input.uploadId),
+      ]);
       await deleteStoredObjects(deletedKeys);
     } catch (cleanupError) {
       console.error("Failed to clean up staged upload:", cleanupError);
@@ -624,7 +632,7 @@ export const cleanupUnreferencedImageStorage = async (
  */
 export const deleteImagesWithStorage = async (
   db: Database,
-  imageIds: string[],
+  imageIds: ImageId[],
 ) => {
   const result = await deleteImages(db, imageIds);
   await deleteStoredObjects(result.deletedKeys);

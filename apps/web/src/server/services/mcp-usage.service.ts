@@ -118,5 +118,6 @@ export async function getMcpUsageDashboard(
     users: usage.userBreakdown,
     clients: usage.clientBreakdown,
     surfaces: usage.surfaceBreakdown,
+    entities: usage.entityBreakdown,
   };
 }

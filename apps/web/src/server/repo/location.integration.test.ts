@@ -1240,8 +1240,9 @@ describe("attaching a photo as the new cover", () => {
     unsafeImageShortcode(img.shortcode);
 
   /** Attach `image` and make it the cover, exactly as the capture hook does.
-   * `pendingImageIds` still takes the raw uuid; `imageOrder` — populated from
-   * the attach response's own `images[].id` — takes the shortcode. */
+   * `pendingImageIds` and `imageOrder` both take the public `IMG-` shortcode
+   * now — `imageOrder` populated from the attach response's own
+   * `images[].id`. */
   const captureAsCover = async (
     shortcode: LocationShortcode,
     image: { id: string; shortcode: string },
@@ -1253,7 +1254,7 @@ describe("attaching a photo as the new cover", () => {
     const { location: attached } = await updateLocation(
       ctx.db,
       id,
-      { pendingImageIds: [image.id] },
+      { pendingImageIds: [code] },
       ctx.actor,
     );
     const otherIds = attached.images

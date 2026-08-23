@@ -53,11 +53,13 @@ export function EntityPreviewPanel({
   // Get entity definition for link
   const entityDef = entities[entityType];
 
-  // usda-food/image stay keyed on `$id` (never shortcode-routed). Every other
-  // Public entity payloads carry their shortcode in `id`; fall back to the
-  // requested id when a specialized payload does not expose an id field.
+  // `usda-food` stays keyed on `$id` (never shortcode-routed — its identity
+  // is an external USDA `fdc_id`). Every other entity, `image` included now
+  // that it mints an `IMG-` shortcode: public entity payloads carry their
+  // shortcode in `id`; fall back to the requested id when a specialized
+  // payload does not expose an id field.
   const detailLinkParams =
-    entityType === "usda-food" || entityType === "image"
+    entityType === "usda-food"
       ? { id }
       : entityDetailParams(
           data &&

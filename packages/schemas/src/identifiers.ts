@@ -190,7 +190,7 @@ export const unsafeWishShortcode = makeUnsafeId<WishShortcode>();
 
 // Entity → id lookups
 //
-// Everything above is written per-entity: fifteen `XxxId` types, fifteen
+// Everything above is written per-entity: sixteen `XxxId` types, sixteen
 // `unsafeXxxId` functions. Code that only knows its entity as a VALUE (a generic
 // shortcode resolver, a CRUD factory) can't reach any of them. These three
 // lookups close that gap — one entry per `ShortcodeEntity`, i.e. exactly the
@@ -243,7 +243,7 @@ type UnsafeIdFor<E extends ShortcodeEntity> = UnsafeIdCast<BrandForEntity<E>>;
 
 /**
  * Entity → its branded-id constructor, the runtime half of `BrandForEntity`.
- * Needed because `unsafeProductId` and friends are fifteen separate functions:
+ * Needed because `unsafeProductId` and friends are sixteen separate functions:
  * a type-level lookup alone can't turn a uuid a resolver just read out of the
  * DB into `ProductId` at the value level.
  *

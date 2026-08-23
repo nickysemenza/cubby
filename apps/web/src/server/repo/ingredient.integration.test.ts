@@ -281,8 +281,7 @@ describe("ingredient", () => {
 
     const summary = await mergeIngredients(
       ctx.db,
-      a.id,
-      [b.id, c.id],
+      { keepId: a.shortcode, mergeIds: [b.shortcode, c.shortcode] },
       ctx.actor,
     );
     const [resultAfterMerge] = await getDb(ctx.db)
@@ -366,7 +365,11 @@ describe("ingredient", () => {
         embedding: [0, 0, 0],
       });
 
-    await mergeIngredients(ctx.db, keeper.id, [alias.id], ctx.actor);
+    await mergeIngredients(
+      ctx.db,
+      { keepId: keeper.shortcode, mergeIds: [alias.shortcode] },
+      ctx.actor,
+    );
 
     // The alias row is HARD-deleted, so its embedding can't be re-read by id —
     // the only observable proof of cleanup is that it no longer appears as an
@@ -386,7 +389,11 @@ describe("ingredient", () => {
     const bogus = unsafeIngredientId("00000000-0000-0000-0000-000000000000");
 
     await expect(
-      mergeIngredients(ctx.db, a.id, [bogus], ctx.actor),
+      mergeIngredients(
+        ctx.db,
+        { keepId: a.shortcode, mergeIds: [bogus] },
+        ctx.actor,
+      ),
     ).rejects.toThrow(/not found/i);
 
     // Nothing changed: the survivor still exists, gained no aliases.
@@ -428,8 +435,7 @@ describe("ingredient", () => {
 
     const summary = await mergeIngredients(
       ctx.db,
-      target.id,
-      [alias.id],
+      { keepId: target.shortcode, mergeIds: [alias.shortcode] },
       ctx.actor,
     );
 
@@ -444,25 +450,32 @@ describe("ingredient", () => {
     expect(pepperRecipe!.totalsComputedAt).toBeNull();
   });
 
-  it("merge dryRun reports counts and writes nothing", async () => {
-    const a = await findOrCreateIngredient(ctx.db, "dry keeper");
-    const b = await findOrCreateIngredient(ctx.db, "dry alias");
+  // `dryRun` is gone: `previewMergeIngredients` (preview_entity_operation) is
+  // the preview, and it reads the same edge policy the mutation writes against.
+  // What replaced the dry run's exactness on this path is `merged` — the rows
+  // the DELETE actually removed, not the count the caller asked for.
+  it("reports a MEASURED removal count, not the size of the request", async () => {
+    const a = await findOrCreateIngredient(ctx.db, "measured keeper");
+    const b = await findOrCreateIngredient(ctx.db, "measured alias");
+    const c = await findOrCreateIngredient(ctx.db, "measured alias two");
 
-    const summary = await mergeIngredients(ctx.db, a.id, [b.id], ctx.actor, {
-      dryRun: true,
-    });
-    expect(summary.deletedIds).toEqual([b.shortcode]);
-    expect(summary.aliasesAdded).toContain(b.name);
+    // `c` twice: a restatement of the same instruction, which collapses. A
+    // count of 3 here would be the request quoted back rather than measured.
+    const summary = await mergeIngredients(
+      ctx.db,
+      {
+        keepId: a.shortcode,
+        mergeIds: [b.shortcode, c.shortcode, c.shortcode],
+      },
+      ctx.actor,
+    );
+    expect(summary.merged).toEqual(2);
+    expect(summary.deletedIds).toHaveLength(2);
 
-    // No write: both ingredients still exist, target gained no aliases.
     const [after] = await getDb(ctx.db)
       .select({ count: count() })
       .from(ingredient);
-    expect(after!.count).toEqual(2);
-    const keeper = await getDb(ctx.db).query.ingredient.findFirst({
-      where: eq(ingredient.id, a.id),
-    });
-    expect(keeper!.aliases).toHaveLength(0);
+    expect(after!.count).toEqual(1);
   });
 
   // Regression: the lean workbench fetch uses a relational query with raw-SQL

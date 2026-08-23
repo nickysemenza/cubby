@@ -27,14 +27,15 @@
  *   `delete_empty_purchases` below is deliberately narrower and refuses any
  *   live Expense or FinancialTransaction reference.
  *
- * `purchase.split` / `.link` / `.merge` are NOT in that list anymore — they are
- * registered below as `split_expense`, `link_expenses_to_purchase` and
- * `merge_purchases`. Their refusal semantics (merge refuses across vendors and
- * across two order ids, split refuses an expense with no purchase attached) are
- * carried in full in each tool's own description, since that description is the
- * agent's error path when a refusal fires.
+ * `purchase.split` / `.link` are NOT in that list anymore — they are registered
+ * below as `split_expense` and `link_expenses_to_purchase`. Their refusal
+ * semantics (split refuses an expense with no purchase attached) are carried in
+ * full in each tool's own description, since that description is the agent's
+ * error path when a refusal fires.
  *
- * `vendor.merge` is registered too, as `merge_vendors` — the fix for
+ * `purchase.merge` and `vendor.merge` are reached through the generic
+ * `merge_entity`; both declare their own prose below, which that tool composes
+ * into its `entity` parameter. The vendor one is the fix for
  * `findDuplicateVendors` (Problems) candidates, which used to dead-end at
  * `preview_entity_operation` with no MCP tool that could act on the preview.
  */
@@ -42,13 +43,10 @@
 import { expenseOut } from "@cubby/schemas/project";
 import {
   linkExpensesToPurchaseInput,
-  mergePurchasesInput,
   purchaseCreateInput,
   purchaseFilterFields,
   purchaseListResponse,
   purchaseOut,
-  purchaseProductMutationInput,
-  purchaseProductMutationOut,
   purchaseProductsInput,
   purchaseProductsMcpOut,
   purchaseUpdateData,
@@ -57,8 +55,6 @@ import {
   splitExpenseInput,
 } from "@cubby/schemas/purchase";
 import {
-  mergeVendorsInput,
-  mergeVendorsOut,
   vendorCreateInput,
   vendorFilterFields,
   vendorListResponse,
@@ -68,13 +64,14 @@ import {
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
+  declareMergeableEntity,
+  declareRelationEntity,
   READ_ONLY_CLOSED,
   registerEntityCrudToolset,
   registerRouterTool,
   slimPurchase,
   slimVendor,
   WRITE_CLOSED,
-  WRITE_DESTRUCTIVE_CLOSED,
 } from "./_shared";
 
 /**
@@ -126,19 +123,6 @@ const purchaseMcpUpdateShape = purchaseUpdateData.omit({
   pendingImageIds: true,
 }).shape;
 
-/**
- * `merge_vendors` over an MCP-safe vendor shape.
- *
- * `vendorOut.logo` is a full `imageOut`, whose `id` is a raw uuid — and a uuid
- * must never cross this boundary. A merge result has no use for the logo's
- * storage metadata anyway: what an agent needs back is which vendor survived
- * and what moved. Same reason `merge_products` publishes `mergeProductsMcpOut`
- * rather than the router's own output.
- */
-const mergeVendorsMcpOut = mergeVendorsOut.extend({
-  vendor: vendorOut.omit({ logo: true }),
-});
-
 export function registerPurchaseTools(server: McpServer) {
   registerEntityCrudToolset(server, {
     entity: "vendor",
@@ -156,7 +140,7 @@ export function registerPurchaseTools(server: McpServer) {
       create:
         'Add a vendor to the roster — identity only, no money. `name` is required; `website` and `notes` are optional and default to null. Prefer NOT calling this directly for an import: create_expense accepts `vendor` by NAME and find-or-creates both the vendor and its purchase inside the same transaction, so a one-off purchase needs no roster call at all. Reach for create_vendor when you are deliberately seeding the roster (e.g. recording a contractor before any invoice exists) or when you need `website`/`notes` set, which the name-resolution path leaves null. Check list_vendors first — the roster already holds ~114 vendors and a near-duplicate ("Amazon" vs "Amazon Business") is a real, separate row, not a typo the system will fold together.',
       delete:
-        "Soft-delete vendors. REFUSES while any live Purchase still points at one — the refusal names which vendors blocked and how many purchases each still holds. Move or delete those purchases first, or merge the vendor into its keeper with merge_vendors instead of deleting it.",
+        "Soft-delete vendors. REFUSES while any live Purchase still points at one — the refusal names which vendors blocked and how many purchases each still holds. Move or delete those purchases first, or merge the vendor into its keeper with merge_entity (entity=vendor) instead of deleting it.",
       update:
         "Update a vendor's identity fields (name, website, notes). Renaming is safe: purchases and expenses reference the vendor by id, so nothing is re-keyed and no spend moves. `purchaseCount` and `spend` are read-only rollups and cannot be written. There is deliberately no delete_vendors tool — deletion refuses while live purchases still reference the vendor, and rehoming them is a UI operation.",
     },
@@ -232,39 +216,22 @@ export function registerPurchaseTools(server: McpServer) {
     call: (caller, params) => caller.purchase.link(params),
   });
 
-  registerRouterTool(server, {
-    name: "merge_purchases",
-    description:
-      "Merge one or more purchases (`mergeIds`) into a single keeper purchase (`keepId`) — for order-less singletons a backfill could not group safely. Every Expense from a merged-away purchase is re-parented onto the keeper, and each merged-away Purchase is then SOFT-DELETED; its identity, statedTotal, and filed documents are gone. This is destructive to the merged-away Purchase rows, though not to any Expense or money, so choose `keepId` deliberately. " +
-      "REFUSES across vendors. REFUSES when more than one purchase involved carries a non-null `orderId` — two order ids are two transactions, not duplicates; a loser's null orderId is fine, and its orderId is adopted when the keeper has none. " +
-      "There is deliberately NO inverse operation and no `splitPurchase`. Confirm the correct keeper and duplicate purchases with list_purchases/get_purchase before calling; never guess a merge.",
-    inputSchema: mergePurchasesInput.shape,
-    outputSchema: purchaseOut,
-    annotations: WRITE_DESTRUCTIVE_CLOSED,
-    call: (caller, params) => caller.purchase.merge(params),
-  });
+  declareMergeableEntity(
+    server,
+    "purchase",
+    "Re-parents every Expense from the merged-away purchases onto the keeper, moves their documents and settlement links, then SOFT-DELETES them — their identity, statedTotal and filed paperwork are gone, though no Expense and no money is. For order-less singletons a backfill could not group safely. REFUSES across vendors, and REFUSES when more than one purchase in the cluster carries a non-null orderId (two order ids are two transactions, not duplicates); a loser's null orderId is fine, and its orderId is adopted when the keeper has none. This is the one merge that reports no `merged` count.",
+  );
 
-  registerRouterTool(server, {
-    name: "merge_vendors",
-    description:
-      "Merge one or more roster rows (`mergeIds`) into a single keeper vendor (`keepId`) — the fix for two spellings of one vendor (`Amazon` / `amazon` / `Amazon.com`), which `findDuplicateVendors` (Problems) surfaces as candidates but cannot itself act on. Every live Purchase from a merged-away vendor is re-pointed onto the keeper. " +
-      "Because Purchase enforces one row per (vendor, orderId), a purchase on a loser that shares its non-null orderId with a purchase already on the keeper (or on another loser in the same call) cannot simply be re-pointed — those two purchases are folded into one: the loser purchase's Expenses and documents move onto the survivor purchase and the loser purchase is soft-deleted. Order-less purchases (`orderId` null) never collide and always re-point untouched. The keeper also picks up `website`/`notes` from a loser ONLY where the keeper itself has none — it never overwrites a value the keeper already has. " +
-      "Each merged-away Vendor is then SOFT-DELETED. It keeps its OWN `VEN-` shortcode as a permanent tombstone — shortcodes are never reassigned or reused, so that code will never resolve to the keeper; if you need to look up which vendor a stale code named, use preview_entity_operation or a shortcode resolver, not a guess. " +
-      "There is deliberately no inverse operation. Call preview_entity_operation first with operation=merge and entity=vendor to see which purchases would repoint vs. fold before committing; never guess a merge.",
-    inputSchema: mergeVendorsInput.shape,
-    // `mergeVendorsOut`, not bare `vendorOut`: the merge already computed a
-    // plan describing what repointed, what folded, and which fields carried,
-    // and used to discard it — so an agent got the keeper back and no account
-    // of what the merge had actually done to the ledger.
-    outputSchema: mergeVendorsMcpOut,
-    annotations: WRITE_DESTRUCTIVE_CLOSED,
-    call: (caller, params) => caller.vendor.merge(params),
-  });
+  declareMergeableEntity(
+    server,
+    "vendor",
+    "The fix for two spellings of one vendor (`Amazon` / `amazon` / `Amazon.com`), which findDuplicateVendors (Problems) surfaces but cannot act on. Every live Purchase re-points onto the keeper; because Purchase enforces one row per (vendor, orderId), a loser purchase sharing its non-null orderId with one already on the keeper is FOLDED instead — its expenses and documents move onto the survivor purchase and the loser purchase is soft-deleted. Order-less purchases never collide. The keeper picks up website/notes/logo ONLY where it has none. Each merged-away vendor is soft-deleted and keeps its OWN `VEN-` code as a permanent tombstone: shortcodes are never reassigned, so that code will never resolve to the keeper.",
+  );
 
   registerRouterTool(server, {
     name: "list_purchase_products",
     description:
-      'List the Products one Purchase acquired. Rows come from TWO sources and `source` says which: "expense" means one of this order\'s own itemized Expenses names the product (the common case), "link" means an explicit PurchaseProduct row, and "both" means each exists for that pair. Only Expenses that ACQUIRE count — a negative Expense records an exit (sale, return, disposal), so a disposal order does not list the goods it sold. This is PROVENANCE, not money: nothing here carries an amount or quantity or appears in any spend total. The explicit link exists because an order paid in installments has Expenses with lineBasis "allocation" — a slice of a total that was never itemized, either by payment schedule (a deposit buys no particular item) or by an estimated materials/labor split — and such a row can never carry a productId. Where spend IS itemized per product (lineBasis "item_line"), the Expense\'s own productId already records it and is the better source; those pairs appear here with source "expense" and need no link. `linkAttachedAt` is when the explicit link was recorded, and is null on a source "expense" row — it is also the test for whether detach_purchase_products has anything to remove.',
+      'List the Products one Purchase acquired. Rows come from TWO sources and `source` says which: "expense" means one of this order\'s own itemized Expenses names the product (the common case), "link" means an explicit PurchaseProduct row, and "both" means each exists for that pair. Only Expenses that ACQUIRE count — a negative Expense records an exit (sale, return, disposal), so a disposal order does not list the goods it sold. This is PROVENANCE, not money: nothing here carries an amount or quantity or appears in any spend total. The explicit link exists because an order paid in installments has Expenses with lineBasis "allocation" — a slice of a total that was never itemized, either by payment schedule (a deposit buys no particular item) or by an estimated materials/labor split — and such a row can never carry a productId. Where spend IS itemized per product (lineBasis "item_line"), the Expense\'s own productId already records it and is the better source; those pairs appear here with source "expense" and need no link. `linkAttachedAt` is when the explicit link was recorded, and is null on a source "expense" row — it is also the test for whether detach_entity has anything to remove.',
     inputSchema: purchaseProductsInput.shape,
     // `{items}`, like every other list tool — see `purchaseProductsMcpOut`.
     outputSchema: purchaseProductsMcpOut,
@@ -274,23 +241,14 @@ export function registerPurchaseTools(server: McpServer) {
     }),
   });
 
-  registerRouterTool(server, {
-    name: "attach_purchase_products",
-    description:
-      'Record that one or more existing Products were bought on one existing Purchase. This link is PROVENANCE, not money: it creates, adjusts, and duplicates nothing in the ledger, and must never stand in for pricing a line. It exists because an order paid in installments has Expenses with lineBasis "allocation" — a slice of a total that was never itemized — which can never carry a productId, leaving the goods with no path back to the order that bought them. Prefer setting an Expense\'s own productId whenever the spend is genuinely itemized per product; reach for this only when no Expense can hold the fact. Repeating a live link is idempotent.',
-    inputSchema: purchaseProductMutationInput.shape,
-    outputSchema: purchaseProductMutationOut,
-    annotations: WRITE_CLOSED,
-    call: (caller, params) => caller.purchase.attachProducts(params),
-  });
-
-  registerRouterTool(server, {
-    name: "detach_purchase_products",
-    description:
-      "Soft-delete one or more explicit Product links from one Purchase. The link carries no money and no quantity, so detaching touches no Expense, no inventory, and no spend total. It removes ONLY the explicit link: if one of this order's itemized Expenses also names that Product, list_purchase_products keeps returning the pair with source \"expense\" — the relationship is still recorded, by the Expense. To break that one, clear the Expense's productId instead. A pair whose `linkAttachedAt` is null has no link to remove at all. Idempotent: safe to call on a link that is already gone, and it reports nothing changed.",
-    inputSchema: purchaseProductMutationInput.shape,
-    outputSchema: purchaseProductMutationOut,
-    annotations: WRITE_DESTRUCTIVE_CLOSED,
-    call: (caller, params) => caller.purchase.detachProducts(params),
+  // The prose that used to be `attach_purchase_products`' /
+  // `detach_purchase_products`' own descriptions, composed into `attach_entity`
+  // / `detach_entity`'s `parentId` parameter. "Provenance, not money" is the
+  // whole point of this edge and must survive the collapse.
+  declareRelationEntity(server, "purchase", {
+    attach:
+      'PUR- parent = PURCHASE PROVENANCE LINKS (`PurchaseProduct`). Records that existing Products were bought on one existing Purchase. This link is PROVENANCE, NOT MONEY: it creates, adjusts, and duplicates nothing in the ledger, carries no amount and no quantity, and must never stand in for pricing a line. It exists because an order paid in installments has Expenses with lineBasis "allocation" — a slice of a total that was never itemized — which can never carry a productId, leaving the goods with no path back to the order that bought them. Prefer setting an Expense\'s own productId whenever the spend is genuinely itemized per product; reach for this only when no Expense can hold the fact.',
+    detach:
+      "PUR- parent = PURCHASE PROVENANCE LINKS. Soft-deletes explicit Product links from one Purchase. The link carries no money and no quantity, so detaching touches no Expense, no inventory, and no spend total. It removes ONLY the explicit link: if one of this order's itemized Expenses also names that Product, list_purchase_products keeps returning the pair with source \"expense\" — the relationship is still recorded, by the Expense. To break that one, clear the Expense's productId instead. A pair whose `linkAttachedAt` is null has no link to remove at all.",
   });
 }

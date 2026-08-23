@@ -28,8 +28,6 @@ import {
   projectMcpListOut,
   projectOut,
   projectPortfolioAnalyticsOut,
-  projectResourceMutationInput,
-  projectResourceMutationOut,
   projectResourceProjectInput,
   projectResourcesMcpOut,
   projectTaskStatusBreakdown,
@@ -48,6 +46,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { sumBy } from "es-toolkit";
 import { z } from "zod";
 import {
+  declareRelationEntity,
   READ_ONLY_CLOSED,
   registerEntityCrudToolset,
   registerRouterTool,
@@ -56,7 +55,6 @@ import {
   slimTask,
   strictFilterInput,
   WRITE_CLOSED,
-  WRITE_DESTRUCTIVE_CLOSED,
 } from "./_shared";
 
 // Synthesis-read / bulk-write projections
@@ -219,30 +217,21 @@ export function registerProjectTools(server: McpServer) {
     call: (caller, params) => caller.project.toolSuggestions(params),
   });
 
-  registerRouterTool(server, {
-    name: "attach_project_resources",
-    description:
-      "Record that one or more existing Cubby tool or software Products were used on one exact project. Repeating an existing live association is idempotent. This does not alter project spend, inventory, or expense history.",
-    inputSchema: projectResourceMutationInput.shape,
-    outputSchema: projectResourceMutationOut,
-    annotations: WRITE_CLOSED,
-    call: (caller, params) => caller.project.attachResources(params),
-  });
-
-  registerRouterTool(server, {
-    name: "detach_project_resources",
-    description:
-      "Soft-delete one or more explicit reusable-resource associations from one exact project. This leaves the Product, Expenses, inventory, and uses on other projects unchanged.",
-    inputSchema: projectResourceMutationInput.shape,
-    outputSchema: projectResourceMutationOut,
-    annotations: WRITE_DESTRUCTIVE_CLOSED,
-    call: (caller, params) => caller.project.detachResources(params),
+  // The prose that used to be `attach_project_resources`' /
+  // `detach_project_resources`' own descriptions, composed into `attach_entity`
+  // / `detach_entity`'s `parentId` parameter. The category rule is the part
+  // that must not evaporate.
+  declareRelationEntity(server, "project", {
+    attach:
+      "PRJ- parent = PROJECT RESOURCE USES (`ProjectToolUsage`). Records that existing Cubby Products were used on one exact project. ONLY category `tools` or `software` may be recorded this way — a live Product of any other category is refused with reason PRODUCT_CATEGORY_INELIGIBLE and its code named, which is a different problem from a code that does not resolve. Also refused: a tool we did not own while the project ran (TOOL_TIMELINE_CONFLICT — acquired after it ended or disposed of before it started; the fix is usually a missing acquisition Expense). This alters no project spend, no inventory, and no expense history, and carries NO quantity.",
+    detach:
+      "PRJ- parent = PROJECT RESOURCE USES. Soft-deletes explicit resource associations from one exact project, leaving the Product, its Expenses, its inventory, and its uses on other projects unchanged. To MOVE the history rather than drop it, use repoint_project_uses.",
   });
 
   registerRouterTool(server, {
     name: "repoint_project_uses",
     description:
-      "Move a Product's recorded project uses onto another Product, in one transaction. This is the tool for retiring or splitting a Product that delete_products refuses because it has project-use history: repoint the history onto the component or replacement that should carry it, then delete. Do NOT do this as detach_project_resources plus attach_project_resources — a detach whose attach is missed discards the project's tool history with nothing to flag it. Omit projectIds to move every live use. Projects that already record the destination keep their existing row and are reported as alreadyPresent, not as an error. The destination must be a live Product with category tools or software.",
+      "Move a Product's recorded project uses onto another Product, in one transaction. This is the tool for retiring or splitting a Product that delete_entity refuses because it has project-use history: repoint the history onto the component or replacement that should carry it, then delete. Do NOT do this as detach_entity plus attach_entity — a detach whose attach is missed discards the project's tool history with nothing to flag it, which is exactly why this stayed its own tool when those six collapsed into two. Omit projectIds to move every live use. Projects that already record the destination keep their existing row and are reported as alreadyPresent, not as an error. The destination must be a live Product with category tools or software.",
     inputSchema: repointProjectUsesInput.shape,
     outputSchema: repointProjectUsesOut,
     annotations: WRITE_CLOSED,

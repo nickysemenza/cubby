@@ -354,7 +354,7 @@ describe("recipe crud repo", () => {
         ctx.db,
         {
           ...makeRecipeInput({ name: "Illustrated" }),
-          pendingImageIds: [cover.id],
+          pendingImageIds: [unsafeImageShortcode(cover.shortcode)],
         },
         ctx.actor,
       );

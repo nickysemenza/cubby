@@ -1,4 +1,5 @@
 import type { ProductId } from "@cubby/schemas/identifiers";
+import { unsafeImageShortcode } from "@cubby/schemas/identifiers";
 import {
   projectCreateInput,
   projectToolMatrixInput,
@@ -62,7 +63,7 @@ describe("project reusable resources", () => {
     await updateProduct(
       ctx.db,
       tool.entityId,
-      { pendingImageIds: [toolCover.id] },
+      { pendingImageIds: [unsafeImageShortcode(toolCover.shortcode)] },
       ctx.actor,
     );
 
@@ -463,13 +464,13 @@ describe("project reusable resources", () => {
     await updateProduct(
       ctx.db,
       purchasedHere.entityId,
-      { pendingImageIds: [purchasedCover.id] },
+      { pendingImageIds: [unsafeImageShortcode(purchasedCover.shortcode)] },
       ctx.actor,
     );
     await updateProduct(
       ctx.db,
       reusedTradeTool.entityId,
-      { pendingImageIds: [reusedCover.id] },
+      { pendingImageIds: [unsafeImageShortcode(reusedCover.shortcode)] },
       ctx.actor,
     );
     const oneUseCheapTool = await createProduct(
@@ -819,7 +820,24 @@ describe("repointProjectUses", () => {
         { fromProductId: kit.entityId, toProductId: consumable.entityId },
         ctx.actor,
       ),
-    ).rejects.toMatchObject({ cause: { reason: "PRODUCT_NOT_FOUND" } });
+      // NOT `PRODUCT_NOT_FOUND` — the destination exists and is live, it is
+      // simply the wrong category, and the two used to be indistinguishable.
+      // The refusal also NAMES the offending shortcode, structurally.
+    ).rejects.toMatchObject({
+      cause: { reason: "PRODUCT_CATEGORY_INELIGIBLE" },
+    });
+    const refusal = await repointProjectUses(
+      ctx.db,
+      { fromProductId: kit.entityId, toProductId: consumable.entityId },
+      ctx.actor,
+    ).catch((error: unknown) => error);
+    expect(
+      (
+        refusal as {
+          cause?: { blockers?: Array<{ byTargetId: Record<string, number> }> };
+        }
+      ).cause?.blockers?.flatMap((b) => Object.keys(b.byTargetId)),
+    ).toEqual([consumable.id]);
   });
 });
 

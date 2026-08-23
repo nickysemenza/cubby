@@ -37,6 +37,11 @@ export async function persistTelemetryMessages(
             outcome: event.outcome,
             registeredAtCall: event.registeredAtCall,
             surface: event.surface,
+            // Absent on a queue message minted before this field existed
+            // (see the `.optional()` note on mcpToolCallTelemetrySchema) —
+            // those replay as null, same as a tool the extractor can't
+            // attribute.
+            entity: event.entity ?? null,
             release: event.release,
             occurredAt: new Date(event.occurredAt),
             userId: unsafeUserId(event.userId),

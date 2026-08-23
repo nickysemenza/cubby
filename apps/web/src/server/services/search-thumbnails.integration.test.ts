@@ -1,3 +1,4 @@
+import { unsafeImageShortcode } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -43,7 +44,7 @@ describe("search hit thumbnails", () => {
     await updateProduct(
       ctx.db,
       product.entityId,
-      { pendingImageIds: [skuPhoto.id] },
+      { pendingImageIds: [unsafeImageShortcode(skuPhoto.shortcode)] },
       ctx.actor,
     );
 
@@ -74,7 +75,7 @@ describe("search hit thumbnails", () => {
     await updateProduct(
       ctx.db,
       product.entityId,
-      { pendingImageIds: [skuPhoto.id] },
+      { pendingImageIds: [unsafeImageShortcode(skuPhoto.shortcode)] },
       ctx.actor,
     );
 
@@ -90,7 +91,7 @@ describe("search hit thumbnails", () => {
     await updateLocation(
       ctx.db,
       location.entityId,
-      { pendingImageIds: [ownPhoto.id] },
+      { pendingImageIds: [unsafeImageShortcode(ownPhoto.shortcode)] },
       ctx.actor,
     );
     await refreshSearchDocument(ctx.db, "location", location.entityId);
@@ -118,7 +119,7 @@ describe("search hit thumbnails", () => {
     await updateProduct(
       ctx.db,
       product.entityId,
-      { pendingImageIds: [skuPhoto.id] },
+      { pendingImageIds: [unsafeImageShortcode(skuPhoto.shortcode)] },
       ctx.actor,
     );
 
@@ -134,7 +135,12 @@ describe("search hit thumbnails", () => {
     await updateLocation(
       ctx.db,
       location.entityId,
-      { pendingImageIds: [broken.id, manual.id] },
+      {
+        pendingImageIds: [
+          unsafeImageShortcode(broken.shortcode),
+          unsafeImageShortcode(manual.shortcode),
+        ],
+      },
       ctx.actor,
     );
     await refreshSearchDocument(ctx.db, "location", location.entityId);

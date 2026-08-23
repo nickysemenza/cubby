@@ -261,12 +261,17 @@ const createLocationTx = async (
     });
 
     if (data.pendingImageIds && data.pendingImageIds.length > 0) {
+      const resolvedImageIds = await resolveAllPresent(
+        tx,
+        "image",
+        data.pendingImageIds,
+      );
       await associatePendingImages(
         tx,
         locationImage,
         "locationId",
         newLocation.id,
-        data.pendingImageIds,
+        resolvedImageIds,
       );
     }
 
@@ -446,6 +451,11 @@ export const updateLocation = async (
     }
 
     if (data.pendingImageIds && data.pendingImageIds.length > 0) {
+      const resolvedPendingImageIds = await resolveAllPresent(
+        tx,
+        "image",
+        data.pendingImageIds,
+      );
       const startSortOrder = await nextImageSortOrder(
         tx,
         locationImage,
@@ -457,7 +467,7 @@ export const updateLocation = async (
         locationImage,
         "locationId",
         updated.id,
-        data.pendingImageIds,
+        resolvedPendingImageIds,
         startSortOrder,
       );
     }

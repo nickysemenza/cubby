@@ -22,36 +22,21 @@ interface UuidFinding {
  * deliberately; field-name heuristics are intentionally not accepted. */
 const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "add_recipe_to_meal.recipes[].id",
-  "attach_file.imageId",
-  "get_product.images[].id",
-  "get_vendor.logo.id",
-  "patch_product_external_ids.images[].id",
   "create_meal.recipes[].id",
   "find_recipes_using_ingredient.recipes[].usages[].lineId",
   "get_meal.recipes[].id",
-  "get_recipe.images[].id",
   "get_recipe.sections[].id",
   "get_recipe.sections[].ingredients[].id",
   "list_meals.items[].recipes[].id",
-  "list_vendors.items[].logo.id",
   "remove_meal_recipe.recipes[].id",
   "update_meal.recipes[].id",
   "update_meal_recipe.recipes[].id",
-  "create_vendor.logo.id",
-  "update_vendor.logo.id",
-  "merge_vendors.logo.id",
-  "verify_product_images.images[].id",
   // Plural mirrors of the singular exceptions above. A batch tool wraps its
   // singular's own output in `results[].item`, so it re-exposes exactly the
-  // same declared-uuid leaves — image ids and the mealRecipe row id, neither of
-  // which has a shortcode.
-  "attach_files.results[].item.imageId",
+  // same declared-uuid leaves — the mealRecipe row id, which has no shortcode
+  // because it names a join row rather than an entity.
   "create_meals.results[].item.recipes[].id",
   "update_meals.results[].item.recipes[].id",
-  "patch_products_external_ids.results[].item.images[].id",
-  "verify_products_images.results[].item.images[].id",
-  "create_vendors.results[].item.logo.id",
-  "update_vendors.results[].item.logo.id",
   // The staged-upload handle. It IS an Image id, and images are a declared
   // exception with no shortcode — the caller hands this straight back to
   // attach_file, so it is the identifier rather than a leaked internal.
@@ -133,6 +118,7 @@ describe("MCP output schemas expose shortcodes, not uuids, outside declared exce
     expect(tools.length).toBeGreaterThan(50);
 
     const violations: UuidFinding[] = [];
+    const matchedDeclarations = new Set<string>();
     for (const tool of tools) {
       const outputSchema = tool.outputSchema as JsonSchemaNode | undefined;
       if (!outputSchema) continue;
@@ -154,6 +140,7 @@ describe("MCP output schemas expose shortcodes, not uuids, outside declared exce
       violations.push(
         ...found.filter((f) => !DECLARED_UUID_OUTPUT_PATHS.has(f.path)),
       );
+      for (const f of found) matchedDeclarations.add(f.path);
     }
 
     // Asserted as an EXACT set, not a subset: a new leak fails here, and so
@@ -167,5 +154,21 @@ describe("MCP output schemas expose shortcodes, not uuids, outside declared exce
         )
         .join("\n")}`,
     ).toEqual([...NOT_YET_CUT_OVER].sort());
+
+    // The other half of "keeps the list shrinking", which the assertion above
+    // cannot see: a declared path whose field is no longer uuid-shaped never
+    // appears in `found`, so it never shows up as a violation and the entry
+    // survives forever. That is exactly how a dozen image paths outlived the
+    // `IMG-` shortcode migration here. Fixing a leak must now also mean
+    // striking it off, or this fails.
+    const dead = [...DECLARED_UUID_OUTPUT_PATHS]
+      .filter((path) => !matchedDeclarations.has(path))
+      .sort();
+    expect(
+      dead,
+      `declared uuid exceptions that no longer match anything.\nThese are cut over — delete them from DECLARED_UUID_OUTPUT_PATHS:\n${dead
+        .map((p) => `  ${p}`)
+        .join("\n")}`,
+    ).toEqual([]);
   });
 });

@@ -64,6 +64,10 @@ describe("getMcpUsageDashboard", () => {
       userBreakdown: [],
       clientBreakdown: [],
       surfaceBreakdown: [],
+      entityBreakdown: [
+        { key: "product", label: "product", count: 3 },
+        { key: "unknown", label: "Unattributed", count: 1 },
+      ],
     });
   });
 
@@ -91,5 +95,13 @@ describe("getMcpUsageDashboard", () => {
       errors: 1,
     });
     expect(result.observationComplete).toBe(true);
+  });
+
+  it("passes through the entity breakdown untouched", async () => {
+    const result = await getMcpUsageDashboard({} as never, 90);
+    expect(result.entities).toEqual([
+      { key: "product", label: "product", count: 3 },
+      { key: "unknown", label: "Unattributed", count: 1 },
+    ]);
   });
 });

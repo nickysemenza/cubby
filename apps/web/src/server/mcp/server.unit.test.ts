@@ -877,16 +877,15 @@ describe("listMcpToolCatalog", () => {
     );
     for (const name of [
       "list_project_resources",
-      "attach_project_resources",
-      "detach_project_resources",
       "list_product_project_uses",
       "suggest_project_tools",
       "list_purchase_products",
-      "attach_purchase_products",
-      "detach_purchase_products",
       "list_product_components",
-      "attach_product_components",
-      "detach_product_components",
+      // The three relation families share one pair of tools; the parent's
+      // shortcode prefix picks the family. `list_*` stays per-family because
+      // its OUTPUT shape genuinely differs.
+      "attach_entity",
+      "detach_entity",
     ]) {
       expect(names.has(name), `${name} missing from catalog`).toBe(true);
     }
@@ -894,6 +893,13 @@ describe("listMcpToolCatalog", () => {
       "list_project_tools",
       "attach_project_tools",
       "detach_project_tools",
+      // Replaced by attach_entity/detach_entity, not renamed.
+      "attach_project_resources",
+      "detach_project_resources",
+      "attach_purchase_products",
+      "detach_purchase_products",
+      "attach_product_components",
+      "detach_product_components",
     ]) {
       expect(names.has(name), `${name} unexpectedly remains in catalog`).toBe(
         false,
@@ -1263,6 +1269,16 @@ describe("listMcpToolCatalog", () => {
           ids: Array.from({ length: 201 }, () => "PRD-2CRC"),
         },
       ],
+      [
+        // The other half of the image cut-over: the uuid arm is gone, not
+        // merely unused. Leaving it accepted would keep the hole open.
+        "an image by raw uuid",
+        {
+          operation: "delete",
+          entity: "image",
+          ids: ["3f2504e0-4f89-41d3-9a0c-0305e82c3302"],
+        },
+      ],
     ];
     for (const [reason, input] of rejected) {
       expect({
@@ -1277,11 +1293,15 @@ describe("listMcpToolCatalog", () => {
         { operation: "delete", entity: "product", ids: ["PRD-2CRC"] },
       ],
       [
-        "hard-delete an image by uuid",
+        // Images carry `IMG-` codes like every other entity now. This case used
+        // to pass a raw uuid, which was the last place a uuid could enter the
+        // MCP boundary — an `IMG-` code read off any response could not be fed
+        // back into its own delete preview.
+        "hard-delete an image by shortcode",
         {
           operation: "delete",
           entity: "image",
-          ids: ["3f2504e0-4f89-41d3-9a0c-0305e82c3302"],
+          ids: ["IMG-2CRC"],
         },
       ],
       [
@@ -1596,45 +1616,21 @@ describe("listMcpToolCatalog", () => {
     const DECLARED_UUID_EXCEPTIONS = new Set([
       "create_recipe.sections[].id",
       "create_recipe.sections[].ingredients[].id",
-      "update_products.items[].removeImageIds",
-      "update_products.items[].imageOrder",
-      "update_purchases.items[].removeImageIds",
-      "update_purchases.items[].imageOrder",
       "create_recipe.sections[].instructions[].id",
       "update_meal_recipe.id",
-      "update_location.imageOrder",
-      "update_location.pendingImageIds",
-      "update_location.removeImageIds",
-      "update_purchase.imageOrder",
-      "update_purchase.removeImageIds",
-      "update_product.imageOrder",
-      "update_product.removeImageIds",
-      "reclassify_purchase_document.imageId",
       "update_recipe.sections[].id",
       "update_recipe.sections[].ingredients[].id",
       "update_recipe.sections[].instructions[].id",
       "remove_meal_recipe.id",
-      // preview_entity_operation is one flat object over every previewable
-      // entity (a union input is uncallable over MCP — see the schema's own
-      // comment), so its id fields are `anyShortcodeSchema | uuid`: the
-      // shortcode half keeps a real prefix alternation, and the uuid half is
-      // there for `image`, the one entity with no shortcode. Which prefix
-      // applies is enforced against `entity` in the schema's refine.
       // A statement row is addressed by its content hash (`v1:<sha256>`), which
       // is the provider row's identity — there is no shortcode to carry a
       // prefix, and minting one would imply the ledger is an entity.
       "update_statement_rows.selector.externalIds",
       "update_statement_rows.data.supersededByExternalId",
       "delete_statement_rows.selector.externalIds",
-      "preview_entity_operation.ids",
-      "preview_entity_operation.mergeIds",
-      "preview_entity_operation.keepId",
       // The plural mirrors of the singular exceptions above. A batch tool wraps
       // its singular's own input schema in `{items: [...]}`, so it inherits
       // every declared uuid field verbatim — same fields, same reasons.
-      "update_locations.items[].imageOrder",
-      "update_locations.items[].pendingImageIds",
-      "update_locations.items[].removeImageIds",
       "create_recipes.items[].sections[].id",
       "create_recipes.items[].sections[].ingredients[].id",
       "create_recipes.items[].sections[].instructions[].id",
@@ -1717,6 +1713,7 @@ describe("listMcpToolCatalog", () => {
 
     const { tools } = await listMcpToolCatalog();
     const violations: string[] = [];
+    const stillNeeded = new Set<string>();
     for (const tool of tools) {
       const fields: Array<{ path: string; node: unknown }> = [];
       const inputSchema = tool.inputSchema as Record<string, unknown>;
@@ -1726,23 +1723,41 @@ describe("listMcpToolCatalog", () => {
         {};
       collectIdFields(inputSchema, "", fields, defs);
       for (const { path, node } of fields) {
-        if (DECLARED_UUID_EXCEPTIONS.has(`${tool.name}.${path}`)) continue;
+        const key = `${tool.name}.${path}`;
         const strings = stringSchemas(node);
         if (strings.length === 0) continue; // not string-shaped (nested object, number, …)
-        if (
-          strings.some(
-            (s) =>
-              typeof s.pattern !== "string" ||
-              !Object.values(SHORTCODE_PREFIX).some((prefix) =>
-                (s.pattern as string).includes(prefix),
-              ),
-          )
-        ) {
-          violations.push(`${tool.name}.${path}`);
+        const lacksShortcodePattern = strings.some(
+          (s) =>
+            typeof s.pattern !== "string" ||
+            !Object.values(SHORTCODE_PREFIX).some((prefix) =>
+              (s.pattern as string).includes(prefix),
+            ),
+        );
+        if (DECLARED_UUID_EXCEPTIONS.has(key)) {
+          // Only counts as "still needed" if it WOULD have failed. An entry
+          // whose field has since gained a real prefix pattern is dead.
+          if (lacksShortcodePattern) stillNeeded.add(key);
+          continue;
         }
+        if (lacksShortcodePattern) violations.push(key);
       }
     }
     expect(violations).toEqual([]);
+
+    // The half the check above cannot see: an exemption is consulted with
+    // `continue`, so a path that has since been cut over to a shortcode simply
+    // stops matching and its entry survives forever. That is how a dozen image
+    // paths outlived the `IMG-` migration. Cutting a field over must now also
+    // mean striking it off, or this fails.
+    const dead = [...DECLARED_UUID_EXCEPTIONS]
+      .filter((key) => !stillNeeded.has(key))
+      .sort();
+    expect(
+      dead,
+      `declared uuid exceptions that no longer need exempting.\nThese advertise a real shortcode prefix now — delete them from DECLARED_UUID_EXCEPTIONS:\n${dead
+        .map((k) => `  ${k}`)
+        .join("\n")}`,
+    ).toEqual([]);
   });
 
   it("advertises dates as date-time strings and emits them on the wire", async () => {
@@ -1889,128 +1904,6 @@ describe("find_similar_entities pair allowlist", () => {
 
     expect(result.isError).toBe(true);
     expect(similar).not.toHaveBeenCalled();
-  });
-});
-
-describe("merge_ingredients partial-success aggregation", () => {
-  const TARGET_A_CODE = "ING-2222";
-  const ALIAS_A_CODE = "ING-2223";
-  const TARGET_B_CODE = "ING-2224";
-  const ALIAS_B_CODE = "ING-2225";
-
-  it("reports summary/results by index and leaves isError unset when at least one merge succeeds", async () => {
-    const mergeSummary = {
-      aliasesAdded: ["Cherry"],
-      recipesMoved: 2,
-      productsMoved: 1,
-      deletedIds: [ALIAS_A_CODE],
-    };
-    const caller = {
-      ingredient: {
-        merge: vi
-          .fn()
-          .mockResolvedValueOnce({ mergeSummary })
-          .mockRejectedValueOnce(new Error("target not found")),
-      },
-    };
-
-    const result = await callTool(
-      createMcpServer(),
-      "merge_ingredients",
-      {
-        merges: [
-          { target: TARGET_A_CODE, aliases: [ALIAS_A_CODE] },
-          { target: TARGET_B_CODE, aliases: [ALIAS_B_CODE] },
-        ],
-      },
-      caller,
-    );
-
-    expect(result.isError).not.toBe(true);
-    expect(result.structuredContent).toEqual({
-      summary: { requested: 2, succeeded: 1, failed: 1 },
-      results: [
-        {
-          index: 0,
-          status: "succeeded",
-          target: TARGET_A_CODE,
-          summary: mergeSummary,
-        },
-        {
-          index: 1,
-          status: "failed",
-          target: TARGET_B_CODE,
-          error: "target not found",
-        },
-      ],
-    });
-  });
-
-  // Same doctrine `registerBatchTool` documents for every other batch tool
-  // (`_shared.ts`): a wholly-failed batch is still `isError: false` — the
-  // per-item errors are the payload, and flagging the envelope would hide
-  // them behind a bare string.
-  it("stays isError: false even when every merge in the batch fails", async () => {
-    const caller = {
-      ingredient: {
-        merge: vi.fn().mockRejectedValue(new Error("boom")),
-      },
-    };
-
-    const result = await callTool(
-      createMcpServer(),
-      "merge_ingredients",
-      {
-        merges: [
-          { target: TARGET_A_CODE, aliases: [ALIAS_A_CODE] },
-          { target: TARGET_B_CODE, aliases: [ALIAS_B_CODE] },
-        ],
-      },
-      caller,
-    );
-
-    expect(result.isError).not.toBe(true);
-    expect(result.structuredContent).toEqual({
-      summary: { requested: 2, succeeded: 0, failed: 2 },
-      results: [
-        { index: 0, status: "failed", target: TARGET_A_CODE, error: "boom" },
-        { index: 1, status: "failed", target: TARGET_B_CODE, error: "boom" },
-      ],
-    });
-  });
-
-  it("does not flag isError on a fully-successful batch", async () => {
-    const mergeSummary = {
-      aliasesAdded: [],
-      recipesMoved: 0,
-      productsMoved: 0,
-      deletedIds: [ALIAS_A_CODE],
-    };
-    const caller = {
-      ingredient: {
-        merge: vi.fn().mockResolvedValue({ mergeSummary }),
-      },
-    };
-
-    const result = await callTool(
-      createMcpServer(),
-      "merge_ingredients",
-      { merges: [{ target: TARGET_A_CODE, aliases: [ALIAS_A_CODE] }] },
-      caller,
-    );
-
-    expect(result.isError).not.toBe(true);
-    expect(result.structuredContent).toEqual({
-      summary: { requested: 1, succeeded: 1, failed: 0 },
-      results: [
-        {
-          index: 0,
-          status: "succeeded",
-          target: TARGET_A_CODE,
-          summary: mergeSummary,
-        },
-      ],
-    });
   });
 });
 
@@ -2635,7 +2528,6 @@ describe("purchase restructuring tools (split/link/merge)", () => {
   const EXPENSE_A = "EXP-7772";
   const EXPENSE_B = "EXP-7773";
   const PURCHASE_A = "PUR-8882";
-  const PURCHASE_B = "PUR-8883";
 
   it("retires delete_empty_purchases in favour of delete_entity", async () => {
     // Its two distinguishing properties are preserved rather than dropped:
@@ -2747,30 +2639,24 @@ describe("purchase restructuring tools (split/link/merge)", () => {
     expect((result.structuredContent as { id: string }).id).toBe(PURCHASE_A);
   });
 
-  it("merge_purchases is WRITE_DESTRUCTIVE_CLOSED and passes params through to purchase.merge", async () => {
+  it("merge_entity is WRITE_DESTRUCTIVE_CLOSED and dispatches per entity", async () => {
     const server = createMcpServer();
-    expect(getRegisteredTool(server, "merge_purchases")?.annotations).toEqual(
+    expect(getRegisteredTool(server, "merge_entity")?.annotations).toEqual(
       WRITE_DESTRUCTIVE_CLOSED,
     );
 
-    const kept = mock(purchaseOut, { seed: 13, overrides: { id: PURCHASE_A } });
-    const merge = vi.fn().mockResolvedValue(kept);
-
-    const input = { keepId: PURCHASE_A, mergeIds: [PURCHASE_B] };
-    const result = await callTool(server, "merge_purchases", input, {
-      purchase: { merge },
-    });
-
-    expect(merge).toHaveBeenCalledWith(input);
-    expect(result.isError).not.toBe(true);
-    expect((result.structuredContent as { id: string }).id).toBe(PURCHASE_A);
-  });
-
-  it("merge_vendors is WRITE_DESTRUCTIVE_CLOSED and passes params through to vendor.merge", async () => {
-    const server = createMcpServer();
-    expect(getRegisteredTool(server, "merge_vendors")?.annotations).toEqual(
-      WRITE_DESTRUCTIVE_CLOSED,
-    );
+    // The four per-entity merge tools this replaced are gone, not renamed.
+    for (const retired of [
+      "merge_products",
+      "merge_ingredients",
+      "merge_vendors",
+      "merge_purchases",
+    ]) {
+      expect(
+        getRegisteredTool(server, retired),
+        `${retired} should have been replaced by merge_entity`,
+      ).toBeUndefined();
+    }
 
     const VENDOR_A = "VEN-9992";
     const VENDOR_B = "VEN-9993";
@@ -2780,24 +2666,42 @@ describe("purchase restructuring tools (split/link/merge)", () => {
       mergeSummary: {
         keepId: VENDOR_A,
         deletedIds: [VENDOR_B],
+        merged: 1,
         purchasesRepointed: 0,
         purchasesFolded: 0,
         carriedFields: [],
       },
     });
 
-    const input = { keepId: VENDOR_A, mergeIds: [VENDOR_B] };
-    const result = await callTool(server, "merge_vendors", input, {
-      vendor: { merge },
-    });
+    const result = await callTool(
+      server,
+      "merge_entity",
+      {
+        entity: "vendor",
+        merges: [{ keepId: VENDOR_A, mergeIds: [VENDOR_B] }],
+      },
+      { vendor: { merge } },
+    );
 
-    expect(merge).toHaveBeenCalledWith(input);
+    // Dispatched to the entity's own router method with that entity's shape —
+    // the generic tool is a front door, not a new merge implementation.
+    expect(merge).toHaveBeenCalledWith({
+      keepId: VENDOR_A,
+      mergeIds: [VENDOR_B],
+    });
     expect(result.isError).not.toBe(true);
-    // `{ vendor, mergeSummary }` now — the merge reports what it moved rather
-    // than handing back only the keeper.
-    expect(
-      (result.structuredContent as { vendor: { id: string } }).vendor.id,
-    ).toBe(VENDOR_A);
+
+    // One result per cluster, carrying the MEASURED removal count rather than
+    // mergeIds.length, and the survivor referenced by id only.
+    const structured = result.structuredContent as {
+      entity: string;
+      results: Array<{ keepId: string; status: string; merged?: number }>;
+    };
+    expect(structured.entity).toBe("vendor");
+    expect(structured.results).toHaveLength(1);
+    expect(structured.results[0]?.keepId).toBe(VENDOR_A);
+    expect(structured.results[0]?.status).toBe("succeeded");
+    expect(structured.results[0]?.merged).toBe(1);
   });
 });
 

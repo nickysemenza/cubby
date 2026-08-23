@@ -101,6 +101,11 @@ export const mergeSummary = z.object({
   productsMoved: z.number().int().nonnegative(),
   /** Ingredient ids absorbed and hard-deleted. */
   deletedIds: z.array(ingredientShortcode),
+  /**
+   * Ingredient rows the merge actually hard-deleted, read back from the DELETE
+   * itself (`finalizeMerge`) rather than assumed from `mergeIds.length`.
+   */
+  merged: z.number().int().nonnegative(),
 });
 export type MergeSummaryOut = z.infer<typeof mergeSummary>;
 
@@ -279,11 +284,19 @@ export const ingredientUpdateInput = z.object({
 
 export type IngredientUpdateInput = z.infer<typeof ingredientUpdateInput>;
 
+/**
+ * `{keepId, mergeIds}` — the same pair `mergeProductsInput`,
+ * `mergeVendorsInput`, and `mergePurchasesInput` take. It used to be
+ * `{target, aliases}`, which made ingredient the one merge a generic caller
+ * had to special-case.
+ *
+ * There is no `dryRun`: `previewMergeIngredients`
+ * (`preview_entity_operation`) is the preview, and it reads the same edge
+ * policy the mutation writes against.
+ */
 export const ingredientMergeInput = z.object({
-  target: ingredientShortcode,
-  aliases: z.array(ingredientShortcode).min(1),
-  // Validate + count what would change without writing.
-  dryRun: z.boolean().optional(),
+  keepId: ingredientShortcode,
+  mergeIds: z.array(ingredientShortcode).min(1),
 });
 
 /**
@@ -352,69 +365,3 @@ export const ingredientMcpListOut =
 export const ingredientResolveOrCreateResponseOut = z.object({
   results: ingredientResolveOrCreateOut,
 });
-
-export const ingredientMergeBatchInput = z.object({
-  merges: z
-    .array(
-      z.object({
-        target: ingredientShortcode.describe("ID of the ingredient to keep"),
-        aliases: z
-          .array(ingredientShortcode)
-          .min(1)
-          .describe("IDs of duplicate ingredients to fold into the target"),
-      }),
-    )
-    .min(1)
-    .describe("One entry per duplicate cluster to merge"),
-  dryRun: z
-    .boolean()
-    .optional()
-    .describe(
-      "Validate ids and report what each cluster WOULD change, without writing.",
-    ),
-});
-
-/**
- * `merge_ingredients`' batch envelope.
- *
- * Bespoke rather than the shared `registerBatchTool`/`batchMutationOut`
- * contract in `mcp/tools/_shared.ts`: this tool's `dryRun` is a single
- * call-level flag that applies to every cluster in the batch, a shape
- * `registerBatchTool`'s `{items, resultDetail}` input has no slot for (moving
- * it onto each item would be a real, and worse, contract change — every
- * cluster in a call would have to repeat the same flag). It otherwise follows
- * the SAME contract as `batchMutationOut`: `index` + a literal-union
- * `status: "succeeded" | "failed"` discriminant rather than a bare `ok`
- * boolean, and `code`/`reason` alongside the rendered `error` string on a
- * failure. `target` is kept on both branches (`batchMutationOut` has no
- * equivalent, since its items are keyed by index alone) because a merge
- * cluster's own id is the natural thing a caller re-checks a failure against.
- */
-export const ingredientMergeBatchOut = z.object({
-  summary: z.object({
-    requested: z.number().int().nonnegative(),
-    succeeded: z.number().int().nonnegative(),
-    failed: z.number().int().nonnegative(),
-  }),
-  results: z.array(
-    z.discriminatedUnion("status", [
-      z.object({
-        index: z.number().int().nonnegative(),
-        status: z.literal("succeeded"),
-        target: ingredientShortcode,
-        summary: mergeSummary,
-      }),
-      z.object({
-        index: z.number().int().nonnegative(),
-        status: z.literal("failed"),
-        target: ingredientShortcode,
-        error: z.string(),
-        /** tRPC code. Absent when the item threw something that wasn't a TRPCError. */
-        code: z.string().optional(),
-        /** The `AppErrorReason` behind the refusal, when there was one. */
-        reason: z.string().optional(),
-      }),
-    ]),
-  ),
-});
-export type IngredientMergeBatchOut = z.infer<typeof ingredientMergeBatchOut>;

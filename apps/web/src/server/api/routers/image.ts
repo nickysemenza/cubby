@@ -1,4 +1,5 @@
 import {
+  imageShortcode,
   type ProjectShortcode,
   projectShortcode,
 } from "@cubby/schemas/identifiers";
@@ -39,7 +40,11 @@ import {
   markImageUploaded,
   updateImage,
 } from "~/server/repo/image";
-import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
+import {
+  resolveAllOrThrow,
+  resolveAllPresent,
+  resolveOrThrow,
+} from "~/server/repo/shortcode-resolver";
 import {
   attachFileToEntity,
   cleanupUnreferencedImageStorage,
@@ -90,9 +95,16 @@ const { list } = createEntityListProcedure({
  * mutation side-effects to run (images carry no embedding / derived data).
  */
 const deleteItem = createDeleteProcedure(async (services, ids) => {
-  const { deletedIds } = await deleteImagesWithStorage(services.db, ids);
+  // The table and detail page hand back `IMG-` codes, so what arrives here is
+  // a shortcode; `deleteImagesWithStorage` keys on `Image.id`. Resolve first.
+  // `createDeleteProcedure` infers its id type from this callback and then
+  // casts, so the branded parameter alone does NOT catch a missed resolve —
+  // hence the explicit `imageShortcode` input schema below, which rejects a
+  // raw uuid at parse time rather than letting one through as a "code".
+  const imageIds = await resolveAllPresent(services.db, "image", ids);
+  const { deletedIds } = await deleteImagesWithStorage(services.db, imageIds);
   return { deleted: deletedIds.length };
-});
+}, imageShortcode);
 
 export const imageRouter = createTRPCRouter({
   list,
@@ -110,10 +122,11 @@ export const imageRouter = createTRPCRouter({
    * `getByID` above.
    */
   update: protectedProcedure
-    .input(z.object({ id: z.string(), data: imageUpdateInput }))
+    .input(z.object({ id: imageShortcode, data: imageUpdateInput }))
     .output(strictOutput(imageWithEntitySchema))
     .mutation(async ({ ctx, input }) => {
-      return await updateImage(ctx.db, input.id, input.data);
+      const id = await resolveOrThrow(ctx.db, "image", input.id);
+      return await updateImage(ctx.db, id, input.data);
     }),
 
   /**
@@ -128,7 +141,8 @@ export const imageRouter = createTRPCRouter({
     .input(getImageByIdSchema)
     .output(strictOutput(imageWithEntitySchema))
     .mutation(async ({ ctx, input }) => {
-      return await markImageUploaded(ctx.db, input.id);
+      const id = await resolveOrThrow(ctx.db, "image", input.id);
+      return await markImageUploaded(ctx.db, id);
     }),
 
   /**
@@ -268,17 +282,20 @@ export const imageRouter = createTRPCRouter({
     }),
 
   /**
-   * Get an image by ID with entity association information.
+   * Get an image by its public `IMG-` shortcode, with entity association
+   * information.
    *
-   * No try/catch wrapper: the repo throws IMAGE_NOT_FOUND (→ tRPC NOT_FOUND, an
-   * expected 4xx) for a stale/deleted id, which should propagate rather than be
-   * rewrapped into a 500 that hits Sentry.
+   * `resolveOrThrow` throws the same `IMAGE_NOT_FOUND` reason `getImageById`
+   * itself throws on a stale/deleted uuid, so this stays a clean 4xx either
+   * way — no try/catch wrapper needed, same reasoning as before the shortcode
+   * cutover.
    */
   getByID: protectedProcedure
     .input(getImageByIdSchema)
     .output(strictOutput(imageWithEntitySchema))
     .query(async ({ ctx, input }) => {
-      return await getImageById(ctx.db, input.id);
+      const id = await resolveOrThrow(ctx.db, "image", input.id);
+      return await getImageById(ctx.db, id);
     }),
 
   /**

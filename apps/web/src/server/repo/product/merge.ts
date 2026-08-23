@@ -172,6 +172,7 @@ import {
 import { impact, present, sideEffect } from "~/server/repo/impact";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import {
+  assertDistinctMergeTargets,
   finalizeMerge,
   foldAssociation,
   planSlotCollisions,
@@ -319,6 +320,8 @@ interface ProductMergeSummary {
   keepId: ProductShortcode;
   /** The merged-away products. Their codes stay permanent tombstones. */
   deletedIds: ProductShortcode[];
+  /** Rows `finalizeMerge` actually soft-deleted — measured, not `mergeIds.length`. */
+  merged: number;
   /**
    * Internal ids for the caller's own side-effect dispatch — never serialized
    * (a uuid must not reach a URL or an MCP payload). The merged-away rows are
@@ -1518,7 +1521,7 @@ export const mergeProducts = async (
       );
     }
 
-    await finalizeMerge(tx, {
+    const { removed } = await finalizeMerge(tx, {
       entity: "product",
       table: product,
       keepId,
@@ -1538,6 +1541,7 @@ export const mergeProducts = async (
           : {}),
       },
     });
+    summary.merged = removed;
 
     // Every moved entry now values at the KEEPER's effective price; without
     // this a re-pointed row keeps a valuation derived from a product that no
@@ -1559,6 +1563,7 @@ const emptySummary = (
 ): ProductMergeSummary => ({
   keepId: unsafeProductShortcode(shortcode),
   deletedIds: [],
+  merged: 0,
   keepEntityId,
   deletedEntityIds: [],
   externalIdsMoved: 0,
@@ -1605,7 +1610,12 @@ export const previewMergeProducts = async (
   sideEffects: ImpactItem[];
 }> => {
   const { keepId } = input;
-  const losers = input.mergeIds.filter((id) => id !== keepId);
+  // Refuses exactly where the mutation refuses. This used to silently filter
+  // the keeper out of the loser set, mirroring the same silent filter
+  // `resolveMergeTargets` used to make — so preview and mutation agreed on a
+  // merge neither of them was actually going to perform.
+  assertDistinctMergeTargets("product", keepId, input.mergeIds);
+  const losers = input.mergeIds;
   if (losers.length === 0) {
     return { blockers: [], changes: [], sideEffects: [] };
   }

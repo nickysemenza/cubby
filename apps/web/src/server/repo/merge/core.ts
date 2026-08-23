@@ -2,19 +2,18 @@
  * The shared mechanics of every entity merge.
  *
  * Four merges exist (`mergeIngredients`, `mergeVendors`, `mergePurchases`,
- * `mergeProducts`) and their *public contracts* deliberately differ —
- * `mergeIngredients` predates the shortcode cutover, so it takes uuids, has no
- * actor, hard-deletes, and returns a summary. Unifying those signatures would
- * ripple into routers, MCP tools, and tests for no gain. What they genuinely
- * share is the machinery *underneath* the contract, and that is what lives
- * here:
+ * `mergeProducts`). All four now take the same `{keepId, mergeIds}` shortcode
+ * pair and resolve it through {@link resolveMergeTargets}; what still differs
+ * is what each one carries over, which collisions it can legally resolve, and
+ * whether it hard- or soft-deletes. The machinery *underneath* that contract is
+ * what lives here:
  *
  *  - {@link resolveMergeTargets} — shortcode → id resolution plus the
  *    keeper/loser split and the fail-loud-on-a-missing-id rule.
  *  - {@link repointEdge} — re-point one *declared* incoming edge, looked up
  *    from `INCOMING_EDGES` by edge key so the column can't be mis-wired.
- *  - {@link finalizeMerge} — remove the losers. **This is the reason the module
- *    exists.**
+ *  - {@link finalizeMerge} — remove the losers, reporting how many rows
+ *    actually went. **This is the reason the module exists.**
  *
  * ## Why `finalizeMerge` is not optional
  *
@@ -57,6 +56,7 @@ import type {
   IncomingEdgeKey,
 } from "~/server/db/entity-incoming-edges";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
+import { createAppError } from "~/server/errors/app-error";
 import type { AuditEntryInput } from "~/server/repo/audit-log";
 import { logAuditEntries } from "~/server/repo/audit-log";
 import { notDeleted } from "~/server/repo/database-helpers";
@@ -71,12 +71,51 @@ type MergeableTable = PgTable & { id: AnyColumn; deletedAt: AnyColumn };
 type MergeAuditChanges = Record<string, { from: unknown; to: unknown }>;
 
 /**
- * Resolve `{keepId, mergeIds}` shortcodes to entity ids, failing loudly when
- * any of them doesn't name a live row.
+ * Refuse a merge that names its own keeper among the rows to merge away.
  *
- * The keeper is dropped from the loser set (merging a record into itself is a
- * no-op, not a delete), and duplicates collapse — so a caller that receives
- * `keepId` twice can't soft-delete the survivor.
+ * Lives here, and is exported, because the refusal has to be made in TWO
+ * places that do not share a call path: {@link resolveMergeTargets} on the
+ * mutation side, and each entity's merge PREVIEW planner, which takes ids
+ * already resolved and so never reaches the resolver. They each used to filter
+ * the keeper out silently and independently — which meant preview and mutation
+ * agreed, on the wrong answer, and `operation-preview-parity` had nothing to
+ * catch.
+ *
+ * The message names no id on purpose: the planners hold raw uuids, which may
+ * never cross the API boundary, and the caller already knows which id it sent
+ * twice.
+ */
+export const assertDistinctMergeTargets = (
+  entity: Entity,
+  keepId: string,
+  mergeIds: readonly string[],
+): void => {
+  if (!mergeIds.includes(keepId)) return;
+  throw createAppError(
+    "MERGE_SELF_REFERENCE",
+    `Cannot merge a ${entity} into itself: keepId is also named in mergeIds.`,
+  );
+};
+
+/**
+ * Resolve `{keepId, mergeIds}` shortcodes to entity ids, failing loudly when
+ * any of them doesn't name a live row — or when the call names its own keeper
+ * among the rows to merge away.
+ *
+ * A self-reference used to be dropped silently, on the reasoning that a caller
+ * handed `keepId` twice must not be able to soft-delete the survivor. Not
+ * deleting the survivor is still the guarantee — but SILENCE is not how to
+ * keep it. The dropped id was still counted in `mergeIds`, so the call
+ * returned success for a merge that moved one row fewer than it was asked to,
+ * and no caller could tell that apart from a real merge. Worse, the three
+ * merge PREVIEW planners each re-implemented the same silent filter, which
+ * meant "preview then mutate" agreed on the wrong answer twice.
+ *
+ * So the survivor is protected by REFUSING the call (`MERGE_SELF_REFERENCE`)
+ * rather than by quietly editing it: nothing is written, the caller is told
+ * exactly which id was wrong, and preview and mutation refuse identically.
+ * Duplicates *within* `mergeIds` still collapse — repeating a loser is a
+ * harmless restatement of the same instruction, not a contradiction.
  *
  * Fail-loud is the point: silently skipping an unresolvable id returns
  * "success" while changing nothing, which is how a typo'd code reads as a
@@ -95,9 +134,12 @@ export const resolveMergeTargets = async <E extends ShortcodeEntity>(
     mergeIds: readonly string[];
   },
 ): Promise<{ keepId: BrandForEntity<E>; loserIds: BrandForEntity<E>[] }> => {
+  // Checked BEFORE any resolution: a self-merge is a malformed request, and a
+  // request that also carries a typo'd id should report the self-reference
+  // rather than the typo it never meant to send.
+  assertDistinctMergeTargets(args.entity, args.keepId, args.mergeIds);
   const codes = uniq([args.keepId, ...args.mergeIds]);
-  // Deduped on the way in, so the positional result maps back cleanly — and a
-  // caller that passed the keeper twice can't have it counted as a loser.
+  // Deduped on the way in, so the positional result maps back cleanly.
   const ids = await resolveAllOrThrow(db, args.entity, codes);
   // Explicitly generic: left to infer, `Map` widens `BrandForEntity<E>` into a
   // union of all fifteen brands, which then can't flow back into the deferred
@@ -106,9 +148,7 @@ export const resolveMergeTargets = async <E extends ShortcodeEntity>(
     codes.map((code, i) => [code, ids[i]!]),
   );
   const keepId = byCode.get(args.keepId)!;
-  const loserIds = uniq(args.mergeIds.map((code) => byCode.get(code)!)).filter(
-    (id) => id !== keepId,
-  );
+  const loserIds = uniq(args.mergeIds.map((code) => byCode.get(code)!));
   return { keepId, loserIds };
 };
 
@@ -208,6 +248,14 @@ export const repointEdge = async <E extends Entity>(
  * `{entity: "vendor", loserIds: productIds}` no longer compiles — the same lock
  * {@link cascadeRemoval} applies, and what lets the tail below delegate to it
  * without a cast.
+ *
+ * Returns `removed` — the rows this call actually took out, read back from the
+ * DELETE/UPDATE itself rather than assumed from `loserIds.length`. The two
+ * differ whenever a caller has already removed a row before getting here
+ * (`mergePurchases` soft-deletes its losers up front to vacate the partial
+ * unique index, so the `finalizeMerge` inside each `foldChargeInto` reports 0),
+ * and a caller that reports `loserIds.length` as "merged" would be quoting its
+ * own request back at itself.
  */
 export const finalizeMerge = async <E extends RemovableEntity>(
   tx: DrizzleTransaction,
@@ -223,9 +271,9 @@ export const finalizeMerge = async <E extends RemovableEntity>(
     /** Recorded on the survivor's `update` entry. No entry is written when empty. */
     survivorChanges?: MergeAuditChanges;
   },
-): Promise<void> => {
+): Promise<{ removed: number }> => {
   const { entity, table, keepId, loserIds, removal, actor } = args;
-  if (loserIds.length === 0) return;
+  if (loserIds.length === 0) return { removed: 0 };
   const ids = [...loserIds];
 
   // The row removal stays here rather than moving into `cascadeRemoval`:
@@ -233,15 +281,20 @@ export const finalizeMerge = async <E extends RemovableEntity>(
   // ingredients) and its position relative to a caller's own writes can be
   // load-bearing when a partial unique index is involved. Only the tail —
   // cascade plus delete entries — is shared.
-  if (removal === "hard") {
-    await tx.delete(table).where(inArray(table.id, ids));
-  } else {
-    await tx
-      .update(table)
-      // biome-ignore lint/suspicious/noExplicitAny: dynamic soft-delete over a structurally-typed table.
-      .set({ deletedAt: new Date() } as any)
-      .where(and(inArray(table.id, ids), notDeleted(table)));
-  }
+  const removedRows =
+    removal === "hard"
+      ? await tx
+          .delete(table)
+          .where(inArray(table.id, ids))
+          // biome-ignore lint/suspicious/noExplicitAny: AnyColumn is too narrow for returning().
+          .returning({ id: table.id as any })
+      : await tx
+          .update(table)
+          // biome-ignore lint/suspicious/noExplicitAny: dynamic soft-delete over a structurally-typed table.
+          .set({ deletedAt: new Date() } as any)
+          .where(and(inArray(table.id, ids), notDeleted(table)))
+          // biome-ignore lint/suspicious/noExplicitAny: AnyColumn is too narrow for returning().
+          .returning({ id: table.id as any });
 
   // A merge with no actor context (`mergeIngredients`) still has to cascade, so
   // the entries go to a local buffer that is only flushed when there IS one.
@@ -258,6 +311,6 @@ export const finalizeMerge = async <E extends RemovableEntity>(
     });
   }
   await cascadeRemoval(tx, { entity, ids, audit: { into: entries } });
-  if (!actor) return;
-  await logAuditEntries(tx, actor, entries);
+  if (actor) await logAuditEntries(tx, actor, entries);
+  return { removed: removedRows.length };
 };

@@ -1,4 +1,5 @@
 import type { ProjectId } from "@cubby/schemas/identifiers";
+import { unsafeImageId } from "@cubby/schemas/identifiers";
 import { projectCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { eq } from "drizzle-orm";
@@ -344,7 +345,7 @@ describe("image repository — purchase (charge) documents", () => {
       charge.uuid,
     );
 
-    const result = await deleteImages(ctx.db, [uploaded.id]);
+    const result = await deleteImages(ctx.db, [unsafeImageId(uploaded.id)]);
     expect(result.deletedIds).toEqual([uploaded.id]);
 
     const [joinRow] = await getDb(ctx.db)
@@ -416,7 +417,9 @@ describe("image repository — purchase (charge) documents", () => {
       const attached = await attachToProject(projectId, "solo.jpg");
 
       const result = await withTransaction(ctx.db, (tx) =>
-        detachImagesFromEntity(tx, "project", projectId, [attached.id]),
+        detachImagesFromEntity(tx, "project", projectId, [
+          unsafeImageId(attached.id),
+        ]),
       );
 
       expect(result.deletedIds).toEqual([attached.id]);
@@ -434,7 +437,9 @@ describe("image repository — purchase (charge) documents", () => {
       });
 
       const result = await withTransaction(ctx.db, (tx) =>
-        detachImagesFromEntity(tx, "project", projectA, [attached.id]),
+        detachImagesFromEntity(tx, "project", projectA, [
+          unsafeImageId(attached.id),
+        ]),
       );
 
       expect(result.deletedIds).toEqual([]);
@@ -466,7 +471,9 @@ describe("image repository — purchase (charge) documents", () => {
       await deleteCookbook(ctx.db, cookbookId, ctx.actor);
 
       const result = await withTransaction(ctx.db, (tx) =>
-        detachImagesFromEntity(tx, "project", projectId, [attached.id]),
+        detachImagesFromEntity(tx, "project", projectId, [
+          unsafeImageId(attached.id),
+        ]),
       );
 
       expect(result.deletedIds).toEqual([]);
@@ -493,7 +500,9 @@ describe("image repository — purchase (charge) documents", () => {
         .returning();
 
       const result = await withTransaction(ctx.db, (tx) =>
-        detachImagesFromEntity(tx, "project", projectA, [attached.id]),
+        detachImagesFromEntity(tx, "project", projectA, [
+          unsafeImageId(attached.id),
+        ]),
       );
 
       expect(result.deletedIds).toEqual([attached.id]);
@@ -614,8 +623,11 @@ describe("image repository — purchase (charge) documents", () => {
     ).resolves.toBeNull();
 
     // The row itself is untouched — the gate narrows the lookup, it does not
-    // clean up. That is `findUnreferencedImages`' job.
-    expect((await getImageById(ctx.db, orphan.id)).id).toEqual(orphan.id);
+    // clean up. That is `findUnreferencedImages`' job. The repo takes the uuid
+    // and hands back the public `IMG-` code, so the two sides differ by design.
+    expect((await getImageById(ctx.db, orphan.id)).id).toEqual(
+      orphan.shortcode,
+    );
   });
 
   describe("findUnreferencedImages", () => {
@@ -688,7 +700,9 @@ describe("image repository — purchase (charge) documents", () => {
       // PENDING rows belong to the pending cull, not this sweep.
       expect(found).not.toContain(pending.id);
       expect(found).not.toContain(coverOnly.id);
-      expect(listed.data.map((row) => row.id)).toContain(orphan.id);
+      // `imageList` is a read API, so its rows carry shortcodes; the raw uuid
+      // stays inside `findUnreferencedImages`, which feeds `deleteImages`.
+      expect(listed.data.map((row) => row.id)).toContain(orphan.shortcode);
       expect(listed.data.map((row) => row.id)).not.toContain(attached.id);
       expect(listed.data.map((row) => row.id)).not.toContain(pending.id);
       expect(listed.data.map((row) => row.id)).not.toContain(coverOnly.id);

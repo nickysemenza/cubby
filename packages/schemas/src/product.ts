@@ -199,7 +199,9 @@ const productCreateShape = {
     .describe(
       "whether shelf records are kept for this kind of thing: null = undecided, false = reviewed/no shelf claim, true = tracked",
     ),
-  pendingImageIds: z.array(z.uuid()).optional(),
+  // Public `IMG-` shortcode — `Image` mints one at insert time, so the repo
+  // layer resolves this to a uuid before the join-table write.
+  pendingImageIds: z.array(imageShortcode).optional(),
 };
 
 export const productCreateInput = z.object(productCreateShape);
@@ -1663,6 +1665,12 @@ export type MergeProductsInput = z.infer<typeof mergeProductsInput>;
 export const productMergeSummaryOut = z.object({
   keepId: productShortcode,
   deletedIds: z.array(productShortcode),
+  /**
+   * Product rows the merge actually soft-deleted, read back from the write
+   * itself (`finalizeMerge`) rather than assumed from `mergeIds.length` — a
+   * count that would only ever quote the request back at the caller.
+   */
+  merged: z.number().int().nonnegative(),
   externalIdsMoved: z.number().int(),
   /**
    * Identifiers whose slot the survivor already filled, kept as SECONDARY rows
@@ -1696,9 +1704,3 @@ export const mergeProductsOut = z.object({
   mergeSummary: productMergeSummaryOut,
 });
 export type MergeProductsOut = z.infer<typeof mergeProductsOut>;
-
-/** `merge_products`' MCP payload — the slim product, not the USDA-enriched one. */
-export const mergeProductsMcpOut = z.object({
-  product: productMcpOut,
-  mergeSummary: productMergeSummaryOut,
-});

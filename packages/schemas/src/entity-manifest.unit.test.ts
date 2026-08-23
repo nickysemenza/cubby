@@ -2,6 +2,7 @@ import { LEGACY_SHORTCODE_PREFIX, SHORTCODE_PREFIX } from "@cubby/shared";
 import { describe, expect, it } from "vitest";
 import { auditEntitySchema } from "./audit";
 import { type Entity, entityImage, entitySchema } from "./entity";
+import { previewMergeEntitySchema } from "./entity-integrity";
 import {
   allEntities,
   auditableEntities,
@@ -228,5 +229,25 @@ describe("entity manifest", () => {
     for (const [legacy, entity] of Object.entries(LEGACY_SHORTCODE_PREFIX)) {
       expect(descriptor(entity).legacyShortcodePrefix).toBe(legacy);
     }
+  });
+
+  it("previewMergeEntitySchema matches entityManifest lifecycle.merge", () => {
+    // `previewMergeEntitySchema` (entity-integrity.ts) is hand-kept rather than
+    // derived from `entityManifest` at the value level: entity-manifest.ts
+    // itself imports value-level schemas FROM entity-integrity.ts
+    // (`entityLifecycleSchema`, `entityRelationshipSchema`), so the reverse
+    // import would be circular — whichever module evaluates first would read
+    // the other's not-yet-initialized export. This test is what keeps the
+    // hand-kept list honest instead.
+    const claimedByManifest = (entity: Entity) =>
+      entityManifest[entity].lifecycle.merge;
+    const inSchema = new Set<string>(previewMergeEntitySchema.options);
+    const drift = allEntities
+      .filter((entity) => inSchema.has(entity) !== claimedByManifest(entity))
+      .map(
+        (entity) =>
+          `${entity}: previewMergeEntitySchema ${inSchema.has(entity) ? "has" : "lacks"} it, manifest lifecycle.merge is ${claimedByManifest(entity)}`,
+      );
+    expect(drift).toEqual([]);
   });
 });

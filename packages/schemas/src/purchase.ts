@@ -83,11 +83,13 @@ const purchaseCreateShape = {
   /**
    * Newly-uploaded document ids awaiting association. The
    * `PendingDocumentUpload` widget pushes the file to R2 first and hands back a
-   * PENDING image id; it only becomes a real attachment when a save carries it
-   * here. Without this an uploaded invoice sits unassociated and gets culled in
-   * 24 hours.
+   * PENDING image's public `IMG-` shortcode; it only becomes a real attachment
+   * when a save carries it here. Without this an uploaded invoice sits
+   * unassociated and gets culled in 24 hours. `Image` mints a shortcode at
+   * insert time, so the repo layer resolves this to a uuid before the
+   * join-table write.
    */
-  pendingImageIds: z.array(z.uuid()).optional(),
+  pendingImageIds: z.array(imageShortcode).optional(),
 };
 
 export const purchaseCreateInput = z.object(purchaseCreateShape);
@@ -464,6 +466,27 @@ export type DeleteEmptyPurchasesOut = z.infer<typeof deleteEmptyPurchasesOut>;
  * id, which no key could have joined (`(vendor, date)` would have falsely merged
  * 71 rows across 31 groups). A user action, never a backfill guess.
  */
+/**
+ * What a purchase merge actually moved.
+ *
+ * Added so `merge_entity` can report a MEASURED `merged` count for purchases
+ * like it does for the other three. The count is read back from the bulk
+ * soft-delete's own `.returning()` rather than from `mergeIds.length`, which
+ * would just quote the request back. Purchase's losers are soft-deleted before
+ * `foldChargeInto` runs (the partial unique index needs the slot vacated), so
+ * the count cannot come from `finalizeMerge` the way the others do.
+ */
+export const mergePurchasesOut = z.object({
+  purchase: purchaseOut,
+  mergeSummary: z.object({
+    keepId: purchaseShortcode,
+    /** Merged-away purchase rows, now soft-deleted tombstones. */
+    deletedIds: z.array(purchaseShortcode),
+    merged: z.number().int().nonnegative(),
+  }),
+});
+export type MergePurchasesOut = z.infer<typeof mergePurchasesOut>;
+
 export const mergePurchasesInput = z.object({
   keepId: purchaseShortcode,
   mergeIds: z.array(purchaseShortcode).min(1),

@@ -46,11 +46,23 @@ import { previewDeleteLocations } from "~/server/repo/location/crud";
 import { previewDeleteMeals } from "~/server/repo/meal/crud";
 import { previewDeleteProducts } from "~/server/repo/product/crud";
 import { previewMergeProducts } from "~/server/repo/product/merge";
+import {
+  previewAttachProductComponents,
+  previewDetachProductComponents,
+} from "~/server/repo/product-components";
 import { previewDeleteProjects } from "~/server/repo/project/crud";
+import {
+  previewAttachProjectResources,
+  previewDetachProjectResources,
+} from "~/server/repo/project/tools";
 import {
   previewDeletePurchases,
   previewMergePurchases,
 } from "~/server/repo/purchase";
+import {
+  previewAttachPurchaseProducts,
+  previewDetachPurchaseProducts,
+} from "~/server/repo/purchase-products";
 import { previewDeleteRecipes } from "~/server/repo/recipe/crud";
 import {
   lookupShortcodes,
@@ -106,13 +118,26 @@ const plan = async (
     publicIdByEntityId: Map<string, string>;
   } & PlanGap
 > => {
+  // Relation verbs are dispatched apart from delete/merge: their targets are
+  // PRODUCTS, in a different id space from the `entity` the parent names, so
+  // they need two resolutions rather than one.
+  // Spelled as an EXCLUSION rather than `=== "attach" || === "detach"`: the
+  // relation member's discriminant is itself a union (`"attach" | "detach"`),
+  // and TypeScript does not remove such a member from the negative branch of an
+  // `||` — so the positive form left every arm below reading `ids`/`mergeIds`
+  // off a union that still contained it. `req` then carries the narrowing into
+  // the `match` and the closures.
+  if (input.operation !== "delete" && input.operation !== "merge") {
+    return planRelation(db, input);
+  }
+  const req = input;
   // Bound to a local const so the `!== "image"` narrowing survives into the
   // closures below — TypeScript drops property-path narrowings inside callbacks.
-  const entity = input.entity;
+  const entity = req.entity;
   const publicIds =
-    input.operation === "delete"
-      ? input.ids
-      : [...input.mergeIds, ...(input.keepId ? [input.keepId] : [])];
+    req.operation === "delete"
+      ? req.ids
+      : [...req.mergeIds, ...(req.keepId ? [req.keepId] : [])];
   const entityIdsByPublicId =
     entity === "image"
       ? new Map(publicIds.map((id) => [id, id]))
@@ -132,7 +157,7 @@ const plan = async (
   // has a candidate-ranking arm below. For the others there is nothing to
   // compute — the old sentinel passed `""` as the keeper, producing a confident
   // empty preview of a merge that could never run.
-  if (input.operation === "merge" && !input.keepId && entity !== "ingredient") {
+  if (req.operation === "merge" && !req.keepId && entity !== "ingredient") {
     return {
       planned: EMPTY_PLAN,
       publicIdByEntityId: new Map(),
@@ -154,7 +179,7 @@ const plan = async (
     return resolved;
   };
 
-  const planned = await match(input)
+  const planned = await match(req)
     .with({ operation: "delete", entity: "product" }, ({ ids }) =>
       previewDeleteProducts(db, entityIds(ids).map(unsafeProductId)),
     )
@@ -271,6 +296,76 @@ const plan = async (
   return { planned, publicIdByEntityId };
 };
 
+/**
+ * The attach/detach arm.
+ *
+ * Every planner it reaches shares the mutation's OWN predicate — see
+ * `repo/relation-preflight.ts` — rather than re-deriving what an attach checks.
+ * The parent's prefix has already been agreed with `entity` by the input
+ * schema's refine, so the dispatch here is a plain three-way match.
+ */
+const planRelation = async (
+  db: Database,
+  input: Extract<PreviewOperationRequest, { operation: "attach" | "detach" }>,
+): Promise<
+  { planned: Planned; publicIdByEntityId: Map<string, string> } & PlanGap
+> => {
+  const [parentIds, productIds] = await Promise.all([
+    resolveLiveShortcodes(db, [input.parentId], input.entity),
+    resolveLiveShortcodes(db, input.productIds, "product"),
+  ]);
+  const unresolved = [
+    ...(parentIds.has(input.parentId) ? [] : [input.parentId]),
+    ...input.productIds.filter((code) => !productIds.has(code)),
+  ];
+  if (unresolved.length > 0) {
+    return { planned: EMPTY_PLAN, publicIdByEntityId: new Map(), unresolved };
+  }
+  // Total past the guard: `parentIds` has the key or we returned.
+  const parentId = parentIds.get(input.parentId)!;
+  const targets = input.productIds.map((code) =>
+    unsafeProductId(productIds.get(code)!),
+  );
+
+  const planned = await match(input)
+    .with({ operation: "attach", entity: "product" }, () =>
+      previewAttachProductComponents(db, unsafeProductId(parentId), targets),
+    )
+    .with({ operation: "detach", entity: "product" }, () =>
+      previewDetachProductComponents(db, unsafeProductId(parentId), targets),
+    )
+    .with({ operation: "attach", entity: "project" }, () =>
+      previewAttachProjectResources(db, unsafeProjectId(parentId), targets),
+    )
+    .with({ operation: "detach", entity: "project" }, () =>
+      previewDetachProjectResources(db, unsafeProjectId(parentId), targets),
+    )
+    .with({ operation: "attach", entity: "purchase" }, () =>
+      previewAttachPurchaseProducts(db, unsafePurchaseId(parentId), targets),
+    )
+    .with({ operation: "detach", entity: "purchase" }, () =>
+      previewDetachPurchaseProducts(db, unsafePurchaseId(parentId), targets),
+    )
+    .exhaustive();
+
+  // Both id spaces, one map: blockers and changes are keyed by PRODUCT uuid,
+  // and the parent-level blocker keys by nothing at all.
+  const codes = await lookupShortcodes(db, [
+    { entity: input.entity, id: parentId },
+    ...targets.map((id) => ({ entity: "product" as const, id })),
+  ]);
+  const publicIdByEntityId = new Map(
+    [
+      [input.entity, parentId] as const,
+      ...targets.map((id) => ["product", id] as const),
+    ].flatMap(([entity, id]) => {
+      const code = codes.get(entityRefKey(entity, id));
+      return code ? [[id, code] as const] : [];
+    }),
+  );
+  return { planned, publicIdByEntityId };
+};
+
 export const previewOperation = async (
   db: Database,
   input: PreviewOperationInput,
@@ -286,7 +381,9 @@ export const previewOperation = async (
   const targetCount =
     request.operation === "delete"
       ? request.ids.length
-      : request.mergeIds.length;
+      : request.operation === "merge"
+        ? request.mergeIds.length
+        : request.productIds.length;
 
   return previewOperationSchema.parse({
     operation: request.operation,

@@ -1,12 +1,13 @@
-import { unsafeIngredientId } from "@cubby/schemas/identifiers";
+import { unsafeIngredientShortcode } from "@cubby/schemas/identifiers";
 import { TEST_ACTOR } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import type { Database } from "~/server/db/database";
 import { mergeIngredients } from "./merge";
 
 /**
- * The self-merge guard is the first statement of `mergeIngredients` — it runs
- * before `getDb(db)` is ever called.
+ * The self-merge guard is the first thing `mergeIngredients` reaches —
+ * `resolveMergeTargets` checks the SHORTCODES before it resolves any of them,
+ * so the rejection happens before `getDb(db)` is ever called.
  *
  * This was an integration test that created two rows and then counted
  * survivors to prove the target had not been hard-deleted. Asserting against a
@@ -25,30 +26,52 @@ const explodingDb = new Proxy(
   },
 ) as Database;
 
+/** The typed refusal, read off `cause` — never matched against message text. */
+const reasonOf = async (run: Promise<unknown>): Promise<unknown> => {
+  const error = await run.then(
+    () => undefined,
+    (thrown: unknown) => thrown,
+  );
+  expect(error).toBeInstanceOf(Error);
+  return (error as { cause?: { reason?: unknown } }).cause?.reason;
+};
+
 describe("mergeIngredients self-merge guard", () => {
-  const target = unsafeIngredientId("11111111-1111-4111-8111-111111111111");
-  const other = unsafeIngredientId("22222222-2222-4222-8222-222222222222");
+  const keepId = unsafeIngredientShortcode("ING-AAAA");
+  const other = unsafeIngredientShortcode("ING-BBBB");
 
   it("rejects merging an ingredient into itself without touching the database", async () => {
     await expect(
-      mergeIngredients(explodingDb, target, [target, other], TEST_ACTOR),
-    ).rejects.toThrow(/itself/i);
+      reasonOf(
+        mergeIngredients(
+          explodingDb,
+          { keepId, mergeIds: [keepId, other] },
+          TEST_ACTOR,
+        ),
+      ),
+    ).resolves.toBe("MERGE_SELF_REFERENCE");
   });
 
-  it("rejects even when the target is the only alias", async () => {
+  it("rejects even when the keeper is the only id to merge away", async () => {
     await expect(
-      mergeIngredients(explodingDb, target, [target], TEST_ACTOR),
-    ).rejects.toThrow(/itself/i);
+      reasonOf(
+        mergeIngredients(
+          explodingDb,
+          { keepId, mergeIds: [keepId] },
+          TEST_ACTOR,
+        ),
+      ),
+    ).resolves.toBe("MERGE_SELF_REFERENCE");
   });
 
   // Guards the guard. Without this, the two tests above would still pass if
   // `mergeIngredients` started rejecting everything for some unrelated reason,
   // or if `explodingDb` silently stopped throwing — both would leave a green
   // test proving nothing. A non-self merge must get PAST the guard and hit the
-  // database, which is the proxy's error, not INGREDIENT_MERGE_INVALID.
+  // database, which is the proxy's error, not MERGE_SELF_REFERENCE.
   it("lets a non-self merge through to the database (proves the harness is live)", async () => {
     await expect(
-      mergeIngredients(explodingDb, target, [other], TEST_ACTOR),
+      mergeIngredients(explodingDb, { keepId, mergeIds: [other] }, TEST_ACTOR),
     ).rejects.toThrow(/touched the database/i);
   });
 });

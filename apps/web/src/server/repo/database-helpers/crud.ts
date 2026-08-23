@@ -3,6 +3,7 @@
  * Insert, update, and batch operations with proper error handling.
  */
 
+import type { ImageId } from "@cubby/schemas/identifiers";
 import type {
   AnyColumn,
   InferInsertModel,
@@ -198,13 +199,33 @@ export const updateLiveAndReturn = async <
  * This helper consolidates the pattern of:
  * 1. Creating records in a join table (productImage, recipeImage, locationImage)
  * 2. Updating image statuses from PENDING to UPLOADED
+ *
+ * `pendingImageIds` (despite the name) must already be raw `Image.id` uuids —
+ * NOT public `IMG-` shortcodes. This function has two families of callers:
+ * the create/update `pendingImageIds` flows (product/location/recipe/purchase),
+ * which now receive public shortcodes over the wire and must resolve them via
+ * `resolveAllPresent(tx, "image", …)` BEFORE calling this (the same pattern
+ * already used for `imageOrder`/`removeImageIds` in `repo/location/crud.ts`);
+ * and the internal attach paths (`associateImageWithEntity`,
+ * `associateImagesWithProduct`/`associateImagesWithRecipe` below), which pass
+ * a row's own `Image.id` straight from an insert and were NEVER shortcodes.
+ * Resolving inside this function would silently no-op every one of those
+ * internal callers — including `attach_file`, the MCP attachment path — since
+ * a raw uuid never matches the `IMG-` shortcode pattern.
+ *
+ * `pendingImageIds` is typed `ImageId[]`, not `string[]`, for the same reason
+ * `applyImageOrder`/`detachImagesFromEntity` are: it turns a caller that
+ * forgets to resolve a public shortcode first into a compile error instead of
+ * a runtime `invalid input syntax for type uuid`. That gap was real —
+ * `repo/location/crud.ts`'s two `pendingImageIds` call sites shipped without
+ * the resolve step and only surfaced via a failing integration test.
  */
 export async function associatePendingImages<T extends PgTable>(
   dbOrTx: DrizzleClient | DrizzleTransaction,
   joinTable: T,
   parentIdField: string,
   parentId: string,
-  pendingImageIds: string[],
+  pendingImageIds: ImageId[],
   startSortOrder = 0,
 ): Promise<void> {
   if (!pendingImageIds || pendingImageIds.length === 0) {
@@ -236,13 +257,19 @@ type ImageJoinTable = PgTable & {
  * Persist an explicit display order for an entity's images: each id in
  * `orderedImageIds` gets `sortOrder = index` (first = cover). Ids not listed
  * keep their existing sortOrder.
+ *
+ * `orderedImageIds` is typed `ImageId[]`, not `string[]`: every caller already
+ * resolves the public `IMG-` shortcodes it receives (via `resolveAllPresent`)
+ * before reaching here, since `joinTable.imageId` is an unbranded uuid column.
+ * The brand turns a future caller that forgets that resolution into a compile
+ * error instead of a silent `invalid input syntax for type uuid` at runtime.
  */
 export async function applyImageOrder<T extends ImageJoinTable>(
   dbOrTx: DrizzleClient | DrizzleTransaction,
   joinTable: T,
   parentIdColumn: AnyColumn,
   parentId: string,
-  orderedImageIds: string[],
+  orderedImageIds: ImageId[],
 ): Promise<void> {
   for (const [i, imageId] of orderedImageIds.entries()) {
     await dbOrTx

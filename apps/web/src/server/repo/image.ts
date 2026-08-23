@@ -31,8 +31,10 @@ import type {
   ImpactItem,
   OperationDisposition,
 } from "@cubby/schemas/entity-integrity";
-import type { ProjectId, RecipeId } from "@cubby/schemas/identifiers";
+import type { ImageId, ProjectId, RecipeId } from "@cubby/schemas/identifiers";
 import {
+  unsafeImageId,
+  unsafeImageShortcode,
   unsafeLocationId,
   unsafeProductId,
   unsafeProjectId,
@@ -114,6 +116,7 @@ import {
   present,
   sideEffect,
 } from "~/server/repo/impact";
+import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 import {
   generateUniqueShortcode,
   insertWithShortcode,
@@ -312,7 +315,7 @@ const imageWithRelationsToAPI = (
     : null;
 
   return {
-    id: imageData.id,
+    id: unsafeImageShortcode(imageData.shortcode),
     url: imageData.url,
     key: imageData.key,
     filename: imageData.filename,
@@ -814,7 +817,7 @@ const fetchExistingImages = (
  */
 export const deleteImages = async (
   db: Database,
-  imageIds: string[],
+  imageIds: ImageId[],
 ): Promise<{ deletedIds: string[]; deletedKeys: string[] }> => {
   if (imageIds.length === 0) return { deletedIds: [], deletedKeys: [] };
   return await withTransaction(db, (tx) => deleteImagesTx(tx, imageIds));
@@ -938,12 +941,19 @@ const findReferencedImageIds = async (
  * Runs on the caller's transaction so the detach and the reap commit together.
  * The returned keys are R2 objects, which have no rollback — drop them only
  * AFTER the outermost transaction commits, and best-effort.
+ *
+ * `imageIds` is typed `ImageId[]`, not `string[]`: every caller already
+ * resolves the public `IMG-` shortcodes it receives (via `resolveAllPresent`)
+ * before reaching here, since the join tables' `imageId` columns are
+ * unbranded uuids. The brand turns a future caller that forgets that
+ * resolution into a compile error instead of a silent
+ * `invalid input syntax for type uuid` at runtime.
  */
 export const detachImagesFromEntity = async (
   tx: DrizzleTransaction,
   entityType: AttachableImageEntity,
   entityId: string,
-  imageIds: string[],
+  imageIds: ImageId[],
 ): Promise<{ deletedIds: string[]; deletedKeys: string[] }> => {
   if (imageIds.length === 0) return { deletedIds: [], deletedKeys: [] };
 
@@ -1072,7 +1082,7 @@ export const findUnreferencedImages = async (
   olderThanHours: number = UNREFERENCED_IMAGE_GRACE_HOURS,
 ): Promise<
   Array<{
-    id: string;
+    id: ImageId;
     key: string;
     filename: string;
     contentType: string;
@@ -1104,7 +1114,11 @@ export const findUnreferencedImages = async (
       targetId: true,
     },
   });
-  return candidates.filter((img) => !referenced.has(img.id));
+  // `image.id` is an unbranded column, so this is the genuine string -> brand
+  // boundary: these are real uuids on their way to `deleteImages`.
+  return candidates
+    .filter((img) => !referenced.has(img.id))
+    .map((img) => ({ ...img, id: unsafeImageId(img.id) }));
 };
 
 /** How many unreferenced files {@link findUnreferencedImages} would report. */
@@ -1207,38 +1221,44 @@ export const previewDeleteImages = async (
  *
  * @param db Database client
  * @param productId Product ID to associate the image with
- * @param imageIds Array of image IDs to associate
+ * @param imageIds Public `IMG-` shortcodes to associate — what
+ *   `importImageFromUrl` (image-storage.service.ts) hands back, e.g. from
+ *   `importImageFromUPC`. Resolved to uuids here since `associatePendingImages`
+ *   writes straight into `ProductImage.imageId`, an unbranded uuid FK.
  */
 export const associateImagesWithProduct = async (
   db: Database,
   productId: string,
   imageIds: string[],
 ): Promise<void> => {
+  const resolvedImageIds = await resolveAllPresent(db, "image", imageIds);
   await associatePendingImages(
     getDb(db),
     productImage,
     "productId",
     productId,
-    imageIds,
+    resolvedImageIds,
   );
 };
 
 /**
  * Associate an image with a recipe. The recipe counterpart of
  * {@link associateImagesWithProduct} (server-side scrape import — see
- * `importRecipeImageFromUrl`).
+ * `importRecipeImageFromUrl`). `imageIds` are public `IMG-` shortcodes,
+ * resolved the same way.
  */
 export const associateImagesWithRecipe = async (
   db: Database,
   recipeId: RecipeId,
   imageIds: string[],
 ): Promise<void> => {
+  const resolvedImageIds = await resolveAllPresent(db, "image", imageIds);
   await associatePendingImages(
     getDb(db),
     recipeImage,
     "recipeId",
     recipeId,
-    imageIds,
+    resolvedImageIds,
   );
 };
 
@@ -1684,7 +1704,7 @@ const associateImageWithEntity = async (
   dbc: DrizzleClient | DrizzleTransaction,
   entityType: AttachableImageEntity,
   entityId: string,
-  imageId: string,
+  imageId: ImageId,
   documentKind?: PurchaseDocumentKind,
 ): Promise<void> => {
   await match(entityType)
@@ -1865,7 +1885,7 @@ export const createOrReuseAttachedImage = async (
       tx,
       entityType,
       entityId,
-      inserted.id,
+      unsafeImageId(inserted.id),
       documentKind,
     );
     return { row: inserted, reused: false };

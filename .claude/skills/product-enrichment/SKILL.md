@@ -105,7 +105,8 @@ receive the item into inventory.
 
 Before adding an identifier, call `find_product_external_id_collisions` in exact
 mode with `identifiers: [{ source, kind, externalId }]`. A `collision` requires
-manual resolution — usually `merge_products`, folding the duplicate into the
+manual resolution — usually `merge_entity` with `entity: "product"`, folding
+the duplicate into the
 proven Product rather than reassigning the identifier by hand; `unique` names
 the current owner; `missing` is safe to add to the proven Product. Keep broad
 source-wide audits separate from exact checks.
@@ -163,7 +164,7 @@ Two rules keep the batching honest:
   items that already succeeded from double-attaching.
 
 Stay singular when a product needs judgment mid-write — a gallery that drifted, a
-collision that needs `merge_products`, a cover replacement whose `imageOrder` you
+collision that needs `merge_entity`, a cover replacement whose `imageOrder` you
 must compute from a fresh read. Batching is for the settled majority.
 
 ## Attach one cover image

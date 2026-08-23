@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { entitySchema } from "./entity-core";
 
 const telemetryEnvelope = {
   version: z.literal(1),
@@ -25,6 +26,12 @@ export const mcpToolCallTelemetrySchema = z.strictObject({
   surface: mcpToolCallSurfaceSchema,
   userId: z.string().min(1),
   clientId: z.string().min(1).nullable(),
+  // Deliberately `.optional()`, not required: in-flight Cloudflare Queue
+  // messages minted by the currently-deployed worker (before this field
+  // existed) have no `entity` key at all. A required field would reject them
+  // on replay — this schema validates messages that can be up to a queue's
+  // retry window old, not just ones from the version deploying right now.
+  entity: entitySchema.optional(),
 });
 export type McpToolCallTelemetry = z.infer<typeof mcpToolCallTelemetrySchema>;
 
@@ -151,6 +158,14 @@ export const mcpUsageDashboardOut = z.strictObject({
   users: z.array(usageBreakdownSchema),
   clients: z.array(usageBreakdownSchema),
   surfaces: z.array(usageBreakdownSchema),
+  // Which entity each call targeted, where derivable — see `entity` on
+  // `mcpToolCallTelemetrySchema`. A `delete_entity`/`merge_entity`/
+  // `attach_entity`/`detach_entity` row without this would otherwise be
+  // indistinguishable from every other row under the same collapsed
+  // `toolName`; the "unknown" bucket covers tool families this can't be
+  // derived for (find_*, patch_*, verify_*, statement/usda/problems, and
+  // any row minted before this field existed).
+  entities: z.array(usageBreakdownSchema),
 });
 
 export const mcpUsageActivityInput = z.strictObject({
@@ -160,6 +175,7 @@ export const mcpUsageActivityInput = z.strictObject({
   clientId: z.string().min(1).nullable().optional(),
   surface: mcpToolCallSurfaceSchema.optional(),
   outcome: mcpToolCallOutcomeSchema.optional(),
+  entity: entitySchema.optional(),
   cursor: z.string().optional(),
   // Added by @trpc/tanstack-react-query for infinite queries. Keep it explicit
   // so this input remains strict while supporting the framework contract.
@@ -175,6 +191,7 @@ export const mcpUsageActivityOut = z.strictObject({
       outcome: mcpToolCallOutcomeSchema,
       registeredAtCall: z.boolean(),
       surface: mcpToolCallSurfaceSchema,
+      entity: entitySchema.nullable(),
       release: z.string(),
       occurredAt: z.coerce.date(),
       ingestedAt: z.coerce.date(),

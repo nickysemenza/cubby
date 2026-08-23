@@ -172,7 +172,7 @@ export function ReviewQueue({
     ]);
   };
   const confirmMerge = (keepId: string, aliasIds: string[]) => {
-    mergeMutation.mutate({ target: keepId, aliases: aliasIds });
+    mergeMutation.mutate({ keepId, mergeIds: aliasIds });
     setMergeConfirm(null);
   };
 

@@ -18,8 +18,10 @@ const BODY_RE = new RegExp(`^${BODY_PATTERN}$`);
  * the generator) derives from this, so a prefix is defined exactly once.
  *
  * Three letters throughout, so a code is self-describing when spoken, typed, or
- * pasted into an agent. `image` is deliberately absent: it has no MCP surface
- * and is only ever reached through the entity that owns it.
+ * pasted into an agent. `image` is included: it was the last local-table
+ * holdout, addressed by raw uuid, which made it a permanent carve-out in every
+ * shape that could name an entity — so it was given `IMG-` rather than kept as
+ * an exception.
  */
 export const SHORTCODE_PREFIX = {
   cookbook: "CKB-",
