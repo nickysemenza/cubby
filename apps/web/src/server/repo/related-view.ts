@@ -26,7 +26,6 @@ import { compileTraversal } from "~/server/repo/relatedness/traversal";
 
 interface SqlRelatedView {
   sourceTable: string;
-  joins: string;
   targetEntity: RelatedPreviewGroup["items"][number]["entity"];
   label: string;
   sort: string;
@@ -35,12 +34,10 @@ interface SqlRelatedView {
 
 const named = (
   sourceTable: string,
-  joins: string,
   targetEntity: SqlRelatedView["targetEntity"],
   sort = `lower(t."name")`,
 ) => ({
   sourceTable,
-  joins,
   targetEntity,
   label: `t."name"`,
   sort,
@@ -48,13 +45,11 @@ const named = (
 });
 const dated = (
   sourceTable: string,
-  joins: string,
   targetEntity: SqlRelatedView["targetEntity"],
   label = `t."name"`,
   sort = `t."createdAt"`,
 ) => ({
   sourceTable,
-  joins,
   targetEntity,
   label,
   sort,
@@ -66,31 +61,17 @@ const dated = (
  * below are constants; caller data is parameterized separately.
  */
 const SQL_RELATED_VIEWS = {
-  "product.vendors": named(
-    "Product",
-    `JOIN "Expense" e ON e."productId" = s."id" AND e."deletedAt" IS NULL JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL JOIN "Vendor" t ON t."id" = p."vendorId" AND t."deletedAt" IS NULL`,
-    "vendor",
-  ),
-  "product.projects": named(
-    "Product",
-    `JOIN "Expense" e ON e."productId" = s."id" AND e."deletedAt" IS NULL JOIN "Project" t ON t."id" = e."projectId" AND t."deletedAt" IS NULL`,
-    "project",
-  ),
-  "product.usedOnProjects": named(
-    "Product",
-    `JOIN "ProjectToolUsage" ptu ON ptu."productId" = s."id" AND ptu."deletedAt" IS NULL JOIN "Project" t ON t."id" = ptu."projectId" AND t."deletedAt" IS NULL`,
-    "project",
-  ),
+  "product.vendors": named("Product", "vendor"),
+  "product.projects": named("Product", "project"),
+  "product.usedOnProjects": named("Product", "project"),
   "product.purchases": dated(
     "Product",
-    `JOIN "Expense" e ON e."productId" = s."id" AND e."deletedAt" IS NULL JOIN "Purchase" t ON t."id" = e."purchaseId" AND t."deletedAt" IS NULL`,
     "purchase",
     `COALESCE(NULLIF(t."orderId", ''), t."shortcode")`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
   "product.expenses": dated(
     "Product",
-    `JOIN "Expense" t ON t."productId" = s."id" AND t."deletedAt" IS NULL`,
     "expense",
     `t."name"`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
@@ -99,211 +80,121 @@ const SQL_RELATED_VIEWS = {
   // identity — a fixture must stay listed among "this product's inventory".
   "product.inventory": dated(
     "Product",
-    `JOIN "InventoryEntry" t ON t."productId" = s."id" AND t."deletedAt" IS NULL`,
     "inventory",
     `t."shortcode"`,
     `t."createdAt"`,
   ),
-  "product.wishes": named(
-    "Product",
-    `JOIN "WishCandidate" wc ON wc."productId" = s."id" AND wc."deletedAt" IS NULL JOIN "Wish" t ON t."id" = wc."wishId" AND t."deletedAt" IS NULL`,
-    "wish",
-  ),
+  "product.wishes": named("Product", "wish"),
   "product.tasks": named(
     "Product",
-    `JOIN "Task" t ON t."subjectProductId" = s."id" AND t."deletedAt" IS NULL`,
     "task",
     `format('%s|%s|%s', CASE WHEN t."status" = 'done' THEN 1 ELSE 0 END, COALESCE(t."dueDate"::text, '9999-12-31'), lower(t."name"))`,
   ),
-  "recipe.ingredients": named(
-    "Recipe",
-    `JOIN "RecipeSection" rs ON rs."recipeId" = s."id" AND rs."deletedAt" IS NULL JOIN "RecipeSectionIngredient" rsi ON rsi."recipeSectionId" = rs."id" AND rsi."deletedAt" IS NULL JOIN "Ingredient" t ON t."id" = rsi."ingredientId" AND t."deletedAt" IS NULL`,
-    "ingredient",
-  ),
+  "recipe.ingredients": named("Recipe", "ingredient"),
   "recipe.meals": dated(
     "Recipe",
-    `JOIN "MealRecipe" mr ON mr."recipeId" = s."id" AND mr."deletedAt" IS NULL JOIN "Meal" t ON t."id" = mr."mealId" AND t."deletedAt" IS NULL`,
     "meal",
     `COALESCE(NULLIF(t."name", ''), t."date"::text, t."shortcode")`,
     `t."date"`,
   ),
-  "meal.recipes": named(
-    "Meal",
-    `JOIN "MealRecipe" mr ON mr."mealId" = s."id" AND mr."deletedAt" IS NULL JOIN "Recipe" t ON t."id" = mr."recipeId" AND t."deletedAt" IS NULL`,
-    "recipe",
-  ),
+  "meal.recipes": named("Meal", "recipe"),
   // includes-installed: identity/relation views, not a browse/count surface
   // — a fixture's related ingredient must stay reachable either direction.
-  "location.ingredients": named(
-    "Location",
-    `JOIN "InventoryEntry" ie ON ie."locationId" = s."id" AND ie."deletedAt" IS NULL JOIN "Product" p ON p."id" = ie."productId" AND p."deletedAt" IS NULL JOIN "Ingredient" t ON t."id" = p."ingredientId" AND t."deletedAt" IS NULL`,
-    "ingredient",
-  ),
-  "inventory.ingredient": named(
-    "InventoryEntry",
-    `JOIN "Product" p ON p."id" = s."productId" AND p."deletedAt" IS NULL JOIN "Ingredient" t ON t."id" = p."ingredientId" AND t."deletedAt" IS NULL`,
-    "ingredient",
-  ),
-  "project.blockedBy": named(
-    "Project",
-    `JOIN "ProjectDependency" pd ON pd."projectId" = s."id" JOIN "Project" t ON t."id" = pd."blockedByProjectId" AND t."deletedAt" IS NULL`,
-    "project",
-  ),
+  "location.ingredients": named("Location", "ingredient"),
+  "inventory.ingredient": named("InventoryEntry", "ingredient"),
+  "project.blockedBy": named("Project", "project"),
   "project.tasks": named(
     "Project",
-    `JOIN "Task" t ON t."projectId" = s."id" AND t."deletedAt" IS NULL`,
     "task",
     `format('%s|%s|%s', CASE WHEN t."status" = 'done' THEN 1 ELSE 0 END, COALESCE(t."dueDate"::text, '9999-12-31'), lower(t."name"))`,
   ),
   "project.expenses": dated(
     "Project",
-    `JOIN "Expense" t ON t."projectId" = s."id" AND t."deletedAt" IS NULL`,
     "expense",
     `t."name"`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
-  "project.taskProducts": named(
-    "Project",
-    `JOIN "Task" task_rel ON task_rel."projectId" = s."id" AND task_rel."deletedAt" IS NULL JOIN "Product" t ON t."id" = task_rel."subjectProductId" AND t."deletedAt" IS NULL`,
-    "product",
-  ),
-  "project.purchasedProducts": named(
-    "Project",
-    `JOIN "Expense" e ON e."projectId" = s."id" AND e."deletedAt" IS NULL JOIN "Product" t ON t."id" = e."productId" AND t."deletedAt" IS NULL`,
-    "product",
-  ),
-  "project.usedTools": named(
-    "Project",
-    `JOIN "ProjectToolUsage" ptu ON ptu."projectId" = s."id" AND ptu."deletedAt" IS NULL JOIN "Product" t ON t."id" = ptu."productId" AND t."deletedAt" IS NULL`,
-    "product",
-  ),
-  "project.vendors": named(
-    "Project",
-    `JOIN "Expense" e ON e."projectId" = s."id" AND e."deletedAt" IS NULL JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL JOIN "Vendor" t ON t."id" = p."vendorId" AND t."deletedAt" IS NULL`,
-    "vendor",
-  ),
+  "project.taskProducts": named("Project", "product"),
+  "project.purchasedProducts": named("Project", "product"),
+  "project.usedTools": named("Project", "product"),
+  "project.vendors": named("Project", "vendor"),
   "task.blockedBy": named(
     "Task",
-    `JOIN "TaskDependency" td ON td."taskId" = s."id" JOIN "Task" t ON t."id" = td."blockedByTaskId" AND t."deletedAt" IS NULL`,
     "task",
     `format('%s|%s|%s', CASE WHEN t."status" = 'done' THEN 1 ELSE 0 END, COALESCE(t."dueDate"::text, '9999-12-31'), lower(t."name"))`,
   ),
   "task.parent": named(
     "Task",
-    `JOIN "Task" t ON t."id" = s."parentTaskId" AND t."deletedAt" IS NULL`,
     "task",
     `format('%s|%s|%s', CASE WHEN t."status" = 'done' THEN 1 ELSE 0 END, COALESCE(t."dueDate"::text, '9999-12-31'), lower(t."name"))`,
   ),
   "vendor.expenses": dated(
     "Vendor",
-    `JOIN "Purchase" p ON p."vendorId" = s."id" AND p."deletedAt" IS NULL JOIN "Expense" t ON t."purchaseId" = p."id" AND t."deletedAt" IS NULL`,
     "expense",
     `t."name"`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
   "vendor.purchases": dated(
     "Vendor",
-    `JOIN "Purchase" t ON t."vendorId" = s."id" AND t."deletedAt" IS NULL`,
     "purchase",
     `COALESCE(NULLIF(t."orderId", ''), t."shortcode")`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
-  "vendor.products": named(
-    "Vendor",
-    `JOIN "Purchase" p ON p."vendorId" = s."id" AND p."deletedAt" IS NULL JOIN "Expense" e ON e."purchaseId" = p."id" AND e."deletedAt" IS NULL JOIN "Product" t ON t."id" = e."productId" AND t."deletedAt" IS NULL`,
-    "product",
-  ),
-  "vendor.projects": named(
-    "Vendor",
-    `JOIN "Purchase" p ON p."vendorId" = s."id" AND p."deletedAt" IS NULL JOIN "Expense" e ON e."purchaseId" = p."id" AND e."deletedAt" IS NULL JOIN "Project" t ON t."id" = e."projectId" AND t."deletedAt" IS NULL`,
-    "project",
-  ),
+  "vendor.products": named("Vendor", "product"),
+  "vendor.projects": named("Vendor", "project"),
   "vendor.transactions": dated(
     "Vendor",
-    `JOIN "Purchase" p ON p."vendorId" = s."id" AND p."deletedAt" IS NULL JOIN "FinancialTransactionAllocation" fta ON fta."purchaseId" = p."id" AND fta."deletedAt" IS NULL JOIN "FinancialTransaction" t ON t."id" = fta."transactionId" AND t."deletedAt" IS NULL`,
     "financialTransaction",
     `COALESCE(NULLIF(t."merchant", ''), NULLIF(t."rawDescription", ''), t."shortcode")`,
     `COALESCE(t."postedDate", t."transactionDate", t."createdAt"::date)`,
   ),
   "purchase.expenses": dated(
     "Purchase",
-    `JOIN "Expense" t ON t."purchaseId" = s."id" AND t."deletedAt" IS NULL`,
     "expense",
     `t."name"`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
   "purchase.transactions": dated(
     "Purchase",
-    `JOIN "FinancialTransactionAllocation" fta ON fta."purchaseId" = s."id" AND fta."deletedAt" IS NULL JOIN "FinancialTransaction" t ON t."id" = fta."transactionId" AND t."deletedAt" IS NULL`,
     "financialTransaction",
     `COALESCE(NULLIF(t."merchant", ''), NULLIF(t."rawDescription", ''), t."shortcode")`,
     `COALESCE(t."postedDate", t."transactionDate", t."createdAt"::date)`,
   ),
-  "purchase.products": named(
-    "Purchase",
-    `JOIN "Expense" e ON e."purchaseId" = s."id" AND e."deletedAt" IS NULL JOIN "Product" t ON t."id" = e."productId" AND t."deletedAt" IS NULL`,
-    "product",
-  ),
-  "purchase.projects": named(
-    "Purchase",
-    `JOIN "Expense" e ON e."purchaseId" = s."id" AND e."deletedAt" IS NULL JOIN "Project" t ON t."id" = e."projectId" AND t."deletedAt" IS NULL`,
-    "project",
-  ),
+  "purchase.products": named("Purchase", "product"),
+  "purchase.projects": named("Purchase", "project"),
   "expense.transactions": dated(
     "Expense",
-    `JOIN "Purchase" p ON p."id" = s."purchaseId" AND p."deletedAt" IS NULL JOIN "FinancialTransactionAllocation" fta ON fta."purchaseId" = p."id" AND fta."deletedAt" IS NULL JOIN "FinancialTransaction" t ON t."id" = fta."transactionId" AND t."deletedAt" IS NULL`,
     "financialTransaction",
     `COALESCE(NULLIF(t."merchant", ''), NULLIF(t."rawDescription", ''), t."shortcode")`,
     `COALESCE(t."postedDate", t."transactionDate", t."createdAt"::date)`,
   ),
   "financialAccount.transactions": dated(
     "FinancialAccount",
-    `JOIN "FinancialTransaction" t ON t."accountId" = s."id" AND t."deletedAt" IS NULL`,
     "financialTransaction",
     `COALESCE(NULLIF(t."merchant", ''), NULLIF(t."rawDescription", ''), t."shortcode")`,
     `COALESCE(t."postedDate", t."transactionDate", t."createdAt"::date)`,
   ),
   "financialAccount.purchases": dated(
     "FinancialAccount",
-    `JOIN "FinancialTransaction" ft ON ft."accountId" = s."id" AND ft."deletedAt" IS NULL JOIN "FinancialTransactionAllocation" fta ON fta."transactionId" = ft."id" AND fta."deletedAt" IS NULL JOIN "Purchase" t ON t."id" = fta."purchaseId" AND t."deletedAt" IS NULL`,
     "purchase",
     `COALESCE(NULLIF(t."orderId", ''), t."shortcode")`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
-  "financialAccount.vendors": named(
-    "FinancialAccount",
-    `JOIN "FinancialTransaction" ft ON ft."accountId" = s."id" AND ft."deletedAt" IS NULL JOIN "FinancialTransactionAllocation" fta ON fta."transactionId" = ft."id" AND fta."deletedAt" IS NULL JOIN "Purchase" p ON p."id" = fta."purchaseId" AND p."deletedAt" IS NULL JOIN "Vendor" t ON t."id" = p."vendorId" AND t."deletedAt" IS NULL`,
-    "vendor",
-  ),
-  "financialTransaction.vendor": named(
-    "FinancialTransaction",
-    `JOIN "FinancialTransactionAllocation" fta ON fta."transactionId" = s."id" AND fta."deletedAt" IS NULL JOIN "Purchase" p ON p."id" = fta."purchaseId" AND p."deletedAt" IS NULL JOIN "Vendor" t ON t."id" = p."vendorId" AND t."deletedAt" IS NULL`,
-    "vendor",
-  ),
+  "financialAccount.vendors": named("FinancialAccount", "vendor"),
+  "financialTransaction.vendor": named("FinancialTransaction", "vendor"),
   "financialTransaction.expenses": dated(
     "FinancialTransaction",
-    `JOIN "FinancialTransactionAllocation" fta ON fta."transactionId" = s."id" AND fta."deletedAt" IS NULL JOIN "Purchase" p ON p."id" = fta."purchaseId" AND p."deletedAt" IS NULL JOIN "Expense" t ON t."purchaseId" = p."id" AND t."deletedAt" IS NULL`,
     "expense",
     `t."name"`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
-  "financialTransaction.products": named(
-    "FinancialTransaction",
-    `JOIN "FinancialTransactionAllocation" fta ON fta."transactionId" = s."id" AND fta."deletedAt" IS NULL JOIN "Purchase" p ON p."id" = fta."purchaseId" AND p."deletedAt" IS NULL JOIN "Expense" e ON e."purchaseId" = p."id" AND e."deletedAt" IS NULL JOIN "Product" t ON t."id" = e."productId" AND t."deletedAt" IS NULL`,
-    "product",
-  ),
-  "wish.candidates": named(
-    "Wish",
-    `JOIN "WishCandidate" wc ON wc."wishId" = s."id" AND wc."deletedAt" IS NULL JOIN "Product" t ON t."id" = wc."productId" AND t."deletedAt" IS NULL`,
-    "product",
-  ),
+  "financialTransaction.products": named("FinancialTransaction", "product"),
+  "wish.candidates": named("Wish", "product"),
 } as const satisfies Record<RelatedViewKey, SqlRelatedView>;
 
 /**
  * The curated registry supplies presentation only; traversal joins are compiled
  * from its declared graph path with the aliases this repository query expects.
- * The legacy join strings remain only until the SQL equivalence harness retires
- * them, and are deliberately not read by any live query.
  */
 const COMPILED_RELATED_JOINS = Object.fromEntries(
   relatedViewRegistry.map((view) => [
