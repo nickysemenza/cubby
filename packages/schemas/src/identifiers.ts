@@ -9,6 +9,7 @@ import type {
   InventoryShortcode,
   LocationShortcode,
   MealShortcode,
+  PersonShortcode,
   ProductShortcode,
   ProjectShortcode,
   PurchaseShortcode,
@@ -95,6 +96,22 @@ export type CookbookId = z.infer<typeof cookbookId>;
 export const [mealId, unsafeMealId] = brandedId("MealId");
 export type MealId = z.infer<typeof mealId>;
 
+export const [personId, unsafePersonId] = brandedId("PersonId");
+export type PersonId = z.infer<typeof personId>;
+
+export const [fundingSourceId, unsafeFundingSourceId] =
+  brandedId("FundingSourceId");
+export type FundingSourceId = z.infer<typeof fundingSourceId>;
+
+export const [expenseAttributionId, unsafeExpenseAttributionId] = brandedId(
+  "ExpenseAttributionId",
+);
+export type ExpenseAttributionId = z.infer<typeof expenseAttributionId>;
+
+export const [fundingTransferId, unsafeFundingTransferId] =
+  brandedId("FundingTransferId");
+export type FundingTransferId = z.infer<typeof fundingTransferId>;
+
 export const [mealRecipeId, unsafeMealRecipeId] = brandedId("MealRecipeId");
 export type MealRecipeId = z.infer<typeof mealRecipeId>;
 
@@ -141,6 +158,7 @@ export {
   inventoryShortcode,
   locationShortcode,
   mealShortcode,
+  personShortcode,
   productShortcode,
   projectShortcode,
   purchaseShortcode,
@@ -160,6 +178,7 @@ export type {
   InventoryShortcode,
   LocationShortcode,
   MealShortcode,
+  PersonShortcode,
   ProductShortcode,
   ProjectShortcode,
   PurchaseShortcode,
@@ -180,6 +199,7 @@ export const unsafeIngredientShortcode = makeUnsafeId<IngredientShortcode>();
 export const unsafeInventoryShortcode = makeUnsafeId<InventoryShortcode>();
 export const unsafeLocationShortcode = makeUnsafeId<LocationShortcode>();
 export const unsafeMealShortcode = makeUnsafeId<MealShortcode>();
+export const unsafePersonShortcode = makeUnsafeId<PersonShortcode>();
 export const unsafeProductShortcode = makeUnsafeId<ProductShortcode>();
 export const unsafeProjectShortcode = makeUnsafeId<ProjectShortcode>();
 export const unsafePurchaseShortcode = makeUnsafeId<PurchaseShortcode>();
@@ -214,6 +234,7 @@ interface EntityIdBrand {
   inventory: InventoryId;
   location: LocationId;
   meal: MealId;
+  person: PersonId;
   product: ProductId;
   project: ProjectId;
   purchase: PurchaseId;
@@ -263,6 +284,7 @@ export const unsafeIdForEntity: {
   inventory: unsafeInventoryId,
   location: unsafeLocationId,
   meal: unsafeMealId,
+  person: unsafePersonId,
   product: unsafeProductId,
   project: unsafeProjectId,
   purchase: unsafePurchaseId,
@@ -298,6 +320,7 @@ export const ENTITY_NOT_FOUND_REASON = {
   inventory: "INVENTORY_NOT_FOUND",
   location: "LOCATION_NOT_FOUND",
   meal: "MEAL_NOT_FOUND",
+  person: "PERSON_NOT_FOUND",
   product: "PRODUCT_NOT_FOUND",
   project: "PROJECT_NOT_FOUND",
   purchase: "PURCHASE_NOT_FOUND",
@@ -329,6 +352,7 @@ export const ENTITY_LABEL = {
   inventory: "Inventory entry",
   location: "Location",
   meal: "Meal",
+  person: "Person",
   product: "Product",
   project: "Project",
   purchase: "Purchase",

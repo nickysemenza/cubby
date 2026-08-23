@@ -9,6 +9,7 @@ import {
   inventoryId,
   locationId,
   mealId,
+  personId,
   productId,
   projectId,
   purchaseId,
@@ -55,6 +56,7 @@ const mutationEntityRefSchema = z.discriminatedUnion("entityType", [
   z.object({ entityType: z.literal("cookbook"), entityId: cookbookId }),
   z.object({ entityType: z.literal("inventory"), entityId: inventoryId }),
   z.object({ entityType: z.literal("meal"), entityId: mealId }),
+  z.object({ entityType: z.literal("person"), entityId: personId }),
   z.object({ entityType: z.literal("project"), entityId: projectId }),
   z.object({ entityType: z.literal("task"), entityId: taskId }),
   z.object({ entityType: z.literal("vendor"), entityId: vendorId }),
@@ -453,6 +455,11 @@ async function enqueueLocationAiRefresh(
 // recompute, so it is enqueued once per mutation wave (see needsValuationRecompute
 // + the run* functions) rather than per affected entity.
 export const mutationSideEffectManifest = {
+  person: {
+    onCreate: [refreshOwnEmbedding],
+    onUpdate: [refreshOwnEmbedding],
+    onDelete: [],
+  },
   product: {
     onCreate: [refreshOwnEmbedding, refreshInventoryEmbeddingsForProduct],
     onUpdate: [

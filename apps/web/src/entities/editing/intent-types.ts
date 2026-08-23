@@ -20,6 +20,10 @@ import type {
 } from "@cubby/schemas/location";
 import type { MealCreateInput, MealUpdateInput } from "@cubby/schemas/meal";
 import type {
+  PersonCreateInput,
+  PersonUpdateData,
+} from "@cubby/schemas/person";
+import type {
   ProductCreateInput,
   ProductUpdateInput,
 } from "@cubby/schemas/product";
@@ -88,6 +92,7 @@ interface EntityEditDraftMap {
     FinancialTransactionCreateInput & FinancialTransactionUpdateData
   >;
   wish: Partial<WishCreateInput & WishUpdateData>;
+  person: Partial<PersonCreateInput & PersonUpdateData>;
 }
 
 interface EntityEditIntentCatalog {
@@ -161,6 +166,11 @@ interface EntityEditIntentCatalog {
     update: "full" | "identity" | "acquisition";
     delete: "delete";
   };
+  person: {
+    create: "capture" | "full";
+    update: "full" | "identity";
+    delete: "delete";
+  };
 }
 
 interface EntityEditCreateInputMap {
@@ -178,6 +188,7 @@ interface EntityEditCreateInputMap {
   financialAccount: FinancialAccountCreateInput;
   financialTransaction: FinancialTransactionCreateInput;
   wish: WishCreateInput;
+  person: PersonCreateInput;
 }
 
 interface EntityEditUpdateInputMap {
@@ -195,6 +206,7 @@ interface EntityEditUpdateInputMap {
   financialAccount: FinancialAccountUpdateData;
   financialTransaction: FinancialTransactionUpdateData;
   wish: WishUpdateData;
+  person: PersonUpdateData;
 }
 
 type EntityEditSpecification<E extends keyof EntityEditIntentCatalog> = {

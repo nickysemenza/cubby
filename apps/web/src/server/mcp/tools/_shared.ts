@@ -2317,6 +2317,76 @@ const mergeDispatch: Record<
     };
   },
 
+  person: async (caller, keepId, mergeIds) => {
+    const { mergeSummary } = await (
+      caller as unknown as {
+        person: {
+          merge: (input: { keepId: string; mergeIds: string[] }) => Promise<{
+            mergeSummary: {
+              deletedIds: string[];
+              merged: number;
+              beneficiaryEdgesRepointed: number;
+              fundingEdgesRepointed: number;
+              accountEdgesRepointed: number;
+              transferEdgesRepointed: number;
+              carriedFields: string[];
+            };
+          }>;
+        };
+      }
+    ).person.merge({ keepId, mergeIds });
+    return {
+      merged: mergeSummary.merged,
+      moved: [
+        ...mergeImpact(
+          {
+            code: "beneficiary-attributions-repointed",
+            effect: "move-dedupe",
+            label: "beneficiary attributions merged",
+            description:
+              "Beneficiary shares re-pointed to the surviving person and duplicate shares combined.",
+          },
+          mergeSummary.beneficiaryEdgesRepointed,
+        ),
+        ...mergeImpact(
+          {
+            code: "funding-sources-folded",
+            effect: "move-dedupe",
+            label: "funding edges folded",
+            description:
+              "Private funding-source edges moved to the surviving person's source.",
+          },
+          mergeSummary.fundingEdgesRepointed,
+        ),
+        ...mergeImpact(
+          {
+            code: "account-memberships-merged",
+            effect: "move-dedupe",
+            label: "account memberships merged",
+            description:
+              "Account memberships re-pointed; the survivor's role wins collisions.",
+          },
+          mergeSummary.accountEdgesRepointed,
+        ),
+        ...mergeImpact(
+          {
+            code: "transfers-repointed",
+            effect: "move-dedupe",
+            label: "funding transfers folded",
+            description:
+              "Funding transfers re-pointed and collapsed internal moves normalized.",
+          },
+          mergeSummary.transferEdgesRepointed,
+        ),
+      ],
+      summary: {
+        deletedIds: mergeSummary.deletedIds,
+        carriedFields: mergeSummary.carriedFields,
+      },
+      sideEffects: [],
+    };
+  },
+
   purchase: async (caller, keepId, mergeIds) => {
     const { mergeSummary } = await (
       caller as unknown as {

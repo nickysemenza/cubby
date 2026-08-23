@@ -144,6 +144,7 @@ export const entityFilterSemantics = {
     "createdAt",
     "updatedAt",
   ],
+  person: ["q", "kind", "linkedUser", "createdAt", "updatedAt"],
   project: [
     "image",
     "name",

@@ -21,6 +21,7 @@ import {
   unsafeInventoryId,
   unsafeLocationId,
   unsafeMealId,
+  unsafePersonId,
   unsafeProductId,
   unsafeProjectId,
   unsafePurchaseId,
@@ -44,6 +45,7 @@ import {
 import { previewDeleteInventoryEntries } from "~/server/repo/inventory/crud";
 import { previewDeleteLocations } from "~/server/repo/location/crud";
 import { previewDeleteMeals } from "~/server/repo/meal/crud";
+import { previewDeletePeople, previewMergePeople } from "~/server/repo/person";
 import { previewDeleteProducts } from "~/server/repo/product/crud";
 import { previewMergeProducts } from "~/server/repo/product/merge";
 import {
@@ -231,6 +233,9 @@ const plan = async (
     .with({ operation: "delete", entity: "wish" }, ({ ids }) =>
       previewDeleteWishes(db, entityIds(ids).map(unsafeWishId)),
     )
+    .with({ operation: "delete", entity: "person" }, ({ ids }) =>
+      previewDeletePeople(db, entityIds(ids).map(unsafePersonId)),
+    )
     .with({ operation: "delete", entity: "image" }, ({ ids }) =>
       previewDeleteImages(db, ids),
     )
@@ -271,6 +276,12 @@ const plan = async (
       previewMergeProducts(db, {
         mergeIds: entityIds(mergeIds).map(unsafeProductId),
         keepId: unsafeProductId(entityId(keepId)),
+      }),
+    )
+    .with({ operation: "merge", entity: "person" }, ({ mergeIds, keepId }) =>
+      previewMergePeople(db, {
+        mergeIds: entityIds(mergeIds).map(unsafePersonId),
+        keepId: unsafePersonId(entityId(keepId)),
       }),
     )
     .exhaustive();

@@ -12,6 +12,7 @@ import {
   unsafeImageId,
   unsafeImageShortcode,
   unsafeLocationId,
+  unsafePersonId,
   unsafeProductId,
   unsafeProjectId,
   unsafePurchaseId,
@@ -80,6 +81,7 @@ import {
 import { deleteLocations } from "./location";
 import { deleteMeals } from "./meal";
 import { previewDeleteMeals } from "./meal/crud";
+import { previewDeletePeople, previewMergePeople } from "./person";
 import { deleteProducts } from "./product";
 import { previewDeleteProducts } from "./product/crud";
 import {
@@ -1885,6 +1887,8 @@ describe("operation preview / mutation parity", () => {
       ingredient: "covered-by-parity",
       cookbook: "covered-by-parity",
       meal: "covered-by-parity",
+      person: (db) =>
+        previewDeletePeople(db, [unsafePersonId(NONEXISTENT_UUID)]),
       task: "covered-by-parity",
       purchase: "covered-by-parity",
       expense: "covered-by-parity",
@@ -1927,6 +1931,11 @@ describe("operation preview / mutation parity", () => {
         previewMergeProducts(db, {
           mergeIds: [unsafeProductId(NONEXISTENT_UUID)],
           keepId: unsafeProductId(NONEXISTENT_UUID_2),
+        }),
+      person: (db) =>
+        previewMergePeople(db, {
+          mergeIds: [unsafePersonId(NONEXISTENT_UUID)],
+          keepId: unsafePersonId(NONEXISTENT_UUID_2),
         }),
     };
 

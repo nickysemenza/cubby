@@ -65,6 +65,7 @@ export const sortableFields = {
     "verifiedAt",
   ],
   meal: ["date", "name", "mealType", "createdAt", "updatedAt"],
+  person: ["name", "kind", "createdAt", "updatedAt"],
   project: [
     "name",
     "status",

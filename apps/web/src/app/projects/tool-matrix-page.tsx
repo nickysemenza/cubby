@@ -84,6 +84,7 @@ const KIND_LABELS: Record<ProjectKind, string> = {
   household: "Household",
   renovation: "Renovation",
   garden: "Garden",
+  trip: "Trip",
 };
 
 const MATRIX_PAGE_SIZE = 16;

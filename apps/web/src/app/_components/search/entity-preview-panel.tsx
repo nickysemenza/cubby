@@ -8,6 +8,7 @@ import { ExpenseDetail } from "~/app/expenses/expense-detail";
 import { FinancialAccountDetail } from "~/app/finance/financial-account-detail";
 import { FinancialTransactionDetail } from "~/app/finance/financial-transaction-detail";
 import { MealDetailPage } from "~/app/meals/meal-detail-page";
+import { PersonDetail } from "~/app/people/person-detail";
 import { ProjectDetailPage } from "~/app/projects/project-detail-page";
 import { PurchaseDetail } from "~/app/purchases/purchase-detail";
 import { TaskDetail } from "~/app/tasks/task-detail";
@@ -136,6 +137,9 @@ export function EntityPreviewPanel({
           // Meal fetches its own data internally (mealId), unlike the other
           // arms which render off this panel's shared getByID `data`.
           .with("meal", () => <MealDetailPage mealId={id as never} />)
+          .with("person", () =>
+            data ? <PersonDetail person={data as never} /> : null,
+          )
           .with("task", () =>
             data ? <TaskDetail task={data as never} /> : null,
           )

@@ -143,6 +143,7 @@ describe("getEntityNavGroup", () => {
       inventory: "Pantry",
       location: "Pantry",
       meal: "Plan",
+      person: "Finance",
       wish: "Plan",
       project: "House",
       task: "House",

@@ -13,6 +13,7 @@ import {
   inventoryMutationInvalidateKeys,
   locationMutationInvalidateKeys,
   mealMutationInvalidateKeys,
+  personMutationInvalidateKeys,
   productMutationInvalidateKeys,
   projectMutationInvalidateKeys,
   purchaseMutationInvalidateKeys,
@@ -497,6 +498,11 @@ const semanticFields: Record<
     full: ["date", "name", "mealType", "mealKind", "sortOrder"],
     calendar: ["date", "name", "mealType", "mealKind"],
   },
+  person: {
+    capture: ["name", "kind"],
+    full: ["name", "kind", "notes"],
+    identity: ["name", "kind"],
+  },
   project: {
     capture: [
       "name",
@@ -687,6 +693,29 @@ const fieldsFor = (entity: EditableEntity, semanticIntent: string) =>
  * dialogs, calendar sheets, and cells stay adapters at their own seams.
  */
 export const entityEditRegistry = defineEntityEditRegistry({
+  person: definition(
+    "person",
+    [
+      trimmedName("person"),
+      field("person", "kind"),
+      nullableText("person", "notes"),
+    ],
+    personMutationInvalidateKeys,
+    operations("person", {
+      create: {
+        capture: createIntent(
+          "person",
+          "capture",
+          fieldsFor("person", "capture"),
+          { defaults: { name: "", kind: "household" } },
+        ),
+        full: createIntent("person", "full", fieldsFor("person", "full"), {
+          defaults: { name: "", kind: "household", notes: null },
+        }),
+      },
+      update: standardUpdate("person", ["full", "identity"]),
+    }),
+  ),
   product: definition(
     "product",
     [

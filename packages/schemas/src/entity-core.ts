@@ -9,6 +9,7 @@ export const entitySchema = z.enum([
   "location",
   "inventory",
   "meal",
+  "person",
   "project",
   "task",
   "vendor",

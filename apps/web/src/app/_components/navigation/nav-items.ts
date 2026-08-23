@@ -205,11 +205,18 @@ export const desktopNav: NavNode[] = [
         icon: entities.purchase.lucideIcon,
       },
       { to: "/vendors", label: "Vendors", icon: entities.vendor.lucideIcon },
+      { to: "/people", label: "People", icon: entities.person.lucideIcon },
       { to: "/financial-accounts", label: "Accounts", icon: Landmark },
       {
         to: "/financial-transactions",
         label: "Transactions",
         icon: CreditCard,
+      },
+      {
+        to: "/household-contribution",
+        label: "Contribution ledger",
+        railLabel: "Contributions",
+        icon: ArrowLeftRight,
       },
       {
         to: "/statement-rows",

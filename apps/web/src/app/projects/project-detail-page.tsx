@@ -79,6 +79,7 @@ import { formatCurrency } from "~/lib/utils";
 import { BudgetStrip } from "./BudgetStrip";
 import type { TradeCostCell } from "./charts/trade-cost-matrix";
 import type { PivotCostKey } from "./charts/trade-cost-pivot";
+import { ProjectContributionSection } from "./project-contribution-section";
 import { projectDateDelta } from "./project-formatting";
 import { ProjectNotes } from "./project-notes";
 import { projectKindOptions } from "./project-options";
@@ -982,6 +983,14 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     ),
   };
 
+  const contributionSection: DetailSection = {
+    id: "contribution",
+    title: "Contribution",
+    icon: Wallet,
+    placement: "primary",
+    content: <ProjectContributionSection projectId={project.id} />,
+  };
+
   // Both views render the full top-level subtree now — List view's default
   // "open work first" ordering is a column filter on the embedded TaskList
   // (see `OPEN_TASK_FILTERS`), not a separate scoped fetch.
@@ -1292,6 +1301,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     // the expense ledger.
     ...(hasNotesContent ? [notesSection] : []),
     ...(showBudget ? [budgetSection] : []),
+    contributionSection,
     tasksSection,
     reusableResourcesSection,
     ...(hasSubtree ? [] : [expensesSection]),

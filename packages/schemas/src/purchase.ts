@@ -381,6 +381,12 @@ export type LinkExpensesToPurchaseInput = z.infer<
  */
 export const splitExpenseInput = z.object({
   expenseId: expenseShortcode,
+  /**
+   * Required by the write path when the original has explicit household
+   * attribution. Copying those weights to every part and clearing them are
+   * both defensible, but neither is a safe implicit default.
+   */
+  attributionPolicy: z.enum(["inherit", "clear"]).optional(),
   parts: z
     .array(
       z.object({

@@ -5,6 +5,7 @@ import type {
   ProjectShortcode,
   VendorShortcode,
 } from "@cubby/schemas/identifiers";
+import type { PersonOut } from "@cubby/schemas/person";
 import type { TaskStatus, Trade } from "@cubby/schemas/project";
 import type { WishOut } from "@cubby/schemas/wish";
 import type { EditableEntity, EntityEditRequest } from "./types";
@@ -86,6 +87,23 @@ export const vendorCaptureRequest = (): DialogRequest<"vendor"> => ({
   entity: "vendor",
   operation: "create",
   intent: "capture",
+});
+
+export const personCaptureRequest = (): DialogRequest<"person"> => ({
+  entity: "person",
+  operation: "create",
+  intent: "capture",
+});
+export const personEditRequest = (
+  person: PersonOut,
+): Omit<EntityEditRequest<"person", "update", "full">, "surface"> & {
+  intent: "full";
+} => ({
+  entity: "person",
+  operation: "update",
+  intent: "full",
+  record: person,
+  seed: { name: person.name, kind: person.kind, notes: person.notes },
 });
 
 export const purchaseCaptureRequest = (input?: {

@@ -6,7 +6,10 @@
  * instead of hand-rolling `update`.
  */
 import type { ActorContext } from "@cubby/schemas/context";
-import type { ImpactItem } from "@cubby/schemas/entity-integrity";
+import type {
+  ImpactItem,
+  OperationDisposition,
+} from "@cubby/schemas/entity-integrity";
 import { inferExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import type {
   ExpenseId,
@@ -34,7 +37,14 @@ import type {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { entityEmbedding, expense, purchase } from "~/server/db/schema";
+import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import {
+  entityEmbedding,
+  expense,
+  expenseAttribution,
+  expenseSourceRef,
+  purchase,
+} from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
   type AuditEntryInput,
@@ -77,6 +87,21 @@ import {
   type ExpenseRow,
   resolveDefaultProjectId,
 } from "./helpers";
+
+export const EXPENSE_DELETE_EDGE_POLICY = {
+  "ExpenseAttribution.expenseId": {
+    code: "soft-delete-attributions",
+    effect: "soft-delete",
+    description:
+      "Deleting an Expense removes its unitless beneficiary and initial-funder shares; no money exists on those child rows.",
+  },
+  "ExpenseSourceRef.expenseId": {
+    code: "soft-delete-source-references",
+    effect: "soft-delete",
+    description:
+      "Deleting an Expense retires the normalized import references that identify that ledger row.",
+  },
+} as const satisfies IncomingEdgePolicy<"expense", OperationDisposition>;
 
 /** `expenseUpdateData` has no standalone type export — derive it from the input. */
 type ExpenseUpdateData = ExpenseUpdateInput["data"];
@@ -915,6 +940,18 @@ export const deleteExpensesWithPurchaseEffects = async (
       ids,
       removal: "soft",
       actor,
+      children: [
+        {
+          table: expenseAttribution,
+          parentColumns: [expenseAttribution.expenseId],
+          auditKey: "cascadedExpenseAttributions",
+        },
+        {
+          table: expenseSourceRef,
+          parentColumns: [expenseSourceRef.expenseId],
+          auditKey: "cascadedExpenseSourceRefs",
+        },
+      ],
     });
 
     await touchDataQualityTargets(tx, {
@@ -1001,10 +1038,9 @@ export const deleteExpenses = async (
 /**
  * What `deleteExpenses` would do to the given expenses, without doing it.
  *
- * `expense` has zero incoming edges (`INCOMING_EDGES.expense` is `{}` — see
- * `entity-incoming-edges.ts`), so unlike every other preview in this feature
- * there is nothing to block or cascade: `blockers` and `changes` are always
- * empty. That doesn't make an expense delete a no-op — its one real
+ * Attribution and normalized source-reference children are removed with the
+ * Expense; neither can outlive the money row it describes. Those owned edges
+ * never block deletion. The other real
  * consequence, read straight off `deleteExpenses` above, is the same-transaction
  * `removeEntity` cascade that removes the row from search. The
  * count here is the SAME predicate that call uses (entityType match +
@@ -1050,5 +1086,30 @@ export const previewDeleteExpenses = async (
     }),
   ]);
 
-  return { blockers: [], changes: [], sideEffects };
+  const changes = present([
+    impact({
+      disposition: EXPENSE_DELETE_EDGE_POLICY["ExpenseAttribution.expenseId"],
+      edgeKey: "ExpenseAttribution.expenseId",
+      label: "expense attributions removed",
+      byTargetId: await countByTarget(
+        dbClient,
+        expenseAttribution,
+        expenseAttribution.expenseId,
+        ids,
+      ),
+    }),
+    impact({
+      disposition: EXPENSE_DELETE_EDGE_POLICY["ExpenseSourceRef.expenseId"],
+      edgeKey: "ExpenseSourceRef.expenseId",
+      label: "expense import references removed",
+      byTargetId: await countByTarget(
+        dbClient,
+        expenseSourceRef,
+        expenseSourceRef.expenseId,
+        ids,
+      ),
+    }),
+  ]);
+
+  return { blockers: [], changes, sideEffects };
 };

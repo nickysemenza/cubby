@@ -33,6 +33,7 @@ export const SHORTCODE_PREFIX = {
   inventory: "INV-",
   location: "LOC-",
   meal: "MEL-",
+  person: "PER-",
   product: "PRD-",
   project: "PRJ-",
   purchase: "PUR-",
@@ -156,6 +157,7 @@ export const locationShortcode = makeShortcodeSchema(
   "LocationShortcode",
 );
 export const mealShortcode = makeShortcodeSchema("meal", "MealShortcode");
+export const personShortcode = makeShortcodeSchema("person", "PersonShortcode");
 export const productShortcode = makeShortcodeSchema(
   "product",
   "ProductShortcode",
@@ -184,6 +186,7 @@ const SHORTCODE_SCHEMA = {
   inventory: inventoryShortcode,
   location: locationShortcode,
   meal: mealShortcode,
+  person: personShortcode,
   product: productShortcode,
   project: projectShortcode,
   purchase: purchaseShortcode,
@@ -215,6 +218,7 @@ export type IngredientShortcode = z.infer<typeof ingredientShortcode>;
 export type InventoryShortcode = z.infer<typeof inventoryShortcode>;
 export type LocationShortcode = z.infer<typeof locationShortcode>;
 export type MealShortcode = z.infer<typeof mealShortcode>;
+export type PersonShortcode = z.infer<typeof personShortcode>;
 export type ProductShortcode = z.infer<typeof productShortcode>;
 export type ProjectShortcode = z.infer<typeof projectShortcode>;
 export type PurchaseShortcode = z.infer<typeof purchaseShortcode>;

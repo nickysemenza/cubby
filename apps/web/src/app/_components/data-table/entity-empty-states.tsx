@@ -22,6 +22,12 @@ interface EntityEmptyConfig {
 }
 
 const entityEmptyConfig: Record<Entity, EntityEmptyConfig> = {
+  person: {
+    title: "No people yet",
+    description:
+      "Add household members and guests to attribute shared spending and account access.",
+    actionLabel: "Add Person",
+  },
   recipe: {
     title: "Your recipe book awaits",
     description:

@@ -18,6 +18,7 @@ import {
   Receipt,
   ReceiptText,
   Store,
+  Users,
 } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { ENTITY_ACCENTS } from "./entity-accents";
@@ -188,6 +189,23 @@ const entityDefinitions = {
       defaultSort: "date",
       standardColumns: [],
     },
+  },
+  person: {
+    label: "Person",
+    pluralLabel: "People",
+    basePath: "people",
+    lucideIcon: Users,
+    color: entityColor("person", {
+      bg: "bg-slate/20",
+      text: "text-slate",
+      border: "border-l-slate",
+    }),
+    routes: {
+      detail: "/people/$shortcode",
+      list: "/people",
+    },
+    detail: { commonSections: ["history"] },
+    list: { defaultSort: "name", standardColumns: ["name"] },
   },
   project: {
     label: "Project",

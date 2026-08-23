@@ -34,6 +34,7 @@ import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   financialTransaction,
   financialTransactionAllocation,
+  fundingTransferEvidence,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
@@ -67,6 +68,7 @@ import {
   resolveAllocationInputs,
   writeAllocationSet,
 } from "~/server/repo/financial-transaction-allocations";
+import { assertFinancialTransactionFundingEvidenceValid } from "~/server/repo/household-contribution/integrity";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
@@ -477,6 +479,7 @@ export async function createFinancialTransaction(
         actor,
       });
     }
+    await assertFinancialTransactionFundingEvidenceValid(tx, created.id);
     return created.id;
   });
   return { output: await getFinancialTransactionByID(db, id), entityId: id };
@@ -679,6 +682,7 @@ export async function updateFinancialTransaction(
       before: allocationsBefore,
       actor,
     });
+    await assertFinancialTransactionFundingEvidenceValid(tx, id);
 
     // Data-quality targets come from applyAllocationChanges, which knows the
     // union of before/after purchases; nothing else here can name one.
@@ -692,6 +696,12 @@ export const FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY = {
     effect: "soft-delete",
     description:
       "Deleting a settlement transaction soft-deletes the purchase allocations that decompose it. Those Purchases keep their expenses and their identity; they simply lose this piece of settlement evidence.",
+  },
+  "FundingTransferEvidence.transactionId": {
+    code: "soft-delete-transfer-evidence",
+    effect: "soft-delete",
+    description:
+      "Deleting a statement transaction removes only its evidence leg; the logical household transfer remains and reports an evidence gap.",
   },
 } as const satisfies IncomingEdgePolicy<
   "financialTransaction",
@@ -735,6 +745,11 @@ export async function deleteFinancialTransactions(
           parentColumns: [financialTransactionAllocation.transactionId],
           auditKey: "cascadedSettlementAllocations",
         },
+        {
+          table: fundingTransferEvidence,
+          parentColumns: [fundingTransferEvidence.transactionId],
+          auditKey: "cascadedFundingTransferEvidence",
+        },
       ],
     });
     await touchDataQualityTargets(tx, {
@@ -771,6 +786,20 @@ export async function previewDeleteFinancialTransactions(
           dbClient,
           financialTransactionAllocation,
           financialTransactionAllocation.transactionId,
+          ids,
+        ),
+      }),
+      impact({
+        disposition:
+          FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY[
+            "FundingTransferEvidence.transactionId"
+          ],
+        edgeKey: "FundingTransferEvidence.transactionId",
+        label: "household funding-transfer evidence removed",
+        byTargetId: await countByTarget(
+          dbClient,
+          fundingTransferEvidence,
+          fundingTransferEvidence.transactionId,
           ids,
         ),
       }),

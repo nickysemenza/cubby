@@ -44,8 +44,13 @@ import type { AnyColumn } from "drizzle-orm";
 import {
   cookbook,
   expense,
+  expenseAttribution,
+  expenseSourceRef,
+  financialAccountPerson,
   financialTransaction,
   financialTransactionAllocation,
+  fundingSource,
+  fundingTransferEvidence,
   ingredient,
   inventoryEntry,
   location,
@@ -138,6 +143,13 @@ export const INCOMING_EDGES = {
   meal: edges({
     "MealRecipe.mealId": { column: mealRecipe.mealId },
   }),
+  person: edges({
+    "FundingSource.personId": { column: fundingSource.personId },
+    "ExpenseAttribution.personId": { column: expenseAttribution.personId },
+    "FinancialAccountPerson.personId": {
+      column: financialAccountPerson.personId,
+    },
+  }),
   product: edges({
     "ProductExternalId.productId": { column: productExternalId.productId },
     "ProductUnitMappings.productId": {
@@ -208,21 +220,30 @@ export const INCOMING_EDGES = {
       column: financialTransaction.accountId,
     },
     "StatementRow.accountId": { column: statementRow.accountId },
+    "FinancialAccountPerson.accountId": {
+      column: financialAccountPerson.accountId,
+    },
   }),
   financialTransaction: edges({
     "FinancialTransactionAllocation.transactionId": {
       column: financialTransactionAllocation.transactionId,
     },
+    "FundingTransferEvidence.transactionId": {
+      column: fundingTransferEvidence.transactionId,
+    },
   }),
   wish: edges({
     "WishCandidate.wishId": { column: wishCandidate.wishId },
   }),
-  // No table carries a live FK at these three: `expense`/`inventory` are leaf
-  // ledger/stock rows nothing else points back at, and `usda-food` has no
+  expense: edges({
+    "ExpenseAttribution.expenseId": { column: expenseAttribution.expenseId },
+    "ExpenseSourceRef.expenseId": { column: expenseSourceRef.expenseId },
+  }),
+  // No table carries a live FK at these two: `inventory` is a leaf stock row,
+  // and `usda-food` has no
   // local table at all (it's resolved at query time via `product.fdc_id`, a
   // cross-system id link rather than a DB FK — see usda-link-resolved-at-
   // query-time).
-  expense: edges({}),
   inventory: edges({}),
   "usda-food": edges({}),
 } as const satisfies Record<Entity, Record<string, IncomingEdge>>;

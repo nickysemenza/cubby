@@ -73,6 +73,8 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   expense,
+  expenseAttribution,
+  expenseSourceRef,
   financialTransactionAllocation,
   image,
   purchase,
@@ -1183,7 +1185,7 @@ export const splitExpense = async (
   items: ExpenseOut[];
   priceAffectedProductIds: ProductId[];
 }> => {
-  const { parts } = input;
+  const { attributionPolicy, parts } = input;
   const expenseId = await resolveOrThrow(db, "expense", input.expenseId);
 
   const { createdIds, priceAffectedProductIds } = await withTransaction(
@@ -1207,6 +1209,46 @@ export const splitExpense = async (
         throw createAppError(
           "PURCHASE_NOT_FOUND",
           `Cannot split an expense with no purchase attached (${expenseId}) — record its vendor first.`,
+        );
+      }
+
+      const [originalAttributions, sourceRefs] = await Promise.all([
+        tx
+          .select({
+            role: expenseAttribution.role,
+            personId: expenseAttribution.personId,
+            fundingSourceId: expenseAttribution.fundingSourceId,
+            weight: expenseAttribution.weight,
+          })
+          .from(expenseAttribution)
+          .where(
+            and(
+              eq(expenseAttribution.expenseId, expenseId),
+              notDeleted(expenseAttribution),
+            ),
+          ),
+        tx
+          .select({ id: expenseSourceRef.id })
+          .from(expenseSourceRef)
+          .where(
+            and(
+              eq(expenseSourceRef.expenseId, expenseId),
+              notDeleted(expenseSourceRef),
+            ),
+          )
+          .limit(1),
+      ]);
+
+      if (sourceRefs.length > 0) {
+        throw createAppError(
+          "EXPENSE_SPLIT_SOURCE_IDENTITY_CONFLICT",
+          "Imported Expenses cannot be split because one external source row cannot identify multiple replacement Expenses.",
+        );
+      }
+      if (originalAttributions.length > 0 && attributionPolicy === undefined) {
+        throw createAppError(
+          "EXPENSE_SPLIT_ATTRIBUTION_REQUIRED",
+          "Choose whether the replacement Expenses inherit or clear the original household attribution.",
         );
       }
 
@@ -1298,6 +1340,21 @@ export const splitExpense = async (
           purchaseId: chargeId,
         });
         inserted.push(row.id);
+
+        if (
+          attributionPolicy === "inherit" &&
+          originalAttributions.length > 0
+        ) {
+          await tx.insert(expenseAttribution).values(
+            originalAttributions.map((attribution) => ({
+              expenseId: row.id,
+              role: attribution.role,
+              personId: attribution.personId,
+              fundingSourceId: attribution.fundingSourceId,
+              weight: attribution.weight,
+            })),
+          );
+        }
       }
 
       // NO `notDeleted` guard here, deliberately. The `original` read above uses

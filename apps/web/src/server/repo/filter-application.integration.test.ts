@@ -53,6 +53,7 @@ import { createIngredient, ingredientList } from "./ingredient";
 import { inventoryentryList } from "./inventory";
 import { createLocation, locationList } from "./location";
 import { createMeal, mealList } from "./meal";
+import { createPerson } from "./person";
 import { productList } from "./product";
 import { createProject, projectList } from "./project";
 import { createPurchase, purchaseList } from "./purchase";
@@ -395,6 +396,16 @@ const seedWorld = async (ctx: {
     wishes.push(output);
   }
 
+  const people = [];
+  for (const name of ["guard person alpha", "guard person beta"]) {
+    const { output } = await createPerson(
+      db,
+      { name, kind: "household", notes: null },
+      actor,
+    );
+    people.push(output);
+  }
+
   for (const filename of ["guard-alpha.jpg", "guard-beta.jpg"]) {
     await createUploadedImageRecord(db, {
       key: `test/${crypto.randomUUID()}.jpg`,
@@ -431,6 +442,7 @@ const seedWorld = async (ctx: {
       inventory: first(inventories, "inventory").id,
       location: first(locations, "location").id,
       meal: first(meals, "meal").id,
+      person: first(people, "person").id,
       product: first(products, "product").id,
       project: first(projects, "project").id,
       purchase: first(purchases, "purchase"),

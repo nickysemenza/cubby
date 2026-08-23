@@ -229,6 +229,15 @@ export const actionItems: ActionItem[] = [
     surfaces: ["empty-state"],
   },
   {
+    id: "add-person",
+    entity: "person",
+    name: "Add Person",
+    path: entities.person.routes.list,
+    search: { create: true },
+    icon: entities.person.lucideIcon,
+    surfaces: ["empty-state"],
+  },
+  {
     id: "add-financial-transaction",
     entity: "financialTransaction",
     name: "Add Transaction",

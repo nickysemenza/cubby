@@ -154,6 +154,29 @@ export const ENTITY_EDGE_SEMANTICS = {
       liveness: { kind: "must-target-live" },
     },
   },
+  person: {
+    "FundingSource.personId": {
+      role: "reference",
+      label: "funding source",
+      description:
+        "The private funding companion through which a person's initial outlays and transfers are recorded.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ExpenseAttribution.personId": {
+      role: "ledger",
+      label: "beneficiary attributions",
+      description:
+        "A weighted share of an expense consumed by this person; money remains on the expense itself.",
+      liveness: { kind: "must-target-live" },
+    },
+    "FinancialAccountPerson.personId": {
+      role: "association",
+      label: "account memberships",
+      description:
+        "A descriptive ownership or access relationship for an evidence account, never an inferred funding split.",
+      liveness: { kind: "must-target-live" },
+    },
+  },
   product: {
     "ProductExternalId.productId": {
       role: "metadata",
@@ -401,6 +424,13 @@ export const ENTITY_EDGE_SEMANTICS = {
         "A provider statement line an agent judged to belong to this account. Evidence Cubby is reconciled against, not a settlement event: the row is what the export said, and assigning it an account is a human judgment rather than something the import derived.",
       liveness: { kind: "must-target-live" },
     },
+    "FinancialAccountPerson.accountId": {
+      role: "association",
+      label: "account people",
+      description:
+        "Descriptive ownership or access for this evidence account; it never implies a funding split.",
+      liveness: { kind: "must-target-live" },
+    },
   },
   financialTransaction: {
     "FinancialTransactionAllocation.transactionId": {
@@ -408,6 +438,13 @@ export const ENTITY_EDGE_SEMANTICS = {
       label: "purchase allocations",
       description:
         "One slice of this transaction's amount, attributed to a single Purchase. The slices are meaningless apart from the charge whose amount they decompose: a transaction has either none of them, or a set that sums to its amount exactly and shares its sign.",
+      liveness: { kind: "must-target-live" },
+    },
+    "FundingTransferEvidence.transactionId": {
+      role: "reference",
+      label: "funding transfer evidence",
+      description:
+        "An optional statement leg proving one logical household funding transfer; deleting the statement fact removes evidence, not the transfer.",
       liveness: { kind: "must-target-live" },
     },
   },
@@ -420,7 +457,22 @@ export const ENTITY_EDGE_SEMANTICS = {
       liveness: { kind: "must-target-live" },
     },
   },
-  expense: {},
+  expense: {
+    "ExpenseAttribution.expenseId": {
+      role: "composition",
+      label: "person and funder shares",
+      description:
+        "Unitless beneficiary or initial-funder weights that allocate this Expense without storing money.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ExpenseSourceRef.expenseId": {
+      role: "metadata",
+      label: "import source references",
+      description:
+        "Durable external identity proving which normalized source row became this Expense.",
+      liveness: { kind: "must-target-live" },
+    },
+  },
   inventory: {},
   "usda-food": {},
 } as const satisfies { [E in Entity]: IncomingEdgeMap<E, EdgeSemantics> };

@@ -31,6 +31,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   financialAccount,
+  financialAccountPerson,
   financialTransaction,
   statementRow,
 } from "~/server/db/schema";
@@ -75,6 +76,12 @@ export const FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY = {
     description:
       "An account cannot be deleted while live statement rows are assigned to it. The column is nullable, so detaching would succeed silently — and it would discard the triage judgment that put the row on this account while leaving the row looking untriaged.",
   },
+  "FinancialAccountPerson.accountId": {
+    code: "soft-delete-account-memberships",
+    effect: "soft-delete",
+    description:
+      "Deleting an otherwise-empty account retires its descriptive ownership/access rows; people and funding history remain.",
+  },
 } as const satisfies IncomingEdgePolicy<
   "financialAccount",
   OperationDisposition
@@ -100,7 +107,7 @@ const columns = {
 
 type FinancialAccountRow = Omit<
   typeof financialAccount.$inferSelect,
-  "deletedAt"
+  "deletedAt" | "fundingSourceId"
 > & {
   transactionCount: number;
 };
@@ -422,6 +429,13 @@ export async function deleteFinancialAccounts(
       ids,
       removal: "soft",
       actor,
+      children: [
+        {
+          table: financialAccountPerson,
+          parentColumns: [financialAccountPerson.accountId],
+          auditKey: "cascadedAccountPeople",
+        },
+      ],
     });
     return { deleted };
   });
@@ -506,6 +520,12 @@ export async function previewDeleteFinancialAccounts(
     statementRow.accountId,
     ids,
   );
+  const peopleByTarget = await countByTarget(
+    client,
+    financialAccountPerson,
+    financialAccountPerson.accountId,
+    ids,
+  );
   return {
     blockers: present([
       impact({
@@ -525,7 +545,17 @@ export async function previewDeleteFinancialAccounts(
         byTargetId: statementRowsByTarget,
       }),
     ]),
-    changes: [],
+    changes: present([
+      impact({
+        disposition:
+          FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY[
+            "FinancialAccountPerson.accountId"
+          ],
+        edgeKey: "FinancialAccountPerson.accountId",
+        label: "account ownership/access rows removed",
+        byTargetId: peopleByTarget,
+      }),
+    ]),
     sideEffects: [],
   };
 }

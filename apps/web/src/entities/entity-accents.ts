@@ -23,6 +23,7 @@ export const ENTITY_ACCENTS: Record<Entity, string> = {
   // spent on overdue/planned expenses inside the same planning calendar, so a
   // meal wearing it read as a warning about nothing.
   meal: "var(--slate)",
+  person: "var(--slate)",
   project: "var(--plum)",
   task: "var(--slate)",
   // A quiet roster, not a live money surface — same neutral as location/task.

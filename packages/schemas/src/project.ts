@@ -154,6 +154,7 @@ export const projectKindValues = [
   "household",
   "renovation",
   "garden",
+  "trip",
 ] as const;
 export const projectKindSchema = z.enum(projectKindValues);
 export type ProjectKind = z.infer<typeof projectKindSchema>;
@@ -462,7 +463,7 @@ export const projectRollup = z.object({
     "SUM(cost) where cost > 0 and future — planned, not yet spent",
   ),
   contributions: money.describe(
-    "SUM(-cost) where cost < 0 — offsets/credits, positive magnitude",
+    "Legacy field name: SUM(-cost) where cost < 0 — project credits, positive magnitude; unrelated to household funding contributions",
   ),
   expenseCount: z.number().int(),
   taskCount: z.number().int(),

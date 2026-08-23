@@ -39,6 +39,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import { COOKBOOK_DELETE_EDGE_POLICY } from "~/server/repo/cookbook";
+import { EXPENSE_DELETE_EDGE_POLICY } from "~/server/repo/expense/crud";
 import { FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY } from "~/server/repo/financial-account";
 import { FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY } from "~/server/repo/financial-transaction";
 import { IMAGE_HARD_DELETE } from "~/server/repo/image";
@@ -46,6 +47,10 @@ import { INGREDIENT_DELETE_EDGE_POLICY } from "~/server/repo/ingredient/deletion
 import { INGREDIENT_MERGE_EDGE_POLICY } from "~/server/repo/ingredient/merge";
 import { LOCATION_DELETE_EDGE_POLICY } from "~/server/repo/location/crud";
 import { MEAL_DELETE_EDGE_POLICY } from "~/server/repo/meal/crud";
+import {
+  PERSON_DELETE_EDGE_POLICY,
+  PERSON_MERGE_EDGE_POLICY,
+} from "~/server/repo/person";
 import { PRODUCT_DELETE_EDGE_POLICY } from "~/server/repo/product/edge-roles";
 import { PRODUCT_MERGE_EDGE_POLICY } from "~/server/repo/product/merge";
 import { PROJECT_DELETE_EDGE_POLICY } from "~/server/repo/project/crud";
@@ -79,6 +84,8 @@ export interface EntityLifecycleRegistryEntry {
 }
 
 export const ENTITY_LIFECYCLE_REGISTRY: EntityLifecycleRegistryEntry[] = [
+  { entity: "person", operation: "delete", policy: PERSON_DELETE_EDGE_POLICY },
+  { entity: "person", operation: "merge", policy: PERSON_MERGE_EDGE_POLICY },
   {
     entity: "product",
     operation: "delete",
@@ -133,10 +140,11 @@ export const ENTITY_LIFECYCLE_REGISTRY: EntityLifecycleRegistryEntry[] = [
     operation: "merge",
     policy: PURCHASE_MERGE_EDGE_POLICY,
   },
-  // Zero incoming edges (INCOMING_EDGES.expense === {}), but deleteExpenses is
-  // a real (bulk, soft) delete op — declared explicitly with an empty policy
-  // rather than omitted.
-  { entity: "expense", operation: "delete", policy: {} },
+  {
+    entity: "expense",
+    operation: "delete",
+    policy: EXPENSE_DELETE_EDGE_POLICY,
+  },
   {
     entity: "financialAccount",
     operation: "delete",

@@ -30,6 +30,7 @@ import {
   createFinancialTransaction,
   deleteFinancialTransactions,
 } from "./financial-transaction";
+import { createPerson } from "./person";
 import { createProject } from "./project";
 import { createPurchase, deletePurchases, mergePurchases } from "./purchase";
 import {
@@ -187,6 +188,11 @@ describe("searchable entity loader maps", () => {
       },
       ctx.actor,
     );
+    const person = await createPerson(
+      ctx.db,
+      { name: "Loader person", kind: "household", notes: null },
+      ctx.actor,
+    );
     const ids = {
       product: product.entityId,
       recipe: recipe.entityId,
@@ -195,6 +201,7 @@ describe("searchable entity loader maps", () => {
       location: location.entityId,
       inventory: inventory.entityId,
       meal: meal.entityId,
+      person: person.entityId,
       project: projectUuid,
       task: taskUuid,
       vendor: vendor.entityId,

@@ -6,8 +6,8 @@
 // three economically distinct quantities into one "spent" number —
 //   - actual: money already out the door (cost > 0, not future-flagged)
 //   - committed: planned/future expenses (cost > 0, future-flagged)
-//   - contributions: negative expenses (e.g. family wedding contributions) that
-//     offset spend rather than being spend
+//   - contributions: legacy wire name for negative Expense credits that offset
+//     spend; unrelated to household funding contributions
 // `net` deliberately equals that old blended figure (== `rollup.spent`) so nothing
 // downstream regresses; the split fields are purely additive.
 
@@ -23,7 +23,7 @@ export interface SpendSplit {
   actual: number;
   /** cost > 0 && future — planned/committed, not yet spent. */
   committed: number;
-  /** Σ|cost| where cost < 0 — offsets (contributions), as a positive magnitude. */
+  /** Σ|cost| where cost < 0 — credits (legacy field name), positive magnitude. */
   contributions: number;
   /** Σ cost across all rows === actual + committed − contributions === rollup.spent. */
   net: number;

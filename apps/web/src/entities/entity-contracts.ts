@@ -11,6 +11,7 @@ import {
   inventoryMutationInvalidateKeys,
   locationMutationInvalidateKeys,
   mealMutationInvalidateKeys,
+  personMutationInvalidateKeys,
   productMutationInvalidateKeys,
   projectMutationInvalidateKeys,
   purchaseMutationInvalidateKeys,
@@ -74,6 +75,7 @@ export const standardEntities = [
   "location",
   "recipe",
   "meal",
+  "person",
   "project",
   "task",
   "expense",
@@ -141,6 +143,7 @@ const entityContracts = {
   location: standardContract("location", locationMutationInvalidateKeys),
   recipe: standardContract("recipe", recipeAllMutationInvalidateKeys),
   meal: standardContract("meal", mealMutationInvalidateKeys),
+  person: standardContract("person", personMutationInvalidateKeys),
   image: {
     entity: "image",
     route: entities.image.routes,

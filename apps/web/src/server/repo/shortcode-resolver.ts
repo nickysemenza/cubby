@@ -35,6 +35,7 @@ import {
   inventoryEntry,
   location,
   meal,
+  person,
   product,
   project,
   purchase,
@@ -388,6 +389,7 @@ const DISPLAY_NAME_COLUMN = {
   inventory: null,
   location: location.name,
   meal: meal.name,
+  person: person.name,
   // Images have no `name`; the uploaded filename is the closest human handle.
   image: image.filename,
   product: product.name,

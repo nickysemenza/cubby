@@ -483,6 +483,31 @@ const ENTITIES_WITHOUT_FILTERS = {
 type FilteredEntity = Exclude<Entity, keyof typeof ENTITIES_WITHOUT_FILTERS>;
 
 const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
+  person: [
+    {
+      columnId: "name",
+      field: "search",
+      urlKey: "q",
+      kind: "text",
+      placeholder: "Search people...",
+    },
+    {
+      columnId: "kind",
+      kind: "multiselect",
+      placeholder: "Filter kind...",
+      options: [
+        { value: "household", label: "Household" },
+        { value: "guest", label: "Guest" },
+      ],
+    },
+    {
+      columnId: "linkedUser",
+      field: "linkedUserPresenceFilter",
+      kind: "presence",
+      placeholder: "Filter linked user...",
+    },
+    ...auditFilterSpecs,
+  ],
   financialAccount: [
     {
       columnId: "name",

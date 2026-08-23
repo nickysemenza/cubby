@@ -30,6 +30,7 @@ import {
   inventoryEntry,
   location,
   meal,
+  person,
   product,
   project,
   purchase,
@@ -207,6 +208,12 @@ const embeddingSources = {
     idColumn: wish.id,
     shortcodeColumn: wish.shortcode,
     deletedAtColumn: wish.deletedAt,
+  },
+  person: {
+    table: person,
+    idColumn: person.id,
+    shortcodeColumn: person.shortcode,
+    deletedAtColumn: person.deletedAt,
   },
 } satisfies Record<SearchableEntity, EmbeddingSource>;
 

@@ -16,6 +16,8 @@ const SEARCH_SCOPE_ALIASES = {
   "inventory items": "inventory",
   meal: "meal",
   meals: "meal",
+  person: "person",
+  people: "person",
   project: "project",
   projects: "project",
   task: "task",

@@ -162,6 +162,9 @@ async function getSearchDocumentSources(
     meal: sql`
       SELECT 'meal', m."id"::text, m."shortcode", COALESCE(NULLIF(m."name", ''), m."date"::text), m."date"::text, NULL, ARRAY[]::text[], ARRAY[m."date"::text]::text[]
       FROM "Meal" m WHERE m."deletedAt" IS NULL AND 'meal' IN (${types}) AND ${requested(sql`m."id"`)}`,
+    person: sql`
+      SELECT 'person', p."id"::text, p."shortcode", p."name", p."kind", NULL, ARRAY[]::text[], ARRAY[p."kind"]::text[]
+      FROM "Person" p WHERE p."deletedAt" IS NULL AND 'person' IN (${types}) AND ${requested(sql`p."id"`)}`,
     project: sql`
       SELECT 'project', p."id"::text, p."shortcode", p."name", concat_ws(' · ', p."kind", p."status"), p."icon", ARRAY[]::text[], ARRAY[p."kind", p."status"]::text[]
       FROM "Project" p WHERE p."deletedAt" IS NULL AND 'project' IN (${types}) AND ${requested(sql`p."id"`)}`,

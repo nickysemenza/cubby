@@ -14,6 +14,7 @@ import {
   unsafeVendorShortcode,
 } from "@cubby/schemas/identifiers";
 import { isDocumentFile } from "@cubby/schemas/image";
+import { personCreateInput } from "@cubby/schemas/person";
 import {
   type ExpenseOut,
   expenseCreateInput,
@@ -25,7 +26,7 @@ import {
   reconcilePurchase,
   splitExpenseInput,
 } from "@cubby/schemas/purchase";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
@@ -44,6 +45,7 @@ import type { Database } from "~/server/db";
 import {
   auditLog,
   expense,
+  expenseAttribution,
   financialTransactionAllocation,
   image,
   project,
@@ -65,6 +67,11 @@ import {
   getExpenseByShortcode,
   updateExpense,
 } from "./expense";
+import {
+  claimExpenseSource,
+  setExpenseAttribution,
+} from "./household-contribution";
+import { createPerson } from "./person";
 import { createProduct } from "./product";
 import {
   createProject,
@@ -602,6 +609,121 @@ describe("purchase repository — linkExpensesToPurchase", () => {
 
 describe("purchase repository — splitExpense", () => {
   const ctx = withTestDb();
+
+  it("requires an explicit attribution policy and can inherit every role", async () => {
+    const { output: beneficiary } = await createPerson(
+      ctx.db,
+      personCreateInput.parse({ name: "Split beneficiary", kind: "guest" }),
+      ctx.actor,
+    );
+    const { output: original } = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "Attributed charge",
+          cost: 20,
+          vendor: "Attribution Test Vendor",
+          orderId: "ATTRIBUTED-SPLIT-1",
+        }),
+      ),
+      ctx.actor,
+    );
+    await setExpenseAttribution(
+      ctx.db,
+      {
+        type: "set_expense_attribution",
+        expenseIds: [original.id],
+        beneficiaries: {
+          people: [{ personId: beneficiary.id, weight: 1 }],
+        },
+      },
+      ctx.actor,
+    );
+    const split = splitExpenseInput.parse({
+      expenseId: original.id,
+      parts: [
+        { name: "first part", cost: 10, costType: "other", trade: "other" },
+        { name: "second part", cost: 10, costType: "other", trade: "other" },
+      ],
+    });
+
+    await expect(splitExpense(ctx.db, split, ctx.actor)).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      cause: { reason: "EXPENSE_SPLIT_ATTRIBUTION_REQUIRED" },
+    });
+
+    const { items } = await splitExpense(
+      ctx.db,
+      { ...split, attributionPolicy: "inherit" },
+      ctx.actor,
+    );
+    const partIds = await Promise.all(
+      items.map((item) => expenseUuid(ctx.db, item.id)),
+    );
+    const inherited = await getDb(ctx.db)
+      .select({ expenseId: expenseAttribution.expenseId })
+      .from(expenseAttribution)
+      .where(
+        and(
+          inArray(expenseAttribution.expenseId, partIds),
+          notDeleted(expenseAttribution),
+        ),
+      );
+    expect(inherited.map((row) => row.expenseId).sort()).toEqual(
+      [...partIds].sort(),
+    );
+  });
+
+  it("refuses to split a source-identified imported Expense", async () => {
+    const { output: original } = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "Imported trip charge",
+          cost: 20,
+          vendor: "Source Test Vendor",
+          orderId: "SOURCE-SPLIT-1",
+        }),
+      ),
+      ctx.actor,
+    );
+    await claimExpenseSource(
+      ctx.db,
+      {
+        type: "claim_expense_source",
+        expenseId: original.id,
+        sourceRef: { source: "splitwise", externalId: "trip-row-1" },
+      },
+      ctx.actor,
+    );
+
+    await expect(
+      splitExpense(
+        ctx.db,
+        splitExpenseInput.parse({
+          expenseId: original.id,
+          parts: [
+            {
+              name: "first part",
+              cost: 10,
+              costType: "other",
+              trade: "other",
+            },
+            {
+              name: "second part",
+              cost: 10,
+              costType: "other",
+              trade: "other",
+            },
+          ],
+        }),
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      cause: { reason: "EXPENSE_SPLIT_SOURCE_IDENTITY_CONFLICT" },
+    });
+  });
 
   it("files the parts against the same charge, soft-deletes the original, and seeds statedTotal", async () => {
     const { output: project } = await createProject(

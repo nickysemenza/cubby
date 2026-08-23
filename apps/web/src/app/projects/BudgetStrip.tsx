@@ -42,7 +42,7 @@ export function BudgetStrip({
           <Figure label="Committed" value={committed} tone="warning" />
         )}
         {contributions > 0 && (
-          <Figure label="Contributions" value={-contributions} tone="muted" />
+          <Figure label="Credits" value={-contributions} tone="muted" />
         )}
         <Figure
           label="Remaining"

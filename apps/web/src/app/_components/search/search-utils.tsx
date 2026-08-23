@@ -23,6 +23,7 @@ export const entityTypeMap: Record<SearchableEntity, Entity> = {
   location: "location",
   inventory: "inventory",
   meal: "meal",
+  person: "person",
   project: "project",
   task: "task",
   vendor: "vendor",

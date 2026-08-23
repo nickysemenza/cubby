@@ -102,6 +102,10 @@ export const queryKeys = {
     shoppingList: procedureKey("meal", "shoppingList"),
     all: entityKey("meal"),
   },
+  person: {
+    list: procedureKey("person", "list"),
+    all: entityKey("person"),
+  },
   project: {
     list: procedureKey("project", "list"),
     getByID: procedureKey("project", "getByID"),
@@ -239,6 +243,12 @@ export const imageMutationInvalidateKeys = [
 
 export const ingredientMutationInvalidateKeys = [
   queryKeys.ingredient.list,
+  queryKeys.dashboard.counts,
+] as const satisfies readonly QueryKey[];
+
+export const personMutationInvalidateKeys = [
+  queryKeys.person.all,
+  queryKeys.search.all,
   queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 
