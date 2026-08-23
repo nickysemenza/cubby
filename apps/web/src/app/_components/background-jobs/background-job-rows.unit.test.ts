@@ -118,7 +118,11 @@ describe("background job table rows", () => {
       });
 
       expect(backgroundJobSubRows(row!)).toEqual([
-        expect.objectContaining({ rowType: "status", status, message }),
+        expect.objectContaining({
+          rowType: "status",
+          loadState: status,
+          name: message,
+        }),
       ]);
     },
   );
@@ -135,12 +139,10 @@ describe("background job table rows", () => {
     expect(selected).toMatchObject({
       rowType: "batch",
       id: "older-batch",
-      selectedOutsideList: true,
     });
     expect(recent).toMatchObject({
       rowType: "batch",
       id: "batch-1",
-      selectedOutsideList: false,
     });
   });
 

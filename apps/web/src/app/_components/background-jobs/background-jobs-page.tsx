@@ -1,10 +1,4 @@
-import {
-  type BackgroundBatchStatus,
-  backgroundBatchProcessors,
-  backgroundBatchSources,
-  backgroundBatchStatuses,
-  backgroundJobKinds,
-} from "@cubby/schemas/background-jobs";
+import type { BackgroundBatchStatus } from "@cubby/schemas/background-jobs";
 import { getErrorMessage } from "@cubby/shared";
 import {
   type QueryKey,
@@ -15,11 +9,9 @@ import {
 import { Link, useNavigate } from "@tanstack/react-router";
 import { StepForward } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Row, Stack } from "~/components/layout";
+import { Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
-import { NativeSelect } from "~/components/ui/native-select";
 import { Spinner } from "~/components/ui/spinner";
 import { useHydratedLoading } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -29,9 +21,7 @@ import {
   type SelectedJobsState,
 } from "./background-job-rows";
 import { BackgroundJobsTable } from "./background-jobs-table";
-import { batchFilterText } from "./batch-metadata";
 
-const ALL_FILTER_VALUE = "all";
 const BATCH_POLL_MS = 4000;
 const JOB_PAGE_SIZE = 100;
 
@@ -61,11 +51,6 @@ export function BackgroundJobsPage({
   const api = useTRPC();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [kindFilter, setKindFilter] = useState(ALL_FILTER_VALUE);
-  const [sourceFilter, setSourceFilter] = useState(ALL_FILTER_VALUE);
-  const [processorFilter, setProcessorFilter] = useState(ALL_FILTER_VALUE);
-  const [statusFilter, setStatusFilter] = useState(ALL_FILTER_VALUE);
-  const [textFilter, setTextFilter] = useState("");
   const [pageIndex, setPageIndex] = useState(0);
   const [showFailedOnly, setShowFailedOnly] = useState(false);
 
@@ -97,17 +82,13 @@ export function BackgroundJobsPage({
         ? BATCH_POLL_MS
         : false,
   });
-  const jobsInput = useMemo(
-    () => ({
+  const jobsQuery = useQuery({
+    ...api.backgroundJobs.listBatchJobs.queryOptions({
       batchId: selectedBatchId ?? "",
       pageIndex,
       pageSize: JOB_PAGE_SIZE,
       failedOnly: showFailedOnly,
     }),
-    [pageIndex, selectedBatchId, showFailedOnly],
-  );
-  const jobsQuery = useQuery({
-    ...api.backgroundJobs.listBatchJobs.queryOptions(jobsInput),
     enabled: Boolean(selectedBatchId),
   });
 
@@ -125,7 +106,6 @@ export function BackgroundJobsPage({
   // biome-ignore lint/correctness/useExhaustiveDependencies: the selected id is the reset signal; the effect deliberately resets local child-query controls without reading the id.
   useEffect(() => {
     setPageIndex(0);
-    setShowFailedOnly(false);
     previousStatusRef.current = undefined;
   }, [selectedBatchId]);
 
@@ -164,157 +144,49 @@ export function BackgroundJobsPage({
     }),
   );
 
-  const filteredBatches = useMemo(() => {
-    const query = textFilter.trim().toLowerCase();
-    return (listQuery.data ?? []).filter((batch) => {
-      if (scopedSet && !scopedSet.has(batch.id)) return false;
-      if (kindFilter !== ALL_FILTER_VALUE && batch.kind !== kindFilter) {
-        return false;
-      }
-      if (sourceFilter !== ALL_FILTER_VALUE && batch.source !== sourceFilter) {
-        return false;
-      }
-      if (
-        processorFilter !== ALL_FILTER_VALUE &&
-        batch.processor !== processorFilter
-      ) {
-        return false;
-      }
-      if (statusFilter !== ALL_FILTER_VALUE && batch.status !== statusFilter) {
-        return false;
-      }
-      return query.length === 0 || batchFilterText(batch).includes(query);
-    });
-  }, [
-    kindFilter,
-    listQuery.data,
-    processorFilter,
-    scopedSet,
-    sourceFilter,
-    statusFilter,
-    textFilter,
-  ]);
+  const visibleBatches = scopedSet
+    ? (listQuery.data ?? []).filter(({ id }) => scopedSet.has(id))
+    : (listQuery.data ?? []);
+  usePageCount(visibleBatches.length);
 
-  usePageCount(filteredBatches.length);
+  let selectedJobs: SelectedJobsState | undefined;
+  if (selectedBatchId) {
+    if (jobsQuery.error)
+      selectedJobs = {
+        status: "error",
+        message: getErrorMessage(jobsQuery.error),
+      };
+    else if (!jobsQuery.data) selectedJobs = { status: "loading" };
+    else
+      selectedJobs = {
+        status: "ready",
+        jobs: jobsQuery.data.jobs,
+        pageIndex: jobsQuery.data.pageIndex,
+        pageSize: jobsQuery.data.pageSize,
+        totalCount: jobsQuery.data.totalCount,
+        failedOnly: showFailedOnly,
+      };
+  }
 
-  const selectedJobs = useMemo<SelectedJobsState | undefined>(() => {
-    if (!selectedBatchId) return undefined;
-    if (jobsQuery.isLoading) return { status: "loading" };
-    if (jobsQuery.error) {
-      return { status: "error", message: getErrorMessage(jobsQuery.error) };
-    }
-    if (!jobsQuery.data) return { status: "loading" };
-    return {
-      status: "ready",
-      jobs: jobsQuery.data.jobs,
-      pageIndex: jobsQuery.data.pageIndex,
-      pageSize: jobsQuery.data.pageSize,
-      totalCount: jobsQuery.data.totalCount,
-      failedOnly: showFailedOnly,
-    };
-  }, [
-    jobsQuery.data,
-    jobsQuery.error,
-    jobsQuery.isLoading,
+  const rows = buildBackgroundJobRows({
+    batches: visibleBatches,
     selectedBatchId,
-    showFailedOnly,
-  ]);
-
-  const rows = useMemo(
-    () =>
-      buildBackgroundJobRows({
-        batches: filteredBatches,
-        selectedBatchId,
-        selectedBatch: summaryQuery.data,
-        selectedBatchError: summaryQuery.error
-          ? getErrorMessage(summaryQuery.error)
-          : undefined,
-        selectedJobs,
-      }),
-    [
-      filteredBatches,
-      selectedBatchId,
-      selectedJobs,
-      summaryQuery.data,
-      summaryQuery.error,
-    ],
-  );
+    selectedBatch: summaryQuery.data,
+    selectedBatchError: summaryQuery.error
+      ? getErrorMessage(summaryQuery.error)
+      : undefined,
+    selectedJobs,
+  });
 
   const listLoading = useHydratedLoading(listQuery.isLoading);
-  const filtersActive =
-    textFilter.trim().length > 0 ||
-    kindFilter !== ALL_FILTER_VALUE ||
-    sourceFilter !== ALL_FILTER_VALUE ||
-    processorFilter !== ALL_FILTER_VALUE ||
-    statusFilter !== ALL_FILTER_VALUE ||
-    scopedSet !== null;
-
-  const setExpandedBatch = (batchId?: string) => {
+  const setExpandedBatch = (batchId?: string, failedOnly = false) => {
+    setPageIndex(0);
+    setShowFailedOnly(failedOnly);
     void navigate({
       to: "/background-jobs",
       search: (previous) => ({ ...previous, batchId }),
     });
   };
-
-  const toolbar = (
-    <Row gap="sm" wrap className="min-w-0">
-      <Input
-        value={textFilter}
-        onChange={(event) => setTextFilter(event.target.value)}
-        placeholder="Filter source, entity, or id"
-        aria-label="Filter background jobs"
-        className="w-64 max-w-full"
-      />
-      <NativeSelect
-        aria-label="Filter background jobs by kind"
-        value={kindFilter}
-        onChange={(event) => setKindFilter(event.target.value)}
-      >
-        <option value={ALL_FILTER_VALUE}>All kinds</option>
-        {backgroundJobKinds.map((kind) => (
-          <option key={kind} value={kind}>
-            {kind}
-          </option>
-        ))}
-      </NativeSelect>
-      <NativeSelect
-        aria-label="Filter background jobs by source"
-        value={sourceFilter}
-        onChange={(event) => setSourceFilter(event.target.value)}
-      >
-        <option value={ALL_FILTER_VALUE}>All sources</option>
-        {backgroundBatchSources.map((source) => (
-          <option key={source} value={source}>
-            {source}
-          </option>
-        ))}
-      </NativeSelect>
-      <NativeSelect
-        aria-label="Filter background jobs by processor"
-        value={processorFilter}
-        onChange={(event) => setProcessorFilter(event.target.value)}
-      >
-        <option value={ALL_FILTER_VALUE}>All processors</option>
-        {backgroundBatchProcessors.map((processor) => (
-          <option key={processor} value={processor}>
-            {processor}
-          </option>
-        ))}
-      </NativeSelect>
-      <NativeSelect
-        aria-label="Filter background jobs by status"
-        value={statusFilter}
-        onChange={(event) => setStatusFilter(event.target.value)}
-      >
-        <option value={ALL_FILTER_VALUE}>All statuses</option>
-        {backgroundBatchStatuses.map((status) => (
-          <option key={status} value={status}>
-            {status}
-          </option>
-        ))}
-      </NativeSelect>
-    </Row>
-  );
 
   const drainAction = (
     <Button
@@ -329,7 +201,7 @@ export function BackgroundJobsPage({
   );
 
   return (
-    <Stack gap="sm">
+    <>
       {scopedSet ? (
         <Row align="center" gap="sm" className="text-muted-foreground text-sm">
           <span>
@@ -351,24 +223,21 @@ export function BackgroundJobsPage({
         showFailedOnly={showFailedOnly}
         isLoading={listLoading}
         error={listQuery.error}
-        toolbar={toolbar}
         actions={drainAction}
-        emptyState={
-          filtersActive
-            ? "No background batches match these filters."
-            : "No background batches yet."
-        }
         onExpandedBatchChange={setExpandedBatch}
         onFailedOnlyChange={(batchId, failedOnly) => {
-          setPageIndex(0);
-          setShowFailedOnly(failedOnly);
-          if (batchId !== selectedBatchId) setExpandedBatch(batchId);
+          if (batchId !== selectedBatchId)
+            setExpandedBatch(batchId, failedOnly);
+          else {
+            setPageIndex(0);
+            setShowFailedOnly(failedOnly);
+          }
         }}
         onPageChange={setPageIndex}
         onRetryBatch={(batchId) => retry.mutate({ batchId })}
         onCancelBatch={(batchId) => cancel.mutate({ batchId })}
         onRetryJob={(jobId) => retryJob.mutate({ jobId })}
       />
-    </Stack>
+    </>
   );
 }

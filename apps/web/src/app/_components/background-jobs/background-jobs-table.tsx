@@ -1,9 +1,15 @@
 import type { AuditEntityType } from "@cubby/schemas/audit";
 import {
   type BackgroundBatchStatus,
+  type BackgroundJobKind,
   type BackgroundJobStatus,
+  backgroundBatchProcessors,
+  backgroundBatchSources,
+  backgroundBatchStatuses,
+  backgroundJobKinds,
   backgroundJobPayloadSchema,
 } from "@cubby/schemas/background-jobs";
+import { parseShortcode } from "@cubby/shared";
 import { Link } from "@tanstack/react-router";
 import type { ExpandedState, OnChangeFn } from "@tanstack/react-table";
 import {
@@ -11,15 +17,18 @@ import {
   ChevronRight,
   ClipboardCopy,
   Eye,
+  type LucideIcon,
   MoreHorizontal,
   RotateCcw,
   Square,
 } from "lucide-react";
-import { type ReactNode, useMemo } from "react";
+import { type ReactNode, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { DebugDialog } from "~/app/_components/data-table/DebugDialog";
 import RTable from "~/app/_components/data-table/Table";
 import {
+  type CubbyCellContext,
+  type CubbyFilterFn,
   createCubbyColumnHelper,
   useCubbyTable,
 } from "~/app/_components/data-table/table-features";
@@ -46,28 +55,71 @@ import {
   backgroundJobRowId,
   backgroundJobSubRows,
 } from "./background-job-rows";
-import { isRecord, parseBackgroundEntityRef } from "./batch-metadata";
-import { formatDate, formatMs } from "./format";
+import {
+  batchFilterText,
+  isRecord,
+  parseBackgroundEntityRef,
+} from "./batch-metadata";
+import { formatDate } from "./format";
 
-const BATCH_STATUS_TONE: Record<BackgroundBatchStatus, BadgeVariant> = {
-  queued: "slate",
-  running: "default",
-  succeeded: "positive",
-  partial: "warning",
-  failed: "destructive",
-  cancelled: "outline",
-};
-const JOB_STATUS_TONE: Record<BackgroundJobStatus, BadgeVariant> = {
+type QueueStatus = BackgroundBatchStatus | BackgroundJobStatus;
+const STATUS_TONE: Record<QueueStatus, BadgeVariant> = {
   pending: "slate",
   queued: "slate",
   running: "default",
   succeeded: "positive",
   skipped: "outline",
+  partial: "warning",
   failed: "destructive",
   cancelled: "outline",
 };
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const COLUMN_DEFAULTS = {
+  sortUndefined: "last" as const,
+  enableCellSelection: false,
+};
+const SELECT_FILTERS = [
+  ["batchKind", "kind", "Kind", backgroundJobKinds],
+  ["batchSource", "source", "Source", backgroundBatchSources],
+  ["batchProcessor", "processor", "Processor", backgroundBatchProcessors],
+  ["batchStatus", "status", "Status", backgroundBatchStatuses],
+] as const;
+const JOB_LABEL: Partial<Record<BackgroundJobKind, string>> = {
+  "entity-embedding.backfill.coordinator": "Continue semantic backfill",
+  "search-document.repair.coordinator": "Continue document repair",
+  "location-valuation.recompute": "All locations",
+  "problems.counts.refresh": "Problem counts",
+};
+
+interface BackgroundJobsTableProps {
+  rows: BackgroundJobTableRow[];
+  selectedBatchId?: string;
+  showFailedOnly: boolean;
+  isLoading: boolean;
+  error: unknown;
+  actions: ReactNode;
+  onExpandedBatchChange: (batchId?: string) => void;
+  onFailedOnlyChange: (batchId: string, failedOnly: boolean) => void;
+  onRetryBatch: (batchId: string) => void;
+  onCancelBatch: (batchId: string) => void;
+  onRetryJob: (jobId: string) => void;
+  onPageChange: (pageIndex: number) => void;
+}
+type ActionProps = Pick<
+  BackgroundJobsTableProps,
+  | "selectedBatchId"
+  | "showFailedOnly"
+  | "onFailedOnlyChange"
+  | "onRetryBatch"
+  | "onCancelBatch"
+  | "onRetryJob"
+  | "onPageChange"
+>;
+type MenuAction = {
+  label: string;
+  icon: LucideIcon;
+  disabled?: boolean;
+  run: () => void;
+};
 
 function EntityTarget({
   entityType,
@@ -76,15 +128,14 @@ function EntityTarget({
   entityType: AuditEntityType;
   entityId: string;
 }) {
-  if (UUID_PATTERN.test(entityId)) {
-    return (
-      <span className="text-muted-foreground">
-        {entityType} · {entityId.slice(0, 8)}
-      </span>
-    );
-  }
-  return (
+  // Queue payloads use private uuids, while detail routes and getByID now
+  // accept public shortcodes. Never send a uuid into that public-id boundary.
+  return parseShortcode(entityId)?.type === entityType ? (
     <EntityInlineLinkById entityType={entityType} entityId={entityId} compact />
+  ) : (
+    <span className="text-muted-foreground">
+      {entityType} · {entityId.slice(0, 8)}
+    </span>
   );
 }
 
@@ -92,20 +143,9 @@ function OriginLink({ batch }: { batch: BackgroundBatchRow["batch"] }) {
   const metadata = isRecord(batch.metadata) ? batch.metadata : null;
   const source = typeof metadata?.source === "string" ? metadata.source : null;
   const entity = parseBackgroundEntityRef(metadata?.entity);
-  if (entity) {
-    return (
-      <EntityInlineLinkById
-        entityType={entity.entityType}
-        entityId={entity.entityId}
-        compact
-      />
-    );
-  }
+  if (entity) return <EntityTarget {...entity} />;
   if (source) return source;
-  if (
-    batch.source === "backfill" &&
-    batch.kind === "entity-embedding.refresh"
-  ) {
+  if (batch.source === "backfill" && batch.kind === "entity-embedding.refresh")
     return (
       <Link
         to="/search/debug"
@@ -114,104 +154,62 @@ function OriginLink({ batch }: { batch: BackgroundBatchRow["batch"] }) {
         Search debug
       </Link>
     );
-  }
   return <span className="text-muted-foreground">{batch.source}</span>;
 }
 
 function JobTarget({ row }: { row: BackgroundJobRow }) {
-  const parsed = backgroundJobPayloadSchema.safeParse({
+  const result = backgroundJobPayloadSchema.safeParse({
     kind: row.job.kind,
     payload: row.job.payload,
   });
-  if (!parsed.success)
+  if (!result.success)
     return <span className="text-destructive">Invalid payload</span>;
-  const value = parsed.data;
-  switch (value.kind) {
-    case "entity-embedding.refresh":
-      return (
-        <EntityTarget
-          entityType={value.payload.entityType}
-          entityId={value.payload.entityId}
-        />
-      );
-    case "location-ai.description.refresh":
-    case "location-ai.inventory.refresh":
-      return (
-        <EntityTarget
-          entityType="location"
-          entityId={value.payload.locationId}
-        />
-      );
-    case "usda-match.retry":
-      return (
-        <EntityTarget
-          entityType="ingredient"
-          entityId={value.payload.ingredientId}
-        />
-      );
-    case "recipe-totals.recompute": {
-      const [recipeId] = value.payload.recipeIds;
-      return recipeId && value.payload.recipeIds.length === 1 ? (
-        <EntityTarget entityType="recipe" entityId={recipeId} />
-      ) : (
-        `${value.payload.recipeIds.length} recipes`
-      );
-    }
-    case "entity-embedding.backfill.coordinator":
-      return "Continue semantic backfill";
-    case "search-document.repair.coordinator":
-      return "Continue document repair";
-    case "location-valuation.recompute":
-      return "All locations";
-    case "problems.counts.refresh":
-      return "Problem counts";
+  const { kind, payload } = result.data;
+  if ("entityType" in payload) return <EntityTarget {...payload} />;
+  if ("locationId" in payload)
+    return <EntityTarget entityType="location" entityId={payload.locationId} />;
+  if ("ingredientId" in payload)
+    return (
+      <EntityTarget entityType="ingredient" entityId={payload.ingredientId} />
+    );
+  if ("recipeIds" in payload) {
+    const [id] = payload.recipeIds;
+    return id && payload.recipeIds.length === 1 ? (
+      <EntityTarget entityType="recipe" entityId={id} />
+    ) : (
+      `${payload.recipeIds.length} recipes`
+    );
   }
+  return JOB_LABEL[kind];
 }
 
 async function copyJson(value: unknown, label: string) {
-  if (!(await copyText(JSON.stringify(value, null, 2)))) {
-    toast.error("Copy failed");
-    return;
-  }
+  if (!(await copyText(JSON.stringify(value, null, 2))))
+    return toast.error("Copy failed");
   toast.success(`Copied ${label}`);
 }
 
 function RowActions({
   row,
-  selectedBatchId,
-  showFailedOnly,
-  onFailedOnlyChange,
-  onRetryBatch,
-  onCancelBatch,
-  onRetryJob,
-  onPageChange,
-}: {
-  row: BackgroundJobTableRow;
-  selectedBatchId?: string;
-  showFailedOnly: boolean;
-  onFailedOnlyChange: (batchId: string, failedOnly: boolean) => void;
-  onRetryBatch: (batchId: string) => void;
-  onCancelBatch: (batchId: string) => void;
-  onRetryJob: (jobId: string) => void;
-  onPageChange: (pageIndex: number) => void;
-}) {
+  ...props
+}: { row: BackgroundJobTableRow } & ActionProps) {
   if (row.rowType === "pager") {
-    const last = Math.min((row.pageIndex + 1) * row.pageSize, row.totalCount);
+    const hasNext = (row.pageIndex + 1) * row.pageSize < row.totalCount;
     return (
       <Row gap="xs">
         <Button
           variant="outline"
           size="xs"
-          disabled={row.pageIndex === 0}
-          onClick={() => onPageChange(row.pageIndex - 1)}
+          disabled={!row.pageIndex}
+          onClick={() => props.onPageChange(row.pageIndex - 1)}
         >
           Previous
         </Button>
         <Button
           variant="outline"
           size="xs"
-          disabled={last >= row.totalCount}
-          onClick={() => onPageChange(row.pageIndex + 1)}
+          disabled={!hasNext}
+          onClick={() => props.onPageChange(row.pageIndex + 1)}
         >
           Next
         </Button>
@@ -219,12 +217,57 @@ function RowActions({
     );
   }
   if (row.rowType !== "batch" && row.rowType !== "job") return null;
-  const debugValue = row.rowType === "batch" ? row.batch : row.job;
+  const batch = row.rowType === "batch" ? row.batch : null;
+  const job = row.rowType === "job" ? row.job : null;
+  const copyLabel = batch ? "metadata" : "payload";
+  const actions: MenuAction[] = [];
+  const add = (
+    label: string,
+    icon: LucideIcon,
+    run: () => void,
+    disabled?: boolean,
+  ) => actions.push({ label, icon, run, disabled });
+  add(
+    `Copy ${copyLabel}`,
+    ClipboardCopy,
+    () => void copyJson(batch?.metadata ?? job?.payload, copyLabel),
+  );
+  if (batch) {
+    const failedOnly = row.id === props.selectedBatchId && props.showFailedOnly;
+    add(failedOnly ? "Show all jobs" : "Show failed jobs", AlertTriangle, () =>
+      props.onFailedOnlyChange(row.id, !failedOnly),
+    );
+    add(
+      "Retry failed",
+      RotateCcw,
+      () => props.onRetryBatch(row.id),
+      !batch.failedJobs,
+    );
+    add(
+      "Cancel queued",
+      Square,
+      () => props.onCancelBatch(row.id),
+      !batch.queuedJobs,
+    );
+  } else {
+    if (job?.lastError)
+      add(
+        "Copy error",
+        ClipboardCopy,
+        () => void copyJson(job.lastError, "job error"),
+      );
+    add(
+      "Retry job",
+      RotateCcw,
+      () => props.onRetryJob(row.id),
+      job?.status !== "failed",
+    );
+  }
   return (
     <Row gap="tight">
       <DebugDialog
-        data={debugValue}
-        title={row.rowType === "batch" ? "Batch details" : "Job details"}
+        data={batch ?? job}
+        title={batch ? "Batch details" : "Job details"}
         trigger={
           <Button variant="ghost" size="icon-sm">
             <Eye />
@@ -244,377 +287,212 @@ function RowActions({
           align="end"
           onClick={(event) => event.stopPropagation()}
         >
-          <DropdownMenuItem
-            onClick={() =>
-              void copyJson(
-                row.rowType === "batch" ? row.batch.metadata : row.job.payload,
-                row.rowType === "batch" ? "batch metadata" : "job payload",
-              )
-            }
-          >
-            <ClipboardCopy /> Copy{" "}
-            {row.rowType === "batch" ? "metadata" : "payload"}
-          </DropdownMenuItem>
-          {row.rowType === "batch" ? (
-            <>
-              <DropdownMenuItem
-                onClick={() =>
-                  onFailedOnlyChange(
-                    row.id,
-                    row.id === selectedBatchId ? !showFailedOnly : true,
-                  )
-                }
-              >
-                <AlertTriangle />
-                {row.id === selectedBatchId && showFailedOnly
-                  ? "Show all jobs"
-                  : "Show failed jobs"}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                disabled={row.batch.failedJobs === 0}
-                onClick={() => onRetryBatch(row.id)}
-              >
-                <RotateCcw /> Retry failed
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                disabled={row.batch.queuedJobs === 0}
-                onClick={() => onCancelBatch(row.id)}
-              >
-                <Square /> Cancel queued
-              </DropdownMenuItem>
-            </>
-          ) : (
-            <>
-              {row.job.lastError ? (
-                <DropdownMenuItem
-                  onClick={() => void copyJson(row.job.lastError, "job error")}
-                >
-                  <ClipboardCopy /> Copy error
-                </DropdownMenuItem>
-              ) : null}
-              <DropdownMenuItem
-                disabled={row.job.status !== "failed"}
-                onClick={() => onRetryJob(row.id)}
-              >
-                <RotateCcw /> Retry job
-              </DropdownMenuItem>
-            </>
-          )}
+          {actions.map(({ label, icon: Icon, disabled, run }) => (
+            <DropdownMenuItem key={label} disabled={disabled} onClick={run}>
+              <Icon /> {label}
+            </DropdownMenuItem>
+          ))}
         </DropdownMenuContent>
       </DropdownMenu>
     </Row>
   );
 }
 
-interface BackgroundJobsTableProps {
-  rows: BackgroundJobTableRow[];
-  selectedBatchId?: string;
-  showFailedOnly: boolean;
-  isLoading: boolean;
-  error: unknown;
-  toolbar: ReactNode;
-  actions: ReactNode;
-  emptyState: ReactNode;
-  onExpandedBatchChange: (batchId?: string) => void;
-  onFailedOnlyChange: (batchId: string, failedOnly: boolean) => void;
-  onRetryBatch: (batchId: string) => void;
-  onCancelBatch: (batchId: string) => void;
-  onRetryJob: (jobId: string) => void;
-  onPageChange: (pageIndex: number) => void;
+function RecordCell({ row }: CubbyCellContext<BackgroundJobTableRow, string>) {
+  const value = row.original;
+  if (value.rowType === "batch") {
+    const expanded = row.getIsExpanded();
+    return (
+      <Row align="center" gap="xs" className="min-w-0">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-expanded={expanded}
+          aria-label={expanded ? "Collapse batch" : "Expand batch"}
+          onClick={(event) => {
+            event.stopPropagation();
+            row.getToggleExpandedHandler()();
+          }}
+        >
+          <ChevronRight
+            className={
+              expanded
+                ? "rotate-90 transition-transform"
+                : "transition-transform"
+            }
+          />
+        </Button>
+        <span className="truncate font-mono text-xs">
+          {value.id.slice(0, 8)}
+        </span>
+      </Row>
+    );
+  }
+  if (value.rowType === "status")
+    return (
+      <Row align="center" gap="xs" className="pl-6">
+        {value.loadState === "loading" ? <Spinner size="sm" /> : null}
+        <span
+          className={
+            value.loadState === "error"
+              ? "text-destructive"
+              : "text-muted-foreground"
+          }
+        >
+          {value.name}
+        </span>
+      </Row>
+    );
+  return (
+    <span className="block truncate pl-6 font-mono text-xs">
+      {value.rowType === "job" ? value.id.slice(0, 8) : value.name}
+    </span>
+  );
 }
 
 function BackgroundJobsTable(props: BackgroundJobsTableProps) {
-  const {
-    rows,
-    selectedBatchId,
-    showFailedOnly,
-    isLoading,
-    error,
-    toolbar,
-    actions,
-    emptyState,
-    onExpandedBatchChange,
-    onFailedOnlyChange,
-    onRetryBatch,
-    onCancelBatch,
-    onRetryJob,
-    onPageChange,
-  } = props;
   const helper = useMemo(
     () => createCubbyColumnHelper<BackgroundJobTableRow>(),
     [],
   );
-  const columns = useMemo(
-    () => [
-      helper.accessor((row) => row.name, {
-        id: "record",
-        header: "Record",
-        size: 180,
-        enableCellSelection: false,
-        meta: { mono: true, mobile: { slot: "title", priority: 0 } },
-        cell: (info) => {
-          const row = info.row.original;
-          if (row.rowType === "batch") {
-            const expanded = info.row.getIsExpanded();
-            return (
-              <Row align="center" gap="xs" className="min-w-0">
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-expanded={expanded}
-                  aria-label={expanded ? "Collapse batch" : "Expand batch"}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    info.row.getToggleExpandedHandler()();
-                  }}
-                >
-                  <ChevronRight
-                    className={
-                      expanded
-                        ? "rotate-90 transition-transform"
-                        : "transition-transform"
-                    }
-                  />
-                </Button>
-                <span className="truncate font-mono text-xs">
-                  {row.id.slice(0, 8)}
-                </span>
-                {row.selectedOutsideList ? (
-                  <Badge variant="outline">Selected</Badge>
-                ) : null}
-              </Row>
-            );
-          }
-          if (row.rowType === "status") {
-            return (
-              <Row align="center" gap="xs" className="pl-6">
-                {row.status === "loading" ? <Spinner size="sm" /> : null}
-                <span
-                  className={
-                    row.status === "error"
-                      ? "text-destructive"
-                      : "text-muted-foreground"
-                  }
-                >
-                  {row.message}
-                </span>
-              </Row>
-            );
-          }
-          return (
-            <span className="block truncate pl-6 font-mono text-xs">
-              {row.rowType === "job" ? row.id.slice(0, 8) : row.name}
-            </span>
-          );
-        },
-      }),
-      helper.accessor(
-        (row) =>
-          row.rowType === "batch"
-            ? row.batch.kind
-            : row.rowType === "job"
-              ? row.job.kind
-              : undefined,
-        {
-          id: "work",
-          header: "Work",
-          size: 260,
-          sortUndefined: "last",
-          enableCellSelection: false,
-          meta: { mobile: { slot: "subtitle", priority: 10 } },
-          cell: (info) => {
-            const row = info.row.original;
-            return row.rowType === "batch" ? (
-              row.batch.kind
-            ) : row.rowType === "job" ? (
-              <JobTarget row={row} />
-            ) : null;
-          },
-        },
-      ),
-      helper.accessor(
-        (row) =>
-          row.rowType === "batch"
-            ? `${row.batch.processor} ${row.batch.source}`
-            : row.rowType === "job"
-              ? row.job.dedupeKey
-              : undefined,
-        {
-          id: "route",
-          header: "Route",
-          size: 190,
-          sortUndefined: "last",
-          enableCellSelection: false,
-          meta: { mobile: { slot: "meta", priority: 30 } },
-          cell: (info) => {
-            const row = info.row.original;
-            return row.rowType === "batch" ? (
-              <Row gap="xs">
-                <span>{row.batch.processor}</span>
-                <span>·</span>
-                <OriginLink batch={row.batch} />
-              </Row>
-            ) : row.rowType === "job" ? (
-              row.job.dedupeKey
-            ) : null;
-          },
-        },
-      ),
-      helper.accessor(
-        (row) =>
-          row.rowType === "batch"
-            ? row.batch.status
-            : row.rowType === "job"
-              ? row.job.status
-              : undefined,
-        {
-          id: "status",
-          header: "Status",
-          size: 170,
-          sortUndefined: "last",
-          enableCellSelection: false,
-          meta: { mobile: { slot: "trailing", priority: 10 } },
-          cell: (info) => {
-            const row = info.row.original;
-            return row.rowType === "batch" ? (
-              <Row gap="xs">
-                <Badge variant={BATCH_STATUS_TONE[row.batch.status]}>
-                  {row.batch.status}
-                </Badge>
-                <span className="font-mono text-2xs text-muted-foreground">
-                  {row.batch.succeededJobs + row.batch.skippedJobs}/
-                  {row.batch.totalJobs}
-                  {row.batch.failedJobs
-                    ? ` · ${row.batch.failedJobs} failed`
-                    : ""}
-                </span>
-              </Row>
-            ) : row.rowType === "job" ? (
-              <Row gap="xs">
-                <Badge variant={JOB_STATUS_TONE[row.job.status]}>
-                  {row.job.status}
-                </Badge>
-                <span className="font-mono text-2xs text-muted-foreground">
-                  {row.job.attempts}/{row.job.maxAttempts}
-                </span>
-              </Row>
-            ) : null;
-          },
-        },
-      ),
-      helper.accessor(
-        (row) =>
-          row.rowType === "batch"
-            ? row.batch.wallDurationMs
-            : row.rowType === "job"
-              ? row.job.durationMs
-              : undefined,
-        {
-          id: "timing",
-          header: "Timing",
-          size: 150,
-          sortUndefined: "last",
-          enableCellSelection: false,
-          meta: { mono: true, mobile: { slot: "meta", priority: 40 } },
-          cell: (info) => {
-            const row = info.row.original;
-            if (row.rowType === "batch")
-              return `${formatMs(row.batch.wallDurationMs) || "—"} · ${formatMs(row.batch.activeDurationMs)} active`;
-            if (row.rowType !== "job") return null;
-            const wait =
-              row.job.queuedAt && row.job.startedAt
-                ? formatMs(
-                    Math.max(
-                      0,
-                      row.job.startedAt.getTime() - row.job.queuedAt.getTime(),
-                    ),
-                  )
-                : "";
-            return `${formatMs(row.job.durationMs) || "—"}${wait ? ` · ${wait} wait` : ""}`;
-          },
-        },
-      ),
-      helper.accessor(
-        (row) =>
-          row.rowType === "batch"
-            ? row.batch.createdAt
-            : row.rowType === "job"
-              ? row.job.createdAt
-              : undefined,
-        {
-          id: "createdAt",
-          header: "Created",
-          size: 190,
-          sortFn: (left, right, columnId) =>
-            String(left.getValue(columnId) ?? "").localeCompare(
-              String(right.getValue(columnId) ?? ""),
-            ),
-          sortUndefined: "last",
-          enableCellSelection: false,
-          meta: { mono: true, mobile: { slot: "meta", priority: 60 } },
-          cell: (info) =>
-            info.getValue() ? formatDate(info.getValue()!) : null,
-        },
-      ),
-      helper.accessor(
-        (row) => (row.rowType === "job" ? row.job.lastError : undefined),
-        {
-          id: "error",
-          header: "Error",
-          size: 260,
-          sortUndefined: "last",
-          enableCellSelection: false,
-          meta: { mobile: { slot: "meta", priority: 70 } },
-          cell: (info) =>
-            info.getValue() ? (
-              <span
-                className="block truncate text-destructive"
-                title={info.getValue()!}
-              >
-                {info.getValue()}
-              </span>
-            ) : null,
-        },
-      ),
-      helper.display({
-        id: "actions",
-        header: "",
-        size: 96,
-        minSize: 40,
-        maxSize: 160,
+  const batchFilter = useCallback<CubbyFilterFn<BackgroundJobTableRow>>(
+    (row, id, value) => {
+      if (row.original.rowType !== "batch") return true;
+      if (row.original.id === props.selectedBatchId) return true;
+      const actual = String(row.getValue(id) ?? "").toLowerCase();
+      return Array.isArray(value)
+        ? value.includes(row.getValue(id))
+        : actual.includes(String(value).toLowerCase());
+    },
+    [props.selectedBatchId],
+  );
+  const columns = [
+    helper.accessor(
+      (row) =>
+        row.rowType === "batch" ? batchFilterText(row.batch) : undefined,
+      {
+        id: "search",
+        header: "Search",
+        filterFn: batchFilter,
         enableSorting: false,
         enableHiding: false,
-        enableCellSelection: false,
-        meta: { mobile: { slot: "actions", priority: 100 } },
-        cell: (info) => (
-          <RowActions
-            row={info.row.original}
-            selectedBatchId={selectedBatchId}
-            showFailedOnly={showFailedOnly}
-            onFailedOnlyChange={onFailedOnlyChange}
-            onRetryBatch={onRetryBatch}
-            onCancelBatch={onCancelBatch}
-            onRetryJob={onRetryJob}
-            onPageChange={onPageChange}
-          />
+        meta: {
+          mobile: { slot: "hidden" },
+          filterConfig: { placeholder: "Filter source, entity, or id" },
+        },
+      },
+    ),
+    ...SELECT_FILTERS.map(([id, field, header, values]) =>
+      helper.accessor(
+        (row) => (row.rowType === "batch" ? row.batch[field] : undefined),
+        {
+          id,
+          header,
+          filterFn: batchFilter,
+          enableSorting: false,
+          enableHiding: false,
+          meta: {
+            mobile: { slot: "hidden" },
+            filterConfig: {
+              placeholder: `All ${header.toLowerCase()}s`,
+              filterType: "select",
+              options: values.map((value) => ({ label: value, value })),
+            },
+          },
+        },
+      ),
+    ),
+    helper.accessor("name", {
+      id: "record",
+      header: "Record",
+      size: 180,
+      enableCellSelection: false,
+      meta: { mono: true, mobile: { slot: "title", priority: 0 } },
+      cell: RecordCell,
+    }),
+    helper.accessor("work", {
+      ...COLUMN_DEFAULTS,
+      header: "Work",
+      size: 260,
+      meta: { mobile: { slot: "subtitle", priority: 10 } },
+      cell: ({ row, getValue }) =>
+        row.original.rowType === "job" ? (
+          <JobTarget row={row.original} />
+        ) : (
+          getValue()
         ),
-      }),
-    ],
-    [
-      helper,
-      onCancelBatch,
-      onFailedOnlyChange,
-      onPageChange,
-      onRetryBatch,
-      onRetryJob,
-      selectedBatchId,
-      showFailedOnly,
-    ],
-  );
+    }),
+    helper.accessor("route", {
+      ...COLUMN_DEFAULTS,
+      header: "Route",
+      size: 190,
+      meta: { mobile: { slot: "meta", priority: 30 } },
+      cell: ({ row, getValue }) =>
+        row.original.rowType === "batch" ? (
+          <Row gap="xs">
+            <span>{row.original.batch.processor}</span>
+            <span>·</span>
+            <OriginLink batch={row.original.batch} />
+          </Row>
+        ) : (
+          getValue()
+        ),
+    }),
+    helper.accessor("status", {
+      ...COLUMN_DEFAULTS,
+      header: "Status",
+      size: 170,
+      meta: { mobile: { slot: "trailing", priority: 10 } },
+      cell: ({ row, getValue }) =>
+        getValue() ? (
+          <Row gap="xs">
+            <Badge variant={STATUS_TONE[getValue()!]}>{getValue()}</Badge>
+            <span className="font-mono text-2xs text-muted-foreground">
+              {row.original.progress}
+            </span>
+          </Row>
+        ) : null,
+    }),
+    helper.accessor("timing", {
+      ...COLUMN_DEFAULTS,
+      header: "Timing",
+      size: 150,
+      meta: { mono: true, mobile: { slot: "meta", priority: 40 } },
+    }),
+    helper.accessor("createdAt", {
+      ...COLUMN_DEFAULTS,
+      header: "Created",
+      size: 190,
+      sortFn: (left, right, id) =>
+        (left.getValue<Date | null>(id)?.getTime() ?? 0) -
+        (right.getValue<Date | null>(id)?.getTime() ?? 0),
+      meta: { mono: true, mobile: { slot: "meta", priority: 60 } },
+      cell: ({ getValue }) => (getValue() ? formatDate(getValue()!) : null),
+    }),
+    helper.display({
+      id: "actions",
+      header: "",
+      size: 96,
+      minSize: 40,
+      maxSize: 160,
+      enableSorting: false,
+      enableHiding: false,
+      enableCellSelection: false,
+      meta: { mobile: { slot: "actions", priority: 100 } },
+      cell: ({ row }) => <RowActions row={row.original} {...props} />,
+    }),
+  ];
   const layout = useCubbyTableLayout({
     key: "background-jobs",
     columns,
-    initialColumnVisibility: { createdAt: false },
+    initialColumnVisibility: {
+      search: false,
+      batchKind: false,
+      batchSource: false,
+      batchProcessor: false,
+      batchStatus: false,
+      createdAt: false,
+    },
   });
   const tableState = useTableState({
     initialSort: "createdAt",
@@ -623,45 +501,33 @@ function BackgroundJobsTable(props: BackgroundJobsTableProps) {
     urlSync: false,
   });
   const expanded = useMemo<ExpandedState>(
-    () => (selectedBatchId ? { [`batch:${selectedBatchId}`]: true } : {}),
-    [selectedBatchId],
+    () =>
+      props.selectedBatchId ? { [`batch:${props.selectedBatchId}`]: true } : {},
+    [props.selectedBatchId],
   );
   const onExpandedChange: OnChangeFn<ExpandedState> = (updater) => {
-    const next =
-      typeof updater === "function"
-        ? (updater as (value: ExpandedState) => ExpandedState)(expanded)
-        : updater;
-    const nextRows =
-      next === true
-        ? Object.fromEntries(
-            rows
-              .filter((row) => row.rowType === "batch")
-              .map((row) => [row.rowKey, true]),
-          )
-        : next;
-    const currentKey = selectedBatchId ? `batch:${selectedBatchId}` : undefined;
-    const replacement = Object.keys(nextRows).find(
-      (key) => nextRows[key] && key !== currentKey && key.startsWith("batch:"),
+    const next = typeof updater === "function" ? updater(expanded) : updater;
+    if (next === true) return;
+    const current = props.selectedBatchId
+      ? `batch:${props.selectedBatchId}`
+      : undefined;
+    const key = Object.keys(next).find(
+      (candidate) => next[candidate] && candidate !== current,
     );
-    if (replacement)
-      return onExpandedBatchChange(replacement.slice("batch:".length));
-    if (!currentKey || !nextRows[currentKey]) onExpandedBatchChange(undefined);
+    props.onExpandedBatchChange(key?.slice("batch:".length));
   };
   const table = useCubbyTable({
-    data: rows,
+    data: props.rows,
     columns: layout.columns,
     atoms: layout.atoms,
     getRowId: backgroundJobRowId,
     getSubRows: backgroundJobSubRows,
     getRowCanExpand: (row) => row.original.rowType === "batch",
+    filterFromLeafRows: false,
     paginateExpandedRows: false,
     autoResetExpanded: false,
     enableRowSelection: false,
     enableCellSelection: false,
-    rowCount: rows.length,
-    manualPagination: false,
-    manualSorting: false,
-    manualFiltering: false,
     onPaginationChange: tableState.setPagination,
     onSortingChange: tableState.setSorting,
     onColumnFiltersChange: tableState.setColumnFilters,
@@ -678,11 +544,9 @@ function BackgroundJobsTable(props: BackgroundJobsTableProps) {
     <RTable
       table={table}
       ariaLabel="Background jobs"
-      isLoading={isLoading}
-      error={error}
-      additionalToolbarContent={toolbar}
-      actions={actions}
-      emptyState={emptyState}
+      isLoading={props.isLoading}
+      error={props.error}
+      actions={props.actions}
       verticalAlign="top"
     />
   );
