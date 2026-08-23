@@ -130,7 +130,6 @@ export const LocationGalleryCard = function LocationGalleryCard({
         </Row>
       </div>
 
-      {/* Products Section */}
       <div className="p-2">
         {productImages.length > 0 ? (
           <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">

@@ -43,10 +43,6 @@ export const entityDescriptor = z.object({
    * The entity's public-id prefix (e.g. "PRD-"). Present on every entity with a
    * local table. Absent means "this entity has no public id" — today only
    * `usda-food`, which is an external identifier (`fdc_id`) with no local table.
-   *
-   * `image` was the last local-table holdout, addressed by raw uuid; that made
-   * it a permanent carve-out in every shape that could name an entity, so it
-   * was given `IMG-` rather than kept as an exception.
    */
   shortcodePrefix: z.string().optional(),
   /**

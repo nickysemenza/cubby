@@ -33,7 +33,6 @@ export function DataTablePagination<TData extends RowData>({
 }: DataTablePaginationProps<TData>) {
   return (
     <div className="flex flex-col space-y-1 px-2 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
-      {/* Selected rows info + timing - hidden on mobile to save space */}
       <div className="hidden items-center gap-2 font-mono text-2xs text-muted-foreground uppercase sm:flex">
         <table.Subscribe source={table.atoms.rowSelection!}>
           {() => (
@@ -71,10 +70,8 @@ export function DataTablePagination<TData extends RowData>({
         </table.Subscribe>
       </div>
 
-      {/* Main pagination controls */}
       {showPaginationControls && (
         <div className="flex flex-col space-y-1 sm:flex-row sm:items-center sm:space-x-4 sm:space-y-0 lg:space-x-4">
-          {/* Rows per page - simplified on mobile */}
           <Row
             align="center"
             justify="between"
@@ -87,7 +84,6 @@ export function DataTablePagination<TData extends RowData>({
             <RowsPerPageSelect table={table} />
           </Row>
 
-          {/* Page info - responsive text */}
           <Row
             align="center"
             justify="center"
@@ -102,7 +98,6 @@ export function DataTablePagination<TData extends RowData>({
             </span>
           </Row>
 
-          {/* Navigation buttons */}
           <Row align="center" justify="center" gap="xs">
             <Button
               variant="outline"

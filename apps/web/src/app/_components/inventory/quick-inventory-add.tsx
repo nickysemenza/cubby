@@ -309,7 +309,6 @@ export function QuickInventoryAdd({
         }}
         className="space-y-4"
       >
-        {/* Header */}
         <Row align="center" justify="between">
           <h4 className="font-medium text-sm">New Product</h4>
           <Button

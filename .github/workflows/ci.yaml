@@ -275,6 +275,23 @@ jobs:
           wasm: "restore"
       - name: Run repository quality gates
         run: pnpm run check
+      - name: Run auxiliary package tests
+        if: needs.scope.outputs.aux == 'true'
+        shell: bash
+        run: |
+          pnpm -r --no-sort --workspace-concurrency=4 --no-bail \
+            --filter '!@cubby/web' --if-present run test \
+            --maxWorkers=1 --reporter=default --reporter=github-actions
+      - name: Build changed auxiliary workers
+        if: needs.scope.outputs.aux == 'true'
+        shell: bash
+        run: |
+          if [[ "${{ needs.scope.outputs.usda }}" == "true" ]]; then
+            pnpm --filter @cubby/usda-api run build
+          fi
+          if [[ "${{ needs.scope.outputs.upc }}" == "true" ]]; then
+            pnpm --filter @cubby/upc-lookup run build
+          fi
 
   test-unit-web:
     name: Unit Tests - web
@@ -373,9 +390,7 @@ jobs:
   test-unit-aux:
     name: Test auxiliary packages
     needs: scope
-    if: |
-      needs.scope.outputs.aux == 'true' &&
-      (needs.scope.outputs.verify == 'true' || needs.scope.outputs.coverage == 'true')
+    if: needs.scope.outputs.coverage == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -435,7 +450,7 @@ jobs:
           name: cf-build
           path: apps/web/dist
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1
       - name: Trigger preview deploy
         if: |
           github.event_name == 'pull_request' &&
@@ -451,7 +466,7 @@ jobs:
             echo "::warning::Could not dispatch the preview deploy; CI is unaffected."
 
   test-e2e:
-    name: E2E Tests (shard ${{ matrix.shard }})
+    name: E2E Tests
     needs: scope
     if: |
       needs.scope.outputs.verify == 'true' &&
@@ -462,10 +477,6 @@ jobs:
     container:
       image: mcr.microsoft.com/playwright:v1.62.1-noble
       options: --user 1001
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2]
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
       PLAYWRIGHT_IMAGE_VERSION: "1.62.1"
@@ -553,22 +564,22 @@ jobs:
           name: cf-build
           path: apps/web/dist
       - name: Run Playwright tests
-        run: pnpm --filter @cubby/web run test:e2e --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+        run: pnpm --filter @cubby/web run test:e2e
       - name: Save Playwright report
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: playwright-report-shard-${{ matrix.shard }}
+          name: playwright-report
           path: apps/web/playwright-report/
-          retention-days: 7
+          retention-days: 1
       - name: Save Wrangler crash logs
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: wrangler-logs-shard-${{ matrix.shard }}
+          name: wrangler-logs
           path: /github/home/.config/.wrangler/logs/
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 1
 
   report-coverage:
     name: Report scheduled coverage
@@ -615,7 +626,6 @@ jobs:
         test-rust,
         test-unit-web,
         test-integration-web,
-        test-unit-aux,
         test-e2e,
       ]
     if: |
@@ -633,7 +643,6 @@ jobs:
           (needs.scope.outputs.rust != 'true' || needs.test-rust.result == 'success') &&
           needs.test-unit-web.result == 'success' &&
           needs.test-integration-web.result == 'success' &&
-          (needs.scope.outputs.aux != 'true' || needs.test-unit-aux.result == 'success') &&
           (needs.test-e2e.result == 'success' || needs.test-e2e.result == 'skipped')
         )
       )
@@ -677,7 +686,7 @@ jobs:
 
   deploy-worker:
     name: Deploy ${{ matrix.pkg }} Worker
-    needs: [scope, lint-format, test-unit-aux]
+    needs: [scope, lint-format]
     if: |
       !cancelled() &&
       github.ref == 'refs/heads/main' &&
@@ -688,8 +697,7 @@ jobs:
         needs.scope.outputs.reuse == 'true' ||
         (
           needs.scope.outputs.verify == 'true' &&
-          needs.lint-format.result == 'success' &&
-          needs.test-unit-aux.result == 'success'
+          needs.lint-format.result == 'success'
         )
       )
     runs-on: ubuntu-latest

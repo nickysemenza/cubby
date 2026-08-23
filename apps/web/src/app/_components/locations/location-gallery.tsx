@@ -517,9 +517,7 @@ export function LocationGallery() {
           fadedIds={fadedIds}
         />
 
-        {/* Main Content */}
         <div className="flex flex-1 flex-col overflow-hidden">
-          {/* Header with breadcrumb */}
           <GalleryHeader
             searchTerm={searchTerm}
             onSearchChange={setSearchTerm}
@@ -534,7 +532,6 @@ export function LocationGallery() {
             stats={stats}
           />
 
-          {/* Gallery Content */}
           <div ref={mainContentRef} className="flex-1 overflow-y-auto px-4">
             <GalleryUnifiedView
               locations={displayLocations}

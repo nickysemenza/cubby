@@ -414,11 +414,8 @@ export const entities = entityDefinitions as typeof entityDefinitions &
  * manifest card, table name columns) goes through, and keeping the indirection
  * is what would make a future per-entity divergence a one-line change.
  *
- * `usda` is NOT routed through here — it is the one detail route that
- * legitimately keys on something other than a shortcode (an external USDA
- * `fdc_id`). `image` used to be the other exception (no public shortcode);
- * it now mints one like every other entity, so it goes through
- * {@link entityDetailLink} same as anything else.
+ * `usda` is NOT routed through here — it legitimately keys on an external USDA
+ * `fdc_id` rather than a shortcode.
  */
 export const entityDetailParams = (
   shortcode: string,
