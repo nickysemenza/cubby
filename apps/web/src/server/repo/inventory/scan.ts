@@ -30,12 +30,17 @@ import { stockOnly } from "./placement";
  * Both id forms travel together on purpose: the planner and the wire speak
  * shortcodes, while the writes that follow need the uuids. Re-resolving one
  * from the other afterwards would be a second query per scan, on the hot path.
+ *
+ * The uuid is `entityId`, never `id`. Reusing `id` for it would make
+ * `row.location.id` a uuid here and a shortcode on the wire — the same key
+ * meaning two id-spaces, which is exactly the confusion the branded types
+ * exist to prevent from compiling.
  */
 export interface ProductStockRow {
-  id: InventoryId;
-  shortcode: InventoryShortcode;
+  entityId: InventoryId;
+  id: InventoryShortcode;
   amount: Amount;
-  location: { id: LocationId; shortcode: LocationShortcode; name: string };
+  location: { entityId: LocationId; id: LocationShortcode; name: string };
 }
 
 /**
@@ -63,12 +68,12 @@ export const getProductStockRows = async (
   return rows
     .filter((row) => row.location && !row.location.deletedAt)
     .map((row) => ({
-      id: row.id,
-      shortcode: unsafeInventoryShortcode(row.shortcode),
+      entityId: row.id,
+      id: unsafeInventoryShortcode(row.shortcode),
       amount: row.amount,
       location: {
-        id: row.location.id,
-        shortcode: unsafeLocationShortcode(row.location.shortcode),
+        entityId: row.location.id,
+        id: unsafeLocationShortcode(row.location.shortcode),
         name: row.location.name,
       },
     }));
@@ -122,12 +127,12 @@ export const getLiveStockRowsByIds = async (
   return rows
     .filter((row) => row.location && !row.location.deletedAt)
     .map((row) => ({
-      id: row.id,
-      shortcode: unsafeInventoryShortcode(row.shortcode),
+      entityId: row.id,
+      id: unsafeInventoryShortcode(row.shortcode),
       amount: row.amount,
       location: {
-        id: row.location.id,
-        shortcode: unsafeLocationShortcode(row.location.shortcode),
+        entityId: row.location.id,
+        id: unsafeLocationShortcode(row.location.shortcode),
         name: row.location.name,
       },
     }));

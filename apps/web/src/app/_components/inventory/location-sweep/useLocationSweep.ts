@@ -294,10 +294,20 @@ export function useLocationSweep({
         });
         setStrays([]);
         onSettled(result);
-        const skipped = result.skipped.length;
+        // Branch on the structured reason rather than a count: "already moved"
+        // and "already here" are different facts, and reporting one as the
+        // other is how a caller learns to distrust the number.
+        const goneElsewhere = result.skipped.filter(
+          (row) => row.reason === "already-moved",
+        ).length;
+        const alreadyHere = result.skipped.length - goneElsewhere;
+        const notes = [
+          goneElsewhere > 0 ? `${goneElsewhere} had already moved` : null,
+          alreadyHere > 0 ? `${alreadyHere} were already here` : null,
+        ].filter(Boolean);
         toast.success(
-          skipped > 0
-            ? `Moved ${result.moved} in · ${skipped} had already moved.`
+          notes.length > 0
+            ? `Moved ${result.moved} in · ${notes.join(" · ")}.`
             : `Moved ${result.moved} in.`,
         );
       } catch (error) {

@@ -291,9 +291,10 @@ describe("resolveScanStrays", () => {
     expect(result.moved).toBe(1);
     expect(result.skipped).toEqual([]);
 
-    // Committing the same stray a second time is a skip, not a failure: a full
-    // move onto an existing destination row hard-deletes its source, so a
-    // queued id legitimately stops existing.
+    // Replaying is a skip, not a failure. The destination was empty, so the row
+    // kept its id and simply moved — which makes the second attempt
+    // `already-here`, not `already-moved`. Those are different facts and the
+    // caller can tell them apart.
     const replay = await resolveScanStrays(
       ctx.db,
       { targetLocationId: target.shortcode, moves: [{ entryId: entry.id }] },
@@ -303,6 +304,54 @@ describe("resolveScanStrays", () => {
     expect(replay.moved).toBe(0);
     expect(replay.skipped).toHaveLength(1);
     expect(replay.skipped[0]?.entryId).toBe(entry.id);
+    expect(replay.skipped[0]?.reason).toBe("already-here");
+  });
+
+  // The other half: a full move ONTO an existing row of the same product sums
+  // the quantities and HARD-deletes the source, so the queued id genuinely
+  // stops existing. This is the case the re-read exists for.
+  it("reports a stray whose source row a merge consumed", async () => {
+    const source = await makeLocation("Merge source");
+    const target = await makeLocation("Merge target");
+    const product = await quickCreateProduct(
+      ctx.db,
+      { name: "Merged book", upc: "012345678914" },
+      TEST_ACTOR,
+    );
+    const productId = unsafeProductId(await requireId(product.id, "product"));
+    const sourceEntry = await createInventoryEntry(
+      ctx.db,
+      { productId, locationId: source.entityId, amount: each },
+      TEST_ACTOR,
+    );
+    // A row of the same product already sits at the destination.
+    await createInventoryEntry(
+      ctx.db,
+      { productId, locationId: target.entityId, amount: each },
+      TEST_ACTOR,
+    );
+
+    const result = await resolveScanStrays(
+      ctx.db,
+      {
+        targetLocationId: target.shortcode,
+        moves: [{ entryId: sourceEntry.id }],
+      },
+      TEST_ACTOR,
+    );
+    expect(result.moved).toBe(1);
+
+    const replay = await resolveScanStrays(
+      ctx.db,
+      {
+        targetLocationId: target.shortcode,
+        moves: [{ entryId: sourceEntry.id }],
+      },
+      TEST_ACTOR,
+    );
+
+    expect(replay.moved).toBe(0);
+    expect(replay.skipped[0]?.reason).toBe("already-moved");
   });
 
   it("skips a stray that already sits at the target", async () => {
@@ -326,6 +375,7 @@ describe("resolveScanStrays", () => {
     );
 
     expect(result.moved).toBe(0);
-    expect(result.skipped[0]?.reason).toBe("Already here.");
+    expect(result.skipped[0]?.reason).toBe("already-here");
+    expect(result.skipped[0]?.message).toBe("Already here.");
   });
 });

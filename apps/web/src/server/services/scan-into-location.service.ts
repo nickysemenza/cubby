@@ -18,13 +18,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import type {
   InventoryId,
   LocationId,
-  LocationShortcode,
   ProductShortcode,
-} from "@cubby/schemas/identifiers";
-import {
-  unsafeInventoryId,
-  unsafeLocationId,
-  unsafeProductId,
 } from "@cubby/schemas/identifiers";
 import type {
   ResolveScanStraysInput,
@@ -45,7 +39,10 @@ import {
   moveInventoryEntries,
 } from "~/server/repo/inventory";
 import { getProductByShortcode } from "~/server/repo/product";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import {
+  resolveCreatedOrInvariant,
+  resolveOrThrow,
+} from "~/server/repo/shortcode-resolver";
 import { runMutationSideEffects } from "./mutation-side-effects";
 import { findOrCreateByCode } from "./product-orchestration.service";
 import { planScan, type ScanFacts } from "./scan-plan";
@@ -58,20 +55,6 @@ const OBSERVED_AMOUNT = { value: 1, unit: "each" } as const;
 
 /** The partial unique index a concurrent create collides with. */
 const SLOT_CONSTRAINT = "InventoryEntry_productId_locationId_key";
-
-const resolveLocation = async (
-  db: Database,
-  shortcode: LocationShortcode,
-): Promise<LocationId> => {
-  const id = await resolveLiveShortcode(db, shortcode, "location");
-  if (!id) {
-    throw createAppError(
-      "LOCATION_NOT_FOUND",
-      `No location found for ${shortcode}.`,
-    );
-  }
-  return unsafeLocationId(id);
-};
 
 const lookupScannedProduct = async (
   db: Database,
@@ -94,7 +77,7 @@ export async function scanAtLocation(
   input: ScanAtLocationInput,
   actor: ActorContext,
 ): Promise<ScanAtLocationOut> {
-  const locationId = await resolveLocation(db, input.locationId);
+  const locationId = await resolveOrThrow(db, "location", input.locationId);
 
   // A Cubby product label names a product that already exists, so it resolves
   // by lookup. Only an external code can name one we have never seen.
@@ -109,22 +92,18 @@ export async function scanAtLocation(
           actor,
         );
 
-  const productEntityId = await resolveLiveShortcode(db, product.id, "product");
-  if (!productEntityId) {
-    throw createAppError(
-      "PRODUCT_NOT_FOUND",
-      `Product ${product.id} could not be resolved after lookup.`,
-    );
-  }
-  const productId = unsafeProductId(productEntityId);
+  // Invariant, not a 404: `findOrCreateByCode` just handed us this code, so a
+  // miss means the write path broke its own contract rather than a caller
+  // naming an absent row.
+  const productId = await resolveCreatedOrInvariant(db, "product", product.id);
 
   const stockRows = await getProductStockRows(db, productId);
   const facts: ScanFacts = {
     product: { id: product.id, name: product.name },
     stock: stockRows.map((row) => ({
-      id: row.shortcode,
+      id: row.id,
       amount: row.amount,
-      location: { id: row.location.shortcode, name: row.location.name },
+      location: { id: row.location.id, name: row.location.name },
     })),
   };
   const plan = planScan(facts, input.locationId);
@@ -151,7 +130,7 @@ export async function scanAtLocation(
   }
 
   if (plan.kind === "confirm") {
-    const entryId = stockRows.find((row) => row.shortcode === plan.entryId)?.id;
+    const entryId = stockRows.find((row) => row.id === plan.entryId)?.entityId;
     if (!entryId) {
       throw createAppError(
         "INVENTORY_NOT_FOUND",
@@ -188,17 +167,18 @@ export async function scanAtLocation(
         },
         actor,
       );
-      const entityId = await resolveLiveShortcode(db, entry.id, "inventory");
-      const backgroundBatches = entityId
-        ? await runMutationSideEffects(db, {
-            action: "created",
-            entity: {
-              entityType: "inventory",
-              entityId: unsafeInventoryId(entityId),
-            },
-            source: "inventory.scanAtLocation",
-          })
-        : [];
+      // Not a ternary that degrades to `[]`: swallowing a miss here would drop
+      // the search/embedding refresh for a row that was just created, silently.
+      const entityId = await resolveCreatedOrInvariant(
+        db,
+        "inventory",
+        entry.id,
+      );
+      const backgroundBatches = await runMutationSideEffects(db, {
+        action: "created",
+        entity: { entityType: "inventory", entityId },
+        source: "inventory.scanAtLocation",
+      });
       return {
         outcome: "added" as const,
         product: productOut,
@@ -208,12 +188,10 @@ export async function scanAtLocation(
     },
     async () => {
       const rows = await getProductStockRows(db, productId);
-      const here = rows.find(
-        (row) => row.location.shortcode === input.locationId,
-      );
+      const here = rows.find((row) => row.location.id === input.locationId);
       if (!here)
         throw createAppError("INVENTORY_NOT_FOUND", "Scan lost a race");
-      await markInventoryEntryVerified(db, here.id, actor);
+      await markInventoryEntryVerified(db, here.entityId, actor);
       return {
         outcome: "confirmed" as const,
         product: productOut,
@@ -229,21 +207,27 @@ export async function scanAtLocation(
  * Commit the strays a sweep turned up, at the end, in one move.
  *
  * Every entry is re-read first rather than trusted from the client's preview.
- * Two scans can queue strays that share a source row, and a full move onto an
- * existing destination row HARD-deletes its source — so by the time the batch
- * runs, some ids legitimately no longer exist. That is a skip, not a failure:
- * one stale row is no reason to strand the other fifty.
+ * Two things can have changed since a stray was queued: it may already sit at
+ * the target (a full move to an empty destination keeps the row and its id),
+ * or its id may be gone entirely (a move ONTO an existing row sums the
+ * quantities and HARD-deletes the source). Both are skips, not failures, and
+ * they are reported apart — one stale row is no reason to strand the other
+ * fifty, and "already here" is not the same fact as "already moved".
  */
 export async function resolveScanStrays(
   db: Database,
   input: ResolveScanStraysInput,
   actor: ActorContext,
 ): Promise<ResolveScanStraysOut> {
-  const targetLocationId = await resolveLocation(db, input.targetLocationId);
+  const targetLocationId = await resolveOrThrow(
+    db,
+    "location",
+    input.targetLocationId,
+  );
 
   const requested = new Map(input.moves.map((move) => [move.entryId, move]));
   const live = await getLiveStockRowsByIds(db, [...requested.keys()]);
-  const liveByShortcode = new Map(live.map((row) => [row.shortcode, row]));
+  const liveByShortcode = new Map(live.map((row) => [row.id, row]));
 
   const skipped: ResolveScanStraysOut["skipped"] = [];
   const items: Array<{
@@ -257,16 +241,21 @@ export async function resolveScanStrays(
     if (!row) {
       skipped.push({
         entryId,
-        reason: "That entry was already moved or removed.",
+        reason: "already-moved",
+        message: "That entry was already moved or removed.",
       });
       continue;
     }
-    if (row.location.shortcode === input.targetLocationId) {
-      skipped.push({ entryId, reason: "Already here." });
+    if (row.location.id === input.targetLocationId) {
+      skipped.push({
+        entryId,
+        reason: "already-here",
+        message: "Already here.",
+      });
       continue;
     }
     items.push({
-      inventoryEntryId: row.id,
+      inventoryEntryId: row.entityId,
       targetLocationId,
       ...(move.quantity ? { quantity: move.quantity } : {}),
     });

@@ -94,15 +94,33 @@ export const resolveScanStraysInput = z.object({
 });
 export type ResolveScanStraysInput = z.infer<typeof resolveScanStraysInput>;
 
+/**
+ * Why a queued stray did not move. Structured, not prose, so a caller can
+ * branch on it — `message` carries the sentence. Same split as
+ * `describeToolError`'s `{code, reason, message}`.
+ */
+export const scanStraySkipReason = z.enum([
+  /** The source row is gone: a prior move in this batch consumed it. */
+  "already-moved",
+  /** It was queued against a location it now sits in. */
+  "already-here",
+]);
+export type ScanStraySkipReason = z.infer<typeof scanStraySkipReason>;
+
 export const resolveScanStraysOut = z.object({
-  moved: z.number().int(),
+  moved: z.number().int().nonnegative(),
   /**
-   * A stray whose source row a previous move in this same batch already
-   * consumed. Reported rather than thrown: one item genuinely arriving is not
-   * a reason to fail the other fifty.
+   * Strays that did not move. Reported rather than thrown: a full move onto an
+   * existing destination row HARD-deletes its source, so by commit time a
+   * queued id can legitimately no longer exist — and one stale row is no
+   * reason to strand the other fifty.
    */
   skipped: z.array(
-    z.object({ entryId: inventoryShortcode, reason: z.string() }),
+    z.object({
+      entryId: inventoryShortcode,
+      reason: scanStraySkipReason,
+      message: z.string(),
+    }),
   ),
   sideEffects: mutationSideEffectsSchema,
 });
