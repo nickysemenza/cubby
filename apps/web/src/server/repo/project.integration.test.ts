@@ -18,12 +18,7 @@ import { eq, or } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { householdDaysAgo } from "~/lib/household-date";
-import {
-  image,
-  project,
-  projectDependency,
-  projectImage,
-} from "~/server/db/schema";
+import { project, projectDependency, projectImage } from "~/server/db/schema";
 import { getAuditLog } from "./audit-log";
 import { getDb, insertAndReturn } from "./database-helpers";
 import { createExpense, expenseList } from "./expense";
@@ -44,6 +39,7 @@ import {
   aggregateSubtreeDates,
   type ProjectParentRow,
 } from "./project/subtree";
+import { insertWithShortcode } from "./shortcode-utils";
 import { createTask, taskList, updateTask } from "./task";
 
 describe("project repository", () => {
@@ -402,7 +398,7 @@ describe("project repository", () => {
         projectCreateInput.parse({ name: "test project with image" }),
         ctx.actor,
       );
-    const img = await insertAndReturn(ctx.db, image, {
+    const img = await insertWithShortcode(ctx.db, "image", {
       key: "test-project-image-key",
       url: "https://example.com/test-project-image.jpg",
       filename: "test-project-image.jpg",
@@ -3186,7 +3182,7 @@ describe("project repository — imagePresenceFilter", () => {
       joinDeleted?: boolean;
     } = {},
   ) => {
-    const img = await insertAndReturn(ctx.db, image, {
+    const img = await insertWithShortcode(ctx.db, "image", {
       key: `image-presence-${entityId}-${overrides.contentType ?? "png"}`,
       url: "https://example.com/image-presence.png",
       filename: "image-presence.png",

@@ -477,12 +477,14 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
         ["productId", bag.product, "create", "get"],
         ["name", "Shortcode Miter Saw Renamed", "update"],
       ],
+      // The purchase consequences are `sideEffects` now, not top-level fields:
+      // they are things the delete CHANGED, not a different kind of result.
+      // Empty here because this expense has no purchase behind it.
       checkDelete: (out, code) =>
         expect(out).toMatchObject({
           deleted: 1,
           deletedIds: [code],
-          affectedPurchaseIds: [],
-          newlyEmptyPurchaseIds: [],
+          sideEffects: [],
         }),
     },
     {
@@ -503,8 +505,9 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
       }),
       listArgs: (bag) => ({ vendorId: bag.vendor }),
       updateArgs: { notes: "renamed" },
-      checkDelete: (out, code) =>
-        expect(out).toEqual({ deleted: 1, deletedIds: [code] }),
+      // `deleteEmpty` reports a measured count; it does not echo the ids back.
+      checkDelete: (out) =>
+        expect(out).toEqual({ deleted: 1, sideEffects: [] }),
     },
     {
       entity: "financialAccount",
@@ -598,7 +601,13 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
       await row.extraChecks?.({ caller, createdOut, code, bag });
 
       if (!tools.remove) return;
-      const deleted = await callTool(tools.remove, { ids: [code] }, caller);
+      // One `delete_entity` for every entity — the per-entity delete tools are
+      // gone. `tools.remove` now only says whether this entity is deletable.
+      const deleted = await callTool(
+        "delete_entity",
+        { entity: row.entity, ids: [code] },
+        caller,
+      );
       expectOk(deleted);
       const deletedOut = structured(deleted);
       if (row.checkDelete) row.checkDelete(deletedOut, code);
@@ -680,8 +689,11 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
     }
 
     const deleted = await callTool(
-      "delete_financial_transactions",
-      { ids: [transactionCode, batchTransactionCode] },
+      "delete_entity",
+      {
+        entity: "financialTransaction",
+        ids: [transactionCode, batchTransactionCode],
+      },
       caller,
     );
     expectOk(deleted);
@@ -802,7 +814,7 @@ describe("a wrong-entity shortcode prefix is rejected before any mutation", () =
     expect((structured(after).items as unknown[]).length).toBe(beforeCount);
   });
 
-  it("delete_locations rejects a PRODUCT shortcode instead of silently deleting nothing or the wrong row", async () => {
+  it("delete_entity rejects a PRODUCT shortcode for entity=location instead of silently deleting nothing or the wrong row", async () => {
     const caller = createTestCaller(domainRouter, ctx.db);
     const product = await callTool(
       "create_product",
@@ -818,8 +830,10 @@ describe("a wrong-entity shortcode prefix is rejected before any mutation", () =
     const productCode = structured(product).id as string;
 
     const rejected = await callTool(
-      "delete_locations",
-      { ids: [productCode] },
+      "delete_entity",
+      // A PRD- code under entity=location: rejected on the prefix, never routed
+      // to the wrong table.
+      { entity: "location", ids: [productCode] },
       caller,
     );
     expect(rejected.isError).toBe(true);
@@ -936,7 +950,9 @@ describe("specialized tools round-trip on shortcodes", () => {
       caller,
     );
     expectOk(merged);
-    expect(structured(merged).merged).toBe(1);
+    expect(
+      (structured(merged).summary as { succeeded: number }).succeeded,
+    ).toBe(1);
 
     const aliasAfter = await callTool(
       "get_ingredient",
@@ -1245,7 +1261,10 @@ describe("specialized tools round-trip on shortcodes", () => {
       caller,
     );
     expectOk(merged);
-    expect(structured(merged).id).toBe(keepCode);
+    // `{ vendor, mergeSummary }` — the merge now reports what it moved.
+    expect((structured(merged) as { vendor: { id: string } }).vendor.id).toBe(
+      keepCode,
+    );
 
     // The loser's code is a permanent tombstone — it resolves to nothing, not
     // to the keeper.

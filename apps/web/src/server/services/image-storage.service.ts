@@ -1,3 +1,4 @@
+import { unsafeImageShortcode } from "@cubby/schemas/identifiers";
 import type {
   AttachFileResponse,
   CreateFileUploadInput,
@@ -142,7 +143,11 @@ export const importImageFromUrl = async (
     if (key) {
       const existing = await getImageByKey(db, key);
       if (existing) {
-        return { imageId: existing.id, key: existing.key, url: existing.url };
+        return {
+          imageId: existing.id,
+          key: existing.key,
+          url: existing.url,
+        };
       }
 
       const createdImage = await createUploadedImageRecord(db, {
@@ -152,7 +157,11 @@ export const importImageFromUrl = async (
         contentType: "application/octet-stream",
         url: params.sourceUrl,
       });
-      return { imageId: createdImage.id, key, url: params.sourceUrl };
+      return {
+        imageId: createdImage.id,
+        key,
+        url: params.sourceUrl,
+      };
     }
   }
 
@@ -182,7 +191,11 @@ export const importImageFromUrl = async (
     throw error;
   }
 
-  return { imageId: createdImage.id, key: stored.key, url: stored.url };
+  return {
+    imageId: createdImage.id,
+    key: stored.key,
+    url: stored.url,
+  };
 };
 
 // `data:<type>;base64,<payload>` — capture the (optional) inline type, the
@@ -367,7 +380,7 @@ export const attachFileToEntity = async (
     );
     if (existing) {
       return {
-        imageId: existing.id,
+        imageId: unsafeImageShortcode(existing.shortcode),
         url: existing.url,
         filename: existing.filename,
         contentType: existing.contentType,
@@ -537,7 +550,7 @@ export const attachFileToEntity = async (
   }
 
   return {
-    imageId: created.row.id,
+    imageId: unsafeImageShortcode(created.row.shortcode),
     url: created.row.url,
     filename: created.row.filename,
     contentType: created.row.contentType,

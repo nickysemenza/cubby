@@ -61,7 +61,7 @@ export const PurchaseDocuments: FC<{ purchase: PurchaseOut }> = ({
   });
 
   const attachedIds = useMemo(
-    () => new Set(purchase.images.map((file) => file.id)),
+    () => new Set<string>(purchase.images.map((file) => file.id)),
     [purchase.images],
   );
 

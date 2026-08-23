@@ -283,6 +283,65 @@ export const impactItemSchema = z.object({
 });
 export type ImpactItem = z.infer<typeof impactItemSchema>;
 
+/**
+ * The same shape in two id spaces, kept apart by the type system.
+ *
+ * `byTargetId` is keyed by whatever id the producer had. Inside a planner that
+ * is the RAW DATABASE UUID; on the wire it must be the public shortcode, because
+ * a uuid may never cross the API boundary. One structural type served both, so
+ * nothing stopped an internally-built item from being returned directly — the
+ * hazard is invisible at a call site since both are `Record<string, number>`.
+ *
+ * The brands make them mutually unassignable, and {@link toPublicImpact} is the
+ * only way to obtain a `PublicImpactItem`. So the translation cannot be
+ * forgotten; it can only be performed.
+ *
+ * Both brands are type-level only — the runtime value is unchanged, and an
+ * existing `ImpactItem` still satisfies the underlying shape.
+ */
+export const internalImpactItemSchema =
+  impactItemSchema.brand("InternalImpactItem");
+export type InternalImpactItem = z.infer<typeof internalImpactItemSchema>;
+
+export const publicImpactItemSchema =
+  impactItemSchema.brand("PublicImpactItem");
+export type PublicImpactItem = z.infer<typeof publicImpactItemSchema>;
+
+/**
+ * What to do with a target id that has no public id.
+ *
+ * A preview is advisory, so dropping an unmappable key merely understates the
+ * impact — that was the pre-existing behavior and it stays available, now named
+ * rather than implicit. A mutation RESULT is a different matter: silently
+ * dropping a blocked id would report fewer blockers than actually blocked, so
+ * those callers pass `"throw"` and find out.
+ */
+export type UnmappedTargetPolicy = "drop" | "throw";
+
+export const toPublicImpact = (
+  item: ImpactItem,
+  publicIdByEntityId: ReadonlyMap<string, string>,
+  onUnmapped: UnmappedTargetPolicy,
+): PublicImpactItem => {
+  const byTargetId: Record<string, number> = {};
+  for (const [entityId, count] of Object.entries(item.byTargetId)) {
+    const publicId = publicIdByEntityId.get(entityId);
+    if (publicId === undefined) {
+      if (onUnmapped === "throw") {
+        throw new Error(
+          `toPublicImpact(${item.code}): no public id for target ${entityId}`,
+        );
+      }
+      continue;
+    }
+    byTargetId[publicId] = count;
+  }
+  // `total` is deliberately NOT recomputed from the surviving keys: it is the
+  // count across all selected targets, and under "drop" it stays honest about
+  // the impact even when a key could not be named.
+  return { ...item, byTargetId } as PublicImpactItem;
+};
+
 /** Entities whose delete has a preview planner. */
 export const previewDeleteEntitySchema = z.enum([
   "product",
@@ -568,9 +627,11 @@ export const previewOperationSchema = z.object({
    * it is not a lock and the mutation rechecks everything in its transaction.
    */
   canProceed: z.boolean(),
-  blockers: z.array(impactItemSchema),
-  changes: z.array(impactItemSchema),
-  sideEffects: z.array(impactItemSchema),
+  // Branded: this is a wire shape, so every item must have come through
+  // `toPublicImpact` and be keyed by shortcode rather than raw uuid.
+  blockers: z.array(publicImpactItemSchema),
+  changes: z.array(publicImpactItemSchema),
+  sideEffects: z.array(publicImpactItemSchema),
   /** Present only on a merge preview asked for without a `keepId`. */
   candidates: z.array(mergeCandidateSchema).optional(),
   generatedAt: z.iso.datetime(),

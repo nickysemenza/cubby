@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { MAX_EXTERNAL_HTML_BYTES } from "@cubby/shared";
+import { amount } from "./codec";
 import {
   cookbookShortcode,
   productShortcode,
@@ -32,7 +33,10 @@ const importRecipeTimes = z.object({
 });
 
 // Structured yield, as the URL scraper produces it (parsed from schema.org).
-const structuredYield = z.object({ value: z.number(), unit: z.string() });
+// Reuses `amount` — the recipe-scraper Rust grammar (recipebridge's
+// `WRecipeYield`) always emits a real unit token, so `amount`'s `unit.min(1)`
+// tightening over the previous bare `z.string()` cannot reject its output.
+const structuredYield = amount;
 
 const importRecipeMeta = z.object({
   title: z.string(),

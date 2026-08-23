@@ -98,6 +98,7 @@ import {
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
 import {
+  resolveAllOrThrow,
   resolveAllPresent,
   resolveFilterIds,
   resolveLiveShortcode,
@@ -925,11 +926,22 @@ export const duplicateRecipe = async (
       // copy, no new Image row. Two recipes sharing an Image row is expected
       // and harmless: Image lifetime is governed by its own reference count
       // (how many join rows still point at it), not by recipe ownership.
+      //
+      // `source.images[].id` are public `IMG-` shortcodes (`getRecipeByID`'s
+      // own output) — resolved back to uuids here since `RecipeImage.imageId`
+      // is the FK. A miss would mean an image `source` just read moments ago
+      // vanished mid-duplicate, so this throws rather than silently cloning a
+      // shorter image list.
       if (source.images.length > 0) {
+        const imageIds = await resolveAllOrThrow(
+          tx,
+          "image",
+          source.images.map((img) => img.id),
+        );
         await tx.insert(recipeImage).values(
-          source.images.map((img, i) => ({
+          imageIds.map((imageId, i) => ({
             recipeId: createdRecipeId,
-            imageId: img.id,
+            imageId,
             sortOrder: i,
           })),
         );
@@ -1210,8 +1222,8 @@ export const deleteRecipes = async (
   dbOrTx: Database | DrizzleTransaction,
   ids: RecipeId[],
   actor: ActorContext,
-): Promise<{ detachedImageKeys: string[] }> => {
-  if (ids.length === 0) return { detachedImageKeys: [] };
+): Promise<{ detachedImageKeys: string[]; deleted: number }> => {
+  if (ids.length === 0) return { detachedImageKeys: [], deleted: 0 };
 
   return await withTransactionOn(dbOrTx, async (tx) => {
     // Row-level locks: proves the ids exist and aren't already deleted, and

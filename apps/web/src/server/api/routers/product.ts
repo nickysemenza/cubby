@@ -746,7 +746,7 @@ const deleteItem = createDeleteProcedure<ProductShortcode>(
     // unreadable once soft-deleted.
     const ingredientIds = await linkedIngredientIds(services.db, shortcodes);
     const ids = await productShortcodes.all(services.db, shortcodes);
-    const { detachedImageKeys } = await deleteProducts(
+    const { detachedImageKeys, deleted } = await deleteProducts(
       services.db,
       ids,
       services.actorContext,
@@ -768,7 +768,10 @@ const deleteItem = createDeleteProcedure<ProductShortcode>(
         ingredientIds,
         { source: "product.delete" },
       );
-    return [...(backgroundBatches ?? []), ...recipeBatches];
+    return {
+      deleted,
+      backgroundBatches: [...(backgroundBatches ?? []), ...recipeBatches],
+    };
   },
   productShortcode,
 );

@@ -8,6 +8,7 @@ import { z } from "zod";
 import { productRelatedFilterFields } from "./related-view";
 import {
   auditDateFilterFields,
+  dateRangeFields,
   deriveUpdateData,
   timestampedFields,
 } from "./base-entity";
@@ -18,6 +19,12 @@ import {
 } from "./data-quality";
 import { amount } from "./codec";
 import { requiredName } from "./common";
+import {
+  money,
+  moneyNullable,
+  positiveMoney,
+  positiveMoneyNullable,
+} from "./money";
 import {
   externalIdInputs,
   externalIdKind,
@@ -30,6 +37,7 @@ import { isbn } from "./isbn";
 import {
   cookbookShortcode,
   expenseShortcode,
+  imageShortcode,
   ingredientShortcode,
   inventoryShortcode,
   locationShortcode,
@@ -167,10 +175,7 @@ const productCreateShape = {
     .describe(
       "Link this product to an ingredient (its id) so recipes using that ingredient can cost from this product.",
     ),
-  price: z
-    .number()
-    .nonnegative()
-    .nullable()
+  price: positiveMoneyNullable
     .optional()
     .describe(
       "Current chosen per-each costing/replacement price ($), not historical spend. 0 means genuinely free; null means no current price is recorded.",
@@ -205,14 +210,18 @@ export const productCreateInput = z.object(productCreateShape);
 // is update-only.
 export const productUpdateData = deriveUpdateData(productCreateShape, {
   extend: {
+    // Public `IMG-` codes, as returned by the web `ProductOut.images[].id` —
+    // resolved to uuids in the repo before they reach the `ProductImage` join
+    // table. The MCP surface is a separate schema (`mcpProductUpdateInput`
+    // below) that still speaks raw uuids, matching `productMcpImageOut`.
     removeImageIds: z
-      .array(z.uuid())
+      .array(imageShortcode)
       .optional()
       .describe(
         "Image ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
       ),
     imageOrder: z
-      .array(z.uuid())
+      .array(imageShortcode)
       .optional()
       .describe("existing image ids in display order; first = cover"),
   },
@@ -394,8 +403,7 @@ export const productFilterFields = {
   ingredientIdFilter: entityFilterList(ingredientShortcode).optional(),
   taskStatusFilter: oneOrMany(taskStatusSchema).optional(),
   taskOpenOnly: z.boolean().optional(),
-  taskDueFrom: plainDate.optional(),
-  taskDueTo: plainDate.optional(),
+  ...dateRangeFields("taskDue"),
   tagFilters: z
     .array(z.string())
     .optional()
@@ -538,8 +546,7 @@ export type ProductMovementKind = z.infer<typeof productMovementKind>;
 export const productMovementTimelineInput = z
   .object({
     filters: productFiltersSchema,
-    movementFrom: plainDate.optional(),
-    movementTo: plainDate.optional(),
+    ...dateRangeFields("movement"),
     order: z.enum(["asc", "desc"]).default("desc"),
   })
   .refine(
@@ -561,7 +568,7 @@ const productMovementLineOut = z.object({
   productId: productShortcode,
   name: z.string(),
   kind: productMovementKind,
-  cost: z.number().nullable(),
+  cost: moneyNullable,
   quantity: z.number().nullable(),
   signedQuantity: z.number().nullable(),
   expenseDate: plainDate,
@@ -607,9 +614,12 @@ export const productMovementTimelineOut = z.object({
     matchingProducts: z.number().int().nonnegative(),
     productsWithMovements: z.number().int().nonnegative(),
     movementCount: z.number().int().nonnegative(),
-    spent: z.number(),
-    recovered: z.number().nonnegative(),
-    netCost: z.number(),
+    spent: money,
+    // Read shape but constrained nonnegative like a write boundary — a
+    // refunded/recovered amount can't be negative by construction, so this is
+    // an intentional invariant rather than a convention drift. See money.ts.
+    recovered: positiveMoney,
+    netCost: money,
     unknownAmountCount: z.number().int().nonnegative(),
   }),
   extent: z.object({ from: plainDate, to: plainDate }).nullable(),
@@ -750,8 +760,8 @@ export const productDiscardOut = z.object({
 export type ProductDiscardOut = z.infer<typeof productDiscardOut>;
 
 export const productPricingOut = z.object({
-  derivedPrice: z.number().nullable(),
-  effectivePrice: z.number().nullable(),
+  derivedPrice: moneyNullable,
+  effectivePrice: moneyNullable,
   source: z.enum(["explicit", "derived", "none"]),
   knownExpenseCount: z.number().int().nonnegative(),
   unknownExpenseCount: z.number().int().nonnegative(),
@@ -807,12 +817,9 @@ const productTopLevelFields = {
     .describe("product category for filtering"),
   images: z.array(imageOut),
   externalIds: z.array(externalIdOut),
-  price: z
-    .number()
-    .nullable()
-    .describe(
-      "Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.",
-    ),
+  price: moneyNullable.describe(
+    "Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.",
+  ),
   pricing: productPricingOut,
   usdaUnavailable: z.boolean().nullable(),
   stockTracked: z.boolean().nullable(),
@@ -854,7 +861,7 @@ export const productLookupUpcOut = z.object({
     .object({
       name: z.string(),
       manufacturer: z.string(),
-      price: z.number().nullable(),
+      price: moneyNullable,
       source: z.string(),
       category: z.string().nullable(),
       description: z.string().nullable(),
@@ -884,7 +891,7 @@ const productIngredientOut = z.object({
 const productInventoryFields = {
   id: inventoryShortcode,
   amount,
-  valuation: z.number().nullable(),
+  valuation: moneyNullable,
   // Last deliberate recount (null = never). `updatedAt` moves on any write —
   // including a price-driven valuation recompute — so it can't stand in for
   // "when was this count last confirmed".
@@ -969,7 +976,9 @@ export const productPickerItemOut = z.object({
   name: z.string(),
   manufacturer: z.string(),
   category: productCategory.nullable(),
-  price: z.number().nonnegative().nullable(),
+  // Read shape but constrained nonnegative like a write boundary; kept as-is
+  // (see money.ts convention note) rather than silently loosened here.
+  price: positiveMoneyNullable,
   coverImageUrl: z.string().nullable(),
   quantityLedger: productQuantityLedgerOut,
   onHand: z.discriminatedUnion("state", [
@@ -1087,7 +1096,7 @@ export const productListItemOut = z.object({
   // IS the net basis here — negative rows (refunds, disposals) are real in
   // this ledger, so they telescope correctly. 0 for a product with no
   // expenses, never null.
-  expenseTotal: z.number(),
+  expenseTotal: money,
   // A product can appear on several Expense lines/Purchases. The table shows
   // the latest live Purchase date as the compact scalar provenance cue.
   purchaseDate: plainDate.nullable(),
@@ -1278,7 +1287,7 @@ export const productQuickCreatePayload = z.object({
   expectedQuantity: z.number().int().positive().nullable().optional(),
   model: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
-  price: z.number().nonnegative().nullable().optional(),
+  price: positiveMoneyNullable.optional(),
   category: productCategory.nullable().optional(),
 });
 
@@ -1331,10 +1340,7 @@ export const mcpProductCreateInput = z.object({
     .describe(
       "Link this product to an ingredient (its id) so recipes using that ingredient can cost from this product.",
     ),
-  price: z
-    .number()
-    .nonnegative()
-    .nullable()
+  price: positiveMoneyNullable
     .optional()
     .describe(
       "Current chosen per-each costing/replacement price ($), not historical spend. 0 means genuinely free; null means no current price is recorded.",
@@ -1405,7 +1411,7 @@ export const mcpProductUpdateInput = z.object({
   expectedQuantity: z.number().int().positive().nullable().optional(),
   category: productCategory.nullable().optional(),
   ingredientId: ingredientShortcode.nullable().optional(),
-  price: z.number().nonnegative().nullable().optional(),
+  price: positiveMoneyNullable.optional(),
   unitMappings: z
     .array(mcpUnitMappingInput)
     .optional()
@@ -1421,13 +1427,13 @@ export const mcpProductUpdateInput = z.object({
       "whether shelf records are kept for this kind of thing: null = undecided, false = reviewed/no shelf claim, true = tracked",
     ),
   removeImageIds: z
-    .array(z.uuid())
+    .array(imageShortcode)
     .optional()
     .describe(
-      "Product image ids to detach; an id not currently attached to this product is silently ignored. Detaching DELETES the stored file when nothing else references it — there is no restore.",
+      "Product image ids (`IMG-` codes, as returned by attach_file and get_product) to detach; an id not currently attached to this product is silently ignored. Detaching DELETES the stored file when nothing else references it — there is no restore.",
     ),
   imageOrder: z
-    .array(z.uuid())
+    .array(imageShortcode)
     .optional()
     .describe("Product image ids in display order; first valid image is cover"),
 });
@@ -1443,8 +1449,8 @@ const productMcpFields = {
   primaryGtin: gtin.nullable(),
   category: productCategory.nullable(),
   tags: z.array(z.string()),
-  price: z.number().nullable().describe("Effective valuation/costing price"),
-  priceOverride: z.number().nullable(),
+  price: moneyNullable.describe("Effective valuation/costing price"),
+  priceOverride: moneyNullable,
   pricing: productPricingOut,
   expectedQuantity: z.number().int().positive().nullable(),
   imageCount: z.number().int().nonnegative(),
@@ -1473,7 +1479,9 @@ export const productMcpOut = z.object(productMcpFields);
 export type ProductMcpOut = z.infer<typeof productMcpOut>;
 
 export const productMcpImageOut = z.object({
-  id: z.uuid(),
+  // `imageShortcode`, not a uuid: images carry public `IMG-` codes now, so the
+  // MCP boundary no longer needs an image exception.
+  id: imageShortcode,
   url: z.url(),
   key: z.string(),
   filename: z.string(),
@@ -1496,7 +1504,7 @@ export const productMcpImageOut = z.object({
 /** Detailed MCP projection used only by get/mutations that need media state. */
 export const productMcpDetailOut = z.object({
   ...productMcpFields,
-  coverImageId: z.uuid().nullable(),
+  coverImageId: imageShortcode.nullable(),
   images: z.array(productMcpImageOut),
 });
 export type ProductMcpDetailOut = z.infer<typeof productMcpDetailOut>;

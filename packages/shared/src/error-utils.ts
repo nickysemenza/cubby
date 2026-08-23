@@ -98,7 +98,18 @@ export const AppErrors = {
   PROJECT_HAS_TASKS: "PRECONDITION_FAILED",
   PROJECT_HAS_EXPENSES: "PRECONDITION_FAILED",
   FINANCIAL_ACCOUNT_HAS_TRANSACTIONS: "PRECONDITION_FAILED",
+  // The second blocking edge on a financial account, and until now a declared
+  // policy entry with no runtime: `StatementRow.accountId` is nullable, so a
+  // detach would have succeeded silently — discarding the triage judgment that
+  // assigned the row while leaving the row itself looking untriaged.
+  FINANCIAL_ACCOUNT_HAS_STATEMENT_ROWS: "PRECONDITION_FAILED",
   FINANCIAL_ACCOUNT_SOURCE_ALIAS_CONFLICT: "CONFLICT",
+  // Two refusals that are business rules rather than FK edges, so they cannot
+  // live in an edge policy. Both previously shared the generic
+  // CONSTRAINT_VIOLATION, which left callers unable to tell them apart — or to
+  // tell either apart from any other constraint failure.
+  LOCATION_IS_ROOT: "PRECONDITION_FAILED",
+  PURCHASE_NOT_EMPTY: "PRECONDITION_FAILED",
   FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT: "CONFLICT",
   FINANCIAL_TRANSACTION_POSTED_DATE_REQUIRED: "BAD_REQUEST",
   // A vendor can't be deleted while charges still point at it — same rule as

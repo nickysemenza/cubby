@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { money } from "./money";
 
 export const financialReconciliationStatus = z.enum([
   "unknown",
@@ -15,11 +16,11 @@ export const financialReconciliationSummary = z.object({
   transactionCount: z.number().int().nonnegative(),
   postedTransactionCount: z.number().int().nonnegative(),
   outstandingTransactionCount: z.number().int().nonnegative(),
-  postedTotal: z.number().finite(),
-  projectedTotal: z.number().finite(),
+  postedTotal: money.finite(),
+  projectedTotal: money.finite(),
   /** Posted refund evidence only; negative under the settlement sign convention. */
-  postedRefundTotal: z.number().finite(),
-  delta: z.number().finite().nullable(),
+  postedRefundTotal: money.finite(),
+  delta: money.finite().nullable(),
 });
 export type FinancialReconciliationSummary = z.infer<
   typeof financialReconciliationSummary

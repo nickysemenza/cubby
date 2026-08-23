@@ -1147,7 +1147,7 @@ describe("purchase repository — mergePurchases", () => {
     label: string,
   ) => {
     const purchaseIdUuid = await purchaseUuid(ctx.db, purchaseShortcodeId);
-    const img = await insertAndReturn(ctx.db, image, {
+    const img = await insertWithShortcode(ctx.db, "image", {
       key: `test-documents/${label}.pdf`,
       url: `https://example.com/${label}.pdf`,
       filename: `${label}.pdf`,
@@ -1639,7 +1639,7 @@ describe("purchase repository — deletion cascades", () => {
       ctx.actor,
     );
     const purchaseId = await purchaseUuid(ctx.db, emptyPurchase.id);
-    const document = await insertAndReturn(ctx.db, image, {
+    const document = await insertWithShortcode(ctx.db, "image", {
       key: "test-documents/empty-delete.pdf",
       url: "https://example.com/empty-delete.pdf",
       filename: "empty-delete.pdf",
@@ -1673,7 +1673,10 @@ describe("purchase repository — deletion cascades", () => {
         .where(eq(purchaseImage.id, join.id)),
     ).toHaveLength(0);
     expect(
-      await getDb(ctx.db).select().from(image).where(eq(image.id, document.id)),
+      await getDb(ctx.db)
+        .select()
+        .from(image)
+        .where(eq(image.shortcode, document.id)),
     ).toHaveLength(0);
 
     const auditRows = await getDb(ctx.db)
@@ -1722,7 +1725,7 @@ describe("purchase repository — deletion cascades", () => {
         [emptyPurchase.id, line.purchaseId!],
         ctx.actor,
       ),
-    ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });
+    ).rejects.toMatchObject({ cause: { reason: "PURCHASE_NOT_EMPTY" } });
 
     await expect(
       getPurchaseByShortcode(ctx.db, emptyPurchase.id),
@@ -1779,7 +1782,7 @@ describe("purchase repository — deletion cascades", () => {
 
     await expect(
       deleteEmptyPurchases(ctx.db, [purchaseWithSettlement.id], ctx.actor),
-    ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });
+    ).rejects.toMatchObject({ cause: { reason: "PURCHASE_NOT_EMPTY" } });
 
     // The refusal must leave the settlement evidence exactly as it was — which
     // now means its allocation, the mirror column being gone.
@@ -1811,7 +1814,7 @@ describe("purchase repository — deletion cascades", () => {
     const chargeId = line.purchaseId!;
     const chargeUuid = await purchaseUuid(ctx.db, chargeId);
 
-    const img = await insertAndReturn(ctx.db, image, {
+    const img = await insertWithShortcode(ctx.db, "image", {
       key: "test-documents/deleted-charge.pdf",
       url: "https://example.com/deleted-charge.pdf",
       filename: "deleted-charge.pdf",
@@ -2595,13 +2598,19 @@ describe("purchase repository — documents", () => {
       documentKind: "invoice",
     });
     const [before] = await getDb(ctx.db)
-      .select({ key: image.key })
+      .select({ key: image.key, shortcode: image.shortcode })
       .from(image)
-      .where(eq(image.id, attached.imageId));
+      .where(eq(image.shortcode, attached.imageId));
 
+    // `attached.imageId` is the public `IMG-` code, which is exactly what
+    // `removeImageIds` wants — a caller can now feed an attach response
+    // straight back in without a round trip through `getPurchaseByID`.
     const { detachedImageKeys } = await updatePurchase(
       ctx.db,
-      { id: charge.id, data: { removeImageIds: [attached.imageId] } },
+      {
+        id: charge.id,
+        data: { removeImageIds: [attached.imageId] },
+      },
       ctx.actor,
     );
 
@@ -2611,7 +2620,7 @@ describe("purchase repository — documents", () => {
       await getDb(ctx.db)
         .select()
         .from(image)
-        .where(eq(image.id, attached.imageId)),
+        .where(eq(image.shortcode, attached.imageId)),
     ).toHaveLength(0);
     expect(
       await getDb(ctx.db).query.purchaseImage.findMany({
@@ -2657,12 +2666,15 @@ describe("purchase repository — documents", () => {
     // MCP and browser uploads share the same purchase-scoped key allocator.
     const [row] = await getDb(ctx.db)
       .select({
+        // `id` too: the join table keys on the uuid, while `result.imageId` is
+        // the public code, so the assertions below need both.
+        id: image.id,
         key: image.key,
         contentType: image.contentType,
         status: image.status,
       })
       .from(image)
-      .where(eq(image.id, result.imageId));
+      .where(eq(image.shortcode, result.imageId));
     expect(row?.key).toContain(`/documents/${charge.id}/metal-invoice-`);
     expect(row?.key).toMatch(/\.pdf$/);
     expect(row?.contentType).toBe("application/pdf");
@@ -2673,7 +2685,7 @@ describe("purchase repository — documents", () => {
       where: eq(purchaseImage.purchaseId, chargeUuid),
     });
     expect(joins).toHaveLength(1);
-    expect(joins[0]?.imageId).toBe(result.imageId);
+    expect(joins[0]?.imageId).toBe(row?.id);
     expect(joins[0]?.deletedAt).toBeNull();
 
     const withDocuments = await purchaseList(
@@ -2713,7 +2725,7 @@ describe("purchase repository — documents", () => {
       .where(
         and(
           eq(purchaseImage.purchaseId, chargeUuid),
-          eq(purchaseImage.imageId, result.imageId),
+          eq(purchaseImage.imageId, row!.id),
         ),
       );
     expect(

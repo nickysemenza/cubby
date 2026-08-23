@@ -53,12 +53,12 @@ const procedures = createSearchableEntityCrudProcedures({
     list: (services, filters, sorts, pagination) =>
       listFinancialAccounts(services.db, filters, sorts, pagination),
     delete: async (services, ids) => {
-      await deleteFinancialAccounts(
+      const { deleted } = await deleteFinancialAccounts(
         services.db,
         ids.map(unsafeFinancialAccountShortcode),
         services.actorContext,
       );
-      return [];
+      return { deleted };
     },
   },
   entityName: "financialAccount",

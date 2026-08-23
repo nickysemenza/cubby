@@ -12,10 +12,11 @@ import {
   GTIN_SOURCE,
   storedExternalIdUrl,
 } from "@cubby/schemas/external-id";
-import type {
-  IngredientId,
-  LocationId,
-  ProductId,
+import {
+  type IngredientId,
+  type LocationId,
+  type ProductId,
+  unsafeImageShortcode,
 } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import {
@@ -52,7 +53,7 @@ import {
 } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
-import type { Database, DrizzleTransaction } from "~/server/db";
+import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   cookbook,
   expense,
@@ -104,6 +105,7 @@ import {
   notDeleted,
   presenceCondition,
   relations,
+  unwrapDb,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
@@ -459,7 +461,10 @@ export const getProductImagesByProductIds = async (
     .orderBy(asc(productImage.sortOrder), asc(productImage.createdAt));
 
   for (const row of rows) {
-    result[row.productId]?.push(row.image);
+    result[row.productId]?.push({
+      ...row.image,
+      id: unsafeImageShortcode(row.image.shortcode),
+    });
   }
 
   return result;
@@ -2178,7 +2183,7 @@ export const quickCreateProduct = async (
 const PRODUCT_RETAINING_DEPENDENTS: Record<
   ProductRetainingEdgeKey,
   (
-    tx: DrizzleTransaction,
+    tx: DrizzleClient | DrizzleTransaction,
     ids: ProductId[],
   ) => Promise<Array<{ productId: ProductId | null }>>
 > = {
@@ -2267,8 +2272,8 @@ export const deleteProducts = async (
   db: Database,
   ids: ProductId[],
   actor: ActorContext,
-): Promise<{ detachedImageKeys: string[] }> => {
-  if (ids.length === 0) return { detachedImageKeys: [] };
+): Promise<{ detachedImageKeys: string[]; deleted: number }> => {
+  if (ids.length === 0) return { detachedImageKeys: [], deleted: 0 };
 
   return await withTransaction(db, async (tx) => {
     // Lock products and validate they exist and aren't already deleted
@@ -2362,17 +2367,17 @@ export const deleteProducts = async (
  * transaction; nothing here is a lock or a permission.
  */
 export const previewDeleteProducts = async (
-  db: Database,
+  db: Database | DrizzleTransaction,
   ids: ProductId[],
 ): Promise<{ blockers: ImpactItem[]; changes: ImpactItem[] }> => {
-  const dbClient = getDb(db);
+  const dbClient = unwrapDb(db);
 
   const blockers: (ImpactItem | null)[] = [];
   for (const [key, disposition] of Object.entries(PRODUCT_DELETE_EDGE_POLICY)) {
     if (disposition.effect !== "block") continue;
     const dependents = await PRODUCT_RETAINING_DEPENDENTS[
       key as ProductRetainingEdgeKey
-    ](dbClient as unknown as DrizzleTransaction, ids);
+    ](dbClient, ids);
     const byTargetId: Record<string, number> = {};
     for (const { productId } of dependents) {
       if (productId) byTargetId[productId] = (byTargetId[productId] ?? 0) + 1;

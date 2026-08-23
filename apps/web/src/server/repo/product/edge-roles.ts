@@ -3,30 +3,36 @@
  * edge semantics — replacing the "must agree on both" prose comment that used
  * to sit next to `deleteProducts` in `crud.ts`.
  *
- * `product` has twelve incoming edges (`INCOMING_EDGES.product` in
+ * `product` has fourteen incoming edges (`INCOMING_EDGES.product` in
  * `entity-incoming-edges.ts`). Their *stable roles* now live in
  * `ENTITY_EDGE_SEMANTICS.product` (`~/server/db/entity-edge-semantics`)
  * alongside every other entity's, because a role describes what an edge means
  * and not what deleting does about it. Three are **acquisition** evidence —
  * proof the thing was actually owned at some point — two are durable
- * **history**, one is a retained Wishlist **association**, one is a
- * **reference** from a Location's own record, one is **usage** by a live kit,
- * one is **composition** (a kit's own component list), two are **metadata**,
+ * **history**, one is a retained Wishlist **association**, two are a
+ * **reference** from another row's own record, one is **usage** by a live kit,
+ * one is **composition** (a kit's own component list), three are **metadata**,
  * and one is **media**:
  *
- *  - acquisition: `InventoryEntry.productId` (it's on a shelf right now) and
+ *  - acquisition: `InventoryEntry.productId` (it's on a shelf right now),
  *    `Expense.productId` (it was bought — the ledger's net cost and
  *    owned/sold window derive from this row, so an orphaned product would
- *    silently corrupt that derivation with no restore path).
+ *    silently corrupt that derivation with no restore path), and
+ *    `PurchaseProduct.productId` (the vendor order it was bought on —
+ *    provenance an allocation-basis Expense can never carry).
  *  - history: `Task.subjectProductId` (work performed on the product; deleting
  *    the subject would leave that durable task history nameless) and
  *    `ProjectToolUsage.productId` (a reusable tool's project-use history).
  *  - association: `WishCandidate.productId` (a Tool alternative remains
  *    meaningful until removed from its Wishlist entries).
  *  - reference: `Location.productId` (a Location that IS this product — the
- *    bin itself). Retaining because a linked Location deliberately carries no
- *    `type` of its own: the SKU is its form factor, so orphaning the Product
- *    leaves the Location with no identity at all, not merely a broken link.
+ *    bin itself) and `Cookbook.productId` (a Cookbook whose physical copy
+ *    this product is — the book on the shelf behind the imported EPUB).
+ *    Retaining because each linked row deliberately carries no identity of
+ *    its own beyond the Product it points at: a Location's `type` and a
+ *    Cookbook's shelf link both live only on this side of the edge, so
+ *    orphaning the Product would leave the other row with no identity at
+ *    all, not merely a broken link.
  *  - usage: `ProductComponent.componentProductId` — this product is cited as
  *    a part inside another (kit) product's component list. Retaining for the
  *    same reason as a purchase link: deleting it would silently shrink the
@@ -36,8 +42,9 @@
  *    with the edge above: deleting a kit is supposed to take its component
  *    list with it, the same way deleting a recipe takes its sections.
  *  - metadata / media: `ProductExternalId.productId`,
- *    `ProductUnitMappings.productId`, `ProductImage.productId` — none of which
- *    say anything about ownership on their own.
+ *    `ProductUnitMappings.productId`, `ProductConversionCoverage.productId`,
+ *    `ProductImage.productId` — none of which say anything about ownership on
+ *    their own.
  *
  * ## Why the retaining filter is positive, not `!== "metadata"`
  *

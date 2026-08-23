@@ -33,6 +33,7 @@
  * concept for a plain purchase/product link.
  */
 
+import type { RelationMutationOut } from "@cubby/schemas/common";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ProductId, PurchaseId } from "@cubby/schemas/identifiers";
 import {
@@ -338,7 +339,7 @@ export async function attachPurchaseProducts(
   purchaseId: PurchaseId,
   productIds: ProductId[],
   actor: ActorContext,
-): Promise<{ changed: number; attached: number }> {
+): Promise<RelationMutationOut> {
   const uniqueProductIds = uniq(productIds);
   return withTransaction(db, async (tx) => {
     const livePurchase = await tx.query.purchase.findFirst({
@@ -379,7 +380,14 @@ export async function attachPurchaseProducts(
         changes: { linkedProductIds: { from: before, to: after } },
       });
     }
-    return { changed: inserted.length, attached: after.length };
+    // Every id in `uniqueProductIds` was already confirmed live above, so the
+    // only reason one wouldn't land in `inserted` is `onConflictDoNothing`
+    // skipping an edge that was already there — the no-op bucket.
+    return {
+      changed: inserted.length,
+      attached: after.length,
+      alreadySatisfied: uniqueProductIds.length - inserted.length,
+    };
   });
 }
 
@@ -388,7 +396,7 @@ export async function detachPurchaseProducts(
   purchaseId: PurchaseId,
   productIds: ProductId[],
   actor: ActorContext,
-): Promise<{ changed: number; attached: number }> {
+): Promise<RelationMutationOut> {
   const uniqueProductIds = uniq(productIds);
   return withTransaction(db, async (tx) => {
     const before = await liveProductShortcodes(tx, purchaseId);
@@ -413,6 +421,14 @@ export async function detachPurchaseProducts(
         changes: { linkedProductIds: { from: before, to: after } },
       });
     }
-    return { changed: removed.length, attached: after.length };
+    // Unlike attach, a requested id here was never confirmed live — it may
+    // never have been linked at all. Either way (never linked, or linked and
+    // already removed), the outcome is the same "no live edge", so whatever
+    // wasn't removed was already in the detached state being asked for.
+    return {
+      changed: removed.length,
+      attached: after.length,
+      alreadySatisfied: uniqueProductIds.length - removed.length,
+    };
   });
 }

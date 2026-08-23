@@ -1,3 +1,4 @@
+import type { RelationMutationOut } from "@cubby/schemas/common";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ProductId, ProjectId } from "@cubby/schemas/identifiers";
 import {
@@ -587,7 +588,7 @@ export async function attachProjectResources(
   productIds: ProductId[],
   actor: ActorContext,
   options: ResourceReadOptions = {},
-): Promise<{ changed: number; attached: number }> {
+): Promise<RelationMutationOut> {
   const uniqueProductIds = uniq(productIds);
   await assertNoTimelineConflict(
     db,
@@ -637,7 +638,15 @@ export async function attachProjectResources(
         changes: { usedResourceIds: { from: before, to: after } },
       });
     }
-    return { changed: inserted.length, attached: after.length };
+    // Every id in `uniqueProductIds` was already confirmed live (and
+    // timeline-clear) above, so the only reason one wouldn't land in
+    // `inserted` is `onConflictDoNothing` skipping an edge that was already
+    // there — the no-op bucket.
+    return {
+      changed: inserted.length,
+      attached: after.length,
+      alreadySatisfied: uniqueProductIds.length - inserted.length,
+    };
   });
 }
 
@@ -646,7 +655,7 @@ export async function detachProjectResources(
   projectId: ProjectId,
   productIds: ProductId[],
   actor: ActorContext,
-): Promise<{ changed: number; attached: number }> {
+): Promise<RelationMutationOut> {
   const uniqueProductIds = uniq(productIds);
   return withTransaction(db, async (tx) => {
     const before = await liveResourceCodes(tx, projectId);
@@ -671,7 +680,16 @@ export async function detachProjectResources(
         changes: { usedResourceIds: { from: before, to: after } },
       });
     }
-    return { changed: removed.length, attached: after.length };
+    // Unlike attach, a requested id here was never confirmed live — it may
+    // never have been used on this project at all. Either way (never used, or
+    // used and already removed), the outcome is the same "no live edge", so
+    // whatever wasn't removed was already in the detached state being asked
+    // for.
+    return {
+      changed: removed.length,
+      attached: after.length,
+      alreadySatisfied: uniqueProductIds.length - removed.length,
+    };
   });
 }
 

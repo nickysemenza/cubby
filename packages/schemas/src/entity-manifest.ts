@@ -16,9 +16,21 @@ import {
  * server (repos, audit schema, counts) and the client (UI manifest) can both
  * read it.
  *
- * It does NOT generate per-entity logic — zod modules, repos, routers, and MCP
- * tools stay where they are; this only declares WHAT each entity is and how they
- * relate, and is kept honest by the drift test in entity-manifest.unit.test.ts.
+ * It declares WHAT each entity is and how they relate, and is kept honest by the
+ * drift test in entity-manifest.unit.test.ts.
+ *
+ * It is now also mildly GENERATIVE, which reverses an earlier boundary and is
+ * worth stating plainly. This file used to promise it "does NOT generate
+ * per-entity logic". `mcpNames` + `mcpToolName` break that promise on purpose:
+ * the naming table they replace lived in `server.unit.test.ts`, so the manifest
+ * said which MCP operations existed while a hand-kept copy in a test decided
+ * what they were called. Declaring a name next to the operation it names is the
+ * point of a manifest.
+ *
+ * The boundary that still holds: this file owns DECLARATIONS, never behavior.
+ * Zod modules, repos, routers, and tool handlers stay where they are — see the
+ * argument in `entity-lifecycle-registry.ts` for why the same split applies to
+ * edge policies.
  */
 const mcpOp = z.enum(["get", "list", "create", "update", "delete"]);
 
@@ -29,8 +41,12 @@ export const entityDescriptor = z.object({
   idBrand: z.string().nullable(),
   /**
    * The entity's public-id prefix (e.g. "PRD-"). Present on every entity with a
-   * local table except `image`, whose rows are only ever addressed through the
-   * entity that owns them. Absent means "this entity has no public id".
+   * local table. Absent means "this entity has no public id" — today only
+   * `usda-food`, which is an external identifier (`fdc_id`) with no local table.
+   *
+   * `image` was the last local-table holdout, addressed by raw uuid; that made
+   * it a permanent carve-out in every shape that could name an entity, so it
+   * was given `IMG-` rather than kept as an exception.
    */
   shortcodePrefix: z.string().optional(),
   /**
@@ -67,8 +83,72 @@ export const entityDescriptor = z.object({
   lifecycle: entityLifecycleSchema,
   /** CRUD operations exposed over MCP. */
   mcp: z.array(mcpOp).readonly(),
+  /**
+   * Departures from the default MCP tool naming. Absent means the defaults hold.
+   *
+   * The names themselves used to live in a `Record<Entity, …>` inside
+   * `server.unit.test.ts` — a hand-kept table in a TEST file, which the same
+   * test then compared against the live catalog. So the manifest declared WHICH
+   * operations exist while something untracked decided what they were CALLED,
+   * and only a test run could tell you the two agreed.
+   */
+  mcpNames: z
+    .object({
+      /** Overrides `snakeCase(entity)`. */
+      singular: z.string().optional(),
+      /** Overrides `${singular}s`. */
+      plural: z.string().optional(),
+      /** Per-operation overrides, for tools whose verb isn't the default. */
+      overrides: z.partialRecord(mcpOp, z.string()).optional(),
+    })
+    .optional(),
 });
 export type EntityDescriptor = z.infer<typeof entityDescriptor>;
+
+/** `financialAccount` → `financial_account`, `usda-food` → `usda_food`. */
+const snakeCase = (entity: string) =>
+  entity
+    .replace(/-/g, "_")
+    .replace(/([a-z])([A-Z])/g, "$1_$2")
+    .toLowerCase();
+
+/**
+ * The MCP tool name for an (entity, operation) pair.
+ *
+ * `list` and `delete` act on a set, so they take the plural; the rest are
+ * singular. That rule was previously reimplemented inline in the drift test.
+ */
+/**
+ * The plural slug an entity's set-shaped tools use. Batch tools are
+ * `create_${plural}` / `update_${plural}`, which is why this is exposed
+ * separately from {@link mcpToolName} — those are plural even though their
+ * singular counterparts are not.
+ */
+export const mcpEntityPlural = (entity: Entity): string => {
+  // Read through the declared type: the manifest literal is a union of 17
+  // object types and only some declare `mcpNames`, so a direct property access
+  // on the union does not compile even though every member satisfies
+  // `EntityDescriptor`.
+  // Widened to `EntityDescriptor` first: the manifest literal is a union of 17
+  // object types and only some declare `mcpNames`, so reading the property off
+  // the union does not compile even though every member satisfies the type.
+  const descriptor: EntityDescriptor = entityManifest[entity];
+  const names = descriptor.mcpNames;
+  return names?.plural ?? `${names?.singular ?? snakeCase(entity)}s`;
+};
+
+export const mcpToolName = (
+  entity: Entity,
+  operation: z.infer<typeof mcpOp>,
+): string => {
+  const descriptor: EntityDescriptor = entityManifest[entity];
+  const names = descriptor.mcpNames;
+  const override = names?.overrides?.[operation];
+  if (override) return override;
+  const singular = names?.singular ?? snakeCase(entity);
+  const plural = names?.plural ?? `${singular}s`;
+  return `${operation}_${operation === "list" || operation === "delete" ? plural : singular}`;
+};
 
 const ALL_MCP = ["get", "list", "create", "update", "delete"] as const;
 
@@ -185,6 +265,7 @@ export const entityManifest = {
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: true },
     mcp: ALL_MCP,
+    mcpNames: { overrides: { list: "search_products" } },
   },
   recipe: {
     dbTable: "Recipe",
@@ -228,6 +309,7 @@ export const entityManifest = {
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
     mcp: ALL_MCP,
+    mcpNames: { overrides: { delete: "delete_recipe" } },
   },
   ingredient: {
     dbTable: "Ingredient",
@@ -249,6 +331,7 @@ export const entityManifest = {
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: true },
     mcp: ALL_MCP,
+    mcpNames: { overrides: { list: "search_ingredients" } },
   },
   cookbook: {
     dbTable: "Cookbook",
@@ -313,6 +396,11 @@ export const entityManifest = {
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
     mcp: ALL_MCP,
+    mcpNames: {
+      singular: "inventory_entry",
+      plural: "inventory_entries",
+      overrides: { list: "list_inventory" },
+    },
   },
   meal: {
     dbTable: "Meal",
@@ -422,9 +510,13 @@ export const entityManifest = {
     // Deletable in the app (blocked while live purchases reference it), and
     // mergeable — two roster rows for one real vendor is a reported defect.
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: true },
-    // No delete: `deleteVendors` refuses while live purchases still reference the
-    // vendor, and an agent has no way to rehome them.
-    mcp: ["get", "list", "create", "update"],
+    // Delete is exposed now. It used to be withheld because `deleteVendors`
+    // refuses while live purchases reference the vendor and "an agent has no
+    // way to rehome them" — but that refusal is structured now: it names which
+    // vendors blocked and how many purchases each still holds, which is exactly
+    // what an agent needs to act. merge_vendors remains the better move when
+    // the two rows are one real vendor.
+    mcp: ["get", "list", "create", "update", "delete"],
   },
   // One vendor order/receipt event — identity (`vendorId` + optional `orderId`),
   // vendor date, literal `statedTotal` that is never summed into spend, and
@@ -450,12 +542,13 @@ export const entityManifest = {
       ),
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: true },
-    // No generic delete: the UI operation may detach real money. MCP exposes a
-    // narrower delete_empty_purchases tool that refuses live Expense or
-    // FinancialTransaction references. The restructuring ops (split/link/merge)
-    // likewise live outside this CRUD roster and are registered directly in
-    // purchase.tools.ts.
-    mcp: ["get", "list", "create", "update"],
+    // Delete is exposed, but NOT the UI's operation: that one detaches real
+    // money from its provenance. `delete_entity` dispatches purchase through
+    // the require-empty policy instead (see `deleteDispatch` in
+    // mcp/tools/_shared.ts), refusing anything still carrying live Expenses or
+    // settlement allocations and naming which. The restructuring ops
+    // (split/link/merge) live outside this CRUD roster.
+    mcp: ["get", "list", "create", "update", "delete"],
   },
   financialAccount: {
     dbTable: "FinancialAccount",
@@ -517,6 +610,7 @@ export const entityManifest = {
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
     mcp: ALL_MCP,
+    mcpNames: { plural: "wishes" },
   },
   expense: {
     dbTable: "Expense",
@@ -547,10 +641,12 @@ export const entityManifest = {
     // No local table, so nothing to remove.
     lifecycle: { delete: null, merge: false },
     mcp: ["get", "list"],
+    mcpNames: { overrides: { list: "search_usda_foods" } },
   },
   image: {
     dbTable: "Image",
-    idBrand: null,
+    idBrand: "ImageId",
+    shortcodePrefix: SHORTCODE_PREFIX.image,
     softDelete: true,
     auditable: false,
     hasImages: false,

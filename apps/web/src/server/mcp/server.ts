@@ -12,6 +12,7 @@ import { registerMcpApps } from "./apps";
 import {
   getRegisteredTool,
   installMockStrippedListToolsHandler,
+  registerGenericEntityTools,
 } from "./tools/_shared";
 import { registerAuditTools } from "./tools/audit.tools";
 import { registerDataQualityTools } from "./tools/data-quality.tools";
@@ -107,6 +108,8 @@ function registerTools(server: McpServer) {
   registerDataQualityTools(server);
   registerEntityIntegrityTools(server);
   registerWishTools(server);
+  // Last: it composes the delete prose every toolset above declared.
+  registerGenericEntityTools(server);
   // The `ui://` resources those tools' `_meta.ui.resourceUri` pointers resolve
   // to. Adds the `resources` capability, which is otherwise unused — cubby's
   // MCP surface is tools-only.

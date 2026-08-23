@@ -1,4 +1,5 @@
 import type { PreviewOperation } from "@cubby/schemas/entity-integrity";
+import { publicImpactItemSchema } from "@cubby/schemas/entity-integrity";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
@@ -169,14 +170,16 @@ describe("useOptimisticDelete", () => {
       basePreview({
         canProceed: false,
         blockers: [
-          {
+          // Parsed, not cast: `blockers[]` is the branded wire type, so the
+          // fixture arrives the way real data does.
+          publicImpactItemSchema.parse({
             code: "target-not-found",
             effect: "block",
             label: "PRD-9999 no longer exists",
             description: "This id does not resolve to a live row.",
             total: 1,
             byTargetId: { "PRD-9999": 1 },
-          },
+          }),
         ],
       }),
     );

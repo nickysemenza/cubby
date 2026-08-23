@@ -43,6 +43,7 @@ import {
   lockAndValidateForDelete,
   notDeleted,
   replaceDependencyEdges,
+  unwrapDb,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
@@ -386,8 +387,8 @@ export const deleteProjects = async (
   db: Database,
   shortcodes: ProjectShortcode[],
   actor: ActorContext,
-): Promise<{ detachedImageKeys: string[] }> => {
-  if (shortcodes.length === 0) return { detachedImageKeys: [] };
+): Promise<{ detachedImageKeys: string[]; deleted: number }> => {
+  if (shortcodes.length === 0) return { detachedImageKeys: [], deleted: 0 };
 
   const ids = await resolveAllOrThrow(db, "project", shortcodes);
 
@@ -481,12 +482,12 @@ export const deleteProjects = async (
  * transaction; nothing here is a lock or a permission.
  */
 export const previewDeleteProjects = async (
-  db: Database,
+  db: Database | DrizzleTransaction,
   ids: ProjectId[],
 ): Promise<{ blockers: ImpactItem[]; changes: ImpactItem[] }> => {
   if (ids.length === 0) return { blockers: [], changes: [] };
 
-  const dbClient = getDb(db);
+  const dbClient = unwrapDb(db);
 
   const [liveChildren, liveTasks, liveExpenses] = await Promise.all([
     fetchLiveChildProjects(dbClient, ids),

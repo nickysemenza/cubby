@@ -1,6 +1,9 @@
-import { deletedCountOut } from "@cubby/schemas/common";
+import { type DeleteEntityOut, deleteEntityOut } from "@cubby/schemas/common";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { shortcodeSchema } from "@cubby/schemas/identifiers";
+import {
+  anyShortcodeSchema,
+  shortcodeSchema,
+} from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import {
   type IngredientOut,
@@ -33,6 +36,7 @@ import { type PurchaseOut, purchaseOut } from "@cubby/schemas/purchase";
 import { type RecipeTopLevel, recipeMcpOut } from "@cubby/schemas/recipe";
 import type { mcpUnitMappingInput } from "@cubby/schemas/unitmapping";
 import { type VendorOut, vendorOut } from "@cubby/schemas/vendor";
+import { type AppErrorReason, AppErrors } from "@cubby/shared";
 import type { foodSummary } from "@cubby/usda-schemas";
 import type {
   McpServer,
@@ -45,6 +49,7 @@ import type {
 } from "@modelcontextprotocol/sdk/types.js";
 import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { TRPCError } from "@trpc/server";
+import type { TRPC_ERROR_CODE_KEY } from "@trpc/server/rpc";
 import { omitBy } from "es-toolkit";
 import { z } from "zod";
 import type { DomainCaller } from "~/server/api/domain";
@@ -245,14 +250,6 @@ function structuredSuccess(
   };
 }
 
-/** Like structuredSuccess but marks the MCP envelope as isError (e.g. total batch failure). */
-export function structuredSuccessWithError(
-  data: unknown,
-  outputSchema: z.ZodType,
-): CallToolResult {
-  return { ...structuredSuccess(data, outputSchema), isError: true };
-}
-
 export function structuredError(text: string) {
   return {
     content: [{ type: "text" as const, text }],
@@ -440,15 +437,46 @@ export function getCaller(extra: ToolExtra): Caller {
   return caller as Caller;
 }
 
-export function formatToolError(error: unknown): string {
+/**
+ * A tool failure, decomposed.
+ *
+ * `formatToolError` renders this to prose for the single-tool error path, where
+ * the MCP envelope carries one text block and nothing else. Batch results keep
+ * the parts: `error` alone forced a caller wanting to branch on *why* item 3
+ * failed to substring-match a sentence, since `code` and `reason` were both
+ * present at the throw site and then flattened into it.
+ */
+export interface ToolErrorDetail {
+  /** The tRPC code, when the failure came through one. */
+  code?: TRPC_ERROR_CODE_KEY;
+  /** The `AppErrorReason` `createAppError` stamped onto `cause`. */
+  reason?: AppErrorReason;
+  message: string;
+}
+
+export function describeToolError(error: unknown): ToolErrorDetail {
   if (error instanceof TRPCError) {
     const reason = (error.cause as { reason?: string })?.reason;
-    return reason
-      ? `${error.code}: ${error.message} (${reason})`
-      : `${error.code}: ${error.message}`;
+    return {
+      code: error.code,
+      // Narrowed on the way out rather than trusted on the way in: `cause` is
+      // typed `unknown`, and a TRPCError thrown by tRPC itself (input parsing,
+      // say) carries no reason at all.
+      ...(isAppErrorReason(reason) ? { reason } : {}),
+      message: error.message,
+    };
   }
-  if (error instanceof Error) return error.message;
-  return String(error);
+  if (error instanceof Error) return { message: error.message };
+  return { message: String(error) };
+}
+
+const isAppErrorReason = (value: unknown): value is AppErrorReason =>
+  typeof value === "string" && value in AppErrors;
+
+export function formatToolError(error: unknown): string {
+  const { code, reason, message } = describeToolError(error);
+  if (!code) return message;
+  return reason ? `${code}: ${message} (${reason})` : `${code}: ${message}`;
 }
 
 export function toUnitMappingInput(m: z.infer<typeof mcpUnitMappingInput>) {
@@ -826,11 +854,6 @@ function isSchema(value: unknown): value is z.ZodType {
 export const idParam = <TEntity extends ShortcodeEntity>(entity: TEntity) =>
   shortcodeSchema(entity);
 
-const idsParam = <TEntity extends ShortcodeEntity>(entity: TEntity) =>
-  z
-    .array(shortcodeSchema(entity))
-    .describe(`Array of ${entity} shortcodes to delete`);
-
 interface DynamicEntityRouter {
   create(input: Record<string, unknown>): Promise<unknown>;
   getByID(input: { id: unknown }): Promise<unknown>;
@@ -877,12 +900,96 @@ function getByIdHandler(
   };
 }
 
-function deleteHandler(routerName: string) {
-  return async (params: Record<string, unknown>, extra: ToolExtra) => {
+/**
+ * How one entity's delete is actually performed.
+ *
+ * Almost every entity is the default: call its router's `delete` over `ids`.
+ * Two are not, and the difference is real rather than cosmetic:
+ *
+ * - **expense** reports which Purchases it touched and which it left empty.
+ *   That is a SIDE EFFECT of the delete, not a different kind of result — it
+ *   used to justify a separate `delete_expenses` tool with its own output
+ *   schema, and now it is two `sideEffects` entries on the shared shape.
+ * - **purchase** uses the require-empty policy, NOT the UI's detach-references
+ *   one. Detaching would silently unlink real money from its provenance, which
+ *   is exactly why the agent-facing path refuses instead. That is a different
+ *   OPERATION, so it stays declared here rather than being smoothed away.
+ */
+const deleteDispatch: Partial<
+  Record<
+    ShortcodeEntity,
+    (caller: Caller, ids: string[]) => Promise<DeleteEntityOut>
+  >
+> = {
+  expense: async (caller, ids) => {
+    const result = await (
+      caller as unknown as {
+        expense: {
+          deleteWithPurchaseEffects: (input: { ids: string[] }) => Promise<{
+            deleted: number;
+            deletedIds: string[];
+            affectedPurchaseIds: string[];
+            newlyEmptyPurchaseIds: string[];
+          }>;
+        };
+      }
+    ).expense.deleteWithPurchaseEffects({ ids });
+    return {
+      deleted: result.deleted,
+      deletedIds: result.deletedIds,
+      sideEffects: [
+        ...(result.affectedPurchaseIds.length > 0
+          ? [
+              {
+                code: "purchase-lost-a-line",
+                description:
+                  "These Purchases lost one or more expense lines, so their totals changed.",
+                ids: result.affectedPurchaseIds,
+              },
+            ]
+          : []),
+        ...(result.newlyEmptyPurchaseIds.length > 0
+          ? [
+              {
+                code: "purchase-now-empty",
+                description:
+                  "These Purchases now carry no expenses at all — delete them too, or attach the missing lines.",
+                ids: result.newlyEmptyPurchaseIds,
+              },
+            ]
+          : []),
+      ],
+    };
+  },
+  purchase: async (caller, ids) => {
+    const result = await (
+      caller as unknown as {
+        purchase: {
+          deleteEmpty: (input: { ids: string[] }) => Promise<{
+            deleted: number;
+            deletedIds?: string[];
+          }>;
+        };
+      }
+    ).purchase.deleteEmpty({ ids });
+    return { deleted: result.deleted, sideEffects: [] };
+  },
+};
+
+function deleteHandler(entity: ShortcodeEntity) {
+  return async (
+    params: Record<string, unknown>,
+    extra: ToolExtra,
+  ): Promise<DeleteEntityOut> => {
     const caller = getCaller(extra);
     const ids = params.ids as string[];
-    await getEntityRouter(caller, routerName).delete({ ids });
-    return { deleted: ids.length };
+    const override = deleteDispatch[entity];
+    if (override) return await override(caller, ids);
+    const result = (await getEntityRouter(caller, entity).delete({ ids })) as {
+      deleted?: number;
+    };
+    // Measured by `removeEntity`, never `ids.length` — a delete can cascade.
+    return { deleted: result?.deleted ?? 0, sideEffects: [] };
   };
 }
 
@@ -944,7 +1051,16 @@ function batchMutationOut(item: z.ZodType) {
         z.object({
           index: z.number().int().nonnegative(),
           status: z.literal("failed"),
+          /**
+           * The rendered sentence, unchanged — still the thing a human reads.
+           * `code` and `reason` are the same failure decomposed, so a caller can
+           * branch on WHY item 3 failed without substring-matching this.
+           */
           error: z.string(),
+          /** tRPC code. Absent when the item threw something that wasn't a TRPCError. */
+          code: z.string().optional(),
+          /** The `AppErrorReason` behind the refusal, when there was one. */
+          reason: z.string().optional(),
         }),
       ]),
     ),
@@ -1003,7 +1119,13 @@ type BatchResult =
       id?: string;
       entityId?: string;
     }
-  | { index: number; status: "failed"; error: string };
+  | {
+      index: number;
+      status: "failed";
+      error: string;
+      code?: TRPC_ERROR_CODE_KEY;
+      reason?: AppErrorReason;
+    };
 
 /**
  * Register a best-effort `{items: [...]}` tool over a per-item operation.
@@ -1085,10 +1207,18 @@ export function registerBatchTool<TItem extends z.ZodType>(
               : summarizeBatchItem(produced)),
           });
         } catch (error) {
+          // `error` keeps the rendered sentence a human reads; `code`/`reason`
+          // carry the same failure in a form a caller can branch on. The
+          // message is not repeated as a third field — it is already inside
+          // `error`, and a near-duplicate string per failed item is the
+          // envelope bloat the compact result exists to avoid.
+          const { code, reason } = describeToolError(error);
           results.push({
             index,
             status: "failed",
             error: formatToolError(error),
+            ...(code ? { code } : {}),
+            ...(reason ? { reason } : {}),
           });
         }
       }
@@ -1327,24 +1457,37 @@ function registerEntityGetTool(
   });
 }
 
-function registerEntityDeleteTool(
+/**
+ * Per-entity delete prose, collected at toolset-registration time.
+ *
+ * There is ONE delete tool (`delete_entity`), but "what blocks a delete" is
+ * entirely per-entity — and that prose is the agent's error path, so it must
+ * not be lost to genericity. Each toolset still declares its own; the generic
+ * tool composes them into its `entity` parameter description, so an agent reads
+ * the same guidance it used to get from `delete_products`' own description.
+ */
+/**
+ * Keyed by SERVER, not module-level: `createMcpServer()` runs more than once per
+ * process (every test that builds a catalog), and a module-level Map would
+ * accumulate across them — so one server's registrations would leak into
+ * another's advertised enum. A WeakMap also lets the entry die with the server.
+ */
+const deletableEntities = new WeakMap<
+  McpServer,
+  Map<ShortcodeEntity, string>
+>();
+
+function declareDeletableEntity(
   server: McpServer,
-  config: {
-    name: string;
-    description: string;
-    router: string;
-    entity: ShortcodeEntity;
-    annotations: ToolAnnotations;
-  },
+  entity: ShortcodeEntity,
+  description: string,
 ) {
-  registerMcpTool(server, {
-    name: config.name,
-    description: config.description,
-    inputSchema: { ids: idsParam(config.entity) },
-    outputSchema: deletedCountOut,
-    annotations: config.annotations,
-    handler: deleteHandler(config.router),
-  });
+  const existing = deletableEntities.get(server);
+  if (existing) {
+    existing.set(entity, description);
+    return;
+  }
+  deletableEntities.set(server, new Map([[entity, description]]));
 }
 
 function registerEntityUpdateTool<TInput extends ZodSchemaLike>(
@@ -1604,20 +1747,14 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
     });
   }
 
-  if (enabled("delete")) {
-    const description = config.descriptions.delete;
-    if (!description) {
-      throw new Error(
-        `registerEntityCrudToolset(${config.entity}): descriptions.delete is required unless operations.delete is false`,
-      );
-    }
-    registerEntityDeleteTool(server, {
-      name: name("delete", `delete_${entityPlural}`),
-      description,
-      router: config.entity,
-      entity: config.entity,
-      annotations: WRITE_DESTRUCTIVE_CLOSED,
-    });
+  // `operations.delete: false` used to mean "no delete tool for this entity".
+  // It now means "no PER-ENTITY delete tool" — which, since there are no
+  // per-entity delete tools left, is every entity. What decides whether
+  // `delete_entity` covers an entity is the manifest's `mcp` list, checked by
+  // the caller; all this needs is the prose.
+  const deleteDescription = config.descriptions.delete;
+  if (deleteDescription) {
+    declareDeletableEntity(server, config.entity, deleteDescription);
   }
 }
 
@@ -1650,5 +1787,97 @@ export function registerRouterTool<
     annotations: config.annotations,
     uiResourceUri: config.uiResourceUri,
     handler: async (params, extra) => config.call(getCaller(extra), params),
+  });
+}
+
+/**
+ * The one delete tool.
+ *
+ * Replaces twelve `delete_<plural>` tools. That collapse was only safe once the
+ * things that actually differed per entity stopped differing: every delete path
+ * now reports a MEASURED count (`removeEntity`, not `ids.length` — which
+ * under-reported `deleteTasks`' subtask cascade), and every refusal carries a
+ * typed `reason` plus structured blockers rather than a hand-built sentence.
+ * With those uniform, the twelve tools differed only in their name and prose.
+ *
+ * The prose is preserved, not discarded: each entity's own delete description is
+ * collected by `registerEntityCrudToolset` and composed into the `entity`
+ * parameter below, so an agent still reads what blocks a product delete before
+ * attempting one.
+ *
+ * Entities deliberately absent are absent by declaration, not omission: vendor
+ * and purchase leave `"delete"` off their manifest `mcp` list (each has a
+ * narrower purpose-built tool instead), and `image` exposes no MCP tools at all.
+ *
+ * Must be registered AFTER every entity toolset, since it reads what they
+ * declared.
+ */
+export function registerGenericEntityTools(server: McpServer) {
+  const entities = [...(deletableEntities.get(server)?.keys() ?? [])].sort();
+  if (entities.length === 0) return;
+
+  const perEntityGuidance = entities
+    .map(
+      (entity) =>
+        `- **${entity}**: ${deletableEntities.get(server)?.get(entity)}`,
+    )
+    .join("\n");
+
+  registerMcpTool(server, {
+    name: "delete_entity",
+    description:
+      "Delete one or more rows of a single entity type by shortcode. The `ids` must all belong to `entity` — a code with the wrong prefix is rejected before anything is deleted. " +
+      "Returns the number of rows ACTUALLY removed, which can exceed `ids.length` where a delete cascades (deleting a task also deletes its live subtasks). " +
+      "A refusal names what blocked it: the error carries a typed `reason` and, where the guard could attribute it, which ids blocked and how many dependents each had. " +
+      "Call preview_entity_operation first to see blockers without committing.",
+    inputSchema: {
+      entity: z
+        .enum(entities as [ShortcodeEntity, ...ShortcodeEntity[]])
+        .describe(
+          `Which entity to delete. What blocks each one:\n${perEntityGuidance}`,
+        ),
+      ids: z
+        // `anyShortcodeSchema(entities)`, not a bare string: it keeps a real
+        // regex in the advertised JSON Schema (asserted by the shortcode-pattern
+        // test), so a client sees the accepted prefixes rather than "string".
+        // The narrower per-entity check still happens in the handler.
+        .array(
+          anyShortcodeSchema(
+            entities as [ShortcodeEntity, ...ShortcodeEntity[]],
+          ),
+        )
+        .min(1)
+        .max(200)
+        .describe(
+          "Shortcodes to delete. Every code must carry `entity`'s own prefix.",
+        ),
+    },
+    outputSchema: deleteEntityOut,
+    annotations: WRITE_DESTRUCTIVE_CLOSED,
+    handler: async (params, extra) => {
+      const { entity, ids } = params as {
+        entity: ShortcodeEntity;
+        ids: string[];
+      };
+      // Re-parsed per entity rather than trusting the loose array: the input
+      // schema cannot express "matches THIS entity's prefix" without a union,
+      // and a union normalizes to `{}` in the MCP SDK — stripping every
+      // argument (see `toolInputSchema`). So the narrow check lives here.
+      const parsed = z.array(shortcodeSchema(entity)).safeParse(ids);
+      if (!parsed.success) {
+        const wrong = ids.filter(
+          (id) => !shortcodeSchema(entity).safeParse(id).success,
+        );
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Not ${entity} shortcodes: ${wrong.join(", ")}`,
+          cause: { reason: "INVALID_INPUT" },
+        });
+      }
+      return await deleteHandler(entity)(
+        { ids: parsed.data as string[] },
+        extra,
+      );
+    },
   });
 }

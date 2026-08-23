@@ -83,6 +83,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  pgView,
   real,
   text,
   timestamp,
@@ -1018,6 +1019,13 @@ export const image = pgTable(
   "Image",
   {
     id: pkUuid(),
+    /**
+     * Image was the last local-table entity addressed by raw uuid, which forced
+     * every impact/result shape that could name an image to special-case it.
+     * Added via expand -> backfill -> contract: landed nullable, backfilled by
+     * `scripts/backfill-image-shortcodes.ts` (5,684 rows), then made NOT NULL.
+     */
+    shortcode: shortcodeColumn(),
     url: text("url").notNull(),
     key: text("key").notNull(),
     filename: text("filename").notNull(),
@@ -1043,6 +1051,7 @@ export const image = pgTable(
     ...softDeletedAt(),
   },
   (table) => [
+    shortcodeUnique("Image", table.shortcode),
     uniqueIndex("Image_key_key")
       .on(table.key)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -2748,3 +2757,28 @@ export const appSettings = pgTable("AppSettings", {
   metadata: jsonb("metadata").$type<Record<string, unknown>>(),
   ...baseTimestamps(),
 });
+
+/**
+ * Views owned by the `pg_stat_statements` extension, declared so Drizzle leaves
+ * them alone.
+ *
+ * `drizzle-kit push` diffs the WHOLE public schema, so any object it cannot see
+ * a declaration for is scheduled for a DROP. These two are created and owned by
+ * the extension, and the drop fails at the dependency check — which aborted the
+ * entire push, including unrelated additive changes. (Drizzle's own hint is to
+ * drop the extension instead; that would remove production query-statistics
+ * collection to satisfy a schema differ, which is backwards.)
+ *
+ * `.existing()` declares them WITHOUT Drizzle managing them: no create, no
+ * drop, no diff. Nothing in the app reads these — they exist purely so the
+ * differ stops proposing to delete them.
+ */
+export const pgStatStatements = pgView("pg_stat_statements", {
+  // A representative column only: `.existing()` needs a shape, and since
+  // Drizzle never creates or reads these, the shape is not verified against
+  // the extension's real (and version-dependent) column list.
+  query: text("query"),
+}).existing();
+export const pgStatStatementsInfo = pgView("pg_stat_statements_info", {
+  dealloc: text("dealloc"),
+}).existing();

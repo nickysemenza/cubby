@@ -42,7 +42,10 @@
  * `pendingImageIds`/`removeImageIds` and deliberately excludes `imageOrder`.
  */
 
-import type { LocationShortcode } from "@cubby/schemas/identifiers";
+import type {
+  ImageShortcode,
+  LocationShortcode,
+} from "@cubby/schemas/identifiers";
 import {
   ALLOWED_IMAGE_TYPES,
   type AllowedImageType,
@@ -96,7 +99,10 @@ export function useLocationPhotoCapture() {
    * `useActionMutation`).
    */
   const capture = useCallback(
-    async (locationId: LocationShortcode, file: File): Promise<string> => {
+    async (
+      locationId: LocationShortcode,
+      file: File,
+    ): Promise<ImageShortcode> => {
       if (!ALLOWED_IMAGE_TYPES.includes(file.type as AllowedImageType)) {
         // iOS hands over an empty or exotic MIME type often enough that this
         // needs to fail as a readable message, not an opaque server zod reject
@@ -128,6 +134,15 @@ export function useLocationPhotoCapture() {
         data: { pendingImageIds: [init.imageId] },
       });
 
+      // `init.imageId` is the raw upload uuid — `imageOrder`/`removeImageIds`
+      // take the public `IMG-` shortcode instead, which only exists once the
+      // server hands it back in `attached.images`. Recovered here rather than
+      // resolved separately: `associatePendingImages` appends via
+      // `nextImageSortOrder` (max + 1), so the image just attached always has
+      // the highest sortOrder, and the response orders images by sortOrder —
+      // making it reliably the LAST entry.
+      const newCode = attached.images.at(-1)!.id;
+
       // Order off the server's own post-attach list rather than a caller-held
       // snapshot. A stale or filtered list would omit ids, and an omitted id
       // keeps its old sortOrder — on legacy rows that all sit at `0` it would
@@ -135,16 +150,16 @@ export function useLocationPhotoCapture() {
       // hands the cover back to the older photo.
       const otherIds = attached.images
         .map((img) => img.id)
-        .filter((id) => id !== init.imageId);
+        .filter((id) => id !== newCode);
       if (otherIds.length > 0) {
         await updateLocation.mutateAsync({
           id: locationId,
-          data: { imageOrder: [init.imageId, ...otherIds] },
+          data: { imageOrder: [newCode, ...otherIds] },
         });
       }
 
       invalidate(attached);
-      return init.imageId;
+      return newCode;
     },
     [uploadImage, updateLocation, invalidate],
   );
@@ -162,7 +177,10 @@ export function useLocationPhotoCapture() {
    * no-op.
    */
   const discardCapture = useCallback(
-    async (locationId: LocationShortcode, imageId: string): Promise<void> => {
+    async (
+      locationId: LocationShortcode,
+      imageId: ImageShortcode,
+    ): Promise<void> => {
       const result = await updateLocation.mutateAsync({
         id: locationId,
         data: { removeImageIds: [imageId] },

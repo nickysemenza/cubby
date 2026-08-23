@@ -25,9 +25,10 @@ import {
  *
  * Generic because a list row's `id` IS its public shortcode (see
  * `nameColumnParams` in columnHelpers.tsx, which builds every detail link as
- * `{ shortcode: String(row.id) }`). `image` is the one entity whose id stays a
- * uuid, so it's gated out by the `shortcodeEntities` roster rather than by a
- * second hand-kept list.
+ * `{ shortcode: String(row.id) }`). Gated on the `shortcodeEntities` roster
+ * rather than a second hand-kept list — which is why `image` picked this action
+ * up for free the moment it was given an `IMG-` code, and why `usda-food` (an
+ * external `fdc_id`, no local table) still does not get it.
  *
  * Foreign child rows in a tree can't reach this: `EntityListTreeConfig.rowIsEntity`
  * already turns selection off for them, so their synthetic `parent:child` ids

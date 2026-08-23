@@ -99,11 +99,11 @@ import {
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
-  insertAndReturn,
   isNotDeleted,
   type ListReadIntent,
   nextImageSortOrder,
   notDeleted,
+  unwrapDb,
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
@@ -114,6 +114,10 @@ import {
   present,
   sideEffect,
 } from "~/server/repo/impact";
+import {
+  generateUniqueShortcode,
+  insertWithShortcode,
+} from "~/server/repo/shortcode-utils";
 
 export const createPendingImageRecord = async (
   db: Database,
@@ -131,7 +135,9 @@ export const createPendingImageRecord = async (
     size: number;
   },
 ) => {
-  return await insertAndReturn(db, image, {
+  // `insertWithShortcode`, not a bare insert: Image now carries a public `IMG-`
+  // id, and minting is what turns a row into something addressable.
+  return await insertWithShortcode(db, "image", {
     key,
     filename,
     size,
@@ -166,7 +172,7 @@ export const createUploadedImageRecord = async (
     idempotencyKey?: string | null;
   },
 ) => {
-  return await insertAndReturn(db, image, {
+  return await insertWithShortcode(db, "image", {
     ...params,
     status: "UPLOADED",
   });
@@ -610,11 +616,18 @@ export const markImageUploaded = async (
 export const getImageByKey = async (
   db: Database,
   key: string,
-): Promise<{ id: string; url: string; key: string } | null> => {
+): Promise<{
+  id: string;
+  shortcode: string;
+  url: string;
+  key: string;
+} | null> => {
   const imageRecord = await getDb(db).query.image.findFirst({
     where: eq(image.key, key),
     columns: {
       id: true,
+      // Selected because callers report the PUBLIC id back to a client.
+      shortcode: true,
       url: true,
       key: true,
     },
@@ -1131,7 +1144,7 @@ const IMAGE_HARD_DELETE_LABELS: Record<IncomingEdgeKey<"image">, string> = {
  * transaction; nothing here is a lock or a permission.
  */
 export const previewDeleteImages = async (
-  db: Database,
+  db: Database | DrizzleTransaction,
   ids: string[],
 ): Promise<{
   blockers: ImpactItem[];
@@ -1140,7 +1153,7 @@ export const previewDeleteImages = async (
 }> => {
   if (ids.length === 0) return { blockers: [], changes: [] };
 
-  const dbClient = getDb(db);
+  const dbClient = unwrapDb(db);
 
   const existingImages = await fetchExistingImages(dbClient, ids);
   if (existingImages.length === 0) return { blockers: [], changes: [] };
@@ -1805,10 +1818,16 @@ export const createOrReuseAttachedImage = async (
     }
 
     const { expectedImageCount: _expectedImageCount, ...record } = params;
+    // Minted inline rather than via `insertWithShortcode`: this insert needs
+    // `onConflictDoNothing` on the idempotency key, and the helper's own
+    // collision retry would fight that. A code burned by a no-op conflict is
+    // fine — shortcodes are never reused, so an unused one is simply retired.
+    const shortcode = await generateUniqueShortcode(tx, "image");
     const [inserted] = await tx
       .insert(image)
       .values({
         ...record,
+        shortcode,
         status: "UPLOADED",
         targetType: entityType,
         targetId: entityId,

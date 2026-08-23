@@ -15,7 +15,7 @@ import type { InventoryEntryDeepDB } from "./types";
 const INVENTORY_ID = unsafeInventoryId("123e4567-e89b-12d3-a456-426614174000");
 const PRODUCT_ID = unsafeProductId("223e4567-e89b-12d3-a456-426614174000");
 const LOCATION_ID = unsafeLocationId("323e4567-e89b-12d3-a456-426614174000");
-const IMAGE_ID = "423e4567-e89b-12d3-a456-426614174000";
+const IMAGE_SHORTCODE = "IMG-2345";
 const EXTERNAL_ID = "523e4567-e89b-12d3-a456-426614174000";
 const UNIT_MAPPING_ID = "623e4567-e89b-12d3-a456-426614174000";
 const DELETED_EXTERNAL_ID = "723e4567-e89b-12d3-a456-426614174000";
@@ -157,7 +157,7 @@ describe("inventory mappers", () => {
         images: [
           {
             image: {
-              id: IMAGE_ID,
+              shortcode: IMAGE_SHORTCODE,
               url: "https://example.com/image.jpg",
               key: "image.jpg",
               filename: "image.jpg",

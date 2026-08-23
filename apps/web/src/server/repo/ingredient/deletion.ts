@@ -104,11 +104,11 @@ export const deleteIngredients = async (
   db: Database,
   ids: IngredientId[],
   actor: ActorContext,
-): Promise<void> => {
-  if (ids.length === 0) return;
+): Promise<{ deleted: number }> => {
+  if (ids.length === 0) return { deleted: 0 };
 
   // Perform safety checks and soft delete in a transaction for atomicity
-  await withTransaction(db, async (tx) => {
+  return await withTransaction(db, async (tx) => {
     // Lock ingredients and validate they exist and aren't already deleted
     // Prevents race conditions by acquiring row-level locks
     await lockAndValidateForDelete(tx, ingredient, ids, "Ingredient");
@@ -145,12 +145,13 @@ export const deleteIngredients = async (
     });
 
     // No `children`: an ingredient delete has no cascaded child rows.
-    await removeEntity(tx, {
+    const { deleted } = await removeEntity(tx, {
       entity: "ingredient",
       ids,
       removal: "soft",
       actor,
     });
+    return { deleted };
   });
 };
 
@@ -169,7 +170,7 @@ export const deleteIngredients = async (
  * transaction; nothing here is a lock or a permission.
  */
 export const previewDeleteIngredients = async (
-  db: Database,
+  db: Database | DrizzleTransaction,
   ids: IngredientId[],
 ): Promise<{ blockers: ImpactItem[]; changes: ImpactItem[] }> => {
   if (ids.length === 0) return { blockers: [], changes: [] };

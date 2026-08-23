@@ -157,12 +157,25 @@ export function createBulkUpdatedMutation<
     });
 }
 
+/**
+ * What a delete adapter reports back to {@link createDeleteProcedure}.
+ *
+ * `deleted` must be MEASURED — read off whatever the repo delete actually
+ * removed (`removeEntity`'s own `deleted`, or a repo function that forwards
+ * it), never assumed from the caller's `ids.length`. `deleteTasks`'s
+ * one-level subtask cascade is the case that makes the distinction real: it
+ * removes more rows than were requested, so an input-length count would
+ * silently undercount there while looking correct everywhere else.
+ * `backgroundBatches` is unrelated and optional, same as before.
+ */
+export type DeleteResult = {
+  deleted: number;
+  backgroundBatches?: BackgroundBatchRef[];
+};
+
 // Reusable procedure builders
 const createDeleteProcedure = <TId extends string = string>(
-  deleteFn: (
-    ctx: ProtectedCrudServices,
-    ids: TId[],
-  ) => Promise<BackgroundBatchRef[] | undefined>,
+  deleteFn: (ctx: ProtectedCrudServices, ids: TId[]) => Promise<DeleteResult>,
   idSchema?: z.ZodType<unknown>,
 ) =>
   protectedProcedure
@@ -174,13 +187,20 @@ const createDeleteProcedure = <TId extends string = string>(
           .max(500),
       }),
     )
-    .output(strictOutput(z.object({ sideEffects: mutationSideEffectsSchema })))
+    .output(
+      strictOutput(
+        z.object({
+          sideEffects: mutationSideEffectsSchema,
+          deleted: z.number(),
+        }),
+      ),
+    )
     .mutation(async ({ ctx, input }) => {
       const ids = input.ids.map((id) =>
         idSchema ? (idSchema.parse(id) as TId) : (id as TId),
       );
-      const backgroundBatches = (await deleteFn(ctx, ids)) ?? [];
-      return { sideEffects: { backgroundBatches } };
+      const { deleted, backgroundBatches = [] } = await deleteFn(ctx, ids);
+      return { sideEffects: { backgroundBatches }, deleted };
     });
 
 // FIXED (was: the four builders here could not take `strictOutput`). The old
@@ -766,10 +786,7 @@ export function createSearchableEntityCrudProcedures<
       id: TId,
       data: z.infer<SUpdate>,
     ) => Promise<{ output: TOutput; entityId: TEntityId }>;
-    delete: (
-      ctx: ProtectedCrudServices,
-      ids: TId[],
-    ) => Promise<BackgroundBatchRef[] | undefined>;
+    delete: (ctx: ProtectedCrudServices, ids: TId[]) => Promise<DeleteResult>;
   };
   entityName: TEntity;
 }) {

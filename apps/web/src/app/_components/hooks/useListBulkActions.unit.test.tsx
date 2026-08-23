@@ -38,9 +38,11 @@ describe("useListBulkActions", () => {
     expect(result.current.enableRowSelection).toBe(true);
   });
 
-  // `image` is the one entity whose row id stays a uuid, and a uuid must never
-  // reach a clipboard the user pastes into MCP.
-  it("omits Copy codes for image", () => {
+  // `image` used to be the one entity whose row id stayed a uuid, so Copy codes
+  // was suppressed for it — a uuid must never reach a clipboard the user pastes
+  // into MCP. It now carries an `IMG-` shortcode like every other local-table
+  // entity, so the action is both available and meaningful.
+  it("offers Copy codes for image now that it has a shortcode", () => {
     const { result } = renderHook(() =>
       useListBulkActions<TestRow>({
         entity: "image",
@@ -48,16 +50,21 @@ describe("useListBulkActions", () => {
       }),
     );
 
-    expect(result.current.config?.actions.map((a) => a.id)).toEqual(["delete"]);
+    expect(result.current.config?.actions.map((a) => a.id)).toEqual([
+      "copy-shortcodes",
+      "delete",
+    ]);
   });
 
-  it("has no config at all for image with nothing else to offer", () => {
+  it("earns the checkbox column for image on Copy codes alone", () => {
     const { result } = renderHook(() =>
       useListBulkActions<TestRow>({ entity: "image" }),
     );
 
-    expect(result.current.config).toBeUndefined();
-    expect(result.current.enableRowSelection).toBe(false);
+    expect(result.current.config?.actions.map((a) => a.id)).toEqual([
+      "copy-shortcodes",
+    ]);
+    expect(result.current.enableRowSelection).toBe(true);
   });
 
   it("leads with Copy and trails with Delete", () => {

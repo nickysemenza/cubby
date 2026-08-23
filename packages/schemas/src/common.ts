@@ -36,3 +36,72 @@ export const deletedCountOut = z.object({
   deleted: z.number().int().nonnegative(),
 });
 export type DeletedCountOut = z.infer<typeof deletedCountOut>;
+
+/**
+ * Result of a list-attach/detach mutation on a many-to-many relation edge —
+ * `ProductComponent`, `ProjectToolUsage`, `PurchaseProduct`, and any future
+ * sibling. All three of today's relation families declared this exact same
+ * shape independently (nine restatements total, counting the repo-layer
+ * signatures); this is the one place it's said now.
+ *
+ * `changed` is the DB delta: rows the statement actually inserted (attach) or
+ * soft-deleted (detach). It is NOT the size of the request — a call that only
+ * re-asserts already-live pairs on attach, or targets already-gone pairs on
+ * detach, is a no-op and reports `changed: 0` (see `alreadySatisfied` below
+ * for why that no-op is worth counting explicitly).
+ *
+ * `attached` is the resulting LIVE count of the edge set after the mutation,
+ * scoped to the one parent id the call named — regardless of direction, an
+ * attach call's `attached` means "how many now" exactly the same way a
+ * detach call's does.
+ */
+export const relationMutationOut = z.object({
+  changed: z.number().int().nonnegative(),
+  attached: z.number().int().nonnegative(),
+  /**
+   * How many of the requested ids needed no write because they already sat
+   * in the state being asked for — already attached, on an attach call;
+   * already absent (never linked, or linked and already removed), on a
+   * detach call. Same reason `repointProjectUses` names its own no-op bucket
+   * (`alreadyPresent`, see `./project`): without it, a caller that attaches 5
+   * ids and gets `changed: 3` cannot tell "2 were rejected" from "2 were
+   * already there" — and the MCP tool descriptions promise exactly that
+   * distinction ("Repeating an already-live pair is idempotent and reports
+   * nothing changed"), a promise the payload could not substantiate before
+   * this field existed. Deliberately does NOT say *which* ids — that needs
+   * the pre-validation step to carry the set forward, which is a wider change
+   * than this one.
+   */
+  alreadySatisfied: z.number().int().nonnegative(),
+});
+export type RelationMutationOut = z.infer<typeof relationMutationOut>;
+
+/**
+ * The result of a delete, uniform across every entity.
+ *
+ * `deleted` is MEASURED (rows actually removed), not the caller's `ids.length` —
+ * a delete can cascade, so deleting one task can remove several rows.
+ *
+ * `sideEffects` is what the delete changed BESIDES its targets. It exists so a
+ * richer per-entity result never has to become a different output shape: an
+ * expense delete can leave a Purchase empty, and that used to justify a whole
+ * separate `delete_expenses` tool with its own schema. It is a consequence of
+ * the delete, not a different kind of result.
+ */
+export const deleteEntityOut = z.object({
+  deleted: z.number().int().nonnegative(),
+  deletedIds: z.array(z.string()).optional(),
+  sideEffects: z
+    .array(
+      z.object({
+        /** Stable slug, e.g. `"purchase-now-empty"`. */
+        code: z.string().min(1),
+        /** One line an agent can act on. */
+        description: z.string().min(1),
+        /** Public ids the effect touched. */
+        ids: z.array(z.string()),
+      }),
+    )
+    .default([]),
+});
+export type DeleteEntityOut = z.infer<typeof deleteEntityOut>;

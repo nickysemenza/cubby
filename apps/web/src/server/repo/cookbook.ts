@@ -24,7 +24,7 @@ import {
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 import { and, eq, sql } from "drizzle-orm";
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { cookbook, image, product, recipe } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -33,6 +33,7 @@ import { logAuditEntry } from "~/server/repo/audit-log";
 import {
   getDb,
   notDeleted,
+  unwrapDb,
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
@@ -440,7 +441,7 @@ export async function* reprocessCookbookStream(
  * (`deleteRecipesByCookbookTx`) inside its own transaction.
  */
 export const previewDeleteCookbooks = async (
-  db: Database,
+  db: Database | DrizzleTransaction,
   ids: CookbookId[],
 ): Promise<{ blockers: ImpactItem[]; changes: ImpactItem[] }> => {
   if (ids.length === 0) return { blockers: [], changes: [] };
@@ -452,7 +453,7 @@ export const previewDeleteCookbooks = async (
       edgeKey: "Recipe.cookbookId",
       label: "imported recipes",
       byTargetId: await countByTarget(
-        getDb(db),
+        unwrapDb(db),
         recipe,
         recipe.cookbookId,
         ids,

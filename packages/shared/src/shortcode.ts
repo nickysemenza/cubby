@@ -26,6 +26,7 @@ export const SHORTCODE_PREFIX = {
   expense: "EXP-",
   financialAccount: "FAC-",
   financialTransaction: "FTX-",
+  image: "IMG-",
   ingredient: "ING-",
   inventory: "INV-",
   location: "LOC-",
@@ -147,6 +148,7 @@ export const inventoryShortcode = makeShortcodeSchema(
   "inventory",
   "InventoryShortcode",
 );
+export const imageShortcode = makeShortcodeSchema("image", "ImageShortcode");
 export const locationShortcode = makeShortcodeSchema(
   "location",
   "LocationShortcode",
@@ -175,6 +177,7 @@ const SHORTCODE_SCHEMA = {
   expense: expenseShortcode,
   financialAccount: financialAccountShortcode,
   financialTransaction: financialTransactionShortcode,
+  image: imageShortcode,
   ingredient: ingredientShortcode,
   inventory: inventoryShortcode,
   location: locationShortcode,
@@ -205,6 +208,7 @@ export type FinancialAccountShortcode = z.infer<
 export type FinancialTransactionShortcode = z.infer<
   typeof financialTransactionShortcode
 >;
+export type ImageShortcode = z.infer<typeof imageShortcode>;
 export type IngredientShortcode = z.infer<typeof ingredientShortcode>;
 export type InventoryShortcode = z.infer<typeof inventoryShortcode>;
 export type LocationShortcode = z.infer<typeof locationShortcode>;

@@ -203,17 +203,19 @@ describe("entity manifest", () => {
     }
   });
 
-  it("gives every entity with a table a shortcode, except image", () => {
+  it("gives every entity with a table a shortcode, with no exceptions", () => {
     const withTable = allEntities.filter(
       (entity) => entityManifest[entity].dbTable !== null,
     );
-    // `image` opts out on purpose: no MCP surface, no name, and it is only ever
-    // reached through the entity that owns it.
-    expect(sorted(withTable.filter((e) => e !== "image"))).toEqual(
-      sorted(shortcodeEntities),
-    );
-    expect(descriptor("image").shortcodePrefix).toBeUndefined();
+    // No carve-out any more. `image` used to opt out — "no MCP surface, no
+    // name, only ever reached through the entity that owns it" — but being the
+    // one entity addressed by raw uuid made it a permanent special case in
+    // every shape that can name an entity, so it was given `IMG-` instead.
+    expect(sorted(withTable)).toEqual(sorted(shortcodeEntities));
+    // `usda-food` is the only entity without one, and it has no local table:
+    // its identity is USDA's own `fdc_id`.
     expect(descriptor("usda-food").shortcodePrefix).toBeUndefined();
+    expect(descriptor("usda-food").dbTable).toBeNull();
   });
 
   it("declares a legacy prefix exactly where one was ever minted", () => {

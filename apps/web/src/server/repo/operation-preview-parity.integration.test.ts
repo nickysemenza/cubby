@@ -3,6 +3,8 @@ import {
   type PreviewMergeEntity,
   previewOperationSchema,
 } from "@cubby/schemas/entity-integrity";
+import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
+import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
 import {
   unsafeFinancialAccountId,
   unsafeFinancialTransactionId,
@@ -17,6 +19,7 @@ import { mealCreateInput } from "@cubby/schemas/meal";
 import { projectCreateInput, taskCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
+import { wishCreateInput } from "@cubby/schemas/wish";
 import { and, eq, inArray } from "drizzle-orm";
 import { NONEXISTENT_UUID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -32,14 +35,23 @@ import {
   recipeSection,
   task,
 } from "~/server/db/schema";
-import { previewDeleteFinancialAccounts } from "~/server/repo/financial-account";
-import { previewDeleteFinancialTransactions } from "~/server/repo/financial-transaction";
+import {
+  createFinancialAccount,
+  deleteFinancialAccounts,
+  previewDeleteFinancialAccounts,
+} from "~/server/repo/financial-account";
+import {
+  createFinancialTransaction,
+  deleteFinancialTransactions,
+  previewDeleteFinancialTransactions,
+} from "~/server/repo/financial-transaction";
 import { previewDeleteLocations } from "~/server/repo/location/crud";
 import { previewMergeProducts } from "~/server/repo/product/merge";
 import { previewDeleteProjects } from "~/server/repo/project/crud";
 import {
   deleteCookbook,
   previewDeleteCookbooks,
+  setCookbookProduct,
   upsertCookbook,
 } from "./cookbook";
 import { getDb, notDeleted } from "./database-helpers";
@@ -66,7 +78,12 @@ import { deleteMeals } from "./meal";
 import { previewDeleteMeals } from "./meal/crud";
 import { deleteProducts } from "./product";
 import { previewDeleteProducts } from "./product/crud";
+import {
+  attachProductComponents,
+  detachProductComponents,
+} from "./product-components";
 import { createProject, deleteProjects } from "./project";
+import { attachProjectResources } from "./project/tools";
 import {
   createPurchase,
   deletePurchases,
@@ -74,6 +91,7 @@ import {
   previewDeletePurchases,
   previewMergePurchases,
 } from "./purchase";
+import { attachPurchaseProducts } from "./purchase-products";
 import { deleteRecipes } from "./recipe";
 import { previewDeleteRecipes } from "./recipe/crud";
 import {
@@ -99,7 +117,7 @@ import {
   previewDeleteVendors,
   previewMergeVendors,
 } from "./vendor";
-import { previewDeleteWishes } from "./wish";
+import { createWish, deleteWishes, previewDeleteWishes } from "./wish";
 
 /**
  * Real-database parity tests between an operation preview and the mutation it
@@ -149,7 +167,12 @@ describe("operation preview / mutation parity", () => {
 
     const detachesNoImages = (result: unknown) =>
       expect(result).toMatchObject({ detachedImageKeys: [] });
-    const resolvesVoid = (result: unknown) => expect(result).toBeUndefined();
+    // Every delete now measures and reports how many rows it actually
+    // removed (see repo/removal/entity.ts's `deleted`) rather than returning
+    // void — each case using this helper unblocks and removes exactly the one
+    // row the blocker was attached to.
+    const deletesOneRow = (result: unknown) =>
+      expect(result).toEqual({ deleted: 1 });
 
     /**
      * One row per (entity, blocking edge). The body below is the parity claim
@@ -241,7 +264,7 @@ describe("operation preview / mutation parity", () => {
             // ingredients, which is what clears the live usage.
             clearBlocker: () =>
               deleteRecipes(ctx.db, [recipe.entityId], ctx.actor),
-            expectResolved: resolvesVoid,
+            expectResolved: deletesOneRow,
           };
         },
       ],
@@ -356,6 +379,465 @@ describe("operation preview / mutation parity", () => {
             clearBlocker: () =>
               deletePurchases(ctx.db, [purchase.id], ctx.actor),
             expectResolved: detachesNoImages,
+          };
+        },
+      ],
+      [
+        "ingredient: a live linked product blocks delete",
+        async () => {
+          const ingredient = await createIngredient(
+            ctx.db,
+            { name: "Blocked-By-Product Ingredient", aliases: [] },
+            ctx.actor,
+          );
+          const product = await createProduct(
+            ctx.db,
+            makeProductInput({
+              name: "Links Blocked Ingredient",
+              upc: "800000000030",
+              ingredientId: ingredient.id,
+            }),
+            ctx.actor,
+          );
+          return {
+            preview: () =>
+              previewOperation(
+                ctx.db,
+                {
+                  operation: "delete",
+                  entity: "ingredient",
+                  ids: [ingredient.id],
+                },
+                new Date(),
+              ),
+            edgeKey: "Product.ingredientId",
+            reason: "INGREDIENT_HAS_PRODUCTS",
+            remove: () =>
+              deleteIngredients(ctx.db, [ingredient.entityId], ctx.actor),
+            clearBlocker: () =>
+              deleteProducts(ctx.db, [product.entityId], ctx.actor),
+            expectResolved: deletesOneRow,
+          };
+        },
+      ],
+      [
+        "project: a live sub-project blocks delete",
+        async () => {
+          const { output: parent } = await createProject(
+            ctx.db,
+            projectCreateInput.parse({ name: "Blocked Parent Project" }),
+            ctx.actor,
+          );
+          const { output: child } = await createProject(
+            ctx.db,
+            projectCreateInput.parse({
+              name: "Blocking Child Project",
+              parentProjectId: parent.id,
+            }),
+            ctx.actor,
+          );
+          return {
+            preview: () =>
+              previewOperation(
+                ctx.db,
+                { operation: "delete", entity: "project", ids: [parent.id] },
+                new Date(),
+              ),
+            edgeKey: "Project.parentProjectId",
+            reason: "PROJECT_HAS_CHILDREN",
+            remove: () => deleteProjects(ctx.db, [parent.id], ctx.actor),
+            clearBlocker: () => deleteProjects(ctx.db, [child.id], ctx.actor),
+            expectResolved: detachesNoImages,
+          };
+        },
+      ],
+      [
+        "project: a live expense blocks delete",
+        async () => {
+          const { output: project } = await createProject(
+            ctx.db,
+            projectCreateInput.parse({ name: "Expense-Blocked Project" }),
+            ctx.actor,
+          );
+          const { output: line } = await createExpense(
+            ctx.db,
+            {
+              ...makeExpenseInput(),
+              name: "Blocking Project Expense",
+              projectId: project.id,
+            },
+            ctx.actor,
+          );
+          return {
+            preview: () =>
+              previewOperation(
+                ctx.db,
+                { operation: "delete", entity: "project", ids: [project.id] },
+                new Date(),
+              ),
+            edgeKey: "Expense.projectId",
+            reason: "PROJECT_HAS_EXPENSES",
+            remove: () => deleteProjects(ctx.db, [project.id], ctx.actor),
+            clearBlocker: () => deleteExpenses(ctx.db, [line.id], ctx.actor),
+            expectResolved: detachesNoImages,
+          };
+        },
+      ],
+      [
+        "product: a live expense blocks delete",
+        async () => {
+          const product = await createProduct(
+            ctx.db,
+            makeProductInput({
+              name: "Expense-Blocked Product",
+              upc: "800000000031",
+            }),
+            ctx.actor,
+          );
+          const { output: line } = await createExpense(
+            ctx.db,
+            {
+              ...makeExpenseInput(),
+              name: "Blocking Product Expense",
+              productId: product.id,
+            },
+            ctx.actor,
+          );
+          return {
+            preview: () =>
+              previewOperation(
+                ctx.db,
+                { operation: "delete", entity: "product", ids: [product.id] },
+                new Date(),
+              ),
+            edgeKey: "Expense.productId",
+            reason: "PRODUCT_HAS_EXPENSES",
+            remove: () => deleteProducts(ctx.db, [product.entityId], ctx.actor),
+            clearBlocker: () => deleteExpenses(ctx.db, [line.id], ctx.actor),
+            expectResolved: detachesNoImages,
+          };
+        },
+      ],
+      [
+        "product: a live task subject blocks delete",
+        async () => {
+          const product = await createProduct(
+            ctx.db,
+            makeProductInput({
+              name: "Task-Blocked Product",
+              upc: "800000000032",
+            }),
+            ctx.actor,
+          );
+          const { output: taskRow } = await createTask(
+            ctx.db,
+            taskCreateInput.parse({
+              name: "Blocking Task Subject",
+              trade: "other",
+              subjectProductId: product.id,
+            }),
+            ctx.actor,
+          );
+          return {
+            preview: () =>
+              previewOperation(
+                ctx.db,
+                { operation: "delete", entity: "product", ids: [product.id] },
+                new Date(),
+              ),
+            edgeKey: "Task.subjectProductId",
+            reason: "PRODUCT_HAS_TASKS",
+            remove: () => deleteProducts(ctx.db, [product.entityId], ctx.actor),
+            clearBlocker: () => deleteTasks(ctx.db, [taskRow.id], ctx.actor),
+            expectResolved: detachesNoImages,
+          };
+        },
+      ],
+      [
+        "product: a live project tool-use blocks delete",
+        async () => {
+          const { output: project, entityId: projectId } = await createProject(
+            ctx.db,
+            projectCreateInput.parse({ name: "Tool-Use Blocked Project" }),
+            ctx.actor,
+          );
+          const tool = await createProduct(
+            ctx.db,
+            makeProductInput({
+              name: "Project-Use-Blocked Tool",
+              upc: "800000000033",
+              category: "tools",
+            }),
+            ctx.actor,
+          );
+          await attachProjectResources(
+            ctx.db,
+            projectId,
+            [tool.entityId],
+            ctx.actor,
+          );
+          return {
+            preview: () =>
+              previewOperation(
+                ctx.db,
+                { operation: "delete", entity: "product", ids: [tool.id] },
+                new Date(),
+              ),
+            edgeKey: "ProjectToolUsage.productId",
+            reason: "PRODUCT_HAS_PROJECT_USES",
+            remove: () => deleteProducts(ctx.db, [tool.entityId], ctx.actor),
+            // Cascades the ProjectToolUsage row along with the project, the
+            // same edge `project-tools.integration.test.ts` exercises from the
+            // mutation side alone.
+            clearBlocker: () => deleteProjects(ctx.db, [project.id], ctx.actor),
+            expectResolved: detachesNoImages,
+          };
+        },
+      ],
+      [
+        "product: a live purchase link blocks delete",
+        async () => {
+          const { output: vendor } = await createVendor(
+            ctx.db,
+            vendorCreateInput.parse({ name: "Purchase-Link Vendor" }),
+            ctx.actor,
+          );
+          const { output: purchase, entityId: purchaseId } =
+            await createPurchase(
+              ctx.db,
+              purchaseCreateInput.parse({
+                date: "2024-01-15",
+                vendorId: vendor.id,
+              }),
+              ctx.actor,
+            );
+          const product = await createProduct(
+            ctx.db,
+            makeProductInput({
+              name: "Purchase-Link-Blocked Product",
+              upc: "800000000034",
+            }),
+            ctx.actor,
+          );
+          await attachPurchaseProducts(
+            ctx.db,
+            purchaseId,
+            [product.entityId],
+            ctx.actor,
+          );
+          return {
+            preview: () =>
+              previewOperation(
+                ctx.db,
+                { operation: "delete", entity: "product", ids: [product.id] },
+                new Date(),
+              ),
+            edgeKey: "PurchaseProduct.productId",
+            reason: "PRODUCT_HAS_PURCHASE_LINKS",
+            remove: () => deleteProducts(ctx.db, [product.entityId], ctx.actor),
+            // Cascades the PurchaseProduct link along with the purchase — the
+            // same edge PURCHASE_DELETE_EDGE_POLICY soft-deletes.
+            clearBlocker: () =>
+              deletePurchases(ctx.db, [purchase.id], ctx.actor),
+            expectResolved: detachesNoImages,
+          };
+        },
+      ],
+      [
+        "product: a live wishlist candidate blocks delete",
+        async () => {
+          const product = await createProduct(
+            ctx.db,
+            makeProductInput({
+              name: "Wish-Blocked Tool",
+              upc: "800000000035",
+              category: "tools",
+            }),
+            ctx.actor,
+          );
+          const { output: wish } = await createWish(
+            ctx.db,
+            wishCreateInput.parse({
+              name: "Blocking Wish",
+              candidateProductIds: [product.id],
+            }),
+            ctx.actor,
+          );
+          return {
+            preview: () =>
+              previewOperation(
+                ctx.db,
+                { operation: "delete", entity: "product", ids: [product.id] },
+                new Date(),
+              ),
+            edgeKey: "WishCandidate.productId",
+            reason: "PRODUCT_HAS_WISH_CANDIDATES",
+            remove: () => deleteProducts(ctx.db, [product.entityId], ctx.actor),
+            clearBlocker: () => deleteWishes(ctx.db, [wish.id], ctx.actor),
+            expectResolved: detachesNoImages,
+          };
+        },
+      ],
+      [
+        "product: a location that IS the product blocks delete",
+        async () => {
+          const product = await createProduct(
+            ctx.db,
+            makeProductInput({
+              name: "Location-Identity Product",
+              upc: "800000000036",
+            }),
+            ctx.actor,
+          );
+          const location = await createLocation(
+            ctx.db,
+            makeLocationInput({
+              name: "Location-Identity Bin",
+              type: null,
+              productId: product.id,
+              parentId: null,
+            }),
+            ctx.actor,
+          );
+          return {
+            preview: () =>
+              previewOperation(
+                ctx.db,
+                { operation: "delete", entity: "product", ids: [product.id] },
+                new Date(),
+              ),
+            edgeKey: "Location.productId",
+            reason: "PRODUCT_HAS_LOCATIONS",
+            remove: () => deleteProducts(ctx.db, [product.entityId], ctx.actor),
+            clearBlocker: () =>
+              deleteLocations(ctx.db, [location.entityId], ctx.actor),
+            expectResolved: detachesNoImages,
+          };
+        },
+      ],
+      [
+        "product: a cookbook's physical copy blocks delete",
+        async () => {
+          const cb = await upsertCookbook(
+            ctx.db,
+            {
+              name: "Copy-Blocked Cookbook",
+              rawJson: [],
+              sourceLabel: "copy-blocked.epub",
+            },
+            ctx.actor,
+          );
+          const product = await createProduct(
+            ctx.db,
+            makeProductInput({
+              name: "Cookbook Physical Copy",
+              upc: "800000000037",
+            }),
+            ctx.actor,
+          );
+          await setCookbookProduct(
+            ctx.db,
+            ctx.actor,
+            cb.entityId,
+            product.entityId,
+          );
+          return {
+            preview: () =>
+              previewOperation(
+                ctx.db,
+                { operation: "delete", entity: "product", ids: [product.id] },
+                new Date(),
+              ),
+            edgeKey: "Cookbook.productId",
+            reason: "PRODUCT_HAS_COOKBOOKS",
+            remove: () => deleteProducts(ctx.db, [product.entityId], ctx.actor),
+            clearBlocker: () => deleteCookbook(ctx.db, cb.entityId, ctx.actor),
+            expectResolved: detachesNoImages,
+          };
+        },
+      ],
+      [
+        "product: a live kit membership blocks delete",
+        async () => {
+          const kit = await createProduct(
+            ctx.db,
+            makeProductInput({ name: "Blocking Kit", upc: "800000000038" }),
+            ctx.actor,
+          );
+          const part = await createProduct(
+            ctx.db,
+            makeProductInput({
+              name: "Kit-Membership-Blocked Part",
+              upc: "800000000039",
+            }),
+            ctx.actor,
+          );
+          await attachProductComponents(
+            ctx.db,
+            kit.entityId,
+            [{ productId: part.entityId, quantity: 1 }],
+            ctx.actor,
+          );
+          return {
+            preview: () =>
+              previewOperation(
+                ctx.db,
+                { operation: "delete", entity: "product", ids: [part.id] },
+                new Date(),
+              ),
+            edgeKey: "ProductComponent.componentProductId",
+            reason: "PRODUCT_HAS_KIT_LINKS",
+            remove: () => deleteProducts(ctx.db, [part.entityId], ctx.actor),
+            clearBlocker: () =>
+              detachProductComponents(
+                ctx.db,
+                kit.entityId,
+                [part.entityId],
+                ctx.actor,
+              ),
+            expectResolved: detachesNoImages,
+          };
+        },
+      ],
+      [
+        "financialAccount: a live financial transaction blocks delete",
+        async () => {
+          const { output: account } = await createFinancialAccount(
+            ctx.db,
+            financialAccountCreateInput.parse({
+              name: "Blocked Financial Account",
+              identity: { kind: "cash" },
+            }),
+            ctx.actor,
+          );
+          const { output: txn } = await createFinancialTransaction(
+            ctx.db,
+            financialTransactionCreateInput.parse({
+              accountId: account.id,
+              kind: "fee",
+              status: "pending",
+              amount: 25,
+            }),
+            ctx.actor,
+          );
+          return {
+            preview: () =>
+              previewOperation(
+                ctx.db,
+                {
+                  operation: "delete",
+                  entity: "financialAccount",
+                  ids: [account.id],
+                },
+                new Date(),
+              ),
+            edgeKey: "FinancialTransaction.accountId",
+            reason: "FINANCIAL_ACCOUNT_HAS_TRANSACTIONS",
+            remove: () =>
+              deleteFinancialAccounts(ctx.db, [account.id], ctx.actor),
+            clearBlocker: () =>
+              deleteFinancialTransactions(ctx.db, [txn.id], ctx.actor),
+            expectResolved: deletesOneRow,
           };
         },
       ],
@@ -1130,7 +1612,7 @@ describe("operation preview / mutation parity", () => {
 
       await expect(
         deleteInventoryEntries(ctx.db, [entry.entityId], ctx.actor),
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual({ deleted: 1 });
     });
   });
 

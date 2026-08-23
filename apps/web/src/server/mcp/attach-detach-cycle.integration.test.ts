@@ -206,7 +206,11 @@ describe("attach_file / detach cycle", () => {
       vi.mocked(deleteS3Object).mockClear();
 
       expectOk(
-        await callTool("delete_products", { ids: [productCode] }, caller),
+        await callTool(
+          "delete_entity",
+          { entity: "product", ids: [productCode] },
+          caller,
+        ),
       );
 
       expect(vi.mocked(deleteS3Object)).toHaveBeenCalledWith(key);
@@ -229,7 +233,13 @@ describe("attach_file / detach cycle", () => {
       // Recipes reach `removeEntity` with `recipeImage` DECLARED in `children`
       // rather than hand-rolled above the call — this is what proves the
       // declaration is what makes the reap visible.
-      expectOk(await callTool("delete_recipe", { ids: [recipeCode] }, caller));
+      expectOk(
+        await callTool(
+          "delete_entity",
+          { entity: "recipe", ids: [recipeCode] },
+          caller,
+        ),
+      );
 
       expect(vi.mocked(deleteS3Object)).toHaveBeenCalledWith(key);
     });

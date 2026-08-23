@@ -1500,7 +1500,7 @@ describe("product repository", () => {
         }),
         ctx.actor,
       );
-      const pendingImage = await insertAndReturn(ctx.db, image, {
+      const pendingImage = await insertWithShortcode(ctx.db, "image", {
         key: "test-products/enrichment-cover.png",
         url: "https://example.com/enrichment-cover.png",
         filename: "enrichment-cover.png",
@@ -3149,7 +3149,7 @@ describe("product repository", () => {
     });
 
     it("allows delete — and cascade-soft-deletes — when only metadata edges (external id, unit mapping, image) are live", async () => {
-      const pendingImage = await insertAndReturn(ctx.db, image, {
+      const pendingImage = await insertWithShortcode(ctx.db, "image", {
         key: "test-products/backstop-metadata.png",
         url: "https://example.com/backstop-metadata.png",
         filename: "backstop-metadata.png",

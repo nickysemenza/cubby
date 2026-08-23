@@ -24,7 +24,6 @@ import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import {
   financialTransactionAllocation,
-  image,
   locationImage,
   mealRecipe,
   productComponent,
@@ -93,7 +92,7 @@ const softDelete = (db: Database, tableName: string, id: string) =>
 // schema.ts) plus whichever FK the calling edge cares about.
 
 const mkImage = (db: Database) =>
-  insertAndReturn(db, image, {
+  insertWithShortcode(db, "image", {
     url: `https://example.com/${uniq("img")}.png`,
     key: uniq("test/img"),
     filename: "img.png",

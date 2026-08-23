@@ -21,7 +21,7 @@ import {
   type SortParams,
 } from "@cubby/schemas/pagination";
 import { and, eq, gte, inArray, lte, type SQL, sql } from "drizzle-orm";
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { meal, mealRecipe, recipe } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -39,6 +39,7 @@ import {
   lockAndValidateForDelete,
   notDeleted,
   relations,
+  unwrapDb,
   updateAndReturn,
   updateLiveAndReturn,
   withTransaction,
@@ -310,15 +311,15 @@ export const deleteMeals = async (
   db: Database,
   ids: MealId[],
   actor: ActorContext,
-): Promise<void> => {
-  if (ids.length === 0) return;
-  await withTransaction(db, async (tx) => {
+): Promise<{ deleted: number }> => {
+  if (ids.length === 0) return { deleted: 0 };
+  return await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, meal, ids, "Meal");
     // The meal manifest has onDelete: [], so this transaction is the only place
     // a meal's EntityEmbedding row gets cleaned up. And because
     // `removeMealRecipe` unplans rows singly, a meal can already own dead
     // MealRecipe rows — the soft cascade's `notDeleted` is what preserves them.
-    await removeEntity(tx, {
+    const { deleted } = await removeEntity(tx, {
       entity: "meal",
       ids,
       removal: "soft",
@@ -331,6 +332,7 @@ export const deleteMeals = async (
         },
       ],
     });
+    return { deleted };
   });
 };
 
@@ -455,7 +457,7 @@ export const removeMealRecipeWithEntityId = async (
  * transaction; nothing here is a lock or a permission.
  */
 export const previewDeleteMeals = async (
-  db: Database,
+  db: Database | DrizzleTransaction,
   ids: MealId[],
 ): Promise<{ blockers: ImpactItem[]; changes: ImpactItem[] }> => {
   if (ids.length === 0) return { blockers: [], changes: [] };
@@ -467,7 +469,7 @@ export const previewDeleteMeals = async (
       edgeKey: "MealRecipe.mealId",
       label: "planned recipes",
       byTargetId: await countByTarget(
-        getDb(db),
+        unwrapDb(db),
         mealRecipe,
         mealRecipe.mealId,
         ids,

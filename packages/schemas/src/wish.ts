@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { moneyNullable } from "./money";
 import {
   auditDateFilterFields,
   deriveUpdateData,
@@ -40,7 +41,7 @@ export const wishCandidateOut = z.object({
   name: z.string(),
   manufacturer: z.string(),
   model: z.string().nullable(),
-  price: z.number().nullable(),
+  price: moneyNullable,
   inventoried: z.boolean(),
 });
 export type WishCandidateOut = z.infer<typeof wishCandidateOut>;

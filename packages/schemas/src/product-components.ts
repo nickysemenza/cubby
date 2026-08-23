@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { plainDate } from "./base-entity";
+import { relationMutationOut } from "./common";
 import { productShortcode, purchaseShortcode } from "./identifiers";
+import { moneyNullable } from "./money";
 import { createItemsResponseSchema } from "./pagination";
 import { productListItemOut } from "./product";
 
@@ -62,10 +64,9 @@ export type DetachProductComponentsInput = z.infer<
   typeof detachProductComponentsInput
 >;
 
-export const productComponentMutationOut = z.object({
-  changed: z.number().int().nonnegative(),
-  attached: z.number().int().nonnegative(),
-});
+/** See `relationMutationOut` (`./common`) for what `changed` / `attached` /
+ * `alreadySatisfied` mean — this family's edge is `ProductComponent`. */
+export const productComponentMutationOut = relationMutationOut;
 export type ProductComponentMutationOut = z.infer<
   typeof productComponentMutationOut
 >;
@@ -76,10 +77,9 @@ export const productComponentOut = z.object({
   productName: z.string(),
   manufacturer: z.string(),
   quantity: componentQuantity,
-  price: z
-    .number()
-    .nullable()
-    .describe("Effective valuation/costing price — display only, not spend."),
+  price: moneyNullable.describe(
+    "Effective valuation/costing price — display only, not spend.",
+  ),
   coverImageUrl: z.url().nullable(),
   /**
    * Live units of this component on shelves — how the kit's stock is actually
@@ -152,12 +152,9 @@ export const kitMembershipOut = z.object({
   quantity: componentQuantity,
   coverImageUrl: z.url().nullable(),
   attachedAt: z.date(),
-  price: z
-    .number()
-    .nullable()
-    .describe(
-      "The kit's own effective valuation/costing price — display only, not spend.",
-    ),
+  price: moneyNullable.describe(
+    "The kit's own effective valuation/costing price — display only, not spend.",
+  ),
   expenseCount: z
     .number()
     .int()

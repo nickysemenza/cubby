@@ -5,7 +5,7 @@ import { purchaseDocumentKind } from "./purchase";
 import type { ShortcodeEntity } from "./entity-manifest";
 import { anyShortcodeSchema } from "./identifiers";
 import { entityImage } from "./entity";
-import { id } from "./identifiers";
+import { id, imageShortcode } from "./identifiers";
 
 // Image status values - single source of truth for both Zod and Drizzle
 export const imageStatusValues = ["PENDING", "UPLOADED", "FAILED"] as const;
@@ -89,8 +89,13 @@ export const createInputImages = z.object({
 
 export const updateInputImages = z.object({
   pendingImageIds: z.array(z.uuid()).optional(),
-  removeImageIds: z.array(z.uuid()).optional(),
-  imageOrder: z.array(z.uuid()).optional(),
+  // Public `IMG-` codes, unlike `pendingImageIds` above: these name images the
+  // client already saw come back through `ImageOut`, so they arrive as
+  // shortcodes and have to be resolved to uuids before they reach a join-table
+  // write. `pendingImageIds` never round-tripped through an output, so it
+  // stays a raw uuid straight from `create_file_upload`.
+  removeImageIds: z.array(imageShortcode).optional(),
+  imageOrder: z.array(imageShortcode).optional(),
 });
 
 export type UpdateInputImages = z.infer<typeof updateInputImages>;
@@ -271,7 +276,9 @@ export const mcpAttachFileInput = z
 export type McpAttachFileInput = z.infer<typeof mcpAttachFileInput>;
 
 export const attachFileResponse = z.object({
-  imageId: id,
+  // The public code, so a caller can feed it straight back into `removeImageIds`
+  // or `imageOrder`. Returning a uuid here made that round trip impossible.
+  imageId: imageShortcode,
   url: z.url(),
   filename: z.string(),
   contentType: z.string(),
@@ -345,7 +352,9 @@ export const cullPendingImagesSchema = z.object({
 });
 
 export const imageOut = z.object({
-  id: id,
+  /** The public `IMG-` code. Images carry a shortcode like every other
+   *  local-table entity, so a raw uuid never reaches an API consumer. */
+  id: imageShortcode,
   url: z.url(),
   key: z.string(),
   filename: z.string(),
@@ -385,6 +394,10 @@ export type ImageAssociation = z.infer<typeof imageAssociationSchema>;
 
 export const initiateUploadWithoutEntityResponseSchema = z.object({
   uploadUrl: z.url(),
+  // Still the uuid: this id's only destination is `pendingImageIds`, which
+  // writes straight into a join-table FK. The pair is a closed round trip that
+  // never reaches an MCP payload, so converting it would churn call sites for
+  // no boundary benefit. `attach_file` is the flow that needed public codes.
   imageId: id,
   key: z.string(),
   url: z.url(),

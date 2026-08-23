@@ -198,8 +198,12 @@ const { getByID, getByShortcode, create, update } =
 const deleteItem = createDeleteProcedure<InventoryShortcode>(
   async (services, shortcodes) => {
     const ids = await inventoryShortcodes.all(services.db, shortcodes);
-    await deleteInventoryEntries(services.db, ids, services.actorContext);
-    return await runMutationSideEffectsForEntities(
+    const { deleted } = await deleteInventoryEntries(
+      services.db,
+      ids,
+      services.actorContext,
+    );
+    const backgroundBatches = await runMutationSideEffectsForEntities(
       services.db,
       ids.map((id) => ({
         action: "deleted" as const,
@@ -207,6 +211,7 @@ const deleteItem = createDeleteProcedure<InventoryShortcode>(
         source: "inventory.delete",
       })),
     );
+    return { deleted, backgroundBatches };
   },
   inventoryShortcode,
 );

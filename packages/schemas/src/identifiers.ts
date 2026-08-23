@@ -4,6 +4,7 @@ import type {
   ExpenseShortcode,
   FinancialAccountShortcode,
   FinancialTransactionShortcode,
+  ImageShortcode,
   IngredientShortcode,
   InventoryShortcode,
   LocationShortcode,
@@ -73,6 +74,9 @@ export type UserId = z.infer<typeof _userId>;
 export const [recipeId, unsafeRecipeId] = brandedId("RecipeId");
 export type RecipeId = z.infer<typeof recipeId>;
 
+export const [imageId, unsafeImageId] = brandedId("ImageId");
+export type ImageId = z.infer<typeof imageId>;
+
 export const [ingredientId, unsafeIngredientId] = brandedId("IngredientId");
 export type IngredientId = z.infer<typeof ingredientId>;
 
@@ -132,6 +136,7 @@ export {
   expenseShortcode,
   financialAccountShortcode,
   financialTransactionShortcode,
+  imageShortcode,
   ingredientShortcode,
   inventoryShortcode,
   locationShortcode,
@@ -150,6 +155,7 @@ export type {
   ExpenseShortcode,
   FinancialAccountShortcode,
   FinancialTransactionShortcode,
+  ImageShortcode,
   IngredientShortcode,
   InventoryShortcode,
   LocationShortcode,
@@ -169,6 +175,7 @@ export const unsafeFinancialAccountShortcode =
   makeUnsafeId<FinancialAccountShortcode>();
 export const unsafeFinancialTransactionShortcode =
   makeUnsafeId<FinancialTransactionShortcode>();
+export const unsafeImageShortcode = makeUnsafeId<ImageShortcode>();
 export const unsafeIngredientShortcode = makeUnsafeId<IngredientShortcode>();
 export const unsafeInventoryShortcode = makeUnsafeId<InventoryShortcode>();
 export const unsafeLocationShortcode = makeUnsafeId<LocationShortcode>();
@@ -199,6 +206,7 @@ export const unsafeWishShortcode = makeUnsafeId<WishShortcode>();
  */
 interface EntityIdBrand {
   cookbook: CookbookId;
+  image: ImageId;
   expense: ExpenseId;
   financialAccount: FinancialAccountId;
   financialTransaction: FinancialTransactionId;
@@ -247,6 +255,7 @@ export const unsafeIdForEntity: {
   readonly [E in ShortcodeEntity]: UnsafeIdFor<E>;
 } = {
   cookbook: unsafeCookbookId,
+  image: unsafeImageId,
   expense: unsafeExpenseId,
   financialAccount: unsafeFinancialAccountId,
   financialTransaction: unsafeFinancialTransactionId,
@@ -284,6 +293,7 @@ export const ENTITY_NOT_FOUND_REASON = {
   expense: "EXPENSE_NOT_FOUND",
   financialAccount: "FINANCIAL_ACCOUNT_NOT_FOUND",
   financialTransaction: "FINANCIAL_TRANSACTION_NOT_FOUND",
+  image: "IMAGE_NOT_FOUND",
   ingredient: "INGREDIENT_NOT_FOUND",
   inventory: "INVENTORY_NOT_FOUND",
   location: "LOCATION_NOT_FOUND",
@@ -314,6 +324,7 @@ export const ENTITY_LABEL = {
   expense: "Expense",
   financialAccount: "Financial account",
   financialTransaction: "Financial transaction",
+  image: "Image",
   ingredient: "Ingredient",
   inventory: "Inventory entry",
   location: "Location",

@@ -30,14 +30,38 @@ export const plainDate = z
   .meta({ mockValue: "2024-01-15" })
   .describe('Calendar day as "YYYY-MM-DD"');
 
-/** Inclusive calendar-day bounds for the audit timestamps every entity carries. */
-const auditDate = plainDate;
+type DateRangeFields<Prefix extends string> = {
+  [K in `${Prefix}From`]: z.ZodOptional<typeof plainDate>;
+} & {
+  [K in `${Prefix}To`]: z.ZodOptional<typeof plainDate>;
+};
+
+/**
+ * Inclusive `{prefix}From`/`{prefix}To` calendar-day filter bounds. Same
+ * generator shape as `trio()` in related-view.ts — a spreadable field-map
+ * factory — specialized to the date-range-pair pattern instead of the
+ * relation-filter-triple one.
+ *
+ * Only covers the plain, undecorated pair: `plainDate.optional()` on both
+ * ends, nothing else. A pair that also carries a `.describe()` (several
+ * filter fields do, for MCP tool prose) or that isn't optional (an output
+ * shape's resolved range, not a filter) is a deliberate divergence, not an
+ * oversight — leave those hand-declared rather than forcing them through
+ * this generator and losing the description or the optionality.
+ */
+export const dateRangeFields = <Prefix extends string>(
+  prefix: Prefix,
+): DateRangeFields<Prefix> => {
+  const bound = plainDate.optional();
+  return {
+    [`${prefix}From`]: bound,
+    [`${prefix}To`]: bound,
+  } as DateRangeFields<Prefix>;
+};
 
 export const auditDateFilterFields = {
-  createdFrom: auditDate.optional(),
-  createdTo: auditDate.optional(),
-  updatedFrom: auditDate.optional(),
-  updatedTo: auditDate.optional(),
+  ...dateRangeFields("created"),
+  ...dateRangeFields("updated"),
 } as const;
 
 type StripDefault<F> =

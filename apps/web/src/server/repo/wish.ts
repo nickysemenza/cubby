@@ -496,11 +496,11 @@ export const deleteWishes = async (
   db: Database,
   shortcodes: WishShortcode[],
   actor: ActorContext,
-): Promise<void> => {
+): Promise<{ deleted: number }> => {
   const ids = await resolveAllOrThrow(db, "wish", shortcodes);
-  await withTransaction(db, async (tx) => {
+  return await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, wish, ids, "Wish");
-    await removeEntity(tx, {
+    const { deleted } = await removeEntity(tx, {
       entity: "wish",
       ids,
       removal: "soft",
@@ -513,12 +513,13 @@ export const deleteWishes = async (
         },
       ],
     });
+    return { deleted };
   });
 };
 
 /** Advisory impact for the owned candidate rows soft-deleted with a wish. */
 export const previewDeleteWishes = async (
-  db: Database,
+  db: Database | DrizzleTransaction,
   ids: WishId[],
 ): Promise<{ blockers: ImpactItem[]; changes: ImpactItem[] }> => {
   if (ids.length === 0) return { blockers: [], changes: [] };
@@ -530,7 +531,7 @@ export const previewDeleteWishes = async (
         edgeKey: "WishCandidate.wishId",
         label: "Tool alternatives",
         byTargetId: await countByTarget(
-          getDb(db),
+          unwrapDb(db),
           wishCandidate,
           wishCandidate.wishId,
           ids,

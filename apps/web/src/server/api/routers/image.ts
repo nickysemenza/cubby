@@ -90,8 +90,8 @@ const { list } = createEntityListProcedure({
  * mutation side-effects to run (images carry no embedding / derived data).
  */
 const deleteItem = createDeleteProcedure(async (services, ids) => {
-  await deleteImagesWithStorage(services.db, ids);
-  return undefined;
+  const { deletedIds } = await deleteImagesWithStorage(services.db, ids);
+  return { deleted: deletedIds.length };
 });
 
 export const imageRouter = createTRPCRouter({

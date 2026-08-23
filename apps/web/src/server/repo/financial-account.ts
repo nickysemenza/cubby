@@ -4,6 +4,10 @@ import type {
   OperationDisposition,
 } from "@cubby/schemas/entity-integrity";
 import {
+  type PublicImpactItem,
+  toPublicImpact,
+} from "@cubby/schemas/entity-integrity";
+import {
   type FinancialAccountCreateInput,
   type FinancialAccountFilters,
   type FinancialAccountOptionsOut,
@@ -20,12 +24,17 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { buildTakeSkip } from "@cubby/schemas/pagination";
-import { and, asc, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
+import type { AppErrorReason } from "@cubby/shared";
+import { and, asc, desc, eq, type SQL, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { financialAccount, financialTransaction } from "~/server/db/schema";
-import { createAppError } from "~/server/errors/app-error";
+import {
+  financialAccount,
+  financialTransaction,
+  statementRow,
+} from "~/server/db/schema";
+import { createAppError, createBlockedError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import {
   auditDateWhereConditions,
@@ -47,6 +56,7 @@ import { countByTarget, impact, present } from "~/server/repo/impact";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
 import {
+  lookupShortcodes,
   resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
@@ -366,40 +376,114 @@ export async function deleteFinancialAccounts(
   db: Database,
   shortcodes: FinancialAccountShortcode[],
   actor: ActorContext,
-) {
+): Promise<{ deleted: number }> {
   const ids = uniq(await resolveAllOrThrow(db, "financialAccount", shortcodes));
-  await withTransaction(db, async (tx) => {
+  return await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(
       tx,
       financialAccount,
       ids,
       "FinancialAccount",
     );
-    const [liveTransaction] = await tx
-      .select({ id: financialTransaction.id })
-      .from(financialTransaction)
-      .where(
-        and(
-          inArray(financialTransaction.accountId, ids),
-          notDeleted(financialTransaction),
-        ),
-      )
-      .limit(1);
-    if (liveTransaction)
-      throw createAppError(
-        "FINANCIAL_ACCOUNT_HAS_TRANSACTIONS",
-        "Cannot delete a financial account while live transactions reference it.",
-      );
-    await removeEntity(tx, {
+    // `countByTarget` rather than a `.limit(1)` existence probe: the probe knew
+    // only THAT something blocked, so the refusal could not name which account
+    // or how many rows. It is also the same call the preview makes, so the two
+    // can no longer disagree about what blocks.
+    const [transactionsByTarget, statementRowsByTarget] = [
+      await countByTarget(
+        tx,
+        financialTransaction,
+        financialTransaction.accountId,
+        ids,
+      ),
+      // `StatementRow.accountId` has been declared `effect: "block"` in
+      // FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY all along with nothing enforcing
+      // it — neither this guard nor the preview queried the table.
+      await countByTarget(tx, statementRow, statementRow.accountId, ids),
+    ];
+    await assertNoBlockingCounts(
+      tx,
+      transactionsByTarget,
+      "FINANCIAL_ACCOUNT_HAS_TRANSACTIONS",
+      "live transactions",
+      "FinancialTransaction.accountId",
+      FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY["FinancialTransaction.accountId"],
+    );
+    await assertNoBlockingCounts(
+      tx,
+      statementRowsByTarget,
+      "FINANCIAL_ACCOUNT_HAS_STATEMENT_ROWS",
+      "live statement rows",
+      "StatementRow.accountId",
+      FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY["StatementRow.accountId"],
+    );
+    const { deleted } = await removeEntity(tx, {
       entity: "financialAccount",
       ids,
       removal: "soft",
       actor,
     });
+    return { deleted };
   });
 }
 
-/** Advisory delete impact using the same live-transaction predicate as delete. */
+/**
+ * Refuse when any target still has dependents, naming the targets and their
+ * counts. `countByTarget` keys by account id, so the message can say WHICH
+ * account blocked and with how many rows — the thing the old existence probe
+ * threw away.
+ */
+async function assertNoBlockingCounts(
+  db: Database | DrizzleTransaction,
+  byTargetId: Record<string, number>,
+  reason: AppErrorReason,
+  noun: string,
+  edgeKey: string,
+  disposition: OperationDisposition,
+): Promise<void> {
+  const blocked = Object.entries(byTargetId).filter(([, n]) => n > 0);
+  if (blocked.length === 0) return;
+
+  // The blockers travel as DATA, not only as prose. `byTargetId` is uuid-keyed
+  // inside a repo, so it is translated to shortcodes before leaving — a uuid
+  // must never cross the API boundary, and `toPublicImpact("throw")` makes an
+  // unmappable target loud rather than silently dropping a blocker.
+  const publicIdByEntityId = await lookupShortcodes(
+    db,
+    blocked.map(([id]) => ({ entity: "financialAccount" as const, id })),
+  );
+  const item = impact({
+    disposition,
+    edgeKey,
+    label: noun,
+    byTargetId: Object.fromEntries(blocked),
+  });
+  // Translation failure must never replace the refusal. This is an ERROR path:
+  // the caller's problem is that the delete is blocked, and swapping a typed
+  // `FINANCIAL_ACCOUNT_HAS_TRANSACTIONS` for a raw "no public id for target"
+  // would hide the real answer behind a bookkeeping detail. So the structured
+  // blockers are best-effort here even though `"throw"` is the right policy for
+  // a SUCCESS payload, where a dropped id would silently under-report.
+  let blockers: PublicImpactItem[] = [];
+  if (item) {
+    try {
+      blockers = [toPublicImpact(item, publicIdByEntityId, "throw")];
+    } catch {
+      blockers = [];
+    }
+  }
+
+  const detail = blocked
+    .map(([id, n]) => `${publicIdByEntityId.get(id) ?? id} (${n})`)
+    .join(", ");
+  throw createBlockedError(
+    reason,
+    `Cannot delete a financial account while ${noun} reference it: ${detail}.`,
+    blockers,
+  );
+}
+
+/** Advisory delete impact using the same predicates as delete. */
 export async function previewDeleteFinancialAccounts(
   db: Database,
   ids: FinancialAccountId[],
@@ -409,10 +493,17 @@ export async function previewDeleteFinancialAccounts(
   sideEffects: ImpactItem[];
 }> {
   if (ids.length === 0) return { blockers: [], changes: [], sideEffects: [] };
-  const byTargetId = await countByTarget(
-    getDb(db),
+  const client = getDb(db);
+  const transactionsByTarget = await countByTarget(
+    client,
     financialTransaction,
     financialTransaction.accountId,
+    ids,
+  );
+  const statementRowsByTarget = await countByTarget(
+    client,
+    statementRow,
+    statementRow.accountId,
     ids,
   );
   return {
@@ -424,7 +515,14 @@ export async function previewDeleteFinancialAccounts(
           ],
         edgeKey: "FinancialTransaction.accountId",
         label: "live transactions still pointing at this account",
-        byTargetId,
+        byTargetId: transactionsByTarget,
+      }),
+      impact({
+        disposition:
+          FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY["StatementRow.accountId"],
+        edgeKey: "StatementRow.accountId",
+        label: "live statement rows assigned to this account",
+        byTargetId: statementRowsByTarget,
       }),
     ]),
     changes: [],

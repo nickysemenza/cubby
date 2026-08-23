@@ -5,7 +5,13 @@ import {
 } from "./expense-line-kind";
 import { financialReconciliationSummary } from "./financial-reconciliation";
 import { imageUrlSummary } from "./image-summary";
-import { wholeCentAmount } from "./money";
+import {
+  money,
+  moneyNullable,
+  positiveMoney,
+  positiveMoneyNullable,
+  wholeCentAmount,
+} from "./money";
 import {
   expenseRelatedFilterFields,
   projectRelatedFilterFields,
@@ -14,10 +20,12 @@ import {
 import { mutationSideEffectsSchema } from "./background-jobs";
 import {
   auditDateFilterFields,
+  dateRangeFields,
   deriveUpdateData,
   plainDate,
   timestampedFields,
 } from "./base-entity";
+import { relationMutationOut } from "./common";
 import type { ShortcodeEntity } from "./entity-manifest";
 import {
   anyShortcodeSchema,
@@ -259,7 +267,7 @@ const projectFields = {
   status: projectStatusSchema,
   kind: projectKindSchema.nullable(),
   locations: z.array(z.string()).describe("House/site names, free-form"),
-  costEstimate: z.number().nullable().describe("Budget estimate in dollars"),
+  costEstimate: moneyNullable.describe("Budget estimate in dollars"),
   // Arbitrary-depth sub-projects (WBS) — a sub-project's own `costEstimate`
   // is its budget envelope; expenses/tasks attribute to it via their
   // existing `projectId`. Cycle/self-parent guards live in
@@ -286,7 +294,7 @@ const projectCreateShape = {
   status: projectStatusSchema.default("planning"),
   kind: projectKindSchema.nullable().default(null),
   locations: z.array(z.string()).default([]),
-  costEstimate: z.number().nullable().default(null),
+  costEstimate: moneyNullable.default(null),
   parentProjectId: projectShortcode.nullable().default(null),
   startDate: plainDate.nullable().default(null),
   endDate: plainDate.nullable().default(null),
@@ -351,8 +359,7 @@ export const embeddedProjectScopeSchema = z.object({
   kinds: z.array(projectKindSchema).optional(),
   locations: z.array(z.string()).optional(),
   search: z.string().optional(),
-  dateFrom: plainDate.optional(),
-  dateTo: plainDate.optional(),
+  ...dateRangeFields("date"),
   completionYear,
 });
 export type EmbeddedProjectScope = z.infer<typeof embeddedProjectScopeSchema>;
@@ -366,8 +373,7 @@ export const projectFilterFields = {
     .optional()
     .describe("Any exact match against locations[]"),
   search: z.string().optional(),
-  dateFrom: plainDate.optional(),
-  dateTo: plainDate.optional(),
+  ...dateRangeFields("date"),
   completionYear,
   parentProjectPresenceFilter: presenceFilter,
   imagePresenceFilter: presenceFilter.describe(
@@ -443,43 +449,36 @@ export const projectDateWindow = z.object({
 export type ProjectDateWindow = z.infer<typeof projectDateWindow>;
 
 export const projectRollup = z.object({
-  spent: z
-    .number()
-    .describe(
-      "SUM(cost) of live expenses — the blended net (actualSpent + committedSpent − contributions), including planned + offsets",
-    ),
+  spent: money.describe(
+    "SUM(cost) of live expenses — the blended net (actualSpent + committedSpent − contributions), including planned + offsets",
+  ),
   // The `spent` figure above blends three economically distinct quantities;
   // these split it so callers can show a true money-out "Actual" that matches
   // the detail hero / BudgetStrip decomposition instead of the net blend.
-  actualSpent: z
-    .number()
-    .describe("SUM(cost) where cost > 0 and not future — money already spent"),
-  committedSpent: z
-    .number()
-    .describe("SUM(cost) where cost > 0 and future — planned, not yet spent"),
-  contributions: z
-    .number()
-    .describe(
-      "SUM(-cost) where cost < 0 — offsets/credits, positive magnitude",
-    ),
+  actualSpent: money.describe(
+    "SUM(cost) where cost > 0 and not future — money already spent",
+  ),
+  committedSpent: money.describe(
+    "SUM(cost) where cost > 0 and future — planned, not yet spent",
+  ),
+  contributions: money.describe(
+    "SUM(-cost) where cost < 0 — offsets/credits, positive magnitude",
+  ),
   expenseCount: z.number().int(),
   taskCount: z.number().int(),
   doneTaskCount: z.number().int(),
   subtree: z.object({
-    spent: z.number(),
-    actualSpent: z.number(),
-    committedSpent: z.number(),
-    contributions: z.number(),
+    spent: money,
+    actualSpent: money,
+    committedSpent: money,
+    contributions: money,
     expenseCount: z.number().int(),
     taskCount: z.number().int(),
     doneTaskCount: z.number().int(),
     projectCount: z.number().int().describe("Live descendant project count"),
-    costEstimate: z
-      .number()
-      .nullable()
-      .describe(
-        "SUM of non-null costEstimates; null when the subtree has none",
-      ),
+    costEstimate: moneyNullable.describe(
+      "SUM of non-null costEstimates; null when the subtree has none",
+    ),
   }),
 });
 export type ProjectRollup = z.infer<typeof projectRollup>;
@@ -1253,10 +1252,10 @@ export type ExpenseListAndSideEffectsOut = z.infer<
  */
 
 const expenseAggregateFields = {
-  actual: z.number(),
-  committed: z.number(),
-  credits: z.number(),
-  net: z.number(),
+  actual: money,
+  committed: money,
+  credits: money,
+  net: money,
   count: z.number().int(),
 };
 
@@ -1306,7 +1305,7 @@ export type ExpenseMonthlySummaryOut = z.infer<typeof expenseMonthlySummaryOut>;
 
 export const expenseCumulativePoint = z.object({
   month: z.string().describe('"yyyy-MM"'),
-  cumulativeNet: z.number(),
+  cumulativeNet: money,
 });
 export type ExpenseCumulativePoint = z.infer<typeof expenseCumulativePoint>;
 
@@ -1637,15 +1636,15 @@ export const expenseMatchPurchaseContext = z.object({
   vendorName: z.string().nullable(),
   orderId: z.string().nullable(),
   expenseCount: z.number().int(),
-  expenseTotal: z.number(),
-  statedTotal: z.number().nullable(),
+  expenseTotal: money,
+  statedTotal: moneyNullable,
   financialReconciliation: financialReconciliationSummary,
 });
 
 export const expenseMatchCandidate = z.object({
   expenseId: expenseShortcode,
   name: z.string(),
-  cost: z.number().nullable(),
+  cost: moneyNullable,
   date: plainDate,
   /** Planned spend. Included, never filtered — an export line often IS one. */
   future: z.boolean(),
@@ -1728,10 +1727,9 @@ export const projectResourceMutationInput = z.object({
   productIds: z.array(productShortcode).min(1).max(100),
 });
 
-export const projectResourceMutationOut = z.object({
-  changed: z.number().int().nonnegative(),
-  attached: z.number().int().nonnegative(),
-});
+/** See `relationMutationOut` (`./common`) for what `changed` / `attached` /
+ * `alreadySatisfied` mean — this family's edge is `ProjectToolUsage`. */
+export const projectResourceMutationOut = relationMutationOut;
 
 // Move a product's project-use history onto another product. Distinct from
 // attach+detach because those two are separable, and a detach without its
@@ -1756,23 +1754,28 @@ export type ReusableResourceCategory = z.infer<typeof reusableResourceCategory>;
 
 const projectToolEconomicsFields = {
   projectUseCount: z.number().int().nonnegative(),
-  netLifetimeCost: z.number(),
-  costPerProjectUse: z.number().nullable(),
-  grossLifetimeAcquisitionCost: z.number().nonnegative(),
+  netLifetimeCost: money,
+  costPerProjectUse: moneyNullable,
+  // Read shape constrained nonnegative like a write boundary — see money.ts
+  // convention note and the Task 2 divergence list. Kept as-is (positiveMoney
+  // preserves the exact current behavior); NOT the same nullability as its
+  // near-twin `projectResourceEconomicsFields` below.
+  grossLifetimeAcquisitionCost: positiveMoney,
 };
 
 export const projectSharedWindowOut = z.object({
   startDate: plainDate,
   endDate: plainDate,
-  netCost: z.number(),
+  netCost: money,
 });
 export type ProjectSharedWindowOut = z.infer<typeof projectSharedWindowOut>;
 
 const projectResourceEconomicsFields = {
   projectUseCount: z.number().int().nonnegative(),
-  netLifetimeCost: z.number(),
-  costPerProjectUse: z.number().nullable(),
-  grossLifetimeAcquisitionCost: z.number().nonnegative().nullable(),
+  netLifetimeCost: money,
+  costPerProjectUse: moneyNullable,
+  // See the divergence note on projectToolEconomicsFields' sibling field above.
+  grossLifetimeAcquisitionCost: positiveMoneyNullable,
 };
 
 export const projectResourceOut = z.object({
@@ -1782,7 +1785,7 @@ export const projectResourceOut = z.object({
   category: reusableResourceCategory,
   coverImageUrl: z.url().nullable(),
   attachedAt: z.date(),
-  projectPurchaseCost: z.number().nonnegative().nullable(),
+  projectPurchaseCost: positiveMoneyNullable,
   sharedWindow: projectSharedWindowOut.nullable(),
   ...projectResourceEconomicsFields,
 });
@@ -1818,7 +1821,10 @@ export const projectToolSuggestionOut = z.object({
   matchedTrade: tradeSchema.nullable(),
   reasons: z.array(z.string()).min(1),
   isInventoried: z.boolean(),
-  projectPurchaseCost: z.number().nonnegative(),
+  // Non-nullable here, unlike `projectResourceOut.projectPurchaseCost` above —
+  // this lane only ever emits rows with real purchase evidence. See the Task 2
+  // divergence note.
+  projectPurchaseCost: positiveMoney,
   matchingExpenseCount: z.number().int().nonnegative(),
   ...projectToolEconomicsFields,
 });
@@ -1841,7 +1847,7 @@ export const projectToolSuggestionsOut = z.object({
   }),
   unlinkedExpensivePurchases: z.object({
     count: z.number().int().nonnegative(),
-    grossCost: z.number().nonnegative(),
+    grossCost: positiveMoney,
   }),
 });
 export type ProjectToolSuggestionsOut = z.infer<
@@ -1860,7 +1866,7 @@ export const productProjectUsesOut = z.object({
       projectName: z.string(),
       status: projectStatusSchema,
       kind: projectKindSchema.nullable(),
-      projectPurchaseCost: z.number().nonnegative().nullable(),
+      projectPurchaseCost: positiveMoneyNullable,
       sharedWindow: projectSharedWindowOut.nullable(),
       attachedAt: z.date(),
     }),
@@ -1958,8 +1964,7 @@ export const projectDashboardFilterFields = {
   kinds: z.array(projectKindSchema).optional(),
   locations: z.array(z.string()).optional(),
   search: z.string().optional(),
-  dateFrom: plainDate.optional(),
-  dateTo: plainDate.optional(),
+  ...dateRangeFields("date"),
   completionYear,
 };
 export const projectDashboardFiltersSchema = z.object(
@@ -2005,10 +2010,7 @@ export const projectToolMatrixInput = z.object({
   ...projectDashboardFilterFields,
   /** Row filter — matches product name or manufacturer. */
   toolSearch: z.string().optional(),
-  minNetLifetimeCost: z
-    .number()
-    .nonnegative()
-    .default(DEFAULT_TOOL_MATRIX_COST_FLOOR),
+  minNetLifetimeCost: positiveMoney.default(DEFAULT_TOOL_MATRIX_COST_FLOOR),
   groupBy: projectToolMatrixGroupBy.default("trade"),
   /** Omit for both lanes. `["purchased_here"]` drops the inferred lane. */
   suggestionLanes: z.array(projectToolSuggestionLane).optional(),
@@ -2106,7 +2108,7 @@ export const projectToolMatrixCellOut = z.object({
   lane: projectToolSuggestionLane.nullable(),
   matchedTrade: tradeSchema.nullable(),
   /** Populated on attached cells too, including below the suggestion floor. */
-  projectPurchaseCost: z.number().nonnegative(),
+  projectPurchaseCost: positiveMoney,
 });
 export type ProjectToolMatrixCellOut = z.infer<typeof projectToolMatrixCellOut>;
 
@@ -2200,15 +2202,15 @@ const attentionFacts = {
   }),
   missing_budget: z.object({
     /** `actualSpend + committedSpend`, the subtree total the rule tested. */
-    spend: z.number(),
-    actualSpend: z.number(),
-    committedSpend: z.number(),
+    spend: money,
+    actualSpend: money,
+    committedSpend: money,
   }),
   past_due_planned_expense: z.object({
     plannedFor: plainDate,
     daysPastDue: z.number().int().positive(),
     /** Null when the planned line never carried a cost. */
-    cost: z.number().nullable(),
+    cost: moneyNullable,
   }),
   unclassified_expense: z.object({
     date: plainDate.nullable(),
@@ -2428,8 +2430,8 @@ export const projectDashboardSummaryOut = z.object({
   summary: z.object({
     activeProjectCount: z.number().int(),
     openTaskCount: z.number().int(),
-    actualSpend: z.number(),
-    committedSpend: z.number(),
+    actualSpend: money,
+    committedSpend: money,
     /**
      * Sum of each scoped project's own SUBTREE `costEstimate` (portfolio
      * equivalent of `BudgetStrip`'s "Estimate" figure) — over ONLY the
@@ -2441,7 +2443,7 @@ export const projectDashboardSummaryOut = z.object({
      * `estimateCoverage` and disclose the population ("across N of M
      * projects") rather than presenting a partial sum as a complete total.
      */
-    estimateTotal: z.number().nullable(),
+    estimateTotal: moneyNullable,
     /** How many of the scoped projects `estimateTotal` actually covers. */
     estimateCoverage: z.object({
       projectsWithEstimate: z.number().int(),
@@ -2493,21 +2495,21 @@ export const projectPortfolioAnalyticsOut = z.object({
     z.object({
       projectId: projectShortcode,
       projectName: z.string(),
-      actual: z.number(),
-      committed: z.number(),
-      estimate: z.number().nullable(),
+      actual: money,
+      committed: money,
+      estimate: moneyNullable,
     }),
   ),
   spendingByProject: z.array(
     z.object({
       projectId: projectShortcode,
       projectName: z.string(),
-      spend: z.number(),
+      spend: money,
     }),
   ),
   monthlySpend: z.array(expenseMonthlyAggregate),
   plannedVsActual: z.array(
-    z.object({ month: z.string(), planned: z.number(), actual: z.number() }),
+    z.object({ month: z.string(), planned: money, actual: money }),
   ),
   tradeActivity: z.array(expenseTradeAggregate),
   adjustments: expenseAdjustmentsAggregate,

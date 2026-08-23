@@ -3,6 +3,11 @@
  * Search formatting, ordering, and list queries with counts.
  */
 
+import type {
+  InternalImpactItem,
+  OperationDisposition,
+  OperationEffect,
+} from "@cubby/schemas/entity-integrity";
 import type { PresenceFilter, SortParams } from "@cubby/schemas/pagination";
 import type { AppErrorReason } from "@cubby/shared";
 import type { AnyColumn, SQL, SQLWrapper } from "drizzle-orm";
@@ -290,16 +295,88 @@ export async function lockAndValidateForDelete<TId extends string>(
  * caller runs its own (entity-specific) dependent query and supplies the name
  * fetch — the shared part is the dedupe + refetch + count + join + throw.
  */
+/**
+ * The blocking half of {@link assertNoDependents}, as a VALUE.
+ *
+ * `assertNoDependents` had the offending ids and their dependent counts, joined
+ * the names into a sentence, and returned `void` — so the structure existed for
+ * exactly as long as it took to stringify. The preview path had been expressing
+ * the same facts as `ImpactItem`s all along; this lets the mutation path
+ * produce them too, from the same inputs.
+ *
+ * Returns `[]` when nothing blocks, so `.length === 0` is the "may proceed"
+ * check. Deliberately does NOT throw and does NOT fetch names: a caller that
+ * only needs to know *whether* it is blocked should not pay for prose.
+ *
+ * `byTargetId` counts occurrences, so it is dependents-per-blocked-parent.
+ * Note this is finer-grained than the count the legacy message renders, which
+ * is the number of distinct blocked parents — see the wrapper below, which
+ * preserves the old wording exactly.
+ */
+function dependentBlockers<TId extends string>(opts: {
+  offendingParentIds: ReadonlyArray<TId | null | undefined>;
+  /** The edge policy entry this blocker came from. */
+  disposition: Pick<OperationDisposition, "code" | "description"> & {
+    effect: OperationEffect;
+  };
+  /** `Table.column`, when the blocker corresponds to a declared edge. */
+  edgeKey?: string;
+  /** Short noun phrase naming the dependent rows — "inventory entries". */
+  label: string;
+}): InternalImpactItem[] {
+  const present = opts.offendingParentIds.filter((id): id is TId => id != null);
+  if (present.length === 0) return [];
+
+  const byTargetId: Record<string, number> = {};
+  for (const id of present) byTargetId[id] = (byTargetId[id] ?? 0) + 1;
+
+  return [
+    {
+      code: opts.disposition.code,
+      effect: opts.disposition.effect,
+      ...(opts.edgeKey ? { edgeKey: opts.edgeKey } : {}),
+      label: opts.label,
+      description: opts.disposition.description,
+      total: present.length,
+      byTargetId,
+    } as InternalImpactItem,
+  ];
+}
+
+/**
+ * Guard a soft-delete against orphaning dependents.
+ *
+ * Genuinely built on {@link dependentBlockers}: that computes WHICH targets are
+ * blocked and by how many dependents, and this adds the name fetch the prose
+ * needs. Wording is unchanged — `count` is still the number of distinct blocked
+ * parents, not the dependent total — so existing callers and the
+ * message-asserting tests are unaffected.
+ *
+ * A caller that wants the structure on the wire rather than in a sentence calls
+ * `dependentBlockers` directly and throws `createBlockedError` with the result;
+ * `deleteFinancialAccounts` is the worked example.
+ */
 export async function assertNoDependents<TId extends string>(opts: {
   offendingParentIds: ReadonlyArray<TId | null | undefined>;
   fetchNames: (ids: TId[]) => Promise<ReadonlyArray<{ name: string }>>;
   reason: AppErrorReason;
   message: (count: number, names: string) => string;
 }): Promise<void> {
+  // One shared notion of "what is blocked", so the prose path and the
+  // structured path can never disagree about it.
+  const blockers = dependentBlockers({
+    offendingParentIds: opts.offendingParentIds,
+    disposition: {
+      code: "block-dependents",
+      effect: "block",
+      description: "Dependent rows still reference this entity.",
+    },
+    label: "dependents",
+  });
+  if (blockers.length === 0) return;
   const ids = uniq(
-    opts.offendingParentIds.filter((id): id is TId => id != null),
-  );
-  if (ids.length === 0) return;
+    Object.keys(blockers[0]?.byTargetId ?? {}),
+  ) as unknown as TId[];
   const offenders = await opts.fetchNames(ids);
   const names = offenders.map((o) => o.name).join(", ");
   throw createAppError(opts.reason, opts.message(offenders.length, names));

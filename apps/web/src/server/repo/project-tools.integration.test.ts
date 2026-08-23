@@ -91,10 +91,13 @@ describe("project reusable resources", () => {
 
     await expect(
       attachProjectResources(ctx.db, kitchenId, [tool.entityId], ctx.actor),
-    ).resolves.toEqual({ changed: 1, attached: 1 });
+    ).resolves.toEqual({ changed: 1, attached: 1, alreadySatisfied: 0 });
+    // Idempotent repeat: `alreadySatisfied: 1` substantiates the "nothing
+    // changed" claim rather than leaving `changed: 0` ambiguous between a
+    // no-op and a silently rejected id.
     await expect(
       attachProjectResources(ctx.db, kitchenId, [tool.entityId], ctx.actor),
-    ).resolves.toEqual({ changed: 0, attached: 1 });
+    ).resolves.toEqual({ changed: 0, attached: 1, alreadySatisfied: 1 });
     await attachProjectResources(ctx.db, yardId, [tool.entityId], ctx.actor);
 
     await expect(listProjectResources(ctx.db, kitchenId)).resolves.toEqual([
@@ -133,7 +136,7 @@ describe("project reusable resources", () => {
 
     await expect(
       detachProjectResources(ctx.db, yardId, [tool.entityId], ctx.actor),
-    ).resolves.toEqual({ changed: 1, attached: 0 });
+    ).resolves.toEqual({ changed: 1, attached: 0, alreadySatisfied: 0 });
     await expect(listProjectResources(ctx.db, kitchenId)).resolves.toEqual([
       expect.objectContaining({
         projectUseCount: 1,
@@ -167,10 +170,10 @@ describe("project reusable resources", () => {
 
     await expect(
       attachProjectResources(ctx.db, projectId, [software.entityId], ctx.actor),
-    ).resolves.toEqual({ changed: 1, attached: 1 });
+    ).resolves.toEqual({ changed: 1, attached: 1, alreadySatisfied: 0 });
     await expect(
       attachProjectResources(ctx.db, projectId, [software.entityId], ctx.actor),
-    ).resolves.toEqual({ changed: 0, attached: 1 });
+    ).resolves.toEqual({ changed: 0, attached: 1, alreadySatisfied: 1 });
     await expect(
       attachProjectResources(ctx.db, projectId, [material.entityId], ctx.actor),
     ).rejects.toThrow(/tools or software/i);

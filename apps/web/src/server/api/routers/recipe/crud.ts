@@ -183,7 +183,7 @@ const deleteItem = createDeleteProcedure<RecipeShortcode>(
       [...parentsByRecipe.values()].flat().filter((id) => !deletedSet.has(id)),
     );
 
-    const { detachedImageKeys } = await deleteRecipes(
+    const { detachedImageKeys, deleted } = await deleteRecipes(
       services.db,
       ids,
       services.actorContext,
@@ -208,7 +208,10 @@ const deleteItem = createDeleteProcedure<RecipeShortcode>(
           })
         : [];
 
-    return [...sideEffectBatches, ...recomputeBatches];
+    return {
+      deleted,
+      backgroundBatches: [...sideEffectBatches, ...recomputeBatches],
+    };
   },
   recipeShortcode,
 );

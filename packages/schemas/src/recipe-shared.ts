@@ -1,6 +1,8 @@
 import { fdcId, type NutrientKey } from "@cubby/usda-schemas";
 import { z } from "zod";
+import { positiveAmount } from "./codec";
 import { cookbookShortcode } from "./identifiers";
+import { money } from "./money";
 
 // Recipe source values - single source of truth for both Zod and Drizzle
 export const recipeSourceValues = [
@@ -10,11 +12,12 @@ export const recipeSourceValues = [
   "Notion",
 ] as const;
 
-// Recipe yield schema - what the recipe produces
-export const recipeYieldSchema = z.object({
-  value: z.number().positive(),
-  unit: z.string().min(1),
-});
+// Recipe yield schema - what the recipe produces. Reuses `positiveAmount`
+// (value > 0, unit non-empty) rather than hand-rolling `{value, unit}` — that
+// was already this schema's exact constraint, so this is behavior-preserving
+// and additionally picks up `positiveAmount`'s optional `upperValue`, giving
+// recipes range yields ("makes 10-12 cookies") for free.
+export const recipeYieldSchema = positiveAmount;
 export type RecipeYield = z.infer<typeof recipeYieldSchema>;
 
 // Precomputed cost/calorie rollup for a recipe, persisted as a `totals` jsonb
@@ -22,11 +25,11 @@ export type RecipeYield = z.infer<typeof recipeYieldSchema>;
 // ingredientCount) drive the list's coverage display. Computed server-side; see
 // recipe-costing.service.
 export const recipeTotalsFields = {
-  costTotal: z.number(),
+  costTotal: money,
   // Upper bound of the cost/calorie totals when the recipe has ranged amounts
   // ("2–3 cups"); absent for recipes with only point amounts. Additive/optional
   // so existing persisted rows validate unchanged.
-  costTotalUpper: z.number().optional(),
+  costTotalUpper: money.optional(),
   caloriesTotal: z.number(),
   caloriesTotalUpper: z.number().optional(),
   // Whole-recipe macro rollup (grams; sodium in mg). Optional/additive so rows
@@ -51,8 +54,8 @@ export const recipeTotalsFieldNames = Object.keys(
 // source so the meal schemas can't drift from recipeTotals' field names or the
 // optional upper-bound convention.
 export const costCalorieTotals = z.object({
-  costTotal: z.number(),
-  costTotalUpper: z.number().optional(),
+  costTotal: money,
+  costTotalUpper: money.optional(),
   caloriesTotal: z.number(),
   caloriesTotalUpper: z.number().optional(),
 });
@@ -94,6 +97,16 @@ const componentSource = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("missing") }),
 ]);
 
+// NOTE: the success arm is structurally `amount` (value/unit) plus the `ok`
+// discriminant, but it deliberately does NOT reuse `codec.ts`'s `amount` here.
+// `amount` is a refined ZodEffects (from `.refine()`), and zod's
+// `discriminatedUnion` cannot introspect a refined/intersected member for its
+// discriminant key — `z.object({ok: z.literal(true)}).and(amount)` throws
+// "Invalid discriminated union option" at schema-construction time. Nesting
+// instead (`z.object({ok, amount})`) would fix that but changes the wire
+// shape from flat `{ok, value, unit}` to `{ok, amount: {value, unit}}`,
+// rippling into every consumer that reads `.value`/`.unit` off this
+// diagnostic — out of scope for a same-shape convention migration.
 const measureDiagnostic = z.discriminatedUnion("ok", [
   z.object({ ok: z.literal(true), value: z.number(), unit: z.string() }),
   z.object({ ok: z.literal(false), error: z.string() }),

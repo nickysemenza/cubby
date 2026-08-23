@@ -41,8 +41,6 @@
 
 import { expenseOut } from "@cubby/schemas/project";
 import {
-  deleteEmptyPurchasesInput,
-  deleteEmptyPurchasesOut,
   linkExpensesToPurchaseInput,
   mergePurchasesInput,
   purchaseCreateInput,
@@ -60,6 +58,7 @@ import {
 } from "@cubby/schemas/purchase";
 import {
   mergeVendorsInput,
+  mergeVendorsOut,
   vendorCreateInput,
   vendorFilterFields,
   vendorListResponse,
@@ -127,6 +126,19 @@ const purchaseMcpUpdateShape = purchaseUpdateData.omit({
   pendingImageIds: true,
 }).shape;
 
+/**
+ * `merge_vendors` over an MCP-safe vendor shape.
+ *
+ * `vendorOut.logo` is a full `imageOut`, whose `id` is a raw uuid — and a uuid
+ * must never cross this boundary. A merge result has no use for the logo's
+ * storage metadata anyway: what an agent needs back is which vendor survived
+ * and what moved. Same reason `merge_products` publishes `mergeProductsMcpOut`
+ * rather than the router's own output.
+ */
+const mergeVendorsMcpOut = mergeVendorsOut.extend({
+  vendor: vendorOut.omit({ logo: true }),
+});
+
 export function registerPurchaseTools(server: McpServer) {
   registerEntityCrudToolset(server, {
     entity: "vendor",
@@ -143,6 +155,8 @@ export function registerPurchaseTools(server: McpServer) {
       get: "Get one vendor by id: identity (name, website, notes) plus the `purchaseCount` and `spend` rollups. `spend` is SUM(cost) over the live expenses of this vendor's live purchases — never a sum of statedTotal. To see what the money actually went on, call list_expenses with this vendorId (the spend ledger) or list_purchases with it (the individual purchases).",
       create:
         'Add a vendor to the roster — identity only, no money. `name` is required; `website` and `notes` are optional and default to null. Prefer NOT calling this directly for an import: create_expense accepts `vendor` by NAME and find-or-creates both the vendor and its purchase inside the same transaction, so a one-off purchase needs no roster call at all. Reach for create_vendor when you are deliberately seeding the roster (e.g. recording a contractor before any invoice exists) or when you need `website`/`notes` set, which the name-resolution path leaves null. Check list_vendors first — the roster already holds ~114 vendors and a near-duplicate ("Amazon" vs "Amazon Business") is a real, separate row, not a typo the system will fold together.',
+      delete:
+        "Soft-delete vendors. REFUSES while any live Purchase still points at one — the refusal names which vendors blocked and how many purchases each still holds. Move or delete those purchases first, or merge the vendor into its keeper with merge_vendors instead of deleting it.",
       update:
         "Update a vendor's identity fields (name, website, notes). Renaming is safe: purchases and expenses reference the vendor by id, so nothing is re-keyed and no spend moves. `purchaseCount` and `spend` are read-only rollups and cannot be written. There is deliberately no delete_vendors tool — deletion refuses while live purchases still reference the vendor, and rehoming them is a UI operation.",
     },
@@ -164,20 +178,12 @@ export function registerPurchaseTools(server: McpServer) {
       get: "Get one vendor purchase by id. A `purchase` is a vendor order/receipt event, NOT an Expense or card charge. Returns vendor/order identity, literal `statedTotal`, Expense totals (the spend), classified documents, financial reconciliation (including `postedRefundTotal`), and computed dataQuality including linked Product gaps. A `refund_adjusted` reconciliation is neutral; `mismatch` needs review. Read Expenses with list_expenses and settlement evidence with list_financial_transactions, both filtered by this PUR- shortcode.",
       create:
         "Create one vendor order, receipt, or deliberately separate purchase event. This books no money: Expenses carry spend, FinancialTransactions carry settlement evidence, and `statedTotal` is always the literal vendor-printed total. `displayLabel` preserves concise human-entered ledger context and renders parenthetically after the order identity. `vendorId` is a VEN- shortcode; orderId, displayLabel, vendor date, notes, and statedTotal are optional.",
+      delete:
+        "Soft-delete purchases, and ONLY empty ones. Refuses any purchase still carrying live Expenses or holding settlement allocations, naming which and with how many — the UI's own delete detaches those references instead, which would silently strip real money of its provenance. Delete the linked Expenses first, and unlink or delete the linked Financial Transactions.",
       update:
         "Update vendor-side purchase identity and paperwork. Nothing here changes spend or settlement: correct spend with update_expense and settlement evidence with update_financial_transaction. `displayLabel` is concise human-entered context rendered parenthetically after the order identity; do not put it in orderId or duplicate it across Expense names. `statedTotal` must remain the literal vendor-printed total and is never summed. Also writable: vendorId, orderId, displayLabel, vendor date, notes, and document ordering/removal.",
     },
     create: (caller, params) => caller.purchase.create(params),
-  });
-
-  registerRouterTool(server, {
-    name: "delete_empty_purchases",
-    description:
-      "Soft-delete one or more Purchase headers only when every target is already empty of live Expenses and FinancialTransactions. This never removes spend: delete bogus Expenses first with delete_expenses, then verify the Purchase is empty. Purchase documents are removed with the Purchase. Call preview_entity_operation first with operation=delete and entity=purchase to inspect document and other effects, but treat that preview as advisory only — this mutation re-locks and re-validates every target atomically and refuses the entire batch if any target is no longer empty.",
-    inputSchema: deleteEmptyPurchasesInput,
-    outputSchema: deleteEmptyPurchasesOut,
-    annotations: WRITE_DESTRUCTIVE_CLOSED,
-    call: (caller, params) => caller.purchase.deleteEmpty(params),
   });
 
   registerRouterTool(server, {
@@ -246,7 +252,11 @@ export function registerPurchaseTools(server: McpServer) {
       "Each merged-away Vendor is then SOFT-DELETED. It keeps its OWN `VEN-` shortcode as a permanent tombstone — shortcodes are never reassigned or reused, so that code will never resolve to the keeper; if you need to look up which vendor a stale code named, use preview_entity_operation or a shortcode resolver, not a guess. " +
       "There is deliberately no inverse operation. Call preview_entity_operation first with operation=merge and entity=vendor to see which purchases would repoint vs. fold before committing; never guess a merge.",
     inputSchema: mergeVendorsInput.shape,
-    outputSchema: vendorOut,
+    // `mergeVendorsOut`, not bare `vendorOut`: the merge already computed a
+    // plan describing what repointed, what folded, and which fields carried,
+    // and used to discard it — so an agent got the keeper back and no account
+    // of what the merge had actually done to the ledger.
+    outputSchema: mergeVendorsMcpOut,
     annotations: WRITE_DESTRUCTIVE_CLOSED,
     call: (caller, params) => caller.vendor.merge(params),
   });

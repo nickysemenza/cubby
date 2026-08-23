@@ -159,11 +159,21 @@ describe("cascadeRemoval — the type-level lock", () => {
   });
 
   it("keeps RemovableEntity aligned with the shortcode table roster", () => {
-    expectTypeOf<RemovableEntity>().toEqualTypeOf<
-      keyof typeof SHORTCODE_TABLE
-    >();
+    // `RemovableEntity` is `AuditableEntity & ShortcodeEntity`, and those two
+    // sets used to coincide — every shortcoded entity was auditable, so the
+    // intersection equalled the whole shortcode roster.
+    //
+    // `image` broke the coincidence: it was given `IMG-` so it stops being a
+    // raw-uuid carve-out in every shape that can name an entity, but it stays
+    // NON-auditable (it is the one hard delete, with no tombstone to annotate).
+    // So it is in `SHORTCODE_TABLE` and out of `RemovableEntity` — which is the
+    // correct outcome, because `removeEntity` must not be called for it;
+    // `IMAGE_HARD_DELETE` owns that path.
+    expectTypeOf<RemovableEntity>().toExtend<keyof typeof SHORTCODE_TABLE>();
     expect([...auditableEntities].sort()).toEqual(
-      Object.keys(SHORTCODE_TABLE).sort(),
+      Object.keys(SHORTCODE_TABLE)
+        .filter((entity) => entity !== "image")
+        .sort(),
     );
     expectTypeOf<RemovableEntity>().toExtend<AuditableEntity>();
   });

@@ -1,3 +1,4 @@
+import { unsafeImageShortcode } from "@cubby/schemas/identifiers";
 /**
  * Data transformation helper functions.
  * Extract, map, and transform database records.
@@ -33,7 +34,8 @@ export type RowWithOptionalAliasesAndTags<
 };
 
 export type MappableImageRecord = {
-  id: string;
+  /** The public `IMG-` code. `id` (the uuid) is deliberately NOT projected. */
+  shortcode: string;
   url: string;
   key: string;
   filename: string;
@@ -74,7 +76,9 @@ export const mapImages = (
       return isNotDeleted(row) && isNotDeleted(dbImage) ? [dbImage] : [];
     })
     .map((dbImage) => ({
-      id: dbImage.id,
+      // The public code, never the uuid: `ImageOut.id` IS the shortcode, the
+      // same way every other entity's API `id` is.
+      id: unsafeImageShortcode(dbImage.shortcode),
       url: dbImage.url,
       key: dbImage.key,
       filename: dbImage.filename,

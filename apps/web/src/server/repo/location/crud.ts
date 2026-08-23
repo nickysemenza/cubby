@@ -414,23 +414,34 @@ export const updateLocation = async (
     const updated = await updateLiveAndReturn(tx, location, updateValues, id);
 
     // Reorder existing images (first = cover) before appending new ones so
-    // additions always land after the reordered set.
+    // additions always land after the reordered set. `data.imageOrder` /
+    // `data.removeImageIds` are public `IMG-` shortcodes (what
+    // `LocationOut.images[].id` hands back) — resolved to uuids here, right
+    // before the two helpers below that still take uuids. A code that doesn't
+    // resolve is dropped rather than thrown on, matching today's silent
+    // no-op for a uuid naming no live row.
     if (data.imageOrder && data.imageOrder.length > 0) {
+      const orderedIds = await resolveAllPresent(tx, "image", data.imageOrder);
       await applyImageOrder(
         tx,
         locationImage,
         locationImage.locationId,
         updated.id,
-        data.imageOrder,
+        orderedIds,
       );
     }
 
     if (data.removeImageIds && data.removeImageIds.length > 0) {
+      const idsToRemove = await resolveAllPresent(
+        tx,
+        "image",
+        data.removeImageIds,
+      );
       ({ deletedKeys: detachedImageKeys } = await detachImagesFromEntity(
         tx,
         "location",
         updated.id,
-        data.removeImageIds,
+        idsToRemove,
       ));
     }
 
@@ -588,8 +599,8 @@ export const deleteLocations = async (
   db: Database,
   ids: LocationId[],
   actor: ActorContext,
-): Promise<{ detachedImageKeys: string[] }> => {
-  if (ids.length === 0) return { detachedImageKeys: [] };
+): Promise<{ detachedImageKeys: string[]; deleted: number }> => {
+  if (ids.length === 0) return { detachedImageKeys: [], deleted: 0 };
 
   return await withTransaction(db, async (tx) => {
     // Lock locations and validate they exist and aren't already deleted
@@ -597,7 +608,12 @@ export const deleteLocations = async (
     await lockAndValidateForDelete(tx, location, ids, "Location");
     const home = await getHomeLocation(tx);
     if (ids.includes(home.id)) {
-      throw createAppError("CONSTRAINT_VIOLATION", "Home cannot be deleted");
+      // Its own reason rather than the shared CONSTRAINT_VIOLATION: this is a
+      // structural rule about one specific row, not a generic constraint, and
+      // a caller could not previously tell it apart from any other refusal.
+      // `previewDeleteLocations` reports the same rule as a blocker, so a Home
+      // delete no longer previews clean and then throws.
+      throw createAppError("LOCATION_IS_ROOT", "Home cannot be deleted");
     }
 
     // Safety check: don't delete if any location has inventory
@@ -678,7 +694,7 @@ export const deleteLocations = async (
  * transaction; nothing here is a lock or a permission.
  */
 export const previewDeleteLocations = async (
-  db: Database,
+  db: Database | DrizzleTransaction,
   ids: LocationId[],
 ): Promise<{
   blockers: ImpactItem[];
@@ -686,7 +702,7 @@ export const previewDeleteLocations = async (
   sideEffects: ImpactItem[];
 }> => {
   if (ids.length === 0) return { blockers: [], changes: [], sideEffects: [] };
-  const dbClient = getDb(db);
+  const dbClient = unwrapDb(db);
 
   const withInventory = await findLocationsWithLiveInventory(db, ids);
   const inventoryByTargetId: Record<string, number> = {};
@@ -695,14 +711,37 @@ export const previewDeleteLocations = async (
       (inventoryByTargetId[locationId] ?? 0) + 1;
   }
 
-  const blockers = present([
-    impact({
-      disposition: LOCATION_DELETE_EDGE_POLICY["InventoryEntry.locationId"],
-      edgeKey: "InventoryEntry.locationId",
-      label: "inventory entries",
-      byTargetId: inventoryByTargetId,
-    }),
-  ]);
+  // Home is a structural rule, not an FK edge, so it has no entry in
+  // LOCATION_DELETE_EDGE_POLICY and carries no `edgeKey` — which the impact
+  // shape already allows for exactly this case. Without it the mutation had a
+  // refusal the preview could not see, so deleting Home previewed as
+  // `canProceed: true` and then threw.
+  const home = await getHomeLocation(db);
+  const homeBlocker: ImpactItem[] = ids.includes(home.id)
+    ? [
+        {
+          code: "block-home-location",
+          effect: "block",
+          label: "the Home location",
+          description:
+            "Home is the root of the location tree and cannot be deleted.",
+          total: 1,
+          byTargetId: { [home.id]: 1 },
+        },
+      ]
+    : [];
+
+  const blockers = [
+    ...homeBlocker,
+    ...present([
+      impact({
+        disposition: LOCATION_DELETE_EDGE_POLICY["InventoryEntry.locationId"],
+        edgeKey: "InventoryEntry.locationId",
+        label: "inventory entries",
+        byTargetId: inventoryByTargetId,
+      }),
+    ]),
+  ];
 
   const changes = present([
     impact({

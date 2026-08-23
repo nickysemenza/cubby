@@ -10,6 +10,7 @@ export type {
 import { financialTransactionRelatedFilterFields } from "./related-view";
 import {
   auditDateFilterFields,
+  dateRangeFields,
   deriveUpdateData,
   timestampedFields,
   uniqueBy,
@@ -407,10 +408,8 @@ export const financialTransactionFilterFields = {
   merchant: z.string().optional(),
   amountMin: z.coerce.number().finite().optional(),
   amountMax: z.coerce.number().finite().optional(),
-  transactionDateFrom: plainDate.optional(),
-  transactionDateTo: plainDate.optional(),
-  postedDateFrom: plainDate.optional(),
-  postedDateTo: plainDate.optional(),
+  ...dateRangeFields("transactionDate"),
+  ...dateRangeFields("postedDate"),
 };
 export const financialTransactionFiltersSchema = z.object(
   financialTransactionFilterFields,
