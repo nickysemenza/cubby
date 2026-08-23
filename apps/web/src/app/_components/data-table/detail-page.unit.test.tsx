@@ -74,8 +74,12 @@ describe("DetailSections ledger", () => {
     );
     expect(ids).toEqual(["summary", "story", "ledger"]);
     expect(
-      screen.getByRole("combobox", { name: "Jump to section" }),
+      screen.getByRole("navigation", { name: "Record sections" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Summary" })).toHaveAttribute(
+      "aria-current",
+      "location",
+    );
   });
 
   it("moves keyboard focus to an indexed section", () => {

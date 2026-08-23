@@ -58,7 +58,7 @@ function SettingsPage() {
   const [devOpen, setDevOpen] = useState(false);
   return (
     <Page variant="list" title="Settings">
-      <Stack gap="lg" className="max-w-2xl pb-6">
+      <Stack gap="md" className="max-w-2xl pb-6 md:gap-6">
         {/* User-facing settings — the everyday prefs, kept above the fold. */}
         <AppearanceCard />
 
@@ -69,7 +69,7 @@ function SettingsPage() {
             render={
               <button
                 type="button"
-                className="flex w-full items-center justify-between border border-[var(--border)] bg-muted/40 px-4 py-2 text-left transition-colors hover:bg-muted"
+                className="flex min-h-11 w-full items-center justify-between border border-[var(--border)] bg-muted/40 px-2 py-2 text-left transition-colors hover:bg-muted md:px-4"
               />
             }
           >
@@ -101,7 +101,7 @@ function SettingsPage() {
                 );
                 if (keys.length === 0) return null;
                 return (
-                  <Card key={group}>
+                  <Card key={group} className="max-md:border-x-0">
                     <CardHeader>
                       <CardTitle>{group}</CardTitle>
                       <CardDescription>{blurb}</CardDescription>
@@ -158,7 +158,11 @@ function FlagRow({
         </Row>
         <Description size="xs">{def.description}</Description>
       </Stack>
-      <Switch checked={value} onCheckedChange={onChange} />
+      <Switch
+        checked={value}
+        onCheckedChange={onChange}
+        className="relative before:absolute before:-inset-x-1 before:-inset-y-3"
+      />
     </Row>
   );
 }
@@ -255,30 +259,30 @@ const DENSITIES = ["comfortable", "compact", "dense"] as const;
 function AppearanceCard() {
   const { density, setDensity } = useTableDensity();
   return (
-    <Card>
-      <CardHeader>
+    <Card className="max-md:border-x-0">
+      <CardHeader className="max-md:px-2">
         <CardTitle>Appearance</CardTitle>
       </CardHeader>
-      <CardContent>
-        <Row align="center" justify="between" gap="md" className="py-1">
+      <CardContent className="max-md:px-2">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-1 max-md:grid-cols-1">
           <Stack gap="tight">
             <span className="font-medium text-sm">Table density</span>
             <Description size="xs">Row height in data tables.</Description>
           </Stack>
-          <Row gap="xs">
+          <div className="grid grid-cols-3 gap-1">
             {DENSITIES.map((d) => (
               <Button
                 key={d}
                 size="xs"
                 variant={density === d ? "default" : "outline"}
                 onClick={() => setDensity(d)}
-                className="capitalize"
+                className="min-h-11 capitalize md:min-h-0"
               >
                 {d}
               </Button>
             ))}
-          </Row>
-        </Row>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );

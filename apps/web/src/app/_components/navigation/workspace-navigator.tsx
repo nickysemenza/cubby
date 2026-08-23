@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { ChevronLeft, Search, Wrench } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { actionItems } from "~/app/_components/actions/action-items";
+import { AuthenticatedShellAccount } from "~/app/_components/navigation/authenticated-shell-controls";
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -16,6 +17,7 @@ import {
   type NavGroup,
   type NavItem,
   primaryNavGroups,
+  settingsNavItem,
   workspaceUtilitySections,
 } from "./nav-items";
 
@@ -208,6 +210,23 @@ export function WorkspaceNavigator({
           </section>
         ) : view === "household" ? (
           <>
+            <section
+              aria-label="Account"
+              className="flex min-h-12 items-center gap-2 border-border border-y px-2 py-1"
+            >
+              <AuthenticatedShellAccount />
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-sm">Household account</p>
+                <p className="truncate text-muted-foreground text-xs">
+                  Identity and application preferences
+                </p>
+              </div>
+              <NavigatorLink
+                item={settingsNavItem}
+                activeTo={activeTo}
+                onNavigate={close}
+              />
+            </section>
             <section aria-labelledby={householdHeadingId}>
               <h3 id={householdHeadingId} className="eyebrow px-2 pb-1">
                 Household

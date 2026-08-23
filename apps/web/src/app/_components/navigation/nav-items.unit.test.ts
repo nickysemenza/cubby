@@ -60,10 +60,9 @@ describe("workspace navigation contract", () => {
       "Problems",
     ]);
     expect(bottomNavItems.map((item) => item.label)).toEqual([
-      "Scan",
+      "Today",
       "Inventory",
-      "Shopping",
-      "Recipes",
+      "Scan",
       "Search",
     ]);
   });

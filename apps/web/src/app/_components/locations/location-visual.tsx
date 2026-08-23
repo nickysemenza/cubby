@@ -250,16 +250,16 @@ export function LocationVisual({
       )}
       aria-label={`Visual overview of ${location.name}`}
     >
-      <div className="aspect-[4/3]">{media}</div>
+      <div className="aspect-video md:aspect-[4/3]">{media}</div>
       <figcaption className="grid grid-cols-2 border-border border-t bg-card">
-        <span className="min-w-0 px-2 py-2 font-mono text-2xs text-muted-foreground uppercase">
+        <span className="min-w-0 px-2 py-1 font-mono text-2xs text-muted-foreground uppercase sm:py-2">
           {visual.primarySource === "product"
             ? `Product · ${location.product?.name ?? "linked vessel"}`
             : visual.primarySource === "location"
               ? "Location photo"
               : "Location"}
         </span>
-        <span className="min-w-0 border-border border-l px-2 py-2 text-right font-mono text-2xs text-muted-foreground uppercase">
+        <span className="min-w-0 border-border border-l px-2 py-1 text-right font-mono text-2xs text-muted-foreground uppercase sm:py-2">
           {visual.childCount > 0
             ? `${visual.childCount} ${childLabel}`
             : "No compartments"}

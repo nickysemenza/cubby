@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { createLocation, createProduct } from "./e2e-helpers";
 
 test.describe("iPhone WebKit smoke", () => {
   test("prewarms and opens the More sheet on touch intent", async ({
@@ -49,12 +50,12 @@ test.describe("iPhone WebKit smoke", () => {
     });
     for (const label of [
       "Inventory",
-      "Recipes",
-      "Search",
       "Scan",
-      "Shopping",
-      "Recipes",
+      "Today",
+      "Search",
       "Inventory",
+      "Scan",
+      "Today",
       "Search",
     ]) {
       await bottomNav.getByRole("link", { name: label, exact: true }).click();
@@ -119,9 +120,8 @@ test.describe("iPhone WebKit smoke", () => {
     await reloaded;
 
     expect(page.url()).toBe(destination);
-    await expect(
-      page.getByRole("heading", { name: "New location" }),
-    ).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Name" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Create" })).toBeVisible();
     await expect(page.locator("body")).not.toContainText(
       "Something went wrong",
     );
@@ -208,6 +208,69 @@ test.describe("iPhone WebKit smoke", () => {
       expect
         .soft(box.height, `target ${index} height`)
         .toBeGreaterThanOrEqual(44);
+    }
+  });
+
+  test("keeps the representative mobile operating surfaces inside the viewport", async ({
+    page,
+  }) => {
+    const suffix = Date.now();
+    const locationName = `Phone density location ${suffix}`;
+    const productName = `Phone density product ${suffix}`;
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await createLocation(page, locationName);
+    await expect(page.getByTestId("detail-spec-plate")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Contents" })).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+
+    await createProduct(page, productName);
+    await expect(page.getByTestId("detail-spec-plate")).toBeVisible();
+    expect(
+      await page.locator('meta[name="viewport"]').getAttribute("content"),
+    ).toContain("minimum-scale=1");
+
+    for (const path of [
+      "/products",
+      "/recipes",
+      "/search",
+      "/scan",
+      "/settings",
+    ]) {
+      await page.goto(path, { waitUntil: "networkidle" });
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+      ).toBe(true);
+      await expect(
+        page.getByRole("navigation", { name: "Main navigation" }),
+      ).toBeVisible();
+    }
+  });
+
+  test("preserves responsive shell boundaries from compact phone through desktop", async ({
+    page,
+  }) => {
+    for (const viewport of [
+      { width: 320, height: 568 },
+      { width: 390, height: 844 },
+      { width: 430, height: 932 },
+      { width: 844, height: 390 },
+      { width: 768, height: 900 },
+      { width: 1440, height: 900 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.goto("/products", { waitUntil: "networkidle" });
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+      ).toBe(true);
     }
   });
 

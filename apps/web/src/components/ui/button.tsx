@@ -36,16 +36,16 @@ const buttonVariants = cva(
       },
       /**
        * Cubby is used on an iOS PWA as well as at a desktop desk. Interactive
-       * controls therefore grow to the 40px phone floor by default while
+       * controls therefore grow to the 44px iOS phone floor by default while
        * retaining their compact ledger density at the `md` desktop shell.
        *
        * `compact` is only for a composite whose enclosing interactive target
-       * already supplies at least 40×40px (or desktop-only chrome). Document
+       * already supplies at least 44×44px (or desktop-only chrome). Document
        * that enclosing target at the call site; never use this just to fit more
        * actions into a phone row.
        */
       mobileSize: {
-        touch: "max-md:min-h-10 max-md:min-w-10",
+        touch: "max-md:min-h-11 max-md:min-w-11",
         compact: "",
       },
     },

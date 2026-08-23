@@ -15,7 +15,7 @@ import { entities } from "~/entities/entities";
 
 /**
  * Surfaces that render quick actions. Deriving each surface's list from one
- * registry (below) is the same trick nav-items uses for `moreNavSections` — so
+ * registry (below) is the same trick nav-items uses for workspace destinations — so
  * the navbar "+" menu and the command palette can't drift on which actions ship
  * or how they're labeled.
  */

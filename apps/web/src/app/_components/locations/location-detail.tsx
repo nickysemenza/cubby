@@ -85,7 +85,12 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
     >
       {/* Breadcrumb lives inside Page so it stays within the max-width page
           container rather than becoming a full-width route sibling. */}
-      <LocationBreadcrumb location={location} linkable />
+      <LocationBreadcrumb
+        location={location}
+        linkable
+        compact
+        className="min-h-11 border-border border-y px-2"
+      />
       <DetailSections
         sections={sections}
         rawData={location}

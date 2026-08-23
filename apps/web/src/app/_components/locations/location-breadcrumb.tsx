@@ -152,7 +152,7 @@ export function LocationBreadcrumb({
                   <button
                     type="button"
                     onClick={() => onSegmentClick(segment.id!)}
-                    className="transition-opacity hover:opacity-80"
+                    className="inline-flex min-h-11 items-center transition-opacity hover:opacity-80"
                   >
                     {content}
                   </button>
@@ -162,6 +162,7 @@ export function LocationBreadcrumb({
                       <Link
                         to="/locations/$shortcode"
                         params={{ shortcode: segment.id }}
+                        className="inline-flex min-h-11 items-center"
                       />
                     }
                   >
