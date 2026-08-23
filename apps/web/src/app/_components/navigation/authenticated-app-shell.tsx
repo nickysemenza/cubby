@@ -88,7 +88,7 @@ export function AuthenticatedAppShell({
         expanded={expanded}
         onToggle={() => setCollapsed((value) => !value)}
       />
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-dvh min-w-0 flex-1 flex-col">
         {/* Today owns the Cubby mark. Working routes use semantic local chrome
             so a deep link still says where it is and where Back will go. */}
         <div className="safe-top sticky top-0 z-40 border-b-[3px] border-b-foreground bg-card md:hidden print:hidden">
@@ -115,7 +115,11 @@ export function AuthenticatedAppShell({
         >
           {children}
         </main>
-        {!viewportSurface && <AppFooter />}
+        {!viewportSurface && (
+          <div className="hidden md:block">
+            <AppFooter />
+          </div>
+        )}
       </div>
     </div>
   );

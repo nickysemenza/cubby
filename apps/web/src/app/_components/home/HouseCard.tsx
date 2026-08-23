@@ -77,7 +77,7 @@ export function HouseCard() {
                   }
                 : { view: "next" }
             }
-            className="transition-colors hover:bg-muted/50"
+            className="min-h-11 transition-colors hover:bg-muted/50"
           >
             <StatTile label={stat.label}>
               {isLoading || !data ? (

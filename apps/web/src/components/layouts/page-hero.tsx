@@ -274,8 +274,8 @@ function ListWorkbench({
   actions,
 }: ListWorkbenchProps) {
   return (
-    <div className="grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 border-border border-b bg-card px-2 py-1 sm:flex sm:gap-2">
-      <div className="flex min-w-0 items-baseline gap-2">
+    <div className="flex min-h-11 items-center gap-1 border-border border-b bg-card px-2 py-1 sm:gap-2">
+      <div className="flex min-w-0 shrink-0 items-baseline gap-2">
         <h1 className="truncate font-bold font-heading text-base tracking-tight max-md:sr-only sm:text-lg">
           {title}
         </h1>
@@ -285,7 +285,7 @@ function ListWorkbench({
           </span>
         )}
       </div>
-      <div className="col-span-2 row-start-2 mt-1 flex min-w-0 items-center gap-1 overflow-x-auto overscroll-x-contain [scrollbar-width:none] sm:col-auto sm:row-auto sm:mt-0 sm:flex-1 [&::-webkit-scrollbar]:hidden">
+      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {controls}
         <div
           className="flex shrink-0 items-center gap-1"
@@ -293,9 +293,7 @@ function ListWorkbench({
         />
       </div>
       {actions && (
-        <div className="col-start-2 row-start-1 flex shrink-0 items-center gap-2 sm:col-auto sm:row-auto">
-          {actions}
-        </div>
+        <div className="flex shrink-0 items-center gap-2">{actions}</div>
       )}
     </div>
   );
