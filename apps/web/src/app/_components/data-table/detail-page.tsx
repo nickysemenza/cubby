@@ -1,5 +1,5 @@
 import { relatedViewRegistry } from "@cubby/schemas/related-view";
-import type { FC, ReactNode } from "react";
+import { type FC, type ReactNode, useEffect, useMemo, useState } from "react";
 import { usePageDetailContext } from "~/components/page/Page";
 import {
   Card,
@@ -43,9 +43,12 @@ function SectionCard({ section }: { section: DetailSection }) {
     >
       <Card
         size={section.placement === "supporting" ? "sm" : "default"}
-        className={cn(section.overflowVisible && "overflow-visible")}
+        className={cn(
+          "max-md:border-0 max-md:bg-transparent max-md:py-2",
+          section.overflowVisible && "overflow-visible",
+        )}
       >
-        <CardHeader className="pb-2">
+        <CardHeader className="px-2 pb-1 md:px-3.5 md:pb-2">
           <CardTitle as="h2">
             <section.icon className="size-3.5 shrink-0 text-slate" />
             {section.title}
@@ -54,7 +57,7 @@ function SectionCard({ section }: { section: DetailSection }) {
             <CardAction>{section.headerAction}</CardAction>
           )}
         </CardHeader>
-        <CardContent>{section.content}</CardContent>
+        <CardContent className="px-2 md:px-3.5">{section.content}</CardContent>
       </Card>
     </section>
   );
@@ -82,9 +85,38 @@ export function DetailAnchorIndex({
 }: {
   sections: Array<Pick<DetailSection, "id" | "title" | "includeInIndex">>;
 }) {
-  const indexed = sections.filter(
-    (section) => section.includeInIndex !== false,
+  const indexed = useMemo(
+    () => sections.filter((section) => section.includeInIndex !== false),
+    [sections],
   );
+  const indexedIds = useMemo(
+    () => indexed.map((section) => section.id),
+    [indexed],
+  );
+  const [activeId, setActiveId] = useState(indexedIds[0]);
+
+  useEffect(() => {
+    if (indexedIds.length < 2 || !("IntersectionObserver" in window)) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort(
+            (a, b) =>
+              Math.abs(a.boundingClientRect.top) -
+              Math.abs(b.boundingClientRect.top),
+          )[0];
+        if (visible?.target.id) setActiveId(visible.target.id);
+      },
+      { rootMargin: "-96px 0px -65% 0px", threshold: [0, 0.01, 0.5] },
+    );
+    for (const id of indexedIds) {
+      const target = document.getElementById(id);
+      if (target) observer.observe(target);
+    }
+    return () => observer.disconnect();
+  }, [indexedIds]);
+
   if (indexed.length < 2) return null;
 
   const jump = (id: string) => {
@@ -97,53 +129,38 @@ export function DetailAnchorIndex({
       block: "start",
     });
     target?.focus({ preventScroll: true });
+    setActiveId(id);
   };
 
   return (
-    <>
-      <div className="sticky top-[var(--app-chrome-top)] z-30 hidden min-h-9 items-center gap-1 overflow-x-auto border-foreground border-b-[3px] bg-card px-2 md:flex">
-        <span className="shrink-0 pr-2 font-mono text-2xs text-slate uppercase tracking-wider">
-          Record index
-        </span>
-        {indexed.map((section) => (
-          <a
-            key={section.id}
-            href={`#${section.id}`}
-            onClick={(event) => {
-              event.preventDefault();
-              window.history.replaceState(null, "", `#${section.id}`);
-              jump(section.id);
-            }}
-            className="shrink-0 px-2 py-1 text-muted-foreground text-xs transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            {section.title}
-          </a>
-        ))}
-      </div>
-      <label className="flex min-h-11 items-center gap-2 border-border border-b bg-card px-2 md:hidden">
-        <span className="shrink-0 font-mono text-2xs text-slate uppercase tracking-wider">
-          Jump to
-        </span>
-        <select
-          aria-label="Jump to section"
-          defaultValue=""
-          className="h-10 min-w-0 flex-1 border-0 bg-transparent px-2 text-sm"
-          onChange={(event) => {
-            if (event.target.value) jump(event.target.value);
-            event.target.value = "";
+    <nav
+      aria-label="Record sections"
+      className="sticky top-[var(--app-chrome-top)] z-30 flex min-h-11 items-stretch overflow-x-auto overscroll-x-contain border-foreground border-b-[3px] bg-card px-1 [scrollbar-width:none] md:min-h-9 md:items-center md:gap-1 md:px-2 [&::-webkit-scrollbar]:hidden"
+    >
+      <span className="hidden shrink-0 pr-2 font-mono text-2xs text-slate uppercase tracking-wider md:block">
+        Record index
+      </span>
+      {indexed.map((section) => (
+        <a
+          key={section.id}
+          href={`#${section.id}`}
+          aria-current={activeId === section.id ? "location" : undefined}
+          onClick={(event) => {
+            event.preventDefault();
+            window.history.replaceState(null, "", `#${section.id}`);
+            jump(section.id);
           }}
+          className={cn(
+            "relative flex min-h-11 shrink-0 items-center px-3 font-medium text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary md:min-h-0 md:px-2 md:py-1",
+            activeId === section.id
+              ? "text-primary after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:bg-primary"
+              : "text-muted-foreground hover:text-foreground",
+          )}
         >
-          <option value="" disabled>
-            Choose section…
-          </option>
-          {indexed.map((section) => (
-            <option key={section.id} value={section.id}>
-              {section.title}
-            </option>
-          ))}
-        </select>
-      </label>
-    </>
+          {section.title}
+        </a>
+      ))}
+    </nav>
   );
 }
 
@@ -241,7 +258,7 @@ function renderSectionLayout({
 }) {
   if (isMobile) {
     return (
-      <div className="space-y-2">
+      <div className="divide-y divide-border border-border border-y">
         {sections.map((section) => (
           <SectionCard key={section.id} section={section} />
         ))}

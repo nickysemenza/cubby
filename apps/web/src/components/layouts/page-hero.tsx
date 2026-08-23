@@ -175,7 +175,7 @@ function DetailBreadcrumb({
       aria-label="Breadcrumb"
       className={cn(
         EYEBROW_CLASS,
-        "flex flex-wrap items-center gap-x-2 gap-y-1 tracking-[0.14em]",
+        "hidden flex-wrap items-center gap-x-2 gap-y-1 tracking-[0.14em] md:flex",
       )}
     >
       {group && (
@@ -252,6 +252,7 @@ interface PageHeroProps extends VariantProps<typeof heroVariants> {
    * nothing — avoids a flash of "0" before the client-side report lands.
    */
   count?: number;
+  mobileTitleVisible?: boolean;
 }
 
 interface ListWorkbenchProps {
@@ -275,7 +276,7 @@ function ListWorkbench({
   return (
     <div className="grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 border-border border-b bg-card px-2 py-1 sm:flex sm:gap-2">
       <div className="flex min-w-0 items-baseline gap-2">
-        <h1 className="truncate font-bold font-heading text-base tracking-tight sm:text-lg">
+        <h1 className="truncate font-bold font-heading text-base tracking-tight max-md:sr-only sm:text-lg">
           {title}
         </h1>
         {count !== undefined && (
@@ -315,6 +316,7 @@ function PageHero({
   decoration = "accent",
   className,
   count,
+  mobileTitleVisible = false,
 }: PageHeroProps) {
   const showAccent = decoration === "accent" && variant !== "compact";
   // A caller-supplied `eyebrow` overrides the derived path outright (no
@@ -338,10 +340,19 @@ function PageHero({
 
   return (
     <div
-      className={cn(heroVariants({ variant }), className)}
+      className={cn(
+        heroVariants({ variant }),
+        !mobileTitleVisible && !actions && "max-md:hidden",
+        className,
+      )}
       style={accentStyle}
     >
-      <div className="min-w-0 flex-1">
+      <div
+        className={cn(
+          "min-w-0 flex-1",
+          !mobileTitleVisible && "max-md:sr-only",
+        )}
+      >
         {(hasPath || hasCount) && (
           <Eyebrow className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-medium tracking-[0.18em]">
             {eyebrow ?? <EyebrowPath segments={segments} />}
@@ -363,7 +374,14 @@ function PageHero({
             showAccent && "page-header-accent pb-2",
           )}
         >
-          <h1 className={titleVariants({ variant })}>{title}</h1>
+          <h1
+            className={cn(
+              titleVariants({ variant }),
+              mobileTitleVisible && "max-md:text-xl",
+            )}
+          >
+            {title}
+          </h1>
         </div>
         {meta && meta.length > 0 && (
           <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-2xs text-muted-foreground">
@@ -454,21 +472,24 @@ function DetailPlate({
       )}
 
       <Card
-        className="border-l-[length:var(--border-spine)] border-l-foreground"
+        className="border-x-0 border-l-[length:var(--border-spine)] border-l-foreground md:border-r"
         data-testid="detail-spec-plate"
       >
-        <CardContent className="px-4 py-1 sm:px-4">
+        <CardContent className="px-2 py-1 sm:px-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
             <div className="min-w-0">
               <DetailBreadcrumb entity={entity} heroNo={heroNo} />
-              <h1 className="break-words font-bold font-heading text-2xl tracking-tight sm:text-3xl">
+              <h1 className="break-words font-bold font-heading text-xl tracking-tight sm:text-3xl">
                 {name}
               </h1>
-              {onFileSince && (
-                <p className="mt-1 font-mono text-2xs text-muted-foreground uppercase">
-                  On file since {onFileSince}
-                </p>
-              )}
+              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-2xs text-muted-foreground uppercase">
+                {heroNo && (
+                  <span className="md:hidden">
+                    <CopyableHeroNo heroNo={heroNo} />
+                  </span>
+                )}
+                {onFileSince && <span>On file since {onFileSince}</span>}
+              </div>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2 sm:shrink-0 sm:justify-end">
               {heroStamp && (
@@ -567,6 +588,7 @@ interface PageHeaderProps {
   count?: number;
   listChrome?: "hero" | "workbench";
   workbenchControls?: ReactNode;
+  mobileTitleVisible?: boolean;
 }
 
 /**
@@ -594,6 +616,7 @@ export function PageHeader({
   count,
   listChrome = "hero",
   workbenchControls,
+  mobileTitleVisible,
 }: PageHeaderProps) {
   if (variant === "detail") {
     if (!entity) {
@@ -635,6 +658,7 @@ export function PageHeader({
       decoration={decoration}
       className={className}
       count={count}
+      mobileTitleVisible={mobileTitleVisible}
     />
   );
 }

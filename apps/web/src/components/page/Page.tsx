@@ -126,6 +126,8 @@ interface PageListProps extends PageBaseProps {
   listChrome?: "hero" | "workbench";
   /** View/mode control rendered in the workbench's first tier. */
   workbenchControls?: ReactNode;
+  /** Today keeps its compact greeting visible; other phone route titles live in the contextual bar. */
+  mobileTitleVisible?: boolean;
 }
 
 interface PageDetailProps extends PageBaseProps {
@@ -204,6 +206,7 @@ function PageWithHeader(props: PageListProps | PageDetailProps) {
           decoration={list?.decoration}
           listChrome={listChrome}
           workbenchControls={list?.workbenchControls}
+          mobileTitleVisible={list?.mobileTitleVisible}
           heroStamp={detail?.heroStamp}
           heroStats={detail?.heroStats}
           heroNo={detail?.heroNo}
@@ -233,7 +236,11 @@ function PageWithHeader(props: PageListProps | PageDetailProps) {
                   region clearance. A no-op for the usual single-child list
                   page, which is why this sits on the children and not on the
                   wrapper the header shares. */}
-                <div className={variant === "list" ? "space-y-8" : undefined}>
+                <div
+                  className={
+                    variant === "list" ? "space-y-4 md:space-y-8" : undefined
+                  }
+                >
                   {children}
                 </div>
               </Suspense>

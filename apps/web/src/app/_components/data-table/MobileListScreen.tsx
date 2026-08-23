@@ -113,7 +113,7 @@ export function MobileListScreen<TItem extends RowData>({
         showViewOptions={portalWorkbenchUtilities}
         portalWorkbenchUtilities={portalWorkbenchUtilities}
         workbenchUtilityViewport="mobile"
-        className="mb-2 flex-wrap overflow-x-hidden"
+        className="mb-0 flex-wrap overflow-x-hidden border-border border-b"
         isTransitioning={isTransitioning}
       />
 

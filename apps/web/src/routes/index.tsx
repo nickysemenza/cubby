@@ -61,9 +61,10 @@ function Home() {
       variant="list"
       eyebrow="Keep everything in its place"
       title={greeting}
+      mobileTitleVisible
       actions={
         now ? (
-          <p className="hidden font-mono text-2xs text-muted-foreground uppercase sm:block">
+          <p className="font-mono text-2xs text-muted-foreground uppercase">
             {now.toLocaleDateString("en-US", {
               weekday: "short",
               day: "2-digit",
