@@ -10,12 +10,16 @@ import type {
 import { searchableEntities, similarEntityPairs } from "@cubby/schemas/search";
 import { getErrorMessage } from "~/lib/error-utils";
 import { dispatchBackgroundJobs } from "~/server/background-dispatch";
+import {
+  continueWorkflow,
+  startOrReuseWorkflow,
+} from "~/server/background-workflow";
 import type { Database } from "~/server/db";
 import {
   findSemanticEntityCandidates,
   findSimilarEntities,
 } from "~/server/repo/entity-embedding";
-import { getStaleSearchDocumentEmbeddingTexts } from "~/server/repo/search-document";
+import { getStaleSearchDocumentEmbeddingTextPage } from "~/server/repo/search-document";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import { SEMANTIC_MIN_QUERY_LENGTH } from "~/server/semantic/constants";
@@ -28,6 +32,44 @@ import { TraceNames, withTrace } from "~/server/tracing";
 import { getEmbeddingReadiness } from "./embedding-readiness.service";
 
 const ALL_SEARCHABLE_ENTITIES: SearchableEntity[] = [...searchableEntities];
+
+type SemanticBackfillWorkflowMetadata = {
+  source: "search.debug.semanticBackfill";
+  workflow: {
+    type: "entity-embedding.backfill.coordinator";
+    entityTypes: SearchableEntity[];
+    cursor: {
+      entityType: SearchableEntity;
+      entityId: string;
+    } | null;
+    pagesCompleted: number;
+    jobsQueued: number;
+    state: "active" | "complete";
+  };
+};
+
+const readSemanticBackfillWorkflowMetadata = (
+  value: unknown,
+): SemanticBackfillWorkflowMetadata | null => {
+  if (!value || typeof value !== "object") return null;
+  const workflow = (value as { workflow?: unknown }).workflow;
+  if (!workflow || typeof workflow !== "object") return null;
+  const state = workflow as Record<string, unknown>;
+  if (
+    state.type !== "entity-embedding.backfill.coordinator" ||
+    !Array.isArray(state.entityTypes) ||
+    !state.entityTypes.every((entityType) =>
+      ALL_SEARCHABLE_ENTITIES.includes(entityType as SearchableEntity),
+    ) ||
+    (state.cursor !== null && typeof state.cursor !== "object") ||
+    typeof state.pagesCompleted !== "number" ||
+    typeof state.jobsQueued !== "number" ||
+    (state.state !== "active" && state.state !== "complete")
+  ) {
+    return null;
+  }
+  return value as SemanticBackfillWorkflowMetadata;
+};
 
 export interface SemanticProductCandidate {
   item: SearchHit & { entityId: string; name: string };
@@ -79,36 +121,97 @@ async function semanticSearchCandidates(
 
 export async function enqueueEntityEmbeddingBackfill(
   db: Database,
-  opts: { entityTypes?: SearchableEntity[]; limit?: number },
+  opts: { entityTypes?: SearchableEntity[] },
 ): Promise<EnqueueEmbeddingBackfillOut> {
-  const entityTypes = opts.entityTypes?.length
-    ? opts.entityTypes
-    : ALL_SEARCHABLE_ENTITIES;
-  const rows = await getStaleSearchDocumentEmbeddingTexts(
-    db,
-    entityTypes,
-    getSemanticEmbeddingConfig(),
-    opts.limit,
-  );
-  const dispatched = await dispatchBackgroundJobs(db, {
-    kind: "entity-embedding.refresh",
+  const entityTypes = [
+    ...new Set(
+      opts.entityTypes?.length ? opts.entityTypes : ALL_SEARCHABLE_ENTITIES,
+    ),
+  ].sort();
+  const workflow = await startOrReuseWorkflow(db, {
+    kind: "entity-embedding.backfill.coordinator",
     source: "backfill",
+    dedupeKey: `semantic-backfill:${entityTypes.join(",")}`,
     metadata: {
       source: "search.debug.semanticBackfill",
-      entityTypes,
-      limit: opts.limit ?? null,
-      mode: "stale-or-missing",
+      workflow: {
+        type: "entity-embedding.backfill.coordinator",
+        entityTypes,
+        cursor: null,
+        pagesCompleted: 0,
+        jobsQueued: 0,
+        state: "active",
+      },
+    } satisfies SemanticBackfillWorkflowMetadata,
+    initialJobs: [
+      {
+        kind: "entity-embedding.backfill.coordinator",
+        dedupeKey: `semantic-backfill:${entityTypes.join(",")}:page:0`,
+        payload: {
+          source: "search.debug.semanticBackfill",
+          workflow: {
+            type: "entity-embedding.backfill.coordinator",
+            entityTypes,
+            cursor: null,
+            pagesCompleted: 0,
+            jobsQueued: 0,
+            state: "active",
+          },
+        } satisfies SemanticBackfillWorkflowMetadata,
+      },
+    ],
+  });
+  return { batch: workflow.batch, reused: workflow.reused };
+}
+
+/** Process one bounded semantic-backfill page inside its coordinator job. */
+export async function continueEntityEmbeddingBackfillWorkflow(
+  db: Database,
+  batchId: string,
+  payload: unknown,
+): Promise<"succeeded" | "skipped"> {
+  const metadata = readSemanticBackfillWorkflowMetadata(payload);
+  if (!metadata || metadata.workflow.state === "complete") return "skipped";
+  const page = await getStaleSearchDocumentEmbeddingTextPage(
+    db,
+    metadata.workflow.entityTypes,
+    getSemanticEmbeddingConfig(),
+    {
+      cursor: metadata.workflow.cursor ? metadata.workflow.cursor : undefined,
     },
-    jobs: rows.map((row) => ({
-      kind: "entity-embedding.refresh" as const,
-      dedupeKey: `entity-embedding.refresh:${row.entityType}:${row.entityId}`,
+  );
+  const nextMetadata: SemanticBackfillWorkflowMetadata = {
+    ...metadata,
+    workflow: {
+      ...metadata.workflow,
+      cursor: page.nextCursor,
+      pagesCompleted: metadata.workflow.pagesCompleted + 1,
+      jobsQueued: metadata.workflow.jobsQueued + page.rows.length,
+      state: page.nextCursor ? "active" : "complete",
+    },
+  };
+  await continueWorkflow(db, {
+    batchId,
+    batchKind: "entity-embedding.backfill.coordinator",
+    metadata: nextMetadata,
+    children: page.rows.map((row) => ({
+      kind: "entity-embedding.refresh",
+      dedupeKey: `entity-embedding.refresh:${row.entityType}:${row.entityId}:${row.expectedEmbeddingHash}`,
       payload: {
         entityType: row.entityType,
         entityId: row.entityId,
+        expectedEmbeddingHash: row.expectedEmbeddingHash,
       },
     })),
+    continuation: page.nextCursor
+      ? {
+          kind: "entity-embedding.backfill.coordinator",
+          dedupeKey: `workflow:${batchId}:page:${metadata.workflow.pagesCompleted + 1}`,
+          payload: nextMetadata,
+        }
+      : null,
   });
-  return { batchId: dispatched.batchId, totalJobs: dispatched.jobIds.length };
+  return "succeeded";
 }
 
 /** Queue one resolved entity, rather than sampling the global stale worklist. */

@@ -96,6 +96,7 @@ async function getSearchDocumentSources(
   db: Database,
   entityTypes: SearchableEntity[],
   entityIds?: readonly string[],
+  page?: { cursor?: SearchDocumentCursor; pageSize?: number },
 ): Promise<SearchDocumentSource[]> {
   const types = sql.join(
     entityTypes.map((entityType) => sql`${entityType}`),
@@ -207,6 +208,10 @@ async function getSearchDocumentSources(
     sql` UNION ALL `,
   );
 
+  const cursor = page?.cursor
+    ? sql`WHERE (source."entityType", source."entityId"::uuid) > (${page.cursor.entityType}, ${page.cursor.entityId}::uuid)`
+    : sql``;
+  const limit = page?.pageSize ? sql`LIMIT ${page.pageSize}` : sql``;
   const result = await getDb(db).execute<{
     entityType: SearchableEntity;
     entityId: string;
@@ -230,6 +235,9 @@ async function getSearchDocumentSources(
       WHERE parent."deletedAt" IS NULL
     )
     SELECT * FROM (${union}) source
+    ${cursor}
+    ORDER BY source."entityType", source."entityId"::uuid
+    ${limit}
   `);
   return result.rows.map((row) => {
     const keywords = textList(row.keywords ?? []);
@@ -242,6 +250,154 @@ async function getSearchDocumentSources(
           : keywords,
     };
   });
+}
+
+async function getSearchDocumentPage(
+  db: Database,
+  options: { cursor?: SearchDocumentCursor; pageSize?: number } = {},
+): Promise<{
+  refs: Array<{ entityType: SearchableEntity; entityId: string }>;
+  nextCursor: SearchDocumentCursor | null;
+}> {
+  const pageSize = Math.min(Math.max(options.pageSize ?? 250, 1), 250);
+  const cursor = options.cursor
+    ? sql`AND ("entityType", "entityId") > (${options.cursor.entityType}, ${options.cursor.entityId}::uuid)`
+    : sql``;
+  const result = await getDb(db).execute<{
+    entityType: SearchableEntity;
+    entityId: string;
+  }>(sql`
+    SELECT "entityType", "entityId"::text AS "entityId"
+    FROM "SearchDocument"
+    WHERE "deletedAt" IS NULL ${cursor}
+    ORDER BY "entityType", "entityId"
+    LIMIT ${pageSize}
+  `);
+  const last = result.rows.at(-1);
+  return {
+    refs: result.rows,
+    nextCursor: last && result.rows.length === pageSize ? last : null,
+  };
+}
+
+export async function getSearchDocumentSourceRepairPage(
+  db: Database,
+  entityTypes: SearchableEntity[],
+  options: { cursor?: SearchDocumentCursor; pageSize?: number } = {},
+): Promise<{
+  refs: Array<{ entityType: SearchableEntity; entityId: string }>;
+  nextCursor: SearchDocumentCursor | null;
+  scannedCount: number;
+  missingCount: number;
+  staleCount: number;
+}> {
+  const pageSize = Math.min(Math.max(options.pageSize ?? 250, 1), 250);
+  const sources = await getSearchDocumentSources(db, entityTypes, undefined, {
+    cursor: options.cursor,
+    pageSize,
+  });
+  const idsByType = new Map<SearchableEntity, string[]>();
+  for (const source of sources) {
+    idsByType.set(source.entityType, [
+      ...(idsByType.get(source.entityType) ?? []),
+      source.entityId,
+    ]);
+  }
+  const [texts, documents] = await Promise.all([
+    getEmbeddingTextsForRefs(db, idsByType),
+    getDb(db).execute<{
+      entityType: SearchableEntity;
+      entityId: string;
+      sourceHash: string;
+    }>(sql`
+      SELECT "entityType", "entityId"::text AS "entityId", "sourceHash"
+      FROM "SearchDocument"
+      WHERE "deletedAt" IS NULL
+        AND "entityId" = ANY(${uuidArrayParam(sources.map((source) => source.entityId))})
+    `),
+  ]);
+  const textByRef = new Map(
+    texts.map((text) => [entityRefKey(text.entityType, text.entityId), text]),
+  );
+  const documentByRef = new Map(
+    documents.rows.map((document) => [
+      entityRefKey(document.entityType, document.entityId),
+      document,
+    ]),
+  );
+  const refs: Array<{ entityType: SearchableEntity; entityId: string }> = [];
+  for (const source of sources) {
+    const key = entityRefKey(source.entityType, source.entityId);
+    const text = textByRef.get(key);
+    if (!text) continue;
+    const document = documentByRef.get(key);
+    if (
+      !document ||
+      document.sourceHash !==
+        (await searchDocumentSourceHash(source, text.embeddingText))
+    ) {
+      refs.push({ entityType: source.entityType, entityId: source.entityId });
+    }
+  }
+  const last = sources.at(-1);
+  return {
+    refs,
+    nextCursor:
+      last && sources.length === pageSize
+        ? { entityType: last.entityType, entityId: last.entityId }
+        : null,
+    scannedCount: sources.length,
+    missingCount: refs.filter(
+      (ref) => !documentByRef.has(entityRefKey(ref.entityType, ref.entityId)),
+    ).length,
+    staleCount: refs.filter((ref) =>
+      documentByRef.has(entityRefKey(ref.entityType, ref.entityId)),
+    ).length,
+  };
+}
+
+export async function getSearchDocumentOrphanPage(
+  db: Database,
+  options: { cursor?: SearchDocumentCursor; pageSize?: number } = {},
+): Promise<{
+  refs: Array<{ entityType: SearchableEntity; entityId: string }>;
+  nextCursor: SearchDocumentCursor | null;
+  scannedCount: number;
+  orphanedCount: number;
+}> {
+  const page = await getSearchDocumentPage(db, options);
+  if (page.refs.length === 0)
+    return { ...page, scannedCount: 0, orphanedCount: 0 };
+  const idsByType = new Map<SearchableEntity, string[]>();
+  for (const ref of page.refs)
+    idsByType.set(ref.entityType, [
+      ...(idsByType.get(ref.entityType) ?? []),
+      ref.entityId,
+    ]);
+  const [sources, texts] = await Promise.all([
+    getSearchDocumentSources(
+      db,
+      [...idsByType.keys()],
+      page.refs.map((ref) => ref.entityId),
+    ),
+    getEmbeddingTextsForRefs(db, idsByType),
+  ]);
+  const sourceRefs = new Set(
+    sources.map((source) => entityRefKey(source.entityType, source.entityId)),
+  );
+  const textRefs = new Set(
+    texts.map((text) => entityRefKey(text.entityType, text.entityId)),
+  );
+  const refs = page.refs.filter((ref) => {
+    const key = entityRefKey(ref.entityType, ref.entityId);
+    return !sourceRefs.has(key) || !textRefs.has(key);
+  });
+  return {
+    ...page,
+    refs,
+    scannedCount: page.refs.length,
+    orphanedCount: refs.length,
+  };
 }
 
 export async function refreshSearchDocument(
@@ -403,20 +559,46 @@ export async function getSearchDocumentEmbeddingText(
   return result.rows[0] ?? null;
 }
 
-const STALE_DOCUMENT_SCAN_OVERSCAN = 4;
+const SEARCH_DOCUMENT_WORKFLOW_PAGE_SIZE = 250;
 
-/** The embedding backfill worklist is derived from SearchDocument text. */
-export async function getStaleSearchDocumentEmbeddingTexts(
+export type SearchDocumentCursor = {
+  entityType: SearchableEntity;
+  entityId: string;
+};
+
+export type StaleSearchDocumentEmbeddingText = SearchableEntityText & {
+  /** Exact normalized text identity checked again before provider work. */
+  expectedEmbeddingHash: string;
+};
+
+/**
+ * One keyset page of the embedding maintenance worklist.
+ *
+ * The query deliberately pages every configured document. An exact-text SQL
+ * comparison is not a safe stale predicate: a model/configuration hash can be
+ * wrong while its text remains identical. The exact normalized hash is checked
+ * in JS, after no more than 250 rows have crossed the network.
+ */
+export async function getStaleSearchDocumentEmbeddingTextPage(
   db: Database,
   entityTypes: SearchableEntity[],
   config: SemanticEmbeddingConfig,
-  limit?: number,
-): Promise<SearchableEntityText[]> {
-  if (entityTypes.length === 0) return [];
-  const scanLimit =
-    limit == null
-      ? sql``
-      : sql`LIMIT ${Math.max(limit, limit * STALE_DOCUMENT_SCAN_OVERSCAN)}`;
+  options: {
+    cursor?: SearchDocumentCursor;
+    pageSize?: number;
+  } = {},
+): Promise<{
+  rows: StaleSearchDocumentEmbeddingText[];
+  nextCursor: SearchDocumentCursor | null;
+}> {
+  if (entityTypes.length === 0) return { rows: [], nextCursor: null };
+  const pageSize = Math.min(
+    Math.max(options.pageSize ?? SEARCH_DOCUMENT_WORKFLOW_PAGE_SIZE, 1),
+    SEARCH_DOCUMENT_WORKFLOW_PAGE_SIZE,
+  );
+  const cursor = options.cursor
+    ? sql`AND (sd."entityType", sd."entityId") > (${options.cursor.entityType}, ${options.cursor.entityId}::uuid)`
+    : sql``;
   const result = await getDb(db).execute<{
     entityType: SearchableEntity;
     entityId: string;
@@ -438,29 +620,40 @@ export async function getStaleSearchDocumentEmbeddingTexts(
         entityTypes.map((entityType) => sql`${entityType}`),
         sql`, `,
       )})
-    ORDER BY sd."updatedAt" ASC, sd."entityType", sd."entityId"
-    ${scanLimit}
+      ${cursor}
+    ORDER BY sd."entityType", sd."entityId"
+    LIMIT ${pageSize}
   `);
 
-  const stale: SearchableEntityText[] = [];
+  const rows: StaleSearchDocumentEmbeddingText[] = [];
   for (const row of result.rows) {
-    const expectedHash = await embeddingTextHash({
+    const expectedEmbeddingHash = await embeddingTextHash({
       entityType: row.entityType,
       provider: config.provider,
       model: config.model,
       dimensions: config.dimensions,
       text: normalizeSearchText(row.embeddingText),
     });
-    if (row.embeddingHash !== expectedHash) {
-      stale.push({
+    if (row.embeddingHash !== expectedEmbeddingHash) {
+      rows.push({
         entityType: row.entityType,
         entityId: row.entityId,
         embeddingText: row.embeddingText,
+        expectedEmbeddingHash,
       });
     }
-    if (limit != null && stale.length >= limit) break;
   }
-  return stale;
+  const last = result.rows.at(-1);
+  return {
+    rows,
+    nextCursor:
+      last && result.rows.length === pageSize
+        ? {
+            entityType: last.entityType,
+            entityId: last.entityId,
+          }
+        : null,
+  };
 }
 
 /**
@@ -542,26 +735,4 @@ export async function getSearchDocumentDiagnostics(
     }
   }
   return { missing, orphaned, stale };
-}
-
-export async function retireOrphanedSearchDocuments(
-  db: Database,
-  refs: ReadonlyArray<{ entityType: SearchableEntity; entityId: string }>,
-): Promise<number> {
-  if (refs.length === 0) return 0;
-  const values = sql.join(
-    refs.map((ref) => sql`(${ref.entityType}::text, ${ref.entityId}::uuid)`),
-    sql`, `,
-  );
-  const result = await getDb(db).execute<{ id: string }>(sql`
-    WITH refs("entityType", "entityId") AS (VALUES ${values})
-    UPDATE "SearchDocument" sd
-    SET "deletedAt" = now(), "updatedAt" = now()
-    FROM refs
-    WHERE sd."entityType" = refs."entityType"
-      AND sd."entityId" = refs."entityId"
-      AND sd."deletedAt" IS NULL
-    RETURNING sd.id::text AS id
-  `);
-  return result.rows.length;
 }

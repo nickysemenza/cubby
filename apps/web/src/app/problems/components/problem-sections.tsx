@@ -404,9 +404,9 @@ function MissingEmbeddingsBackfillAction() {
   const backfill = useProblemCardMutation({
     mutationFn: api.search.enqueueEmbeddingBackfill.mutationOptions,
     success: (data) =>
-      data.totalJobs > 0
-        ? `Queued ${data.totalJobs} for embedding.`
-        : "Nothing to embed.",
+      data.reused
+        ? "Embedding backfill is already running."
+        : "Started embedding backfill.",
   });
   return (
     <Button

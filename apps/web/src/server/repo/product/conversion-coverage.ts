@@ -60,11 +60,19 @@ export const getProductConversionCoverageFreshness = async (
   db: Database,
   now = new Date(),
 ): Promise<ProductConversionCoverageFreshness> => {
-  const rows = await getDb(db)
+  const freshAfter = new Date(
+    now.getTime() - PRODUCT_CONVERSION_COVERAGE_MAX_AGE_MS,
+  );
+  const [row] = await getDb(db)
     .select({
-      status: productConversionCoverage.status,
-      engineVersion: productConversionCoverage.engineVersion,
-      computedAt: productConversionCoverage.computedAt,
+      computedAt:
+        sql<Date | null>`max(${productConversionCoverage.computedAt})`.mapWith(
+          productConversionCoverage.computedAt,
+        ),
+      readyCount: sql<number>`count(*) filter (where ${productConversionCoverage.status} = 'ready' and ${productConversionCoverage.engineVersion} = ${PRODUCT_CONVERSION_COVERAGE_ENGINE_VERSION} and ${productConversionCoverage.computedAt} >= ${freshAfter})::int`,
+      staleCount: sql<number>`count(*) filter (where ${productConversionCoverage.status} is not null and ${productConversionCoverage.status} <> 'unavailable' and (${productConversionCoverage.status} <> 'ready' or ${productConversionCoverage.engineVersion} <> ${PRODUCT_CONVERSION_COVERAGE_ENGINE_VERSION} or ${productConversionCoverage.computedAt} is null or ${productConversionCoverage.computedAt} < ${freshAfter}))::int`,
+      unavailableCount: sql<number>`count(*) filter (where ${productConversionCoverage.status} = 'unavailable')::int`,
+      missingCount: sql<number>`count(*) filter (where ${productConversionCoverage.status} is null)::int`,
     })
     .from(product)
     .leftJoin(
@@ -73,31 +81,10 @@ export const getProductConversionCoverageFreshness = async (
     )
     .where(isNull(product.deletedAt));
 
-  let readyCount = 0;
-  let staleCount = 0;
-  let unavailableCount = 0;
-  let missingCount = 0;
-  let computedAt: Date | null = null;
-  const freshAfter = now.getTime() - PRODUCT_CONVERSION_COVERAGE_MAX_AGE_MS;
-  for (const row of rows) {
-    if (row.computedAt && (!computedAt || row.computedAt > computedAt)) {
-      computedAt = row.computedAt;
-    }
-    if (row.status == null) {
-      missingCount++;
-    } else if (row.status === "unavailable") {
-      unavailableCount++;
-    } else if (
-      row.status !== "ready" ||
-      row.engineVersion !== PRODUCT_CONVERSION_COVERAGE_ENGINE_VERSION ||
-      row.computedAt == null ||
-      row.computedAt.getTime() < freshAfter
-    ) {
-      staleCount++;
-    } else {
-      readyCount++;
-    }
-  }
+  const readyCount = row?.readyCount ?? 0;
+  const staleCount = row?.staleCount ?? 0;
+  const unavailableCount = row?.unavailableCount ?? 0;
+  const missingCount = row?.missingCount ?? 0;
 
   return {
     state:
@@ -106,7 +93,7 @@ export const getProductConversionCoverageFreshness = async (
         : staleCount > 0 || missingCount > 0
           ? "stale"
           : "fresh",
-    computedAt,
+    computedAt: row?.computedAt ?? null,
     expectedEngineVersion: PRODUCT_CONVERSION_COVERAGE_ENGINE_VERSION,
     readyCount,
     staleCount,

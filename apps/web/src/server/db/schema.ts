@@ -2679,6 +2679,10 @@ export const backgroundBatch = pgTable(
   {
     id: pkUuid(),
     kind: backgroundJobKindEnum("kind").notNull().$type<BackgroundJobKind>(),
+    // Durable workflow identity. Only active batches participate in the
+    // partial unique index below, so a completed maintenance run remains
+    // auditable while a later run may start normally.
+    dedupeKey: text("dedupeKey"),
     source: backgroundBatchSourceEnum("source")
       .notNull()
       .$type<BackgroundBatchSource>(),
@@ -2711,6 +2715,11 @@ export const backgroundBatch = pgTable(
   (table) => [
     index("BackgroundBatch_status_idx").on(table.status),
     index("BackgroundBatch_kind_idx").on(table.kind),
+    uniqueIndex("BackgroundBatch_active_dedupe_key")
+      .on(table.kind, table.dedupeKey)
+      .where(
+        sql`${table.deletedAt} IS NULL AND ${table.dedupeKey} IS NOT NULL AND ${table.status} IN ('queued', 'running')`,
+      ),
     index("BackgroundBatch_createdAt_idx").on(table.createdAt.desc()),
   ],
 );

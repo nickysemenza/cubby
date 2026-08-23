@@ -3,7 +3,7 @@ import type { MaintenanceCounts } from "@cubby/schemas/problems";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import pluralize from "pluralize";
-import { type ReactNode, useState } from "react";
+import type { ReactNode } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -17,6 +17,8 @@ import {
 import { Description } from "~/components/ui/description";
 import { useTRPC } from "~/integrations/trpc/react";
 import { problemsMutationInvalidateKeys, queryKeys } from "~/lib/query-keys";
+import { PROBLEMS_QUERY_STALE_TIME } from "../problem-query-freshness";
+import { searchDocumentMaintenanceRefetchInterval } from "../search-document-maintenance-query";
 import { BACKFILL } from "./backfill-registry";
 import { ProblemActionButton } from "./problem-action-button";
 import { BackfillButton } from "./problem-backfill-action";
@@ -85,11 +87,13 @@ function MaintenanceDryRunRow({
   summary,
   onDryRun,
   dryRunPending,
+  dryRunLabel = "Dry run",
   backfill,
 }: {
-  summary: string | null;
+  summary: ReactNode;
   onDryRun: () => void;
   dryRunPending: boolean;
+  dryRunLabel?: string;
   backfill: ReactNode;
 }) {
   return (
@@ -105,7 +109,7 @@ function MaintenanceDryRunRow({
         onClick={onDryRun}
         disabled={dryRunPending}
       >
-        {dryRunPending ? "Checking…" : "Dry run"}
+        {dryRunPending ? "Checking…" : dryRunLabel}
       </Button>
       {backfill}
     </Row>
@@ -130,7 +134,7 @@ function RecomputeAction() {
   // clears these in seconds; a lingering count flags a stuck/lost wave.
   const { data: counts } = useQuery(
     trpc.problems.getMaintenanceCounts.queryOptions(undefined, {
-      staleTime: 30_000,
+      staleTime: PROBLEMS_QUERY_STALE_TIME,
     }),
   );
   return (
@@ -257,56 +261,64 @@ function PruneAliasesAction() {
   );
 }
 
-// Full catalog integrity is intentionally on demand: rebuilding canonical
-// semantic text for every searchable entity is too expensive for the Problems
-// page/navbar hot path. Once checked, the query stays active so background-batch
-// invalidation refreshes the summary when queued repairs finish.
+// This reads the latest persisted repair batch only; it never starts a
+// full-catalog diagnostic from the Problems page.
 function SearchDocumentsAction() {
   const trpc = useTRPC();
-  const [enabled, setEnabled] = useState(false);
   const health = useQuery({
     ...trpc.search.documentHealth.queryOptions(),
-    enabled,
     staleTime: 30_000,
+    refetchInterval: (query) =>
+      searchDocumentMaintenanceRefetchInterval(query.state.data),
   });
   const repair = useActionMutation({
     mutationFn: trpc.search.repairDocuments.mutationOptions,
     invalidateKeys: [queryKeys.search.all],
-    success: (result) =>
-      result.queued > 0 ? (
-        <span>
-          Queued {pluralize("search document", result.queued, true)} for repair.{" "}
-          {result.retired > 0 ? `Retired ${result.retired} orphaned. ` : ""}
-          {result.batchId ? (
+    success: (result) => (
+      <span>
+        {result.reused ? "Repair already running. " : "Repair started. "}
+        <Link
+          to="/background-jobs"
+          search={{ batchId: result.batch.id }}
+          className="underline decoration-border decoration-dotted underline-offset-2 hover:decoration-primary"
+        >
+          View progress
+        </Link>
+      </span>
+    ),
+  });
+  const summary: ReactNode = health.data ? (
+    health.data.state === "never-run" ? (
+      "Not audited yet"
+    ) : health.data.state === "running" ? (
+      <span>
+        Auditing · {health.data.findings.total} findings so far
+        {health.data.batchId ? (
+          <>
+            {" · "}
             <Link
               to="/background-jobs"
-              search={{ batchId: result.batchId }}
+              search={{ batchId: health.data.batchId }}
               className="underline decoration-border decoration-dotted underline-offset-2 hover:decoration-primary"
             >
               View progress
             </Link>
-          ) : null}
-        </span>
-      ) : result.retired > 0 ? (
-        `Retired ${pluralize("orphaned search document", result.retired, true)}.`
-      ) : (
-        "Search index is already healthy."
-      ),
-  });
-  const summary = health.data
-    ? health.data.total === 0
-      ? "Index healthy"
-      : `${health.data.missing} missing · ${health.data.orphaned} orphaned · ${health.data.stale} stale`
-    : null;
+          </>
+        ) : null}
+      </span>
+    ) : health.data.findings.total === 0 ? (
+      "Index healthy"
+    ) : (
+      `${health.data.findings.missing} missing · ${health.data.findings.orphaned} orphaned · ${health.data.findings.stale} stale`
+    )
+  ) : null;
 
   return (
     <MaintenanceDryRunRow
       summary={summary}
-      onDryRun={() => {
-        if (enabled) void health.refetch();
-        else setEnabled(true);
-      }}
+      onDryRun={() => void health.refetch()}
       dryRunPending={health.isFetching}
+      dryRunLabel="Refresh"
       backfill={
         <ProblemActionButton
           onClick={() => repair.mutate(undefined)}
@@ -482,7 +494,7 @@ export function MaintenanceCard() {
   // Dry-run "N affected" figures — one cheap DB/WASM query (no USDA/UPC network).
   const { data: counts } = useQuery(
     trpc.problems.getMaintenanceCounts.queryOptions(undefined, {
-      staleTime: 30_000,
+      staleTime: PROBLEMS_QUERY_STALE_TIME,
     }),
   );
 

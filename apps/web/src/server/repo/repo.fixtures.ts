@@ -20,9 +20,11 @@ import type { MealCreateInput } from "@cubby/schemas/meal";
 import type { ProductCreateInput } from "@cubby/schemas/product";
 import type { ExpenseCreateInput } from "@cubby/schemas/project";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
+import { eq } from "drizzle-orm";
 import { mock } from "~/lib/test/mock-schema";
 import type { Database } from "~/server/db";
-import type { image } from "~/server/db/schema";
+import { type image, product } from "~/server/db/schema";
+import { getDb } from "./database-helpers";
 import { createIngredient, findOrCreateIngredient } from "./ingredient";
 import { createInventoryEntry } from "./inventory";
 import { createLocation } from "./location";
@@ -118,6 +120,18 @@ export const createProductFixture = async (
   );
   if (!resolvedProductId) throw new Error("fixture: created product not found");
   return { ...output, entityId: unsafeProductId(resolvedProductId) };
+};
+
+/** Simulate an out-of-band source edit without running mutation side effects. */
+export const updateProductNameFixtureRaw = async (
+  db: Database,
+  productId: string,
+  name: string,
+): Promise<void> => {
+  await getDb(db)
+    .update(product)
+    .set({ name })
+    .where(eq(product.id, unsafeProductId(productId)));
 };
 
 export const createIngredientFixture = async (

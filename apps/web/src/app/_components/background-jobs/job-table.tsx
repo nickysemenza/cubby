@@ -54,6 +54,12 @@ function JobTarget({ job }: { job: BackgroundJobSummary }) {
         compact
       />
     ))
+    .with({ kind: "entity-embedding.backfill.coordinator" }, () => (
+      <span>Continue semantic backfill</span>
+    ))
+    .with({ kind: "search-document.repair.coordinator" }, () => (
+      <span>Continue search-document repair</span>
+    ))
     .with(
       { kind: "location-ai.description.refresh" },
       { kind: "location-ai.inventory.refresh" },
@@ -120,6 +126,12 @@ function JobPayloadSummary({ job }: { job: BackgroundJobSummary }) {
       <span>
         {p.payload.entityType} · {p.payload.entityId.slice(0, 8)}
       </span>
+    ))
+    .with({ kind: "entity-embedding.backfill.coordinator" }, () => (
+      <span>Semantic backfill page</span>
+    ))
+    .with({ kind: "search-document.repair.coordinator" }, () => (
+      <span>Search-document repair page</span>
     ))
     .with(
       { kind: "location-ai.description.refresh" },

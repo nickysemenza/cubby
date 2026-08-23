@@ -402,16 +402,29 @@ const imageEntityRelations = {
   },
 } as const;
 
+type ImageReferenceLiveness = "active" | "any-fk";
+
 /**
- * The SQL form of the same exhaustive incoming-edge set used by image delete.
- * Entity-list membership can therefore paginate/count unreferenced images
- * without loading every Image and reducing the result in JavaScript.
+ * The SQL form of the exhaustive incoming-edge set used by image deletion.
+ *
+ * `active` answers whether an image still renders through a live join row;
+ * direct foreign keys remain references even when their owner is tombstoned.
+ * `any-fk` answers the stricter question required before hard-deleting a
+ * PENDING image: a tombstoned join row still holds an FK that PostgreSQL will
+ * enforce. Keeping the distinction here prevents the maintenance detectors
+ * from materializing every edge merely to make the same decision in JavaScript.
  */
 const imageReferenceCondition = (
   db: Database,
   outerImage: typeof image,
+  liveness: ImageReferenceLiveness,
 ): SQL => {
   const dbc = getDb(db);
+  const joinReferenceWhere = (imageId: PgColumn, activeWhere: SQL) =>
+    and(
+      eq(imageId, outerImage.id),
+      liveness === "active" ? activeWhere : undefined,
+    );
   const byEdge = {
     // includes-deleted: direct FKs remain live constraints after their parent
     // is tombstoned, so reference membership must match hard-delete safety.
@@ -433,10 +446,7 @@ const imageReferenceCondition = (
         .select({ one: sql`1` })
         .from(productImage)
         .where(
-          and(
-            eq(productImage.imageId, outerImage.id),
-            notDeleted(productImage),
-          ),
+          joinReferenceWhere(productImage.imageId, notDeleted(productImage)),
         ),
     ),
     "LocationImage.imageId": exists(
@@ -444,10 +454,7 @@ const imageReferenceCondition = (
         .select({ one: sql`1` })
         .from(locationImage)
         .where(
-          and(
-            eq(locationImage.imageId, outerImage.id),
-            notDeleted(locationImage),
-          ),
+          joinReferenceWhere(locationImage.imageId, notDeleted(locationImage)),
         ),
     ),
     "RecipeImage.imageId": exists(
@@ -455,7 +462,7 @@ const imageReferenceCondition = (
         .select({ one: sql`1` })
         .from(recipeImage)
         .where(
-          and(eq(recipeImage.imageId, outerImage.id), notDeleted(recipeImage)),
+          joinReferenceWhere(recipeImage.imageId, notDeleted(recipeImage)),
         ),
     ),
     "ProjectImage.imageId": exists(
@@ -463,10 +470,7 @@ const imageReferenceCondition = (
         .select({ one: sql`1` })
         .from(projectImage)
         .where(
-          and(
-            eq(projectImage.imageId, outerImage.id),
-            notDeleted(projectImage),
-          ),
+          joinReferenceWhere(projectImage.imageId, notDeleted(projectImage)),
         ),
     ),
     "PurchaseImage.imageId": exists(
@@ -474,16 +478,32 @@ const imageReferenceCondition = (
         .select({ one: sql`1` })
         .from(purchaseImage)
         .where(
-          and(
-            eq(purchaseImage.imageId, outerImage.id),
-            notDeleted(purchaseImage),
-          ),
+          joinReferenceWhere(purchaseImage.imageId, notDeleted(purchaseImage)),
         ),
     ),
   } satisfies Record<IncomingEdgeKey<"image">, SQL>;
 
   return or(...Object.values(byEdge))!;
 };
+
+const activeImageReferenceCondition = (
+  db: Database,
+  outerImage: typeof image,
+) => imageReferenceCondition(db, outerImage, "active");
+
+const anyForeignKeyImageReferenceCondition = (
+  db: Database,
+  outerImage: typeof image,
+) => imageReferenceCondition(db, outerImage, "any-fk");
+
+const cullablePendingImageWhere = (db: Database, cutoffDate: Date) =>
+  and(
+    eq(image.status, "PENDING"),
+    lt(image.createdAt, cutoffDate),
+    // Any reference, including a tombstoned join-row owner, protects this hard
+    // delete. PostgreSQL still enforces that FK even though no page renders it.
+    not(anyForeignKeyImageReferenceCondition(db, image)),
+  );
 
 export const imageList = async (
   db: Database,
@@ -509,7 +529,7 @@ export const imageList = async (
       ),
     );
     if (filters.referencePresenceFilter) {
-      const referenced = imageReferenceCondition(db, outerImage);
+      const referenced = activeImageReferenceCondition(db, outerImage);
       whereConditions.push(
         filters.referencePresenceFilter === "has"
           ? referenced
@@ -654,54 +674,30 @@ const findCullablePendingImages = async (
   const cutoffDate = new Date();
   cutoffDate.setHours(cutoffDate.getHours() - olderThanHours);
 
-  // Every incoming edge on `image` (INCOMING_EDGES.image), checked uniformly
-  // in one loop. `isNotNull` is harmlessly always-true on the five join
-  // tables' NOT NULL `imageId` column and does the real work on the one direct
-  // FK (`Cookbook.coverImageId`) — a cookbook cover is a DIRECT FK, not a join
-  // row, so enumerating only join tables would miss it, and this feeds a HARD
-  // delete wired to the one-click auto-fix. `deleteImages` below handles the
-  // same edge set (via `IMAGE_HARD_DELETE`, keyed off this same map), so a new
-  // edge added to one but not the other — the asymmetry that broke
-  // `PurchaseImage` originally — is no longer possible: both read from
-  // `INCOMING_EDGES.image`.
-  //
-  // Deliberately NOT filtered by `notDeleted(...)`: e.g. deleteCookbook
-  // tombstones the row without nulling coverImageId, so a soft-deleted cookbook
-  // still holds a live FK. The constraint doesn't care about deletedAt, and this
-  // cull is a hard delete — filtering here would cull exactly the images that
-  // then blow up on the FK constraint when the hard delete runs.
-  const associationQueries = Object.values(INCOMING_EDGES.image).map(
-    ({ column }) =>
-      dbClient
-        // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for select()
-        .select({ imageId: column as any })
-        // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for from()
-        .from(column.table as any)
-        // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for isNotNull()
-        .where(isNotNull(column as any)) as Promise<Array<{ imageId: string }>>,
-  );
-  const associationResults = await Promise.all(associationQueries);
-  const associatedImageIds = new Set(
-    associationResults.flatMap((rows) => rows.map((row) => row.imageId)),
-  );
+  const pendingImages = await dbClient
+    .select({
+      id: image.id,
+      key: image.key,
+    })
+    .from(image)
+    .where(cullablePendingImageWhere(db, cutoffDate));
 
-  const allPendingImages = await dbClient.query.image.findMany({
-    where: and(eq(image.status, "PENDING"), lt(image.createdAt, cutoffDate)),
-    columns: {
-      id: true,
-      key: true,
-    },
-  });
-
-  return allPendingImages.filter((img) => !associatedImageIds.has(img.id));
+  return pendingImages;
 };
 
 /** How many abandoned uploads the cull would remove right now. */
 export const countCullablePendingImages = async (
   db: Database,
   olderThanHours: number,
-): Promise<number> =>
-  (await findCullablePendingImages(db, olderThanHours)).length;
+): Promise<number> => {
+  const cutoffDate = new Date();
+  cutoffDate.setHours(cutoffDate.getHours() - olderThanHours);
+  const [row] = await getDb(db)
+    .select({ count: sql<number>`count(*)::int` })
+    .from(image)
+    .where(cullablePendingImageWhere(db, cutoffDate));
+  return row?.count ?? 0;
+};
 
 export const cullPendingImages = async (
   db: Database,
@@ -1061,12 +1057,20 @@ export const imageJoinColumnFor = (table: PgTable): PgColumn | undefined => {
 /** Grace window before an unattached UPLOADED row counts as orphaned. */
 export const UNREFERENCED_IMAGE_GRACE_HOURS = 1;
 
+const unreferencedImageWhere = (db: Database, cutoffDate: Date) =>
+  and(
+    eq(image.status, "UPLOADED"),
+    notDeleted(image),
+    lt(image.createdAt, cutoffDate),
+    not(activeImageReferenceCondition(db, image)),
+  );
+
 /**
  * UPLOADED images no edge still reaches — bytes R2 charges for that nothing can
  * render. The mirror of `findCullablePendingImages`, which only ever swept
- * PENDING rows; that gap is exactly why these accumulated unnoticed. Reads the
- * same {@link findReferencedImageIds} the detach reap reads, so the detector and
- * the fix cannot disagree about what "referenced" means.
+ * PENDING rows; that gap is exactly why these accumulated unnoticed. It shares
+ * the active-reference SQL used by the Images list, so the detector and that
+ * list cannot disagree about whether an image still renders.
  *
  * The grace window is load-bearing, not cosmetic: `importImageFromUrl` and the
  * cookbook cover import create an UPLOADED row and associate it in a SEPARATE
@@ -1096,36 +1100,37 @@ export const findUnreferencedImages = async (
   const cutoffDate = new Date();
   cutoffDate.setHours(cutoffDate.getHours() - olderThanHours);
 
-  const referenced = await findReferencedImageIds(dbClient);
-  const candidates = await dbClient.query.image.findMany({
-    where: and(
-      eq(image.status, "UPLOADED"),
-      notDeleted(image),
-      lt(image.createdAt, cutoffDate),
-    ),
-    columns: {
-      id: true,
-      key: true,
-      filename: true,
-      contentType: true,
-      size: true,
-      createdAt: true,
-      targetType: true,
-      targetId: true,
-    },
-  });
+  const candidates = await dbClient
+    .select({
+      id: image.id,
+      key: image.key,
+      filename: image.filename,
+      contentType: image.contentType,
+      size: image.size,
+      createdAt: image.createdAt,
+      targetType: image.targetType,
+      targetId: image.targetId,
+    })
+    .from(image)
+    .where(unreferencedImageWhere(db, cutoffDate));
   // `image.id` is an unbranded column, so this is the genuine string -> brand
   // boundary: these are real uuids on their way to `deleteImages`.
-  return candidates
-    .filter((img) => !referenced.has(img.id))
-    .map((img) => ({ ...img, id: unsafeImageId(img.id) }));
+  return candidates.map((img) => ({ ...img, id: unsafeImageId(img.id) }));
 };
 
 /** How many unreferenced files {@link findUnreferencedImages} would report. */
 export const countUnreferencedImages = async (
   db: Database,
   olderThanHours: number = UNREFERENCED_IMAGE_GRACE_HOURS,
-): Promise<number> => (await findUnreferencedImages(db, olderThanHours)).length;
+): Promise<number> => {
+  const cutoffDate = new Date();
+  cutoffDate.setHours(cutoffDate.getHours() - olderThanHours);
+  const [row] = await getDb(db)
+    .select({ count: sql<number>`count(*)::int` })
+    .from(image)
+    .where(unreferencedImageWhere(db, cutoffDate));
+  return row?.count ?? 0;
+};
 
 /** Human-readable labels for each {@link IMAGE_HARD_DELETE} edge, for the preview. */
 const IMAGE_HARD_DELETE_LABELS: Record<IncomingEdgeKey<"image">, string> = {

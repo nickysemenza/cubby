@@ -6,6 +6,7 @@ interface BackgroundQueueMessage {
   messageVersion: number;
   batchId: string;
   jobId: string;
+  /** Batch kind gates workflow continuation checks without another DB read. */
   kind: BackgroundJobKind;
 }
 
@@ -19,7 +20,7 @@ export interface BackgroundQueueProducer {
 export interface BackgroundQueueDeliveredMessage {
   readonly body: BackgroundQueueMessage;
   ack(): void;
-  retry(): void;
+  retry(options?: { delaySeconds: number }): void;
 }
 
 export interface BackgroundQueueBatch {

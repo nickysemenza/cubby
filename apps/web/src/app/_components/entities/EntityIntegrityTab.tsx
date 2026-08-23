@@ -7,11 +7,11 @@ import type {
   ReferentialLivenessViolation,
   RelationshipProvenance,
 } from "@cubby/schemas/entity-integrity";
+import { referentialLivenessViolationSchema } from "@cubby/schemas/entity-integrity";
 import { useQuery } from "@tanstack/react-query";
 import { HeartPulse, Trash2, Waypoints } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
-import { useProblemsData } from "~/app/problems/use-problems-data";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Grid, Row, Stack } from "~/components/layout";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
@@ -45,6 +45,13 @@ const LENS_OPTIONS: {
   { value: "health", label: "Health", icon: HeartPulse },
 ];
 
+const REFERENTIAL_LIVENESS_INPUT = {
+  key: "referentialLivenessViolations",
+} as const;
+const EMPTY_REFERENTIAL_LIVENESS_VIOLATIONS: ReferentialLivenessViolation[] =
+  [];
+const REFERENTIAL_LIVENESS_STALE_TIME = 60_000;
+
 /** Raw `effect` slug → the badge tone that reads correctly for it. */
 const EFFECT_VARIANT: Record<OperationEffect, BadgeVariant> = {
   block: "destructive",
@@ -59,20 +66,22 @@ const EFFECT_VARIANT: Record<OperationEffect, BadgeVariant> = {
 /**
  * `/entities?tab=integrity` — the static architecture surface (relationships,
  * physical FK edges, lifecycle dispositions) from `entityIntegrity.catalog`,
- * cross-referenced with the live referential-liveness findings from
- * `useProblemsData` (the SAME cache the Problems page and navbar badge
- * populate — deliberately not a second auditor query).
+ * cross-referenced with the focused referential-liveness Problem query. This
+ * must not load the full five-lane Problems dashboard just to render one tab.
  */
 export function EntityIntegrityTab() {
   const api = useTRPC();
   const { data: catalog, isLoading: catalogLoading } = useQuery(
     api.entityIntegrity.catalog.queryOptions(),
   );
-  // 1-min staleTime: this tab is opened deliberately (not a background badge),
-  // so it's fine to revalidate more eagerly than the navbar's 5-min window
-  // while still reusing whatever the badge/Problems page already fetched.
-  const { problems } = useProblemsData({ staleTime: 60_000 });
-  const violations = problems.referentialLivenessViolations;
+  const { data: violations = EMPTY_REFERENTIAL_LIVENESS_VIOLATIONS } = useQuery(
+    {
+      ...api.problems.getByType.queryOptions(REFERENTIAL_LIVENESS_INPUT),
+      staleTime: REFERENTIAL_LIVENESS_STALE_TIME,
+      select: (result) =>
+        referentialLivenessViolationSchema.array().parse(result.items),
+    },
+  );
 
   const [selected, setSelected] = useState<Entity | null>(null);
   const [lens, setLens] = useState<EntityGraphLens>("logical");

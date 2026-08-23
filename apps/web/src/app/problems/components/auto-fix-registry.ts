@@ -158,10 +158,10 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
     run: async (client) => {
       const r = await client.search.enqueueEmbeddingBackfill.mutate({});
       return {
-        summary: r.totalJobs
-          ? `queued ${pluralize("embedding", r.totalJobs, true)}`
-          : null,
-        batchId: r.batchId,
+        summary: r.reused
+          ? "embedding backfill is already running"
+          : "started embedding backfill",
+        batchId: r.batch.id,
       };
     },
   },

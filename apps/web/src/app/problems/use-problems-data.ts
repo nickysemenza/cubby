@@ -9,6 +9,7 @@ import type { ProblemExecutionLane } from "~/entities/problem-query";
 import { useTRPC } from "~/integrations/trpc/react";
 import type { ProblemsHotPathProcedure } from "~/lib/problems-query-groups";
 import type { ProblemLaneState } from "./problem-lane-state";
+import { PROBLEMS_QUERY_STALE_TIME } from "./problem-query-freshness";
 
 /**
  * Loads the Problems page data as five cost-grouped tRPC queries instead of one
@@ -36,7 +37,7 @@ export function useProblemsData(opts?: {
   // the page revalidates on entry. `enabled` lets the homepage card gate the
   // fetch (SSR-idle, then enable on the client) to avoid a hydration mismatch,
   // like the sibling stat cards. The navbar badge now uses getCounts directly.
-  const staleTime = opts?.staleTime;
+  const staleTime = opts?.staleTime ?? PROBLEMS_QUERY_STALE_TIME;
   const enabled = opts?.enabled;
   const problemGroupQueries = {
     getFast: { ...api.problems.getFast.queryOptions(), staleTime, enabled },
