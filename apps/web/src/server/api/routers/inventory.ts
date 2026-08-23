@@ -34,6 +34,12 @@ import {
   moveInventoryEntriesPayload,
   reconcileSessionPayload,
 } from "@cubby/schemas/inventory";
+import {
+  resolveScanStraysInput,
+  resolveScanStraysOut,
+  scanAtLocationInput,
+  scanAtLocationOut,
+} from "@cubby/schemas/scan";
 import { uniq } from "es-toolkit";
 import { match } from "ts-pattern";
 import { createAppError } from "~/server/errors/app-error";
@@ -61,6 +67,10 @@ import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
+import {
+  resolveScanStrays as resolveScanStraysService,
+  scanAtLocation as scanAtLocationService,
+} from "~/server/services/scan-into-location.service";
 import {
   createBulkUpdatedMutation,
   createDeleteProcedure,
@@ -493,6 +503,31 @@ const getByLocationIds = protectedProcedure
     );
   });
 
+/**
+ * One scan during a location sweep. Adds, confirms, or reports strays — see
+ * `scan-into-location.service` for why the decision is server-side.
+ */
+const scanAtLocation = protectedProcedure
+  .input(scanAtLocationInput)
+  .output(strictOutput(scanAtLocationOut))
+  .mutation(({ ctx, input }) =>
+    scanAtLocationService(
+      ctx.db,
+      ctx.usdaClient,
+      ctx.upcLookupClient,
+      input,
+      ctx.actorContext,
+    ),
+  );
+
+/** Commit the strays a sweep turned up, at the end, in one move. */
+const resolveScanStrays = protectedProcedure
+  .input(resolveScanStraysInput)
+  .output(strictOutput(resolveScanStraysOut))
+  .mutation(({ ctx, input }) =>
+    resolveScanStraysService(ctx.db, input, ctx.actorContext),
+  );
+
 export const inventoryRouter = createTRPCRouter({
   getByID,
   getByShortcode,
@@ -504,6 +539,8 @@ export const inventoryRouter = createTRPCRouter({
   bulkMove,
   moveEntries,
   reconcileSession,
+  scanAtLocation,
+  resolveScanStrays,
   findDuplicates,
   getCountsByLocations,
   getByLocationIds,
