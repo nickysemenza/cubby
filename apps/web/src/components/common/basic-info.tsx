@@ -1,6 +1,5 @@
 import type { FC, ReactNode } from "react";
 import { Stack } from "~/components/layout";
-import { InfoRow } from "./info-row";
 
 export interface BasicInfoField {
   label: string;
@@ -28,16 +27,16 @@ export const BasicInfo: FC<BasicInfoProps> = ({
   return (
     <Stack gap="sm">
       {header}
-      {/* Fact sheet: each InfoRow carries its own dotted leader — no dividers */}
-      <div>
+      <div className="basic-info-ledger">
         {visibleFields.map((field) => (
-          <InfoRow
+          <div
             key={field.label}
-            label={field.label}
-            action={field.filterAction}
+            className="grid grid-cols-[6.5rem_minmax(0,1fr)_auto] items-baseline gap-2 border-border border-b py-1.5" /* tight */
           >
-            {field.value}
-          </InfoRow>
+            <span className="eyebrow min-w-0">{field.label}</span>
+            <span className="min-w-0 text-xs">{field.value}</span>
+            {field.filterAction}
+          </div>
         ))}
       </div>
       {footer}

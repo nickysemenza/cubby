@@ -474,28 +474,26 @@ function DetailPlate({
         data-testid="detail-spec-plate"
       >
         <CardContent className="px-2 py-1 sm:px-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <div
+            className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-3 gap-y-1" /* tight */
+          >
             <div className="min-w-0">
               <DetailBreadcrumb entity={entity} heroNo={heroNo} />
-              <h1 className="break-words font-bold font-heading text-xl tracking-tight sm:text-3xl">
+              <h1 className="break-words font-bold font-heading text-xl leading-6 tracking-tight sm:text-3xl sm:leading-9">
                 {name}
               </h1>
-              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-2xs text-muted-foreground uppercase">
-                {heroNo && (
-                  <span className="md:hidden">
-                    <CopyableHeroNo heroNo={heroNo} />
-                  </span>
-                )}
-                {onFileSince && <span>On file since {onFileSince}</span>}
-              </div>
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-2 sm:shrink-0 sm:justify-end">
-              {heroStamp && (
-                <InkStamp tone={heroStamp.tone} className="mt-1">
-                  {heroStamp.label}
-                </InkStamp>
+            <DetailPlateActions actions={heroActions} />
+            <div className="col-span-2 flex flex-wrap items-center gap-2 font-mono text-2xs text-muted-foreground uppercase">
+              {heroNo && (
+                <span className="md:hidden">
+                  <CopyableHeroNo heroNo={heroNo} />
+                </span>
               )}
-              <DetailPlateActions actions={heroActions} />
+              {heroStamp && (
+                <InkStamp tone={heroStamp.tone}>{heroStamp.label}</InkStamp>
+              )}
+              {onFileSince && <span>On file since {onFileSince}</span>}
             </div>
           </div>
           {heroStats && heroStats.length > 0 && (
