@@ -16,6 +16,7 @@ import {
   recipeShortcode,
   taskShortcode,
   vendorShortcode,
+  wishShortcode,
 } from "./identifiers";
 
 /**
@@ -680,6 +681,7 @@ export const productRelatedFilterFields = {
   ...trio("purchase", purchaseShortcode),
   ...trio("expense", expenseShortcode),
   ...trio("relatedInventory", inventoryShortcode),
+  ...trio("wish", wishShortcode),
   ...trio("task", taskShortcode),
 };
 export const recipeRelatedFilterFields = {
