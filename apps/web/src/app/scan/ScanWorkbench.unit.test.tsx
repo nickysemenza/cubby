@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ScanWorkbench } from "./ScanWorkbench";
 
 vi.mock("~/app/_components/inventory/persistent-scanner", () => ({
@@ -22,14 +22,14 @@ vi.mock("~/app/_components/inventory/persistent-scanner", () => ({
   ),
 }));
 
-afterEach(() => {
-  document.body.innerHTML = "";
-});
-
 describe("ScanWorkbench", () => {
+  const openManualEntry = () =>
+    fireEvent.click(screen.getByRole("button", { name: "Enter code" }));
+
   it("submits a Cubby label from the manual field", async () => {
     const onResolve = vi.fn(async () => {});
     render(<ScanWorkbench onResolve={onResolve} />);
+    openManualEntry();
 
     fireEvent.change(screen.getByLabelText("Code"), {
       target: { value: "https://cubby.nickysemenza.com/LOC-4K7M" },
@@ -63,6 +63,7 @@ describe("ScanWorkbench", () => {
       code: { kind: "barcode", value: "012345678905" },
     });
 
+    openManualEntry();
     fireEvent.change(screen.getByLabelText("Code"), {
       target: { value: "978-0-306-40615-7" },
     });
@@ -71,15 +72,14 @@ describe("ScanWorkbench", () => {
 
     finish?.();
     await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Simulate camera scan" }),
-      ).toBeDefined(),
+      expect(screen.getByRole("button", { name: "Open" })).not.toBeDisabled(),
     );
   });
 
   it("retains manual input and names the recovery after invalid input", () => {
     const onResolve = vi.fn(async () => {});
     render(<ScanWorkbench onResolve={onResolve} />);
+    openManualEntry();
 
     const input = screen.getByLabelText("Code") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "https://example.com/item" } });
@@ -93,12 +93,13 @@ describe("ScanWorkbench", () => {
   it("keeps manual entry usable when camera permission is denied", () => {
     const onResolve = vi.fn(async () => {});
     render(<ScanWorkbench onResolve={onResolve} />);
-
-    const input = screen.getByLabelText("Code") as HTMLInputElement;
-    fireEvent.change(input, { target: { value: "012345678905" } });
     fireEvent.click(
       screen.getByRole("button", { name: "Deny camera permission" }),
     );
+    openManualEntry();
+
+    const input = screen.getByLabelText("Code") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "012345678905" } });
 
     expect(
       screen.getByText(/Camera unavailable.*Permission denied/),
@@ -112,6 +113,7 @@ describe("ScanWorkbench", () => {
       throw new Error("Lookup service is unavailable");
     });
     render(<ScanWorkbench onResolve={onResolve} />);
+    openManualEntry();
 
     const input = screen.getByLabelText("Code") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "012345678905" } });

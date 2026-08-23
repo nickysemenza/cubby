@@ -114,41 +114,43 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
 
   return (
     <Stack gap="md" className="container mx-auto p-1">
-      <div className="relative">
-        <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          type="search"
-          aria-label="Search Cubby"
-          placeholder="Search products, recipes, locations..."
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && event.currentTarget.value.trim())
-              setRecents((previous) =>
-                uniq([event.currentTarget.value.trim(), ...previous]).slice(
-                  0,
-                  8,
-                ),
-              );
-          }}
-          className="pl-6"
-          autoFocus
+      <div className="sticky top-[var(--app-chrome-top)] z-20 -mx-1 space-y-1 border-border border-b bg-background px-1 pb-1">
+        <div className="relative">
+          <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="search"
+            aria-label="Search Cubby"
+            placeholder="Search products, recipes, locations..."
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && event.currentTarget.value.trim())
+                setRecents((previous) =>
+                  uniq([event.currentTarget.value.trim(), ...previous]).slice(
+                    0,
+                    8,
+                  ),
+                );
+            }}
+            className="min-h-11 pl-7 md:min-h-0"
+            autoFocus
+          />
+        </div>
+        <SearchFilter
+          value={type}
+          onChange={(next) =>
+            navigate({
+              to: "/search",
+              search: {
+                q: draft || undefined,
+                type: next === "all" ? undefined : next,
+              },
+            })
+          }
         />
       </div>
       {hasQuery ? (
         <Stack gap="md">
-          <SearchFilter
-            value={type}
-            onChange={(next) =>
-              navigate({
-                to: "/search",
-                search: {
-                  q: draft || undefined,
-                  type: next === "all" ? undefined : next,
-                },
-              })
-            }
-          />
           {isMobile ? (
             <MobileSearchResults
               data={primary.data ?? []}
@@ -227,7 +229,7 @@ function SearchFilter({
         <Badge
           key={option.value}
           variant={option.value === value ? "default" : "outline"}
-          className="h-auto shrink-0 cursor-pointer px-2 py-1 text-xs"
+          className="min-h-11 shrink-0 cursor-pointer px-2 py-1 text-xs md:min-h-0"
           render={
             <button type="button" onClick={() => onChange(option.value)} />
           }

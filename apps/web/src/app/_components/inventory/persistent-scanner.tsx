@@ -138,11 +138,11 @@ export function PersistentScanner({
 
   return (
     <Stack gap="sm">
-      <div className="relative w-full overflow-hidden rounded-lg bg-black">
+      <div className="relative w-full overflow-hidden bg-black md:rounded-lg">
         {/* Video element — camera feed */}
         <video
           ref={videoRef}
-          className="aspect-[4/3] w-full object-cover"
+          className="h-[calc(100dvh-var(--app-chrome-top)-var(--app-chrome-bottom)-3rem)] w-full object-cover md:aspect-[4/3] md:h-auto"
           playsInline
           muted
         />
