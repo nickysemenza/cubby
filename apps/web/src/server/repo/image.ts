@@ -817,7 +817,7 @@ const fetchExistingImages = (
  */
 export const deleteImages = async (
   db: Database,
-  imageIds: string[],
+  imageIds: ImageId[],
 ): Promise<{ deletedIds: string[]; deletedKeys: string[] }> => {
   if (imageIds.length === 0) return { deletedIds: [], deletedKeys: [] };
   return await withTransaction(db, (tx) => deleteImagesTx(tx, imageIds));
@@ -1082,7 +1082,7 @@ export const findUnreferencedImages = async (
   olderThanHours: number = UNREFERENCED_IMAGE_GRACE_HOURS,
 ): Promise<
   Array<{
-    id: string;
+    id: ImageId;
     key: string;
     filename: string;
     contentType: string;
@@ -1114,7 +1114,11 @@ export const findUnreferencedImages = async (
       targetId: true,
     },
   });
-  return candidates.filter((img) => !referenced.has(img.id));
+  // `image.id` is an unbranded column, so this is the genuine string -> brand
+  // boundary: these are real uuids on their way to `deleteImages`.
+  return candidates
+    .filter((img) => !referenced.has(img.id))
+    .map((img) => ({ ...img, id: unsafeImageId(img.id) }));
 };
 
 /** How many unreferenced files {@link findUnreferencedImages} would report. */

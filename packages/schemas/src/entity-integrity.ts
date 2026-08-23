@@ -514,7 +514,7 @@ export const previewOperationInputSchema = z
       .max(200)
       .optional()
       .describe(
-        "delete only: the shortcodes to preview deleting (uuids for `image`). Must match the `entity` prefix — e.g. PRD- codes when entity is `product`.",
+        "delete only: the shortcodes to preview deleting. Must match the `entity` prefix — e.g. PRD- codes when entity is `product`, IMG- codes when it is `image`.",
       ),
     mergeIds: z
       .array(previewTargetId)

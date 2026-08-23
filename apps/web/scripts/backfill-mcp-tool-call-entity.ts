@@ -20,8 +20,9 @@
  *    from what the tool DOES, even though it isn't a manifest CRUD name
  *    (`verify_product_images` → product, `split_expense` → expense, …).
  *    Confirmed against production's real toolName/count distribution
- *    (20,590 rows / 115 distinct names, 2026-08-02..2026-08-23) before this
- *    map was written — see the table below.
+ *    the real toolName distribution before this map was written — see the
+ *    table below. Re-derive it against the live table rather than trusting a
+ *    figure quoted here; this script reports its own coverage on every run.
  *
  * What is PERMANENTLY unattributable for historical rows, and why — these
  * are excluded from the map on principle, not omission:
@@ -34,8 +35,8 @@
  *   hook (see `_shared.ts` / `server.ts`) ships will carry it. Note some of
  *   these names still match a naming regex like `delete_.*` at a glance, so
  *   do not assume "matches a CRUD-shaped prefix" implies "in the map below".
- * - **`attach_file` / `attach_files`** (3,789 + 53 calls in the sample
- *   window — `attach_file` ALONE is ~18% of all MCP traffic) — the target
+ * - **`attach_file` / `attach_files`** (together a large share of all
+ *   recorded traffic, `attach_file` dominant among them) — the target
  *   entity is derived from `entityId`'s shortcode prefix at call time, and
  *   that argument was never persisted either. Fixed going forward once
  *   `image.tools.ts` gets a `telemetryEntity` extractor (see the report this
@@ -50,7 +51,7 @@
  *   manifest `Entity` at all.
  *
  * In the production sample this script was validated against, those seven
- * names alone account for ~4,300 of 20,590 rows (~21%) that no backfill can
+ * names alone account for a substantial minority of rows that no backfill can
  * ever attribute. Combined with a handful of stray `find_*` tools that match
  * a "CRUD-shaped" naming heuristic but aren't manifest CRUD (e.g.
  * `find_recipes_using_ingredient`, `find_similar_entities`), real historical

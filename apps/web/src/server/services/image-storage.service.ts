@@ -1,5 +1,9 @@
 import type { ImageShortcode } from "@cubby/schemas/identifiers";
-import { unsafeImageShortcode } from "@cubby/schemas/identifiers";
+import {
+  type ImageId,
+  unsafeImageId,
+  unsafeImageShortcode,
+} from "@cubby/schemas/identifiers";
 import type {
   AttachFileResponse,
   CreateFileUploadInput,
@@ -543,7 +547,10 @@ export const attachFileToEntity = async (
   // rather than leaking them, and must not fail an attachment that succeeded.
   if (input.uploadId) {
     try {
-      const { deletedKeys } = await deleteImages(db, [input.uploadId]);
+      // The staging handle is a genuine raw `Image.id` uuid, not a shortcode.
+      const { deletedKeys } = await deleteImages(db, [
+        unsafeImageId(input.uploadId),
+      ]);
       await deleteStoredObjects(deletedKeys);
     } catch (cleanupError) {
       console.error("Failed to clean up staged upload:", cleanupError);
@@ -625,7 +632,7 @@ export const cleanupUnreferencedImageStorage = async (
  */
 export const deleteImagesWithStorage = async (
   db: Database,
-  imageIds: string[],
+  imageIds: ImageId[],
 ) => {
   const result = await deleteImages(db, imageIds);
   await deleteStoredObjects(result.deletedKeys);

@@ -42,6 +42,7 @@ import {
 } from "~/server/repo/image";
 import {
   resolveAllOrThrow,
+  resolveAllPresent,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import {
@@ -94,9 +95,16 @@ const { list } = createEntityListProcedure({
  * mutation side-effects to run (images carry no embedding / derived data).
  */
 const deleteItem = createDeleteProcedure(async (services, ids) => {
-  const { deletedIds } = await deleteImagesWithStorage(services.db, ids);
+  // The table and detail page hand back `IMG-` codes, so what arrives here is
+  // a shortcode; `deleteImagesWithStorage` keys on `Image.id`. Resolve first.
+  // `createDeleteProcedure` infers its id type from this callback and then
+  // casts, so the branded parameter alone does NOT catch a missed resolve —
+  // hence the explicit `imageShortcode` input schema below, which rejects a
+  // raw uuid at parse time rather than letting one through as a "code".
+  const imageIds = await resolveAllPresent(services.db, "image", ids);
+  const { deletedIds } = await deleteImagesWithStorage(services.db, imageIds);
   return { deleted: deletedIds.length };
-});
+}, imageShortcode);
 
 export const imageRouter = createTRPCRouter({
   list,

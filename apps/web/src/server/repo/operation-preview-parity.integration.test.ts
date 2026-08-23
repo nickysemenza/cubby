@@ -9,6 +9,7 @@ import { financialTransactionCreateInput } from "@cubby/schemas/financial-transa
 import {
   unsafeFinancialAccountId,
   unsafeFinancialTransactionId,
+  unsafeImageId,
   unsafeImageShortcode,
   unsafeLocationId,
   unsafeProductId,
@@ -1571,7 +1572,7 @@ describe("operation preview / mutation parity", () => {
       );
       expect(assocChange?.total).toBe(1);
 
-      await deleteImages(ctx.db, [pendingImage.id]);
+      await deleteImages(ctx.db, [unsafeImageId(pendingImage.id)]);
 
       const rows = await getDb(ctx.db)
         .select({ id: productImage.id })

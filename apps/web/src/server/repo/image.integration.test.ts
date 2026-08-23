@@ -345,7 +345,7 @@ describe("image repository — purchase (charge) documents", () => {
       charge.uuid,
     );
 
-    const result = await deleteImages(ctx.db, [uploaded.id]);
+    const result = await deleteImages(ctx.db, [unsafeImageId(uploaded.id)]);
     expect(result.deletedIds).toEqual([uploaded.id]);
 
     const [joinRow] = await getDb(ctx.db)
