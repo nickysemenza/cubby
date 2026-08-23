@@ -65,6 +65,7 @@ import type {
 } from "~/server/repo/audit-log";
 import { logAuditEntries } from "~/server/repo/audit-log";
 import { softDeleteEntitySearchArtifactsTx } from "~/server/repo/entity-embedding-cleanup";
+import { softDeleteSuggestionDismissalsTx } from "~/server/repo/suggestion-dismissal";
 
 /**
  * An entity a removal path can operate on: it writes audit rows and it has a
@@ -155,6 +156,7 @@ export const cascadeRemoval = async <E extends RemovableEntity>(
 
   if (isSearchable(entity)) {
     await softDeleteEntitySearchArtifactsTx(tx, entity, [...ids]);
+    await softDeleteSuggestionDismissalsTx(tx, entity, [...ids]);
   }
 
   const entries = buildCascadeAuditEntries(entity, ids, args.counts ?? {});
