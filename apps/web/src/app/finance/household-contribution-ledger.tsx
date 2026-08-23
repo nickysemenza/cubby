@@ -170,9 +170,11 @@ export function HouseholdContributionLedgerReport({
                     <Badge variant={row.party.household ? "slate" : "outline"}>
                       {row.party.kind === "shared_fund"
                         ? "Shared fund"
-                        : row.party.household
-                          ? "Household"
-                          : "Guest"}
+                        : row.party.kind === "household"
+                          ? "Shared beneficiary"
+                          : row.party.household
+                            ? "Household"
+                            : "Guest"}
                     </Badge>
                   </Stack>
                 </TableCell>

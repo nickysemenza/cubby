@@ -2359,7 +2359,9 @@ export const expense = pgTable(
 /**
  * Unitless cost attribution. Money remains solely on Expense.cost; readers
  * allocate its integer cents across each role with deterministic largest
- * remainder arithmetic. A null target is an explicit unattributed bucket.
+ * remainder arithmetic. Beneficiaries may target a Person, the household
+ * explicitly, or an unattributed bucket; funders target an economic source or
+ * an unattributed bucket.
  */
 export const expenseAttribution = pgTable(
   "ExpenseAttribution",
@@ -2376,6 +2378,7 @@ export const expenseAttribution = pgTable(
     fundingSourceId: uuid("fundingSourceId")
       .$type<FundingSourceId>()
       .references(() => fundingSource.id),
+    household: boolean("household").notNull().default(false),
     weight: integer("weight").notNull(),
     ...baseTimestamps(),
     ...softDeletedAt(),
@@ -2389,10 +2392,13 @@ export const expenseAttribution = pgTable(
       .where(
         sql`${table.deletedAt} IS NULL AND ${table.fundingSourceId} IS NOT NULL`,
       ),
+    uniqueIndex("ExpenseAttribution_expenseId_role_household_key")
+      .on(table.expenseId, table.role)
+      .where(sql`${table.deletedAt} IS NULL AND ${table.household} = true`),
     uniqueIndex("ExpenseAttribution_expenseId_role_unattributed_key")
       .on(table.expenseId, table.role)
       .where(
-        sql`${table.deletedAt} IS NULL AND ${table.personId} IS NULL AND ${table.fundingSourceId} IS NULL`,
+        sql`${table.deletedAt} IS NULL AND ${table.personId} IS NULL AND ${table.fundingSourceId} IS NULL AND ${table.household} = false`,
       ),
     index("ExpenseAttribution_expenseId_idx").on(table.expenseId),
     index("ExpenseAttribution_personId_idx").on(table.personId),
@@ -2404,8 +2410,8 @@ export const expenseAttribution = pgTable(
     check("ExpenseAttribution_weight_check", sql`${table.weight} > 0`),
     check(
       "ExpenseAttribution_target_check",
-      sql`(${table.role} = 'beneficiary' AND ${table.fundingSourceId} IS NULL)
-          OR (${table.role} = 'funder' AND ${table.personId} IS NULL)`,
+      sql`(${table.role} = 'beneficiary' AND ${table.fundingSourceId} IS NULL AND (${table.personId} IS NULL OR ${table.household} = false))
+          OR (${table.role} = 'funder' AND ${table.personId} IS NULL AND ${table.household} = false)`,
     ),
   ],
 );

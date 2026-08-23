@@ -13,6 +13,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import {
+  expenseAttribution,
   expenseSourceRef,
   financialTransaction,
   fundingSource,
@@ -513,7 +514,11 @@ describe("household contribution repository", () => {
           ],
           unattributedWeight: 1,
         },
-        beneficiaries: { people: [], unattributedWeight: 1 },
+        beneficiaries: {
+          people: [],
+          householdWeight: 2,
+          unattributedWeight: 1,
+        },
       },
       ctx.actor,
     );
@@ -521,12 +526,141 @@ describe("household contribution repository", () => {
       asOf: "2026-08-20",
     });
     expect(ledger.checks.expenseTotal).toBe(0.05);
+    expect(ledger.checks.consumedTotal + ledger.unattributed.consumption).toBe(
+      0.05,
+    );
     expect(ledger.checks.fundedTotal + ledger.unattributed.funding).toBe(0.05);
+    expect(
+      ledger.parties.find((party) => party.party.kind === "household")
+        ?.consumed,
+    ).toBe(0.03);
     expect(
       ledger.parties.find((party) => party.party.key === "household-cash")
         ?.initiallyOutlaid,
     ).toBe(0.03);
+    expect(ledger.unattributed.consumption).toBe(0.02);
     expect(ledger.unattributed.funding).toBe(0.02);
+    expect(ledger.gaps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "partial_beneficiaries",
+          amount: 0.02,
+        }),
+      ]),
+    );
+  });
+
+  it("never infers attribution from project kind", async () => {
+    const project = await insertWithShortcode(ctx.db, "project", {
+      name: "Historic renovation",
+      kind: "renovation",
+    });
+    await insertWithShortcode(ctx.db, "expense", {
+      name: "Historic project cost",
+      cost: 25,
+      date: "2020-01-15",
+      costType: "materials",
+      trade: "other",
+      projectId: project.id,
+    });
+
+    const result = await projectContribution(ctx.db, {
+      projectId: unsafeProjectShortcode(project.shortcode),
+      includeSubprojects: true,
+    });
+    expect(result).toMatchObject({
+      householdConsumed: 0,
+      people: [],
+    });
+    expect(result.gaps).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("missing_beneficiaries"),
+        expect.stringContaining("missing_funders"),
+      ]),
+    );
+  });
+
+  it("keeps shared renovation costs off individual people", async () => {
+    await upsertFundingFund(ctx.db, {
+      type: "upsert_funding_fund",
+      key: "renovation-fund",
+      name: "Renovation fund",
+    });
+    const project = await insertWithShortcode(ctx.db, "project", {
+      name: "Shared renovation",
+      kind: "renovation",
+    });
+    const row = await insertWithShortcode(ctx.db, "expense", {
+      name: "Renovation materials",
+      cost: 125,
+      date: "2026-08-20",
+      costType: "materials",
+      trade: "other",
+      projectId: project.id,
+    });
+    await setExpenseAttribution(
+      ctx.db,
+      {
+        type: "set_expense_attribution",
+        expenseIds: [unsafeExpenseShortcode(row.shortcode)],
+        beneficiaries: { people: [], householdWeight: 1 },
+        funders: {
+          parties: [
+            { party: { kind: "fund", key: "renovation-fund" }, weight: 1 },
+          ],
+        },
+      },
+      ctx.actor,
+    );
+    const [beneficiary] = await getDb(ctx.db)
+      .select({
+        personId: expenseAttribution.personId,
+        fundingSourceId: expenseAttribution.fundingSourceId,
+        household: expenseAttribution.household,
+      })
+      .from(expenseAttribution)
+      .where(
+        and(
+          eq(expenseAttribution.expenseId, row.id),
+          eq(expenseAttribution.role, "beneficiary"),
+          notDeleted(expenseAttribution),
+        ),
+      );
+    expect(beneficiary).toEqual({
+      personId: null,
+      fundingSourceId: null,
+      household: true,
+    });
+
+    const projectResult = await projectContribution(ctx.db, {
+      projectId: unsafeProjectShortcode(project.shortcode),
+      includeSubprojects: true,
+    });
+    expect(projectResult).toMatchObject({
+      wholeGroupCost: 125,
+      householdConsumed: 125,
+      householdInitialExposure: 125,
+      guestInitialFunding: 0,
+      unattributedInitialFunding: 0,
+      people: [],
+      gaps: [],
+    });
+
+    const ledger = await householdContributionLedger(ctx.db, {
+      asOf: "2026-08-20",
+    });
+    expect(
+      ledger.parties.find((party) => party.party.kind === "household"),
+    ).toMatchObject({ consumed: 125, position: -125 });
+    expect(
+      ledger.parties.find((party) => party.party.key === "renovation-fund"),
+    ).toMatchObject({ initiallyOutlaid: 125, position: 125 });
+    expect(ledger.gaps).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "missing_beneficiaries" }),
+        expect.objectContaining({ code: "missing_funders" }),
+      ]),
+    );
   });
 
   it("keeps project funding lanes separate and cancels internal moves globally", async () => {

@@ -9,6 +9,7 @@ const contribution = projectContributionOut.parse({
   householdInitialExposure: 90,
   guestInitialFunding: 25,
   unattributedInitialFunding: 10,
+  householdConsumed: 75,
   people: [
     {
       personId: "PER-ABCD",
@@ -53,6 +54,8 @@ describe("ProjectContributionReport", () => {
     expect(
       screen.getByRole("heading", { name: "Original funders" }),
     ).toBeVisible();
+    expect(screen.getByText("Household")).toBeVisible();
+    expect(screen.getByText("Shared")).toBeVisible();
     expect(screen.getAllByText("Guest")).toHaveLength(3);
     expect(screen.getByText("Joint checking")).toBeVisible();
     expect(screen.getByText("partial_funders: EXP-1111")).toBeVisible();

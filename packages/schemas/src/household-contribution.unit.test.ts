@@ -37,6 +37,15 @@ describe("household contribution contracts", () => {
     expect(weightedFunders.safeParse({ parties: [] }).success).toBe(false);
   });
 
+  it("represents shared household benefit without inventing a Person", () => {
+    expect(
+      weightedBeneficiaries.parse({
+        people: [],
+        householdWeight: 1,
+      }),
+    ).toEqual({ people: [], householdWeight: 1 });
+  });
+
   it("rejects duplicate people and funding parties", () => {
     expect(
       weightedBeneficiaries.safeParse({

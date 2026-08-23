@@ -8,17 +8,17 @@ const ledger = {
   parties: [
     {
       party: {
-        key: "PER-1111",
-        kind: "person",
-        name: "Household person",
+        key: "household",
+        kind: "household",
+        name: "Household",
         household: true,
       },
       consumed: 60,
-      initiallyOutlaid: 100,
+      initiallyOutlaid: 0,
       transfersSent: 0,
-      transfersReceived: 40,
-      netContribution: 60,
-      position: 0,
+      transfersReceived: 0,
+      netContribution: 0,
+      position: -60,
     },
     {
       party: { key: "guest", kind: "person", name: "Guest", household: false },
@@ -28,6 +28,20 @@ const ledger = {
       transfersReceived: 0,
       netContribution: 40,
       position: 0,
+    },
+    {
+      party: {
+        key: "shared-fund",
+        kind: "shared_fund",
+        name: "Shared fund",
+        household: true,
+      },
+      consumed: 0,
+      initiallyOutlaid: 100,
+      transfersSent: 0,
+      transfersReceived: 40,
+      netContribution: 60,
+      position: 60,
     },
   ],
   unattributed: { consumption: 0, funding: 0 },
@@ -60,11 +74,12 @@ describe("HouseholdContributionLedgerReport", () => {
       screen.getByRole("heading", { name: "Household contribution by party" }),
     ).toBeVisible();
 
-    const partyRow = screen.getByText("Household person").closest("tr");
+    const partyRow = screen.getByText("Household").closest("tr");
     expect(partyRow).not.toBeNull();
     expect(
-      within(partyRow as HTMLTableRowElement).getAllByText("$60.00"),
-    ).toHaveLength(2);
+      within(partyRow as HTMLTableRowElement).getByText("$60.00"),
+    ).toBeVisible();
+    expect(screen.getByText("Shared beneficiary")).toBeVisible();
 
     expect(screen.getByText("Transfer net")).toBeVisible();
     expect(

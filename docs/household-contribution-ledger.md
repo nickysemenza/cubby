@@ -20,9 +20,11 @@ activity record for every applied batch, including the normalized changes,
 actor, source, fingerprint, and result.
 
 Beneficiary and funder weights contain no money. Reports convert each Expense
-to integer cents and use deterministic largest-remainder allocation; an absent
-role is implicitly fully unattributed, while an explicit null-target weight is
-the unknown residual beside known targets.
+to integer cents and use deterministic largest-remainder allocation. A
+beneficiary may be a Person, the household as a whole, or an explicit unknown
+residual. The household target is intentional attribution—not a synthetic
+Person and not an incomplete-data warning. An absent role remains implicitly
+fully unattributed.
 
 ## Shared accounts
 
@@ -35,6 +37,19 @@ fund. Paying that card from that checking is a same-source internal transfer:
 both statement facts remain visible and its contribution effect is zero.
 Individual credit appears only when an explicit transfer or attributed deposit
 moves value from a person's source into the shared fund.
+
+Project kind never implies attribution. Each Expense is explicit: it may
+benefit one Person, several weighted People, the household collectively, or an
+unknown residual, independently of who funded it. A current shared renovation
+Expense paid by shared checking or a shared card can use the household as
+beneficiary and the shared fund as original funder, while a historic solo
+renovation can name its individual beneficiary and personal funding source. A
+trip may likewise benefit either household member, both members at any weights,
+or guests. An import may batch-apply one reviewed pattern to many Expenses, but
+never infers that pattern from `Project.kind`. Existing Projects and Expenses
+are never reclassified automatically. Statement transactions remain account
+evidence, not Person assignments, and paying a shared card from shared checking
+remains a zero-effect internal account move.
 
 ## Reporting boundaries
 

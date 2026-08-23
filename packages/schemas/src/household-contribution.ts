@@ -74,12 +74,15 @@ export const weightedBeneficiaries = z
           "duplicate beneficiary",
         ),
       ),
+    householdWeight: positiveContributionWeight.optional(),
     unattributedWeight: positiveContributionWeight.optional(),
   })
   .refine(
     (value) =>
-      value.people.length > 0 || value.unattributedWeight !== undefined,
-    "at least one beneficiary or an unattributed weight is required",
+      value.people.length > 0 ||
+      value.householdWeight !== undefined ||
+      value.unattributedWeight !== undefined,
+    "at least one person, household, or unattributed beneficiary weight is required",
   );
 export type WeightedBeneficiaries = z.infer<typeof weightedBeneficiaries>;
 
@@ -303,7 +306,7 @@ export type ApplyHouseholdLedgerChangesOut = z.infer<
 
 const fundingPartyOut = z.object({
   key: z.string(),
-  kind: z.enum(["person", "shared_fund", "unattributed"]),
+  kind: z.enum(["person", "shared_fund", "household", "unattributed"]),
   name: z.string(),
   household: z.boolean(),
 });
@@ -370,6 +373,7 @@ export const projectContributionOut = z.object({
   householdInitialExposure: money,
   guestInitialFunding: money,
   unattributedInitialFunding: money,
+  householdConsumed: money,
   people: z.array(
     z.object({
       personId: personShortcode,

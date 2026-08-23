@@ -57,7 +57,7 @@ export function ProjectContributionReport({
           >
             Beneficiaries
           </h3>
-          {data.people.length === 0 ? (
+          {data.people.length === 0 && data.householdConsumed === 0 ? (
             <CompactEmpty
               icon={UsersRound}
               title="No beneficiaries attributed"
@@ -67,11 +67,24 @@ export function ProjectContributionReport({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-40">Person</TableHead>
+                  <TableHead className="w-40">Beneficiary</TableHead>
                   <TableHead className="w-28 text-right">Consumed</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
+                {data.householdConsumed !== 0 && (
+                  <TableRow>
+                    <TableCell>
+                      <Row align="center" gap="xs">
+                        <span>Household</span>
+                        <Badge variant="slate">Shared</Badge>
+                      </Row>
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {formatCurrency(data.householdConsumed)}
+                    </TableCell>
+                  </TableRow>
+                )}
                 {data.people.map((person) => (
                   <TableRow key={person.personId}>
                     <TableCell>

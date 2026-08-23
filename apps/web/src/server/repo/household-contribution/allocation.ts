@@ -71,6 +71,7 @@ export type ExpenseAllocationRow = {
   role: "beneficiary" | "funder";
   personId: PersonId | null;
   fundingSourceId: FundingSourceId | null;
+  household: boolean;
   implicitUnattributed: boolean;
   cents: bigint;
 };
@@ -127,6 +128,7 @@ export async function loadExpenseAllocations(
         r.role,
         a."personId",
         a."fundingSourceId",
+        a.household,
         a.weight::bigint AS weight,
         false AS "implicitUnattributed"
       FROM scoped_expense e
@@ -146,6 +148,7 @@ export async function loadExpenseAllocations(
         r.role,
         NULL::uuid AS "personId",
         NULL::uuid AS "fundingSourceId",
+        false AS household,
         1::bigint AS weight,
         true AS "implicitUnattributed"
       FROM scoped_expense e
@@ -180,7 +183,9 @@ export async function loadExpenseAllocations(
         row_number() OVER (
           PARTITION BY "expenseId", role
           ORDER BY fractional_remainder DESC,
-            coalesce("personId"::text, "fundingSourceId"::text, '~') ASC
+            CASE WHEN household THEN 'household'
+              ELSE coalesce("personId"::text, "fundingSourceId"::text, '~')
+            END ASC
         ) AS remainder_rank
       FROM based
     )
@@ -191,6 +196,7 @@ export async function loadExpenseAllocations(
       role,
       "personId",
       "fundingSourceId",
+      household,
       "implicitUnattributed",
       (
         CASE WHEN cost_cents < 0 THEN -1 ELSE 1 END
@@ -201,7 +207,9 @@ export async function loadExpenseAllocations(
       )::text AS cents
     FROM ranked
     ORDER BY "expenseId", role,
-      coalesce("personId"::text, "fundingSourceId"::text, '~')
+      CASE WHEN household THEN 'household'
+        ELSE coalesce("personId"::text, "fundingSourceId"::text, '~')
+      END
   `);
   return result.rows.map((row) => ({ ...row, cents: BigInt(row.cents) }));
 }

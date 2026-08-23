@@ -174,22 +174,35 @@ async function desiredBeneficiaries(
   const people: Array<{
     personId: typeof person.$inferSelect.id;
     fundingSourceId: null;
+    household: false;
     weight: number;
   }> = [];
   for (const row of value.people) {
     people.push({
       personId: await resolveOrThrow(tx, "person", row.personId),
       fundingSourceId: null,
+      household: false,
       weight: row.weight,
     });
   }
   return [
     ...people,
+    ...(value.householdWeight
+      ? [
+          {
+            personId: null,
+            fundingSourceId: null,
+            household: true,
+            weight: value.householdWeight,
+          },
+        ]
+      : []),
     ...(value.unattributedWeight
       ? [
           {
             personId: null,
             fundingSourceId: null,
+            household: false,
             weight: value.unattributedWeight,
           },
         ]
@@ -205,6 +218,7 @@ async function desiredFunders(
   const parties: Array<{
     personId: null;
     fundingSourceId: FundingSourceId;
+    household: false;
     weight: number;
   }> = [];
   for (const row of value.parties) {
@@ -212,6 +226,7 @@ async function desiredFunders(
       personId: null,
       fundingSourceId: (await resolveFundingPartyOrThrow(tx, row.party))
         .sourceId,
+      household: false,
       weight: row.weight,
     });
   }
@@ -222,6 +237,7 @@ async function desiredFunders(
           {
             personId: null,
             fundingSourceId: null,
+            household: false,
             weight: value.unattributedWeight,
           },
         ]
@@ -232,8 +248,10 @@ async function desiredFunders(
 const attributionKey = (row: {
   personId: string | null;
   fundingSourceId: string | null;
+  household: boolean;
   weight: number;
-}) => `${row.personId ?? ""}:${row.fundingSourceId ?? ""}:${row.weight}`;
+}) =>
+  `${row.personId ?? ""}:${row.fundingSourceId ?? ""}:${row.household}:${row.weight}`;
 
 async function replaceAttributionRole(
   tx: DrizzleTransaction,
@@ -242,6 +260,7 @@ async function replaceAttributionRole(
   desired: Array<{
     personId: typeof person.$inferSelect.id | null;
     fundingSourceId: FundingSourceId | null;
+    household: boolean;
     weight: number;
   }>,
 ): Promise<boolean> {
@@ -249,6 +268,7 @@ async function replaceAttributionRole(
     .select({
       personId: expenseAttribution.personId,
       fundingSourceId: expenseAttribution.fundingSourceId,
+      household: expenseAttribution.household,
       weight: expenseAttribution.weight,
     })
     .from(expenseAttribution)
@@ -280,6 +300,7 @@ async function replaceAttributionRole(
         role,
         personId: row.personId,
         fundingSourceId: row.fundingSourceId,
+        household: row.household,
         weight: row.weight,
       })),
     );

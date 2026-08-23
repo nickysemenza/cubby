@@ -155,7 +155,7 @@ function attributionGaps(rows: ExpenseAllocationRow[]): Gap[] {
     const first = bucket[0];
     if (!first) continue;
     const nullRows = bucket.filter(
-      (row) => !row.personId && !row.fundingSourceId,
+      (row) => !row.personId && !row.fundingSourceId && !row.household,
     );
     const nullCents = sum(nullRows.map((row) => row.cents));
     if (nullRows.some((row) => row.implicitUnattributed)) {
@@ -169,7 +169,7 @@ function attributionGaps(rows: ExpenseAllocationRow[]): Gap[] {
       });
     } else if (
       nullRows.length > 0 &&
-      bucket.some((row) => row.personId || row.fundingSourceId)
+      bucket.some((row) => row.personId || row.fundingSourceId || row.household)
     ) {
       gaps.push({
         code:
@@ -275,7 +275,12 @@ export async function householdContributionLedger(
 
   let unattributedConsumption = 0n;
   let unattributedFunding = 0n;
+  let householdConsumption = 0n;
   for (const row of allocations) {
+    if (row.role === "beneficiary" && row.household) {
+      householdConsumption += row.cents;
+      continue;
+    }
     const sourceId = allocationPartyId(row, directory);
     const balance = sourceId ? balances.get(sourceId) : undefined;
     if (!balance) {
@@ -311,8 +316,8 @@ export async function householdContributionLedger(
     }
   }
 
-  const parties = [...directory.parties.entries()]
-    .map(([sourceId, party]) => {
+  const fundingParties = [...directory.parties.entries()].map(
+    ([sourceId, party]) => {
       const balance = balances.get(sourceId);
       if (!balance)
         throw new Error("Funding party balance was not initialized");
@@ -327,28 +332,51 @@ export async function householdContributionLedger(
         netContribution: money(netContribution),
         position: money(netContribution - balance.consumed),
       };
-    })
-    .sort((a, b) => a.party.name.localeCompare(b.party.name));
+    },
+  );
+  const parties: HouseholdContributionLedgerOut["parties"] = [
+    ...fundingParties,
+    ...(householdConsumption !== 0n
+      ? [
+          {
+            party: {
+              key: "household",
+              kind: "household" as const,
+              name: "Household",
+              household: true,
+            },
+            consumed: money(householdConsumption),
+            initiallyOutlaid: 0,
+            transfersSent: 0,
+            transfersReceived: 0,
+            netContribution: 0,
+            position: money(-householdConsumption),
+          },
+        ]
+      : []),
+  ].sort((a, b) => a.party.name.localeCompare(b.party.name));
 
   const expenseTotalCents = sum(
     expenseFacts.flatMap((row) =>
       row.costCents === null ? [] : [BigInt(row.costCents)],
     ),
   );
-  const consumedTotalCents = sum(
-    [...balances.values()].map((row) => row.consumed),
-  );
+  const consumedTotalCents = sum([
+    ...[...balances.values()].map((row) => row.consumed),
+    householdConsumption,
+  ]);
   const fundedTotalCents = sum(
     [...balances.values()].map((row) => row.initiallyOutlaid),
   );
   const transferNetCents = sum(
     [...balances.values()].map((row) => row.sent - row.received),
   );
-  const positionNetCents = sum(
-    [...balances.values()].map(
+  const positionNetCents = sum([
+    ...[...balances.values()].map(
       (row) => row.initiallyOutlaid + row.sent - row.received - row.consumed,
     ),
-  );
+    -householdConsumption,
+  ]);
   const unpricedGaps: Gap[] = expenseFacts
     .filter((row) => row.costCents === null)
     .map((row) => ({ code: "unpriced_expense", targetIds: [row.shortcode] }));
@@ -413,10 +441,12 @@ export async function projectContribution(
 
   const consumed = new Map<PersonId, bigint>();
   const initiallyFunded = new Map<FundingSourceId, bigint>();
+  let householdConsumed = 0n;
   let unattributedInitialFunding = 0n;
   for (const row of allocations) {
     if (row.role === "beneficiary") {
-      if (row.personId)
+      if (row.household) householdConsumed += row.cents;
+      else if (row.personId)
         consumed.set(
           row.personId,
           (consumed.get(row.personId) ?? 0n) + row.cents,
@@ -474,6 +504,7 @@ export async function projectContribution(
     householdInitialExposure: money(householdInitialExposure),
     guestInitialFunding: money(guestInitialFunding),
     unattributedInitialFunding: money(unattributedInitialFunding),
+    householdConsumed: money(householdConsumed),
     people: peopleRows
       .filter((row) => consumed.has(row.id))
       .map((row) => ({
