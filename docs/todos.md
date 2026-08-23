@@ -186,6 +186,49 @@ history is the archive. Permanent product constraints live in the
 - **Generated eager-route filter mirrors** — Promote if a third schema mirror
   appears; generate build-time projections rather than importing validation graphs
   into the eager route tree.
+- **StatementRow and StatementImport as manifest entities** — Promote once the
+  `supersededByRowId` disposition is decided (block, detach, or cascade for a live
+  predecessor pointing at a deleted row); "add an edge policy" is not the decision.
+  Unblocks the audit gap `deleteStatementRows` currently only documents: StatementRow
+  has no `AuditEntityType`, so no truthful `logAuditEntry` call exists and all three
+  statement-row mutation paths write no audit trail. Also routes that delete through
+  `removeEntity` for cascade and locking. Costs shortcode prefixes, a batched backfill
+  of the whole `StatementRow` table, a detail route, and entries in roughly ten
+  exhaustive `Record<Entity, …>` tables. Follow `scripts/backfill-image-shortcodes.ts`;
+  `generateUniqueShortcode` does a SELECT per candidate and is wrong for bulk.
+- **Split `computeBlockers` from `computeChanges`** — Promote if preview cost or
+  duplicated cascade counting becomes a real drag. Preview planners still compute
+  narration the mutation does not need; `previewDeleteProducts` runs fourteen
+  sequential queries where nine produce blockers and the rest are cascade counts
+  `removeEntity` re-counts anyway. Splitting is the prerequisite for computing
+  blockers inside the mutation's transaction without doubling its query count. Any
+  planner moved inside a transaction must serialize its `Promise.all` sites — pg
+  rejects a second query on a client already executing one.
+- **Explicit idempotency key for `add_recipe_to_meal`** — Promote if a re-sent agent
+  call actually duplicates a meal line in practice. A natural-key unique index is NOT
+  the answer: a meal repeating a recipe at different scales is intended behavior, and
+  each occurrence must stay a distinguishable shopping-list contribution (see
+  `api/routers/meal.integration.test.ts`). Retry-safety needs a caller-supplied key.
+- **`relation` enum for `attach_entity`/`detach_entity`** — Promote when a second
+  product-parented relation appears (accessories, replacement parts, consumable-for).
+  Dispatch currently reads the family off the parent's shortcode prefix, which is
+  unambiguous only while `PRD-` means kit components. Add an explicit `relation`
+  parameter then; do NOT add an optional one defaulting to "components", which
+  silently changes what existing calls mean.
+- **Per-edge breakdown for purchase merges** — Promote if `merge_entity`'s empty
+  `moved` array on purchase is noticed in use. `foldChargeInto` moves expenses and
+  documents without counting them, so purchase reports a measured `merged` count but
+  no per-edge detail, unlike the other three merge entities.
+- **Exact entity attribution for `attach_files`** — Promote if mixed-entity batches
+  distort the MCP usage dashboard. The batch attributes telemetry to its first item's
+  entity because one row has nowhere to put a set; a batch spanning entities
+  under-reports the rest.
+- **Harden `createDeleteProcedure`'s id contract** — Promote if a second hand-rolled
+  delete procedure appears. It infers its id type from the callback and then casts
+  (`id as TId`), so a branded parameter alone does not catch a caller passing the
+  wrong id form — that is how shortcode-vs-uuid image deletion shipped to review.
+  Every entity going through `createEntityCrudRouter` is safe today because that
+  config requires an `idSchema`; a hand-rolled call site can still omit one.
 
 ---
 
