@@ -64,14 +64,16 @@ vi.mock("../products/product-image-summaries", () => ({
     mocks.images[productId] ?? [],
 }));
 
-vi.mock("~/components/entity/entity-identity-mark", () => ({
-  EntityIdentityMark: ({
+vi.mock("~/app/_components/EntityInlineLink", () => ({
+  EntityInlineLink: ({
+    data,
     displayImage,
   }: {
+    data: { name: string };
     displayImage: { url: string } | null;
   }) => (
-    <span data-testid="identity-mark">
-      {displayImage ? `image:${displayImage.url}` : "product-icon"}
+    <span data-testid="entity-inline-link">
+      {data.name}:{displayImage?.url ?? "product-icon"}
     </span>
   ),
 }));
@@ -132,12 +134,14 @@ describe("RelatednessRail", () => {
     );
 
     expect(mocks.imageSummaryProductIds).toEqual([pictured, unpictured]);
-    expect(screen.getByText("Pictured related product")).toBeInTheDocument();
-    expect(screen.getByText("Unpictured related product")).toBeInTheDocument();
-    expect(screen.getAllByTestId("identity-mark")).toHaveLength(2);
+    expect(screen.getAllByTestId("entity-inline-link")).toHaveLength(2);
     expect(
-      screen.getByText("image:https://images.example/cover.jpg"),
+      screen.getByText(
+        "Pictured related product:https://images.example/cover.jpg",
+      ),
     ).toBeInTheDocument();
-    expect(screen.getByText("product-icon")).toBeInTheDocument();
+    expect(
+      screen.getByText("Unpictured related product:product-icon"),
+    ).toBeInTheDocument();
   });
 });

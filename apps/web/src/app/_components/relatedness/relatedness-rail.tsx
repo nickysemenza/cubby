@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
 import { useEffect, useMemo } from "react";
-import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
+import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -154,20 +154,12 @@ function RelatedProductRow({
       gap="sm"
       className="border-border border-b pb-1 last:border-b-0"
     >
-      <Row align="center" gap="sm" className="min-w-0">
-        <EntityIdentityMark
-          entity="product"
-          displayImage={images[0] ?? null}
-          size="row"
-        />
-        <Link
-          to="/products/$shortcode"
-          params={{ shortcode: item.shortcode }}
-          className="min-w-0 truncate text-sm hover:underline"
-        >
-          {item.title}
-        </Link>
-      </Row>
+      <EntityInlineLink
+        entity="product"
+        data={{ id: item.shortcode, name: item.title }}
+        displayImage={images[0] ?? null}
+        truncate
+      />
       <span className="shrink-0 font-mono text-2xs text-slate">
         {item.score > 0
           ? `${Math.round(item.score * 100)}% similar`
