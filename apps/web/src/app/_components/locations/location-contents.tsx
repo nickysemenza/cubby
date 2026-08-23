@@ -11,7 +11,13 @@ import type { InfLocation } from "@cubby/schemas/location";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { sortBy } from "es-toolkit";
-import { ChevronDown, EllipsisVertical, FolderPlus, Plus } from "lucide-react";
+import {
+  ChevronDown,
+  EllipsisVertical,
+  FolderPlus,
+  Plus,
+  ScanBarcode,
+} from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -46,6 +52,7 @@ import {
   ShelfGrid,
   type ShelfView,
 } from "../data-table/shelf";
+import { LocationSweep } from "../inventory/location-sweep/LocationSweepSheet";
 import { QuickInventoryAdd } from "../inventory/quick-inventory-add";
 import {
   calculateInventoryValuation,
@@ -225,6 +232,7 @@ export function LocationContents({ location }: { location: InfLocation }) {
 
   const [view, setView] = useState<ShelfView>("shelf");
   const [addOpen, setAddOpen] = useState(false);
+  const [sweepOpen, setSweepOpen] = useState(false);
   const [createChildOpen, setCreateChildOpen] = useState(false);
 
   const children = location.children ?? [];
@@ -290,6 +298,10 @@ export function LocationContents({ location }: { location: InfLocation }) {
     setAddOpen((prev) => !prev);
   }, []);
 
+  const toggleSweep = useCallback(() => {
+    setSweepOpen((prev) => !prev);
+  }, []);
+
   const openCreateChild = useCallback(() => {
     setCreateChildOpen(true);
   }, []);
@@ -306,6 +318,15 @@ export function LocationContents({ location }: { location: InfLocation }) {
         >
           <Plus />
           Add item
+        </Button>
+        <Button
+          variant={sweepOpen ? "secondary" : "outline"}
+          size="sm"
+          className="col-span-2 h-12 sm:col-span-1 sm:h-7"
+          onClick={toggleSweep}
+        >
+          <ScanBarcode />
+          Sweep
         </Button>
         <LocationPhotoAction location={location} className="h-12 sm:h-7" />
         <VerbButton
@@ -423,6 +444,23 @@ export function LocationContents({ location }: { location: InfLocation }) {
               locationId={location.id}
               onSuccess={handleItemAdded}
             />
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+
+      {/* Sweep rides collapsed the same way. Unlike the recount it works on an
+          empty location, which is the point: a brand-new shelf has no expected
+          contents to review, only things to put on it. */}
+      <Collapsible open={sweepOpen}>
+        <CollapsibleContent>
+          <div className="border border-[var(--border)] bg-muted/20 p-4">
+            {sweepOpen && (
+              <LocationSweep
+                locationId={location.id}
+                locationName={location.name}
+                onSettled={handleItemAdded}
+              />
+            )}
           </div>
         </CollapsibleContent>
       </Collapsible>

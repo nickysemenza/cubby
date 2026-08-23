@@ -38,10 +38,24 @@ export interface ScanFeedbackEntry {
   key: string;
   /** Product name once resolved, else the raw code. */
   label: string;
-  status: "pending" | "added" | "failed";
+  /**
+   * `confirmed` is a sweep outcome, not a lesser `added`: the row was already
+   * on this shelf and only its `verifiedAt` moved. `queued` means the product
+   * lives elsewhere and a decision is waiting at the end of the sweep.
+   */
+  status: "pending" | "added" | "confirmed" | "queued" | "failed";
 }
 
 const NO_RECENT_SCANS: readonly ScanFeedbackEntry[] = [];
+
+/** Chip tone per outcome. Quiet for "nothing changed", warning for "needs you". */
+const SCAN_CHIP_VARIANT = {
+  pending: "outline",
+  added: "positive",
+  confirmed: "slate",
+  queued: "warning",
+  failed: "destructive",
+} as const satisfies Record<ScanFeedbackEntry["status"], string>;
 
 interface PersistentScannerProps {
   onScan: (barcode: string) => void;
@@ -236,13 +250,7 @@ export function PersistentScanner({
           {recentScans.map((entry) => (
             <Badge
               key={entry.key}
-              variant={
-                entry.status === "failed"
-                  ? "destructive"
-                  : entry.status === "added"
-                    ? "positive"
-                    : "outline"
-              }
+              variant={SCAN_CHIP_VARIANT[entry.status]}
               className="max-w-44 font-sans normal-case tracking-normal"
               title={entry.label}
             >
