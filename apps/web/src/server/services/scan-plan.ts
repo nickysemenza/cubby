@@ -30,7 +30,7 @@ import type {
  * here — a faucet plumbed into a wall is not a stray to be pulled onto a shelf,
  * and the caller that forgets this is the bug the filter exists to prevent.
  */
-export interface ScanStockRow {
+interface ScanStockRow {
   id: InventoryShortcode;
   amount: Amount;
   location: { id: LocationShortcode; name: string };
@@ -46,7 +46,7 @@ export interface ScanFacts {
  * A row of this product sitting somewhere other than where it was just scanned.
  * Never acted on during the sweep — it queues for the end-of-sweep review.
  */
-export interface ScanStray {
+interface ScanStray {
   entryId: InventoryShortcode;
   location: { id: LocationShortcode; name: string };
   amount: Amount;

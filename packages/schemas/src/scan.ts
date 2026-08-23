@@ -17,11 +17,24 @@ import {
 } from "./identifiers";
 import { productFindOrCreateByCodeInput } from "./product";
 
+/**
+ * What a sweep can be pointed at.
+ *
+ * A barcode or ISBN may name a product that does not exist yet, so those
+ * resolve through find-or-create. A `PRD-` label names one that certainly
+ * does — Cubby printed it — so it resolves by lookup and never creates.
+ * Without this variant, enabling QR would read Cubby's own product labels and
+ * then reject them.
+ */
+export const scanAtLocationCode = z.union([
+  productFindOrCreateByCodeInput,
+  z.object({ kind: z.literal("product"), value: productShortcode }),
+]);
+export type ScanAtLocationCode = z.infer<typeof scanAtLocationCode>;
+
 export const scanAtLocationInput = z.object({
   locationId: locationShortcode.describe("The location being swept."),
-  code: productFindOrCreateByCodeInput.describe(
-    "The scanned product code. A `PRD-` label resolves through the same path.",
-  ),
+  code: scanAtLocationCode.describe("The scanned code."),
 });
 export type ScanAtLocationInput = z.infer<typeof scanAtLocationInput>;
 

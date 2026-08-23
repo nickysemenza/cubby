@@ -19,6 +19,7 @@ import type {
   InventoryId,
   LocationId,
   LocationShortcode,
+  ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import {
   unsafeInventoryId,
@@ -43,6 +44,7 @@ import {
   markInventoryEntryVerified,
   moveInventoryEntries,
 } from "~/server/repo/inventory";
+import { getProductByShortcode } from "~/server/repo/product";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { runMutationSideEffects } from "./mutation-side-effects";
 import { findOrCreateByCode } from "./product-orchestration.service";
@@ -71,6 +73,20 @@ const resolveLocation = async (
   return unsafeLocationId(id);
 };
 
+const lookupScannedProduct = async (
+  db: Database,
+  shortcode: ProductShortcode,
+) => {
+  const product = await getProductByShortcode(db, shortcode);
+  if (!product) {
+    throw createAppError(
+      "PRODUCT_NOT_FOUND",
+      `No product found for ${shortcode}.`,
+    );
+  }
+  return { product, created: false };
+};
+
 export async function scanAtLocation(
   db: Database,
   usdaClient: USDAClient,
@@ -79,13 +95,19 @@ export async function scanAtLocation(
   actor: ActorContext,
 ): Promise<ScanAtLocationOut> {
   const locationId = await resolveLocation(db, input.locationId);
-  const { product, created } = await findOrCreateByCode(
-    db,
-    usdaClient,
-    upcLookupClient,
-    input.code,
-    actor,
-  );
+
+  // A Cubby product label names a product that already exists, so it resolves
+  // by lookup. Only an external code can name one we have never seen.
+  const { product, created } =
+    input.code.kind === "product"
+      ? await lookupScannedProduct(db, input.code.value)
+      : await findOrCreateByCode(
+          db,
+          usdaClient,
+          upcLookupClient,
+          input.code,
+          actor,
+        );
 
   const productEntityId = await resolveLiveShortcode(db, product.id, "product");
   if (!productEntityId) {

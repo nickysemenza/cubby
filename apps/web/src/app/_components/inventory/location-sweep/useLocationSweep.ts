@@ -17,7 +17,12 @@
  */
 
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
-import type { ScanAtLocationOut, ScanStrayOut } from "@cubby/schemas/scan";
+import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
+import type {
+  ScanAtLocationCode,
+  ScanAtLocationOut,
+  ScanStrayOut,
+} from "@cubby/schemas/scan";
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -55,6 +60,43 @@ export interface SweepTally {
   confirmed: number;
 }
 
+/**
+ * Narrow a scanned string to something a sweep can stock.
+ *
+ * Cubby's own product labels are QR, and the sweep reads QR, so a printed
+ * `PRD-` label has to work here — rejecting it would make the label useless on
+ * the one screen most likely to see it. A location QR is the caller's business
+ * (it re-parents bins), and any other entity simply isn't stock.
+ */
+function toSweepCode(
+  raw: string,
+): { ok: true; value: ScanAtLocationCode } | { ok: false; error: string } {
+  const parsed = resolveScanCode(raw);
+  if (!parsed.ok) return { ok: false, error: parsed.error };
+  if (parsed.value.kind === "product") {
+    return { ok: true, value: parsed.value.code };
+  }
+  if (parsed.value.type === "product") {
+    return {
+      ok: true,
+      value: {
+        kind: "product",
+        value: unsafeProductShortcode(parsed.value.shortcode),
+      },
+    };
+  }
+  if (parsed.value.type === "location") {
+    return {
+      ok: false,
+      error: "That's a location label — use the bin scanner to move it.",
+    };
+  }
+  return {
+    ok: false,
+    error: `That's a ${parsed.value.type} label, not stock.`,
+  };
+}
+
 export function useLocationSweep({
   locationId,
   onSettled,
@@ -68,7 +110,13 @@ export function useLocationSweep({
   const [strays, setStrays] = useState<QueuedStray[]>([]);
   const [tally, setTally] = useState<SweepTally>({ added: 0, confirmed: 0 });
   const [pending, setPending] = useState(0);
-  const [followUp, setFollowUp] = useState<SweepFollowUp | null>(null);
+  // Curation is QUEUED, never interrupting. The follow-up is a modal sheet, so
+  // opening it per scan would put sixty modals in front of a sixty-book sweep
+  // and cover the stray review besides. It waits until you ask for it.
+  const [curationQueue, setCurationQueue] = useState<SweepFollowUp[]>([]);
+  const [activeCuration, setActiveCuration] = useState<SweepFollowUp | null>(
+    null,
+  );
 
   const scanMutation = useMutation(
     api.inventory.scanAtLocation.mutationOptions(),
@@ -88,7 +136,8 @@ export function useLocationSweep({
     setStrays([]);
     setTally({ added: 0, confirmed: 0 });
     setPending(0);
-    setFollowUp(null);
+    setCurationQueue([]);
+    setActiveCuration(null);
   }, []);
 
   // A sweep belongs to one shelf. Moving to the next one starts over — a stray
@@ -131,12 +180,19 @@ export function useLocationSweep({
         PLACEHOLDER_PRODUCT_NAME.test(result.product.name) ||
         isUnspecifiedManufacturer(result.product.manufacturer);
       if (result.product.created || needsName) {
-        setFollowUp({
-          id: result.product.id,
-          name: result.product.name,
-          needsName,
-          needsPrice: !result.product.hasPrice,
-        });
+        setCurationQueue((prev) =>
+          prev.some((entry) => entry.id === result.product.id)
+            ? prev
+            : [
+                ...prev,
+                {
+                  id: result.product.id,
+                  name: result.product.name,
+                  needsName,
+                  needsPrice: !result.product.hasPrice,
+                },
+              ],
+        );
       }
 
       if (result.strays.length > 0) {
@@ -165,12 +221,10 @@ export function useLocationSweep({
         const next = queueRef.current.shift();
         if (!next) break;
 
-        const parsed = resolveScanCode(next.raw);
-        if (!parsed.ok || parsed.value.kind !== "product") {
-          // A location QR is handled by the caller, not here; anything else is
-          // simply not something a sweep can stock.
+        const code = toSweepCode(next.raw);
+        if (!code.ok) {
           patchChip(next.key, { status: "failed" });
-          toast.error(parsed.ok ? "Not a product code." : parsed.error);
+          toast.error(code.error);
           setPending((n) => Math.max(0, n - 1));
           continue;
         }
@@ -178,7 +232,7 @@ export function useLocationSweep({
         try {
           const result = await scanMutation.mutateAsync({
             locationId,
-            code: parsed.value.code,
+            code: code.value,
           });
           applyResult(next.key, result);
           onSettled(result);
@@ -253,10 +307,17 @@ export function useLocationSweep({
     [strays, locationId, commitMutation, onSettled],
   );
 
+  const finishCuration = useCallback((id: string) => {
+    setCurationQueue((prev) => prev.filter((entry) => entry.id !== id));
+    setActiveCuration(null);
+  }, []);
+
   return {
     scan,
-    followUp,
-    dismissFollowUp: () => setFollowUp(null),
+    curationQueue,
+    activeCuration,
+    openCuration: () => setActiveCuration(curationQueue[0] ?? null),
+    finishCuration,
     recentScans,
     strays,
     tally,

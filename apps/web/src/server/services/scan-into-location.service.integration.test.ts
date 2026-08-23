@@ -198,6 +198,29 @@ describe("scanAtLocation", () => {
     expect(result.strays[0]?.ambiguousQuantity).toBe(true);
   });
 
+  // Cubby prints product labels as QR, and the sweep reads QR — so a printed
+  // label has to resolve. It names a product that already exists, so it looks
+  // up rather than creating.
+  it("stocks a scanned Cubby product label without creating anything", async () => {
+    const shelf = await makeLocation("Bookshelf E");
+    const product = await makeProduct("Labelled thing", "012345678913");
+
+    const result = await scanAtLocation(
+      ctx.db,
+      fakeUsdaClient(),
+      fakeUpcLookupClient(),
+      {
+        locationId: shelf.shortcode,
+        code: { kind: "product", value: product.shortcode },
+      },
+      TEST_ACTOR,
+    );
+
+    expect(result.outcome).toBe("added");
+    expect(result.product.created).toBe(false);
+    expect(await rowsAt(shelf.entityId, product.shortcode)).toHaveLength(1);
+  });
+
   // Two reads of the same code moments apart both see "not stocked here" and
   // race to insert. The partial unique index arbitrates; the loser must
   // converge on confirming the winner, not surface a raw 23505.

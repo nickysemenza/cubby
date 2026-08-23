@@ -36,8 +36,10 @@ export function LocationSweep({
   const [manualValue, setManualValue] = useState("");
   const {
     scan,
-    followUp,
-    dismissFollowUp,
+    curationQueue,
+    activeCuration,
+    openCuration,
+    finishCuration,
     recentScans,
     strays,
     tally,
@@ -73,6 +75,20 @@ export function LocationSweep({
           {tally.added} added · {tally.confirmed} confirmed
           {pending > 0 ? ` · ${pending} reading…` : ""}
         </Description>
+        {/* Curation waits for you to ask. Opening it per scan would put a modal
+            in front of every new item and cover the review below. */}
+        {curationQueue.length > 0 && (
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-9 shrink-0 px-3 text-xs"
+            onClick={openCuration}
+          >
+            {curationQueue.length === 1
+              ? "1 item needs details"
+              : `${curationQueue.length} items need details`}
+          </Button>
+        )}
       </Row>
 
       {/* A smudged barcode is a real failure mode, and this is also the only
@@ -112,9 +128,9 @@ export function LocationSweep({
       />
 
       <SweepProductFollowUp
-        followUp={followUp}
+        followUp={activeCuration}
         locationName={locationName}
-        onClose={dismissFollowUp}
+        onClose={finishCuration}
         onSaved={onSettled}
       />
     </Stack>

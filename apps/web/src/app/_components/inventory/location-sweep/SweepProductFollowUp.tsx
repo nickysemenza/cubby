@@ -48,7 +48,8 @@ export function SweepProductFollowUp({
 }: {
   followUp: SweepFollowUp | null;
   locationName: string;
-  onClose: () => void;
+  /** Called with the product id once it is dealt with, saved or skipped. */
+  onClose: (productId: string) => void;
   onSaved: (result?: unknown) => void;
 }) {
   const api = useTRPC();
@@ -76,7 +77,7 @@ export function SweepProductFollowUp({
     setName(null);
     setPrice("");
     setIngredient(null);
-    onClose();
+    if (followUp) onClose(followUp.id);
   };
 
   // A fast sweep can raise a second follow-up before the first is dismissed;
