@@ -1,4 +1,5 @@
 import { type Entity, entityRefKey } from "@cubby/schemas/entity";
+import { entityManifest } from "@cubby/schemas/entity-manifest";
 import type {
   RelatedBranchInput,
   RelatedBranchOutput,
@@ -24,33 +25,18 @@ import { getDb } from "~/server/repo/database-helpers";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { compileTraversal } from "~/server/repo/relatedness/traversal";
 
-interface SqlRelatedView {
-  sourceTable: string;
-  targetEntity: RelatedPreviewGroup["items"][number]["entity"];
+interface RelatedViewSqlPresentation {
   label: string;
   sort: string;
   sortDirection: "ASC" | "DESC";
 }
 
-const named = (
-  sourceTable: string,
-  targetEntity: SqlRelatedView["targetEntity"],
-  sort = `lower(t."name")`,
-) => ({
-  sourceTable,
-  targetEntity,
+const named = (sort = `lower(t."name")`) => ({
   label: `t."name"`,
   sort,
   sortDirection: "ASC" as const,
 });
-const dated = (
-  sourceTable: string,
-  targetEntity: SqlRelatedView["targetEntity"],
-  label = `t."name"`,
-  sort = `t."createdAt"`,
-) => ({
-  sourceTable,
-  targetEntity,
+const dated = (label = `t."name"`, sort = `t."createdAt"`) => ({
   label,
   sort,
   sortDirection: "DESC" as const,
@@ -61,136 +47,115 @@ const dated = (
  * below are constants; caller data is parameterized separately.
  */
 const SQL_RELATED_VIEWS = {
-  "product.vendors": named("Product", "vendor"),
-  "product.projects": named("Product", "project"),
-  "product.usedOnProjects": named("Product", "project"),
+  "product.vendors": named(),
+  "product.projects": named(),
+  "product.usedOnProjects": named(),
   "product.purchases": dated(
-    "Product",
-    "purchase",
     `COALESCE(NULLIF(t."orderId", ''), t."shortcode")`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
   "product.expenses": dated(
-    "Product",
-    "expense",
     `t."name"`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
   // includes-installed: this is a related-records view keyed off product
   // identity — a fixture must stay listed among "this product's inventory".
-  "product.inventory": dated(
-    "Product",
-    "inventory",
-    `t."shortcode"`,
-    `t."createdAt"`,
-  ),
-  "product.wishes": named("Product", "wish"),
+  "product.inventory": dated(`t."shortcode"`, `t."createdAt"`),
+  "product.wishes": named(),
   "product.tasks": named(
-    "Product",
-    "task",
     `format('%s|%s|%s', CASE WHEN t."status" = 'done' THEN 1 ELSE 0 END, COALESCE(t."dueDate"::text, '9999-12-31'), lower(t."name"))`,
   ),
-  "recipe.ingredients": named("Recipe", "ingredient"),
+  "recipe.ingredients": named(),
   "recipe.meals": dated(
-    "Recipe",
-    "meal",
     `COALESCE(NULLIF(t."name", ''), t."date"::text, t."shortcode")`,
     `t."date"`,
   ),
-  "meal.recipes": named("Meal", "recipe"),
+  "meal.recipes": named(),
   // includes-installed: identity/relation views, not a browse/count surface
   // — a fixture's related ingredient must stay reachable either direction.
-  "location.ingredients": named("Location", "ingredient"),
-  "inventory.ingredient": named("InventoryEntry", "ingredient"),
-  "project.blockedBy": named("Project", "project"),
+  "location.ingredients": named(),
+  "inventory.ingredient": named(),
+  "project.blockedBy": named(),
   "project.tasks": named(
-    "Project",
-    "task",
     `format('%s|%s|%s', CASE WHEN t."status" = 'done' THEN 1 ELSE 0 END, COALESCE(t."dueDate"::text, '9999-12-31'), lower(t."name"))`,
   ),
   "project.expenses": dated(
-    "Project",
-    "expense",
     `t."name"`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
-  "project.taskProducts": named("Project", "product"),
-  "project.purchasedProducts": named("Project", "product"),
-  "project.usedTools": named("Project", "product"),
-  "project.vendors": named("Project", "vendor"),
+  "project.taskProducts": named(),
+  "project.purchasedProducts": named(),
+  "project.usedTools": named(),
+  "project.vendors": named(),
   "task.blockedBy": named(
-    "Task",
-    "task",
     `format('%s|%s|%s', CASE WHEN t."status" = 'done' THEN 1 ELSE 0 END, COALESCE(t."dueDate"::text, '9999-12-31'), lower(t."name"))`,
   ),
   "task.parent": named(
-    "Task",
-    "task",
     `format('%s|%s|%s', CASE WHEN t."status" = 'done' THEN 1 ELSE 0 END, COALESCE(t."dueDate"::text, '9999-12-31'), lower(t."name"))`,
   ),
   "vendor.expenses": dated(
-    "Vendor",
-    "expense",
     `t."name"`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
   "vendor.purchases": dated(
-    "Vendor",
-    "purchase",
     `COALESCE(NULLIF(t."orderId", ''), t."shortcode")`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
-  "vendor.products": named("Vendor", "product"),
-  "vendor.projects": named("Vendor", "project"),
+  "vendor.products": named(),
+  "vendor.projects": named(),
   "vendor.transactions": dated(
-    "Vendor",
-    "financialTransaction",
     `COALESCE(NULLIF(t."merchant", ''), NULLIF(t."rawDescription", ''), t."shortcode")`,
     `COALESCE(t."postedDate", t."transactionDate", t."createdAt"::date)`,
   ),
   "purchase.expenses": dated(
-    "Purchase",
-    "expense",
     `t."name"`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
   "purchase.transactions": dated(
-    "Purchase",
-    "financialTransaction",
     `COALESCE(NULLIF(t."merchant", ''), NULLIF(t."rawDescription", ''), t."shortcode")`,
     `COALESCE(t."postedDate", t."transactionDate", t."createdAt"::date)`,
   ),
-  "purchase.products": named("Purchase", "product"),
-  "purchase.projects": named("Purchase", "project"),
+  "purchase.products": named(),
+  "purchase.projects": named(),
   "expense.transactions": dated(
-    "Expense",
-    "financialTransaction",
     `COALESCE(NULLIF(t."merchant", ''), NULLIF(t."rawDescription", ''), t."shortcode")`,
     `COALESCE(t."postedDate", t."transactionDate", t."createdAt"::date)`,
   ),
   "financialAccount.transactions": dated(
-    "FinancialAccount",
-    "financialTransaction",
     `COALESCE(NULLIF(t."merchant", ''), NULLIF(t."rawDescription", ''), t."shortcode")`,
     `COALESCE(t."postedDate", t."transactionDate", t."createdAt"::date)`,
   ),
   "financialAccount.purchases": dated(
-    "FinancialAccount",
-    "purchase",
     `COALESCE(NULLIF(t."orderId", ''), t."shortcode")`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
-  "financialAccount.vendors": named("FinancialAccount", "vendor"),
-  "financialTransaction.vendor": named("FinancialTransaction", "vendor"),
+  "financialAccount.vendors": named(),
+  "financialTransaction.vendor": named(),
   "financialTransaction.expenses": dated(
-    "FinancialTransaction",
-    "expense",
     `t."name"`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
-  "financialTransaction.products": named("FinancialTransaction", "product"),
-  "wish.candidates": named("Wish", "product"),
-} as const satisfies Record<RelatedViewKey, SqlRelatedView>;
+  "financialTransaction.products": named(),
+  "wish.candidates": named(),
+} as const satisfies Record<RelatedViewKey, RelatedViewSqlPresentation>;
+
+const relatedViewsByKey = new Map(
+  relatedViewRegistry.map((view) => [view.key, view]),
+);
+
+/**
+ * Presentation SQL belongs here; endpoint identity and table ownership remain
+ * in the manifest-backed related-view registry.
+ */
+const sqlRelatedView = (key: RelatedViewKey) => {
+  const definition = relatedViewsByKey.get(key);
+  if (!definition) throw new Error(`Unknown related view: ${key}`);
+  return {
+    ...SQL_RELATED_VIEWS[key],
+    sourceTable: entityManifest[definition.source].dbTable,
+    targetEntity: definition.target,
+  };
+};
 
 /**
  * The curated registry supplies presentation only; traversal joins are compiled
@@ -229,7 +194,7 @@ async function loadOneRows(
   relationKey: RelatedViewKey,
   sourceIds: string[],
 ): Promise<RawRow[]> {
-  const view = SQL_RELATED_VIEWS[relationKey];
+  const view = sqlRelatedView(relationKey);
   const ids = sql.join(
     sourceIds.map((id) => sql`${id}`),
     sql`, `,
@@ -284,7 +249,7 @@ export async function loadRelatedPreviews(
   const displayImages = await resolveEntityDisplayImages(
     db,
     loaded.flatMap(({ relationKey, rows }) => {
-      const targetEntity = SQL_RELATED_VIEWS[relationKey].targetEntity;
+      const targetEntity = sqlRelatedView(relationKey).targetEntity;
       return rows.map((row) => ({
         entityType: targetEntity,
         entityId: row.targetEntityId,
@@ -292,7 +257,7 @@ export async function loadRelatedPreviews(
     }),
   );
   return loaded.flatMap(({ relationKey, rows }) => {
-    const targetEntity = SQL_RELATED_VIEWS[relationKey].targetEntity;
+    const targetEntity = sqlRelatedView(relationKey).targetEntity;
     const grouped = new Map<string, RelatedPreviewGroup>();
     for (const row of rows) {
       const group = grouped.get(row.sourceId) ?? {
@@ -324,7 +289,7 @@ export async function loadRelatedBranch(
   db: Database,
   input: RelatedBranchInput,
 ): Promise<RelatedBranchOutput> {
-  const view = SQL_RELATED_VIEWS[input.relationKey];
+  const view = sqlRelatedView(input.relationKey);
   const query = sql`
     WITH related AS (
       SELECT DISTINCT
@@ -376,7 +341,7 @@ export async function loadRelatedOptions(
   db: Database,
   input: RelatedOptionsInput,
 ): Promise<RelatedOptionsOutput> {
-  const view = SQL_RELATED_VIEWS[input.relationKey];
+  const view = sqlRelatedView(input.relationKey);
   const search = input.search?.trim();
   const query = sql`
     SELECT
@@ -717,7 +682,7 @@ export function relatedWhereConditions(
   return relatedViewRegistry
     .filter((view) => view.source === source)
     .flatMap((definition) => {
-      const view = SQL_RELATED_VIEWS[definition.key];
+      const view = sqlRelatedView(definition.key);
       const prefix = relatedFilterPrefix(definition);
       const rawIds = filters[`${prefix}Id`];
       const ids = Array.isArray(rawIds)
