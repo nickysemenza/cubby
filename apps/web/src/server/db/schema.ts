@@ -968,6 +968,36 @@ export const searchDocument = pgTable(
   ],
 );
 
+/** Durable suppression of an explicitly dismissed, source-scoped suggestion. */
+export const suggestionDismissal = pgTable(
+  "SuggestionDismissal",
+  {
+    id: pkUuid(),
+    sourceEntityType: text("sourceEntityType")
+      .notNull()
+      .$type<SearchableEntity>(),
+    sourceEntityId: uuid("sourceEntityId").notNull(),
+    suggestionKind: text("suggestionKind").notNull(),
+    candidateKey: text("candidateKey").notNull(),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
+  },
+  (table) => [
+    uniqueIndex("SuggestionDismissal_active_key")
+      .on(
+        table.sourceEntityType,
+        table.sourceEntityId,
+        table.suggestionKind,
+        table.candidateKey,
+      )
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("SuggestionDismissal_source_idx").on(
+      table.sourceEntityType,
+      table.sourceEntityId,
+    ),
+  ],
+);
+
 // InventoryEntry table
 export const inventoryEntry = pgTable(
   "InventoryEntry",

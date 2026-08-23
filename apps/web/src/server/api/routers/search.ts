@@ -5,6 +5,8 @@ import {
 import {
   relatedSearchOutSchema,
   repairSearchDocumentsOutSchema,
+  requestEmbeddingRefreshInputSchema,
+  requestEmbeddingRefreshOutSchema,
   searchDebugOutSchema,
   searchDocumentHealthSchema,
   searchHitsOut,
@@ -21,6 +23,7 @@ import {
 import {
   enqueueEntityEmbeddingBackfill,
   findSimilarEntitiesForPair,
+  requestEmbeddingRefresh,
 } from "~/server/services/semantic-search.service";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
@@ -83,4 +86,11 @@ export const searchRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       return await enqueueEntityEmbeddingBackfill(ctx.db, input);
     }),
+
+  requestEmbeddingRefresh: protectedProcedure
+    .input(requestEmbeddingRefreshInputSchema)
+    .output(strictOutput(requestEmbeddingRefreshOutSchema))
+    .mutation(
+      async ({ ctx, input }) => await requestEmbeddingRefresh(ctx.db, input),
+    ),
 });

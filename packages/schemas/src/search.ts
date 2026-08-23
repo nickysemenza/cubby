@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { searchableEntities, type ShortcodeEntity } from "./entity-manifest";
 import { anyShortcodeSchema } from "./identifiers";
+import {
+  activeRelatednessPairKeys,
+  embeddingReadinessSchema,
+  relatednessPairRegistry,
+} from "./relatedness";
 
 export { searchableEntities } from "./entity-manifest";
 
@@ -46,21 +51,13 @@ export const searchQueryInputSchema = z.object(searchQueryInputFields);
 export type SearchQueryInput = z.infer<typeof searchQueryInputSchema>;
 
 /** Allowlisted entity-to-entity similarity directions. */
-export const similarEntityPairKeys = [
-  "expense_to_product",
-  "product_to_product",
-  "ingredient_to_ingredient",
-  "recipe_to_recipe",
-] as const;
+export const similarEntityPairKeys = activeRelatednessPairKeys;
 export const similarEntityPairSchema = z.enum(similarEntityPairKeys);
 export type SimilarEntityPair = z.infer<typeof similarEntityPairSchema>;
 
-export const similarEntityPairs = {
-  expense_to_product: { source: "expense", target: "product" },
-  product_to_product: { source: "product", target: "product" },
-  ingredient_to_ingredient: { source: "ingredient", target: "ingredient" },
-  recipe_to_recipe: { source: "recipe", target: "recipe" },
-} as const satisfies Record<
+export const similarEntityPairs = Object.fromEntries(
+  similarEntityPairKeys.map((key) => [key, relatednessPairRegistry[key]]),
+) as unknown as Record<
   SimilarEntityPair,
   { source: SearchableEntity; target: SearchableEntity }
 >;
@@ -75,6 +72,22 @@ export const similarEntitiesInputSchema = z.object({
   limit: z.number().int().min(1).max(25).default(5),
 });
 export type SimilarEntitiesInput = z.infer<typeof similarEntitiesInputSchema>;
+
+export const requestEmbeddingRefreshInputSchema = z.object({
+  entityType: searchableEntitySchema,
+  entityId: searchableEntityIdSchema,
+});
+export type RequestEmbeddingRefreshInput = z.infer<
+  typeof requestEmbeddingRefreshInputSchema
+>;
+
+export const requestEmbeddingRefreshOutSchema = z.object({
+  batchId: z.string(),
+  totalJobs: z.number().int().nonnegative(),
+});
+export type RequestEmbeddingRefreshOut = z.infer<
+  typeof requestEmbeddingRefreshOutSchema
+>;
 
 export const searchMatchKindSchema = z.enum([
   "exact",
@@ -158,6 +171,7 @@ export type SimilarEntityResult = z.infer<typeof similarEntityResultSchema>;
 
 export const similarEntitiesOut = z.object({
   source: searchableEntityRefSchema,
+  status: embeddingReadinessSchema,
   results: z.array(similarEntityResultSchema),
 });
 export type SimilarEntitiesOut = z.infer<typeof similarEntitiesOut>;

@@ -1,0 +1,61 @@
+import type { ExpenseOut } from "@cubby/schemas/project";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { ProjectSuggestionChips } from "./project-suggestion-chips";
+
+const mocks = vi.hoisted(() => ({
+  projects: [
+    {
+      id: "PRJ-PLAN",
+      name: "Workshop refresh",
+      effectiveStart: "2026-08-01",
+      effectiveEnd: "2026-08-31",
+    },
+  ],
+  affinity: [{ projectId: "PRJ-PLAN", trade: "electrical", count: 2 }],
+}));
+
+vi.mock("@tanstack/react-query", () => ({
+  useQuery: (options: { queryKey?: readonly unknown[] }) => ({
+    data:
+      options.queryKey?.[0] === "projects" ? mocks.projects : mocks.affinity,
+  }),
+}));
+
+vi.mock("~/integrations/trpc/react", () => ({
+  useTRPC: () => ({
+    project: { options: { queryOptions: () => ({ queryKey: ["projects"] }) } },
+    expense: {
+      tradeAffinity: { queryOptions: () => ({ queryKey: ["affinity"] }) },
+    },
+  }),
+}));
+
+const expense = {
+  id: "EXP-PLAN",
+  projectId: null,
+  date: "2026-08-12",
+  trade: "electrical",
+} as ExpenseOut;
+
+describe("ProjectSuggestionChips", () => {
+  it("does not assign until the selected proposal is accepted", () => {
+    const onAssign = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ProjectSuggestionChips
+        expense={expense}
+        isPending={false}
+        onAssign={onAssign}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Workshop refresh" }));
+
+    expect(onAssign).not.toHaveBeenCalled();
+    expect(screen.getByText(/Assign to Workshop refresh/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+
+    expect(onAssign).toHaveBeenCalledWith("PRJ-PLAN");
+  });
+});

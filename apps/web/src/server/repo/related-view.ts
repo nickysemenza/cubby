@@ -1,4 +1,5 @@
 import { type Entity, entityRefKey } from "@cubby/schemas/entity";
+import { entityManifest } from "@cubby/schemas/entity-manifest";
 import type {
   RelatedBranchInput,
   RelatedBranchOutput,
@@ -13,6 +14,7 @@ import type {
 } from "@cubby/schemas/related-view";
 import {
   relatedFilterPrefix,
+  relatedViewPath,
   relatedViewRegistry,
 } from "@cubby/schemas/related-view";
 import { parseShortcode } from "@cubby/shared";
@@ -21,39 +23,20 @@ import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/repo/database-helpers";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
+import { compileTraversal } from "~/server/repo/relatedness/traversal";
 
-interface SqlRelatedView {
-  sourceTable: string;
-  joins: string;
-  targetEntity: RelatedPreviewGroup["items"][number]["entity"];
+interface RelatedViewSqlPresentation {
   label: string;
   sort: string;
   sortDirection: "ASC" | "DESC";
 }
 
-const named = (
-  sourceTable: string,
-  joins: string,
-  targetEntity: SqlRelatedView["targetEntity"],
-  sort = `lower(t."name")`,
-) => ({
-  sourceTable,
-  joins,
-  targetEntity,
+const named = (sort = `lower(t."name")`) => ({
   label: `t."name"`,
   sort,
   sortDirection: "ASC" as const,
 });
-const dated = (
-  sourceTable: string,
-  joins: string,
-  targetEntity: SqlRelatedView["targetEntity"],
-  label = `t."name"`,
-  sort = `t."createdAt"`,
-) => ({
-  sourceTable,
-  joins,
-  targetEntity,
+const dated = (label = `t."name"`, sort = `t."createdAt"`) => ({
   label,
   sort,
   sortDirection: "DESC" as const,
@@ -64,233 +47,129 @@ const dated = (
  * below are constants; caller data is parameterized separately.
  */
 const SQL_RELATED_VIEWS = {
-  "product.vendors": named(
-    "Product",
-    `JOIN "Expense" e ON e."productId" = s."id" AND e."deletedAt" IS NULL JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL JOIN "Vendor" t ON t."id" = p."vendorId" AND t."deletedAt" IS NULL`,
-    "vendor",
-  ),
-  "product.projects": named(
-    "Product",
-    `JOIN "Expense" e ON e."productId" = s."id" AND e."deletedAt" IS NULL JOIN "Project" t ON t."id" = e."projectId" AND t."deletedAt" IS NULL`,
-    "project",
-  ),
-  "product.usedOnProjects": named(
-    "Product",
-    `JOIN "ProjectToolUsage" ptu ON ptu."productId" = s."id" AND ptu."deletedAt" IS NULL JOIN "Project" t ON t."id" = ptu."projectId" AND t."deletedAt" IS NULL`,
-    "project",
-  ),
+  "product.vendors": named(),
+  "product.projects": named(),
+  "product.usedOnProjects": named(),
   "product.purchases": dated(
-    "Product",
-    `JOIN "Expense" e ON e."productId" = s."id" AND e."deletedAt" IS NULL JOIN "Purchase" t ON t."id" = e."purchaseId" AND t."deletedAt" IS NULL`,
-    "purchase",
     `COALESCE(NULLIF(t."orderId", ''), t."shortcode")`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
   "product.expenses": dated(
-    "Product",
-    `JOIN "Expense" t ON t."productId" = s."id" AND t."deletedAt" IS NULL`,
-    "expense",
     `t."name"`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
   // includes-installed: this is a related-records view keyed off product
   // identity — a fixture must stay listed among "this product's inventory".
-  "product.inventory": dated(
-    "Product",
-    `JOIN "InventoryEntry" t ON t."productId" = s."id" AND t."deletedAt" IS NULL`,
-    "inventory",
-    `t."shortcode"`,
-    `t."createdAt"`,
-  ),
+  "product.inventory": dated(`t."shortcode"`, `t."createdAt"`),
+  "product.wishes": named(),
   "product.tasks": named(
-    "Product",
-    `JOIN "Task" t ON t."subjectProductId" = s."id" AND t."deletedAt" IS NULL`,
-    "task",
     `format('%s|%s|%s', CASE WHEN t."status" = 'done' THEN 1 ELSE 0 END, COALESCE(t."dueDate"::text, '9999-12-31'), lower(t."name"))`,
   ),
-  "recipe.ingredients": named(
-    "Recipe",
-    `JOIN "RecipeSection" rs ON rs."recipeId" = s."id" AND rs."deletedAt" IS NULL JOIN "RecipeSectionIngredient" rsi ON rsi."recipeSectionId" = rs."id" AND rsi."deletedAt" IS NULL JOIN "Ingredient" t ON t."id" = rsi."ingredientId" AND t."deletedAt" IS NULL`,
-    "ingredient",
-  ),
+  "recipe.ingredients": named(),
   "recipe.meals": dated(
-    "Recipe",
-    `JOIN "MealRecipe" mr ON mr."recipeId" = s."id" AND mr."deletedAt" IS NULL JOIN "Meal" t ON t."id" = mr."mealId" AND t."deletedAt" IS NULL`,
-    "meal",
     `COALESCE(NULLIF(t."name", ''), t."date"::text, t."shortcode")`,
     `t."date"`,
   ),
-  "meal.recipes": named(
-    "Meal",
-    `JOIN "MealRecipe" mr ON mr."mealId" = s."id" AND mr."deletedAt" IS NULL JOIN "Recipe" t ON t."id" = mr."recipeId" AND t."deletedAt" IS NULL`,
-    "recipe",
-  ),
+  "meal.recipes": named(),
   // includes-installed: identity/relation views, not a browse/count surface
   // — a fixture's related ingredient must stay reachable either direction.
-  "location.ingredients": named(
-    "Location",
-    `JOIN "InventoryEntry" ie ON ie."locationId" = s."id" AND ie."deletedAt" IS NULL JOIN "Product" p ON p."id" = ie."productId" AND p."deletedAt" IS NULL JOIN "Ingredient" t ON t."id" = p."ingredientId" AND t."deletedAt" IS NULL`,
-    "ingredient",
-  ),
-  "inventory.ingredient": named(
-    "InventoryEntry",
-    `JOIN "Product" p ON p."id" = s."productId" AND p."deletedAt" IS NULL JOIN "Ingredient" t ON t."id" = p."ingredientId" AND t."deletedAt" IS NULL`,
-    "ingredient",
-  ),
-  "project.blockedBy": named(
-    "Project",
-    `JOIN "ProjectDependency" pd ON pd."projectId" = s."id" JOIN "Project" t ON t."id" = pd."blockedByProjectId" AND t."deletedAt" IS NULL`,
-    "project",
-  ),
+  "location.ingredients": named(),
+  "inventory.ingredient": named(),
+  "project.blockedBy": named(),
   "project.tasks": named(
-    "Project",
-    `JOIN "Task" t ON t."projectId" = s."id" AND t."deletedAt" IS NULL`,
-    "task",
     `format('%s|%s|%s', CASE WHEN t."status" = 'done' THEN 1 ELSE 0 END, COALESCE(t."dueDate"::text, '9999-12-31'), lower(t."name"))`,
   ),
   "project.expenses": dated(
-    "Project",
-    `JOIN "Expense" t ON t."projectId" = s."id" AND t."deletedAt" IS NULL`,
-    "expense",
     `t."name"`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
-  "project.taskProducts": named(
-    "Project",
-    `JOIN "Task" task_rel ON task_rel."projectId" = s."id" AND task_rel."deletedAt" IS NULL JOIN "Product" t ON t."id" = task_rel."subjectProductId" AND t."deletedAt" IS NULL`,
-    "product",
-  ),
-  "project.purchasedProducts": named(
-    "Project",
-    `JOIN "Expense" e ON e."projectId" = s."id" AND e."deletedAt" IS NULL JOIN "Product" t ON t."id" = e."productId" AND t."deletedAt" IS NULL`,
-    "product",
-  ),
-  "project.usedTools": named(
-    "Project",
-    `JOIN "ProjectToolUsage" ptu ON ptu."projectId" = s."id" AND ptu."deletedAt" IS NULL JOIN "Product" t ON t."id" = ptu."productId" AND t."deletedAt" IS NULL`,
-    "product",
-  ),
-  "project.vendors": named(
-    "Project",
-    `JOIN "Expense" e ON e."projectId" = s."id" AND e."deletedAt" IS NULL JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL JOIN "Vendor" t ON t."id" = p."vendorId" AND t."deletedAt" IS NULL`,
-    "vendor",
-  ),
+  "project.taskProducts": named(),
+  "project.purchasedProducts": named(),
+  "project.usedTools": named(),
+  "project.vendors": named(),
   "task.blockedBy": named(
-    "Task",
-    `JOIN "TaskDependency" td ON td."taskId" = s."id" JOIN "Task" t ON t."id" = td."blockedByTaskId" AND t."deletedAt" IS NULL`,
-    "task",
     `format('%s|%s|%s', CASE WHEN t."status" = 'done' THEN 1 ELSE 0 END, COALESCE(t."dueDate"::text, '9999-12-31'), lower(t."name"))`,
   ),
   "task.parent": named(
-    "Task",
-    `JOIN "Task" t ON t."id" = s."parentTaskId" AND t."deletedAt" IS NULL`,
-    "task",
     `format('%s|%s|%s', CASE WHEN t."status" = 'done' THEN 1 ELSE 0 END, COALESCE(t."dueDate"::text, '9999-12-31'), lower(t."name"))`,
   ),
   "vendor.expenses": dated(
-    "Vendor",
-    `JOIN "Purchase" p ON p."vendorId" = s."id" AND p."deletedAt" IS NULL JOIN "Expense" t ON t."purchaseId" = p."id" AND t."deletedAt" IS NULL`,
-    "expense",
     `t."name"`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
   "vendor.purchases": dated(
-    "Vendor",
-    `JOIN "Purchase" t ON t."vendorId" = s."id" AND t."deletedAt" IS NULL`,
-    "purchase",
     `COALESCE(NULLIF(t."orderId", ''), t."shortcode")`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
-  "vendor.products": named(
-    "Vendor",
-    `JOIN "Purchase" p ON p."vendorId" = s."id" AND p."deletedAt" IS NULL JOIN "Expense" e ON e."purchaseId" = p."id" AND e."deletedAt" IS NULL JOIN "Product" t ON t."id" = e."productId" AND t."deletedAt" IS NULL`,
-    "product",
-  ),
-  "vendor.projects": named(
-    "Vendor",
-    `JOIN "Purchase" p ON p."vendorId" = s."id" AND p."deletedAt" IS NULL JOIN "Expense" e ON e."purchaseId" = p."id" AND e."deletedAt" IS NULL JOIN "Project" t ON t."id" = e."projectId" AND t."deletedAt" IS NULL`,
-    "project",
-  ),
+  "vendor.products": named(),
+  "vendor.projects": named(),
   "vendor.transactions": dated(
-    "Vendor",
-    `JOIN "Purchase" p ON p."vendorId" = s."id" AND p."deletedAt" IS NULL JOIN "FinancialTransactionAllocation" fta ON fta."purchaseId" = p."id" AND fta."deletedAt" IS NULL JOIN "FinancialTransaction" t ON t."id" = fta."transactionId" AND t."deletedAt" IS NULL`,
-    "financialTransaction",
     `COALESCE(NULLIF(t."merchant", ''), NULLIF(t."rawDescription", ''), t."shortcode")`,
     `COALESCE(t."postedDate", t."transactionDate", t."createdAt"::date)`,
   ),
   "purchase.expenses": dated(
-    "Purchase",
-    `JOIN "Expense" t ON t."purchaseId" = s."id" AND t."deletedAt" IS NULL`,
-    "expense",
     `t."name"`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
   "purchase.transactions": dated(
-    "Purchase",
-    `JOIN "FinancialTransactionAllocation" fta ON fta."purchaseId" = s."id" AND fta."deletedAt" IS NULL JOIN "FinancialTransaction" t ON t."id" = fta."transactionId" AND t."deletedAt" IS NULL`,
-    "financialTransaction",
     `COALESCE(NULLIF(t."merchant", ''), NULLIF(t."rawDescription", ''), t."shortcode")`,
     `COALESCE(t."postedDate", t."transactionDate", t."createdAt"::date)`,
   ),
-  "purchase.products": named(
-    "Purchase",
-    `JOIN "Expense" e ON e."purchaseId" = s."id" AND e."deletedAt" IS NULL JOIN "Product" t ON t."id" = e."productId" AND t."deletedAt" IS NULL`,
-    "product",
-  ),
-  "purchase.projects": named(
-    "Purchase",
-    `JOIN "Expense" e ON e."purchaseId" = s."id" AND e."deletedAt" IS NULL JOIN "Project" t ON t."id" = e."projectId" AND t."deletedAt" IS NULL`,
-    "project",
-  ),
+  "purchase.products": named(),
+  "purchase.projects": named(),
   "expense.transactions": dated(
-    "Expense",
-    `JOIN "Purchase" p ON p."id" = s."purchaseId" AND p."deletedAt" IS NULL JOIN "FinancialTransactionAllocation" fta ON fta."purchaseId" = p."id" AND fta."deletedAt" IS NULL JOIN "FinancialTransaction" t ON t."id" = fta."transactionId" AND t."deletedAt" IS NULL`,
-    "financialTransaction",
     `COALESCE(NULLIF(t."merchant", ''), NULLIF(t."rawDescription", ''), t."shortcode")`,
     `COALESCE(t."postedDate", t."transactionDate", t."createdAt"::date)`,
   ),
   "financialAccount.transactions": dated(
-    "FinancialAccount",
-    `JOIN "FinancialTransaction" t ON t."accountId" = s."id" AND t."deletedAt" IS NULL`,
-    "financialTransaction",
     `COALESCE(NULLIF(t."merchant", ''), NULLIF(t."rawDescription", ''), t."shortcode")`,
     `COALESCE(t."postedDate", t."transactionDate", t."createdAt"::date)`,
   ),
   "financialAccount.purchases": dated(
-    "FinancialAccount",
-    `JOIN "FinancialTransaction" ft ON ft."accountId" = s."id" AND ft."deletedAt" IS NULL JOIN "FinancialTransactionAllocation" fta ON fta."transactionId" = ft."id" AND fta."deletedAt" IS NULL JOIN "Purchase" t ON t."id" = fta."purchaseId" AND t."deletedAt" IS NULL`,
-    "purchase",
     `COALESCE(NULLIF(t."orderId", ''), t."shortcode")`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
-  "financialAccount.vendors": named(
-    "FinancialAccount",
-    `JOIN "FinancialTransaction" ft ON ft."accountId" = s."id" AND ft."deletedAt" IS NULL JOIN "FinancialTransactionAllocation" fta ON fta."transactionId" = ft."id" AND fta."deletedAt" IS NULL JOIN "Purchase" p ON p."id" = fta."purchaseId" AND p."deletedAt" IS NULL JOIN "Vendor" t ON t."id" = p."vendorId" AND t."deletedAt" IS NULL`,
-    "vendor",
-  ),
-  "financialTransaction.vendor": named(
-    "FinancialTransaction",
-    `JOIN "FinancialTransactionAllocation" fta ON fta."transactionId" = s."id" AND fta."deletedAt" IS NULL JOIN "Purchase" p ON p."id" = fta."purchaseId" AND p."deletedAt" IS NULL JOIN "Vendor" t ON t."id" = p."vendorId" AND t."deletedAt" IS NULL`,
-    "vendor",
-  ),
+  "financialAccount.vendors": named(),
+  "financialTransaction.vendor": named(),
   "financialTransaction.expenses": dated(
-    "FinancialTransaction",
-    `JOIN "FinancialTransactionAllocation" fta ON fta."transactionId" = s."id" AND fta."deletedAt" IS NULL JOIN "Purchase" p ON p."id" = fta."purchaseId" AND p."deletedAt" IS NULL JOIN "Expense" t ON t."purchaseId" = p."id" AND t."deletedAt" IS NULL`,
-    "expense",
     `t."name"`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
-  "financialTransaction.products": named(
-    "FinancialTransaction",
-    `JOIN "FinancialTransactionAllocation" fta ON fta."transactionId" = s."id" AND fta."deletedAt" IS NULL JOIN "Purchase" p ON p."id" = fta."purchaseId" AND p."deletedAt" IS NULL JOIN "Expense" e ON e."purchaseId" = p."id" AND e."deletedAt" IS NULL JOIN "Product" t ON t."id" = e."productId" AND t."deletedAt" IS NULL`,
-    "product",
-  ),
-  "wish.candidates": named(
-    "Wish",
-    `JOIN "WishCandidate" wc ON wc."wishId" = s."id" AND wc."deletedAt" IS NULL JOIN "Product" t ON t."id" = wc."productId" AND t."deletedAt" IS NULL`,
-    "product",
-  ),
-} as const satisfies Record<RelatedViewKey, SqlRelatedView>;
+  "financialTransaction.products": named(),
+  "wish.candidates": named(),
+} as const satisfies Record<RelatedViewKey, RelatedViewSqlPresentation>;
+
+const relatedViewsByKey = new Map(
+  relatedViewRegistry.map((view) => [view.key, view]),
+);
+
+/**
+ * Presentation SQL belongs here; endpoint identity and table ownership remain
+ * in the manifest-backed related-view registry.
+ */
+const sqlRelatedView = (key: RelatedViewKey) => {
+  const definition = relatedViewsByKey.get(key);
+  if (!definition) throw new Error(`Unknown related view: ${key}`);
+  return {
+    ...SQL_RELATED_VIEWS[key],
+    sourceTable: entityManifest[definition.source].dbTable,
+    targetEntity: definition.target,
+  };
+};
+
+/**
+ * The curated registry supplies presentation only; traversal joins are compiled
+ * from its declared graph path with the aliases this repository query expects.
+ */
+const COMPILED_RELATED_JOINS = Object.fromEntries(
+  relatedViewRegistry.map((view) => [
+    view.key,
+    compileTraversal(view.source, relatedViewPath(view), "related", {
+      root: "s",
+      leaf: "t",
+    }).joins,
+  ]),
+) as Record<RelatedViewKey, SQL>;
 
 type RawRow = {
   sourceId: string;
@@ -315,7 +194,7 @@ async function loadOneRows(
   relationKey: RelatedViewKey,
   sourceIds: string[],
 ): Promise<RawRow[]> {
-  const view = SQL_RELATED_VIEWS[relationKey];
+  const view = sqlRelatedView(relationKey);
   const ids = sql.join(
     sourceIds.map((id) => sql`${id}`),
     sql`, `,
@@ -329,7 +208,7 @@ async function loadOneRows(
         ${sql.raw(view.label)}::text AS "label",
         ${sql.raw(view.sort)} AS "sortValue"
       FROM ${sql.raw(`"${view.sourceTable}"`)} s
-      ${sql.raw(view.joins)}
+      ${COMPILED_RELATED_JOINS[relationKey]}
       WHERE s."shortcode" IN (${ids}) AND s."deletedAt" IS NULL
     ), ranked AS (
       SELECT *,
@@ -370,7 +249,7 @@ export async function loadRelatedPreviews(
   const displayImages = await resolveEntityDisplayImages(
     db,
     loaded.flatMap(({ relationKey, rows }) => {
-      const targetEntity = SQL_RELATED_VIEWS[relationKey].targetEntity;
+      const targetEntity = sqlRelatedView(relationKey).targetEntity;
       return rows.map((row) => ({
         entityType: targetEntity,
         entityId: row.targetEntityId,
@@ -378,7 +257,7 @@ export async function loadRelatedPreviews(
     }),
   );
   return loaded.flatMap(({ relationKey, rows }) => {
-    const targetEntity = SQL_RELATED_VIEWS[relationKey].targetEntity;
+    const targetEntity = sqlRelatedView(relationKey).targetEntity;
     const grouped = new Map<string, RelatedPreviewGroup>();
     for (const row of rows) {
       const group = grouped.get(row.sourceId) ?? {
@@ -410,7 +289,7 @@ export async function loadRelatedBranch(
   db: Database,
   input: RelatedBranchInput,
 ): Promise<RelatedBranchOutput> {
-  const view = SQL_RELATED_VIEWS[input.relationKey];
+  const view = sqlRelatedView(input.relationKey);
   const query = sql`
     WITH related AS (
       SELECT DISTINCT
@@ -419,7 +298,7 @@ export async function loadRelatedBranch(
         ${sql.raw(view.label)}::text AS "label",
         ${sql.raw(view.sort)} AS "sortValue"
       FROM ${sql.raw(`"${view.sourceTable}"`)} s
-      ${sql.raw(view.joins)}
+      ${COMPILED_RELATED_JOINS[input.relationKey]}
       WHERE s."shortcode" = ${input.sourceId} AND s."deletedAt" IS NULL
     ), ranked AS (
       SELECT *, count(*) OVER ()::int AS "totalCount"
@@ -462,7 +341,7 @@ export async function loadRelatedOptions(
   db: Database,
   input: RelatedOptionsInput,
 ): Promise<RelatedOptionsOutput> {
-  const view = SQL_RELATED_VIEWS[input.relationKey];
+  const view = sqlRelatedView(input.relationKey);
   const search = input.search?.trim();
   const query = sql`
     SELECT
@@ -470,7 +349,7 @@ export async function loadRelatedOptions(
       ${sql.raw(view.label)}::text AS "label",
       count(DISTINCT s."id")::int AS "count"
     FROM ${sql.raw(`"${view.sourceTable}"`)} s
-    ${sql.raw(view.joins)}
+    ${COMPILED_RELATED_JOINS[input.relationKey]}
     WHERE s."deletedAt" IS NULL
       ${search ? sql`AND ${sql.raw(view.label)} ILIKE ${`%${search}%`}` : sql``}
     GROUP BY t."shortcode", ${sql.raw(view.label)}
@@ -803,7 +682,7 @@ export function relatedWhereConditions(
   return relatedViewRegistry
     .filter((view) => view.source === source)
     .flatMap((definition) => {
-      const view = SQL_RELATED_VIEWS[definition.key];
+      const view = sqlRelatedView(definition.key);
       const prefix = relatedFilterPrefix(definition);
       const rawIds = filters[`${prefix}Id`];
       const ids = Array.isArray(rawIds)
@@ -823,7 +702,7 @@ export function relatedWhereConditions(
       const exists = (extra?: SQL) => sql`EXISTS (
         SELECT 1
         FROM ${sql.raw(`"${view.sourceTable}"`)} s
-        ${sql.raw(view.joins)}
+        ${COMPILED_RELATED_JOINS[definition.key]}
         WHERE s."id" = ${sourceId}
           AND s."deletedAt" IS NULL
           ${extra ? sql`AND ${extra}` : sql``}

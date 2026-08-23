@@ -23,15 +23,15 @@ describe("semantic search text builders", () => {
     expect(text).toContain("aliases: tarpaulin, drop cover");
   });
 
-  it("indexes ISBN-10 and ISBN-13 aliases for a stored book GTIN", () => {
+  it("keeps identifiers out while retaining product-specific notes", () => {
     const text = buildProductEmbeddingText({
       name: "Reference Book",
       gtins: ["09780306406157"],
+      notes: "Fits the radiant manifold in the basement",
     });
 
-    expect(text).toContain(
-      "barcode: 09780306406157, 9780306406157, 0306406152",
-    );
+    expect(text).not.toContain("09780306406157");
+    expect(text).toContain("radiant manifold");
   });
 
   it("includes location context and AI description", () => {

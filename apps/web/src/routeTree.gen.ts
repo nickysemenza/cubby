@@ -83,6 +83,7 @@ import { Route as AuthenticatedRecipesShortcodeRouteImport } from './routes/_aut
 import { Route as AuthenticatedRecipesCompareRouteImport } from './routes/_authenticated/recipes.compare'
 import { Route as AuthenticatedRecipesImportRouteImport } from './routes/_authenticated/recipes.import'
 import { Route as AuthenticatedRecipesNewRouteImport } from './routes/_authenticated/recipes.new'
+import { Route as AuthenticatedRecommendationsWorkbenchRouteImport } from './routes/_authenticated/recommendations.workbench'
 import { Route as AuthenticatedSearchIndexRouteImport } from './routes/_authenticated/search.index'
 import { Route as AuthenticatedSearchDebugRouteImport } from './routes/_authenticated/search.debug'
 import { Route as AuthenticatedStatementRowsIndexRouteImport } from './routes/_authenticated/statement-rows.index'
@@ -524,6 +525,12 @@ const AuthenticatedRecipesNewRoute = AuthenticatedRecipesNewRouteImport.update({
   path: '/recipes/new',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedRecommendationsWorkbenchRoute =
+  AuthenticatedRecommendationsWorkbenchRouteImport.update({
+    id: '/recommendations/workbench',
+    path: '/recommendations/workbench',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedSearchIndexRoute =
   AuthenticatedSearchIndexRouteImport.update({
     id: '/search/',
@@ -698,6 +705,7 @@ export interface FileRoutesByFullPath {
   '/recipes/compare': typeof AuthenticatedRecipesCompareRoute
   '/recipes/import': typeof AuthenticatedRecipesImportRoute
   '/recipes/new': typeof AuthenticatedRecipesNewRoute
+  '/recommendations/workbench': typeof AuthenticatedRecommendationsWorkbenchRoute
   '/search/debug': typeof AuthenticatedSearchDebugRoute
   '/tasks/$shortcode': typeof AuthenticatedTasksShortcodeRoute
   '/usda/$id': typeof AuthenticatedUsdaIdRoute
@@ -792,6 +800,7 @@ export interface FileRoutesByTo {
   '/recipes/compare': typeof AuthenticatedRecipesCompareRoute
   '/recipes/import': typeof AuthenticatedRecipesImportRoute
   '/recipes/new': typeof AuthenticatedRecipesNewRoute
+  '/recommendations/workbench': typeof AuthenticatedRecommendationsWorkbenchRoute
   '/search/debug': typeof AuthenticatedSearchDebugRoute
   '/tasks/$shortcode': typeof AuthenticatedTasksShortcodeRoute
   '/usda/$id': typeof AuthenticatedUsdaIdRoute
@@ -889,6 +898,7 @@ export interface FileRoutesById {
   '/_authenticated/recipes/compare': typeof AuthenticatedRecipesCompareRoute
   '/_authenticated/recipes/import': typeof AuthenticatedRecipesImportRoute
   '/_authenticated/recipes/new': typeof AuthenticatedRecipesNewRoute
+  '/_authenticated/recommendations/workbench': typeof AuthenticatedRecommendationsWorkbenchRoute
   '/_authenticated/search/debug': typeof AuthenticatedSearchDebugRoute
   '/_authenticated/tasks/$shortcode': typeof AuthenticatedTasksShortcodeRoute
   '/_authenticated/usda/$id': typeof AuthenticatedUsdaIdRoute
@@ -986,6 +996,7 @@ export interface FileRouteTypes {
     | '/recipes/compare'
     | '/recipes/import'
     | '/recipes/new'
+    | '/recommendations/workbench'
     | '/search/debug'
     | '/tasks/$shortcode'
     | '/usda/$id'
@@ -1080,6 +1091,7 @@ export interface FileRouteTypes {
     | '/recipes/compare'
     | '/recipes/import'
     | '/recipes/new'
+    | '/recommendations/workbench'
     | '/search/debug'
     | '/tasks/$shortcode'
     | '/usda/$id'
@@ -1176,6 +1188,7 @@ export interface FileRouteTypes {
     | '/_authenticated/recipes/compare'
     | '/_authenticated/recipes/import'
     | '/_authenticated/recipes/new'
+    | '/_authenticated/recommendations/workbench'
     | '/_authenticated/search/debug'
     | '/_authenticated/tasks/$shortcode'
     | '/_authenticated/usda/$id'
@@ -1748,6 +1761,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRecipesNewRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/recommendations/workbench': {
+      id: '/_authenticated/recommendations/workbench'
+      path: '/recommendations/workbench'
+      fullPath: '/recommendations/workbench'
+      preLoaderRoute: typeof AuthenticatedRecommendationsWorkbenchRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/search/': {
       id: '/_authenticated/search/'
       path: '/search'
@@ -1941,6 +1961,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedRecipesCompareRoute: typeof AuthenticatedRecipesCompareRoute
   AuthenticatedRecipesImportRoute: typeof AuthenticatedRecipesImportRoute
   AuthenticatedRecipesNewRoute: typeof AuthenticatedRecipesNewRoute
+  AuthenticatedRecommendationsWorkbenchRoute: typeof AuthenticatedRecommendationsWorkbenchRoute
   AuthenticatedSearchDebugRoute: typeof AuthenticatedSearchDebugRoute
   AuthenticatedTasksShortcodeRoute: typeof AuthenticatedTasksShortcodeRoute
   AuthenticatedUsdaIdRoute: typeof AuthenticatedUsdaIdRoute
@@ -2029,6 +2050,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedRecipesCompareRoute: AuthenticatedRecipesCompareRoute,
   AuthenticatedRecipesImportRoute: AuthenticatedRecipesImportRoute,
   AuthenticatedRecipesNewRoute: AuthenticatedRecipesNewRoute,
+  AuthenticatedRecommendationsWorkbenchRoute:
+    AuthenticatedRecommendationsWorkbenchRoute,
   AuthenticatedSearchDebugRoute: AuthenticatedSearchDebugRoute,
   AuthenticatedTasksShortcodeRoute: AuthenticatedTasksShortcodeRoute,
   AuthenticatedUsdaIdRoute: AuthenticatedUsdaIdRoute,

@@ -1,6 +1,7 @@
 import { SHORTCODE_PREFIX } from "@cubby/shared";
 import { z } from "zod";
 import type { Entity } from "./entity-core";
+import { relatednessSignalSchema } from "./relatedness";
 import {
   type EntityRelationship,
   entityLifecycleSchema,
@@ -75,6 +76,8 @@ export const entityDescriptor = z.object({
    * the whole reason for the extra structure.
    */
   relationships: z.array(entityRelationshipSchema).readonly(),
+  /** Optional closed-set signals which can discover useful, inferred links. */
+  relatednessSignals: z.array(relatednessSignalSchema).readonly().optional(),
   /** Which removal paths exist for this entity — drives the lifecycle registry. */
   lifecycle: entityLifecycleSchema,
   /** CRUD operations exposed over MCP. */
@@ -236,6 +239,36 @@ export const entityManifest = {
         out("ProjectToolUsage.projectId"),
       ),
       path(
+        "vendors",
+        "Vendors",
+        "vendor",
+        inc("Expense.productId"),
+        out("Expense.purchaseId"),
+        out("Purchase.vendorId"),
+      ),
+      path(
+        "purchased-projects",
+        "Projects",
+        "project",
+        inc("Expense.productId"),
+        out("Expense.projectId"),
+      ),
+      path(
+        "purchases-via-spend",
+        "Purchases (via spend)",
+        "purchase",
+        inc("Expense.productId"),
+        out("Expense.purchaseId"),
+      ),
+      path("expenses", "Expenses", "expense", inc("Expense.productId")),
+      path(
+        "inventory",
+        "Inventory",
+        "inventory",
+        inc("InventoryEntry.productId"),
+      ),
+      path("tasks", "Tasks", "task", inc("Task.subjectProductId")),
+      path(
         "wishes",
         "Wishlist candidates",
         "wish",
@@ -258,6 +291,26 @@ export const entityManifest = {
         "ProductExternalId.externalId",
         "Product.fdc_id",
       ]),
+    ],
+    // Only the active product pair declares executable signals at merge. Tags
+    // explain a match but never increase its score; manufacturer is omitted
+    // because shared brand is not household-level relatedness.
+    relatednessSignals: [
+      {
+        kind: "semantic",
+        label: "Similar meaning",
+        pair: "product_to_product",
+        weight: 1,
+        limit: 8,
+      },
+      {
+        kind: "scalarOverlap",
+        label: "Shared tag",
+        pair: "product_to_product",
+        column: "Product.tags",
+        popularityCap: 24,
+        scoring: "displayOnly",
+      },
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: true },
     mcp: ALL_MCP,
@@ -301,6 +354,13 @@ export const entityManifest = {
         inc("RecipeSectionIngredient.recipeSectionId"),
         out("RecipeSectionIngredient.ingredientId"),
         out("Ingredient.recipeId"),
+      ),
+      path(
+        "meals",
+        "Meals",
+        "meal",
+        inc("MealRecipe.recipeId"),
+        out("MealRecipe.mealId"),
       ),
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
@@ -367,6 +427,14 @@ export const entityManifest = {
       ),
       // The SKU this location is an instance of; null for rooms and areas.
       path("product", "Product", "product", out("Location.productId")),
+      path(
+        "ingredients",
+        "Ingredients",
+        "ingredient",
+        inc("InventoryEntry.locationId"),
+        out("InventoryEntry.productId"),
+        out("Product.ingredientId"),
+      ),
       imageGallery("LocationImage", "locationId"),
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
@@ -388,6 +456,13 @@ export const entityManifest = {
         "Location",
         "location",
         out("InventoryEntry.locationId"),
+      ),
+      path(
+        "ingredient",
+        "Ingredient",
+        "ingredient",
+        out("InventoryEntry.productId"),
+        out("Product.ingredientId"),
       ),
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
@@ -453,6 +528,30 @@ export const entityManifest = {
         inc("ProjectToolUsage.projectId"),
         out("ProjectToolUsage.productId"),
       ),
+      path("tasks", "Tasks", "task", inc("Task.projectId")),
+      path("expenses", "Expenses", "expense", inc("Expense.projectId")),
+      path(
+        "task-products",
+        "Task products",
+        "product",
+        inc("Task.projectId"),
+        out("Task.subjectProductId"),
+      ),
+      path(
+        "purchased-products",
+        "Purchased products",
+        "product",
+        inc("Expense.projectId"),
+        out("Expense.productId"),
+      ),
+      path(
+        "vendors",
+        "Vendors",
+        "vendor",
+        inc("Expense.projectId"),
+        out("Expense.purchaseId"),
+        out("Purchase.vendorId"),
+      ),
       imageGallery("ProjectImage", "projectId"),
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
@@ -502,6 +601,38 @@ export const entityManifest = {
     countable: true,
     relationships: [
       path("logo", "Logo image", "image", out("Vendor.logoImageId")),
+      path(
+        "expenses",
+        "Recent expenses",
+        "expense",
+        inc("Purchase.vendorId"),
+        inc("Expense.purchaseId"),
+      ),
+      path("purchases", "Purchases", "purchase", inc("Purchase.vendorId")),
+      path(
+        "products",
+        "Products",
+        "product",
+        inc("Purchase.vendorId"),
+        inc("Expense.purchaseId"),
+        out("Expense.productId"),
+      ),
+      path(
+        "projects",
+        "Projects",
+        "project",
+        inc("Purchase.vendorId"),
+        inc("Expense.purchaseId"),
+        out("Expense.projectId"),
+      ),
+      path(
+        "transactions",
+        "Financial transactions",
+        "financialTransaction",
+        inc("Purchase.vendorId"),
+        inc("FinancialTransactionAllocation.purchaseId"),
+        out("FinancialTransactionAllocation.transactionId"),
+      ),
     ],
     // Deletable in the app (blocked while live purchases reference it), and
     // mergeable — two roster rows for one real vendor is a reported defect.
@@ -536,6 +667,21 @@ export const entityManifest = {
         inc("FinancialTransactionAllocation.purchaseId"),
         out("FinancialTransactionAllocation.transactionId"),
       ),
+      path("expenses", "Expenses", "expense", inc("Expense.purchaseId")),
+      path(
+        "products",
+        "Products",
+        "product",
+        inc("Expense.purchaseId"),
+        out("Expense.productId"),
+      ),
+      path(
+        "projects",
+        "Projects",
+        "project",
+        inc("Expense.purchaseId"),
+        out("Expense.projectId"),
+      ),
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: true },
     // Delete is exposed, but NOT the UI's operation: that one detaches real
@@ -555,7 +701,31 @@ export const entityManifest = {
     hasImages: false,
     searchable: true,
     countable: true,
-    relationships: [],
+    relationships: [
+      path(
+        "transactions",
+        "Transactions",
+        "financialTransaction",
+        inc("FinancialTransaction.accountId"),
+      ),
+      path(
+        "purchases",
+        "Purchases",
+        "purchase",
+        inc("FinancialTransaction.accountId"),
+        inc("FinancialTransactionAllocation.transactionId"),
+        out("FinancialTransactionAllocation.purchaseId"),
+      ),
+      path(
+        "vendors",
+        "Vendors",
+        "vendor",
+        inc("FinancialTransaction.accountId"),
+        inc("FinancialTransactionAllocation.transactionId"),
+        out("FinancialTransactionAllocation.purchaseId"),
+        out("Purchase.vendorId"),
+      ),
+    ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
     mcp: ALL_MCP,
   },
@@ -581,6 +751,31 @@ export const entityManifest = {
         "purchase",
         inc("FinancialTransactionAllocation.transactionId"),
         out("FinancialTransactionAllocation.purchaseId"),
+      ),
+      path(
+        "vendor",
+        "Vendor",
+        "vendor",
+        inc("FinancialTransactionAllocation.transactionId"),
+        out("FinancialTransactionAllocation.purchaseId"),
+        out("Purchase.vendorId"),
+      ),
+      path(
+        "expenses",
+        "Expenses",
+        "expense",
+        inc("FinancialTransactionAllocation.transactionId"),
+        out("FinancialTransactionAllocation.purchaseId"),
+        inc("Expense.purchaseId"),
+      ),
+      path(
+        "products",
+        "Products",
+        "product",
+        inc("FinancialTransactionAllocation.transactionId"),
+        out("FinancialTransactionAllocation.purchaseId"),
+        inc("Expense.purchaseId"),
+        out("Expense.productId"),
       ),
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
@@ -621,6 +816,14 @@ export const entityManifest = {
       path("purchase", "Purchase", "purchase", out("Expense.purchaseId")),
       path("project", "Project", "project", out("Expense.projectId")),
       path("product", "Product", "product", out("Expense.productId")),
+      path(
+        "transactions",
+        "Purchase transactions",
+        "financialTransaction",
+        out("Expense.purchaseId"),
+        inc("FinancialTransactionAllocation.purchaseId"),
+        out("FinancialTransactionAllocation.transactionId"),
+      ),
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
     mcp: ALL_MCP,
@@ -657,6 +860,27 @@ export const entityManifest = {
 } as const satisfies Record<Entity, EntityDescriptor>;
 
 export type EntityManifest = typeof entityManifest;
+export type LocalPathRelationship = EntityRelationship & {
+  provenance: { kind: "local-path"; steps: readonly RelationshipPathStep[] };
+};
+
+/**
+ * Resolve a declared local graph edge by its source-local key. Curated view
+ * presentation and server traversal both use this instead of retaining another
+ * path declaration beside the manifest.
+ */
+export const localRelationshipByKey = (
+  source: Entity,
+  key: string,
+): LocalPathRelationship => {
+  const relationship = entityManifest[source].relationships.find(
+    (candidate) => candidate.key === key,
+  );
+  if (relationship?.provenance.kind !== "local-path") {
+    throw new Error(`Unknown local relationship ${source}.${key}`);
+  }
+  return relationship as LocalPathRelationship;
+};
 
 /** All entities, in manifest declaration order. */
 export const allEntities = Object.keys(entityManifest) as Entity[];

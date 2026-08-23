@@ -51,9 +51,14 @@ import { gzipSync } from "node:zlib";
 // route/schema/navigation contract measures 527.6 KiB on macOS/Node 26 and
 // 528.9 KiB on Linux/Node 24. The closure still fits in 144 chunks, so the
 // 145-chunk guard remains unchanged.
+//
+// Raised 530 -> 536 KiB for manifest-driven relatedness and the focused
+// recommendations workbench. The Cloudflare build measures 534.3 KiB across
+// 146 chunks; this leaves bounded cross-platform headroom while preserving a
+// strict size and chunk-count guard for later route/dependency additions.
 export const CLIENT_BUNDLE_BUDGET = {
-  gzipBytes: 530 * 1024,
-  chunks: 145,
+  gzipBytes: 536 * 1024,
+  chunks: 146,
 } as const;
 
 const STATIC_FROM =

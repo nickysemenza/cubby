@@ -1865,25 +1865,26 @@ describe("listMcpToolCatalog", () => {
 });
 
 describe("find_similar_entities pair allowlist", () => {
-  const EXPENSE_A_CODE = "EXP-2222";
+  const PRODUCT_A_CODE = "PRD-2222";
 
   it("passes an allowlisted pair through to search.similar", async () => {
     const similar = vi.fn().mockResolvedValue({
-      source: { entityType: "expense", entityId: EXPENSE_A_CODE },
+      source: { entityType: "product", entityId: PRODUCT_A_CODE },
+      status: "uncomputed",
       results: [],
     });
 
     const result = await callTool(
       createMcpServer(),
       "find_similar_entities",
-      { pair: "expense_to_product", sourceId: EXPENSE_A_CODE, limit: 3 },
+      { pair: "product_to_product", sourceId: PRODUCT_A_CODE, limit: 3 },
       { search: { similar } },
     );
 
     expect(result.isError).not.toBe(true);
     expect(similar).toHaveBeenCalledWith({
-      pair: "expense_to_product",
-      sourceId: EXPENSE_A_CODE,
+      pair: "product_to_product",
+      sourceId: PRODUCT_A_CODE,
       limit: 3,
     });
   });
@@ -1895,7 +1896,7 @@ describe("find_similar_entities pair allowlist", () => {
       createMcpServer(),
       "find_similar_entities",
       // A valid seed code, so the rejection can only be about the PAIR.
-      { pair: "expense_to_recipe", sourceId: EXPENSE_A_CODE },
+      { pair: "expense_to_product", sourceId: PRODUCT_A_CODE },
       { search: { similar } },
     );
 

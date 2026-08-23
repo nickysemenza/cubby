@@ -14,6 +14,8 @@
     "./entity-manifest": "./src/entity-manifest.ts",
     "./entity-integrity": "./src/entity-integrity.ts",
     "./related-view": "./src/related-view.ts",
+    "./relatedness": "./src/relatedness.ts",
+    "./recommendations": "./src/recommendations.ts",
     "./identifiers": "./src/identifiers.ts",
     "./common": "./src/common.ts",
     "./pagination": "./src/pagination.ts",

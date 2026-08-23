@@ -6,7 +6,6 @@ import {
 } from "@cubby/schemas/identifiers";
 import { match } from "ts-pattern";
 import { getProblemCountsCache } from "~/server/cf-env";
-import { createUpcLookupClient } from "~/server/clients/upc-lookup";
 import type { Database } from "~/server/db";
 import {
   failOrRetryBackgroundJob,
@@ -29,14 +28,6 @@ import {
   BACKGROUND_MESSAGE_VERSION,
   type BackgroundQueueDeliveredMessage,
 } from "./background-queue-types";
-import {
-  describeLocation,
-  detectInventoryItems,
-  isLocationHasNoImagesToAnalyzeError,
-} from "./services/ai-enrichment/location-vision";
-import { retryUsdaMatch } from "./services/ai-enrichment/usda-match";
-import { LocationValuationService } from "./services/location-valuation.service";
-import { refreshCachedProblemCounts } from "./services/problem-counts-cache";
 
 export async function processBackgroundQueueMessage(
   db: Database,
@@ -154,6 +145,11 @@ async function runBackgroundJobPayload(
       return "succeeded" as const;
     })
     .with({ kind: "location-ai.description.refresh" }, async (p) => {
+      // Location vision reaches browser-facing feature flags. Keep it out of
+      // the common worker module so maintenance can drain embedding-only work
+      // in a plain Node runtime.
+      const { describeLocation, isLocationHasNoImagesToAnalyzeError } =
+        await import("./services/ai-enrichment/location-vision");
       try {
         await describeLocation(db, unsafeLocationId(p.payload.locationId), {
           batchId,
@@ -166,6 +162,8 @@ async function runBackgroundJobPayload(
       return "succeeded" as const;
     })
     .with({ kind: "location-ai.inventory.refresh" }, async (p) => {
+      const { detectInventoryItems, isLocationHasNoImagesToAnalyzeError } =
+        await import("./services/ai-enrichment/location-vision");
       try {
         await detectInventoryItems(db, unsafeLocationId(p.payload.locationId), {
           batchId,
@@ -178,10 +176,19 @@ async function runBackgroundJobPayload(
       return "succeeded" as const;
     })
     .with({ kind: "location-valuation.recompute" }, async () => {
+      const { LocationValuationService } = await import(
+        "./services/location-valuation.service"
+      );
       await new LocationValuationService(db).recompute();
       return "succeeded" as const;
     })
     .with({ kind: "problems.counts.refresh" }, async (p) => {
+      const { createUpcLookupClient } = await import(
+        "~/server/clients/upc-lookup"
+      );
+      const { refreshCachedProblemCounts } = await import(
+        "./services/problem-counts-cache"
+      );
       const cache = getProblemCountsCache();
       if (!cache) return "skipped" as const;
       return await refreshCachedProblemCounts(
@@ -192,6 +199,9 @@ async function runBackgroundJobPayload(
       );
     })
     .with({ kind: "usda-match.retry" }, async (p) => {
+      const { retryUsdaMatch } = await import(
+        "./services/ai-enrichment/usda-match"
+      );
       // Real failures propagate (no catch here) — failOrRetryBackgroundJob is
       // what turns those into the queue's own attempts/backoff.
       await retryUsdaMatch(db, unsafeIngredientId(p.payload.ingredientId));

@@ -1,5 +1,4 @@
 import type { Amount } from "@cubby/schemas/codec";
-import { productCodeSearchTerms } from "@cubby/schemas/isbn";
 import { z } from "zod";
 
 const nullableText = z.string().nullish();
@@ -40,9 +39,9 @@ const productSearchTextInputSchema = z.object({
   manufacturer: nullableText,
   category: nullableText,
   model: nullableText,
-  // Every barcode, not just the primary: a product carries a set, and a second
-  // barcode exists precisely so the item can be found by it.
+  /** Preserved in lexical SearchDocument keywords, deliberately not semantic text. */
   gtins: nullableTextList,
+  /** Household context can distinguish otherwise-identical products. */
   notes: nullableText,
   aliases: nullableTextList,
 });
@@ -50,15 +49,11 @@ type ProductSearchTextInput = z.infer<typeof productSearchTextInputSchema>;
 
 export function buildProductEmbeddingText(product: ProductSearchTextInput) {
   const parsed = productSearchTextInputSchema.parse(product);
-  const productCodes = parsed.gtins?.flatMap((value) =>
-    value ? productCodeSearchTerms(value) : [],
-  );
   return joinFields([
     field("product", parsed.name),
     field("manufacturer", parsed.manufacturer),
     field("category", parsed.category),
     field("model", parsed.model),
-    listField("barcode", productCodes),
     listField("aliases", parsed.aliases),
     field("notes", parsed.notes),
   ]);
