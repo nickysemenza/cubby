@@ -387,7 +387,7 @@ function BackgroundJobsTable(props: BackgroundJobsTableProps) {
           }
           if (row.rowType === "status") {
             return (
-              <Row align="center" gap="xs" className="pl-7">
+              <Row align="center" gap="xs" className="pl-6">
                 {row.status === "loading" ? <Spinner size="sm" /> : null}
                 <span
                   className={
@@ -402,7 +402,7 @@ function BackgroundJobsTable(props: BackgroundJobsTableProps) {
             );
           }
           return (
-            <span className="block truncate pl-7 font-mono text-xs">
+            <span className="block truncate pl-6 font-mono text-xs">
               {row.rowType === "job" ? row.id.slice(0, 8) : row.name}
             </span>
           );
