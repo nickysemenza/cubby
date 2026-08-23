@@ -15,6 +15,7 @@ import { purchaseFilterFields } from "./purchase";
 import { recipeFilterFields } from "./recipe";
 import {
   relatedFilterPrefix,
+  relatedViewPath,
   relatedSummaryInput,
   relatedSummaryOutput,
   relatedSummaryRelationKeys,
@@ -100,15 +101,16 @@ describe("relatedViewRegistry", () => {
     const keys = relatedViewRegistry.map((view) => view.key);
     expect(new Set(keys).size).toBe(keys.length);
     for (const view of relatedViewRegistry) {
+      const path = relatedViewPath(view);
       expect(view.key.startsWith(`${view.source}.`)).toBe(true);
-      expect(view.path.length).toBeGreaterThanOrEqual(1);
+      expect(path.length).toBeGreaterThanOrEqual(1);
       // 4, not 3, since FinancialTransactionAllocation landed: a transaction
       // reaches a Purchase through a join table now, so every path crossing
       // that relationship costs two hops rather than one. The ceiling still
       // exists to stop a related view becoming an arbitrary graph walk — it is
       // just that the shortest honest route across this edge is longer than it
       // used to be.
-      expect(view.path.length).toBeLessThanOrEqual(4);
+      expect(path.length).toBeLessThanOrEqual(4);
       expect(view.source).not.toBe("usda-food");
       expect(view.source).not.toBe("image");
     }
@@ -116,7 +118,7 @@ describe("relatedViewRegistry", () => {
 
   it("uses only edges verified by the canonical entity graph", () => {
     for (const view of relatedViewRegistry) {
-      for (const step of view.path) {
+      for (const step of relatedViewPath(view)) {
         expect(declaredLocalEdges, `${view.key}: ${step.edge}`).toContain(
           step.edge,
         );

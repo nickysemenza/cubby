@@ -1,8 +1,8 @@
 import { z } from "zod";
 import type { Entity } from "./entity";
+import { localRelationshipByKey } from "./entity-manifest";
 import { money } from "./money";
 import { entitySchema } from "./entity";
-import type { RelationshipPathStep } from "./entity-integrity";
 import { imageUrlSummary } from "./image-summary";
 import {
   expenseShortcode,
@@ -26,14 +26,13 @@ import {
  * declaration in schemas makes the API contract and the UI agree on the exact
  * set of paths the server is willing to execute; SQL remains server-owned.
  */
-export interface RelatedViewDefinition {
+interface RelatedViewPresentationDefinition {
   key: string;
   source: Entity;
-  target: Entity;
-  label: string;
+  /** `entityManifest[source].relationships[].key` — the canonical graph. */
+  relationship?: string;
   defaultVisible: boolean;
   order: "alphabetical" | "newest" | "task";
-  path: readonly RelationshipPathStep[];
   /** Override when one source has multiple curated paths to the same target. */
   filterPrefix?: string;
   /**
@@ -44,15 +43,18 @@ export interface RelatedViewDefinition {
   inverseKey?: string;
 }
 
-const out = (edge: string) => ({ edge, direction: "outgoing" }) as const;
-const inc = (edge: string) => ({ edge, direction: "incoming" }) as const;
+/** Fully resolved runtime projection; presentation declarations never carry paths. */
+export interface RelatedViewDefinition
+  extends RelatedViewPresentationDefinition {
+  target: Entity;
+  label: string;
+}
 
-export const relatedViewRegistry = [
+const relatedViewPresentationRegistry = [
   {
     key: "product.vendors",
     source: "product",
-    target: "vendor",
-    label: "Vendors",
+    relationship: "vendors",
     // Off by default: each of these relational previews is a wide column that
     // renders the no-value placeholder on most products, and three of them
     // together spent ~768px of a 1280px viewport — the single largest cause of
@@ -60,18 +62,12 @@ export const relatedViewRegistry = [
     // the rows that do have them.
     defaultVisible: false,
     order: "alphabetical",
-    path: [
-      inc("Expense.productId"),
-      out("Expense.purchaseId"),
-      out("Purchase.vendorId"),
-    ],
     inverseKey: "vendor.products",
   },
   {
     key: "product.projects",
     source: "product",
-    target: "project",
-    label: "Projects",
+    relationship: "purchased-projects",
     // Off by default: each of these relational previews is a wide column that
     // renders the no-value placeholder on most products, and three of them
     // together spent ~768px of a 1280px viewport — the single largest cause of
@@ -79,14 +75,12 @@ export const relatedViewRegistry = [
     // the rows that do have them.
     defaultVisible: false,
     order: "alphabetical",
-    path: [inc("Expense.productId"), out("Expense.projectId")],
     inverseKey: "project.purchasedProducts",
   },
   {
     key: "product.usedOnProjects",
     source: "product",
-    target: "project",
-    label: "Used on projects",
+    relationship: "project-uses",
     // Off by default: each of these relational previews is a wide column that
     // renders the no-value placeholder on most products, and three of them
     // together spent ~768px of a 1280px viewport — the single largest cause of
@@ -94,17 +88,13 @@ export const relatedViewRegistry = [
     // the rows that do have them.
     defaultVisible: false,
     order: "alphabetical",
-    path: [
-      inc("ProjectToolUsage.productId"),
-      out("ProjectToolUsage.projectId"),
-    ],
     filterPrefix: "usedOnProject",
     inverseKey: "project.usedTools",
   },
   {
     key: "product.purchases",
     source: "product",
-    target: "purchase",
+    relationship: "purchases-via-spend",
     // "via spend", not just "Purchases": the product detail page now also has a
     // Purchases section fed by the direct `PurchaseProduct` provenance link, and
     // the two answer different questions. This path reaches a purchase only
@@ -112,399 +102,342 @@ export const relatedViewRegistry = [
     // Expenses are `lineBasis: "allocation"` — exactly the case the direct link
     // was added for. Two sections both labelled "Purchases" is the confusion
     // that feature exists to remove.
-    label: "Purchases (via spend)",
     defaultVisible: false,
     order: "newest",
-    path: [inc("Expense.productId"), out("Expense.purchaseId")],
   },
   {
     key: "product.expenses",
     source: "product",
-    target: "expense",
-    label: "Expenses",
+    relationship: "expenses",
     defaultVisible: false,
     order: "newest",
-    path: [inc("Expense.productId")],
   },
   {
     key: "product.inventory",
     source: "product",
-    target: "inventory",
-    label: "Inventory",
+    relationship: "inventory",
     defaultVisible: false,
     order: "newest",
-    path: [inc("InventoryEntry.productId")],
     filterPrefix: "relatedInventory",
   },
   {
     key: "product.wishes",
     source: "product",
-    target: "wish",
-    label: "Wishes",
+    relationship: "wishes",
     defaultVisible: false,
     order: "alphabetical",
-    path: [inc("WishCandidate.productId"), out("WishCandidate.wishId")],
   },
   {
     key: "product.tasks",
     source: "product",
-    target: "task",
-    label: "Tasks",
+    relationship: "tasks",
     defaultVisible: false,
     order: "task",
-    path: [inc("Task.subjectProductId")],
   },
   {
     key: "recipe.ingredients",
     source: "recipe",
-    target: "ingredient",
-    label: "Ingredients",
+    relationship: "ingredients",
     defaultVisible: false,
     order: "alphabetical",
-    path: [
-      inc("RecipeSection.recipeId"),
-      inc("RecipeSectionIngredient.recipeSectionId"),
-      out("RecipeSectionIngredient.ingredientId"),
-    ],
   },
   {
     key: "recipe.meals",
     source: "recipe",
-    target: "meal",
-    label: "Meals",
+    relationship: "meals",
     defaultVisible: false,
     order: "newest",
-    path: [inc("MealRecipe.recipeId"), out("MealRecipe.mealId")],
     inverseKey: "meal.recipes",
   },
   {
     key: "meal.recipes",
     source: "meal",
-    target: "recipe",
-    label: "Recipes",
+    relationship: "recipes",
     defaultVisible: false,
     order: "alphabetical",
-    path: [inc("MealRecipe.mealId"), out("MealRecipe.recipeId")],
     inverseKey: "recipe.meals",
   },
   {
     key: "location.ingredients",
     source: "location",
-    target: "ingredient",
-    label: "Ingredients",
+    relationship: "ingredients",
     defaultVisible: false,
     order: "alphabetical",
-    path: [
-      inc("InventoryEntry.locationId"),
-      out("InventoryEntry.productId"),
-      out("Product.ingredientId"),
-    ],
   },
   {
     key: "inventory.ingredient",
     source: "inventory",
-    target: "ingredient",
-    label: "Ingredient",
+    relationship: "ingredient",
     defaultVisible: false,
     order: "alphabetical",
-    path: [out("InventoryEntry.productId"), out("Product.ingredientId")],
   },
   {
     key: "project.blockedBy",
     source: "project",
-    target: "project",
-    label: "Blocked by",
+    relationship: "blocked-by",
     defaultVisible: true,
     order: "alphabetical",
-    path: [
-      inc("ProjectDependency.projectId"),
-      out("ProjectDependency.blockedByProjectId"),
-    ],
   },
   {
     key: "project.tasks",
     source: "project",
-    target: "task",
-    label: "Tasks",
+    relationship: "tasks",
     defaultVisible: false,
     order: "task",
-    path: [inc("Task.projectId")],
   },
   {
     key: "project.expenses",
     source: "project",
-    target: "expense",
-    label: "Expenses",
+    relationship: "expenses",
     defaultVisible: false,
     order: "newest",
-    path: [inc("Expense.projectId")],
   },
   {
     key: "project.taskProducts",
     source: "project",
-    target: "product",
-    label: "Task products",
+    relationship: "task-products",
     defaultVisible: false,
     order: "alphabetical",
-    path: [inc("Task.projectId"), out("Task.subjectProductId")],
     filterPrefix: "taskProduct",
   },
   {
     key: "project.purchasedProducts",
     source: "project",
-    target: "product",
-    label: "Purchased products",
+    relationship: "purchased-products",
     defaultVisible: false,
     order: "alphabetical",
-    path: [inc("Expense.projectId"), out("Expense.productId")],
     filterPrefix: "purchasedProduct",
     inverseKey: "product.projects",
   },
   {
     key: "project.usedTools",
     source: "project",
-    target: "product",
-    label: "Reusable resources",
+    relationship: "tools-used",
     defaultVisible: true,
     order: "alphabetical",
-    path: [
-      inc("ProjectToolUsage.projectId"),
-      out("ProjectToolUsage.productId"),
-    ],
     filterPrefix: "usedTool",
     inverseKey: "product.usedOnProjects",
   },
   {
     key: "project.vendors",
     source: "project",
-    target: "vendor",
-    label: "Vendors",
+    relationship: "vendors",
     defaultVisible: false,
     order: "alphabetical",
-    path: [
-      inc("Expense.projectId"),
-      out("Expense.purchaseId"),
-      out("Purchase.vendorId"),
-    ],
     inverseKey: "vendor.projects",
   },
   {
     key: "task.blockedBy",
     source: "task",
-    target: "task",
-    label: "Blocked by",
+    relationship: "blocked-by",
     defaultVisible: true,
     order: "task",
-    path: [inc("TaskDependency.taskId"), out("TaskDependency.blockedByTaskId")],
     filterPrefix: "blockedByTask",
   },
   {
     key: "task.parent",
     source: "task",
-    target: "task",
-    label: "Parent task",
+    relationship: "parent",
     defaultVisible: false,
     order: "task",
-    path: [out("Task.parentTaskId")],
     filterPrefix: "parentTask",
   },
   {
     key: "vendor.expenses",
     source: "vendor",
-    target: "expense",
-    label: "Recent expenses",
+    relationship: "expenses",
     defaultVisible: true,
     order: "newest",
-    path: [inc("Purchase.vendorId"), inc("Expense.purchaseId")],
   },
   {
     key: "vendor.purchases",
     source: "vendor",
-    target: "purchase",
-    label: "Purchases",
+    relationship: "purchases",
     defaultVisible: false,
     order: "newest",
-    path: [inc("Purchase.vendorId")],
   },
   {
     key: "vendor.products",
     source: "vendor",
-    target: "product",
-    label: "Products",
+    relationship: "products",
     defaultVisible: false,
     order: "alphabetical",
-    path: [
-      inc("Purchase.vendorId"),
-      inc("Expense.purchaseId"),
-      out("Expense.productId"),
-    ],
     inverseKey: "product.vendors",
   },
   {
     key: "vendor.projects",
     source: "vendor",
-    target: "project",
-    label: "Projects",
+    relationship: "projects",
     defaultVisible: false,
     order: "alphabetical",
-    path: [
-      inc("Purchase.vendorId"),
-      inc("Expense.purchaseId"),
-      out("Expense.projectId"),
-    ],
     inverseKey: "project.vendors",
   },
   {
     key: "vendor.transactions",
     source: "vendor",
-    target: "financialTransaction",
-    label: "Financial transactions",
+    relationship: "transactions",
     defaultVisible: false,
     order: "newest",
-    path: [
-      inc("Purchase.vendorId"),
-      inc("FinancialTransactionAllocation.purchaseId"),
-      out("FinancialTransactionAllocation.transactionId"),
-    ],
   },
   {
     key: "purchase.expenses",
     source: "purchase",
-    target: "expense",
-    label: "Expenses",
+    relationship: "expenses",
     defaultVisible: true,
     order: "newest",
-    path: [inc("Expense.purchaseId")],
   },
   {
     key: "purchase.transactions",
     source: "purchase",
-    target: "financialTransaction",
-    label: "Transactions",
+    relationship: "financial-transactions",
     defaultVisible: true,
     order: "newest",
-    path: [
-      inc("FinancialTransactionAllocation.purchaseId"),
-      out("FinancialTransactionAllocation.transactionId"),
-    ],
   },
   {
     key: "purchase.products",
     source: "purchase",
-    target: "product",
-    label: "Products",
+    relationship: "products",
     defaultVisible: false,
     order: "alphabetical",
-    path: [inc("Expense.purchaseId"), out("Expense.productId")],
   },
   {
     key: "purchase.projects",
     source: "purchase",
-    target: "project",
-    label: "Projects",
+    relationship: "projects",
     defaultVisible: false,
     order: "alphabetical",
-    path: [inc("Expense.purchaseId"), out("Expense.projectId")],
   },
   {
     key: "expense.transactions",
     source: "expense",
-    target: "financialTransaction",
-    label: "Purchase transactions",
+    relationship: "transactions",
     defaultVisible: false,
     order: "newest",
-    path: [
-      out("Expense.purchaseId"),
-      inc("FinancialTransactionAllocation.purchaseId"),
-      out("FinancialTransactionAllocation.transactionId"),
-    ],
   },
   {
     key: "financialAccount.transactions",
     source: "financialAccount",
-    target: "financialTransaction",
-    label: "Transactions",
+    relationship: "transactions",
     defaultVisible: true,
     order: "newest",
-    path: [inc("FinancialTransaction.accountId")],
   },
   {
     key: "financialAccount.purchases",
     source: "financialAccount",
-    target: "purchase",
-    label: "Purchases",
+    relationship: "purchases",
     defaultVisible: false,
     order: "newest",
-    path: [
-      inc("FinancialTransaction.accountId"),
-      inc("FinancialTransactionAllocation.transactionId"),
-      out("FinancialTransactionAllocation.purchaseId"),
-    ],
   },
   {
     key: "financialAccount.vendors",
     source: "financialAccount",
-    target: "vendor",
-    label: "Vendors",
+    relationship: "vendors",
     defaultVisible: false,
     order: "alphabetical",
-    path: [
-      inc("FinancialTransaction.accountId"),
-      inc("FinancialTransactionAllocation.transactionId"),
-      out("FinancialTransactionAllocation.purchaseId"),
-      out("Purchase.vendorId"),
-    ],
   },
   {
     key: "financialTransaction.vendor",
     source: "financialTransaction",
-    target: "vendor",
-    label: "Vendor",
+    relationship: "vendor",
     defaultVisible: true,
     order: "alphabetical",
-    path: [
-      inc("FinancialTransactionAllocation.transactionId"),
-      out("FinancialTransactionAllocation.purchaseId"),
-      out("Purchase.vendorId"),
-    ],
   },
   {
     key: "financialTransaction.expenses",
     source: "financialTransaction",
-    target: "expense",
-    label: "Expenses",
+    relationship: "expenses",
     defaultVisible: false,
     order: "newest",
-    path: [
-      inc("FinancialTransactionAllocation.transactionId"),
-      out("FinancialTransactionAllocation.purchaseId"),
-      inc("Expense.purchaseId"),
-    ],
   },
   {
     key: "financialTransaction.products",
     source: "financialTransaction",
-    target: "product",
-    label: "Products",
+    relationship: "products",
     defaultVisible: false,
     order: "alphabetical",
-    path: [
-      inc("FinancialTransactionAllocation.transactionId"),
-      out("FinancialTransactionAllocation.purchaseId"),
-      inc("Expense.purchaseId"),
-      out("Expense.productId"),
-    ],
   },
   {
     key: "wish.candidates",
     source: "wish",
-    target: "product",
-    label: "Candidates",
+    relationship: "candidates",
     defaultVisible: true,
     order: "alphabetical",
-    path: [inc("WishCandidate.wishId"), out("WishCandidate.productId")],
   },
-] as const satisfies readonly RelatedViewDefinition[];
+] as const satisfies readonly RelatedViewPresentationDefinition[];
+
+/**
+ * The registry chooses which declared graph relationships are presented in a
+ * table. Traversal reads this map, not the legacy view-local path, so all live
+ * SQL now starts from the manifest graph while the presentation migration is
+ * completed incrementally.
+ */
+type RelatedViewPresentation = (typeof relatedViewPresentationRegistry)[number];
+
+const relatedViewRelationshipKeys = {
+  "product.vendors": "vendors",
+  "product.projects": "purchased-projects",
+  "product.usedOnProjects": "project-uses",
+  "product.purchases": "purchases-via-spend",
+  "product.expenses": "expenses",
+  "product.inventory": "inventory",
+  "product.wishes": "wishes",
+  "product.tasks": "tasks",
+  "recipe.ingredients": "ingredients",
+  "recipe.meals": "meals",
+  "meal.recipes": "recipes",
+  "location.ingredients": "ingredients",
+  "inventory.ingredient": "ingredient",
+  "project.blockedBy": "blocked-by",
+  "project.tasks": "tasks",
+  "project.expenses": "expenses",
+  "project.taskProducts": "task-products",
+  "project.purchasedProducts": "purchased-products",
+  "project.usedTools": "tools-used",
+  "project.vendors": "vendors",
+  "task.blockedBy": "blocked-by",
+  "task.parent": "parent",
+  "vendor.expenses": "expenses",
+  "vendor.purchases": "purchases",
+  "vendor.products": "products",
+  "vendor.projects": "projects",
+  "vendor.transactions": "transactions",
+  "purchase.expenses": "expenses",
+  "purchase.transactions": "financial-transactions",
+  "purchase.products": "products",
+  "purchase.projects": "projects",
+  "expense.transactions": "transactions",
+  "financialAccount.transactions": "transactions",
+  "financialAccount.purchases": "purchases",
+  "financialAccount.vendors": "vendors",
+  "financialTransaction.vendor": "vendor",
+  "financialTransaction.expenses": "expenses",
+  "financialTransaction.products": "products",
+  "wish.candidates": "candidates",
+} as const satisfies Record<
+  (typeof relatedViewPresentationRegistry)[number]["key"],
+  string
+>;
+
+export const relatedViewRegistry = relatedViewPresentationRegistry.map(
+  (view) => {
+    const relationship = localRelationshipByKey(view.source, view.relationship);
+    return { ...view, target: relationship.target, label: relationship.label };
+  },
+) as readonly (RelatedViewPresentation & {
+  target: Entity;
+  label: string;
+})[];
+
+/** The executable path is resolved from the canonical manifest graph. */
+export const relatedViewPath = (
+  view: Pick<RelatedViewDefinition, "source" | "key">,
+) =>
+  localRelationshipByKey(
+    view.source,
+    relatedViewRelationshipKeys[
+      view.key as keyof typeof relatedViewRelationshipKeys
+    ],
+  ).provenance.steps;
 
 type RelatedViewSource = (typeof relatedViewRegistry)[number]["source"];
 

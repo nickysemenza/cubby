@@ -13,6 +13,7 @@ import type {
 } from "@cubby/schemas/related-view";
 import {
   relatedFilterPrefix,
+  relatedViewPath,
   relatedViewRegistry,
 } from "@cubby/schemas/related-view";
 import { parseShortcode } from "@cubby/shared";
@@ -307,7 +308,7 @@ const SQL_RELATED_VIEWS = {
 const COMPILED_RELATED_JOINS = Object.fromEntries(
   relatedViewRegistry.map((view) => [
     view.key,
-    compileTraversal(view.source, view.path, "related", {
+    compileTraversal(view.source, relatedViewPath(view), "related", {
       root: "s",
       leaf: "t",
     }).joins,
