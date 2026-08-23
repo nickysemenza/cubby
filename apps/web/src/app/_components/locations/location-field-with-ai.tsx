@@ -54,8 +54,11 @@ export function LocationFieldWithAI<
       enabled
       disabledReason=""
       suggestLabel="Use AI to suggest a location"
+      basisKey={productId}
+      currentValue={form.watch(name)}
+      fieldDirty={form.getFieldState(name).isDirty}
       runSuggest={() => trpcClient.ai.suggestLocation.query({ productId })}
-      onResult={(r) =>
+      onAccept={(r) =>
         form.setValue(
           name,
           buildLocationComboboxItem(r.location) as PathValue<

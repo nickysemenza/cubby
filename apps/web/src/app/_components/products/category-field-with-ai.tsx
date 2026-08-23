@@ -50,10 +50,13 @@ export function CategoryFieldWithAI<
           : "Enter manufacturer first"
       }
       suggestLabel="Use AI to suggest category"
+      basisKey={`${productName}\u0000${manufacturer}`}
+      currentValue={form.watch(name)}
+      fieldDirty={form.getFieldState(name).isDirty}
       runSuggest={() =>
         trpcClient.ai.suggestCategory.query({ productName, manufacturer })
       }
-      onResult={(r) =>
+      onAccept={(r) =>
         form.setValue(name, r.category as TFieldValues[typeof name])
       }
     />

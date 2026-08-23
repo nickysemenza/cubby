@@ -4,7 +4,6 @@ import type {
   ProductWithFoodOut,
 } from "@cubby/schemas/product";
 import { isNonFoodCategory } from "@cubby/shared";
-import { isCollectionTag } from "@cubby/shared/collection-tag";
 import {
   Apple,
   BookOpen,
@@ -49,6 +48,7 @@ import { FullNutrientBreakdown } from "../nutrition/FullNutrientBreakdown";
 import { NutrientDensityStats } from "../nutrition/NutrientDensityStats";
 import { ProductNutritionLabel } from "../nutrition/ProductNutritionLabel";
 import { RecipeUsagesTable } from "../recipe/recipe-usages-table";
+import { RelatednessRail } from "../relatedness/relatedness-rail";
 import { RelationshipSummaryTable } from "../relationships/relationship-summary-table";
 import { UnitCoveragePanel } from "../units/UnitCoveragePanel";
 import { ProductAddToInventoryDialog } from "./product-add-to-inventory-dialog";
@@ -62,7 +62,6 @@ import { ProductKitComponents } from "./product-kit-components";
 import { ProductProjectUses } from "./product-project-uses";
 import { ProductPurchases } from "./product-purchases";
 import { ProductStockedAt } from "./product-stocked-at";
-import { ProductTagSiblings } from "./product-tag-siblings";
 import { ProductTaskHistory } from "./product-task-history";
 
 interface ProductDetailProps {
@@ -251,20 +250,13 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
           },
         ]
       : []),
-    // Custom section: Fits With — the other products sharing a tag. Sidebar
-    // zone and tags-only: on an untagged product it would be a permanently
-    // empty panel, and most of the catalog is untagged food.
-    ...(product.tags.some((tag) => !isCollectionTag(tag))
-      ? [
-          {
-            id: "fits-with",
-            title: "Fits With",
-            icon: Link2,
-            placement: "supporting" as const,
-            content: <ProductTagSiblings product={product} />,
-          },
-        ]
-      : []),
+    {
+      id: "fits-with",
+      title: "Fits With",
+      icon: Link2,
+      placement: "supporting" as const,
+      content: <RelatednessRail product={product} />,
+    },
     // The book behind the book: this product is a cookbook's physical copy.
     // Gated on the link existing, so it never draws on the ~3,000 products
     // that aren't books.

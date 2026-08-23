@@ -41,10 +41,13 @@ export function TypeFieldWithAI<
       enabled={enabled}
       disabledReason="Enter location name first"
       suggestLabel="Use AI to suggest type"
+      basisKey={locationName}
+      currentValue={form.watch(name)}
+      fieldDirty={form.getFieldState(name).isDirty}
       runSuggest={() =>
         trpcClient.ai.suggestLocationType.query({ locationName })
       }
-      onResult={(r) => form.setValue(name, r.type as TFieldValues[typeof name])}
+      onAccept={(r) => form.setValue(name, r.type as TFieldValues[typeof name])}
     />
   );
 }

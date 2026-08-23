@@ -1,6 +1,6 @@
 import type { Confidence } from "@cubby/schemas/ai";
 import { Sparkles } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -32,7 +32,7 @@ export function ConfidenceReasoningCard({
   label?: string;
 }) {
   return (
-    <div className="rounded-md bg-muted/50 p-2 text-sm">
+    <div className="border border-border bg-muted/30 p-2 text-sm">
       <Row align="center" gap="sm">
         <Sparkles className="size-3 text-muted-foreground" />
         <span className="font-medium">{label}:</span>
@@ -47,9 +47,8 @@ export function ConfidenceReasoningCard({
 
 /**
  * A SelectField paired with an "AI Suggest" button. Owns the ai-availability
- * gate, the loading state, and the result card; the field, the suggest call,
- * and the "why is it disabled" tooltip text are supplied by the caller. Category
- * and location-type fields are thin wrappers over this.
+ * gate, request-basis snapshots, stale-response rejection, and explicit
+ * acceptance. Domain adapters keep their typed field patches local.
  */
 export function FieldWithAISuggest<
   TResult extends { confidence: Confidence; reasoning: string },
@@ -58,8 +57,12 @@ export function FieldWithAISuggest<
   enabled,
   disabledReason,
   suggestLabel,
+  basisKey,
+  currentValue,
+  fieldDirty,
   runSuggest,
-  onResult,
+  onAccept,
+  onDismiss,
 }: {
   field: ReactNode;
   /** Inputs sufficient to suggest (caller-computed; e.g. name && manufacturer). */
@@ -68,21 +71,51 @@ export function FieldWithAISuggest<
   disabledReason: string;
   /** Tooltip shown when ready, e.g. "Use AI to suggest category". */
   suggestLabel: string;
+  /** Stable serialization of the values the model will inspect. */
+  basisKey: string;
+  /** The field value when a proposal was requested; manual changes invalidate it. */
+  currentValue: unknown;
+  /** Exposed so domain callers state their edit-state contract explicitly. */
+  fieldDirty: boolean;
   runSuggest: () => Promise<TResult>;
-  onResult: (result: TResult) => void;
+  onAccept: (result: TResult) => void;
+  onDismiss?: (result: TResult) => void;
 }) {
-  const [suggestion, setSuggestion] = useState<TResult | null>(null);
+  const [suggestion, setSuggestion] = useState<{
+    result: TResult;
+    basisKey: string;
+    currentValue: unknown;
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const basisRef = useRef(basisKey);
+  basisRef.current = basisKey;
+
+  useEffect(() => {
+    if (
+      suggestion &&
+      (suggestion.basisKey !== basisKey ||
+        (fieldDirty && suggestion.currentValue !== currentValue))
+    ) {
+      setSuggestion(null);
+    }
+  }, [basisKey, currentValue, fieldDirty, suggestion]);
 
   const canSuggest = enabled;
 
   const handleSuggest = async () => {
     if (!enabled) return;
+    const requestBasis = basisKey;
+    const requestValue = currentValue;
     setIsLoading(true);
     try {
       const result = await runSuggest();
-      setSuggestion(result);
-      onResult(result);
+      // A response for old product/location inputs is not a proposal anymore.
+      if (basisRef.current !== requestBasis) return;
+      setSuggestion({
+        result,
+        basisKey: requestBasis,
+        currentValue: requestValue,
+      });
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -116,10 +149,35 @@ export function FieldWithAISuggest<
       </Row>
 
       {suggestion && (
-        <ConfidenceReasoningCard
-          confidence={suggestion.confidence}
-          reasoning={suggestion.reasoning}
-        />
+        <Stack gap="xs" className="border-border border-t pt-2">
+          <ConfidenceReasoningCard
+            confidence={suggestion.result.confidence}
+            reasoning={suggestion.result.reasoning}
+          />
+          <Row gap="xs">
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                onAccept(suggestion.result);
+                setSuggestion(null);
+              }}
+            >
+              Accept
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                onDismiss?.(suggestion.result);
+                setSuggestion(null);
+              }}
+            >
+              Dismiss
+            </Button>
+          </Row>
+        </Stack>
       )}
     </Stack>
   );

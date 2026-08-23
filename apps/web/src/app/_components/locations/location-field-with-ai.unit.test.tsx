@@ -49,7 +49,7 @@ function Harness() {
 }
 
 describe("LocationFieldWithAI", () => {
-  it("writes the suggested location into the field and shows its reasoning", async () => {
+  it("keeps the field unchanged until the suggestion is accepted", async () => {
     mocks.suggestLocation.mockResolvedValue({
       location: {
         id: "LOC-2222",
@@ -67,19 +67,20 @@ describe("LocationFieldWithAI", () => {
     fireEvent.click(screen.getByRole("button"));
 
     await waitFor(() => {
-      // The breadcrumb rides along, so the accepted pick is as legible as one
-      // chosen by hand.
-      expect(screen.getByTestId("combobox")).toHaveTextContent(
-        "Garage|PACKOUT Wall",
-      );
+      expect(
+        screen.getByText("Three M18 siblings already live there."),
+      ).toBeInTheDocument();
     });
+    expect(screen.getByTestId("combobox")).toHaveTextContent("(empty)");
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    // The breadcrumb rides along, so the accepted pick is as legible as one
+    // chosen by hand.
+    expect(screen.getByTestId("combobox")).toHaveTextContent(
+      "Garage|PACKOUT Wall",
+    );
     expect(mocks.suggestLocation).toHaveBeenCalledWith({
       productId: "PRD-4K7M",
     });
-    expect(
-      screen.getByText("Three M18 siblings already live there."),
-    ).toBeInTheDocument();
-    expect(screen.getByText("high confidence")).toBeInTheDocument();
   });
 
   it("leaves the field alone when the suggestion fails", async () => {
