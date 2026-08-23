@@ -1,8 +1,5 @@
 import type { EmbeddingReadiness } from "@cubby/schemas/relatedness";
-import type {
-  SearchableEntity,
-  SearchableEntityRef,
-} from "@cubby/schemas/search";
+import type { SearchableEntityRef } from "@cubby/schemas/search";
 import type { Database } from "~/server/db";
 import { getEntityEmbeddingReadiness } from "~/server/repo/entity-embedding";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
@@ -24,9 +21,3 @@ export async function getEmbeddingReadiness(
     getSemanticEmbeddingConfig(),
   );
 }
-
-export const getEmbeddingReadinessFor = async (
-  db: Database,
-  entityType: SearchableEntity,
-  entityId: string,
-) => await getEmbeddingReadiness(db, { entityType, entityId });

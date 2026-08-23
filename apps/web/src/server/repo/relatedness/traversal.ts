@@ -8,7 +8,7 @@ import {
   type IncomingEdge,
 } from "~/server/db/entity-incoming-edges";
 
-export interface EdgeSpec {
+interface EdgeSpec {
   edgeKey: string;
   sourceTable: string;
   sourceColumn: string;
@@ -16,7 +16,7 @@ export interface EdgeSpec {
   sourceSoftDeletable: boolean;
 }
 
-export interface TraversalHop {
+interface TraversalHop {
   table: string;
   alias: string;
   fromAlias: string;
@@ -31,6 +31,7 @@ export interface Traversal {
   hops: readonly TraversalHop[];
   leafTable: string;
   leafAlias: string;
+  joins: SQL;
 }
 
 const entityTable = (entity: Entity): string => {
@@ -41,7 +42,7 @@ const entityTable = (entity: Entity): string => {
 };
 
 /** Drizzle is the source of real table/column facts; the manifest names targets. */
-export const edgeIndex = (): ReadonlyMap<string, EdgeSpec> => {
+const edgeIndex = (): ReadonlyMap<string, EdgeSpec> => {
   const specs = new Map<string, EdgeSpec>();
   for (const [target, edges] of Object.entries(INCOMING_EDGES) as Array<
     [Entity, Record<string, IncomingEdge>]
@@ -126,17 +127,18 @@ export const compileTraversal = (
     currentAlias = alias;
   }
 
-  return {
+  const traversal = {
     rootTable,
     rootAlias,
     hops,
     leafTable: currentTable,
     leafAlias: currentAlias,
   };
+  return { ...traversal, joins: renderJoins(traversal) };
 };
 
 /** Each join is structurally parenthesized, so callers never inherit precedence. */
-export const renderJoins = (traversal: Traversal): SQL =>
+const renderJoins = (traversal: Pick<Traversal, "hops">): SQL =>
   sql.join(
     traversal.hops.map(
       (hop) =>

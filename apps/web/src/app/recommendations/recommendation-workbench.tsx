@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/integrations/trpc/react";
+import { invalidateTRPCQueries } from "~/lib/query-keys";
 
 /** A focused review surface: candidates are always re-resolved, never URL data. */
 export function RecommendationWorkbench({
@@ -19,10 +20,10 @@ export function RecommendationWorkbench({
   );
   const dismiss = useMutation(
     api.recommendations.dismissProduct.mutationOptions({
-      onSuccess: async () => {
-        await queryClient.invalidateQueries(
-          api.recommendations.product.queryFilter({ sourceId }),
-        );
+      onSuccess: () => {
+        invalidateTRPCQueries(queryClient, [
+          api.recommendations.product.queryKey({ sourceId }),
+        ]);
       },
     }),
   );
