@@ -1204,20 +1204,23 @@ describe("specialized tools round-trip on shortcodes", () => {
   });
 
   it("find_similar_entities takes the seed by shortcode (the intended contract)", async () => {
-    // An ingredient, not a product — isolates this test from the separate
-    // create_product quickCreate double-slim bug documented above.
     const caller = createTestCaller(domainRouter, ctx.db);
-    const ingredient = await callTool(
-      "create_ingredient",
-      { name: "Similarity Seed Ingredient", aliases: [] },
+    const product = await callTool(
+      "create_product",
+      {
+        name: "Similarity Seed Product",
+        upc: null,
+        manufacturer: "Test Mfg",
+        ingredientId: null,
+      },
       caller,
     );
-    expectOk(ingredient);
-    const ingredientCode = structured(ingredient).id as string;
+    expectOk(product);
+    const productCode = structured(product).id as string;
 
     const result = await callTool(
       "find_similar_entities",
-      { pair: "ingredient_to_ingredient", sourceId: ingredientCode },
+      { pair: "product_to_product", sourceId: productCode },
       caller,
     );
     expectOk(result);
