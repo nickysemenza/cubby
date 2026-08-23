@@ -1427,13 +1427,13 @@ export const mcpProductUpdateInput = z.object({
       "whether shelf records are kept for this kind of thing: null = undecided, false = reviewed/no shelf claim, true = tracked",
     ),
   removeImageIds: z
-    .array(z.uuid())
+    .array(imageShortcode)
     .optional()
     .describe(
-      "Product image ids to detach; an id not currently attached to this product is silently ignored. Detaching DELETES the stored file when nothing else references it — there is no restore.",
+      "Product image ids (`IMG-` codes, as returned by attach_file and get_product) to detach; an id not currently attached to this product is silently ignored. Detaching DELETES the stored file when nothing else references it — there is no restore.",
     ),
   imageOrder: z
-    .array(z.uuid())
+    .array(imageShortcode)
     .optional()
     .describe("Product image ids in display order; first valid image is cover"),
 });

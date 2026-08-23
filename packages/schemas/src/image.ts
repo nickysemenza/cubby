@@ -276,7 +276,9 @@ export const mcpAttachFileInput = z
 export type McpAttachFileInput = z.infer<typeof mcpAttachFileInput>;
 
 export const attachFileResponse = z.object({
-  imageId: id,
+  // The public code, so a caller can feed it straight back into `removeImageIds`
+  // or `imageOrder`. Returning a uuid here made that round trip impossible.
+  imageId: imageShortcode,
   url: z.url(),
   filename: z.string(),
   contentType: z.string(),
@@ -392,6 +394,10 @@ export type ImageAssociation = z.infer<typeof imageAssociationSchema>;
 
 export const initiateUploadWithoutEntityResponseSchema = z.object({
   uploadUrl: z.url(),
+  // Still the uuid: this id's only destination is `pendingImageIds`, which
+  // writes straight into a join-table FK. The pair is a closed round trip that
+  // never reaches an MCP payload, so converting it would churn call sites for
+  // no boundary benefit. `attach_file` is the flow that needed public codes.
   imageId: id,
   key: z.string(),
   url: z.url(),

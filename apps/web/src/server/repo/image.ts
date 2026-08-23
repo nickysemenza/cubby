@@ -616,11 +616,18 @@ export const markImageUploaded = async (
 export const getImageByKey = async (
   db: Database,
   key: string,
-): Promise<{ id: string; url: string; key: string } | null> => {
+): Promise<{
+  id: string;
+  shortcode: string;
+  url: string;
+  key: string;
+} | null> => {
   const imageRecord = await getDb(db).query.image.findFirst({
     where: eq(image.key, key),
     columns: {
       id: true,
+      // Selected because callers report the PUBLIC id back to a client.
+      shortcode: true,
       url: true,
       key: true,
     },

@@ -477,12 +477,14 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
         ["productId", bag.product, "create", "get"],
         ["name", "Shortcode Miter Saw Renamed", "update"],
       ],
+      // The purchase consequences are `sideEffects` now, not top-level fields:
+      // they are things the delete CHANGED, not a different kind of result.
+      // Empty here because this expense has no purchase behind it.
       checkDelete: (out, code) =>
         expect(out).toMatchObject({
           deleted: 1,
           deletedIds: [code],
-          affectedPurchaseIds: [],
-          newlyEmptyPurchaseIds: [],
+          sideEffects: [],
         }),
     },
     {
@@ -503,8 +505,9 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
       }),
       listArgs: (bag) => ({ vendorId: bag.vendor }),
       updateArgs: { notes: "renamed" },
-      checkDelete: (out, code) =>
-        expect(out).toEqual({ deleted: 1, deletedIds: [code] }),
+      // `deleteEmpty` reports a measured count; it does not echo the ids back.
+      checkDelete: (out) =>
+        expect(out).toEqual({ deleted: 1, sideEffects: [] }),
     },
     {
       entity: "financialAccount",
