@@ -995,15 +995,30 @@ const DECLARED_SECTIONS = [
       // Every barcode on the row, not one: a set is exactly what distinguishes
       // "two encodings of one barcode" (safe to merge) from "two barcodes"
       // (probably not), which a single scalar could never show.
-      details: dupe.products.map((p) => (
-        <div key={p.id} className="text-muted-foreground text-sm">
-          {[
-            p.name,
-            p.gtins.length ? p.gtins.map(displayGtin).join(", ") : "no barcode",
-            p.sources.length ? p.sources.join(", ") : "no external ids",
-          ].join(" · ")}
-        </div>
-      )),
+      details: [
+        ...dupe.products.map((p) => (
+          <div key={p.id} className="text-muted-foreground text-sm">
+            {[
+              p.name,
+              p.gtins.length
+                ? p.gtins.map(displayGtin).join(", ")
+                : "no barcode",
+              p.sources.length ? p.sources.join(", ") : "no external ids",
+            ].join(" · ")}
+          </div>
+        )),
+        <Link
+          key="recommendation-workbench"
+          to="/recommendations/workbench"
+          search={{
+            kind: "duplicate-product",
+            source: dupe.products[0]?.id ?? "PRD-0000",
+          }}
+          className="text-sm underline underline-offset-2"
+        >
+          Review in Recommendations Workbench
+        </Link>,
+      ],
       route: entityDetailLink("product", dupe.products[0]?.id ?? ""),
       inlineFix: {
         label: "Merge",

@@ -1,7 +1,10 @@
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
+import type { RecommendationKind } from "@cubby/schemas/recommendations";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { X } from "lucide-react";
+import { useState } from "react";
+import { DuplicateProductMergeFix } from "~/app/problems/components/tier2-fixes";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -9,6 +12,20 @@ import { invalidateTRPCQueries } from "~/lib/query-keys";
 
 /** A focused review surface: candidates are always re-resolved, never URL data. */
 export function RecommendationWorkbench({
+  sourceId,
+  kind,
+}: {
+  sourceId: ProductShortcode;
+  kind: RecommendationKind;
+}) {
+  return kind === "duplicate-product" ? (
+    <DuplicateProductRecommendation sourceId={sourceId} />
+  ) : (
+    <ProductRelatednessRecommendation sourceId={sourceId} />
+  );
+}
+
+function ProductRelatednessRecommendation({
   sourceId,
 }: {
   sourceId: ProductShortcode;
@@ -97,6 +114,47 @@ export function RecommendationWorkbench({
           </Row>
         ))
       )}
+    </Stack>
+  );
+}
+
+function DuplicateProductRecommendation({
+  sourceId,
+}: {
+  sourceId: ProductShortcode;
+}) {
+  const api = useTRPC();
+  const [merged, setMerged] = useState(false);
+  const recommendation = useQuery(
+    api.recommendations.duplicateProduct.queryOptions({ sourceId }),
+  );
+
+  if (merged) {
+    return <p className="text-positive text-sm">Products merged.</p>;
+  }
+  if (recommendation.isLoading) {
+    return (
+      <p className="text-muted-foreground text-sm">Loading recommendation…</p>
+    );
+  }
+  if (recommendation.isError || !recommendation.data) {
+    return (
+      <p className="text-muted-foreground text-sm">
+        This duplicate-product recommendation is no longer current.
+      </p>
+    );
+  }
+
+  return (
+    <Stack gap="sm">
+      <p className="text-muted-foreground text-sm">
+        Review the live duplicate cluster, choose the keeper, then inspect the
+        merge impact before accepting.
+      </p>
+      <DuplicateProductMergeFix
+        variant={recommendation.data}
+        close={() => setMerged(true)}
+      />
     </Stack>
   );
 }

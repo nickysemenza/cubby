@@ -1,9 +1,12 @@
 import {
   dismissProductRecommendationInput,
+  duplicateProductRecommendationInput,
+  duplicateProductRecommendationOut,
   recommendationWorkbenchInput,
   recommendationWorkbenchOut,
 } from "@cubby/schemas/recommendations";
 import { createAppError } from "~/server/errors/app-error";
+import { findDuplicateProductIdentities } from "~/server/repo/problems";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import {
   dismissSuggestion,
@@ -20,6 +23,18 @@ export const recommendationsRouter = createTRPCRouter({
       async ({ ctx, input }) =>
         await getProductRelatedness(ctx.db, input.sourceId),
     ),
+
+  duplicateProduct: protectedProcedure
+    .input(duplicateProductRecommendationInput)
+    .output(strictOutput(duplicateProductRecommendationOut))
+    .query(async ({ ctx, input }) => {
+      const candidates = await findDuplicateProductIdentities(ctx.db);
+      return (
+        candidates.find((candidate) =>
+          candidate.products.some((product) => product.id === input.sourceId),
+        ) ?? null
+      );
+    }),
 
   dismissProduct: protectedProcedure
     .input(dismissProductRecommendationInput)

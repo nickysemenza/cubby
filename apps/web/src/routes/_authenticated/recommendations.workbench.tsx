@@ -16,8 +16,8 @@ function RecommendationWorkbenchPage() {
   const { kind, source } = Route.useSearch();
   return (
     <Page variant="list" title="Recommendations Workbench" layout="full">
-      {kind === "product-related" && source ? (
-        <RecommendationWorkbench sourceId={source} />
+      {source ? (
+        <RecommendationWorkbench sourceId={source} kind={kind} />
       ) : (
         <p className="text-muted-foreground text-sm">
           Open this workbench from a product recommendation.
