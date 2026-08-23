@@ -1,5 +1,7 @@
 import type { EnqueueEmbeddingBackfillOut } from "@cubby/schemas/background-jobs";
 import type {
+  RequestEmbeddingRefreshInput,
+  RequestEmbeddingRefreshOut,
   SearchableEntity,
   SearchHit,
   SimilarEntitiesInput,
@@ -23,6 +25,7 @@ import {
 } from "~/server/semantic/embeddings";
 import { hydrateSearchHitRefs } from "~/server/services/search.service";
 import { TraceNames, withTrace } from "~/server/tracing";
+import { getEmbeddingReadiness } from "./embedding-readiness.service";
 
 const ALL_SEARCHABLE_ENTITIES: SearchableEntity[] = [...searchableEntities];
 
@@ -108,6 +111,27 @@ export async function enqueueEntityEmbeddingBackfill(
   return { batchId: dispatched.batchId, totalJobs: dispatched.jobIds.length };
 }
 
+/** Queue one resolved entity, rather than sampling the global stale worklist. */
+export async function requestEmbeddingRefresh(
+  db: Database,
+  input: RequestEmbeddingRefreshInput,
+): Promise<RequestEmbeddingRefreshOut> {
+  const entityId = await resolveOrThrow(db, input.entityType, input.entityId);
+  const dispatched = await dispatchBackgroundJobs(db, {
+    kind: "entity-embedding.refresh",
+    source: "ui",
+    metadata: { source: "relatedness.indexNow", entityType: input.entityType },
+    jobs: [
+      {
+        kind: "entity-embedding.refresh" as const,
+        dedupeKey: `entity-embedding.refresh:${input.entityType}:${entityId}`,
+        payload: { entityType: input.entityType, entityId },
+      },
+    ],
+  });
+  return { batchId: dispatched.batchId, totalJobs: dispatched.jobIds.length };
+}
+
 /** Entity-to-entity similarity remains an explicit semantic interaction. */
 export async function findSimilarEntitiesForPair(
   db: Database,
@@ -117,8 +141,13 @@ export async function findSimilarEntitiesForPair(
   const sourceEntityId = await resolveOrThrow(db, source, input.sourceId);
   const sourceRef = { entityType: source, entityId: sourceEntityId };
   const publicSource = { entityType: source, entityId: input.sourceId };
-  const empty: SimilarEntitiesOut = { source: publicSource, results: [] };
-  if (!semanticEmbeddingsConfigured()) return empty;
+  const status = await getEmbeddingReadiness(db, sourceRef);
+  const empty: SimilarEntitiesOut = {
+    source: publicSource,
+    status,
+    results: [],
+  };
+  if (status !== "ready") return empty;
 
   const candidates = await findSimilarEntities(
     db,
@@ -132,6 +161,7 @@ export async function findSimilarEntitiesForPair(
   );
   return {
     source: publicSource,
+    status,
     results: candidates.flatMap((candidate) => {
       const hit = hitByRef.get(`${candidate.entityType}:${candidate.entityId}`);
       if (!hit) return [];

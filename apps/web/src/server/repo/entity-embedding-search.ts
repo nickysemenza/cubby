@@ -1,3 +1,4 @@
+import type { EmbeddingReadiness } from "@cubby/schemas/relatedness";
 import type {
   SearchableEntity,
   SearchableEntityRef,
@@ -6,12 +7,46 @@ import { and, eq, type SQL, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { entityEmbedding } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { getSearchDocumentEmbeddingText } from "~/server/repo/search-document";
 import type { SemanticEmbeddingConfig } from "~/server/semantic/config";
+import { embeddingTextHash } from "~/server/semantic/hash";
+import { normalizeSearchText } from "~/server/semantic/text";
 
 export interface EntityEmbeddingCandidate {
   entityType: SearchableEntity;
   entityId: string;
   similarity: number;
+}
+
+/** Compare one entity's current document text to its configured stored vector. */
+export async function getEntityEmbeddingReadiness(
+  db: Database,
+  ref: SearchableEntityRef,
+  config: SemanticEmbeddingConfig,
+): Promise<Exclude<EmbeddingReadiness, "unavailable">> {
+  const [document, embedding] = await Promise.all([
+    getSearchDocumentEmbeddingText(db, ref.entityType, ref.entityId),
+    getDb(db).query.entityEmbedding.findFirst({
+      where: and(
+        eq(entityEmbedding.entityType, ref.entityType),
+        eq(entityEmbedding.entityId, ref.entityId),
+        eq(entityEmbedding.provider, config.provider),
+        eq(entityEmbedding.model, config.model),
+        eq(entityEmbedding.dimensions, config.dimensions),
+        notDeleted(entityEmbedding),
+      ),
+      columns: { embeddingHash: true },
+    }),
+  ]);
+  if (!document || !embedding) return "uncomputed";
+  const expectedHash = await embeddingTextHash({
+    entityType: ref.entityType,
+    provider: config.provider,
+    model: config.model,
+    dimensions: config.dimensions,
+    text: normalizeSearchText(document.embeddingText),
+  });
+  return embedding.embeddingHash === expectedHash ? "ready" : "stale";
 }
 
 /**

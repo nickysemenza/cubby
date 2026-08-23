@@ -1,6 +1,7 @@
 import { SHORTCODE_PREFIX } from "@cubby/shared";
 import { z } from "zod";
 import type { Entity } from "./entity-core";
+import { relatednessSignalSchema } from "./relatedness";
 import {
   type EntityRelationship,
   entityLifecycleSchema,
@@ -75,6 +76,8 @@ export const entityDescriptor = z.object({
    * the whole reason for the extra structure.
    */
   relationships: z.array(entityRelationshipSchema).readonly(),
+  /** Optional closed-set signals which can discover useful, inferred links. */
+  relatednessSignals: z.array(relatednessSignalSchema).readonly().optional(),
   /** Which removal paths exist for this entity — drives the lifecycle registry. */
   lifecycle: entityLifecycleSchema,
   /** CRUD operations exposed over MCP. */
