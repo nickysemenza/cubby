@@ -12,6 +12,16 @@ type TagCandidate = {
   tags: string[];
 };
 
+type ProductRelatednessSignalPresentation = {
+  semantic: { label: string; weight: number };
+  tag: { label: string };
+};
+
+const defaultPresentation: ProductRelatednessSignalPresentation = {
+  semantic: { label: "Similar meaning", weight: 1 },
+  tag: { label: "Shared tag" },
+};
+
 /**
  * One display ledger joins scored candidates with display-only evidence before
  * the wire boundary, preventing the semantic rail and tag rail from drifting.
@@ -20,6 +30,7 @@ export function buildProductRelatednessLedger(
   semantic: readonly SemanticCandidate[],
   siblings: readonly TagCandidate[],
   isVisible: (shortcode: string) => boolean,
+  presentation: ProductRelatednessSignalPresentation = defaultPresentation,
 ): RelatednessOut["items"] {
   const ledger = new Map<string, RelatednessOut["items"][number]>();
   for (const candidate of semantic) {
@@ -31,9 +42,9 @@ export function buildProductRelatednessLedger(
       score: candidate.similarity,
       evidence: [
         {
-          signal: "Similar meaning",
+          signal: presentation.semantic.label,
           detail: null,
-          weight: candidate.similarity,
+          weight: candidate.similarity * presentation.semantic.weight,
         },
       ],
     });
@@ -41,7 +52,7 @@ export function buildProductRelatednessLedger(
   for (const sibling of siblings) {
     if (!isVisible(sibling.shortcode)) continue;
     const tagEvidence = {
-      signal: "Shared tag",
+      signal: presentation.tag.label,
       detail: sibling.tags.join(", "),
       weight: 0,
     };

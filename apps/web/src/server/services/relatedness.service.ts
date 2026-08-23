@@ -1,3 +1,4 @@
+import { entityManifest } from "@cubby/schemas/entity-manifest";
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import type { TagPropagationRecommendationOut } from "@cubby/schemas/recommendations";
 import type { RelatednessOut } from "@cubby/schemas/relatedness";
@@ -23,12 +24,23 @@ export async function getProductRelatedness(
   db: Database,
   sourceId: ProductShortcode,
 ): Promise<RelatednessOut> {
+  const signals = entityManifest.product.relatednessSignals ?? [];
+  const semanticSignal = signals.find((signal) => signal.kind === "semantic");
+  const tagSignal = signals.find(
+    (signal) =>
+      signal.kind === "scalarOverlap" && signal.column === "Product.tags",
+  );
+  if (!semanticSignal || !tagSignal) {
+    throw new Error(
+      "Product relatedness signals are not declared in the manifest",
+    );
+  }
   const sourceEntityId = await resolveOrThrow(db, "product", sourceId);
   const [semantic, siblings, dismissals] = await Promise.all([
     findSimilarEntitiesForPair(db, {
       pair: "product_to_product",
       sourceId,
-      limit: 8,
+      limit: semanticSignal.limit,
     }),
     getProductsSharingTags(db, sourceEntityId),
     getActiveSuggestionDismissalKeys(db, {
@@ -64,6 +76,13 @@ export async function getProductRelatedness(
       })),
       siblings,
       visible,
+      {
+        semantic: {
+          label: semanticSignal.label,
+          weight: semanticSignal.weight,
+        },
+        tag: { label: tagSignal.label },
+      },
     ),
   };
 }
@@ -76,12 +95,18 @@ export async function getProductTagPropagation(
   db: Database,
   sourceId: ProductShortcode,
 ): Promise<TagPropagationRecommendationOut> {
+  const semanticSignal = (entityManifest.product.relatednessSignals ?? []).find(
+    (signal) => signal.kind === "semantic",
+  );
+  if (!semanticSignal) {
+    throw new Error("Product semantic relatedness signal is not declared");
+  }
   const [sourceEntityId, semantic] = await Promise.all([
     resolveOrThrow(db, "product", sourceId),
     findSimilarEntitiesForPair(db, {
       pair: "product_to_product",
       sourceId,
-      limit: 12,
+      limit: semanticSignal.limit,
     }),
   ]);
   const [rows, dismissals] = await Promise.all([
