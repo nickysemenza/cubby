@@ -79,4 +79,4 @@ lcov.info
 
 # Written by tooling/failure-summary-reporter.ts so a truncated run
 # does not have to be repeated to recover the failure list.
-apps/web/.vitest-failures.txt
+.vitest-failures.txt

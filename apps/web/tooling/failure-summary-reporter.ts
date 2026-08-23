@@ -1,5 +1,5 @@
 import { writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import type { Reporter, TestModule } from "vitest/node";
 
 /**
@@ -40,15 +40,22 @@ export default class FailureSummaryReporter implements Reporter {
 
     const outputPath = join(process.cwd(), ".vitest-failures.txt");
     const body = lines.join("\n");
+    let wrote = true;
     try {
       writeFileSync(outputPath, `${body}\n`);
     } catch {
       // A read-only or racing filesystem must never fail the run itself; the
       // stderr block below is the copy that actually gets read.
+      wrote = false;
     }
 
+    // Report the path actually written, not a hardcoded one — `cwd` follows
+    // wherever vitest was invoked from.
+    const alsoAt = wrote
+      ? `\n\nAlso written to ${relative(process.cwd(), outputPath)}`
+      : "";
     process.stderr.write(
-      `\n${"─".repeat(60)}\n${lines.length} FAILING TEST(S) — do not re-run to find them:\n\n${body}\n\nAlso written to apps/web/.vitest-failures.txt\n${"─".repeat(60)}\n`,
+      `\n${"─".repeat(60)}\n${lines.length} FAILING TEST(S) — do not re-run to find them:\n\n${body}${alsoAt}\n${"─".repeat(60)}\n`,
     );
   }
 }
