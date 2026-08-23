@@ -331,16 +331,11 @@ export const workspaceUtilitySections: NavSection[] = [
   })),
 ];
 
-/** Mobile bottom tabs (primary). `scan`/`search` are mobile-only shortcuts. */
+/** Four persistent task destinations; the More trigger is the fifth tab. */
 export const bottomNavItems: NavItem[] = [
-  scan,
+  { to: "/", label: "Today", icon: Home },
   inventory,
-  // The phone-first meals→shopping-list loop earns a primary tab over
-  // Locations. Locations stays reachable: moreNavSections is derived from
-  // desktopNav minus bottomTabTargets, so dropping it here re-surfaces it in
-  // the Pantry section of the More sheet automatically.
-  { to: "/meals/shopping-list", label: "Shopping", icon: ShoppingCart },
-  recipes,
+  scan,
   { to: "/search", label: "Search", icon: Search },
 ];
 

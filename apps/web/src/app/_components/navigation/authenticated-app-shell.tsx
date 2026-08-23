@@ -6,7 +6,9 @@ import { AppFooter } from "~/app/_components/footer";
 import { MainNav } from "~/app/_components/MainNav";
 import { Button } from "~/components/ui/button";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
+import { useVirtualKeyboard } from "~/hooks/useVirtualKeyboard";
 import { cn } from "~/lib/utils";
+import { resolveMobileRoute } from "./mobile-route-descriptor";
 import {
   homeNavItem,
   type NavGroup,
@@ -69,21 +71,28 @@ export function AuthenticatedAppShell({
     false,
   );
   const expanded = !collapsed;
-  const viewportSurface = useLocation().pathname === "/pantry-view";
+  const pathname = useLocation().pathname;
+  const routeDescriptor = resolveMobileRoute(pathname);
+  const viewportSurface = routeDescriptor.presentation === "immersive";
+  const keyboardOpen = useVirtualKeyboard();
 
   return (
-    <div className="min-h-dvh bg-background [--app-chrome-bottom:calc(3.5rem+3px+env(safe-area-inset-bottom))] [--app-chrome-top:calc(3rem+3px+env(safe-area-inset-top))] md:flex md:[--app-chrome-bottom:0rem] md:[--app-chrome-top:3rem]">
+    <div
+      data-mobile-keyboard={keyboardOpen ? "open" : "closed"}
+      className={cn(
+        "min-h-dvh bg-background [--app-chrome-bottom:calc(3.5rem+3px+env(safe-area-inset-bottom))] [--app-chrome-top:calc(3rem+3px+env(safe-area-inset-top))] md:flex md:[--app-chrome-bottom:0rem] md:[--app-chrome-top:3rem]",
+        keyboardOpen && "[--app-chrome-bottom:0rem]",
+      )}
+    >
       <WorkspaceSidebar
         expanded={expanded}
         onToggle={() => setCollapsed((value) => !value)}
       />
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Phone PWA keeps the familiar masthead; its bottom bar stays mounted
-            by the root route and remains the primary phone navigation. */}
+        {/* Today owns the Cubby mark. Working routes use semantic local chrome
+            so a deep link still says where it is and where Back will go. */}
         <div className="safe-top sticky top-0 z-40 border-b-[3px] border-b-foreground bg-card md:hidden print:hidden">
-          <div className="flex h-12 w-full items-center px-2">
-            <MainNav onSearchClick={onSearchClick} />
-          </div>
+          <MobileRouteBar pathname={pathname} onSearchClick={onSearchClick} />
           {navigationProgress}
         </div>
         <DesktopCommandHeader
@@ -91,21 +100,64 @@ export function AuthenticatedAppShell({
           navigationProgress={navigationProgress}
         />
         {/* Flush to the rail and the command header: the table's own border
-            is the page edge, so main spends no gutter. The 5rem bottom stays
-            for the phone's fixed bottom nav, which would otherwise cover the
-            last rows. */}
+            is the page edge, so main spends no gutter. Phone clearance tracks
+            the actual fixed bar, including the home-indicator inset, so the
+            last row can never land underneath the navigation. */}
         <main
           id={mainContentId}
           tabIndex={-1}
           className={cn(
             "min-w-0 flex-1",
-            viewportSurface ? "overflow-hidden" : "pb-20 md:pb-0",
+            viewportSurface
+              ? "overflow-hidden"
+              : "pb-[calc(var(--app-chrome-bottom)+1rem)] md:pb-0",
           )}
         >
           {children}
         </main>
         {!viewportSurface && <AppFooter />}
       </div>
+    </div>
+  );
+}
+
+function MobileRouteBar({
+  pathname,
+  onSearchClick,
+}: {
+  pathname: string;
+  onSearchClick: () => void;
+}) {
+  const descriptor = resolveMobileRoute(pathname);
+  if (descriptor.tab === "today") {
+    return (
+      <div className="flex h-12 w-full items-center px-2">
+        <MainNav onSearchClick={onSearchClick} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid h-12 w-full grid-cols-[2.75rem_minmax(0,1fr)_auto] items-center px-1">
+      <Button
+        render={
+          <Link
+            to={descriptor.parentTo ?? "/"}
+            aria-label={`Back to ${descriptor.parentTo === "/" ? "Today" : descriptor.label}`}
+          />
+        }
+        variant="ghost"
+        size="icon"
+        className="size-11"
+      >
+        <ChevronLeft className="size-5" />
+      </Button>
+      <p className="truncate font-heading font-semibold text-sm tracking-tight">
+        {descriptor.label}
+      </p>
+      <Suspense fallback={<div className="h-8 w-20" aria-hidden="true" />}>
+        <ShellControls debugClassName="hidden" />
+      </Suspense>
     </div>
   );
 }

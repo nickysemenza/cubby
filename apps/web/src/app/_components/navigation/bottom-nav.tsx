@@ -1,17 +1,13 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useLocation } from "@tanstack/react-router";
 import { LogIn, MoreHorizontal } from "lucide-react";
 import * as React from "react";
 import { Row } from "~/components/layout";
 import { useNavAuthed } from "~/hooks/useNavAuthed";
+import { useVirtualKeyboard } from "~/hooks/useVirtualKeyboard";
 import { createCachedLoader, scheduleIdlePreload } from "~/lib/lazy-preload";
 import { cn } from "~/lib/utils";
-import {
-  bottomNavItems,
-  moreNavSections,
-  publicNavItems,
-  useActiveTo,
-  workspaceUtilitySections,
-} from "./nav-items";
+import { resolveMobileRoute } from "./mobile-route-descriptor";
+import { bottomNavItems, publicNavItems, useActiveTo } from "./nav-items";
 
 const importWorkspaceNavigator = createCachedLoader(() =>
   import("./workspace-navigator").then((m) => ({
@@ -74,6 +70,9 @@ function BottomNavItem({
 
 export function BottomNav() {
   const activeTo = useActiveTo();
+  const pathname = useLocation().pathname;
+  const activeTab = resolveMobileRoute(pathname).tab;
+  const keyboardOpen = useVirtualKeyboard();
   const [isOpen, setIsOpen] = React.useState(false);
   const [moreMounted, setMoreMounted] = React.useState(false);
   // SSR-accurate auth (see useNavAuthed): the tab bar renders the right state
@@ -88,16 +87,17 @@ export function BottomNav() {
     });
   }, [authed]);
 
-  const isMoreActive = [...moreNavSections, ...workspaceUtilitySections].some(
-    (section) => section.items.some((item) => item.to === activeTo),
-  );
+  const isMoreActive = activeTab === "more";
 
   return (
     <nav
       // Warm-Paper Ledger: a flat opaque paper-surface bar edged by the 3px ink
       // top-rule — separation by rule and tone, no raised/blurred/translucent
       // chrome.
-      className="safe-bottom fixed inset-x-0 bottom-0 z-50 border-t-[3px] border-t-foreground bg-card md:hidden print:hidden"
+      className={cn(
+        "safe-bottom fixed inset-x-0 bottom-0 z-50 border-t-[3px] border-t-foreground bg-card md:hidden print:hidden",
+        keyboardOpen && "hidden",
+      )}
       aria-label="Main navigation"
     >
       <Row align="center" justify="around" className="h-14">
@@ -113,7 +113,12 @@ export function BottomNav() {
                 search={item.search as never}
                 icon={item.icon}
                 label={item.label}
-                active={item.to === activeTo}
+                active={
+                  (item.to === "/" && activeTab === "today") ||
+                  (item.to === "/inventory" && activeTab === "inventory") ||
+                  (item.to === "/scan" && activeTab === "scan") ||
+                  (item.to === "/search" && activeTab === "search")
+                }
               />
             ))}
 

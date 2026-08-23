@@ -124,4 +124,27 @@ describe("Page workbench", () => {
     fireEvent.click(menuTrigger);
     expect(screen.getByText("Record actions")).toBeInTheDocument();
   });
+
+  it("uses a viewport-aligned, overflow-safe wrapper for phone detail media", () => {
+    render(
+      <Page
+        variant="detail"
+        entity="location"
+        title="Pantry shelf"
+        heroMedia={<div data-testid="detail-media">Photo</div>}
+      >
+        <p>Detail body</p>
+      </Page>,
+    );
+
+    expect(screen.getByTestId("detail-media").parentElement).toHaveClass(
+      "left-1/2",
+      "w-screen",
+      "-translate-x-1/2",
+      "overflow-hidden",
+    );
+    expect(
+      screen.getByTestId("detail-media").parentElement?.className,
+    ).not.toContain("-mx-");
+  });
 });

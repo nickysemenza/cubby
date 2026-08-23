@@ -87,10 +87,13 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
         charSet: "utf-8",
       },
       {
-        // Allow pinch-zoom (no maximum-scale / user-scalable=no) — locking zoom
-        // is an accessibility anti-pattern and the PWA doesn't rely on it.
+        // Phone layouts are authored at 1×, so prevent accidental zoom-out
+        // without blocking pinch-to-enlarge accessibility. Deliberately omit
+        // maximum-scale / user-scalable=no: people must still be able to zoom
+        // in when they need to read or operate dense household records.
         name: "viewport",
-        content: "width=device-width, initial-scale=1, viewport-fit=cover",
+        content:
+          "width=device-width, initial-scale=1, minimum-scale=1, viewport-fit=cover",
       },
       {
         title: "Cubby",
