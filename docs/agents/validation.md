@@ -11,9 +11,11 @@ scripts that CI depends on remain load-bearing.
 
 ## Commands and ownership
 
-While editing, run one file: `pnpm --dir apps/web test:file <path>`. That is the
-spelling — the transcripts carried three competing ones (`pnpm vitest run`,
-`pnpm exec vitest`, `npx vitest run`) for the same job. It works for any tier,
+While editing, run one file: `pnpm test:file src/…` from the repo root. That is
+the spelling — the transcripts carried three competing ones (`pnpm vitest run`,
+`pnpm exec vitest`, `npx vitest run`) for the same job. The path is relative to
+`apps/web`, because that is where Vitest's root is; a repo-root-relative path
+matches nothing and exits 1 with "No test files found". It works for any tier,
 including a single `*.integration.test.ts`, which is bounded and cheap.
 
 `pnpm test:unit`, `pnpm test:ui`, `pnpm test:integration` (requires

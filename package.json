@@ -28,6 +28,7 @@
     "test:ui": "pnpm --filter @cubby/web test:ui",
     "test:integration": "pnpm --filter @cubby/web test:integration",
     "test:changed": "pnpm --filter @cubby/web test:changed",
+    "test:file": "pnpm --filter @cubby/web test:file",
     "test-ui": "pnpm --filter @cubby/web test:watch",
     "test:e2e": "pnpm -r test:e2e",
     "wasm": "CARGO_TARGET_DIR=\"${CARGO_TARGET_DIR:-$HOME/.cache/cubby/recipebridge-target}\" wasm-pack build --scope cubby --out-dir ../packages/wasm recipebridge",

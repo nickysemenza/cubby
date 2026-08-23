@@ -4,9 +4,10 @@
 
 - Make the requested in-scope change; validate at the narrowest tier that can
   fail. `pnpm typecheck` is cheap; `pnpm format:changed` formats the diff in
-  ~1s where `format:write` costs ~18s. Run one file with `pnpm test:file <path>`
-  — that is the spelling, not `vitest`/`npx vitest`. At handoff, run `pnpm check`
-  plus affected tests; before a PR, run the existing full relevant gates.
+  ~1s where `format:write` costs ~18s. Run one file with `pnpm test:file src/…`
+  (path relative to `apps/web`) — that is the spelling, not `vitest`/`npx
+  vitest`. At handoff, run `pnpm check` plus affected tests; before a PR, run
+  the existing full relevant gates.
 - A failing test run already lists what failed, at the end of its output and in
   `apps/web/.vitest-failures.txt`. Read those instead of re-running the tier —
   measured, 24% of all test runs were a re-run of one that had just failed.

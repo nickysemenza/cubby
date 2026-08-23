@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { rmSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import type { Reporter, TestModule } from "vitest/node";
 
@@ -36,9 +36,20 @@ export default class FailureSummaryReporter implements Reporter {
       }
     }
 
-    if (lines.length === 0) return;
-
     const outputPath = join(process.cwd(), ".vitest-failures.txt");
+
+    if (lines.length === 0) {
+      // Clear a previous run's list. Leaving it would tell a later turn that
+      // tests are failing after they have been fixed — the exact wasted turn
+      // this reporter exists to prevent, and worse than having no file at all.
+      try {
+        rmSync(outputPath, { force: true });
+      } catch {
+        // Same reasoning as the write below: never fail a green run over this.
+      }
+      return;
+    }
+
     const body = lines.join("\n");
     let wrote = true;
     try {
