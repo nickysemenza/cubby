@@ -325,17 +325,13 @@ jobs:
           retention-days: 1
 
   test-integration-web:
-    name: Integration Tests - web (shard ${{ matrix.shard }})
+    name: Integration Tests - web
     needs: scope
     if: |
       needs.scope.outputs.web == 'true' &&
       (needs.scope.outputs.verify == 'true' || needs.scope.outputs.coverage == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2]
     services:
       postgres:
         image: pgvector/pgvector:pg17
@@ -372,7 +368,6 @@ jobs:
         run: |
           args=(
             --project integration
-            --shard=${{ matrix.shard }}/${{ strategy.job-total }}
             --reporter=default
             --reporter=github-actions
           )
@@ -382,7 +377,7 @@ jobs:
         if: needs.scope.outputs.coverage == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: coverage-web-integration-${{ matrix.shard }}
+          name: coverage-web-integration
           path: apps/web/coverage/coverage-final.json
           if-no-files-found: error
           retention-days: 1
