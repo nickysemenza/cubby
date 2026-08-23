@@ -103,6 +103,11 @@ const SQL_RELATED_VIEWS = {
     `t."shortcode"`,
     `t."createdAt"`,
   ),
+  "product.wishes": named(
+    "Product",
+    `JOIN "WishCandidate" wc ON wc."productId" = s."id" AND wc."deletedAt" IS NULL JOIN "Wish" t ON t."id" = wc."wishId" AND t."deletedAt" IS NULL`,
+    "wish",
+  ),
   "product.tasks": named(
     "Product",
     `JOIN "Task" t ON t."subjectProductId" = s."id" AND t."deletedAt" IS NULL`,

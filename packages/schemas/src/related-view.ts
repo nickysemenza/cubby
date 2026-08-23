@@ -137,6 +137,15 @@ export const relatedViewRegistry = [
     filterPrefix: "relatedInventory",
   },
   {
+    key: "product.wishes",
+    source: "product",
+    target: "wish",
+    label: "Wishes",
+    defaultVisible: false,
+    order: "alphabetical",
+    path: [inc("WishCandidate.productId"), out("WishCandidate.wishId")],
+  },
+  {
     key: "product.tasks",
     source: "product",
     target: "task",
