@@ -264,7 +264,7 @@ jobs:
     name: Lint and Format
     needs: scope
     if: needs.scope.outputs.verify == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 15
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
@@ -299,7 +299,7 @@ jobs:
     if: |
       needs.scope.outputs.web == 'true' &&
       (needs.scope.outputs.verify == 'true' || needs.scope.outputs.coverage == 'true')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -430,7 +430,7 @@ jobs:
     name: Build for Cloudflare Workers
     needs: scope
     if: needs.scope.outputs.verify == 'true' && needs.scope.outputs.web == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 15
     permissions:
       contents: read
