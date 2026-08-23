@@ -29,6 +29,25 @@ describe("allocateWeightedCents", () => {
     expect(rows.reduce((total, row) => total + row.cents, 0n)).toBe(-5n);
   });
 
+  it.each([
+    ["large cost", 9_000_000_000_000_001n],
+    ["large refund", -9_000_000_000_000_001n],
+  ])("keeps %s exact at maximum valid weights", (_label, totalCents) => {
+    const rows = allocateWeightedCents(totalCents, [
+      { key: "a", target: "a", weight: 2_147_483_647 },
+      { key: "b", target: "b", weight: 2_147_483_646 },
+    ]);
+
+    expect(rows.reduce((total, row) => total + row.cents, 0n)).toBe(totalCents);
+    if (totalCents < 0n) {
+      expect(rows[0]?.cents).toBeLessThan(0n);
+      expect(rows[1]?.cents).toBeLessThan(0n);
+    } else {
+      expect(rows[0]?.cents).toBeGreaterThan(0n);
+      expect(rows[1]?.cents).toBeGreaterThan(0n);
+    }
+  });
+
   it("rejects non-positive or fractional weights", () => {
     expect(() =>
       allocateWeightedCents(1n, [{ key: "x", target: "x", weight: 0 }]),

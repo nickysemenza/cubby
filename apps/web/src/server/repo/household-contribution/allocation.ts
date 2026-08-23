@@ -166,7 +166,12 @@ export async function loadExpenseAllocations(
       SELECT
         weighted.*,
         floor(abs(cost_cents)::numeric * weight / total_weight)::bigint AS base_cents,
-        mod(abs(cost_cents) * weight, total_weight) AS fractional_remainder
+        /* Keep this numerator numeric: multiplying a near-bigint cost by an
+           int32-max accepted weight can overflow before mod reduces it. */
+        mod(
+          abs(cost_cents)::numeric * weight::numeric,
+          total_weight::numeric
+        ) AS fractional_remainder
       FROM weighted
     ), ranked AS (
       SELECT
