@@ -59,7 +59,6 @@ import type {
   ExpenseMatchCandidate,
   ExpenseMatchOptions,
   ExpenseMatchOut,
-  ExpenseMatchRatioLabel,
 } from "@cubby/schemas/project";
 import { sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
@@ -69,6 +68,11 @@ import {
   emptyPurchaseFinancialAggregate,
   loadPurchaseFinancialAggregates,
 } from "~/server/repo/purchase-financial-aggregates";
+import {
+  classifyMatchRatio,
+  countTokenOverlap,
+  tokenizeMatchLabel,
+} from "./match-grading";
 
 /**
  * Raw shape of one candidate row off the wire.
@@ -101,74 +105,6 @@ type MatchRow = {
   vendorMatch: boolean | null;
   dayDelta: number | null;
   amountDelta: number | null;
-};
-
-/**
- * Tokens that carry no identifying signal in either a vendor export line or a
- * ledger row name. Kept deliberately small: over-stripping costs real overlap,
- * and overlap is only ever a grading hint.
- */
-const STOPWORDS = new Set([
-  "a",
-  "an",
-  "and",
-  "for",
-  "from",
-  "in",
-  "of",
-  "on",
-  "or",
-  "pack",
-  "pc",
-  "pcs",
-  "set",
-  "the",
-  "to",
-  "with",
-  "x",
-]);
-
-/** Lowercase alphanumeric tokens, stopwords and 1-character noise dropped. */
-const tokenize = (value: string | null | undefined): Set<string> => {
-  if (!value) return new Set();
-  return new Set(
-    value
-      .toLowerCase()
-      .split(/[^a-z0-9]+/)
-      .filter((token) => token.length > 1 && !STOPWORDS.has(token)),
-  );
-};
-
-const countOverlap = (a: Set<string>, b: Set<string>): number => {
-  let n = 0;
-  for (const token of a) if (b.has(token)) n += 1;
-  return n;
-};
-
-/**
- * Classify `cost / amount` against the tax rate.
- *
- * `exact` is an absolute cent comparison, not a ratio one — a one-cent gap is
- * exact at any magnitude, and rounding a float ratio would make the verdict
- * depend on where binary floating point happened to land (the same trap
- * `reconcilePurchase` documents).
- *
- * The tax bands are relative because they scale with the amount. Everything
- * else is `other` **on purpose**: the caller reads `amountDelta` and recognizes
- * a $9.99 or $12.50 residual as shipping. Do not add hypotheses here.
- */
-const classifyRatio = (
-  amountDelta: number | null,
-  ratio: number | null,
-  taxRate: number,
-): ExpenseMatchRatioLabel => {
-  if (amountDelta !== null && Math.round(Math.abs(amountDelta) * 100) <= 1)
-    return "exact";
-  if (ratio === null) return "other";
-  const band = 0.005;
-  if (Math.abs(ratio - (1 + taxRate)) <= band) return "plus_tax";
-  if (Math.abs(ratio - 1 / (1 + taxRate)) <= band) return "pre_tax";
-  return "other";
 };
 
 /**
@@ -491,8 +427,11 @@ export const matchExpenses = async (
       dayDelta: raw.dayDelta === null ? null : Number(raw.dayDelta),
       amountDelta,
       ratio,
-      ratioLabel: classifyRatio(amountDelta, ratio, taxRate),
-      tokenOverlap: countOverlap(tokenize(inputRow.label), tokenize(raw.name)),
+      ratioLabel: classifyMatchRatio(amountDelta, ratio, taxRate),
+      tokenOverlap: countTokenOverlap(
+        tokenizeMatchLabel(inputRow.label),
+        tokenizeMatchLabel(raw.name),
+      ),
     };
 
     const existing = byKey.get(raw.key);
