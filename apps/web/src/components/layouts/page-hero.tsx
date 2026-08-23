@@ -480,7 +480,7 @@ function DetailPlate({
               <h1 className="break-words font-bold font-heading text-xl tracking-tight sm:text-3xl">
                 {name}
               </h1>
-              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-2xs text-muted-foreground uppercase">
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-2xs text-muted-foreground uppercase">
                 {heroNo && (
                   <span className="md:hidden">
                     <CopyableHeroNo heroNo={heroNo} />

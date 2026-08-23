@@ -1,8 +1,8 @@
 import type { LinkProps } from "@tanstack/react-router";
 import { completeNavLeaves, findActiveTo } from "./nav-items";
 
-export type MobileTabId = "today" | "inventory" | "scan" | "search" | "more";
-export type MobilePresentation = "standard" | "immersive";
+type MobileTabId = "today" | "inventory" | "scan" | "search" | "more";
+type MobilePresentation = "standard" | "immersive";
 
 export interface MobileRouteDescriptor {
   label: string;

@@ -50,12 +50,12 @@ test.describe("iPhone WebKit smoke", () => {
     });
     for (const label of [
       "Inventory",
-      "Recipes",
-      "Search",
       "Scan",
-      "Shopping",
-      "Recipes",
+      "Today",
+      "Search",
       "Inventory",
+      "Scan",
+      "Today",
       "Search",
     ]) {
       await bottomNav.getByRole("link", { name: label, exact: true }).click();
@@ -120,9 +120,8 @@ test.describe("iPhone WebKit smoke", () => {
     await reloaded;
 
     expect(page.url()).toBe(destination);
-    await expect(
-      page.getByRole("heading", { name: "New location" }),
-    ).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Name" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Create" })).toBeVisible();
     await expect(page.locator("body")).not.toContainText(
       "Something went wrong",
     );

@@ -212,7 +212,7 @@ export function WorkspaceNavigator({
           <>
             <section
               aria-label="Account"
-              className="flex min-h-12 items-center gap-3 border-border border-y px-2 py-1"
+              className="flex min-h-12 items-center gap-2 border-border border-y px-2 py-1"
             >
               <AuthenticatedShellAccount />
               <div className="min-w-0 flex-1">

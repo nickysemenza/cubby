@@ -264,7 +264,7 @@ function AppearanceCard() {
         <CardTitle>Appearance</CardTitle>
       </CardHeader>
       <CardContent className="max-md:px-2">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-1 max-md:grid-cols-1">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-1 max-md:grid-cols-1">
           <Stack gap="tight">
             <span className="font-medium text-sm">Table density</span>
             <Description size="xs">Row height in data tables.</Description>

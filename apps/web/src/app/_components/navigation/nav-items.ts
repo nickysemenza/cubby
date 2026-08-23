@@ -339,27 +339,8 @@ export const bottomNavItems: NavItem[] = [
   { to: "/search", label: "Search", icon: Search },
 ];
 
-const bottomTabTargets = new Set(bottomNavItems.map((item) => item.to));
-
 /** A labeled group of leaves in the mobile "More" sheet. */
 export type NavSection = { title: string; items: NavItem[] };
-
-/**
- * Mobile "More" sheet, sectioned instead of one flat catch-all list. Home leads
- * (the desktop logo links home, but the mobile bar has no logo). The rest are
- * DERIVED from the desktop groups — each becomes a titled section minus the
- * leaves already promoted to a primary bottom tab — so the mobile sheet and the
- * desktop dropdowns can't drift apart.
- */
-export const moreNavSections: NavSection[] = [
-  { title: "Household", items: mobileHouseholdItems },
-  ...primaryNavGroups
-    .map((group) => ({
-      title: group.label,
-      items: group.children.filter((leaf) => !bottomTabTargets.has(leaf.to)),
-    }))
-    .filter((section) => section.items.length > 0),
-];
 
 /** Signed-out bar / bottom tabs — always flat leaves (no dropdowns). */
 export const publicNavItems: NavItem[] = [

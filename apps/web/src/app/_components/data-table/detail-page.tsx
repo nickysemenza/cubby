@@ -48,7 +48,7 @@ function SectionCard({ section }: { section: DetailSection }) {
           section.overflowVisible && "overflow-visible",
         )}
       >
-        <CardHeader className="px-2 pb-1 md:px-3.5 md:pb-2">
+        <CardHeader className="px-2 pb-1 md:px-4 md:pb-2">
           <CardTitle as="h2">
             <section.icon className="size-3.5 shrink-0 text-slate" />
             {section.title}
@@ -57,7 +57,7 @@ function SectionCard({ section }: { section: DetailSection }) {
             <CardAction>{section.headerAction}</CardAction>
           )}
         </CardHeader>
-        <CardContent className="px-2 md:px-3.5">{section.content}</CardContent>
+        <CardContent className="px-2 md:px-4">{section.content}</CardContent>
       </Card>
     </section>
   );
@@ -151,7 +151,7 @@ export function DetailAnchorIndex({
             jump(section.id);
           }}
           className={cn(
-            "relative flex min-h-11 shrink-0 items-center px-3 font-medium text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary md:min-h-0 md:px-2 md:py-1",
+            "relative flex min-h-11 shrink-0 items-center px-2 font-medium text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary md:min-h-0 md:py-1",
             activeId === section.id
               ? "text-primary after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:bg-primary"
               : "text-muted-foreground hover:text-foreground",

@@ -132,7 +132,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
                   ),
                 );
             }}
-            className="min-h-11 pl-7 md:min-h-0"
+            className="min-h-11 pl-6 md:min-h-0"
             autoFocus
           />
         </div>
