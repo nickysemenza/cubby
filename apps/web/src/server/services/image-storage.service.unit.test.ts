@@ -158,7 +158,14 @@ describe("attachFileToEntity", () => {
         _db: unknown,
         params: { url: string; filename: string; contentType: string },
       ) => ({
-        row: { id: "img-99", ...params, idempotencyKey: null },
+        // `shortcode` too: `attachFileResponse.imageId` is the public `IMG-`
+        // code now, so a row without one yields `undefined` downstream.
+        row: {
+          id: "img-99",
+          shortcode: "IMG-9999",
+          ...params,
+          idempotencyKey: null,
+        },
         reused: false,
       }),
     );
@@ -179,7 +186,7 @@ describe("attachFileToEntity", () => {
     });
 
     expect(result.kind).toBe("image");
-    expect(result.imageId).toBe("img-99");
+    expect(result.imageId).toBe("IMG-9999");
     // A real upload, so the caller can tell this apart from a replay.
     expect(result.reused).toBe(false);
     expect(result.entityId).toBe("PRD-TEST");
@@ -318,6 +325,7 @@ describe("attachFileToEntity", () => {
   it("returns an existing idempotency winner before fetching or uploading", async () => {
     mocks.findAttachmentByIdempotencyKey.mockResolvedValueOnce({
       id: "winner-1",
+      shortcode: "IMG-7771",
       url: "https://images.example/winner.png",
       filename: "winner.png",
       contentType: "image/png",
@@ -331,7 +339,7 @@ describe("attachFileToEntity", () => {
       idempotencyKey: "stable-key",
     });
 
-    expect(result.imageId).toBe("winner-1");
+    expect(result.imageId).toBe("IMG-7771");
     expect(result.reused).toBe(true);
     expect(mocks.uploadToS3).not.toHaveBeenCalled();
   });
@@ -340,6 +348,7 @@ describe("attachFileToEntity", () => {
     mocks.createOrReuseAttachedImage.mockResolvedValueOnce({
       row: {
         id: "winner-2",
+        shortcode: "IMG-7772",
         url: "https://images.example/winner.png",
         filename: "winner.png",
         contentType: "image/png",
@@ -355,7 +364,7 @@ describe("attachFileToEntity", () => {
       idempotencyKey: "race-key",
     });
 
-    expect(result.imageId).toBe("winner-2");
+    expect(result.imageId).toBe("IMG-7772");
     expect(result.reused).toBe(true);
     expect(mocks.deleteS3Object).toHaveBeenCalledWith(
       expect.stringContaining("cubby/images/"),

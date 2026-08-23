@@ -8,7 +8,6 @@ import type {
 } from "@cubby/schemas/identifiers";
 import {
   unsafeExpenseId,
-  unsafeImageShortcode,
   unsafePurchaseId,
   unsafePurchaseShortcode,
   unsafeVendorId,
@@ -1674,7 +1673,10 @@ describe("purchase repository — deletion cascades", () => {
         .where(eq(purchaseImage.id, join.id)),
     ).toHaveLength(0);
     expect(
-      await getDb(ctx.db).select().from(image).where(eq(image.id, document.id)),
+      await getDb(ctx.db)
+        .select()
+        .from(image)
+        .where(eq(image.shortcode, document.id)),
     ).toHaveLength(0);
 
     const auditRows = await getDb(ctx.db)
@@ -2598,17 +2600,16 @@ describe("purchase repository — documents", () => {
     const [before] = await getDb(ctx.db)
       .select({ key: image.key, shortcode: image.shortcode })
       .from(image)
-      .where(eq(image.id, attached.imageId));
+      .where(eq(image.shortcode, attached.imageId));
 
-    // `attached.imageId` (from `attachFileToEntity`) is the raw uuid — that
-    // response deliberately never crosses a shortcode boundary. `removeImageIds`
-    // wants the public `IMG-` code instead, same as a real client would supply
-    // it after reading it back from `getPurchaseByID`.
+    // `attached.imageId` is the public `IMG-` code, which is exactly what
+    // `removeImageIds` wants — a caller can now feed an attach response
+    // straight back in without a round trip through `getPurchaseByID`.
     const { detachedImageKeys } = await updatePurchase(
       ctx.db,
       {
         id: charge.id,
-        data: { removeImageIds: [unsafeImageShortcode(before!.shortcode)] },
+        data: { removeImageIds: [attached.imageId] },
       },
       ctx.actor,
     );
@@ -2619,7 +2620,7 @@ describe("purchase repository — documents", () => {
       await getDb(ctx.db)
         .select()
         .from(image)
-        .where(eq(image.id, attached.imageId)),
+        .where(eq(image.shortcode, attached.imageId)),
     ).toHaveLength(0);
     expect(
       await getDb(ctx.db).query.purchaseImage.findMany({
@@ -2665,12 +2666,15 @@ describe("purchase repository — documents", () => {
     // MCP and browser uploads share the same purchase-scoped key allocator.
     const [row] = await getDb(ctx.db)
       .select({
+        // `id` too: the join table keys on the uuid, while `result.imageId` is
+        // the public code, so the assertions below need both.
+        id: image.id,
         key: image.key,
         contentType: image.contentType,
         status: image.status,
       })
       .from(image)
-      .where(eq(image.id, result.imageId));
+      .where(eq(image.shortcode, result.imageId));
     expect(row?.key).toContain(`/documents/${charge.id}/metal-invoice-`);
     expect(row?.key).toMatch(/\.pdf$/);
     expect(row?.contentType).toBe("application/pdf");
@@ -2681,7 +2685,7 @@ describe("purchase repository — documents", () => {
       where: eq(purchaseImage.purchaseId, chargeUuid),
     });
     expect(joins).toHaveLength(1);
-    expect(joins[0]?.imageId).toBe(result.imageId);
+    expect(joins[0]?.imageId).toBe(row?.id);
     expect(joins[0]?.deletedAt).toBeNull();
 
     const withDocuments = await purchaseList(
@@ -2721,7 +2725,7 @@ describe("purchase repository — documents", () => {
       .where(
         and(
           eq(purchaseImage.purchaseId, chargeUuid),
-          eq(purchaseImage.imageId, result.imageId),
+          eq(purchaseImage.imageId, row!.id),
         ),
       );
     expect(
