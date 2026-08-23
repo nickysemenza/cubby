@@ -120,6 +120,10 @@ async function globalSetup(_config: FullConfig): Promise<void> {
           ALLOW_SIGNUP: "true",
           // Linux WebKit rejects __Secure- cookies over plain localhost.
           INSECURE_AUTH_COOKIES: "true",
+          // The production artifact enables Better Auth rate limiting. The
+          // harness deliberately shares one local Worker identity across all
+          // browser contexts, so disable it only for this isolated test host.
+          E2E_AUTH_TEST_MODE: "true",
           DATABASE_URL: databaseUrl,
           R2_ACCESS_KEY_ID: "dummy",
           R2_SECRET_ACCESS_KEY: "dummy",

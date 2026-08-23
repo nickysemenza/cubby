@@ -80,6 +80,7 @@ const handler = {
     // (better-auth reads BETTER_AUTH_SECRET from process.env at init time)
     process.env.BETTER_AUTH_SECRET ??= env.BETTER_AUTH_SECRET;
     process.env.ALLOW_SIGNUP ??= env.ALLOW_SIGNUP;
+    process.env.E2E_AUTH_TEST_MODE = env.E2E_AUTH_TEST_MODE;
 
     // Expose service bindings to server code (clients pick binding fetch
     // over public URLs when present).

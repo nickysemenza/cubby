@@ -11,9 +11,41 @@ import { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
  * control.
  */
 export async function waitForAppHydration(page: Page) {
-  await expect(
-    page.locator('[data-app-shell="authenticated"][data-hydrated="true"]'),
-  ).toBeAttached({ timeout: 15000 });
+  const shell = page.locator(
+    '[data-app-shell="authenticated"][data-hydrated="true"]',
+  );
+  const signIn = page.getByRole("link", { name: "Sign In", exact: true });
+
+  await expect(async () => {
+    if (await signIn.isVisible().catch(() => false)) {
+      const rateLimited = await page
+        .getByText("Too Many Requests", { exact: true })
+        .isVisible()
+        .catch(() => false);
+      throw new Error(
+        `Authenticated shell unavailable at ${page.url()}${rateLimited ? " (Too Many Requests)" : " (Sign In is visible)"}`,
+      );
+    }
+    await expect(shell).toBeAttached({ timeout: 750 });
+  }).toPass({ timeout: 15000 });
+}
+
+/** Navigate to an authenticated route and wait for the route's own ready UI. */
+export async function gotoAuthenticatedPage(
+  page: Page,
+  path: string,
+  ready?: Locator,
+) {
+  await page.goto(path, { waitUntil: "domcontentloaded" });
+  await waitForAppHydration(page);
+  if (ready) await expect(ready).toBeVisible({ timeout: 15000 });
+}
+
+/** Reload an authenticated route without coupling test progress to background IO. */
+export async function reloadAuthenticatedPage(page: Page, ready?: Locator) {
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await waitForAppHydration(page);
+  if (ready) await expect(ready).toBeVisible({ timeout: 15000 });
 }
 
 /**

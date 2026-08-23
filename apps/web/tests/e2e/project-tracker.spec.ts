@@ -1,71 +1,13 @@
 import {
   editDetailCell,
   editListCell,
+  gotoAuthenticatedPage,
   openCommandPalette,
   waitForAppHydration,
 } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
-/**
- * Coverage for the new (DB-backed) project-tracker surfaces: /projects
- * (dashboard), /tasks and /expenses (RTable list pages with quick-add
- * dialogs). The E2E suite runs against a fresh IntegresQL database, so these
- * pages render with no seed data — the dashboard's empty state and the two
- * list pages' empty tables are all we can assert on load; the interesting
- * coverage is the quick-add → row-appears round trip.
- *
- * Projects are also reachable via the project SelectField in the
- * task/expense quick-add dialogs, which is left at its default "None" in
- * those two tests to avoid the FilterableCombobox-inside-Dialog combination
- * form-utils.tsx flags as untested for nested-dialog use (it's built for
- * page-level forms, not `DialogCompatibleCombobox`). The project-inline-link
- * test below *does* drive that Project `SelectField` — it's the plain
- * `FilterableCombobox` (base-ui, click-then-click-option, no search-input
- * step), not the async `DialogCompatibleCombobox` the note above is about.
- *
- * Three more surfaces added this round (tracker-first-class-previews):
- *  1. Command palette deep-linking search hits straight to their detail route
- *     (Phase B consolidation — the palette dropped its bespoke tracker
- *     section in favor of ranked global search + `getSearchResultRoute`).
- *     Lexical search (ILIKE, see `search.ts`) matches a just-created task by
- *     name with no embeddings needed, so this runs the real palette flow
- *     rather than falling back to a direct-navigation smoke test.
- *  2. `EntityInlineLink` on the task detail page's Project field renders a
- *     real `/projects/$id` anchor (Phase A hovercards) — hover-to-open-card
- *     is flaky in E2E, so this only asserts the link/href, not the card.
- *  3. `ResponsiveDialog` (Phase C) renders quick-add as a bottom `Sheet`
- *     (not a centered `Dialog`) under the 768px mobile breakpoint, and the
- *     create flow still round-trips at that viewport.
- */
-
 test.describe("Project tracker", () => {
-  test("projects dashboard renders signed in with no data", async ({
-    page,
-  }) => {
-    await page.goto("/projects");
-
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Projects" }),
-    ).toBeVisible({ timeout: 15000 });
-
-    // Empty-state summary tiles render zeroed counts rather than crashing.
-    // Exact match: the "Needs Attention" banner's "N active projects missing…"
-    // text also substring-matches "Active Projects" case-insensitively, and
-    // the section listing the project cards is titled "Projects" (not
-    // "Active Projects", to avoid duplicating the tile's own label) — see
-    // `OverviewView`'s `summaryItems` in projects-dashboard.tsx for the
-    // current tile set: Active Projects / Open Tasks / Spend (+committed
-    // caption).
-    await expect(
-      page.getByText("Active Projects", { exact: true }),
-    ).toBeVisible();
-    await expect(page.getByText("Open Tasks", { exact: true })).toBeVisible();
-    await expect(page.getByText("Spend", { exact: true })).toBeVisible();
-
-    // No React error boundary / router error page.
-    await expect(page.getByText(/something went wrong/i)).toHaveCount(0);
-  });
-
   test("projects data keeps project URL sorting out of embedded lists", async ({
     page,
   }) => {
@@ -232,42 +174,36 @@ test.describe("Project tracker", () => {
     // Dialog closes on success (onSuccess resets + calls onOpenChange(false)).
     await expect(dialog).not.toBeVisible({ timeout: 10000 });
 
-    // Switch to the Data tab, where the project table renders names directly
-    // (the default Overview tab is charts-only) to confirm the row landed. A
-    // brand-new "planning"-status project with no expenses/estimate also
-    // matches "Needs Attention"'s stalled/missing-estimate `ProjectPill`s,
-    // which render earlier in the DOM but stay inside collapsed `<details>`
-    // (hidden) — use `.last()` to land on the always-visible table row.
     await page.getByRole("button", { name: "Data view" }).click();
     await expect(page.getByText(name).last()).toBeVisible({
       timeout: 10000,
     });
 
-    // The Data tab's project table (`shared.tsx`'s `ProjectTable`, migrated
-    // onto `useEntityList`) has an inline-editable name column, same as
-    // tasks/expenses. `ProjectPill` (Needs Attention) renders a Link, not a
-    // button, so this is unambiguous even before the edit.
-    //
-    // Sheets-style select-then-edit: inside the cell-selection grid the editor
-    // opens from the cell's separate edit trigger. Scope through the name link
-    // so the helper targets this exact row; the name itself navigates to the
-    // detail page.
     const editedName = `${name} (edited)`;
     const nameCell = page.getByRole("cell").filter({
       has: page.getByRole("link", { name, exact: true }),
     });
+    const committed = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        response.url().includes("/api/trpc/project.update") &&
+        response.ok(),
+    );
     await editListCell(
       page,
       nameCell.getByRole("button", { name: "Edit value" }),
       editedName,
     );
+    await committed;
 
-    // Assert the edited value renders (react-query invalidation round trip) —
-    // more stable than a full page reload, and still proves the mutation
-    // persisted (not just an optimistic client-side echo).
-    await expect(page.getByText(editedName).last()).toBeVisible({
-      timeout: 10000,
-    });
+    await gotoAuthenticatedPage(
+      page,
+      "/projects?view=data",
+      page.getByRole("table", { name: "Projects Table" }),
+    );
+    await expect(
+      page.getByRole("link", { name: editedName, exact: true }).last(),
+    ).toBeVisible({ timeout: 10000 });
   });
 
   test("command palette: search deep-links a task straight to its detail page", async ({

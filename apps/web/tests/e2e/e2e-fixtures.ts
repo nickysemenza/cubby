@@ -62,7 +62,11 @@ export const seedTaskPrerequisite = (
     }),
   );
 
-export const seedLocationPrerequisite = (page: Page, name: string) =>
+export const seedLocationPrerequisite = (
+  page: Page,
+  name: string,
+  opts: { parentId?: string } = {},
+) =>
   createFixture(
     page,
     "location.create",
@@ -71,7 +75,7 @@ export const seedLocationPrerequisite = (page: Page, name: string) =>
       aliases: [],
       tags: [],
       type: "room",
-      parentId: null,
+      parentId: opts.parentId ?? null,
     }),
   );
 
