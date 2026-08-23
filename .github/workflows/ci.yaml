@@ -474,9 +474,6 @@ jobs:
       !(github.event_name == 'workflow_dispatch' && inputs.bypass_e2e)
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    container:
-      image: mcr.microsoft.com/playwright:v1.62.1-noble
-      options: --user 1001
     strategy:
       fail-fast: false
       matrix:
@@ -487,8 +484,8 @@ jobs:
       E2E_TEST_USER_EMAIL: nicky@test.com
       E2E_TEST_USER_PASSWORD: password1234
       BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9
-      INTEGRESQL_URL: http://integresql:5000
-      INTEGRESQL_DATABASE_HOST: postgres
+      INTEGRESQL_URL: http://localhost:5000
+      INTEGRESQL_DATABASE_HOST: localhost
     services:
       postgres:
         image: pgvector/pgvector:pg17
@@ -519,14 +516,19 @@ jobs:
           wasm: "false"
           workspace-filter: "@cubby/web..."
           cache-pnpm-store: "false"
-      - name: Assert Playwright package matches the container
+      - name: Install and verify Playwright browsers
         shell: bash
         run: |
-          actual="$(pnpm --filter @cubby/web exec playwright --version | awk '{print $2}')"
-          if [[ "$actual" != "$PLAYWRIGHT_IMAGE_VERSION" ]]; then
-            echo "::error::@playwright/test is $actual; update the CI container and PLAYWRIGHT_IMAGE_VERSION together"
-            exit 1
-          fi
+          pnpm --filter @cubby/web run test:e2e:install
+          # shellcheck disable=SC2016
+          pnpm --dir apps/web exec node --input-type=module -e '
+            import { chromium, webkit } from "@playwright/test";
+            for (const [name, browserType] of [["chromium", chromium], ["webkit", webkit]]) {
+              const browser = await browserType.launch();
+              console.log(`${name}: ${browser.version()} (${browserType.executablePath()})`);
+              await browser.close();
+            }
+          '
       - uses: ./.github/actions/setup-web-env
       - name: Wait for the shared Cloudflare bundle
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
@@ -581,7 +583,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: wrangler-logs-shard-${{ matrix.shard }}
-          path: /github/home/.config/.wrangler/logs/
+          path: /home/runner/.config/.wrangler/logs/
           if-no-files-found: ignore
           retention-days: 1
 
