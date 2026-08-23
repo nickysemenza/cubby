@@ -9,8 +9,6 @@
 import { projectShortcode } from "@cubby/schemas/identifiers";
 import {
   actionableTasksOut,
-  deleteExpensesWithPurchaseEffectsInput,
-  deleteExpensesWithPurchaseEffectsOut,
   expenseAnalyticsOut,
   expenseCreateInput,
   expenseFilterFields,
@@ -387,6 +385,8 @@ export function registerProjectTools(server: McpServer) {
       get: "Get an expense by ID.",
       create:
         "Log an expense (costType materials|tools|services; set future=true for planned spend), optionally attached to a project. Set lineKind explicitly for an itemized tax, shipping, discount, fee, tip, or combined other_adjustment line. If omitted, Cubby only infers a strict adjustment-like Expense name when no Product is linked; otherwise it stores principal. Never estimate or allocate embedded tax. Non-principal Expenses cannot link productId or productQuantity. productQuantity may be FRACTIONAL — the unit is the shelf's unit, so half a coil thrown away is -0.5. productQuantity is SIGNED: money direction wins, so a positive-cost line is an acquisition of |qty| and a negative-cost line an exit of |qty|, and only on a $0 line does the sign carry the fact — positive is a free acquisition (promo pack, bundled accessory), NEGATIVE is a discard/write-off. A positive-cost line may not carry a negative quantity. Zero is legal ONLY on a negative-cost line and means the money came back but no unit left — a price concession with the item KEPT (an Amazon 'Account adjustment', a partial refund for shipping damage). Use 0 there, not null: null means the count is unknown and is reported as data-entry debt. A discard has no vendor charge behind it, so leave vendor/orderId/purchaseId unset on one.",
+      delete:
+        "Soft-delete expenses. Nothing blocks an expense delete — it is the leaf of the money ledger — but it has consequences: `sideEffects` reports which Purchases lost a line (their totals changed) and which are now empty, since an empty Purchase is a record of an order with no spend and usually wants deleting too.",
       update:
         "Update an expense's fields. Renaming never re-infers lineKind. Change lineKind explicitly when correcting a role. A non-principal Expense cannot link productId or productQuantity, and conflicting writes are rejected without unlinking anything. productQuantity is SIGNED — see create; flipping a $0 line's quantity to negative is how an already-logged row is corrected into a discard, setting a negative-cost line's quantity to 0 is how a refund is corrected into a price concession with the item kept, and a positive-cost line may not carry a negative quantity.",
     },
@@ -399,16 +399,6 @@ export function registerProjectTools(server: McpServer) {
             ...data,
             productId: data.productId,
           },
-  });
-
-  registerRouterTool(server, {
-    name: "delete_expenses",
-    description:
-      "Soft-delete up to 200 distinct expenses atomically. Returns the deleted expense IDs, every Purchase affected, and the subset that now has no live Expenses; use the latter to inspect before deleting an empty Purchase. This does not delete Purchases or settlement records.",
-    inputSchema: deleteExpensesWithPurchaseEffectsInput,
-    outputSchema: deleteExpensesWithPurchaseEffectsOut,
-    annotations: WRITE_DESTRUCTIVE_CLOSED,
-    call: (caller, params) => caller.expense.deleteWithPurchaseEffects(params),
   });
 
   registerRouterTool(server, {

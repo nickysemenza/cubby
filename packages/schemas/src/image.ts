@@ -5,7 +5,7 @@ import { purchaseDocumentKind } from "./purchase";
 import type { ShortcodeEntity } from "./entity-manifest";
 import { anyShortcodeSchema } from "./identifiers";
 import { entityImage } from "./entity";
-import { id } from "./identifiers";
+import { id, imageShortcode } from "./identifiers";
 
 // Image status values - single source of truth for both Zod and Drizzle
 export const imageStatusValues = ["PENDING", "UPLOADED", "FAILED"] as const;
@@ -89,8 +89,13 @@ export const createInputImages = z.object({
 
 export const updateInputImages = z.object({
   pendingImageIds: z.array(z.uuid()).optional(),
-  removeImageIds: z.array(z.uuid()).optional(),
-  imageOrder: z.array(z.uuid()).optional(),
+  // Public `IMG-` codes, unlike `pendingImageIds` above: these name images the
+  // client already saw come back through `ImageOut`, so they arrive as
+  // shortcodes and have to be resolved to uuids before they reach a join-table
+  // write. `pendingImageIds` never round-tripped through an output, so it
+  // stays a raw uuid straight from `create_file_upload`.
+  removeImageIds: z.array(imageShortcode).optional(),
+  imageOrder: z.array(imageShortcode).optional(),
 });
 
 export type UpdateInputImages = z.infer<typeof updateInputImages>;
@@ -345,7 +350,9 @@ export const cullPendingImagesSchema = z.object({
 });
 
 export const imageOut = z.object({
-  id: id,
+  /** The public `IMG-` code. Images carry a shortcode like every other
+   *  local-table entity, so a raw uuid never reaches an API consumer. */
+  id: imageShortcode,
   url: z.url(),
   key: z.string(),
   filename: z.string(),

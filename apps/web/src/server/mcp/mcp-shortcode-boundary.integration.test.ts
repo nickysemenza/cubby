@@ -598,7 +598,13 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
       await row.extraChecks?.({ caller, createdOut, code, bag });
 
       if (!tools.remove) return;
-      const deleted = await callTool(tools.remove, { ids: [code] }, caller);
+      // One `delete_entity` for every entity — the per-entity delete tools are
+      // gone. `tools.remove` now only says whether this entity is deletable.
+      const deleted = await callTool(
+        "delete_entity",
+        { entity: row.entity, ids: [code] },
+        caller,
+      );
       expectOk(deleted);
       const deletedOut = structured(deleted);
       if (row.checkDelete) row.checkDelete(deletedOut, code);
@@ -680,8 +686,11 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
     }
 
     const deleted = await callTool(
-      "delete_financial_transactions",
-      { ids: [transactionCode, batchTransactionCode] },
+      "delete_entity",
+      {
+        entity: "financialTransaction",
+        ids: [transactionCode, batchTransactionCode],
+      },
       caller,
     );
     expectOk(deleted);
@@ -802,7 +811,7 @@ describe("a wrong-entity shortcode prefix is rejected before any mutation", () =
     expect((structured(after).items as unknown[]).length).toBe(beforeCount);
   });
 
-  it("delete_locations rejects a PRODUCT shortcode instead of silently deleting nothing or the wrong row", async () => {
+  it("delete_entity rejects a PRODUCT shortcode for entity=location instead of silently deleting nothing or the wrong row", async () => {
     const caller = createTestCaller(domainRouter, ctx.db);
     const product = await callTool(
       "create_product",
@@ -818,8 +827,10 @@ describe("a wrong-entity shortcode prefix is rejected before any mutation", () =
     const productCode = structured(product).id as string;
 
     const rejected = await callTool(
-      "delete_locations",
-      { ids: [productCode] },
+      "delete_entity",
+      // A PRD- code under entity=location: rejected on the prefix, never routed
+      // to the wrong table.
+      { entity: "location", ids: [productCode] },
       caller,
     );
     expect(rejected.isError).toBe(true);

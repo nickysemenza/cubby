@@ -4,6 +4,7 @@ import type {
   VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import {
+  unsafeImageShortcode,
   unsafePurchaseId,
   unsafeVendorId,
   unsafeVendorShortcode,
@@ -844,7 +845,9 @@ describe("vendor repository — mergeVendors", () => {
       ctx.actor,
     );
 
-    expect(result.vendor.logo?.id).toBe(keeperLogo.id);
+    expect(result.vendor.logo?.id).toBe(
+      unsafeImageShortcode(keeperLogo.shortcode),
+    );
     expect(result.detachedImageKeys).toEqual([loserLogo.key]);
     expect(
       await getDb(ctx.db).query.image.findFirst({

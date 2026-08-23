@@ -12,6 +12,7 @@ import { requiredName } from "./common";
 import {
   cookbookShortcode,
   id,
+  imageShortcode,
   ingredientShortcode,
   productShortcode,
   recipeShortcode,
@@ -387,14 +388,18 @@ export const recipeCreateInput = z.object(recipeCreateShape);
 
 export const recipeUpdateData = deriveUpdateData(recipeCreateShape, {
   extend: {
+    // Public `IMG-` codes, as returned by `RecipeOut.images[].id` — resolved to
+    // uuids in the repo before they reach the `RecipeImage` join table. MCP has
+    // no recipe image surface (`mcpRecipeUpdateInput` below doesn't extend
+    // these in), so this pair is tRPC/web-only.
     removeImageIds: z
-      .array(z.uuid())
+      .array(imageShortcode)
       .optional()
       .describe(
         "Image ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
       ),
     imageOrder: z
-      .array(z.uuid())
+      .array(imageShortcode)
       .optional()
       .describe("existing image ids in display order; first = cover"),
   },

@@ -1,3 +1,4 @@
+import { unsafeImageShortcode } from "@cubby/schemas/identifiers";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { listBackgroundBatches } from "~/server/repo/background-jobs";
@@ -107,7 +108,12 @@ describe("location.create AI-description side-effect", () => {
 
     await caller.update({
       id: created.id,
-      data: { imageOrder: [second.id, first.id] },
+      data: {
+        imageOrder: [
+          unsafeImageShortcode(second.shortcode),
+          unsafeImageShortcode(first.shortcode),
+        ],
+      },
     });
 
     // Counting only `location-ai.*`: a reorder still refreshes the location's

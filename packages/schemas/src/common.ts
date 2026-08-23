@@ -75,3 +75,33 @@ export const relationMutationOut = z.object({
   alreadySatisfied: z.number().int().nonnegative(),
 });
 export type RelationMutationOut = z.infer<typeof relationMutationOut>;
+
+/**
+ * The result of a delete, uniform across every entity.
+ *
+ * `deleted` is MEASURED (rows actually removed), not the caller's `ids.length` —
+ * a delete can cascade, so deleting one task can remove several rows.
+ *
+ * `sideEffects` is what the delete changed BESIDES its targets. It exists so a
+ * richer per-entity result never has to become a different output shape: an
+ * expense delete can leave a Purchase empty, and that used to justify a whole
+ * separate `delete_expenses` tool with its own schema. It is a consequence of
+ * the delete, not a different kind of result.
+ */
+export const deleteEntityOut = z.object({
+  deleted: z.number().int().nonnegative(),
+  deletedIds: z.array(z.string()).optional(),
+  sideEffects: z
+    .array(
+      z.object({
+        /** Stable slug, e.g. `"purchase-now-empty"`. */
+        code: z.string().min(1),
+        /** One line an agent can act on. */
+        description: z.string().min(1),
+        /** Public ids the effect touched. */
+        ids: z.array(z.string()),
+      }),
+    )
+    .default([]),
+});
+export type DeleteEntityOut = z.infer<typeof deleteEntityOut>;

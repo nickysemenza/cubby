@@ -1,4 +1,5 @@
 import {
+  unsafeImageShortcode,
   unsafeIngredientId,
   unsafeIngredientShortcode,
   unsafeProductId,
@@ -26,8 +27,9 @@ const INGREDIENT_ID = unsafeIngredientId(
   "223e4567-e89b-12d3-a456-426614174000",
 );
 const RECIPE_ID = unsafeRecipeId("923e4567-e89b-12d3-a456-426614174000");
-const IMAGE_ID = "323e4567-e89b-12d3-a456-426614174000";
-const DELETED_IMAGE_ID = "423e4567-e89b-12d3-a456-426614174000";
+const IMAGE_SHORTCODE = "IMG-2345";
+const IMAGE_ID = unsafeImageShortcode(IMAGE_SHORTCODE);
+const DELETED_IMAGE_SHORTCODE = "IMG-6789";
 const EXTERNAL_ID = "523e4567-e89b-12d3-a456-426614174000";
 const DELETED_EXTERNAL_ID = "623e4567-e89b-12d3-a456-426614174000";
 const UNIT_MAPPING_ID = "723e4567-e89b-12d3-a456-426614174000";
@@ -178,7 +180,7 @@ describe("ingredient product mappers", () => {
         images: [
           {
             image: {
-              id: IMAGE_ID,
+              shortcode: IMAGE_SHORTCODE,
               url: "https://example.com/image.jpg",
               key: "image.jpg",
               filename: "image.jpg",
@@ -193,7 +195,7 @@ describe("ingredient product mappers", () => {
           },
           {
             image: {
-              id: DELETED_IMAGE_ID,
+              shortcode: DELETED_IMAGE_SHORTCODE,
               url: "https://example.com/deleted.jpg",
               key: "deleted.jpg",
               filename: "deleted.jpg",

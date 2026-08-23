@@ -912,7 +912,6 @@ describe("listMcpToolCatalog", () => {
       "update_expenses",
       "create_purchases",
       "update_purchases",
-      "delete_empty_purchases",
       "update_tasks",
       "create_financial_transactions",
       "update_financial_transactions",
@@ -1084,13 +1083,10 @@ describe("listMcpToolCatalog", () => {
       (await listMcpToolCatalog()).tools.map(({ name }) => name),
     );
 
-    const OPERATIONS: Operation[] = [
-      "list",
-      "get",
-      "create",
-      "update",
-      "delete",
-    ];
+    // `delete` is deliberately absent: there is no per-entity delete tool any
+    // more. One `delete_entity` takes the entity as a parameter, and its own
+    // coverage is asserted separately below.
+    const OPERATIONS: Operation[] = ["list", "get", "create", "update"];
 
     for (const entity of allEntities) {
       const declared = new Set<Operation>(entityManifest[entity].mcp);
@@ -1115,6 +1111,39 @@ describe("listMcpToolCatalog", () => {
           registered: declared.has(operation),
         });
       }
+    }
+  });
+
+  it("exposes one delete_entity covering exactly the delete-declaring entities", async () => {
+    // The twelve `delete_<plural>` tools collapsed into one. The manifest is
+    // still the source of truth for WHICH entities are deletable — vendor and
+    // purchase omit "delete" on purpose (each has a narrower tool), and image
+    // exposes no MCP tools at all — so the generic tool's `entity` enum must
+    // match the manifest exactly, in both directions.
+    const { tools } = await listMcpToolCatalog();
+    const names = new Set(tools.map(({ name }) => name));
+    expect(names.has("delete_entity")).toBe(true);
+
+    const schema = tools.find((tool) => tool.name === "delete_entity")
+      ?.inputSchema as
+      | { properties?: { entity?: { enum?: string[] } } }
+      | undefined;
+    const covered = [...(schema?.properties?.entity?.enum ?? [])].sort();
+    const expected = allEntities
+      .filter((entity) =>
+        (entityManifest[entity].mcp as readonly Operation[]).includes("delete"),
+      )
+      .sort();
+    expect(covered).toEqual(expected);
+
+    // No entity may have both routes.
+    for (const entity of covered) {
+      expect({
+        entity,
+        alsoHasPerEntityTool: names.has(
+          mcpToolName(entity as Entity, "delete"),
+        ),
+      }).toEqual({ entity, alsoHasPerEntityTool: false });
     }
   });
 
@@ -2608,31 +2637,16 @@ describe("purchase restructuring tools (split/link/merge)", () => {
   const PURCHASE_A = "PUR-8882";
   const PURCHASE_B = "PUR-8883";
 
-  it("delete_empty_purchases is destructive, bounded, and returns deleted IDs", async () => {
-    const server = createMcpServer();
-    expect(
-      getRegisteredTool(server, "delete_empty_purchases")?.annotations,
-    ).toEqual(WRITE_DESTRUCTIVE_CLOSED);
-    const deleteEmpty = vi.fn().mockResolvedValue({
-      deleted: 2,
-      deletedIds: [PURCHASE_A, PURCHASE_B],
-    });
-
-    const result = await callTool(
-      server,
-      "delete_empty_purchases",
-      { ids: [PURCHASE_A, PURCHASE_B] },
-      { purchase: { deleteEmpty } },
-    );
-
-    expect(deleteEmpty).toHaveBeenCalledWith({
-      ids: [PURCHASE_A, PURCHASE_B],
-    });
-    expect(result.isError).not.toBe(true);
-    expect(result.structuredContent).toEqual({
-      deleted: 2,
-      deletedIds: [PURCHASE_A, PURCHASE_B],
-    });
+  it("retires delete_empty_purchases in favour of delete_entity", async () => {
+    // Its two distinguishing properties are preserved rather than dropped:
+    // `delete_entity` dispatches purchase through the SAME require-empty policy
+    // (so it still refuses anything carrying live money), and it reports a
+    // measured count. What is gone is a second door to the same operation.
+    const { tools } = await listMcpToolCatalog();
+    const names = new Set(tools.map(({ name }) => name));
+    expect(names.has("delete_empty_purchases")).toBe(false);
+    expect(names.has("delete_expenses")).toBe(false);
+    expect(names.has("delete_entity")).toBe(true);
   });
 
   it("split_expense is WRITE_CLOSED, wraps the array result in items, and passes params through", async () => {

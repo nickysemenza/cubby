@@ -1,5 +1,9 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
-import { unsafeLocationId, unsafeProductId } from "@cubby/schemas/identifiers";
+import {
+  unsafeImageShortcode,
+  unsafeLocationId,
+  unsafeProductId,
+} from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { count, eq } from "drizzle-orm";
 import {
@@ -788,7 +792,9 @@ describe("locationSearch picker rows", () => {
     const usable = await addImage("bin-photo", 2);
 
     const found = await searchFor("Photographed Bin");
-    expect(found.data[0]!.coverImage?.id).toBe(usable.id);
+    expect(found.data[0]!.coverImage?.id).toBe(
+      unsafeImageShortcode(usable.shortcode),
+    );
   });
 
   it("leaves coverImage null when a location has no image", async () => {
@@ -833,7 +839,7 @@ describe("locationSearch picker rows", () => {
     );
 
     expect((await searchFor(created.name)).data[0]!.coverImage?.id).toBe(
-      productCover.id,
+      unsafeImageShortcode(productCover.shortcode),
     );
 
     const ownPhoto = await insertWithShortcode(ctx.db, "image", {
@@ -850,7 +856,7 @@ describe("locationSearch picker rows", () => {
     });
 
     expect((await searchFor(created.name)).data[0]!.coverImage?.id).toBe(
-      ownPhoto.id,
+      unsafeImageShortcode(ownPhoto.shortcode),
     );
   });
 
@@ -888,7 +894,9 @@ describe("locationSearch picker rows", () => {
 
     // Same location, same page — the picker read still resolves the cover.
     const found = await searchFor("Optioned Bin");
-    expect(found.data[0]!.coverImage?.id).toBe(img.id);
+    expect(found.data[0]!.coverImage?.id).toBe(
+      unsafeImageShortcode(img.shortcode),
+    );
   });
 });
 
@@ -929,7 +937,7 @@ describe("buildLocationTree identity product hydration", () => {
     const row = home?.children?.find((location) => location.id === created.id);
     expect(row?.product).toMatchObject({
       id: vessel.id,
-      coverImage: { id: cover.id },
+      coverImage: { id: unsafeImageShortcode(cover.shortcode) },
     });
   });
 });
@@ -1227,28 +1235,35 @@ describe("attaching a photo as the new cover", () => {
       status: "PENDING",
     });
 
-  /** Attach `imageId` and make it the cover, exactly as the capture hook does. */
+  /** The public `IMG-` code `ImageOut.id` hands back for a raw `image` row. */
+  const shortcodeOf = (img: { shortcode: string }) =>
+    unsafeImageShortcode(img.shortcode);
+
+  /** Attach `image` and make it the cover, exactly as the capture hook does.
+   * `pendingImageIds` still takes the raw uuid; `imageOrder` — populated from
+   * the attach response's own `images[].id` — takes the shortcode. */
   const captureAsCover = async (
     shortcode: LocationShortcode,
-    imageId: string,
+    image: { id: string; shortcode: string },
   ) => {
     const id = unsafeLocationId(
       (await resolveLiveShortcode(ctx.db, shortcode, "location"))!,
     );
+    const code = shortcodeOf(image);
     const { location: attached } = await updateLocation(
       ctx.db,
       id,
-      { pendingImageIds: [imageId] },
+      { pendingImageIds: [image.id] },
       ctx.actor,
     );
     const otherIds = attached.images
       .map((img) => img.id)
-      .filter((existing) => existing !== imageId);
+      .filter((existing) => existing !== code);
     if (otherIds.length > 0) {
       await updateLocation(
         ctx.db,
         id,
-        { imageOrder: [imageId, ...otherIds] },
+        { imageOrder: [code, ...otherIds] },
         ctx.actor,
       );
     }
@@ -1263,9 +1278,9 @@ describe("attaching a photo as the new cover", () => {
     );
     const img = await pendingImage("first");
 
-    const after = await captureAsCover(shelf.id, img.id);
+    const after = await captureAsCover(shelf.id, img);
 
-    expect(after?.images.map((i) => i.id)).toEqual([img.id]);
+    expect(after?.images.map((i) => i.id)).toEqual([shortcodeOf(img)]);
     // The attach is what flips PENDING → UPLOADED; without it the row is culled.
     expect(after?.images[0]?.status).toBe("UPLOADED");
   });
@@ -1278,17 +1293,17 @@ describe("attaching a photo as the new cover", () => {
     );
     const older = await pendingImage("older");
     const middle = await pendingImage("middle");
-    await captureAsCover(shelf.id, older.id);
-    await captureAsCover(shelf.id, middle.id);
+    await captureAsCover(shelf.id, older);
+    await captureAsCover(shelf.id, middle);
 
     const newest = await pendingImage("newest");
-    const after = await captureAsCover(shelf.id, newest.id);
+    const after = await captureAsCover(shelf.id, newest);
 
-    expect(after?.images[0]?.id).toBe(newest.id);
+    expect(after?.images[0]?.id).toBe(shortcodeOf(newest));
     expect(after?.images.map((i) => i.id)).toEqual([
-      newest.id,
-      middle.id,
-      older.id,
+      shortcodeOf(newest),
+      shortcodeOf(middle),
+      shortcodeOf(older),
     ]);
   });
 
@@ -1318,13 +1333,13 @@ describe("attaching a photo as the new cover", () => {
         imageId: img.id,
         sortOrder: 0,
       });
-      legacy.push(img.id);
+      legacy.push(shortcodeOf(img));
     }
 
     const newest = await pendingImage("legacy-newest");
-    const after = await captureAsCover(shelf.id, newest.id);
+    const after = await captureAsCover(shelf.id, newest);
 
-    expect(after?.images[0]?.id).toBe(newest.id);
+    expect(after?.images[0]?.id).toBe(shortcodeOf(newest));
     expect(after?.images).toHaveLength(4);
     for (const id of legacy) {
       expect(after?.images.map((i) => i.id)).toContain(id);
@@ -1338,10 +1353,10 @@ describe("attaching a photo as the new cover", () => {
       ctx.actor,
     );
     const keeper = await pendingImage("keeper");
-    await captureAsCover(shelf.id, keeper.id);
+    await captureAsCover(shelf.id, keeper);
 
     const badFrame = await pendingImage("bad-frame");
-    await captureAsCover(shelf.id, badFrame.id);
+    await captureAsCover(shelf.id, badFrame);
 
     const locationId = unsafeLocationId(
       (await resolveLiveShortcode(ctx.db, shelf.id, "location"))!,
@@ -1349,11 +1364,11 @@ describe("attaching a photo as the new cover", () => {
     await updateLocation(
       ctx.db,
       locationId,
-      { removeImageIds: [badFrame.id] },
+      { removeImageIds: [shortcodeOf(badFrame)] },
       ctx.actor,
     );
 
     const after = await getLocationById(ctx.db, locationId);
-    expect(after?.images.map((i) => i.id)).toEqual([keeper.id]);
+    expect(after?.images.map((i) => i.id)).toEqual([shortcodeOf(keeper)]);
   });
 });

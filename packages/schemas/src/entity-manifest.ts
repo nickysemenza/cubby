@@ -510,9 +510,13 @@ export const entityManifest = {
     // Deletable in the app (blocked while live purchases reference it), and
     // mergeable — two roster rows for one real vendor is a reported defect.
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: true },
-    // No delete: `deleteVendors` refuses while live purchases still reference the
-    // vendor, and an agent has no way to rehome them.
-    mcp: ["get", "list", "create", "update"],
+    // Delete is exposed now. It used to be withheld because `deleteVendors`
+    // refuses while live purchases reference the vendor and "an agent has no
+    // way to rehome them" — but that refusal is structured now: it names which
+    // vendors blocked and how many purchases each still holds, which is exactly
+    // what an agent needs to act. merge_vendors remains the better move when
+    // the two rows are one real vendor.
+    mcp: ["get", "list", "create", "update", "delete"],
   },
   // One vendor order/receipt event — identity (`vendorId` + optional `orderId`),
   // vendor date, literal `statedTotal` that is never summed into spend, and
@@ -538,12 +542,13 @@ export const entityManifest = {
       ),
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: true },
-    // No generic delete: the UI operation may detach real money. MCP exposes a
-    // narrower delete_empty_purchases tool that refuses live Expense or
-    // FinancialTransaction references. The restructuring ops (split/link/merge)
-    // likewise live outside this CRUD roster and are registered directly in
-    // purchase.tools.ts.
-    mcp: ["get", "list", "create", "update"],
+    // Delete is exposed, but NOT the UI's operation: that one detaches real
+    // money from its provenance. `delete_entity` dispatches purchase through
+    // the require-empty policy instead (see `deleteDispatch` in
+    // mcp/tools/_shared.ts), refusing anything still carrying live Expenses or
+    // settlement allocations and naming which. The restructuring ops
+    // (split/link/merge) live outside this CRUD roster.
+    mcp: ["get", "list", "create", "update", "delete"],
   },
   financialAccount: {
     dbTable: "FinancialAccount",

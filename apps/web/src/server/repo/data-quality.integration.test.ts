@@ -1,4 +1,5 @@
 import type { PurchaseId } from "@cubby/schemas/identifiers";
+import { unsafeImageShortcode } from "@cubby/schemas/identifiers";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { eq, inArray } from "drizzle-orm";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
@@ -73,11 +74,17 @@ describe("computed purchase and product data quality", () => {
       size: 12,
       status: "UPLOADED",
     });
-    return insertAndReturn(ctx.db, purchaseImage, {
+    const joinRow = await insertAndReturn(ctx.db, purchaseImage, {
       purchaseId,
       imageId: stored.id,
       ...(documentKind ? { documentKind } : {}),
     });
+    // `reclassifyPurchaseDocument` now takes the public `IMG-` shortcode, not
+    // the join row's raw uuid FK.
+    return {
+      ...joinRow,
+      imageShortcode: unsafeImageShortcode(stored.shortcode),
+    };
   };
 
   it("derives gaps, removes them with evidence, and distinguishes primary documents", async () => {
@@ -156,7 +163,7 @@ describe("computed purchase and product data quality", () => {
       ctx.db,
       {
         purchaseId: seeded.output.id,
-        imageId: quote.imageId,
+        imageId: quote.imageShortcode,
         documentKind: "receipt",
       },
       ctx.actor,
@@ -687,7 +694,7 @@ describe("computed purchase and product data quality", () => {
       ctx.db,
       {
         purchaseId: seeded.output.id,
-        imageId: document.imageId,
+        imageId: document.imageShortcode,
         documentKind: "receipt",
       },
       ctx.actor,

@@ -367,7 +367,9 @@ describe("recipe crud repo", () => {
 
       // No new Image row was minted — the duplicate's cover is the SAME row.
       expect(duplicated.images).toHaveLength(1);
-      expect(duplicated.images[0]!.id).toBe(cover.id);
+      expect(duplicated.images[0]!.id).toBe(
+        unsafeImageShortcode(cover.shortcode),
+      );
 
       // Both recipes now carry their own live RecipeImage join row for it.
       const joinRows = await getDb(ctx.db)
@@ -851,5 +853,6 @@ describe("recipe crud repo", () => {
 
 import {
   type IngredientShortcode,
+  unsafeImageShortcode,
   unsafeRecipeShortcode,
 } from "@cubby/schemas/identifiers";

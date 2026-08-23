@@ -18,6 +18,7 @@ import type {
 } from "@cubby/schemas/entity-integrity";
 import {
   type PurchaseId,
+  unsafeImageShortcode,
   unsafeVendorId,
   unsafeVendorShortcode,
   type VendorId,
@@ -172,7 +173,7 @@ const vendorColumns = {
   spend: vendorSpend,
   latestPurchaseDate: vendorLatestPurchaseDate,
   logo: {
-    id: image.id,
+    id: image.shortcode,
     url: image.url,
     key: image.key,
     filename: image.filename,
@@ -240,7 +241,7 @@ const dbVendorToAPI = (row: VendorRow): VendorOut => ({
   // product/mappers.ts applies to its own aggregates.
   spend: Number(row.spend),
   latestPurchaseDate: row.latestPurchaseDate,
-  logo: row.logo,
+  logo: row.logo && { ...row.logo, id: unsafeImageShortcode(row.logo.id) },
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });
@@ -607,7 +608,10 @@ export const replaceVendorLogo = async (
         entityId,
         action: "update",
         changes: {
-          logoImageId: { from: before.logoImageId, to: created.id },
+          // `to` records the public shortcode — the same value a reader gets
+          // back from `logo.id` — never the internal uuid `from` still holds
+          // (that's whatever the column already had before this migration).
+          logoImageId: { from: before.logoImageId, to: created.shortcode },
         },
       });
 

@@ -19,7 +19,10 @@
  * shared with the recount session and the ingredient review queue.
  */
 
-import type { LocationShortcode } from "@cubby/schemas/identifiers";
+import type {
+  ImageShortcode,
+  LocationShortcode,
+} from "@cubby/schemas/identifiers";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -298,7 +301,7 @@ function QueuePass({ parent, all, type }: PhotoPassSearch) {
   });
   const { stops, current, counts, complete } = pass;
 
-  const handleRetake = async (stop: PhotoStop, imageId: string) => {
+  const handleRetake = async (stop: PhotoStop, imageId: ImageShortcode) => {
     try {
       await discardCapture(stop.id, imageId);
       pass.unsettle(stop.id);

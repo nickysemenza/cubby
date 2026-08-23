@@ -208,6 +208,7 @@ export type FinancialAccountShortcode = z.infer<
 export type FinancialTransactionShortcode = z.infer<
   typeof financialTransactionShortcode
 >;
+export type ImageShortcode = z.infer<typeof imageShortcode>;
 export type IngredientShortcode = z.infer<typeof ingredientShortcode>;
 export type InventoryShortcode = z.infer<typeof inventoryShortcode>;
 export type LocationShortcode = z.infer<typeof locationShortcode>;

@@ -9,6 +9,7 @@ import { relationMutationOut } from "./common";
 import { dataCheck, dataQuality, dataQualityStatus } from "./data-quality";
 import {
   expenseShortcode,
+  imageShortcode,
   productShortcode,
   projectShortcode,
   purchaseShortcode,
@@ -100,14 +101,18 @@ export type PurchaseCreateInput = z.infer<typeof purchaseCreateInput>;
  */
 export const purchaseUpdateData = deriveUpdateData(purchaseCreateShape, {
   extend: {
+    // Public `IMG-` codes — these name documents `get_purchase`/`getPurchaseByID`
+    // already handed back through `PurchaseOut.images[].id`, so a client passes
+    // one straight back. The repo resolves it to a uuid before it reaches the
+    // `PurchaseImage` join table.
     removeImageIds: z
-      .array(z.uuid())
+      .array(imageShortcode)
       .optional()
       .describe(
         "Document ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
       ),
     imageOrder: z
-      .array(z.uuid())
+      .array(imageShortcode)
       .optional()
       .describe("existing document ids in display order"),
   },
@@ -259,7 +264,7 @@ export const purchaseOut = z.object({
    */
   images: z.array(
     z.object({
-      id: z.string(),
+      id: imageShortcode,
       url: z.url(),
       filename: z.string(),
       contentType: z.string(),
@@ -283,7 +288,9 @@ export type PurchaseListResponse = z.infer<typeof purchaseListResponse>;
 
 export const reclassifyPurchaseDocumentInput = z.object({
   purchaseId: purchaseShortcode,
-  imageId: z.uuid(),
+  // Public `IMG-` code, as returned by `PurchaseOut.images[].id` — resolved to
+  // a uuid in the repo before it's compared against `PurchaseImage.imageId`.
+  imageId: imageShortcode,
   documentKind: purchaseDocumentKind,
 });
 export type ReclassifyPurchaseDocumentInput = z.infer<

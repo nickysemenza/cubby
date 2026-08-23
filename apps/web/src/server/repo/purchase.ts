@@ -27,6 +27,7 @@ import {
   type PurchaseId,
   type PurchaseShortcode,
   unsafeExpenseId,
+  unsafeImageShortcode,
   unsafePurchaseId,
   unsafePurchaseShortcode,
   unsafeVendorShortcode,
@@ -151,6 +152,7 @@ import { relatedWhereConditions } from "~/server/repo/related-view";
 import { cascadeRemoval, removeEntity } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
+  resolveAllPresent,
   resolveLiveShortcode,
   resolveOrThrow,
   resolveShortcodes,
@@ -399,7 +401,7 @@ const loadPurchaseImages = async (
 ): Promise<PurchaseOut["images"]> => {
   const rows = await unwrapDb(db)
     .select({
-      id: image.id,
+      shortcode: image.shortcode,
       url: image.url,
       filename: image.filename,
       contentType: image.contentType,
@@ -416,7 +418,10 @@ const loadPurchaseImages = async (
       ),
     )
     .orderBy(asc(purchaseImage.sortOrder), asc(purchaseImage.createdAt));
-  return rows;
+  return rows.map(({ shortcode, ...rest }) => ({
+    ...rest,
+    id: unsafeImageShortcode(shortcode),
+  }));
 };
 
 /**
@@ -424,6 +429,13 @@ const loadPurchaseImages = async (
  * display order. Mirrors `syncProductImages` (repo/product/update-helpers.ts)
  * exactly, including applying the order BEFORE the append so new documents always
  * land after the reordered existing set.
+ *
+ * `removeImageIds`/`imageOrder` arrive as public `IMG-` shortcodes (what
+ * `PurchaseOut.images[].id` hands back); `applyImageOrder` and
+ * `detachImagesFromEntity` both still take uuids, so this is the boundary
+ * that resolves one to the other. A code that doesn't resolve is dropped
+ * rather than thrown on — same as today's silent no-op for a uuid naming no
+ * live row, since neither helper below errors on an id that doesn't match.
  */
 const syncPurchaseImages = async (
   tx: DrizzleTransaction,
@@ -435,21 +447,23 @@ const syncPurchaseImages = async (
   let detachedImageKeys: string[] = [];
 
   if (imageOrder && imageOrder.length > 0) {
+    const orderedIds = await resolveAllPresent(tx, "image", imageOrder);
     await applyImageOrder(
       tx,
       purchaseImage,
       purchaseImage.purchaseId,
       id,
-      imageOrder,
+      orderedIds,
     );
   }
 
   if (removeImageIds && removeImageIds.length > 0) {
+    const idsToRemove = await resolveAllPresent(tx, "image", removeImageIds);
     ({ deletedKeys: detachedImageKeys } = await detachImagesFromEntity(
       tx,
       "purchase",
       id,
-      removeImageIds,
+      idsToRemove,
     ));
   }
 
@@ -768,11 +782,16 @@ export const reclassifyPurchaseDocument = async (
   actor: ActorContext,
 ): Promise<PurchaseOut> => {
   const id = await resolveOrThrow(db, "purchase", input.purchaseId);
+  // `input.imageId` is the public `IMG-` code `PurchaseOut.images[].id` handed
+  // back; resolving it here (throwing IMAGE_NOT_FOUND on an unknown code)
+  // subsumes the "not a real image" case the join lookup below used to be the
+  // only guard against.
+  const imageId = await resolveOrThrow(db, "image", input.imageId);
   await withTransaction(db, async (tx) => {
     const before = await tx.query.purchaseImage.findFirst({
       where: and(
         eq(purchaseImage.purchaseId, id),
-        eq(purchaseImage.imageId, input.imageId),
+        eq(purchaseImage.imageId, imageId),
         notDeleted(purchaseImage),
       ),
     });

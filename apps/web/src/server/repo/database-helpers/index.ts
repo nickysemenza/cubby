@@ -36,7 +36,6 @@ export {
   buildSearchConditions,
   correlated,
   countWhere,
-  dependentBlockers,
   eqAny,
   eqAnyOrPresence,
   eqAnyRequested,

@@ -31,7 +31,10 @@ import {
   unwrapDb,
 } from "~/server/repo/database-helpers";
 import { detachImagesFromEntity } from "~/server/repo/image";
-import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import {
+  resolveAllPresent,
+  resolveOrThrow,
+} from "~/server/repo/shortcode-resolver";
 import { findOrCreateWithShortcode } from "~/server/repo/shortcode-utils";
 
 import type { ExistingRecipeWithSections } from "./internal-types";
@@ -248,22 +251,33 @@ export async function updateRecipeImages(
 ): Promise<string[]> {
   let detachedImageKeys: string[] = [];
 
+  // `updates.imageOrder`/`updates.removeImageIds` are public `IMG-` shortcodes
+  // — what `RecipeOut.images[].id` hands back — resolved to uuids here, right
+  // before `applyImageOrder`/`detachImagesFromEntity`, which both still take
+  // uuids. A code that doesn't resolve is dropped rather than thrown on,
+  // matching today's silent no-op for a uuid naming no live row.
   if (updates.imageOrder && updates.imageOrder.length > 0) {
+    const orderedIds = await resolveAllPresent(tx, "image", updates.imageOrder);
     await applyImageOrder(
       tx,
       recipeImage,
       recipeImage.recipeId,
       recipeId,
-      updates.imageOrder,
+      orderedIds,
     );
   }
 
   if (updates.removeImageIds && updates.removeImageIds.length > 0) {
+    const idsToRemove = await resolveAllPresent(
+      tx,
+      "image",
+      updates.removeImageIds,
+    );
     ({ deletedKeys: detachedImageKeys } = await detachImagesFromEntity(
       tx,
       "recipe",
       recipeId,
-      updates.removeImageIds,
+      idsToRemove,
     ));
   }
 

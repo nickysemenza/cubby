@@ -4,6 +4,7 @@ import type {
   ExpenseShortcode,
   FinancialAccountShortcode,
   FinancialTransactionShortcode,
+  ImageShortcode,
   IngredientShortcode,
   InventoryShortcode,
   LocationShortcode,
@@ -135,6 +136,7 @@ export {
   expenseShortcode,
   financialAccountShortcode,
   financialTransactionShortcode,
+  imageShortcode,
   ingredientShortcode,
   inventoryShortcode,
   locationShortcode,
@@ -153,6 +155,7 @@ export type {
   ExpenseShortcode,
   FinancialAccountShortcode,
   FinancialTransactionShortcode,
+  ImageShortcode,
   IngredientShortcode,
   InventoryShortcode,
   LocationShortcode,
@@ -172,6 +175,7 @@ export const unsafeFinancialAccountShortcode =
   makeUnsafeId<FinancialAccountShortcode>();
 export const unsafeFinancialTransactionShortcode =
   makeUnsafeId<FinancialTransactionShortcode>();
+export const unsafeImageShortcode = makeUnsafeId<ImageShortcode>();
 export const unsafeIngredientShortcode = makeUnsafeId<IngredientShortcode>();
 export const unsafeInventoryShortcode = makeUnsafeId<InventoryShortcode>();
 export const unsafeLocationShortcode = makeUnsafeId<LocationShortcode>();

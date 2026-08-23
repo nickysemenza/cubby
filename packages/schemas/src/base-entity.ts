@@ -127,41 +127,6 @@ export function deriveUpdateData<
   >;
 }
 
-type McpInputShape<T extends z.ZodRawShape> = {
-  [K in keyof T]: T[K] extends z.ZodNullable<infer Inner extends z.ZodType>
-    ? z.ZodOptional<z.ZodNullable<Inner>>
-    : T[K];
-};
-
-/**
- * Mechanically re-derive an MCP write shape from a plain `*CreateShape`
- * sibling: every field that is bare `.nullable()` (nullable but NOT also
- * `.optional()`) becomes `.nullish()`. Every other field passes through
- * unchanged — this does not touch `.describe()` text, add/remove fields, or
- * reorder them.
- *
- * This exists because of one concrete, previously-shipped bug: a bare
- * `.nullable()` field still makes its KEY required, so an MCP client with no
- * value for it (as opposed to an explicit `null`) cannot omit it — that's what
- * made a Product with no UPC uncreatable over MCP (`productCreateShape.upc:
- * gtin.nullable()`; hand-fixed on `mcpProductCreateInput` as
- * `upc: gtin.nullish()`). The narrow scope is deliberate: because it changes
- * nothing else, `toMcpInput(createShape)` only reproduces today's hand-written
- * MCP shape when that shape's field set and prose ALREADY match the plain
- * shape's — an MCP shape that omits fields, adds MCP-only ones, or carries
- * rewritten tool-facing descriptions needs its own hand-written declaration,
- * same as before this helper existed.
- */
-export function toMcpInput<T extends z.ZodRawShape>(
-  shape: T,
-): McpInputShape<T> {
-  const result: Record<string, z.ZodType> = {};
-  for (const [key, field] of Object.entries(shape) as [string, z.ZodType][]) {
-    result[key] = field instanceof z.ZodNullable ? field.optional() : field;
-  }
-  return result as McpInputShape<T>;
-}
-
 /**
  * `.refine()` args for an array that must not contain duplicate `keyFn(item)`
  * values — spread into `.refine(...uniqueBy(keyFn, message))`. `keyFn` is the

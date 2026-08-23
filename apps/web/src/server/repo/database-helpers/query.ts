@@ -313,7 +313,7 @@ export async function lockAndValidateForDelete<TId extends string>(
  * is the number of distinct blocked parents — see the wrapper below, which
  * preserves the old wording exactly.
  */
-export function dependentBlockers<TId extends string>(opts: {
+function dependentBlockers<TId extends string>(opts: {
   offendingParentIds: ReadonlyArray<TId | null | undefined>;
   /** The edge policy entry this blocker came from. */
   disposition: Pick<OperationDisposition, "code" | "description"> & {
@@ -346,10 +346,15 @@ export function dependentBlockers<TId extends string>(opts: {
 /**
  * Guard a soft-delete against orphaning dependents.
  *
- * Now a thin wrapper over {@link dependentBlockers} plus the name fetch the
- * message needs. Behavior and wording are unchanged — `count` is still the
- * number of distinct blocked parents, not the dependent total — so existing
- * callers and the message-asserting tests are unaffected.
+ * Genuinely built on {@link dependentBlockers}: that computes WHICH targets are
+ * blocked and by how many dependents, and this adds the name fetch the prose
+ * needs. Wording is unchanged — `count` is still the number of distinct blocked
+ * parents, not the dependent total — so existing callers and the
+ * message-asserting tests are unaffected.
+ *
+ * A caller that wants the structure on the wire rather than in a sentence calls
+ * `dependentBlockers` directly and throws `createBlockedError` with the result;
+ * `deleteFinancialAccounts` is the worked example.
  */
 export async function assertNoDependents<TId extends string>(opts: {
   offendingParentIds: ReadonlyArray<TId | null | undefined>;
@@ -357,10 +362,21 @@ export async function assertNoDependents<TId extends string>(opts: {
   reason: AppErrorReason;
   message: (count: number, names: string) => string;
 }): Promise<void> {
+  // One shared notion of "what is blocked", so the prose path and the
+  // structured path can never disagree about it.
+  const blockers = dependentBlockers({
+    offendingParentIds: opts.offendingParentIds,
+    disposition: {
+      code: "block-dependents",
+      effect: "block",
+      description: "Dependent rows still reference this entity.",
+    },
+    label: "dependents",
+  });
+  if (blockers.length === 0) return;
   const ids = uniq(
-    opts.offendingParentIds.filter((id): id is TId => id != null),
-  );
-  if (ids.length === 0) return;
+    Object.keys(blockers[0]?.byTargetId ?? {}),
+  ) as unknown as TId[];
   const offenders = await opts.fetchNames(ids);
   const names = offenders.map((o) => o.name).join(", ");
   throw createAppError(opts.reason, opts.message(offenders.length, names));

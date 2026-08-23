@@ -8,6 +8,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import {
   unsafeExpenseId,
+  unsafeImageShortcode,
   unsafePurchaseId,
   unsafePurchaseShortcode,
   unsafeVendorId,
@@ -2595,13 +2596,20 @@ describe("purchase repository — documents", () => {
       documentKind: "invoice",
     });
     const [before] = await getDb(ctx.db)
-      .select({ key: image.key })
+      .select({ key: image.key, shortcode: image.shortcode })
       .from(image)
       .where(eq(image.id, attached.imageId));
 
+    // `attached.imageId` (from `attachFileToEntity`) is the raw uuid — that
+    // response deliberately never crosses a shortcode boundary. `removeImageIds`
+    // wants the public `IMG-` code instead, same as a real client would supply
+    // it after reading it back from `getPurchaseByID`.
     const { detachedImageKeys } = await updatePurchase(
       ctx.db,
-      { id: charge.id, data: { removeImageIds: [attached.imageId] } },
+      {
+        id: charge.id,
+        data: { removeImageIds: [unsafeImageShortcode(before!.shortcode)] },
+      },
       ctx.actor,
     );
 

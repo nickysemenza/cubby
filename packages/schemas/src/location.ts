@@ -13,6 +13,7 @@ import { money, moneyNullable } from "./money";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import { requiredName } from "./common";
 import {
+  imageShortcode,
   inventoryShortcode,
   locationShortcode,
   productShortcode,
@@ -519,14 +520,16 @@ export const locationCreateInput = z.object(locationCreateShape);
 // `parentId` inherits the create field's description — harmless doc, same type.)
 export const locationUpdateData = deriveUpdateData(locationCreateShape, {
   extend: {
+    // Public `IMG-` codes, as returned by `LocationOut.images[].id` — resolved
+    // to uuids in the repo before they reach the `LocationImage` join table.
     removeImageIds: z
-      .array(z.uuid())
+      .array(imageShortcode)
       .optional()
       .describe(
         "Image ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
       ),
     imageOrder: z
-      .array(z.uuid())
+      .array(imageShortcode)
       .optional()
       .describe("existing image ids in display order; first = cover"),
   },

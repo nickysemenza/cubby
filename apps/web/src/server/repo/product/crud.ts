@@ -12,10 +12,11 @@ import {
   GTIN_SOURCE,
   storedExternalIdUrl,
 } from "@cubby/schemas/external-id";
-import type {
-  IngredientId,
-  LocationId,
-  ProductId,
+import {
+  type IngredientId,
+  type LocationId,
+  type ProductId,
+  unsafeImageShortcode,
 } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import {
@@ -460,7 +461,10 @@ export const getProductImagesByProductIds = async (
     .orderBy(asc(productImage.sortOrder), asc(productImage.createdAt));
 
   for (const row of rows) {
-    result[row.productId]?.push(row.image);
+    result[row.productId]?.push({
+      ...row.image,
+      id: unsafeImageShortcode(row.image.shortcode),
+    });
   }
 
   return result;

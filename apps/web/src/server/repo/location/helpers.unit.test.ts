@@ -1,4 +1,5 @@
 import {
+  unsafeImageShortcode,
   unsafeInventoryId,
   unsafeInventoryShortcode,
   unsafeLocationId,
@@ -29,8 +30,9 @@ const INVENTORY_ID = unsafeInventoryId("723e4567-e89b-12d3-a456-426614174000");
 const DELETED_PRODUCT_INVENTORY_ID = unsafeInventoryId(
   "823e4567-e89b-12d3-a456-426614174000",
 );
-const IMAGE_ID = "923e4567-e89b-12d3-a456-426614174000";
-const DELETED_IMAGE_ID = "a23e4567-e89b-12d3-a456-426614174000";
+const IMAGE_SHORTCODE = "IMG-2345";
+const IMAGE_ID = unsafeImageShortcode(IMAGE_SHORTCODE);
+const DELETED_IMAGE_SHORTCODE = "IMG-6789";
 const CREATED_AT = new Date("2024-01-01T00:00:00.000Z");
 const UPDATED_AT = new Date("2024-01-02T00:00:00.000Z");
 const DELETED_AT = new Date("2024-01-03T00:00:00.000Z");
@@ -76,7 +78,7 @@ const deletedChildLocation = {
 };
 
 const image = {
-  id: IMAGE_ID,
+  shortcode: IMAGE_SHORTCODE,
   url: "https://example.com/location.jpg",
   key: "location.jpg",
   filename: "location.jpg",
@@ -90,7 +92,7 @@ const image = {
 
 const deletedImage = {
   ...image,
-  id: DELETED_IMAGE_ID,
+  shortcode: DELETED_IMAGE_SHORTCODE,
   url: "https://example.com/deleted.jpg",
   deletedAt: DELETED_AT,
 };

@@ -1,4 +1,5 @@
 import {
+  unsafeImageShortcode,
   unsafeIngredientId,
   unsafeIngredientShortcode,
   unsafeInventoryId,
@@ -31,9 +32,11 @@ const INVENTORY_ID = unsafeInventoryId("423e4567-e89b-12d3-a456-426614174000");
 const DELETED_LOCATION_INVENTORY_ID = unsafeInventoryId(
   "023e4567-e89b-12d3-a456-426614174000",
 );
-const IMAGE_ID = "523e4567-e89b-12d3-a456-426614174000";
-const JOIN_IMAGE_ID = "623e4567-e89b-12d3-a456-426614174000";
-const DELETED_IMAGE_ID = "723e4567-e89b-12d3-a456-426614174000";
+const IMAGE_SHORTCODE = "IMG-2345";
+const IMAGE_ID = unsafeImageShortcode(IMAGE_SHORTCODE);
+const JOIN_IMAGE_SHORTCODE = "IMG-6789";
+const JOIN_IMAGE_ID = unsafeImageShortcode(JOIN_IMAGE_SHORTCODE);
+const DELETED_IMAGE_SHORTCODE = "IMG-ABCD";
 const EXTERNAL_ID = "823e4567-e89b-12d3-a456-426614174000";
 const DELETED_EXTERNAL_ID = "923e4567-e89b-12d3-a456-426614174000";
 const UNIT_MAPPING_ID = "a23e4567-e89b-12d3-a456-426614174000";
@@ -86,7 +89,7 @@ const baseProduct = {
 };
 
 const baseImage = {
-  id: IMAGE_ID,
+  shortcode: IMAGE_SHORTCODE,
   url: "https://example.com/image.jpg",
   key: "image.jpg",
   filename: "image.jpg",
@@ -99,7 +102,7 @@ const baseImage = {
 };
 
 const joinedImage = {
-  id: JOIN_IMAGE_ID,
+  shortcode: JOIN_IMAGE_SHORTCODE,
   url: "https://example.com/joined.jpg",
   key: "joined.jpg",
   filename: "joined.jpg",
@@ -113,7 +116,7 @@ const joinedImage = {
 
 const deletedImage = {
   ...baseImage,
-  id: DELETED_IMAGE_ID,
+  shortcode: DELETED_IMAGE_SHORTCODE,
   deletedAt: DELETED_AT,
 };
 

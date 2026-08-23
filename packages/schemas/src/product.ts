@@ -37,6 +37,7 @@ import { isbn } from "./isbn";
 import {
   cookbookShortcode,
   expenseShortcode,
+  imageShortcode,
   ingredientShortcode,
   inventoryShortcode,
   locationShortcode,
@@ -209,14 +210,18 @@ export const productCreateInput = z.object(productCreateShape);
 // is update-only.
 export const productUpdateData = deriveUpdateData(productCreateShape, {
   extend: {
+    // Public `IMG-` codes, as returned by the web `ProductOut.images[].id` —
+    // resolved to uuids in the repo before they reach the `ProductImage` join
+    // table. The MCP surface is a separate schema (`mcpProductUpdateInput`
+    // below) that still speaks raw uuids, matching `productMcpImageOut`.
     removeImageIds: z
-      .array(z.uuid())
+      .array(imageShortcode)
       .optional()
       .describe(
         "Image ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
       ),
     imageOrder: z
-      .array(z.uuid())
+      .array(imageShortcode)
       .optional()
       .describe("existing image ids in display order; first = cover"),
   },
@@ -1474,7 +1479,9 @@ export const productMcpOut = z.object(productMcpFields);
 export type ProductMcpOut = z.infer<typeof productMcpOut>;
 
 export const productMcpImageOut = z.object({
-  id: z.uuid(),
+  // `imageShortcode`, not a uuid: images carry public `IMG-` codes now, so the
+  // MCP boundary no longer needs an image exception.
+  id: imageShortcode,
   url: z.url(),
   key: z.string(),
   filename: z.string(),
@@ -1497,7 +1504,7 @@ export const productMcpImageOut = z.object({
 /** Detailed MCP projection used only by get/mutations that need media state. */
 export const productMcpDetailOut = z.object({
   ...productMcpFields,
-  coverImageId: z.uuid().nullable(),
+  coverImageId: imageShortcode.nullable(),
   images: z.array(productMcpImageOut),
 });
 export type ProductMcpDetailOut = z.infer<typeof productMcpDetailOut>;

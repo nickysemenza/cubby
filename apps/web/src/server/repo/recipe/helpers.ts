@@ -24,8 +24,8 @@ import type {
 import { recipeImage } from "~/server/db/schema";
 import {
   imageOrder,
-  isNotDeleted,
   type MappableImageRecord,
+  mapImages,
   mapRelation,
   notDeleted,
 } from "~/server/repo/database-helpers";
@@ -45,24 +45,7 @@ type RecipeImageRow = {
 };
 
 const mapRecipeImages = (images: RecipeImageRow[] | undefined): ImageOut[] =>
-  (images ?? []).filter(isNotDeleted).map((row) => ({
-    id: row.image.id,
-    url: row.image.url,
-    key: row.image.key,
-    filename: row.image.filename,
-    size: row.image.size,
-    contentType: row.image.contentType,
-    status: row.image.status,
-    width: row.image.width ?? null,
-    height: row.image.height ?? null,
-    detectedContentType: row.image.detectedContentType ?? null,
-    sha256: row.image.sha256 ?? null,
-    renderStatus: row.image.renderStatus ?? null,
-    storageStatus: row.image.storageStatus ?? null,
-    verifiedAt: row.image.verifiedAt ?? null,
-    createdAt: row.image.createdAt,
-    updatedAt: row.image.updatedAt,
-  }));
+  mapImages(images);
 
 /**
  * Distinct live NON-COOKBOOK recipes using this ingredient — "how many of my

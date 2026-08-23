@@ -1,3 +1,4 @@
+import { unsafeImageShortcode } from "@cubby/schemas/identifiers";
 import type { UpdateInputImages } from "@cubby/schemas/image";
 import { useState } from "react";
 import type { PendingImage } from "~/app/_components/PendingImageUpload";
@@ -45,16 +46,23 @@ export function useImageState() {
       imageData.pendingImageIds = pendingIds;
     }
 
+    // `removedImageIds`/`imageOrder` name EXISTING images — ids that came
+    // back from the server as `ImageOut.id`, i.e. real `IMG-` shortcodes —
+    // unlike `pendingIds` above, which are raw upload uuids that never round
+    // tripped through an output. The callback props that feed this state
+    // (`onExistingImagesRemove`/`onExistingImagesReorder`) are typed as plain
+    // `string[]` because the same gallery component also handles pending
+    // images, so the brand is asserted here rather than threaded through.
     const removedIds = [...removedImageIds, ...removedDocumentIds];
     if (!isCreate && removedIds.length > 0) {
-      imageData.removeImageIds = removedIds;
+      imageData.removeImageIds = removedIds.map(unsafeImageShortcode);
     }
 
     // If the user reordered the existing images, persist the new order.
     // Removed ids may still appear here; the server applies order before the
     // removal, so they are harmless.
     if (!isCreate && imageOrder !== null) {
-      imageData.imageOrder = imageOrder;
+      imageData.imageOrder = imageOrder.map(unsafeImageShortcode);
     }
 
     return imageData;

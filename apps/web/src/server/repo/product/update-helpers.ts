@@ -30,6 +30,7 @@ import {
   notDeleted,
 } from "~/server/repo/database-helpers";
 import { detachImagesFromEntity } from "~/server/repo/image";
+import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 
 /**
  * Reject a canonical "1 each <-> $X" price mapping in unit mappings.
@@ -464,6 +465,12 @@ export async function syncProductExternalIds(
  * display order (first = cover) for a product. Order is applied before the
  * append so new images always land after the reordered existing set.
  *
+ * `removeImageIds`/`imageOrder` are public `IMG-` shortcodes — what the web
+ * `ProductOut.images[].id` hands back — resolved to uuids here, right before
+ * `applyImageOrder`/`detachImagesFromEntity`, which both still take uuids. A
+ * code that doesn't resolve is dropped rather than thrown on, matching
+ * today's silent no-op for a uuid naming no live row.
+ *
  * Returns the R2 keys of images the removal reaped (see
  * {@link detachImagesFromEntity}). They have no rollback, so the caller drops
  * the objects only after its transaction commits.
@@ -478,21 +485,23 @@ export async function syncProductImages(
   let detachedImageKeys: string[] = [];
 
   if (imageOrder && imageOrder.length > 0) {
+    const orderedIds = await resolveAllPresent(tx, "image", imageOrder);
     await applyImageOrder(
       tx,
       productImage,
       productImage.productId,
       productId,
-      imageOrder,
+      orderedIds,
     );
   }
 
   if (removeImageIds && removeImageIds.length > 0) {
+    const idsToRemove = await resolveAllPresent(tx, "image", removeImageIds);
     ({ deletedKeys: detachedImageKeys } = await detachImagesFromEntity(
       tx,
       "product",
       productId,
-      removeImageIds,
+      idsToRemove,
     ));
   }
 

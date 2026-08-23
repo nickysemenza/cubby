@@ -414,23 +414,34 @@ export const updateLocation = async (
     const updated = await updateLiveAndReturn(tx, location, updateValues, id);
 
     // Reorder existing images (first = cover) before appending new ones so
-    // additions always land after the reordered set.
+    // additions always land after the reordered set. `data.imageOrder` /
+    // `data.removeImageIds` are public `IMG-` shortcodes (what
+    // `LocationOut.images[].id` hands back) — resolved to uuids here, right
+    // before the two helpers below that still take uuids. A code that doesn't
+    // resolve is dropped rather than thrown on, matching today's silent
+    // no-op for a uuid naming no live row.
     if (data.imageOrder && data.imageOrder.length > 0) {
+      const orderedIds = await resolveAllPresent(tx, "image", data.imageOrder);
       await applyImageOrder(
         tx,
         locationImage,
         locationImage.locationId,
         updated.id,
-        data.imageOrder,
+        orderedIds,
       );
     }
 
     if (data.removeImageIds && data.removeImageIds.length > 0) {
+      const idsToRemove = await resolveAllPresent(
+        tx,
+        "image",
+        data.removeImageIds,
+      );
       ({ deletedKeys: detachedImageKeys } = await detachImagesFromEntity(
         tx,
         "location",
         updated.id,
-        data.removeImageIds,
+        idsToRemove,
       ));
     }
 

@@ -4,6 +4,10 @@ import type {
   OperationDisposition,
 } from "@cubby/schemas/entity-integrity";
 import {
+  type PublicImpactItem,
+  toPublicImpact,
+} from "@cubby/schemas/entity-integrity";
+import {
   type FinancialAccountCreateInput,
   type FinancialAccountFilters,
   type FinancialAccountOptionsOut,
@@ -30,7 +34,7 @@ import {
   financialTransaction,
   statementRow,
 } from "~/server/db/schema";
-import { createAppError } from "~/server/errors/app-error";
+import { createAppError, createBlockedError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import {
   auditDateWhereConditions,
@@ -52,6 +56,7 @@ import { countByTarget, impact, present } from "~/server/repo/impact";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
 import {
+  lookupShortcodes,
   resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
@@ -396,15 +401,21 @@ export async function deleteFinancialAccounts(
       // it — neither this guard nor the preview queried the table.
       await countByTarget(tx, statementRow, statementRow.accountId, ids),
     ];
-    assertNoBlockingCounts(
+    await assertNoBlockingCounts(
+      tx,
       transactionsByTarget,
       "FINANCIAL_ACCOUNT_HAS_TRANSACTIONS",
       "live transactions",
+      "FinancialTransaction.accountId",
+      FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY["FinancialTransaction.accountId"],
     );
-    assertNoBlockingCounts(
+    await assertNoBlockingCounts(
+      tx,
       statementRowsByTarget,
       "FINANCIAL_ACCOUNT_HAS_STATEMENT_ROWS",
       "live statement rows",
+      "StatementRow.accountId",
+      FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY["StatementRow.accountId"],
     );
     const { deleted } = await removeEntity(tx, {
       entity: "financialAccount",
@@ -422,17 +433,53 @@ export async function deleteFinancialAccounts(
  * account blocked and with how many rows — the thing the old existence probe
  * threw away.
  */
-function assertNoBlockingCounts(
+async function assertNoBlockingCounts(
+  db: Database | DrizzleTransaction,
   byTargetId: Record<string, number>,
   reason: AppErrorReason,
   noun: string,
-): void {
+  edgeKey: string,
+  disposition: OperationDisposition,
+): Promise<void> {
   const blocked = Object.entries(byTargetId).filter(([, n]) => n > 0);
   if (blocked.length === 0) return;
-  const detail = blocked.map(([id, n]) => `${id} (${n})`).join(", ");
-  throw createAppError(
+
+  // The blockers travel as DATA, not only as prose. `byTargetId` is uuid-keyed
+  // inside a repo, so it is translated to shortcodes before leaving — a uuid
+  // must never cross the API boundary, and `toPublicImpact("throw")` makes an
+  // unmappable target loud rather than silently dropping a blocker.
+  const publicIdByEntityId = await lookupShortcodes(
+    db,
+    blocked.map(([id]) => ({ entity: "financialAccount" as const, id })),
+  );
+  const item = impact({
+    disposition,
+    edgeKey,
+    label: noun,
+    byTargetId: Object.fromEntries(blocked),
+  });
+  // Translation failure must never replace the refusal. This is an ERROR path:
+  // the caller's problem is that the delete is blocked, and swapping a typed
+  // `FINANCIAL_ACCOUNT_HAS_TRANSACTIONS` for a raw "no public id for target"
+  // would hide the real answer behind a bookkeeping detail. So the structured
+  // blockers are best-effort here even though `"throw"` is the right policy for
+  // a SUCCESS payload, where a dropped id would silently under-report.
+  let blockers: PublicImpactItem[] = [];
+  if (item) {
+    try {
+      blockers = [toPublicImpact(item, publicIdByEntityId, "throw")];
+    } catch {
+      blockers = [];
+    }
+  }
+
+  const detail = blocked
+    .map(([id, n]) => `${publicIdByEntityId.get(id) ?? id} (${n})`)
+    .join(", ");
+  throw createBlockedError(
     reason,
     `Cannot delete a financial account while ${noun} reference it: ${detail}.`,
+    blockers,
   );
 }
 
