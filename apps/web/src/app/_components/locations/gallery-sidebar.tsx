@@ -151,7 +151,6 @@ export function GallerySidebar({
         className,
       )}
     >
-      {/* Header */}
       <Row align="center" justify="between" className="border-b px-2 py-2">
         <Row align="center" gap="sm">
           <ImageIcon className="size-3.5 text-slate" />

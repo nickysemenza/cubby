@@ -435,11 +435,6 @@ describe("createActionsColumn", () => {
     expect(clipboardMocks.copyShortcodes).toHaveBeenCalledWith(["PRD-4K7M"]);
   });
 
-  // `image` used to be the one entity routed by uuid, so this asserted that its
-  // row offered no copy item — a uuid must never reach the clipboard as if it
-  // were a public code. Images carry `IMG-` codes now and route on them like
-  // every other entity, so the copy item is CORRECT here; the case that needed
-  // suppressing no longer exists.
   it("offers the copy item for an image, which is shortcode-routed like the rest", () => {
     renderColumn<ActionRow, unknown>(actionsColumn("image"), {
       id: "IMG-4K7M",

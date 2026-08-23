@@ -317,10 +317,8 @@ export function RecipeMagazineView({
 
   return (
     <Stack gap="lg">
-      {/* Hero Section */}
       <RecipeHero recipe={recipe} />
 
-      {/* Kicker: Makes / Serves */}
       {kicker && (
         <Eyebrow className="border-foreground border-b pb-2 tracking-[0.12em]">
           {kicker}

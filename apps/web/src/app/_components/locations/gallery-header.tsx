@@ -52,13 +52,11 @@ export function GalleryHeader({
 
   return (
     <div className={cn("sticky top-0 z-10 border-b", className)}>
-      {/* Stats + Breadcrumb row */}
       <Row
         align="center"
         gap="sm"
         className="min-h-[32px] border-b bg-muted/30 px-4 py-1"
       >
-        {/* Stats - hidden on mobile */}
         {stats && (
           <div className="hidden items-center gap-2 border-r pr-2 text-muted-foreground text-xs md:flex">
             <EntityStat
@@ -74,7 +72,6 @@ export function GalleryHeader({
           </div>
         )}
 
-        {/* Breadcrumb */}
         <Row align="center" gap="xs" className="flex-1 overflow-hidden">
           <LocationBreadcrumb
             showHome
@@ -90,7 +87,6 @@ export function GalleryHeader({
         </Row>
       </Row>
 
-      {/* Controls row */}
       <Row
         align="center"
         gap="sm"
@@ -100,7 +96,6 @@ export function GalleryHeader({
         // Matches the sticky table header's treatment (Table.tsx).
         className="bg-card px-4 py-2 shadow-[0_1px_0_var(--border)]"
       >
-        {/* Search Input */}
         <div className="relative min-w-[180px] flex-1 md:max-w-xs">
           <Search className="absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input

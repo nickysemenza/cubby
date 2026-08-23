@@ -61,7 +61,6 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
       entity: inventoryitem,
       children: <InventoryBasicInfo inventoryitem={inventoryitem} />,
     }),
-    // Common sections from entity config (History)
     ...commonSections,
   ];
 

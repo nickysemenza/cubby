@@ -1020,12 +1020,7 @@ export const image = pgTable(
   "Image",
   {
     id: pkUuid(),
-    /**
-     * Image was the last local-table entity addressed by raw uuid, which forced
-     * every impact/result shape that could name an image to special-case it.
-     * Added via expand -> backfill -> contract: landed nullable, backfilled by
-     * `scripts/backfill-image-shortcodes.ts` (5,684 rows), then made NOT NULL.
-     */
+    /** Public IMG- shortcode; every local-table entity has a public identifier. */
     shortcode: shortcodeColumn(),
     url: text("url").notNull(),
     key: text("key").notNull(),

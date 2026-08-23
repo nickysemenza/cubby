@@ -136,10 +136,3 @@ export async function upsertAiAnalysis<T>(
   });
   return parsed;
 }
-
-export function parseStoredAiAnalysis<T>(
-  schema: z.ZodType<T>,
-  result: unknown,
-): T {
-  return schema.parse(result);
-}

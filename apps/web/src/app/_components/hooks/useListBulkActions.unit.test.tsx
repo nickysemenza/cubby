@@ -38,10 +38,6 @@ describe("useListBulkActions", () => {
     expect(result.current.enableRowSelection).toBe(true);
   });
 
-  // `image` used to be the one entity whose row id stayed a uuid, so Copy codes
-  // was suppressed for it — a uuid must never reach a clipboard the user pastes
-  // into MCP. It now carries an `IMG-` shortcode like every other local-table
-  // entity, so the action is both available and meaningful.
   it("offers Copy codes for image now that it has a shortcode", () => {
     const { result } = renderHook(() =>
       useListBulkActions<TestRow>({

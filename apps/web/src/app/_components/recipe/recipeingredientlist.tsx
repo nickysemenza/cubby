@@ -447,7 +447,6 @@ export const RecipeIngredientList: React.FC<{
         );
       },
     }),
-    // Actions column - links to ingredient or recipe detail
     createActionsColumnBase(columnHelper, (row) =>
       match(row)
         .with({ type: "ingredient" }, (row) => ({

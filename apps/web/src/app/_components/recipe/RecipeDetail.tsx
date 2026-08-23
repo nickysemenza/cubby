@@ -460,13 +460,10 @@ const RecipeDetailInner: React.FC<{
         </details>
       )}
 
-      {/* Debug mode: how the totals were produced (usage, rules, errors, paths) */}
       {isDebugEnabled && <RecipeCostingDebugCard recipeId={recipe.id} />}
 
-      {/* Tear line between the recipe itself and its paper trail */}
       <TicketDivider className="print:hidden" />
 
-      {/* History Section */}
       <Card className="print:hidden">
         <CardHeader className="pb-2">
           <CardTitle icon={Clock}>History</CardTitle>

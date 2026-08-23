@@ -37,9 +37,10 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   // because it names a join row rather than an entity.
   "create_meals.results[].item.recipes[].id",
   "update_meals.results[].item.recipes[].id",
-  // The staged-upload handle. It IS an Image id, and images are a declared
-  // exception with no shortcode — the caller hands this straight back to
-  // attach_file, so it is the identifier rather than a leaked internal.
+  // The staged-upload handle is a transient raw Image UUID, deliberately
+  // returned by create_file_upload only so the caller can pass it to attach_file.
+  // Image records otherwise expose IMG- codes, so this is a narrow protocol
+  // handle rather than an internal-id leak.
   "create_file_upload.uploadId",
 ]);
 

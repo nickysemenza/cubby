@@ -493,7 +493,6 @@ export function GlobalCommandMenu({
               </div>
             )}
 
-            {/* Quick Actions - show when searching and matching */}
             {hasSearch && filteredActions.length > 0 && !isLoading && (
               <>
                 {hasResults && <CommandSeparator />}

@@ -1388,8 +1388,7 @@ describe("listMcpToolCatalog", () => {
     )._def.procedures;
 
     // Every entity with both a shortcode and a declared `get` tool. usda-food
-    // and image are excluded because they have no shortcode (their get tools,
-    // where present, are keyed by fdc_id / uuid, not by the `{ id }` default).
+    // has no shortcode, and image declares no get MCP tool.
     const entities = allEntities.filter(
       (entity) =>
         Object.hasOwn(SHORTCODE_PREFIX, entity) &&
@@ -1637,13 +1636,11 @@ describe("listMcpToolCatalog", () => {
       "update_recipes.items[].sections[].id",
       "update_recipes.items[].sections[].ingredients[].id",
       "update_recipes.items[].sections[].instructions[].id",
-      // An Image id is a declared exception — images have no shortcode. These
-      // two carry one between create_file_upload and attach_file, so the uuid
-      // IS the identifier rather than a leaked internal. Note this covers only
-      // `uploadId`: `create_file_upload.entityId` is an `anyShortcodeSchema`
-      // and publishes a real prefix pattern, so it passes the check on its own
-      // and must stay outside this list — exempting it would let a future
-      // change to a bare uuid slip through silently.
+      // A staged-upload handle is a transient raw Image UUID, deliberately
+      // round-tripped only from create_file_upload to attach_file. Image records
+      // otherwise expose IMG- codes. This covers only `uploadId`:
+      // create_file_upload.entityId is an anyShortcodeSchema and must remain
+      // outside this list so a future bare-UUID regression fails.
       "attach_file.uploadId",
       "attach_files.items[].uploadId",
     ]);

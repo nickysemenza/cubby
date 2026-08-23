@@ -565,11 +565,9 @@ export const orphanedEntityEmbeddingSchema = z.object({
 /**
  * A stored file no edge still reaches — R2 bytes nothing can render.
  *
- * Permanent diagnostic exceptions, same reasoning as
- * {@link orphanedEntityEmbeddingSchema}: `Image` has no public shortcode at all,
- * and `targetType`/`targetId` are provenance recorded at attach time, so the
- * entity they name may itself be gone. They are shown to say where the file came
- * from, never to link anywhere.
+ * Permanent diagnostic exceptions: `targetType`/`targetId` are provenance
+ * recorded at attach time, so the entity they name may itself be gone. They are
+ * shown to say where the file came from, never to link anywhere.
  */
 export const unreferencedImageSchema = z.object({
   id: z.uuid(),

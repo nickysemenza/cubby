@@ -157,12 +157,7 @@ interface BaseRow {
   updatedAt?: string | Date;
 }
 
-/**
- * `TableLink` params for an entity's own row — the canonical public
- * `{ shortcode: row.id }` route parameter, uniformly. `image` used to be the
- * one exception (keyed on its uuid); it mints an `IMG-` shortcode like every
- * other entity now.
- */
+/** `TableLink` params for an entity's own row. */
 function nameColumnParams(row: BaseRow): { shortcode: string } {
   return { shortcode: String(row.id) };
 }

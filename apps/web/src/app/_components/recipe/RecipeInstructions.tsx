@@ -45,7 +45,6 @@ export function RecipeInstructions({ recipe }: RecipeInstructionsProps) {
           key={section.id}
           className="fade-in slide-in-from-bottom-2 animate-in duration-300"
         >
-          {/* Section header - only show if there are multiple sections or section has a name */}
           <SectionHeading
             sectionName={section.name}
             index={sectionIndex}
@@ -53,7 +52,6 @@ export function RecipeInstructions({ recipe }: RecipeInstructionsProps) {
             variant="title"
           />
 
-          {/* Instructions list */}
           <Stack as="ol" gap="md" className="my-0 ml-0 list-none">
             {section.instructions.map((instruction, stepIndex) => {
               const stepKey = `${section.id}-${stepIndex}`;
