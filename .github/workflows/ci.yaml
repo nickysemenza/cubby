@@ -466,7 +466,7 @@ jobs:
             echo "::warning::Could not dispatch the preview deploy; CI is unaffected."
 
   test-e2e:
-    name: E2E Tests
+    name: E2E Tests (shard ${{ matrix.shard }})
     needs: scope
     if: |
       needs.scope.outputs.verify == 'true' &&
@@ -477,6 +477,10 @@ jobs:
     container:
       image: mcr.microsoft.com/playwright:v1.62.1-noble
       options: --user 1001
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
       PLAYWRIGHT_IMAGE_VERSION: "1.62.1"
@@ -564,19 +568,19 @@ jobs:
           name: cf-build
           path: apps/web/dist
       - name: Run Playwright tests
-        run: pnpm --filter @cubby/web run test:e2e
+        run: pnpm --filter @cubby/web run test:e2e --shard=${{ matrix.shard }}/${{ strategy.job-total }}
       - name: Save Playwright report
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: playwright-report
+          name: playwright-report-shard-${{ matrix.shard }}
           path: apps/web/playwright-report/
           retention-days: 1
       - name: Save Wrangler crash logs
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: wrangler-logs
+          name: wrangler-logs-shard-${{ matrix.shard }}
           path: /github/home/.config/.wrangler/logs/
           if-no-files-found: ignore
           retention-days: 1
