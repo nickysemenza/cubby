@@ -55,7 +55,7 @@ describe("RelatednessRail", () => {
 
     await waitFor(() => {
       expect(mocks.invalidateQueries).toHaveBeenCalledWith({
-        queryKey: ["relatedness", productId],
+        queryKey: [["relatedness", productId]],
       });
     });
   });

@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/integrations/trpc/react";
+import { invalidateTRPCQueries } from "~/lib/query-keys";
 
 /**
  * Product's compact relationship ledger. Tags remain compatibility evidence;
@@ -45,9 +46,9 @@ export function RelatednessRail({
     if (!refresh.data?.batchId || indexing || !batch.data) return;
     // The worker has reached a terminal state. Re-read the product's status
     // rather than leaving the rail on the request-time readiness snapshot.
-    void queryClient.invalidateQueries({
-      queryKey: api.relatedness.product.queryKey(product.id),
-    });
+    invalidateTRPCQueries(queryClient, [
+      api.relatedness.product.queryKey(product.id),
+    ]);
   }, [
     api.relatedness.product,
     batch.data,
