@@ -7,6 +7,7 @@ import {
   INCOMING_EDGES,
   type IncomingEdge,
 } from "~/server/db/entity-incoming-edges";
+import * as schema from "~/server/db/schema";
 
 interface EdgeSpec {
   edgeKey: string;
@@ -41,7 +42,12 @@ const entityTable = (entity: Entity): string => {
   return table;
 };
 
-/** Drizzle is the source of real table/column facts; the manifest names targets. */
+/**
+ * Build the canonical entity edges first, then add FK facts for owned
+ * intermediate tables such as RecipeSection. Those rows are intentionally not
+ * entities and therefore cannot appear as targets in INCOMING_EDGES, but a
+ * manifest path may legitimately pass through them.
+ */
 const edgeIndex = (): ReadonlyMap<string, EdgeSpec> => {
   const specs = new Map<string, EdgeSpec>();
   for (const [target, edges] of Object.entries(INCOMING_EDGES) as Array<
@@ -64,6 +70,28 @@ const edgeIndex = (): ReadonlyMap<string, EdgeSpec> => {
           (candidate) => candidate.name === "deletedAt",
         ),
       });
+    }
+  }
+  for (const table of Object.values(schema).filter((value) =>
+    is(value, PgTable),
+  ) as PgTable[]) {
+    const config = getTableConfig(table);
+    for (const foreignKey of config.foreignKeys) {
+      const reference = foreignKey.reference();
+      const targetTable = getTableConfig(reference.foreignTable).name;
+      for (const column of reference.columns) {
+        const edgeKey = `${config.name}.${column.name}`;
+        if (specs.has(edgeKey)) continue;
+        specs.set(edgeKey, {
+          edgeKey,
+          sourceTable: config.name,
+          sourceColumn: column.name,
+          targetTable,
+          sourceSoftDeletable: config.columns.some(
+            (candidate) => candidate.name === "deletedAt",
+          ),
+        });
+      }
     }
   }
   return specs;
