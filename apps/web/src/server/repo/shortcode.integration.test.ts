@@ -8,7 +8,11 @@
 
 import { entityRefKey } from "@cubby/schemas/entity";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
-import { parseShortcode, SHORTCODE_PREFIX } from "@cubby/shared";
+import {
+  PUBLIC_SHORTCODE_PREFIXES,
+  parseShortcode,
+  SHORTCODE_PREFIX,
+} from "@cubby/shared";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -418,7 +422,10 @@ describe("schema-level invariants", () => {
       FROM pg_indexes
       WHERE schemaname = 'public' AND indexname LIKE '%\\_shortcode\\_unique'
     `);
-    expect(found).toHaveLength(shortcodeEntities.length);
+    expect(found).toHaveLength(PUBLIC_SHORTCODE_PREFIXES.length);
+    expect(found.map((row) => row.indexname)).toContain(
+      "FundingTransfer_shortcode_unique",
+    );
     for (const row of found) {
       expect(row.partial, `${row.indexname} must not be partial`).toBe(false);
     }

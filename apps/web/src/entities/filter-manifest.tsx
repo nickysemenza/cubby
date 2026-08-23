@@ -17,6 +17,7 @@ import { ingredientFilterFields } from "@cubby/schemas/ingredient";
 import { inventoryFilterFields } from "@cubby/schemas/inventory";
 import { locationFilterFields } from "@cubby/schemas/location";
 import { mealFilterFields } from "@cubby/schemas/meal";
+import { personFilterFields } from "@cubby/schemas/person";
 import { productFilterFields } from "@cubby/schemas/product";
 import {
   expenseFilterFields,
@@ -414,6 +415,7 @@ export const entityFilterFieldMaps: Partial<
   location: locationFilterFields,
   image: imageFilterFields,
   meal: mealFilterFields,
+  person: personFilterFields,
   project: projectFilterFields,
   wish: wishFilterFields,
 };
@@ -505,8 +507,8 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       field: "linkedUserPresenceFilter",
       kind: "presence",
       placeholder: "Filter linked user...",
+      options: presenceFilterOptions("linked user"),
     },
-    ...auditFilterSpecs,
   ],
   financialAccount: [
     {

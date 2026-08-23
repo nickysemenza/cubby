@@ -295,6 +295,7 @@ describe("mutation side effects manifest", () => {
       "inventory",
       "location",
       "meal",
+      "person",
       "product",
       "project",
       "purchase",
