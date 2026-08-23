@@ -74,7 +74,7 @@ export function RelatednessRail({
         </p>
       )}
 
-      {relatedness.data?.items.map(({ shortcode, title, score }) => (
+      {relatedness.data?.items.map(({ shortcode, title, score, evidence }) => (
         <Row
           key={shortcode}
           align="center"
@@ -90,41 +90,18 @@ export function RelatednessRail({
             {title}
           </Link>
           <span className="shrink-0 font-mono text-2xs text-slate">
-            {Math.round(score * 100)}% similar
+            {score > 0
+              ? `${Math.round(score * 100)}% similar`
+              : evidence.map((item) => item.signal).join(" · ")}
           </span>
         </Row>
       ))}
 
-      {relatedness.data?.groups.map((group) => (
-        <div key={group.label} className="border-border border-t pt-2">
-          <Row align="baseline" justify="between" className="mb-1">
-            <span className="text-xs">{group.label}</span>
-            <span className="font-mono text-2xs text-slate">
-              {group.items.length} related
-            </span>
-          </Row>
-          <Stack gap="tight">
-            {group.items.slice(0, 4).map((item) => (
-              <Link
-                key={item.shortcode}
-                to="/products/$shortcode"
-                params={{ shortcode: item.shortcode as ProductShortcode }}
-                className="truncate text-sm hover:underline"
-              >
-                {item.title}
-              </Link>
-            ))}
-          </Stack>
-        </div>
-      ))}
-
-      {status === "ready" &&
-        relatedness.data?.items.length === 0 &&
-        relatedness.data.groups.length === 0 && (
-          <p className="text-muted-foreground text-xs">
-            No related products yet.
-          </p>
-        )}
+      {status === "ready" && relatedness.data?.items.length === 0 && (
+        <p className="text-muted-foreground text-xs">
+          No related products yet.
+        </p>
+      )}
 
       {status === "ready" && (
         <Link

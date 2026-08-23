@@ -7,6 +7,7 @@ import {
   getActiveSuggestionDismissalKeys,
   suggestionCandidateKey,
 } from "~/server/repo/suggestion-dismissal";
+import { buildProductRelatednessLedger } from "./relatedness-ledger";
 import { findSimilarEntitiesForPair } from "./semantic-search.service";
 
 /**
@@ -50,36 +51,15 @@ export async function getProductRelatedness(
     !dismissals.has(candidateKeys.get(shortcode) ?? "");
   return {
     status: semantic.status,
-    items: semantic.results
-      .filter(({ entity }) => visible(entity.id))
-      .map(({ entity, similarity }) => ({
-        entity: "product" as const,
-        shortcode: entity.id,
+    items: buildProductRelatednessLedger(
+      semantic.results.map(({ entity, similarity }) => ({
+        id: entity.id,
         title: entity.title,
-        score: similarity,
-        evidence: [
-          { signal: "Similar meaning", detail: null, weight: similarity },
-        ],
+        similarity,
       })),
-    groups: [
-      {
-        label: "Compatibility tags",
-        items: siblings
-          .filter((sibling) => visible(sibling.shortcode))
-          .map((sibling) => ({
-            entity: "product" as const,
-            shortcode: sibling.shortcode,
-            title: sibling.name,
-            score: 0,
-            evidence: [
-              {
-                signal: "Shared tag",
-                detail: sibling.tags.join(", "),
-                weight: 0,
-              },
-            ],
-          })),
-      },
-    ].filter((group) => group.items.length > 0),
+      siblings,
+      visible,
+    ),
+    groups: [],
   };
 }
