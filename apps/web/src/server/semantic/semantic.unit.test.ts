@@ -23,15 +23,15 @@ describe("semantic search text builders", () => {
     expect(text).toContain("aliases: tarpaulin, drop cover");
   });
 
-  it("keeps identifiers and provenance out of product semantic text", () => {
+  it("keeps identifiers out while retaining product-specific notes", () => {
     const text = buildProductEmbeddingText({
       name: "Reference Book",
       gtins: ["09780306406157"],
-      notes: "Created from receipt 0000 at a hardware store",
+      notes: "Fits the radiant manifold in the basement",
     });
 
     expect(text).not.toContain("09780306406157");
-    expect(text).not.toContain("receipt");
+    expect(text).toContain("radiant manifold");
   });
 
   it("includes location context and AI description", () => {

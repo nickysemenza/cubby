@@ -41,7 +41,7 @@ const productSearchTextInputSchema = z.object({
   model: nullableText,
   /** Preserved in lexical SearchDocument keywords, deliberately not semantic text. */
   gtins: nullableTextList,
-  /** Provenance and receipt text belongs in lexical search, not similarity. */
+  /** Household context can distinguish otherwise-identical products. */
   notes: nullableText,
   aliases: nullableTextList,
 });
@@ -55,6 +55,7 @@ export function buildProductEmbeddingText(product: ProductSearchTextInput) {
     field("category", parsed.category),
     field("model", parsed.model),
     listField("aliases", parsed.aliases),
+    field("notes", parsed.notes),
   ]);
 }
 
