@@ -107,7 +107,13 @@ export async function scanAtLocation(
   };
   const plan = planScan(facts, input.locationId);
 
-  const productOut = { id: product.id, name: product.name, created };
+  const productOut = {
+    id: product.id,
+    name: product.name,
+    created,
+    manufacturer: product.manufacturer,
+    hasPrice: product.pricing.effectivePrice != null,
+  };
   const now = new Date();
 
   if (plan.kind === "decide") {

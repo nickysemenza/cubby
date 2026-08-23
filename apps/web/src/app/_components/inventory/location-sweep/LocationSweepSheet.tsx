@@ -20,6 +20,7 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
+import { SweepProductFollowUp } from "./SweepProductFollowUp";
 import { SweepStrayReview } from "./SweepStrayReview";
 import { useLocationSweep } from "./useLocationSweep";
 
@@ -35,6 +36,8 @@ export function LocationSweep({
   const [manualValue, setManualValue] = useState("");
   const {
     scan,
+    followUp,
+    dismissFollowUp,
     recentScans,
     strays,
     tally,
@@ -106,6 +109,13 @@ export function LocationSweep({
         committing={committing}
         onCommit={commitStrays}
         onDismiss={dismissStray}
+      />
+
+      <SweepProductFollowUp
+        followUp={followUp}
+        locationName={locationName}
+        onClose={dismissFollowUp}
+        onSaved={onSettled}
       />
     </Stack>
   );

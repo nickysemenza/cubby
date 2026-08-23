@@ -207,6 +207,24 @@ export function findLocationInTreeByShortcode(
   return flattenAllLocations(tree).find((loc) => loc.id === shortcode) ?? null;
 }
 
+/**
+ * The node that currently holds `childId`, read off the tree.
+ *
+ * Adopting a bin has to record where it came from so undo can put it back;
+ * the in-memory session nodes do not all carry a `parentId` to read instead.
+ */
+export function findParentLocation(
+  tree: InfLocation[] | undefined,
+  childId: string,
+): InfLocation | null {
+  if (!tree) return null;
+  return (
+    flattenAllLocations(tree).find((node) =>
+      (node.children ?? []).some((child) => child.id === childId),
+    ) ?? null
+  );
+}
+
 export function isDescendantLocation(
   parent: InfLocation,
   candidateId: string,
@@ -215,6 +233,43 @@ export function isDescendantLocation(
   return flattenAllLocations(parent.children ?? []).some(
     (loc) => loc.id === candidateId,
   );
+}
+
+/**
+ * What a scanned location QR means relative to where you are standing.
+ *
+ * Deliberately about the TREE, not about pass membership. A bin that got
+ * carried into another room is often still inside the recount's root, so
+ * classifying by "is it a stop in this pass" would call it a jump and quietly
+ * lose the case this exists for — adopting a bin that wandered.
+ */
+export type ScannedLocationRelation =
+  /** The bin you are already standing at. */
+  | "current"
+  /** Already somewhere inside the current bin — nothing to adopt. */
+  | "inside"
+  /** Contains the current bin, so adopting it would make a cycle. */
+  | "ancestor"
+  /** Anywhere else: the adoptable case. */
+  | "elsewhere";
+
+export function classifyScannedLocation(
+  root: InfLocation,
+  current: InfLocation,
+  targetId: string,
+): ScannedLocationRelation {
+  if (targetId === current.id) return "current";
+  if (isDescendantLocation(current, targetId)) return "inside";
+
+  // An ancestor is any node on the path from the tree root down to `current`.
+  // Reading it off the tree beats walking `parentId` links, which the session's
+  // in-memory nodes do not all carry.
+  const ancestors = flattenAllLocations([root]).filter(
+    (node) => node.id !== current.id && isDescendantLocation(node, current.id),
+  );
+  if (ancestors.some((node) => node.id === targetId)) return "ancestor";
+
+  return "elsewhere";
 }
 
 export function buildBulkMovePayloadItems<

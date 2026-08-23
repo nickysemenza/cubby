@@ -52,6 +52,14 @@ export const scanAtLocationOut = z.object({
     id: productShortcode,
     name: z.string(),
     created: z.boolean(),
+    /**
+     * Enough to decide whether the scan is worth a curation prompt, without a
+     * second fetch on the hot path. A brand-new UPC product often lands with a
+     * placeholder name, no price, and no ingredient link — the last of which
+     * makes it invisible to recipe costing.
+     */
+    manufacturer: z.string().nullable(),
+    hasPrice: z.boolean(),
   }),
   strays: z.array(scanStrayOut),
   sideEffects: mutationSideEffectsSchema,

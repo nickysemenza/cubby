@@ -24,10 +24,19 @@ import { toast } from "sonner";
 import type { ScanFeedbackEntry } from "~/app/_components/inventory/persistent-scanner";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
+import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { resolveScanCode } from "~/lib/scan-code";
+import type { SweepFollowUp } from "./SweepProductFollowUp";
 
 /** How many recently-scanned chips the viewfinder shows (newest first). */
 const RECENT_SCAN_LIMIT = 5;
+
+/**
+ * `Product 012345678905` — the name the UPC cascade falls back to when neither
+ * USDA nor the UPC worker recognises a code. A scan that lands one of these is
+ * worth a rename while the object is still in hand.
+ */
+const PLACEHOLDER_PRODUCT_NAME = /^Product \d+$/;
 
 /**
  * One product that turned up elsewhere during the sweep.
@@ -59,6 +68,7 @@ export function useLocationSweep({
   const [strays, setStrays] = useState<QueuedStray[]>([]);
   const [tally, setTally] = useState<SweepTally>({ added: 0, confirmed: 0 });
   const [pending, setPending] = useState(0);
+  const [followUp, setFollowUp] = useState<SweepFollowUp | null>(null);
 
   const scanMutation = useMutation(
     api.inventory.scanAtLocation.mutationOptions(),
@@ -78,6 +88,7 @@ export function useLocationSweep({
     setStrays([]);
     setTally({ added: 0, confirmed: 0 });
     setPending(0);
+    setFollowUp(null);
   }, []);
 
   // A sweep belongs to one shelf. Moving to the next one starts over — a stray
@@ -112,6 +123,20 @@ export function useLocationSweep({
       }
       if (result.outcome === "confirmed") {
         setTally((prev) => ({ ...prev, confirmed: prev.confirmed + 1 }));
+      }
+
+      // Only a product the scan itself created can be in the poor state worth
+      // curating; anything with existing stock has been seen before.
+      const needsName =
+        PLACEHOLDER_PRODUCT_NAME.test(result.product.name) ||
+        isUnspecifiedManufacturer(result.product.manufacturer);
+      if (result.product.created || needsName) {
+        setFollowUp({
+          id: result.product.id,
+          name: result.product.name,
+          needsName,
+          needsPrice: !result.product.hasPrice,
+        });
       }
 
       if (result.strays.length > 0) {
@@ -230,6 +255,8 @@ export function useLocationSweep({
 
   return {
     scan,
+    followUp,
+    dismissFollowUp: () => setFollowUp(null),
     recentScans,
     strays,
     tally,
