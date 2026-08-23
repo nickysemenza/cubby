@@ -4,9 +4,9 @@ import type {
 } from "@cubby/schemas/identifiers";
 import type { RecommendationKind } from "@cubby/schemas/recommendations";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { X } from "lucide-react";
 import { useState } from "react";
+import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { DuplicateProductMergeFix } from "~/app/problems/components/tier2-fixes";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -264,13 +264,12 @@ function ProductRelatednessRecommendation({
             className="border-border border-b pb-2"
           >
             <Stack gap="tight" className="min-w-0">
-              <Link
-                to="/products/$shortcode"
-                params={{ shortcode: item.shortcode as ProductShortcode }}
-                className="truncate text-sm hover:underline"
-              >
-                {item.title}
-              </Link>
+              <EntityInlineLink
+                entity="product"
+                data={{ id: item.shortcode, name: item.title }}
+                displayImage={null}
+                truncate
+              />
               <span className="text-muted-foreground text-xs">
                 {item.evidence.map((evidence) => evidence.signal).join(" · ")}
               </span>

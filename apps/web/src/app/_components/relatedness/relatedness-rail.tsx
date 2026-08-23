@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
 import { useEffect } from "react";
+import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -101,13 +102,12 @@ export function RelatednessRail({
           gap="sm"
           className="border-border border-b pb-1 last:border-b-0"
         >
-          <Link
-            to="/products/$shortcode"
-            params={{ shortcode }}
-            className="min-w-0 truncate text-sm hover:underline"
-          >
-            {title}
-          </Link>
+          <EntityInlineLink
+            entity="product"
+            data={{ id: shortcode, name: title }}
+            displayImage={null}
+            truncate
+          />
           <span className="shrink-0 font-mono text-2xs text-slate">
             {score > 0
               ? `${Math.round(score * 100)}% similar`
