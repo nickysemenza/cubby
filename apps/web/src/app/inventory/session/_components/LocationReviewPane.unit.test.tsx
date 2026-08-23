@@ -1,3 +1,5 @@
+// @vitest-environment happy-dom
+
 import type { ProductQuantitySummaryOut } from "@cubby/schemas/product";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";

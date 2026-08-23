@@ -1,3 +1,5 @@
+// @vitest-environment happy-dom
+
 import type { LocationIdentityProductOut } from "@cubby/schemas/location";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";

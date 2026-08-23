@@ -1,3 +1,5 @@
+// @vitest-environment happy-dom
+
 import { unsafeRecipeShortcode } from "@cubby/schemas/identifiers";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";

@@ -1,3 +1,5 @@
+// @vitest-environment happy-dom
+
 import { render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { CubbyTable } from "../_components/data-table/table-features";

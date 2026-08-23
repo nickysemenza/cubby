@@ -1,3 +1,5 @@
+// @vitest-environment happy-dom
+
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
