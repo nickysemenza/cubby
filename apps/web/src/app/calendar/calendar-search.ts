@@ -24,7 +24,7 @@ export const calendarPeriodParam = z
  * Keys must match `calendarFilterSpecs`' URL keys exactly — a strict `z.object`
  * strips anything it doesn't declare, so an undeclared key would be written to
  * the URL and removed again before the bar could read it back.
- * `calendar-filter-specs.unit.test.tsx` asserts the two stay in step.
+ * `calendar-filter-specs.unit.test.ts` asserts the two stay in step.
  */
 export const calendarSearchSchema = z.object({
   period: calendarPeriodParam,

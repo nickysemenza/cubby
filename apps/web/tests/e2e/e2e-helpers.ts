@@ -194,15 +194,19 @@ export async function editDetailCell(
   trigger: Locator,
   value: string,
 ) {
+  const input = cellEditorInput(page);
   await expect(async () => {
     await trigger.click();
-    const input = cellEditorInput(page);
     await expect(input).toBeVisible({ timeout: 2_000 });
     await expect(input).toBeEnabled({ timeout: 2_000 });
-    await input.fill(value);
-    await input.press("Enter");
-    await expect(input).toHaveCount(0, { timeout: 10_000 });
   }).toPass({ timeout: 30_000 });
+
+  // Retrying a save could submit the same mutation twice if the request
+  // succeeded but its portaled editor was slow to close. Only opening the
+  // editor is retried; the commit itself is deliberately issued once.
+  await input.fill(value);
+  await input.press("Enter");
+  await expect(input).toHaveCount(0, { timeout: 10_000 });
 }
 
 /**

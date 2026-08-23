@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { seedProductPrerequisite } from "./e2e-fixtures";
+import { waitForAppHydration } from "./e2e-helpers";
 
 test("Product filters persist while switching movement renderers", async ({
   page,
@@ -13,6 +14,7 @@ test("Product filters persist while switching movement renderers", async ({
   await page.goto(
     `/products?manufacturer=${encodeURIComponent(manufacturer)}&view=events`,
   );
+  await waitForAppHydration(page);
   await expect(page.getByRole("group", { name: "Products view" })).toBeVisible({
     timeout: 15_000,
   });

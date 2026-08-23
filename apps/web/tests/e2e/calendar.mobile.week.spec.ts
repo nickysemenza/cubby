@@ -1,11 +1,13 @@
 import { expect, test } from "@playwright/test";
 import { waitForDndMutation } from "./dnd-helpers";
 import { seedTaskPrerequisite } from "./e2e-fixtures";
+import { waitForAppHydration } from "./e2e-helpers";
 
 test("weekly planning becomes a seven-day ruled agenda without overflow", async ({
   page,
 }) => {
   await page.goto("/calendar?date=2026-08-18&period=week");
+  await waitForAppHydration(page);
 
   await expect(
     page.getByRole("button", { name: "Week", exact: true }),
@@ -38,6 +40,7 @@ test("phone agenda events edit in a bottom sheet", async ({
   const updatedName = `${name} edited`;
   await seedTaskPrerequisite(page, { name, dueDate: "2026-08-18" });
   await page.goto("/calendar?date=2026-08-18&period=week");
+  await waitForAppHydration(page);
 
   const agenda = page.locator('[data-slot="calendar-agenda"]');
   await agenda.getByRole("button", { name: new RegExp(name) }).click();

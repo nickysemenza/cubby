@@ -1,3 +1,4 @@
+import { inventoryCreatePayloadData } from "@cubby/schemas/inventory";
 import { locationCreateInput } from "@cubby/schemas/location";
 import { productCreateInput } from "@cubby/schemas/product";
 import { type TaskStatus, taskCreateInput } from "@cubby/schemas/project";
@@ -98,11 +99,15 @@ export const seedInventoryPrerequisites = (
       const created = await seedProductPrerequisite(page, {
         name: product.name,
       });
-      await createFixture(page, "inventory.create", {
-        productId: created.id,
-        locationId: location.id,
-        amount: { value: product.quantity, unit: product.unit },
-      });
+      await createFixture(
+        page,
+        "inventory.create",
+        inventoryCreatePayloadData.parse({
+          productId: created.id,
+          locationId: location.id,
+          amount: { value: product.quantity, unit: product.unit },
+        }),
+      );
       products.push(created);
     }
     return { products, location };

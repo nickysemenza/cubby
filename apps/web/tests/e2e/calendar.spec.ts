@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { waitForDndMutation } from "./dnd-helpers";
 import { seedTaskPrerequisite } from "./e2e-fixtures";
+import { waitForAppHydration } from "./e2e-helpers";
 
 test("calendar events open an anchored editor, save atomically, and restore focus", async ({
   page,
@@ -10,8 +11,13 @@ test("calendar events open an anchored editor, save atomically, and restore focu
   const updatedName = `${name} edited`;
   await seedTaskPrerequisite(page, { name, dueDate: "2026-07-16" });
   await page.goto("/calendar?date=2026-07-01");
+  await waitForAppHydration(page);
 
-  const event = page.getByRole("button", { name: `${name}, All day` });
+  // Calendar renders the same task in its overlapping day and week surfaces;
+  // either button opens the one shared editor. Scope this interaction to one
+  // concrete rendered event rather than treating that presentation duplication
+  // as a second task.
+  const event = page.getByRole("button", { name: `${name}, All day` }).first();
   await event.click();
   const editor = page.getByRole("dialog", { name });
   await expect(editor).toBeVisible();
@@ -26,9 +32,11 @@ test("calendar events open an anchored editor, save atomically, and restore focu
     page.getByRole("button", { name: `${updatedName}, All day` }),
   ).toBeVisible();
 
-  const updatedEvent = page.getByRole("button", {
-    name: `${updatedName}, All day`,
-  });
+  const updatedEvent = page
+    .getByRole("button", {
+      name: `${updatedName}, All day`,
+    })
+    .first();
   await updatedEvent.click();
   await page.keyboard.press("Escape");
   await expect(updatedEvent).toBeFocused();
@@ -40,6 +48,7 @@ test("calendar opens a date drawer and prefills quick creation", async ({
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.goto("/calendar?date=2026-07-01");
+  await waitForAppHydration(page);
 
   await expect(
     page.getByRole("heading", { level: 1, name: "Calendar" }),
@@ -88,6 +97,7 @@ test("calendar filters are URL-backed and survive a reload", async ({
   await page.goto(
     "/calendar?date=2026-07-01&kinds=meal,task&projectKinds=renovation",
   );
+  await waitForAppHydration(page);
 
   const showFilter = page.getByRole("button", { name: "Show: Meals, Tasks" });
   const projectKind = page.getByRole("button", {
@@ -97,6 +107,7 @@ test("calendar filters are URL-backed and survive a reload", async ({
   await expect(projectKind).toBeVisible();
 
   await page.reload();
+  await waitForAppHydration(page);
   await expect(page).toHaveURL(/kinds=meal%2Ctask|kinds=meal,task/);
   await expect(showFilter).toBeVisible();
   await expect(projectKind).toBeVisible();
@@ -109,6 +120,7 @@ test("weekly planning is URL-backed and navigates by exact weeks", async ({
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.goto("/calendar?date=2026-08-18&period=week&kinds=meal,task");
+  await waitForAppHydration(page);
 
   await expect(
     page.getByRole("button", { name: "Week", exact: true }),
@@ -129,6 +141,7 @@ test("weekly planning is URL-backed and navigates by exact weeks", async ({
   await expect(page).toHaveURL(/kinds=meal%2Ctask|kinds=meal,task/);
 
   await page.reload();
+  await waitForAppHydration(page);
   await expect(
     page.getByRole("button", { name: "Week", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
@@ -150,6 +163,7 @@ test("the fortnight grid spans two week-aligned rows and steps 14 days", async (
   page.on("pageerror", (error) => pageErrors.push(error.message));
   // A Thursday anchor: the grid has to snap back to its Sunday, not start here.
   await page.goto("/calendar?date=2026-08-20&period=fortnight&kinds=meal,task");
+  await waitForAppHydration(page);
 
   await expect(
     page.getByRole("button", { name: "Fortnight", exact: true }),
@@ -172,6 +186,7 @@ test("the fortnight grid spans two week-aligned rows and steps 14 days", async (
   ).toBeVisible();
 
   await page.reload();
+  await waitForAppHydration(page);
   await expect(
     page.getByRole("button", { name: "Fortnight", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
@@ -191,6 +206,7 @@ test("the Meals calendar preserves its legacy anchor in Week mode", async ({
   page,
 }) => {
   await page.goto("/meals?week=2026-08-18&period=week");
+  await waitForAppHydration(page);
 
   await expect(
     page.getByRole("button", { name: "Week", exact: true }),

@@ -223,7 +223,7 @@ export function isNarrowed<TData extends RowData>(
 }
 
 /**
- * Exposed for the drift guard in `actions/action-items.unit.test.tsx`, which
+ * Exposed for the drift guard in `actions/action-items.unit.test.ts`, which
  * asserts every declared `actionLabel` resolves somewhere to click. Not for
  * rendering — read the config through this module's components.
  */
