@@ -48,7 +48,7 @@ const recordingTx = () => {
 const ids = <E extends RemovableEntity>(...v: string[]) =>
   v as BrandForEntity<E>[];
 
-describe("cascadeRemoval — the embedding cascade is derived, not passed", () => {
+describe("cascadeRemoval — derived search and suggestion cleanup", () => {
   // Table-driven over the whole searchable roster: the point of deriving the
   // cascade from `entity` is that adding a searchable entity cannot leave a
   // removal path silently uncovered, and only enumerating the roster proves it.
@@ -61,7 +61,9 @@ describe("cascadeRemoval — the embedding cascade is derived, not passed", () =
         ids: ids("id-1", "id-2"),
         audit: { actor: ACTOR },
       });
-      expect(log.updates).toHaveLength(2);
+      // SearchDocument, EntityEmbedding, and source-scoped suggestion
+      // dismissals all become invalid when the source entity is removed.
+      expect(log.updates).toHaveLength(3);
       expect(log.updates.every((update) => "deletedAt" in update.values)).toBe(
         true,
       );
@@ -123,7 +125,7 @@ describe("cascadeRemoval — the embedding cascade is derived, not passed", () =
       audit: { into: buffer },
     });
     expect(log.inserted).toEqual([]);
-    expect(log.updates).toHaveLength(2);
+    expect(log.updates).toHaveLength(3);
     expect(buffer.map((entry) => entry.action)).toEqual(["update", "delete"]);
   });
 });

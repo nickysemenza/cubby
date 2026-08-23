@@ -12,6 +12,7 @@ import {
   productImage,
   productUnitMappings,
   searchDocument,
+  suggestionDismissal,
   task,
   taskDependency,
 } from "~/server/db/schema";
@@ -28,6 +29,7 @@ const ACTOR: ActorContext = { userId: unsafeUserId("user-1"), source: "ui" };
 const AUDIT = getTableName(auditLog);
 const EMBEDDING = getTableName(entityEmbedding);
 const SEARCH_DOCUMENT = getTableName(searchDocument);
+const SUGGESTION_DISMISSAL = getTableName(suggestionDismissal);
 
 type WriteStatement = {
   op: "select" | "update" | "delete";
@@ -154,6 +156,7 @@ describe("removeEntity — statement order", () => {
       `update ${getTableName(product)}`,
       `update ${EMBEDDING}`,
       `update ${SEARCH_DOCUMENT}`,
+      `update ${SUGGESTION_DISMISSAL}`,
       `insert ${AUDIT}`,
     ]);
   });
@@ -186,6 +189,7 @@ describe("removeEntity — statement order", () => {
       // count(productImage), then the image-id read, then the removals.
       "select",
       "select",
+      "update",
       "update",
       "update",
       "update",
@@ -241,6 +245,7 @@ describe("removeEntity — statement order", () => {
       `update ${getTableName(product)}`,
       `update ${EMBEDDING}`,
       `update ${SEARCH_DOCUMENT}`,
+      `update ${SUGGESTION_DISMISSAL}`,
       `insert ${AUDIT}`,
     ]);
     expect(auditRows(log)[0]?.changes).toEqual({
@@ -276,6 +281,7 @@ describe("removeEntity — removal mode", () => {
       `delete ${getTableName(product)}`,
       `update ${EMBEDDING}`,
       `update ${SEARCH_DOCUMENT}`,
+      `update ${SUGGESTION_DISMISSAL}`,
       `insert ${AUDIT}`,
     ]);
   });
@@ -302,6 +308,7 @@ describe("removeEntity — removal mode", () => {
       `update ${getTableName(task)}`,
       `update ${EMBEDDING}`,
       `update ${SEARCH_DOCUMENT}`,
+      `update ${SUGGESTION_DISMISSAL}`,
       `insert ${AUDIT}`,
     ]);
   });
