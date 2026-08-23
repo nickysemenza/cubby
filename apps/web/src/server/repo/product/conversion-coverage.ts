@@ -65,7 +65,10 @@ export const getProductConversionCoverageFreshness = async (
   );
   const [row] = await getDb(db)
     .select({
-      computedAt: sql<Date | null>`max(${productConversionCoverage.computedAt})`,
+      computedAt:
+        sql<Date | null>`max(${productConversionCoverage.computedAt})`.mapWith(
+          productConversionCoverage.computedAt,
+        ),
       readyCount: sql<number>`count(*) filter (where ${productConversionCoverage.status} = 'ready' and ${productConversionCoverage.engineVersion} = ${PRODUCT_CONVERSION_COVERAGE_ENGINE_VERSION} and ${productConversionCoverage.computedAt} >= ${freshAfter})::int`,
       staleCount: sql<number>`count(*) filter (where ${productConversionCoverage.status} is not null and ${productConversionCoverage.status} <> 'unavailable' and (${productConversionCoverage.status} <> 'ready' or ${productConversionCoverage.engineVersion} <> ${PRODUCT_CONVERSION_COVERAGE_ENGINE_VERSION} or ${productConversionCoverage.computedAt} is null or ${productConversionCoverage.computedAt} < ${freshAfter}))::int`,
       unavailableCount: sql<number>`count(*) filter (where ${productConversionCoverage.status} = 'unavailable')::int`,

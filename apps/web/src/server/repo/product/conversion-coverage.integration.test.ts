@@ -185,9 +185,8 @@ describe("ProductConversionCoverage projection", () => {
     expect(
       (await list({ conversionCoverage: "partial" })).data.map((p) => p.id),
     ).not.toContain(partial.id);
-    await expect(
-      getProductConversionCoverageFreshness(ctx.db),
-    ).resolves.toMatchObject({
+    const freshness = await getProductConversionCoverageFreshness(ctx.db);
+    expect(freshness).toMatchObject({
       state: "stale",
       readyCount: 1,
       staleCount: 3,
@@ -195,6 +194,7 @@ describe("ProductConversionCoverage projection", () => {
       missingCount: 0,
       expectedEngineVersion: "conversion-coverage-v1",
     });
+    expect(freshness.computedAt).toBeInstanceOf(Date);
   });
 
   it("invalidates the parent projection when kit components attach or detach", async () => {
