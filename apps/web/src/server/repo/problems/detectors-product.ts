@@ -33,6 +33,7 @@ import {
   isNotNull,
   isNull,
   notExists,
+  or,
   type SQL,
   sql,
 } from "drizzle-orm";
@@ -503,6 +504,74 @@ export const findDuplicateProductIdentities = async (
   db: Database,
 ): Promise<DuplicateProductIdentity[]> => {
   const dbClient = getDb(db);
+  const manufacturerKey = canonicalLabelKey(product.manufacturer);
+  // JavaScript's trim/lower contract is authoritative below. On ASCII-only
+  // models, this SQL form is identical (the vertical tab is octal because
+  // PostgreSQL escape strings do not spell it as `\v`). Any manufacturer that
+  // contains a non-ASCII model takes the conservative fallback path below,
+  // since JavaScript handles Unicode whitespace/case differently.
+  const asciiModelKey = sql<string>`lower(btrim(${product.model}, E' \\t\\n\\r\\f\\013'))`;
+  const isAsciiModel = sql`${product.model} ~ '^[[:ascii:]]*$'`;
+  // Keep the first read to model groups that can actually produce a duplicate,
+  // except for the Unicode fallback described above. The semantic exclusions
+  // below remain in TypeScript because `isMiscProduct` and
+  // `isUnspecifiedManufacturer` are shared application predicates, not SQL
+  // policy; a group can therefore still be discarded after this prefilter.
+  const duplicateAsciiModelGroups = dbClient
+    .select({
+      manufacturerKey: manufacturerKey.as("manufacturerKey"),
+      modelKey: asciiModelKey.as("modelKey"),
+    })
+    .from(product)
+    .where(
+      and(
+        notDeleted(product),
+        isNotNull(product.model),
+        isAsciiModel,
+        sql`${asciiModelKey} <> ''`,
+      ),
+    )
+    .groupBy(manufacturerKey, asciiModelKey)
+    .having(sql`count(*) > 1`)
+    .as("duplicate_product_identity_ascii_groups");
+
+  // Returning every model for these manufacturers is intentionally broader
+  // than the final detector: it guarantees a Unicode-normalized model and its
+  // otherwise-ASCII peer arrive together for the canonical JS grouping.
+  const manufacturersWithNonAsciiModels = dbClient
+    .select({
+      manufacturerKey: manufacturerKey.as("manufacturerKey"),
+    })
+    .from(product)
+    .where(
+      and(
+        notDeleted(product),
+        isNotNull(product.model),
+        sql`NOT ${isAsciiModel}`,
+      ),
+    )
+    .groupBy(manufacturerKey)
+    .as("product_manufacturers_with_non_ascii_models");
+
+  const belongsToDuplicateAsciiModelGroup = exists(
+    dbClient
+      .select({ one: sql`1` })
+      .from(duplicateAsciiModelGroups)
+      .where(
+        and(
+          eq(duplicateAsciiModelGroups.manufacturerKey, manufacturerKey),
+          eq(duplicateAsciiModelGroups.modelKey, asciiModelKey),
+        ),
+      ),
+  );
+  const belongsToUnicodeFallbackManufacturer = exists(
+    dbClient
+      .select({ one: sql`1` })
+      .from(manufacturersWithNonAsciiModels)
+      .where(
+        eq(manufacturersWithNonAsciiModels.manufacturerKey, manufacturerKey),
+      ),
+  );
 
   const rows = await dbClient
     .select({
@@ -514,10 +583,19 @@ export const findDuplicateProductIdentities = async (
       // The SAME canonical key `findManufacturerSpellingVariants` and
       // `resolveEstablishedManufacturer` use, so `Ryobi`/`RYOBI` can't split a
       // real duplicate apart before this detector can group it.
-      manufacturerKey: sql<string>`${canonicalLabelKey(product.manufacturer)}`,
+      manufacturerKey,
     })
     .from(product)
-    .where(and(notDeleted(product), isNotNull(product.model)));
+    .where(
+      and(
+        notDeleted(product),
+        isNotNull(product.model),
+        or(
+          belongsToDuplicateAsciiModelGroup,
+          belongsToUnicodeFallbackManufacturer,
+        ),
+      ),
+    );
 
   const candidates = rows.filter(
     (row): row is typeof row & { model: string } =>

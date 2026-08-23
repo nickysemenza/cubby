@@ -15,6 +15,8 @@ import {
 import { deleteCookbook, upsertCookbook } from "./cookbook";
 import { getDb, insertAndReturn, withTransaction } from "./database-helpers";
 import {
+  countCullablePendingImages,
+  countUnreferencedImages,
   createAndAssociateUploadedImage,
   createPendingImageRecord,
   createUploadedImageRecord,
@@ -245,6 +247,50 @@ describe("image repository", () => {
         role: "cover",
       }),
     ]);
+  });
+
+  it("counts exactly the pending rows the cull would remove", async () => {
+    const cullable = await makePendingImage();
+    const protectedImage = await makePendingImage();
+    const { entityId: cookbookId } = await upsertCookbook(
+      ctx.db,
+      { name: "Pending Count Book", rawJson: [], sourceLabel: "Count Book" },
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(cookbook)
+      .set({ coverImageId: protectedImage.id })
+      .where(eq(cookbook.id, cookbookId));
+
+    const count = await countCullablePendingImages(ctx.db, 0);
+    const culled = await cullPendingImages(ctx.db, 0);
+
+    expect(culled.count).toBe(count);
+    expect(culled.deletedIds).toContain(cullable.id);
+    expect(culled.deletedIds).not.toContain(protectedImage.id);
+  });
+
+  it("keeps a PENDING image referenced only by a tombstoned join row", async () => {
+    const protectedImage = await makePendingImage();
+    const project = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "Deleted image attachment project" }),
+      ctx.actor,
+    );
+    await insertAndReturn(ctx.db, projectImage, {
+      projectId: project.entityId,
+      imageId: protectedImage.id,
+      deletedAt: new Date(),
+    });
+
+    const count = await countCullablePendingImages(ctx.db, 0);
+    const culled = await cullPendingImages(ctx.db, 0);
+
+    expect(culled.count).toBe(count);
+    expect(culled.deletedIds).not.toContain(protectedImage.id);
+    expect((await getImageById(ctx.db, protectedImage.id)).status).toBe(
+      "PENDING",
+    );
   });
 
   // The non-obvious half of the guard above: deleteCookbook tombstones the
@@ -684,6 +730,7 @@ describe("image repository — purchase (charge) documents", () => {
         .where(eq(image.id, orphan.id));
 
       const found = (await findUnreferencedImages(ctx.db)).map((r) => r.id);
+      expect(await countUnreferencedImages(ctx.db)).toBe(found.length);
       const listed = await imageList(
         ctx.db,
         {

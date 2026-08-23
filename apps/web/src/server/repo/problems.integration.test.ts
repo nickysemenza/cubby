@@ -2512,6 +2512,74 @@ describe("findDuplicateProductIdentities", () => {
     );
   });
 
+  it("keeps duplicate models with JavaScript-trim whitespace in the candidate set", async () => {
+    const amazonRow = await seed("Whitespace-normalized drill", {
+      manufacturer: "DeWalt",
+      // The ASCII whitespace path must agree with JavaScript's `trim()`.
+      model: "\t\nDCD791D2\n\t",
+      externalIds: [
+        { source: "amazon", kind: "asin", externalId: "B01DUPEWS1", url: null },
+      ],
+    });
+    const hdRow = await seed("Whitespace-normalized drill listing", {
+      manufacturer: "DEWALT",
+      model: "DCD791D2",
+      externalIds: [
+        {
+          source: "homedepot",
+          kind: "retailer_sku",
+          externalId: "HD-DUPE-WS-1",
+          url: null,
+        },
+      ],
+    });
+
+    const { duplicateProductIdentities } = await findFastProblems(ctx.db);
+    const found = duplicateProductIdentities.find((row) =>
+      row.products.some((product) => product.id === amazonRow.id),
+    );
+    expect(found?.products.map((product) => product.id).sort()).toEqual(
+      [amazonRow.id, hdRow.id].sort(),
+    );
+  });
+
+  it("falls back conservatively for duplicate models with non-ASCII whitespace", async () => {
+    const amazonRow = await seed("Unicode-whitespace drill", {
+      manufacturer: "DeWalt",
+      // NBSP is whitespace to JavaScript trim but not PostgreSQL btrim. The
+      // fallback must retain this row AND its ASCII-normalized peer.
+      model: "\u00a0DCD792D2\u00a0",
+      externalIds: [
+        {
+          source: "amazon",
+          kind: "asin",
+          externalId: "B01DUPEUNICODE1",
+          url: null,
+        },
+      ],
+    });
+    const hdRow = await seed("Unicode-whitespace drill listing", {
+      manufacturer: "DEWALT",
+      model: "DCD792D2",
+      externalIds: [
+        {
+          source: "homedepot",
+          kind: "retailer_sku",
+          externalId: "HD-DUPE-UNICODE-1",
+          url: null,
+        },
+      ],
+    });
+
+    const { duplicateProductIdentities } = await findFastProblems(ctx.db);
+    const found = duplicateProductIdentities.find((row) =>
+      row.products.some((product) => product.id === amazonRow.id),
+    );
+    expect(found?.products.map((product) => product.id).sort()).toEqual(
+      [amazonRow.id, hdRow.id].sort(),
+    );
+  });
+
   it("does not flag a variant family separated by distinct UPCs", async () => {
     await seed("Milwaukee Grinder 4.5in", {
       manufacturer: "Milwaukee",

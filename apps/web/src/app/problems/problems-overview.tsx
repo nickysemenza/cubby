@@ -74,8 +74,8 @@ export function ProblemsOverview() {
 
   // The page loads detectors as five cost-grouped, unbatched queries (each its
   // own Worker invocation/CPU budget — see useProblemsData) and merges them back
-  // into the AllProblems shape the sections expect. No staleTime: opening the
-  // page revalidates whatever the badge's 5-min cache may have left stale.
+  // into the AllProblems shape the sections expect. The hook keeps results warm
+  // for five minutes; successful repairs explicitly invalidate them.
   const {
     problems,
     isLoading: detectorsLoading,

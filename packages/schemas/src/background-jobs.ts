@@ -1,9 +1,15 @@
-import { searchableEntitySchema } from "./search";
 import { z } from "zod";
+import { searchableEntities } from "./entity-manifest";
+
+// Keep background-job payload validation independent of search.ts so search
+// can reuse the generic batch-reference schema without a runtime import cycle.
+const backgroundSearchableEntitySchema = z.enum(searchableEntities);
 
 export const backgroundJobKinds = [
   "recipe-totals.recompute",
   "entity-embedding.refresh",
+  "entity-embedding.backfill.coordinator",
+  "search-document.repair.coordinator",
   "location-ai.description.refresh",
   "location-ai.inventory.refresh",
   "location-valuation.recompute",
@@ -63,8 +69,47 @@ export const recipeTotalsRecomputePayloadSchema = z.object({
 });
 
 export const entityEmbeddingRefreshPayloadSchema = z.object({
-  entityType: searchableEntitySchema,
+  entityType: backgroundSearchableEntitySchema,
   entityId: z.string(),
+  /**
+   * A coordinator records the exact normalized source hash it inspected. The
+   * worker checks it before calling the embedding provider, so a concurrent
+   * write cannot spend tokens on text that has already changed.
+   */
+  expectedEmbeddingHash: z.string().optional(),
+});
+
+const workflowCursorSchema = z.object({
+  entityType: backgroundSearchableEntitySchema,
+  entityId: z.string(),
+});
+
+/** Coordinator payloads carry their own durable page state for retry safety. */
+export const entityEmbeddingBackfillCoordinatorPayloadSchema = z.object({
+  source: z.literal("search.debug.semanticBackfill"),
+  workflow: z.object({
+    type: z.literal("entity-embedding.backfill.coordinator"),
+    entityTypes: z.array(backgroundSearchableEntitySchema),
+    cursor: workflowCursorSchema.nullable(),
+    pagesCompleted: z.number().int().nonnegative(),
+    jobsQueued: z.number().int().nonnegative(),
+    state: z.enum(["active", "complete"]),
+  }),
+});
+export const searchDocumentRepairCoordinatorPayloadSchema = z.object({
+  source: z.literal("search.documentRepair"),
+  workflow: z.object({
+    type: z.literal("search-document.repair.coordinator"),
+    phase: z.enum(["documents", "missing"]),
+    cursor: workflowCursorSchema.nullable(),
+    scanned: z.number().int().nonnegative(),
+    queued: z.number().int().nonnegative(),
+    retired: z.number().int().nonnegative(),
+    missing: z.number().int().nonnegative(),
+    stale: z.number().int().nonnegative(),
+    orphaned: z.number().int().nonnegative(),
+    state: z.enum(["active", "complete"]),
+  }),
 });
 
 export const locationAiRefreshPayloadSchema = z.object({
@@ -97,6 +142,14 @@ export const backgroundJobPayloadSchema = z.discriminatedUnion("kind", [
     payload: entityEmbeddingRefreshPayloadSchema,
   }),
   z.object({
+    kind: z.literal("entity-embedding.backfill.coordinator"),
+    payload: entityEmbeddingBackfillCoordinatorPayloadSchema,
+  }),
+  z.object({
+    kind: z.literal("search-document.repair.coordinator"),
+    payload: searchDocumentRepairCoordinatorPayloadSchema,
+  }),
+  z.object({
     kind: z.literal("location-ai.description.refresh"),
     payload: locationAiRefreshPayloadSchema,
   }),
@@ -121,18 +174,8 @@ export const backgroundJobPayloadSchema = z.discriminatedUnion("kind", [
 export type BackgroundJobPayload = z.infer<typeof backgroundJobPayloadSchema>;
 
 export const enqueueEmbeddingBackfillInputSchema = z.object({
-  entityTypes: z.array(searchableEntitySchema).optional(),
-  limit: z.number().int().min(1).max(10_000).optional(),
+  entityTypes: z.array(backgroundSearchableEntitySchema).optional(),
 });
-
-export const enqueueEmbeddingBackfillOutSchema = z.object({
-  batchId: z.string(),
-  totalJobs: z.number().int().nonnegative(),
-});
-
-export type EnqueueEmbeddingBackfillOut = z.infer<
-  typeof enqueueEmbeddingBackfillOutSchema
->;
 
 const backgroundBatchSummaryFields = {
   id: z.string(),
@@ -169,6 +212,15 @@ export const backgroundBatchRefSchema = z.object({
 });
 
 export type BackgroundBatchRef = z.infer<typeof backgroundBatchRefSchema>;
+
+export const enqueueEmbeddingBackfillOutSchema = z.object({
+  batch: backgroundBatchRefSchema,
+  reused: z.boolean(),
+});
+
+export type EnqueueEmbeddingBackfillOut = z.infer<
+  typeof enqueueEmbeddingBackfillOutSchema
+>;
 
 export const mutationSideEffectsSchema = z.object({
   backgroundBatches: z.array(backgroundBatchRefSchema),

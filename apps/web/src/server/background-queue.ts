@@ -1,16 +1,26 @@
-import { backgroundJobPayloadSchema } from "@cubby/schemas/background-jobs";
+import {
+  type BackgroundJobKind,
+  backgroundJobPayloadSchema,
+} from "@cubby/schemas/background-jobs";
 import {
   unsafeIngredientId,
   unsafeLocationId,
   unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
 import { match } from "ts-pattern";
+import {
+  advanceWorkflowIfReady,
+  isBackgroundWorkflowKind,
+} from "~/server/background-workflow";
 import { getProblemCountsCache } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import {
+  addBackgroundJobsToBatch,
+  BACKGROUND_JOB_LEASE_MS,
   failOrRetryBackgroundJob,
   findQueuedBackgroundJobs,
   finishBackgroundJob,
+  getBackgroundBatchSummary,
   getBackgroundJob,
   markBackgroundJobRunning,
 } from "~/server/repo/background-jobs";
@@ -24,6 +34,8 @@ import {
   embedTexts,
   semanticEmbeddingsConfigured,
 } from "~/server/semantic/embeddings";
+import { embeddingTextHash } from "~/server/semantic/hash";
+import { normalizeSearchText } from "~/server/semantic/text";
 import {
   BACKGROUND_MESSAGE_VERSION,
   type BackgroundQueueDeliveredMessage,
@@ -41,8 +53,16 @@ export async function processBackgroundQueueMessage(
     return;
   }
 
-  const outcome = await processBackgroundJob(db, message.body.jobId);
-  if (outcome === "retry") {
+  const outcome = await processBackgroundJob(
+    db,
+    message.body.jobId,
+    message.body.kind,
+  );
+  if (outcome === "leased") {
+    message.retry({
+      delaySeconds: Math.ceil(BACKGROUND_JOB_LEASE_MS / 1_000),
+    });
+  } else if (outcome === "retry") {
     message.retry();
   } else {
     message.ack();
@@ -54,9 +74,15 @@ export async function drainQueuedBackgroundJobs(
   limit: number,
 ): Promise<{ processed: number }> {
   const jobs = await findQueuedBackgroundJobs(db, limit);
+  const batchKinds = new Map<string, BackgroundJobKind | undefined>();
   let processed = 0;
   for (const job of jobs) {
-    await processBackgroundJob(db, job.id);
+    let batchKind = batchKinds.get(job.batchId);
+    if (batchKind === undefined && !batchKinds.has(job.batchId)) {
+      batchKind = (await getBackgroundBatchSummary(db, job.batchId))?.kind;
+      batchKinds.set(job.batchId, batchKind);
+    }
+    await processBackgroundJob(db, job.id, batchKind);
     processed++;
   }
   return { processed };
@@ -65,9 +91,20 @@ export async function drainQueuedBackgroundJobs(
 export async function processBackgroundJob(
   db: Database,
   jobId: string,
-): Promise<"succeeded" | "skipped" | "retry" | "failed"> {
+  batchKind?: BackgroundJobKind,
+): Promise<"succeeded" | "skipped" | "retry" | "failed" | "leased"> {
   const current = await getBackgroundJob(db, jobId);
   if (!current) return "skipped";
+  if (
+    current.status === "running" &&
+    current.startedAt &&
+    current.startedAt.getTime() > Date.now() - BACKGROUND_JOB_LEASE_MS
+  ) {
+    // A duplicate delivery can race the live worker. Ask the queue to retry
+    // instead of acknowledging it; once the lease expires, markRunning below
+    // reclaims work that a crashed worker left behind.
+    return "leased";
+  }
   if (
     current.status === "succeeded" ||
     current.status === "skipped" ||
@@ -87,13 +124,20 @@ export async function processBackgroundJob(
     });
     const status = await runBackgroundJobPayload(db, running.batchId, parsed);
     await finishBackgroundJob(db, jobId, status);
+    if (isBackgroundWorkflowKind(batchKind)) {
+      await advanceWorkflowIfReady(db, running.batchId);
+    }
     return status;
   } catch (error) {
     console.error(
       `[background-queue] job failed batch=${running.batchId} job=${jobId} kind=${running.kind}`,
       error,
     );
-    return await failOrRetryBackgroundJob(db, jobId, error);
+    const outcome = await failOrRetryBackgroundJob(db, jobId, error);
+    if (outcome === "failed" && isBackgroundWorkflowKind(batchKind)) {
+      await advanceWorkflowIfReady(db, running.batchId);
+    }
+    return outcome;
   }
 }
 
@@ -119,13 +163,50 @@ async function runBackgroundJobPayload(
         p.payload.entityId,
       );
       if (refreshed.status !== "upserted") return "skipped" as const;
-      if (!semanticEmbeddingsConfigured()) return "skipped" as const;
       const text = await getSearchDocumentEmbeddingText(
         db,
         p.payload.entityType,
         p.payload.entityId,
       );
       if (!text) return "skipped" as const;
+      if (p.payload.expectedEmbeddingHash) {
+        const currentHash = await embeddingTextHash({
+          entityType: text.entityType,
+          provider: getSemanticEmbeddingConfig().provider,
+          model: getSemanticEmbeddingConfig().model,
+          dimensions: getSemanticEmbeddingConfig().dimensions,
+          text: normalizeSearchText(text.embeddingText),
+        });
+        // The workflow inspected a different document revision. Refresh is
+        // already complete above; persist a replacement child keyed by the
+        // current hash so this same workflow still converges without paying a
+        // provider call for the obsolete input.
+        if (currentHash !== p.payload.expectedEmbeddingHash) {
+          const jobIds = await addBackgroundJobsToBatch(db, batchId, [
+            {
+              kind: "entity-embedding.refresh",
+              dedupeKey: `entity-embedding.refresh:${text.entityType}:${text.entityId}:${currentHash}`,
+              payload: {
+                entityType: text.entityType,
+                entityId: text.entityId,
+                expectedEmbeddingHash: currentHash,
+              },
+            },
+          ]);
+          if (jobIds.length > 0) {
+            const { dispatchQueuedBackgroundJobs } = await import(
+              "./background-dispatch"
+            );
+            await dispatchQueuedBackgroundJobs(db, {
+              batchId,
+              jobIds,
+              batchKind: "entity-embedding.backfill.coordinator",
+            });
+          }
+          return "skipped" as const;
+        }
+      }
+      if (!semanticEmbeddingsConfigured()) return "skipped" as const;
       const [embedding] = await embedTexts([text.embeddingText], {
         operation: "entityEmbeddingRefresh",
         db,
@@ -143,6 +224,22 @@ async function runBackgroundJobPayload(
         embedding,
       });
       return "succeeded" as const;
+    })
+    .with({ kind: "entity-embedding.backfill.coordinator" }, async (p) => {
+      const { continueEntityEmbeddingBackfillWorkflow } = await import(
+        "./services/semantic-search.service"
+      );
+      return await continueEntityEmbeddingBackfillWorkflow(
+        db,
+        batchId,
+        p.payload,
+      );
+    })
+    .with({ kind: "search-document.repair.coordinator" }, async (p) => {
+      const { continueSearchDocumentRepairWorkflow } = await import(
+        "./services/search.service"
+      );
+      return await continueSearchDocumentRepairWorkflow(db, batchId, p.payload);
     })
     .with({ kind: "location-ai.description.refresh" }, async (p) => {
       // Location vision reaches browser-facing feature flags. Keep it out of

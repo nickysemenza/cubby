@@ -12,7 +12,15 @@ import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
 import type { LocationAncestorOut } from "@cubby/schemas/location";
 import type { ProductCategory } from "@cubby/schemas/product";
 import { isCollectionTag } from "@cubby/shared/collection-tag";
-import { and, arrayOverlaps, eq, isNull, ne, sql } from "drizzle-orm";
+import {
+  and,
+  arrayOverlaps,
+  eq,
+  isNull,
+  ne,
+  notExists,
+  sql,
+} from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
   image,
@@ -30,7 +38,7 @@ import { stockOnly } from "~/server/repo/inventory/placement";
 // through it would close an import cycle. `location/tree` imports no product
 // code.
 import { loadLocationAncestors } from "~/server/repo/location/tree";
-import { loadPrimaryGtins } from "./gtin";
+import { loadPrimaryGtins, productHasAnyGtin } from "./gtin";
 
 export const findDuplicateUniqueProducts = async (
   db: Database,
@@ -114,6 +122,42 @@ export const findProductsWithNoImages = async (
     ...row,
     primaryGtin: gtins.get(row.id) ?? null,
   }));
+};
+
+/**
+ * Scalar counterpart of the Maintenance card's barcode-backed image backfill
+ * candidate list. The action still loads presenter rows through
+ * {@link findProductsWithNoImages}; its always-on count must not ship each
+ * product and GTIN across the connection merely to return a number.
+ */
+export const countProductsWithNoImagesWithGtin = async (
+  db: Database,
+): Promise<number> => {
+  const dbClient = getDb(db);
+  const [row] = await dbClient
+    .select({ count: sql<number>`count(*)::int` })
+    .from(product)
+    .where(
+      and(
+        notDeleted(product),
+        isNull(product.ingredientId),
+        productHasAnyGtin(),
+        notExists(
+          dbClient
+            .select({ one: sql`1` })
+            .from(productImage)
+            .innerJoin(image, eq(image.id, productImage.imageId))
+            .where(
+              and(
+                eq(productImage.productId, product.id),
+                notDeleted(productImage),
+                displayableImageWhere,
+              ),
+            ),
+        ),
+      ),
+    );
+  return row?.count ?? 0;
 };
 
 /**

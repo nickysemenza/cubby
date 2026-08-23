@@ -1,21 +1,40 @@
+import { eq } from "drizzle-orm";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
-import { dispatchBackgroundJobs } from "~/server/background-dispatch";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  dispatchBackgroundJobs,
+  dispatchQueuedBackgroundJobs,
+} from "~/server/background-dispatch";
+import {
+  processBackgroundJob,
+  processBackgroundQueueMessage,
+} from "~/server/background-queue";
+import { BACKGROUND_MESSAGE_VERSION } from "~/server/background-queue-types";
+import { setCfEnv } from "~/server/cf-env";
+import { backgroundJob } from "~/server/db/schema";
+import {
+  appendBackgroundJobsToWorkflow,
+  BACKGROUND_JOB_LEASE_MS,
   createBackgroundBatchWithJobs,
   failOrRetryBackgroundJob,
   finishBackgroundJob,
   getBackgroundBatchDetail,
   getBackgroundBatchSummary,
+  getQueuedBackgroundBatchDispatch,
   listBackgroundBatchJobs,
   markBackgroundJobRunning,
+  promotePendingBackgroundWorkflowContinuation,
+  startOrReuseBackgroundWorkflow,
 } from "~/server/repo/background-jobs";
+import { getDb } from "~/server/repo/database-helpers";
 import { createLocation } from "~/server/repo/location";
 import { makeLocationInput } from "~/server/repo/repo.fixtures";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
 describe("background job persistence", () => {
   const ctx = withTestDb();
+
+  afterEach(() => setCfEnv(undefined as unknown as Env));
 
   it("summarizes job transitions on the batch", async () => {
     const { batchId, jobIds } = await createBackgroundBatchWithJobs(ctx.db, {
@@ -50,6 +69,55 @@ describe("background job persistence", () => {
     expect(detail?.wallDurationMs).not.toBeNull();
   });
 
+  it("reclaims a running job only after its worker lease expires", async () => {
+    const { jobIds } = await createBackgroundBatchWithJobs(ctx.db, {
+      kind: "entity-embedding.refresh",
+      source: "backfill",
+      jobs: [
+        {
+          kind: "entity-embedding.refresh",
+          dedupeKey: "test:embedding:leased",
+          payload: { entityType: "product", entityId: crypto.randomUUID() },
+        },
+      ],
+    });
+    const jobId = jobIds[0]!;
+
+    expect((await markBackgroundJobRunning(ctx.db, jobId))?.attempts).toBe(1);
+    await expect(markBackgroundJobRunning(ctx.db, jobId)).resolves.toBeNull();
+    await expect(
+      processBackgroundJob(
+        ctx.db,
+        jobId,
+        "entity-embedding.backfill.coordinator",
+      ),
+    ).resolves.toBe("leased");
+    const retry = vi.fn();
+    await processBackgroundQueueMessage(ctx.db, {
+      body: {
+        messageVersion: BACKGROUND_MESSAGE_VERSION,
+        batchId: "lease-test",
+        jobId,
+        kind: "entity-embedding.backfill.coordinator",
+      },
+      ack: vi.fn(),
+      retry,
+    });
+    expect(retry).toHaveBeenCalledWith({
+      delaySeconds: BACKGROUND_JOB_LEASE_MS / 1_000,
+    });
+
+    await getDb(ctx.db)
+      .update(backgroundJob)
+      .set({
+        startedAt: new Date(Date.now() - BACKGROUND_JOB_LEASE_MS - 1_000),
+      })
+      .where(eq(backgroundJob.id, jobId));
+
+    const reclaimed = await markBackgroundJobRunning(ctx.db, jobId);
+    expect(reclaimed).toMatchObject({ status: "running", attempts: 2 });
+  });
+
   it("reads a batch summary without loading jobs", async () => {
     const { batchId } = await createBackgroundBatchWithJobs(ctx.db, {
       kind: "entity-embedding.refresh",
@@ -70,6 +138,181 @@ describe("background job persistence", () => {
     expect(queryCount).toBe(1);
     expect(result).toMatchObject({ id: batchId, totalJobs: 1 });
     expect(result).not.toHaveProperty("jobs");
+  });
+
+  it("reads only queued ids when redispatching a batch", async () => {
+    const { batchId, jobIds } = await createBackgroundBatchWithJobs(ctx.db, {
+      kind: "entity-embedding.refresh",
+      source: "backfill",
+      jobs: Array.from({ length: 3 }, (_, index) => ({
+        kind: "entity-embedding.refresh" as const,
+        dedupeKey: `test:queued-dispatch:${index}`,
+        payload: { entityType: "product", entityId: crypto.randomUUID() },
+      })),
+    });
+    await markBackgroundJobRunning(ctx.db, jobIds[0]!);
+    await markBackgroundJobRunning(ctx.db, jobIds[1]!);
+    await finishBackgroundJob(ctx.db, jobIds[1]!, "succeeded");
+
+    const dispatch = await getQueuedBackgroundBatchDispatch(ctx.db, batchId);
+
+    expect(dispatch).toEqual({
+      kind: "entity-embedding.refresh",
+      jobIds: [jobIds[2]!],
+    });
+  });
+
+  it("holds a workflow continuation pending until its page is terminal", async () => {
+    const dedupeKey = `test:workflow-reuse:${crypto.randomUUID()}`;
+    const started = await startOrReuseBackgroundWorkflow(ctx.db, {
+      kind: "entity-embedding.backfill.coordinator",
+      source: "maintenance",
+      dedupeKey,
+      metadata: { cursor: null },
+    });
+    const duplicate = await startOrReuseBackgroundWorkflow(ctx.db, {
+      kind: "entity-embedding.backfill.coordinator",
+      source: "maintenance",
+      dedupeKey,
+      metadata: { cursor: null },
+    });
+    expect(duplicate).toMatchObject({ batch: started.batch, reused: true });
+
+    const page = {
+      batchId: started.batch.id,
+      children: [
+        {
+          kind: "entity-embedding.refresh" as const,
+          dedupeKey: "test:workflow-child",
+          payload: { entityType: "product", entityId: crypto.randomUUID() },
+        },
+      ],
+      continuation: {
+        kind: "entity-embedding.backfill.coordinator" as const,
+        dedupeKey: "test:workflow-next-page",
+        payload: {},
+      },
+      metadata: { cursor: { page: 1 } },
+    };
+    const { childJobIds, continuationJobId } =
+      await appendBackgroundJobsToWorkflow(ctx.db, page);
+    const childId = childJobIds[0];
+    expect(childId).toBeDefined();
+    expect(continuationJobId).toBeDefined();
+    await expect(appendBackgroundJobsToWorkflow(ctx.db, page)).resolves.toEqual(
+      {
+        childJobIds,
+        continuationJobId,
+      },
+    );
+    await markBackgroundJobRunning(ctx.db, childId!);
+
+    await expect(
+      promotePendingBackgroundWorkflowContinuation(ctx.db, started.batch.id),
+    ).resolves.toBeNull();
+
+    await finishBackgroundJob(ctx.db, childId!, "succeeded");
+    const promoted = await promotePendingBackgroundWorkflowContinuation(
+      ctx.db,
+      started.batch.id,
+    );
+
+    expect(promoted).toMatchObject({
+      kind: "entity-embedding.backfill.coordinator",
+    });
+    const detail = await getBackgroundBatchDetail(ctx.db, started.batch.id);
+    expect(detail?.jobs.find((job) => job.id === promoted?.jobId)?.status).toBe(
+      "queued",
+    );
+    expect(detail?.metadata).toEqual({
+      cursor: { page: 1 },
+      reused: true,
+    });
+  });
+
+  it("atomically reuses an active workflow and permits a new one after terminal completion", async () => {
+    const dedupeKey = `test:workflow-concurrent:${crypto.randomUUID()}`;
+    const input = {
+      kind: "entity-embedding.backfill.coordinator" as const,
+      source: "maintenance" as const,
+      dedupeKey,
+      metadata: { cursor: null },
+      initialJobs: Array.from({ length: 2 }, (_, index) => ({
+        kind: "entity-embedding.backfill.coordinator" as const,
+        dedupeKey: `${dedupeKey}:seed:${index}`,
+        payload: {},
+      })),
+    };
+
+    const starts = await Promise.all([
+      startOrReuseBackgroundWorkflow(ctx.db, input),
+      startOrReuseBackgroundWorkflow(ctx.db, input),
+    ]);
+    expect(starts.filter((start) => !start.reused)).toHaveLength(1);
+    expect(new Set(starts.map((start) => start.batch.id)).size).toBe(1);
+
+    const active = starts.find((start) => !start.reused)!;
+    const reused = starts.find((start) => start.reused)!;
+    expect(active.jobIds).toHaveLength(2);
+    expect(new Set(active.jobIds).size).toBe(2);
+    expect([...reused.jobIds].sort()).toEqual([...active.jobIds].sort());
+    const detail = await getBackgroundBatchDetail(ctx.db, active.batch.id);
+    expect(detail?.totalJobs).toBe(2);
+    expect(detail?.metadata).toEqual({ cursor: null, reused: true });
+    expect(detail?.jobs.map((job) => job.id).sort()).toEqual(
+      [...active.jobIds].sort(),
+    );
+
+    for (const jobId of active.jobIds) {
+      await markBackgroundJobRunning(ctx.db, jobId);
+      await finishBackgroundJob(ctx.db, jobId, "succeeded");
+    }
+
+    const restarted = await startOrReuseBackgroundWorkflow(ctx.db, input);
+    expect(restarted.reused).toBe(false);
+    expect(restarted.batch.id).not.toBe(active.batch.id);
+    expect(restarted.jobIds).toHaveLength(2);
+  });
+
+  it("delivers 201 persisted queued jobs in queue-sized chunks", async () => {
+    const sent: Array<
+      Array<{ body: { batchId: string; jobId: string; kind: string } }>
+    > = [];
+    setCfEnv({
+      BACKGROUND_QUEUE: {
+        send: vi.fn(),
+        sendBatch: vi.fn(
+          async (
+            messages: Iterable<{
+              body: { batchId: string; jobId: string; kind: string };
+            }>,
+          ) => sent.push([...messages]),
+        ),
+      },
+    } as unknown as Env);
+    const { batchId, jobIds } = await createBackgroundBatchWithJobs(ctx.db, {
+      kind: "entity-embedding.refresh",
+      source: "backfill",
+      jobs: Array.from({ length: 201 }, (_, index) => ({
+        kind: "entity-embedding.refresh" as const,
+        dedupeKey: `test:queued-delivery:${index}`,
+        payload: { entityType: "product", entityId: crypto.randomUUID() },
+      })),
+    });
+
+    await dispatchQueuedBackgroundJobs(ctx.db, {
+      batchId,
+      jobIds,
+      batchKind: "entity-embedding.refresh",
+    });
+
+    expect(sent.map((batch) => batch.length)).toEqual([100, 100, 1]);
+    expect(
+      sent.flatMap((batch) => batch.map((message) => message.body.jobId)),
+    ).toEqual(jobIds);
+    expect(
+      sent.flat().every((message) => message.body.batchId === batchId),
+    ).toBe(true);
   });
 
   it("bounds large batch reads to 100 jobs and returns a stable next page", async () => {

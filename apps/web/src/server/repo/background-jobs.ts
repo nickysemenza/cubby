@@ -11,7 +11,7 @@ import type {
   BackgroundJobSummary,
 } from "@cubby/schemas/background-jobs";
 import { getErrorMessage } from "@cubby/shared";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { backgroundBatch, backgroundJob } from "~/server/db/schema";
 import {
@@ -38,6 +38,9 @@ interface CreateBackgroundBatchInput {
 
 type BatchRow = typeof backgroundBatch.$inferSelect;
 type JobRow = typeof backgroundJob.$inferSelect;
+
+/** A queue redelivery may reclaim work left running by a crashed worker. */
+export const BACKGROUND_JOB_LEASE_MS = 15 * 60 * 1_000;
 
 const coerceDate = (value: Date | string | null): Date | null => {
   if (value == null) return null;
@@ -85,6 +88,134 @@ export const toBackgroundBatchRef = (
   status: batch.status,
   totalJobs: batch.totalJobs,
 });
+
+export interface StartOrReuseBackgroundWorkflowInput {
+  kind: BackgroundJobKind;
+  source: BackgroundBatchSource;
+  dedupeKey: string;
+  metadata: unknown;
+  initialJobs?: CreateBackgroundJobInput[];
+}
+
+/**
+ * Start one durable workflow or return its in-flight predecessor. The partial
+ * unique index on `BackgroundBatch.dedupeKey` makes this safe across concurrent
+ * requests; completed batches intentionally do not participate in reuse.
+ */
+export async function startOrReuseBackgroundWorkflow(
+  db: Database,
+  input: StartOrReuseBackgroundWorkflowInput,
+): Promise<{ batch: BackgroundBatchRef; reused: boolean; jobIds: string[] }> {
+  return await withTransaction(db, async (tx) => {
+    const insertWorkflowBatch = async (): Promise<BatchRow | undefined> => {
+      const [row] = await tx
+        .insert(backgroundBatch)
+        .values({
+          kind: input.kind,
+          source: input.source,
+          dedupeKey: input.dedupeKey,
+          metadata: input.metadata,
+          status: "queued",
+        })
+        .onConflictDoNothing()
+        .returning();
+      return row;
+    };
+    const findActiveWorkflow = async (): Promise<BatchRow | undefined> =>
+      await tx.query.backgroundBatch.findFirst({
+        where: and(
+          eq(backgroundBatch.dedupeKey, input.dedupeKey),
+          eq(backgroundBatch.kind, input.kind),
+          inArray(backgroundBatch.status, ["queued", "running"]),
+          notDeleted(backgroundBatch),
+        ),
+      });
+
+    let created = await insertWorkflowBatch();
+    let existing: BatchRow | undefined;
+    if (!created) {
+      existing = await findActiveWorkflow();
+      if (!existing) {
+        // The conflicting partial-index row can become terminal between the
+        // INSERT and this SELECT. Its unique slot is released at that point,
+        // so retry the INSERT once rather than surfacing a false conflict.
+        created = await insertWorkflowBatch();
+        if (!created) existing = await findActiveWorkflow();
+      }
+    }
+    if (created) {
+      if (!input.initialJobs?.length) {
+        return {
+          batch: toBackgroundBatchRef(created),
+          reused: false,
+          jobIds: [],
+        };
+      }
+      const now = new Date();
+      const jobs = await tx
+        .insert(backgroundJob)
+        .values(
+          input.initialJobs.map((job) => ({
+            batchId: created.id,
+            kind: job.kind,
+            dedupeKey: job.dedupeKey,
+            payload: job.payload,
+            status: "queued" as const,
+            maxAttempts: job.maxAttempts ?? 3,
+            queuedAt: now,
+          })),
+        )
+        .returning({ id: backgroundJob.id });
+      await recalculateBackgroundBatchSummaryTx(tx, created.id);
+      const batch = await tx.query.backgroundBatch.findFirst({
+        where: eq(backgroundBatch.id, created.id),
+      });
+      if (!batch || jobs.length !== input.initialJobs.length) {
+        throw new Error("Background workflow seed disappeared");
+      }
+      return {
+        batch: toBackgroundBatchRef(batch),
+        reused: false,
+        jobIds: jobs.map((job) => job.id),
+      };
+    }
+    if (!existing) {
+      throw new Error(
+        `Background workflow ${input.dedupeKey} conflicts with another active workflow`,
+      );
+    }
+    if (
+      existing.metadata &&
+      typeof existing.metadata === "object" &&
+      !Array.isArray(existing.metadata)
+    ) {
+      await tx
+        .update(backgroundBatch)
+        .set({ metadata: { ...existing.metadata, reused: true } })
+        .where(eq(backgroundBatch.id, existing.id));
+    }
+    const seedDedupeKeys = input.initialJobs?.map((job) => job.dedupeKey) ?? [];
+    const queuedSeeds = seedDedupeKeys.length
+      ? await tx
+          .select({ id: backgroundJob.id })
+          .from(backgroundJob)
+          .where(
+            and(
+              eq(backgroundJob.batchId, existing.id),
+              inArray(backgroundJob.dedupeKey, seedDedupeKeys),
+              eq(backgroundJob.status, "queued"),
+              notDeleted(backgroundJob),
+            ),
+          )
+          .orderBy(asc(backgroundJob.createdAt), asc(backgroundJob.id))
+      : [];
+    return {
+      batch: toBackgroundBatchRef(existing),
+      reused: true,
+      jobIds: queuedSeeds.map((job) => job.id),
+    };
+  });
+}
 
 const toJobSummary = (row: JobRow): BackgroundJobSummary => ({
   id: row.id,
@@ -151,7 +282,7 @@ export async function addBackgroundJobsToBatch(
   if (jobs.length === 0) return [];
   return await withTransaction(db, async (tx) => {
     const now = new Date();
-    const inserted = await tx
+    await tx
       .insert(backgroundJob)
       .values(
         jobs.map((job) => ({
@@ -164,15 +295,186 @@ export async function addBackgroundJobsToBatch(
           queuedAt: now,
         })),
       )
-      .onConflictDoNothing()
-      .returning({ id: backgroundJob.id });
+      .onConflictDoNothing();
 
     await tx
       .update(backgroundBatch)
       .set({ lastEnqueuedAt: now })
       .where(eq(backgroundBatch.id, batchId));
     await recalculateBackgroundBatchSummaryTx(tx, batchId);
-    return inserted.map((row) => row.id);
+    const dedupeKeys = jobs.map((job) => job.dedupeKey);
+    const queued = await tx
+      .select({ id: backgroundJob.id })
+      .from(backgroundJob)
+      .where(
+        and(
+          eq(backgroundJob.batchId, batchId),
+          inArray(backgroundJob.dedupeKey, dedupeKeys),
+          eq(backgroundJob.status, "queued"),
+          notDeleted(backgroundJob),
+        ),
+      )
+      .orderBy(asc(backgroundJob.createdAt), asc(backgroundJob.id));
+    return queued.map((row) => row.id);
+  });
+}
+
+/**
+ * Append a workflow page and its next coordinator atomically, so a retry never
+ * observes cursor metadata ahead of the jobs that should process that page.
+ */
+export async function appendBackgroundJobsToWorkflow(
+  db: Database,
+  input: {
+    batchId: string;
+    children: CreateBackgroundJobInput[];
+    continuation?: CreateBackgroundJobInput | null;
+    metadata: unknown;
+  },
+): Promise<{ childJobIds: string[]; continuationJobId: string | null }> {
+  return await withTransaction(db, async (tx) => {
+    const now = new Date();
+    const jobs = [
+      ...input.children.map((job) => ({ ...job, status: "queued" as const })),
+      ...(input.continuation
+        ? [{ ...input.continuation, status: "pending" as const }]
+        : []),
+    ];
+    if (jobs.length) {
+      await tx
+        .insert(backgroundJob)
+        .values(
+          jobs.map((job) => ({
+            batchId: input.batchId,
+            kind: job.kind,
+            dedupeKey: job.dedupeKey,
+            payload: job.payload,
+            status: job.status,
+            maxAttempts: job.maxAttempts ?? 3,
+            queuedAt: job.status === "queued" ? now : null,
+          })),
+        )
+        .onConflictDoNothing();
+    }
+
+    const currentBatch = await tx.query.backgroundBatch.findFirst({
+      where: and(
+        eq(backgroundBatch.id, input.batchId),
+        notDeleted(backgroundBatch),
+      ),
+      columns: { metadata: true },
+    });
+    const currentMetadata = currentBatch?.metadata;
+    const nextMetadata =
+      currentMetadata &&
+      typeof currentMetadata === "object" &&
+      !Array.isArray(currentMetadata) &&
+      input.metadata &&
+      typeof input.metadata === "object" &&
+      !Array.isArray(input.metadata)
+        ? { ...currentMetadata, ...input.metadata }
+        : input.metadata;
+
+    await tx
+      .update(backgroundBatch)
+      .set({ metadata: nextMetadata, lastEnqueuedAt: now })
+      .where(
+        and(eq(backgroundBatch.id, input.batchId), notDeleted(backgroundBatch)),
+      );
+    await recalculateBackgroundBatchSummaryTx(tx, input.batchId);
+    const childDedupeKeys = input.children.map((child) => child.dedupeKey);
+    const queuedChildren = childDedupeKeys.length
+      ? await tx
+          .select({ id: backgroundJob.id })
+          .from(backgroundJob)
+          .where(
+            and(
+              eq(backgroundJob.batchId, input.batchId),
+              inArray(backgroundJob.dedupeKey, childDedupeKeys),
+              eq(backgroundJob.status, "queued"),
+              notDeleted(backgroundJob),
+            ),
+          )
+          .orderBy(asc(backgroundJob.createdAt), asc(backgroundJob.id))
+      : [];
+    const [pendingContinuation] = input.continuation
+      ? await tx
+          .select({ id: backgroundJob.id })
+          .from(backgroundJob)
+          .where(
+            and(
+              eq(backgroundJob.batchId, input.batchId),
+              eq(backgroundJob.dedupeKey, input.continuation.dedupeKey),
+              eq(backgroundJob.status, "pending"),
+              notDeleted(backgroundJob),
+            ),
+          )
+          .limit(1)
+      : [];
+    return {
+      childJobIds: queuedChildren.map((row) => row.id),
+      continuationJobId: pendingContinuation?.id ?? null,
+    };
+  });
+}
+
+/**
+ * Advance one workflow continuation only after every queued/running sibling
+ * has reached a terminal state. Locking the batch row makes competing terminal
+ * workers observe and promote at most one pending coordinator.
+ */
+export async function promotePendingBackgroundWorkflowContinuation(
+  db: Database,
+  batchId: string,
+): Promise<{ jobId: string; kind: BackgroundJobKind } | null> {
+  return await withTransaction(db, async (tx) => {
+    const locked = await tx.execute<{ id: string }>(sql`
+      SELECT "id"::text AS id
+      FROM "BackgroundBatch"
+      WHERE "id" = ${batchId}
+        AND "deletedAt" IS NULL
+      FOR UPDATE
+    `);
+    if (!locked.rows[0]) return null;
+
+    const [active] = await tx
+      .select({ id: backgroundJob.id })
+      .from(backgroundJob)
+      .where(
+        and(
+          eq(backgroundJob.batchId, batchId),
+          inArray(backgroundJob.status, ["queued", "running"]),
+          notDeleted(backgroundJob),
+        ),
+      )
+      .limit(1);
+    if (active) return null;
+
+    const [pending] = await tx
+      .select({ id: backgroundJob.id, kind: backgroundJob.kind })
+      .from(backgroundJob)
+      .where(
+        and(
+          eq(backgroundJob.batchId, batchId),
+          eq(backgroundJob.status, "pending"),
+          notDeleted(backgroundJob),
+        ),
+      )
+      .orderBy(asc(backgroundJob.createdAt), asc(backgroundJob.id))
+      .limit(1);
+    if (!pending) return null;
+
+    await tx
+      .update(backgroundJob)
+      .set({ status: "queued", queuedAt: new Date() })
+      .where(
+        and(
+          eq(backgroundJob.id, pending.id),
+          eq(backgroundJob.status, "pending"),
+        ),
+      );
+    await recalculateBackgroundBatchSummaryTx(tx, batchId);
+    return { jobId: pending.id, kind: pending.kind };
   });
 }
 
@@ -199,6 +501,23 @@ export async function listBackgroundBatches(
   return rows.map(toBatchSummary);
 }
 
+/** Internal workflow state lookup; does not materialize child jobs. */
+export async function findLatestBackgroundWorkflow(
+  db: Database,
+  kind: BackgroundJobKind,
+  dedupeKey: string,
+): Promise<BackgroundBatchSummary | null> {
+  const batch = await getDb(db).query.backgroundBatch.findFirst({
+    where: and(
+      eq(backgroundBatch.kind, kind),
+      eq(backgroundBatch.dedupeKey, dedupeKey),
+      notDeleted(backgroundBatch),
+    ),
+    orderBy: desc(backgroundBatch.createdAt),
+  });
+  return batch ? toBatchSummary(batch) : null;
+}
+
 export async function getBackgroundBatchDetail(
   db: Database,
   batchId: string,
@@ -222,6 +541,28 @@ export async function getBackgroundBatchSummary(
     where: and(eq(backgroundBatch.id, batchId), notDeleted(backgroundBatch)),
   });
   return batch ? toBatchSummary(batch) : null;
+}
+
+/** The only fields redispatch needs; it must never materialize job payloads. */
+export async function getQueuedBackgroundBatchDispatch(
+  db: Database,
+  batchId: string,
+): Promise<{ kind: BackgroundJobKind; jobIds: string[] } | null> {
+  const batch = await getDb(db).query.backgroundBatch.findFirst({
+    where: and(eq(backgroundBatch.id, batchId), notDeleted(backgroundBatch)),
+    columns: { kind: true },
+  });
+  if (!batch) return null;
+  const jobs = await getDb(db).query.backgroundJob.findMany({
+    where: and(
+      eq(backgroundJob.batchId, batchId),
+      eq(backgroundJob.status, "queued"),
+      notDeleted(backgroundJob),
+    ),
+    columns: { id: true },
+    orderBy: desc(backgroundJob.createdAt),
+  });
+  return { kind: batch.kind, jobIds: jobs.map((job) => job.id) };
 }
 
 export async function listBackgroundBatchJobs(
@@ -286,6 +627,7 @@ export async function markBackgroundJobRunning(
 ): Promise<BackgroundJobSummary | null> {
   return await withTransaction(db, async (tx) => {
     const now = new Date();
+    const reclaimBefore = new Date(now.getTime() - BACKGROUND_JOB_LEASE_MS);
     const [row] = await tx
       .update(backgroundJob)
       .set({
@@ -299,7 +641,16 @@ export async function markBackgroundJobRunning(
       .where(
         and(
           eq(backgroundJob.id, jobId),
-          inArray(backgroundJob.status, ["queued", "pending"]),
+          or(
+            inArray(backgroundJob.status, ["queued", "pending"]),
+            and(
+              eq(backgroundJob.status, "running"),
+              or(
+                isNull(backgroundJob.startedAt),
+                lt(backgroundJob.startedAt, reclaimBefore),
+              ),
+            ),
+          ),
           notDeleted(backgroundJob),
         ),
       )

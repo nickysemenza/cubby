@@ -8,7 +8,7 @@ import {
   requestEmbeddingRefreshInputSchema,
   requestEmbeddingRefreshOutSchema,
   searchDebugOutSchema,
-  searchDocumentHealthSchema,
+  searchDocumentMaintenanceSchema,
   searchHitsOut,
   searchQueryInputSchema,
   similarEntitiesInputSchema,
@@ -36,7 +36,7 @@ export const searchRouter = createTRPCRouter({
 
   /** On-demand catalog integrity check; intentionally absent from hot paths. */
   documentHealth: protectedProcedure
-    .output(strictOutput(searchDocumentHealthSchema))
+    .output(strictOutput(searchDocumentMaintenanceSchema))
     .query(async ({ ctx }) => await inspectSearchDocumentHealth(ctx.db)),
 
   /** Queue missing/stale repairs and retire orphaned documents immediately. */

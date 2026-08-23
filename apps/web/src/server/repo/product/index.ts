@@ -19,6 +19,7 @@
  */
 
 export {
+  countProductsWithNoImagesWithGtin,
   findDuplicateUniqueProducts,
   findProductsWithNoImages,
   getCategoryDistribution,

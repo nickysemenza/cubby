@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { backgroundBatchRefSchema } from "./background-jobs";
 import { searchableEntities, type ShortcodeEntity } from "./entity-manifest";
 import { anyShortcodeSchema } from "./identifiers";
 import {
@@ -145,11 +146,24 @@ export const searchDocumentHealthSchema = z.object({
 });
 export type SearchDocumentHealth = z.infer<typeof searchDocumentHealthSchema>;
 
-export const repairSearchDocumentsOutSchema = z.object({
-  before: searchDocumentHealthSchema,
-  queued: z.number().int().nonnegative(),
-  retired: z.number().int().nonnegative(),
+export const searchDocumentMaintenanceSchema = z.object({
+  state: z.enum(["never-run", "running", "completed", "failed"]),
   batchId: z.string().nullable(),
+  findings: searchDocumentHealthSchema,
+  repaired: z.object({
+    queued: z.number().int().nonnegative(),
+    retired: z.number().int().nonnegative(),
+  }),
+  reused: z.boolean(),
+  completedAt: z.date().nullable(),
+});
+export type SearchDocumentMaintenance = z.infer<
+  typeof searchDocumentMaintenanceSchema
+>;
+
+export const repairSearchDocumentsOutSchema = z.object({
+  batch: backgroundBatchRefSchema,
+  reused: z.boolean(),
 });
 export type RepairSearchDocumentsOut = z.infer<
   typeof repairSearchDocumentsOutSchema

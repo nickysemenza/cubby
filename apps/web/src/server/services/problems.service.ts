@@ -88,8 +88,8 @@ import {
   synthesizeEffectiveMappings,
 } from "~/server/repo/problems";
 import {
+  countProductsWithNoImagesWithGtin,
   deleteProducts,
-  findProductsWithNoImages,
   getProductConversionCoverageFreshness,
   loadProductConversionCoverageProjection,
   type ProductConversionCoverageFreshness,
@@ -434,8 +434,7 @@ export const findMaintenanceCounts = async (
   db: Database,
 ): Promise<MaintenanceCounts> => {
   const r = await traceAll({
-    productsWithNoImages: () =>
-      findProductsWithNoImages(db, { excludeIngredients: true }),
+    productsWithNoImages: () => countProductsWithNoImagesWithGtin(db),
     locationsWithoutAiDescription: () =>
       countViewProblem(db, "locationsWithoutAiDescription"),
     staleRecipeTotals: () => countStaleRecipeTotals(db),
@@ -448,10 +447,8 @@ export const findMaintenanceCounts = async (
   return {
     // Deliberately a SUBSET of the Problems-page productsWithNoImages count:
     // backfillUPCImages can only act on products that have a barcode to look
-    // up, so this counts just those. Same canonical key, narrower number.
-    productsWithNoImages: r.productsWithNoImages.filter(
-      (p) => p.primaryGtin != null,
-    ).length,
+    // up, so this scalar count is the same narrower population.
+    productsWithNoImages: r.productsWithNoImages,
     locationsWithoutAiDescription: r.locationsWithoutAiDescription,
     staleRecipeTotals: r.staleRecipeTotals,
     cullablePendingImages: r.cullablePendingImages,

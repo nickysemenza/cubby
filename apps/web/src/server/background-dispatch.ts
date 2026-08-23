@@ -9,7 +9,8 @@ import {
   addBackgroundJobsToBatch,
   type CreateBackgroundJobInput,
   createBackgroundBatchWithJobs,
-  getBackgroundBatchDetail,
+  getBackgroundBatchSummary,
+  getQueuedBackgroundBatchDispatch,
   setBackgroundBatchProcessor,
   toBackgroundBatchRef,
 } from "~/server/repo/background-jobs";
@@ -36,24 +37,25 @@ async function getDispatchedBatchRef(
   db: Database,
   batchId: string,
 ): Promise<BackgroundBatchRef> {
-  const detail = await getBackgroundBatchDetail(db, batchId);
-  if (!detail) {
+  const summary = await getBackgroundBatchSummary(db, batchId);
+  if (!summary) {
     throw new Error(`Background batch ${batchId} was not found after dispatch`);
   }
-  return toBackgroundBatchRef(detail);
+  return toBackgroundBatchRef(summary);
 }
 
 async function processInlineJobs(
   db: Database,
   jobIds: string[],
+  batchKind: BackgroundJobKind,
 ): Promise<void> {
   // Deferred boundary: producer-side services never statically import handlers
   // that import those same services.
   const { processBackgroundJob } = await import("./background-queue");
   for (const jobId of jobIds) {
-    let outcome = await processBackgroundJob(db, jobId);
+    let outcome = await processBackgroundJob(db, jobId, batchKind);
     while (outcome === "retry") {
-      outcome = await processBackgroundJob(db, jobId);
+      outcome = await processBackgroundJob(db, jobId, batchKind);
     }
   }
 }
@@ -87,7 +89,7 @@ export async function dispatchBackgroundJobs(
     );
   } else {
     await setBackgroundBatchProcessor(db, result.batchId, "inline");
-    await processInlineJobs(db, result.jobIds);
+    await processInlineJobs(db, result.jobIds, input.kind);
   }
 
   return {
@@ -99,7 +101,7 @@ export async function dispatchBackgroundJobs(
 async function sendBackgroundMessages(
   queue: BackgroundQueueProducer,
   batchId: string,
-  kind: BackgroundJobKind,
+  batchKind: BackgroundJobKind,
   jobIds: string[],
 ): Promise<void> {
   for (let index = 0; index < jobIds.length; index += 100) {
@@ -109,31 +111,65 @@ async function sendBackgroundMessages(
           messageVersion: BACKGROUND_MESSAGE_VERSION,
           batchId,
           jobId,
-          kind,
+          kind: batchKind,
         },
       })),
     );
   }
 }
 
+/** Deliver persisted queued jobs without re-reading their potentially wide payloads. */
+export async function dispatchQueuedBackgroundJobs(
+  db: Database,
+  input: { batchId: string; jobIds: string[]; batchKind: BackgroundJobKind },
+): Promise<void> {
+  if (input.jobIds.length === 0) return;
+  const queue = getBackgroundQueue();
+  if (queue) {
+    await setBackgroundBatchProcessor(db, input.batchId, "queue");
+    await sendBackgroundMessages(
+      queue,
+      input.batchId,
+      input.batchKind,
+      input.jobIds,
+    );
+  } else {
+    await setBackgroundBatchProcessor(db, input.batchId, "inline");
+    await processInlineJobs(db, input.jobIds, input.batchKind);
+  }
+}
+
+/** Deliver one already-persisted queued job, used for workflow continuations. */
+export async function dispatchQueuedBackgroundJob(
+  db: Database,
+  input: { batchId: string; jobId: string; batchKind: BackgroundJobKind },
+): Promise<void> {
+  await dispatchQueuedBackgroundJobs(db, {
+    batchId: input.batchId,
+    jobIds: [input.jobId],
+    batchKind: input.batchKind,
+  });
+}
+
 export async function redispatchQueuedBatchJobs(
   db: Database,
   batchId: string,
 ): Promise<void> {
-  const detail = await getBackgroundBatchDetail(db, batchId);
-  if (!detail) return;
-  const queuedJobIds = detail.jobs
-    .filter((job) => job.status === "queued")
-    .map((job) => job.id);
-  if (queuedJobIds.length === 0) return;
+  const dispatch = await getQueuedBackgroundBatchDispatch(db, batchId);
+  if (!dispatch || dispatch.jobIds.length === 0) return;
 
   const queue = getBackgroundQueue();
   if (queue) {
     await setBackgroundBatchProcessor(db, batchId, "queue");
-    await sendBackgroundMessages(queue, batchId, detail.kind, queuedJobIds);
+    await sendBackgroundMessages(
+      queue,
+      batchId,
+      dispatch.kind,
+      dispatch.jobIds,
+    );
   } else {
     await setBackgroundBatchProcessor(db, batchId, "inline");
-    await processInlineJobs(db, queuedJobIds);
+    await processInlineJobs(db, dispatch.jobIds, dispatch.kind);
   }
 }
 

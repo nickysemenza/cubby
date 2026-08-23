@@ -154,14 +154,13 @@ export function SearchDebugPage() {
 
       {backfill.data ? (
         <p className="text-muted-foreground text-xs">
-          Enqueued {backfill.data.totalJobs} embedding job
-          {backfill.data.totalJobs === 1 ? "" : "s"} in{" "}
+          {backfill.data.reused ? "Reusing" : "Started"} embedding backfill in{" "}
           <Link
             to="/background-jobs"
-            search={{ batchId: backfill.data.batchId }}
+            search={{ batchId: backfill.data.batch.id }}
             className="underline decoration-border decoration-dotted underline-offset-2 hover:decoration-primary"
           >
-            batch {backfill.data.batchId.slice(0, 8)}
+            batch {backfill.data.batch.id.slice(0, 8)}
           </Link>
           .
         </p>

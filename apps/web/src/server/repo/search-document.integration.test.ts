@@ -17,9 +17,11 @@ import {
 } from "~/server/repo/repo.fixtures";
 import {
   getSearchDocumentDiagnostics,
+  getStaleSearchDocumentEmbeddingTextPage,
   refreshSearchDocument,
 } from "~/server/repo/search-document";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import {
   findSearchHits,
   inspectSearchDocumentHealth,
@@ -28,6 +30,57 @@ import {
 
 describe("SearchDocument indexed retrieval", () => {
   const ctx = withTestDb();
+
+  it("walks more than 8,000 stale documents in bounded keyset pages", async () => {
+    const total = 8_001;
+    await getDb(ctx.db).execute(sql`
+      INSERT INTO "SearchDocument" (
+        "entityType", "entityId", shortcode, title, aliases, keywords, body,
+        "semanticText", "normalizedText", "searchVector", "sourceHash",
+        "createdAt", "updatedAt"
+      )
+      SELECT
+        'product',
+        (substr(md5('bounded-search-document-' || series::text), 1, 8) || '-' ||
+         substr(md5('bounded-search-document-' || series::text), 9, 4) || '-' ||
+         substr(md5('bounded-search-document-' || series::text), 13, 4) || '-' ||
+         substr(md5('bounded-search-document-' || series::text), 17, 4) || '-' ||
+         substr(md5('bounded-search-document-' || series::text), 21, 12))::uuid,
+        'BND-' || series::text,
+        'Bounded search document ' || series::text,
+        ARRAY[]::text[], ARRAY[]::text[], '', 'bounded semantic ' || series::text,
+        'bounded search document ' || series::text,
+        to_tsvector('simple', 'bounded search document ' || series::text),
+        md5('source-' || series::text),
+        now() + (series || ' microseconds')::interval,
+        now() + (series || ' microseconds')::interval
+      FROM generate_series(1, ${total}) AS series
+    `);
+
+    const seen = new Set<string>();
+    let cursor: NonNullable<
+      Parameters<typeof getStaleSearchDocumentEmbeddingTextPage>[3]
+    >["cursor"];
+    let pages = 0;
+    do {
+      const page = await getStaleSearchDocumentEmbeddingTextPage(
+        ctx.db,
+        ["product"],
+        getSemanticEmbeddingConfig(),
+        { cursor },
+      );
+      expect(page.rows.length).toBeLessThanOrEqual(250);
+      for (const row of page.rows) {
+        expect(seen.has(row.entityId)).toBe(false);
+        seen.add(row.entityId);
+      }
+      cursor = page.nextCursor ?? undefined;
+      pages += 1;
+    } while (cursor);
+
+    expect(seen.size).toBe(total);
+    expect(pages).toBe(Math.ceil(total / 250));
+  });
 
   it("ranks exact, prefix, text, and fuzzy hits while respecting scopes", async () => {
     const product = await createProduct(
@@ -355,17 +408,15 @@ describe("SearchDocument indexed retrieval", () => {
 
     const result = await repairSearchDocuments(ctx.db);
     expect(result).toMatchObject({
-      // Home is a normal searchable Location and starts without a document.
-      before: { missing: 2, stale: 1, orphaned: 1, total: 4 },
-      queued: 3,
-      retired: 1,
+      batch: { id: expect.any(String) },
+      reused: false,
     });
-    expect(result.batchId).not.toBeNull();
-    expect(await inspectSearchDocumentHealth(ctx.db)).toEqual({
-      missing: 0,
-      stale: 0,
-      orphaned: 0,
-      total: 0,
+    // Repair is now a bounded durable workflow; the browser receives its batch
+    // reference rather than a synchronous full-corpus diagnosis.
+    expect(await inspectSearchDocumentHealth(ctx.db)).toMatchObject({
+      state: "completed",
+      findings: { missing: 2, stale: 1, orphaned: 1, total: 4 },
+      repaired: { queued: 3, retired: 1 },
     });
 
     expect(

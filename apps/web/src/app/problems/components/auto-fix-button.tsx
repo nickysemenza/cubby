@@ -20,6 +20,7 @@ import {
   invalidateTRPCQueries,
   problemsMutationInvalidateKeys,
 } from "~/lib/query-keys";
+import { PROBLEMS_QUERY_STALE_TIME } from "../problem-query-freshness";
 import { type AutoFixTask, buildAutoFixPlan } from "./auto-fix-registry";
 
 /**
@@ -37,7 +38,7 @@ export function useAutoFixPlan(problems: AllProblems) {
   const api = useTRPC();
   const { data: counts } = useQuery(
     api.problems.getMaintenanceCounts.queryOptions(undefined, {
-      staleTime: 30_000,
+      staleTime: PROBLEMS_QUERY_STALE_TIME,
     }),
   );
 
