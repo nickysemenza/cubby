@@ -36,6 +36,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { assertFinancialTransactionFundingEvidenceValid } from "./integrity";
+import { lockFundingEvidenceMutationTargets } from "./locks";
 import { resolveFundingPartyOrThrow } from "./party";
 
 type SetExpenseAttributionChange = Extract<
@@ -495,6 +496,7 @@ export async function setAccountFunding(
       "financialAccount",
       change.accountId,
     );
+    await lockFundingEvidenceMutationTargets(tx, { accountIds: [accountId] });
     const fundingSourceId = change.fundingParty
       ? (await resolveFundingPartyOrThrow(tx, change.fundingParty)).sourceId
       : null;
@@ -704,10 +706,34 @@ export async function putFundingTransfer(
       existingTransfer?.id ?? unsafeFundingTransferId(crypto.randomUUID());
     let transferShortcode =
       existingTransfer?.shortcode ?? (await mintFundingTransferShortcode(tx));
+    const evidenceTransactionIds = [] as Array<
+      typeof financialTransaction.$inferSelect.id
+    >;
+    for (const row of change.evidence) {
+      evidenceTransactionIds.push(
+        await resolveOrThrow(tx, "financialTransaction", row.transactionId),
+      );
+    }
+    await lockFundingEvidenceMutationTargets(tx, {
+      transactionIds: evidenceTransactionIds,
+    });
+    if (evidenceTransactionIds.length > 0) {
+      const evidenceAccounts = await tx
+        .selectDistinct({ accountId: financialTransaction.accountId })
+        .from(financialTransaction)
+        .where(
+          and(
+            inArray(financialTransaction.id, evidenceTransactionIds),
+            notDeleted(financialTransaction),
+          ),
+        );
+      await lockFundingEvidenceMutationTargets(tx, {
+        accountIds: evidenceAccounts.map((row) => row.accountId),
+      });
+    }
     const keys = [
       `transfer:${transferId}`,
       ...change.sourceRefs.map((row) => `ref:${row.source}:${row.externalId}`),
-      ...change.evidence.map((row) => `evidence:${row.transactionId}`),
     ];
     await lockTransferKeys(tx, keys);
     const evidence = await validateFundingTransferEvidence(
@@ -974,6 +1000,18 @@ export async function foldPersonFundingSourceForMerge(
     }
     fundingEdgesRepointed += 1;
   }
+  const accountsToMove = await tx
+    .select({ id: financialAccount.id })
+    .from(financialAccount)
+    .where(
+      and(
+        eq(financialAccount.fundingSourceId, input.loserSourceId),
+        notDeleted(financialAccount),
+      ),
+    );
+  await lockFundingEvidenceMutationTargets(tx, {
+    accountIds: accountsToMove.map((row) => row.id),
+  });
   const movedAccounts = await tx
     .update(financialAccount)
     .set({ fundingSourceId: input.keeperSourceId })

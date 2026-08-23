@@ -108,6 +108,23 @@ export async function findHouseholdContributionDefects(
         OR (ev.side = 'outflow' AND (ft.amount <= 0 OR fa."fundingSourceId" IS DISTINCT FROM t."fromSourceId"))
         OR (ev.side = 'inflow' AND (ft.amount >= 0 OR fa."fundingSourceId" IS DISTINCT FROM t."toSourceId"))
       )
+
+      UNION ALL
+
+      SELECT
+        'transfer_evidence_invalid',
+        t.id::text,
+        'two-sided live transfer evidence must use two distinct financial accounts'
+      FROM "FundingTransfer" t
+      JOIN "FundingTransferEvidence" ev
+        ON ev."transferId" = t.id AND ev."deletedAt" IS NULL
+      JOIN "FinancialTransaction" ft
+        ON ft.id = ev."transactionId" AND ft."deletedAt" IS NULL
+      JOIN "FinancialAccount" fa
+        ON fa.id = ft."accountId" AND fa."deletedAt" IS NULL
+      WHERE t."deletedAt" IS NULL
+      GROUP BY t.id
+      HAVING count(ev.id) = 2 AND count(DISTINCT fa.id) <> 2
     )
     SELECT code, "targetId", detail FROM defects ORDER BY code, "targetId"
   `);
@@ -138,22 +155,43 @@ export async function assertFinancialTransactionFundingEvidenceValid(
   transactionId: FinancialTransactionId,
 ): Promise<void> {
   const result = await unwrapDb(db).execute<{ id: string }>(sql`
-    SELECT ev.id::text AS id
-    FROM "FundingTransferEvidence" ev
-    LEFT JOIN "FundingTransfer" t ON t.id = ev."transferId"
-    LEFT JOIN "FinancialTransaction" ft ON ft.id = ev."transactionId"
-    LEFT JOIN "FinancialAccount" fa ON fa.id = ft."accountId"
-    WHERE ev."deletedAt" IS NULL
-      AND ev."transactionId" = ${transactionId}
-      AND (
-        t.id IS NULL OR t."deletedAt" IS NOT NULL
-        OR ft.id IS NULL OR ft."deletedAt" IS NOT NULL
-        OR fa.id IS NULL OR fa."deletedAt" IS NOT NULL
-        OR ft.status <> 'posted'
-        OR round(abs(ft.amount)::numeric * 100) <> round(t.amount::numeric * 100)
-        OR (ev.side = 'outflow' AND (ft.amount <= 0 OR fa."fundingSourceId" IS DISTINCT FROM t."fromSourceId"))
-        OR (ev.side = 'inflow' AND (ft.amount >= 0 OR fa."fundingSourceId" IS DISTINCT FROM t."toSourceId"))
-      )
+    WITH affected_transfer AS (
+      SELECT DISTINCT ev."transferId"
+      FROM "FundingTransferEvidence" ev
+      WHERE ev."deletedAt" IS NULL
+        AND ev."transactionId" = ${transactionId}
+    ), invalid_leg AS (
+      SELECT ev.id::text AS id
+      FROM "FundingTransferEvidence" ev
+      JOIN affected_transfer affected ON affected."transferId" = ev."transferId"
+      LEFT JOIN "FundingTransfer" t ON t.id = ev."transferId"
+      LEFT JOIN "FinancialTransaction" ft ON ft.id = ev."transactionId"
+      LEFT JOIN "FinancialAccount" fa ON fa.id = ft."accountId"
+      WHERE ev."deletedAt" IS NULL
+        AND (
+          t.id IS NULL OR t."deletedAt" IS NOT NULL
+          OR ft.id IS NULL OR ft."deletedAt" IS NOT NULL
+          OR fa.id IS NULL OR fa."deletedAt" IS NOT NULL
+          OR ft.status <> 'posted'
+          OR round(abs(ft.amount)::numeric * 100) <> round(t.amount::numeric * 100)
+          OR (ev.side = 'outflow' AND (ft.amount <= 0 OR fa."fundingSourceId" IS DISTINCT FROM t."fromSourceId"))
+          OR (ev.side = 'inflow' AND (ft.amount >= 0 OR fa."fundingSourceId" IS DISTINCT FROM t."toSourceId"))
+        )
+    ), collapsed_accounts AS (
+      SELECT min(ev.id::text) AS id
+      FROM "FundingTransferEvidence" ev
+      JOIN affected_transfer affected ON affected."transferId" = ev."transferId"
+      JOIN "FinancialTransaction" ft
+        ON ft.id = ev."transactionId" AND ft."deletedAt" IS NULL
+      JOIN "FinancialAccount" fa
+        ON fa.id = ft."accountId" AND fa."deletedAt" IS NULL
+      WHERE ev."deletedAt" IS NULL
+      GROUP BY ev."transferId"
+      HAVING count(ev.id) = 2 AND count(DISTINCT fa.id) <> 2
+    )
+    SELECT id FROM invalid_leg
+    UNION ALL
+    SELECT id FROM collapsed_accounts
     LIMIT 1
   `);
   if (!result.rows[0]) return;

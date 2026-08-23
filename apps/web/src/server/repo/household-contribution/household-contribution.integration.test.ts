@@ -9,16 +9,24 @@ import {
   unsafePersonShortcode,
   unsafeProjectShortcode,
 } from "@cubby/schemas/identifiers";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { expenseSourceRef, fundingSource } from "~/server/db/schema";
+import {
+  expenseSourceRef,
+  financialTransaction,
+  fundingSource,
+  fundingTransfer,
+} from "~/server/db/schema";
 import {
   getDb,
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { updateFinancialTransaction } from "~/server/repo/financial-transaction";
+import {
+  deleteFinancialTransactions,
+  updateFinancialTransaction,
+} from "~/server/repo/financial-transaction";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
   applyHouseholdLedgerChanges,
@@ -49,6 +57,165 @@ describe("household contribution repository", () => {
       trade: "other",
       future: false,
     });
+
+  const makeEvidenceFixture = async () => {
+    await upsertFundingFund(ctx.db, {
+      type: "upsert_funding_fund",
+      key: "evidence-fund",
+      name: "Evidence fund",
+    });
+    const firstAccount = await insertWithShortcode(ctx.db, "financialAccount", {
+      name: "Evidence account one",
+      identity: { kind: "cash" },
+    });
+    const secondAccount = await insertWithShortcode(
+      ctx.db,
+      "financialAccount",
+      { name: "Evidence account two", identity: { kind: "cash" } },
+    );
+    for (const account of [firstAccount, secondAccount]) {
+      await setAccountFunding(
+        ctx.db,
+        {
+          type: "set_account_funding",
+          accountId: unsafeFinancialAccountShortcode(account.shortcode),
+          fundingParty: { kind: "fund", key: "evidence-fund" },
+          people: [],
+        },
+        ctx.actor,
+      );
+    }
+    const outflow = await insertWithShortcode(ctx.db, "financialTransaction", {
+      accountId: firstAccount.id,
+      kind: "account_transfer",
+      status: "posted",
+      amount: 2.5,
+      transactionDate: "2026-08-20",
+      postedDate: "2026-08-20",
+    });
+    const inflow = await insertWithShortcode(ctx.db, "financialTransaction", {
+      accountId: secondAccount.id,
+      kind: "account_transfer",
+      status: "posted",
+      amount: -2.5,
+      transactionDate: "2026-08-20",
+      postedDate: "2026-08-20",
+    });
+    const created = await putFundingTransfer(ctx.db, {
+      type: "put_funding_transfer",
+      from: { kind: "fund", key: "evidence-fund" },
+      to: { kind: "fund", key: "evidence-fund" },
+      kind: "internal_account_move",
+      amount: 2.5,
+      date: "2026-08-20",
+      sourceRefs: [],
+      evidence: [],
+    });
+    const transferShortcode = created.transferIds[0];
+    if (!transferShortcode) throw new Error("transfer id was not returned");
+    const [transfer] = await getDb(ctx.db)
+      .select({ id: fundingTransfer.id })
+      .from(fundingTransfer)
+      .where(eq(fundingTransfer.shortcode, transferShortcode));
+    if (!transfer) throw new Error("transfer fixture was not persisted");
+    return {
+      firstAccount,
+      secondAccount,
+      outflow,
+      inflow,
+      transferId: transfer.id,
+      transferShortcode,
+    };
+  };
+
+  const holdTransferRow = (
+    transferId: typeof fundingTransfer.$inferSelect.id,
+  ) => {
+    let markLocked!: () => void;
+    const locked = new Promise<void>((resolve) => {
+      markLocked = resolve;
+    });
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const done = withTransaction(ctx.db, async (tx) => {
+      await tx
+        .select({ id: fundingTransfer.id })
+        .from(fundingTransfer)
+        .where(eq(fundingTransfer.id, transferId))
+        .for("update");
+      markLocked();
+      await released;
+    });
+    return { done, locked, release };
+  };
+
+  const attachFixtureEvidence = (
+    fixture: Awaited<ReturnType<typeof makeEvidenceFixture>>,
+  ) =>
+    putFundingTransfer(ctx.db, {
+      type: "put_funding_transfer",
+      transferId: fixture.transferShortcode,
+      from: { kind: "fund", key: "evidence-fund" },
+      to: { kind: "fund", key: "evidence-fund" },
+      kind: "internal_account_move",
+      amount: 2.5,
+      date: "2026-08-20",
+      sourceRefs: [],
+      evidence: [
+        {
+          transactionId: unsafeFinancialTransactionShortcode(
+            fixture.outflow.shortcode,
+          ),
+          side: "outflow",
+        },
+        {
+          transactionId: unsafeFinancialTransactionShortcode(
+            fixture.inflow.shortcode,
+          ),
+          side: "inflow",
+        },
+      ],
+    });
+
+  const waitForAdvisoryLockWaiter = async (hasSettled: () => boolean) => {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      if (hasSettled()) return false;
+      const result = await getDb(ctx.db).execute<{ waiting: boolean }>(sql`
+        SELECT EXISTS (
+          SELECT 1
+          FROM pg_stat_activity
+          WHERE datname = current_database()
+            AND pid <> pg_backend_pid()
+            AND wait_event_type = 'Lock'
+            AND wait_event = 'advisory'
+            AND query LIKE '%pg_advisory_xact_lock%'
+        ) AS waiting
+      `);
+      if (result.rows[0]?.waiting) return true;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error("expected an advisory-lock waiter");
+  };
+
+  const waitForBlockedTransferWrite = async () => {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const result = await getDb(ctx.db).execute<{ waiting: boolean }>(sql`
+        SELECT EXISTS (
+          SELECT 1
+          FROM pg_stat_activity
+          WHERE datname = current_database()
+            AND pid <> pg_backend_pid()
+            AND wait_event_type = 'Lock'
+            AND query ILIKE '%update%FundingTransfer%'
+        ) AS waiting
+      `);
+      if (result.rows[0]?.waiting) return;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error("expected a blocked FundingTransfer write");
+  };
 
   it("synthesizes both missing roles as exact unattributed allocations", async () => {
     const row = await makeExpense(10.01);
@@ -537,7 +704,7 @@ describe("household contribution repository", () => {
     }
     const outflow = await insertWithShortcode(ctx.db, "financialTransaction", {
       accountId: firstAccount.id,
-      kind: "transfer",
+      kind: "account_transfer",
       status: "posted",
       amount: 2.5,
       transactionDate: "2026-08-20",
@@ -545,7 +712,7 @@ describe("household contribution repository", () => {
     });
     const inflow = await insertWithShortcode(ctx.db, "financialTransaction", {
       accountId: secondAccount.id,
-      kind: "transfer",
+      kind: "account_transfer",
       status: "posted",
       amount: -2.5,
       transactionDate: "2026-08-20",
@@ -581,5 +748,155 @@ describe("household contribution repository", () => {
     ).rejects.toMatchObject({
       cause: { reason: "HOUSEHOLD_LEDGER_INVALID_TRANSFER" },
     });
+
+    await expect(
+      updateFinancialTransaction(
+        ctx.db,
+        unsafeFinancialTransactionShortcode(inflow.shortcode),
+        {
+          accountId: unsafeFinancialAccountShortcode(firstAccount.shortcode),
+        },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      cause: { reason: "HOUSEHOLD_LEDGER_INVALID_TRANSFER" },
+    });
+  });
+
+  it("serializes evidence creation against transaction edits", async () => {
+    const fixture = await makeEvidenceFixture();
+    const holder = holdTransferRow(fixture.transferId);
+    await holder.locked;
+    const evidenceWrite = attachFixtureEvidence(fixture);
+    await waitForBlockedTransferWrite();
+
+    let editSettled = false;
+    const edit = updateFinancialTransaction(
+      ctx.db,
+      unsafeFinancialTransactionShortcode(fixture.outflow.shortcode),
+      { amount: 3 },
+      ctx.actor,
+    ).then(
+      () => {
+        editSettled = true;
+        return { status: "fulfilled" as const };
+      },
+      (reason: unknown) => {
+        editSettled = true;
+        return { status: "rejected" as const, reason };
+      },
+    );
+    const editWaitedForEvidence = await waitForAdvisoryLockWaiter(
+      () => editSettled,
+    );
+
+    holder.release();
+    await holder.done;
+    await evidenceWrite;
+    const editResult = await edit;
+    expect(editWaitedForEvidence).toBe(true);
+    expect(editResult).toMatchObject({
+      status: "rejected",
+      reason: { cause: { reason: "HOUSEHOLD_LEDGER_INVALID_TRANSFER" } },
+    });
+    await assertHouseholdContributionIntegrity(ctx.db);
+  });
+
+  it("reports two-sided evidence collapsed onto one account", async () => {
+    const fixture = await makeEvidenceFixture();
+    await attachFixtureEvidence(fixture);
+    await getDb(ctx.db)
+      .update(financialTransaction)
+      .set({ accountId: fixture.firstAccount.id })
+      .where(eq(financialTransaction.id, fixture.inflow.id));
+
+    await expect(findHouseholdContributionDefects(ctx.db)).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "transfer_evidence_invalid",
+          detail:
+            "two-sided live transfer evidence must use two distinct financial accounts",
+        }),
+      ]),
+    );
+  });
+
+  it("serializes evidence creation against account funding edits", async () => {
+    const fixture = await makeEvidenceFixture();
+    const holder = holdTransferRow(fixture.transferId);
+    await holder.locked;
+    const evidenceWrite = attachFixtureEvidence(fixture);
+    await waitForBlockedTransferWrite();
+
+    let editSettled = false;
+    const edit = setAccountFunding(
+      ctx.db,
+      {
+        type: "set_account_funding",
+        accountId: unsafeFinancialAccountShortcode(
+          fixture.firstAccount.shortcode,
+        ),
+        fundingParty: null,
+        people: [],
+      },
+      ctx.actor,
+    ).then(
+      () => {
+        editSettled = true;
+        return { status: "fulfilled" as const };
+      },
+      (reason: unknown) => {
+        editSettled = true;
+        return { status: "rejected" as const, reason };
+      },
+    );
+    const editWaitedForEvidence = await waitForAdvisoryLockWaiter(
+      () => editSettled,
+    );
+
+    holder.release();
+    await holder.done;
+    await evidenceWrite;
+    const editResult = await edit;
+    expect(editWaitedForEvidence).toBe(true);
+    expect(editResult).toMatchObject({
+      status: "rejected",
+      reason: { cause: { reason: "HOUSEHOLD_LEDGER_INVALID_TRANSFER" } },
+    });
+    await assertHouseholdContributionIntegrity(ctx.db);
+  });
+
+  it("serializes evidence creation against transaction deletion", async () => {
+    const fixture = await makeEvidenceFixture();
+    const holder = holdTransferRow(fixture.transferId);
+    await holder.locked;
+    const evidenceWrite = attachFixtureEvidence(fixture);
+    await waitForBlockedTransferWrite();
+
+    let deletionSettled = false;
+    const deletion = deleteFinancialTransactions(
+      ctx.db,
+      [unsafeFinancialTransactionShortcode(fixture.outflow.shortcode)],
+      ctx.actor,
+    ).then(
+      (value) => {
+        deletionSettled = true;
+        return value;
+      },
+      (reason: unknown) => {
+        deletionSettled = true;
+        throw reason;
+      },
+    );
+    const deletionWaitedForEvidence = await waitForAdvisoryLockWaiter(
+      () => deletionSettled,
+    );
+
+    holder.release();
+    await holder.done;
+    await evidenceWrite;
+    await expect(deletion).resolves.toEqual({ deleted: 1 });
+    expect(deletionWaitedForEvidence).toBe(true);
+    await assertHouseholdContributionIntegrity(ctx.db);
   });
 });

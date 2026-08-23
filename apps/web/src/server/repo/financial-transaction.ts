@@ -69,6 +69,7 @@ import {
   writeAllocationSet,
 } from "~/server/repo/financial-transaction-allocations";
 import { assertFinancialTransactionFundingEvidenceValid } from "~/server/repo/household-contribution/integrity";
+import { lockFundingEvidenceMutationTargets } from "~/server/repo/household-contribution/locks";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
@@ -493,6 +494,10 @@ export async function updateFinancialTransaction(
 ) {
   const id = await resolveOrThrow(db, "financialTransaction", shortcode);
   await withTransaction(db, async (tx) => {
+    // Funding-evidence advisory keys precede both entity rows and account keys.
+    // Evidence creation uses the same order, so it cannot validate an old row
+    // while this mutation commits a new amount/status/account.
+    await lockFundingEvidenceMutationTargets(tx, { transactionIds: [id] });
     // LOCK ORDER: Purchase rows first, THEN the transaction row. Every purchase
     // operation locks purchases first (lockAndValidateForDelete, the merge) and
     // reaches FinancialTransaction afterwards via syncSettlementMirror, so
@@ -546,6 +551,9 @@ export async function updateFinancialTransaction(
       data.accountId === undefined
         ? before.accountId
         : await resolveOrThrow(tx, "financialAccount", data.accountId);
+    await lockFundingEvidenceMutationTargets(tx, {
+      accountIds: uniq([before.accountId, accountId]),
+    });
     const sourceRefs = data.sourceRefs ?? before.sourceRefs;
     await lockFinancialEvidenceKeys(
       tx,
@@ -717,6 +725,7 @@ export async function deleteFinancialTransactions(
     await resolveAllOrThrow(db, "financialTransaction", shortcodes),
   );
   return await withTransaction(db, async (tx) => {
+    await lockFundingEvidenceMutationTargets(tx, { transactionIds: ids });
     await lockAndValidateForDelete(
       tx,
       financialTransaction,
