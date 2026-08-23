@@ -2,7 +2,8 @@ import type {
   BackgroundBatchSummary,
   BackgroundJobSummary,
 } from "@cubby/schemas/background-jobs";
-import { act, render, screen } from "@testing-library/react";
+import { flexRender } from "@tanstack/react-table";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { CubbyTable } from "~/app/_components/data-table/table-features";
@@ -85,9 +86,12 @@ const job: BackgroundJobSummary = {
   updatedAt: batch.updatedAt,
 };
 
-function renderWorkbench(selectedBatchId?: string) {
+function renderWorkbench(
+  selectedBatchId?: string,
+  batches: BackgroundBatchSummary[] = [batch],
+) {
   const rows = buildBackgroundJobRows({
-    batches: [batch],
+    batches,
     selectedBatchId,
     selectedJobs: selectedBatchId
       ? {
@@ -101,6 +105,7 @@ function renderWorkbench(selectedBatchId?: string) {
       : undefined,
   });
   const onExpandedBatchChange = vi.fn();
+  const onFailedOnlyChange = vi.fn();
   render(
     <BackgroundJobsTable
       rows={rows}
@@ -108,11 +113,9 @@ function renderWorkbench(selectedBatchId?: string) {
       showFailedOnly={false}
       isLoading={false}
       error={null}
-      toolbar={<span>Filters</span>}
       actions={<button type="button">Drain pending</button>}
-      emptyState="No background batches yet."
       onExpandedBatchChange={onExpandedBatchChange}
-      onFailedOnlyChange={vi.fn()}
+      onFailedOnlyChange={onFailedOnlyChange}
       onRetryBatch={vi.fn()}
       onCancelBatch={vi.fn()}
       onRetryJob={vi.fn()}
@@ -124,7 +127,7 @@ function renderWorkbench(selectedBatchId?: string) {
     ariaLabel: string;
     verticalAlign: string;
   };
-  return { ...props, onExpandedBatchChange };
+  return { ...props, onExpandedBatchChange, onFailedOnlyChange };
 }
 
 describe("BackgroundJobsTable", () => {
@@ -132,7 +135,6 @@ describe("BackgroundJobsTable", () => {
     const { table, ariaLabel, verticalAlign } = renderWorkbench(batch.id);
 
     expect(screen.getByTestId("standard-workbench")).toBeVisible();
-    expect(screen.getByText("Filters")).toBeVisible();
     expect(screen.getByRole("button", { name: "Drain pending" })).toBeVisible();
     expect(ariaLabel).toBe("Background jobs");
     expect(verticalAlign).toBe("top");
@@ -158,5 +160,40 @@ describe("BackgroundJobsTable", () => {
     act(() => table.getRow("batch:batch-1").toggleExpanded(false));
 
     expect(onExpandedBatchChange).toHaveBeenCalledWith(undefined);
+  });
+
+  it("sorts created dates chronologically rather than by their display text", () => {
+    const january = {
+      ...batch,
+      id: "january",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    };
+    const june = {
+      ...batch,
+      id: "june",
+      createdAt: new Date("2026-06-01T00:00:00.000Z"),
+    };
+
+    const { table } = renderWorkbench(undefined, [january, june]);
+
+    expect(table.getRowModel().rows.map((row) => row.id)).toEqual([
+      "batch:june",
+      "batch:january",
+    ]);
+  });
+
+  it("carries failed-only intent when its batch is not selected yet", () => {
+    const { table, onFailedOnlyChange } = renderWorkbench();
+    const cell = table
+      .getRow("batch:batch-1")
+      .getAllCells()
+      .find(({ column }) => column.id === "actions");
+    if (!cell) throw new Error("Missing actions cell");
+    render(flexRender(cell.column.columnDef.cell, cell.getContext()));
+
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByText("Show failed jobs"));
+
+    expect(onFailedOnlyChange).toHaveBeenCalledWith("batch-1", true);
   });
 });

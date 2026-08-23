@@ -1,47 +1,44 @@
 import type {
+  BackgroundBatchStatus,
   BackgroundBatchSummary,
+  BackgroundJobStatus,
   BackgroundJobSummary,
 } from "@cubby/schemas/background-jobs";
+import { formatMs } from "./format";
 
-interface BackgroundBatchRow {
+interface RowView {
+  work?: string;
+  route?: string;
+  status?: BackgroundBatchStatus | BackgroundJobStatus;
+  progress?: string;
+  timing?: string;
+  createdAt?: Date;
+}
+
+type RowBase = RowView & { id: string; name: string; rowKey: string };
+type BackgroundBatchRow = RowBase & {
   rowType: "batch";
   rowKey: `batch:${string}`;
-  id: string;
-  name: string;
   batch: BackgroundBatchSummary;
-  selectedOutsideList: boolean;
   subRows?: BackgroundJobTableRow[];
-}
-
-interface BackgroundJobRow {
+};
+type BackgroundJobRow = RowBase & {
   rowType: "job";
   rowKey: `job:${string}`;
-  id: string;
-  name: string;
   job: BackgroundJobSummary;
-}
-
-interface BackgroundStatusRow {
+};
+type BackgroundStatusRow = RowBase & {
   rowType: "status";
   rowKey: `status:${string}:${"loading" | "error" | "empty"}`;
-  id: string;
-  name: string;
-  batchId: string;
-  status: "loading" | "error" | "empty";
-  message: string;
-}
-
-interface BackgroundPagerRow {
+  loadState: "loading" | "error" | "empty";
+};
+type BackgroundPagerRow = RowBase & {
   rowType: "pager";
   rowKey: `pager:${string}:${number}:${number}`;
-  id: string;
-  name: string;
-  batchId: string;
   pageIndex: number;
   pageSize: number;
   totalCount: number;
-}
-
+};
 type BackgroundJobTableRow =
   | BackgroundBatchRow
   | BackgroundJobRow
@@ -60,7 +57,7 @@ type SelectedJobsState =
       failedOnly: boolean;
     };
 
-interface BuildBackgroundJobRowsInput {
+interface BuildRowsInput {
   batches: BackgroundBatchSummary[];
   selectedBatchId?: string;
   selectedBatch?: BackgroundBatchSummary;
@@ -68,41 +65,32 @@ interface BuildBackgroundJobRowsInput {
   selectedJobs?: SelectedJobsState;
 }
 
-function shortId(id: string): string {
-  return id.slice(0, 8);
+const shortId = (id: string) => id.slice(0, 8);
+const statusRow = (
+  batchId: string,
+  loadState: BackgroundStatusRow["loadState"],
+  message: string,
+): BackgroundStatusRow => ({
+  rowType: "status",
+  rowKey: `status:${batchId}:${loadState}`,
+  id: batchId,
+  name: message,
+  loadState,
+});
+
+function jobTiming(job: BackgroundJobSummary) {
+  const wait =
+    job.queuedAt && job.startedAt
+      ? formatMs(Math.max(0, job.startedAt.getTime() - job.queuedAt.getTime()))
+      : "";
+  return `${formatMs(job.durationMs) || "—"}${wait ? ` · ${wait} wait` : ""}`;
 }
 
-function buildSelectedChildren(
-  batchId: string,
-  state: SelectedJobsState | undefined,
-): BackgroundJobTableRow[] {
-  if (!state || state.status === "loading") {
-    return [
-      {
-        rowType: "status",
-        rowKey: `status:${batchId}:loading`,
-        id: batchId,
-        name: "Loading jobs",
-        batchId,
-        status: "loading",
-        message: "Loading jobs…",
-      },
-    ];
-  }
-
-  if (state.status === "error") {
-    return [
-      {
-        rowType: "status",
-        rowKey: `status:${batchId}:error`,
-        id: batchId,
-        name: "Jobs unavailable",
-        batchId,
-        status: "error",
-        message: state.message,
-      },
-    ];
-  }
+function children(batchId: string, state?: SelectedJobsState) {
+  if (!state || state.status === "loading")
+    return [statusRow(batchId, "loading", "Loading jobs…")];
+  if (state.status === "error")
+    return [statusRow(batchId, "error", state.message)];
 
   const rows: BackgroundJobTableRow[] = state.jobs.map((job) => ({
     rowType: "job",
@@ -110,40 +98,32 @@ function buildSelectedChildren(
     id: job.id,
     name: `Job ${shortId(job.id)}`,
     job,
+    work: job.kind,
+    route: job.dedupeKey,
+    status: job.status,
+    progress: `${job.attempts}/${job.maxAttempts}`,
+    timing: jobTiming(job),
+    createdAt: job.createdAt,
   }));
-
   if (rows.length === 0) {
-    rows.push({
-      rowType: "status",
-      rowKey: `status:${batchId}:empty`,
-      id: batchId,
-      name: state.failedOnly ? "No failed jobs" : "No jobs",
-      batchId,
-      status: "empty",
-      message: state.failedOnly ? "No failed jobs" : "No jobs",
-    });
+    const message = state.failedOnly ? "No failed jobs" : "No jobs";
+    rows.push(statusRow(batchId, "empty", message));
   }
-
   if (state.totalCount > state.pageSize) {
-    const firstJob =
-      state.totalCount === 0 ? 0 : state.pageIndex * state.pageSize + 1;
-    const lastJob = Math.min(
+    const last = Math.min(
       (state.pageIndex + 1) * state.pageSize,
       state.totalCount,
     );
-    const label = `Jobs ${firstJob}–${lastJob} of ${state.totalCount}`;
     rows.push({
       rowType: "pager",
       rowKey: `pager:${batchId}:${state.pageIndex}:${state.totalCount}`,
       id: batchId,
-      name: label,
-      batchId,
+      name: `Jobs ${state.pageIndex * state.pageSize + 1}–${last} of ${state.totalCount}`,
       pageIndex: state.pageIndex,
       pageSize: state.pageSize,
       totalCount: state.totalCount,
     });
   }
-
   return rows;
 }
 
@@ -153,60 +133,39 @@ function buildBackgroundJobRows({
   selectedBatch,
   selectedBatchError,
   selectedJobs,
-}: BuildBackgroundJobRowsInput): BackgroundJobTableRow[] {
-  const visible = [...batches];
-  const visibleIds = new Set(visible.map((batch) => batch.id));
-  if (selectedBatch && !visibleIds.has(selectedBatch.id)) {
-    visible.unshift(selectedBatch);
-  }
-
-  const rows: BackgroundJobTableRow[] = visible.map((batch) => {
-    const selected = batch.id === selectedBatchId;
-    const liveBatch = selected && selectedBatch ? selectedBatch : batch;
+}: BuildRowsInput): BackgroundJobTableRow[] {
+  const recentIds = new Set(batches.map(({ id }) => id));
+  const visible =
+    selectedBatch && !recentIds.has(selectedBatch.id)
+      ? [selectedBatch, ...batches]
+      : batches;
+  const rows: BackgroundJobTableRow[] = visible.map((listedBatch) => {
+    const selected = listedBatch.id === selectedBatchId;
+    const batch = selected && selectedBatch ? selectedBatch : listedBatch;
+    const completed = batch.succeededJobs + batch.skippedJobs;
     return {
       rowType: "batch",
-      rowKey: `batch:${liveBatch.id}`,
-      id: liveBatch.id,
-      name: `Batch ${shortId(liveBatch.id)}`,
-      batch: liveBatch,
-      selectedOutsideList:
-        selected && selectedBatch != null && !visibleIds.has(selectedBatch.id),
-      ...(selected
-        ? { subRows: buildSelectedChildren(liveBatch.id, selectedJobs) }
-        : {}),
+      rowKey: `batch:${batch.id}`,
+      id: batch.id,
+      name: `Batch ${shortId(batch.id)}`,
+      batch,
+      ...(selected ? { subRows: children(batch.id, selectedJobs) } : {}),
+      work: batch.kind,
+      route: `${batch.processor} ${batch.source}`,
+      status: batch.status,
+      progress: `${completed}/${batch.totalJobs}${batch.failedJobs ? ` · ${batch.failedJobs} failed` : ""}`,
+      timing: `${formatMs(batch.wallDurationMs) || "—"} · ${formatMs(batch.activeDurationMs)} active`,
+      createdAt: batch.createdAt,
     };
   });
-
-  if (
-    selectedBatchId &&
-    !rows.some(
-      (row) => row.rowType === "batch" && row.batch.id === selectedBatchId,
-    ) &&
-    selectedBatchError
-  ) {
-    rows.unshift({
-      rowType: "status",
-      rowKey: `status:${selectedBatchId}:error`,
-      id: selectedBatchId,
-      name: "Batch unavailable",
-      batchId: selectedBatchId,
-      status: "error",
-      message: selectedBatchError,
-    });
-  }
-
+  if (selectedBatchId && selectedBatchError && !recentIds.has(selectedBatchId))
+    rows.unshift(statusRow(selectedBatchId, "error", selectedBatchError));
   return rows;
 }
 
-function backgroundJobRowId(row: BackgroundJobTableRow): string {
-  return row.rowKey;
-}
-
-function backgroundJobSubRows(
-  row: BackgroundJobTableRow,
-): BackgroundJobTableRow[] | undefined {
-  return row.rowType === "batch" ? row.subRows : undefined;
-}
+const backgroundJobRowId = (row: BackgroundJobTableRow) => row.rowKey;
+const backgroundJobSubRows = (row: BackgroundJobTableRow) =>
+  row.rowType === "batch" ? row.subRows : undefined;
 
 export {
   type BackgroundBatchRow,

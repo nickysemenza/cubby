@@ -22,17 +22,12 @@ function parseBackgroundEntityRef(value: unknown): BackgroundEntityRef | null {
 }
 
 function batchFilterText(batch: BackgroundBatchSummary): string {
-  const metadata = isRecord(batch.metadata) ? batch.metadata : null;
-  const entity = parseBackgroundEntityRef(metadata?.entity);
   return [
     batch.id,
     batch.kind,
     batch.source,
     batch.processor,
     batch.status,
-    typeof metadata?.source === "string" ? metadata.source : "",
-    entity?.entityType ?? "",
-    entity?.entityId ?? "",
     JSON.stringify(batch.metadata ?? ""),
   ]
     .join(" ")
