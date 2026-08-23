@@ -1,13 +1,20 @@
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
+import type { RelatednessOut } from "@cubby/schemas/relatedness";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/integrations/trpc/react";
 import { invalidateTRPCQueries } from "~/lib/query-keys";
+import {
+  ProductImageSummariesProvider,
+  useHydratedProductImages,
+} from "../products/product-image-summaries";
+
+const EMPTY_RELATED_PRODUCTS: RelatednessOut["items"] = [];
 
 /**
  * Product's compact relationship ledger. Tags remain compatibility evidence;
@@ -40,6 +47,11 @@ export function RelatednessRail({
   });
 
   const status = relatedness.data?.status;
+  const items = relatedness.data?.items ?? EMPTY_RELATED_PRODUCTS;
+  const relatedProductIds = useMemo(
+    () => items.map((item) => item.shortcode),
+    [items],
+  );
   const indexing =
     batch.data?.status === "queued" || batch.data?.status === "running";
 
@@ -94,27 +106,11 @@ export function RelatednessRail({
         </p>
       )}
 
-      {relatedness.data?.items.map(({ shortcode, title, score, evidence }) => (
-        <Row
-          key={shortcode}
-          align="center"
-          justify="between"
-          gap="sm"
-          className="border-border border-b pb-1 last:border-b-0"
-        >
-          <EntityInlineLink
-            entity="product"
-            data={{ id: shortcode, name: title }}
-            displayImage={null}
-            truncate
-          />
-          <span className="shrink-0 font-mono text-2xs text-slate">
-            {score > 0
-              ? `${Math.round(score * 100)}% similar`
-              : evidence.map((item) => item.signal).join(" · ")}
-          </span>
-        </Row>
-      ))}
+      <ProductImageSummariesProvider productIds={relatedProductIds}>
+        {items.map((item) => (
+          <RelatedProductRow key={item.shortcode} item={item} />
+        ))}
+      </ProductImageSummariesProvider>
 
       {status === "ready" && relatedness.data?.items.length === 0 && (
         <p className="text-muted-foreground text-xs">
@@ -141,5 +137,34 @@ export function RelatednessRail({
         </Row>
       )}
     </Stack>
+  );
+}
+
+function RelatedProductRow({
+  item,
+}: {
+  item: RelatednessOut["items"][number];
+}) {
+  const images = useHydratedProductImages(item.shortcode);
+
+  return (
+    <Row
+      align="center"
+      justify="between"
+      gap="sm"
+      className="border-border border-b pb-1 last:border-b-0"
+    >
+      <EntityInlineLink
+        entity="product"
+        data={{ id: item.shortcode, name: item.title }}
+        displayImage={images[0] ?? null}
+        truncate
+      />
+      <span className="shrink-0 font-mono text-2xs text-slate">
+        {item.score > 0
+          ? `${Math.round(item.score * 100)}% similar`
+          : item.evidence.map((evidence) => evidence.signal).join(" · ")}
+      </span>
+    </Row>
   );
 }
