@@ -18,6 +18,7 @@ import type {
   VendorShortcode,
   WishShortcode,
 } from "@cubby/shared";
+import { NON_ENTITY_SHORTCODE_PREFIX, SHORTCODE_CHARS } from "@cubby/shared";
 import { z } from "zod";
 import type { ShortcodeEntity } from "./entity-manifest";
 
@@ -64,6 +65,24 @@ function brandedId<Name extends string>(name: Name) {
   const schema = z.uuid().brand(name);
   return [schema, makeUnsafeId<z.infer<typeof schema>>()] as const;
 }
+
+/**
+ * Public shortcode for a durable record that is intentionally not a generic
+ * Entity. Funding transfers have their own MCP lifecycle, but raw UUIDs still
+ * never cross that boundary.
+ */
+const fundingTransferShortcodePattern = new RegExp(
+  `^${NON_ENTITY_SHORTCODE_PREFIX.fundingTransfer}[${SHORTCODE_CHARS}]{4}$`,
+);
+export const fundingTransferShortcode = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(fundingTransferShortcodePattern)
+  .brand("FundingTransferShortcode");
+export const unsafeFundingTransferShortcode =
+  makeUnsafeId<z.infer<typeof fundingTransferShortcode>>();
+export type FundingTransferShortcode = z.infer<typeof fundingTransferShortcode>;
 
 // Branded ID types for type safety.
 // `_userId` isn't uuid-shaped (session ids aren't uuids) and isn't exported as a

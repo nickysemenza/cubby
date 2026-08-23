@@ -7,8 +7,11 @@ import type {
 import {
   type FundingSourceId,
   type FundingTransferId,
+  type FundingTransferShortcode,
   unsafeFundingTransferId,
+  unsafeFundingTransferShortcode,
 } from "@cubby/schemas/identifiers";
+import { NON_ENTITY_SHORTCODE_PREFIX, SHORTCODE_CHARS } from "@cubby/shared";
 import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -39,7 +42,7 @@ type SetExpenseAttributionChange = Extract<
   HouseholdLedgerChange,
   { type: "set_expense_attribution" }
 >;
-type ClaimExpenseSourceChange = Extract<
+export type ClaimExpenseSourceChange = Extract<
   HouseholdLedgerChange,
   { type: "claim_expense_source" }
 >;
@@ -58,10 +61,83 @@ export type PutFundingTransferChange = Extract<
 
 export type HouseholdMutationResult = {
   changed: number;
-  transferIds: FundingTransferId[];
+  transferIds: FundingTransferShortcode[];
 };
 
 const toCents = (amount: number): bigint => BigInt(Math.round(amount * 100));
+
+export function validateExpenseSourceClaim(
+  expenseCost: number | null | undefined,
+  change: ClaimExpenseSourceChange,
+): { expenseCost: number; reconciliationNote: string | null } {
+  if (expenseCost === null || expenseCost === undefined) {
+    throw createAppError(
+      "HOUSEHOLD_LEDGER_INVALID_ATTRIBUTION",
+      "An Expense must have a priced cost before an external source row can be claimed",
+    );
+  }
+  const amountsMatch = toCents(expenseCost) === toCents(change.sourceAmount);
+  if (amountsMatch !== (change.reconciliation.decision === "amounts_match")) {
+    throw createAppError(
+      "HOUSEHOLD_LEDGER_INVALID_ATTRIBUTION",
+      amountsMatch
+        ? "Matching source and Expense amounts require the amounts_match decision"
+        : "A source/Expense amount mismatch requires an explicit accept_existing_expense decision with a note",
+    );
+  }
+  return {
+    expenseCost,
+    reconciliationNote:
+      change.reconciliation.decision === "accept_existing_expense"
+        ? change.reconciliation.note
+        : null,
+  };
+}
+
+function randomFundingTransferShortcode(): FundingTransferShortcode {
+  const bytes = crypto.getRandomValues(new Uint8Array(4));
+  const body = [...bytes]
+    .map((byte) => SHORTCODE_CHARS[byte % SHORTCODE_CHARS.length])
+    .join("");
+  return unsafeFundingTransferShortcode(
+    `${NON_ENTITY_SHORTCODE_PREFIX.fundingTransfer}${body}`,
+  );
+}
+
+async function mintFundingTransferShortcode(
+  tx: DrizzleTransaction,
+): Promise<FundingTransferShortcode> {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const shortcode = randomFundingTransferShortcode();
+    const [taken] = await tx
+      .select({ id: fundingTransfer.id })
+      .from(fundingTransfer)
+      .where(eq(fundingTransfer.shortcode, shortcode))
+      .limit(1);
+    if (!taken) return shortcode;
+  }
+  throw new Error("Could not mint a unique FundingTransfer shortcode");
+}
+
+export async function findFundingTransferByShortcode(
+  db: Database | DrizzleTransaction,
+  shortcode: FundingTransferShortcode,
+): Promise<{
+  id: FundingTransferId;
+  shortcode: FundingTransferShortcode;
+  deletedAt: Date | null;
+} | null> {
+  const [row] = await unwrapDb(db)
+    .select({
+      id: fundingTransfer.id,
+      shortcode: fundingTransfer.shortcode,
+      deletedAt: fundingTransfer.deletedAt,
+    })
+    .from(fundingTransfer)
+    .where(eq(fundingTransfer.shortcode, shortcode))
+    .limit(1);
+  return row ?? null;
+}
 
 async function desiredBeneficiaries(
   tx: DrizzleTransaction,
@@ -252,6 +328,16 @@ export async function claimExpenseSource(
 ): Promise<HouseholdMutationResult> {
   return withTransactionOn(db, async (tx) => {
     const expenseId = await resolveOrThrow(tx, "expense", change.expenseId);
+    const [expenseRow] = await tx
+      .select({ cost: expense.cost })
+      .from(expense)
+      .where(and(eq(expense.id, expenseId), notDeleted(expense)))
+      .for("update")
+      .limit(1);
+    const { expenseCost, reconciliationNote } = validateExpenseSourceClaim(
+      expenseRow?.cost,
+      change,
+    );
     await lockTransferKeys(tx, [
       `expense-ref:${change.sourceRef.source}:${change.sourceRef.externalId}`,
     ]);
@@ -259,6 +345,10 @@ export async function claimExpenseSource(
       .select({
         id: expenseSourceRef.id,
         expenseId: expenseSourceRef.expenseId,
+        sourceAmount: expenseSourceRef.sourceAmount,
+        expenseAmountAtClaim: expenseSourceRef.expenseAmountAtClaim,
+        reconciliationDecision: expenseSourceRef.reconciliationDecision,
+        reconciliationNote: expenseSourceRef.reconciliationNote,
         deletedAt: expenseSourceRef.deletedAt,
       })
       .from(expenseSourceRef)
@@ -270,6 +360,17 @@ export async function claimExpenseSource(
       )
       .limit(1);
     if (existing?.expenseId === expenseId) {
+      const sameDecision =
+        toCents(existing.sourceAmount) === toCents(change.sourceAmount) &&
+        toCents(existing.expenseAmountAtClaim) === toCents(expenseCost) &&
+        existing.reconciliationDecision === change.reconciliation.decision &&
+        existing.reconciliationNote === reconciliationNote;
+      if (!sameDecision) {
+        throw createAppError(
+          "HOUSEHOLD_LEDGER_EVIDENCE_CONFLICT",
+          "This Expense source identity already has a different reconciliation decision",
+        );
+      }
       if (existing.deletedAt === null) {
         return { changed: 0, transferIds: [] };
       }
@@ -282,7 +383,14 @@ export async function claimExpenseSource(
         entityId: expenseId,
         action: "update",
         changes: {
-          sourceRef: { from: "retired", to: change.sourceRef },
+          sourceRef: {
+            from: "retired",
+            to: {
+              ...change.sourceRef,
+              sourceAmount: change.sourceAmount,
+              reconciliation: change.reconciliation,
+            },
+          },
         },
       });
       return { changed: 1, transferIds: [] };
@@ -296,13 +404,24 @@ export async function claimExpenseSource(
     await tx.insert(expenseSourceRef).values({
       expenseId,
       ...change.sourceRef,
+      sourceAmount: change.sourceAmount,
+      expenseAmountAtClaim: expenseCost,
+      reconciliationDecision: change.reconciliation.decision,
+      reconciliationNote,
     });
     await logAuditEntry(tx, actor, {
       entityType: "expense",
       entityId: expenseId,
       action: "update",
       changes: {
-        sourceRef: { from: null, to: change.sourceRef },
+        sourceRef: {
+          from: null,
+          to: {
+            ...change.sourceRef,
+            sourceAmount: change.sourceAmount,
+            reconciliation: change.reconciliation,
+          },
+        },
       },
     });
     return { changed: 1, transferIds: [] };
@@ -572,9 +691,19 @@ export async function putFundingTransfer(
       );
     }
 
-    const transferId = change.transferId
-      ? unsafeFundingTransferId(change.transferId)
-      : unsafeFundingTransferId(crypto.randomUUID());
+    const existingTransfer = change.transferId
+      ? await findFundingTransferByShortcode(tx, change.transferId)
+      : null;
+    if (change.transferId && !existingTransfer) {
+      throw createAppError(
+        "HOUSEHOLD_LEDGER_INVALID_TRANSFER",
+        `Funding transfer not found: ${change.transferId}`,
+      );
+    }
+    const transferId =
+      existingTransfer?.id ?? unsafeFundingTransferId(crypto.randomUUID());
+    let transferShortcode =
+      existingTransfer?.shortcode ?? (await mintFundingTransferShortcode(tx));
     const keys = [
       `transfer:${transferId}`,
       ...change.sourceRefs.map((row) => `ref:${row.source}:${row.externalId}`),
@@ -647,9 +776,38 @@ export async function putFundingTransfer(
         .set(transferValues)
         .where(eq(fundingTransfer.id, transferId));
     } else {
-      await tx
-        .insert(fundingTransfer)
-        .values({ id: transferId, ...transferValues });
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          await tx.transaction(async (savepoint) => {
+            await savepoint.insert(fundingTransfer).values({
+              id: transferId,
+              shortcode: transferShortcode,
+              ...transferValues,
+            });
+          });
+          break;
+        } catch (error) {
+          let cause: unknown = error;
+          let shortcodeCollision = false;
+          while (cause && typeof cause === "object") {
+            const row = cause as {
+              code?: unknown;
+              constraint?: unknown;
+              cause?: unknown;
+            };
+            if (
+              row.code === "23505" &&
+              row.constraint === "FundingTransfer_shortcode_unique"
+            ) {
+              shortcodeCollision = true;
+              break;
+            }
+            cause = row.cause;
+          }
+          if (!shortcodeCollision || attempt >= 9) throw error;
+          transferShortcode = await mintFundingTransferShortcode(tx);
+        }
+      }
     }
     await tx
       .update(fundingTransferSourceRef)
@@ -694,15 +852,23 @@ export async function putFundingTransfer(
         .insert(fundingTransferEvidence)
         .values(evidence.map((row) => ({ transferId, ...row })));
     }
-    return { changed: 1, transferIds: [transferId] };
+    return { changed: 1, transferIds: [transferShortcode] };
   });
 }
 
 export async function deleteFundingTransfer(
   db: Database | DrizzleTransaction,
-  transferId: FundingTransferId,
+  transferShortcode: FundingTransferShortcode,
 ): Promise<HouseholdMutationResult> {
   return withTransactionOn(db, async (tx) => {
+    const transfer = await findFundingTransferByShortcode(
+      tx,
+      transferShortcode,
+    );
+    if (!transfer || transfer.deletedAt) {
+      return { changed: 0, transferIds: [] };
+    }
+    const transferId = transfer.id;
     const now = new Date();
     const removed = await tx
       .update(fundingTransfer)
@@ -730,7 +896,7 @@ export async function deleteFundingTransfer(
           notDeleted(fundingTransferEvidence),
         ),
       );
-    return { changed: 1, transferIds: [transferId] };
+    return { changed: 1, transferIds: [transferShortcode] };
   });
 }
 
@@ -751,10 +917,7 @@ export async function applyHouseholdLedgerChange(
     case "put_funding_transfer":
       return putFundingTransfer(db, change);
     case "delete_funding_transfer":
-      return deleteFundingTransfer(
-        db,
-        unsafeFundingTransferId(change.transferId),
-      );
+      return deleteFundingTransfer(db, change.transferId);
   }
 }
 

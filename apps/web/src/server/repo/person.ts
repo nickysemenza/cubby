@@ -42,6 +42,7 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import {
+  auditDateWhereConditions,
   buildPartialUpdateValues,
   countWhere,
   executeListQueryWithCount,
@@ -171,6 +172,7 @@ export async function listPeople(
 ) {
   const where = and(
     notDeleted(person),
+    ...auditDateWhereConditions(person, filters),
     filters.search
       ? ilike(person.name, `%${filters.search.trim()}%`)
       : undefined,

@@ -102,6 +102,31 @@ describe("household contribution contracts", () => {
     ).toBe(false);
   });
 
+  it("uses FTR shortcodes rather than raw UUIDs for transfer updates", () => {
+    const base = {
+      type: "put_funding_transfer" as const,
+      from: person("PER-A234"),
+      to: person("PER-B234"),
+      kind: "reimbursement" as const,
+      amount: 25,
+      date: "2026-08-23",
+      sourceRefs: [],
+      evidence: [],
+    };
+    expect(
+      previewHouseholdLedgerChangesInput.safeParse({
+        changes: [{ ...base, transferId: "FTR-A234" }],
+      }).success,
+    ).toBe(true);
+    expect(
+      previewHouseholdLedgerChangesInput.safeParse({
+        changes: [
+          { ...base, transferId: "21e5e0dd-a310-43f0-9b06-ff9c041b73f9" },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
   it("distinguishes unchanged, clear, and whole-set replacement", () => {
     const unchanged = previewHouseholdLedgerChangesInput.parse({
       changes: [
@@ -129,7 +154,7 @@ describe("household contribution contracts", () => {
     expect(
       applyHouseholdLedgerChangesInput.safeParse({
         previewFingerprint: "sha256:abc",
-        idempotencyKey: "coachella-2026-v1",
+        idempotencyKey: "trip-import-v1",
         changes: [
           {
             type: "set_expense_attribution",

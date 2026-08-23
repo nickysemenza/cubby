@@ -24,6 +24,7 @@ import type {
   AccountPersonRole,
   ContributionRole,
   FundingTransferKind,
+  HouseholdLedgerChange,
 } from "@cubby/schemas/household-contribution";
 import type {
   CookbookId,
@@ -33,6 +34,7 @@ import type {
   FinancialTransactionId,
   FundingSourceId,
   FundingTransferId,
+  FundingTransferShortcode,
   IngredientId,
   InventoryId,
   LocationId,
@@ -1895,6 +1897,7 @@ export const fundingTransfer = pgTable(
   "FundingTransfer",
   {
     id: pkUuid<FundingTransferId>(),
+    shortcode: shortcodeColumn().$type<FundingTransferShortcode>(),
     fromSourceId: uuid("fromSourceId")
       .notNull()
       .$type<FundingSourceId>()
@@ -1911,6 +1914,7 @@ export const fundingTransfer = pgTable(
     ...softDeletedAt(),
   },
   (table) => [
+    uniqueIndex("FundingTransfer_shortcode_unique").on(table.shortcode),
     index("FundingTransfer_fromSourceId_idx").on(table.fromSourceId),
     index("FundingTransfer_toSourceId_idx").on(table.toSourceId),
     index("FundingTransfer_date_idx").on(table.date),
@@ -2002,6 +2006,12 @@ export const householdLedgerImport = pgTable(
     idempotencyKey: text("idempotencyKey").notNull(),
     previewFingerprint: text("previewFingerprint").notNull(),
     requestHash: text("requestHash").notNull(),
+    changes: jsonb("changes").notNull().$type<HouseholdLedgerChange[]>(),
+    actorUserId: text("actorUserId")
+      .notNull()
+      .$type<UserId>()
+      .references(() => user.id),
+    actorSource: text("actorSource").notNull(),
     result: jsonb("result").notNull().$type<Record<string, unknown>>(),
     ...baseTimestamps(),
   },
@@ -2411,6 +2421,12 @@ export const expenseSourceRef = pgTable(
       .references(() => expense.id),
     source: text("source").notNull(),
     externalId: text("externalId").notNull(),
+    sourceAmount: doublePrecision("sourceAmount").notNull(),
+    expenseAmountAtClaim: doublePrecision("expenseAmountAtClaim").notNull(),
+    reconciliationDecision: text("reconciliationDecision")
+      .notNull()
+      .$type<"amounts_match" | "accept_existing_expense">(),
+    reconciliationNote: text("reconciliationNote"),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },
@@ -2427,6 +2443,20 @@ export const expenseSourceRef = pgTable(
     check(
       "ExpenseSourceRef_externalId_check",
       sql`length(trim(${table.externalId})) > 0`,
+    ),
+    check(
+      "ExpenseSourceRef_amounts_whole_cent_check",
+      sql`abs(${table.sourceAmount} * 100 - round(${table.sourceAmount} * 100)) < 0.0000001
+          AND abs(${table.expenseAmountAtClaim} * 100 - round(${table.expenseAmountAtClaim} * 100)) < 0.0000001`,
+    ),
+    check(
+      "ExpenseSourceRef_reconciliation_check",
+      sql`(${table.reconciliationDecision} = 'amounts_match'
+            AND abs(${table.sourceAmount} - ${table.expenseAmountAtClaim}) < 0.0000001
+            AND ${table.reconciliationNote} IS NULL)
+          OR (${table.reconciliationDecision} = 'accept_existing_expense'
+            AND abs(${table.sourceAmount} - ${table.expenseAmountAtClaim}) >= 0.0000001
+            AND length(trim(${table.reconciliationNote})) > 0)`,
     ),
   ],
 );

@@ -642,8 +642,18 @@ describe("purchase repository — splitExpense", () => {
     const split = splitExpenseInput.parse({
       expenseId: original.id,
       parts: [
-        { name: "first part", cost: 10, costType: "other", trade: "other" },
-        { name: "second part", cost: 10, costType: "other", trade: "other" },
+        {
+          name: "first part",
+          cost: 10,
+          costType: "materials",
+          trade: "other",
+        },
+        {
+          name: "second part",
+          cost: 10,
+          costType: "materials",
+          trade: "other",
+        },
       ],
     });
 
@@ -693,6 +703,8 @@ describe("purchase repository — splitExpense", () => {
         type: "claim_expense_source",
         expenseId: original.id,
         sourceRef: { source: "splitwise", externalId: "trip-row-1" },
+        sourceAmount: 20,
+        reconciliation: { decision: "amounts_match" },
       },
       ctx.actor,
     );
@@ -706,13 +718,13 @@ describe("purchase repository — splitExpense", () => {
             {
               name: "first part",
               cost: 10,
-              costType: "other",
+              costType: "materials",
               trade: "other",
             },
             {
               name: "second part",
               cost: 10,
-              costType: "other",
+              costType: "materials",
               trade: "other",
             },
           ],

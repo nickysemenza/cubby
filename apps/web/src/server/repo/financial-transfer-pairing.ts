@@ -53,7 +53,7 @@ export function buildFinancialTransferPairSuggestions(
     SuggestFinancialTransferPairsInput,
     "maxCandidatesPerTransaction" | "maxDateDistanceDays"
   >,
-): FinancialTransferPairSuggestionsOut {
+): FinancialTransferPairSuggestionsOut["suggestions"] {
   return requested.map((transaction) => {
     const matches =
       transaction.date && transaction.eligible !== false
@@ -220,7 +220,9 @@ export async function suggestFinancialTransferPairs(
   const requested = selected.map(toPairingRow);
   const dated = requested.filter((row) => row.date !== null);
   if (dated.length === 0)
-    return buildFinancialTransferPairSuggestions(requested, [], input);
+    return {
+      suggestions: buildFinancialTransferPairSuggestions(requested, [], input),
+    };
 
   const dates = dated.map((row) => row.date!).sort();
   const first = dates[0]!;
@@ -270,9 +272,11 @@ export async function suggestFinancialTransferPairs(
     )
     .orderBy(asc(effectiveDate), asc(financialTransaction.shortcode));
 
-  return buildFinancialTransferPairSuggestions(
-    requested,
-    candidates.map(toPairingRow),
-    input,
-  );
+  return {
+    suggestions: buildFinancialTransferPairSuggestions(
+      requested,
+      candidates.map(toPairingRow),
+      input,
+    ),
+  };
 }

@@ -45,6 +45,21 @@ export const SHORTCODE_PREFIX = {
 export type ShortcodeType = keyof typeof SHORTCODE_PREFIX;
 
 /**
+ * Public shortcodes for durable records that are not generic Entities. Keep
+ * these separate from `SHORTCODE_PREFIX`: adding one there would falsely make
+ * it part of the generic entity manifest and CRUD lifecycle.
+ */
+export const NON_ENTITY_SHORTCODE_PREFIX = {
+  fundingTransfer: "FTR-",
+} as const;
+
+/** Every canonical prefix that may legitimately cross an API or MCP boundary. */
+export const PUBLIC_SHORTCODE_PREFIXES = [
+  ...Object.values(SHORTCODE_PREFIX),
+  ...Object.values(NON_ENTITY_SHORTCODE_PREFIX),
+] as const;
+
+/**
  * The single-letter prefixes minted before the 2026-07 cutover, kept forever so
  * physical QR labels already stuck to shelves and products keep resolving.
  *

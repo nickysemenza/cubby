@@ -86,8 +86,8 @@ function AccountingChecks({ data }: { data: HouseholdContributionLedgerOut }) {
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Check</TableHead>
-          <TableHead className="text-right">Result</TableHead>
+          <TableHead className="w-48">Check</TableHead>
+          <TableHead className="w-64 text-right">Result</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -218,7 +218,7 @@ export function HouseholdContributionLedgerReport({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Issue</TableHead>
+                <TableHead className="w-56">Issue</TableHead>
                 <TableHead className="w-32 text-right">Amount</TableHead>
                 <TableHead className="w-52">Records</TableHead>
               </TableRow>
@@ -277,7 +277,7 @@ export function HouseholdContributionLedger() {
 
   return (
     <Stack gap="lg">
-      <Row align="end" wrap gap="sm" className="border-border border-b pb-3">
+      <Row align="end" wrap gap="sm" className="border-border border-b pb-2">
         <label className="grid gap-1 text-xs" htmlFor={asOfId}>
           <span className="eyebrow">As of</span>
           <DatePickerInput
@@ -323,7 +323,7 @@ export function HouseholdContributionLedger() {
 function LedgerSkeleton() {
   return (
     <Stack gap="lg" aria-label="Loading household contribution ledger">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
         {["cost", "consumption", "outlays", "position"].map((key) => (
           <Skeleton key={key} className="h-14" />
         ))}

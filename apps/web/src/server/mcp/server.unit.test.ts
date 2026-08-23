@@ -28,7 +28,7 @@ import type {
   TelemetryMessageV1,
 } from "@cubby/schemas/telemetry";
 import { vendorOut } from "@cubby/schemas/vendor";
-import { SHORTCODE_PREFIX } from "@cubby/shared";
+import { PUBLIC_SHORTCODE_PREFIXES, SHORTCODE_PREFIX } from "@cubby/shared";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -1726,7 +1726,7 @@ describe("listMcpToolCatalog", () => {
         const lacksShortcodePattern = strings.some(
           (s) =>
             typeof s.pattern !== "string" ||
-            !Object.values(SHORTCODE_PREFIX).some((prefix) =>
+            !PUBLIC_SHORTCODE_PREFIXES.some((prefix) =>
               (s.pattern as string).includes(prefix),
             ),
         );

@@ -16,6 +16,7 @@ import { inventoryFilterFields } from "@cubby/schemas/inventory";
 import { locationFilterFields } from "@cubby/schemas/location";
 import { mealCreateInput, mealFilterFields } from "@cubby/schemas/meal";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
+import { personFilterFields } from "@cubby/schemas/person";
 import { productFilterFields } from "@cubby/schemas/product";
 import {
   expenseCreateInput,
@@ -53,7 +54,7 @@ import { createIngredient, ingredientList } from "./ingredient";
 import { inventoryentryList } from "./inventory";
 import { createLocation, locationList } from "./location";
 import { createMeal, mealList } from "./meal";
-import { createPerson } from "./person";
+import { createPerson, listPeople } from "./person";
 import { productList } from "./product";
 import { createProject, projectList } from "./project";
 import { createPurchase, purchaseList } from "./purchase";
@@ -508,6 +509,7 @@ const GUARDS = {
   },
   location: { fields: locationFilterFields, list: listFor(locationList) },
   meal: { fields: mealFilterFields, list: listFor(mealList) },
+  person: { fields: personFilterFields, list: listFor(listPeople) },
   product: { fields: productFilterFields, list: listFor(productList) },
   project: { fields: projectFilterFields, list: listFor(projectList) },
   purchase: { fields: purchaseFilterFields, list: listFor(purchaseList) },

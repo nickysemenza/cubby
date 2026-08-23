@@ -1230,12 +1230,7 @@ export const splitExpense = async (
         tx
           .select({ id: expenseSourceRef.id })
           .from(expenseSourceRef)
-          .where(
-            and(
-              eq(expenseSourceRef.expenseId, expenseId),
-              notDeleted(expenseSourceRef),
-            ),
-          )
+          .where(eq(expenseSourceRef.expenseId, expenseId))
           .limit(1),
       ]);
 

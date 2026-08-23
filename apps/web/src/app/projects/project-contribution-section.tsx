@@ -67,7 +67,7 @@ export function ProjectContributionReport({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Person</TableHead>
+                  <TableHead className="w-40">Person</TableHead>
                   <TableHead className="w-28 text-right">Consumed</TableHead>
                 </TableRow>
               </TableHeader>
@@ -113,7 +113,7 @@ export function ProjectContributionReport({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Party</TableHead>
+                  <TableHead className="w-40">Party</TableHead>
                   <TableHead className="w-32 text-right">
                     Initially funded
                   </TableHead>

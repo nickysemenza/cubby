@@ -12,6 +12,7 @@ import { TRPCError } from "@trpc/server";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
+  expense,
   expenseSourceRef,
   fundingSource,
   fundingTransferEvidence,
@@ -29,6 +30,7 @@ import {
   applyHouseholdLedgerChange,
   findFundingTransferByShortcode,
   type HouseholdMutationResult,
+  validateExpenseSourceClaim,
   validateFundingTransferEvidence,
 } from "./mutations";
 import { resolveFundingPartyOrThrow } from "./party";
@@ -72,7 +74,7 @@ async function loadLedgerStateWitness(
       'attributions', (SELECT coalesce(jsonb_agg(to_jsonb(x) ORDER BY x.id), '[]'::jsonb)
         FROM (SELECT id, "expenseId", role, "personId", "fundingSourceId", weight, "updatedAt", "deletedAt" FROM "ExpenseAttribution") x),
       'expenseRefs', (SELECT coalesce(jsonb_agg(to_jsonb(x) ORDER BY x.id), '[]'::jsonb)
-        FROM (SELECT id, "expenseId", source, "externalId", "updatedAt", "deletedAt" FROM "ExpenseSourceRef") x),
+        FROM (SELECT id, "expenseId", source, "externalId", "sourceAmount", "expenseAmountAtClaim", "reconciliationDecision", "reconciliationNote", "updatedAt", "deletedAt" FROM "ExpenseSourceRef") x),
       'accounts', (SELECT coalesce(jsonb_agg(to_jsonb(x) ORDER BY x.id), '[]'::jsonb)
         FROM (SELECT id, shortcode, "fundingSourceId", "updatedAt", "deletedAt" FROM "FinancialAccount") x),
       'accountPeople', (SELECT coalesce(jsonb_agg(to_jsonb(x) ORDER BY x.id), '[]'::jsonb)
@@ -80,7 +82,7 @@ async function loadLedgerStateWitness(
       'transactions', (SELECT coalesce(jsonb_agg(to_jsonb(x) ORDER BY x.id), '[]'::jsonb)
         FROM (SELECT id, shortcode, "accountId", status, amount, "updatedAt", "deletedAt" FROM "FinancialTransaction") x),
       'transfers', (SELECT coalesce(jsonb_agg(to_jsonb(x) ORDER BY x.id), '[]'::jsonb)
-        FROM (SELECT id, "fromSourceId", "toSourceId", kind, amount, date, notes, "updatedAt", "deletedAt" FROM "FundingTransfer") x),
+        FROM (SELECT id, shortcode, "fromSourceId", "toSourceId", kind, amount, date, notes, "updatedAt", "deletedAt" FROM "FundingTransfer") x),
       'transferRefs', (SELECT coalesce(jsonb_agg(to_jsonb(x) ORDER BY x.id), '[]'::jsonb)
         FROM (SELECT id, "transferId", source, "externalId", "updatedAt", "deletedAt" FROM "FundingTransferSourceRef") x),
       'transferEvidence', (SELECT coalesce(jsonb_agg(to_jsonb(x) ORDER BY x.id), '[]'::jsonb)
@@ -219,9 +221,22 @@ async function previewChange(
     }
     case "claim_expense_source": {
       const expenseId = await resolveOrThrow(db, "expense", change.expenseId);
+      const [expenseRow] = await unwrapDb(db)
+        .select({ cost: expense.cost })
+        .from(expense)
+        .where(and(eq(expense.id, expenseId), notDeleted(expense)))
+        .limit(1);
+      const { expenseCost, reconciliationNote } = validateExpenseSourceClaim(
+        expenseRow?.cost,
+        change,
+      );
       const [existing] = await unwrapDb(db)
         .select({
           expenseId: expenseSourceRef.expenseId,
+          sourceAmount: expenseSourceRef.sourceAmount,
+          expenseAmountAtClaim: expenseSourceRef.expenseAmountAtClaim,
+          reconciliationDecision: expenseSourceRef.reconciliationDecision,
+          reconciliationNote: expenseSourceRef.reconciliationNote,
           deletedAt: expenseSourceRef.deletedAt,
         })
         .from(expenseSourceRef)
@@ -232,12 +247,29 @@ async function previewChange(
           ),
         )
         .limit(1);
-      if (existing?.expenseId === expenseId && !existing.deletedAt) {
+      const sameDecision =
+        existing?.expenseId === expenseId &&
+        Math.round(existing.sourceAmount * 100) ===
+          Math.round(change.sourceAmount * 100) &&
+        Math.round(existing.expenseAmountAtClaim * 100) ===
+          Math.round(expenseCost * 100) &&
+        existing.reconciliationDecision === change.reconciliation.decision &&
+        existing.reconciliationNote === reconciliationNote;
+      if (existing && sameDecision && !existing.deletedAt) {
         return {
           index,
           status: "already_recorded",
           summary:
             "Expense source reference is already claimed by this Expense",
+          affectedIds: [change.expenseId],
+        };
+      }
+      if (existing?.expenseId === expenseId && !sameDecision) {
+        return {
+          index,
+          status: "conflict",
+          summary:
+            "This Expense source identity already has a different reconciliation decision",
           affectedIds: [change.expenseId],
         };
       }

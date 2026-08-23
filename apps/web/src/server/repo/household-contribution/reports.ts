@@ -185,7 +185,7 @@ function attributionGaps(rows: ExpenseAllocationRow[]): Gap[] {
 }
 
 type TransferRow = {
-  id: string;
+  shortcode: string;
   fromSourceId: FundingSourceId;
   toSourceId: FundingSourceId;
   cents: string;
@@ -198,7 +198,7 @@ async function loadTransfers(
 ): Promise<TransferRow[]> {
   const result = await unwrapDb(db).execute<TransferRow>(sql`
     SELECT
-      t.id,
+      t.shortcode,
       t."fromSourceId",
       t."toSourceId",
       round(t.amount::numeric * 100)::bigint::text AS cents,
@@ -299,14 +299,14 @@ export async function householdContributionLedger(
       transferGaps.push({
         code: "unattributed_transfer_party",
         amount: money(cents),
-        targetIds: [transfer.id],
+        targetIds: [transfer.shortcode],
       });
     }
     if (Number(transfer.evidenceCount) === 1) {
       transferGaps.push({
         code: "transfer_evidence_one_sided",
         amount: money(cents),
-        targetIds: [transfer.id],
+        targetIds: [transfer.shortcode],
       });
     }
   }

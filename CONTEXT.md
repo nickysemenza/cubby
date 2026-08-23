@@ -37,7 +37,7 @@ A durable joint pot, such as joint checking plus a shared credit card paid from 
 _Avoid_: Person, 50/50 account, payer
 
 **Funding transfer**:
-One logical, project-neutral movement between funding sources. Zero, one, or two FinancialTransactions may evidence it; those evidence legs never multiply the transfer or become spend.
+One logical, project-neutral movement between funding sources. Zero, one, or two FinancialTransactions may evidence it; those evidence legs never multiply the transfer or become spend. Public callers use its immutable `FTR-` shortcode, and the reviewed import envelope records actor provenance.
 _Avoid_: Expense, reimbursement line item, Monarch row
 
 **Contribution position**:

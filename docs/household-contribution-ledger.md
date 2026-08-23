@@ -13,6 +13,12 @@ Cubby separates four facts that are easy to double-count when collapsed:
 4. `FinancialTransaction` rows are statement evidence only. Two mirrored rows
    may evidence one transfer, but never become two contributions.
 
+Funding transfers are addressed outside Cubby by immutable `FTR-` shortcodes;
+their database UUIDs never cross tRPC or MCP. They are intentionally not generic
+Entities: the reviewed `HouseholdLedgerImport` envelope is the append-only
+activity record for every applied batch, including the normalized changes,
+actor, source, fingerprint, and result.
+
 Beneficiary and funder weights contain no money. Reports convert each Expense
 to integer cents and use deterministic largest-remainder allocation; an absent
 role is implicitly fully unattributed, while an explicit null-target weight is
@@ -60,8 +66,10 @@ apply_household_ledger_changes
 ```
 
 The server never receives provider credentials, local file paths, raw emails,
-or whole CSV exports. Receipt-total discrepancies and ambiguous transfer pairs
-remain explicit decisions; neither is automatically spread or paired.
+or whole CSV exports. Claiming an Expense source records the external amount,
+the Expense amount at claim time, and either an exact match or a noted explicit
+decision to retain the existing Expense amount. Ambiguous transfer pairs remain
+unpaired. Neither discrepancy is automatically spread or paired.
 
 Expected domain failures (missing records, evidence conflicts, stale previews,
 or an idempotency-key mismatch) are returned in the structured refusal branch,

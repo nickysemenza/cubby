@@ -5,6 +5,7 @@ import {
 import {
   unsafeExpenseShortcode,
   unsafeFinancialAccountShortcode,
+  unsafeFinancialTransactionShortcode,
   unsafePersonShortcode,
   unsafeProjectShortcode,
 } from "@cubby/schemas/identifiers";
@@ -17,6 +18,7 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { updateFinancialTransaction } from "~/server/repo/financial-transaction";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
   applyHouseholdLedgerChanges,
@@ -162,6 +164,68 @@ describe("household contribution repository", () => {
         ),
       );
     expect(revivedRefs).toHaveLength(1);
+  });
+
+  it("requires and preserves an explicit decision for a source amount mismatch", async () => {
+    const row = await makeExpense(12.5);
+    const invalid = previewHouseholdLedgerChangesInput.parse({
+      changes: [
+        {
+          type: "claim_expense_source",
+          expenseId: row.shortcode,
+          sourceRef: { source: "splitwise", externalId: "mismatch-row" },
+          sourceAmount: 11.25,
+          reconciliation: { decision: "amounts_match" },
+        },
+      ],
+    });
+    await expect(
+      previewHouseholdLedgerChanges(ctx.db, invalid),
+    ).resolves.toMatchObject({
+      changes: [{ status: "conflict" }],
+      refusal: { reason: "HOUSEHOLD_LEDGER_INVALID_ATTRIBUTION" },
+    });
+
+    const reviewed = previewHouseholdLedgerChangesInput.parse({
+      changes: [
+        {
+          ...invalid.changes[0],
+          reconciliation: {
+            decision: "accept_existing_expense",
+            note: "The itemized receipt is authoritative.",
+          },
+        },
+      ],
+    });
+    const preview = await previewHouseholdLedgerChanges(ctx.db, reviewed);
+    expect(preview.changes).toEqual([
+      expect.objectContaining({ status: "ready" }),
+    ]);
+    const applied = await applyHouseholdLedgerChanges(
+      ctx.db,
+      applyHouseholdLedgerChangesInput.parse({
+        ...reviewed,
+        previewFingerprint: preview.previewFingerprint,
+        idempotencyKey: "fixture:reviewed-mismatch",
+      }),
+      ctx.actor,
+    );
+    expect(applied.status).toBe("applied");
+    const [decision] = await getDb(ctx.db)
+      .select({
+        sourceAmount: expenseSourceRef.sourceAmount,
+        expenseAmountAtClaim: expenseSourceRef.expenseAmountAtClaim,
+        reconciliationDecision: expenseSourceRef.reconciliationDecision,
+        reconciliationNote: expenseSourceRef.reconciliationNote,
+      })
+      .from(expenseSourceRef)
+      .where(eq(expenseSourceRef.expenseId, row.id));
+    expect(decision).toEqual({
+      sourceAmount: 11.25,
+      expenseAmountAtClaim: 12.5,
+      reconciliationDecision: "accept_existing_expense",
+      reconciliationNote: "The itemized receipt is authoritative.",
+    });
   });
 
   it("returns expected preview and apply failures as structured refusals", async () => {
@@ -442,5 +506,80 @@ describe("household contribution repository", () => {
     const transferId = transfer.transferIds[0];
     if (!transferId) throw new Error("transfer id was not returned");
     await deleteFundingTransfer(ctx.db, transferId);
+  });
+
+  it("refuses edits that would invalidate linked transfer evidence", async () => {
+    await upsertFundingFund(ctx.db, {
+      type: "upsert_funding_fund",
+      key: "evidence-fund",
+      name: "Evidence fund",
+    });
+    const firstAccount = await insertWithShortcode(ctx.db, "financialAccount", {
+      name: "Evidence account one",
+      identity: { kind: "cash" },
+    });
+    const secondAccount = await insertWithShortcode(
+      ctx.db,
+      "financialAccount",
+      { name: "Evidence account two", identity: { kind: "cash" } },
+    );
+    for (const account of [firstAccount, secondAccount]) {
+      await setAccountFunding(
+        ctx.db,
+        {
+          type: "set_account_funding",
+          accountId: unsafeFinancialAccountShortcode(account.shortcode),
+          fundingParty: { kind: "fund", key: "evidence-fund" },
+          people: [],
+        },
+        ctx.actor,
+      );
+    }
+    const outflow = await insertWithShortcode(ctx.db, "financialTransaction", {
+      accountId: firstAccount.id,
+      kind: "transfer",
+      status: "posted",
+      amount: 2.5,
+      transactionDate: "2026-08-20",
+      postedDate: "2026-08-20",
+    });
+    const inflow = await insertWithShortcode(ctx.db, "financialTransaction", {
+      accountId: secondAccount.id,
+      kind: "transfer",
+      status: "posted",
+      amount: -2.5,
+      transactionDate: "2026-08-20",
+      postedDate: "2026-08-20",
+    });
+    await putFundingTransfer(ctx.db, {
+      type: "put_funding_transfer",
+      from: { kind: "fund", key: "evidence-fund" },
+      to: { kind: "fund", key: "evidence-fund" },
+      kind: "internal_account_move",
+      amount: 2.5,
+      date: "2026-08-20",
+      sourceRefs: [],
+      evidence: [
+        {
+          transactionId: unsafeFinancialTransactionShortcode(outflow.shortcode),
+          side: "outflow",
+        },
+        {
+          transactionId: unsafeFinancialTransactionShortcode(inflow.shortcode),
+          side: "inflow",
+        },
+      ],
+    });
+
+    await expect(
+      updateFinancialTransaction(
+        ctx.db,
+        unsafeFinancialTransactionShortcode(outflow.shortcode),
+        { amount: 3 },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      cause: { reason: "HOUSEHOLD_LEDGER_INVALID_TRANSFER" },
+    });
   });
 });

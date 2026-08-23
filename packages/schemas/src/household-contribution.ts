@@ -5,6 +5,7 @@ import {
   expenseShortcode,
   financialAccountShortcode,
   financialTransactionShortcode,
+  fundingTransferShortcode,
   personShortcode,
   projectShortcode,
 } from "./identifiers";
@@ -133,11 +134,23 @@ const setExpenseAttributionChange = z.object({
   funders: weightedFunders.nullable().optional(),
 });
 
-const claimExpenseSourceChange = z.object({
-  type: z.literal("claim_expense_source"),
-  expenseId: expenseShortcode,
-  sourceRef,
-});
+const claimExpenseSourceChange = z
+  .object({
+    type: z.literal("claim_expense_source"),
+    expenseId: expenseShortcode,
+    sourceRef,
+    sourceAmount: wholeCentAmount,
+    reconciliation: z.discriminatedUnion("decision", [
+      z.object({ decision: z.literal("amounts_match") }),
+      z.object({
+        decision: z.literal("accept_existing_expense"),
+        note: z.string().trim().min(1),
+      }),
+    ]),
+  })
+  .describe(
+    "Durably binds an external row to an Expense. A differing source amount requires an explicit, noted decision to retain the existing Expense cost.",
+  );
 
 const upsertFundingFundChange = z.object({
   type: z.literal("upsert_funding_fund"),
@@ -163,7 +176,7 @@ const setAccountFundingChange = z.object({
 const putFundingTransferChange = z
   .object({
     type: z.literal("put_funding_transfer"),
-    transferId: z.uuid().optional(),
+    transferId: fundingTransferShortcode.optional(),
     from: fundingPartyRef,
     to: fundingPartyRef,
     kind: fundingTransferKindSchema,
@@ -227,7 +240,7 @@ const putFundingTransferChange = z
 
 const deleteFundingTransferChange = z.object({
   type: z.literal("delete_funding_transfer"),
-  transferId: z.uuid(),
+  transferId: fundingTransferShortcode,
 });
 
 export const householdLedgerChange = z.discriminatedUnion("type", [
@@ -281,7 +294,7 @@ export const applyHouseholdLedgerChangesOut = z.object({
   status: z.enum(["applied", "already_applied", "refused"]),
   previewFingerprint: z.string(),
   changed: z.number().int().nonnegative(),
-  transferIds: z.array(z.uuid()),
+  transferIds: z.array(fundingTransferShortcode),
   refusal: operationRefusalOut.optional(),
 });
 export type ApplyHouseholdLedgerChangesOut = z.infer<
@@ -384,24 +397,26 @@ export type SuggestFinancialTransferPairsInput = z.infer<
   typeof suggestFinancialTransferPairsInput
 >;
 
-export const financialTransferPairSuggestionsOut = z.array(
-  z.object({
-    transactionId: financialTransactionShortcode,
-    status: z.enum(["proposed", "ambiguous", "no_match"]),
-    candidates: z.array(
-      z.object({
-        transactionId: financialTransactionShortcode,
-        amount: money,
-        dateDistanceDays: z.number().int().nonnegative(),
-        fromAccountId: financialAccountShortcode,
-        toAccountId: financialAccountShortcode,
-        from: fundingPartyRef.nullable(),
-        to: fundingPartyRef.nullable(),
-        reasons: z.array(z.string()),
-      }),
-    ),
-  }),
-);
+export const financialTransferPairSuggestionsOut = z.object({
+  suggestions: z.array(
+    z.object({
+      transactionId: financialTransactionShortcode,
+      status: z.enum(["proposed", "ambiguous", "no_match"]),
+      candidates: z.array(
+        z.object({
+          transactionId: financialTransactionShortcode,
+          amount: money,
+          dateDistanceDays: z.number().int().nonnegative(),
+          fromAccountId: financialAccountShortcode,
+          toAccountId: financialAccountShortcode,
+          from: fundingPartyRef.nullable(),
+          to: fundingPartyRef.nullable(),
+          reasons: z.array(z.string()),
+        }),
+      ),
+    }),
+  ),
+});
 export type FinancialTransferPairSuggestionsOut = z.infer<
   typeof financialTransferPairSuggestionsOut
 >;
