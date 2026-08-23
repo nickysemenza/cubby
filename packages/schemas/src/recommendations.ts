@@ -34,6 +34,9 @@ export const duplicateProductRecommendationInput = z.object({
 });
 export const duplicateProductRecommendationOut =
   duplicateProductIdentitySchema.nullable();
+export const dismissDuplicateProductRecommendationInput = z.object({
+  sourceId: productShortcode,
+});
 
 export const tagPropagationRecommendationInput = z.object({
   sourceId: productShortcode,

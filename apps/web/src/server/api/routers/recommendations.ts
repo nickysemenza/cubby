@@ -1,4 +1,5 @@
 import {
+  dismissDuplicateProductRecommendationInput,
   dismissProductRecommendationInput,
   dismissTagPropagationInput,
   duplicateProductRecommendationInput,
@@ -13,6 +14,7 @@ import { findDuplicateProductIdentities } from "~/server/repo/problems";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import {
   dismissSuggestion,
+  getActiveSuggestionDismissalKeys,
   suggestionCandidateKey,
 } from "~/server/repo/suggestion-dismissal";
 import {
@@ -35,11 +37,54 @@ export const recommendationsRouter = createTRPCRouter({
     .output(strictOutput(duplicateProductRecommendationOut))
     .query(async ({ ctx, input }) => {
       const candidates = await findDuplicateProductIdentities(ctx.db);
-      return (
+      const candidate =
         candidates.find((candidate) =>
           candidate.products.some((product) => product.id === input.sourceId),
-        ) ?? null
+        ) ?? null;
+      if (!candidate) return null;
+      const sourceEntityId = await resolveOrThrow(
+        ctx.db,
+        "product",
+        input.sourceId,
       );
+      const dismissals = await getActiveSuggestionDismissalKeys(ctx.db, {
+        sourceEntityType: "product",
+        sourceEntityId,
+        suggestionKind: "product.duplicate",
+      });
+      const candidateKey = await suggestionCandidateKey(
+        "product.duplicate",
+        candidate.products.map((product) => product.id).sort(),
+      );
+      return dismissals.has(candidateKey) ? null : candidate;
+    }),
+
+  dismissDuplicateProduct: protectedProcedure
+    .input(dismissDuplicateProductRecommendationInput)
+    .mutation(async ({ ctx, input }) => {
+      const [sourceEntityId, candidates] = await Promise.all([
+        resolveOrThrow(ctx.db, "product", input.sourceId),
+        findDuplicateProductIdentities(ctx.db),
+      ]);
+      const candidate = candidates.find((item) =>
+        item.products.some((product) => product.id === input.sourceId),
+      );
+      if (!candidate) {
+        throw createAppError(
+          "PRODUCT_NOT_FOUND",
+          "Duplicate recommendation is no longer current",
+        );
+      }
+      await dismissSuggestion(ctx.db, {
+        sourceEntityType: "product",
+        sourceEntityId,
+        suggestionKind: "product.duplicate",
+        candidateKey: await suggestionCandidateKey(
+          "product.duplicate",
+          candidate.products.map((product) => product.id).sort(),
+        ),
+      });
+      return { ok: true };
     }),
 
   tagPropagation: protectedProcedure

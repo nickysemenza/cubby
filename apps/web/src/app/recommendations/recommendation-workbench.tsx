@@ -233,9 +233,19 @@ function DuplicateProductRecommendation({
   sourceId: ProductShortcode;
 }) {
   const api = useTRPC();
+  const queryClient = useQueryClient();
   const [merged, setMerged] = useState(false);
   const recommendation = useQuery(
     api.recommendations.duplicateProduct.queryOptions({ sourceId }),
+  );
+  const dismiss = useMutation(
+    api.recommendations.dismissDuplicateProduct.mutationOptions({
+      onSuccess: () => {
+        invalidateTRPCQueries(queryClient, [
+          api.recommendations.duplicateProduct.queryKey({ sourceId }),
+        ]);
+      },
+    }),
   );
 
   if (merged) {
@@ -260,10 +270,21 @@ function DuplicateProductRecommendation({
         Review the live duplicate cluster, choose the keeper, then inspect the
         merge impact before accepting.
       </p>
-      <DuplicateProductMergeFix
-        variant={recommendation.data}
-        close={() => setMerged(true)}
-      />
+      <Row gap="sm">
+        <DuplicateProductMergeFix
+          variant={recommendation.data}
+          close={() => setMerged(true)}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          disabled={dismiss.isPending}
+          onClick={() => dismiss.mutate({ sourceId })}
+        >
+          <X className="size-3" />
+          Dismiss
+        </Button>
+      </Row>
     </Stack>
   );
 }
