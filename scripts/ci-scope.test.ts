@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { classifyPaths } from "./ci-scope.mjs";
+import { classifyPaths } from "./ci-scope.ts";
 
 test("agent, documentation, and editor-only changes are inert", () => {
   assert.deepEqual(classifyPaths([".claude/skills/example/SKILL.md"]), {

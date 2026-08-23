@@ -36,7 +36,7 @@ for (const file of markdownFiles) {
       continue;
     }
 
-    const path = decodeURIComponent(target.split("#", 1)[0].split("?", 1)[0]);
+    const path = decodeURIComponent(target.split("#", 1)[0]?.split("?", 1)[0] ?? "");
     if (!path) continue;
     if (!existsSync(resolve(repositoryRoot, dirname(file), path))) {
       const line = content.slice(0, match.index).split("\n").length;

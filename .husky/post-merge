@@ -2,4 +2,4 @@
 
 # A pull/merge that changes recipebridge/ leaves the gitignored WASM binary stale
 # (git can't update it). Rebuild it so the app doesn't break at runtime.
-node "$(git rev-parse --show-toplevel)/scripts/ensure-wasm.mjs"
+node "$(git rev-parse --show-toplevel)/scripts/ensure-wasm.ts"

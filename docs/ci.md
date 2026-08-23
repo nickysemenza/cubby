@@ -7,7 +7,7 @@ experiments that should not be rediscovered from scratch.
 
 ## Work selection
 
-`scripts/ci-scope.mjs` is the source of truth for path classification. It maps a
+`scripts/ci-scope.ts` is the source of truth for path classification. It maps a
 change to web, Rust, auxiliary-package, and auxiliary-worker work. A path the
 classifier does not recognize deliberately selects every suite and worker.
 Documentation, agent configuration, and editor-only files are inert for the
@@ -66,7 +66,7 @@ Keep these measured negative results in mind:
 Before changing CI, run:
 
 ```sh
-node --test scripts/ci-scope.test.mjs
+node --test scripts/ci-scope.test.ts
 actionlint -no-color .github/workflows/*.yaml
 pnpm run check
 ```

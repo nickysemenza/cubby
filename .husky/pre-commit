@@ -5,5 +5,7 @@ set -e
 # user's staged/unstaged split for partially staged files.
 pnpm exec biome check --staged --error-on-warnings --no-errors-on-unmatched
 
-# Run TypeScript checks across all packages (native tsc, TypeScript 7)
-pnpm typecheck
+# Typecheck only the workspaces the staged files can affect. Falls back to the
+# full run for broad or unrecognised changes; skips entirely for docs-only
+# commits. See scripts/typecheck-staged.ts for why this reuses CI's classifier.
+node "$(git rev-parse --show-toplevel)/scripts/typecheck-staged.ts"

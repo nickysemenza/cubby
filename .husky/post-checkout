@@ -4,4 +4,4 @@
 # Only react to branch checkouts/rebases — refresh the gitignored WASM binary if
 # the new tree's recipebridge/ (or a local path-dep) differs from the built one.
 [ "$3" = "1" ] || exit 0
-node "$(git rev-parse --show-toplevel)/scripts/ensure-wasm.mjs"
+node "$(git rev-parse --show-toplevel)/scripts/ensure-wasm.ts"

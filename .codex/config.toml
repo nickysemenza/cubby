@@ -1,7 +1,19 @@
-# Codex natively discovers AGENTS.md. Treat CLAUDE.md as the per-directory
-# fallback so work below apps/web also picks up apps/web/CLAUDE.md.
-model = "gpt-5.6-sol"
-model_reasoning_effort = "high"
+# There is deliberately no AGENTS.md. Codex discovers it natively, but ours was
+# an 8-line pointer to CLAUDE.md — an extra read hop on every session and a
+# second file to keep in sync. `project_doc_fallback_filenames` below makes
+# Codex load CLAUDE.md directly instead, and per-directory, so work below
+# apps/web also picks up apps/web/CLAUDE.md. One canonical rules file, shared
+# with Claude Code, no drift.
+# No `model` / `model_reasoning_effort` pinned here on purpose. Pinning them
+# forced every main task on this repo onto one frontier model at high effort
+# (248 of 255 measured turns) and overrode the user-level default, which made
+# choosing a cheaper tier for routine work a fight with the repo. The model now
+# comes from the user/session level; `/model` still selects per session.
+#
+# `tool_output_token_limit` caps how much of any single tool result is retained.
+# Screenshots and whole-file dumps are the dominant context intake, and unlike a
+# prose rule this is enforced by the runtime.
+tool_output_token_limit = 24000
 project_doc_fallback_filenames = ["CLAUDE.md"]
 
 [agents]

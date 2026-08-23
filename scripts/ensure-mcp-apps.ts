@@ -12,7 +12,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { extremeMtime } from "./mtime.mjs";
+import { extremeMtime } from "./mtime.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PKG = join(ROOT, "apps/mcp-apps");
@@ -20,7 +20,7 @@ const DIST = join(PKG, "dist");
 const PRUNE = new Set(["dist", "node_modules"]);
 const WATCH_EXT = [".ts", ".html", ".css"];
 
-const log = (msg) => process.stderr.write(`[ensure-mcp-apps] ${msg}\n`);
+const log = (msg: string) => process.stderr.write(`[ensure-mcp-apps] ${msg}\n`);
 
 const build = () =>
   execFileSync("pnpm", ["--filter", "@cubby/mcp-apps", "run", "build"], {
@@ -28,15 +28,15 @@ const build = () =>
     stdio: "inherit",
   });
 
-const mtimeOf = (dir, pick, seed) =>
+const mtimeOf = (dir: string, pick: (a: number, b: number) => number, seed: number) =>
   extremeMtime(dir, {
     pick,
     seed,
     prune: PRUNE,
     extensions: WATCH_EXT,
   });
-const newest = (dir) => mtimeOf(dir, Math.max, 0);
-const oldest = (dir) => mtimeOf(dir, Math.min, Number.POSITIVE_INFINITY);
+const newest = (dir: string) => mtimeOf(dir, Math.max, 0);
+const oldest = (dir: string) => mtimeOf(dir, Math.min, Number.POSITIVE_INFINITY);
 
 if (!existsSync(DIST) || !readdirSync(DIST).some((f) => f.endsWith(".html"))) {
   log("no MCP app bundles — building…");

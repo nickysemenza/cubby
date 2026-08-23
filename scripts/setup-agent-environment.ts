@@ -11,7 +11,7 @@ const LOCKFILE = join(ROOT, "pnpm-lock.yaml");
 const INSTALLED_LOCKFILE = join(ROOT, "node_modules/.pnpm/lock.yaml");
 const worktreeOnly = process.argv.includes("--worktree-only");
 
-const run = (command, args) =>
+const run = (command: string, args: readonly string[]) =>
   execFileSync(command, args, {
     cwd: ROOT,
     // SessionStart stdout is injected into Claude's context. Keep setup output
@@ -19,7 +19,7 @@ const run = (command, args) =>
     stdio: ["ignore", 2, 2],
   });
 
-const gitPath = (kind) =>
+const gitPath = (kind: string) =>
   execFileSync(
     "git",
     ["rev-parse", "--path-format=absolute", kind],
@@ -54,4 +54,4 @@ if (!dependenciesAreCurrent()) {
   run("pnpm", ["install", "--frozen-lockfile"]);
 }
 
-run("node", ["scripts/ensure-wasm.mjs"]);
+run("node", ["scripts/ensure-wasm.ts"]);

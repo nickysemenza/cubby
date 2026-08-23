@@ -126,7 +126,7 @@ type ProductWithUpcGapCandidate = {
  * edges can't drift between the two consumers, even though their SQL does.
  *
  * Each builder stays a literal `.from(<table>)` (not a generic `column.table`
- * walk) on purpose — `scripts/check-soft-delete-filters.mjs` matches incoming
+ * walk) on purpose — `scripts/check-soft-delete-filters.ts` matches incoming
  * edges by literal table identifier, so a fully-generic loop here would be
  * invisible to that guard.
  */

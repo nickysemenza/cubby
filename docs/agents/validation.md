@@ -11,10 +11,30 @@ scripts that CI depends on remain load-bearing.
 
 ## Commands and ownership
 
-Prefer a single Vitest file while editing. `pnpm test:unit`, `pnpm test:ui`,
-`pnpm test:integration` (requires `docker compose -p cubby up -d`), and
-`pnpm test:e2e` are the normal tiers. Reserve full `pnpm test` for pre-PR or
-cross-layer work.
+While editing, run one file: `pnpm --dir apps/web test:file <path>`. That is the
+spelling — the transcripts carried three competing ones (`pnpm vitest run`,
+`pnpm exec vitest`, `npx vitest run`) for the same job. It works for any tier,
+including a single `*.integration.test.ts`, which is bounded and cheap.
+
+`pnpm test:unit`, `pnpm test:ui`, `pnpm test:integration` (requires
+`docker compose -p cubby up -d`), and `pnpm test:e2e` are the whole-tier
+commands. Reserve full `pnpm test` for pre-PR or cross-layer work.
+
+**Integration is opt-in.** A bare `vitest run` no longer registers the
+integration project, so it cannot silently cost ten minutes; reach it with
+`--project integration`, `pnpm test:integration`, or `CUBBY_TEST_INTEGRATION=1`.
+That tier was 1,879 invocations and 12h over three weeks — more than unit, ui,
+and e2e combined — so it is a decision, not a reflex.
+
+**Never re-run a tier to find out what failed.** Every run ends with a compact
+list of the failing tests, and writes the same list to
+`apps/web/.vitest-failures.txt`, so a `| tail` or a later turn can both recover
+it. 24% of all test runs used to be a re-run of one that had just failed.
+
+Narrow the other gates too: `pnpm format:changed` (~1s) over `pnpm format:write`
+(~18s), and `pnpm typecheck:web` when only the web app is touched. `pnpm check`
+runs every gate concurrently via `scripts/run-checks.ts` and stays the single
+canonical pre-handoff command; CI runs exactly it.
 
 One agent owns a particular gate; other agents continue useful work and consume
 the owner's distilled result instead of repeating it. At handoff report commands,

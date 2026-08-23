@@ -18,14 +18,14 @@ import { execFileSync } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { extremeMtime } from "./mtime.mjs";
+import { extremeMtime } from "./mtime.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ART = join(ROOT, "packages/wasm/recipebridge_bg.wasm");
 const PRUNE = new Set(["target", ".git", "node_modules"]);
 const WATCH_EXT = [".rs", ".toml", ".lock"];
 
-const log = (msg) => process.stderr.write(`[ensure-wasm] ${msg}\n`);
+const log = (msg: string) => process.stderr.write(`[ensure-wasm] ${msg}\n`);
 
 const build = () =>
   execFileSync("pnpm", ["run", "wasm"], { cwd: ROOT, stdio: "inherit" });
@@ -56,7 +56,7 @@ const sourceRoots = () => {
   return [...roots];
 };
 
-const newestMtime = (dir) =>
+const newestMtime = (dir: string) =>
   extremeMtime(dir, {
     pick: Math.max,
     seed: 0,

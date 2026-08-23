@@ -76,3 +76,7 @@ lcov.info
 
 .pnpm-store.codex/
 .pnpm-store/
+
+# Written by tooling/failure-summary-reporter.ts so a truncated run
+# does not have to be repeated to recover the failure list.
+apps/web/.vitest-failures.txt

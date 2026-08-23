@@ -71,7 +71,7 @@ jobs:
           script: |
             const { pathToFileURL } = require("node:url");
             const { classifyPaths } = await import(
-              pathToFileURL(`${process.env.GITHUB_WORKSPACE}/scripts/ci-scope.mjs`)
+              pathToFileURL(`${process.env.GITHUB_WORKSPACE}/scripts/ci-scope.ts`)
             );
 
             const coverage =

@@ -80,7 +80,7 @@
  * scan already has for a dynamic `.from(someVar)`. A subquery like that is
  * left to review, same as before.
  *
- * Run standalone: node scripts/check-soft-delete-filters.mjs
+ * Run standalone: node scripts/check-soft-delete-filters.ts
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -146,7 +146,7 @@ function serverSources() {
  * argument doesn't unbalance its parens) and the template-range finder (so a
  * nested `${sql\`...\`}` doesn't prematurely close the outer template).
  */
-function skipOpaque(text, i) {
+function skipOpaque(text: string, i: number) {
   const ch = text[i];
   if (ch === '"' || ch === "'") {
     const quote = ch;
@@ -211,7 +211,7 @@ function skipOpaque(text, i) {
  * String, comment, and template-literal contents are skipped (via
  * `skipOpaque`) so a paren inside them can't unbalance the scan.
  */
-function balancedSlice(text, open) {
+function balancedSlice(text: string, open: number) {
   let depth = 0;
   let i = open;
   while (i < text.length) {
@@ -254,8 +254,8 @@ function balancedSlice(text, open) {
  * (e.g. a markdown code span in a docblock) is never mistaken for the start
  * of a template.
  */
-function allTemplateRanges(text) {
-  const ranges = [];
+function allTemplateRanges(text: string) {
+  const ranges: Array<[number, number]> = [];
   let i = 0;
   while (i < text.length) {
     const ch = text[i];
@@ -329,7 +329,7 @@ const SQL_KEYWORDS = new Set([
 ]);
 
 /** Reject a captured alias that's actually the next SQL keyword, not a name. */
-const cleanAlias = (rawAlias) =>
+const cleanAlias = (rawAlias: string | undefined) =>
   rawAlias && !SQL_KEYWORDS.has(rawAlias.toUpperCase()) ? rawAlias : undefined;
 
 const { varNames, sqlNameToVar, varToSqlName } = softDeletableTables();
@@ -340,13 +340,14 @@ const callPattern = /\b(exists|notExists)\s*\(/g;
 const tableRefQuoted = /\b(?:FROM|JOIN)\s+"(\w+)"(?:\s+(?:AS\s+)?(\w+))?/g;
 const tableRefInterp =
   /\b(?:FROM|JOIN)\s+\$\{(\w+)\}(?:\s+(?:AS\s+)?(\w+))?/g;
-const violations = [];
+type Violation = { file: string; line: number; detail: string };
+const violations: Violation[] = [];
 
 for (const file of serverSources()) {
   const abs = join(repoRoot, file);
   const text = readFileSync(abs, "utf8");
-  const lineOf = (index) => text.slice(0, index).split("\n").length;
-  const hasOptOut = (callIndex) =>
+  const lineOf = (index: number) => text.slice(0, index).split("\n").length;
+  const hasOptOut = (callIndex: number) =>
     text.slice(Math.max(0, callIndex - 200), callIndex).includes(OPT_OUT);
 
   // --- drizzle exists()/notExists() form ---
@@ -377,7 +378,7 @@ for (const file of serverSources()) {
 
   // --- raw template-literal EXISTS form (tagged sql`` or plain) ---
   if (text.includes("EXISTS")) {
-    const seen = new Set(); // dedupe safety net; occurrences are non-overlapping by construction
+    const seen = new Set<string>(); // dedupe safety net; occurrences are non-overlapping by construction
     const existsPattern = /\b(NOT\s+)?EXISTS\s*\(/g;
     for (const [rangeStart, rangeEnd] of allTemplateRanges(text)) {
       const literal = text.slice(rangeStart, rangeEnd);
@@ -389,8 +390,7 @@ for (const file of serverSources()) {
       existsPattern.lastIndex = 0;
       const occurrences = [...literal.matchAll(existsPattern)];
 
-      for (let idx = 0; idx < occurrences.length; idx++) {
-        const occ = occurrences[idx];
+      for (const [idx, occ] of occurrences.entries()) {
         const existsIndex = rangeStart + occ.index;
         if (hasOptOut(existsIndex)) continue;
         const kind = occ[1] ? "NOT EXISTS" : "EXISTS";
@@ -419,17 +419,17 @@ for (const file of serverSources()) {
         const localOpen = occ.index + occ[0].length - 1;
         const span = balancedSlice(literal, localOpen);
         const nextStart =
-          idx + 1 < occurrences.length ? occurrences[idx + 1].index : literal.length;
+          occurrences[idx + 1]?.index ?? literal.length;
         const body = span
           ? literal.slice(span[0], span[1])
           : literal.slice(occ.index, nextStart);
 
-        const refs = [];
+        const refs: Array<{ table: string; alias: string; aliasIsBare: boolean }> = [];
         tableRefQuoted.lastIndex = 0;
         let ref;
         while ((ref = tableRefQuoted.exec(body))) {
           const [, sqlName, rawAlias] = ref;
-          if (!sqlNameToVar.has(sqlName)) continue;
+          if (!sqlName || !sqlNameToVar.has(sqlName)) continue;
           const alias = cleanAlias(rawAlias);
           refs.push({
             table: sqlName,
@@ -440,9 +440,10 @@ for (const file of serverSources()) {
         tableRefInterp.lastIndex = 0;
         while ((ref = tableRefInterp.exec(body))) {
           const [, varName, rawAlias] = ref;
-          if (!varNames.has(varName)) continue;
+          if (!varName || !varNames.has(varName)) continue;
           const alias = cleanAlias(rawAlias);
           const sqlName = varToSqlName.get(varName);
+          if (!sqlName) continue;
           refs.push({
             table: sqlName,
             alias: alias ?? sqlName,

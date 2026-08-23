@@ -5,10 +5,10 @@ const inertExact = new Set([
 
 const inertPrefixes = [".agents/", ".claude/", ".codex/", ".vscode/", "docs/"];
 
-const startsWithAny = (path, prefixes) =>
+const startsWithAny = (path: string, prefixes: readonly string[]) =>
   prefixes.some((prefix) => path.startsWith(prefix));
 
-const isInert = (path) =>
+const isInert = (path: string) =>
   path.endsWith(".md") ||
   inertExact.has(path) ||
   startsWithAny(path, inertPrefixes);
@@ -74,7 +74,7 @@ const sharedRootExact = new Set([
 
 const sharedRootPrefixes = [".github/", ".husky/", "scripts/"];
 
-const isKnownCodePath = (path) =>
+const isKnownCodePath = (path: string) =>
   startsWithAny(path, [
     ...webPrefixes,
     ...auxTestPrefixes,
@@ -86,8 +86,8 @@ const isKnownCodePath = (path) =>
   sharedRootExact.has(path) ||
   startsWithAny(path, sharedRootPrefixes);
 
-export function classifyPaths(paths) {
-  const changed = [...new Set(paths.filter(Boolean))];
+export function classifyPaths(paths: readonly (string | null | undefined)[]) {
+  const changed = [...new Set(paths.filter((path) => Boolean(path)))] as string[];
   const active = changed.filter((path) => !isInert(path));
   const unknown = active.some((path) => !isKnownCodePath(path));
   const sharedRoot = active.some(
