@@ -5,6 +5,8 @@ import {
 } from "./expense-line-kind";
 import { financialReconciliationSummary } from "./financial-reconciliation";
 import { imageUrlSummary } from "./image-summary";
+import { ledgerAttributions } from "./ledger-party";
+import { ledgerSourceClaimOut, ledgerSourceClaims } from "./ledger-transfer";
 import {
   money,
   moneyNullable,
@@ -920,6 +922,11 @@ const expenseCreateShape = {
     .describe(PRODUCT_QUANTITY_DESCRIPTION),
   vendor: z.string().nullable().default(null),
   orderId: z.string().nullable().default(null),
+  // Replacement sets: omitted on update leaves the role unchanged; null clears
+  // it and an array replaces the complete role set.
+  beneficiaries: ledgerAttributions.nullable().default([]),
+  funders: ledgerAttributions.nullable().default([]),
+  sourceClaims: ledgerSourceClaims.nullable().default([]),
 };
 
 export const expenseCreateInput = z.object(expenseCreateShape);
@@ -1190,6 +1197,9 @@ export const expenseOut = z.object({
   // product deletion deliberately does not block on referencing expenses
   // (unlike project deletion), so this null branch is routinely reachable.
   productName: z.string().nullable(),
+  beneficiaries: ledgerAttributions,
+  funders: ledgerAttributions,
+  sourceClaims: z.array(ledgerSourceClaimOut),
   ...timestampedFields,
 });
 export type ExpenseOut = z.infer<typeof expenseOut>;

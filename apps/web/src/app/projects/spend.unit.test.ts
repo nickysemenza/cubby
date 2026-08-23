@@ -38,7 +38,7 @@ describe("splitExpenseSpend", () => {
   });
 
   it("treats negative expenses as contributions (positive magnitude) that offset net", () => {
-    // Mirrors the Wedding project: family contributions are negative, future rows.
+    // A project credit is a negative, future row.
     const split = splitExpenseSpend([
       { cost: 60_000, future: false },
       { cost: 46_600, future: true },

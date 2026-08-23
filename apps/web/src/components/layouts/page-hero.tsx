@@ -20,7 +20,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "~/components/ui/popover";
-import { entities } from "~/entities/entities";
+import { entities, isBrowserRoutedEntity } from "~/entities/entities";
 import { ENTITY_ACCENTS } from "~/entities/entity-accents";
 import { copyShortcodes } from "~/lib/clipboard";
 import { cn, formatCount } from "~/lib/utils";
@@ -90,6 +90,7 @@ function deriveEyebrowSegments(
   entity: Entity,
   title: ReactNode,
 ): EyebrowSegment[] {
+  if (!isBrowserRoutedEntity(entity)) return [];
   const def = entities[entity];
   const group = getEntityNavGroup(entity);
   // The group's own `to` (a landing route, when it has one) rides along with
@@ -167,6 +168,7 @@ function DetailBreadcrumb({
   entity: Entity;
   heroNo?: string;
 }) {
+  if (!isBrowserRoutedEntity(entity)) return null;
   const def = entities[entity];
   const group = getEntityNavGroup(entity);
 
@@ -331,7 +333,8 @@ function PageHero({
     hasCount &&
     `${formatCount(count)}${typeof title === "string" ? ` ${title}` : ""}`;
   // Entity-inked accent rule (falls back to ultramarine via the CSS defaults).
-  const accent = entity ? ENTITY_ACCENTS[entity] : null;
+  const accent =
+    entity && isBrowserRoutedEntity(entity) ? ENTITY_ACCENTS[entity] : null;
   const accentStyle = accent
     ? ({ "--page-accent": accent } as CSSProperties)
     : undefined;

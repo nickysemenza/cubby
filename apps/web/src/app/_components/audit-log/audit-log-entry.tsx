@@ -18,7 +18,7 @@ import {
   CollapsibleTrigger,
 } from "~/components/ui/collapsible";
 import { Description } from "~/components/ui/description";
-import { EntityIcon, entities } from "~/entities/entities";
+import { EntityIcon, entityLabel } from "~/entities/entities";
 import type { RouterOutputs } from "~/integrations/trpc/react";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn } from "~/lib/utils";
@@ -238,7 +238,7 @@ export function AuditLogEntryComponent({
   const [isOpen, setIsOpen] = useState(false);
   const hasChanges = entry.changes && Object.keys(entry.changes).length > 0;
 
-  const entityConfig = entities[entry.entityType as AuditEntityType];
+  const fallbackEntityLabel = entityLabel(entry.entityType as AuditEntityType);
   const action = getStatusBadgeProps("audit", entry.action);
 
   if (variant === "ledger") {
@@ -277,7 +277,7 @@ export function AuditLogEntryComponent({
                     className="size-4 flex-shrink-0"
                   />
                   <span className="truncate font-medium text-sm">
-                    {entry.entityName ?? entityConfig.label}
+                    {entry.entityName ?? fallbackEntityLabel}
                   </span>
                 </>
               )}
@@ -355,7 +355,7 @@ export function AuditLogEntryComponent({
                       className="size-4 flex-shrink-0"
                     />
                     <span className="font-medium text-sm">
-                      {entry.entityName ?? entityConfig.label}
+                      {entry.entityName ?? fallbackEntityLabel}
                     </span>
                   </>
                 )}

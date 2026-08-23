@@ -146,7 +146,7 @@ function datedTaskProjectIds(dateFrom?: string, dateTo?: string) {
  * {@link datedTaskProjectIds}, and uncorrelated / `notDeleted` / `isNotNull`
  * for the same three reasons documented there.
  *
- * Negative expenses (refunds, family contributions) count, matching
+ * Negative expenses (refunds and price adjustments) count, matching
  * `projectContentDates`: they are dated project activity, and nowhere else in
  * the tracker filters them out of a date range.
  */

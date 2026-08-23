@@ -1,4 +1,4 @@
-import type { Entity } from "@cubby/schemas/entity";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { type LinkProps, useLocation } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
 import {
@@ -205,7 +205,6 @@ export const desktopNav: NavNode[] = [
         icon: entities.purchase.lucideIcon,
       },
       { to: "/vendors", label: "Vendors", icon: entities.vendor.lucideIcon },
-      { to: "/people", label: "People", icon: entities.person.lucideIcon },
       { to: "/financial-accounts", label: "Accounts", icon: Landmark },
       {
         to: "/financial-transactions",
@@ -371,7 +370,9 @@ export const publicNavItems: NavItem[] = [
  * {@link desktopLeaves}, which flattens groups away and drops the parent
  * reference this needs.
  */
-export function getEntityNavGroup(entity: Entity): NavGroup | undefined {
+export function getEntityNavGroup(
+  entity: BrowserRoutedEntity,
+): NavGroup | undefined {
   const listRoute = entities[entity].routes.list;
   return desktopNav.find(
     (node): node is NavGroup =>

@@ -206,7 +206,7 @@ export const kitCountedTwiceSchema = z.object({
 // Keyed on a disposal Purchase for the same reason its mirror is, and the
 // reasoning is worth not restating: see `soldButStillStockedSchema` above and
 // the essay over `findSoldButStillStocked`. Negative Expense lines on their own
-// are overwhelmingly refunds, price adjustments, and family contributions —
+// are overwhelmingly refunds and price adjustments —
 // every one of them legitimate, none of them a sale.
 export const unlinkedExitExpenseSchema = z.object({
   id: expenseShortcode,
@@ -226,8 +226,8 @@ export const unlinkedExitExpenseSchema = z.object({
 //
 // Deliberately NOT folded into that detector. A purchase-less negative line is
 // about half sales (an item handed over for cash, entered by hand) and half
-// money that never bought anything (family contributions, a neighbour's share
-// of a shared cost). Neither the ledger nor the settlement side carries a
+// money that never bought anything (for example, a neighbour's share of a
+// shared cost). Neither the expense nor settlement side carries a
 // signal separating them, so this is reported as `coverage` — a worklist, never
 // a red count. Widening the disposal-Purchase predicate instead would import
 // that same ambiguity into a detector that is currently precise.

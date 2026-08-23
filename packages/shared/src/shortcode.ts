@@ -32,8 +32,9 @@ export const SHORTCODE_PREFIX = {
   ingredient: "ING-",
   inventory: "INV-",
   location: "LOC-",
+  ledgerParty: "LPY-",
+  ledgerTransfer: "LTR-",
   meal: "MEL-",
-  person: "PER-",
   product: "PRD-",
   project: "PRJ-",
   purchase: "PUR-",
@@ -44,20 +45,8 @@ export const SHORTCODE_PREFIX = {
 } as const;
 export type ShortcodeType = keyof typeof SHORTCODE_PREFIX;
 
-/**
- * Public shortcodes for durable records that are not generic Entities. Keep
- * these separate from `SHORTCODE_PREFIX`: adding one there would falsely make
- * it part of the generic entity manifest and CRUD lifecycle.
- */
-export const NON_ENTITY_SHORTCODE_PREFIX = {
-  fundingTransfer: "FTR-",
-} as const;
-
 /** Every canonical prefix that may legitimately cross an API or MCP boundary. */
-export const PUBLIC_SHORTCODE_PREFIXES = [
-  ...Object.values(SHORTCODE_PREFIX),
-  ...Object.values(NON_ENTITY_SHORTCODE_PREFIX),
-] as const;
+export const PUBLIC_SHORTCODE_PREFIXES = Object.values(SHORTCODE_PREFIX);
 
 /**
  * The single-letter prefixes minted before the 2026-07 cutover, kept forever so
@@ -171,8 +160,15 @@ export const locationShortcode = makeShortcodeSchema(
   "location",
   "LocationShortcode",
 );
+export const ledgerPartyShortcode = makeShortcodeSchema(
+  "ledgerParty",
+  "LedgerPartyShortcode",
+);
+export const ledgerTransferShortcode = makeShortcodeSchema(
+  "ledgerTransfer",
+  "LedgerTransferShortcode",
+);
 export const mealShortcode = makeShortcodeSchema("meal", "MealShortcode");
-export const personShortcode = makeShortcodeSchema("person", "PersonShortcode");
 export const productShortcode = makeShortcodeSchema(
   "product",
   "ProductShortcode",
@@ -199,9 +195,10 @@ const SHORTCODE_SCHEMA = {
   image: imageShortcode,
   ingredient: ingredientShortcode,
   inventory: inventoryShortcode,
+  ledgerParty: ledgerPartyShortcode,
+  ledgerTransfer: ledgerTransferShortcode,
   location: locationShortcode,
   meal: mealShortcode,
-  person: personShortcode,
   product: productShortcode,
   project: projectShortcode,
   purchase: purchaseShortcode,
@@ -231,9 +228,10 @@ export type FinancialTransactionShortcode = z.infer<
 export type ImageShortcode = z.infer<typeof imageShortcode>;
 export type IngredientShortcode = z.infer<typeof ingredientShortcode>;
 export type InventoryShortcode = z.infer<typeof inventoryShortcode>;
+export type LedgerPartyShortcode = z.infer<typeof ledgerPartyShortcode>;
+export type LedgerTransferShortcode = z.infer<typeof ledgerTransferShortcode>;
 export type LocationShortcode = z.infer<typeof locationShortcode>;
 export type MealShortcode = z.infer<typeof mealShortcode>;
-export type PersonShortcode = z.infer<typeof personShortcode>;
 export type ProductShortcode = z.infer<typeof productShortcode>;
 export type ProjectShortcode = z.infer<typeof projectShortcode>;
 export type PurchaseShortcode = z.infer<typeof purchaseShortcode>;

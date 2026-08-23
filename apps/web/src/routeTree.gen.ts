@@ -71,8 +71,6 @@ import { Route as AuthenticatedMealsIndexRouteImport } from './routes/_authentic
 import { Route as AuthenticatedMealsShortcodeRouteImport } from './routes/_authenticated/meals.$shortcode'
 import { Route as AuthenticatedMealsShoppingListRouteImport } from './routes/_authenticated/meals.shopping-list'
 import { Route as AuthenticatedMealsSuggestionsRouteImport } from './routes/_authenticated/meals.suggestions'
-import { Route as AuthenticatedPeopleIndexRouteImport } from './routes/_authenticated/people.index'
-import { Route as AuthenticatedPeopleShortcodeRouteImport } from './routes/_authenticated/people.$shortcode'
 import { Route as AuthenticatedProductsIndexRouteImport } from './routes/_authenticated/products.index'
 import { Route as AuthenticatedProductsShortcodeRouteImport } from './routes/_authenticated/products.$shortcode'
 import { Route as AuthenticatedProductsNewRouteImport } from './routes/_authenticated/products.new'
@@ -457,18 +455,6 @@ const AuthenticatedMealsSuggestionsRoute =
     path: '/meals/suggestions',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedPeopleIndexRoute =
-  AuthenticatedPeopleIndexRouteImport.update({
-    id: '/people/',
-    path: '/people/',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedPeopleShortcodeRoute =
-  AuthenticatedPeopleShortcodeRouteImport.update({
-    id: '/people/$shortcode',
-    path: '/people/$shortcode',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
 const AuthenticatedProductsIndexRoute =
   AuthenticatedProductsIndexRouteImport.update({
     id: '/products/',
@@ -718,7 +704,6 @@ export interface FileRoutesByFullPath {
   '/meals/$shortcode': typeof AuthenticatedMealsShortcodeRoute
   '/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
   '/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
-  '/people/$shortcode': typeof AuthenticatedPeopleShortcodeRoute
   '/products/$shortcode': typeof AuthenticatedProductsShortcodeRoute
   '/products/new': typeof AuthenticatedProductsNewRoute
   '/projects/$shortcode': typeof AuthenticatedProjectsShortcodeRoute
@@ -747,7 +732,6 @@ export interface FileRoutesByFullPath {
   '/inventory/': typeof AuthenticatedInventoryIndexRoute
   '/locations/': typeof AuthenticatedLocationsIndexRoute
   '/meals/': typeof AuthenticatedMealsIndexRoute
-  '/people/': typeof AuthenticatedPeopleIndexRoute
   '/products/': typeof AuthenticatedProductsIndexRoute
   '/projects/': typeof AuthenticatedProjectsIndexRoute
   '/purchases/': typeof AuthenticatedPurchasesIndexRoute
@@ -816,7 +800,6 @@ export interface FileRoutesByTo {
   '/meals/$shortcode': typeof AuthenticatedMealsShortcodeRoute
   '/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
   '/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
-  '/people/$shortcode': typeof AuthenticatedPeopleShortcodeRoute
   '/products/$shortcode': typeof AuthenticatedProductsShortcodeRoute
   '/products/new': typeof AuthenticatedProductsNewRoute
   '/projects/$shortcode': typeof AuthenticatedProjectsShortcodeRoute
@@ -845,7 +828,6 @@ export interface FileRoutesByTo {
   '/inventory': typeof AuthenticatedInventoryIndexRoute
   '/locations': typeof AuthenticatedLocationsIndexRoute
   '/meals': typeof AuthenticatedMealsIndexRoute
-  '/people': typeof AuthenticatedPeopleIndexRoute
   '/products': typeof AuthenticatedProductsIndexRoute
   '/projects': typeof AuthenticatedProjectsIndexRoute
   '/purchases': typeof AuthenticatedPurchasesIndexRoute
@@ -917,7 +899,6 @@ export interface FileRoutesById {
   '/_authenticated/meals/$shortcode': typeof AuthenticatedMealsShortcodeRoute
   '/_authenticated/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
   '/_authenticated/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
-  '/_authenticated/people/$shortcode': typeof AuthenticatedPeopleShortcodeRoute
   '/_authenticated/products/$shortcode': typeof AuthenticatedProductsShortcodeRoute
   '/_authenticated/products/new': typeof AuthenticatedProductsNewRoute
   '/_authenticated/projects/$shortcode': typeof AuthenticatedProjectsShortcodeRoute
@@ -946,7 +927,6 @@ export interface FileRoutesById {
   '/_authenticated/inventory/': typeof AuthenticatedInventoryIndexRoute
   '/_authenticated/locations/': typeof AuthenticatedLocationsIndexRoute
   '/_authenticated/meals/': typeof AuthenticatedMealsIndexRoute
-  '/_authenticated/people/': typeof AuthenticatedPeopleIndexRoute
   '/_authenticated/products/': typeof AuthenticatedProductsIndexRoute
   '/_authenticated/projects/': typeof AuthenticatedProjectsIndexRoute
   '/_authenticated/purchases/': typeof AuthenticatedPurchasesIndexRoute
@@ -1018,7 +998,6 @@ export interface FileRouteTypes {
     | '/meals/$shortcode'
     | '/meals/shopping-list'
     | '/meals/suggestions'
-    | '/people/$shortcode'
     | '/products/$shortcode'
     | '/products/new'
     | '/projects/$shortcode'
@@ -1047,7 +1026,6 @@ export interface FileRouteTypes {
     | '/inventory/'
     | '/locations/'
     | '/meals/'
-    | '/people/'
     | '/products/'
     | '/projects/'
     | '/purchases/'
@@ -1116,7 +1094,6 @@ export interface FileRouteTypes {
     | '/meals/$shortcode'
     | '/meals/shopping-list'
     | '/meals/suggestions'
-    | '/people/$shortcode'
     | '/products/$shortcode'
     | '/products/new'
     | '/projects/$shortcode'
@@ -1145,7 +1122,6 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/locations'
     | '/meals'
-    | '/people'
     | '/products'
     | '/projects'
     | '/purchases'
@@ -1216,7 +1192,6 @@ export interface FileRouteTypes {
     | '/_authenticated/meals/$shortcode'
     | '/_authenticated/meals/shopping-list'
     | '/_authenticated/meals/suggestions'
-    | '/_authenticated/people/$shortcode'
     | '/_authenticated/products/$shortcode'
     | '/_authenticated/products/new'
     | '/_authenticated/projects/$shortcode'
@@ -1245,7 +1220,6 @@ export interface FileRouteTypes {
     | '/_authenticated/inventory/'
     | '/_authenticated/locations/'
     | '/_authenticated/meals/'
-    | '/_authenticated/people/'
     | '/_authenticated/products/'
     | '/_authenticated/projects/'
     | '/_authenticated/purchases/'
@@ -1716,20 +1690,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMealsSuggestionsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/people/': {
-      id: '/_authenticated/people/'
-      path: '/people'
-      fullPath: '/people/'
-      preLoaderRoute: typeof AuthenticatedPeopleIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/people/$shortcode': {
-      id: '/_authenticated/people/$shortcode'
-      path: '/people/$shortcode'
-      fullPath: '/people/$shortcode'
-      preLoaderRoute: typeof AuthenticatedPeopleShortcodeRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
     '/_authenticated/products/': {
       id: '/_authenticated/products/'
       path: '/products'
@@ -2013,7 +1973,6 @@ interface AuthenticatedRouteChildren {
   AuthenticatedMealsShortcodeRoute: typeof AuthenticatedMealsShortcodeRoute
   AuthenticatedMealsShoppingListRoute: typeof AuthenticatedMealsShoppingListRoute
   AuthenticatedMealsSuggestionsRoute: typeof AuthenticatedMealsSuggestionsRoute
-  AuthenticatedPeopleShortcodeRoute: typeof AuthenticatedPeopleShortcodeRoute
   AuthenticatedProductsShortcodeRoute: typeof AuthenticatedProductsShortcodeRoute
   AuthenticatedProductsNewRoute: typeof AuthenticatedProductsNewRoute
   AuthenticatedProjectsShortcodeRoute: typeof AuthenticatedProjectsShortcodeRoute
@@ -2039,7 +1998,6 @@ interface AuthenticatedRouteChildren {
   AuthenticatedInventoryIndexRoute: typeof AuthenticatedInventoryIndexRoute
   AuthenticatedLocationsIndexRoute: typeof AuthenticatedLocationsIndexRoute
   AuthenticatedMealsIndexRoute: typeof AuthenticatedMealsIndexRoute
-  AuthenticatedPeopleIndexRoute: typeof AuthenticatedPeopleIndexRoute
   AuthenticatedProductsIndexRoute: typeof AuthenticatedProductsIndexRoute
   AuthenticatedProjectsIndexRoute: typeof AuthenticatedProjectsIndexRoute
   AuthenticatedPurchasesIndexRoute: typeof AuthenticatedPurchasesIndexRoute
@@ -2106,7 +2064,6 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedMealsShortcodeRoute: AuthenticatedMealsShortcodeRoute,
   AuthenticatedMealsShoppingListRoute: AuthenticatedMealsShoppingListRoute,
   AuthenticatedMealsSuggestionsRoute: AuthenticatedMealsSuggestionsRoute,
-  AuthenticatedPeopleShortcodeRoute: AuthenticatedPeopleShortcodeRoute,
   AuthenticatedProductsShortcodeRoute: AuthenticatedProductsShortcodeRoute,
   AuthenticatedProductsNewRoute: AuthenticatedProductsNewRoute,
   AuthenticatedProjectsShortcodeRoute: AuthenticatedProjectsShortcodeRoute,
@@ -2135,7 +2092,6 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedInventoryIndexRoute: AuthenticatedInventoryIndexRoute,
   AuthenticatedLocationsIndexRoute: AuthenticatedLocationsIndexRoute,
   AuthenticatedMealsIndexRoute: AuthenticatedMealsIndexRoute,
-  AuthenticatedPeopleIndexRoute: AuthenticatedPeopleIndexRoute,
   AuthenticatedProductsIndexRoute: AuthenticatedProductsIndexRoute,
   AuthenticatedProjectsIndexRoute: AuthenticatedProjectsIndexRoute,
   AuthenticatedPurchasesIndexRoute: AuthenticatedPurchasesIndexRoute,

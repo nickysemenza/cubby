@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { LucideIcon } from "lucide-react";
 import {
   AlertTriangle,
@@ -11,7 +12,7 @@ import {
   ShoppingCart,
   Sparkles,
 } from "lucide-react";
-import { entities } from "~/entities/entities";
+import { entities, isBrowserRoutedEntity } from "~/entities/entities";
 
 /**
  * Surfaces that render quick actions. Deriving each surface's list from one
@@ -41,7 +42,7 @@ export type ActionSurface =
 export interface ActionItem {
   id: string;
   /** Set for entity-create actions — name/path derive from `entities[entity]`. */
-  entity?: Entity;
+  entity?: BrowserRoutedEntity;
   name: string;
   path: string;
   /**
@@ -62,7 +63,7 @@ export interface ActionItem {
  * entities registry. Keeps "New {label}" / `routes.new` single-sourced.
  */
 function entityCreate(
-  entity: Entity,
+  entity: BrowserRoutedEntity,
   id: string,
   icon: LucideIcon,
   surfaces: ActionSurface[],
@@ -75,7 +76,9 @@ function entityCreate(
     // Discovery wording — the navbar create menu renders its own "New {label}"
     // (see quick-actions-menu); this `name` is what the palette/search surface.
     name: `Add ${def.label}`,
-    path: def.routes.new ?? `/${def.basePath}/new`,
+    path:
+      ("new" in def.routes ? def.routes.new : undefined) ??
+      `/${def.basePath}/new`,
     icon,
     keywords,
     surfaces,
@@ -229,15 +232,6 @@ export const actionItems: ActionItem[] = [
     surfaces: ["empty-state"],
   },
   {
-    id: "add-person",
-    entity: "person",
-    name: "Add Person",
-    path: entities.person.routes.list,
-    search: { create: true },
-    icon: entities.person.lucideIcon,
-    surfaces: ["empty-state"],
-  },
-  {
     id: "add-financial-transaction",
     entity: "financialTransaction",
     name: "Add Transaction",
@@ -319,8 +313,10 @@ export interface CreateTarget {
  * because the button was gated on a route they deliberately don't have.
  */
 export function createActionFor(entity: Entity): CreateTarget | null {
+  if (!isBrowserRoutedEntity(entity)) return null;
   const action = actionItems.find((item) => item.entity === entity);
   if (action) return { to: action.path, search: action.search };
-  const newRoute = entities[entity].routes.new;
+  const routes = entities[entity].routes;
+  const newRoute = "new" in routes ? routes.new : undefined;
   return newRoute ? { to: newRoute } : null;
 }

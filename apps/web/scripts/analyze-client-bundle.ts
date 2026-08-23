@@ -53,19 +53,13 @@ import { gzipSync } from "node:zlib";
 // 145-chunk guard remains unchanged.
 //
 // Raised 530 -> 536 KiB for manifest-driven relatedness and the focused
-// recommendations workbench. The Cloudflare build measures 534.3 KiB across
-// 146 chunks; this leaves bounded cross-platform headroom while preserving a
-// strict size and chunk-count guard for later route/dependency additions.
-//
-// Raised 536 -> 539 KiB and 146 -> 147 chunks for the full Person entity and
-// household contribution ledger. The only new eager chunk is the 2.2 KiB
-// `people/$shortcode` route definition; its page body and the contribution
-// ledger remain route-split. Linux CI measures 537.8 KiB and macOS measures
-// 536.9 KiB, so this records the intentional route contract with narrow
-// cross-platform headroom instead of weakening the guard around lazy bodies.
+// recommendations workbench. Route-less ledger guards and the contribution
+// reports bring the Cloudflare build to 536.4 KiB on macOS and 537.4 KiB on
+// Linux across the same 146 chunks; 538 KiB leaves bounded cross-platform
+// headroom without permitting another eager chunk.
 export const CLIENT_BUNDLE_BUDGET = {
-  gzipBytes: 539 * 1024,
-  chunks: 147,
+  gzipBytes: 538 * 1024,
+  chunks: 146,
 } as const;
 
 const STATIC_FROM =

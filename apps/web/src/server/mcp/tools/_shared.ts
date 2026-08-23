@@ -2317,16 +2317,15 @@ const mergeDispatch: Record<
     };
   },
 
-  person: async (caller, keepId, mergeIds) => {
+  ledgerParty: async (caller, keepId, mergeIds) => {
     const { mergeSummary } = await (
       caller as unknown as {
-        person: {
+        ledgerParty: {
           merge: (input: { keepId: string; mergeIds: string[] }) => Promise<{
             mergeSummary: {
               deletedIds: string[];
               merged: number;
-              beneficiaryEdgesRepointed: number;
-              fundingEdgesRepointed: number;
+              attributionEdgesRepointed: number;
               accountEdgesRepointed: number;
               transferEdgesRepointed: number;
               carriedFields: string[];
@@ -2334,47 +2333,36 @@ const mergeDispatch: Record<
           }>;
         };
       }
-    ).person.merge({ keepId, mergeIds });
+    ).ledgerParty.merge({ keepId, mergeIds });
     return {
       merged: mergeSummary.merged,
       moved: [
         ...mergeImpact(
           {
-            code: "beneficiary-attributions-repointed",
+            code: "attributions-repointed",
             effect: "move-dedupe",
-            label: "beneficiary attributions merged",
+            label: "attributions merged",
             description:
-              "Beneficiary shares re-pointed to the surviving person and duplicate shares combined.",
+              "Expense shares re-pointed to the surviving ledger party and duplicate weights combined.",
           },
-          mergeSummary.beneficiaryEdgesRepointed,
+          mergeSummary.attributionEdgesRepointed,
         ),
         ...mergeImpact(
           {
-            code: "funding-sources-folded",
-            effect: "move-dedupe",
-            label: "funding edges folded",
-            description:
-              "Private funding-source edges moved to the surviving person's source.",
-          },
-          mergeSummary.fundingEdgesRepointed,
-        ),
-        ...mergeImpact(
-          {
-            code: "account-memberships-merged",
-            effect: "move-dedupe",
-            label: "account memberships merged",
-            description:
-              "Account memberships re-pointed; the survivor's role wins collisions.",
+            code: "accounts-repointed",
+            effect: "repoint",
+            label: "accounts re-pointed",
+            description: "Accounts now map to the surviving ledger party.",
           },
           mergeSummary.accountEdgesRepointed,
         ),
         ...mergeImpact(
           {
             code: "transfers-repointed",
-            effect: "move-dedupe",
-            label: "funding transfers folded",
+            effect: "repoint",
+            label: "transfers re-pointed",
             description:
-              "Funding transfers re-pointed and collapsed internal moves normalized.",
+              "Transfer endpoints now reference the surviving ledger party.",
           },
           mergeSummary.transferEdgesRepointed,
         ),

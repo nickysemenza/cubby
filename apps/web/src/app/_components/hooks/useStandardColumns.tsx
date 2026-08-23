@@ -1,8 +1,8 @@
-import type { Entity } from "@cubby/schemas/entity";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
-import { entities } from "~/entities/entities";
+import { browserEntityDefinition } from "~/entities/entities";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { getSortableFields } from "~/entities/sortable-fields";
 import {
@@ -47,7 +47,7 @@ interface BaseListRow {
 
 interface UseStandardColumnsOptions<TData extends BaseListRow> {
   /** The entity type */
-  entity: Entity;
+  entity: BrowserRoutedEntity;
   /** Column helper instance (must be memoized) */
   columnHelper: ColumnHelper<TData>;
   /** Custom columns (inserted between standard columns) */
@@ -161,12 +161,13 @@ export function useStandardColumns<TData extends BaseListRow>({
 
   // Memoize entity config to prevent re-renders when entity doesn't change
   const { standardColumns, shouldUseMappings } = useMemo(() => {
-    const entityConfig = entities[entity];
-    const listConfig = entityConfig.list;
+    const listConfig = browserEntityDefinition(entity).list;
+    const standardColumns: readonly string[] =
+      listConfig?.standardColumns ?? [];
+    const listHasUnitMappings = listConfig?.hasUnitMappings ?? false;
     return {
-      standardColumns: listConfig?.standardColumns ?? [],
-      shouldUseMappings:
-        (listConfig?.hasUnitMappings ?? false) && hasUnitMappings,
+      standardColumns,
+      shouldUseMappings: listHasUnitMappings && hasUnitMappings,
     };
   }, [entity, hasUnitMappings]);
 

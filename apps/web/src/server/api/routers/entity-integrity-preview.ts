@@ -19,9 +19,10 @@ import {
   unsafeFinancialTransactionId,
   unsafeIngredientId,
   unsafeInventoryId,
+  unsafeLedgerPartyId,
+  unsafeLedgerTransferId,
   unsafeLocationId,
   unsafeMealId,
-  unsafePersonId,
   unsafeProductId,
   unsafeProjectId,
   unsafePurchaseId,
@@ -43,9 +44,13 @@ import {
   previewMergeIngredients,
 } from "~/server/repo/ingredient/merge";
 import { previewDeleteInventoryEntries } from "~/server/repo/inventory/crud";
+import {
+  previewDeleteLedgerParties,
+  previewMergeLedgerParties,
+} from "~/server/repo/ledger-party";
+import { previewDeleteLedgerTransfers } from "~/server/repo/ledger-transfer";
 import { previewDeleteLocations } from "~/server/repo/location/crud";
 import { previewDeleteMeals } from "~/server/repo/meal/crud";
-import { previewDeletePeople, previewMergePeople } from "~/server/repo/person";
 import { previewDeleteProducts } from "~/server/repo/product/crud";
 import { previewMergeProducts } from "~/server/repo/product/merge";
 import {
@@ -233,8 +238,14 @@ const plan = async (
     .with({ operation: "delete", entity: "wish" }, ({ ids }) =>
       previewDeleteWishes(db, entityIds(ids).map(unsafeWishId)),
     )
-    .with({ operation: "delete", entity: "person" }, ({ ids }) =>
-      previewDeletePeople(db, entityIds(ids).map(unsafePersonId)),
+    .with({ operation: "delete", entity: "ledgerParty" }, ({ ids }) =>
+      previewDeleteLedgerParties(db, entityIds(ids).map(unsafeLedgerPartyId)),
+    )
+    .with({ operation: "delete", entity: "ledgerTransfer" }, ({ ids }) =>
+      previewDeleteLedgerTransfers(
+        db,
+        entityIds(ids).map(unsafeLedgerTransferId),
+      ),
     )
     .with({ operation: "delete", entity: "image" }, ({ ids }) =>
       previewDeleteImages(db, ids),
@@ -278,11 +289,13 @@ const plan = async (
         keepId: unsafeProductId(entityId(keepId)),
       }),
     )
-    .with({ operation: "merge", entity: "person" }, ({ mergeIds, keepId }) =>
-      previewMergePeople(db, {
-        mergeIds: entityIds(mergeIds).map(unsafePersonId),
-        keepId: unsafePersonId(entityId(keepId)),
-      }),
+    .with(
+      { operation: "merge", entity: "ledgerParty" },
+      ({ mergeIds, keepId }) =>
+        previewMergeLedgerParties(db, {
+          mergeIds: entityIds(mergeIds).map(unsafeLedgerPartyId),
+          keepId: unsafeLedgerPartyId(entityId(keepId)),
+        }),
     )
     .exhaustive();
 

@@ -1,77 +1,21 @@
 import type {
   ExpenseId,
-  FundingSourceId,
-  PersonId,
+  LedgerPartyId,
   ProjectId,
 } from "@cubby/schemas/identifiers";
 import { and, inArray, lte, type SQL, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { expense } from "~/server/db/schema";
+import { expense, expenseAttribution, ledgerParty } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
-
-export type WeightedCentInput<T> = {
-  key: string;
-  target: T;
-  weight: number;
-};
-
-/**
- * Deterministic largest-remainder allocation over integer cents. This pure
- * mirror of the SQL allocator makes the tie-break and signed-refund behavior
- * easy to test without teaching callers about either implementation.
- */
-export function allocateWeightedCents<T>(
-  totalCents: bigint,
-  inputs: readonly WeightedCentInput<T>[],
-): Array<{ target: T; cents: bigint }> {
-  if (inputs.length === 0) return [];
-  if (inputs.some((row) => !Number.isInteger(row.weight) || row.weight <= 0)) {
-    throw new Error("Attribution weights must be positive integers");
-  }
-
-  const sign = totalCents < 0n ? -1n : 1n;
-  const absolute = totalCents < 0n ? -totalCents : totalCents;
-  const totalWeight = inputs.reduce((sum, row) => sum + BigInt(row.weight), 0n);
-  const ranked = inputs
-    .map((row, index) => {
-      const numerator = absolute * BigInt(row.weight);
-      return {
-        ...row,
-        index,
-        base: numerator / totalWeight,
-        remainder: numerator % totalWeight,
-      };
-    })
-    .sort(
-      (a, b) =>
-        (a.remainder === b.remainder
-          ? 0
-          : a.remainder > b.remainder
-            ? -1
-            : 1) || a.key.localeCompare(b.key),
-    );
-  const assigned = ranked.reduce((sum, row) => sum + row.base, 0n);
-  const extra = Number(absolute - assigned);
-  const centsByIndex = new Map(
-    ranked.map((row, rank) => [
-      row.index,
-      sign * (row.base + (rank < extra ? 1n : 0n)),
-    ]),
-  );
-  return inputs.map((row, index) => ({
-    target: row.target,
-    cents: centsByIndex.get(index) ?? 0n,
-  }));
-}
 
 export type ExpenseAllocationRow = {
   expenseId: ExpenseId;
   expenseShortcode: string;
   projectId: ProjectId | null;
   role: "beneficiary" | "funder";
-  personId: PersonId | null;
-  fundingSourceId: FundingSourceId | null;
-  household: boolean;
+  ledgerPartyId: LedgerPartyId | null;
+  /** Public and stable, including `~unattributed` for a null party. */
+  allocationKey: string;
   implicitUnattributed: boolean;
   cents: bigint;
 };
@@ -126,17 +70,18 @@ export async function loadExpenseAllocations(
         e."projectId",
         e.cost_cents,
         r.role,
-        a."personId",
-        a."fundingSourceId",
-        a.household,
+        a."ledgerPartyId",
+        coalesce(p.shortcode, '~unattributed') AS "allocationKey",
         a.weight::bigint AS weight,
         false AS "implicitUnattributed"
       FROM scoped_expense e
       CROSS JOIN roles r
-      JOIN "ExpenseAttribution" a
+      JOIN ${expenseAttribution} a
         ON a."expenseId" = e."expenseId"
        AND a.role = r.role
        AND a."deletedAt" IS NULL
+      LEFT JOIN ${ledgerParty} p
+        ON p.id = a."ledgerPartyId" AND p."deletedAt" IS NULL
 
       UNION ALL
 
@@ -146,16 +91,15 @@ export async function loadExpenseAllocations(
         e."projectId",
         e.cost_cents,
         r.role,
-        NULL::uuid AS "personId",
-        NULL::uuid AS "fundingSourceId",
-        false AS household,
+        NULL::uuid AS "ledgerPartyId",
+        '~unattributed'::text AS "allocationKey",
         1::bigint AS weight,
         true AS "implicitUnattributed"
       FROM scoped_expense e
       CROSS JOIN roles r
       WHERE NOT EXISTS (
         SELECT 1
-        FROM "ExpenseAttribution" a
+        FROM ${expenseAttribution} a
         WHERE a."expenseId" = e."expenseId"
           AND a.role = r.role
           AND a."deletedAt" IS NULL
@@ -183,9 +127,7 @@ export async function loadExpenseAllocations(
         row_number() OVER (
           PARTITION BY "expenseId", role
           ORDER BY fractional_remainder DESC,
-            CASE WHEN household THEN 'household'
-              ELSE coalesce("personId"::text, "fundingSourceId"::text, '~')
-            END ASC
+            "allocationKey" ASC
         ) AS remainder_rank
       FROM based
     )
@@ -194,9 +136,8 @@ export async function loadExpenseAllocations(
       "expenseShortcode",
       "projectId",
       role,
-      "personId",
-      "fundingSourceId",
-      household,
+      "ledgerPartyId",
+      "allocationKey",
       "implicitUnattributed",
       (
         CASE WHEN cost_cents < 0 THEN -1 ELSE 1 END
@@ -206,10 +147,7 @@ export async function loadExpenseAllocations(
           END)
       )::text AS cents
     FROM ranked
-    ORDER BY "expenseId", role,
-      CASE WHEN household THEN 'household'
-        ELSE coalesce("personId"::text, "fundingSourceId"::text, '~')
-      END
+    ORDER BY "expenseId", role, "allocationKey"
   `);
   return result.rows.map((row) => ({ ...row, cents: BigInt(row.cents) }));
 }

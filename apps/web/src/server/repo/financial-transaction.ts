@@ -20,6 +20,7 @@ import {
   type FinancialTransactionShortcode,
   unsafeFinancialAccountShortcode,
   unsafeFinancialTransactionShortcode,
+  unsafeLedgerTransferShortcode,
   unsafePurchaseShortcode,
 } from "@cubby/schemas/identifiers";
 import {
@@ -34,7 +35,6 @@ import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   financialTransaction,
   financialTransactionAllocation,
-  fundingTransferEvidence,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
@@ -68,8 +68,6 @@ import {
   resolveAllocationInputs,
   writeAllocationSet,
 } from "~/server/repo/financial-transaction-allocations";
-import { assertFinancialTransactionFundingEvidenceValid } from "~/server/repo/household-contribution/integrity";
-import { lockFundingEvidenceMutationTargets } from "~/server/repo/household-contribution/locks";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
@@ -116,6 +114,9 @@ const columns = {
   id: financialTransaction.id,
   shortcode: financialTransaction.shortcode,
   accountId: financialTransaction.accountId,
+  ledgerTransferShortcode: sql<
+    string | null
+  >`(SELECT shortcode FROM "LedgerTransfer" WHERE id = "FinancialTransaction"."ledgerTransferId")`,
   kind: financialTransaction.kind,
   status: financialTransaction.status,
   amount: financialTransaction.amount,
@@ -142,9 +143,10 @@ const columns = {
 
 type FinancialTransactionRow = Omit<
   typeof financialTransaction.$inferSelect,
-  "deletedAt"
+  "ledgerTransferId" | "deletedAt"
 > & {
   accountShortcode: string;
+  ledgerTransferShortcode: string | null;
   allocations: { purchaseId: string; amount: number }[];
   accountName: string | null;
 };
@@ -176,6 +178,9 @@ const toOut = (row: FinancialTransactionRow): FinancialTransactionOut => {
     sourceRefs: row.sourceRefs,
     notes: row.notes,
     allocations,
+    ledgerTransferId: row.ledgerTransferShortcode
+      ? unsafeLedgerTransferShortcode(row.ledgerTransferShortcode)
+      : null,
     accountName: row.accountName,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -480,7 +485,6 @@ export async function createFinancialTransaction(
         actor,
       });
     }
-    await assertFinancialTransactionFundingEvidenceValid(tx, created.id);
     return created.id;
   });
   return { output: await getFinancialTransactionByID(db, id), entityId: id };
@@ -497,7 +501,6 @@ export async function updateFinancialTransaction(
     // Funding-evidence advisory keys precede both entity rows and account keys.
     // Evidence creation uses the same order, so it cannot validate an old row
     // while this mutation commits a new amount/status/account.
-    await lockFundingEvidenceMutationTargets(tx, { transactionIds: [id] });
     // LOCK ORDER: Purchase rows first, THEN the transaction row. Every purchase
     // operation locks purchases first (lockAndValidateForDelete, the merge) and
     // reaches FinancialTransaction afterwards via syncSettlementMirror, so
@@ -547,13 +550,22 @@ export async function updateFinancialTransaction(
         "FINANCIAL_TRANSACTION_NOT_FOUND",
         `Financial transaction not found: ${shortcode}`,
       );
+    if (
+      before.ledgerTransferId !== null &&
+      (data.accountId !== undefined ||
+        data.status !== undefined ||
+        data.amount !== undefined ||
+        data.allocations !== undefined ||
+        data.purchaseId !== undefined)
+    )
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "A financial transaction linked as ledger-transfer evidence cannot be changed in a way that could invalidate that evidence. Update the transfer evidence set first.",
+      );
     const accountId =
       data.accountId === undefined
         ? before.accountId
         : await resolveOrThrow(tx, "financialAccount", data.accountId);
-    await lockFundingEvidenceMutationTargets(tx, {
-      accountIds: uniq([before.accountId, accountId]),
-    });
     const sourceRefs = data.sourceRefs ?? before.sourceRefs;
     await lockFinancialEvidenceKeys(
       tx,
@@ -690,7 +702,6 @@ export async function updateFinancialTransaction(
       before: allocationsBefore,
       actor,
     });
-    await assertFinancialTransactionFundingEvidenceValid(tx, id);
 
     // Data-quality targets come from applyAllocationChanges, which knows the
     // union of before/after purchases; nothing else here can name one.
@@ -705,16 +716,17 @@ export const FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY = {
     description:
       "Deleting a settlement transaction soft-deletes the purchase allocations that decompose it. Those Purchases keep their expenses and their identity; they simply lose this piece of settlement evidence.",
   },
-  "FundingTransferEvidence.transactionId": {
-    code: "soft-delete-transfer-evidence",
-    effect: "soft-delete",
-    description:
-      "Deleting a statement transaction removes only its evidence leg; the logical household transfer remains and reports an evidence gap.",
-  },
 } as const satisfies IncomingEdgePolicy<
   "financialTransaction",
   OperationDisposition
 >;
+
+const TRANSFER_EVIDENCE_DELETE_BLOCKER = {
+  code: "block-transfer-evidence",
+  effect: "block",
+  description:
+    "A transfer retains each linked transaction until its complete evidence set is replaced or the transfer is deleted.",
+} as const satisfies OperationDisposition;
 
 export async function deleteFinancialTransactions(
   db: Database,
@@ -725,13 +737,28 @@ export async function deleteFinancialTransactions(
     await resolveAllOrThrow(db, "financialTransaction", shortcodes),
   );
   return await withTransaction(db, async (tx) => {
-    await lockFundingEvidenceMutationTargets(tx, { transactionIds: ids });
     await lockAndValidateForDelete(
       tx,
       financialTransaction,
       ids,
       "FinancialTransaction",
     );
+    const [linkedEvidence] = await tx
+      .select({ id: financialTransaction.id })
+      .from(financialTransaction)
+      .where(
+        and(
+          inArray(financialTransaction.id, ids),
+          sql`${financialTransaction.ledgerTransferId} IS NOT NULL`,
+          notDeleted(financialTransaction),
+        ),
+      )
+      .limit(1);
+    if (linkedEvidence)
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "A financial transaction that evidences a ledger transfer cannot be deleted until the transfer releases it.",
+      );
     // Quality targets come from the allocations as well as the mirror: a
     // transaction split across two purchases has a NULL mirror, so reading only
     // that column would leave both purchases' data-quality exceptions stale.
@@ -754,11 +781,6 @@ export async function deleteFinancialTransactions(
           parentColumns: [financialTransactionAllocation.transactionId],
           auditKey: "cascadedSettlementAllocations",
         },
-        {
-          table: fundingTransferEvidence,
-          parentColumns: [fundingTransferEvidence.transactionId],
-          auditKey: "cascadedFundingTransferEvidence",
-        },
       ],
     });
     await touchDataQualityTargets(tx, {
@@ -768,10 +790,7 @@ export async function deleteFinancialTransactions(
   });
 }
 
-/**
- * Nothing refuses a transaction delete — its allocations are parts of it, not
- * dependents with a claim on it — but they do go with it, so the preview says so.
- */
+/** Preview both the transfer-evidence refusal and owned allocation cleanup. */
 export async function previewDeleteFinancialTransactions(
   db: Database | DrizzleTransaction,
   ids: FinancialTransactionId[],
@@ -782,7 +801,22 @@ export async function previewDeleteFinancialTransactions(
 }> {
   const dbClient = unwrapDb(db);
   return {
-    blockers: [],
+    blockers: present([
+      impact({
+        disposition: TRANSFER_EVIDENCE_DELETE_BLOCKER,
+        edgeKey: "FinancialTransaction.ledgerTransferId",
+        label: "ledger transfer evidence retained",
+        byTargetId: await countByTarget(
+          dbClient,
+          financialTransaction,
+          financialTransaction.id,
+          ids,
+          {
+            extraWhere: sql`${financialTransaction.ledgerTransferId} IS NOT NULL`,
+          },
+        ),
+      }),
+    ]),
     changes: present([
       impact({
         disposition:
@@ -795,20 +829,6 @@ export async function previewDeleteFinancialTransactions(
           dbClient,
           financialTransactionAllocation,
           financialTransactionAllocation.transactionId,
-          ids,
-        ),
-      }),
-      impact({
-        disposition:
-          FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY[
-            "FundingTransferEvidence.transactionId"
-          ],
-        edgeKey: "FundingTransferEvidence.transactionId",
-        label: "household funding-transfer evidence removed",
-        byTargetId: await countByTarget(
-          dbClient,
-          fundingTransferEvidence,
-          fundingTransferEvidence.transactionId,
           ids,
         ),
       }),

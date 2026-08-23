@@ -28,7 +28,7 @@ describe("resolveCostFilter", () => {
   });
 
   it("resolves credits to costMax: 0, not a positive floor", () => {
-    // Credits are real in this ledger (refunds, family contributions), so the
+    // Credits are real in this ledger (refunds and price adjustments), so the
     // credits bucket is an UPPER bound at zero. A `costMin` here would silently
     // invert the filter.
     expect(resolveCostFilter("credits")).toEqual({ costMax: 0 });

@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { useTRPC } from "~/integrations/trpc/react";
+import { isBrowserRoutedEntity } from "./entities";
 import {
   fdcIdFromParam,
   getEntityContract,
@@ -18,6 +19,9 @@ export { fdcIdFromParam, usdaRouteId };
  * through `useQuery(opts as ...)`.
  */
 export function entityQueryOptions(api: Api, entity: Entity, id: string) {
+  if (!isBrowserRoutedEntity(entity)) {
+    throw new Error(`Entity ${entity} has no browser route`);
+  }
   const detailQuery = getEntityContract(entity).query.detail;
   if (!detailQuery) {
     throw new Error(`Entity ${entity} has no detail query contract`);

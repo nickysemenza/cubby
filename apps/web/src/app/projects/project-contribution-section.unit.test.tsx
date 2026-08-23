@@ -1,45 +1,74 @@
 import { projectContributionOut } from "@cubby/schemas/household-contribution";
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import type { ReactNode } from "react";
+import { describe, expect, it, vi } from "vitest";
 import { ProjectContributionReport } from "./project-contribution-section";
+
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({
+    children,
+    className,
+    params,
+    to,
+  }: {
+    children: ReactNode;
+    className?: string;
+    params: { shortcode: string };
+    to: string;
+  }) => (
+    <a className={className} href={to.replace("$shortcode", params.shortcode)}>
+      {children}
+    </a>
+  ),
+}));
 
 const contribution = projectContributionOut.parse({
   projectId: "PRJ-ABCD",
   wholeGroupCost: 125,
   householdInitialExposure: 90,
   guestInitialFunding: 25,
+  unattributedConsumption: 5,
   unattributedInitialFunding: 10,
   householdConsumed: 75,
-  people: [
+  parties: [
     {
-      personId: "PER-ABCD",
-      name: "Household person",
-      kind: "household",
+      party: {
+        id: "LPY-H234",
+        name: "Household",
+        kind: "household",
+      },
       consumed: 100,
     },
-    { personId: "PER-EFGH", name: "Guest", kind: "guest", consumed: 25 },
+    {
+      party: { id: "LPY-G234", name: "Guest", kind: "guest" },
+      consumed: 25,
+    },
   ],
   funders: [
     {
       party: {
-        key: "joint",
-        kind: "shared_fund",
-        name: "Joint checking",
-        household: true,
+        id: "LPY-H234",
+        kind: "household",
+        name: "Household",
       },
       initiallyFunded: 90,
     },
     {
       party: {
-        key: "PER-EFGH",
-        kind: "person",
+        id: "LPY-G234",
+        kind: "guest",
         name: "Guest",
-        household: false,
       },
       initiallyFunded: 25,
     },
   ],
-  gaps: ["partial_funders: EXP-1111"],
+  gaps: [
+    {
+      code: "partial_funders",
+      amount: 10,
+      targetIds: ["EXP-2222"],
+    },
+  ],
 });
 
 describe("ProjectContributionReport", () => {
@@ -48,16 +77,22 @@ describe("ProjectContributionReport", () => {
 
     expect(screen.getByText("Whole-group cost")).toBeVisible();
     expect(screen.getByText("$125.00")).toBeVisible();
+    expect(screen.getByText("Unattributed consumption")).toBeVisible();
+    expect(screen.getByText("$5.00")).toBeVisible();
     expect(
       screen.getByRole("heading", { name: "Beneficiaries" }),
     ).toBeVisible();
     expect(
       screen.getByRole("heading", { name: "Original funders" }),
     ).toBeVisible();
-    expect(screen.getByText("Household")).toBeVisible();
-    expect(screen.getByText("Shared")).toBeVisible();
-    expect(screen.getAllByText("Guest")).toHaveLength(3);
-    expect(screen.getByText("Joint checking")).toBeVisible();
-    expect(screen.getByText("partial_funders: EXP-1111")).toBeVisible();
+    expect(screen.getAllByText("Household")).toHaveLength(4);
+    expect(screen.getAllByText("Guest")).toHaveLength(4);
+    expect(
+      screen.getByText(/Some original funding is unattributed/),
+    ).toBeVisible();
+    expect(screen.getByRole("link", { name: "EXP-2222" })).toHaveAttribute(
+      "href",
+      "/expenses/EXP-2222",
+    );
   });
 });

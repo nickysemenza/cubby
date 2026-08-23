@@ -8,7 +8,11 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "~/components/ui/collapsible";
-import { entities } from "~/entities/entities";
+import {
+  entities,
+  entityPluralLabel,
+  isBrowserRoutedEntity,
+} from "~/entities/entities";
 import { getEntityFilters } from "~/entities/filter-manifest";
 import {
   encodeFilters,
@@ -42,7 +46,8 @@ export const problemListLocation = (
 ): ProblemListLocation | undefined => {
   if (
     query.source.kind !== "entity" ||
-    query.continuation.kind !== "entity-list"
+    query.continuation.kind !== "entity-list" ||
+    !isBrowserRoutedEntity(query.source.entity)
   ) {
     return undefined;
   }
@@ -119,7 +124,7 @@ const assemblyChips = (query: ProblemQuery): string[] => {
   if (source.kind === "derived") {
     const inputs = source.inputs ?? [];
     const inputChips = inputs.flatMap((input) => [
-      entities[input.entity].pluralLabel,
+      entityPluralLabel(input.entity),
       ...input.filters.flatMap((filter) => {
         const values = Array.isArray(filter.value)
           ? filter.value
@@ -133,7 +138,7 @@ const assemblyChips = (query: ProblemQuery): string[] => {
   }
 
   return [
-    entities[source.entity].pluralLabel,
+    entityPluralLabel(source.entity),
     ...source.filters.flatMap((filter) => {
       const values = Array.isArray(filter.value)
         ? filter.value
@@ -208,7 +213,7 @@ export function ProblemAssembly({
           >
             <ListFilter className="mr-1 size-3" />
             Open {onlyLocation.count}{" "}
-            {entities[onlyLocation.location.entity].pluralLabel.toLowerCase()}
+            {entityPluralLabel(onlyLocation.location.entity).toLowerCase()}
           </a>
         )}
         {queries.some((query) => query.freshness.kind === "projection") &&
@@ -234,9 +239,8 @@ export function ProblemAssembly({
               )}
               {query.source.kind === "entity" ? (
                 <span>
-                  Matches{" "}
-                  {entities[query.source.entity].pluralLabel.toLowerCase()} with
-                  the filters above
+                  Matches {entityPluralLabel(query.source.entity).toLowerCase()}{" "}
+                  with the filters above
                   {query.source.sort?.length
                     ? `, sorted by ${query.source.sort.map((sort) => `${sort.desc ? "descending" : "ascending"} ${humanize(sort.id)}`).join(", ")}`
                     : ""}
@@ -267,9 +271,7 @@ export function ProblemAssembly({
                     >
                       <ListFilter className="mr-1 size-3" />
                       Open {entry.count}{" "}
-                      {entities[
-                        entry.location.entity
-                      ].pluralLabel.toLowerCase()}
+                      {entityPluralLabel(entry.location.entity).toLowerCase()}
                     </a>
                   ))}
             </div>

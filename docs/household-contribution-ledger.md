@@ -1,94 +1,57 @@
 # Household contribution ledger
 
-Status: accepted architecture for the household contribution implementation.
+Status: accepted architecture for the consolidated household ledger.
 
-## Decision
+## Domain boundary
 
-Cubby separates four facts that are easy to double-count when collapsed:
+`Expense.cost` remains the only source of spend. Expense Attribution records consumption and initial funding against that existing cost. A Ledger Transfer records one later movement between Ledger Parties. Financial transactions and external records are evidence; they do not multiply transfers or become spend.
 
-1. `Expense.cost` is the actual cost and remains the only source of spend.
-2. Expense attribution weights say who consumed the cost and which economic
-   source initially covered it.
-3. `FundingTransfer` records one later movement between economic sources.
-4. `FinancialTransaction` rows are statement evidence only. Two mirrored rows
-   may evidence one transfer, but never become two contributions.
-
-Funding transfers are addressed outside Cubby by immutable `FTR-` shortcodes;
-their database UUIDs never cross tRPC or MCP. They are intentionally not generic
-Entities: the reviewed `HouseholdLedgerImport` envelope is the append-only
-activity record for every applied batch, including the normalized changes,
-actor, source, fingerprint, and result.
-
-Beneficiary and funder weights contain no money. Reports convert each Expense
-to integer cents and use deterministic largest-remainder allocation. A
-beneficiary may be a Person, the household as a whole, or an explicit unknown
-residual. The household target is intentional attribution—not a synthetic
-Person and not an incomplete-data warning. An absent role remains implicitly
-fully unattributed.
-
-## Shared accounts
-
-A Person and a FinancialAccount are not the same concept. Account-person rows
-describe access or ownership, while `FinancialAccount.fundingSourceId` says
-which economic source the account currently evidences.
-
-Joint checking and a shared card paid from it can map to one shared household
-fund. Paying that card from that checking is a same-source internal transfer:
-both statement facts remain visible and its contribution effect is zero.
-Individual credit appears only when an explicit transfer or attributed deposit
-moves value from a person's source into the shared fund.
-
-Project kind never implies attribution. Each Expense is explicit: it may
-benefit one Person, several weighted People, the household collectively, or an
-unknown residual, independently of who funded it. A current shared renovation
-Expense paid by shared checking or a shared card can use the household as
-beneficiary and the shared fund as original funder, while a historic solo
-renovation can name its individual beneficiary and personal funding source. A
-trip may likewise benefit either household member, both members at any weights,
-or guests. An import may batch-apply one reviewed pattern to many Expenses, but
-never infers that pattern from `Project.kind`. Existing Projects and Expenses
-are never reclassified automatically. Statement transactions remain account
-evidence, not Person assignments, and paying a shared card from shared checking
-remains a zero-effect internal account move.
-
-## Reporting boundaries
-
-Project reports show whole-group cost, household initial exposure, guest
-initial funding, beneficiary consumption, original funding sources, and gaps.
-They never apply later transfers because transfers are household-global.
-
-The household report is cumulative as of a date:
+The household report is cumulative as of a date. It includes only Expenses and
+Ledger Transfers dated through that day, and excludes planned future Expenses:
 
 ```text
 net contribution = initially outlaid + transfers sent - transfers received
 position         = net contribution - consumed
 ```
 
-Internal transfers cancel. Positions remain advisory while attribution or
-evidence gaps exist and are never labeled as debts.
+Internal account moves have zero contribution effect. Positions are advisory when attribution or evidence is incomplete and are never labeled as debts.
+
+Evidence completeness is intentionally present-day rather than historical: a
+transfer shown in an as-of position is checked against the Financial Transaction
+evidence currently attached to it, including evidence attached after that date.
+This keeps historical positions date-bounded while surfacing whether their
+supporting evidence is complete now.
+
+## Standard mutations
+
+LedgerParty and LedgerTransfer are standard entities with the ordinary create, update, delete, list, and get surface. A LedgerParty's kind is `member`, `guest`, or `household`; it has no standalone browser route. A LedgerTransfer moves value between parties and likewise has no standalone route.
+
+Expense mutations carry the nested Expense Attribution and Source Claim fields needed to record consumption, initial funding, external source identity, source amount, and an explicit decision about any discrepancy. FinancialAccount mutations carry a nullable Ledger Party field identifying which party the account evidences. These fields preserve the surrounding Expense or FinancialAccount as the routed record.
+
+A Source Claim accepts a provider row ID only as write-time key material. The server hashes it with the provider namespace into the versioned source key, then discards it; reads expose the key and normalized evidence, never the raw provider identifier or payload.
+
+## Supported flows
+
+- Attribute an Expense to one or more parties, the household collectively, or null when attribution is unknown.
+- Claim an Expense's external source amount while retaining an explicit decision when amounts differ.
+- Create, update, or delete a Ledger Transfer between parties, including reimbursements and same-party internal moves.
+- List and get Ledger Parties and Ledger Transfers for review without presenting them as standalone navigation destinations.
+- Pair statement evidence to a transfer without treating mirrored rows as separate transfers.
+- Review household-global positions and project-local initial funding, consumption, and gaps.
+
+Project kind never implies attribution. Project reports include both recorded and
+planned future Expenses because they describe the project’s full intended cost;
+the household/as-of ledger excludes those future Expenses. Project reports do
+not apply later transfers: transfers are household-global.
+
+## Presentation and unknowns
+
+Client labels are derived from party kind. Route-capable entity references are links; Ledger Parties and Ledger Transfers intentionally render as text because they have no standalone browse route. Household attribution is intentional. Missing, partial, unavailable, and null-attributed values remain explicit gaps rather than inferred parties or automatic matches.
 
 ## Import boundary
 
-The MCP client reads Splitwise, Gmail, and Monarch. Cubby accepts normalized
-changes only:
+Clients orchestrate provider reads from Splitwise, Gmail, Monarch, or local exports and send normalized reviewed changes through the standard mutations. Cubby receives no provider credentials, raw emails, file paths, or whole exports. There is no global transaction across providers or independent records. Each record can be resumed from durable Source Claims and evidence, so a partial import does not require a global rollback or batch receipt.
 
-```text
-preview_household_ledger_changes
-  -> reviewed fingerprint and per-change status
+## Production cutover
 
-apply_household_ledger_changes
-  -> atomic, idempotent commit or structured refusal
-```
-
-The server never receives provider credentials, local file paths, raw emails,
-or whole CSV exports. Claiming an Expense source records the external amount,
-the Expense amount at claim time, and either an exact match or a noted explicit
-decision to retain the existing Expense amount. Ambiguous transfer pairs remain
-unpaired. Neither discrepancy is automatically spread or paired.
-
-Expected domain failures (missing records, evidence conflicts, stale previews,
-or an idempotency-key mismatch) are returned in the structured refusal branch,
-not as a transport failure. A newly created shared fund is deliberately a
-two-batch bootstrap: first create and review the fund, then preview and apply a
-later batch that maps accounts, attribution, or transfers to it. This keeps a
-preview's fingerprint tied to one already-existing funding topology.
+The superseded branch-only ledger tables were verified to contain zero production rows before consolidation. The cutover therefore deliberately drops those empty structures and creates the canonical Ledger Party, Ledger Transfer, Expense Attribution, and Ledger Source Claim structures; it is not a data migration or rename. Immediately before applying the schema, the exclusive migration owner must repeat the zero-row checks and abort if any row exists. Ambiguous rename prompts are never accepted. Afterward, the owner reads back every table, column, foreign key, check, and partial index, then creates the singleton generic Household party through the standard repository path.

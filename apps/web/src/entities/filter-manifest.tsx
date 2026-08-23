@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { financialAccountFilterFields } from "@cubby/schemas/financial-account";
 import { financialTransactionFilterFields } from "@cubby/schemas/financial-transaction";
 import {
@@ -17,7 +18,6 @@ import { ingredientFilterFields } from "@cubby/schemas/ingredient";
 import { inventoryFilterFields } from "@cubby/schemas/inventory";
 import { locationFilterFields } from "@cubby/schemas/location";
 import { mealFilterFields } from "@cubby/schemas/meal";
-import { personFilterFields } from "@cubby/schemas/person";
 import { productFilterFields } from "@cubby/schemas/product";
 import {
   expenseFilterFields,
@@ -415,7 +415,6 @@ export const entityFilterFieldMaps: Partial<
   location: locationFilterFields,
   image: imageFilterFields,
   meal: mealFilterFields,
-  person: personFilterFields,
   project: projectFilterFields,
   wish: wishFilterFields,
 };
@@ -482,34 +481,12 @@ const ENTITIES_WITHOUT_FILTERS = {
   "usda-food": "remote USDA search, not a local list",
 } as const satisfies Partial<Record<Entity, string>>;
 
-type FilteredEntity = Exclude<Entity, keyof typeof ENTITIES_WITHOUT_FILTERS>;
+type FilteredEntity = Exclude<
+  BrowserRoutedEntity,
+  keyof typeof ENTITIES_WITHOUT_FILTERS
+>;
 
 const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
-  person: [
-    {
-      columnId: "name",
-      field: "search",
-      urlKey: "q",
-      kind: "text",
-      placeholder: "Search people...",
-    },
-    {
-      columnId: "kind",
-      kind: "multiselect",
-      placeholder: "Filter kind...",
-      options: [
-        { value: "household", label: "Household" },
-        { value: "guest", label: "Guest" },
-      ],
-    },
-    {
-      columnId: "linkedUser",
-      field: "linkedUserPresenceFilter",
-      kind: "presence",
-      placeholder: "Filter linked user...",
-      options: presenceFilterOptions("linked user"),
-    },
-  ],
   financialAccount: [
     {
       columnId: "name",

@@ -45,12 +45,13 @@ import { FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY } from "~/server/repo/financia
 import { IMAGE_HARD_DELETE } from "~/server/repo/image";
 import { INGREDIENT_DELETE_EDGE_POLICY } from "~/server/repo/ingredient/deletion";
 import { INGREDIENT_MERGE_EDGE_POLICY } from "~/server/repo/ingredient/merge";
+import {
+  LEDGER_PARTY_DELETE_EDGE_POLICY,
+  LEDGER_PARTY_MERGE_EDGE_POLICY,
+} from "~/server/repo/ledger-party";
+import { LEDGER_TRANSFER_DELETE_EDGE_POLICY } from "~/server/repo/ledger-transfer";
 import { LOCATION_DELETE_EDGE_POLICY } from "~/server/repo/location/crud";
 import { MEAL_DELETE_EDGE_POLICY } from "~/server/repo/meal/crud";
-import {
-  PERSON_DELETE_EDGE_POLICY,
-  PERSON_MERGE_EDGE_POLICY,
-} from "~/server/repo/person";
 import { PRODUCT_DELETE_EDGE_POLICY } from "~/server/repo/product/edge-roles";
 import { PRODUCT_MERGE_EDGE_POLICY } from "~/server/repo/product/merge";
 import { PROJECT_DELETE_EDGE_POLICY } from "~/server/repo/project/crud";
@@ -84,8 +85,21 @@ export interface EntityLifecycleRegistryEntry {
 }
 
 export const ENTITY_LIFECYCLE_REGISTRY: EntityLifecycleRegistryEntry[] = [
-  { entity: "person", operation: "delete", policy: PERSON_DELETE_EDGE_POLICY },
-  { entity: "person", operation: "merge", policy: PERSON_MERGE_EDGE_POLICY },
+  {
+    entity: "ledgerParty",
+    operation: "delete",
+    policy: LEDGER_PARTY_DELETE_EDGE_POLICY,
+  },
+  {
+    entity: "ledgerParty",
+    operation: "merge",
+    policy: LEDGER_PARTY_MERGE_EDGE_POLICY,
+  },
+  {
+    entity: "ledgerTransfer",
+    operation: "delete",
+    policy: LEDGER_TRANSFER_DELETE_EDGE_POLICY,
+  },
   {
     entity: "product",
     operation: "delete",

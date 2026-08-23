@@ -25,7 +25,7 @@ import {
 import { Eyebrow } from "~/components/ui/eyebrow";
 import { StatTile } from "~/components/ui/stat-tile";
 import { ViewSwitcher } from "~/components/ui/view-switcher";
-import { entities } from "~/entities/entities";
+import { entities, isBrowserRoutedEntity } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import {
   type EntityGraphLens,
@@ -176,6 +176,12 @@ function HairlineRow({ children }: { children: ReactNode }) {
   );
 }
 
+const entityLabel = (entity: Entity) => {
+  if (isBrowserRoutedEntity(entity)) return entities[entity].label;
+  const words = entity.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/-/g, " ");
+  return words[0]?.toUpperCase() + words.slice(1);
+};
+
 /** One step of an FK path (column plus direction) — a dense inline token. */
 function PathStepChip({ children }: { children: ReactNode }) {
   return (
@@ -192,8 +198,9 @@ function EntityChip({
   entity: Entity;
   onClick: () => void;
 }) {
-  const def = entities[entity];
-  const Icon = def.lucideIcon;
+  const def = isBrowserRoutedEntity(entity) ? entities[entity] : null;
+  const Icon = def?.lucideIcon ?? Waypoints;
+  const label = entityLabel(entity);
   return (
     <Badge
       variant="outline"
@@ -201,7 +208,7 @@ function EntityChip({
       render={<button type="button" onClick={onClick} />}
     >
       <Icon className="size-3" />
-      {def.label}
+      {label}
     </Badge>
   );
 }
@@ -361,13 +368,14 @@ function EntityDetailPanel({
     );
   }
 
-  const def = entities[entity];
-  const Icon = def.lucideIcon;
+  const def = isBrowserRoutedEntity(entity) ? entities[entity] : null;
+  const Icon = def?.lucideIcon ?? Waypoints;
+  const label = entityLabel(entity);
 
   return (
     <Card className="h-[420px] overflow-y-auto">
       <CardHeader>
-        <CardTitle icon={Icon}>{def.label}</CardTitle>
+        <CardTitle icon={Icon}>{label}</CardTitle>
         <CardDescription>
           {row.dbTable ? (
             <span className="font-mono">{row.dbTable}</span>

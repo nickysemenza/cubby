@@ -20,15 +20,15 @@ import { expense } from "~/server/db/schema";
 /**
  * actual/committed/credits/net/count — the shared aggregate columns every
  * expense-based breakdown selects. `actual` = live spend already made,
- * `committed` = future/planned spend, `credits` = refunds & contributions
+ * `committed` = future/planned spend, `credits` = refunds and price adjustments
  * (stored as negative `cost`, flipped positive here). `net` is the
  * expense's blended total — algebraically `actual + committed - credits`,
  * which telescopes to a plain `sum(cost)` (cost = 0 and NULL cost both
  * contribute nothing to any of the three either). Computed directly as one
  * sum rather than three-way arithmetic to keep the query plan cheap.
  *
- * Negative expenses are real in this app (refunds, and large negative
- * family contributions) — the `filter (where cost > 0 …)` / credits split
+ * Negative expenses are real in this app (refunds and large negative price
+ * adjustments) — the `filter (where cost > 0 …)` / credits split
  * is load-bearing. Do not "simplify" the sign handling.
  *
  * A fresh object is returned per call since these `sql` fragments get spread

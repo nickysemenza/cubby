@@ -8,6 +8,11 @@ import {
   mcpToolName,
 } from "@cubby/schemas/entity-manifest";
 import { FINANCIAL_STATEMENT_IMPORT_MAX_ROWS } from "@cubby/schemas/financial-transaction";
+import {
+  financialTransferPairSuggestionsOut,
+  householdContributionLedgerOut,
+  projectContributionOut,
+} from "@cubby/schemas/household-contribution";
 import { unsafeExpenseShortcode } from "@cubby/schemas/identifiers";
 import { problemsCountSchema } from "@cubby/schemas/mcp";
 import { mcpProductCreateInput } from "@cubby/schemas/product";
@@ -51,6 +56,7 @@ import {
 import {
   getRegisteredTool,
   installMockStrippedListToolsHandler,
+  READ_ONLY_CLOSED,
   registerEntityCreateTool,
   registerEntityCrudToolset,
   registerMcpTool,
@@ -786,6 +792,92 @@ describe("slimUsdaFood", () => {
 describe("createMcpServer registration", () => {
   it("registers all tools without throwing", () => {
     expect(() => createMcpServer()).not.toThrow();
+  });
+
+  it("exposes household contribution reads without granting write access", async () => {
+    const ledger = vi.fn().mockResolvedValue(
+      householdContributionLedgerOut.parse({
+        asOf: "2026-08-23",
+        parties: [],
+        unattributed: { consumption: 0, funding: 0 },
+        checks: {
+          expenseTotal: 0,
+          consumedTotal: 0,
+          fundedTotal: 0,
+          transferNet: 0,
+          positionNet: 0,
+        },
+        gaps: [],
+        gapsTruncated: false,
+      }),
+    );
+    const project = vi.fn().mockResolvedValue(
+      projectContributionOut.parse({
+        projectId: "PRJ-TEST",
+        wholeGroupCost: 0,
+        householdInitialExposure: 0,
+        guestInitialFunding: 0,
+        unattributedConsumption: 0,
+        unattributedInitialFunding: 0,
+        householdConsumed: 0,
+        parties: [],
+        funders: [],
+        gaps: [],
+      }),
+    );
+    const suggestTransferPairs = vi.fn().mockResolvedValue(
+      financialTransferPairSuggestionsOut.parse({
+        status: "no_match",
+        suggestions: [],
+      }),
+    );
+    const caller = {
+      householdContribution: { ledger, project, suggestTransferPairs },
+    };
+
+    const householdResult = await callTool(
+      createMcpServer(),
+      "get_household_contribution_ledger",
+      {},
+      caller,
+    );
+    const projectResult = await callTool(
+      createMcpServer(),
+      "get_project_contribution",
+      { projectId: "PRJ-TEST" },
+      caller,
+    );
+    const suggestionsResult = await callTool(
+      createMcpServer(),
+      "suggest_financial_transfer_pairs",
+      { transactionIds: ["FTX-TEST"] },
+      caller,
+    );
+
+    expect(householdResult.isError).not.toBe(true);
+    expect(projectResult.isError).not.toBe(true);
+    expect(suggestionsResult.isError).not.toBe(true);
+
+    expect(ledger).toHaveBeenCalledWith({});
+    expect(project).toHaveBeenCalledWith({
+      projectId: "PRJ-TEST",
+      includeSubprojects: true,
+    });
+    expect(suggestTransferPairs).toHaveBeenCalledWith({
+      transactionIds: ["FTX-TEST"],
+      maxDateDistanceDays: 5,
+      maxCandidatesPerTransaction: 3,
+    });
+    const server = createMcpServer();
+    for (const name of [
+      "get_household_contribution_ledger",
+      "get_project_contribution",
+      "suggest_financial_transfer_pairs",
+    ]) {
+      expect(getRegisteredTool(server, name)?.annotations).toEqual(
+        READ_ONLY_CLOSED,
+      );
+    }
   });
 
   it("advertises the deployed Git commit as its development build id", async () => {
@@ -1611,6 +1703,9 @@ describe("listMcpToolCatalog", () => {
       "externalId",
       "expectedExternalId",
       "externalAccountId",
+      // Provider-owned row identity, such as a statement transaction ID. It is
+      // deliberately opaque and never a Cubby shortcode.
+      "providerId",
     ]);
     const DECLARED_UUID_EXCEPTIONS = new Set([
       "create_recipe.sections[].id",

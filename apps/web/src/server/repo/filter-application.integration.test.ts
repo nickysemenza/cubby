@@ -13,10 +13,17 @@ import {
 import { imageFilterFields } from "@cubby/schemas/image";
 import { ingredientFilterFields } from "@cubby/schemas/ingredient";
 import { inventoryFilterFields } from "@cubby/schemas/inventory";
+import {
+  ledgerPartyCreateInput,
+  ledgerPartyFilterFields,
+} from "@cubby/schemas/ledger-party";
+import {
+  ledgerTransferCreateInput,
+  ledgerTransferFilterFields,
+} from "@cubby/schemas/ledger-transfer";
 import { locationFilterFields } from "@cubby/schemas/location";
 import { mealCreateInput, mealFilterFields } from "@cubby/schemas/meal";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { personFilterFields } from "@cubby/schemas/person";
 import { productFilterFields } from "@cubby/schemas/product";
 import {
   expenseCreateInput,
@@ -52,9 +59,10 @@ import {
 import { createUploadedImageRecord, imageList } from "./image";
 import { createIngredient, ingredientList } from "./ingredient";
 import { inventoryentryList } from "./inventory";
+import { createLedgerParty, listLedgerParties } from "./ledger-party";
+import { createLedgerTransfer, listLedgerTransfers } from "./ledger-transfer";
 import { createLocation, locationList } from "./location";
 import { createMeal, mealList } from "./meal";
-import { createPerson, listPeople } from "./person";
 import { productList } from "./product";
 import { createProject, projectList } from "./project";
 import { createPurchase, purchaseList } from "./purchase";
@@ -370,6 +378,36 @@ const seedWorld = async (ctx: {
   const accountCode = accounts[0];
   if (!accountCode) throw new Error("seed: financial account not created");
 
+  const ledgerParties = [];
+  for (const name of ["Guard ledger member", "Guard ledger guest"]) {
+    const { output } = await createLedgerParty(
+      db,
+      ledgerPartyCreateInput.parse({
+        name,
+        kind: name.endsWith("member") ? "member" : "guest",
+      }),
+      actor,
+    );
+    ledgerParties.push(output);
+  }
+  const [firstLedgerParty, secondLedgerParty] = ledgerParties;
+  if (!firstLedgerParty || !secondLedgerParty)
+    throw new Error("seed: ledger parties not created");
+  const ledgerTransfers = [];
+  for (const date of ["2024-06-01", "2024-06-02"]) {
+    const { output } = await createLedgerTransfer(
+      db,
+      ledgerTransferCreateInput.parse({
+        fromPartyId: firstLedgerParty.id,
+        toPartyId: secondLedgerParty.id,
+        amount: 10,
+        date,
+      }),
+      actor,
+    );
+    ledgerTransfers.push(output);
+  }
+
   const transactions = [];
   for (const [index, date] of ["2024-04-01", "2024-04-02"].entries()) {
     const { output } = await createFinancialTransaction(
@@ -395,16 +433,6 @@ const seedWorld = async (ctx: {
       actor,
     );
     wishes.push(output);
-  }
-
-  const people = [];
-  for (const name of ["guard person alpha", "guard person beta"]) {
-    const { output } = await createPerson(
-      db,
-      { name, kind: "household", notes: null },
-      actor,
-    );
-    people.push(output);
   }
 
   for (const filename of ["guard-alpha.jpg", "guard-beta.jpg"]) {
@@ -442,8 +470,9 @@ const seedWorld = async (ctx: {
       ingredient: first(ingredients, "ingredient").id,
       inventory: first(inventories, "inventory").id,
       location: first(locations, "location").id,
+      ledgerParty: firstLedgerParty.id,
+      ledgerTransfer: first(ledgerTransfers, "ledger transfer").id,
       meal: first(meals, "meal").id,
-      person: first(people, "person").id,
       product: first(products, "product").id,
       project: first(projects, "project").id,
       purchase: first(purchases, "purchase"),
@@ -508,8 +537,15 @@ const GUARDS = {
     list: listFor(inventoryentryList),
   },
   location: { fields: locationFilterFields, list: listFor(locationList) },
+  ledgerParty: {
+    fields: ledgerPartyFilterFields,
+    list: listFor(listLedgerParties),
+  },
+  ledgerTransfer: {
+    fields: ledgerTransferFilterFields,
+    list: listFor(listLedgerTransfers),
+  },
   meal: { fields: mealFilterFields, list: listFor(mealList) },
-  person: { fields: personFilterFields, list: listFor(listPeople) },
   product: { fields: productFilterFields, list: listFor(productList) },
   project: { fields: projectFilterFields, list: listFor(projectList) },
   purchase: { fields: purchaseFilterFields, list: listFor(purchaseList) },

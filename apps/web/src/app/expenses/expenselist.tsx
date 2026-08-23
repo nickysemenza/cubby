@@ -120,7 +120,7 @@ export function ExpenseList() {
   // expenses table on the project detail page — so the two can't drift. This
   // page passes its own mobile projections + filter configs and keeps default
   // cents (no `decimals`); it does pass `signedTone` — this list is the one
-  // built to hold refunds and family contributions (negative expenses are
+  // built to hold refunds and price adjustments (negative expenses are
   // real, not errors), so a credit must render distinctly from a charge, same
   // as product/vendor/purchase/project already do. The project + name + url
   // columns stay inline here.

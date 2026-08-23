@@ -20,13 +20,12 @@ import { registerAuditTools } from "./tools/audit.tools";
 import { registerDataQualityTools } from "./tools/data-quality.tools";
 import { registerEntityIntegrityTools } from "./tools/entity-integrity.tools";
 import { registerFinancialTools } from "./tools/financial.tools";
-import { registerHouseholdContributionTools } from "./tools/household-contribution.tools";
 import { registerImageTools } from "./tools/image.tools";
 import { registerIngredientTools } from "./tools/ingredient.tools";
 import { registerInventoryTools } from "./tools/inventory.tools";
+import { registerLedgerTools } from "./tools/ledger.tools";
 import { registerLocationTools } from "./tools/location.tools";
 import { registerMealTools } from "./tools/meal.tools";
-import { registerPersonTools } from "./tools/person.tools";
 import { registerProblemsTools } from "./tools/problems.tools";
 import { registerProductTools } from "./tools/product.tools";
 import { registerProjectTools } from "./tools/project.tools";
@@ -61,6 +60,8 @@ Entity ids are public shortcodes, not uuids. Every top-level entity id you recei
 - PUR- purchase (one vendor order/receipt event — see the ledger note below; it is not an expense or a card charge)
 - FAC- financial account
 - FTX- financial transaction
+- LPY- ledger party (member, guest, or the household)
+- LTR- ledger transfer
 - CKB- cookbook
 - WSH- wishlist item
 - IMG- image
@@ -83,6 +84,8 @@ Workflow tips:
 - Purchase completeness: start with list_purchases dataStatus="needs_data" and optionally dataGap. Purchase and Product outputs carry computed dataQuality; linked Product gaps and exceptions are returned separately on Purchases with targetType/targetId so mutations can address the owning entity without changing the Purchase's own status. Use set_data_exception only for source-backed negative knowledge, and require documentKind when attach_file targets a Purchase.
 - Safe attachment: provide a deterministic idempotencyKey for retries and the freshly read expectedImageCount for Product gallery writes. A mismatch is a precondition failure and associates nothing. MIME/signature conflicts are rejected; verify_product_images backfills and checks stored Product files without making ordinary get_product reads contact R2.
 - Financial settlement is separate evidence: FinancialTransaction amounts never enter spend. A Purchase is the vendor order/receipt; it may have several FTX- rows (installments, refunds, split tender). Use list_financial_transactions with purchaseId to inspect those rows.
+- Household contribution accounting uses standard entities: Expense beneficiaries/funders describe who consumed and initially funded existing cost; LedgerTransfer records later movement between Ledger Parties and owns its complete normalized-claim and evidence-transaction sets. Route-less LPY-/LTR- records are available through their standard list/get/create/update/delete tools, not global search or browser pages.
+- Ledger imports are client-orchestrated per record through those standard mutations. Retry with the same normalized Source Claim; use a reviewed disambiguator for legitimate indistinguishable duplicates. There is intentionally no custom batch importer or cross-record transaction.
 - Monarch CSVs stay client-side: parse them in the MCP client, then use preview_financial_statement_import in batches before creating approved ready_to_create rows with create_financial_transactions. The preview is read-only and its stable source references make unchanged rows from later full-history exports no-ops.
 - All list tools return { meta, items } paginated objects. Generic create_/update_ plural batch tools return ordered per-item successes or failures plus requested/succeeded/failed counts.
 - structuredContent is canonical; text content mirrors the same JSON.`;
@@ -101,8 +104,7 @@ function registerTools(server: McpServer) {
   registerLocationTools(server);
   registerSearchTools(server);
   registerIngredientTools(server);
-  registerPersonTools(server);
-  registerHouseholdContributionTools(server);
+  registerLedgerTools(server);
   registerRecipeTools(server);
   registerProblemsTools(server);
   registerProjectTools(server);

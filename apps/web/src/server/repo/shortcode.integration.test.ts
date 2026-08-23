@@ -424,7 +424,7 @@ describe("schema-level invariants", () => {
     `);
     expect(found).toHaveLength(PUBLIC_SHORTCODE_PREFIXES.length);
     expect(found.map((row) => row.indexname)).toContain(
-      "FundingTransfer_shortcode_unique",
+      "LedgerTransfer_shortcode_unique",
     );
     for (const row of found) {
       expect(row.partial, `${row.indexname} must not be partial`).toBe(false);

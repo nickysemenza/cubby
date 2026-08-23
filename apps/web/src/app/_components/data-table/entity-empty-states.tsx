@@ -1,4 +1,4 @@
-import type { Entity } from "@cubby/schemas/entity";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { Link } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
 import { createActionFor } from "~/app/_components/actions/action-items";
@@ -21,13 +21,7 @@ interface EntityEmptyConfig {
   actionLabel?: string;
 }
 
-const entityEmptyConfig: Record<Entity, EntityEmptyConfig> = {
-  person: {
-    title: "No people yet",
-    description:
-      "Add household members and guests to attribute shared spending and account access.",
-    actionLabel: "Add Person",
-  },
+const entityEmptyConfig: Record<BrowserRoutedEntity, EntityEmptyConfig> = {
   recipe: {
     title: "Your recipe book awaits",
     description:
@@ -128,7 +122,7 @@ const entityEmptyConfig: Record<Entity, EntityEmptyConfig> = {
 };
 
 interface EntityEmptyStateProps {
-  entity: Entity;
+  entity: BrowserRoutedEntity;
   isFiltered?: boolean;
   onClearFilters?: () => void;
 }

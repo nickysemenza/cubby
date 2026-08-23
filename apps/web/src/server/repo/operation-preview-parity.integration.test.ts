@@ -11,8 +11,9 @@ import {
   unsafeFinancialTransactionId,
   unsafeImageId,
   unsafeImageShortcode,
+  unsafeLedgerPartyId,
+  unsafeLedgerTransferId,
   unsafeLocationId,
-  unsafePersonId,
   unsafeProductId,
   unsafeProjectId,
   unsafePurchaseId,
@@ -78,10 +79,14 @@ import {
   deleteInventoryEntries,
   previewDeleteInventoryEntries,
 } from "./inventory/crud";
+import {
+  previewDeleteLedgerParties,
+  previewMergeLedgerParties,
+} from "./ledger-party";
+import { previewDeleteLedgerTransfers } from "./ledger-transfer";
 import { deleteLocations } from "./location";
 import { deleteMeals } from "./meal";
 import { previewDeleteMeals } from "./meal/crud";
-import { previewDeletePeople, previewMergePeople } from "./person";
 import { deleteProducts } from "./product";
 import { previewDeleteProducts } from "./product/crud";
 import {
@@ -1887,8 +1892,6 @@ describe("operation preview / mutation parity", () => {
       ingredient: "covered-by-parity",
       cookbook: "covered-by-parity",
       meal: "covered-by-parity",
-      person: (db) =>
-        previewDeletePeople(db, [unsafePersonId(NONEXISTENT_UUID)]),
       task: "covered-by-parity",
       purchase: "covered-by-parity",
       expense: "covered-by-parity",
@@ -1908,6 +1911,12 @@ describe("operation preview / mutation parity", () => {
       financialTransaction: (db) =>
         previewDeleteFinancialTransactions(db, [
           unsafeFinancialTransactionId(NONEXISTENT_UUID),
+        ]),
+      ledgerParty: (db) =>
+        previewDeleteLedgerParties(db, [unsafeLedgerPartyId(NONEXISTENT_UUID)]),
+      ledgerTransfer: (db) =>
+        previewDeleteLedgerTransfers(db, [
+          unsafeLedgerTransferId(NONEXISTENT_UUID),
         ]),
     };
 
@@ -1932,10 +1941,10 @@ describe("operation preview / mutation parity", () => {
           mergeIds: [unsafeProductId(NONEXISTENT_UUID)],
           keepId: unsafeProductId(NONEXISTENT_UUID_2),
         }),
-      person: (db) =>
-        previewMergePeople(db, {
-          mergeIds: [unsafePersonId(NONEXISTENT_UUID)],
-          keepId: unsafePersonId(NONEXISTENT_UUID_2),
+      ledgerParty: (db) =>
+        previewMergeLedgerParties(db, {
+          mergeIds: [unsafeLedgerPartyId(NONEXISTENT_UUID)],
+          keepId: unsafeLedgerPartyId(NONEXISTENT_UUID_2),
         }),
     };
 

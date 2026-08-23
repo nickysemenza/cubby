@@ -5,7 +5,6 @@ import { ingredientSortableFields } from "@cubby/schemas/ingredient";
 import { inventorySortableFields } from "@cubby/schemas/inventory";
 import { locationSortableFields } from "@cubby/schemas/location";
 import { mealSortableFields } from "@cubby/schemas/meal";
-import { personSortableFields } from "@cubby/schemas/person";
 import { productSortableFields } from "@cubby/schemas/product";
 import {
   expenseSortableFields,
@@ -30,7 +29,6 @@ describe("sortableFields", () => {
       location: locationSortableFields,
       inventory: inventorySortableFields,
       meal: mealSortableFields,
-      person: personSortableFields,
       project: projectSortableFields,
       task: taskSortableFields,
       vendor: vendorSortableFields,

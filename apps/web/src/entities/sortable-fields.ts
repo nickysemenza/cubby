@@ -1,4 +1,8 @@
 import type { Entity } from "@cubby/schemas/entity";
+import {
+  type BrowserRoutedEntity,
+  browserRoutedEntities,
+} from "@cubby/schemas/entity-manifest";
 
 /**
  * Dependency-free client projection of the server sort contracts. Route
@@ -65,7 +69,6 @@ export const sortableFields = {
     "verifiedAt",
   ],
   meal: ["date", "name", "mealType", "createdAt", "updatedAt"],
-  person: ["name", "kind", "createdAt", "updatedAt"],
   project: [
     "name",
     "status",
@@ -147,7 +150,9 @@ export const sortableFields = {
     "linkedProducts",
   ],
   image: ["createdAt", "updatedAt", "filename", "size", "status"],
-} as const satisfies Record<Entity, readonly string[]>;
+} as const satisfies Record<BrowserRoutedEntity, readonly string[]>;
 
 export const getSortableFields = (entity: Entity): readonly string[] =>
-  sortableFields[entity];
+  (browserRoutedEntities as readonly string[]).includes(entity)
+    ? sortableFields[entity as BrowserRoutedEntity]
+    : [];

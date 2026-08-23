@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { QueryKey } from "@tanstack/react-query";
 import { entities } from "~/entities/entities";
 import { getSortableFields } from "~/entities/sortable-fields";
@@ -11,7 +12,6 @@ import {
   inventoryMutationInvalidateKeys,
   locationMutationInvalidateKeys,
   mealMutationInvalidateKeys,
-  personMutationInvalidateKeys,
   productMutationInvalidateKeys,
   projectMutationInvalidateKeys,
   purchaseMutationInvalidateKeys,
@@ -47,8 +47,8 @@ interface EntityQueryContract {
 }
 
 interface EntityContract {
-  entity: Entity;
-  route: (typeof entities)[Entity]["routes"];
+  entity: BrowserRoutedEntity;
+  route: (typeof entities)[BrowserRoutedEntity]["routes"];
   defaultSort: string;
   sortableFields: readonly string[];
   canPreview: boolean;
@@ -75,7 +75,6 @@ export const standardEntities = [
   "location",
   "recipe",
   "meal",
-  "person",
   "project",
   "task",
   "expense",
@@ -143,7 +142,6 @@ const entityContracts = {
   location: standardContract("location", locationMutationInvalidateKeys),
   recipe: standardContract("recipe", recipeAllMutationInvalidateKeys),
   meal: standardContract("meal", mealMutationInvalidateKeys),
-  person: standardContract("person", personMutationInvalidateKeys),
   image: {
     entity: "image",
     route: entities.image.routes,
@@ -208,8 +206,11 @@ const entityContracts = {
     financialTransactionMutationInvalidateKeys,
   ),
   wish: standardContract("wish", wishMutationInvalidateKeys),
-} satisfies Record<Entity, EntityContract>;
+} satisfies Record<BrowserRoutedEntity, EntityContract>;
 
 export function getEntityContract(entity: Entity): EntityContract {
-  return entityContracts[entity];
+  if (!(entity in entityContracts)) {
+    throw new Error(`Entity ${entity} has no browser contract`);
+  }
+  return entityContracts[entity as BrowserRoutedEntity];
 }

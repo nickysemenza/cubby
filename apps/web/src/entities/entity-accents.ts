@@ -1,4 +1,4 @@
-import type { Entity } from "@cubby/schemas/entity";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 
 /**
  * Per-entity accent inks for decorative chrome: the page-hero accent bar,
@@ -11,7 +11,7 @@ import type { Entity } from "@cubby/schemas/entity";
  * the neutral ink-slate. Status semantics (`--positive`/`--warning`) are the
  * only colored exceptions, kept for the entities whose accent encodes state.
  */
-export const ENTITY_ACCENTS: Record<Entity, string> = {
+export const ENTITY_ACCENTS: Record<BrowserRoutedEntity, string> = {
   inventory: "var(--primary)",
   product: "var(--primary)",
   recipe: "var(--primary)",
@@ -23,7 +23,6 @@ export const ENTITY_ACCENTS: Record<Entity, string> = {
   // spent on overdue/planned expenses inside the same planning calendar, so a
   // meal wearing it read as a warning about nothing.
   meal: "var(--slate)",
-  person: "var(--slate)",
   project: "var(--plum)",
   task: "var(--slate)",
   // A quiet roster, not a live money surface — same neutral as location/task.

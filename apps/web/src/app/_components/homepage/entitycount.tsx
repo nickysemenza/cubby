@@ -1,4 +1,3 @@
-import type { Entity } from "@cubby/schemas/entity";
 import {
   type CountableEntity,
   countableEntities,
@@ -58,7 +57,7 @@ export default function EntityCount() {
   // it was by an order of magnitude the largest number on the page. Dropping it
   // also restores the exact 8/4/2-column rows the grid below is built for: the
   // 17th cell had been stranding a full row of dead space at every breakpoint.
-  const cards: { entity: Entity; count: number | undefined }[] =
+  const cards: { entity: CountableEntity; count: number | undefined }[] =
     countableEntities.map((entity: CountableEntity) => ({
       entity,
       count: counts?.[entity],

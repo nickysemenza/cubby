@@ -457,7 +457,10 @@ const ENTITIES_WITHOUT_RELATED_VIEWS = {
   ingredient: "usages are rendered in full on the detail page, not previewed",
   // Browsed as a gallery, and its one relationship (its recipes) is the page.
   cookbook: "the cookbook page IS its recipe list",
-  person: "person money relationships are rendered in the household ledger",
+  ledgerParty:
+    "ledger party relationships are rendered in the household ledger",
+  ledgerTransfer:
+    "ledger transfer relationships are rendered in the household ledger",
   // The one entity with no shortcode, no detail route, and no list table.
   image: "no detail route or list table to hang a preview column on",
   // Not a local entity — remote USDA search results, no local edges.

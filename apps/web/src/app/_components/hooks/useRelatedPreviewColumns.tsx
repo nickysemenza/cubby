@@ -1,4 +1,4 @@
-import type { Entity } from "@cubby/schemas/entity";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type {
   RelatedPreviewGroup,
   RelatedViewDefinition,
@@ -33,7 +33,7 @@ export function useRelatedPreviewColumnDefs<TData extends { id: string }>({
   supportsServerSorting,
   relatedStateRef,
 }: {
-  entity: Entity;
+  entity: BrowserRoutedEntity;
   relatedViews: readonly RelatedViewDefinition[];
   columnHelper: ColumnHelper<TData>;
   filterOptions?: RuntimeFilterOptions;
@@ -85,7 +85,7 @@ export function useRelatedPreviewData({
   visibleRelationKeys,
   relatedStateRef,
 }: {
-  entity: Entity;
+  entity: BrowserRoutedEntity;
   sourceIds: string[];
   visibleRelationKeys: RelatedViewKey[];
   relatedStateRef: RefObject<RelatedPreviewState>;
@@ -132,7 +132,7 @@ export function useRelatedPreviewColumns<TData extends { id: string }>({
   filterOptions,
   supportsServerSorting,
 }: {
-  entity: Entity;
+  entity: BrowserRoutedEntity;
   sourceIds: string[];
   visibleRelationKeys: RelatedViewKey[];
   relatedViews: readonly RelatedViewDefinition[];

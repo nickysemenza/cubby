@@ -3,6 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import type { LucideIcon } from "lucide-react";
 import { AlertTriangle, UsersRound, WalletCards } from "lucide-react";
 import { useId } from "react";
+import {
+  ContributionGapTargets,
+  contributionGapLabels,
+  ledgerPartyLabel,
+} from "~/app/_components/household-contribution-format";
 import { Row, Stack } from "~/components/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
@@ -44,6 +49,9 @@ export function ProjectContributionReport({
         <StatTile label="Guest initial funding">
           {formatCurrency(data.guestInitialFunding)}
         </StatTile>
+        <StatTile label="Unattributed consumption">
+          {formatCurrency(data.unattributedConsumption)}
+        </StatTile>
         <StatTile label="Unattributed funding">
           {formatCurrency(data.unattributedInitialFunding)}
         </StatTile>
@@ -57,7 +65,7 @@ export function ProjectContributionReport({
           >
             Beneficiaries
           </h3>
-          {data.people.length === 0 && data.householdConsumed === 0 ? (
+          {data.parties.length === 0 ? (
             <CompactEmpty
               icon={UsersRound}
               title="No beneficiaries attributed"
@@ -72,35 +80,22 @@ export function ProjectContributionReport({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.householdConsumed !== 0 && (
-                  <TableRow>
+                {data.parties.map(({ party, consumed }) => (
+                  <TableRow key={party.id}>
                     <TableCell>
                       <Row align="center" gap="xs">
-                        <span>Household</span>
-                        <Badge variant="slate">Shared</Badge>
-                      </Row>
-                    </TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">
-                      {formatCurrency(data.householdConsumed)}
-                    </TableCell>
-                  </TableRow>
-                )}
-                {data.people.map((person) => (
-                  <TableRow key={person.personId}>
-                    <TableCell>
-                      <Row align="center" gap="xs">
-                        <span>{person.name}</span>
+                        <span>{party.name}</span>
                         <Badge
                           variant={
-                            person.kind === "household" ? "slate" : "outline"
+                            party.kind === "household" ? "slate" : "outline"
                           }
                         >
-                          {person.kind}
+                          {ledgerPartyLabel(party.kind)}
                         </Badge>
                       </Row>
                     </TableCell>
                     <TableCell className="text-right font-mono tabular-nums">
-                      {formatCurrency(person.consumed)}
+                      {formatCurrency(consumed)}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -134,18 +129,18 @@ export function ProjectContributionReport({
               </TableHeader>
               <TableBody>
                 {data.funders.map((funder) => (
-                  <TableRow key={`${funder.party.kind}:${funder.party.key}`}>
+                  <TableRow key={funder.party.id}>
                     <TableCell>
                       <Row align="center" gap="xs">
                         <span>{funder.party.name}</span>
                         <Badge
-                          variant={funder.party.household ? "slate" : "outline"}
+                          variant={
+                            funder.party.kind === "household"
+                              ? "slate"
+                              : "outline"
+                          }
                         >
-                          {funder.party.kind === "shared_fund"
-                            ? "Shared fund"
-                            : funder.party.household
-                              ? "Household"
-                              : "Guest"}
+                          {ledgerPartyLabel(funder.party.kind)}
                         </Badge>
                       </Row>
                     </TableCell>
@@ -164,7 +159,15 @@ export function ProjectContributionReport({
         <Alert>
           <AlertTriangle className="size-3.5 text-warning-ink" />
           <AlertTitle>Contribution attribution is incomplete</AlertTitle>
-          <AlertDescription>{data.gaps.join(" · ")}</AlertDescription>
+          <AlertDescription>
+            {data.gaps.map((gap, index) => (
+              <span key={`${gap.code}:${gap.targetIds.join(":")}`}>
+                {index > 0 && " · "}
+                {contributionGapLabels[gap.code]}:{" "}
+                <ContributionGapTargets targetIds={gap.targetIds} />
+              </span>
+            ))}
+          </AlertDescription>
         </Alert>
       )}
     </Stack>

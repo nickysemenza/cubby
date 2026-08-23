@@ -1,17 +1,40 @@
 import type { HouseholdContributionLedgerOut } from "@cubby/schemas/household-contribution";
+import {
+  unsafeExpenseShortcode,
+  unsafeLedgerPartyShortcode,
+  unsafeLedgerTransferShortcode,
+} from "@cubby/schemas/identifiers";
 import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import type { ReactNode } from "react";
+import { describe, expect, it, vi } from "vitest";
 import { HouseholdContributionLedgerReport } from "./household-contribution-ledger";
+
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({
+    children,
+    className,
+    params,
+    to,
+  }: {
+    children: ReactNode;
+    className?: string;
+    params: { shortcode: string };
+    to: string;
+  }) => (
+    <a className={className} href={to.replace("$shortcode", params.shortcode)}>
+      {children}
+    </a>
+  ),
+}));
 
 const ledger = {
   asOf: "2026-08-23",
   parties: [
     {
       party: {
-        key: "household",
+        id: unsafeLedgerPartyShortcode("LPY-H234"),
         kind: "household",
         name: "Household",
-        household: true,
       },
       consumed: 60,
       initiallyOutlaid: 0,
@@ -21,7 +44,11 @@ const ledger = {
       position: -60,
     },
     {
-      party: { key: "guest", kind: "person", name: "Guest", household: false },
+      party: {
+        id: unsafeLedgerPartyShortcode("LPY-G234"),
+        kind: "guest",
+        name: "Guest",
+      },
       consumed: 40,
       initiallyOutlaid: 0,
       transfersSent: 40,
@@ -31,10 +58,9 @@ const ledger = {
     },
     {
       party: {
-        key: "shared-fund",
-        kind: "shared_fund",
-        name: "Shared fund",
-        household: true,
+        id: unsafeLedgerPartyShortcode("LPY-M234"),
+        kind: "member",
+        name: "Member",
       },
       consumed: 0,
       initiallyOutlaid: 100,
@@ -54,9 +80,14 @@ const ledger = {
   },
   gaps: [
     {
+      code: "partial_funders",
+      amount: 10,
+      targetIds: [unsafeExpenseShortcode("EXP-TEST")],
+    },
+    {
       code: "transfer_evidence_one_sided",
       amount: 40,
-      targetIds: ["transfer-123"],
+      targetIds: [unsafeLedgerTransferShortcode("LTR-TEST")],
     },
   ],
   gapsTruncated: false,
@@ -74,17 +105,24 @@ describe("HouseholdContributionLedgerReport", () => {
       screen.getByRole("heading", { name: "Household contribution by party" }),
     ).toBeVisible();
 
-    const partyRow = screen.getByText("Household").closest("tr");
+    const partyRow = screen.getAllByText("Household")[0]!.closest("tr");
     expect(partyRow).not.toBeNull();
     expect(
       within(partyRow as HTMLTableRowElement).getByText("$60.00"),
     ).toBeVisible();
-    expect(screen.getByText("Shared beneficiary")).toBeVisible();
+    expect(
+      within(partyRow as HTMLTableRowElement).getAllByText("Household"),
+    ).toHaveLength(2);
 
     expect(screen.getByText("Transfer net")).toBeVisible();
     expect(
       screen.getByText("Transfer has evidence from only one side"),
     ).toBeVisible();
-    expect(screen.getByText("transfer-123")).toBeVisible();
+    expect(screen.getByText("LTR-TEST")).toBeVisible();
+    expect(screen.queryByRole("link", { name: "LTR-TEST" })).toBeNull();
+    expect(screen.getByRole("link", { name: "EXP-TEST" })).toHaveAttribute(
+      "href",
+      "/expenses/EXP-TEST",
+    );
   });
 });

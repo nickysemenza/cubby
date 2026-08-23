@@ -15,7 +15,7 @@ import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { NativeSelect } from "~/components/ui/native-select";
-import { entities } from "~/entities/entities";
+import { entityPluralLabel } from "~/entities/entities";
 import { pageTitle } from "~/lib/page-title";
 
 const searchSchema = z.object({
@@ -81,7 +81,7 @@ function EntityTypeFilter({
         <option value="">All entities</option>
         {auditableEntities.map((entity) => (
           <option key={entity} value={entity}>
-            {entities[entity].pluralLabel}
+            {entityPluralLabel(entity)}
           </option>
         ))}
       </NativeSelect>

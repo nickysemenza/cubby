@@ -7,9 +7,10 @@ import type {
   ImageShortcode,
   IngredientShortcode,
   InventoryShortcode,
+  LedgerPartyShortcode,
+  LedgerTransferShortcode,
   LocationShortcode,
   MealShortcode,
-  PersonShortcode,
   ProductShortcode,
   ProjectShortcode,
   PurchaseShortcode,
@@ -18,7 +19,6 @@ import type {
   VendorShortcode,
   WishShortcode,
 } from "@cubby/shared";
-import { NON_ENTITY_SHORTCODE_PREFIX, SHORTCODE_CHARS } from "@cubby/shared";
 import { z } from "zod";
 import type { ShortcodeEntity } from "./entity-manifest";
 
@@ -66,24 +66,6 @@ function brandedId<Name extends string>(name: Name) {
   return [schema, makeUnsafeId<z.infer<typeof schema>>()] as const;
 }
 
-/**
- * Public shortcode for a durable record that is intentionally not a generic
- * Entity. Funding transfers have their own MCP lifecycle, but raw UUIDs still
- * never cross that boundary.
- */
-const fundingTransferShortcodePattern = new RegExp(
-  `^${NON_ENTITY_SHORTCODE_PREFIX.fundingTransfer}[${SHORTCODE_CHARS}]{4}$`,
-);
-export const fundingTransferShortcode = z
-  .string()
-  .trim()
-  .toUpperCase()
-  .regex(fundingTransferShortcodePattern)
-  .brand("FundingTransferShortcode");
-export const unsafeFundingTransferShortcode =
-  makeUnsafeId<z.infer<typeof fundingTransferShortcode>>();
-export type FundingTransferShortcode = z.infer<typeof fundingTransferShortcode>;
-
 // Branded ID types for type safety.
 // `_userId` isn't uuid-shaped (session ids aren't uuids) and isn't exported as a
 // schema, so it stays hand-written rather than going through `brandedId`.
@@ -115,21 +97,17 @@ export type CookbookId = z.infer<typeof cookbookId>;
 export const [mealId, unsafeMealId] = brandedId("MealId");
 export type MealId = z.infer<typeof mealId>;
 
-export const [personId, unsafePersonId] = brandedId("PersonId");
-export type PersonId = z.infer<typeof personId>;
-
-export const [fundingSourceId, unsafeFundingSourceId] =
-  brandedId("FundingSourceId");
-export type FundingSourceId = z.infer<typeof fundingSourceId>;
+export const [ledgerPartyId, unsafeLedgerPartyId] = brandedId("LedgerPartyId");
+export type LedgerPartyId = z.infer<typeof ledgerPartyId>;
 
 export const [expenseAttributionId, unsafeExpenseAttributionId] = brandedId(
   "ExpenseAttributionId",
 );
 export type ExpenseAttributionId = z.infer<typeof expenseAttributionId>;
 
-export const [fundingTransferId, unsafeFundingTransferId] =
-  brandedId("FundingTransferId");
-export type FundingTransferId = z.infer<typeof fundingTransferId>;
+export const [ledgerTransferId, unsafeLedgerTransferId] =
+  brandedId("LedgerTransferId");
+export type LedgerTransferId = z.infer<typeof ledgerTransferId>;
 
 export const [mealRecipeId, unsafeMealRecipeId] = brandedId("MealRecipeId");
 export type MealRecipeId = z.infer<typeof mealRecipeId>;
@@ -175,9 +153,10 @@ export {
   imageShortcode,
   ingredientShortcode,
   inventoryShortcode,
+  ledgerPartyShortcode,
+  ledgerTransferShortcode,
   locationShortcode,
   mealShortcode,
-  personShortcode,
   productShortcode,
   projectShortcode,
   purchaseShortcode,
@@ -195,9 +174,10 @@ export type {
   ImageShortcode,
   IngredientShortcode,
   InventoryShortcode,
+  LedgerPartyShortcode,
+  LedgerTransferShortcode,
   LocationShortcode,
   MealShortcode,
-  PersonShortcode,
   ProductShortcode,
   ProjectShortcode,
   PurchaseShortcode,
@@ -216,9 +196,11 @@ export const unsafeFinancialTransactionShortcode =
 export const unsafeImageShortcode = makeUnsafeId<ImageShortcode>();
 export const unsafeIngredientShortcode = makeUnsafeId<IngredientShortcode>();
 export const unsafeInventoryShortcode = makeUnsafeId<InventoryShortcode>();
+export const unsafeLedgerPartyShortcode = makeUnsafeId<LedgerPartyShortcode>();
+export const unsafeLedgerTransferShortcode =
+  makeUnsafeId<LedgerTransferShortcode>();
 export const unsafeLocationShortcode = makeUnsafeId<LocationShortcode>();
 export const unsafeMealShortcode = makeUnsafeId<MealShortcode>();
-export const unsafePersonShortcode = makeUnsafeId<PersonShortcode>();
 export const unsafeProductShortcode = makeUnsafeId<ProductShortcode>();
 export const unsafeProjectShortcode = makeUnsafeId<ProjectShortcode>();
 export const unsafePurchaseShortcode = makeUnsafeId<PurchaseShortcode>();
@@ -251,9 +233,10 @@ interface EntityIdBrand {
   financialTransaction: FinancialTransactionId;
   ingredient: IngredientId;
   inventory: InventoryId;
+  ledgerParty: LedgerPartyId;
+  ledgerTransfer: LedgerTransferId;
   location: LocationId;
   meal: MealId;
-  person: PersonId;
   product: ProductId;
   project: ProjectId;
   purchase: PurchaseId;
@@ -301,9 +284,10 @@ export const unsafeIdForEntity: {
   financialTransaction: unsafeFinancialTransactionId,
   ingredient: unsafeIngredientId,
   inventory: unsafeInventoryId,
+  ledgerParty: unsafeLedgerPartyId,
+  ledgerTransfer: unsafeLedgerTransferId,
   location: unsafeLocationId,
   meal: unsafeMealId,
-  person: unsafePersonId,
   product: unsafeProductId,
   project: unsafeProjectId,
   purchase: unsafePurchaseId,
@@ -337,9 +321,10 @@ export const ENTITY_NOT_FOUND_REASON = {
   image: "IMAGE_NOT_FOUND",
   ingredient: "INGREDIENT_NOT_FOUND",
   inventory: "INVENTORY_NOT_FOUND",
+  ledgerParty: "LEDGER_PARTY_NOT_FOUND",
+  ledgerTransfer: "LEDGER_TRANSFER_NOT_FOUND",
   location: "LOCATION_NOT_FOUND",
   meal: "MEAL_NOT_FOUND",
-  person: "PERSON_NOT_FOUND",
   product: "PRODUCT_NOT_FOUND",
   project: "PROJECT_NOT_FOUND",
   purchase: "PURCHASE_NOT_FOUND",
@@ -369,9 +354,10 @@ export const ENTITY_LABEL = {
   image: "Image",
   ingredient: "Ingredient",
   inventory: "Inventory entry",
+  ledgerParty: "Ledger party",
+  ledgerTransfer: "Ledger transfer",
   location: "Location",
   meal: "Meal",
-  person: "Person",
   product: "Product",
   project: "Project",
   purchase: "Purchase",

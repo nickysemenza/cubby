@@ -3,12 +3,6 @@ import type { EntityEditResultFor } from "./intent-types";
 import type { EditableEntity, EntityEditRequest } from "./types";
 
 type SupportedEntityEditDialogRequest =
-  | (Omit<EntityEditRequest<"person", "create", "capture">, "surface"> & {
-      intent: "capture";
-    })
-  | (Omit<EntityEditRequest<"person", "update", "full">, "surface"> & {
-      intent: "full";
-    })
   | (Omit<EntityEditRequest<"meal", "create", "capture">, "surface"> & {
       intent: "capture";
     })

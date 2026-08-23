@@ -7,7 +7,6 @@ import {
   unsafeInventoryId,
   unsafeLocationId,
   unsafeMealId,
-  unsafePersonId,
   unsafeProductId,
   unsafeProjectId,
   unsafePurchaseId,
@@ -30,7 +29,6 @@ import {
   location,
   meal,
   mealRecipe,
-  person,
   product,
   project,
   purchase,
@@ -507,29 +505,6 @@ async function getTaskEmbeddingTexts(
   }));
 }
 
-async function getPersonEmbeddingTexts(
-  db: Database,
-  options: EmbeddingLoadOptions = {},
-): Promise<SearchableEntityText[]> {
-  const rows = await getDb(db).query.person.findMany({
-    where: and(
-      notDeleted(person),
-      options.ids?.length
-        ? inArray(person.id, options.ids.map(unsafePersonId))
-        : undefined,
-    ),
-    columns: { id: true, name: true, kind: true, notes: true },
-    ...(options.limit == null ? {} : { limit: options.limit }),
-  });
-  return rows.map((row) => ({
-    entityType: "person",
-    entityId: row.id,
-    embeddingText: ["person", row.name, row.kind, row.notes]
-      .filter((value): value is string => Boolean(value))
-      .join(" "),
-  }));
-}
-
 async function getExpenseEmbeddingTexts(
   db: Database,
   options: EmbeddingLoadOptions = {},
@@ -743,7 +718,6 @@ const embeddingTextLoaders = {
   location: getLocationEmbeddingTexts,
   inventory: getInventoryEmbeddingTexts,
   meal: getMealEmbeddingTexts,
-  person: getPersonEmbeddingTexts,
   project: getProjectEmbeddingTexts,
   task: getTaskEmbeddingTexts,
   vendor: getVendorEmbeddingTexts,

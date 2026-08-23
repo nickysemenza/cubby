@@ -2,7 +2,12 @@ import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { Link } from "@tanstack/react-router";
 import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
-import { entities, entityDetailParams } from "~/entities/entities";
+import {
+  entities,
+  entityDetailParams,
+  entityLabel,
+  isBrowserRoutedEntity,
+} from "~/entities/entities";
 import { cn } from "~/lib/utils";
 
 /**
@@ -32,24 +37,9 @@ export function AuditEntityLink({
   displayImage: ImageUrlSummary | null;
   compact?: boolean;
 }) {
-  const entity = entities[entityType];
-
-  return (
-    <Link
-      to={entity.routes.detail}
-      params={entityDetailParams(entityId)}
-      className={cn(
-        // Fills the ledger row's height on phones so the tap target is the row
-        // the reader is aiming at, not the 20px of text inside it.
-        "inline-flex min-h-11 min-w-0 items-center gap-2 font-medium text-primary text-sm hover:underline sm:min-h-0",
-        // The composite inventory label puts the disambiguating location last,
-        // so a cap tuned for the old narrow feed truncated away the very part
-        // that identifies the row. Desktop has the room; phones keep the tight
-        // cap so the change summary beside it stays visible.
-        compact && "max-w-48 sm:max-w-72",
-      )}
-      title={name ? `${name} · ${entityId}` : `${entity.label} ${entityId}`}
-    >
+  const label = entityLabel(entityType);
+  const content = (
+    <>
       <EntityIdentityMark entity={entityType} displayImage={displayImage} />
       {name ? (
         <>
@@ -60,9 +50,40 @@ export function AuditEntityLink({
         </>
       ) : (
         <span className={cn(compact && "truncate")}>
-          {entity.label} <span className="font-mono text-xs">{entityId}</span>
+          {label} <span className="font-mono text-xs">{entityId}</span>
         </span>
       )}
+    </>
+  );
+
+  const className = cn(
+    // Fills the ledger row's height on phones so the tap target is the row
+    // the reader is aiming at, not the 20px of text inside it.
+    "inline-flex min-h-11 min-w-0 items-center gap-2 font-medium text-primary text-sm sm:min-h-0",
+    compact && "max-w-48 sm:max-w-72",
+  );
+
+  if (!isBrowserRoutedEntity(entityType)) {
+    return (
+      <span
+        className={className}
+        title={name ? `${name} · ${entityId}` : `${label} ${entityId}`}
+      >
+        {content}
+      </span>
+    );
+  }
+
+  const entity = entities[entityType];
+
+  return (
+    <Link
+      to={entity.routes.detail}
+      params={entityDetailParams(entityId)}
+      className={cn(className, "hover:underline")}
+      title={name ? `${name} · ${entityId}` : `${label} ${entityId}`}
+    >
+      {content}
     </Link>
   );
 }

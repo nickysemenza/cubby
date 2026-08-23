@@ -46,7 +46,12 @@ import type {
   EntityDetailParams,
   EntityDetailRoute,
 } from "~/entities/entities";
-import { entities } from "~/entities/entities";
+import {
+  entities,
+  entityLabel,
+  entityPluralLabel,
+  isBrowserRoutedEntity,
+} from "~/entities/entities";
 import { multiSelectFilterFn, multiSelectFilterFnBy } from "~/entities/filters";
 import { copyShortcodes } from "~/lib/clipboard";
 import { type BaseKind, gradedKinds } from "~/lib/conversion-coverage";
@@ -181,6 +186,7 @@ export type RowLinkResolver<T> = (row: T) => EntityRowLink | null;
 const defaultRowLink = <T extends BaseRow>(
   entity: Entity,
 ): RowLinkResolver<T> => {
+  if (!isBrowserRoutedEntity(entity)) return () => null;
   const to = entities[entity].routes.detail;
   return (row) => ({ to, params: nameColumnParams(row) });
 };
@@ -266,7 +272,8 @@ export function createNameColumn<T extends BaseRow>(
     rowLink?: RowLinkResolver<T>;
   },
 ) {
-  const entityConfig = entities[entity];
+  const singularLabel = entityLabel(entity).toLowerCase();
+  const pluralLabel = entityPluralLabel(entity).toLowerCase();
   const rowLink = options?.rowLink ?? defaultRowLink<T>(entity);
   const cellData = textCellData<T>(
     "text",
@@ -298,7 +305,7 @@ export function createNameColumn<T extends BaseRow>(
       const count =
         info.table.options.meta?.serverTotals?.totalCount ??
         info.table.getFilteredRowModel().rows.length;
-      return `${count} ${count === 1 ? entityConfig.label.toLowerCase() : entityConfig.pluralLabel.toLowerCase()}`;
+      return `${count} ${count === 1 ? singularLabel : pluralLabel}`;
     },
     cell: (info: CellContext<T, T[keyof T]>) => {
       // NOT `String(info.getValue())` — that renders a null name as the literal

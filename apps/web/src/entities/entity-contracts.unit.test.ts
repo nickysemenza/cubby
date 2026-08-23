@@ -7,6 +7,7 @@ import {
   type EntityListRoute,
   type EntityNewRoute,
   entities,
+  isBrowserRoutedEntity,
 } from "./entities";
 import { getEntityContract, standardEntities } from "./entity-contracts";
 
@@ -45,6 +46,12 @@ describe("entity-contracts drift guard", () => {
 });
 
 describe("derived entity route unions", () => {
+  it("keeps route-less ledger entities out of browser route capability", () => {
+    expect(isBrowserRoutedEntity("ledgerParty")).toBe(false);
+    expect(isBrowserRoutedEntity("ledgerTransfer")).toBe(false);
+    expect(isBrowserRoutedEntity("project")).toBe(true);
+  });
+
   it("preserves detail, list, and new route literals", () => {
     const detail: EntityDetailRoute = entities.recipe.routes.detail;
     const list: EntityListRoute = entities.project.routes.list;

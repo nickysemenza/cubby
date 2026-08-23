@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import type { EntityEditDraft } from "~/entities/editing/intent-types";
 import type { EditableEntity } from "~/entities/editing/types";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
-import { entities } from "~/entities/entities";
+import { entityLabel } from "~/entities/entities";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import {
@@ -33,7 +33,7 @@ export function useUpdateMutation<TFn extends MutationOptionsFn>({
   entity: Entity;
   invalidateKeys: readonly QueryKey[];
 }) {
-  const entityLabel = entities[entity].label;
+  const label = entityLabel(entity);
   const registered =
     entity !== "image" && entity !== "usda-food" && entity !== "cookbook";
   const commandEntity = (registered ? entity : "product") as EditableEntity;
@@ -49,10 +49,10 @@ export function useUpdateMutation<TFn extends MutationOptionsFn>({
       savedWithBackgroundWork(
         (data as { sideEffects?: MutationSideEffects }).sideEffects ??
           emptySideEffects,
-        `${entityLabel} updated`,
+        `${label} updated`,
       ),
     error: (err) =>
-      getErrorMessage(err) || `Failed to update ${entityLabel.toLowerCase()}`,
+      getErrorMessage(err) || `Failed to update ${label.toLowerCase()}`,
   });
 
   const registryMutation = useMutation<DataOf<TFn>, Error, VariablesOf<TFn>>({
@@ -74,15 +74,14 @@ export function useUpdateMutation<TFn extends MutationOptionsFn>({
         savedWithBackgroundWork(
           (data as { sideEffects?: MutationSideEffects }).sideEffects ??
             emptySideEffects,
-          `${entityLabel} updated`,
+          `${label} updated`,
         ),
         { id: `entity-updated:${entity}` },
       );
     },
     onError: (error) => {
       toast.error(
-        getErrorMessage(error) ||
-          `Failed to update ${entityLabel.toLowerCase()}`,
+        getErrorMessage(error) || `Failed to update ${label.toLowerCase()}`,
       );
     },
   });

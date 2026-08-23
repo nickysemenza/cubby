@@ -2,7 +2,11 @@ import type { RelatedPreviewGroup } from "@cubby/schemas/related-view";
 import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
 import { NoneValue } from "~/components/ui/none-value";
 import type { EntityDetailRoute } from "~/entities/entities";
-import { entities, entityDetailParams } from "~/entities/entities";
+import {
+  entities,
+  entityDetailParams,
+  isBrowserRoutedEntity,
+} from "~/entities/entities";
 import { TableLink } from "../table/TableLink";
 
 export function RelatedPreviewCell({
@@ -29,14 +33,20 @@ export function RelatedPreviewCell({
             entity={item.entity}
             displayImage={item.displayImage}
           />
-          <TableLink
-            to={entities[item.entity].routes.detail as EntityDetailRoute}
-            params={entityDetailParams(item.id)}
-            className="max-w-36 truncate"
-            variant="muted"
-          >
-            {item.label}
-          </TableLink>
+          {isBrowserRoutedEntity(item.entity) ? (
+            <TableLink
+              to={entities[item.entity].routes.detail as EntityDetailRoute}
+              params={entityDetailParams(item.id)}
+              className="max-w-36 truncate"
+              variant="muted"
+            >
+              {item.label}
+            </TableLink>
+          ) : (
+            <span className="max-w-36 truncate text-muted-foreground">
+              {item.label}
+            </span>
+          )}
         </span>
       ))}
       {overflow > 0 && (

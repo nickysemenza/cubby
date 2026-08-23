@@ -8,6 +8,11 @@ import {
 } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import { DatePickerInput } from "~/app/_components/date-picker-input";
+import {
+  ContributionGapTargets,
+  contributionGapLabels,
+  ledgerPartyLabel,
+} from "~/app/_components/household-contribution-format";
 import { Row, Stack } from "~/components/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
@@ -24,20 +29,6 @@ import {
 } from "~/components/ui/table";
 import { useTRPC } from "~/integrations/trpc/react";
 import { formatCurrency } from "~/lib/utils";
-
-const gapLabels: Record<
-  HouseholdContributionLedgerOut["gaps"][number]["code"],
-  string
-> = {
-  missing_beneficiaries: "No beneficiaries recorded",
-  missing_funders: "No original funder recorded",
-  partial_beneficiaries: "Some beneficiary share is unattributed",
-  partial_funders: "Some original funding is unattributed",
-  shared_account_unmapped: "Shared account needs a funding source",
-  unpriced_expense: "Expense has no price",
-  transfer_evidence_one_sided: "Transfer has evidence from only one side",
-  unattributed_transfer_party: "Transfer party is unavailable",
-};
 
 function CheckMark({ ok }: { ok: boolean }) {
   return ok ? (
@@ -158,7 +149,7 @@ export function HouseholdContributionLedgerReport({
           </TableHeader>
           <TableBody>
             {data.parties.map((row) => (
-              <TableRow key={`${row.party.kind}:${row.party.key}`}>
+              <TableRow key={row.party.id}>
                 <TableCell>
                   <Stack gap="tight" className="min-w-0">
                     <span
@@ -167,14 +158,12 @@ export function HouseholdContributionLedgerReport({
                     >
                       {row.party.name}
                     </span>
-                    <Badge variant={row.party.household ? "slate" : "outline"}>
-                      {row.party.kind === "shared_fund"
-                        ? "Shared fund"
-                        : row.party.kind === "household"
-                          ? "Shared beneficiary"
-                          : row.party.household
-                            ? "Household"
-                            : "Guest"}
+                    <Badge
+                      variant={
+                        row.party.kind === "household" ? "slate" : "outline"
+                      }
+                    >
+                      {ledgerPartyLabel(row.party.kind)}
                     </Badge>
                   </Stack>
                 </TableCell>
@@ -231,12 +220,12 @@ export function HouseholdContributionLedgerReport({
                   <TableCell>
                     <Row align="center" gap="xs">
                       <AlertTriangle className="size-3.5 shrink-0 text-warning-ink" />
-                      {gapLabels[gap.code]}
+                      {contributionGapLabels[gap.code]}
                     </Row>
                   </TableCell>
                   <MoneyCell value={gap.amount} empty="—" />
                   <TableCell className="font-mono text-2xs text-muted-foreground">
-                    {gap.targetIds.join(", ")}
+                    <ContributionGapTargets targetIds={gap.targetIds} />
                   </TableCell>
                 </TableRow>
               ))}

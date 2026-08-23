@@ -3,14 +3,12 @@ import type { EdgeRole, EdgeSemantics } from "@cubby/schemas/entity-integrity";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import {
   unsafeCookbookId,
-  unsafeExpenseId,
   unsafeFinancialAccountId,
   unsafeFinancialTransactionId,
-  unsafeFundingTransferShortcode,
   unsafeIngredientId,
+  unsafeLedgerPartyId,
   unsafeLocationId,
   unsafeMealId,
-  unsafePersonId,
   unsafeProductId,
   unsafeProjectId,
   unsafePurchaseId,
@@ -27,12 +25,8 @@ import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import {
   expenseAttribution,
-  expenseSourceRef,
-  financialAccountPerson,
   financialTransactionAllocation,
-  fundingSource,
-  fundingTransfer,
-  fundingTransferEvidence,
+  ledgerSourceClaim,
   locationImage,
   mealRecipe,
   productComponent,
@@ -60,7 +54,7 @@ import { findReferentialLivenessViolations } from "./detectors-integrity";
 /**
  * Regression suite for `findReferentialLivenessViolations` (detectors-integrity.ts)
  * — the audit that finds every LIVE row whose FK points at a SOFT-DELETED target,
- * across the 57 `must-target-live` incoming edges in `ENTITY_EDGE_SEMANTICS`.
+ * across the 58 `must-target-live` incoming edges in `ENTITY_EDGE_SEMANTICS`.
  *
  * The matrix below is driven from `INCOMING_EDGES` × `ENTITY_EDGE_SEMANTICS`
  * themselves (not a hand-copied edge list), so a newly-added `must-target-live`
@@ -127,12 +121,6 @@ const mkIngredient = (db: Database) =>
 const mkMeal = (db: Database) =>
   insertWithShortcode(db, "meal", { date: "2026-01-01" });
 
-const mkPerson = (db: Database) =>
-  insertWithShortcode(db, "person", {
-    name: uniq("Person"),
-    kind: "household",
-  });
-
 const mkProduct = (db: Database) =>
   insertWithShortcode(db, "product", {
     name: uniq("Product"),
@@ -147,15 +135,6 @@ const mkLocation = (db: Database) =>
 
 const mkProject = (db: Database) =>
   insertWithShortcode(db, "project", { name: uniq("Project") });
-
-const mkExpense = (db: Database) =>
-  insertWithShortcode(db, "expense", {
-    name: uniq("Expense"),
-    cost: 1,
-    costType: "materials",
-    trade: "other",
-    date: "2024-01-15",
-  });
 
 const mkTask = (db: Database) =>
   insertWithShortcode(db, "task", { name: uniq("Task"), trade: "other" });
@@ -187,28 +166,32 @@ const mkFinancialTransaction = async (db: Database) => {
   });
 };
 
-const mkFundingSource = (db: Database) =>
-  insertAndReturn(db, fundingSource, {
-    kind: "shared_fund",
-    fundKey: uniq("fund"),
-    name: uniq("Fund"),
-  });
-
-const mkFundingTransfer = async (db: Database) => {
-  const from = await mkFundingSource(db);
-  const to = await mkFundingSource(db);
-  return insertAndReturn(db, fundingTransfer, {
-    shortcode: unsafeFundingTransferShortcode("FTR-A234"),
-    fromSourceId: from.id,
-    toSourceId: to.id,
-    kind: "household_transfer",
-    amount: 1,
-    date: "2026-01-01",
-  });
-};
-
 const mkWish = (db: Database) =>
   insertWithShortcode(db, "wish", { name: uniq("Wish") });
+
+const mkExpense = (db: Database) =>
+  insertWithShortcode(db, "expense", {
+    name: uniq("Expense"),
+    costType: "materials",
+    trade: "other",
+    date: "2024-01-15",
+  });
+
+const mkLedgerParty = (db: Database) =>
+  insertWithShortcode(db, "ledgerParty", {
+    name: uniq("Ledger party"),
+    kind: "member",
+  });
+
+const mkLedgerTransfer = async (db: Database) => {
+  const [from, to] = await Promise.all([mkLedgerParty(db), mkLedgerParty(db)]);
+  return insertWithShortcode(db, "ledgerTransfer", {
+    fromPartyId: from.id,
+    toPartyId: to.id,
+    amount: 1,
+    date: "2024-01-15",
+  });
+};
 
 const mkRecipeSection = async (db: Database) => {
   const r = await mkRecipe(db);
@@ -224,18 +207,19 @@ const TARGET_FACTORIES: Partial<
   Record<Entity, (db: Database) => Promise<{ id: string }>>
 > = {
   cookbook: mkCookbook,
+  expense: mkExpense,
   image: mkImage,
   recipe: mkRecipe,
   ingredient: mkIngredient,
   meal: mkMeal,
-  person: mkPerson,
+  ledgerParty: mkLedgerParty,
+  ledgerTransfer: mkLedgerTransfer,
   product: mkProduct,
   location: mkLocation,
   project: mkProject,
   task: mkTask,
   vendor: mkVendor,
   purchase: mkPurchase,
-  expense: mkExpense,
   financialAccount: mkFinancialAccount,
   financialTransaction: mkFinancialTransaction,
   wish: mkWish,
@@ -248,31 +232,95 @@ const SOURCE_FACTORIES: Record<
   string,
   (db: Database, targetId: string) => Promise<{ id: string }>
 > = {
-  "FundingSource.personId": (db, targetId) =>
-    insertAndReturn(db, fundingSource, {
-      kind: "person",
-      personId: unsafePersonId(targetId),
-    }),
-
-  "ExpenseAttribution.personId": async (db, targetId) => {
-    const exp = await mkExpense(db);
+  "ExpenseAttribution.expenseId": async (db, targetId) => {
+    const party = await mkLedgerParty(db);
     return insertAndReturn(db, expenseAttribution, {
-      expenseId: exp.id,
-      role: "beneficiary",
-      personId: unsafePersonId(targetId),
+      expenseId: targetId as never,
+      role: "funder",
+      ledgerPartyId: party.id,
       weight: 1,
     });
   },
-
-  "FinancialAccountPerson.personId": async (db, targetId) => {
+  "FinancialTransaction.ledgerTransferId": async (db, targetId) => {
     const account = await mkFinancialAccount(db);
-    return insertAndReturn(db, financialAccountPerson, {
+    return insertWithShortcode(db, "financialTransaction", {
       accountId: account.id,
-      personId: unsafePersonId(targetId),
-      role: "joint_owner",
+      ledgerTransferId: targetId as never,
+      kind: "purchase",
+      status: "pending",
+      amount: 1,
     });
   },
-
+  "LedgerSourceClaim.expenseId": async (db, targetId) =>
+    insertAndReturn(db, ledgerSourceClaim, {
+      expenseId: targetId as never,
+      source: "synthetic-integrity",
+      sourceKey: uniq("claim"),
+      sourceKeyVersion: 1,
+      normalizedEvidence: {
+        amount: 1,
+        occurredOn: null,
+        description: null,
+        context: null,
+        disambiguator: null,
+      },
+      targetAmountAtClaim: 1,
+      reconciliationDecision: "amounts_match",
+    }),
+  "LedgerSourceClaim.ledgerTransferId": async (db, targetId) =>
+    insertAndReturn(db, ledgerSourceClaim, {
+      ledgerTransferId: targetId as never,
+      source: "synthetic-integrity",
+      sourceKey: uniq("claim"),
+      sourceKeyVersion: 1,
+      normalizedEvidence: {
+        amount: 1,
+        occurredOn: null,
+        description: null,
+        context: null,
+        disambiguator: null,
+      },
+      targetAmountAtClaim: 1,
+      reconciliationDecision: "amounts_match",
+    }),
+  "ExpenseAttribution.ledgerPartyId": async (db, targetId) => {
+    const expense = await insertWithShortcode(db, "expense", {
+      name: uniq("Expense"),
+      costType: "materials",
+      trade: "other",
+      date: "2024-01-15",
+    });
+    return insertAndReturn(db, expenseAttribution, {
+      expenseId: expense.id,
+      role: "funder",
+      ledgerPartyId: unsafeLedgerPartyId(targetId),
+      weight: 1,
+    });
+  },
+  "FinancialAccount.ledgerPartyId": (db, targetId) =>
+    insertWithShortcode(db, "financialAccount", {
+      name: uniq("Financial account"),
+      identity: { kind: "cash" },
+      ledgerPartyId: unsafeLedgerPartyId(targetId),
+    }),
+  "LedgerTransfer.fromPartyId": async (db, targetId) => {
+    const to = await mkLedgerParty(db);
+    return insertWithShortcode(db, "ledgerTransfer", {
+      fromPartyId: unsafeLedgerPartyId(targetId),
+      toPartyId: to.id,
+      amount: 1,
+      date: "2024-01-15",
+    });
+  },
+  "LedgerTransfer.toPartyId": async (db, targetId) => {
+    const from = await mkLedgerParty(db);
+    return insertWithShortcode(db, "ledgerTransfer", {
+      fromPartyId: from.id,
+      toPartyId: unsafeLedgerPartyId(targetId),
+      amount: 1,
+      date: "2024-01-15",
+    });
+  },
   "WishCandidate.wishId": async (db, targetId) => {
     const p = await mkProduct(db);
     return insertAndReturn(db, wishCandidate, {
@@ -621,15 +669,6 @@ const SOURCE_FACTORIES: Record<
       amount: 1,
     }),
 
-  "FinancialAccountPerson.accountId": async (db, targetId) => {
-    const owner = await mkPerson(db);
-    return insertAndReturn(db, financialAccountPerson, {
-      accountId: unsafeFinancialAccountId(targetId),
-      personId: owner.id,
-      role: "joint_owner",
-    });
-  },
-
   "StatementRow.accountId": async (db, targetId) => {
     const batch = await insertAndReturn(db, statementImport, {
       source: "monarch",
@@ -673,35 +712,6 @@ const SOURCE_FACTORIES: Record<
     });
   },
 
-  "FundingTransferEvidence.transactionId": async (db, targetId) => {
-    const transfer = await mkFundingTransfer(db);
-    return insertAndReturn(db, fundingTransferEvidence, {
-      transferId: transfer.id,
-      transactionId: unsafeFinancialTransactionId(targetId),
-      side: "outflow",
-    });
-  },
-
-  "ExpenseAttribution.expenseId": async (db, targetId) => {
-    const beneficiary = await mkPerson(db);
-    return insertAndReturn(db, expenseAttribution, {
-      expenseId: unsafeExpenseId(targetId),
-      role: "beneficiary",
-      personId: beneficiary.id,
-      weight: 1,
-    });
-  },
-
-  "ExpenseSourceRef.expenseId": (db, targetId) =>
-    insertAndReturn(db, expenseSourceRef, {
-      expenseId: unsafeExpenseId(targetId),
-      source: "test",
-      externalId: uniq("expense-source"),
-      sourceAmount: 1,
-      expenseAmountAtClaim: 1,
-      reconciliationDecision: "amounts_match",
-    }),
-
   "ProductComponent.parentProductId": async (db, targetId) => {
     const component = await mkProduct(db);
     return insertAndReturn(db, productComponent, {
@@ -741,8 +751,8 @@ interface DerivedEdgeSpec {
   targetEntity: Entity;
   role: EdgeRole;
   sourceTableName: string;
-  /** False only for source tables with no `deletedAt` column at all
-   * (see {@link HARD_DELETE_ONLY_SOURCE_TABLES}; each omits
+  /** False only for the two source tables with no `deletedAt` column at all
+   * (ProjectDependency, TaskDependency — see schema.ts: both omit
    * `...softDeletedAt()`). The "soft-deleted source" matrix case doesn't apply
    * to them, so it's skipped for those edges rather than attempted and failing
    * to compile a `deletedAt` update against a column that doesn't exist. */
@@ -792,11 +802,11 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
 
-  it("derives 57 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
+  it("derives 58 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
     // Mirrors EXPECTED_EDGE_COUNT in detectors-integrity.ts — an independent
     // spot check computed from the same two source-of-truth maps, not from the
     // detector's own (unexported) derivation.
-    expect(derivedMustTargetLiveEdges).toHaveLength(57);
+    expect(derivedMustTargetLiveEdges).toHaveLength(58);
   });
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {
@@ -830,7 +840,7 @@ describe("findReferentialLivenessViolations", () => {
     // Authoritative owner for the old per-edge "reports exactly one" cases:
     // make one violation for every derived edge, then prove the detector returns
     // that complete edge/source/target map in one scan. This retains the exact
-    // full-edge regression guard without paying for one database reset per edge.
+    // 50-edge regression guard without paying for 50 database resets and audits.
     const expected = [] as Array<{
       edgeKey: string;
       role: EdgeRole;

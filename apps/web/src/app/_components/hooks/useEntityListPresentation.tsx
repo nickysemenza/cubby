@@ -1,5 +1,5 @@
-import type { Entity } from "@cubby/schemas/entity";
 import type { PreviewDeleteEntity } from "@cubby/schemas/entity-integrity";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { relatedViewsFor } from "@cubby/schemas/related-view";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { QueryKey } from "@tanstack/react-query";
@@ -57,7 +57,7 @@ export function useEntityListPresentationState<TData extends BaseListRow>({
   deleteEmptyLabel,
   selectionScope,
 }: {
-  entity: Entity;
+  entity: BrowserRoutedEntity;
   tableStateOptions?: Parameters<typeof useTableState>[0];
   deletable?: DeleteConfig;
   extraActions?: (row: TData) => ReactNode;
@@ -80,10 +80,13 @@ export function useEntityListPresentationState<TData extends BaseListRow>({
     bulkActions,
     deleteBulkAction,
   });
-  const defaultSort = useMemo(
-    () => entities[entity].list?.defaultSort ?? "createdAt",
-    [entity],
-  );
+  const defaultSort = useMemo(() => {
+    const definition = entities[entity];
+    return (
+      ("list" in definition ? definition.list?.defaultSort : undefined) ??
+      "createdAt"
+    );
+  }, [entity]);
   const mergedTableStateOptions = useMemo(
     () => ({
       initialSort: defaultSort,
@@ -147,7 +150,7 @@ export function useEntityListPresentation<TData extends BaseListRow>({
   rowLink,
   rowActionGuard,
 }: {
-  entity: Entity;
+  entity: BrowserRoutedEntity;
   data: readonly { id: string }[];
   columns: AnyColumnDef<TData>[];
   filters?: FilterInput[];

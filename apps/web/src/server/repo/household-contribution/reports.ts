@@ -6,20 +6,20 @@ import {
   type ProjectContributionOut,
   projectContributionOut,
 } from "@cubby/schemas/household-contribution";
-import type {
-  FundingSourceId,
-  PersonId,
-  ProjectId,
+import type { LedgerPartyId, ProjectId } from "@cubby/schemas/identifiers";
+import {
+  unsafeExpenseShortcode,
+  unsafeLedgerPartyShortcode,
+  unsafeLedgerTransferShortcode,
 } from "@cubby/schemas/identifiers";
-import { and, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, inArray, lte, sql } from "drizzle-orm";
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   expense,
-  financialAccount,
-  financialAccountPerson,
-  fundingSource,
-  person,
+  financialTransaction,
+  ledgerParty,
+  ledgerTransfer,
 } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 import {
@@ -44,8 +44,7 @@ const sum = (values: Iterable<bigint>): bigint => {
 };
 
 type PartyDirectory = {
-  parties: Map<FundingSourceId, Party>;
-  personSource: Map<PersonId, FundingSourceId>;
+  parties: Map<LedgerPartyId, Party>;
 };
 
 async function loadPartyDirectory(
@@ -53,56 +52,26 @@ async function loadPartyDirectory(
 ): Promise<PartyDirectory> {
   const rows = await unwrapDb(db)
     .select({
-      sourceId: fundingSource.id,
-      sourceKind: fundingSource.kind,
-      personId: fundingSource.personId,
-      fundKey: fundingSource.fundKey,
-      fundName: fundingSource.name,
-      personShortcode: person.shortcode,
-      personName: person.name,
-      personKind: person.kind,
-      personDeletedAt: person.deletedAt,
+      id: ledgerParty.id,
+      shortcode: ledgerParty.shortcode,
+      name: ledgerParty.name,
+      kind: ledgerParty.kind,
     })
-    .from(fundingSource)
-    .leftJoin(person, eq(fundingSource.personId, person.id))
-    .where(notDeleted(fundingSource));
+    .from(ledgerParty)
+    .where(notDeleted(ledgerParty));
 
-  const parties = new Map<FundingSourceId, Party>();
-  const personSource = new Map<PersonId, FundingSourceId>();
+  const parties = new Map<LedgerPartyId, Party>();
   for (const row of rows) {
-    if (
-      row.sourceKind === "person" &&
-      row.personId &&
-      row.personShortcode &&
-      row.personName &&
-      row.personKind &&
-      !row.personDeletedAt
-    ) {
-      parties.set(row.sourceId, {
-        key: row.personShortcode,
-        kind: "person",
-        name: row.personName,
-        household: row.personKind === "household",
-      });
-      personSource.set(row.personId, row.sourceId);
-    } else if (
-      row.sourceKind === "shared_fund" &&
-      row.fundKey &&
-      row.fundName
-    ) {
-      parties.set(row.sourceId, {
-        key: row.fundKey,
-        kind: "shared_fund",
-        name: row.fundName,
-        household: true,
-      });
-    }
+    parties.set(row.id, {
+      id: unsafeLedgerPartyShortcode(row.shortcode),
+      name: row.name,
+      kind: row.kind,
+    });
   }
-  return { parties, personSource };
+  return { parties };
 }
 
 type ExpenseFact = {
-  id: string;
   shortcode: string;
   costCents: string | null;
 };
@@ -114,7 +83,6 @@ async function loadExpenseFacts(
   if (scope.projectIds?.length === 0) return [];
   const result = await unwrapDb(db).execute<ExpenseFact>(sql`
     SELECT
-      ${expense.id} AS id,
       ${expense.shortcode} AS shortcode,
       CASE WHEN ${expense.cost} IS NULL THEN NULL
         ELSE round((${expense.cost})::numeric * 100)::bigint::text
@@ -132,16 +100,6 @@ async function loadExpenseFacts(
   return result.rows;
 }
 
-function allocationPartyId(
-  row: ExpenseAllocationRow,
-  directory: PartyDirectory,
-): FundingSourceId | null {
-  if (row.role === "funder") return row.fundingSourceId;
-  return row.personId
-    ? (directory.personSource.get(row.personId) ?? null)
-    : null;
-}
-
 function attributionGaps(rows: ExpenseAllocationRow[]): Gap[] {
   const grouped = new Map<string, ExpenseAllocationRow[]>();
   for (const row of rows) {
@@ -154,9 +112,7 @@ function attributionGaps(rows: ExpenseAllocationRow[]): Gap[] {
   for (const bucket of grouped.values()) {
     const first = bucket[0];
     if (!first) continue;
-    const nullRows = bucket.filter(
-      (row) => !row.personId && !row.fundingSourceId && !row.household,
-    );
+    const nullRows = bucket.filter((row) => !row.ledgerPartyId);
     const nullCents = sum(nullRows.map((row) => row.cents));
     if (nullRows.some((row) => row.implicitUnattributed)) {
       gaps.push({
@@ -165,19 +121,16 @@ function attributionGaps(rows: ExpenseAllocationRow[]): Gap[] {
             ? "missing_beneficiaries"
             : "missing_funders",
         amount: money(nullCents),
-        targetIds: [first.expenseShortcode],
+        targetIds: [unsafeExpenseShortcode(first.expenseShortcode)],
       });
-    } else if (
-      nullRows.length > 0 &&
-      bucket.some((row) => row.personId || row.fundingSourceId || row.household)
-    ) {
+    } else if (nullRows.length > 0) {
       gaps.push({
         code:
           first.role === "beneficiary"
             ? "partial_beneficiaries"
             : "partial_funders",
         amount: money(nullCents),
-        targetIds: [first.expenseShortcode],
+        targetIds: [unsafeExpenseShortcode(first.expenseShortcode)],
       });
     }
   }
@@ -186,8 +139,8 @@ function attributionGaps(rows: ExpenseAllocationRow[]): Gap[] {
 
 type TransferRow = {
   shortcode: string;
-  fromSourceId: FundingSourceId;
-  toSourceId: FundingSourceId;
+  fromPartyId: LedgerPartyId;
+  toPartyId: LedgerPartyId;
   cents: string;
   evidenceCount: number;
 };
@@ -199,45 +152,18 @@ async function loadTransfers(
   const result = await unwrapDb(db).execute<TransferRow>(sql`
     SELECT
       t.shortcode,
-      t."fromSourceId",
-      t."toSourceId",
+      t."fromPartyId",
+      t."toPartyId",
       round(t.amount::numeric * 100)::bigint::text AS cents,
       count(e.id)::int AS "evidenceCount"
-    FROM "FundingTransfer" t
-    LEFT JOIN "FundingTransferEvidence" e
-      ON e."transferId" = t.id AND e."deletedAt" IS NULL
+    FROM ${ledgerTransfer} t
+    LEFT JOIN ${financialTransaction} e
+      ON e."ledgerTransferId" = t.id AND e."deletedAt" IS NULL
     WHERE t."deletedAt" IS NULL AND t.date <= ${asOf}
     GROUP BY t.id
-    ORDER BY t.date, t.id
+    ORDER BY t.date, t.shortcode
   `);
   return result.rows;
-}
-
-async function loadSharedAccountGaps(
-  db: Database | DrizzleTransaction,
-): Promise<Gap[]> {
-  const rows = await unwrapDb(db)
-    .select({ id: financialAccount.shortcode })
-    .from(financialAccount)
-    .innerJoin(
-      financialAccountPerson,
-      and(
-        eq(financialAccountPerson.accountId, financialAccount.id),
-        notDeleted(financialAccountPerson),
-      ),
-    )
-    .where(
-      and(
-        notDeleted(financialAccount),
-        sql`${financialAccount.fundingSourceId} IS NULL`,
-      ),
-    )
-    .groupBy(financialAccount.id)
-    .having(sql`count(${financialAccountPerson.id}) > 1`);
-  return rows.map((row) => ({
-    code: "shared_account_unmapped" as const,
-    targetIds: [row.id],
-  }));
 }
 
 export async function householdContributionLedger(
@@ -246,17 +172,15 @@ export async function householdContributionLedger(
 ): Promise<HouseholdContributionLedgerOut> {
   const asOf = input.asOf ?? householdLocalDate();
   const scope = { asOf, includeFuture: false } satisfies ExpenseAllocationScope;
-  const [directory, allocations, expenseFacts, transfers, accountGaps] =
-    await Promise.all([
-      loadPartyDirectory(db),
-      loadExpenseAllocations(db, scope),
-      loadExpenseFacts(db, scope),
-      loadTransfers(db, asOf),
-      loadSharedAccountGaps(db),
-    ]);
+  const [directory, allocations, expenseFacts, transfers] = await Promise.all([
+    loadPartyDirectory(db),
+    loadExpenseAllocations(db, scope),
+    loadExpenseFacts(db, scope),
+    loadTransfers(db, asOf),
+  ]);
 
   const balances = new Map<
-    FundingSourceId,
+    LedgerPartyId,
     {
       consumed: bigint;
       initiallyOutlaid: bigint;
@@ -275,14 +199,10 @@ export async function householdContributionLedger(
 
   let unattributedConsumption = 0n;
   let unattributedFunding = 0n;
-  let householdConsumption = 0n;
   for (const row of allocations) {
-    if (row.role === "beneficiary" && row.household) {
-      householdConsumption += row.cents;
-      continue;
-    }
-    const sourceId = allocationPartyId(row, directory);
-    const balance = sourceId ? balances.get(sourceId) : undefined;
+    const balance = row.ledgerPartyId
+      ? balances.get(row.ledgerPartyId)
+      : undefined;
     if (!balance) {
       if (row.role === "beneficiary") unattributedConsumption += row.cents;
       else unattributedFunding += row.cents;
@@ -296,22 +216,15 @@ export async function householdContributionLedger(
   const transferGaps: Gap[] = [];
   for (const transfer of transfers) {
     const cents = BigInt(transfer.cents);
-    const from = balances.get(transfer.fromSourceId);
-    const to = balances.get(transfer.toSourceId);
+    const from = balances.get(transfer.fromPartyId);
+    const to = balances.get(transfer.toPartyId);
     if (from) from.sent += cents;
     if (to) to.received += cents;
-    if (!from || !to) {
-      transferGaps.push({
-        code: "unattributed_transfer_party",
-        amount: money(cents),
-        targetIds: [transfer.shortcode],
-      });
-    }
     if (Number(transfer.evidenceCount) === 1) {
       transferGaps.push({
         code: "transfer_evidence_one_sided",
         amount: money(cents),
-        targetIds: [transfer.shortcode],
+        targetIds: [unsafeLedgerTransferShortcode(transfer.shortcode)],
       });
     }
   }
@@ -336,24 +249,6 @@ export async function householdContributionLedger(
   );
   const parties: HouseholdContributionLedgerOut["parties"] = [
     ...fundingParties,
-    ...(householdConsumption !== 0n
-      ? [
-          {
-            party: {
-              key: "household",
-              kind: "household" as const,
-              name: "Household",
-              household: true,
-            },
-            consumed: money(householdConsumption),
-            initiallyOutlaid: 0,
-            transfersSent: 0,
-            transfersReceived: 0,
-            netContribution: 0,
-            position: money(-householdConsumption),
-          },
-        ]
-      : []),
   ].sort((a, b) => a.party.name.localeCompare(b.party.name));
 
   const expenseTotalCents = sum(
@@ -363,7 +258,6 @@ export async function householdContributionLedger(
   );
   const consumedTotalCents = sum([
     ...[...balances.values()].map((row) => row.consumed),
-    householdConsumption,
   ]);
   const fundedTotalCents = sum(
     [...balances.values()].map((row) => row.initiallyOutlaid),
@@ -375,14 +269,15 @@ export async function householdContributionLedger(
     ...[...balances.values()].map(
       (row) => row.initiallyOutlaid + row.sent - row.received - row.consumed,
     ),
-    -householdConsumption,
   ]);
   const unpricedGaps: Gap[] = expenseFacts
     .filter((row) => row.costCents === null)
-    .map((row) => ({ code: "unpriced_expense", targetIds: [row.shortcode] }));
+    .map((row) => ({
+      code: "unpriced_expense",
+      targetIds: [unsafeExpenseShortcode(row.shortcode)],
+    }));
   const allGaps = [
     ...attributionGaps(allocations),
-    ...accountGaps,
     ...unpricedGaps,
     ...transferGaps,
   ];
@@ -424,40 +319,30 @@ export async function projectContribution(
     projectIds,
     includeFuture: true,
   } satisfies ExpenseAllocationScope;
-  const [directory, allocations, facts, peopleRows] = await Promise.all([
+  const [directory, allocations, facts] = await Promise.all([
     loadPartyDirectory(db),
     loadExpenseAllocations(db, scope),
     loadExpenseFacts(db, scope),
-    unwrapDb(db)
-      .select({
-        id: person.id,
-        shortcode: person.shortcode,
-        name: person.name,
-        kind: person.kind,
-      })
-      .from(person)
-      .where(notDeleted(person)),
   ]);
 
-  const consumed = new Map<PersonId, bigint>();
-  const initiallyFunded = new Map<FundingSourceId, bigint>();
-  let householdConsumed = 0n;
+  const consumed = new Map<LedgerPartyId, bigint>();
+  const initiallyFunded = new Map<LedgerPartyId, bigint>();
+  let unattributedConsumption = 0n;
   let unattributedInitialFunding = 0n;
   for (const row of allocations) {
     if (row.role === "beneficiary") {
-      if (row.household) householdConsumed += row.cents;
-      else if (row.personId)
+      if (row.ledgerPartyId && directory.parties.has(row.ledgerPartyId)) {
         consumed.set(
-          row.personId,
-          (consumed.get(row.personId) ?? 0n) + row.cents,
+          row.ledgerPartyId,
+          (consumed.get(row.ledgerPartyId) ?? 0n) + row.cents,
         );
-    } else if (
-      row.fundingSourceId &&
-      directory.parties.has(row.fundingSourceId)
-    ) {
+      } else {
+        unattributedConsumption += row.cents;
+      }
+    } else if (row.ledgerPartyId && directory.parties.has(row.ledgerPartyId)) {
       initiallyFunded.set(
-        row.fundingSourceId,
-        (initiallyFunded.get(row.fundingSourceId) ?? 0n) + row.cents,
+        row.ledgerPartyId,
+        (initiallyFunded.get(row.ledgerPartyId) ?? 0n) + row.cents,
       );
     } else {
       unattributedInitialFunding += row.cents;
@@ -475,21 +360,22 @@ export async function projectContribution(
     .sort((a, b) => a.party.name.localeCompare(b.party.name));
   const householdInitialExposure = sum(
     [...initiallyFunded.entries()].flatMap(([sourceId, cents]) =>
-      directory.parties.get(sourceId)?.household ? [cents] : [],
+      directory.parties.get(sourceId)?.kind === "household" ? [cents] : [],
     ),
   );
   const guestInitialFunding = sum(
     [...initiallyFunded.entries()].flatMap(([sourceId, cents]) =>
-      directory.parties.get(sourceId)?.household === false ? [cents] : [],
+      directory.parties.get(sourceId)?.kind === "guest" ? [cents] : [],
     ),
   );
-  const gaps = [
-    ...attributionGaps(allocations).map(
-      (gap) => `${gap.code}: ${gap.targetIds.join(", ")}`,
-    ),
+  const gaps: Gap[] = [
+    ...attributionGaps(allocations),
     ...facts
       .filter((row) => row.costCents === null)
-      .map((row) => `unpriced_expense: ${row.shortcode}`),
+      .map((row) => ({
+        code: "unpriced_expense" as const,
+        targetIds: [unsafeExpenseShortcode(row.shortcode)],
+      })),
   ];
 
   return projectContributionOut.parse({
@@ -503,17 +389,24 @@ export async function projectContribution(
     ),
     householdInitialExposure: money(householdInitialExposure),
     guestInitialFunding: money(guestInitialFunding),
+    unattributedConsumption: money(unattributedConsumption),
     unattributedInitialFunding: money(unattributedInitialFunding),
-    householdConsumed: money(householdConsumed),
-    people: peopleRows
-      .filter((row) => consumed.has(row.id))
-      .map((row) => ({
-        personId: row.shortcode,
-        name: row.name,
-        kind: row.kind,
-        consumed: money(consumed.get(row.id) ?? 0n),
+    householdConsumed: money(
+      sum(
+        [...consumed.entries()].flatMap(([partyId, cents]) =>
+          directory.parties.get(partyId)?.kind === "household" ? [cents] : [],
+        ),
+      ),
+    ),
+    parties: [...consumed.entries()]
+      .map(([partyId, cents]) => ({
+        party: directory.parties.get(partyId),
+        consumed: money(cents),
       }))
-      .sort((a, b) => a.name.localeCompare(b.name)),
+      .filter((row): row is { party: Party; consumed: number } =>
+        Boolean(row.party),
+      )
+      .sort((a, b) => a.party.name.localeCompare(b.party.name)),
     funders,
     gaps,
   });

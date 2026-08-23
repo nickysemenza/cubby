@@ -1,12 +1,12 @@
-import type { Entity } from "@cubby/schemas/entity";
 import type { PreviewDeleteEntity } from "@cubby/schemas/entity-integrity";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { QueryKey } from "@tanstack/react-query";
 import { useSearch } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { entities } from "~/entities/entities";
+import { browserEntityDefinition, entities } from "~/entities/entities";
 import { getEntityFilters } from "~/entities/filter-manifest";
 import {
   buildFiltersFromManifest,
@@ -117,7 +117,7 @@ export interface UseEntityListOptions<
   TRow extends BaseListRow = TData,
 > {
   /** The entity type */
-  entity: Entity;
+  entity: BrowserRoutedEntity;
   /** tRPC queryOptions function */
   queryOptions: TRPCQueryOptionsFn<TFilters>;
   /**
@@ -292,7 +292,8 @@ export function useEntityList<
   // Derive the groupBy field for server queries (only when grouped + groupConfig)
   const groupByField = grouped && groupConfig ? groupConfig.field : undefined;
 
-  const hasUnitMappings = entities[entity].list?.hasUnitMappings ?? false;
+  const hasUnitMappings =
+    browserEntityDefinition(entity).list?.hasUnitMappings ?? false;
 
   // Column-filter state → the server's `*Filters` object, driven by the
   // entity's manifest. This replaced a hand-written `buildFilters` on every

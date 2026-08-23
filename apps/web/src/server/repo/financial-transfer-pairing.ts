@@ -1,20 +1,18 @@
 import type {
   FinancialTransferPairSuggestionsOut,
-  FundingPartyRef,
+  LedgerPartyRefOut,
   SuggestFinancialTransferPairsInput,
 } from "@cubby/schemas/household-contribution";
 import {
   unsafeFinancialAccountShortcode,
   unsafeFinancialTransactionShortcode,
-  unsafePersonShortcode,
 } from "@cubby/schemas/identifiers";
-import { and, asc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
   financialAccount,
   financialTransaction,
-  fundingSource,
-  person,
+  ledgerParty,
 } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
@@ -26,8 +24,8 @@ export type PairingRow = {
   accountShortcode: string;
   amount: number;
   date: string | null;
-  fundingParty: FundingPartyRef | null;
-  /** False for a requested row that cannot itself be transfer evidence. */
+  party: LedgerPartyRefOut | null;
+  /** False for a requested row that cannot itself become transfer evidence. */
   eligible?: boolean;
 };
 
@@ -40,11 +38,8 @@ const daysBetween = (a: string, b: string) =>
   );
 
 /**
- * Pure pairing policy shared by the DB read and its unit tests.
- *
- * A suggestion is deliberately only a candidate: equal-and-opposite evidence
- * can be two unrelated events, so this function never creates a transfer or
- * writes a FinancialTransaction kind. The reviewed ledger change owns that.
+ * Read-only candidate policy. Equal and opposite statement rows are evidence,
+ * not proof of intent, so callers must create the LedgerTransfer separately.
  */
 export function buildFinancialTransferPairSuggestions(
   requested: readonly PairingRow[],
@@ -87,8 +82,8 @@ export function buildFinancialTransferPairSuggestions(
                 toAccountId: unsafeFinancialAccountShortcode(
                   negative.accountShortcode,
                 ),
-                from: positive.fundingParty,
-                to: negative.fundingParty,
+                from: positive.party,
+                to: negative.party,
                 reasons: [
                   "equal and opposite amount",
                   "posted within the requested date window",
@@ -102,7 +97,6 @@ export function buildFinancialTransferPairSuggestions(
                 a.transactionId.localeCompare(b.transactionId),
             )
         : [];
-    const limited = matches.slice(0, input.maxCandidatesPerTransaction);
     return {
       transactionId: unsafeFinancialTransactionShortcode(transaction.shortcode),
       status:
@@ -111,7 +105,7 @@ export function buildFinancialTransferPairSuggestions(
           : matches.length === 1
             ? "proposed"
             : "ambiguous",
-      candidates: limited,
+      candidates: matches.slice(0, input.maxCandidatesPerTransaction),
     };
   });
 }
@@ -126,12 +120,6 @@ const noLiveAllocations = sql`NOT EXISTS (
     AND allocation."deletedAt" IS NULL
 )`;
 
-const noLiveTransferEvidence = sql`NOT EXISTS (
-  SELECT 1 FROM "FundingTransferEvidence" evidence
-  WHERE evidence."transactionId" = ${financialTransaction.id}
-    AND evidence."deletedAt" IS NULL
-)`;
-
 const pairingColumns = {
   id: financialTransaction.id,
   shortcode: financialTransaction.shortcode,
@@ -139,10 +127,10 @@ const pairingColumns = {
   accountShortcode: financialAccount.shortcode,
   amount: financialTransaction.amount,
   date: effectiveDate,
-  sourceKind: fundingSource.kind,
-  sourceFundKey: fundingSource.fundKey,
-  personShortcode: person.shortcode,
-  eligible: sql<boolean>`(${financialTransaction.status} = 'posted' AND ${noLiveAllocations} AND ${noLiveTransferEvidence})`,
+  partyShortcode: ledgerParty.shortcode,
+  partyName: ledgerParty.name,
+  partyKind: ledgerParty.kind,
+  eligible: sql<boolean>`(${financialTransaction.status} = 'posted' AND ${noLiveAllocations} AND ${financialTransaction.ledgerTransferId} IS NULL)`,
 } as const;
 
 type DbPairingRow = {
@@ -152,36 +140,31 @@ type DbPairingRow = {
   accountShortcode: string;
   amount: number;
   date: string | null;
-  sourceKind: "person" | "shared_fund" | null;
-  sourceFundKey: string | null;
-  personShortcode: string | null;
+  partyShortcode: string | null;
+  partyName: string | null;
+  partyKind: LedgerPartyRefOut["kind"] | null;
   eligible: boolean;
 };
 
-const toPairingRow = (row: DbPairingRow): PairingRow => {
-  const fundingParty: FundingPartyRef | null =
-    row.sourceKind === "person" && row.personShortcode
-      ? { kind: "person", id: unsafePersonShortcode(row.personShortcode) }
-      : row.sourceKind === "shared_fund" && row.sourceFundKey
-        ? { kind: "fund", key: row.sourceFundKey }
-        : null;
-  return {
-    id: row.id,
-    shortcode: row.shortcode,
-    accountId: row.accountId,
-    accountShortcode: row.accountShortcode,
-    amount: Number(row.amount),
-    date: row.date,
-    fundingParty,
-    eligible: row.eligible,
-  };
-};
+const toPairingRow = (row: DbPairingRow): PairingRow => ({
+  id: row.id,
+  shortcode: row.shortcode,
+  accountId: row.accountId,
+  accountShortcode: row.accountShortcode,
+  amount: Number(row.amount),
+  date: row.date,
+  party:
+    row.partyShortcode && row.partyName && row.partyKind
+      ? {
+          id: row.partyShortcode as LedgerPartyRefOut["id"],
+          name: row.partyName,
+          kind: row.partyKind,
+        }
+      : null,
+  eligible: row.eligible,
+});
 
-/**
- * Read-only candidate finder for two statement rows that may be the two legs
- * of a household transfer. Pairing remains a reviewed ledger write because
- * amount/date symmetry is useful evidence, never proof of intent.
- */
+/** Finds, but never writes, compatible FinancialTransaction evidence legs. */
 export async function suggestFinancialTransferPairs(
   db: Database,
   input: SuggestFinancialTransferPairsInput,
@@ -199,15 +182,11 @@ export async function suggestFinancialTransferPairs(
       eq(financialTransaction.accountId, financialAccount.id),
     )
     .leftJoin(
-      fundingSource,
+      ledgerParty,
       and(
-        eq(financialAccount.fundingSourceId, fundingSource.id),
-        notDeleted(fundingSource),
+        eq(financialAccount.ledgerPartyId, ledgerParty.id),
+        notDeleted(ledgerParty),
       ),
-    )
-    .leftJoin(
-      person,
-      and(eq(fundingSource.personId, person.id), notDeleted(person)),
     )
     .where(
       and(
@@ -219,17 +198,19 @@ export async function suggestFinancialTransferPairs(
 
   const requested = selected.map(toPairingRow);
   const dated = requested.filter((row) => row.date !== null);
-  if (dated.length === 0)
-    return {
-      suggestions: buildFinancialTransferPairSuggestions(requested, [], input),
-    };
+  if (dated.length === 0) {
+    const suggestions = buildFinancialTransferPairSuggestions(
+      requested,
+      [],
+      input,
+    );
+    return { status: pairingStatus(suggestions), suggestions };
+  }
 
   const dates = dated.map((row) => row.date!).sort();
-  const first = dates[0]!;
-  const last = dates.at(-1)!;
-  const dateStart = new Date(`${first}T00:00:00Z`);
+  const dateStart = new Date(`${dates[0]}T00:00:00Z`);
   dateStart.setUTCDate(dateStart.getUTCDate() - input.maxDateDistanceDays);
-  const dateEnd = new Date(`${last}T00:00:00Z`);
+  const dateEnd = new Date(`${dates.at(-1)}T00:00:00Z`);
   dateEnd.setUTCDate(dateEnd.getUTCDate() + input.maxDateDistanceDays);
   const isoDate = (value: Date) => value.toISOString().slice(0, 10);
   const requestedAmounts = [
@@ -244,24 +225,20 @@ export async function suggestFinancialTransferPairs(
       eq(financialTransaction.accountId, financialAccount.id),
     )
     .leftJoin(
-      fundingSource,
+      ledgerParty,
       and(
-        eq(financialAccount.fundingSourceId, fundingSource.id),
-        notDeleted(fundingSource),
+        eq(financialAccount.ledgerPartyId, ledgerParty.id),
+        notDeleted(ledgerParty),
       ),
-    )
-    .leftJoin(
-      person,
-      and(eq(fundingSource.personId, person.id), notDeleted(person)),
     )
     .where(
       and(
         notDeleted(financialTransaction),
         eq(financialTransaction.status, "posted"),
+        isNull(financialTransaction.ledgerTransferId),
         gte(effectiveDate, isoDate(dateStart)),
         lte(effectiveDate, isoDate(dateEnd)),
         noLiveAllocations,
-        noLiveTransferEvidence,
         or(
           ...requestedAmounts.map(
             (amount) =>
@@ -272,11 +249,19 @@ export async function suggestFinancialTransferPairs(
     )
     .orderBy(asc(effectiveDate), asc(financialTransaction.shortcode));
 
-  return {
-    suggestions: buildFinancialTransferPairSuggestions(
-      requested,
-      candidates.map(toPairingRow),
-      input,
-    ),
-  };
+  const suggestions = buildFinancialTransferPairSuggestions(
+    requested,
+    candidates.map(toPairingRow),
+    input,
+  );
+  return { status: pairingStatus(suggestions), suggestions };
 }
+
+const pairingStatus = (
+  suggestions: FinancialTransferPairSuggestionsOut["suggestions"],
+): FinancialTransferPairSuggestionsOut["status"] =>
+  suggestions.some((suggestion) => suggestion.candidates.length > 1)
+    ? "ambiguous"
+    : suggestions.some((suggestion) => suggestion.candidates.length === 1)
+      ? "proposed"
+      : "no_match";

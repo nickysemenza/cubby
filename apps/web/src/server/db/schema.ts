@@ -21,26 +21,18 @@ import type {
 } from "@cubby/schemas/financial-account";
 import type { FinancialTransactionSourceRef } from "@cubby/schemas/financial-transaction";
 import type {
-  AccountPersonRole,
-  ContributionRole,
-  FundingTransferKind,
-  HouseholdLedgerChange,
-} from "@cubby/schemas/household-contribution";
-import type {
   CookbookId,
   ExpenseAttributionId,
   ExpenseId,
   FinancialAccountId,
   FinancialTransactionId,
-  FundingSourceId,
-  FundingTransferId,
-  FundingTransferShortcode,
   IngredientId,
   InventoryId,
+  LedgerPartyId,
+  LedgerTransferId,
   LocationId,
   MealId,
   MealRecipeId,
-  PersonId,
   ProductId,
   ProjectId,
   PurchaseId,
@@ -52,12 +44,16 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { imageStatusValues } from "@cubby/schemas/image";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
+import type {
+  ContributionRole,
+  LedgerPartyKind,
+} from "@cubby/schemas/ledger-party";
+import type { LedgerSourceClaimNormalizedEvidence } from "@cubby/schemas/ledger-transfer";
 import type { LocationValuation } from "@cubby/schemas/location";
 import {
   mealKindValues,
   mealTypeValues,
 } from "@cubby/schemas/meal-classification";
-import type { PersonKind } from "@cubby/schemas/person";
 import type { BaseKind } from "@cubby/schemas/problems";
 import { productCategoryValues } from "@cubby/schemas/product";
 import {
@@ -86,6 +82,7 @@ import { inventoryPlacementValues } from "@cubby/shared";
 import { relations, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
+  bigint,
   boolean,
   check,
   customType,
@@ -1447,69 +1444,27 @@ export const vendor = pgTable(
   ],
 );
 
-/** A real human who may consume costs or contribute funding. */
-export const person = pgTable(
-  "Person",
+/** A durable economic participant in the household ledger. */
+export const ledgerParty = pgTable(
+  "LedgerParty",
   {
-    id: pkUuid<PersonId>(),
+    id: pkUuid<LedgerPartyId>(),
     shortcode: shortcodeColumn(),
     name: text("name").notNull(),
-    kind: text("kind").notNull().$type<PersonKind>(),
-    userId: text("userId")
-      .$type<UserId>()
-      .references(() => user.id, { onDelete: "set null" }),
+    kind: text("kind").notNull().$type<LedgerPartyKind>(),
     notes: text("notes"),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },
   (table) => [
-    shortcodeUnique("Person", table.shortcode),
-    uniqueIndex("Person_name_key")
-      .on(sql`lower(${table.name})`)
-      .where(sql`${table.deletedAt} IS NULL`),
-    uniqueIndex("Person_userId_key")
-      .on(table.userId)
-      .where(sql`${table.deletedAt} IS NULL AND ${table.userId} IS NOT NULL`),
-    index("Person_kind_idx").on(table.kind),
-    check("Person_kind_check", sql`${table.kind} IN ('household', 'guest')`),
-  ],
-);
-
-/**
- * An economic source used by funder shares and transfers. Person-backed rows
- * are private implementation companions to Person; shared-fund rows represent
- * durable pots that can span several evidence accounts.
- */
-export const fundingSource = pgTable(
-  "FundingSource",
-  {
-    id: pkUuid<FundingSourceId>(),
-    kind: text("kind").notNull().$type<"person" | "shared_fund">(),
-    personId: uuid("personId")
-      .$type<PersonId>()
-      .references(() => person.id),
-    fundKey: text("fundKey"),
-    name: text("name"),
-    notes: text("notes"),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
-  (table) => [
-    uniqueIndex("FundingSource_personId_key")
-      .on(table.personId)
-      .where(sql`${table.deletedAt} IS NULL AND ${table.personId} IS NOT NULL`),
-    uniqueIndex("FundingSource_fundKey_key")
-      .on(table.fundKey)
-      .where(sql`${table.deletedAt} IS NULL AND ${table.fundKey} IS NOT NULL`),
-    index("FundingSource_kind_idx").on(table.kind),
+    shortcodeUnique("LedgerParty", table.shortcode),
+    index("LedgerParty_kind_idx").on(table.kind),
+    uniqueIndex("LedgerParty_household_singleton_key")
+      .on(table.kind)
+      .where(sql`${table.deletedAt} IS NULL AND ${table.kind} = 'household'`),
     check(
-      "FundingSource_shape_check",
-      sql`(${table.kind} = 'person' AND ${table.personId} IS NOT NULL AND ${table.fundKey} IS NULL AND ${table.name} IS NULL)
-          OR (${table.kind} = 'shared_fund' AND ${table.personId} IS NULL AND ${table.fundKey} IS NOT NULL AND ${table.name} IS NOT NULL)`,
-    ),
-    check(
-      "FundingSource_fundKey_check",
-      sql`${table.fundKey} IS NULL OR (${table.fundKey} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND ${table.fundKey} = lower(trim(${table.fundKey})))`,
+      "LedgerParty_kind_check",
+      sql`${table.kind} IN ('member', 'guest', 'household')`,
     ),
   ],
 );
@@ -1527,9 +1482,9 @@ export const financialAccount = pgTable(
       .notNull()
       .$type<FinancialAccountSourceAlias[]>()
       .default([]),
-    fundingSourceId: uuid("fundingSourceId")
-      .$type<FundingSourceId>()
-      .references(() => fundingSource.id),
+    ledgerPartyId: uuid("ledgerPartyId")
+      .$type<LedgerPartyId>()
+      .references(() => ledgerParty.id),
     notes: text("notes"),
     ...baseTimestamps(),
     ...softDeletedAt(),
@@ -1538,37 +1493,7 @@ export const financialAccount = pgTable(
     shortcodeUnique("FinancialAccount", table.shortcode),
     index("FinancialAccount_name_idx").on(table.name),
     index("FinancialAccount_provisional_idx").on(table.provisional),
-    index("FinancialAccount_fundingSourceId_idx").on(table.fundingSourceId),
-  ],
-);
-
-/** Descriptive account access/ownership; never an automatic funding split. */
-export const financialAccountPerson = pgTable(
-  "FinancialAccountPerson",
-  {
-    id: pkUuid(),
-    accountId: uuid("accountId")
-      .notNull()
-      .$type<FinancialAccountId>()
-      .references(() => financialAccount.id),
-    personId: uuid("personId")
-      .notNull()
-      .$type<PersonId>()
-      .references(() => person.id),
-    role: text("role").notNull().$type<AccountPersonRole>(),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
-  (table) => [
-    uniqueIndex("FinancialAccountPerson_accountId_personId_key")
-      .on(table.accountId, table.personId)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("FinancialAccountPerson_accountId_idx").on(table.accountId),
-    index("FinancialAccountPerson_personId_idx").on(table.personId),
-    check(
-      "FinancialAccountPerson_role_check",
-      sql`${table.role} IN ('sole_owner', 'joint_owner', 'authorized_user', 'custodian')`,
-    ),
+    index("FinancialAccount_ledgerPartyId_idx").on(table.ledgerPartyId),
   ],
 );
 
@@ -1776,6 +1701,9 @@ export const financialTransaction = pgTable(
       .notNull()
       .$type<FinancialAccountId>()
       .references(() => financialAccount.id),
+    ledgerTransferId: uuid("ledgerTransferId")
+      .$type<LedgerTransferId>()
+      .references(() => ledgerTransfer.id),
     kind: text("kind").notNull(),
     status: text("status").notNull(),
     amount: doublePrecision("amount").notNull(),
@@ -1795,6 +1723,19 @@ export const financialTransaction = pgTable(
   (table) => [
     shortcodeUnique("FinancialTransaction", table.shortcode),
     index("FinancialTransaction_accountId_idx").on(table.accountId),
+    index("FinancialTransaction_ledgerTransferId_idx").on(
+      table.ledgerTransferId,
+    ),
+    uniqueIndex("FinancialTransaction_ledgerTransferId_positive_evidence_key")
+      .on(table.ledgerTransferId)
+      .where(
+        sql`${table.deletedAt} IS NULL AND ${table.ledgerTransferId} IS NOT NULL AND ${table.amount} > 0`,
+      ),
+    uniqueIndex("FinancialTransaction_ledgerTransferId_negative_evidence_key")
+      .on(table.ledgerTransferId)
+      .where(
+        sql`${table.deletedAt} IS NULL AND ${table.ledgerTransferId} IS NOT NULL AND ${table.amount} < 0`,
+      ),
     index("FinancialTransaction_kind_idx").on(table.kind),
     index("FinancialTransaction_status_idx").on(table.status),
     index("FinancialTransaction_transactionDate_idx").on(table.transactionDate),
@@ -1889,24 +1830,20 @@ export const financialTransactionAllocation = pgTable(
   ],
 );
 
-/**
- * One logical movement between economic sources. Its positive amount changes
- * contribution positions but is never spend and never enters project totals.
- */
-export const fundingTransfer = pgTable(
-  "FundingTransfer",
+/** A durable movement between ledger parties; it is never spend. */
+export const ledgerTransfer = pgTable(
+  "LedgerTransfer",
   {
-    id: pkUuid<FundingTransferId>(),
-    shortcode: shortcodeColumn().$type<FundingTransferShortcode>(),
-    fromSourceId: uuid("fromSourceId")
+    id: pkUuid<LedgerTransferId>(),
+    shortcode: shortcodeColumn(),
+    fromPartyId: uuid("fromPartyId")
       .notNull()
-      .$type<FundingSourceId>()
-      .references(() => fundingSource.id),
-    toSourceId: uuid("toSourceId")
+      .$type<LedgerPartyId>()
+      .references(() => ledgerParty.id),
+    toPartyId: uuid("toPartyId")
       .notNull()
-      .$type<FundingSourceId>()
-      .references(() => fundingSource.id),
-    kind: text("kind").notNull().$type<FundingTransferKind>(),
+      .$type<LedgerPartyId>()
+      .references(() => ledgerParty.id),
     amount: doublePrecision("amount").notNull(),
     date: date("date", { mode: "string" }).notNull(),
     notes: text("notes"),
@@ -1914,110 +1851,13 @@ export const fundingTransfer = pgTable(
     ...softDeletedAt(),
   },
   (table) => [
-    uniqueIndex("FundingTransfer_shortcode_unique").on(table.shortcode),
-    index("FundingTransfer_fromSourceId_idx").on(table.fromSourceId),
-    index("FundingTransfer_toSourceId_idx").on(table.toSourceId),
-    index("FundingTransfer_date_idx").on(table.date),
-    index("FundingTransfer_kind_idx").on(table.kind),
+    shortcodeUnique("LedgerTransfer", table.shortcode),
+    index("LedgerTransfer_fromPartyId_idx").on(table.fromPartyId),
+    index("LedgerTransfer_toPartyId_idx").on(table.toPartyId),
+    index("LedgerTransfer_date_idx").on(table.date),
     check(
-      "FundingTransfer_kind_check",
-      sql`${table.kind} IN ('reimbursement', 'fund_contribution', 'household_transfer', 'internal_account_move')`,
-    ),
-    check(
-      "FundingTransfer_amount_whole_cent_check",
+      "LedgerTransfer_amount_whole_cent_check",
       sql`${table.amount} > 0 AND abs(${table.amount} * 100 - round(${table.amount} * 100)) < 0.0000001`,
-    ),
-    check(
-      "FundingTransfer_endpoint_check",
-      sql`(${table.kind} = 'internal_account_move' AND ${table.fromSourceId} = ${table.toSourceId})
-          OR (${table.kind} <> 'internal_account_move' AND ${table.fromSourceId} <> ${table.toSourceId})`,
-    ),
-  ],
-);
-
-/** Provider/source idempotency for logical transfers. */
-export const fundingTransferSourceRef = pgTable(
-  "FundingTransferSourceRef",
-  {
-    id: pkUuid(),
-    transferId: uuid("transferId")
-      .notNull()
-      .$type<FundingTransferId>()
-      .references(() => fundingTransfer.id),
-    source: text("source").notNull(),
-    externalId: text("externalId").notNull(),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
-  (table) => [
-    uniqueIndex("FundingTransferSourceRef_source_externalId_key").on(
-      table.source,
-      table.externalId,
-    ),
-    index("FundingTransferSourceRef_transferId_idx").on(table.transferId),
-    check(
-      "FundingTransferSourceRef_source_check",
-      sql`${table.source} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND ${table.source} = lower(trim(${table.source}))`,
-    ),
-    check(
-      "FundingTransferSourceRef_externalId_check",
-      sql`length(trim(${table.externalId})) > 0`,
-    ),
-  ],
-);
-
-/** FinancialTransaction rows are evidence legs, not additional transfers. */
-export const fundingTransferEvidence = pgTable(
-  "FundingTransferEvidence",
-  {
-    id: pkUuid(),
-    transferId: uuid("transferId")
-      .notNull()
-      .$type<FundingTransferId>()
-      .references(() => fundingTransfer.id),
-    transactionId: uuid("transactionId")
-      .notNull()
-      .$type<FinancialTransactionId>()
-      .references(() => financialTransaction.id),
-    side: text("side").notNull().$type<"outflow" | "inflow">(),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
-  (table) => [
-    uniqueIndex("FundingTransferEvidence_transactionId_key")
-      .on(table.transactionId)
-      .where(sql`${table.deletedAt} IS NULL`),
-    uniqueIndex("FundingTransferEvidence_transferId_side_key")
-      .on(table.transferId, table.side)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("FundingTransferEvidence_transferId_idx").on(table.transferId),
-    check(
-      "FundingTransferEvidence_side_check",
-      sql`${table.side} IN ('outflow', 'inflow')`,
-    ),
-  ],
-);
-
-/** Durable idempotency envelope for reviewed MCP preview/apply batches. */
-export const householdLedgerImport = pgTable(
-  "HouseholdLedgerImport",
-  {
-    id: pkUuid(),
-    idempotencyKey: text("idempotencyKey").notNull(),
-    previewFingerprint: text("previewFingerprint").notNull(),
-    requestHash: text("requestHash").notNull(),
-    changes: jsonb("changes").notNull().$type<HouseholdLedgerChange[]>(),
-    actorUserId: text("actorUserId")
-      .notNull()
-      .$type<UserId>()
-      .references(() => user.id),
-    actorSource: text("actorSource").notNull(),
-    result: jsonb("result").notNull().$type<Record<string, unknown>>(),
-    ...baseTimestamps(),
-  },
-  (table) => [
-    uniqueIndex("HouseholdLedgerImport_idempotencyKey_key").on(
-      table.idempotencyKey,
     ),
   ],
 );
@@ -2356,13 +2196,7 @@ export const expense = pgTable(
   ],
 );
 
-/**
- * Unitless cost attribution. Money remains solely on Expense.cost; readers
- * allocate its integer cents across each role with deterministic largest
- * remainder arithmetic. Beneficiaries may target a Person, the household
- * explicitly, or an unattributed bucket; funders target an economic source or
- * an unattributed bucket.
- */
+/** Unitless beneficiary/funder weights. Money remains solely on Expense.cost. */
 export const expenseAttribution = pgTable(
   "ExpenseAttribution",
   {
@@ -2372,97 +2206,91 @@ export const expenseAttribution = pgTable(
       .$type<ExpenseId>()
       .references(() => expense.id),
     role: text("role").notNull().$type<ContributionRole>(),
-    personId: uuid("personId")
-      .$type<PersonId>()
-      .references(() => person.id),
-    fundingSourceId: uuid("fundingSourceId")
-      .$type<FundingSourceId>()
-      .references(() => fundingSource.id),
-    household: boolean("household").notNull().default(false),
-    weight: integer("weight").notNull(),
+    ledgerPartyId: uuid("ledgerPartyId")
+      .$type<LedgerPartyId>()
+      .references(() => ledgerParty.id),
+    weight: bigint("weight", { mode: "number" }).notNull(),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },
   (table) => [
-    uniqueIndex("ExpenseAttribution_expenseId_role_personId_key")
-      .on(table.expenseId, table.role, table.personId)
-      .where(sql`${table.deletedAt} IS NULL AND ${table.personId} IS NOT NULL`),
-    uniqueIndex("ExpenseAttribution_expenseId_role_fundingSourceId_key")
-      .on(table.expenseId, table.role, table.fundingSourceId)
+    uniqueIndex("ExpenseAttribution_expenseId_role_ledgerPartyId_key")
+      .on(table.expenseId, table.role, table.ledgerPartyId)
       .where(
-        sql`${table.deletedAt} IS NULL AND ${table.fundingSourceId} IS NOT NULL`,
+        sql`${table.deletedAt} IS NULL AND ${table.ledgerPartyId} IS NOT NULL`,
       ),
-    uniqueIndex("ExpenseAttribution_expenseId_role_household_key")
-      .on(table.expenseId, table.role)
-      .where(sql`${table.deletedAt} IS NULL AND ${table.household} = true`),
     uniqueIndex("ExpenseAttribution_expenseId_role_unattributed_key")
       .on(table.expenseId, table.role)
       .where(
-        sql`${table.deletedAt} IS NULL AND ${table.personId} IS NULL AND ${table.fundingSourceId} IS NULL AND ${table.household} = false`,
+        sql`${table.deletedAt} IS NULL AND ${table.ledgerPartyId} IS NULL`,
       ),
     index("ExpenseAttribution_expenseId_idx").on(table.expenseId),
-    index("ExpenseAttribution_personId_idx").on(table.personId),
-    index("ExpenseAttribution_fundingSourceId_idx").on(table.fundingSourceId),
+    index("ExpenseAttribution_ledgerPartyId_idx").on(table.ledgerPartyId),
     check(
       "ExpenseAttribution_role_check",
       sql`${table.role} IN ('beneficiary', 'funder')`,
     ),
-    check("ExpenseAttribution_weight_check", sql`${table.weight} > 0`),
     check(
-      "ExpenseAttribution_target_check",
-      sql`(${table.role} = 'beneficiary' AND ${table.fundingSourceId} IS NULL AND (${table.personId} IS NULL OR ${table.household} = false))
-          OR (${table.role} = 'funder' AND ${table.personId} IS NULL AND ${table.household} = false)`,
+      "ExpenseAttribution_weight_check",
+      sql`${table.weight} > 0 AND ${table.weight} <= 9007199254740991`,
     ),
   ],
 );
 
-/** Durable source identity for normalized expense imports such as Splitwise. */
-export const expenseSourceRef = pgTable(
-  "ExpenseSourceRef",
+/** Canonical external evidence claimed by exactly one Expense or LedgerTransfer. */
+export const ledgerSourceClaim = pgTable(
+  "LedgerSourceClaim",
   {
     id: pkUuid(),
     expenseId: uuid("expenseId")
-      .notNull()
       .$type<ExpenseId>()
       .references(() => expense.id),
+    ledgerTransferId: uuid("ledgerTransferId")
+      .$type<LedgerTransferId>()
+      .references(() => ledgerTransfer.id),
     source: text("source").notNull(),
-    externalId: text("externalId").notNull(),
-    sourceAmount: doublePrecision("sourceAmount").notNull(),
-    expenseAmountAtClaim: doublePrecision("expenseAmountAtClaim").notNull(),
+    sourceKey: text("sourceKey").notNull(),
+    sourceKeyVersion: integer("sourceKeyVersion").notNull(),
+    normalizedEvidence: jsonb("normalizedEvidence")
+      .notNull()
+      .$type<LedgerSourceClaimNormalizedEvidence>(),
+    targetAmountAtClaim: doublePrecision("targetAmountAtClaim").notNull(),
     reconciliationDecision: text("reconciliationDecision")
       .notNull()
-      .$type<"amounts_match" | "accept_existing_expense">(),
+      .$type<"amounts_match" | "accept_target_amount">(),
     reconciliationNote: text("reconciliationNote"),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },
   (table) => [
-    uniqueIndex("ExpenseSourceRef_source_externalId_key").on(
+    uniqueIndex("LedgerSourceClaim_source_sourceKey_key").on(
       table.source,
-      table.externalId,
+      table.sourceKey,
     ),
-    index("ExpenseSourceRef_expenseId_idx").on(table.expenseId),
+    index("LedgerSourceClaim_expenseId_idx").on(table.expenseId),
+    index("LedgerSourceClaim_ledgerTransferId_idx").on(table.ledgerTransferId),
     check(
-      "ExpenseSourceRef_source_check",
+      "LedgerSourceClaim_owner_check",
+      sql`(${table.expenseId} IS NOT NULL) <> (${table.ledgerTransferId} IS NOT NULL)`,
+    ),
+    check(
+      "LedgerSourceClaim_sourceKeyVersion_check",
+      sql`${table.sourceKeyVersion} > 0`,
+    ),
+    check(
+      "LedgerSourceClaim_source_check",
       sql`${table.source} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND ${table.source} = lower(trim(${table.source}))`,
     ),
     check(
-      "ExpenseSourceRef_externalId_check",
-      sql`length(trim(${table.externalId})) > 0`,
-    ),
-    check(
-      "ExpenseSourceRef_amounts_whole_cent_check",
-      sql`abs(${table.sourceAmount} * 100 - round(${table.sourceAmount} * 100)) < 0.0000001
-          AND abs(${table.expenseAmountAtClaim} * 100 - round(${table.expenseAmountAtClaim} * 100)) < 0.0000001`,
-    ),
-    check(
-      "ExpenseSourceRef_reconciliation_check",
-      sql`(${table.reconciliationDecision} = 'amounts_match'
-            AND abs(${table.sourceAmount} - ${table.expenseAmountAtClaim}) < 0.0000001
-            AND ${table.reconciliationNote} IS NULL)
-          OR (${table.reconciliationDecision} = 'accept_existing_expense'
-            AND abs(${table.sourceAmount} - ${table.expenseAmountAtClaim}) >= 0.0000001
-            AND length(trim(${table.reconciliationNote})) > 0)`,
+      "LedgerSourceClaim_reconciliation_check",
+      sql`abs(${table.targetAmountAtClaim} * 100 - round(${table.targetAmountAtClaim} * 100)) < 0.0000001
+          AND abs(((${table.normalizedEvidence}->>'amount')::double precision) * 100 - round(((${table.normalizedEvidence}->>'amount')::double precision) * 100)) < 0.0000001
+          AND ((${table.reconciliationDecision} = 'amounts_match'
+            AND ${table.reconciliationNote} IS NULL
+            AND abs(((${table.normalizedEvidence}->>'amount')::double precision) - ${table.targetAmountAtClaim}) < 0.0000001)
+          OR (${table.reconciliationDecision} = 'accept_target_amount'
+            AND length(trim(${table.reconciliationNote})) > 0
+            AND abs(((${table.normalizedEvidence}->>'amount')::double precision) - ${table.targetAmountAtClaim}) >= 0.0000001))`,
     ),
   ],
 );
@@ -2777,32 +2605,19 @@ export const expenseRelations = relations(expense, ({ one, many }) => ({
     references: [product.id],
   }),
   attributions: many(expenseAttribution),
-  sourceRefs: many(expenseSourceRef),
+  sourceClaims: many(ledgerSourceClaim),
 }));
 
-export const personRelations = relations(person, ({ one, many }) => ({
-  fundingSource: one(fundingSource),
-  accountMemberships: many(financialAccountPerson),
-  beneficiaryAttributions: many(expenseAttribution),
-}));
-
-export const fundingSourceRelations = relations(
-  fundingSource,
-  ({ one, many }) => ({
-    person: one(person, {
-      fields: [fundingSource.personId],
-      references: [person.id],
-    }),
-    accounts: many(financialAccount),
-    funderAttributions: many(expenseAttribution),
-    outgoingTransfers: many(fundingTransfer, {
-      relationName: "FundingTransferFromSource",
-    }),
-    incomingTransfers: many(fundingTransfer, {
-      relationName: "FundingTransferToSource",
-    }),
+export const ledgerPartyRelations = relations(ledgerParty, ({ many }) => ({
+  accounts: many(financialAccount),
+  attributions: many(expenseAttribution),
+  outgoingTransfers: many(ledgerTransfer, {
+    relationName: "LedgerTransferFromParty",
   }),
-);
+  incomingTransfers: many(ledgerTransfer, {
+    relationName: "LedgerTransferToParty",
+  }),
+}));
 
 export const expenseAttributionRelations = relations(
   expenseAttribution,
@@ -2811,23 +2626,23 @@ export const expenseAttributionRelations = relations(
       fields: [expenseAttribution.expenseId],
       references: [expense.id],
     }),
-    person: one(person, {
-      fields: [expenseAttribution.personId],
-      references: [person.id],
-    }),
-    fundingSource: one(fundingSource, {
-      fields: [expenseAttribution.fundingSourceId],
-      references: [fundingSource.id],
+    ledgerParty: one(ledgerParty, {
+      fields: [expenseAttribution.ledgerPartyId],
+      references: [ledgerParty.id],
     }),
   }),
 );
 
-export const expenseSourceRefRelations = relations(
-  expenseSourceRef,
+export const ledgerSourceClaimRelations = relations(
+  ledgerSourceClaim,
   ({ one }) => ({
     expense: one(expense, {
-      fields: [expenseSourceRef.expenseId],
+      fields: [ledgerSourceClaim.expenseId],
       references: [expense.id],
+    }),
+    ledgerTransfer: one(ledgerTransfer, {
+      fields: [ledgerSourceClaim.ledgerTransferId],
+      references: [ledgerTransfer.id],
     }),
   }),
 );
@@ -2843,26 +2658,11 @@ export const vendorRelations = relations(vendor, ({ one, many }) => ({
 export const financialAccountRelations = relations(
   financialAccount,
   ({ one, many }) => ({
-    fundingSource: one(fundingSource, {
-      fields: [financialAccount.fundingSourceId],
-      references: [fundingSource.id],
+    ledgerParty: one(ledgerParty, {
+      fields: [financialAccount.ledgerPartyId],
+      references: [ledgerParty.id],
     }),
-    people: many(financialAccountPerson),
     transactions: many(financialTransaction),
-  }),
-);
-
-export const financialAccountPersonRelations = relations(
-  financialAccountPerson,
-  ({ one }) => ({
-    account: one(financialAccount, {
-      fields: [financialAccountPerson.accountId],
-      references: [financialAccount.id],
-    }),
-    person: one(person, {
-      fields: [financialAccountPerson.personId],
-      references: [person.id],
-    }),
   }),
 );
 
@@ -2885,7 +2685,10 @@ export const financialTransactionRelations = relations(
       references: [financialAccount.id],
     }),
     allocations: many(financialTransactionAllocation),
-    fundingTransferEvidence: many(fundingTransferEvidence),
+    ledgerTransfer: one(ledgerTransfer, {
+      fields: [financialTransaction.ledgerTransferId],
+      references: [ledgerTransfer.id],
+    }),
   }),
 );
 
@@ -2903,45 +2706,21 @@ export const financialTransactionAllocationRelations = relations(
   }),
 );
 
-export const fundingTransferRelations = relations(
-  fundingTransfer,
+export const ledgerTransferRelations = relations(
+  ledgerTransfer,
   ({ one, many }) => ({
-    fromSource: one(fundingSource, {
-      fields: [fundingTransfer.fromSourceId],
-      references: [fundingSource.id],
-      relationName: "FundingTransferFromSource",
+    fromParty: one(ledgerParty, {
+      fields: [ledgerTransfer.fromPartyId],
+      references: [ledgerParty.id],
+      relationName: "LedgerTransferFromParty",
     }),
-    toSource: one(fundingSource, {
-      fields: [fundingTransfer.toSourceId],
-      references: [fundingSource.id],
-      relationName: "FundingTransferToSource",
+    toParty: one(ledgerParty, {
+      fields: [ledgerTransfer.toPartyId],
+      references: [ledgerParty.id],
+      relationName: "LedgerTransferToParty",
     }),
-    evidence: many(fundingTransferEvidence),
-    sourceRefs: many(fundingTransferSourceRef),
-  }),
-);
-
-export const fundingTransferEvidenceRelations = relations(
-  fundingTransferEvidence,
-  ({ one }) => ({
-    transfer: one(fundingTransfer, {
-      fields: [fundingTransferEvidence.transferId],
-      references: [fundingTransfer.id],
-    }),
-    transaction: one(financialTransaction, {
-      fields: [fundingTransferEvidence.transactionId],
-      references: [financialTransaction.id],
-    }),
-  }),
-);
-
-export const fundingTransferSourceRefRelations = relations(
-  fundingTransferSourceRef,
-  ({ one }) => ({
-    transfer: one(fundingTransfer, {
-      fields: [fundingTransferSourceRef.transferId],
-      references: [fundingTransfer.id],
-    }),
+    evidenceTransactions: many(financialTransaction),
+    sourceClaims: many(ledgerSourceClaim),
   }),
 );
 

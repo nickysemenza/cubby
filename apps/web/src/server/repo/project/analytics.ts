@@ -109,7 +109,7 @@ export async function projectRollups(
  * path (`projectNameOptions`) wants dates *without* the money aggregate, and
  * restating the one-day-task rule at a second call site is how it would drift.
  *
- * Negative expenses (refunds, family contributions) count: they are dated
+ * Negative expenses (refunds and price adjustments) count: they are dated
  * project activity, and the tracker has no other place that filters them out
  * of a date range.
  *

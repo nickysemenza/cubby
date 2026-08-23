@@ -29,7 +29,6 @@ import {
   location,
   meal,
   mealRecipe,
-  person,
   product,
   project,
   purchase,
@@ -442,11 +441,6 @@ const liveIdSources = {
     deletedAtColumn: inventoryEntry.deletedAt,
   },
   meal: { table: meal, idColumn: meal.id, deletedAtColumn: meal.deletedAt },
-  person: {
-    table: person,
-    idColumn: person.id,
-    deletedAtColumn: person.deletedAt,
-  },
   project: {
     table: project,
     idColumn: project.id,

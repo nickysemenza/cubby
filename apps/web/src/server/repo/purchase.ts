@@ -74,9 +74,9 @@ import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   expense,
   expenseAttribution,
-  expenseSourceRef,
   financialTransactionAllocation,
   image,
+  ledgerSourceClaim,
   purchase,
   purchaseImage,
   purchaseProduct,
@@ -1216,8 +1216,7 @@ export const splitExpense = async (
         tx
           .select({
             role: expenseAttribution.role,
-            personId: expenseAttribution.personId,
-            fundingSourceId: expenseAttribution.fundingSourceId,
+            ledgerPartyId: expenseAttribution.ledgerPartyId,
             weight: expenseAttribution.weight,
           })
           .from(expenseAttribution)
@@ -1228,21 +1227,26 @@ export const splitExpense = async (
             ),
           ),
         tx
-          .select({ id: expenseSourceRef.id })
-          .from(expenseSourceRef)
-          .where(eq(expenseSourceRef.expenseId, expenseId))
+          .select({ id: ledgerSourceClaim.id })
+          .from(ledgerSourceClaim)
+          .where(
+            and(
+              eq(ledgerSourceClaim.expenseId, expenseId),
+              notDeleted(ledgerSourceClaim),
+            ),
+          )
           .limit(1),
       ]);
 
       if (sourceRefs.length > 0) {
         throw createAppError(
-          "EXPENSE_SPLIT_SOURCE_IDENTITY_CONFLICT",
+          "CONSTRAINT_VIOLATION",
           "Imported Expenses cannot be split because one external source row cannot identify multiple replacement Expenses.",
         );
       }
       if (originalAttributions.length > 0 && attributionPolicy === undefined) {
         throw createAppError(
-          "EXPENSE_SPLIT_ATTRIBUTION_REQUIRED",
+          "CONSTRAINT_VIOLATION",
           "Choose whether the replacement Expenses inherit or clear the original household attribution.",
         );
       }
@@ -1344,8 +1348,7 @@ export const splitExpense = async (
             originalAttributions.map((attribution) => ({
               expenseId: row.id,
               role: attribution.role,
-              personId: attribution.personId,
-              fundingSourceId: attribution.fundingSourceId,
+              ledgerPartyId: attribution.ledgerPartyId,
               weight: attribution.weight,
             })),
           );

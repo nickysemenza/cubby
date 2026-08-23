@@ -57,6 +57,9 @@ const LINKED: ExpenseOut = {
   vendor: "Tool Shop",
   orderId: "ORDER-42",
   orderUrl: null,
+  beneficiaries: [],
+  funders: [],
+  sourceClaims: [],
   createdAt: new Date("2026-07-20T00:00:00Z"),
   updatedAt: new Date("2026-07-20T00:00:00Z"),
 };

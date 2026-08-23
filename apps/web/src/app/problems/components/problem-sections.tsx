@@ -54,7 +54,14 @@ import {
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { EntityIcon, entities, entityDetailLink } from "~/entities/entities";
+import {
+  EntityIcon,
+  entities,
+  entityDetailLink,
+  entityLabel,
+  entityPluralLabel,
+  isBrowserRoutedEntity,
+} from "~/entities/entities";
 import { humanize } from "~/entities/filters";
 import type { ProblemQuery } from "~/entities/problem-query";
 import { problemQuery } from "~/entities/problem-registry";
@@ -425,7 +432,7 @@ function MissingEmbeddingsBackfillAction() {
  * as one flat wall of identical-looking rows.
  */
 function referentialLivenessGroup(v: ReferentialLivenessViolation): string {
-  return `${entities[v.targetEntity].pluralLabel} · ${v.edgeKey}`;
+  return `${entityPluralLabel(v.targetEntity)} · ${v.edgeKey}`;
 }
 
 /** `Table.column` — mono, the exact FK the audit failed on. */
@@ -473,7 +480,7 @@ function referentialTargetBadge(v: ReferentialLivenessViolation): ReactNode {
       className="flex items-center gap-1 font-sans normal-case tracking-normal"
     >
       <EntityIcon entity={v.targetEntity} colored className="size-3" />
-      {entities[v.targetEntity].label} {v.targetId.slice(0, 8)}
+      {entityLabel(v.targetEntity)} {v.targetId.slice(0, 8)}
     </Badge>
   );
 }
@@ -872,15 +879,18 @@ function entityBadge(
   entity: ShortcodeEntity,
   ref: { id: string; name: string },
 ): ReactNode {
+  const routed = isBrowserRoutedEntity(entity);
   return (
     <Badge
       key={ref.id}
       variant="outline"
       // Free-form entity names — opt out of the mono-uppercase stamp.
       className="flex items-center gap-1 font-sans normal-case tracking-normal hover:bg-accent"
-      render={<Link {...entityDetailLink(entity, ref.id)} />}
+      render={
+        routed ? <Link {...entityDetailLink(entity, ref.id)} /> : <span />
+      }
     >
-      <EntityIcon entity={entity} colored className="size-3" />
+      {routed && <EntityIcon entity={entity} colored className="size-3" />}
       {ref.name}
     </Badge>
   );

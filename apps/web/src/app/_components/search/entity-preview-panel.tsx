@@ -8,7 +8,6 @@ import { ExpenseDetail } from "~/app/expenses/expense-detail";
 import { FinancialAccountDetail } from "~/app/finance/financial-account-detail";
 import { FinancialTransactionDetail } from "~/app/finance/financial-transaction-detail";
 import { MealDetailPage } from "~/app/meals/meal-detail-page";
-import { PersonDetail } from "~/app/people/person-detail";
 import { ProjectDetailPage } from "~/app/projects/project-detail-page";
 import { PurchaseDetail } from "~/app/purchases/purchase-detail";
 import { TaskDetail } from "~/app/tasks/task-detail";
@@ -17,7 +16,11 @@ import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { SheetHeader, SheetTitle } from "~/components/ui/sheet";
 import { Spinner } from "~/components/ui/spinner";
-import { entities, entityDetailParams } from "~/entities/entities";
+import {
+  entities,
+  entityDetailParams,
+  isBrowserRoutedEntity,
+} from "~/entities/entities";
 import { entityQueryOptions, fdcIdFromParam } from "~/entities/entity-query";
 import { useTRPC } from "~/integrations/trpc/react";
 import { CookbookPreviewContent } from "../EntityPreviewContent";
@@ -42,7 +45,14 @@ export function EntityPreviewPanel({
 
   // One shared entity→getByID mapping (entity-query), stable for useQuery.
   const queryOptions = useMemo(
-    () => entityQueryOptions(api, entityType, id),
+    () =>
+      isBrowserRoutedEntity(entityType)
+        ? entityQueryOptions(api, entityType, id)
+        : {
+            queryKey: ["entity-preview", entityType, id],
+            queryFn: async () => null,
+            enabled: false,
+          },
     [entityType, id, api],
   );
 
@@ -52,7 +62,9 @@ export function EntityPreviewPanel({
   const { isLoading, error, data } = query;
 
   // Get entity definition for link
-  const entityDef = entities[entityType];
+  const entityDef = isBrowserRoutedEntity(entityType)
+    ? entities[entityType]
+    : null;
 
   // `usda-food` stays keyed on `$id` (never shortcode-routed — its identity
   // is an external USDA `fdc_id`). Every other entity, `image` included now
@@ -82,7 +94,7 @@ export function EntityPreviewPanel({
   if (error) {
     return (
       <div className="flex h-full items-center justify-center text-destructive">
-        Failed to load {entityDef.label.toLowerCase()}
+        Failed to load {entityDef?.label.toLowerCase() ?? entityType}
       </div>
     );
   }
@@ -96,16 +108,18 @@ export function EntityPreviewPanel({
       >
         <Row align="center" justify="between">
           <SheetTitle>Preview</SheetTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            render={
-              <Link to={entityDef.routes.detail} params={detailLinkParams} />
-            }
-          >
-            <ExternalLink className="mr-1 size-3" />
-            View Full Details
-          </Button>
+          {entityDef && (
+            <Button
+              variant="outline"
+              size="sm"
+              render={
+                <Link to={entityDef.routes.detail} params={detailLinkParams} />
+              }
+            >
+              <ExternalLink className="mr-1 size-3" />
+              View Full Details
+            </Button>
+          )}
         </Row>
       </SheetHeader>
 
@@ -137,9 +151,6 @@ export function EntityPreviewPanel({
           // Meal fetches its own data internally (mealId), unlike the other
           // arms which render off this panel's shared getByID `data`.
           .with("meal", () => <MealDetailPage mealId={id as never} />)
-          .with("person", () =>
-            data ? <PersonDetail person={data as never} /> : null,
-          )
           .with("task", () =>
             data ? <TaskDetail task={data as never} /> : null,
           )
@@ -167,6 +178,8 @@ export function EntityPreviewPanel({
             ) : null,
           )
           .with("wish", () => null)
+          .with("ledgerParty", () => null)
+          .with("ledgerTransfer", () => null)
           .exhaustive()}
       </div>
     </div>

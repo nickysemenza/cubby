@@ -5,7 +5,7 @@ import {
   deriveUpdateData,
   timestampedFields,
 } from "./base-entity";
-import { financialAccountShortcode } from "./identifiers";
+import { financialAccountShortcode, ledgerPartyShortcode } from "./identifiers";
 import {
   createPaginatedResponseSchema,
   oneOrMany,
@@ -88,6 +88,7 @@ const financialAccountFields = {
   identity: financialAccountIdentity,
   provisional: z.boolean(),
   sourceAliases: financialAccountSourceAliases,
+  ledgerPartyId: ledgerPartyShortcode.nullable(),
   notes: z.string().nullable(),
 };
 
@@ -95,6 +96,7 @@ const financialAccountCreateShape = {
   ...financialAccountFields,
   provisional: z.boolean().default(false),
   sourceAliases: financialAccountSourceAliases.default([]),
+  ledgerPartyId: ledgerPartyShortcode.nullable().default(null),
   notes: z.string().nullable().default(null),
 };
 

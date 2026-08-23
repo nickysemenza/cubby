@@ -14,6 +14,7 @@ import {
 import { MobileCard } from "~/components/entity/mobile-card";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
+import { isBrowserRoutedEntity } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
 import { cn } from "~/lib/utils";
 import { useInfiniteScrollSentinel } from "../hooks/useInfiniteScrollSentinel";
@@ -351,7 +352,7 @@ export function MobileCardView<TItem extends RowData>({
         <div className="px-2 py-6 text-center text-muted-foreground text-sm">
           {emptyState}
         </div>
-      ) : entity ? (
+      ) : entity && isBrowserRoutedEntity(entity) ? (
         <EntityEmptyState entity={entity} isFiltered={isNarrowed(table)} />
       ) : (
         <FilteredEmptyState isFiltered={isNarrowed(table)} />

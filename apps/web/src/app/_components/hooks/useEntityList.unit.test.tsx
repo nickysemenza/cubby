@@ -48,6 +48,10 @@ vi.mock("~/entities/entities", () => ({
       list: { hasUnitMappings: false, defaultSort: "name" },
     },
   },
+  browserEntityDefinition: () => ({
+    pluralLabel: "Products",
+    list: { hasUnitMappings: false, defaultSort: "name" },
+  }),
 }));
 vi.mock("~/entities/filter-manifest", () => ({
   getEntityFilters: () => [],

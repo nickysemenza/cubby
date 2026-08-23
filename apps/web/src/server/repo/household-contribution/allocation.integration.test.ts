@@ -1,12 +1,9 @@
-import {
-  unsafeExpenseShortcode,
-  unsafePersonShortcode,
-} from "@cubby/schemas/identifiers";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { expenseAttribution, ledgerParty } from "~/server/db/schema";
+import { insertAndReturn, unwrapDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { loadExpenseAllocations } from "./allocation";
-import { setExpenseAttribution } from "./mutations";
 
 describe("loadExpenseAllocations SQL arithmetic", () => {
   const ctx = withTestDb("mcp");
@@ -18,8 +15,14 @@ describe("loadExpenseAllocations SQL arithmetic", () => {
     "allocates a %s at maximum weights without bigint multiplication overflow",
     async (_label, cost, expectedCents) => {
       const people = await Promise.all(
-        ["First beneficiary", "Second beneficiary"].map((name) =>
-          insertWithShortcode(ctx.db, "person", { name, kind: "guest" }),
+        [
+          { name: "First beneficiary", shortcode: "LPY-AL01" },
+          { name: "Second beneficiary", shortcode: "LPY-AL02" },
+        ].map((row) =>
+          insertAndReturn(ctx.db, ledgerParty, {
+            ...row,
+            kind: "guest",
+          }),
         ),
       );
       const [first, second] = people;
@@ -33,26 +36,22 @@ describe("loadExpenseAllocations SQL arithmetic", () => {
         trade: "other",
         future: false,
       });
-      await setExpenseAttribution(
-        ctx.db,
-        {
-          type: "set_expense_attribution",
-          expenseIds: [unsafeExpenseShortcode(row.shortcode)],
-          beneficiaries: {
-            people: [
-              {
-                personId: unsafePersonShortcode(first.shortcode),
-                weight: 2_147_483_647,
-              },
-              {
-                personId: unsafePersonShortcode(second.shortcode),
-                weight: 2_147_483_646,
-              },
-            ],
+      await unwrapDb(ctx.db)
+        .insert(expenseAttribution)
+        .values([
+          {
+            expenseId: row.id,
+            role: "beneficiary",
+            ledgerPartyId: first.id,
+            weight: 2_147_483_647,
           },
-        },
-        ctx.actor,
-      );
+          {
+            expenseId: row.id,
+            role: "beneficiary",
+            ledgerPartyId: second.id,
+            weight: 2_147_483_646,
+          },
+        ]);
 
       const allocations = await loadExpenseAllocations(ctx.db, {
         asOf: "2026-08-20",
@@ -74,4 +73,53 @@ describe("loadExpenseAllocations SQL arithmetic", () => {
       }
     },
   );
+
+  it("uses LedgerParty shortcode, rather than UUID, for a tied leftover cent", async () => {
+    const [first, second] = await Promise.all([
+      insertAndReturn(ctx.db, ledgerParty, {
+        name: "Later shortcode",
+        shortcode: "LPY-ZZZZ",
+        kind: "member",
+      }),
+      insertAndReturn(ctx.db, ledgerParty, {
+        name: "Earlier shortcode",
+        shortcode: "LPY-AAAA",
+        kind: "member",
+      }),
+    ]);
+    const expense = await insertWithShortcode(ctx.db, "expense", {
+      name: "Shortcode tie fixture",
+      cost: 0.01,
+      date: "2026-08-20",
+      costType: "materials",
+      trade: "other",
+      future: false,
+    });
+    await unwrapDb(ctx.db)
+      .insert(expenseAttribution)
+      .values([
+        {
+          expenseId: expense.id,
+          role: "beneficiary",
+          ledgerPartyId: first.id,
+          weight: 1,
+        },
+        {
+          expenseId: expense.id,
+          role: "beneficiary",
+          ledgerPartyId: second.id,
+          weight: 1,
+        },
+      ]);
+
+    const rows = await loadExpenseAllocations(ctx.db, { asOf: "2026-08-20" });
+    const allocations = rows.filter(
+      (row) => row.expenseId === expense.id && row.role === "beneficiary",
+    );
+
+    expect(allocations).toEqual([
+      expect.objectContaining({ allocationKey: "LPY-AAAA", cents: 1n }),
+      expect.objectContaining({ allocationKey: "LPY-ZZZZ", cents: 0n }),
+    ]);
+  });
 });

@@ -45,14 +45,13 @@ import {
   cookbook,
   expense,
   expenseAttribution,
-  expenseSourceRef,
-  financialAccountPerson,
+  financialAccount,
   financialTransaction,
   financialTransactionAllocation,
-  fundingSource,
-  fundingTransferEvidence,
   ingredient,
   inventoryEntry,
+  ledgerSourceClaim,
+  ledgerTransfer,
   location,
   locationImage,
   mealRecipe,
@@ -143,12 +142,15 @@ export const INCOMING_EDGES = {
   meal: edges({
     "MealRecipe.mealId": { column: mealRecipe.mealId },
   }),
-  person: edges({
-    "FundingSource.personId": { column: fundingSource.personId },
-    "ExpenseAttribution.personId": { column: expenseAttribution.personId },
-    "FinancialAccountPerson.personId": {
-      column: financialAccountPerson.personId,
+  ledgerParty: edges({
+    "ExpenseAttribution.ledgerPartyId": {
+      column: expenseAttribution.ledgerPartyId,
     },
+    "FinancialAccount.ledgerPartyId": {
+      column: financialAccount.ledgerPartyId,
+    },
+    "LedgerTransfer.fromPartyId": { column: ledgerTransfer.fromPartyId },
+    "LedgerTransfer.toPartyId": { column: ledgerTransfer.toPartyId },
   }),
   product: edges({
     "ProductExternalId.productId": { column: productExternalId.productId },
@@ -220,16 +222,10 @@ export const INCOMING_EDGES = {
       column: financialTransaction.accountId,
     },
     "StatementRow.accountId": { column: statementRow.accountId },
-    "FinancialAccountPerson.accountId": {
-      column: financialAccountPerson.accountId,
-    },
   }),
   financialTransaction: edges({
     "FinancialTransactionAllocation.transactionId": {
       column: financialTransactionAllocation.transactionId,
-    },
-    "FundingTransferEvidence.transactionId": {
-      column: fundingTransferEvidence.transactionId,
     },
   }),
   wish: edges({
@@ -237,7 +233,15 @@ export const INCOMING_EDGES = {
   }),
   expense: edges({
     "ExpenseAttribution.expenseId": { column: expenseAttribution.expenseId },
-    "ExpenseSourceRef.expenseId": { column: expenseSourceRef.expenseId },
+    "LedgerSourceClaim.expenseId": { column: ledgerSourceClaim.expenseId },
+  }),
+  ledgerTransfer: edges({
+    "FinancialTransaction.ledgerTransferId": {
+      column: financialTransaction.ledgerTransferId,
+    },
+    "LedgerSourceClaim.ledgerTransferId": {
+      column: ledgerSourceClaim.ledgerTransferId,
+    },
   }),
   // No table carries a live FK at these two: `inventory` is a leaf stock row,
   // and `usda-food` has no

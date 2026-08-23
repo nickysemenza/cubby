@@ -73,10 +73,6 @@ const NON_ENTITY_FK_TARGETS: Record<string, string> = {
   // statement line by public id.
   StatementImport: "provider export bookkeeping, not a domain entity",
   StatementRow: "verbatim statement evidence, not a domain entity",
-  FundingSource:
-    "private economic party companion addressed through a Person or shared-fund key",
-  FundingTransfer:
-    "household-ledger fact addressed through reviewed ledger operations, not generic entity CRUD",
 };
 
 interface IntrospectedEdge {
