@@ -262,6 +262,26 @@ export const entityManifest = {
         "Product.fdc_id",
       ]),
     ],
+    // Only the active product pair declares executable signals at merge. Tags
+    // explain a match but never increase its score; manufacturer is omitted
+    // because shared brand is not household-level relatedness.
+    relatednessSignals: [
+      {
+        kind: "semantic",
+        label: "Similar meaning",
+        pair: "product_to_product",
+        weight: 1,
+        limit: 8,
+      },
+      {
+        kind: "scalarOverlap",
+        label: "Shared tag",
+        pair: "product_to_product",
+        column: "Product.tags",
+        popularityCap: 24,
+        scoring: "displayOnly",
+      },
+    ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: true },
     mcp: ALL_MCP,
     mcpNames: { overrides: { list: "search_products" } },

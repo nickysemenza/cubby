@@ -45,7 +45,7 @@ export function registerSearchTools(server: McpServer) {
   registerMcpTool(server, {
     name: "find_similar_entities",
     description:
-      "Find the entities whose stored embedding is closest to one seed entity's, along an allowlisted direction: expense_to_product (which product does this expense line refer to?), product_to_product / ingredient_to_ingredient (duplicate hunting), recipe_to_recipe (related recipes). Pass the pair key plus the seed's id; returns each neighbour with its cosine similarity, nearest first, and echoes the resolved source ref. Similarity ranks candidates, but does not verify them: inspect each candidate and be willing to conclude that none match. Returns no results when the seed has no embedding yet or embeddings are unavailable.",
+      "Find products whose stored embedding is closest to one product seed. This is the only active public similarity direction; other declared pairs remain unavailable until their independent backtests pass. Pass the pair key plus the seed's id; results are nearest first with cosine similarity and the resolved source ref. Similarity ranks candidates but never verifies a match. Returns no results when the seed is uncomputed, stale, or embeddings are unavailable.",
     inputSchema: similarEntitiesInputSchema.shape,
     outputSchema: similarEntitiesMcpOut,
     annotations: READ_ONLY_CLOSED,
