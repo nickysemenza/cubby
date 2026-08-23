@@ -2,7 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { useNavigate } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { Bug } from "lucide-react";
+import { Bug, ChevronRight } from "lucide-react";
 import {
   type ReactNode,
   useCallback,
@@ -15,10 +15,15 @@ import { MobileCard } from "~/components/entity/mobile-card";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { useDebug } from "~/hooks/useDebug";
+import { cn } from "~/lib/utils";
 import { useInfiniteScrollSentinel } from "../hooks/useInfiniteScrollSentinel";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { DebugDialog } from "./DebugDialog";
-import { EntityEmptyState, isNarrowed } from "./entity-empty-states";
+import {
+  EntityEmptyState,
+  FilteredEmptyState,
+  isNarrowed,
+} from "./entity-empty-states";
 import { SectionHeader } from "./SectionHeader";
 import type { CubbyTable as ITable } from "./table-features";
 import type { GroupConfig } from "./useGroupedList";
@@ -72,6 +77,7 @@ interface MobileCardViewProps<TItem extends RowData> {
   isTransitioning?: boolean;
   /** External cell-render state snapshot; see useTableConfig. */
   rowContentVersion?: unknown;
+  emptyState?: ReactNode;
 }
 
 export function MobileCardView<TItem extends RowData>({
@@ -82,6 +88,7 @@ export function MobileCardView<TItem extends RowData>({
   grouped = false,
   isTransitioning = false,
   rowContentVersion,
+  emptyState,
 }: MobileCardViewProps<TItem>) {
   const { isDebugEnabled } = useDebug();
   const navigate = useNavigate();
@@ -210,6 +217,34 @@ export function MobileCardView<TItem extends RowData>({
   ) => {
     const row = model.row;
 
+    const treeToggle = row.getCanExpand() ? (
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-expanded={row.getIsExpanded()}
+        aria-label={row.getIsExpanded() ? "Collapse" : "Expand"}
+        onClick={(event) => {
+          event.stopPropagation();
+          row.getToggleExpandedHandler()();
+        }}
+      >
+        <ChevronRight
+          className={cn(
+            "size-4 transition-transform",
+            row.getIsExpanded() && "rotate-90",
+          )}
+        />
+      </Button>
+    ) : null;
+    const rowActions =
+      treeToggle || model.actionsContent ? (
+        <div className="flex items-center gap-1">
+          {treeToggle}
+          {model.actionsContent}
+        </div>
+      ) : undefined;
+
     // Debug footer (only in row children if debug mode)
     const debugContent = isDebugEnabled ? (
       <div className="flex items-center gap-1">
@@ -230,6 +265,7 @@ export function MobileCardView<TItem extends RowData>({
     const card = (
       <MobileCard
         variant="row"
+        className={row.depth > 0 ? "bg-muted/20 pl-4" : undefined}
         title={model.title}
         subtitle={model.subtitle}
         // No generic entity-icon fallback: a chef hat (or package, or receipt)
@@ -256,7 +292,7 @@ export function MobileCardView<TItem extends RowData>({
               }
             : undefined
         }
-        actions={model.actionsContent}
+        actions={rowActions}
         onClick={
           // In selection mode a tap toggles the row rather than navigating —
           // the iOS convention, and otherwise picking a second row means
@@ -311,10 +347,14 @@ export function MobileCardView<TItem extends RowData>({
             </>
           )}
         </div>
+      ) : emptyState ? (
+        <div className="px-2 py-6 text-center text-muted-foreground text-sm">
+          {emptyState}
+        </div>
       ) : entity ? (
         <EntityEmptyState entity={entity} isFiltered={isNarrowed(table)} />
       ) : (
-        <EntityEmptyState entity="product" isFiltered={true} />
+        <FilteredEmptyState isFiltered={isNarrowed(table)} />
       )}
     </div>
   );

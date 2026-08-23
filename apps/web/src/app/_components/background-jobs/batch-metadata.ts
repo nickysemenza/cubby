@@ -21,13 +21,6 @@ function parseBackgroundEntityRef(value: unknown): BackgroundEntityRef | null {
   return { entityType: parsedEntityType.data, entityId };
 }
 
-function formatMetadataValue(value: unknown): string {
-  if (Array.isArray(value)) return value.join(", ");
-  if (value == null) return "";
-  if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
-}
-
 function batchFilterText(batch: BackgroundBatchSummary): string {
   const metadata = isRecord(batch.metadata) ? batch.metadata : null;
   const entity = parseBackgroundEntityRef(metadata?.entity);
@@ -46,9 +39,4 @@ function batchFilterText(batch: BackgroundBatchSummary): string {
     .toLowerCase();
 }
 
-export {
-  batchFilterText,
-  formatMetadataValue,
-  isRecord,
-  parseBackgroundEntityRef,
-};
+export { batchFilterText, isRecord, parseBackgroundEntityRef };

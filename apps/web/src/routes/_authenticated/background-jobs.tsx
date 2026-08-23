@@ -21,7 +21,7 @@ export const Route = createFileRoute("/_authenticated/background-jobs")({
 function BackgroundJobsRoute() {
   const { batchId, batchIds } = Route.useSearch();
   return (
-    <Page variant="list" title="Background jobs" compact decoration="none">
+    <Page variant="list" title="Background jobs" listChrome="workbench">
       <BackgroundJobsPage selectedBatchId={batchId} scopedBatchIds={batchIds} />
     </Page>
   );
