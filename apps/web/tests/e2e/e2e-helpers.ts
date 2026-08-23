@@ -5,14 +5,15 @@ import { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
 /**
  * Wait until React has hydrated the authenticated application shell.
  *
- * The account trigger replaces its SSR placeholder only after hydration, so
- * its presence proves shell-level click handlers are attached without relying
- * on network timing or retrying an interaction that may already have effects.
+ * The shell flips this explicit marker after the initial hydration render, so
+ * it proves shell-level click handlers are attached across both desktop chrome
+ * and contextual mobile chrome without coupling the wait to a route-specific
+ * control.
  */
 export async function waitForAppHydration(page: Page) {
-  await expect(page.getByRole("button", { name: "Account menu" })).toBeVisible({
-    timeout: 15000,
-  });
+  await expect(
+    page.locator('[data-app-shell="authenticated"][data-hydrated="true"]'),
+  ).toBeAttached({ timeout: 15000 });
 }
 
 /**

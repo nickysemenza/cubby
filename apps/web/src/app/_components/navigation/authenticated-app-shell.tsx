@@ -5,6 +5,7 @@ import { preloadCommandMenu } from "~/app/_components/command-menu-loader";
 import { AppFooter } from "~/app/_components/footer";
 import { MainNav } from "~/app/_components/MainNav";
 import { Button } from "~/components/ui/button";
+import { useHydrated } from "~/hooks/useHydrated";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useVirtualKeyboard } from "~/hooks/useVirtualKeyboard";
 import { cn } from "~/lib/utils";
@@ -75,9 +76,12 @@ export function AuthenticatedAppShell({
   const routeDescriptor = resolveMobileRoute(pathname);
   const viewportSurface = routeDescriptor.presentation === "immersive";
   const keyboardOpen = useVirtualKeyboard();
+  const hydrated = useHydrated();
 
   return (
     <div
+      data-app-shell="authenticated"
+      data-hydrated={hydrated ? "true" : "false"}
       data-mobile-keyboard={keyboardOpen ? "open" : "closed"}
       className={cn(
         "min-h-dvh bg-background [--app-chrome-bottom:calc(3.5rem+3px+env(safe-area-inset-bottom))] [--app-chrome-top:calc(3rem+3px+env(safe-area-inset-top))] md:flex md:[--app-chrome-bottom:0rem] md:[--app-chrome-top:3rem]",
