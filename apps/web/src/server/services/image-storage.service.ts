@@ -1,3 +1,4 @@
+import type { ImageShortcode } from "@cubby/schemas/identifiers";
 import { unsafeImageShortcode } from "@cubby/schemas/identifiers";
 import type {
   AttachFileResponse,
@@ -76,7 +77,7 @@ const initiatePendingUpload = async (
 
   return {
     uploadUrl,
-    imageId: createdImage.id,
+    imageId: unsafeImageShortcode(createdImage.shortcode),
     key,
     url,
   };
@@ -137,14 +138,14 @@ export const initiateDocumentUpload = async (
 export const importImageFromUrl = async (
   db: Database,
   params: { sourceUrl: string; filenamePrefix: string },
-): Promise<{ imageId: string; key: string; url: string } | null> => {
+): Promise<{ imageId: ImageShortcode; key: string; url: string } | null> => {
   if (isOurBucketUrl(params.sourceUrl)) {
     const key = extractKeyFromUrl(params.sourceUrl);
     if (key) {
       const existing = await getImageByKey(db, key);
       if (existing) {
         return {
-          imageId: existing.id,
+          imageId: unsafeImageShortcode(existing.shortcode),
           key: existing.key,
           url: existing.url,
         };
@@ -158,7 +159,7 @@ export const importImageFromUrl = async (
         url: params.sourceUrl,
       });
       return {
-        imageId: createdImage.id,
+        imageId: unsafeImageShortcode(createdImage.shortcode),
         key,
         url: params.sourceUrl,
       };
@@ -192,7 +193,7 @@ export const importImageFromUrl = async (
   }
 
   return {
-    imageId: createdImage.id,
+    imageId: unsafeImageShortcode(createdImage.shortcode),
     key: stored.key,
     url: stored.url,
   };

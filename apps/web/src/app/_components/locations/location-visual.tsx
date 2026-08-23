@@ -57,8 +57,8 @@ function SourceLink({
   if (visual.primarySource === "location" && visual.primaryImage) {
     return (
       <Link
-        to="/images/$id"
-        params={{ id: visual.primaryImage.id }}
+        to="/images/$shortcode"
+        params={{ shortcode: visual.primaryImage.id }}
         aria-label={`Open photo of ${location.name}`}
         className="block size-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
       >

@@ -1,3 +1,4 @@
+import type { Entity } from "@cubby/schemas/entity-core";
 import type {
   McpToolUsageStatus,
   McpUsageDashboardOut,
@@ -260,6 +261,17 @@ function UsageCharts({ data }: { data: McpUsageDashboardOut }) {
               </div>
             ))}
           </div>
+          <div>
+            <div className="mb-2 text-muted-foreground text-xs">
+              Entities acted on
+            </div>
+            {data.entities.map((row) => (
+              <div key={row.key} className="flex justify-between border-t py-2">
+                <span>{row.label}</span>
+                <span className="font-mono">{formatCount(row.count)}</span>
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -269,14 +281,21 @@ function UsageCharts({ data }: { data: McpUsageDashboardOut }) {
 function ActivityTable({
   window,
   toolName,
+  entity,
 }: {
   window: McpUsageWindow;
   toolName: string | null;
+  entity: Entity | null;
 }) {
   const api = useTRPC();
   const query = useInfiniteQuery({
     ...api.mcp.usageActivity.infiniteQueryOptions(
-      { window, toolName: toolName ?? undefined, limit: 25 },
+      {
+        window,
+        toolName: toolName ?? undefined,
+        entity: entity ?? undefined,
+        limit: 25,
+      },
       { getNextPageParam: (page) => page.nextCursor },
     ),
   });
@@ -304,6 +323,7 @@ function ActivityTable({
               <TableRow>
                 <TableHead>Time</TableHead>
                 <TableHead>Tool</TableHead>
+                <TableHead>Entity</TableHead>
                 <TableHead>Outcome</TableHead>
                 <TableHead>User</TableHead>
                 <TableHead>Client</TableHead>
@@ -318,6 +338,9 @@ function ActivityTable({
                     {formatDate(entry.occurredAt)}
                   </TableCell>
                   <TableCell className="font-mono">{entry.toolName}</TableCell>
+                  <TableCell className="font-mono text-xs">
+                    {entry.entity ?? "—"}
+                  </TableCell>
                   <TableCell>
                     <Badge
                       variant={
@@ -360,6 +383,7 @@ export function McpUsageDashboard() {
   const [status, setStatus] = useState<McpToolUsageStatus | "all">("all");
   const [search, setSearch] = useState("");
   const [selectedTool, setSelectedTool] = useState<string | null>(null);
+  const [entityFilter, setEntityFilter] = useState<Entity | null>(null);
   const [sort, setSort] = useState<{
     key: ToolSort;
     descending: boolean;
@@ -627,11 +651,38 @@ export function McpUsageDashboard() {
             <SchemaCard title="Input schema" schema={selected.inputSchema} />
             <SchemaCard title="Output schema" schema={selected.outputSchema} />
           </div>
-          <ActivityTable window={window} toolName={selected.toolName} />
+          <ActivityTable
+            window={window}
+            toolName={selected.toolName}
+            entity={entityFilter}
+          />
         </div>
       ) : null}
 
-      <ActivityTable window={window} toolName={null} />
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-mono text-muted-foreground text-xs uppercase tracking-wide">
+          Entity
+        </span>
+        <Button
+          variant={entityFilter === null ? "secondary" : "outline"}
+          onClick={() => setEntityFilter(null)}
+        >
+          All
+        </Button>
+        {data.entities
+          .filter((row) => row.key !== "unknown")
+          .map((row) => (
+            <Button
+              key={row.key}
+              variant={entityFilter === row.key ? "secondary" : "outline"}
+              onClick={() => setEntityFilter(row.key as Entity)}
+            >
+              {row.label}
+            </Button>
+          ))}
+      </div>
+
+      <ActivityTable window={window} toolName={null} entity={entityFilter} />
     </div>
   );
 }

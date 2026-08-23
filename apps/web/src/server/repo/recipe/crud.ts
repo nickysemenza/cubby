@@ -747,14 +747,23 @@ const createRecipeReturningId = async (
       await createSectionWithIngredients(tx, createdRecipeId, section, i);
     }
 
-    // Associate images if provided
+    // Associate images if provided. `pendingImageIds` arrives as public
+    // `IMG-` shortcodes (what `create_file_upload`/`image.uploadImage` hand
+    // back), resolved to uuids here since `associatePendingImages` writes
+    // straight into `RecipeImage.imageId`, an unbranded uuid FK. A code that
+    // doesn't resolve is dropped rather than thrown on.
     if (pendingImageIds && pendingImageIds.length > 0) {
+      const resolvedImageIds = await resolveAllPresent(
+        tx,
+        "image",
+        pendingImageIds,
+      );
       await associatePendingImages(
         tx,
         recipeImage,
         "recipeId",
         createdRecipe.id,
-        pendingImageIds,
+        resolvedImageIds,
       );
     }
 
@@ -1431,7 +1440,9 @@ export const previewDeleteRecipes = async (
 
   const dbClient = getDb(db);
 
-  const cascades: Array<[string, PgTable, PgColumn, string]> = [
+  const cascades: Array<
+    [keyof typeof RECIPE_DELETE_EDGE_POLICY, PgTable, PgColumn, string]
+  > = [
     [
       "RecipeSection.recipeId",
       recipeSection,
@@ -1449,10 +1460,7 @@ export const previewDeleteRecipes = async (
 
   const changes: (ImpactItem | null)[] = [];
   for (const [edgeKey, table, column, label] of cascades) {
-    const disposition =
-      RECIPE_DELETE_EDGE_POLICY[
-        edgeKey as keyof typeof RECIPE_DELETE_EDGE_POLICY
-      ];
+    const disposition = RECIPE_DELETE_EDGE_POLICY[edgeKey];
     changes.push(
       impact({
         disposition,

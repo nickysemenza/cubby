@@ -49,7 +49,7 @@ import { Route as AuthenticatedFinancialAccountsShortcodeRouteImport } from './r
 import { Route as AuthenticatedFinancialTransactionsIndexRouteImport } from './routes/_authenticated/financial-transactions.index'
 import { Route as AuthenticatedFinancialTransactionsShortcodeRouteImport } from './routes/_authenticated/financial-transactions.$shortcode'
 import { Route as AuthenticatedImagesIndexRouteImport } from './routes/_authenticated/images.index'
-import { Route as AuthenticatedImagesIdRouteImport } from './routes/_authenticated/images.$id'
+import { Route as AuthenticatedImagesShortcodeRouteImport } from './routes/_authenticated/images.$shortcode'
 import { Route as AuthenticatedIngredientsIndexRouteImport } from './routes/_authenticated/ingredients.index'
 import { Route as AuthenticatedIngredientsShortcodeRouteImport } from './routes/_authenticated/ingredients.$shortcode'
 import { Route as AuthenticatedIngredientsEquivalencesRouteImport } from './routes/_authenticated/ingredients.equivalences'
@@ -322,11 +322,12 @@ const AuthenticatedImagesIndexRoute =
     path: '/images/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedImagesIdRoute = AuthenticatedImagesIdRouteImport.update({
-  id: '/images/$id',
-  path: '/images/$id',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
+const AuthenticatedImagesShortcodeRoute =
+  AuthenticatedImagesShortcodeRouteImport.update({
+    id: '/images/$shortcode',
+    path: '/images/$shortcode',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedIngredientsIndexRoute =
   AuthenticatedIngredientsIndexRouteImport.update({
     id: '/ingredients/',
@@ -671,7 +672,7 @@ export interface FileRoutesByFullPath {
   '/expenses/$shortcode': typeof AuthenticatedExpensesShortcodeRoute
   '/financial-accounts/$shortcode': typeof AuthenticatedFinancialAccountsShortcodeRoute
   '/financial-transactions/$shortcode': typeof AuthenticatedFinancialTransactionsShortcodeRoute
-  '/images/$id': typeof AuthenticatedImagesIdRoute
+  '/images/$shortcode': typeof AuthenticatedImagesShortcodeRoute
   '/ingredients/$shortcode': typeof AuthenticatedIngredientsShortcodeRoute
   '/ingredients/equivalences': typeof AuthenticatedIngredientsEquivalencesRoute
   '/ingredients/new': typeof AuthenticatedIngredientsNewRoute
@@ -765,7 +766,7 @@ export interface FileRoutesByTo {
   '/expenses/$shortcode': typeof AuthenticatedExpensesShortcodeRoute
   '/financial-accounts/$shortcode': typeof AuthenticatedFinancialAccountsShortcodeRoute
   '/financial-transactions/$shortcode': typeof AuthenticatedFinancialTransactionsShortcodeRoute
-  '/images/$id': typeof AuthenticatedImagesIdRoute
+  '/images/$shortcode': typeof AuthenticatedImagesShortcodeRoute
   '/ingredients/$shortcode': typeof AuthenticatedIngredientsShortcodeRoute
   '/ingredients/equivalences': typeof AuthenticatedIngredientsEquivalencesRoute
   '/ingredients/new': typeof AuthenticatedIngredientsNewRoute
@@ -862,7 +863,7 @@ export interface FileRoutesById {
   '/_authenticated/expenses/$shortcode': typeof AuthenticatedExpensesShortcodeRoute
   '/_authenticated/financial-accounts/$shortcode': typeof AuthenticatedFinancialAccountsShortcodeRoute
   '/_authenticated/financial-transactions/$shortcode': typeof AuthenticatedFinancialTransactionsShortcodeRoute
-  '/_authenticated/images/$id': typeof AuthenticatedImagesIdRoute
+  '/_authenticated/images/$shortcode': typeof AuthenticatedImagesShortcodeRoute
   '/_authenticated/ingredients/$shortcode': typeof AuthenticatedIngredientsShortcodeRoute
   '/_authenticated/ingredients/equivalences': typeof AuthenticatedIngredientsEquivalencesRoute
   '/_authenticated/ingredients/new': typeof AuthenticatedIngredientsNewRoute
@@ -959,7 +960,7 @@ export interface FileRouteTypes {
     | '/expenses/$shortcode'
     | '/financial-accounts/$shortcode'
     | '/financial-transactions/$shortcode'
-    | '/images/$id'
+    | '/images/$shortcode'
     | '/ingredients/$shortcode'
     | '/ingredients/equivalences'
     | '/ingredients/new'
@@ -1053,7 +1054,7 @@ export interface FileRouteTypes {
     | '/expenses/$shortcode'
     | '/financial-accounts/$shortcode'
     | '/financial-transactions/$shortcode'
-    | '/images/$id'
+    | '/images/$shortcode'
     | '/ingredients/$shortcode'
     | '/ingredients/equivalences'
     | '/ingredients/new'
@@ -1149,7 +1150,7 @@ export interface FileRouteTypes {
     | '/_authenticated/expenses/$shortcode'
     | '/_authenticated/financial-accounts/$shortcode'
     | '/_authenticated/financial-transactions/$shortcode'
-    | '/_authenticated/images/$id'
+    | '/_authenticated/images/$shortcode'
     | '/_authenticated/ingredients/$shortcode'
     | '/_authenticated/ingredients/equivalences'
     | '/_authenticated/ingredients/new'
@@ -1509,11 +1510,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedImagesIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/images/$id': {
-      id: '/_authenticated/images/$id'
-      path: '/images/$id'
-      fullPath: '/images/$id'
-      preLoaderRoute: typeof AuthenticatedImagesIdRouteImport
+    '/_authenticated/images/$shortcode': {
+      id: '/_authenticated/images/$shortcode'
+      path: '/images/$shortcode'
+      fullPath: '/images/$shortcode'
+      preLoaderRoute: typeof AuthenticatedImagesShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/ingredients/': {
@@ -1914,7 +1915,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedExpensesShortcodeRoute: typeof AuthenticatedExpensesShortcodeRoute
   AuthenticatedFinancialAccountsShortcodeRoute: typeof AuthenticatedFinancialAccountsShortcodeRoute
   AuthenticatedFinancialTransactionsShortcodeRoute: typeof AuthenticatedFinancialTransactionsShortcodeRoute
-  AuthenticatedImagesIdRoute: typeof AuthenticatedImagesIdRoute
+  AuthenticatedImagesShortcodeRoute: typeof AuthenticatedImagesShortcodeRoute
   AuthenticatedIngredientsShortcodeRoute: typeof AuthenticatedIngredientsShortcodeRoute
   AuthenticatedIngredientsEquivalencesRoute: typeof AuthenticatedIngredientsEquivalencesRoute
   AuthenticatedIngredientsNewRoute: typeof AuthenticatedIngredientsNewRoute
@@ -1999,7 +2000,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedFinancialAccountsShortcodeRoute,
   AuthenticatedFinancialTransactionsShortcodeRoute:
     AuthenticatedFinancialTransactionsShortcodeRoute,
-  AuthenticatedImagesIdRoute: AuthenticatedImagesIdRoute,
+  AuthenticatedImagesShortcodeRoute: AuthenticatedImagesShortcodeRoute,
   AuthenticatedIngredientsShortcodeRoute:
     AuthenticatedIngredientsShortcodeRoute,
   AuthenticatedIngredientsEquivalencesRoute:

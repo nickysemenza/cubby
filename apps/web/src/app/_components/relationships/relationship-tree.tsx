@@ -15,7 +15,7 @@ const RELATIONSHIP_EXPAND_LIMIT = 500;
 /** A compact, routeable record returned by the relationship explorer API. */
 export interface RelationshipEntity {
   entity: Entity;
-  /** Public shortcode for normal entities; image keeps its UUID route id. */
+  /** Public shortcode. */
   id: string;
   label: string;
   displayImage: { url: string } | null;
@@ -87,9 +87,7 @@ function groupStateKey(
 }
 
 function routeParams(item: RelationshipEntity) {
-  return item.entity === "image"
-    ? { id: item.id }
-    : entityDetailParams(item.id);
+  return entityDetailParams(item.id);
 }
 
 function EntityRow({

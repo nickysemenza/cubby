@@ -148,6 +148,11 @@ export const vendorMergeSummaryOut = z.object({
   keepId: vendorShortcode,
   /** Merged-away vendor rows, now soft-deleted tombstones. */
   deletedIds: z.array(vendorShortcode),
+  /**
+   * Vendor rows the merge actually soft-deleted, read back from the write
+   * itself (`finalizeMerge`) rather than assumed from `mergeIds.length`.
+   */
+  merged: z.number().int().nonnegative(),
   /** Live purchases that simply adopted the keeper — no same-order collision. */
   purchasesRepointed: z.number().int().nonnegative(),
   /**

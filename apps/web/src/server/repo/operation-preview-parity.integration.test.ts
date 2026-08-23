@@ -1,6 +1,7 @@
 import {
   type PreviewDeleteEntity,
   type PreviewMergeEntity,
+  type PublicImpactItem,
   previewOperationSchema,
 } from "@cubby/schemas/entity-integrity";
 import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
@@ -8,6 +9,7 @@ import { financialTransactionCreateInput } from "@cubby/schemas/financial-transa
 import {
   unsafeFinancialAccountId,
   unsafeFinancialTransactionId,
+  unsafeImageShortcode,
   unsafeLocationId,
   unsafeProductId,
   unsafeProjectId,
@@ -30,6 +32,7 @@ import {
   expense,
   ingredient,
   mealRecipe,
+  product,
   productImage,
   recipe,
   recipeSection,
@@ -153,10 +156,29 @@ describe("operation preview / mutation parity", () => {
      */
     interface BlockerCase {
       preview: () => ReturnType<typeof previewOperation>;
-      /** The edge the preview must name as the blocker. */
-      edgeKey: string;
+      /**
+       * The edge the preview must name as the blocker. Every DELETE blocker
+       * comes from a declared incoming edge and has one; a relation refusal
+       * (wrong category, a component cycle) is not an edge at all, so those
+       * rows identify their blocker by {@link blockerCode} instead.
+       */
+      edgeKey?: string;
+      /** The `ImpactItem.code` the preview must name, for edge-less blockers. */
+      blockerCode?: string;
       /** The `cause.reason` the mutation must refuse with. */
       reason: string;
+      /**
+       * The tRPC code the mutation must refuse with. Defaults to
+       * PRECONDITION_FAILED, which every delete blocker uses; an attach refusal
+       * can be NOT_FOUND (the product is gone) or BAD_REQUEST (a cycle).
+       */
+      code?: string;
+      /**
+       * Shortcodes the refusal must NAME, in `cause.blockers[].byTargetId`.
+       * This is the half that used to be computed and thrown away — a row that
+       * sets it asserts the ids actually reach the client.
+       */
+      expectBlockerIds?: string[];
       /** The mutation under test. Called once blocked, once unblocked. */
       remove: () => Promise<unknown>;
       /** Delete the blocking row, so the second pass can proceed. */
@@ -841,6 +863,187 @@ describe("operation preview / mutation parity", () => {
           };
         },
       ],
+      // ── Relation verbs. Same claim as every row above, one operation over:
+      // the preview refuses, the mutation refuses with the matching reason, and
+      // clearing the cause flips BOTH to permitted.
+      [
+        "project attach: a wrong-category product is INELIGIBLE, not missing",
+        async () => {
+          const { output: project, entityId: projectId } = await createProject(
+            ctx.db,
+            projectCreateInput.parse({ name: "Category Gate Project" }),
+            ctx.actor,
+          );
+          // Live, resolvable, and the wrong kind — the exact case that used to
+          // come back as PRODUCT_NOT_FOUND and send the caller hunting for a
+          // typo in a shortcode that resolves perfectly well.
+          const material = await createProduct(
+            ctx.db,
+            makeProductInput({
+              name: "Category Gate Lumber",
+              upc: "800000000060",
+              category: "hardware",
+            }),
+            ctx.actor,
+          );
+          return {
+            preview: () =>
+              previewOperation(
+                ctx.db,
+                {
+                  operation: "attach",
+                  entity: "project",
+                  parentId: project.id,
+                  productIds: [material.id],
+                },
+                new Date(),
+              ),
+            blockerCode: "block-product-category-ineligible",
+            reason: "PRODUCT_CATEGORY_INELIGIBLE",
+            expectBlockerIds: [material.id],
+            remove: () =>
+              attachProjectResources(
+                ctx.db,
+                projectId,
+                [material.entityId],
+                ctx.actor,
+              ),
+            clearBlocker: () =>
+              getDb(ctx.db)
+                .update(product)
+                .set({ category: "tools" })
+                .where(eq(product.id, material.entityId)),
+            expectResolved: (result: unknown) =>
+              expect(result).toEqual({
+                changed: 1,
+                attached: 1,
+                alreadySatisfied: 0,
+              }),
+          };
+        },
+      ],
+      [
+        "product attach: a multi-hop component cycle is refused and named",
+        async () => {
+          const outer = await createProduct(
+            ctx.db,
+            makeProductInput({ name: "Cycle Outer Kit", upc: "800000000061" }),
+            ctx.actor,
+          );
+          const inner = await createProduct(
+            ctx.db,
+            makeProductInput({ name: "Cycle Inner Kit", upc: "800000000062" }),
+            ctx.actor,
+          );
+          // outer contains inner; attaching outer INTO inner closes the loop.
+          await attachProductComponents(
+            ctx.db,
+            outer.entityId,
+            [{ productId: inner.entityId, quantity: 1 }],
+            ctx.actor,
+          );
+          return {
+            preview: () =>
+              previewOperation(
+                ctx.db,
+                {
+                  operation: "attach",
+                  entity: "product",
+                  parentId: inner.id,
+                  productIds: [outer.id],
+                },
+                new Date(),
+              ),
+            blockerCode: "block-component-cycle",
+            reason: "PRODUCT_COMPONENT_CYCLE",
+            code: "BAD_REQUEST",
+            expectBlockerIds: [inner.id],
+            remove: () =>
+              attachProductComponents(
+                ctx.db,
+                inner.entityId,
+                [{ productId: outer.entityId, quantity: 1 }],
+                ctx.actor,
+              ),
+            clearBlocker: () =>
+              detachProductComponents(
+                ctx.db,
+                outer.entityId,
+                [inner.entityId],
+                ctx.actor,
+              ),
+            expectResolved: (result: unknown) =>
+              expect(result).toEqual({
+                changed: 1,
+                attached: 1,
+                alreadySatisfied: 0,
+              }),
+          };
+        },
+      ],
+      [
+        "purchase attach: a soft-deleted product is refused and named",
+        async () => {
+          const { output: vendor } = await createVendor(
+            ctx.db,
+            vendorCreateInput.parse({ name: "Dead-Product Vendor" }),
+            ctx.actor,
+          );
+          const { output: order, entityId: purchaseId } = await createPurchase(
+            ctx.db,
+            purchaseCreateInput.parse({
+              date: "2024-02-01",
+              vendorId: vendor.id,
+            }),
+            ctx.actor,
+          );
+          const gone = await createProduct(
+            ctx.db,
+            makeProductInput({ name: "Gone Product", upc: "800000000063" }),
+            ctx.actor,
+          );
+          await deleteProducts(ctx.db, [gone.entityId], ctx.actor);
+          return {
+            preview: () =>
+              previewOperation(
+                ctx.db,
+                {
+                  operation: "attach",
+                  entity: "purchase",
+                  parentId: order.id,
+                  productIds: [gone.id],
+                },
+                new Date(),
+              ),
+            // The preview resolves shortcodes before planning, so a
+            // soft-deleted target is caught one step earlier than the repo's
+            // own liveness check — different code, same refusal, and both name
+            // the offending shortcode.
+            blockerCode: "block-unresolved-target",
+            reason: "PRODUCT_NOT_FOUND",
+            code: "NOT_FOUND",
+            expectBlockerIds: [gone.id],
+            remove: () =>
+              attachPurchaseProducts(
+                ctx.db,
+                purchaseId,
+                [gone.entityId],
+                ctx.actor,
+              ),
+            clearBlocker: () =>
+              getDb(ctx.db)
+                .update(product)
+                .set({ deletedAt: null })
+                .where(eq(product.id, gone.entityId)),
+            expectResolved: (result: unknown) =>
+              expect(result).toEqual({
+                changed: 1,
+                attached: 1,
+                alreadySatisfied: 0,
+              }),
+          };
+        },
+      ],
     ];
 
     it.each(BLOCKER_CASES)(
@@ -850,13 +1053,35 @@ describe("operation preview / mutation parity", () => {
 
         const blocked = await subject.preview();
         expect(blocked.canProceed).toBe(false);
-        expect(blocked.blockers.map((b) => b.edgeKey)).toContain(
-          subject.edgeKey,
-        );
+        if (subject.edgeKey) {
+          expect(blocked.blockers.map((b) => b.edgeKey)).toContain(
+            subject.edgeKey,
+          );
+        }
+        if (subject.blockerCode) {
+          expect(blocked.blockers.map((b) => b.code)).toContain(
+            subject.blockerCode,
+          );
+        }
         await expect(subject.remove()).rejects.toMatchObject({
-          code: "PRECONDITION_FAILED",
+          code: subject.code ?? "PRECONDITION_FAILED",
           cause: { reason: subject.reason },
         });
+        if (subject.expectBlockerIds) {
+          // Asserted on the STRUCTURE, never the sentence: `blockers` is what a
+          // tRPC client reads off `error.data` and what `attach_entity` puts in
+          // its `refusal`. A message that happens to mention the code proves
+          // nothing about either.
+          const refusal = await subject
+            .remove()
+            .catch((error: unknown) => error);
+          const blockers = (
+            refusal as { cause?: { blockers?: PublicImpactItem[] } }
+          ).cause?.blockers;
+          expect(blockers?.flatMap((b) => Object.keys(b.byTargetId))).toEqual(
+            expect.arrayContaining(subject.expectBlockerIds),
+          );
+        }
 
         await subject.clearBlocker();
 
@@ -1335,7 +1560,7 @@ describe("operation preview / mutation parity", () => {
         ctx.db,
         makeProductInput({
           name: "Image Cascade Product",
-          pendingImageIds: [pendingImage.id],
+          pendingImageIds: [unsafeImageShortcode(pendingImage.shortcode)],
         }),
         ctx.actor,
       );
@@ -1681,10 +1906,10 @@ describe("operation preview / mutation parity", () => {
         ]),
     };
 
-    // `keepId` must differ from `mergeIds`: the planners compute
-    // `losers = mergeIds.filter((id) => id !== keepId)` and short-circuit on an
-    // empty result, so reusing one uuid for both would skip the SQL entirely
-    // and quietly re-vacuate these tests.
+    // `keepId` must differ from `mergeIds`: every planner now REFUSES a
+    // self-reference (`MERGE_SELF_REFERENCE`) — the same refusal the mutation
+    // makes — so reusing one uuid for both would throw before any SQL ran and
+    // quietly re-vacuate these tests.
     const MERGE_PLANNER_SMOKE: Record<PreviewMergeEntity, Smoke> = {
       ingredient: "covered-by-parity",
       vendor: (db) =>

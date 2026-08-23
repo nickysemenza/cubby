@@ -1,5 +1,21 @@
-import { type DeleteEntityOut, deleteEntityOut } from "@cubby/schemas/common";
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import {
+  type DeleteEntityOut,
+  deleteEntityOut,
+  operationRefusalOut,
+  relationMutationOut,
+} from "@cubby/schemas/common";
+import {
+  type PublicImpactItem,
+  publicImpactItemSchema,
+  type RelationParentEntity,
+  relationParentEntitySchema,
+  toPublicImpact,
+} from "@cubby/schemas/entity-integrity";
+import {
+  entityManifest,
+  type ShortcodeEntity,
+  shortcodeEntities,
+} from "@cubby/schemas/entity-manifest";
 import {
   anyShortcodeSchema,
   shortcodeSchema,
@@ -23,6 +39,7 @@ import {
   type ProductTopLevelOut,
   productMcpDetailOut,
   productMcpOut,
+  productMergeSummaryOut,
 } from "@cubby/schemas/product";
 import {
   type ExpenseOut,
@@ -36,7 +53,7 @@ import { type PurchaseOut, purchaseOut } from "@cubby/schemas/purchase";
 import { type RecipeTopLevel, recipeMcpOut } from "@cubby/schemas/recipe";
 import type { mcpUnitMappingInput } from "@cubby/schemas/unitmapping";
 import { type VendorOut, vendorOut } from "@cubby/schemas/vendor";
-import { type AppErrorReason, AppErrors } from "@cubby/shared";
+import { parseShortcode } from "@cubby/shared";
 import type { foodSummary } from "@cubby/usda-schemas";
 import type {
   McpServer,
@@ -53,6 +70,11 @@ import type { TRPC_ERROR_CODE_KEY } from "@trpc/server/rpc";
 import { omitBy } from "es-toolkit";
 import { z } from "zod";
 import type { DomainCaller } from "~/server/api/domain";
+import {
+  createAppError,
+  isBlockedRefusal,
+  toPublicErrorPayload,
+} from "~/server/errors/app-error";
 import { resolveProductPricing } from "~/server/repo/product/pricing";
 
 /**
@@ -96,7 +118,62 @@ type RegisterMcpToolConfig<
    * this is always additive.
    */
   uiResourceUri?: string;
+  /**
+   * Which concrete entity a GENERIC tool acted on, read off the call's own
+   * arguments.
+   *
+   * `delete_entity` and `merge_entity` each stand in for what used to be a
+   * dozen per-entity tools, so a usage record keyed only by tool name can no
+   * longer say whether the agent deleted a product or a task — the collapse
+   * that made the surface smaller also flattened the telemetry. This is the
+   * declared way back: the tool names its own entity argument rather than
+   * telemetry guessing which key holds one.
+   *
+   * Returns `undefined` when the arguments don't name one (a malformed call
+   * that never reached the handler).
+   */
+  telemetryEntity?: (params: InferSchemaLike<TInput>) => string | undefined;
 };
+
+export type ToolEntityExtractor = (
+  params: Record<string, unknown>,
+) => string | undefined;
+
+/**
+ * Per-tool entity extractors, keyed by SERVER — the same reason
+ * `deletableEntities` below is: `createMcpServer()` runs more than once per
+ * process (every test that builds a catalog), and a module-level Map would
+ * accumulate one server's registrations into another's. A WeakMap also lets the
+ * entry die with the server.
+ */
+const toolEntityExtractors = new WeakMap<
+  McpServer,
+  Map<string, ToolEntityExtractor>
+>();
+
+function declareToolEntityExtractor(
+  server: McpServer,
+  name: string,
+  extract: ToolEntityExtractor,
+) {
+  const existing = toolEntityExtractors.get(server);
+  if (existing) {
+    existing.set(name, extract);
+    return;
+  }
+  toolEntityExtractors.set(server, new Map([[name, extract]]));
+}
+
+/**
+ * How to name the entity one call to `name` acted on, or `undefined` for a tool
+ * that declared none.
+ */
+export function getToolEntityExtractor(
+  server: McpServer,
+  name: string,
+): ToolEntityExtractor | undefined {
+  return toolEntityExtractors.get(server)?.get(name);
+}
 
 /**
  * `_meta` for a tool that declares an MCP App.
@@ -250,11 +327,43 @@ function structuredSuccess(
   };
 }
 
-export function structuredError(text: string) {
+/**
+ * A genuine FAULT: the call could not run at all.
+ *
+ * `_meta` carries the same `{code, reason}` a tRPC client reads off
+ * `error.data`, so an agent can branch on WHY without substring-matching the
+ * sentence. It rides in `_meta` and NOT in `structuredContent` on purpose: the
+ * reference SDK client validates `structuredContent` against the tool's
+ * declared output schema with no exemption for `isError` (client/index.js — the
+ * missing-content guard checks `isError`, the validation right below it does
+ * not), so a refusal payload smuggled in there makes every errored call throw
+ * `McpError` client-side. Nothing validates `_meta`.
+ *
+ * A REFUSAL does not come through here at all — it is a domain answer inside
+ * the tool's own output schema (see `operationRefusalOut`).
+ */
+export function structuredError(
+  text: string,
+  meta?: Record<string, unknown>,
+): CallToolResult {
   return {
     content: [{ type: "text" as const, text }],
     isError: true as const,
+    ...(meta ? { _meta: meta } : {}),
   };
+}
+
+/**
+ * `_meta` key for the machine-readable half of a failed call. Namespaced
+ * because `_meta` is a shared bag and the spec reserves the unprefixed space.
+ */
+export const ERROR_META_KEY = "cubby/error";
+
+/** The `_meta` bag for a fault, or `undefined` when there is nothing to add. */
+function toolErrorMeta(error: unknown): Record<string, unknown> | undefined {
+  const payload = toPublicErrorPayload(error);
+  if (!payload.code && !payload.reason && !payload.blockers) return undefined;
+  return { [ERROR_META_KEY]: payload };
 }
 
 /**
@@ -372,11 +481,32 @@ function isCallToolResult(value: unknown): value is CallToolResult {
   );
 }
 
+/**
+ * Adapt a wrapper's `Record<string, unknown>` extractor to the generic
+ * `InferSchemaLike<TInput>` one {@link registerMcpTool} declares.
+ *
+ * Forwarding it directly makes `InferSchemaLike<TInput>` an INPUT position TS
+ * has to satisfy, which pins the generic and turns `params.items` into
+ * `unknown` inside every batch tool's own handler. The wrapper already knows
+ * its params are an object; the cast says so without constraining inference.
+ */
+function adaptEntityExtractor<TIn, TOut>(
+  extract: ((params: TIn) => string | undefined) | undefined,
+): ((params: TOut) => string | undefined) | undefined {
+  return extract && ((params) => extract(params as unknown as TIn));
+}
+
 export function registerMcpTool<
   TInput extends ZodSchemaLike,
   TOutput extends z.ZodType,
 >(server: McpServer, config: RegisterMcpToolConfig<TInput, TOutput>) {
   const inputSchema = toolInputSchema(config.name, config.inputSchema);
+  const telemetryEntity = config.telemetryEntity;
+  if (telemetryEntity) {
+    declareToolEntityExtractor(server, config.name, (params) =>
+      telemetryEntity(params as InferSchemaLike<TInput>),
+    );
+  }
   const callback = async (
     params: Record<string, unknown>,
     extra: ToolExtra,
@@ -391,7 +521,7 @@ export function registerMcpTool<
       }
       return structuredSuccess(result, config.outputSchema);
     } catch (error) {
-      return structuredError(formatToolError(error));
+      return structuredError(formatToolError(error), toolErrorMeta(error));
     }
   };
   server.registerTool(
@@ -450,30 +580,27 @@ export interface ToolErrorDetail {
   /** The tRPC code, when the failure came through one. */
   code?: TRPC_ERROR_CODE_KEY;
   /** The `AppErrorReason` `createAppError` stamped onto `cause`. */
-  reason?: AppErrorReason;
+  reason?: string;
   message: string;
 }
 
-export function describeToolError(error: unknown): ToolErrorDetail {
-  if (error instanceof TRPCError) {
-    const reason = (error.cause as { reason?: string })?.reason;
-    return {
-      code: error.code,
-      // Narrowed on the way out rather than trusted on the way in: `cause` is
-      // typed `unknown`, and a TRPCError thrown by tRPC itself (input parsing,
-      // say) carries no reason at all.
-      ...(isAppErrorReason(reason) ? { reason } : {}),
-      message: error.message,
-    };
-  }
-  if (error instanceof Error) return { message: error.message };
-  return { message: String(error) };
+/**
+ * `code`/`reason`/`blockers` come from `toPublicErrorPayload` — the same
+ * whitelist tRPC's `errorFormatter` uses — so the two transports cannot drift
+ * about what a client is allowed to learn. Only `message` is added here, since
+ * it is the one part that belongs to the MCP envelope's text block.
+ */
+function describeToolError(error: unknown): ToolErrorDetail {
+  const { code, reason } = toPublicErrorPayload(error);
+  const message = error instanceof Error ? error.message : String(error);
+  return {
+    ...(code ? { code } : {}),
+    ...(reason ? { reason } : {}),
+    message,
+  };
 }
 
-const isAppErrorReason = (value: unknown): value is AppErrorReason =>
-  typeof value === "string" && value in AppErrors;
-
-export function formatToolError(error: unknown): string {
+function formatToolError(error: unknown): string {
   const { code, reason, message } = describeToolError(error);
   if (!code) return message;
   return reason ? `${code}: ${message} (${reason})` : `${code}: ${message}`;
@@ -983,13 +1110,36 @@ function deleteHandler(entity: ShortcodeEntity) {
   ): Promise<DeleteEntityOut> => {
     const caller = getCaller(extra);
     const ids = params.ids as string[];
-    const override = deleteDispatch[entity];
-    if (override) return await override(caller, ids);
-    const result = (await getEntityRouter(caller, entity).delete({ ids })) as {
-      deleted?: number;
-    };
-    // Measured by `removeEntity`, never `ids.length` — a delete can cascade.
-    return { deleted: result?.deleted ?? 0, sideEffects: [] };
+    try {
+      const override = deleteDispatch[entity];
+      if (override) return await override(caller, ids);
+      const result = (await getEntityRouter(caller, entity).delete({
+        ids,
+      })) as {
+        deleted?: number;
+      };
+      // Measured by `removeEntity`, never `ids.length` — a delete can cascade.
+      return { deleted: result?.deleted ?? 0, sideEffects: [] };
+    } catch (error) {
+      // A BLOCKED delete is an answer, not a failure — the guard ran and has
+      // something specific to say. Returned inside the declared output schema
+      // rather than thrown, because the MCP error envelope carries prose and
+      // nothing structured a client may rely on, and `delete_entity`'s own
+      // description promises the blocker ids. Anything else (a missing row, a
+      // bug) still throws and becomes an `isError` result.
+      if (!isBlockedRefusal(error)) throw error;
+      const { code, reason, blockers } = toPublicErrorPayload(error);
+      return {
+        deleted: 0,
+        sideEffects: [],
+        refusal: {
+          error: formatToolError(error),
+          ...(code ? { code } : {}),
+          ...(reason ? { reason } : {}),
+          blockers: blockers ?? [],
+        },
+      };
+    }
   };
 }
 
@@ -1124,7 +1274,7 @@ type BatchResult =
       status: "failed";
       error: string;
       code?: TRPC_ERROR_CODE_KEY;
-      reason?: AppErrorReason;
+      reason?: string;
     };
 
 /**
@@ -1160,6 +1310,10 @@ export function registerBatchTool<TItem extends z.ZodType>(
      */
     defaultResultDetail?: BatchResultDetail;
     annotations: ToolAnnotations;
+    /** Which entity this batch acts on — see `RegisterMcpToolConfig.telemetryEntity`. */
+    telemetryEntity?: (params: {
+      items: Array<z.output<TItem>>;
+    }) => string | undefined;
     /** Cross-item input rules — e.g. rejecting two items that target one entity. */
     refineItems?: (
       items: Array<z.output<TItem>>,
@@ -1189,6 +1343,7 @@ export function registerBatchTool<TItem extends z.ZodType>(
     inputSchema,
     outputSchema: batchMutationOut(config.itemOutput),
     annotations: config.annotations,
+    telemetryEntity: adaptEntityExtractor(config.telemetryEntity),
     handler: async (params, extra) => {
       const caller = getCaller(extra);
       const detail =
@@ -1399,6 +1554,8 @@ type EntityListToolConfig = {
   defaultPageSize?: number;
   maxPageSize?: number;
   buildFilters?: BuildListFilters;
+  /** Which entity this tool acts on — see `RegisterMcpToolConfig.telemetryEntity`. */
+  telemetryEntity?: (params: Record<string, unknown>) => string | undefined;
 };
 
 function registerEntityListTool(
@@ -1422,6 +1579,7 @@ function registerEntityListTool(
     ),
     outputSchema: config.outputSchema,
     annotations: config.annotations,
+    telemetryEntity: adaptEntityExtractor(config.telemetryEntity),
     handler: listHandler(config.router, config.slim, {
       orderBy: config.sort.orderBy,
       direction: config.sort.direction,
@@ -1445,6 +1603,8 @@ function registerEntityGetTool(
     annotations: ToolAnnotations;
     /** Override the fetch when `router.getByID({ id })` is the wrong call. */
     get?: GetByIdFetch;
+    /** Which entity this tool acts on — see `RegisterMcpToolConfig.telemetryEntity`. */
+    telemetryEntity?: (params: Record<string, unknown>) => string | undefined;
   },
 ) {
   registerMcpTool(server, {
@@ -1453,6 +1613,7 @@ function registerEntityGetTool(
     inputSchema: { id: idParam(config.entity) },
     outputSchema: config.outputSchema,
     annotations: config.annotations,
+    telemetryEntity: adaptEntityExtractor(config.telemetryEntity),
     handler: getByIdHandler(config.router, config.slim ?? identity, config.get),
   });
 }
@@ -1476,6 +1637,38 @@ const deletableEntities = new WeakMap<
   McpServer,
   Map<ShortcodeEntity, string>
 >();
+
+/**
+ * Per-entity merge prose, collected at toolset-registration time — the same
+ * mechanism {@link declareDeletableEntity} uses, for the same reason.
+ *
+ * There is ONE merge tool (`merge_entity`), but what a merge CARRIES OVER, what
+ * it refuses, and what is unrecoverable afterwards are entirely per-entity, and
+ * that prose is the only thing standing between an agent and an irreversible
+ * fold of the wrong two rows. Each toolset still declares its own; the generic
+ * tool composes them into its `entity` parameter description.
+ *
+ * Which entities the tool actually OFFERS is not decided here — it comes from
+ * `entityManifest[entity].lifecycle.merge`, so an entity cannot be merged by
+ * MCP just because someone wrote a paragraph about it.
+ */
+const mergeableEntities = new WeakMap<
+  McpServer,
+  Map<ShortcodeEntity, string>
+>();
+
+export function declareMergeableEntity(
+  server: McpServer,
+  entity: ShortcodeEntity,
+  description: string,
+) {
+  const existing = mergeableEntities.get(server);
+  if (existing) {
+    existing.set(entity, description);
+    return;
+  }
+  mergeableEntities.set(server, new Map([[entity, description]]));
+}
 
 function declareDeletableEntity(
   server: McpServer,
@@ -1503,6 +1696,8 @@ function registerEntityUpdateTool<TInput extends ZodSchemaLike>(
     annotations: ToolAnnotations;
     /** Resolve any FK shortcode fields inside `data` before it reaches the router. */
     resolveUpdateData?: ResolveUpdateData;
+    /** Which entity this tool acts on — see `RegisterMcpToolConfig.telemetryEntity`. */
+    telemetryEntity?: (params: Record<string, unknown>) => string | undefined;
   },
 ) {
   registerMcpTool(server, {
@@ -1511,6 +1706,7 @@ function registerEntityUpdateTool<TInput extends ZodSchemaLike>(
     inputSchema: config.inputSchema,
     outputSchema: config.outputSchema,
     annotations: config.annotations,
+    telemetryEntity: adaptEntityExtractor(config.telemetryEntity),
     handler: async (params, extra) =>
       updateHandler(
         config.router,
@@ -1529,6 +1725,8 @@ export function registerEntityCreateTool<TInput extends ZodSchemaLike>(
     outputSchema: z.ZodType;
     slim: Slim;
     annotations: ToolAnnotations;
+    /** Which entity this tool acts on — see `RegisterMcpToolConfig.telemetryEntity`. */
+    telemetryEntity?: (params: Record<string, unknown>) => string | undefined;
     create: (
       caller: Caller,
       params: InferSchemaLike<TInput>,
@@ -1541,6 +1739,7 @@ export function registerEntityCreateTool<TInput extends ZodSchemaLike>(
     inputSchema: config.inputSchema,
     outputSchema: config.outputSchema,
     annotations: config.annotations,
+    telemetryEntity: adaptEntityExtractor(config.telemetryEntity),
     handler: async (params, extra) => {
       const result = await config.create(getCaller(extra), params);
       return respond(result, config.slim);
@@ -1648,6 +1847,10 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
       ));
   const updateInput =
     config.updateInput ?? withIdInput(config.entity, config.updateShape);
+  // Every tool a CRUD toolset registers targets ONE statically-known entity, so
+  // the extractor is a constant rather than something read off the arguments.
+  // Only the generic tools (`delete_entity`, `merge_entity`) have to inspect.
+  const entityName = () => config.entity as string;
 
   if (enabled("list"))
     registerEntityListTool(server, {
@@ -1663,6 +1866,7 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
       maxPageSize: config.paging?.maxPageSize,
       buildFilters: config.buildFilters,
       annotations: READ_ONLY_CLOSED,
+      telemetryEntity: entityName,
     });
 
   if (enabled("get"))
@@ -1678,6 +1882,7 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
           : (config.detailSlim ?? config.slim),
       annotations: READ_ONLY_CLOSED,
       get: config.get,
+      telemetryEntity: entityName,
     });
 
   if (enabled("create"))
@@ -1688,6 +1893,7 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
       outputSchema: mutationOut,
       slim: config.slim,
       annotations: WRITE_CLOSED,
+      telemetryEntity: entityName,
       create,
     });
 
@@ -1701,6 +1907,7 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
       router: config.entity,
       entity: config.entity,
       annotations: WRITE_CLOSED,
+      telemetryEntity: entityName,
       resolveUpdateData: config.resolveUpdateData,
     });
 
@@ -1714,6 +1921,7 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
       itemInput: schemaFromShape(config.createInput),
       itemOutput: mutationOut,
       annotations: WRITE_CLOSED,
+      telemetryEntity: entityName,
       run: async (caller, item) =>
         respond(
           await create(caller, item as InferSchemaLike<TCreateInput>),
@@ -1732,6 +1940,7 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
       itemInput: schemaFromShape(updateInput),
       itemOutput: mutationOut,
       annotations: WRITE_CLOSED,
+      telemetryEntity: entityName,
       refineItems: rejectDuplicateIds,
       run: async (caller, item) => {
         const { id, ...rest } = item as Record<string, unknown>;
@@ -1770,6 +1979,8 @@ export function registerRouterTool<
     outputSchema: TOutput;
     annotations: ToolAnnotations;
     uiResourceUri?: string;
+    /** Which entity this tool acts on — see `RegisterMcpToolConfig.telemetryEntity`. */
+    telemetryEntity?: (params: InferSchemaLike<TInput>) => string | undefined;
     call: (
       caller: Caller,
       params: InferSchemaLike<TInput>,
@@ -1786,9 +1997,406 @@ export function registerRouterTool<
     outputSchema: config.outputSchema,
     annotations: config.annotations,
     uiResourceUri: config.uiResourceUri,
+    telemetryEntity: adaptEntityExtractor(config.telemetryEntity),
     handler: async (params, extra) => config.call(getCaller(extra), params),
   });
 }
+
+/**
+ * The by-VALUE half of a merge result, as one flat object whose every field is
+ * optional.
+ *
+ * WHICH FIELDS APPEAR DEPENDS ON THE ENTITY. That is deliberate, and it is the
+ * reason this is a superset object rather than a per-entity union: a union
+ * normalizes to `undefined` in the MCP SDK, which strips the whole field (see
+ * `toolInputSchema`), and four sibling objects would advertise four shapes for
+ * one tool.
+ *
+ * It exists alongside `moved` because `PublicImpactItem` is counts-only
+ * (`total` plus `byTargetId`), and some of what a merge does is only meaningful
+ * BY VALUE. `externalIdsDemoted` is the clearest case: each entry is a live
+ * listing the survivor already had a slot for, kept as a secondary rather than
+ * destroyed, and knowing WHICH identifier survived is the entire point — a
+ * count of three would say nothing an agent could act on.
+ */
+const mergeEntitySummaryOut = z.object({
+  /** Public ids of the rows this merge removed. Their codes are permanent tombstones. */
+  deletedIds: z.array(z.string()).optional(),
+  /** ingredient, product: names newly folded into the survivor's alias list. */
+  aliasesAdded: z.array(z.string()).optional(),
+  /** product, vendor: survivor columns filled in from a merged-away row (never overwritten). */
+  carriedFields: z.array(z.string()).optional(),
+  /**
+   * product: identifiers whose `(source, kind)` slot the survivor already
+   * filled. Kept as SECONDARY rows rather than destroyed — reported by value,
+   * because each is a live listing and knowing it survived is the point.
+   */
+  externalIdsDemoted:
+    productMergeSummaryOut.shape.externalIdsDemoted.optional(),
+});
+
+/**
+ * One cluster's outcome. Flat rather than a `status` discriminated union: the
+ * failure fields are the only ones that vary, and a flat object keeps the
+ * advertised JSON Schema to one shape per tool.
+ *
+ * The SURVIVOR ROW IS DELIBERATELY ABSENT. All four merges used to return the
+ * merged entity, which is up to ~3KB of hydrated product per cluster — spent on
+ * every cluster of a dedup sweep whether or not anything reads it, and never the
+ * thing a sweep is actually asking. `keepId` names it; `get_<entity>` fetches it
+ * when it's genuinely wanted.
+ */
+const mergeEntityResultOut = z.object({
+  /** The survivor's public id, echoed so a caller can key results by its own input. */
+  keepId: z.string(),
+  status: z.enum(["succeeded", "failed"]),
+  /**
+   * Rows the merge ACTUALLY removed, measured by the write itself. Never
+   * `mergeIds.length`, which would only quote the request back.
+   *
+   * All four entities report it. Three read it back from `finalizeMerge`;
+   * `purchase` reads it from its own bulk soft-delete's `.returning()`, because
+   * that statement runs BEFORE `foldChargeInto` (the partial unique index needs
+   * the slot vacated first), which makes the `finalizeMerge` inside the fold a
+   * no-op that would report 0.
+   *
+   * Optional because it is absent on a FAILED cluster, where nothing was
+   * removed and reporting 0 would be indistinguishable from a successful no-op.
+   */
+  merged: z.number().int().nonnegative().optional(),
+  /** What moved onto the survivor, as counts. Only non-empty consequences appear. */
+  moved: z.array(publicImpactItemSchema),
+  /** The by-value half — see {@link mergeEntitySummaryOut}. */
+  summary: mergeEntitySummaryOut,
+  /** Work the merge triggered beyond the rows themselves (recomputes, reindexing). */
+  sideEffects: z.array(publicImpactItemSchema),
+  /**
+   * Why the cluster refused, flattened onto the result: `error` is the rendered
+   * sentence, `code`/`reason` the same failure a caller can branch on, and
+   * `blockers` names WHICH rows blocked it and how many dependents each had.
+   * Failures only — every field is absent on a success, which is what
+   * `.partial()` says here.
+   *
+   * Shared with a refused `delete_entity`, which NESTS the same four fields
+   * instead of flattening them (one result, so presence is its own
+   * discriminator). One definition, one vocabulary — see `operationRefusalOut`.
+   */
+  ...operationRefusalOut.partial().shape,
+});
+
+const mergeEntityOut = z.object({
+  entity: z.string(),
+  results: z.array(mergeEntityResultOut),
+});
+
+type MergeEntityOutcome = Pick<
+  z.infer<typeof mergeEntityResultOut>,
+  "merged" | "moved" | "summary" | "sideEffects"
+>;
+
+/** No merge result carries per-target counts, so there is never a uuid to map. */
+const NO_TARGET_IDS: ReadonlyMap<string, string> = new Map();
+
+/**
+ * One counted consequence, as the branded `PublicImpactItem` the preview side
+ * already speaks — dropped entirely when the count is zero, the same way
+ * `present()` drops an empty impact from a preview.
+ *
+ * `byTargetId` is always empty here: a merge MUTATION reports what it did in
+ * aggregate, while the per-target breakdown is something only the planners
+ * compute (they have the losers' rows in hand). Inventing one would mean
+ * re-querying rows that are already soft-deleted.
+ */
+const mergeImpact = (
+  item: {
+    code: string;
+    effect: z.infer<typeof publicImpactItemSchema>["effect"];
+    label: string;
+    description: string;
+  },
+  total: number,
+): PublicImpactItem[] =>
+  total > 0
+    ? [
+        toPublicImpact(
+          { ...item, total, byTargetId: {} },
+          NO_TARGET_IDS,
+          "drop",
+        ),
+      ]
+    : [];
+
+/** Entities whose lifecycle declares a merge — the gate on `merge_entity`'s enum. */
+const MERGEABLE_ENTITIES = shortcodeEntities.filter(
+  (entity) => entityManifest[entity].lifecycle.merge,
+);
+
+/**
+ * How one entity's merge is actually performed, and how its result is projected
+ * onto the shared shape.
+ *
+ * Unlike {@link deleteDispatch}, every entry here is an override: there is no
+ * generic `router.merge` to fall back on, because what a merge reports is
+ * genuinely per-entity (a vendor merge folds charges, a product merge demotes
+ * identifiers, an ingredient merge folds aliases and re-costs recipes). The
+ * shared part is the SHAPE, not the operation.
+ */
+const mergeDispatch: Record<
+  string,
+  (
+    caller: Caller,
+    keepId: string,
+    mergeIds: string[],
+  ) => Promise<MergeEntityOutcome>
+> = {
+  product: async (caller, keepId, mergeIds) => {
+    const { mergeSummary } = await (
+      caller as unknown as {
+        product: {
+          merge: (input: { keepId: string; mergeIds: string[] }) => Promise<{
+            mergeSummary: z.infer<typeof productMergeSummaryOut>;
+          }>;
+        };
+      }
+    ).product.merge({ keepId, mergeIds });
+    return {
+      merged: mergeSummary.merged,
+      moved: [
+        ...mergeImpact(
+          {
+            code: "external-ids-moved",
+            effect: "repoint",
+            label: "identifiers moved",
+            description:
+              "External identifiers re-pointed onto the survivor into a slot it had free.",
+          },
+          mergeSummary.externalIdsMoved,
+        ),
+        ...mergeImpact(
+          {
+            code: "inventory-moved",
+            effect: "repoint",
+            label: "stock entries moved",
+            description:
+              "Stock entries re-pointed onto the survivor in a location it did not already stock.",
+          },
+          mergeSummary.inventoryMoved,
+        ),
+        ...mergeImpact(
+          {
+            code: "inventory-merged",
+            effect: "move-dedupe",
+            label: "stock entries summed",
+            description:
+              "Stock in a location the survivor already stocks, summed into its existing entry.",
+          },
+          mergeSummary.inventoryMerged,
+        ),
+        ...mergeImpact(
+          {
+            code: "expenses-moved",
+            effect: "repoint",
+            label: "ledger lines moved",
+            description: "Expenses re-pointed onto the survivor.",
+          },
+          mergeSummary.expensesMoved,
+        ),
+        ...mergeImpact(
+          {
+            code: "images-moved",
+            effect: "repoint",
+            label: "images moved",
+            description:
+              "Images re-pointed onto the survivor; its own cover image is preserved.",
+          },
+          mergeSummary.imagesMoved,
+        ),
+        ...mergeImpact(
+          {
+            code: "unit-mappings-moved",
+            effect: "repoint",
+            label: "unit mappings moved",
+            description: "Unit mappings re-pointed onto the survivor.",
+          },
+          mergeSummary.unitMappingsMoved,
+        ),
+        ...mergeImpact(
+          {
+            code: "tasks-moved",
+            effect: "repoint",
+            label: "tasks moved",
+            description: "Tasks re-pointed onto the survivor.",
+          },
+          mergeSummary.tasksMoved,
+        ),
+        ...mergeImpact(
+          {
+            code: "project-uses-moved",
+            effect: "repoint",
+            label: "project uses moved",
+            description:
+              "Project tool-use records re-pointed onto the survivor.",
+          },
+          mergeSummary.projectUsesMoved,
+        ),
+        ...mergeImpact(
+          {
+            code: "purchase-links-moved",
+            effect: "repoint",
+            label: "purchase links moved",
+            description:
+              "Explicit Purchase↔Product provenance links re-pointed onto the survivor.",
+          },
+          mergeSummary.purchaseLinksMoved,
+        ),
+        ...mergeImpact(
+          {
+            code: "wish-candidates-moved",
+            effect: "repoint",
+            label: "wishlist candidacies moved",
+            description: "Wishlist candidacies re-pointed onto the survivor.",
+          },
+          mergeSummary.wishCandidatesMoved,
+        ),
+      ],
+      summary: {
+        deletedIds: mergeSummary.deletedIds,
+        aliasesAdded: mergeSummary.aliasesAdded,
+        carriedFields: mergeSummary.carriedFields,
+        externalIdsDemoted: mergeSummary.externalIdsDemoted,
+      },
+      sideEffects: [],
+    };
+  },
+
+  vendor: async (caller, keepId, mergeIds) => {
+    const { mergeSummary } = await (
+      caller as unknown as {
+        vendor: {
+          merge: (input: { keepId: string; mergeIds: string[] }) => Promise<{
+            mergeSummary: {
+              deletedIds: string[];
+              merged: number;
+              purchasesRepointed: number;
+              purchasesFolded: number;
+              carriedFields: string[];
+            };
+          }>;
+        };
+      }
+    ).vendor.merge({ keepId, mergeIds });
+    return {
+      merged: mergeSummary.merged,
+      moved: [
+        ...mergeImpact(
+          {
+            code: "purchases-repointed",
+            effect: "repoint",
+            label: "purchases re-pointed",
+            description:
+              "Live purchases that simply adopted the keeper — no same-order collision.",
+          },
+          mergeSummary.purchasesRepointed,
+        ),
+        ...mergeImpact(
+          {
+            code: "purchases-folded",
+            effect: "move-dedupe",
+            label: "purchases folded",
+            description:
+              "Purchases sharing a non-null orderId with one already on the keeper: their expenses and documents moved onto the survivor purchase and the loser purchase was soft-deleted.",
+          },
+          mergeSummary.purchasesFolded,
+        ),
+      ],
+      summary: {
+        deletedIds: mergeSummary.deletedIds,
+        carriedFields: mergeSummary.carriedFields,
+      },
+      sideEffects: [],
+    };
+  },
+
+  purchase: async (caller, keepId, mergeIds) => {
+    const { mergeSummary } = await (
+      caller as unknown as {
+        purchase: {
+          merge: (input: { keepId: string; mergeIds: string[] }) => Promise<{
+            mergeSummary: { deletedIds: string[]; merged: number };
+          }>;
+        };
+      }
+    ).purchase.merge({ keepId, mergeIds });
+    // Measured like the other three. Purchase has no per-edge breakdown to
+    // report — `foldChargeInto` moves expenses and documents without counting
+    // them — so `moved` stays empty rather than inventing categories.
+    return {
+      merged: mergeSummary.merged,
+      moved: [],
+      summary: { deletedIds: mergeSummary.deletedIds },
+      sideEffects: [],
+    };
+  },
+
+  ingredient: async (caller, keepId, mergeIds) => {
+    const result = await (
+      caller as unknown as {
+        ingredient: {
+          merge: (input: { keepId: string; mergeIds: string[] }) => Promise<{
+            mergeSummary: {
+              aliasesAdded: string[];
+              recipesMoved: number;
+              productsMoved: number;
+              merged: number;
+              deletedIds: string[];
+            };
+            sideEffects: { backgroundBatches: unknown[] };
+          }>;
+        };
+      }
+    ).ingredient.merge({ keepId, mergeIds });
+    const { mergeSummary } = result;
+    return {
+      merged: mergeSummary.merged,
+      moved: [
+        ...mergeImpact(
+          {
+            code: "recipes-moved",
+            effect: "repoint",
+            label: "recipe usages re-pointed",
+            description:
+              "Distinct recipes that had an ingredient line re-pointed onto the survivor.",
+          },
+          mergeSummary.recipesMoved,
+        ),
+        ...mergeImpact(
+          {
+            code: "products-moved",
+            effect: "repoint",
+            label: "products moved",
+            description:
+              "Products re-pointed onto the survivor, which therefore inherits their USDA links and prices.",
+          },
+          mergeSummary.productsMoved,
+        ),
+      ],
+      summary: {
+        deletedIds: mergeSummary.deletedIds,
+        aliasesAdded: mergeSummary.aliasesAdded,
+      },
+      sideEffects: mergeImpact(
+        {
+          code: "recompute-affected-recipes",
+          effect: "preserve",
+          label: "background recompute batches",
+          description:
+            "Recipes using the merged ingredients — or already using the survivor — had their totals marked stale in-transaction and their recompute dispatched off the request path.",
+        },
+        result.sideEffects.backgroundBatches.length,
+      ),
+    };
+  },
+};
 
 /**
  * The one delete tool.
@@ -1813,6 +2421,279 @@ export function registerRouterTool<
  * declared.
  */
 export function registerGenericEntityTools(server: McpServer) {
+  registerDeleteEntityTool(server);
+  registerMergeEntityTool(server);
+  registerRelationTools(server);
+}
+
+/**
+ * Per-family attach/detach prose, collected at toolset-registration time — the
+ * same mechanism {@link declareDeletableEntity} and {@link
+ * declareMergeableEntity} use, for the same reason.
+ *
+ * There are TWO relation tools (`attach_entity`, `detach_entity`) standing in
+ * for six, and what each family's edge MEANS is entirely per-family: kit
+ * semantics and quantity for components, "provenance, not money" for purchase
+ * links, the tools/software category rule for project resources. A generic tool
+ * with generic prose is a worse tool than the three it replaced, so each toolset
+ * still writes its own paragraph and the generic tool composes them into its
+ * `parentId` description.
+ */
+const relationParents = new WeakMap<
+  McpServer,
+  Map<RelationParentEntity, { attach: string; detach: string }>
+>();
+
+export function declareRelationEntity(
+  server: McpServer,
+  entity: RelationParentEntity,
+  prose: { attach: string; detach: string },
+) {
+  const existing = relationParents.get(server);
+  if (existing) {
+    existing.set(entity, prose);
+    return;
+  }
+  relationParents.set(server, new Map([[entity, prose]]));
+}
+
+/**
+ * A relation mutation's result, plus the refusal channel.
+ *
+ * `attached` becomes OPTIONAL here and is omitted on a refusal: it means "how
+ * many are on this parent now", and the write never ran, so any number would be
+ * a claim the call cannot support. `changed: 0` / `alreadySatisfied: 0` are both
+ * literally true and stay required.
+ */
+const relationEntityOut = relationMutationOut
+  .extend({
+    attached: relationMutationOut.shape.attached
+      .optional()
+      .describe(
+        "Live edges on this parent after the write. Absent on a refusal — nothing was written, so there is no 'after'.",
+      ),
+    refusal: operationRefusalOut
+      .optional()
+      .describe(
+        "Present INSTEAD of a write when a guard refused. `blockers` names which shortcodes blocked and why.",
+      ),
+  })
+  .describe("Relation mutation result. See `relationMutationOut`.");
+
+/** The three parents, in the order their prefixes are dispatched on. */
+const RELATION_PARENTS = ["product", "project", "purchase"] as const;
+
+type RelationItem = { productId: string; quantity?: number };
+
+/**
+ * Run one relation mutation, dispatched on the PARENT'S SHORTCODE PREFIX.
+ *
+ * ⚠️ Prefix dispatch is unambiguous only because each parent has exactly ONE
+ * product-parented relation today. A second product-parented relation —
+ * accessories, replacement parts, consumable-for — makes `attach_entity(PRD-…)`
+ * ambiguous, and the tempting retrofit (an optional `relation` param defaulting
+ * to "components") silently reinterprets nothing while quietly making the
+ * default load-bearing. When that day comes, add an explicit REQUIRED `relation`
+ * enum for product parents rather than overloading the prefix further.
+ */
+async function runRelationMutation(
+  caller: Caller,
+  verb: "attach" | "detach",
+  entity: RelationParentEntity,
+  parentId: string,
+  items: RelationItem[],
+): Promise<z.infer<typeof relationEntityOut>> {
+  // `quantity` is components-only. REFUSED rather than ignored for the other
+  // two parents: collapsing three tools into one converted three compile-time
+  // input schemas into one runtime check, and a silently-dropped quantity is
+  // exactly the failure that trade makes possible.
+  if (entity !== "product") {
+    const withQuantity = items.filter((item) => item.quantity !== undefined);
+    if (withQuantity.length > 0) {
+      throw createAppError(
+        "RELATION_QUANTITY_UNSUPPORTED",
+        `A ${entity} relation carries no quantity — it records that the product was used or bought, not how many. Drop \`quantity\` from ${withQuantity.map((item) => item.productId).join(", ")}. Only kit components (a PRD- parent) take one.`,
+      );
+    }
+  }
+  const productIds = items.map((item) => item.productId);
+  if (entity === "product") {
+    return verb === "attach"
+      ? await caller.product.attachComponents({
+          parentProductId: parentId,
+          components: items.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity ?? 1,
+          })),
+        })
+      : await caller.product.detachComponents({
+          parentProductId: parentId,
+          componentProductIds: productIds,
+        });
+  }
+  if (entity === "project") {
+    const input = { projectId: parentId, productIds };
+    return verb === "attach"
+      ? await caller.project.attachResources(input)
+      : await caller.project.detachResources(input);
+  }
+  const input = { purchaseId: parentId, productIds };
+  return verb === "attach"
+    ? await caller.purchase.attachProducts(input)
+    : await caller.purchase.detachProducts(input);
+}
+
+/** The parent entity a relation call names, or `undefined` for a malformed code. */
+function relationParentOf(parentId: string): RelationParentEntity | undefined {
+  const parsed = relationParentEntitySchema.safeParse(
+    parseShortcode(parentId)?.type,
+  );
+  return parsed.success ? parsed.data : undefined;
+}
+
+/**
+ * Run a relation mutation and turn a BLOCKED refusal into a domain answer.
+ *
+ * Same doctrine as `delete_entity`: a guard that refused is not a fault, and
+ * the MCP error envelope carries prose and nothing a client may rely on, so the
+ * refusal has to ride inside the declared output schema to survive the trip.
+ */
+async function relationHandler(
+  verb: "attach" | "detach",
+  caller: Caller,
+  parentId: string,
+  items: RelationItem[],
+): Promise<z.infer<typeof relationEntityOut>> {
+  const entity = relationParentOf(parentId);
+  if (!entity) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `${parentId} is not a ${RELATION_PARENTS.join(", ")} shortcode.`,
+      cause: { reason: "INVALID_INPUT" },
+    });
+  }
+  try {
+    return await runRelationMutation(caller, verb, entity, parentId, items);
+  } catch (error) {
+    if (!isBlockedRefusal(error)) throw error;
+    const { code, reason, blockers } = toPublicErrorPayload(error);
+    return {
+      changed: 0,
+      alreadySatisfied: 0,
+      refusal: {
+        error: formatToolError(error),
+        ...(code ? { code } : {}),
+        ...(reason ? { reason } : {}),
+        blockers: blockers ?? [],
+      },
+    };
+  }
+}
+
+/**
+ * The two relation tools.
+ *
+ * Replace `attach_product_components` / `detach_product_components`,
+ * `attach_project_resources` / `detach_project_resources`, and
+ * `attach_purchase_products` / `detach_purchase_products` — six tools over
+ * three families that already returned one shared output shape
+ * (`relationMutationOut`) and differed only in what their parent was called.
+ *
+ * `repoint_project_uses` deliberately does NOT collapse in here: it is a MOVE,
+ * and its own description warns that spelling it as detach+attach discards a
+ * project's tool history with nothing to flag it.
+ *
+ * Must be registered AFTER every entity toolset, since it reads what they
+ * declared.
+ */
+function registerRelationTools(server: McpServer) {
+  const declared = relationParents.get(server);
+  const entities = RELATION_PARENTS.filter((entity) => declared?.has(entity));
+  if (entities.length === 0) return;
+
+  const parentIdParam = (verb: "attach" | "detach") =>
+    anyShortcodeSchema(
+      entities as unknown as [RelationParentEntity, ...RelationParentEntity[]],
+    ).describe(
+      `The row the edge hangs off. ITS PREFIX PICKS THE RELATION:\n${entities
+        .map((entity) => `- **${entity}**: ${declared?.get(entity)?.[verb]}`)
+        .join("\n")}`,
+    );
+
+  const productIdsParam = z
+    .array(shortcodeSchema("product"))
+    .min(1)
+    .max(100)
+    .describe("PRD- codes on the other end of the edge.");
+
+  registerMcpTool(server, {
+    name: "attach_entity",
+    description:
+      "Record a relation between one parent row and one or more existing Products. The parent's SHORTCODE PREFIX picks which relation: PRD- = kit components, PRJ- = project resource uses, PUR- = purchase provenance links. " +
+      "⚠️ This trades a COMPILE-TIME contract for a RUNTIME one: the three tools this replaces had three separate input schemas, so `quantity` simply did not exist on the two that carry none. Here it exists on every call and is REFUSED (never ignored) for a PRJ- or PUR- parent, with reason RELATION_QUANTITY_UNSUPPORTED. Read the parentId description for what each relation means before calling — the families are genuinely different, and only the shape is shared. " +
+      "Every relation is idempotent: re-asserting a live edge writes nothing and is reported in `alreadySatisfied`, not as an error. `changed` is the rows actually written; `attached` is the live count on that parent afterwards. " +
+      "A REFUSAL is not an error: the call succeeds with `changed: 0` and a `refusal` object whose `blockers` name WHICH shortcodes blocked and why (not live, wrong category, would create a cycle). Call preview_entity_operation with operation=attach to see all of that without committing.",
+    inputSchema: {
+      parentId: parentIdParam("attach"),
+      items: z
+        .array(
+          z.object({
+            productId: shortcodeSchema("product"),
+            quantity: z
+              .number()
+              .int()
+              .min(1)
+              .max(9999)
+              .optional()
+              .describe(
+                "KIT COMPONENTS ONLY (PRD- parent): how many of this component one unit of the kit contains — a 4-pack of one part is ONE entry at quantity 4, a 9-piece kit is nine entries. Defaults to 1. Passing it with a PRJ- or PUR- parent is refused, because those edges carry no quantity at all.",
+              ),
+          }),
+        )
+        .min(1)
+        .max(100)
+        .describe("One entry per product to attach."),
+    },
+    outputSchema: relationEntityOut,
+    annotations: WRITE_CLOSED,
+    // Without this, the call records no entity at all: `mcpToolName` cannot
+    // invert `attach_entity` back to product/project/purchase the way it could
+    // invert `attach_project_resources`.
+    telemetryEntity: (params) => parseShortcode(params.parentId)?.type,
+    handler: async (params, extra) =>
+      await relationHandler(
+        "attach",
+        getCaller(extra),
+        params.parentId,
+        params.items,
+      ),
+  });
+
+  registerMcpTool(server, {
+    name: "detach_entity",
+    description:
+      "Remove a relation between one parent row and one or more Products. The parent's SHORTCODE PREFIX picks which relation, exactly as in attach_entity: PRD- = kit components, PRJ- = project resource uses, PUR- = purchase provenance links. " +
+      "Soft-deletes the edge ONLY. No relation in this family carries money, quantity, or stock, so a detach never touches an Expense, an inventory entry, a price, or a spend total. " +
+      "Idempotent and never blocked: detaching a pair that was never linked, or was already removed, reports `changed: 0` with the id counted in `alreadySatisfied` rather than erroring. " +
+      "To MOVE a product's project history onto another product, use repoint_project_uses — a detach whose matching attach is missed discards that history with nothing to flag it.",
+    inputSchema: {
+      parentId: parentIdParam("detach"),
+      productIds: productIdsParam,
+    },
+    outputSchema: relationEntityOut,
+    annotations: WRITE_DESTRUCTIVE_CLOSED,
+    telemetryEntity: (params) => parseShortcode(params.parentId)?.type,
+    handler: async (params, extra) =>
+      await relationHandler(
+        "detach",
+        getCaller(extra),
+        params.parentId,
+        params.productIds.map((productId) => ({ productId })),
+      ),
+  });
+}
+
+function registerDeleteEntityTool(server: McpServer) {
   const entities = [...(deletableEntities.get(server)?.keys() ?? [])].sort();
   if (entities.length === 0) return;
 
@@ -1828,7 +2709,7 @@ export function registerGenericEntityTools(server: McpServer) {
     description:
       "Delete one or more rows of a single entity type by shortcode. The `ids` must all belong to `entity` — a code with the wrong prefix is rejected before anything is deleted. " +
       "Returns the number of rows ACTUALLY removed, which can exceed `ids.length` where a delete cascades (deleting a task also deletes its live subtasks). " +
-      "A refusal names what blocked it: the error carries a typed `reason` and, where the guard could attribute it, which ids blocked and how many dependents each had. " +
+      "A REFUSAL is not an error: the call succeeds with `deleted: 0` and a `refusal` object naming what blocked it — a typed `reason` plus, where the guard could attribute it, `blockers` saying which ids blocked and how many dependents each had. " +
       "Call preview_entity_operation first to see blockers without committing.",
     inputSchema: {
       entity: z
@@ -1854,6 +2735,7 @@ export function registerGenericEntityTools(server: McpServer) {
     },
     outputSchema: deleteEntityOut,
     annotations: WRITE_DESTRUCTIVE_CLOSED,
+    telemetryEntity: (params) => params.entity,
     handler: async (params, extra) => {
       const { entity, ids } = params as {
         entity: ShortcodeEntity;
@@ -1878,6 +2760,155 @@ export function registerGenericEntityTools(server: McpServer) {
         { ids: parsed.data as string[] },
         extra,
       );
+    },
+  });
+}
+
+/**
+ * The one merge tool.
+ *
+ * Replaces `merge_products`, `merge_ingredients`, `merge_vendors` and
+ * `merge_purchases` — four tools that took three different input shapes
+ * (`{target, aliases}` of uuids, `{keepId, mergeIds}` of shortcodes, and a
+ * batch envelope) and returned four unrelated payloads. They now share one
+ * contract, and the things that genuinely differ per entity are the prose in
+ * the `entity` parameter and the projection in {@link mergeDispatch}.
+ *
+ * The BATCH shape is kept and promoted to all four entities, because it is the
+ * shape the work has: a dedup sweep confirms N clusters at once, and one bad
+ * cluster must not discard the other N-1. `merge_ingredients` was the only tool
+ * that had it.
+ *
+ * There is no `dryRun`. `preview_entity_operation(operation: "merge")` is the
+ * preview: it reads the same edge policies the mutation writes against and
+ * reports blockers, changes and side effects with a per-target breakdown — but
+ * it is APPROXIMATE where `dryRun` was exact, because it counts each edge with
+ * its own query rather than executing the mutation's plan. The ingredient
+ * planner documents its own such gap: it dedupes each merged-away ingredient's
+ * alias contribution against the SURVIVOR only, not against the other
+ * merged-away ingredients, so two sources sharing a new alias double-count by
+ * one. Use it to decide, not to reconcile.
+ *
+ * Must be registered AFTER every entity toolset, since it reads what they
+ * declared.
+ */
+function registerMergeEntityTool(server: McpServer) {
+  const declared = mergeableEntities.get(server);
+  // Declared prose is necessary but not sufficient — the manifest's lifecycle
+  // decides which entities can be merged at all.
+  const entities = MERGEABLE_ENTITIES.filter((entity) =>
+    declared?.has(entity),
+  ).sort();
+  if (entities.length === 0) return;
+
+  const perEntityGuidance = entities
+    .map((entity) => `- **${entity}**: ${declared?.get(entity)}`)
+    .join("\n");
+
+  registerMcpTool(server, {
+    name: "merge_entity",
+    description:
+      "Fold duplicate rows of ONE entity type into a surviving row, for one or more clusters in a single call. Each cluster is `{keepId, mergeIds}`: every row in `mergeIds` is merged into `keepId` and then removed. " +
+      "Clusters are independent and NOT transactional with each other — a cluster that refuses fails alone and the rest still run, which is what makes this usable for a dedup sweep. Each cluster individually is atomic. " +
+      "REFUSES a cluster whose `keepId` also appears in its own `mergeIds`. " +
+      "`merged` is the number of rows the write actually removed, never `mergeIds.length`. `moved` reports what landed on the survivor as counts; `summary` reports the parts that only mean something by value (which identifiers were demoted rather than destroyed, which aliases and which survivor columns were filled in). " +
+      "The surviving row is NOT returned — `keepId` names it, and `get_<entity>` fetches it if you actually need to read it back. " +
+      "There is deliberately no inverse operation and no dry run: call preview_entity_operation with operation=merge first to see blockers and impact without committing. That preview is richer in structure than the old dryRun but APPROXIMATE where dryRun was exact — it counts each edge with its own query instead of executing the merge's plan (the ingredient planner, for instance, double-counts an alias two merged-away rows both contribute). Use it to decide, not to reconcile. " +
+      "Confirm the keeper and the duplicates deliberately; never guess a merge.",
+    inputSchema: {
+      entity: z
+        .enum(entities as [ShortcodeEntity, ...ShortcodeEntity[]])
+        .describe(
+          `Which entity to merge. What each merge carries over and what it refuses:\n${perEntityGuidance}`,
+        ),
+      merges: z
+        .array(
+          z.object({
+            keepId: anyShortcodeSchema(
+              entities as [ShortcodeEntity, ...ShortcodeEntity[]],
+            ).describe("The row to KEEP. Must carry `entity`'s own prefix."),
+            mergeIds: z
+              .array(
+                anyShortcodeSchema(
+                  entities as [ShortcodeEntity, ...ShortcodeEntity[]],
+                ),
+              )
+              .min(1)
+              .max(50)
+              .describe(
+                "Rows to fold into `keepId` and then remove. Must all carry `entity`'s own prefix, and must not include `keepId`.",
+              ),
+          }),
+        )
+        .min(1)
+        .max(50)
+        .describe("One entry per duplicate cluster to merge."),
+    },
+    outputSchema: mergeEntityOut,
+    annotations: WRITE_DESTRUCTIVE_CLOSED,
+    telemetryEntity: (params) => params.entity,
+    handler: async (params, extra) => {
+      const { entity, merges } = params as {
+        entity: ShortcodeEntity;
+        merges: Array<{ keepId: string; mergeIds: string[] }>;
+      };
+      const caller = getCaller(extra);
+      const run = mergeDispatch[entity];
+      if (!run) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `No merge is registered for ${entity}`,
+          cause: { reason: "INVALID_INPUT" },
+        });
+      }
+      const codeSchema = shortcodeSchema(entity);
+      const results: z.infer<typeof mergeEntityOut>["results"] = [];
+      for (const { keepId, mergeIds } of merges) {
+        try {
+          // Re-parsed per entity rather than trusting the loose array: the
+          // input schema cannot express "matches THIS entity's prefix" without
+          // a union, and a union normalizes to `{}` in the MCP SDK, stripping
+          // every argument (see `toolInputSchema`). Per CLUSTER, not per call,
+          // so one mistyped code fails its own cluster instead of the batch.
+          const parsed = z
+            .object({ keepId: codeSchema, mergeIds: z.array(codeSchema) })
+            .safeParse({ keepId, mergeIds });
+          if (!parsed.success) {
+            const wrong = [keepId, ...mergeIds].filter(
+              (id) => !codeSchema.safeParse(id).success,
+            );
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Not ${entity} shortcodes: ${wrong.join(", ")}`,
+              cause: { reason: "INVALID_INPUT" },
+            });
+          }
+          const outcome = await run(caller, keepId, mergeIds);
+          results.push({ keepId, status: "succeeded", ...outcome });
+        } catch (error) {
+          // `error` keeps the rendered sentence a human reads; `code`/`reason`
+          // carry the same failure in a form a caller can branch on — the same
+          // split every batch tool in this file makes.
+          const { code, reason, blockers } = toPublicErrorPayload(error);
+          results.push({
+            keepId,
+            status: "failed",
+            moved: [],
+            summary: {},
+            sideEffects: [],
+            error: formatToolError(error),
+            ...(code ? { code } : {}),
+            ...(reason ? { reason } : {}),
+            // Omitted rather than sent empty: a cluster that refused without
+            // attributing it to rows has nothing to say here, and an empty
+            // array per failed cluster is envelope noise.
+            ...(blockers?.length ? { blockers } : {}),
+          });
+        }
+      }
+      // A wholly-failed batch is still `isError: false` — see the doctrine on
+      // `registerBatchTool`. The per-cluster errors are the payload.
+      return { entity, results };
     },
   });
 }

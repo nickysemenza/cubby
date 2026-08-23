@@ -23,6 +23,7 @@ import {
   deleteEmptyPurchasesOut,
   linkExpensesToPurchaseInput,
   mergePurchasesInput,
+  mergePurchasesOut,
   purchaseCreateInput,
   purchaseFiltersSchema,
   purchaseOut,
@@ -229,10 +230,14 @@ const split = protectedProcedure
 /** Merge charges the backfill couldn't group. Refuses across vendors. */
 const merge = protectedProcedure
   .input(mergePurchasesInput)
-  .output(strictOutput(purchaseOut))
+  .output(strictOutput(mergePurchasesOut))
   .mutation(async ({ ctx, input }) => {
     const output = await mergePurchases(ctx.db, input, ctx.actorContext);
-    const entityId = await resolveLiveShortcode(ctx.db, output.id, "purchase");
+    const entityId = await resolveLiveShortcode(
+      ctx.db,
+      output.purchase.id,
+      "purchase",
+    );
     if (entityId) {
       await runMutationSideEffects(ctx.db, {
         action: "updated",

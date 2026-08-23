@@ -1,8 +1,6 @@
 import {
   mcpProductCreateInput,
   mcpProductUpdateInput,
-  mergeProductsInput,
-  mergeProductsMcpOut,
   patchProductExternalIdsInput,
   productExternalIdCollisionInput,
   productExternalIdCollisionsOut,
@@ -13,9 +11,6 @@ import {
   productMcpOut,
 } from "@cubby/schemas/product";
 import {
-  attachProductComponentsInput,
-  detachProductComponentsInput,
-  productComponentMutationOut,
   productComponentsInput,
   productComponentsMcpOut,
 } from "@cubby/schemas/product-components";
@@ -24,6 +19,8 @@ import { upc } from "@cubby/usda-schemas";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
+  declareMergeableEntity,
+  declareRelationEntity,
   getCaller,
   idParam,
   READ_ONLY_CLOSED,
@@ -38,7 +35,6 @@ import {
   slimProductDetail,
   toUnitMappingInput,
   WRITE_CLOSED,
-  WRITE_DESTRUCTIVE_CLOSED,
 } from "./_shared";
 
 /**
@@ -175,21 +171,11 @@ export function registerProductTools(server: McpServer) {
       respond(await caller.product.verifyImages(item.id), slimProductDetail),
   });
 
-  registerMcpTool(server, {
-    name: "merge_products",
-    description:
-      "Fold duplicate products into one survivor. Moves the merged-away products' stock, ledger lines, identifiers, images, unit mappings, tasks, project uses, and wishlist candidacies onto keepId, then soft-deletes them. Stock in a location the survivor already stocks is SUMMED into the survivor's entry; an identifier slot (source, kind) the survivor already fills keeps the survivor's value as PRIMARY and carries the other over as a secondary rather than destroying it (returned in mergeSummary.externalIdsDemoted). The survivor's cover image is preserved. Refuses when two entries in one location carry different units — preview with preview_entity_operation first.",
-    inputSchema: mergeProductsInput.shape,
-    outputSchema: mergeProductsMcpOut,
-    annotations: WRITE_DESTRUCTIVE_CLOSED,
-    handler: async (params, extra) => {
-      const result = await getCaller(extra).product.merge(params);
-      return {
-        product: slimProduct(result.product),
-        mergeSummary: result.mergeSummary,
-      };
-    },
-  });
+  declareMergeableEntity(
+    server,
+    "product",
+    "Moves the merged-away products' stock, ledger lines, identifiers, images, unit mappings, tasks, project uses, purchase links and wishlist candidacies onto the survivor, then soft-deletes them. Stock in a location the survivor already stocks is SUMMED into its entry; an identifier slot (source, kind) the survivor already fills keeps the survivor's value as PRIMARY and carries the other over as a secondary rather than destroying it (reported in `summary.externalIdsDemoted`). The survivor's cover image is preserved, and its null columns are filled from a loser but never overwritten. REFUSES when two entries in one location carry different units, and when the merge would create a kit-component cycle or leave one kit listing the same component at two different quantities.",
+  );
 
   registerMcpTool(server, {
     name: "lookup_upc",
@@ -248,23 +234,14 @@ export function registerProductTools(server: McpServer) {
     }),
   });
 
-  registerRouterTool(server, {
-    name: "attach_product_components",
-    description:
-      "Record that one or more existing Products are inside a kit or multi-pack Product — the ProductComponent edge. `parentProductId` is the kit; each entry in `components` names one component Product and how many of it the kit contains (a 4-pack of one part is one entry at quantity 4, a 9-piece kit is nine entries). This creates no money and splits nothing: the kit keeps its own Expense and its own price, exactly as before attaching — use split_expense instead if the goal is a real per-component cost basis, not a composition record. A barcode/model identifies the PACKAGE: the kit keeps its OWN UPC/model/ASIN, and a component's identifiers stay its own — never copy the kit's barcode onto a component or a component's onto the kit just because they ship together. REFUSES a self-referencing entry (a Product cannot be its own component) and REFUSES any component that does not exist or is not live. Quantity is set at attach time; to change it, detach and reattach — there is no in-place update. Repeating an already-live pair is idempotent and reports nothing changed.",
-    inputSchema: attachProductComponentsInput.shape,
-    outputSchema: productComponentMutationOut,
-    annotations: WRITE_CLOSED,
-    call: (caller, params) => caller.product.attachComponents(params),
-  });
-
-  registerRouterTool(server, {
-    name: "detach_product_components",
-    description:
-      "Soft-delete one or more component links from one kit Product. This only removes the composition record — the kit's Expense was never split across its components, so detaching touches no money, no inventory, and no price. Idempotent: detaching a link that is already gone reports nothing changed rather than erroring.",
-    inputSchema: detachProductComponentsInput.shape,
-    outputSchema: productComponentMutationOut,
-    annotations: WRITE_DESTRUCTIVE_CLOSED,
-    call: (caller, params) => caller.product.detachComponents(params),
+  // The prose that used to be `attach_product_components`' /
+  // `detach_product_components`' own descriptions, now composed into
+  // `attach_entity` / `detach_entity`'s `parentId` parameter. The tools
+  // collapsed; the kit semantics must not.
+  declareRelationEntity(server, "product", {
+    attach:
+      "PRD- parent = KIT COMPONENTS (`ProductComponent`). Records that existing Products are inside a kit or multi-pack. Each item names one component Product and how many of it the kit contains — a 4-pack of one part is ONE item at quantity 4, a 9-piece kit is nine items; omit `quantity` for 1. This creates no money and splits nothing: the kit keeps its own Expense and its own price, exactly as before attaching — use split_expense instead if the goal is a real per-component cost basis rather than a composition record. A barcode/model identifies the PACKAGE: the kit keeps its OWN UPC/model/ASIN and a component's identifiers stay its own — never copy one onto the other just because they ship together. REFUSES a self-referencing entry, a component that is not live, and a multi-hop cycle (A contains B contains A), naming the offending codes. Quantity is set at attach time; to change it, detach and reattach — there is no in-place update.",
+    detach:
+      "PRD- parent = KIT COMPONENTS. Soft-deletes component links from one kit Product. This removes only the composition record — the kit's Expense was never split across its components, so detaching touches no money, no inventory, and no price.",
   });
 }

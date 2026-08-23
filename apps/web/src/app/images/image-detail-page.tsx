@@ -6,17 +6,17 @@ import { Page } from "~/components/page/Page";
 import { useTRPC } from "~/integrations/trpc/react";
 
 interface ImageDetailPageProps {
-  id: string;
+  shortcode: string;
 }
 
-export default function ImageDetailPage({ id }: ImageDetailPageProps) {
+export default function ImageDetailPage({ shortcode }: ImageDetailPageProps) {
   const api = useTRPC();
 
   const {
     data: imageDetails,
     isLoading,
     error,
-  } = useQuery(api.image.getByID.queryOptions({ id }));
+  } = useQuery(api.image.getByID.queryOptions({ id: shortcode }));
 
   if (isLoading) {
     return (

@@ -5,10 +5,14 @@
  * Extracted from trpc.ts to avoid circular dependencies with repo files.
  */
 
-import type { PublicImpactItem } from "@cubby/schemas/entity-integrity";
+import {
+  type PublicImpactItem,
+  publicImpactItemSchema,
+} from "@cubby/schemas/entity-integrity";
 import { type AppErrorReason, AppErrors } from "@cubby/shared";
 import { TRPCError } from "@trpc/server";
 import type { TRPC_ERROR_CODE_KEY } from "@trpc/server/rpc";
+import { z } from "zod";
 import { annotateActiveSpanError } from "~/server/tracing";
 
 // Expected 4xx errors that shouldn't be logged as failures
@@ -91,6 +95,79 @@ export function createBlockedError(
     message,
     cause: { reason, blockers },
   });
+}
+
+/**
+ * Everything a client may learn about a thrown error — the ONE whitelist.
+ *
+ * `cause` never crosses either boundary: it is `unknown`, it can hold an
+ * arbitrary original exception, and both transports have to lift what they
+ * expose out of it explicitly. That lifting used to be written twice — once in
+ * tRPC's `errorFormatter` and once in the MCP layer's `describeToolError` — and
+ * the two promptly disagreed: the MCP copy read `code` and `reason` and never
+ * `blockers`, so `delete_entity`'s own description promised blocker ids that
+ * the transport silently discarded. Two whitelists that can drift IS the bug,
+ * so there is one now and both layers call it.
+ *
+ * `reason` is deliberately NOT narrowed to `AppErrorReason`. The MCP copy used
+ * to narrow, which dropped `INVALID_INPUT` — minted at the MCP boundary itself
+ * for a wrong-prefix shortcode, absent from `AppErrors`, and the single most
+ * common fault a caller can actually fix. The tRPC copy never narrowed. Passing
+ * the string through is what both sides already needed.
+ *
+ * `blockers` is parsed rather than passed through: a malformed payload must not
+ * become the client's problem, and the branded `publicImpactItemSchema` is what
+ * makes "keyed by shortcode, never uuid" a checked property at the boundary.
+ */
+export interface PublicErrorPayload {
+  /** The tRPC code, when the failure came through a `TRPCError`. */
+  code?: TRPC_ERROR_CODE_KEY;
+  /** The `AppErrorReason` (or boundary slug) stamped onto `cause`. */
+  reason?: string;
+  /** Present only for a refusal built by {@link createBlockedError}. */
+  blockers?: PublicImpactItem[];
+}
+
+export function toPublicErrorPayload(error: unknown): PublicErrorPayload {
+  const payload: PublicErrorPayload = {};
+  if (error instanceof TRPCError) payload.code = error.code;
+
+  const cause = (error as { cause?: unknown } | null | undefined)?.cause;
+  if (!cause || typeof cause !== "object") return payload;
+
+  const reason = (cause as Record<string, unknown>).reason;
+  if (typeof reason === "string") payload.reason = reason;
+
+  const blockers = (cause as Record<string, unknown>).blockers;
+  if (Array.isArray(blockers)) {
+    const parsed = z.array(publicImpactItemSchema).safeParse(blockers);
+    if (parsed.success) payload.blockers = parsed.data;
+  }
+  return payload;
+}
+
+/**
+ * True when an error is a guard REFUSING an operation, rather than the
+ * operation failing.
+ *
+ * The distinction decides how an MCP tool answers: a refusal is a domain
+ * answer that belongs inside the tool's declared output schema, while a fault
+ * (unresolvable shortcode, missing row, an actual bug) stays an `isError`
+ * envelope. Two signals, because the codebase has two vintages of guard:
+ * `createBlockedError` attributes the refusal to specific rows, and the older
+ * `createAppError` guards say the same thing with a `PRECONDITION_FAILED` code
+ * and prose — which is exactly what every one of the 17 blocking dispositions
+ * in `operation-preview-parity.integration.test.ts` asserts on the mutation
+ * side, so it is the reliable marker and not a guess.
+ *
+ * A merge refusal is `BAD_REQUEST` and so is NOT recognized here; it does not
+ * need to be, because `merge_entity` already reports every cluster failure
+ * inside its own result rather than erroring the envelope.
+ */
+export function isBlockedRefusal(error: unknown): boolean {
+  if (!(error instanceof TRPCError)) return false;
+  if (error.code === "PRECONDITION_FAILED") return true;
+  return (toPublicErrorPayload(error).blockers?.length ?? 0) > 0;
 }
 
 /**

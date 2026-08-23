@@ -119,8 +119,8 @@ export const LocationGalleryCard = function LocationGalleryCard({
                   key={image.id}
                   src={image.url}
                   alt={`${location.name} photo`}
-                  to="/images/$id"
-                  params={{ id: image.id }}
+                  to="/images/$shortcode"
+                  params={{ shortcode: image.id }}
                   size={28}
                   previewSize={240}
                 />

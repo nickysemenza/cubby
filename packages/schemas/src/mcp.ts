@@ -14,7 +14,6 @@ import { productShortcode } from "./identifiers";
 import {
   ingredientMcpListOut,
   ingredientMcpOut,
-  ingredientMergeBatchOut,
   ingredientResolveOrCreateResponseOut,
   mcpIngredientCreateInput,
   ingredientUpdateData,
@@ -166,7 +165,6 @@ export {
   productMcpOut,
   recipeMcpOut,
   ingredientMcpListOut,
-  ingredientMergeBatchOut,
   ingredientResolveOrCreateResponseOut,
   inventoryMcpBulkMoveOut,
   inventoryMcpListOut,

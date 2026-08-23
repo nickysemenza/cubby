@@ -158,23 +158,19 @@ interface BaseRow {
 }
 
 /**
- * `TableLink` params for an entity's own row — `{ id }` for `image` and the
- * canonical public `{ shortcode: row.id }` route parameter everywhere else.
+ * `TableLink` params for an entity's own row — the canonical public
+ * `{ shortcode: row.id }` route parameter, uniformly. `image` used to be the
+ * one exception (keyed on its uuid); it mints an `IMG-` shortcode like every
+ * other entity now.
  */
-function nameColumnParams(
-  entity: Entity,
-  row: BaseRow,
-): { id: string } | { shortcode: string } {
-  if (entity === "image") return { id: String(row.id) };
+function nameColumnParams(row: BaseRow): { shortcode: string } {
   return { shortcode: String(row.id) };
 }
 
 /** Where a row's name and its "View details" action point. */
 type EntityRowLink = {
   to: EntityDetailRoute;
-  // `{ id }` covers `image`, the one entity `EntityDetailRoute` includes that
-  // isn't shortcode-routed.
-  params: EntityDetailParams | { id: string };
+  params: EntityDetailParams;
 };
 
 /**
@@ -191,7 +187,7 @@ const defaultRowLink = <T extends BaseRow>(
   entity: Entity,
 ): RowLinkResolver<T> => {
   const to = entities[entity].routes.detail;
-  return (row) => ({ to, params: nameColumnParams(entity, row) });
+  return (row) => ({ to, params: nameColumnParams(row) });
 };
 
 interface ImageRow extends BaseRow {

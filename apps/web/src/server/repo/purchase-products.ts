@@ -46,7 +46,7 @@ import type {
 } from "@cubby/schemas/purchase";
 import { and, asc, count, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
-import type { Database, DrizzleClient } from "~/server/db";
+import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   expense,
   product,
@@ -64,6 +64,16 @@ import {
 } from "~/server/repo/database-helpers";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product";
 import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
+import {
+  emptyPreflight,
+  loadRelationProducts,
+  planRelationAttach,
+  planRelationDetach,
+  type RelationPlan,
+  type RelationPreflight,
+  relationImpact,
+  throwRelationRefusal,
+} from "~/server/repo/relation-preflight";
 
 /**
  * Does this Expense say the order ACQUIRED the product?
@@ -334,6 +344,118 @@ async function liveProductShortcodes(
   return rows.map((row) => row.shortcode);
 }
 
+/** Which of the requested products this Purchase already links, live. */
+async function livePurchaseProductIds(
+  dbc: DrizzleClient | DrizzleTransaction,
+  purchaseId: PurchaseId,
+  productIds: readonly ProductId[],
+): Promise<Set<string>> {
+  if (productIds.length === 0) return new Set();
+  const rows = await dbc
+    .select({ productId: purchaseProduct.productId })
+    .from(purchaseProduct)
+    .where(
+      and(
+        eq(purchaseProduct.purchaseId, purchaseId),
+        inArray(purchaseProduct.productId, [...productIds]),
+        notDeleted(purchaseProduct),
+      ),
+    );
+  return new Set(rows.map((row) => row.productId));
+}
+
+/**
+ * Everything that decides whether a purchase→product link may be written.
+ *
+ * Shared by `attachPurchaseProducts` (which passes its `tx`) and
+ * `previewAttachPurchaseProducts` (which passes the pooled client); queries run
+ * SEQUENTIALLY so both call sites are safe — see `repo/relation-preflight.ts`.
+ *
+ * There is no category gate here on purpose: an order can buy anything. The
+ * only counterpart to `ProjectToolUsage`'s `ineligible` bucket is the empty
+ * one this returns.
+ */
+async function preflightAttachPurchaseProducts(
+  dbc: DrizzleClient | DrizzleTransaction,
+  purchaseId: PurchaseId,
+  productIds: readonly ProductId[],
+): Promise<RelationPreflight> {
+  const requested = uniq([...productIds]);
+  const { rows, codeById } = await loadRelationProducts(dbc, requested);
+  const liveIds = new Set(rows.filter((row) => row.live).map((row) => row.id));
+
+  const livePurchase = await dbc.query.purchase.findFirst({
+    where: and(eq(purchase.id, purchaseId), notDeleted(purchase)),
+    columns: { id: true },
+  });
+  const alreadyLive = await livePurchaseProductIds(dbc, purchaseId, requested);
+  return {
+    ...emptyPreflight(),
+    requested,
+    parentMissing: !livePurchase,
+    missing: requested.filter((id) => !liveIds.has(id)),
+    alreadySatisfied: requested.filter((id) => alreadyLive.has(id)),
+    codeById,
+  };
+}
+
+/** The detach counterpart: the only thing to know is which links exist. */
+async function preflightDetachPurchaseProducts(
+  dbc: DrizzleClient | DrizzleTransaction,
+  purchaseId: PurchaseId,
+  productIds: readonly ProductId[],
+): Promise<RelationPreflight> {
+  const requested = uniq([...productIds]);
+  const { codeById } = await loadRelationProducts(dbc, requested);
+  const alreadyLive = await livePurchaseProductIds(dbc, purchaseId, requested);
+  return {
+    ...emptyPreflight(),
+    requested,
+    // A detach is already satisfied when there is NO live link to remove.
+    alreadySatisfied: requested.filter((id) => !alreadyLive.has(id)),
+    codeById,
+  };
+}
+
+const PURCHASE_PRODUCT_EDGE = {
+  edgeKey: "PurchaseProduct.productId",
+  label: "purchase product links",
+} as const;
+
+/** Advisory impact for a purchase→product attach, from the same predicate. */
+export async function previewAttachPurchaseProducts(
+  db: Database,
+  purchaseId: PurchaseId,
+  productIds: readonly ProductId[],
+): Promise<RelationPlan> {
+  const pre = await preflightAttachPurchaseProducts(
+    getDb(db),
+    purchaseId,
+    productIds,
+  );
+  return planRelationAttach(pre, {
+    ...PURCHASE_PRODUCT_EDGE,
+    description: "Provenance links this attach would create.",
+  });
+}
+
+/** Advisory impact for a purchase→product detach. */
+export async function previewDetachPurchaseProducts(
+  db: Database,
+  purchaseId: PurchaseId,
+  productIds: readonly ProductId[],
+): Promise<RelationPlan> {
+  const pre = await preflightDetachPurchaseProducts(
+    getDb(db),
+    purchaseId,
+    productIds,
+  );
+  return planRelationDetach(pre, {
+    ...PURCHASE_PRODUCT_EDGE,
+    description: "Provenance links this detach would remove.",
+  });
+}
+
 export async function attachPurchaseProducts(
   db: Database,
   purchaseId: PurchaseId,
@@ -342,26 +464,36 @@ export async function attachPurchaseProducts(
 ): Promise<RelationMutationOut> {
   const uniqueProductIds = uniq(productIds);
   return withTransaction(db, async (tx) => {
-    const livePurchase = await tx.query.purchase.findFirst({
-      where: and(eq(purchase.id, purchaseId), notDeleted(purchase)),
-      columns: { id: true },
-    });
-    if (!livePurchase) {
+    // On `tx`, not the pooled client: these checks and the insert below must
+    // see one snapshot.
+    const pre = await preflightAttachPurchaseProducts(
+      tx,
+      purchaseId,
+      uniqueProductIds,
+    );
+    if (pre.parentMissing) {
       throw createAppError(
         "PURCHASE_NOT_FOUND",
         `Purchase ${purchaseId} not found`,
       );
     }
-
-    const liveProducts = await tx.query.product.findMany({
-      where: and(inArray(product.id, uniqueProductIds), notDeleted(product)),
-      columns: { id: true },
-    });
-    if (liveProducts.length !== uniqueProductIds.length) {
-      throw createAppError(
-        "PRODUCT_NOT_FOUND",
-        "Every linked Product must exist and be live.",
-      );
+    if (pre.missing.length > 0) {
+      throwRelationRefusal({
+        reason: "PRODUCT_NOT_FOUND",
+        ids: pre.missing,
+        codeById: pre.codeById,
+        message: (codes) =>
+          `Every linked Product must exist and be live. Not live: ${codes}.`,
+        items: [
+          relationImpact({
+            code: "block-relation-target-not-live",
+            label: "products that are not live",
+            description:
+              "A Product named here does not exist or has been deleted.",
+            ids: pre.missing,
+          }),
+        ],
+      });
     }
 
     const before = await liveProductShortcodes(tx, purchaseId);

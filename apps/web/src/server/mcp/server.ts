@@ -1,3 +1,4 @@
+import { type Entity, entitySchema } from "@cubby/schemas/entity-core";
 import {
   mcpTelemetryIdentitySchema,
   type TelemetryMessageV1,
@@ -11,6 +12,7 @@ import { TraceNames, withTrace } from "~/server/tracing";
 import { registerMcpApps } from "./apps";
 import {
   getRegisteredTool,
+  getToolEntityExtractor,
   installMockStrippedListToolsHandler,
   registerGenericEntityTools,
 } from "./tools/_shared";
@@ -59,9 +61,10 @@ Entity ids are public shortcodes, not uuids. Every top-level entity id you recei
 - FTX- financial transaction
 - CKB- cookbook
 - WSH- wishlist item
+- IMG- image
 A code with the wrong prefix for the field it's passed to (a LOC- code where a tool wants a product) is rejected by input validation before the tool runs, so a mismatched or unresolvable code never reaches a write.
 
-Declared exceptions — these stay raw uuids because no public entity shortcode exists for them: image ids; the mealRecipe \`id\` inside a meal's recipes[]; recipe section and section-line ids; unit-mapping ids; background job/batch ids; and orphan/liveness diagnostics whose row may no longer resolve. USDA \`fdc_id\` is also retained as an external USDA identifier rather than a Cubby id.
+Declared exceptions — these stay raw uuids because no public entity shortcode exists for them, and all of them are SUB-entity ids rather than manifest entities: the mealRecipe \`id\` inside a meal's recipes[]; recipe section and section-line ids; unit-mapping ids; background job/batch ids; and orphan/liveness diagnostics whose row may no longer resolve. USDA \`fdc_id\` is also retained as an external USDA identifier rather than a Cubby id.
 
 Workflow tips:
 - Turn a name into an id with list_*/search_*/get_* (or global_search across every indexed entity at once) before writing — you get a shortcode back, ready to pass straight into the next call.
@@ -138,6 +141,49 @@ function requestToolName(request: unknown): string | null {
   return typeof name === "string" && name.length > 0 ? name : null;
 }
 
+function requestToolArguments(
+  request: unknown,
+): Record<string, unknown> | undefined {
+  if (!request || typeof request !== "object") return undefined;
+  const params = (request as { params?: unknown }).params;
+  if (!params || typeof params !== "object") return undefined;
+  const args = (params as { arguments?: unknown }).arguments;
+  return args && typeof args === "object"
+    ? (args as Record<string, unknown>)
+    : undefined;
+}
+
+/**
+ * Which entity a call acted on, for `McpToolCall.entity`.
+ *
+ * Read from an extractor the tool declared at registration, never by
+ * inspecting arguments here: `delete_entity`/`merge_entity` carry `entity`
+ * explicitly, `attach_entity`/`attach_file` derive it from a shortcode prefix,
+ * and ordinary CRUD tools know it statically. A generic tool would otherwise
+ * be unattributable, which is what collapsing per-entity tools cost us.
+ *
+ * The result is validated against `entitySchema`, so this stays payload-free:
+ * one enum value, never free-form arguments.
+ */
+function toolCallEntity(
+  server: McpServer,
+  toolName: string,
+  request: unknown,
+): Entity | undefined {
+  const extractor = getToolEntityExtractor(server, toolName);
+  if (!extractor) return undefined;
+  try {
+    const parsed = entitySchema.safeParse(
+      extractor(requestToolArguments(request) ?? {}),
+    );
+    return parsed.success ? parsed.data : undefined;
+  } catch {
+    // Best-effort: a malformed or unexpected argument shape must never break
+    // the call it is only being observed for.
+    return undefined;
+  }
+}
+
 /**
  * Wrap the SDK-installed tools/call handler instead of duplicating its input
  * and output validation. This private-map adapter is intentionally narrow and
@@ -194,6 +240,7 @@ function installToolCallTelemetryHandler(server: McpServer): void {
               toolName,
               outcome,
               registeredAtCall,
+              entity: toolCallEntity(server, toolName, request),
               ...identity.data,
             });
           } catch (error) {

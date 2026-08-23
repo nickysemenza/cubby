@@ -298,7 +298,7 @@ export function EnrichmentWorkbench({
   // Execute the merge the user confirmed: keeper = the chosen target, the other
   // becomes an alias (deleted, its recipe lines + products repoint to the keeper).
   const confirmMerge = (keepId: string, aliasIds: string[]) => {
-    mergeMutation.mutate({ target: keepId, aliases: aliasIds });
+    mergeMutation.mutate({ keepId, mergeIds: aliasIds });
     setMergeSuggestions((prev) => {
       const next = { ...prev };
       for (const aliasId of aliasIds) delete next[aliasId];

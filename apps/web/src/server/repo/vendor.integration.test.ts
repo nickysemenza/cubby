@@ -934,6 +934,8 @@ describe("vendor repository — mergeVendors", () => {
     expect(mergeSummary).toEqual({
       keepId: keeperCode,
       deletedIds: [loserCode],
+      // Measured by `finalizeMerge`, not `mergeIds.length`.
+      merged: 1,
       purchasesRepointed: 2,
       purchasesFolded: 0,
       carriedFields: [],
@@ -993,6 +995,7 @@ describe("vendor repository — mergeVendors", () => {
     expect(mergeSummary).toEqual({
       keepId: keeperCode,
       deletedIds: [loserCode],
+      merged: 1,
       purchasesRepointed: 0,
       purchasesFolded: 1,
       carriedFields: [],
@@ -1336,45 +1339,42 @@ describe("vendor repository — mergeVendors", () => {
     });
   });
 
-  it("filters keepId out of mergeIds, so a self-merge is a no-op", async () => {
+  it("REFUSES a self-merge instead of silently dropping the keeper", async () => {
     const keeper = await findOrCreateVendor(ctx.db, "Self Merge Vendor");
     const keeperCharge = await charge(keeper, "SELF-1");
     await addLine("self line", 77, keeperCharge);
     const keeperCode = await vendorCode(keeper);
+    const other = await findOrCreateVendor(ctx.db, "Self Merge Bystander");
+    const otherCode = await vendorCode(other);
 
-    const { vendor: selfOnly, mergeSummary: selfOnlySummary } =
-      await mergeVendors(
+    // Both shapes refuse: the keeper alone, and the keeper smuggled in
+    // alongside a genuine loser — which is the dangerous one, because the old
+    // silent filter would have merged the loser and reported success for a
+    // request it had quietly edited.
+    for (const mergeIds of [[keeperCode], [otherCode, keeperCode]]) {
+      const error = await mergeVendors(
         ctx.db,
-        { keepId: keeperCode, mergeIds: [keeperCode] },
+        { keepId: keeperCode, mergeIds },
         ctx.actor,
+      ).then(
+        () => undefined,
+        (thrown: unknown) => thrown,
       );
-    const { vendor: emptySet, mergeSummary: emptySetSummary } =
-      await mergeVendors(
-        ctx.db,
-        { keepId: keeperCode, mergeIds: [] },
-        ctx.actor,
+      expect((error as { cause?: { reason?: string } })?.cause?.reason).toBe(
+        "MERGE_SELF_REFERENCE",
       );
+    }
 
-    // Not self-destruction: the keeper is returned untouched and its charge is
-    // neither folded nor deleted.
-    for (const result of [selfOnly, emptySet]) {
-      expect(result.id).toBe(keeperCode);
-      expect(result.purchaseCount).toBe(1);
-      expect(result.spend).toBe(77);
-    }
-    // Nothing to report either: the no-op short-circuit never builds a plan.
-    for (const summary of [selfOnlySummary, emptySetSummary]) {
-      expect(summary).toEqual({
-        keepId: keeperCode,
-        deletedIds: [],
-        purchasesRepointed: 0,
-        purchasesFolded: 0,
-        carriedFields: [],
-      });
-    }
+    // Nothing was written by either attempt: the bystander is still live, the
+    // keeper's charge is untouched, and no merge audit row exists.
+    expect(
+      (
+        await getDb(ctx.db).query.vendor.findFirst({
+          where: eq(vendor.id, other),
+        })
+      )?.deletedAt,
+    ).toBeNull();
     expect((await chargeRow(keeperCharge))?.deletedAt).toBeNull();
-    // An empty effective loser set returns early, before the transaction — so
-    // there is no merge audit row at all.
     expect(await auditRows("vendor", keeper, "update")).toHaveLength(0);
   });
 

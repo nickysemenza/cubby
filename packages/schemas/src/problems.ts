@@ -3,6 +3,7 @@ import { amount } from "./codec";
 import { money, moneyNullable } from "./money";
 import { shortcodeEntities, type ShortcodeEntity } from "./entity-manifest";
 import { referentialLivenessViolationSchema } from "./entity-integrity";
+import { financialReconciliationFields } from "./financial-reconciliation";
 import {
   anyShortcodeSchema,
   cookbookShortcode,
@@ -719,23 +720,29 @@ export const purchaseNotReconcilingSchema = z.object({
   expenseTotal: money,
   expenseCount: z.number().int(),
   unpricedExpenseCount: z.number().int(),
-  /** Posted refund evidence used to distinguish explained differences. */
-  postedRefundTotal: money,
+  /**
+   * Posted refund evidence used to distinguish explained differences. Taken
+   * from the canonical field map rather than hand-restated, so it keeps that
+   * schema's `.finite()` guard.
+   */
+  postedRefundTotal: financialReconciliationFields.postedRefundTotal,
 });
 
 export const purchaseFinancialSettlementMismatchSchema = z.object({
   id: purchaseShortcode,
   vendorName: z.string().nullable(),
   expenseTotal: money,
+  // Spreads the canonical field map rather than hand-restating it, so the
+  // `.finite()` guards cannot be dropped again. Two fields genuinely narrow
+  // here, because this detector only ever emits the "mismatch" case: `delta`
+  // is null exactly when the summary is not comparable, and that is exactly
+  // when `status` is "unknown" (see `calculateFinancialReconciliation`) — so a
+  // mismatch always carries a delta, and callers should not have to handle a
+  // null that cannot occur.
   financialReconciliation: z.object({
     status: z.literal("mismatch"),
-    transactionCount: z.number().int(),
-    postedTransactionCount: z.number().int(),
-    outstandingTransactionCount: z.number().int(),
-    postedTotal: money,
-    projectedTotal: money,
-    postedRefundTotal: money,
-    delta: money,
+    ...financialReconciliationFields,
+    delta: money.finite(),
   }),
 });
 

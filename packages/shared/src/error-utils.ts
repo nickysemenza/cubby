@@ -77,6 +77,21 @@ export const AppErrors = {
   // A product still listed inside a live kit's component list — same shape as
   // PRODUCT_HAS_PURCHASE_LINKS, one hop over into ProductComponent.
   PRODUCT_HAS_KIT_LINKS: "PRECONDITION_FAILED",
+  // A Product that exists and is live, but whose `category` the relation it is
+  // being attached to does not accept — today only `ProjectToolUsage`, which
+  // takes `tools` and `software` and nothing else.
+  //
+  // Split out of PRODUCT_NOT_FOUND, which every one of those gates used to
+  // throw. The code LIED: it sent a caller hunting for a typo in a shortcode
+  // that resolves perfectly well, when the fix is to change the product's
+  // category (or attach a different product). "Doesn't exist" and "wrong kind"
+  // are different problems with different fixes, so they are different reasons.
+  PRODUCT_CATEGORY_INELIGIBLE: "PRECONDITION_FAILED",
+  // `attach_entity` was handed a `quantity` for a parent whose relation carries
+  // none. Collapsing three attach tools into one converted three compile-time
+  // input schemas into one runtime check; this is that check having something
+  // specific to say rather than the field being silently ignored.
+  RELATION_QUANTITY_UNSUPPORTED: "BAD_REQUEST",
   // Caller tried to attach a product as a component of itself.
   PRODUCT_COMPONENT_SELF_REFERENCE: "BAD_REQUEST",
   // Attach-side counterpart of PRODUCT_MERGE_COMPONENT_CYCLE: the DB CHECK only
@@ -94,7 +109,11 @@ export const AppErrors = {
   PRODUCT_GTIN_INVALID: "BAD_REQUEST",
   INGREDIENT_HAS_PRODUCTS: "PRECONDITION_FAILED",
   INGREDIENT_HAS_RECIPES: "PRECONDITION_FAILED",
-  INGREDIENT_MERGE_INVALID: "BAD_REQUEST",
+  // A merge that names its own keeper among the rows to merge away. One code
+  // for all four merges: the resolver refuses the whole call rather than
+  // silently dropping the keeper from the loser set, because "merged 3" while
+  // only 2 rows moved is a result a caller cannot tell apart from a real one.
+  MERGE_SELF_REFERENCE: "BAD_REQUEST",
   PROJECT_HAS_TASKS: "PRECONDITION_FAILED",
   PROJECT_HAS_EXPENSES: "PRECONDITION_FAILED",
   FINANCIAL_ACCOUNT_HAS_TRANSACTIONS: "PRECONDITION_FAILED",

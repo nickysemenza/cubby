@@ -435,16 +435,21 @@ describe("createActionsColumn", () => {
     expect(clipboardMocks.copyShortcodes).toHaveBeenCalledWith(["PRD-4K7M"]);
   });
 
-  // `image` is the one entity routed by uuid, so its link params carry `id`
-  // rather than `shortcode` — and a uuid must never reach the clipboard as if
-  // it were a public code.
-  it("omits the copy item for an entity routed by uuid", () => {
+  // `image` used to be the one entity routed by uuid, so this asserted that its
+  // row offered no copy item — a uuid must never reach the clipboard as if it
+  // were a public code. Images carry `IMG-` codes now and route on them like
+  // every other entity, so the copy item is CORRECT here; the case that needed
+  // suppressing no longer exists.
+  it("offers the copy item for an image, which is shortcode-routed like the rest", () => {
     renderColumn<ActionRow, unknown>(actionsColumn("image"), {
-      id: "3f6c1e0a-0000-4000-8000-000000000000",
+      id: "IMG-4K7M",
     });
 
     expect(screen.getByRole("link", { name: /View details/ })).toBeVisible();
-    expect(screen.queryByRole("button", { name: /Copy/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /Copy IMG-4K7M/ }));
+
+    expect(clipboardMocks.copyShortcodes).toHaveBeenCalledWith(["IMG-4K7M"]);
   });
 });
 

@@ -45,7 +45,6 @@ import {
   purchaseProduct,
   vendor,
 } from "~/server/db/schema";
-import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadProductDataQualities } from "~/server/repo/data-quality";
 import {
@@ -78,6 +77,16 @@ import {
 // shared rather than restated, so a kit's purchase link and the Purchases panel
 // can never disagree about which orders count.
 import { expensePairPredicate } from "~/server/repo/purchase-products";
+import {
+  emptyPreflight,
+  loadRelationProducts,
+  planRelationAttach,
+  planRelationDetach,
+  type RelationPlan,
+  type RelationPreflight,
+  relationImpact,
+  throwRelationRefusal,
+} from "~/server/repo/relation-preflight";
 
 /** One entry to attach: which Product, and how many of it the kit contains. */
 export interface ProductComponentEntry {
@@ -456,6 +465,227 @@ async function liveComponentShortcodes(
   return rows.map((row) => row.shortcode);
 }
 
+/**
+ * Which component ids the parent already lists, live.
+ *
+ * Sequential single query, so it runs on a transaction client or the pooled one
+ * — see the transaction-boundary note in `repo/relation-preflight.ts`.
+ */
+async function liveComponentIds(
+  dbc: DrizzleClient | DrizzleTransaction,
+  parentProductId: ProductId,
+  componentProductIds: readonly ProductId[],
+): Promise<Set<string>> {
+  if (componentProductIds.length === 0) return new Set();
+  const rows = await dbc
+    .select({ componentProductId: productComponent.componentProductId })
+    .from(productComponent)
+    .where(
+      and(
+        eq(productComponent.parentProductId, parentProductId),
+        inArray(productComponent.componentProductId, [...componentProductIds]),
+        notDeleted(productComponent),
+      ),
+    );
+  return new Set(rows.map((row) => row.componentProductId));
+}
+
+/**
+ * Everything that decides whether a component attach may proceed, computed
+ * once and returned rather than thrown.
+ *
+ * Shared verbatim by `attachProductComponents` (which passes its `tx`) and
+ * `previewAttachProductComponents` (which passes the pooled client). Queries
+ * run SEQUENTIALLY for exactly that reason — see `repo/relation-preflight.ts`.
+ */
+async function preflightAttachComponents(
+  dbc: DrizzleClient | DrizzleTransaction,
+  parentProductId: ProductId,
+  componentProductIds: readonly ProductId[],
+): Promise<RelationPreflight> {
+  const requested = uniq([...componentProductIds]);
+  const { rows, codeById } = await loadRelationProducts(dbc, [
+    parentProductId,
+    ...requested,
+  ]);
+  const liveIds = new Set(rows.filter((row) => row.live).map((row) => row.id));
+
+  const parentMissing = !liveIds.has(parentProductId);
+  const missing = requested.filter((id) => !liveIds.has(id));
+  const selfReference = requested.filter((id) => id === parentProductId);
+
+  // The parent being gone, a component being gone, or the one-hop
+  // self-reference all make the cycle walk meaningless — the proposed edge set
+  // it would project is not the one that would be written.
+  if (parentMissing || missing.length > 0 || selfReference.length > 0) {
+    return {
+      ...emptyPreflight(),
+      requested,
+      parentMissing,
+      missing,
+      selfReference,
+      codeById,
+    };
+  }
+
+  // Multi-hop cycle guard: the one-hop self-reference is refused above (and
+  // backstopped by the DB CHECK), but A→B→A several hops down is only visible
+  // by walking the WHOLE live edge set with the proposed new edges projected on
+  // top. See the `findMergeComponentCycle` import comment.
+  const liveEdges = await allLiveComponentEdges(dbc);
+  const cycle = findMergeComponentCycle({
+    edges: [
+      ...liveEdges,
+      ...requested.map((productId) => ({
+        parentProductId,
+        componentProductId: productId,
+      })),
+    ],
+    keepId: parentProductId,
+    loserIds: [],
+  });
+
+  const alreadyLive = await liveComponentIds(dbc, parentProductId, requested);
+  return {
+    ...emptyPreflight(),
+    requested,
+    alreadySatisfied: requested.filter((id) => alreadyLive.has(id)),
+    cyclePath: cycle ? await describeComponentPath(dbc, cycle) : null,
+    codeById,
+  };
+}
+
+/** The detach counterpart: the only thing to know is which links exist. */
+async function preflightDetachComponents(
+  dbc: DrizzleClient | DrizzleTransaction,
+  parentProductId: ProductId,
+  componentProductIds: readonly ProductId[],
+): Promise<RelationPreflight> {
+  const requested = uniq([...componentProductIds]);
+  const { codeById } = await loadRelationProducts(dbc, [
+    parentProductId,
+    ...requested,
+  ]);
+  const alreadyLive = await liveComponentIds(dbc, parentProductId, requested);
+  return {
+    ...emptyPreflight(),
+    requested,
+    // Inverted from attach: a detach is already satisfied when there is NO
+    // live edge to remove.
+    alreadySatisfied: requested.filter((id) => !alreadyLive.has(id)),
+    codeById,
+  };
+}
+
+/** Refuse a component attach, naming the offending shortcodes. */
+function assertComponentsAttachable(
+  parentProductId: ProductId,
+  pre: RelationPreflight,
+): void {
+  // Order matches the checks this replaced: dead parent, then self-reference,
+  // then dead components, then the multi-hop cycle.
+  if (pre.parentMissing) {
+    throwRelationRefusal({
+      reason: "PRODUCT_NOT_FOUND",
+      ids: [parentProductId],
+      codeById: pre.codeById,
+      message: (codes) => `Product ${codes} not found`,
+      items: [],
+    });
+  }
+  if (pre.selfReference.length > 0) {
+    throwRelationRefusal({
+      reason: "PRODUCT_COMPONENT_SELF_REFERENCE",
+      ids: pre.selfReference,
+      codeById: pre.codeById,
+      message: (codes) =>
+        `A product cannot be a component of itself (${codes}).`,
+      items: [
+        relationImpact({
+          code: "block-component-self-reference",
+          label: "self-referencing components",
+          description: "A Product cannot be listed inside itself.",
+          ids: pre.selfReference,
+        }),
+      ],
+    });
+  }
+  if (pre.missing.length > 0) {
+    throwRelationRefusal({
+      reason: "PRODUCT_NOT_FOUND",
+      ids: pre.missing,
+      codeById: pre.codeById,
+      message: (codes) =>
+        `Every component Product must exist and be live. Not live: ${codes}.`,
+      items: [
+        relationImpact({
+          code: "block-component-not-live",
+          label: "products that are not live",
+          description:
+            "A component Product named here does not exist or has been deleted.",
+          ids: pre.missing,
+        }),
+      ],
+    });
+  }
+  if (pre.cyclePath) {
+    throwRelationRefusal({
+      reason: "PRODUCT_COMPONENT_CYCLE",
+      ids: [parentProductId],
+      codeById: pre.codeById,
+      message: () =>
+        `Attaching would make a product contain itself (${pre.cyclePath}). Detach the conflicting link first.`,
+      items: [
+        relationImpact({
+          code: "block-component-cycle",
+          label: "component cycle",
+          description: `Attaching would close a cycle: ${pre.cyclePath}.`,
+          ids: [parentProductId],
+        }),
+      ],
+    });
+  }
+}
+
+/**
+ * Advisory impact for a component attach, using the SAME predicate the
+ * mutation refuses on. Runs on the pooled client, outside any transaction.
+ */
+export async function previewAttachProductComponents(
+  db: Database,
+  parentProductId: ProductId,
+  componentProductIds: readonly ProductId[],
+): Promise<RelationPlan> {
+  const pre = await preflightAttachComponents(
+    getDb(db),
+    parentProductId,
+    componentProductIds,
+  );
+  return planRelationAttach(pre, {
+    edgeKey: "ProductComponent.componentProductId",
+    label: "kit components",
+    description: "Component links this attach would create.",
+  });
+}
+
+/** Advisory impact for a component detach. */
+export async function previewDetachProductComponents(
+  db: Database,
+  parentProductId: ProductId,
+  componentProductIds: readonly ProductId[],
+): Promise<RelationPlan> {
+  const pre = await preflightDetachComponents(
+    getDb(db),
+    parentProductId,
+    componentProductIds,
+  );
+  return planRelationDetach(pre, {
+    edgeKey: "ProductComponent.componentProductId",
+    label: "kit components",
+    description: "Component links this detach would remove.",
+  });
+}
+
 export async function attachProductComponents(
   db: Database,
   parentProductId: ProductId,
@@ -466,57 +696,15 @@ export async function attachProductComponents(
   const componentProductIds = uniqueComponents.map((c) => c.productId);
 
   return withTransaction(db, async (tx) => {
-    const liveParent = await tx.query.product.findFirst({
-      where: and(eq(product.id, parentProductId), notDeleted(product)),
-      columns: { id: true },
-    });
-    if (!liveParent) {
-      throw createAppError(
-        "PRODUCT_NOT_FOUND",
-        `Product ${parentProductId} not found`,
-      );
-    }
-
-    if (componentProductIds.includes(parentProductId)) {
-      throw createAppError(
-        "PRODUCT_COMPONENT_SELF_REFERENCE",
-        "A product cannot be a component of itself.",
-      );
-    }
-
-    const liveComponents = await tx.query.product.findMany({
-      where: and(inArray(product.id, componentProductIds), notDeleted(product)),
-      columns: { id: true },
-    });
-    if (liveComponents.length !== componentProductIds.length) {
-      throw createAppError(
-        "PRODUCT_NOT_FOUND",
-        "Every component Product must exist and be live.",
-      );
-    }
-
-    // Multi-hop cycle guard: the one-hop self-reference is already refused
-    // above (and backstopped by the DB CHECK), but A→B→A several hops down is
-    // only visible by walking the WHOLE live edge set with the proposed new
-    // edges projected on top. See the `findMergeComponentCycle` import comment.
-    const liveEdges = await allLiveComponentEdges(tx);
-    const cycle = findMergeComponentCycle({
-      edges: [
-        ...liveEdges,
-        ...uniqueComponents.map(({ productId }) => ({
-          parentProductId,
-          componentProductId: productId,
-        })),
-      ],
-      keepId: parentProductId,
-      loserIds: [],
-    });
-    if (cycle) {
-      throw createAppError(
-        "PRODUCT_COMPONENT_CYCLE",
-        `Attaching would make a product contain itself (${await describeComponentPath(tx, cycle)}). Detach the conflicting link first.`,
-      );
-    }
+    // The preflight runs on `tx`, not the pooled client: its checks and the
+    // insert below must see one snapshot, or a component soft-deleted between
+    // the two lands as a live edge to a dead product.
+    const pre = await preflightAttachComponents(
+      tx,
+      parentProductId,
+      componentProductIds,
+    );
+    assertComponentsAttachable(parentProductId, pre);
 
     const before = await liveComponentShortcodes(tx, parentProductId);
     const inserted = await tx

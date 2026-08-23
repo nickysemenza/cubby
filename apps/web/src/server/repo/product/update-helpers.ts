@@ -506,6 +506,11 @@ export async function syncProductImages(
   }
 
   if (pendingImageIds && pendingImageIds.length > 0) {
+    const resolvedPendingImageIds = await resolveAllPresent(
+      tx,
+      "image",
+      pendingImageIds,
+    );
     const startSortOrder = await nextImageSortOrder(
       tx,
       productImage,
@@ -517,7 +522,7 @@ export async function syncProductImages(
       productImage,
       "productId",
       productId,
-      pendingImageIds,
+      resolvedPendingImageIds,
       startSortOrder,
     );
   }

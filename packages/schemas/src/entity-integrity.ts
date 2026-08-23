@@ -6,6 +6,7 @@ import {
   expenseShortcode,
   financialAccountShortcode,
   financialTransactionShortcode,
+  imageShortcode,
   ingredientShortcode,
   inventoryShortcode,
   locationShortcode,
@@ -363,7 +364,22 @@ export const previewDeleteEntitySchema = z.enum([
 ]);
 export type PreviewDeleteEntity = z.infer<typeof previewDeleteEntitySchema>;
 
-/** Entities that support merge. */
+/**
+ * Entities that support merge. Hand-kept rather than derived from
+ * `entityManifest[e].lifecycle.merge` — `entity-manifest.ts` itself imports
+ * value-level schemas from THIS file (`entityLifecycleSchema`,
+ * `entityRelationshipSchema`), so importing `entityManifest` back here would
+ * be a circular value import: whichever of the two modules evaluates first
+ * would read the other's not-yet-initialized export at module-load time. That
+ * is not hypothetical — it was tried and threw
+ * `TypeError: Cannot read properties of undefined (reading 'filter')` from
+ * whichever module the test graph happened to reach second, breaking every
+ * consumer of `@cubby/schemas`, not just this file's own tests.
+ *
+ * Kept honest by a drift test instead: see
+ * `entity-manifest.unit.test.ts`, which asserts this list matches
+ * `allEntities.filter((e) => entityManifest[e].lifecycle.merge)`.
+ */
 export const previewMergeEntitySchema = z.enum([
   "ingredient",
   "vendor",
@@ -392,38 +408,60 @@ const PREVIEW_TARGET_ID_SCHEMA = {
   financialTransaction: financialTransactionShortcode,
   wish: wishShortcode,
   inventory: inventoryShortcode,
-  // Image has no shortcode and is the intentional hard-delete UUID exception.
-  image: z.uuid(),
+  image: imageShortcode,
 } as const satisfies Record<PreviewDeleteEntity, z.ZodType<string, string>>;
 
 /**
- * The field-level shape of one target id: any entity shortcode, or a bare uuid
- * for `image`. The entity isn't known until `entity` is read, so the *exact*
- * prefix is enforced in the refine — but publishing the alternation keeps a
- * real `pattern` in the advertised JSON Schema instead of a bare string.
+ * The field-level shape of one target id: any entity shortcode, `image`
+ * included — it carries an `IMG-` code like every other local-table entity,
+ * so no bare-uuid alternative belongs here. The entity isn't known until
+ * `entity` is read, so the *exact* prefix is enforced in the refine below —
+ * this alternation just keeps a real `pattern` in the advertised JSON Schema
+ * instead of a bare string.
  */
-const previewTargetId = z.union([
-  anyShortcodeSchema([
-    "product",
-    "recipe",
-    "ingredient",
-    "cookbook",
-    "meal",
-    "location",
-    "project",
-    "task",
-    "vendor",
-    "purchase",
-    "expense",
-    "financialAccount",
-    "financialTransaction",
-    "wish",
-    "inventory",
-  ]),
-  z.uuid(),
+const previewTargetId = anyShortcodeSchema([
+  "product",
+  "recipe",
+  "ingredient",
+  "cookbook",
+  "meal",
+  "location",
+  "project",
+  "task",
+  "vendor",
+  "purchase",
+  "expense",
+  "financialAccount",
+  "financialTransaction",
+  "wish",
+  "inventory",
+  "image",
 ]);
 
 const previewMergeEntities = new Set<string>(previewMergeEntitySchema.options);
+
+/**
+ * The parents of the three `<parent> ← product` relation families — the only
+ * entities `attach`/`detach` can preview.
+ *
+ * ⚠️ Dispatch is on the PARENT'S SHORTCODE PREFIX, which is unambiguous only
+ * because each of these has exactly one product-parented relation today
+ * (`ProductComponent`, `ProjectToolUsage`, `PurchaseProduct`). A SECOND
+ * product-parented relation — accessories, replacement parts, consumable-for —
+ * would make `PRD-…` ambiguous. When that day comes, add an explicit
+ * `relation` ENUM parameter here and in `attach_entity`; do NOT default it to
+ * "components" and keep overloading the prefix, which silently reinterprets
+ * every existing call.
+ */
+export const relationParentEntitySchema = z.enum([
+  "product",
+  "project",
+  "purchase",
+]);
+export type RelationParentEntity = z.infer<typeof relationParentEntitySchema>;
+const relationParentEntities = new Set<string>(
+  relationParentEntitySchema.options,
+);
 
 /**
  * `preview_entity_operation`'s input — deliberately a FLAT object, not a union.
@@ -443,12 +481,29 @@ const previewMergeEntities = new Set<string>(previewMergeEntitySchema.options);
  * message names the offending value and says what was expected: an agent
  * calling this wrongly should learn what to send next, not just that it failed.
  */
+/** `parentId`/`productIds` belong to attach/detach; say so rather than ignoring them. */
+function rejectRelationFields(
+  input: { parentId?: string; productIds?: string[] },
+  ctx: z.core.$RefinementCtx,
+  operation: "delete" | "merge",
+) {
+  for (const key of ["parentId", "productIds"] as const) {
+    if (input[key] !== undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: [key],
+        message: `\`${key}\` belongs to operation "attach"/"detach"; a ${operation} preview does not take it.`,
+      });
+    }
+  }
+}
+
 export const previewOperationInputSchema = z
   .object({
     operation: z
-      .enum(["delete", "merge"])
+      .enum(["delete", "merge", "attach", "detach"])
       .describe(
-        "delete → pass `ids`. merge → pass `mergeIds` (and optionally `keepId`).",
+        "delete → pass `ids`. merge → pass `mergeIds` (and optionally `keepId`). attach/detach → pass `parentId` and `productIds`.",
       ),
     entity: previewDeleteEntitySchema.describe(
       `The entity the target ids name. Every entity here supports delete; only ${previewMergeEntitySchema.options.join(", ")} support merge.`,
@@ -474,13 +529,28 @@ export const previewOperationInputSchema = z
       .describe(
         "merge only: the record to keep. Omit for candidate ranking; supply it for the final preview. Must not also appear in `mergeIds`.",
       ),
+    parentId: anyShortcodeSchema(
+      relationParentEntitySchema.options as unknown as [
+        RelationParentEntity,
+        ...RelationParentEntity[],
+      ],
+    )
+      .optional()
+      .describe(
+        `attach/detach only: the row the edge hangs off — a ${relationParentEntitySchema.options.join(", ")} shortcode. Its prefix picks the relation, and must agree with \`entity\`.`,
+      ),
+    productIds: z
+      .array(productShortcode)
+      .min(1)
+      .max(100)
+      .optional()
+      .describe(
+        "attach/detach only: the PRD- codes on the other end of the edge. Always products — all three relation families are `<parent> ← product`.",
+      ),
   })
   .superRefine((input, ctx) => {
     const idSchema = PREVIEW_TARGET_ID_SCHEMA[input.entity];
-    const expected =
-      input.entity === "image"
-        ? "a uuid (`image` is the one entity with no shortcode)"
-        : `a ${input.entity} shortcode`;
+    const expected = `a ${input.entity} shortcode`;
     const checkId = (value: string, path: Array<string | number>) => {
       if (idSchema.safeParse(value).success) return;
       ctx.addIssue({
@@ -497,6 +567,50 @@ export const previewOperationInputSchema = z
         checkId(value, [key, index]);
       }
     };
+
+    if (input.operation === "attach" || input.operation === "detach") {
+      if (!relationParentEntities.has(input.entity)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["entity"],
+          message: `${input.operation} is only supported for ${relationParentEntitySchema.options.join(", ")}; "${input.entity}" has no product relation.`,
+        });
+      }
+      if (!input.parentId) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["parentId"],
+          message: `operation "${input.operation}" requires \`parentId\` — the row the edge hangs off.`,
+        });
+      } else {
+        checkId(input.parentId, ["parentId"]);
+      }
+      if (!input.productIds) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["productIds"],
+          message: `operation "${input.operation}" requires \`productIds\` — the products on the other end of the edge.`,
+        });
+      }
+      for (const key of ["ids", "mergeIds", "keepId"] as const) {
+        if (input[key] !== undefined) {
+          ctx.addIssue({
+            code: "custom",
+            path: [key],
+            message: `\`${key}\` belongs to delete/merge; an ${input.operation} preview takes \`parentId\` plus \`productIds\`.`,
+          });
+        }
+      }
+      const productIds = input.productIds ?? [];
+      if (new Set(productIds).size !== productIds.length) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["productIds"],
+          message: "productIds must be distinct",
+        });
+      }
+      return;
+    }
 
     if (input.operation === "delete") {
       if (!input.ids) {
@@ -516,6 +630,7 @@ export const previewOperationInputSchema = z
           });
         }
       }
+      rejectRelationFields(input, ctx, "delete");
       checkIds(input.ids, "ids");
       return;
     }
@@ -551,6 +666,7 @@ export const previewOperationInputSchema = z
         message: "mergeIds must be distinct",
       });
     }
+    rejectRelationFields(input, ctx, "merge");
     if (input.keepId !== undefined && mergeIds.includes(input.keepId)) {
       ctx.addIssue({
         code: "custom",
@@ -579,6 +695,12 @@ export type PreviewOperationRequest =
       mergeIds: string[];
       /** Omit for candidate ranking; supply it for the final preview. */
       keepId?: string;
+    }
+  | {
+      operation: "attach" | "detach";
+      entity: RelationParentEntity;
+      parentId: string;
+      productIds: string[];
     };
 
 /**
@@ -591,6 +713,25 @@ export function narrowPreviewOperationInput(
   if (input.operation === "delete") {
     if (!input.ids) throw new Error("preview delete requires ids");
     return { operation: "delete", entity: input.entity, ids: input.ids };
+  }
+  if (input.operation === "attach" || input.operation === "detach") {
+    if (!input.parentId || !input.productIds) {
+      throw new Error(
+        `preview ${input.operation} requires parentId and productIds`,
+      );
+    }
+    const parentEntity = relationParentEntitySchema.safeParse(input.entity);
+    if (!parentEntity.success) {
+      throw new Error(
+        `preview ${input.operation} does not support entity ${input.entity}`,
+      );
+    }
+    return {
+      operation: input.operation,
+      entity: parentEntity.data,
+      parentId: input.parentId,
+      productIds: input.productIds,
+    };
   }
   if (!input.mergeIds) throw new Error("preview merge requires mergeIds");
   const parsedEntity = previewMergeEntitySchema.safeParse(input.entity);
@@ -616,9 +757,9 @@ export const mergeCandidateSchema = z.object({
 export type MergeCandidate = z.infer<typeof mergeCandidateSchema>;
 
 export const previewOperationSchema = z.object({
-  operation: z.enum(["delete", "merge"]),
+  operation: z.enum(["delete", "merge", "attach", "detach"]),
   entity: entitySchema,
-  /** `soft` / `hard` for a delete; null for a merge. */
+  /** `soft` / `hard` for a delete; null for a merge, attach, or detach. */
   mode: z.enum(["soft", "hard"]).nullable(),
   targetCount: z.number().int().nonnegative(),
   /**

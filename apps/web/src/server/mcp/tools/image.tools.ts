@@ -104,6 +104,11 @@ export function registerImageTools(server: McpServer) {
     inputSchema: attachFileInputShape,
     outputSchema: attachFileResponse,
     annotations: WRITE_CLOSED,
+    // The attachment target, for `McpToolCall.entity`. Derived from the
+    // shortcode prefix for the same reason `entityType` is not an input: the
+    // code already names the entity. This tool is ~18% of all MCP traffic, so
+    // leaving it unattributed would hollow out the usage dashboard on its own.
+    telemetryEntity: (params) => parseShortcode(params.entityId)?.type,
     handler: async (params, extra) => await attachOne(getCaller(extra), params),
   });
 
@@ -125,6 +130,15 @@ export function registerImageTools(server: McpServer) {
     // Deliberately NOT rejectDuplicateIds: `entityId` is the target, not the
     // item's own identity, and attaching several files to one product in a
     // single call is the normal case (cover plus detail shots).
+    //
+    // Telemetry attributes the batch to its FIRST item's entity. A batch is
+    // free to mix entities, so this is deliberately approximate — one row per
+    // call has nowhere to put a set. First-item attribution beats null for the
+    // common single-entity sweep; a mixed batch under-reports the rest.
+    telemetryEntity: (params) =>
+      params.items.length > 0
+        ? parseShortcode(params.items[0]!.entityId)?.type
+        : undefined,
     run: attachOne,
   });
 }

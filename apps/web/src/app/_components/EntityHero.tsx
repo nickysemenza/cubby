@@ -49,8 +49,8 @@ export const EntityHero: FC<EntityHeroProps> = ({
       <CardContent className="space-y-2">
         {/* Primary image, set as a textbook figure: hairline mat + caption */}
         <Link
-          to="/images/$id"
-          params={{ id: activeImage.id }}
+          to="/images/$shortcode"
+          params={{ shortcode: activeImage.id }}
           className="group block"
         >
           <figure className="my-0 rounded-sm border border-border p-2">

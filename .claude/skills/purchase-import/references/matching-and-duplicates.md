@@ -50,7 +50,8 @@ treat a near-exact hit as a duplicate to resolve, not a new Product: a
 single-best-match search silently hides the real duplicate behind a
 similarly-named different size. Prefer consolidating onto the record that
 already carries images, model, price, or expenses, then add the missing id kind
-to it — use `merge_products` for the consolidation itself rather than hand
+to it — use `merge_entity` with `entity: "product"` for the consolidation
+itself rather than hand
 copying fields and deleting the loser; it moves external ids, inventory,
 expenses, images, unit mappings, tasks, project-uses, and wish-candidates onto
 the survivor, and sums same-location inventory rather than dropping it. A

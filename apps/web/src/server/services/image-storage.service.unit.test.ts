@@ -56,6 +56,7 @@ vi.mock("@cubby/shared/external-fetch", async (importActual) => ({
   fetchExternalResponse: mocks.fetchExternalResponse,
 }));
 
+import { imageShortcode } from "@cubby/schemas/identifiers";
 import type { McpAttachFileInput } from "@cubby/schemas/image";
 import { ExternalFetchError } from "@cubby/shared/external-fetch";
 import {
@@ -92,12 +93,40 @@ describe("importImageFromUrl", () => {
     ).rejects.toBe(databaseError);
     expect(mocks.deleteS3Object).toHaveBeenCalledWith("imports/recipe.jpg");
   });
+
+  /**
+   * Regression test: `importImageFromUrlResponseSchema.imageId` is
+   * `imageShortcode`, not a raw uuid — a mismatch here would previously only
+   * surface as a `strictOutput` 500 on the live upload path, never at
+   * typecheck (the repo layer's return type wasn't itself branded), and never
+   * in a fast test. Asserting on the SHAPE (parses as `imageShortcode`), not a
+   * fixed string, so this doesn't just pin today's mock value.
+   */
+  it("returns the created image's public IMG- shortcode, not its uuid", async () => {
+    mocks.createUploadedImageRecord.mockResolvedValue({
+      id: "11111111-1111-1111-1111-111111111111",
+      shortcode: "IMG-7QRS",
+    });
+
+    const result = await importImageFromUrl({} as never, {
+      sourceUrl: "https://recipes.example/photo.jpg",
+      filenamePrefix: "recipe",
+    });
+
+    expect(result).not.toBeNull();
+    expect(imageShortcode.safeParse(result?.imageId).success).toBe(true);
+    expect(result?.imageId).toBe("IMG-7QRS");
+    expect(result?.imageId).not.toBe("11111111-1111-1111-1111-111111111111");
+  });
 });
 
 describe("initiateDocumentUpload", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.createPendingImageRecord.mockResolvedValue({ id: "img-1" });
+    mocks.createPendingImageRecord.mockResolvedValue({
+      id: "22222222-2222-2222-2222-222222222222",
+      shortcode: "IMG-2AAA",
+    });
     mocks.generatePresignedUploadUrl.mockResolvedValue(
       "https://r2.example/put",
     );
@@ -114,7 +143,11 @@ describe("initiateDocumentUpload", () => {
     });
 
     expect(result.key).toBe("cubby/documents/P-0123/blender-manual.pdf");
-    expect(result.imageId).toBe("img-1");
+    // `initiateUploadWithoutEntityResponseSchema.imageId` is `imageShortcode`
+    // — this pins the shape (not a raw uuid), same reasoning as the
+    // `importImageFromUrl` regression test above.
+    expect(imageShortcode.safeParse(result.imageId).success).toBe(true);
+    expect(result.imageId).toBe("IMG-2AAA");
     expect(mocks.createPendingImageRecord).toHaveBeenCalledWith(
       {},
       expect.objectContaining({

@@ -140,7 +140,8 @@ Expense → Purchase ← Allocation → FinancialTransaction → FinancialAccoun
   notes. Reuse the roster's exact spelling; do not mint a near duplicate.
 - Use `split_expense` for a real aggregate Expense that needs per-product cost
   basis. Use `link_expenses_to_purchase` for several existing Expenses on one
-  Purchase, and `merge_purchases` only after explicit approval.
+  Purchase, and `merge_entity` with `entity: "purchase"` only after explicit
+  approval.
 - Reconcile every proposed split against the vendor's own stated order total
   before writing it, and refuse the order when it does not agree. `split_expense`
   does not validate that parts sum to anything, so this assertion is the only

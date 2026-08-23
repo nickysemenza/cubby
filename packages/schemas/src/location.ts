@@ -511,7 +511,9 @@ const locationCreateShape = {
   parentId: optionalLocationShortcode.describe(
     "Parent location id — nest this location under another (omit/null to place it directly under Home).",
   ),
-  pendingImageIds: z.array(z.uuid()).optional(),
+  // Public `IMG-` shortcode — `Image` mints one at insert time, so the repo
+  // layer resolves this to a uuid before the join-table write.
+  pendingImageIds: z.array(imageShortcode).optional(),
 };
 
 export const locationCreateInput = z.object(locationCreateShape);

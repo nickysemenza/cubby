@@ -84,16 +84,16 @@ export const partitionEntityFiles = <T extends { contentType: string }>(
 });
 
 export const createInputImages = z.object({
-  pendingImageIds: z.array(z.uuid()).optional(),
+  pendingImageIds: z.array(imageShortcode).optional(),
 });
 
 export const updateInputImages = z.object({
-  pendingImageIds: z.array(z.uuid()).optional(),
-  // Public `IMG-` codes, unlike `pendingImageIds` above: these name images the
-  // client already saw come back through `ImageOut`, so they arrive as
-  // shortcodes and have to be resolved to uuids before they reach a join-table
-  // write. `pendingImageIds` never round-tripped through an output, so it
-  // stays a raw uuid straight from `create_file_upload`.
+  // All three are public `IMG-` codes now that `Image` mints a shortcode at
+  // insert time: `pendingImageIds` comes back from `create_file_upload`/
+  // `image.uploadImage`/`importImageFromUrl`, `removeImageIds`/`imageOrder`
+  // from `ImageOut`. Every one has to be resolved to a uuid (via
+  // `resolveAllPresent`) before it reaches a join-table write.
+  pendingImageIds: z.array(imageShortcode).optional(),
   removeImageIds: z.array(imageShortcode).optional(),
   imageOrder: z.array(imageShortcode).optional(),
 });
@@ -137,7 +137,7 @@ export type InitiateDocumentUploadInput = z.infer<
 >;
 
 export const getImageByIdSchema = z.object({
-  id: id,
+  id: imageShortcode,
 });
 
 // Input for renaming an image. `filename` is the only safely user-editable
@@ -394,17 +394,17 @@ export type ImageAssociation = z.infer<typeof imageAssociationSchema>;
 
 export const initiateUploadWithoutEntityResponseSchema = z.object({
   uploadUrl: z.url(),
-  // Still the uuid: this id's only destination is `pendingImageIds`, which
-  // writes straight into a join-table FK. The pair is a closed round trip that
-  // never reaches an MCP payload, so converting it would churn call sites for
-  // no boundary benefit. `attach_file` is the flow that needed public codes.
-  imageId: id,
+  // The public `IMG-` code: `Image` mints a shortcode at insert time
+  // (`insertWithShortcode`) like every other entity, so there is no longer a
+  // raw-uuid form to hand back here. Its destination, `pendingImageIds`, is a
+  // shortcode field for the same reason — see the note there.
+  imageId: imageShortcode,
   key: z.string(),
   url: z.url(),
 });
 
 export const imageWithEntitySchema = z.object({
-  id: id,
+  id: imageShortcode,
   url: z.url(),
   key: z.string(),
   filename: z.string(),
@@ -430,7 +430,7 @@ export const imageWithEntitySchema = z.object({
 export type ImageWithEntity = z.infer<typeof imageWithEntitySchema>;
 
 export const importImageFromUrlResponseSchema = z.object({
-  imageId: id,
+  imageId: imageShortcode,
   key: z.string(),
   url: z.url(),
   filename: z.string(),

@@ -10,6 +10,7 @@
     "./cookbook": "./src/cookbook.ts",
     "./import-recipe": "./src/import-recipe.ts",
     "./entity": "./src/entity.ts",
+    "./entity-core": "./src/entity-core.ts",
     "./entity-manifest": "./src/entity-manifest.ts",
     "./entity-integrity": "./src/entity-integrity.ts",
     "./related-view": "./src/related-view.ts",

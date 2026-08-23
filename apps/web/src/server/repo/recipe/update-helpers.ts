@@ -282,6 +282,11 @@ export async function updateRecipeImages(
   }
 
   if (updates.pendingImageIds && updates.pendingImageIds.length > 0) {
+    const resolvedPendingImageIds = await resolveAllPresent(
+      tx,
+      "image",
+      updates.pendingImageIds,
+    );
     const startSortOrder = await nextImageSortOrder(
       tx,
       recipeImage,
@@ -293,7 +298,7 @@ export async function updateRecipeImages(
       recipeImage,
       "recipeId",
       recipeId,
-      updates.pendingImageIds,
+      resolvedPendingImageIds,
       startSortOrder,
     );
   }

@@ -27,11 +27,7 @@ export {
   updateIngredient,
 } from "./crud";
 export { deleteIngredients } from "./deletion";
-export {
-  findFuzzyMergeCandidates,
-  type MergeSummary,
-  mergeIngredients,
-} from "./merge";
+export { findFuzzyMergeCandidates, mergeIngredients } from "./merge";
 export {
   enrichmentWorkbenchIngredients,
   getIngredientByName,

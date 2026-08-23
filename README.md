@@ -194,11 +194,15 @@ rows, so a retired code is a permanent tombstone), and case-insensitive on input
 | expense | `EXP-` | | location | `LOC-` | | recipe | `RCP-` |
 | ingredient | `ING-` | | meal | `MEL-` | | task | `TSK-` |
 | product | `PRD-` | | project | `PRJ-` | | vendor | `VEN-` |
-| financial account | `FAC-` | | financial transaction | `FTX-` | | — | — |
+| financial account | `FAC-` | | financial transaction | `FTX-` | | image | `IMG-` |
 | wishlist | `WSH-` | | — | — | | — | — |
 
-`Image` is the one entity with no shortcode — it has no MCP surface and is only
-ever reached through the entity that owns it.
+`Image` carries a code like every other local-table entity. It was the last
+holdout, addressed by raw uuid — which made it a permanent carve-out in every
+shape that could name an entity, so it was given a prefix rather than kept as an
+exception. The remaining uuid exceptions are all *sub-entity* ids (the
+`mealRecipe` id inside a meal's `recipes[]`, recipe section and section-line ids,
+unit-mapping ids, background job ids); none of them are manifest entities.
 
 The body is four characters from a 31-character alphabet (digits and uppercase
 letters minus the scan-confusable `0 O 1 I L`) — 923,521 codes per prefix.

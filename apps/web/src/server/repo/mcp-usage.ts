@@ -1,3 +1,4 @@
+import type { Entity } from "@cubby/schemas/entity-core";
 import { unsafeUserId } from "@cubby/schemas/identifiers";
 import type {
   McpToolCallOutcome,
@@ -47,6 +48,7 @@ export async function getMcpUsageAggregateData(
     userBreakdown,
     clientBreakdown,
     surfaceBreakdown,
+    entityBreakdown,
   ] = await Promise.all([
     drizzle
       .select({ startedAt: sql<Date | null>`min(${mcpToolCall.occurredAt})` })
@@ -139,6 +141,23 @@ export async function getMcpUsageAggregateData(
       .where(periodWhere)
       .groupBy(mcpToolCall.surface)
       .orderBy(desc(countInt())),
+    // Which entity each call targeted, where derivable. `entity` is only
+    // populated for CRUD-shaped tools plus merge/attach/detach — everything
+    // else (find_*, patch_*, verify_*, statement/usda/problems workflows)
+    // stays null, so this is a coarser lens than the per-tool breakdown
+    // above, not a replacement for it: it is what lets a `delete_entity` /
+    // `merge_entity` / `attach_entity` / `detach_entity` row (collapsed
+    // under one toolName) say WHAT it acted on.
+    drizzle
+      .select({
+        key: sql<string>`coalesce(${mcpToolCall.entity}, 'unknown')`,
+        label: sql<string>`coalesce(${mcpToolCall.entity}, 'Unattributed')`,
+        count: countInt(),
+      })
+      .from(mcpToolCall)
+      .where(periodWhere)
+      .groupBy(mcpToolCall.entity)
+      .orderBy(desc(countInt())),
   ]);
 
   return {
@@ -151,6 +170,7 @@ export async function getMcpUsageAggregateData(
     userBreakdown,
     clientBreakdown,
     surfaceBreakdown,
+    entityBreakdown,
   };
 }
 
@@ -199,6 +219,7 @@ export async function listMcpUsageActivity(
     clientId?: string | null;
     surface?: McpToolCallSurface;
     outcome?: McpToolCallOutcome;
+    entity?: Entity;
     cursor?: string;
     limit: number;
   },
@@ -207,6 +228,7 @@ export async function listMcpUsageActivity(
   const since = mcpUsageSince(input.window);
   if (since) conditions.push(gte(mcpToolCall.occurredAt, since));
   if (input.toolName) conditions.push(eq(mcpToolCall.toolName, input.toolName));
+  if (input.entity) conditions.push(eq(mcpToolCall.entity, input.entity));
   if (input.userId) {
     conditions.push(eq(mcpToolCall.userId, unsafeUserId(input.userId)));
   }
@@ -239,6 +261,7 @@ export async function listMcpUsageActivity(
       outcome: mcpToolCall.outcome,
       registeredAtCall: mcpToolCall.registeredAtCall,
       surface: mcpToolCall.surface,
+      entity: mcpToolCall.entity,
       release: mcpToolCall.release,
       occurredAt: mcpToolCall.occurredAt,
       ingestedAt: mcpToolCall.ingestedAt,
@@ -265,6 +288,7 @@ export async function listMcpUsageActivity(
       outcome: row.outcome,
       registeredAtCall: row.registeredAtCall,
       surface: row.surface,
+      entity: row.entity,
       release: row.release,
       occurredAt: row.occurredAt,
       ingestedAt: row.ingestedAt,

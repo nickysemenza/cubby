@@ -27,8 +27,10 @@ type USDALookupRoute =
 /**
  * Standard entity detail routes. `params` is the full `EntityDetailParams`
  * union (`{ shortcode }`) for the shortcode-bearing entities, or `{ id }` for
- * `image` — the one entity `EntityDetailRoute` covers that stays keyed on its
- * uuid (`/images/$id`; `usda-food` never routes through `TableLink`).
+ * `usda-food` — the one entity `EntityDetailRoute` covers whose route
+ * (`/usda/$id`) keys on its external `fdc_id` rather than a Cubby shortcode.
+ * `image` used to be a second exception here, keyed on its uuid; it mints an
+ * `IMG-` shortcode like every other entity now, so it no longer needs one.
  */
 type EntityRoute = {
   to: EntityDetailRoute;

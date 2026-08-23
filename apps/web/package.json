@@ -24,6 +24,7 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.sw.json",
     "db:ensure-extensions": "tsx scripts/ensure-db-extensions.ts",
     "db:backfill-image-shortcodes": "tsx scripts/backfill-image-shortcodes.ts",
+    "db:backfill-mcp-tool-call-entity": "tsx scripts/backfill-mcp-tool-call-entity.ts",
     "db:push": "pnpm run db:ensure-extensions && drizzle-kit push",
     "db:pull": "drizzle-kit pull",
     "db:rebuild": "pnpm run db:push",

@@ -39,6 +39,7 @@ import {
   getIngredientMatches,
   getRecipeUsagesForIngredient,
   ingredientList,
+  mergeIngredients,
   resolveOrCreateIngredients,
 } from "~/server/repo/ingredient";
 import {
@@ -51,7 +52,6 @@ import {
   getIngredientByID,
   getIngredientByName,
   getIngredientsByIDs,
-  mergeIngredients,
   updateIngredient as updateIngredientService,
 } from "~/server/services/ingredient.service";
 import {
@@ -181,72 +181,61 @@ const update = protectedProcedure
     };
   });
 
+// Calls the repo directly: the service wrapper this used to go through only
+// ran the merge and then re-read the survivor, which is a pass-through, and
+// the layering rule reserves the service layer for cross-cutting
+// enrichment/compute. The survivor read is `getIngredientByID` right here.
 const merge = protectedProcedure
   .input(ingredientMergeInput)
   .output(strictOutput(ingredientMergeOut))
   .mutation(async ({ ctx, input }) => {
-    const [target, ...aliases] = await ingredientShortcodes.all(ctx.db, [
-      input.target,
-      ...input.aliases,
-    ]);
-    const { ingredient: merged, summary } = await mergeIngredients(
+    // Shortcodes go in whole: `mergeIngredients` resolves them itself through
+    // the shared `resolveMergeTargets`, which is also what refuses a
+    // self-merge before anything is written.
+    const summary = await mergeIngredients(ctx.db, input, ctx.actorContext);
+    const keepEntityId = await ingredientShortcodes.one(ctx.db, input.keepId);
+    const merged = await getIngredientByID(
       ctx.db,
       ctx.usdaClient,
-      target!,
-      aliases,
-      ctx.actorContext,
-      {
-        dryRun: input.dryRun,
-      },
+      keepEntityId,
     );
     // The merge marked the absorbed recipes stale in-transaction; dispatch their
     // recompute OFF the request path (queue in prod, inline in dev) so a
-    // heavily-used target can't overrun the Workers budget and sink the mutation.
-    if (!input.dryRun) {
-      const recipeBatches = await ctx.services.recipeCosting.dispatchRecompute(
-        summary.affectedRecipeIds,
-        {
-          source: "ingredient.merge",
-          entity: { entityType: "ingredient", entityId: target! },
-        },
-      );
-      const backgroundBatches = await runMutationSideEffects(ctx.db, {
-        action: "updated",
-        entity: { entityType: "ingredient", entityId: target! },
+    // heavily-used keeper can't overrun the Workers budget and sink the mutation.
+    const recipeBatches = await ctx.services.recipeCosting.dispatchRecompute(
+      summary.affectedRecipeIds,
+      {
         source: "ingredient.merge",
-      });
-      const deletedBatches = await runMutationSideEffectsForEntities(
-        ctx.db,
-        summary.deletedEntityIds.map((id) => ({
-          action: "deleted" as const,
-          entity: { entityType: "ingredient" as const, entityId: id },
-          source: "ingredient.merge",
-        })),
-      );
-      return {
-        ...merged,
-        sideEffects: {
-          backgroundBatches: [
-            ...recipeBatches,
-            ...backgroundBatches,
-            ...deletedBatches,
-          ],
-        },
-        mergeSummary: {
-          aliasesAdded: summary.aliasesAdded,
-          recipesMoved: summary.recipesMoved,
-          productsMoved: summary.productsMoved,
-          deletedIds: summary.deletedIds,
-        },
-      };
-    }
+        entity: { entityType: "ingredient", entityId: keepEntityId },
+      },
+    );
+    const backgroundBatches = await runMutationSideEffects(ctx.db, {
+      action: "updated",
+      entity: { entityType: "ingredient", entityId: keepEntityId },
+      source: "ingredient.merge",
+    });
+    const deletedBatches = await runMutationSideEffectsForEntities(
+      ctx.db,
+      summary.deletedEntityIds.map((id) => ({
+        action: "deleted" as const,
+        entity: { entityType: "ingredient" as const, entityId: id },
+        source: "ingredient.merge",
+      })),
+    );
     return {
       ...merged,
-      sideEffects: { backgroundBatches: [] },
+      sideEffects: {
+        backgroundBatches: [
+          ...recipeBatches,
+          ...backgroundBatches,
+          ...deletedBatches,
+        ],
+      },
       mergeSummary: {
         aliasesAdded: summary.aliasesAdded,
         recipesMoved: summary.recipesMoved,
         productsMoved: summary.productsMoved,
+        merged: summary.merged,
         deletedIds: summary.deletedIds,
       },
     };

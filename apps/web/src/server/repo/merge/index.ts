@@ -9,4 +9,9 @@ export {
   planSlotCollisions,
   type SlotCollisionPlan,
 } from "./collisions";
-export { finalizeMerge, repointEdge, resolveMergeTargets } from "./core";
+export {
+  assertDistinctMergeTargets,
+  finalizeMerge,
+  repointEdge,
+  resolveMergeTargets,
+} from "./core";

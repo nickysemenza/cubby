@@ -1,3 +1,4 @@
+import { unsafeImageShortcode } from "@cubby/schemas/identifiers";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import {
@@ -149,7 +150,7 @@ describe("detectInventoryItems cached result filtering", () => {
     await updateLocation(
       ctx.db,
       location.entityId,
-      { pendingImageIds: [image.id] },
+      { pendingImageIds: [unsafeImageShortcode(image.shortcode)] },
       ctx.actor,
     );
     const locationWithImage = await getLocationById(ctx.db, location.entityId);

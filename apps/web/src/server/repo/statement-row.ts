@@ -348,6 +348,7 @@ const storedRowCount = async (
 export async function recordStatementRows(
   db: Database,
   input: RecordStatementRowsInput,
+  // Unused: StatementRow has no `AuditEntityType` — see deleteStatementRows.
   _actor: ActorContext,
 ) {
   const { source } = input.import;
@@ -683,6 +684,7 @@ const selectorConditions = (selector: StatementRowSelector): SQL => {
 export async function updateStatementRows(
   db: Database,
   input: UpdateStatementRowsInput,
+  // Unused: StatementRow has no `AuditEntityType` — see deleteStatementRows.
   _actor: ActorContext,
 ) {
   const { data, selector } = input;
@@ -767,6 +769,12 @@ export async function updateStatementRows(
 export async function deleteStatementRows(
   db: Database,
   selector: StatementRowSelector,
+  // Unused: StatementRow isn't in entity-core.ts's `Entity` union, so
+  // `logAuditEntry` has no `AuditEntityType` to name it under — nothing here
+  // can produce a truthful audit entry. TODO: once StatementRow gets a
+  // manifest entry, route this through `removeEntity` instead (also brings
+  // cascade/locking, and `removeEntity` needs an id list, not a filter
+  // selector — same promotion this selector shape is blocked on today).
   _actor: ActorContext,
 ) {
   return withTransaction(db, async (tx) => {

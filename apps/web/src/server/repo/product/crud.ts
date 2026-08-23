@@ -1505,18 +1505,27 @@ export const createProduct = async (
 
       let images: Array<typeof image.$inferSelect> = [];
       if (pendingImageIds && pendingImageIds.length > 0) {
+        // `pendingImageIds` are public `IMG-` codes; both the join-table write
+        // and the read-back below key on `Image.id`, so resolve once and use
+        // the uuids for both.
+        const resolvedImageIds = await resolveAllPresent(
+          tx,
+          "image",
+          pendingImageIds,
+        );
+
         await associatePendingImages(
           tx,
           productImage,
           "productId",
           newProduct.id,
-          pendingImageIds,
+          resolvedImageIds,
         );
 
         images = await tx
           .select()
           .from(image)
-          .where(inArray(image.id, pendingImageIds));
+          .where(inArray(image.id, resolvedImageIds));
       }
 
       await logAuditEntry(tx, actor, {
@@ -2296,16 +2305,22 @@ export const deleteProducts = async (
     // resolveLiveJoinName — but that was reversed: the ledger's net cost and
     // owned/sold window are derived from these rows, and a nameless product
     // silently corrupts that derivation with no restore path.
-    for (const [key, disposition] of Object.entries(
-      PRODUCT_DELETE_EDGE_POLICY,
-    )) {
-      // Drive off the delete policy's own `block` effect rather than excluding
-      // a role: the roles are shared vocabulary, so a negative filter would
-      // silently promote any newly-introduced role (e.g. the `media` role
-      // `ProductImage.productId` now carries) into a delete blocker.
+    for (const key of Object.keys(
+      PRODUCT_RETAINING_DEPENDENTS,
+    ) as Array<ProductRetainingEdgeKey>) {
+      // Iterate `PRODUCT_RETAINING_DEPENDENTS`'s own keys — typed
+      // `Record<ProductRetainingEdgeKey, ...>` (see ./edge-roles) — rather
+      // than every policy entry, so `key` is provably in that type with no
+      // cast. Still drive the actual block decision off the delete policy's
+      // own `block` effect rather than the role itself: the roles are shared
+      // vocabulary, so a negative filter would silently promote any
+      // newly-introduced role (e.g. the `media` role `ProductImage.productId`
+      // now carries) into a delete blocker. The `PRODUCT_EDGE_ROLES backstop`
+      // test in product.integration.test.ts guards the two staying in
+      // agreement.
+      const disposition = PRODUCT_DELETE_EDGE_POLICY[key];
       if (disposition.effect !== "block") continue;
-      const fetchDependents =
-        PRODUCT_RETAINING_DEPENDENTS[key as ProductRetainingEdgeKey];
+      const fetchDependents = PRODUCT_RETAINING_DEPENDENTS[key];
       const dependents = await fetchDependents(tx, ids);
       await assertNoDependents({
         offendingParentIds: dependents.map((d) => d.productId),
@@ -2373,11 +2388,15 @@ export const previewDeleteProducts = async (
   const dbClient = unwrapDb(db);
 
   const blockers: (ImpactItem | null)[] = [];
-  for (const [key, disposition] of Object.entries(PRODUCT_DELETE_EDGE_POLICY)) {
+  for (const key of Object.keys(
+    PRODUCT_RETAINING_DEPENDENTS,
+  ) as Array<ProductRetainingEdgeKey>) {
+    // See the matching loop in `deleteProducts` above for why iteration is
+    // keyed off `PRODUCT_RETAINING_DEPENDENTS` (no cast) while the block
+    // decision still reads the delete policy's own `block` effect.
+    const disposition = PRODUCT_DELETE_EDGE_POLICY[key];
     if (disposition.effect !== "block") continue;
-    const dependents = await PRODUCT_RETAINING_DEPENDENTS[
-      key as ProductRetainingEdgeKey
-    ](dbClient, ids);
+    const dependents = await PRODUCT_RETAINING_DEPENDENTS[key](dbClient, ids);
     const byTargetId: Record<string, number> = {};
     for (const { productId } of dependents) {
       if (productId) byTargetId[productId] = (byTargetId[productId] ?? 0) + 1;
@@ -2394,7 +2413,17 @@ export const previewDeleteProducts = async (
 
   // Everything the delete cascades. Each is a `soft-delete` disposition on the
   // same policy, so adding an edge there surfaces here without a code change.
-  const cascades: Array<[string, PgTable, PgColumn, string, boolean?]> = [
+  // The first tuple element is typed to the policy's own `keyof` so a typo'd
+  // key is a compile error instead of an `undefined` disposition at runtime.
+  const cascades: Array<
+    [
+      keyof typeof PRODUCT_DELETE_EDGE_POLICY,
+      PgTable,
+      PgColumn,
+      string,
+      boolean?,
+    ]
+  > = [
     [
       "ProductExternalId.productId",
       productExternalId,
@@ -2425,10 +2454,7 @@ export const previewDeleteProducts = async (
 
   const changes: (ImpactItem | null)[] = [];
   for (const [edgeKey, table, column, label, includeDeleted] of cascades) {
-    const disposition =
-      PRODUCT_DELETE_EDGE_POLICY[
-        edgeKey as keyof typeof PRODUCT_DELETE_EDGE_POLICY
-      ];
+    const disposition = PRODUCT_DELETE_EDGE_POLICY[edgeKey];
     changes.push(
       impact({
         disposition,

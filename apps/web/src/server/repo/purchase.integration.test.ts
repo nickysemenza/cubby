@@ -1205,7 +1205,7 @@ describe("purchase repository — mergePurchases", () => {
       ctx.actor,
     );
 
-    expect(merged.id).toBe(keeper.id);
+    expect(merged.purchase.id).toBe(keeper.id);
     const keeperUuid = await purchaseUuid(ctx.db, keeper.id);
 
     const lines = await getPurchaseExpenses(ctx.db, keeperUuid);
@@ -1235,8 +1235,8 @@ describe("purchase repository — mergePurchases", () => {
     expect(await getPurchaseByShortcode(ctx.db, loser.id)).toBeNull();
 
     // The keeper's rollup now covers both sides' money.
-    expect(merged.expenseCount).toBe(2);
-    expect(merged.expenseTotal).toBe(30);
+    expect(merged.purchase.expenseCount).toBe(2);
+    expect(merged.purchase.expenseTotal).toBe(30);
   });
 
   it("previews settlement movement and audits each absorbed purchase once", async () => {
@@ -1345,7 +1345,7 @@ describe("purchase repository — mergePurchases", () => {
       ctx.actor,
     );
 
-    expect(merged.orderId).toBe("ADOPT-1");
+    expect(merged.purchase.orderId).toBe("ADOPT-1");
     expect(
       (await getPurchaseByID(ctx.db, await purchaseUuid(ctx.db, keeper.id)))
         .orderId,
@@ -1434,7 +1434,7 @@ describe("purchase repository — mergePurchases", () => {
     ).toBe("ORD-2");
   });
 
-  it("a self-merge (or an empty merge set) returns the keeper untouched", async () => {
+  it("REFUSES a self-merge instead of silently dropping the keeper", async () => {
     const vendorId = await vendorShortcodeByName(ctx.db, "Self Merge Charge");
     const { output: keeper } = await createPurchase(
       ctx.db,
@@ -1445,18 +1445,40 @@ describe("purchase repository — mergePurchases", () => {
       }),
       ctx.actor,
     );
+    const { output: bystander } = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ date: "2024-01-16", vendorId }),
+      ctx.actor,
+    );
 
-    // `losers` is `mergeIds` minus `keepId`, so both of these come back before
-    // the transaction opens — the keeper must NOT be folded into itself.
-    for (const mergeIds of [[keeper.id], []]) {
-      const result = await mergePurchases(
+    // The keeper alone, and the keeper smuggled in alongside a genuine loser.
+    // The second is the dangerous shape: the old code filtered `keepId` out of
+    // `mergeIds` and went on to fold the bystander, reporting success for a
+    // request it had quietly rewritten.
+    for (const mergeIds of [[keeper.id], [bystander.id, keeper.id]]) {
+      const error = await mergePurchases(
         ctx.db,
         { keepId: keeper.id, mergeIds },
         ctx.actor,
+      ).then(
+        () => undefined,
+        (thrown: unknown) => thrown,
       );
-      expect(result.id).toBe(keeper.id);
-      expect(result.orderId).toBe("SELF-1");
+      expect((error as { cause?: { reason?: string } })?.cause?.reason).toBe(
+        "MERGE_SELF_REFERENCE",
+      );
     }
+
+    // Nothing was written: both charges are still live and unchanged.
+    const survivor = await getPurchaseByID(
+      ctx.db,
+      await purchaseUuid(ctx.db, keeper.id),
+    );
+    expect(survivor.orderId).toBe("SELF-1");
+    expect(
+      (await getPurchaseByID(ctx.db, await purchaseUuid(ctx.db, bystander.id)))
+        .id,
+    ).toBe(bystander.id);
   });
 });
 
@@ -2767,10 +2789,12 @@ describe("purchase repository — documents", () => {
     expect(initiated.key).toContain(`/documents/${charge.id}/`);
     expect(initiated.key).toContain("flow-form-invoice.pdf");
     // Still PENDING until the client finishes its PUT and finalizes.
+    // `initiated.imageId` is the public `IMG-` code, so this looks the row up
+    // by shortcode — the uuid never leaves the repo layer.
     const pending = await getDb(ctx.db)
       .select({ status: image.status })
       .from(image)
-      .where(eq(image.id, initiated.imageId));
+      .where(eq(image.shortcode, initiated.imageId));
     expect(pending[0]?.status).toBe("PENDING");
   });
 

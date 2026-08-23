@@ -1,5 +1,6 @@
 import type { RelationMutationOut } from "@cubby/schemas/common";
 import type { ActorContext } from "@cubby/schemas/context";
+import type { ImpactItem } from "@cubby/schemas/entity-integrity";
 import type { ProductId, ProjectId } from "@cubby/schemas/identifiers";
 import {
   unsafeProductShortcode,
@@ -41,7 +42,7 @@ import {
   toolTimelineConflict,
   UNKNOWN_OWNERSHIP,
 } from "~/lib/tool-timeline";
-import type { Database, DrizzleClient } from "~/server/db";
+import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   expense,
   inventoryEntry,
@@ -60,6 +61,16 @@ import {
 import { foldAssociation } from "~/server/repo/merge";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product";
 import { loadProductOwnershipTimelines } from "~/server/repo/product/ownership";
+import {
+  emptyPreflight,
+  loadRelationProducts,
+  planRelationAttach,
+  planRelationDetach,
+  type RelationPlan,
+  type RelationPreflight,
+  relationImpact,
+  throwRelationRefusal,
+} from "~/server/repo/relation-preflight";
 import { maxPlainDate } from "./helpers";
 import { collectDescendantIds, loadProjectDateWindows } from "./subtree";
 
@@ -483,7 +494,7 @@ type UsagePair = { projectId: ProjectId; productId: ProductId };
 /**
  * Refuse usage edges for tools we did not own while the project ran. Every
  * attach path funnels through here — the single setter, the project-keyed bulk
- * attach (which MCP's `attach_project_resources` calls), and the product-keyed
+ * attach (which MCP's `attach_entity` calls for a PRJ- parent), and the product-keyed
  * set replacement.
  *
  * Three deliberate exemptions, and all of them matter:
@@ -503,17 +514,28 @@ type UsagePair = { projectId: ProjectId; productId: ProductId };
  *  - **Detach is never checked.** `used: false` and `detachProjectResources`
  *    don't call this at all.
  *
- * Runs BEFORE `withTransaction` rather than inside `assertUsagePair`: the fold
- * it needs (`loadProjectDateWindows`) takes the opaque `Database`, and a
- * transaction hands callees an unwrapped client. Safe here — the check reads
- * only ledger history, which a concurrent `ProjectToolUsage` write can't move.
+ * ⚠️ TRANSACTION BOUNDARY: this runs OUTSIDE `withTransaction`, and must. It
+ * fans its six reads out with `Promise.all`, and pg refuses a second query on a
+ * client that is already executing one — so pulling it under a transaction to
+ * share it with `assertUsagePair` would break it. It also needs the opaque
+ * `Database` for `loadProjectDateWindows`, which a transaction client is not.
+ * Safe outside: it reads only ledger history, which a concurrent
+ * `ProjectToolUsage` write can't move. The PREVIEW shares this predicate by
+ * calling it the same way — outside a transaction — rather than by relocating
+ * it (see `repo/relation-preflight.ts`: share the predicate, not the call site).
  */
-async function assertNoTimelineConflict(
+interface ToolTimelineConflictRow {
+  projectId: ProjectId;
+  productId: ProductId;
+  message: string;
+}
+
+async function findToolTimelineConflicts(
   db: Database,
   pairs: UsagePair[],
   options: ResourceReadOptions = {},
-): Promise<void> {
-  if (pairs.length === 0) return;
+): Promise<ToolTimelineConflictRow[]> {
+  if (pairs.length === 0) return [];
   const dbc = getDb(db);
   const today = options.today ?? householdLocalDate();
   const projectIds = uniq(pairs.map((pair) => pair.projectId));
@@ -560,6 +582,7 @@ async function assertNoTimelineConflict(
     existingRows.map((row) => `${row.projectId}:${row.productId}`),
   );
 
+  const conflicts: ToolTimelineConflictRow[] = [];
   for (const { projectId, productId } of pairs) {
     if (alreadyLive.has(`${projectId}:${productId}`)) continue;
     // Bought on this project — the same evidence lane A trusts.
@@ -572,14 +595,251 @@ async function assertNoTimelineConflict(
       { isLive: gate.isLive, today },
     );
     if (!conflict) continue;
-    throw createAppError(
-      "TOOL_TIMELINE_CONFLICT",
-      describeToolTimelineConflict(conflict, {
+    conflicts.push({
+      projectId,
+      productId,
+      message: describeToolTimelineConflict(conflict, {
         toolName: productNameById.get(productId) ?? "That tool",
         projectName: projectNameById.get(projectId) ?? "this project",
       }),
-    );
+    });
   }
+  return conflicts;
+}
+
+/**
+ * The throwing wrapper every attach path already called.
+ *
+ * Kept separate from {@link findToolTimelineConflicts} so a PREVIEW can ask the
+ * same question without an exception being the answer — the standing rule that
+ * a preview shares the mutation's predicate, not a copy of it. The refusal is
+ * still first-conflict-wins, exactly as before.
+ */
+async function assertNoTimelineConflict(
+  db: Database,
+  pairs: UsagePair[],
+  options: ResourceReadOptions = {},
+): Promise<void> {
+  const [conflict] = await findToolTimelineConflicts(db, pairs, options);
+  if (conflict) {
+    throw createAppError("TOOL_TIMELINE_CONFLICT", conflict.message);
+  }
+}
+
+/** Which of the requested products this project already records, live. */
+async function liveResourceProductIds(
+  dbc: DrizzleClient | DrizzleTransaction,
+  projectId: ProjectId,
+  productIds: readonly ProductId[],
+): Promise<Set<string>> {
+  if (productIds.length === 0) return new Set();
+  const rows = await dbc
+    .select({ productId: projectToolUsage.productId })
+    .from(projectToolUsage)
+    .where(
+      and(
+        eq(projectToolUsage.projectId, projectId),
+        inArray(projectToolUsage.productId, [...productIds]),
+        notDeleted(projectToolUsage),
+      ),
+    );
+  return new Set(rows.map((row) => row.productId));
+}
+
+/**
+ * Everything that decides whether a project resource attach may proceed — with
+ * the two cases the old gate conflated kept apart.
+ *
+ * The old check was one query with `notDeleted(product)` AND
+ * `inArray(category, [tools, software])`, so a perfectly live `materials`
+ * Product came back as `PRODUCT_NOT_FOUND`. That reason is a lie: the row
+ * exists, the shortcode resolves, and the caller goes hunting for a typo. The
+ * `missing`/`ineligible` split is the fix, and `PRODUCT_CATEGORY_INELIGIBLE`
+ * is what the second one refuses with.
+ *
+ * ⚠️ TRANSACTION BOUNDARY: sequential queries only, so this runs on `tx` (the
+ * mutation) or on the pooled client (the preview). The timeline guard is NOT in
+ * here — it fans out with `Promise.all` and must stay outside a transaction;
+ * see {@link findToolTimelineConflicts}.
+ */
+async function preflightAttachProjectResources(
+  dbc: DrizzleClient | DrizzleTransaction,
+  projectId: ProjectId,
+  productIds: readonly ProductId[],
+): Promise<RelationPreflight> {
+  const requested = uniq([...productIds]);
+  const { rows, codeById } = await loadRelationProducts(dbc, requested);
+  const liveProject = await dbc.query.project.findFirst({
+    where: and(eq(project.id, projectId), notDeleted(project)),
+    columns: { id: true },
+  });
+  const alreadyLive = await liveResourceProductIds(dbc, projectId, requested);
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return {
+    ...emptyPreflight(),
+    requested,
+    parentMissing: !liveProject,
+    missing: requested.filter((id) => !byId.get(id)?.live),
+    ineligible: requested.filter((id) => {
+      const row = byId.get(id);
+      return (
+        !!row?.live && row.category !== "tools" && row.category !== "software"
+      );
+    }),
+    alreadySatisfied: requested.filter((id) => alreadyLive.has(id)),
+    codeById,
+  };
+}
+
+/** The detach counterpart: the only thing to know is which uses exist. */
+async function preflightDetachProjectResources(
+  dbc: DrizzleClient | DrizzleTransaction,
+  projectId: ProjectId,
+  productIds: readonly ProductId[],
+): Promise<RelationPreflight> {
+  const requested = uniq([...productIds]);
+  const { codeById } = await loadRelationProducts(dbc, requested);
+  const alreadyLive = await liveResourceProductIds(dbc, projectId, requested);
+  return {
+    ...emptyPreflight(),
+    requested,
+    // A detach is already satisfied when there is NO live use to remove.
+    alreadySatisfied: requested.filter((id) => !alreadyLive.has(id)),
+    codeById,
+  };
+}
+
+/** Refuse an attach, naming the offending shortcodes and saying WHICH problem. */
+function assertResourcesAttachable(
+  projectId: ProjectId,
+  pre: RelationPreflight,
+): void {
+  if (pre.parentMissing) {
+    throw createAppError("PROJECT_NOT_FOUND", `Project ${projectId} not found`);
+  }
+  if (pre.missing.length > 0) {
+    throwRelationRefusal({
+      reason: "PRODUCT_NOT_FOUND",
+      ids: pre.missing,
+      codeById: pre.codeById,
+      message: (codes) =>
+        `Every attached Product must exist and be live. Not live: ${codes}.`,
+      items: [
+        relationImpact({
+          code: "block-relation-target-not-live",
+          label: "products that are not live",
+          description:
+            "A Product named here does not exist or has been deleted.",
+          ids: pre.missing,
+        }),
+      ],
+    });
+  }
+  if (pre.ineligible.length > 0) {
+    throwRelationRefusal({
+      reason: "PRODUCT_CATEGORY_INELIGIBLE",
+      ids: pre.ineligible,
+      codeById: pre.codeById,
+      message: (codes) =>
+        `A project resource must have category tools or software. Wrong category: ${codes}. Change the product's category, or attach a different Product — these exist and are live.`,
+      items: [
+        relationImpact({
+          code: "block-product-category-ineligible",
+          label: "products of the wrong category",
+          description:
+            "The Product is live, but only category tools or software may be recorded as a project resource.",
+          ids: pre.ineligible,
+        }),
+      ],
+    });
+  }
+}
+
+const PROJECT_RESOURCE_EDGE = {
+  edgeKey: "ProjectToolUsage.productId",
+  label: "project resource uses",
+} as const;
+
+/**
+ * Advisory impact for a project resource attach.
+ *
+ * Two predicates, called exactly the way the mutation calls them: the timeline
+ * guard OUTSIDE any transaction (it fans out concurrently), then the sequential
+ * preflight. Sharing the predicate rather than the call site is what keeps the
+ * pg constraint intact.
+ */
+export async function previewAttachProjectResources(
+  db: Database,
+  projectId: ProjectId,
+  productIds: readonly ProductId[],
+  options: ResourceReadOptions = {},
+): Promise<RelationPlan> {
+  const uniqueProductIds = uniq([...productIds]);
+  const conflicts = await findToolTimelineConflicts(
+    db,
+    uniqueProductIds.map((productId) => ({ projectId, productId })),
+    options,
+  );
+  const pre = await preflightAttachProjectResources(
+    getDb(db),
+    projectId,
+    uniqueProductIds,
+  );
+  const plan = planRelationAttach(pre, {
+    ...PROJECT_RESOURCE_EDGE,
+    description: "Resource uses this attach would record.",
+  });
+  const timelineBlocker = relationImpact({
+    code: "block-tool-timeline-conflict",
+    label: "tools we did not own during the project",
+    description: conflicts[0]
+      ? conflicts[0].message
+      : "The tool's ownership window does not cover the project.",
+    ids: conflicts.map((conflict) => conflict.productId),
+  });
+  return {
+    blockers: timelineBlocker
+      ? [...plan.blockers, timelineBlocker]
+      : plan.blockers,
+    // A pair the timeline refuses is not going to be written, so it must not be
+    // counted among the changes either.
+    changes: timelineBlocker
+      ? plan.changes.map((item) => withoutTargets(item, conflicts))
+      : plan.changes,
+  };
+}
+
+/** Drop timeline-refused targets from a change item, keeping `total` honest. */
+function withoutTargets(
+  item: ImpactItem,
+  conflicts: ToolTimelineConflictRow[],
+): ImpactItem {
+  const blocked = new Set<string>(conflicts.map((c) => c.productId));
+  const byTargetId = Object.fromEntries(
+    Object.entries(item.byTargetId).filter(([id]) => !blocked.has(id)),
+  );
+  return {
+    ...item,
+    byTargetId,
+    total: Object.keys(byTargetId).length,
+  };
+}
+
+/** Advisory impact for a project resource detach. */
+export async function previewDetachProjectResources(
+  db: Database,
+  projectId: ProjectId,
+  productIds: readonly ProductId[],
+): Promise<RelationPlan> {
+  const pre = await preflightDetachProjectResources(
+    getDb(db),
+    projectId,
+    productIds,
+  );
+  return planRelationDetach(pre, {
+    ...PROJECT_RESOURCE_EDGE,
+    description: "Resource uses this detach would remove.",
+  });
 }
 
 export async function attachProjectResources(
@@ -590,37 +850,21 @@ export async function attachProjectResources(
   options: ResourceReadOptions = {},
 ): Promise<RelationMutationOut> {
   const uniqueProductIds = uniq(productIds);
+  // Outside the transaction, and it has to be — see the boundary note on
+  // `findToolTimelineConflicts`.
   await assertNoTimelineConflict(
     db,
     uniqueProductIds.map((productId) => ({ projectId, productId })),
     options,
   );
   return withTransaction(db, async (tx) => {
-    const liveProject = await tx.query.project.findFirst({
-      where: and(eq(project.id, projectId), notDeleted(project)),
-      columns: { id: true },
-    });
-    if (!liveProject) {
-      throw createAppError(
-        "PROJECT_NOT_FOUND",
-        `Project ${projectId} not found`,
-      );
-    }
-
-    const liveResources = await tx.query.product.findMany({
-      where: and(
-        inArray(product.id, uniqueProductIds),
-        inArray(product.category, ["tools", "software"]),
-        notDeleted(product),
-      ),
-      columns: { id: true },
-    });
-    if (liveResources.length !== uniqueProductIds.length) {
-      throw createAppError(
-        "PRODUCT_NOT_FOUND",
-        "Every attached Product must exist, be live, and have category tools or software.",
-      );
-    }
+    // On `tx`: these checks and the insert below must see one snapshot.
+    const pre = await preflightAttachProjectResources(
+      tx,
+      projectId,
+      uniqueProductIds,
+    );
+    assertResourcesAttachable(projectId, pre);
 
     const before = await liveResourceCodes(tx, projectId);
     const inserted = await tx
@@ -738,20 +982,7 @@ export async function repointProjectUses(
   }
 
   return withTransaction(db, async (tx) => {
-    const destination = await tx.query.product.findFirst({
-      where: and(
-        eq(product.id, toProductId),
-        inArray(product.category, ["tools", "software"]),
-        notDeleted(product),
-      ),
-      columns: { id: true },
-    });
-    if (!destination) {
-      throw createAppError(
-        "PRODUCT_NOT_FOUND",
-        "The destination Product must exist, be live, and have category tools or software.",
-      );
-    }
+    await assertReusableResource(tx, toProductId, "The destination Product");
 
     const rows = await tx.query.projectToolUsage.findMany({
       where: and(
@@ -839,6 +1070,58 @@ async function liveProjectCodes(
  * silently reports success and the UI shows a cleared checkbox that never
  * cleared anything.
  */
+/**
+ * One Product must be live AND a reusable resource — and the two failures must
+ * be told apart.
+ *
+ * The single query these three call sites used to share (`notDeleted` AND
+ * `category IN (tools, software)`) collapsed both into `PRODUCT_NOT_FOUND`,
+ * which is wrong for the second: the row exists, the shortcode resolves, and
+ * the caller has no way to learn that the actual problem is a category.
+ */
+async function assertReusableResource(
+  dbc: DrizzleClient | DrizzleTransaction,
+  productId: ProductId,
+  role: string,
+): Promise<{ shortcode: string }> {
+  const row = await dbc.query.product.findFirst({
+    where: and(eq(product.id, productId), notDeleted(product)),
+    columns: { shortcode: true, category: true },
+  });
+  if (!row) {
+    throw createAppError(
+      "PRODUCT_NOT_FOUND",
+      `${role} must exist and be live.`,
+    );
+  }
+  assertReusableCategory(productId, row);
+  return { shortcode: row.shortcode };
+}
+
+/** The category half of {@link assertReusableResource}, for callers that already have the row. */
+function assertReusableCategory(
+  productId: ProductId,
+  row: { shortcode: string; category: string | null },
+): asserts row is { shortcode: string; category: ReusableResourceCategory } {
+  if (row.category === "tools" || row.category === "software") return;
+  throwRelationRefusal({
+    reason: "PRODUCT_CATEGORY_INELIGIBLE",
+    ids: [productId],
+    codeById: new Map([[productId, row.shortcode]]),
+    message: (codes) =>
+      `A project resource must have category tools or software. ${codes} is category ${row.category} — change the product's category, or use a different Product.`,
+    items: [
+      relationImpact({
+        code: "block-product-category-ineligible",
+        label: "products of the wrong category",
+        description:
+          "The Product is live, but only category tools or software may be recorded as a project resource.",
+        ids: [productId],
+      }),
+    ],
+  });
+}
+
 async function assertUsagePair(
   tx: DrizzleClient,
   projectId: ProjectId,
@@ -850,12 +1133,8 @@ async function assertUsagePair(
       columns: { id: true },
     }),
     tx.query.product.findFirst({
-      where: and(
-        eq(product.id, productId),
-        inArray(product.category, ["tools", "software"]),
-        notDeleted(product),
-      ),
-      columns: { shortcode: true },
+      where: and(eq(product.id, productId), notDeleted(product)),
+      columns: { shortcode: true, category: true },
     }),
   ]);
   if (!liveProject) {
@@ -864,9 +1143,10 @@ async function assertUsagePair(
   if (!liveProduct) {
     throw createAppError(
       "PRODUCT_NOT_FOUND",
-      "A used Product must exist, be live, and have category tools or software.",
+      "A used Product must exist and be live.",
     );
   }
+  assertReusableCategory(productId, liveProduct);
   return { productCode: liveProduct.shortcode };
 }
 
@@ -974,20 +1254,7 @@ export async function setProductProjectUses(
     options,
   );
   return withTransaction(db, async (tx) => {
-    const liveProduct = await tx.query.product.findFirst({
-      where: and(
-        eq(product.id, productId),
-        inArray(product.category, ["tools", "software"]),
-        notDeleted(product),
-      ),
-      columns: { id: true },
-    });
-    if (!liveProduct) {
-      throw createAppError(
-        "PRODUCT_NOT_FOUND",
-        "A used Product must exist, be live, and have category tools or software.",
-      );
-    }
+    await assertReusableResource(tx, productId, "A used Product");
 
     const liveProjects =
       desired.length === 0
@@ -1504,12 +1771,10 @@ export async function listProductProjectUses(
   if (!productRow) {
     throw createAppError("PRODUCT_NOT_FOUND", `Product ${productId} not found`);
   }
-  if (productRow.category !== "tools" && productRow.category !== "software") {
-    throw createAppError(
-      "PRODUCT_NOT_FOUND",
-      `${productRow.name} is not a reusable tool or software Product`,
-    );
-  }
+  // Distinct reason from the not-found above: this Product exists and is live,
+  // it is simply not a reusable resource. Reusing PRODUCT_NOT_FOUND here sent
+  // callers hunting for a typo in a code that resolves.
+  assertReusableCategory(productId, productRow);
   const category = productRow.category;
 
   const rows = await dbc

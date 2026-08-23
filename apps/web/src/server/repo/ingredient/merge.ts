@@ -40,7 +40,12 @@ import {
   present,
   sideEffect,
 } from "~/server/repo/impact";
-import { finalizeMerge, repointEdge } from "~/server/repo/merge";
+import {
+  assertDistinctMergeTargets,
+  finalizeMerge,
+  repointEdge,
+  resolveMergeTargets,
+} from "~/server/repo/merge";
 import { mergeImpactForIngredients } from "./search";
 
 export const INGREDIENT_MERGE_EDGE_POLICY = {
@@ -154,34 +159,34 @@ const recipeIdsUsingIngredients = async (
 };
 
 /**
- * Merge `aliases` into `target`: fold their names/aliases into the target, then
- * re-point their recipe lines + products onto it before hard-deleting them. The
- * absorbed recipes' totals are marked stale (`totalsComputedAt = null`)
- * **inside the transaction** so they are never silently wrong; the caller
- * dispatches the (potentially heavy) recompute off the request path.
+ * Merge `mergeIds` into `keepId`: fold their names/aliases into the survivor,
+ * then re-point their recipe lines + products onto it before hard-deleting
+ * them. The absorbed recipes' totals are marked stale
+ * (`totalsComputedAt = null`) **inside the transaction** so they are never
+ * silently wrong; the caller dispatches the (potentially heavy) recompute off
+ * the request path.
+ *
+ * Takes the same `{keepId, mergeIds}` SHORTCODE pair as the other three merges
+ * and resolves it through the shared {@link resolveMergeTargets}. It used to
+ * take branded uuids resolved by its router, which made it the one merge whose
+ * public contract a generic caller could not reuse.
  *
  * Fails loudly — and writes nothing — when:
- * - `target` is itself in `aliases` (self-merge would delete the survivor), or
- * - any alias id doesn't resolve to a live ingredient (the old code silently
- *   no-op'd on a typo'd/deleted id, returning "success" while changing nothing).
- *
- * `dryRun` runs the same validation and counts what *would* change without
- * writing — the safe preview for a dedup sweep.
+ * - `keepId` is itself in `mergeIds` (`MERGE_SELF_REFERENCE`, raised by
+ *   `resolveMergeTargets` — the same refusal every merge and every merge
+ *   preview now makes), or
+ * - any id doesn't resolve to a live ingredient (the old code silently no-op'd
+ *   on a typo'd/deleted id, returning "success" while changing nothing).
  */
 export const mergeIngredients = async (
   db: Database,
-  target: IngredientId,
-  aliases: IngredientId[],
+  input: { keepId: string; mergeIds: readonly string[] },
   actor: ActorContext,
-  opts?: { dryRun?: boolean },
 ): Promise<MergeSummary> => {
-  const uniqueAliases = uniq(aliases);
-  if (uniqueAliases.includes(target)) {
-    throw createAppError(
-      "INGREDIENT_MERGE_INVALID",
-      `Cannot merge ingredient ${target} into itself`,
-    );
-  }
+  const { keepId: target, loserIds: uniqueAliases } = await resolveMergeTargets(
+    db,
+    { entity: "ingredient", keepId: input.keepId, mergeIds: input.mergeIds },
+  );
 
   // Validate + resolve against the given client; returns the survivor + the
   // freshly-computed alias set + the absorbed recipes. Shared by both paths so
@@ -261,18 +266,6 @@ export const mergeIngredients = async (
     };
   };
 
-  if (opts?.dryRun) {
-    const r = await resolve(getDb(db));
-    return {
-      aliasesAdded: r.aliasesAdded,
-      recipesMoved: r.movedRecipeIds.length,
-      productsMoved: r.productsMoved,
-      deletedIds: r.deletedIds,
-      deletedEntityIds: r.deletedEntityIds,
-      affectedRecipeIds: r.affectedRecipeIds,
-    };
-  }
-
   return await withTransaction(db, async (tx) => {
     const r = await resolve(tx);
 
@@ -311,7 +304,7 @@ export const mergeIngredients = async (
     // one call — see `finalizeMerge`'s doc for why those can't be separated.
     // This is the repo's one HARD-delete merge; the hard-deleted rows still get
     // SOFT-deleted embeddings, same as a collapsed inventory source row.
-    await finalizeMerge(tx, {
+    const { removed } = await finalizeMerge(tx, {
       entity: "ingredient",
       table: ingredient,
       keepId: target,
@@ -338,6 +331,7 @@ export const mergeIngredients = async (
       aliasesAdded: r.aliasesAdded,
       recipesMoved: r.movedRecipeIds.length,
       productsMoved: r.productsMoved,
+      merged: removed,
       deletedIds: r.deletedIds,
       deletedEntityIds: r.deletedEntityIds,
       affectedRecipeIds: r.affectedRecipeIds,
@@ -402,7 +396,9 @@ const foldedAliasCountsByTarget = async (
  * about which recipes go stale.
  *
  * Merging never blocks (no `block` disposition in the policy), so `blockers`
- * is always empty.
+ * is always empty — a self-merge is REFUSED rather than reported as a blocker,
+ * because the mutation refuses it too and a preview that reports must agree
+ * with the mutation it previews.
  *
  * Advisory only. `mergeIngredients` still re-validates and recomputes
  * everything inside its own transaction.
@@ -415,6 +411,11 @@ export const previewMergeIngredients = async (
   changes: ImpactItem[];
   sideEffects: ImpactItem[];
 }> => {
+  // Refuses exactly where the mutation refuses. The other three planners used
+  // to filter the keeper out silently; this one never filtered at all, so a
+  // self-merge preview double-counted the survivor's own rows before the
+  // mutation refused the call outright.
+  assertDistinctMergeTargets("ingredient", keepId, mergeIds);
   if (mergeIds.length === 0) {
     return { blockers: [], changes: [], sideEffects: [] };
   }

@@ -58,16 +58,24 @@ describe("previewOperationInputSchema", () => {
       ).toContain("ids.0");
     });
 
-    it("takes a uuid for image, the one entity with no shortcode", () => {
+    it("takes an IMG- shortcode for image, like every other entity", () => {
       expect(
         ok({
           operation: "delete",
           entity: "image",
-          ids: ["3f2504e0-4f89-11d3-9a0c-0305e82c3301"],
+          ids: ["IMG-2CRC"],
         }).success,
       ).toBe(true);
       expect(
         errorPaths({ operation: "delete", entity: "image", ids: ["PRD-2CRC"] }),
+      ).toContain("ids.0");
+      // A raw uuid is no longer accepted now that image has a shortcode.
+      expect(
+        errorPaths({
+          operation: "delete",
+          entity: "image",
+          ids: ["3f2504e0-4f89-11d3-9a0c-0305e82c3301"],
+        }),
       ).toContain("ids.0");
     });
 
@@ -177,6 +185,83 @@ describe("previewOperationInputSchema", () => {
           keepId: "PRD-2CRD",
         }),
       ).toContain("keepId");
+    });
+  });
+
+  describe("attach / detach", () => {
+    it("accepts a parent whose prefix matches `entity`, for all three families", () => {
+      for (const [entity, parentId] of [
+        ["product", "PRD-2CRC"],
+        ["project", "PRJ-2CRC"],
+        ["purchase", "PUR-2CRC"],
+      ] as const) {
+        for (const operation of ["attach", "detach"] as const) {
+          expect(
+            ok({ operation, entity, parentId, productIds: ["PRD-2CRD"] })
+              .success,
+            `${operation} ${entity}`,
+          ).toBe(true);
+        }
+      }
+    });
+
+    it("rejects an entity with no product relation", () => {
+      expect(
+        errorPaths({
+          operation: "attach",
+          entity: "recipe",
+          parentId: "PRD-2CRC",
+          productIds: ["PRD-2CRD"],
+        }),
+      ).toContain("entity");
+    });
+
+    it("rejects a parentId whose prefix disagrees with `entity`", () => {
+      expect(
+        errorPaths({
+          operation: "attach",
+          entity: "project",
+          parentId: "PUR-2CRC",
+          productIds: ["PRD-2CRD"],
+        }),
+      ).toContain("parentId");
+    });
+
+    it("requires both relation fields, and refuses the delete/merge ones", () => {
+      expect(errorPaths({ operation: "attach", entity: "product" })).toEqual(
+        expect.arrayContaining(["parentId", "productIds"]),
+      );
+      // Silently ignoring a field that belongs to another operation is how a
+      // caller ends up believing it did something.
+      expect(
+        errorPaths({
+          operation: "detach",
+          entity: "product",
+          parentId: "PRD-2CRC",
+          productIds: ["PRD-2CRD"],
+          ids: ["PRD-2CRE"],
+        }),
+      ).toContain("ids");
+    });
+
+    it("refuses the relation fields on a delete or merge", () => {
+      expect(
+        errorPaths({
+          operation: "delete",
+          entity: "product",
+          ids: ["PRD-2CRC"],
+          productIds: ["PRD-2CRD"],
+        }),
+      ).toContain("productIds");
+      expect(
+        errorPaths({
+          operation: "merge",
+          entity: "product",
+          mergeIds: ["PRD-2CRC"],
+          keepId: "PRD-2CRD",
+          parentId: "PRD-2CRE",
+        }),
+      ).toContain("parentId");
     });
   });
 

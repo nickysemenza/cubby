@@ -1,10 +1,7 @@
 import {
-  type IngredientMergeBatchOut,
   ingredientFilterFields,
   ingredientMcpListOut,
   ingredientMcpOut,
-  ingredientMergeBatchInput,
-  ingredientMergeBatchOut,
   ingredientResolvableNamesInput,
   ingredientResolveOrCreateResponseOut,
   ingredientUpdateData,
@@ -12,15 +9,11 @@ import {
 } from "@cubby/schemas/ingredient";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  describeToolError,
-  formatToolError,
-  getCaller,
+  declareMergeableEntity,
   registerEntityCrudToolset,
-  registerMcpTool,
   registerRouterTool,
   slimIngredient,
   WRITE_CLOSED,
-  WRITE_DESTRUCTIVE_CLOSED,
 } from "./_shared";
 
 export function registerIngredientTools(server: McpServer) {
@@ -65,58 +58,9 @@ export function registerIngredientTools(server: McpServer) {
         })),
   });
 
-  registerMcpTool(server, {
-    name: "merge_ingredients",
-    description:
-      "Merge one or more clusters of duplicate ingredients in a single call.",
-    inputSchema: ingredientMergeBatchInput.shape,
-    outputSchema: ingredientMergeBatchOut,
-    annotations: WRITE_DESTRUCTIVE_CLOSED,
-    handler: async (params, extra) => {
-      const caller = getCaller(extra);
-      const merges = params.merges;
-      const dryRun = params.dryRun;
-      const results: IngredientMergeBatchOut["results"] = [];
-      for (const [index, { target, aliases }] of merges.entries()) {
-        try {
-          const result = await caller.ingredient.merge({
-            target,
-            aliases,
-            dryRun,
-          });
-          results.push({
-            index,
-            status: "succeeded",
-            target,
-            summary: result.mergeSummary,
-          });
-        } catch (error) {
-          // `error` keeps the rendered sentence a human reads; `code`/`reason`
-          // carry the same failure in a form a caller can branch on — the same
-          // split `registerBatchTool` makes for every other batch tool.
-          const { code, reason } = describeToolError(error);
-          results.push({
-            index,
-            status: "failed",
-            target,
-            error: formatToolError(error),
-            ...(code ? { code } : {}),
-            ...(reason ? { reason } : {}),
-          });
-        }
-      }
-      const succeeded = results.filter((r) => r.status === "succeeded").length;
-      // A wholly-failed batch is still `isError: false` — see the doctrine on
-      // `registerBatchTool` in `_shared.ts`. The per-item errors are the
-      // payload; flagging the envelope would hide them behind a bare string.
-      return {
-        summary: {
-          requested: results.length,
-          succeeded,
-          failed: results.length - succeeded,
-        },
-        results,
-      };
-    },
-  });
+  declareMergeableEntity(
+    server,
+    "ingredient",
+    'Folds the merged-away ingredients\' names and aliases into the survivor\'s alias list, re-points their recipe lines and their linked products onto it (so the survivor inherits their USDA links and prices), then HARD-deletes them — this is the one merge whose losers leave no tombstone row. Recipes using either side have their totals marked stale in the same transaction and recomputed off the request path. Nothing blocks a merge; a bad merge is unrecoverable, and trigram/AI duplicate suggestions have real false positives ("red wine vinegar" vs "white wine vinegar"), so confirm the pair before calling.',
+  );
 }
