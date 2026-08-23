@@ -1053,4 +1053,175 @@ describe("computed purchase and product data quality", () => {
       amazonProduct.id,
     ]);
   });
+  // ⚠️ REGRESSION (SQL operator precedence). `dataStatus: "needs_data"` matched
+  // ZERO products in production — 1,193 real gaps read as a clean bill of
+  // health, and a location-scoped audit (the documented worklist entry point)
+  // reported nothing to do. `productDataGapCondition` returned a bare
+  // `scope AND missing AND NOT exception`, so `productNeedsDataCondition`'s
+  // `NOT <defect>` bound to `scope` alone and rendered
+  // `(<missing group>) AND NOT scope AND <collision> AND …`. Every disjunct in
+  // the missing group requires that same scope, so the conjunction was a
+  // contradiction. The two halves each looked correct in isolation, which is
+  // why this asserts the INTERSECTION against the same thing computed in
+  // application code rather than against a hand-written expected count.
+  it("intersects dataStatus with locationIdFilter instead of cancelling it", async () => {
+    const seeded = await seedPurchase("Worklist Supply");
+    const shelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Worklist Shelf" }),
+      ctx.actor,
+    );
+    const otherShelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Worklist Other Shelf" }),
+      ctx.actor,
+    );
+
+    // Missing category — a needs_data gap, on the shelf under audit.
+    const incomplete = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Worklist Incomplete",
+        manufacturer: "Acme",
+        category: null,
+      }),
+      ctx.actor,
+    );
+    // Same gap, a DIFFERENT shelf. Locks the intersection down in the widening
+    // direction too: a filter that silently ignored the location scope would
+    // pass every assertion below except this one.
+    const elsewhere = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Worklist Elsewhere",
+        manufacturer: "Acme",
+        category: null,
+      }),
+      ctx.actor,
+    );
+    // Fully enriched, on the shelf under audit.
+    const complete = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Worklist Complete",
+        manufacturer: "Acme",
+        category: "tools",
+        model: "AC-1",
+      }),
+      ctx.actor,
+    );
+
+    for (const item of [incomplete, elsewhere, complete]) {
+      await createExpense(
+        ctx.db,
+        makeExpenseInput({
+          purchaseId: seeded.output.id,
+          productId: item.id,
+          cost: 25,
+        }),
+        ctx.actor,
+      );
+    }
+    for (const [item, place] of [
+      [incomplete, shelf],
+      [elsewhere, otherShelf],
+      [complete, shelf],
+    ] as const) {
+      await createInventoryFixture(
+        ctx.db,
+        {
+          productId: item.id,
+          locationId: place.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+    }
+    // Stocked products owe a photo, so the "complete" one needs a real one.
+    const photo = await createImageFixture(ctx.db, "worklist-cover");
+    await insertAndReturn(ctx.db, productImage, {
+      productId: complete.entityId,
+      imageId: photo.id,
+    });
+
+    const sorts = [{ orderBy: "name", direction: "asc" as const }];
+    const scoped = await productList(
+      ctx.db,
+      { locationIdFilter: shelf.id, dataStatus: "needs_data" },
+      sorts,
+      page,
+    );
+
+    // The bug's whole signature: an empty worklist over a real backlog.
+    expect(scoped.data.length).toBeGreaterThan(0);
+    expect(scoped.data.map((item) => item.id)).toContain(incomplete.id);
+    expect(scoped.data.map((item) => item.id)).not.toContain(complete.id);
+    expect(scoped.data.map((item) => item.id)).not.toContain(elsewhere.id);
+    // `count` runs a SEPARATE unaliased query over the same where clause, so a
+    // predicate that renders differently there would show up as totalCount 0
+    // over a non-empty page (or the reverse).
+    expect(scoped.count).toBe(scoped.data.length);
+
+    // The contract the audit entry point actually depends on: filtering by both
+    // in SQL === filtering by location in SQL, then by status in TS.
+    const byLocationOnly = await productList(
+      ctx.db,
+      { locationIdFilter: shelf.id },
+      sorts,
+      page,
+    );
+    const expected = byLocationOnly.data
+      .filter((item) => item.dataQuality.status === "needs_data")
+      .map((item) => item.id);
+    expect(expected.length).toBeGreaterThan(0);
+    expect(scoped.data.map((item) => item.id)).toEqual(expected);
+  });
+
+  // Same precedence class, opposite direction: `productList`/`purchaseList`
+  // spell "complete" as `NOT <anyDataGap>`, and an unparenthesized `a OR b`
+  // there renders `NOT a OR b` — so anything carrying a DEFECT was reported
+  // complete. This fixture carries a missing-data gap AND a defect, which is
+  // exactly the input the broken form let through.
+  //
+  // Purchase-side only: the product-side defect (`duplicate_external_id`) is
+  // unconstructible here by design — `ProductExternalId_source_kind_externalId_key`
+  // guarantees a live identifier has at most one owner. The parenthesization of
+  // BOTH sides is locked down in `data-quality.unit.test.ts` instead.
+  it("keeps a defective purchase out of the complete worklist", async () => {
+    const seeded = await seedPurchase("Defect Complete Supply");
+    const item = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Defect Complete Line", manufacturer: "Acme" }),
+      ctx.actor,
+    );
+    // A cost that cannot reconcile against the purchase's statedTotal of 25 —
+    // `paperwork_mismatch`, the purchase-side defect. The purchase also still
+    // lacks its primary document, so it carries a missing-data gap too.
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        purchaseId: seeded.output.id,
+        productId: item.id,
+        cost: 400,
+      }),
+      ctx.actor,
+    );
+
+    const sorts = [{ orderBy: "date", direction: "desc" as const }];
+    const complete = await purchaseList(
+      ctx.db,
+      { dataStatus: "complete" },
+      sorts,
+      page,
+    );
+    expect(complete.data.map((row) => row.id)).not.toContain(seeded.output.id);
+    // The fixture really is a defect, not merely absent from every bucket.
+    const defective = await purchaseList(
+      ctx.db,
+      { dataStatus: "defect" },
+      sorts,
+      page,
+    );
+    expect(defective.data.map((row) => row.id)).toContain(seeded.output.id);
+  });
 });

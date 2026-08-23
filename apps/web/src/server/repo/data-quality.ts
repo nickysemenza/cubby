@@ -278,7 +278,15 @@ export const productDataGapCondition = (check: ProductDataCheck): SQL => {
       throw new Error(`Unhandled product data check: ${String(unhandled)}`);
     }
   }
-  return sql`${scope} AND ${missing} AND NOT ${activeException(product.dataExceptions, product.updatedAt, check)}`;
+  // ⚠️ Outer parens LOAD-BEARING. This is a bare conjunction, and callers embed
+  // it under `NOT` (`productNeedsDataCondition`) and inside larger boolean
+  // trees. Unparenthesized, `NOT <this>` binds only to `scope` — the rest of the
+  // conjunction stays positive — so `NOT gap` rendered as
+  // `NOT scope AND missing AND …`. AND-ed against the missing group (which
+  // requires that same scope) that is a contradiction, and `dataStatus`
+  // `needs_data` matched ZERO products unconditionally. Same class as the
+  // `not()` note in `presenceCondition` and TAGS_ARE_EMPTY.
+  return sql`(${scope} AND ${missing} AND NOT ${activeException(product.dataExceptions, product.updatedAt, check)})`;
 };
 
 const productMissingDataCondition = (): SQL =>
@@ -293,10 +301,13 @@ export const productDefectCondition = (): SQL =>
   productDataGapCondition("duplicate_external_id");
 
 export const productNeedsDataCondition = (): SQL =>
-  sql`${productMissingDataCondition()} AND NOT ${productDefectCondition()}`;
+  sql`(${productMissingDataCondition()} AND NOT ${productDefectCondition()})`;
 
+// Parenthesized because `productList` filters "complete" as `NOT <this>`. A bare
+// `a OR b` there renders `NOT a OR b`, which reads every defective product as
+// complete.
 export const productAnyDataGapCondition = (): SQL =>
-  sql`${productMissingDataCondition()} OR ${productDefectCondition()}`;
+  sql`(${productMissingDataCondition()} OR ${productDefectCondition()})`;
 
 // ⚠️ LOAD-BEARING: same fingerprint format as `activeException` above (see its
 // comment) — keep the two, plus TS's `evidenceFingerprint`, byte-for-byte in
@@ -385,7 +396,12 @@ const purchaseProductGapRaw = (check: ProductDataCheck): string => {
       throw new Error(`Unhandled product data check: ${String(unhandled)}`);
     }
   }
-  return `${base} ${condition} AND ${exceptionAbsent})`;
+  // Outer parens for the same reason as `productDataGapCondition`: every gap
+  // builder in this module emits ONE group, so a caller can embed it under
+  // `NOT` or beside an `OR` without reading its body. A bare `EXISTS (…)` is
+  // already safe under `NOT`, but "safe if you inspect it" is the property
+  // that failed here — the rule is uniform, and asserted in the unit test.
+  return `(${base} ${condition} AND ${exceptionAbsent}))`;
 };
 
 const purchaseGapRaw = (check: PurchaseDataCheck): string => {
@@ -468,10 +484,12 @@ export const purchaseDefectCondition = (): SQL =>
   sql.raw(purchaseGapRaw("paperwork_mismatch"));
 
 export const purchaseNeedsDataCondition = (): SQL =>
-  sql`${purchaseMissingDataCondition()} AND NOT ${purchaseDefectCondition()}`;
+  sql`(${purchaseMissingDataCondition()} AND NOT ${purchaseDefectCondition()})`;
 
+// Parenthesized for the same reason as `productAnyDataGapCondition`: `purchaseList`
+// filters "complete" as `NOT <this>`.
 export const purchaseAnyDataGapCondition = (): SQL =>
-  sql`${purchaseMissingDataCondition()} OR ${purchaseDefectCondition()}`;
+  sql`(${purchaseMissingDataCondition()} OR ${purchaseDefectCondition()})`;
 
 type FingerprintedGap = DataQualityGap & { fingerprint: string };
 
