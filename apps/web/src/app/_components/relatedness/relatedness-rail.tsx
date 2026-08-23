@@ -1,7 +1,8 @@
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
+import { useEffect } from "react";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -17,6 +18,7 @@ export function RelatednessRail({
   product: { id: ProductShortcode; tags: string[] };
 }) {
   const api = useTRPC();
+  const queryClient = useQueryClient();
   const relatedness = useQuery(
     api.relatedness.product.queryOptions(product.id),
   );
@@ -38,6 +40,22 @@ export function RelatednessRail({
   const status = relatedness.data?.status;
   const indexing =
     batch.data?.status === "queued" || batch.data?.status === "running";
+
+  useEffect(() => {
+    if (!refresh.data?.batchId || indexing || !batch.data) return;
+    // The worker has reached a terminal state. Re-read the product's status
+    // rather than leaving the rail on the request-time readiness snapshot.
+    void queryClient.invalidateQueries({
+      queryKey: api.relatedness.product.queryKey(product.id),
+    });
+  }, [
+    api.relatedness.product,
+    batch.data,
+    indexing,
+    product.id,
+    queryClient,
+    refresh.data?.batchId,
+  ]);
 
   return (
     <Stack gap="sm">
