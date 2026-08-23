@@ -40,7 +40,9 @@ export default defineConfig({
      still reports most of its failures in one go. */
   maxFailures: isCI ? 6 : 0,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: isCI ? [["github"], ["html"]] : "html",
+  reporter: isCI
+    ? [["github"], ["html"], ["./tests/e2e/e2e-harness-reporter.ts"]]
+    : [["html"], ["./tests/e2e/e2e-harness-reporter.ts"]],
   expect: {
     // Allow a bit more time on CI for client-side navigations
     timeout: isCI ? 15000 : 5000,
@@ -83,5 +85,5 @@ export default defineConfig({
     },
   ],
 
-  /* Note: webServer is handled by globalSetup with IntegresQL fresh database */
+  /* Note: the Cloudflare harness is handled by globalSetup with a fresh IntegreSQL database. */
 });

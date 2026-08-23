@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { addInventory, createLocation, createProduct } from "./e2e-helpers";
+import { expect, test } from "./e2e-test";
 
 test("phone recount keeps the common path to one tap per location", async ({
   page,

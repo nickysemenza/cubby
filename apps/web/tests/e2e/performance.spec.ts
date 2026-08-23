@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { openCommandPalette } from "./e2e-helpers";
+import { expect, test } from "./e2e-test";
 
 test("Home batches compact critical reads once and keeps hidden reads dormant", async ({
   page,

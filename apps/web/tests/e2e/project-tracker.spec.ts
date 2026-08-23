@@ -1,10 +1,10 @@
-import { expect, test } from "@playwright/test";
 import {
   editDetailCell,
   editListCell,
   openCommandPalette,
   waitForAppHydration,
 } from "./e2e-helpers";
+import { expect, test } from "./e2e-test";
 
 /**
  * Coverage for the new (DB-backed) project-tracker surfaces: /projects

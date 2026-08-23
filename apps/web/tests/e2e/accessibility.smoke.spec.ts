@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
 import { createProduct } from "./e2e-helpers";
+import { expect, test } from "./e2e-test";
 
 test("representative authenticated pages have no serious Axe violations", async ({
   page,

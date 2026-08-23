@@ -1,6 +1,6 @@
-import { expect, test } from "@playwright/test";
 import { dragByTouch, waitForDndMutation } from "./dnd-helpers";
 import { seedTaskPrerequisite } from "./e2e-fixtures";
+import { expect, test } from "./e2e-test";
 
 test("long-press moves a task in the responsive agenda and persists it", async ({
   page,

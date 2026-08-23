@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./e2e-test";
 
 test("workspace shell responds from phone navigation through desktop sidebar", async ({
   page,

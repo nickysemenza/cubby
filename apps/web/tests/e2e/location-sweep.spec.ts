@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { addInventory, createLocation, createProduct } from "./e2e-helpers";
+import { expect, test } from "./e2e-test";
 
 /**
  * The camera cannot be driven from a test, so both flows go through the

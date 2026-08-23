@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./e2e-test";
 
 test.describe("Main navigation", () => {
   test("mobile bottom nav shows the public navbar when signed out", async ({

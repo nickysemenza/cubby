@@ -1,9 +1,9 @@
-import { expect, test } from "@playwright/test";
 import {
   seedInventoryPrerequisites,
   seedLocationPrerequisite,
 } from "./e2e-fixtures";
 import { selectComboboxItem, waitForFormHydration } from "./e2e-helpers";
+import { expect, test } from "./e2e-test";
 
 test.describe("Bulk Move Inventory - Transfer", () => {
   test("can move inventory items between locations", async ({ page }) => {

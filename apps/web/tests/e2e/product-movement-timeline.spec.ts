@@ -1,6 +1,6 @@
-import { expect, test } from "@playwright/test";
 import { seedProductPrerequisite } from "./e2e-fixtures";
 import { waitForAppHydration } from "./e2e-helpers";
+import { expect, test } from "./e2e-test";
 
 test("Product filters persist while switching movement renderers", async ({
   page,

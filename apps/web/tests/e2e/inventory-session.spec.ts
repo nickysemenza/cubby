@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { addInventory, createLocation, createProduct } from "./e2e-helpers";
+import { expect, test } from "./e2e-test";
 
 test("recount is current-pass scoped, resumable, and completes with a summary", async ({
   page,

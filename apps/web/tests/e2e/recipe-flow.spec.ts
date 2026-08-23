@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { expect, test } from "@playwright/test";
 import { Pool } from "pg";
 import { fillInput, waitForFormHydration } from "./e2e-helpers";
+import { expect, test } from "./e2e-test";
 
 const MODEL = "claude-haiku-4-5";
 const PROMPT_VERSION = "2026-07-29.1";

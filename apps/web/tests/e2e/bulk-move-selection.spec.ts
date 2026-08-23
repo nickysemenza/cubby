@@ -1,6 +1,6 @@
-import { expect, test } from "@playwright/test";
 import { seedInventoryPrerequisites } from "./e2e-fixtures";
 import { selectComboboxItem, waitForFormHydration } from "./e2e-helpers";
+import { expect, test } from "./e2e-test";
 
 test.describe("Bulk Move Inventory - Selection", () => {
   test.describe.configure({ mode: "serial" });

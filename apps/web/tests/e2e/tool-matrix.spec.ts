@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { waitForFormHydration } from "./e2e-helpers";
+import { expect, test } from "./e2e-test";
 
 test("tool matrix keeps angled project headers pinned below the nav", async ({
   page,
