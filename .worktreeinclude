@@ -3,7 +3,7 @@
 # copied). See README "Worktrees". Deliberately env-only — the WASM package is
 # NOT copied (copying it blindly drifts stale); it's built per-worktree via
 # `pnpm run wasm`, kept warm by a shared CARGO_TARGET_DIR and rebuilt-when-stale
-# by scripts/ensure-wasm.mjs.
+# by scripts/ensure-wasm.ts.
 
 # Local env / secrets the dev server (and e2e) need
 apps/web/.env
