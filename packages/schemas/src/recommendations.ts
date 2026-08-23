@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { productShortcode } from "./identifiers";
 import { duplicateProductIdentitySchema } from "./problems";
-import { relatednessOutSchema } from "./relatedness";
+import { embeddingReadinessSchema, relatednessOutSchema } from "./relatedness";
 
 export const recommendationWorkbenchInput = z.object({
   sourceId: productShortcode,
@@ -10,6 +10,7 @@ export const recommendationWorkbenchInput = z.object({
 export const recommendationKind = z.enum([
   "product-related",
   "duplicate-product",
+  "tag-propagation",
 ]);
 export type RecommendationKind = z.infer<typeof recommendationKind>;
 
@@ -33,3 +34,24 @@ export const duplicateProductRecommendationInput = z.object({
 });
 export const duplicateProductRecommendationOut =
   duplicateProductIdentitySchema.nullable();
+
+export const tagPropagationRecommendationInput = z.object({
+  sourceId: productShortcode,
+});
+export const dismissTagPropagationInput = z.object({
+  sourceId: productShortcode,
+  tag: z.string().min(1),
+});
+export const tagPropagationRecommendationOut = z.object({
+  status: embeddingReadinessSchema,
+  currentTags: z.array(z.string()),
+  proposals: z.array(
+    z.object({
+      tag: z.string(),
+      supportingProductCount: z.number().int().positive(),
+    }),
+  ),
+});
+export type TagPropagationRecommendationOut = z.infer<
+  typeof tagPropagationRecommendationOut
+>;

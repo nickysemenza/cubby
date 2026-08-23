@@ -20,8 +20,117 @@ export function RecommendationWorkbench({
 }) {
   return kind === "duplicate-product" ? (
     <DuplicateProductRecommendation sourceId={sourceId} />
+  ) : kind === "tag-propagation" ? (
+    <TagPropagationRecommendation sourceId={sourceId} />
   ) : (
     <ProductRelatednessRecommendation sourceId={sourceId} />
+  );
+}
+
+function TagPropagationRecommendation({
+  sourceId,
+}: {
+  sourceId: ProductShortcode;
+}) {
+  const api = useTRPC();
+  const queryClient = useQueryClient();
+  const recommendation = useQuery(
+    api.recommendations.tagPropagation.queryOptions({ sourceId }),
+  );
+  const accept = useMutation(
+    api.product.update.mutationOptions({
+      onSuccess: () => {
+        invalidateTRPCQueries(queryClient, [
+          api.recommendations.tagPropagation.queryKey({ sourceId }),
+          api.relatedness.product.queryKey(sourceId),
+        ]);
+      },
+    }),
+  );
+  const dismiss = useMutation(
+    api.recommendations.dismissTagPropagation.mutationOptions({
+      onSuccess: () => {
+        invalidateTRPCQueries(queryClient, [
+          api.recommendations.tagPropagation.queryKey({ sourceId }),
+        ]);
+      },
+    }),
+  );
+
+  if (recommendation.isLoading) {
+    return (
+      <p className="text-muted-foreground text-sm">Loading tag proposals…</p>
+    );
+  }
+  if (
+    !recommendation.data ||
+    recommendation.isError ||
+    recommendation.data.status !== "ready"
+  ) {
+    return (
+      <p className="text-muted-foreground text-sm">
+        This product needs a current similarity index before tag proposals can
+        be reviewed.
+      </p>
+    );
+  }
+  const data = recommendation.data;
+  if (data.proposals.length === 0) {
+    return (
+      <p className="text-muted-foreground text-sm">No current tag proposals.</p>
+    );
+  }
+
+  return (
+    <Stack gap="sm">
+      <p className="text-muted-foreground text-sm">
+        Each tag has agreement from at least three current semantic neighbours.
+        Accepting adds only that tag through the normal product update path.
+      </p>
+      {data.proposals.map((proposal) => (
+        <Row
+          key={proposal.tag}
+          align="center"
+          justify="between"
+          gap="sm"
+          className="border-border border-b pb-2"
+        >
+          <Stack gap="tight">
+            <span className="text-sm">{proposal.tag}</span>
+            <span className="text-muted-foreground text-xs">
+              {proposal.supportingProductCount} related products agree
+            </span>
+          </Stack>
+          <Row gap="xs">
+            <Button
+              type="button"
+              size="sm"
+              disabled={accept.isPending}
+              onClick={() =>
+                accept.mutate({
+                  id: sourceId,
+                  data: {
+                    tags: [...data.currentTags, proposal.tag],
+                  },
+                })
+              }
+            >
+              Accept
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={dismiss.isPending}
+              onClick={() => dismiss.mutate({ sourceId, tag: proposal.tag })}
+            >
+              <X className="size-3" />
+              Dismiss
+            </Button>
+          </Row>
+        </Row>
+      ))}
+    </Stack>
   );
 }
 

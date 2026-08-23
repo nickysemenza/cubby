@@ -123,13 +123,22 @@ export function RelatednessRail({
       )}
 
       {status === "ready" && (
-        <Link
-          to="/recommendations/workbench"
-          search={{ kind: "product-related", source: product.id }}
-          className="text-xs underline underline-offset-2"
-        >
-          Review recommendations
-        </Link>
+        <Row gap="sm">
+          <Link
+            to="/recommendations/workbench"
+            search={{ kind: "product-related", source: product.id }}
+            className="text-xs underline underline-offset-2"
+          >
+            Review recommendations
+          </Link>
+          <Link
+            to="/recommendations/workbench"
+            search={{ kind: "tag-propagation", source: product.id }}
+            className="text-xs underline underline-offset-2"
+          >
+            Review tag proposals
+          </Link>
+        </Row>
       )}
     </Stack>
   );
