@@ -53,7 +53,10 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
-import { foldPersonFundingSourceForMerge } from "~/server/repo/household-contribution";
+import {
+  foldPersonFundingSourcesForMerge,
+  lockHouseholdLedgerTopology,
+} from "~/server/repo/household-contribution";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { finalizeMerge, resolveMergeTargets } from "~/server/repo/merge/core";
 import { removeEntity } from "~/server/repo/removal";
@@ -343,6 +346,7 @@ export async function deletePeople(
     await Promise.all(codes.map((code) => resolveOrThrow(db, "person", code))),
   );
   return await withTransaction(db, async (tx) => {
+    await lockHouseholdLedgerTopology(tx);
     await lockAndValidateForDelete(tx, person, ids, "Person");
     const [beneficiaries, memberships] = await Promise.all([
       countByTarget(tx, expenseAttribution, expenseAttribution.personId, ids),
@@ -532,6 +536,7 @@ export async function mergePeople(
   });
   let summary: PersonMergeSummaryOut | undefined;
   await withTransaction(db, async (tx) => {
+    await lockHouseholdLedgerTopology(tx);
     await lockAndValidateForDelete(tx, person, [keepId, ...loserIds], "Person");
     const people = await tx
       .select()
@@ -642,16 +647,11 @@ export async function mergePeople(
         accountEdgesRepointed++;
       }
     }
-    let fundingEdgesRepointed = 0;
-    let transferEdgesRepointed = 0;
-    for (const source of loserSources) {
-      const folded = await foldPersonFundingSourceForMerge(tx, {
+    const { fundingEdgesRepointed, transferEdgesRepointed } =
+      await foldPersonFundingSourcesForMerge(tx, {
         keeperSourceId: keeperSource.id,
-        loserSourceId: source.id,
+        loserSourceIds: loserSources.map((source) => source.id),
       });
-      fundingEdgesRepointed += folded.fundingEdgesRepointed;
-      transferEdgesRepointed += folded.transferEdgesRepointed;
-    }
     const carried =
       !keeper.userId && losers.find((row) => row.userId)
         ? { userId: losers.find((row) => row.userId)!.userId }

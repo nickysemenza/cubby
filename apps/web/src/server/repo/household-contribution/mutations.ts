@@ -36,7 +36,10 @@ import {
 } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { assertFinancialTransactionFundingEvidenceValid } from "./integrity";
-import { lockFundingEvidenceMutationTargets } from "./locks";
+import {
+  lockFundingEvidenceMutationTargets,
+  lockHouseholdLedgerTopology,
+} from "./locks";
 import { resolveFundingPartyOrThrow } from "./party";
 
 type SetExpenseAttributionChange = Extract<
@@ -66,6 +69,29 @@ export type HouseholdMutationResult = {
 };
 
 const toCents = (amount: number): bigint => BigInt(Math.round(amount * 100));
+
+async function assertFundingSourcesLive(
+  tx: DrizzleTransaction,
+  sourceIds: readonly FundingSourceId[],
+  reason:
+    | "HOUSEHOLD_LEDGER_INVALID_ATTRIBUTION"
+    | "HOUSEHOLD_LEDGER_INVALID_TRANSFER",
+): Promise<void> {
+  const uniqueIds = [...new Set(sourceIds)];
+  if (uniqueIds.length === 0) return;
+  const rows = await tx
+    .select({ id: fundingSource.id })
+    .from(fundingSource)
+    .where(
+      and(inArray(fundingSource.id, uniqueIds), notDeleted(fundingSource)),
+    );
+  if (rows.length !== uniqueIds.length) {
+    throw createAppError(
+      reason,
+      "A funding source changed while the household funding write was waiting; retry against the live parties",
+    );
+  }
+}
 
 export function validateExpenseSourceClaim(
   expenseCost: number | null | undefined,
@@ -267,10 +293,27 @@ export async function setExpenseAttribution(
   actor: ActorContext,
 ): Promise<HouseholdMutationResult> {
   return withTransactionOn(db, async (tx) => {
+    await lockHouseholdLedgerTopology(tx);
     const expenseIds: Array<typeof expense.$inferSelect.id> = [];
     for (const code of change.expenseIds) {
       expenseIds.push(await resolveOrThrow(tx, "expense", code));
     }
+    const funders =
+      change.funders === undefined
+        ? undefined
+        : await desiredFunders(tx, change.funders);
+    const funderSourceIds =
+      funders
+        ?.map((row) => row.fundingSourceId)
+        .filter((id): id is FundingSourceId => id !== null) ?? [];
+    await lockFundingEvidenceMutationTargets(tx, {
+      sourceIds: funderSourceIds,
+    });
+    await assertFundingSourcesLive(
+      tx,
+      funderSourceIds,
+      "HOUSEHOLD_LEDGER_INVALID_ATTRIBUTION",
+    );
     await tx.execute(sql`
       SELECT id FROM ${expense}
       WHERE ${inArray(expense.id, expenseIds)}
@@ -280,10 +323,6 @@ export async function setExpenseAttribution(
       change.beneficiaries === undefined
         ? undefined
         : await desiredBeneficiaries(tx, change.beneficiaries);
-    const funders =
-      change.funders === undefined
-        ? undefined
-        : await desiredFunders(tx, change.funders);
     const changedExpenseIds: typeof expenseIds = [];
     for (const expenseId of expenseIds) {
       let changed = false;
@@ -328,6 +367,7 @@ export async function claimExpenseSource(
   actor: ActorContext,
 ): Promise<HouseholdMutationResult> {
   return withTransactionOn(db, async (tx) => {
+    await lockHouseholdLedgerTopology(tx);
     const expenseId = await resolveOrThrow(tx, "expense", change.expenseId);
     const [expenseRow] = await tx
       .select({ cost: expense.cost })
@@ -453,6 +493,7 @@ export async function upsertFundingFund(
   change: UpsertFundChange,
 ): Promise<HouseholdMutationResult> {
   return withTransactionOn(db, async (tx) => {
+    await lockHouseholdLedgerTopology(tx);
     const [existing] = await tx
       .select()
       .from(fundingSource)
@@ -491,15 +532,25 @@ export async function setAccountFunding(
   actor: ActorContext,
 ): Promise<HouseholdMutationResult> {
   return withTransactionOn(db, async (tx) => {
+    await lockHouseholdLedgerTopology(tx);
     const accountId = await resolveOrThrow(
       tx,
       "financialAccount",
       change.accountId,
     );
-    await lockFundingEvidenceMutationTargets(tx, { accountIds: [accountId] });
     const fundingSourceId = change.fundingParty
       ? (await resolveFundingPartyOrThrow(tx, change.fundingParty)).sourceId
       : null;
+    const sourceIds = fundingSourceId ? [fundingSourceId] : [];
+    await lockFundingEvidenceMutationTargets(tx, {
+      sourceIds,
+      accountIds: [accountId],
+    });
+    await assertFundingSourcesLive(
+      tx,
+      sourceIds,
+      "HOUSEHOLD_LEDGER_INVALID_ATTRIBUTION",
+    );
     const people: Array<{
       personId: typeof person.$inferSelect.id;
       role: (typeof change.people)[number]["role"];
@@ -674,8 +725,63 @@ export async function putFundingTransfer(
   change: PutFundingTransferChange,
 ): Promise<HouseholdMutationResult> {
   return withTransactionOn(db, async (tx) => {
+    await lockHouseholdLedgerTopology(tx);
+    const initialFrom = await resolveFundingPartyOrThrow(tx, change.from);
+    const initialTo = await resolveFundingPartyOrThrow(tx, change.to);
+    const initialTransfer = change.transferId
+      ? await findFundingTransferByShortcode(tx, change.transferId)
+      : null;
+    if (change.transferId && !initialTransfer) {
+      throw createAppError(
+        "HOUSEHOLD_LEDGER_INVALID_TRANSFER",
+        `Funding transfer not found: ${change.transferId}`,
+      );
+    }
+    const transferId =
+      initialTransfer?.id ?? unsafeFundingTransferId(crypto.randomUUID());
+    let transferShortcode =
+      initialTransfer?.shortcode ?? (await mintFundingTransferShortcode(tx));
+    const evidenceTransactionIds = [] as Array<
+      typeof financialTransaction.$inferSelect.id
+    >;
+    for (const row of change.evidence) {
+      evidenceTransactionIds.push(
+        await resolveOrThrow(tx, "financialTransaction", row.transactionId),
+      );
+    }
+    await lockFundingEvidenceMutationTargets(tx, {
+      sourceIds: [initialFrom.sourceId, initialTo.sourceId],
+      transferIds: [transferId],
+      transactionIds: evidenceTransactionIds,
+    });
+    await assertFundingSourcesLive(
+      tx,
+      [initialFrom.sourceId, initialTo.sourceId],
+      "HOUSEHOLD_LEDGER_INVALID_TRANSFER",
+    );
     const from = await resolveFundingPartyOrThrow(tx, change.from);
     const to = await resolveFundingPartyOrThrow(tx, change.to);
+    if (
+      from.sourceId !== initialFrom.sourceId ||
+      to.sourceId !== initialTo.sourceId
+    ) {
+      throw createAppError(
+        "HOUSEHOLD_LEDGER_INVALID_TRANSFER",
+        "A funding party changed while the transfer was waiting; retry against the live parties",
+      );
+    }
+    if (change.transferId) {
+      const lockedTransfer = await findFundingTransferByShortcode(
+        tx,
+        change.transferId,
+      );
+      if (!lockedTransfer || lockedTransfer.id !== transferId) {
+        throw createAppError(
+          "HOUSEHOLD_LEDGER_INVALID_TRANSFER",
+          `Funding transfer changed while waiting: ${change.transferId}`,
+        );
+      }
+    }
     const sameParty = from.sourceId === to.sourceId;
     if (sameParty !== (change.kind === "internal_account_move")) {
       throw createAppError(
@@ -692,31 +798,6 @@ export async function putFundingTransfer(
         "Fund contributions must move from a person to a shared fund",
       );
     }
-
-    const existingTransfer = change.transferId
-      ? await findFundingTransferByShortcode(tx, change.transferId)
-      : null;
-    if (change.transferId && !existingTransfer) {
-      throw createAppError(
-        "HOUSEHOLD_LEDGER_INVALID_TRANSFER",
-        `Funding transfer not found: ${change.transferId}`,
-      );
-    }
-    const transferId =
-      existingTransfer?.id ?? unsafeFundingTransferId(crypto.randomUUID());
-    let transferShortcode =
-      existingTransfer?.shortcode ?? (await mintFundingTransferShortcode(tx));
-    const evidenceTransactionIds = [] as Array<
-      typeof financialTransaction.$inferSelect.id
-    >;
-    for (const row of change.evidence) {
-      evidenceTransactionIds.push(
-        await resolveOrThrow(tx, "financialTransaction", row.transactionId),
-      );
-    }
-    await lockFundingEvidenceMutationTargets(tx, {
-      transactionIds: evidenceTransactionIds,
-    });
     if (evidenceTransactionIds.length > 0) {
       const evidenceAccounts = await tx
         .selectDistinct({ accountId: financialTransaction.accountId })
@@ -887,10 +968,15 @@ export async function deleteFundingTransfer(
   transferShortcode: FundingTransferShortcode,
 ): Promise<HouseholdMutationResult> {
   return withTransactionOn(db, async (tx) => {
-    const transfer = await findFundingTransferByShortcode(
-      tx,
-      transferShortcode,
-    );
+    await lockHouseholdLedgerTopology(tx);
+    let transfer = await findFundingTransferByShortcode(tx, transferShortcode);
+    if (!transfer || transfer.deletedAt) {
+      return { changed: 0, transferIds: [] };
+    }
+    await lockFundingEvidenceMutationTargets(tx, {
+      transferIds: [transfer.id],
+    });
+    transfer = await findFundingTransferByShortcode(tx, transferShortcode);
     if (!transfer || transfer.deletedAt) {
       return { changed: 0, transferIds: [] };
     }
@@ -947,25 +1033,89 @@ export async function applyHouseholdLedgerChange(
   }
 }
 
-export async function foldPersonFundingSourceForMerge(
+type PersonFundingSourceFoldResult = {
+  fundingEdgesRepointed: number;
+  transferEdgesRepointed: number;
+};
+
+export async function foldPersonFundingSourcesForMerge(
   tx: DrizzleTransaction,
   input: {
     keeperSourceId: FundingSourceId;
-    loserSourceId: FundingSourceId;
+    loserSourceIds: readonly FundingSourceId[];
   },
-): Promise<{
-  fundingEdgesRepointed: number;
-  transferEdgesRepointed: number;
-}> {
-  if (input.keeperSourceId === input.loserSourceId) {
+): Promise<PersonFundingSourceFoldResult> {
+  await lockHouseholdLedgerTopology(tx);
+  const loserSourceIds = [...new Set(input.loserSourceIds)].filter(
+    (id) => id !== input.keeperSourceId,
+  );
+  if (loserSourceIds.length === 0) {
     return { fundingEdgesRepointed: 0, transferEdgesRepointed: 0 };
   }
+  await lockFundingEvidenceMutationTargets(tx, {
+    sourceIds: [input.keeperSourceId, ...loserSourceIds],
+  });
+  await assertFundingSourcesLive(
+    tx,
+    [input.keeperSourceId, ...loserSourceIds],
+    "HOUSEHOLD_LEDGER_INVALID_ATTRIBUTION",
+  );
+  const transferCandidates = await tx
+    .select({ id: fundingTransfer.id })
+    .from(fundingTransfer)
+    .where(
+      and(
+        or(
+          inArray(fundingTransfer.fromSourceId, loserSourceIds),
+          inArray(fundingTransfer.toSourceId, loserSourceIds),
+        ),
+        notDeleted(fundingTransfer),
+      ),
+    );
+  await lockFundingEvidenceMutationTargets(tx, {
+    transferIds: transferCandidates.map((row) => row.id),
+  });
+  const affectedTransfers =
+    transferCandidates.length === 0
+      ? []
+      : await tx
+          .select({
+            id: fundingTransfer.id,
+            fromSourceId: fundingTransfer.fromSourceId,
+            toSourceId: fundingTransfer.toSourceId,
+          })
+          .from(fundingTransfer)
+          .where(
+            and(
+              inArray(
+                fundingTransfer.id,
+                transferCandidates.map((row) => row.id),
+              ),
+              or(
+                inArray(fundingTransfer.fromSourceId, loserSourceIds),
+                inArray(fundingTransfer.toSourceId, loserSourceIds),
+              ),
+              notDeleted(fundingTransfer),
+            ),
+          );
+  const accountsToMove = await tx
+    .select({ id: financialAccount.id })
+    .from(financialAccount)
+    .where(
+      and(
+        inArray(financialAccount.fundingSourceId, loserSourceIds),
+        notDeleted(financialAccount),
+      ),
+    );
+  await lockFundingEvidenceMutationTargets(tx, {
+    accountIds: accountsToMove.map((row) => row.id),
+  });
   const loserRows = await tx
     .select()
     .from(expenseAttribution)
     .where(
       and(
-        eq(expenseAttribution.fundingSourceId, input.loserSourceId),
+        inArray(expenseAttribution.fundingSourceId, loserSourceIds),
         notDeleted(expenseAttribution),
       ),
     );
@@ -1000,55 +1150,26 @@ export async function foldPersonFundingSourceForMerge(
     }
     fundingEdgesRepointed += 1;
   }
-  const accountsToMove = await tx
-    .select({ id: financialAccount.id })
-    .from(financialAccount)
-    .where(
-      and(
-        eq(financialAccount.fundingSourceId, input.loserSourceId),
-        notDeleted(financialAccount),
-      ),
-    );
-  await lockFundingEvidenceMutationTargets(tx, {
-    accountIds: accountsToMove.map((row) => row.id),
-  });
   const movedAccounts = await tx
     .update(financialAccount)
     .set({ fundingSourceId: input.keeperSourceId })
     .where(
       and(
-        eq(financialAccount.fundingSourceId, input.loserSourceId),
+        inArray(financialAccount.fundingSourceId, loserSourceIds),
         notDeleted(financialAccount),
       ),
     )
     .returning({ id: financialAccount.id });
   fundingEdgesRepointed += movedAccounts.length;
 
-  const affectedTransfers = await tx
-    .select({
-      id: fundingTransfer.id,
-      fromSourceId: fundingTransfer.fromSourceId,
-      toSourceId: fundingTransfer.toSourceId,
-    })
-    .from(fundingTransfer)
-    .where(
-      and(
-        or(
-          eq(fundingTransfer.fromSourceId, input.loserSourceId),
-          eq(fundingTransfer.toSourceId, input.loserSourceId),
-        ),
-        notDeleted(fundingTransfer),
-      ),
-    );
+  const loserSourceSet = new Set(loserSourceIds);
   for (const transfer of affectedTransfers) {
-    const fromSourceId =
-      transfer.fromSourceId === input.loserSourceId
-        ? input.keeperSourceId
-        : transfer.fromSourceId;
-    const toSourceId =
-      transfer.toSourceId === input.loserSourceId
-        ? input.keeperSourceId
-        : transfer.toSourceId;
+    const fromSourceId = loserSourceSet.has(transfer.fromSourceId)
+      ? input.keeperSourceId
+      : transfer.fromSourceId;
+    const toSourceId = loserSourceSet.has(transfer.toSourceId)
+      ? input.keeperSourceId
+      : transfer.toSourceId;
     await tx
       .update(fundingTransfer)
       .set({
@@ -1064,7 +1185,7 @@ export async function foldPersonFundingSourceForMerge(
     .update(fundingSource)
     .set({ deletedAt: new Date() })
     .where(
-      and(eq(fundingSource.id, input.loserSourceId), notDeleted(fundingSource)),
+      and(inArray(fundingSource.id, loserSourceIds), notDeleted(fundingSource)),
     );
   return {
     fundingEdgesRepointed,

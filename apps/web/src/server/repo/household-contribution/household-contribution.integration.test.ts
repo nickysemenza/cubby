@@ -27,6 +27,7 @@ import {
   deleteFinancialTransactions,
   updateFinancialTransaction,
 } from "~/server/repo/financial-transaction";
+import { mergePeople } from "~/server/repo/person";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
   applyHouseholdLedgerChanges,
@@ -898,5 +899,85 @@ describe("household contribution repository", () => {
     await expect(deletion).resolves.toEqual({ deleted: 1 });
     expect(deletionWaitedForEvidence).toBe(true);
     await assertHouseholdContributionIntegrity(ctx.db);
+  });
+
+  it("serializes a Person source merge after an uncommitted transfer write", async () => {
+    const keeper = await insertWithShortcode(ctx.db, "person", {
+      name: "Merge keeper",
+      kind: "guest",
+    });
+    const loser = await insertWithShortcode(ctx.db, "person", {
+      name: "Merge loser",
+      kind: "guest",
+    });
+    const [keeperSource, loserSource] = await getDb(ctx.db)
+      .insert(fundingSource)
+      .values([
+        { kind: "person", personId: keeper.id },
+        { kind: "person", personId: loser.id },
+      ])
+      .returning();
+    if (!keeperSource || !loserSource) {
+      throw new Error("person funding sources were not inserted");
+    }
+
+    let markTransferWritten!: () => void;
+    const transferWritten = new Promise<void>((resolve) => {
+      markTransferWritten = resolve;
+    });
+    let releaseTransfer!: () => void;
+    const transferCanCommit = new Promise<void>((resolve) => {
+      releaseTransfer = resolve;
+    });
+    const transferWrite = withTransaction(ctx.db, async (tx) => {
+      const result = await putFundingTransfer(tx, {
+        type: "put_funding_transfer",
+        from: {
+          kind: "person",
+          id: unsafePersonShortcode(loser.shortcode),
+        },
+        to: {
+          kind: "person",
+          id: unsafePersonShortcode(keeper.shortcode),
+        },
+        kind: "reimbursement",
+        amount: 5,
+        date: "2026-08-20",
+        sourceRefs: [],
+        evidence: [],
+      });
+      markTransferWritten();
+      await transferCanCommit;
+      return result;
+    });
+    await transferWritten;
+
+    let mergeSettled = false;
+    const merge = mergePeople(
+      ctx.db,
+      {
+        keepId: unsafePersonShortcode(keeper.shortcode),
+        mergeIds: [unsafePersonShortcode(loser.shortcode)],
+      },
+      ctx.actor,
+    ).then(
+      (result) => {
+        mergeSettled = true;
+        return result;
+      },
+      (reason: unknown) => {
+        mergeSettled = true;
+        throw reason;
+      },
+    );
+    const mergeWaitedForTransfer = await waitForAdvisoryLockWaiter(
+      () => mergeSettled,
+    );
+
+    releaseTransfer();
+    await transferWrite;
+    await merge;
+    expect(mergeWaitedForTransfer).toBe(true);
+    await expect(findHouseholdContributionDefects(ctx.db)).resolves.toEqual([]);
   });
 });
