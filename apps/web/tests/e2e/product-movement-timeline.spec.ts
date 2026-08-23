@@ -1,15 +1,20 @@
 import { expect, test } from "@playwright/test";
-import { createProduct } from "./e2e-helpers";
+import { seedProductPrerequisite } from "./e2e-fixtures";
+import { waitForAppHydration } from "./e2e-helpers";
 
 test("Product filters persist while switching movement renderers", async ({
   page,
 }) => {
   const manufacturer = `Timeline Tools ${Date.now()}`;
-  await createProduct(page, `Timeline Product ${Date.now()}`, { manufacturer });
+  await seedProductPrerequisite(page, {
+    name: `Timeline Product ${Date.now()}`,
+    manufacturer,
+  });
 
   await page.goto(
     `/products?manufacturer=${encodeURIComponent(manufacturer)}&view=events`,
   );
+  await waitForAppHydration(page);
   await expect(page.getByRole("group", { name: "Products view" })).toBeVisible({
     timeout: 15_000,
   });

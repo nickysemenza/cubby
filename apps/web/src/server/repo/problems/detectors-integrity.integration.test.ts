@@ -717,52 +717,77 @@ describe("findReferentialLivenessViolations", () => {
     );
   });
 
-  describe.each(derivedMustTargetLiveEdges)(
-    "$edgeKey",
-    ({ edgeKey, targetEntity, role, sourceTableName, sourceSoftDeletable }) => {
-      const createTarget = TARGET_FACTORIES[targetEntity]!;
-      const createSource = SOURCE_FACTORIES[edgeKey]!;
-      const targetTableName = entityManifest[targetEntity].dbTable!;
+  it("reports every derived edge when a live source points at a soft-deleted target", async () => {
+    // Authoritative owner for the old per-edge "reports exactly one" cases:
+    // make one violation for every derived edge, then prove the detector returns
+    // that complete edge/source/target map in one scan. This retains the exact
+    // 50-edge regression guard without paying for 50 database resets and audits.
+    const expected = [] as Array<{
+      edgeKey: string;
+      role: EdgeRole;
+      targetEntity: Entity;
+      targetId: string;
+      sourceTable: string;
+      sourceId: string;
+    }>;
 
-      it("reports exactly one violation for a live source pointing at a soft-deleted target", async () => {
-        const target = await createTarget(ctx.db);
-        const source = await createSource(ctx.db, target.id);
-        await softDelete(ctx.db, targetTableName, target.id);
-
-        const violations = await findReferentialLivenessViolations(ctx.db);
-
-        expect(violations).toHaveLength(1);
-        const violation = violations[0]!;
-        expect(violation).toMatchObject({
-          edgeKey,
-          role,
-          targetEntity,
-          targetId: target.id,
-          sourceTable: sourceTableName,
-          sourceId: source.id,
-        });
-        expect(violation.description).toContain(sourceTableName);
+    for (const spec of derivedMustTargetLiveEdges) {
+      const target = await TARGET_FACTORIES[spec.targetEntity]!(ctx.db);
+      const source = await SOURCE_FACTORIES[spec.edgeKey]!(ctx.db, target.id);
+      await softDelete(
+        ctx.db,
+        entityManifest[spec.targetEntity].dbTable!,
+        target.id,
+      );
+      expected.push({
+        edgeKey: spec.edgeKey,
+        role: spec.role,
+        targetEntity: spec.targetEntity,
+        targetId: target.id,
+        sourceTable: spec.sourceTableName,
+        sourceId: source.id,
       });
+    }
 
-      if (sourceSoftDeletable) {
-        it("does not report a soft-deleted source pointing at a soft-deleted target", async () => {
-          const target = await createTarget(ctx.db);
-          const source = await createSource(ctx.db, target.id);
-          await softDelete(ctx.db, targetTableName, target.id);
-          await softDelete(ctx.db, sourceTableName, source.id);
+    const violations = await findReferentialLivenessViolations(ctx.db);
+    expect(violations).toHaveLength(expected.length);
+    for (const violation of violations) {
+      expect(violation.description).toContain(violation.sourceTable);
+    }
+    expect(
+      violations.map(({ description: _description, ...identity }) => identity),
+    ).toEqual(expect.arrayContaining(expected));
+  });
 
-          expect(await findReferentialLivenessViolations(ctx.db)).toEqual([]);
-        });
-      }
+  it("ignores every soft-deleted source even when its target is soft-deleted", async () => {
+    // Authoritative owner for the old per-edge soft-source cases. Hard-delete
+    // source tables remain deliberately absent: the structural guard above
+    // proves this matrix is exactly the set where a deletedAt guard exists.
+    for (const spec of derivedMustTargetLiveEdges.filter(
+      (edge) => edge.sourceSoftDeletable,
+    )) {
+      const target = await TARGET_FACTORIES[spec.targetEntity]!(ctx.db);
+      const source = await SOURCE_FACTORIES[spec.edgeKey]!(ctx.db, target.id);
+      await softDelete(
+        ctx.db,
+        entityManifest[spec.targetEntity].dbTable!,
+        target.id,
+      );
+      await softDelete(ctx.db, spec.sourceTableName, source.id);
+    }
 
-      it("does not report a live source pointing at a live target", async () => {
-        const target = await createTarget(ctx.db);
-        await createSource(ctx.db, target.id);
+    expect(await findReferentialLivenessViolations(ctx.db)).toEqual([]);
+  });
 
-        expect(await findReferentialLivenessViolations(ctx.db)).toEqual([]);
-      });
-    },
-  );
+  it("returns no violations for every derived edge while both sides are live", async () => {
+    // Authoritative owner for the old per-edge live-source/live-target cases.
+    for (const spec of derivedMustTargetLiveEdges) {
+      const target = await TARGET_FACTORIES[spec.targetEntity]!(ctx.db);
+      await SOURCE_FACTORIES[spec.edgeKey]!(ctx.db, target.id);
+    }
+
+    expect(await findReferentialLivenessViolations(ctx.db)).toEqual([]);
+  });
 
   // The one deliberate exemption — see ENTITY_EDGE_SEMANTICS.recipe["Ingredient.recipeId"]
   // and the detectors-integrity.ts file-level doc comment. This is the single

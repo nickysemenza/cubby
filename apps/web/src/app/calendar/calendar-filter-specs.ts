@@ -25,7 +25,7 @@ import { KIND_ICONS } from "./calendar-icons";
  * tables and a fake `calendarFilterFields` entry into three drift guards, all
  * to serve one page. Exporting the specs directly gets `decodeFilters`,
  * `encodeFilters`, and `buildFiltersFromManifest` with none of that — and
- * `calendar-filter-specs.unit.test.tsx` re-creates the drift protection the
+ * `calendar-filter-specs.unit.test.ts` re-creates the drift protection the
  * registry would have supplied.
  *
  * A `.ts`, not `.tsx`: the item-kind icons are built with `createElement` so

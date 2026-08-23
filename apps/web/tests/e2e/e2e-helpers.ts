@@ -19,11 +19,12 @@ export async function waitForAppHydration(page: Page) {
 /**
  * Wait for React to hydrate a form after SSR.
  *
- * Uses `networkidle` (not `domcontentloaded`) so that all JS bundles have been
- * downloaded AND executed before we start interacting with the page.
+ * The submit control is route-owned readiness: it proves the form has rendered
+ * and React can receive the next interaction without waiting for unrelated
+ * background requests to settle.
  */
 export async function waitForFormHydration(page: Page) {
-  await page.waitForLoadState("networkidle");
+  await waitForAppHydration(page);
   // Match any common submit-button text (Create, Save, Move …)
   await expect(
     page.getByRole("button", { name: /Create|Save|Move/ }),
@@ -183,6 +184,32 @@ export async function fillCellEditor(page: Page, value: string) {
 }
 
 /**
+ * Open, fill, and commit a detail-page cell editor as one atomic retried unit.
+ * Detail cards do not use RTable's transition curtain, but their portaled editor
+ * still mounts asynchronously; retrying the entire interaction prevents a
+ * stale trigger/overlay pair from racing the next edit.
+ */
+export async function editDetailCell(
+  page: Page,
+  trigger: Locator,
+  value: string,
+) {
+  const input = cellEditorInput(page);
+  await expect(async () => {
+    await trigger.click();
+    await expect(input).toBeVisible({ timeout: 2_000 });
+    await expect(input).toBeEnabled({ timeout: 2_000 });
+  }).toPass({ timeout: 30_000 });
+
+  // Retrying a save could submit the same mutation twice if the request
+  // succeeded but its portaled editor was slow to close. Only opening the
+  // editor is retried; the commit itself is deliberately issued once.
+  await input.fill(value);
+  await input.press("Enter");
+  await expect(input).toHaveCount(0, { timeout: 10_000 });
+}
+
+/**
  * Open the global command palette via the header "Search" trigger and return
  * its dialog.
  *
@@ -246,7 +273,7 @@ export async function createTask(
   opts: { dueDate?: string; status?: TaskStatus } = {},
 ) {
   await page.goto("/tasks");
-  await page.waitForLoadState("networkidle");
+  await waitForAppHydration(page);
   await page.getByRole("button", { name: "New", exact: true }).click();
 
   const dialog = page.getByRole("dialog", { name: "New Task" });

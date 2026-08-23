@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
+  editDetailCell,
   editListCell,
-  fillCellEditor,
   openCommandPalette,
   waitForAppHydration,
 } from "./e2e-helpers";
@@ -43,7 +43,6 @@ test.describe("Project tracker", () => {
     page,
   }) => {
     await page.goto("/projects");
-    await page.waitForLoadState("networkidle");
 
     await expect(
       page.getByRole("heading", { level: 1, name: "Projects" }),
@@ -71,7 +70,6 @@ test.describe("Project tracker", () => {
     page,
   }) => {
     await page.goto("/projects?view=data&sort=startDate");
-    await page.waitForLoadState("networkidle");
 
     await expect(
       page.getByRole("table", { name: "Projects Table" }),
@@ -96,7 +94,6 @@ test.describe("Project tracker", () => {
     const name = `e2e task ${Date.now()}`;
 
     await page.goto("/tasks");
-    await page.waitForLoadState("networkidle");
 
     await expect(
       page.getByRole("heading", { level: 1, name: "Tasks" }),
@@ -131,7 +128,6 @@ test.describe("Project tracker", () => {
     // Command-palette deep link: /tasks?q=<name> seeds the "name" filter so
     // the matched task is visible immediately instead of buried pages deep.
     await page.goto(`/tasks?q=${encodeURIComponent(name)}`);
-    await page.waitForLoadState("networkidle");
 
     await expect(
       page.getByRole("button", { name: `Name: ${name}` }),
@@ -153,7 +149,6 @@ test.describe("Project tracker", () => {
     const name = `e2e expense ${Date.now()}`;
 
     await page.goto("/expenses");
-    await page.waitForLoadState("networkidle");
 
     await expect(
       page.getByRole("heading", { level: 1, name: "Expenses" }),
@@ -190,7 +185,6 @@ test.describe("Project tracker", () => {
     // Command-palette deep link: /expenses?q=<name> seeds the "name" filter
     // so the matched expense is visible immediately.
     await page.goto(`/expenses?q=${encodeURIComponent(name)}`);
-    await page.waitForLoadState("networkidle");
 
     await expect(
       page.getByRole("button", { name: `Name: ${name}` }),
@@ -219,7 +213,6 @@ test.describe("Project tracker", () => {
     const name = `e2e project ${Date.now()}-${testInfo.workerIndex}-${testInfo.repeatEachIndex}`;
 
     await page.goto("/projects");
-    await page.waitForLoadState("networkidle");
 
     await expect(
       page.getByRole("heading", { level: 1, name: "Projects" }),
@@ -283,7 +276,6 @@ test.describe("Project tracker", () => {
     const name = `e2e palette task ${Date.now()}`;
 
     await page.goto("/tasks");
-    await page.waitForLoadState("networkidle");
     await waitForAppHydration(page);
     await page.getByRole("button", { name: "New", exact: true }).click();
 
@@ -372,7 +364,6 @@ test.describe("Project tracker", () => {
     const taskName = `e2e link task ${Date.now()}`;
 
     await page.goto("/projects");
-    await page.waitForLoadState("networkidle");
     await waitForAppHydration(page);
     await page.getByRole("button", { name: "New Project" }).click();
 
@@ -390,7 +381,6 @@ test.describe("Project tracker", () => {
     // search-input step, so it doesn't hit the nested-dialog flakiness the
     // other quick-add tests avoid).
     await page.goto("/tasks");
-    await page.waitForLoadState("networkidle");
     await waitForAppHydration(page);
     await page.getByRole("button", { name: "New", exact: true }).click();
 
@@ -409,7 +399,6 @@ test.describe("Project tracker", () => {
     // Navigate to the task's detail page via the filtered list link (same
     // deep-link pattern the tasks quick-add test above already exercises).
     await page.goto(`/tasks?q=${encodeURIComponent(taskName)}`);
-    await page.waitForLoadState("networkidle");
     await page.getByRole("link", { name: taskName }).first().click();
     await expect(
       page.getByRole("heading", { level: 1, name: taskName }),
@@ -438,7 +427,6 @@ test.describe("Project tracker", () => {
       "https://app.notion.com/p/nickysemenza/Backyard-Project-Main-Page-d4ffaba2e4b240ebb4aa8b7d80a7aabb?source=copy_link";
 
     await page.goto("/projects");
-    await page.waitForLoadState("networkidle");
     await waitForAppHydration(page);
     await page.getByRole("button", { name: "New Project" }).click();
 
@@ -486,11 +474,16 @@ test.describe("Project tracker", () => {
     await expect(driveRow.getByText("Add", { exact: true })).toBeVisible();
     await expect(notionRow.getByText("Add", { exact: true })).toBeVisible();
 
-    await driveRow.getByRole("button", { name: "Edit value" }).click();
-    await fillCellEditor(page, driveUrl);
-
-    await notionRow.getByRole("button", { name: "Edit value" }).click();
-    await fillCellEditor(page, notionUrl);
+    await editDetailCell(
+      page,
+      driveRow.getByRole("button", { name: "Edit value" }),
+      driveUrl,
+    );
+    await editDetailCell(
+      page,
+      notionRow.getByRole("button", { name: "Edit value" }),
+      notionUrl,
+    );
 
     const driveLink = driveRow.getByRole("link", { name: "Open folder" });
     const notionLink = notionRow.getByRole("link", { name: "Open page" });
@@ -523,13 +516,19 @@ test.describe("Project tracker", () => {
     await expect(driveLink).toHaveAttribute("href", driveUrl);
 
     // Clearing the shared inline text editor removes each optional URL.
-    await driveRow.getByRole("button", { name: "Edit value" }).click();
-    await fillCellEditor(page, "");
+    await editDetailCell(
+      page,
+      driveRow.getByRole("button", { name: "Edit value" }),
+      "",
+    );
     await expect(driveLink).toHaveCount(0);
     await expect(driveRow.getByText("Add", { exact: true })).toBeVisible();
 
-    await notionRow.getByRole("button", { name: "Edit value" }).click();
-    await fillCellEditor(page, "");
+    await editDetailCell(
+      page,
+      notionRow.getByRole("button", { name: "Edit value" }),
+      "",
+    );
     await expect(notionLink).toHaveCount(0);
     await expect(notionRow.getByText("Add", { exact: true })).toBeVisible();
   });
@@ -542,7 +541,6 @@ test.describe("Project tracker", () => {
     const name = `e2e mobile expense ${Date.now()}`;
 
     await page.goto("/expenses");
-    await page.waitForLoadState("networkidle");
     await expect(
       page.getByRole("heading", { level: 1, name: "Expenses" }),
     ).toBeVisible({ timeout: 15000 });
