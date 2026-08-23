@@ -103,10 +103,6 @@ async function globalSetup(_config: FullConfig): Promise<void> {
     readFileSync(path.join(webRoot, "dist/server/wrangler.json"), "utf8"),
   ) as Record<string, unknown>;
   delete e2eConfig.ai;
-  // The auxiliary Workers are not part of the E2E artifact. Remove their
-  // production service bindings so the clients use the hermetic URL fallbacks
-  // below, matching the existing local E2E behavior.
-  delete e2eConfig.services;
   writeFileSync(
     path.join(webRoot, "dist/server/wrangler.e2e.json"),
     JSON.stringify(e2eConfig),
@@ -133,6 +129,28 @@ async function globalSetup(_config: FullConfig): Promise<void> {
         secrets: {
           BETTER_AUTH_SECRET:
             process.env.BETTER_AUTH_SECRET || "e2e-test-secret",
+        },
+        // Keep the production service-binding path in the built Worker while
+        // routing it to deterministic, schema-valid harness Workers. The
+        // auxiliary production Workers and their datasets are intentionally
+        // outside this browser suite's artifact.
+        bindingOverrides: {
+          USDA_API: "e2e-usda-empty",
+          UPC_LOOKUP: "e2e-upc-empty",
+        },
+      },
+      {
+        config: {
+          name: "e2e-usda-empty",
+          main: "tests/e2e/harness-services/usda-empty.ts",
+          compatibility_date: "2026-06-16",
+        },
+      },
+      {
+        config: {
+          name: "e2e-upc-empty",
+          main: "tests/e2e/harness-services/upc-empty.ts",
+          compatibility_date: "2026-06-16",
         },
       },
     ],
