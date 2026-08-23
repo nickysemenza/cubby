@@ -125,6 +125,16 @@ export function RelatednessRail({
             No related products yet.
           </p>
         )}
+
+      {status === "ready" && (
+        <Link
+          to="/recommendations/workbench"
+          search={{ kind: "product-related", source: product.id }}
+          className="text-xs underline underline-offset-2"
+        >
+          Review recommendations
+        </Link>
+      )}
     </Stack>
   );
 }

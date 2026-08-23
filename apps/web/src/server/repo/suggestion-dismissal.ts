@@ -49,6 +49,28 @@ export async function dismissSuggestion(
     });
 }
 
+export async function getActiveSuggestionDismissalKeys(
+  db: Database,
+  input: {
+    sourceEntityType: SearchableEntity;
+    sourceEntityId: string;
+    suggestionKind: string;
+  },
+): Promise<Set<string>> {
+  const rows = await getDb(db)
+    .select({ candidateKey: suggestionDismissal.candidateKey })
+    .from(suggestionDismissal)
+    .where(
+      and(
+        eq(suggestionDismissal.sourceEntityType, input.sourceEntityType),
+        eq(suggestionDismissal.sourceEntityId, input.sourceEntityId),
+        eq(suggestionDismissal.suggestionKind, input.suggestionKind),
+        isNull(suggestionDismissal.deletedAt),
+      ),
+    );
+  return new Set(rows.map((row) => row.candidateKey));
+}
+
 export async function softDeleteSuggestionDismissalsTx(
   tx: DrizzleTransaction,
   sourceEntityType: SearchableEntity,

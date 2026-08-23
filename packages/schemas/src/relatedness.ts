@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { entitySchema, type Entity } from "./entity";
+import { entitySchema, type Entity } from "./entity-core";
 import type { RelationshipPathStep } from "./entity-integrity";
 
 /**
