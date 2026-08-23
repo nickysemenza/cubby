@@ -290,7 +290,7 @@ Claude keeps managed worktrees under `.claude/worktrees/<name>`; Codex keeps
 them under `$CODEX_HOME/worktrees`. A few things to know:
 
 - **Fresh worktree setup:** Codex and Claude both run
-  [scripts/setup-agent-environment.mjs](scripts/setup-agent-environment.mjs)
+  [scripts/setup-agent-environment.ts](scripts/setup-agent-environment.ts)
   automatically. Codex calls it from
   [.codex/environments/environment.toml](.codex/environments/environment.toml);
   Claude calls it for new linked-worktree sessions from
@@ -303,7 +303,7 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
   shared cache (`~/.cache/cubby/recipebridge-target`), so worktrees reuse the
   compiled Rust deps — a worktree `pnpm run wasm` is an incremental build, not the
   ~90s cold one, and there's no 1.3GB `target/` per worktree.
-- **WASM never silently drifts.** [scripts/ensure-wasm.mjs](scripts/ensure-wasm.mjs)
+- **WASM never silently drifts.** [scripts/ensure-wasm.ts](scripts/ensure-wasm.ts)
   rebuilds the gitignored WASM only when a source it's built from is newer than the
   built binary. "Sources" is `recipebridge/` **plus every local path-dependency**
   `cargo metadata` reports (`source: null`) — notably the
@@ -497,7 +497,7 @@ no React, no tRPC, no Tailwind). It doesn't deploy on its own: it builds to
 self-contained HTML that [server/mcp/apps/](apps/web/src/server/mcp/apps/)
 inlines and serves as `ui://` resources, driven off the manifest in
 [src/bundles.ts](apps/mcp-apps/src/bundles.ts) — the one place an app is
-declared. `scripts/ensure-mcp-apps.mjs` gates apps/web's `dev`, `test`, and
+declared. `scripts/ensure-mcp-apps.ts` gates apps/web's `dev`, `test`, and
 `build:cf`, rebuilding only when a source is newer than the bundles.
 
 `pnpm --filter @cubby/mcp-apps dev` runs a local host harness that drives the

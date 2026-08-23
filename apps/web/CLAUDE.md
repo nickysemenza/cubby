@@ -11,3 +11,11 @@ only when making UI or visual decisions.
 
 Run the narrowest affected web test tier; browser seams earn E2E only when lower
 tiers cannot observe the failure.
+
+Verify browser work by reading, not by looking: `read_page`, `get_page_text`,
+`read_console_messages`, and `javascript_tool` answer almost every question and
+cost a few hundred tokens. A screenshot averages ~11k tokens — measured, they
+are a third of everything the agent reads across a session, and context that
+large is what makes each turn slower. Take one only when the question is
+genuinely visual (layout, spacing, colour) or as a single final proof for the
+user; never to confirm text, structure, or that a page loaded.

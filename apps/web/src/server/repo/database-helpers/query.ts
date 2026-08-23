@@ -543,7 +543,7 @@ export const presenceCondition = (
  *
  * Two things the caller owns, because SQL won't warn about either:
  * - **Soft deletes.** Guard the subquery with `notDeleted(...)` at *every* join
- *   level. `scripts/check-soft-delete-filters.mjs` only scans `exists`/
+ *   level. `scripts/check-soft-delete-filters.ts` only scans `exists`/
  *   `notExists` bodies, so it cannot see a hoisted `inArray` subquery.
  * - **Nullable FKs.** If the selected column is nullable, add `isNotNull(...)`
  *   to the subquery: a NULL inside a `NOT IN` list makes the whole predicate

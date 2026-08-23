@@ -1,12 +1,20 @@
-import { readdirSync, statSync } from "node:fs";
+import { type Dirent, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
+/** How to fold two mtimes together, and which entries to consider. */
+type ExtremeMtimeOptions = {
+  pick: (a: number, b: number) => number;
+  seed: number;
+  prune: Set<string>;
+  extensions: readonly string[];
+};
+
 export const extremeMtime = (
-  dir,
-  { pick, seed, prune, extensions },
-) => {
+  dir: string,
+  { pick, seed, prune, extensions }: ExtremeMtimeOptions,
+): number => {
   let acc = seed;
-  let entries;
+  let entries: Dirent[];
   try {
     entries = readdirSync(dir, { withFileTypes: true });
   } catch {

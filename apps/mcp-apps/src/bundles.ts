@@ -11,7 +11,7 @@
  * thing to edit. It resolves at build time exactly like a static import — but
  * it yields `{}` instead of throwing when `dist/` is missing, so `bundleFor`
  * raises the error itself and keeps the failure loud. (`pnpm dev`, `test`, and
- * `build:cf` all gate on `scripts/ensure-mcp-apps.mjs`, so this should only
+ * `build:cf` all gate on `scripts/ensure-mcp-apps.ts`, so this should only
  * ever fire for someone wiring up a new consumer.)
  */
 const BUILT = import.meta.glob<string>("../dist/*.html", {

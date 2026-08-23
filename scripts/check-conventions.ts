@@ -117,7 +117,7 @@ function gitTrackedSources() {
 }
 
 /** Recursive fallback if git is unavailable. @returns {string[]} */
-function walk(dir) {
+function walk(dir: string): string[] {
   /** @type {string[]} */
   const found = [];
   for (const name of readdirSync(dir)) {
@@ -218,7 +218,7 @@ const ACTION_VERBS_PATH = "apps/web/src/app/_components/actions/action-verbs.ts"
  * `<DropdownMenuItem><Trash /> Delete</DropdownMenuItem>` would have walked
  * straight past the rule it exists to enforce.
  */
-const menuItemText = (line) =>
+const menuItemText = (line: string) =>
   line
     // Braces FIRST. `<[^>]*>` stops at the first `>`, so an attribute holding
     // one — `onSelect={() => x()}`, `disabled={x > 0}` — truncates the tag
@@ -238,8 +238,8 @@ const actionVerbLabelSet = (() => {
     const src = readFileSync(join(repoRoot, ACTION_VERBS_PATH), "utf8");
     const body = src.slice(src.indexOf("export const actionVerbs"));
     return new Set(
-      [...body.matchAll(/label:\s*"([^"]+)"/g)].map((m) =>
-        m[1].replace(/\.\.\.$/, "").trim().toLowerCase(),
+      [...body.matchAll(/label:\s*"([^"]+)"/g)].flatMap((m) =>
+        m[1] ? [m[1].replace(/\.\.\.$/, "").trim().toLowerCase()] : [],
       ),
     );
   } catch (error) {
@@ -344,23 +344,23 @@ const LOOSE_SORT_PAGINATION_RE = /\.\.\.sortPaginationFields\b/;
 
 // components/ui and components/reui hold copied third-party primitives whose
 // internal layout/accessibility implementation is maintained as vendored source.
-function isUiPrimitive(path) {
+function isUiPrimitive(path: string) {
   return (
     path.includes("/components/ui/") || path.includes("/components/reui/")
   );
 }
 
-function isCommentLine(line) {
+function isCommentLine(line: string) {
   const t = line.trim();
   return t.startsWith("//") || t.startsWith("*") || t.startsWith("/*");
 }
 
-function basename(path) {
+function basename(path: string) {
   const i = path.lastIndexOf("/");
   return i === -1 ? path : path.slice(i + 1);
 }
 
-function isTestOrFixture(path) {
+function isTestOrFixture(path: string) {
   const b = basename(path);
   return (
     b.includes(".test.") ||
@@ -370,12 +370,12 @@ function isTestOrFixture(path) {
   );
 }
 
-function isResponseSidecar(path) {
+function isResponseSidecar(path: string) {
   const rel = relative(repoRoot, path);
   return rel.startsWith("packages/schemas/src/") && rel.endsWith("-responses.ts");
 }
 
-function isSchemaContractFile(path) {
+function isSchemaContractFile(path: string) {
   const rel = relative(repoRoot, path);
   if (!rel.endsWith(".ts") || rel.endsWith(".unit.test.ts")) return false;
   if (rel.startsWith("packages/schemas/src/")) return true;
@@ -385,19 +385,19 @@ function isSchemaContractFile(path) {
   );
 }
 
-function isQueryKeyHelperFile(path) {
+function isQueryKeyHelperFile(path: string) {
   return relative(repoRoot, path) === "apps/web/src/lib/query-keys.ts";
 }
 
-function isPaginationHelperFile(path) {
+function isPaginationHelperFile(path: string) {
   return relative(repoRoot, path) === "packages/schemas/src/pagination.ts";
 }
 
-function isCrudFactoryFile(path) {
+function isCrudFactoryFile(path: string) {
   return relative(repoRoot, path) === "apps/web/src/server/api/crud-factory.ts";
 }
 
-function isRouterFile(path) {
+function isRouterFile(path: string) {
   return relative(repoRoot, path).startsWith(
     "apps/web/src/server/api/routers/",
   );
@@ -413,10 +413,8 @@ const SERVICE_TEST_EXEMPTIONS = new Set([
   "location-valuation.service.ts",
 ]);
 
-/** @returns {Violation[]} */
-function checkServicesHaveTests() {
-  /** @type {Violation[]} */
-  const violations = [];
+function checkServicesHaveTests(): Violation[] {
+  const violations: Violation[] = [];
   let entries;
   try {
     entries = readdirSync(servicesDir);
@@ -448,7 +446,7 @@ function checkServicesHaveTests() {
 // behind a repo helper.
 const GETDB_RE = /\bgetDb\b/;
 
-function isRepoFile(path) {
+function isRepoFile(path: string) {
   return relative(repoRoot, path).startsWith("apps/web/src/server/repo/");
 }
 
@@ -456,10 +454,8 @@ function isRepoFile(path) {
 // that doesn't exist on disk (relative to that package's directory).
 const SCRIPT_TARGET_RE = /\b(?:tsx|node)\s+([^\s"']+\.(?:ts|mjs|js))\b/g;
 
-/** @returns {Violation[]} */
-function checkPackageScriptTargets() {
-  /** @type {Violation[]} */
-  const violations = [];
+function checkPackageScriptTargets(): Violation[] {
+  const violations: Violation[] = [];
   let packageJsonPaths;
   try {
     const out = execFileSync("git", ["ls-files", "*package.json"], {
@@ -541,7 +537,7 @@ const UNSTABLE_PARAM_DEFAULT_RE =
 const DEPENDENCY_ARRAY_RE = /[}\])]\s*,\s*\[([^\]]*)\]\s*,?\s*\)/g;
 
 /** Identifiers named in any dependency array in this file. */
-function dependencyIdentifiers(content) {
+function dependencyIdentifiers(content: string) {
   const names = new Set();
   for (const match of content.matchAll(DEPENDENCY_ARRAY_RE)) {
     for (const part of (match[1] ?? "").split(",")) {
@@ -568,12 +564,10 @@ const IMAGE_ELEMENT_RE = /<Image(?=[\s/>])/g;
  * (`fallback={<Icon />}`) in a prop from ending the scan early. Quotes matter
  * too: literal `>` and braces are ordinary attribute text, not JSX structure.
  *
- * @param {string} content @param {number} open @returns {string}
  */
-function jsxOpeningTag(content, open) {
+function jsxOpeningTag(content: string, open: number): string {
   let depth = 0;
-  /** @type {"'" | '"' | null} */
-  let quote = null;
+  let quote: "'" | '"' | null = null;
   let escaped = false;
 
   for (let i = open; i < content.length; i++) {
@@ -604,7 +598,7 @@ const WIDTH_CLASS_RE = /(?:^|[\s"'`])w-(?:\[[^\]]+\]|[^\s"'`]+)/;
  *
  * @param {string} tag @param {string} name @returns {string | null}
  */
-function jsxAttributeValue(tag, name) {
+function jsxAttributeValue(tag: string, name: string) {
   const match = new RegExp(`\\b${name}\\s*=`).exec(tag);
   if (!match) return null;
   let index = (match.index ?? 0) + match[0].length;
@@ -648,7 +642,7 @@ function jsxAttributeValue(tag, name) {
  *
  * @param {string} expression @returns {[string, string] | null}
  */
-function topLevelConditionalBranches(expression) {
+function topLevelConditionalBranches(expression: string) {
   let question = -1;
   let nestedQuestions = 0;
   let round = 0;
@@ -699,7 +693,7 @@ function topLevelConditionalBranches(expression) {
  *
  * @param {string} expression @returns {string[] | null}
  */
-function topLevelClassArguments(expression) {
+function topLevelClassArguments(expression: string) {
   const call = /^(?:cn|clsx)\s*\(/.exec(expression);
   if (!call || !expression.endsWith(")")) return null;
   const body = expression.slice(call[0].length, -1);
@@ -740,7 +734,7 @@ function topLevelClassArguments(expression) {
 }
 
 /** @param {string} expression @returns {boolean} */
-function expressionHasUnconditionalWidth(expression) {
+function expressionHasUnconditionalWidth(expression: string): boolean {
   const branches = topLevelConditionalBranches(expression);
   if (branches)
     return branches.every((branch) =>
@@ -760,7 +754,7 @@ function expressionHasUnconditionalWidth(expression) {
 }
 
 /** @param {string} source @returns {boolean} */
-function hasUnconditionalWidthClass(source) {
+function hasUnconditionalWidthClass(source: string) {
   const value = jsxAttributeValue(source, "className");
   if (!value) return false;
   if (value[0] === '"' || value[0] === "'")
@@ -771,7 +765,7 @@ function hasUnconditionalWidthClass(source) {
 }
 
 /** @param {string} tableTag @returns {boolean} */
-function hasUnconditionalTableAuto(tableTag) {
+function hasUnconditionalTableAuto(tableTag: string) {
   const value = jsxAttributeValue(tableTag, "className");
   if (!value) return false;
   if (value[0] === '"' || value[0] === "'")
@@ -785,17 +779,13 @@ function hasUnconditionalTableAuto(tableTag) {
 /**
  * Offsets of fixed-layout table heads that can render without a width.
  *
- * @param {string} content
- * @param {boolean} dynamicOrchestrator
- * @returns {{ index: number, tag: string }[]}
  */
 function fixedTableColumnWidthViolations(
-  content,
+  content: string,
   dynamicOrchestrator = false,
-) {
+): Array<{ index: number; tag: string }> {
   if (dynamicOrchestrator) return [];
-  /** @type {{ index: number, tag: string }[]} */
-  const violations = [];
+  const violations: Array<{ index: number; tag: string }> = [];
   for (const tableMatch of content.matchAll(/<Table(?=[\s>])/g)) {
     const tableIndex = tableMatch.index ?? 0;
     const line = content.slice(0, tableIndex).split("\n").at(-1) ?? "";
@@ -818,7 +808,7 @@ function fixedTableColumnWidthViolations(
 
 // Keep this parser's edge cases adjacent to the guard it protects. The script
 // is dependency-free and runs in CI, so these regressions run with every scan.
-for (const [source, expected] of [
+const jsxOpeningTagCases: Array<[source: string, expected: string]> = [
   [
     '<Image alt="{" displayWidth={32} /><div />',
     '<Image alt="{" displayWidth={32} />',
@@ -835,11 +825,12 @@ for (const [source, expected] of [
     String.raw`<Image alt="an escaped quote: \" > { }" displayWidth={32} />`,
     String.raw`<Image alt="an escaped quote: \" > { }" displayWidth={32} />`,
   ],
-]) {
+];
+for (const [source, expected] of jsxOpeningTagCases) {
   assert.equal(jsxOpeningTag(source, 0), expected);
 }
 
-for (const [source, dynamicOrchestrator, expected] of [
+const fixedTableCases: Array<[source: string, dynamicOrchestrator: boolean, expected: number]> = [
   [
     '<Table><TableHead className="w-40">Name</TableHead></Table>',
     false,
@@ -868,7 +859,8 @@ for (const [source, dynamicOrchestrator, expected] of [
     1,
   ],
   ['<Table><TableHead className={styles.header}>Name</TableHead></Table>', true, 0],
-]) {
+];
+for (const [source, dynamicOrchestrator, expected] of fixedTableCases) {
   assert.equal(
     fixedTableColumnWidthViolations(source, dynamicOrchestrator).length,
     expected,
@@ -876,12 +868,10 @@ for (const [source, dynamicOrchestrator, expected] of [
   );
 }
 
-/** @typedef {{ file: string, line: number, snippet: string, rule: string }} Violation */
+type Violation = { file: string; line: number; snippet: string; rule: string };
 
-/** @param {string[]} files @returns {Violation[]} */
-function scan(files) {
-  /** @type {Violation[]} */
-  const violations = [];
+function scan(files: string[]): Violation[] {
+  const violations: Violation[] = [];
 
   for (const file of files) {
     if (file.includes("/components/reui/")) continue;
@@ -1329,11 +1319,9 @@ if (violations.length === 0) {
   process.exit(0);
 }
 
-const byRule = {
+const byRule: Record<string, string> = {
   "hardcoded-color":
     "Hardcoded chromatic Tailwind colors — use design tokens in apps/web/src/styles.css (see CLAUDE.md Colors).",
-  "ts-calculateTotals":
-    "TS `calculateTotals` costing reimplementation — costing must stay in the WASM crate (recipebridge), not TS.",
   "off-scale-spacing":
     "Off-scale spacing — use the {1,2,4,6} scale (see CLAUDE.md Spacing). Mark genuinely-dense exceptions with an inline /* tight */ comment.",
   "schema-response-sidecar":
