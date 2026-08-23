@@ -81,7 +81,7 @@ export function LocationSweep({
           <Button
             type="button"
             variant="outline"
-            className="min-h-9 shrink-0 px-3 text-xs"
+            className="min-h-9 shrink-0 px-3 text-xs" /* tight: sits inline with the tally line */
             onClick={openCuration}
           >
             {curationQueue.length === 1

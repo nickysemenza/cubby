@@ -44,7 +44,7 @@ export function SweepStrayReview({
   const rowCount = strays.reduce((n, stray) => n + stray.rows.length, 0);
 
   return (
-    <Stack gap="sm" className="border-t-[3px] border-t-foreground pt-3">
+    <Stack gap="sm" className="border-t-[3px] border-t-foreground pt-4">
       <Stack gap="tight">
         <span className="font-mono text-[0.625rem] text-slate uppercase tracking-[0.05em]">
           Living elsewhere
@@ -66,7 +66,7 @@ export function SweepStrayReview({
                 key={row.entryId}
                 align="center"
                 gap="sm"
-                className="min-w-0 border border-[var(--border)] px-2 py-1.5"
+                className="min-w-0 border border-[var(--border)] p-2"
               >
                 <Stack gap="tight" className="min-w-0 flex-1">
                   <span className="truncate text-xs">{stray.productName}</span>
