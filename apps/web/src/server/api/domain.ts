@@ -24,6 +24,7 @@ import { projectRouter } from "./routers/project";
 import { purchaseRouter } from "./routers/purchase";
 import { recipeRouter } from "./routers/recipe";
 import { relatedDataRouter } from "./routers/related-data";
+import { relatednessRouter } from "./routers/relatedness";
 import { searchRouter } from "./routers/search";
 import { statementRowRouter } from "./routers/statement-row";
 import { suggestionsRouter } from "./routers/suggestions";
@@ -43,6 +44,7 @@ export const domainRouterRecord = {
   dataQuality: dataQualityRouter,
   recipe: recipeRouter,
   relatedData: relatedDataRouter,
+  relatedness: relatednessRouter,
   ingredient: ingredientRouter,
   location: locationRouter,
   product: productRouter,

@@ -1,5 +1,4 @@
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
-import { isCollectionTag } from "@cubby/shared/collection-tag";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
@@ -18,14 +17,9 @@ export function RelatednessRail({
   product: { id: ProductShortcode; tags: string[] };
 }) {
   const api = useTRPC();
-  const similar = useQuery(
-    api.search.similar.queryOptions({
-      pair: "product_to_product",
-      sourceId: product.id,
-      limit: 5,
-    }),
+  const relatedness = useQuery(
+    api.relatedness.product.queryOptions(product.id),
   );
-  const tags = useQuery(api.product.tagSiblings.queryOptions(product.id));
   const refresh = useMutation(
     api.search.requestEmbeddingRefresh.mutationOptions(),
   );
@@ -41,16 +35,7 @@ export function RelatednessRail({
         : false,
   });
 
-  const compatibilityTags = product.tags.filter((tag) => !isCollectionTag(tag));
-  const tagGroups = compatibilityTags
-    .map((tag) => ({
-      tag,
-      siblings: (tags.data?.siblings ?? []).filter((sibling) =>
-        sibling.tags.includes(tag),
-      ),
-    }))
-    .filter((group) => group.siblings.length > 0);
-  const status = similar.data?.status;
+  const status = relatedness.data?.status;
   const indexing =
     batch.data?.status === "queued" || batch.data?.status === "running";
 
@@ -89,9 +74,9 @@ export function RelatednessRail({
         </p>
       )}
 
-      {similar.data?.results.map(({ entity, similarity }) => (
+      {relatedness.data?.items.map(({ shortcode, title, score }) => (
         <Row
-          key={entity.id}
+          key={shortcode}
           align="center"
           justify="between"
           gap="sm"
@@ -99,40 +84,34 @@ export function RelatednessRail({
         >
           <Link
             to="/products/$shortcode"
-            params={{ shortcode: entity.id }}
+            params={{ shortcode }}
             className="min-w-0 truncate text-sm hover:underline"
           >
-            {entity.title}
+            {title}
           </Link>
           <span className="shrink-0 font-mono text-2xs text-slate">
-            {Math.round(similarity * 100)}% similar
+            {Math.round(score * 100)}% similar
           </span>
         </Row>
       ))}
 
-      {tagGroups.map(({ tag, siblings }) => (
-        <div key={tag} className="border-border border-t pt-2">
+      {relatedness.data?.groups.map((group) => (
+        <div key={group.label} className="border-border border-t pt-2">
           <Row align="baseline" justify="between" className="mb-1">
-            <Link
-              to="/products"
-              search={{ tags: tag }}
-              className="text-xs underline"
-            >
-              {tag}
-            </Link>
+            <span className="text-xs">{group.label}</span>
             <span className="font-mono text-2xs text-slate">
-              {siblings.length} compatible
+              {group.items.length} related
             </span>
           </Row>
           <Stack gap="tight">
-            {siblings.slice(0, 4).map((sibling) => (
+            {group.items.slice(0, 4).map((item) => (
               <Link
-                key={sibling.id}
+                key={item.shortcode}
                 to="/products/$shortcode"
-                params={{ shortcode: sibling.id }}
+                params={{ shortcode: item.shortcode as ProductShortcode }}
                 className="truncate text-sm hover:underline"
               >
-                {sibling.name}
+                {item.title}
               </Link>
             ))}
           </Stack>
@@ -140,8 +119,8 @@ export function RelatednessRail({
       ))}
 
       {status === "ready" &&
-        similar.data?.results.length === 0 &&
-        tagGroups.length === 0 && (
+        relatedness.data?.items.length === 0 &&
+        relatedness.data.groups.length === 0 && (
           <p className="text-muted-foreground text-xs">
             No related products yet.
           </p>
