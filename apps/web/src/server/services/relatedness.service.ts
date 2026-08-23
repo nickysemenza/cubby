@@ -60,6 +60,5 @@ export async function getProductRelatedness(
       siblings,
       visible,
     ),
-    groups: [],
   };
 }

@@ -50,7 +50,6 @@ describe("getProductRelatedness", () => {
       getProductRelatedness({} as Database, "PRD-ABCD" as never),
     ).resolves.toMatchObject({
       status: "ready",
-      groups: [],
       items: [
         {
           shortcode: "PRD-SCORE",

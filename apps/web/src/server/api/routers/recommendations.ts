@@ -45,10 +45,9 @@ export const recommendationsRouter = createTRPCRouter({
         input.sourceId,
       );
       const current = await getProductRelatedness(ctx.db, input.sourceId);
-      const stillCurrent = [
-        ...current.items,
-        ...current.groups.flatMap((group) => group.items),
-      ].some((item) => item.shortcode === input.targetId);
+      const stillCurrent = current.items.some(
+        (item) => item.shortcode === input.targetId,
+      );
       if (!stillCurrent) {
         throw createAppError(
           "PRODUCT_NOT_FOUND",

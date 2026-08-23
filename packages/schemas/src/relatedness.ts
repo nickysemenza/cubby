@@ -160,8 +160,5 @@ export const relatednessItemSchema = z.object({
 export const relatednessOutSchema = z.object({
   status: embeddingReadinessSchema,
   items: z.array(relatednessItemSchema),
-  groups: z.array(
-    z.object({ label: z.string(), items: z.array(relatednessItemSchema) }),
-  ),
 });
 export type RelatednessOut = z.infer<typeof relatednessOutSchema>;
