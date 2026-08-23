@@ -118,9 +118,10 @@ export const compileTraversal = (
   from: Entity,
   steps: readonly RelationshipPathStep[],
   aliasPrefix: string,
+  aliases?: { root?: string; leaf?: string },
 ): Traversal => {
   const rootTable = entityTable(from);
-  const rootAlias = `${aliasPrefix}0`;
+  const rootAlias = aliases?.root ?? `${aliasPrefix}0`;
   let currentTable = rootTable;
   let currentAlias = rootAlias;
   const hops: TraversalHop[] = [];
@@ -128,7 +129,10 @@ export const compileTraversal = (
   for (const [index, step] of steps.entries()) {
     const edge = EDGES.get(step.edge);
     if (!edge) throw new Error(`Unknown relatedness edge ${step.edge}`);
-    const alias = `${aliasPrefix}${index + 1}`;
+    const alias =
+      index === steps.length - 1 && aliases?.leaf
+        ? aliases.leaf
+        : `${aliasPrefix}${index + 1}`;
     const outgoing = step.direction === "outgoing";
     const expected = outgoing ? edge.sourceTable : edge.targetTable;
     if (currentTable !== expected) {

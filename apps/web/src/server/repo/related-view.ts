@@ -21,6 +21,7 @@ import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/repo/database-helpers";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
+import { compileTraversal } from "~/server/repo/relatedness/traversal";
 
 interface SqlRelatedView {
   sourceTable: string;
@@ -292,6 +293,22 @@ const SQL_RELATED_VIEWS = {
   ),
 } as const satisfies Record<RelatedViewKey, SqlRelatedView>;
 
+/**
+ * The curated registry supplies presentation only; traversal joins are compiled
+ * from its declared graph path with the aliases this repository query expects.
+ * The legacy join strings remain only until the SQL equivalence harness retires
+ * them, and are deliberately not read by any live query.
+ */
+const COMPILED_RELATED_JOINS = Object.fromEntries(
+  relatedViewRegistry.map((view) => [
+    view.key,
+    compileTraversal(view.source, view.path, "related", {
+      root: "s",
+      leaf: "t",
+    }).joins,
+  ]),
+) as Record<RelatedViewKey, SQL>;
+
 type RawRow = {
   sourceId: string;
   targetEntityId: string;
@@ -329,7 +346,7 @@ async function loadOneRows(
         ${sql.raw(view.label)}::text AS "label",
         ${sql.raw(view.sort)} AS "sortValue"
       FROM ${sql.raw(`"${view.sourceTable}"`)} s
-      ${sql.raw(view.joins)}
+      ${COMPILED_RELATED_JOINS[relationKey]}
       WHERE s."shortcode" IN (${ids}) AND s."deletedAt" IS NULL
     ), ranked AS (
       SELECT *,
@@ -419,7 +436,7 @@ export async function loadRelatedBranch(
         ${sql.raw(view.label)}::text AS "label",
         ${sql.raw(view.sort)} AS "sortValue"
       FROM ${sql.raw(`"${view.sourceTable}"`)} s
-      ${sql.raw(view.joins)}
+      ${COMPILED_RELATED_JOINS[input.relationKey]}
       WHERE s."shortcode" = ${input.sourceId} AND s."deletedAt" IS NULL
     ), ranked AS (
       SELECT *, count(*) OVER ()::int AS "totalCount"
@@ -470,7 +487,7 @@ export async function loadRelatedOptions(
       ${sql.raw(view.label)}::text AS "label",
       count(DISTINCT s."id")::int AS "count"
     FROM ${sql.raw(`"${view.sourceTable}"`)} s
-    ${sql.raw(view.joins)}
+    ${COMPILED_RELATED_JOINS[input.relationKey]}
     WHERE s."deletedAt" IS NULL
       ${search ? sql`AND ${sql.raw(view.label)} ILIKE ${`%${search}%`}` : sql``}
     GROUP BY t."shortcode", ${sql.raw(view.label)}
@@ -823,7 +840,7 @@ export function relatedWhereConditions(
       const exists = (extra?: SQL) => sql`EXISTS (
         SELECT 1
         FROM ${sql.raw(`"${view.sourceTable}"`)} s
-        ${sql.raw(view.joins)}
+        ${COMPILED_RELATED_JOINS[definition.key]}
         WHERE s."id" = ${sourceId}
           AND s."deletedAt" IS NULL
           ${extra ? sql`AND ${extra}` : sql``}
