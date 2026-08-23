@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { productShortcode } from "./identifiers";
+import {
+  inventoryShortcode,
+  locationShortcode,
+  productShortcode,
+} from "./identifiers";
 import { duplicateProductIdentitySchema } from "./problems";
 import { embeddingReadinessSchema, relatednessOutSchema } from "./relatedness";
 
@@ -11,6 +15,7 @@ export const recommendationKind = z.enum([
   "product-related",
   "duplicate-product",
   "tag-propagation",
+  "placement",
 ]);
 export type RecommendationKind = z.infer<typeof recommendationKind>;
 
@@ -19,6 +24,7 @@ export const recommendationWorkbenchSearch = z
   .object({
     kind: recommendationKind,
     source: productShortcode.optional(),
+    inventory: inventoryShortcode.optional(),
   })
   .strict();
 
@@ -58,3 +64,15 @@ export const tagPropagationRecommendationOut = z.object({
 export type TagPropagationRecommendationOut = z.infer<
   typeof tagPropagationRecommendationOut
 >;
+
+export const placementRecommendationInput = z.object({
+  inventoryId: inventoryShortcode,
+});
+export const placementRecommendationOut = z
+  .object({
+    inventoryId: inventoryShortcode,
+    productName: z.string(),
+    sourceLocation: z.object({ id: locationShortcode, name: z.string() }),
+    destination: z.object({ id: locationShortcode, name: z.string() }),
+  })
+  .nullable();

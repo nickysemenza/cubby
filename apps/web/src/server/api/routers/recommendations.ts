@@ -4,6 +4,8 @@ import {
   dismissTagPropagationInput,
   duplicateProductRecommendationInput,
   duplicateProductRecommendationOut,
+  placementRecommendationInput,
+  placementRecommendationOut,
   recommendationWorkbenchInput,
   recommendationWorkbenchOut,
   tagPropagationRecommendationInput,
@@ -17,6 +19,7 @@ import {
   getActiveSuggestionDismissalKeys,
   suggestionCandidateKey,
 } from "~/server/repo/suggestion-dismissal";
+import { getPlacementRecommendation } from "~/server/services/placement-recommendation.service";
 import {
   getProductRelatedness,
   getProductTagPropagation,
@@ -24,6 +27,14 @@ import {
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 export const recommendationsRouter = createTRPCRouter({
+  placement: protectedProcedure
+    .input(placementRecommendationInput)
+    .output(strictOutput(placementRecommendationOut))
+    .query(
+      async ({ ctx, input }) =>
+        await getPlacementRecommendation(ctx.db, input.inventoryId),
+    ),
+
   product: protectedProcedure
     .input(recommendationWorkbenchInput)
     .output(strictOutput(recommendationWorkbenchOut))

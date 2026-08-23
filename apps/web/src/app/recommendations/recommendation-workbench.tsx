@@ -1,4 +1,7 @@
-import type { ProductShortcode } from "@cubby/schemas/identifiers";
+import type {
+  InventoryShortcode,
+  ProductShortcode,
+} from "@cubby/schemas/identifiers";
 import type { RecommendationKind } from "@cubby/schemas/recommendations";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -13,17 +16,84 @@ import { invalidateTRPCQueries } from "~/lib/query-keys";
 /** A focused review surface: candidates are always re-resolved, never URL data. */
 export function RecommendationWorkbench({
   sourceId,
+  inventoryId,
   kind,
 }: {
-  sourceId: ProductShortcode;
+  sourceId?: ProductShortcode;
+  inventoryId?: InventoryShortcode;
   kind: RecommendationKind;
 }) {
+  if (kind === "placement") {
+    return inventoryId ? (
+      <PlacementRecommendation inventoryId={inventoryId} />
+    ) : null;
+  }
+  if (!sourceId) return null;
   return kind === "duplicate-product" ? (
     <DuplicateProductRecommendation sourceId={sourceId} />
   ) : kind === "tag-propagation" ? (
     <TagPropagationRecommendation sourceId={sourceId} />
   ) : (
     <ProductRelatednessRecommendation sourceId={sourceId} />
+  );
+}
+
+function PlacementRecommendation({
+  inventoryId,
+}: {
+  inventoryId: InventoryShortcode;
+}) {
+  const api = useTRPC();
+  const queryClient = useQueryClient();
+  const recommendation = useQuery(
+    api.recommendations.placement.queryOptions({ inventoryId }),
+  );
+  const accept = useMutation(
+    api.inventory.moveEntries.mutationOptions({
+      onSuccess: () => {
+        invalidateTRPCQueries(queryClient, [
+          api.recommendations.placement.queryKey({ inventoryId }),
+          api.problems.getFast.queryKey(),
+        ]);
+      },
+    }),
+  );
+  if (recommendation.isLoading) {
+    return (
+      <p className="text-muted-foreground text-sm">Loading recommendation…</p>
+    );
+  }
+  if (recommendation.isError || !recommendation.data) {
+    return (
+      <p className="text-muted-foreground text-sm">
+        This placement recommendation is no longer current.
+      </p>
+    );
+  }
+  const data = recommendation.data;
+  return (
+    <Stack gap="sm">
+      <p className="text-muted-foreground text-sm">
+        {data.productName} is parked in {data.sourceLocation.name}; another live
+        stock row for this exact product is in {data.destination.name}.
+      </p>
+      <Button
+        type="button"
+        disabled={accept.isPending}
+        onClick={() =>
+          accept.mutate({
+            items: [
+              {
+                inventoryEntryId: data.inventoryId,
+                targetLocationId: data.destination.id,
+              },
+            ],
+          })
+        }
+      >
+        Move to {data.destination.name}
+      </Button>
+    </Stack>
   );
 }
 

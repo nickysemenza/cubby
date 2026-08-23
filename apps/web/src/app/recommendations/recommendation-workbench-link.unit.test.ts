@@ -17,6 +17,12 @@ describe("recommendation workbench link", () => {
     ).toBe(true);
     expect(
       recommendationWorkbenchSearch.safeParse({
+        kind: "placement",
+        inventory: "INV-ABCD",
+      }).success,
+    ).toBe(true);
+    expect(
+      recommendationWorkbenchSearch.safeParse({
         kind: "product-related",
         source: "not-a-shortcode",
         score: 0.99,

@@ -13,14 +13,16 @@ export const Route = createFileRoute(
 });
 
 function RecommendationWorkbenchPage() {
-  const { kind, source } = Route.useSearch();
+  const { kind, inventory, source } = Route.useSearch();
   return (
     <Page variant="list" title="Recommendations Workbench" layout="full">
-      {source ? (
+      {kind === "placement" && inventory ? (
+        <RecommendationWorkbench inventoryId={inventory} kind={kind} />
+      ) : source ? (
         <RecommendationWorkbench sourceId={source} kind={kind} />
       ) : (
         <p className="text-muted-foreground text-sm">
-          Open this workbench from a product recommendation.
+          Open this workbench from a current recommendation.
         </p>
       )}
     </Page>

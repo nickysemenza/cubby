@@ -1383,7 +1383,18 @@ const DECLARED_SECTIONS = [
       details: [createdAgoDetail(item.createdAt)],
       route: entityDetailLink("inventory", item.id),
       editLabel: "Open inventory entry",
-      customActions: <RecountLink shortcode={item.location.id} />,
+      customActions: (
+        <Row gap="sm">
+          <RecountLink shortcode={item.location.id} />
+          <Link
+            to="/recommendations/workbench"
+            search={{ kind: "placement", inventory: item.id }}
+            className="text-sm underline underline-offset-2"
+          >
+            Review placement recommendation
+          </Link>
+        </Row>
+      ),
     }),
   }),
   section({
