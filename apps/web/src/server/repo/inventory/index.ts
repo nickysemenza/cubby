@@ -36,3 +36,8 @@ export {
   inventoryentryList,
   updateInventoryEntry,
 } from "./crud";
+export {
+  getLiveStockRowsByIds,
+  getProductStockRows,
+  markInventoryEntryVerified,
+} from "./scan";

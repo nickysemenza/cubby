@@ -624,6 +624,7 @@ export const createInventoryEntry = async (
     locationId: data.locationId,
     amount: data.amount,
     ...(data.placement ? { placement: data.placement } : {}),
+    ...(data.verifiedAt ? { verifiedAt: data.verifiedAt } : {}),
     valuation,
   });
 

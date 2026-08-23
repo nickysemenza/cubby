@@ -3,14 +3,14 @@ import { resolveScanCode } from "./scan-code";
 
 describe("resolveScanCode", () => {
   it.each([
-    ["PRD-4K7M", "PRD-4K7M"],
-    [" prd-4k7m ", "PRD-4K7M"],
-    ["https://cubby.nickysemenza.com/LOC-4K7M", "LOC-4K7M"],
-    ["https://cubby.nickysemenza.com/L-4K7M", "LOC-4K7M"],
-  ])("resolves the Cubby label %s", (raw, shortcode) => {
+    ["PRD-4K7M", "PRD-4K7M", "product"],
+    [" prd-4k7m ", "PRD-4K7M", "product"],
+    ["https://cubby.nickysemenza.com/LOC-4K7M", "LOC-4K7M", "location"],
+    ["https://cubby.nickysemenza.com/L-4K7M", "LOC-4K7M", "location"],
+  ])("resolves the Cubby label %s", (raw, shortcode, type) => {
     expect(resolveScanCode(raw)).toEqual({
       ok: true,
-      value: { kind: "shortcode", shortcode },
+      value: { kind: "shortcode", shortcode, type },
     });
   });
 

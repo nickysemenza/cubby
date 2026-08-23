@@ -3,6 +3,7 @@ import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { describe, expect, it } from "vitest";
 import {
   buildBulkMovePayloadItems,
+  classifyScannedLocation,
   confirmationKey,
   findLocationInTree,
   findLocationInTreeByShortcode,
@@ -302,5 +303,40 @@ describe("inventory session utils", () => {
         quantity: { value: 2, unit: "each" },
       },
     ]);
+  });
+
+  // The bin-QR outcomes classify by TREE POSITION, not pass membership. A bin
+  // carried into another room is usually still inside the recount root, so
+  // classifying by "is it a stop" would call it a jump and lose the adopt case.
+  describe("classifyScannedLocation", () => {
+    const drawer = loc("...0001", "Drawer", "box");
+    const shelf = loc("...0002", "Shelf", "shelf", [drawer]);
+    const strayBin = loc("...0003", "Stray bin", "box");
+    const garage = loc("...0004", "Garage", "room", [strayBin]);
+    const house = loc("...0005", "House", "room", [shelf, garage]);
+
+    it("names the bin you are already standing at", () => {
+      expect(classifyScannedLocation(house, shelf, shelf.id)).toBe("current");
+    });
+
+    it("treats something already inside the current bin as nothing to adopt", () => {
+      expect(classifyScannedLocation(house, shelf, drawer.id)).toBe("inside");
+    });
+
+    it("refuses an ancestor, which would make a cycle", () => {
+      expect(classifyScannedLocation(house, shelf, house.id)).toBe("ancestor");
+    });
+
+    it("offers to adopt a bin sitting elsewhere in the same tree", () => {
+      expect(classifyScannedLocation(house, shelf, strayBin.id)).toBe(
+        "elsewhere",
+      );
+    });
+
+    it("offers to adopt a sibling branch, not just a leaf", () => {
+      expect(classifyScannedLocation(house, shelf, garage.id)).toBe(
+        "elsewhere",
+      );
+    });
   });
 });

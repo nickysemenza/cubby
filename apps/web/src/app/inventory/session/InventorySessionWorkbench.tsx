@@ -35,6 +35,7 @@ import type {
 import {
   findLocationInTree,
   findLocationInTreeByShortcode,
+  findParentLocation,
   flattenAuditableLocations,
   getUnknownChildLocations,
 } from "./session-utils";
@@ -310,8 +311,17 @@ export function InventorySessionWorkbench({
     });
   };
 
-  const pullLocationFromUnknown = async (location: InfLocation) => {
-    if (!currentLocation || !unknownLocation) return;
+  /**
+   * Re-parent a location into the bin being recounted.
+   *
+   * Undo restores the parent it actually had. The Unknown-tray version this
+   * generalizes always put it back in Unknown, which is only right when Unknown
+   * is where it came from — wrong the moment a bin is adopted from anywhere
+   * else.
+   */
+  const adoptLocation = async (location: InfLocation) => {
+    if (!currentLocation) return;
+    const previousParent = findParentLocation(tree, location.id);
     await updateLocation.mutateAsync({
       id: location.id,
       data: { parentId: currentLocation.id },
@@ -319,13 +329,19 @@ export function InventorySessionWorkbench({
     pushUndo(
       {
         run: async () => {
+          if (!previousParent) {
+            toast.error(`Nothing to restore ${location.name} to.`);
+            return;
+          }
           await updateLocation.mutateAsync({
             id: location.id,
-            data: { parentId: unknownLocation.id },
+            data: { parentId: previousParent.id },
           });
         },
       },
-      `Moved ${location.name} into ${currentLocation.name}.`,
+      // Pass membership is frozen when the scope is set, so an adopted bin
+      // cannot join the queue mid-pass. Say so rather than let it look lost.
+      `Moved ${location.name} into ${currentLocation.name}. It'll be a stop next pass.`,
     );
   };
 
@@ -552,6 +568,8 @@ export function InventorySessionWorkbench({
           }
         }}
         parentLocation={parent}
+        currentLocation={currentLocation?.location ?? null}
+        onAdoptLocation={adoptLocation}
       />
 
       <div className="grid min-h-[calc(100dvh-10rem)] min-w-0 gap-4 lg:grid-cols-[20rem_minmax(0,1fr)] lg:items-start">
@@ -570,6 +588,8 @@ export function InventorySessionWorkbench({
             }
           }}
           parentLocation={parent}
+          currentLocation={currentLocation?.location ?? null}
+          onAdoptLocation={adoptLocation}
         />
 
         {currentLocation && (
@@ -592,7 +612,7 @@ export function InventorySessionWorkbench({
             onMoveUnknownTo={(item) => {
               if (unknownLocation) openMoveTo(item, unknownLocation.id, "now");
             }}
-            onPullUnknownLocation={pullLocationFromUnknown}
+            onPullUnknownLocation={adoptLocation}
             onDone={handleDone}
             onToggleSkip={handleToggleSkip}
             unresolvedCount={unresolvedCount}

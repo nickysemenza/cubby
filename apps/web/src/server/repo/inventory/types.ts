@@ -57,4 +57,10 @@ export interface CreateInventoryEntryData {
   productId: ProductId;
   locationId: LocationId;
   placement?: InventoryPlacement;
+  /**
+   * Stamp the row as observed at creation. Only a location sweep sets this: it
+   * put the row there by looking at the object, so leaving `verifiedAt` null
+   * would make a just-scanned shelf read as never audited.
+   */
+  verifiedAt?: Date | null;
 }

@@ -94,6 +94,55 @@ skipped locations** when any remain.
 - Nested locations are not separately acknowledged during a recount. They appear
   as their own stops when they are part of the selected sweep.
 
+## 3b. Sweeping a location
+
+A **sweep** is the other half of the job and a separate surface: point a camera
+at everything on a shelf. It is launchable from any location's own toolbar
+("Sweep", beside Add item) and mounted inside the recount at its current stop.
+
+It is deliberately not a recount. A recount reviews expected contents and its
+stops require `directItemCount > 0`, so a brand-new empty shelf cannot be
+targeted at all — which is exactly the thing most worth sweeping.
+
+Each scan resolves server-side in `inventory.scanAtLocation`:
+
+| Facts | Outcome |
+|---|---|
+| No stock rows anywhere | create a row here, stamped `verifiedAt` |
+| A stock row **here** | confirm it — stamp `verifiedAt`, amount untouched |
+| Stock rows **elsewhere** | write nothing; queue them for the end |
+
+**Confirm, never increment.** Sweeping a correct shelf twice must change
+nothing. The intuitive alternative — "not a one-of-a-kind item, so add another"
+— silently doubles a bookshelf on its first honest re-sweep, because products
+created from an ISBN carry `expectedQuantity: null`, not `1`.
+
+**Strays commit once, at the end.** Nothing interrupts the camera; the
+`SweepStrayReview` panel collects everything found elsewhere and moves it in one
+tap. Single-unit rows move whole; a row holding more than one unit asks
+move-one-or-all, because a scan proves one object moved, not five. Curation of
+newly created products is queued the same way rather than opening a modal per
+scan.
+
+`placement: "installed"` never counts as stock — a faucet plumbed into a wall is
+not a stray to pull onto a shelf.
+
+Absence stays out of scope. A row that is never scanned is never touched; only
+an explicit recount closes the world.
+
+### Scanning a bin QR
+
+`classifyScannedLocation` reads **tree position, not pass membership**: a bin
+carried into another room is usually still inside the recount root, so
+classifying by "is it a stop in this pass" would call it a jump and lose the
+adopt case entirely. Four outcomes — already here, already inside, would-be
+cycle, and adoptable — and all four hold the camera open so a rack of labels can
+be swept in one go.
+
+An adopted bin does **not** join the current pass: membership is frozen when the
+scope is set, so the cursor cannot renumber underneath you. The toast says so
+rather than letting the bin look lost.
+
 ## 4. Reconcile safety
 
 `reconcileLocationSession` is an atomic transaction with a lightweight stale-tab
@@ -146,8 +195,12 @@ Primary files:
 - `ParentPicker.tsx` — root choice plus the In-progress resume list
 - `LocationReviewPane.tsx` — phone review interaction and completion bar
 - `SessionCaptureActions.tsx` — unexpected-item capture inside the Add sheet
+- `server/services/scan-plan.ts` — the pure add/confirm/queue decision
+- `server/services/scan-into-location.service.ts` — resolve, plan, execute
+- `_components/inventory/location-sweep/` — the sweep UI, shared by the location
+  page and the recount
 - `SessionLocationList.tsx` — outstanding-first current-pass navigation
-- `QrJumpButton.tsx` — scan-first start and in-session switching
+- `QrJumpButton.tsx` — scan-first start, in-session switching, and bin adoption
 - `server/repo/inventory/bulk.ts` — atomic reconcile and staleness guard
 
 Still deliberately deferred:

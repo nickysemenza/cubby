@@ -41,6 +41,7 @@
     "./recipe": "./src/recipe.ts",
     "./recipe-flow": "./src/recipe-flow.ts",
     "./usda": "./src/usda.ts",
+    "./scan": "./src/scan.ts",
     "./search": "./src/search.ts",
     "./suggestions": "./src/suggestions.ts",
     "./audit": "./src/audit.ts",

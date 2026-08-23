@@ -32,7 +32,11 @@ type SessionLocationListProps = {
   skippedLocationIds: ReadonlySet<string>;
   onSelect: (locationId: LocationShortcode) => void;
   onScanJump: (locationId: string) => void;
+  /** Re-parent a scanned stray bin into the location being recounted. */
+  onAdoptLocation: (location: InfLocation) => void;
   parentLocation: InfLocation;
+  /** The bin being recounted, which a scanned bin is classified against. */
+  currentLocation: InfLocation | null;
 };
 
 /**
@@ -51,7 +55,9 @@ function SessionLocationList({
   skippedLocationIds,
   onSelect,
   onScanJump,
+  onAdoptLocation,
   parentLocation,
+  currentLocation,
 }: SessionLocationListProps) {
   const [showCompleted, setShowCompleted] = useState(false);
   // Skipped locations stay in the outstanding list on purpose — the whole point
@@ -75,7 +81,12 @@ function SessionLocationList({
               {skipped > 0 ? ` · ${skipped} skipped` : ""}
             </Description>
           </div>
-          <QrJumpButton parent={parentLocation} onJump={onScanJump} />
+          <QrJumpButton
+            parent={parentLocation}
+            current={currentLocation}
+            onJump={onScanJump}
+            onAdopt={onAdoptLocation}
+          />
         </Row>
         {completed > 0 && (
           <Button

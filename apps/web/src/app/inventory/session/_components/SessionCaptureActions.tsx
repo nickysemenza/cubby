@@ -21,12 +21,8 @@ import { toast } from "sonner";
 import { z } from "zod";
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
+import { WithProductSearch } from "~/app/_components/combobox/with-search-hook";
 import {
-  WithIngredientSearch,
-  WithProductSearch,
-} from "~/app/_components/combobox/with-search-hook";
-import {
-  getOptionalIngredientId,
   getProductShortcode,
   requiredProductField,
 } from "~/app/_components/form-fields";
@@ -36,12 +32,7 @@ import {
   AmountFieldGroup,
   DEFAULT_AMOUNT_UNIT,
 } from "~/app/_components/inventory/amount-field-group";
-import { useUpcLookup } from "~/app/_components/inventory/hooks";
-import {
-  BARCODE_FORMATS,
-  PersistentScanner,
-  type ScanFeedbackEntry,
-} from "~/app/_components/inventory/persistent-scanner";
+import { LocationSweep } from "~/app/_components/inventory/location-sweep/LocationSweepSheet";
 import { useLocationPhotoCapture } from "~/app/_components/locations/use-location-photo-capture";
 import { useUpcAwareCreate } from "~/app/_components/products/use-upc-aware-create";
 import { Row, Stack } from "~/components/layout";
@@ -58,7 +49,6 @@ import {
 import { Spinner } from "~/components/ui/spinner";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
-import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import {
   invalidateTRPCQueries,
   inventoryMutationInvalidateKeys,
@@ -78,30 +68,6 @@ const manualAddSchema = z.object({
 
 type ManualAddValues = z.input<typeof manualAddSchema>;
 
-/** How many recently-scanned chips the viewfinder shows (newest first). */
-const RECENT_SCAN_LIMIT = 5;
-
-/**
- * `Product 012345678905` — the placeholder name the UPC cascade falls back to
- * when neither USDA nor the UPC worker knows the code (see
- * product-orchestration.service). A scan that lands one of these (or an
- * unspecified manufacturer) is worth a quick rename while the item is in hand.
- */
-const PLACEHOLDER_PRODUCT_NAME = /^Product \d+$/;
-
-/**
- * A just-scanned product that could use a moment of curation: a name, a price,
- * or an ingredient link. Never blocks the scan loop — the item is already added.
- */
-interface ScanFollowUp {
-  id: ProductShortcode;
-  name: string;
-  /** Placeholder name or unspecified manufacturer. */
-  needsName: boolean;
-  /** No price ⇒ no cost basis for recipe costing. */
-  needsPrice: boolean;
-}
-
 export function SessionCaptureActions({
   location,
 }: {
@@ -114,8 +80,6 @@ export function SessionCaptureActions({
   // Continuous multi-add feedback: a running tally plus the last few scans, so a
   // grocery haul can be ripped through without watching the list below. Both are
   // component-local and reset when the scanner sheet closes.
-  const [scanTally, setScanTally] = useState(0);
-  const [recentScans, setRecentScans] = useState<ScanFeedbackEntry[]>([]);
   const [suggestions, setSuggestions] = useState<DetectedItem[]>([]);
   const [suggestionProductOverrides, setSuggestionProductOverrides] = useState<
     Record<number, ComboboxItem<ProductShortcode> | null>
@@ -133,12 +97,6 @@ export function SessionCaptureActions({
   // price, so after the add we surface a non-blocking sheet to fix those while
   // the item is still in hand. The scan/inventory flow already completed — this
   // never blocks the continuous loop.
-  const [scanFollowUp, setScanFollowUp] = useState<ScanFollowUp | null>(null);
-  const [followUpName, setFollowUpName] = useState("");
-  const [followUpPrice, setFollowUpPrice] = useState("");
-  const [linkIngredient, setLinkIngredient] = useState<ComboboxItem | null>(
-    null,
-  );
 
   // Distinct from the outer session invalidator: this one also refreshes the
   // product-lookup caches and, given a mutation result, polls its background
@@ -146,13 +104,6 @@ export function SessionCaptureActions({
   // self-heals once it drains.
   const invalidateCapture = (result?: unknown) =>
     invalidate({ includeProductLookup: true, result, watch: true });
-
-  const closeScanFollowUp = () => {
-    setScanFollowUp(null);
-    setFollowUpName("");
-    setFollowUpPrice("");
-    setLinkIngredient(null);
-  };
 
   const uploadImage = useMutation(api.image.uploadImage.mutationOptions());
   // Location photos go through the shared capture hook rather than a local
@@ -206,20 +157,6 @@ export function SessionCaptureActions({
     api.product.quickCreate.mutationOptions(),
   );
   const updateProduct = useMutation(api.product.update.mutationOptions());
-  const saveScanFollowUp = useActionMutation({
-    entity: "product",
-    operation: "update",
-    intent: "full",
-    mutationFn: api.product.update.mutationOptions,
-    success: "Product details saved",
-    invalidateKeys: productMutationInvalidateKeys,
-    onSuccess: (data) => {
-      invalidateCapture(data);
-      closeScanFollowUp();
-    },
-  });
-  const { lookupUpc } = useUpcLookup();
-
   const handleFile = async (file: File) => {
     try {
       await captureLocationPhoto(location.id, file);
@@ -257,100 +194,6 @@ export function SessionCaptureActions({
     } catch (error) {
       toast.error(`Could not add suggestion: ${getErrorMessage(error)}`);
     }
-  };
-
-  const handleBarcode = async (barcode: string) => {
-    // The chip goes up immediately (as the raw code) and is relabelled once the
-    // UPC resolves, so the sweep always shows what the camera just took.
-    const scanKey = `${barcode}-${Date.now()}`;
-    setRecentScans((prev) =>
-      [
-        { key: scanKey, label: barcode, status: "pending" as const },
-        ...prev,
-      ].slice(0, RECENT_SCAN_LIMIT),
-    );
-    const updateScanChip = (patch: Partial<Omit<ScanFeedbackEntry, "key">>) =>
-      setRecentScans((prev) =>
-        prev.map((entry) =>
-          entry.key === scanKey ? { ...entry, ...patch } : entry,
-        ),
-      );
-
-    const product = await lookupUpc(barcode);
-    if (!product) {
-      updateScanChip({ status: "failed" });
-      return;
-    }
-    updateScanChip({ label: product.name });
-
-    try {
-      const inventory = await createInventory.mutateAsync({
-        productId: product.id,
-        locationId: location.id,
-        amount: { value: 1, unit: DEFAULT_AMOUNT_UNIT },
-      });
-      updateScanChip({ status: "added" });
-      setScanTally((count) => count + 1);
-      toast.success(
-        savedWithBackgroundWork(inventory.sideEffects, `Added ${product.name}`),
-      );
-    } catch {
-      // createInventory already toasts the error.
-      updateScanChip({ status: "failed" });
-      return;
-    }
-
-    // A brand-new product has no ingredient link yet (so it won't cost in any
-    // recipe) and the UPC cascade may have left it with a placeholder name and
-    // no price. Surface a non-blocking follow-up sheet — the add above already
-    // succeeded, so this never stalls the continuous scan loop.
-    const needsName =
-      PLACEHOLDER_PRODUCT_NAME.test(product.name) ||
-      isUnspecifiedManufacturer(product.manufacturer);
-    if (product.created || needsName) {
-      setLinkIngredient(null);
-      setFollowUpName(product.name);
-      setFollowUpPrice("");
-      setScanFollowUp({
-        id: product.id,
-        name: product.name,
-        needsName,
-        needsPrice: product.pricing.effectivePrice == null,
-      });
-    }
-  };
-
-  const followUpPriceValue = Number.parseFloat(followUpPrice);
-  const followUpNamePatch =
-    scanFollowUp?.needsName &&
-    followUpName.trim().length > 0 &&
-    followUpName.trim() !== scanFollowUp.name
-      ? followUpName.trim()
-      : undefined;
-  const followUpPricePatch =
-    scanFollowUp?.needsPrice &&
-    Number.isFinite(followUpPriceValue) &&
-    followUpPriceValue > 0
-      ? followUpPriceValue
-      : undefined;
-  const followUpIngredientPatch = getOptionalIngredientId(linkIngredient);
-  const hasFollowUpChanges =
-    followUpNamePatch !== undefined ||
-    followUpPricePatch !== undefined ||
-    followUpIngredientPatch !== undefined;
-
-  const submitScanFollowUp = () => {
-    if (!scanFollowUp || !hasFollowUpChanges) return;
-    saveScanFollowUp.mutate({
-      id: scanFollowUp.id,
-      data: {
-        ...(followUpNamePatch !== undefined && { name: followUpNamePatch }),
-        ...(followUpPricePatch !== undefined && { price: followUpPricePatch }),
-        ...(followUpIngredientPatch !== undefined && {
-          ingredientId: followUpIngredientPatch,
-        }),
-      },
-    });
   };
 
   // Photo-as-identity: add an unlabeled object from a photo + a short name as a
@@ -543,35 +386,28 @@ export function SessionCaptureActions({
       <Sheet
         open={scanner === "barcode"}
         onOpenChange={(open) => {
-          if (!open) {
-            setScanner(null);
-            setScanTally(0);
-            setRecentScans([]);
-          }
+          if (!open) setScanner(null);
         }}
       >
         <SheetContent side="bottom" className="p-4" showCloseButton={false}>
           <SheetHeader className="p-0 pb-4">
-            <SheetTitle>Scan barcode</SheetTitle>
+            <SheetTitle>Sweep {location.name}</SheetTitle>
             <SheetDescription>
-              Adds one each to {location.name}.
+              New items are stocked here, things already here are confirmed, and
+              anything living elsewhere collects for one decision at the end.
             </SheetDescription>
           </SheetHeader>
           {/*
-            The scanner stays live through the whole sweep — tearing the camera
-            down while a lookup is in flight costs a full getUserMedia restart
-            per item. Repeat reads of a code held in frame are the scanner's own
-            job: `debounceMs` is the single accept gate (flash + beep + add).
+            The same sweep the location page mounts. The recount owns the
+            surrounding pass; the sweep owns what one scan means.
           */}
-          <PersistentScanner
-            onScan={(barcode) => void handleBarcode(barcode)}
-            enabled={scanner === "barcode"}
-            formatsToSupport={BARCODE_FORMATS}
-            scanHintText="Point at barcode"
-            debounceMs={2500}
-            addedCount={scanTally}
-            recentScans={recentScans}
-          />
+          {scanner === "barcode" && (
+            <LocationSweep
+              locationId={location.id}
+              locationName={location.name}
+              onSettled={invalidateCapture}
+            />
+          )}
         </SheetContent>
       </Sheet>
       <Sheet
@@ -613,100 +449,6 @@ export function SessionCaptureActions({
               Add
             </Button>
           </form>
-        </SheetContent>
-      </Sheet>
-
-      {/* Scanned product → optional name / price / ingredient (non-blocking). */}
-      <Sheet
-        open={scanFollowUp !== null}
-        onOpenChange={(open) => {
-          if (!open && !saveScanFollowUp.isPending) closeScanFollowUp();
-        }}
-      >
-        <SheetContent side="bottom" className="p-4" showCloseButton={false}>
-          <SheetHeader className="p-0 pb-4">
-            <SheetTitle>
-              {scanFollowUp?.needsName
-                ? "Scanned item needs a name"
-                : "New product added"}
-            </SheetTitle>
-            <SheetDescription>
-              {scanFollowUp?.name} was added to {location.name}. Fill in what
-              you know — a name and price make it usable, an ingredient link
-              lets it count toward recipe costing. Skip to keep scanning.
-            </SheetDescription>
-          </SheetHeader>
-          <Stack gap="sm">
-            {scanFollowUp?.needsName && (
-              <Input
-                value={followUpName}
-                onChange={(event) => setFollowUpName(event.target.value)}
-                onFocus={(event) => event.target.select()}
-                placeholder="Product name"
-                aria-label="Product name"
-                autoFocus
-                disabled={saveScanFollowUp.isPending}
-              />
-            )}
-            {scanFollowUp?.needsPrice && (
-              <Input
-                value={followUpPrice}
-                onChange={(event) => setFollowUpPrice(event.target.value)}
-                type="number"
-                inputMode="decimal"
-                step="0.01"
-                min="0"
-                placeholder="Price per each ($)"
-                aria-label="Price per each in dollars"
-                disabled={saveScanFollowUp.isPending}
-              />
-            )}
-            <WithIngredientSearch>
-              {({
-                items,
-                onSearchChange,
-                isLoading,
-                onCreateNew,
-                onOpenChange,
-              }) => (
-                <EntityPicker
-                  entity="ingredient"
-                  label="ingredient"
-                  items={items}
-                  onSearchChange={onSearchChange}
-                  isLoading={isLoading}
-                  value={linkIngredient}
-                  setValue={setLinkIngredient}
-                  onCreateNew={onCreateNew}
-                  onOpenChange={onOpenChange}
-                />
-              )}
-            </WithIngredientSearch>
-            <Row gap="sm" justify="end">
-              <Button
-                type="button"
-                variant="ghost"
-                className="min-h-12 shrink-0 md:min-h-10"
-                disabled={saveScanFollowUp.isPending}
-                onClick={closeScanFollowUp}
-              >
-                Skip
-              </Button>
-              <Button
-                type="button"
-                className="min-h-12 shrink-0 md:min-h-10"
-                disabled={!hasFollowUpChanges || saveScanFollowUp.isPending}
-                onClick={submitScanFollowUp}
-              >
-                {saveScanFollowUp.isPending ? (
-                  <Spinner />
-                ) : (
-                  <Check className="size-4" />
-                )}
-                Save
-              </Button>
-            </Row>
-          </Stack>
         </SheetContent>
       </Sheet>
     </>

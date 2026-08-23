@@ -40,6 +40,7 @@ describe("ScanWorkbench", () => {
       expect(onResolve).toHaveBeenCalledWith({
         kind: "shortcode",
         shortcode: "LOC-4K7M",
+        type: "location",
       }),
     );
   });

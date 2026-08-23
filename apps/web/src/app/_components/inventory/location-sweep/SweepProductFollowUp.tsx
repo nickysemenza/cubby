@@ -1,0 +1,212 @@
+/**
+ * The curation prompt for a product a scan just created.
+ *
+ * Non-blocking by construction: the item is already stocked before this opens,
+ * so dismissing it loses nothing and the sweep never stalls. It exists because
+ * a brand-new UPC product lands in a poor state — often a placeholder name, no
+ * price, and no ingredient link, the last of which makes it invisible to recipe
+ * costing entirely.
+ */
+
+import type { ProductShortcode } from "@cubby/schemas/identifiers";
+import { Check } from "lucide-react";
+import { useEffect, useState } from "react";
+import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
+import { EntityPicker } from "~/app/_components/combobox/entity-picker";
+import { WithIngredientSearch } from "~/app/_components/combobox/with-search-hook";
+import { getOptionalIngredientId } from "~/app/_components/form-fields";
+import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { Row, Stack } from "~/components/layout";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "~/components/ui/sheet";
+import { Spinner } from "~/components/ui/spinner";
+import { useTRPC } from "~/integrations/trpc/react";
+import { productMutationInvalidateKeys } from "~/lib/query-keys";
+
+/** A product the sweep just created that could use a moment of curation. */
+export interface SweepFollowUp {
+  id: ProductShortcode;
+  name: string;
+  /** Placeholder name or unspecified manufacturer. */
+  needsName: boolean;
+  /** No price means no cost basis for recipe costing. */
+  needsPrice: boolean;
+}
+
+export function SweepProductFollowUp({
+  followUp,
+  locationName,
+  onClose,
+  onSaved,
+}: {
+  followUp: SweepFollowUp | null;
+  locationName: string;
+  /** Called with the product id once it is dealt with, saved or skipped. */
+  onClose: (productId: string) => void;
+  onSaved: (result?: unknown) => void;
+}) {
+  const api = useTRPC();
+  // `null` means untouched, so the field can show the scanned name as a
+  // starting point and still be cleared. Seeding state with the name directly
+  // would make an emptied field snap back to it on the next render.
+  const [name, setName] = useState<string | null>(null);
+  const [price, setPrice] = useState("");
+  const [ingredient, setIngredient] = useState<ComboboxItem | null>(null);
+
+  const save = useActionMutation({
+    entity: "product",
+    operation: "update",
+    intent: "full",
+    mutationFn: api.product.update.mutationOptions,
+    success: "Product details saved",
+    invalidateKeys: productMutationInvalidateKeys,
+    onSuccess: (result) => {
+      onSaved(result);
+      close();
+    },
+  });
+
+  const close = () => {
+    setName(null);
+    setPrice("");
+    setIngredient(null);
+    if (followUp) onClose(followUp.id);
+  };
+
+  // A fast sweep can raise a second follow-up before the first is dismissed;
+  // without this the new product would inherit the previous one's draft.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resetting ON a new product is the point.
+  useEffect(() => {
+    setName(null);
+    setPrice("");
+    setIngredient(null);
+  }, [followUp?.id]);
+
+  const seededName = name ?? followUp?.name ?? "";
+
+  const priceValue = Number.parseFloat(price);
+  const namePatch =
+    followUp?.needsName &&
+    seededName.trim() &&
+    seededName.trim() !== followUp.name
+      ? seededName.trim()
+      : undefined;
+  const pricePatch =
+    followUp?.needsPrice && Number.isFinite(priceValue) && priceValue > 0
+      ? priceValue
+      : undefined;
+  const ingredientPatch = getOptionalIngredientId(ingredient);
+  const hasChanges =
+    namePatch !== undefined ||
+    pricePatch !== undefined ||
+    ingredientPatch !== undefined;
+
+  return (
+    <Sheet
+      open={followUp !== null}
+      onOpenChange={(open) => {
+        if (!open && !save.isPending) close();
+      }}
+    >
+      <SheetContent side="bottom" className="p-4" showCloseButton={false}>
+        <SheetHeader className="p-0 pb-4">
+          <SheetTitle>
+            {followUp?.needsName
+              ? "Scanned item needs a name"
+              : "New product added"}
+          </SheetTitle>
+          <SheetDescription>
+            {followUp?.name} was added to {locationName}. Fill in what you know
+            — a name and price make it usable, an ingredient link lets it count
+            toward recipe costing. Skip to keep scanning.
+          </SheetDescription>
+        </SheetHeader>
+        <Stack gap="sm">
+          {followUp?.needsName && (
+            <Input
+              value={seededName}
+              onChange={(event) => setName(event.target.value)}
+              onFocus={(event) => event.target.select()}
+              placeholder="Product name"
+              aria-label="Product name"
+              disabled={save.isPending}
+            />
+          )}
+          {followUp?.needsPrice && (
+            <Input
+              value={price}
+              onChange={(event) => setPrice(event.target.value)}
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min="0"
+              placeholder="Price per each ($)"
+              aria-label="Price per each in dollars"
+              disabled={save.isPending}
+            />
+          )}
+          <WithIngredientSearch>
+            {({
+              items,
+              onSearchChange,
+              isLoading,
+              onCreateNew,
+              onOpenChange,
+            }) => (
+              <EntityPicker
+                entity="ingredient"
+                label="ingredient"
+                items={items}
+                onSearchChange={onSearchChange}
+                isLoading={isLoading}
+                value={ingredient}
+                setValue={setIngredient}
+                onCreateNew={onCreateNew}
+                onOpenChange={onOpenChange}
+              />
+            )}
+          </WithIngredientSearch>
+          <Row gap="sm" justify="end">
+            <Button
+              type="button"
+              variant="ghost"
+              className="min-h-12 shrink-0 md:min-h-10"
+              disabled={save.isPending}
+              onClick={close}
+            >
+              Skip
+            </Button>
+            <Button
+              type="button"
+              className="min-h-12 shrink-0 md:min-h-10"
+              disabled={!hasChanges || save.isPending}
+              onClick={() => {
+                if (!followUp || !hasChanges) return;
+                save.mutate({
+                  id: followUp.id,
+                  data: {
+                    ...(namePatch !== undefined && { name: namePatch }),
+                    ...(pricePatch !== undefined && { price: pricePatch }),
+                    ...(ingredientPatch !== undefined && {
+                      ingredientId: ingredientPatch,
+                    }),
+                  },
+                });
+              }}
+            >
+              {save.isPending ? <Spinner /> : <Check className="size-4" />}
+              Save
+            </Button>
+          </Row>
+        </Stack>
+      </SheetContent>
+    </Sheet>
+  );
+}
