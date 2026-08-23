@@ -1,12 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { waitForDndMutation } from "./dnd-helpers";
-import { createTask } from "./e2e-helpers";
+import { seedTaskPrerequisite } from "./e2e-fixtures";
 
 test("weekly planning becomes a seven-day ruled agenda without overflow", async ({
   page,
 }) => {
   await page.goto("/calendar?date=2026-08-18&period=week");
-  await page.waitForLoadState("networkidle");
 
   await expect(
     page.getByRole("button", { name: "Week", exact: true }),
@@ -31,13 +30,14 @@ test("weekly planning becomes a seven-day ruled agenda without overflow", async 
   ).toBeVisible();
 });
 
-test("phone agenda events edit in a bottom sheet", async ({ page }) => {
+test("phone agenda events edit in a bottom sheet", async ({
+  page,
+}, testInfo) => {
   const stamp = Date.now();
-  const name = `e2e phone calendar task ${stamp}`;
-  const updatedName = `e2e phone edited task ${stamp}`;
-  await createTask(page, name, { dueDate: "2026-08-18" });
+  const name = `e2e phone calendar task ${stamp}-${testInfo.workerIndex}-${testInfo.repeatEachIndex}`;
+  const updatedName = `${name} edited`;
+  await seedTaskPrerequisite(page, { name, dueDate: "2026-08-18" });
   await page.goto("/calendar?date=2026-08-18&period=week");
-  await page.waitForLoadState("networkidle");
 
   const agenda = page.locator('[data-slot="calendar-agenda"]');
   await agenda.getByRole("button", { name: new RegExp(name) }).click();

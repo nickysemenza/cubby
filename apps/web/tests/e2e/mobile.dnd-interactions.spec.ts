@@ -1,17 +1,19 @@
 import { expect, test } from "@playwright/test";
 import { dragByTouch, waitForDndMutation } from "./dnd-helpers";
-import { createTask } from "./e2e-helpers";
+import { seedTaskPrerequisite } from "./e2e-fixtures";
 
 test("long-press moves a task in the responsive agenda and persists it", async ({
   page,
-}) => {
-  const name = `e2e touch drag task ${Date.now()}`;
-  await createTask(page, name);
+}, testInfo) => {
+  const name = `e2e touch drag task ${Date.now()}-${testInfo.workerIndex}-${testInfo.repeatEachIndex}`;
+  await seedTaskPrerequisite(page, { name });
   await page.goto(`/tasks?view=board&q=${encodeURIComponent(name)}`);
-  await page.waitForLoadState("networkidle");
 
   const destination = page.getByRole("group", {
     name: "In progress task drop target",
+  });
+  await expect(page.getByRole("button", { name: `Drag ${name}` })).toBeVisible({
+    timeout: 15_000,
   });
   const committed = waitForDndMutation(page, "task.update");
   await dragByTouch(
@@ -22,7 +24,7 @@ test("long-press moves a task in the responsive agenda and persists it", async (
   await expect(destination).toContainText(name);
 
   await committed;
-  await page.reload({ waitUntil: "networkidle" });
+  await page.reload();
   await expect(
     page.getByRole("group", { name: "In progress task drop target" }),
   ).toContainText(name);

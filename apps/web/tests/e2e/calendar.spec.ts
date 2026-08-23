@@ -1,16 +1,15 @@
 import { expect, test } from "@playwright/test";
 import { waitForDndMutation } from "./dnd-helpers";
-import { createTask } from "./e2e-helpers";
+import { seedTaskPrerequisite } from "./e2e-fixtures";
 
 test("calendar events open an anchored editor, save atomically, and restore focus", async ({
   page,
-}) => {
+}, testInfo) => {
   const stamp = Date.now();
-  const name = `e2e inline calendar task ${stamp}`;
-  const updatedName = `e2e edited calendar task ${stamp}`;
-  await createTask(page, name, { dueDate: "2026-07-16" });
+  const name = `e2e inline calendar task ${stamp}-${testInfo.workerIndex}-${testInfo.repeatEachIndex}`;
+  const updatedName = `${name} edited`;
+  await seedTaskPrerequisite(page, { name, dueDate: "2026-07-16" });
   await page.goto("/calendar?date=2026-07-01");
-  await page.waitForLoadState("networkidle");
 
   const event = page.getByRole("button", { name: `${name}, All day` });
   await event.click();
@@ -41,7 +40,6 @@ test("calendar opens a date drawer and prefills quick creation", async ({
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.goto("/calendar?date=2026-07-01");
-  await page.waitForLoadState("networkidle");
 
   await expect(
     page.getByRole("heading", { level: 1, name: "Calendar" }),
@@ -90,7 +88,6 @@ test("calendar filters are URL-backed and survive a reload", async ({
   await page.goto(
     "/calendar?date=2026-07-01&kinds=meal,task&projectKinds=renovation",
   );
-  await page.waitForLoadState("networkidle");
 
   const showFilter = page.getByRole("button", { name: "Show: Meals, Tasks" });
   const projectKind = page.getByRole("button", {
@@ -100,7 +97,6 @@ test("calendar filters are URL-backed and survive a reload", async ({
   await expect(projectKind).toBeVisible();
 
   await page.reload();
-  await page.waitForLoadState("networkidle");
   await expect(page).toHaveURL(/kinds=meal%2Ctask|kinds=meal,task/);
   await expect(showFilter).toBeVisible();
   await expect(projectKind).toBeVisible();
@@ -113,7 +109,6 @@ test("weekly planning is URL-backed and navigates by exact weeks", async ({
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.goto("/calendar?date=2026-08-18&period=week&kinds=meal,task");
-  await page.waitForLoadState("networkidle");
 
   await expect(
     page.getByRole("button", { name: "Week", exact: true }),
@@ -134,7 +129,6 @@ test("weekly planning is URL-backed and navigates by exact weeks", async ({
   await expect(page).toHaveURL(/kinds=meal%2Ctask|kinds=meal,task/);
 
   await page.reload();
-  await page.waitForLoadState("networkidle");
   await expect(
     page.getByRole("button", { name: "Week", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
@@ -156,7 +150,6 @@ test("the fortnight grid spans two week-aligned rows and steps 14 days", async (
   page.on("pageerror", (error) => pageErrors.push(error.message));
   // A Thursday anchor: the grid has to snap back to its Sunday, not start here.
   await page.goto("/calendar?date=2026-08-20&period=fortnight&kinds=meal,task");
-  await page.waitForLoadState("networkidle");
 
   await expect(
     page.getByRole("button", { name: "Fortnight", exact: true }),
@@ -179,7 +172,6 @@ test("the fortnight grid spans two week-aligned rows and steps 14 days", async (
   ).toBeVisible();
 
   await page.reload();
-  await page.waitForLoadState("networkidle");
   await expect(
     page.getByRole("button", { name: "Fortnight", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
@@ -199,7 +191,6 @@ test("the Meals calendar preserves its legacy anchor in Week mode", async ({
   page,
 }) => {
   await page.goto("/meals?week=2026-08-18&period=week");
-  await page.waitForLoadState("networkidle");
 
   await expect(
     page.getByRole("button", { name: "Week", exact: true }),

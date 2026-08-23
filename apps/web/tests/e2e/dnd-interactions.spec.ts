@@ -1,35 +1,35 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, type TestInfo, test } from "@playwright/test";
 import { dragByKeyboard, dragByMouse, waitForDndMutation } from "./dnd-helpers";
-import { createLocation, createTask } from "./e2e-helpers";
+import { seedLocationPrerequisite, seedTaskPrerequisite } from "./e2e-fixtures";
+import { selectComboboxItem, waitForFormHydration } from "./e2e-helpers";
 
-const taskDropTarget = (
-  page: Parameters<typeof createTask>[0],
-  label: string,
-) => page.getByRole("group", { name: `${label} task drop target` });
+const fixtureName = (prefix: string, testInfo: TestInfo) =>
+  `${prefix} ${Date.now()}-${testInfo.workerIndex}-${testInfo.repeatEachIndex}`;
 
-const calendarDay = (page: Parameters<typeof createTask>[0], label: string) =>
+const taskDropTarget = (page: Page, label: string) =>
+  page.getByRole("group", { name: `${label} task drop target` });
+
+const calendarDay = (page: Page, label: string) =>
   page.getByRole("gridcell", { name: label, exact: true });
 
 async function expectTaskOnCalendarDay(
-  page: Parameters<typeof createTask>[0],
+  page: Page,
   name: string,
   day: string,
   heading: string,
 ) {
   await page.goto(`/calendar?date=2026-07-01&day=${day}`);
-  await page.waitForLoadState("networkidle");
   const sheet = page.getByRole("dialog", { name: heading });
   await expect(sheet).toContainText(name);
 }
 
 async function expectTaskAbsentFromCalendarDay(
-  page: Parameters<typeof createTask>[0],
+  page: Page,
   name: string,
   day: string,
   heading: string,
 ) {
   await page.goto(`/calendar?date=2026-07-01&day=${day}`);
-  await page.waitForLoadState("networkidle");
   const sheet = page.getByRole("dialog", { name: heading });
   await expect(sheet).not.toContainText(name);
 }
@@ -37,32 +37,34 @@ async function expectTaskAbsentFromCalendarDay(
 test.describe("Drag and drop", () => {
   test("moves a task between statuses with the mouse and persists it", async ({
     page,
-  }) => {
-    const name = `e2e mouse drag task ${Date.now()}`;
-    await createTask(page, name);
+  }, testInfo) => {
+    const name = fixtureName("e2e mouse drag task", testInfo);
+    await seedTaskPrerequisite(page, { name });
     await page.goto(`/tasks?view=board&q=${encodeURIComponent(name)}`);
-    await page.waitForLoadState("networkidle");
 
     const source = page.getByRole("button", { name: `Drag ${name}` });
+    await expect(source).toBeVisible({ timeout: 15_000 });
     const destination = taskDropTarget(page, "In progress");
     const committed = waitForDndMutation(page, "task.update");
     await dragByMouse(page, source, destination);
     await expect(destination).toContainText(name);
 
     await committed;
-    await page.reload({ waitUntil: "networkidle" });
+    await page.reload();
     await expect(taskDropTarget(page, "In progress")).toContainText(name);
     await expect(taskDropTarget(page, "Not started")).not.toContainText(name);
   });
 
   test("moves a task between statuses with the keyboard and persists it", async ({
     page,
-  }) => {
-    const name = `e2e keyboard drag task ${Date.now()}`;
-    await createTask(page, name);
+  }, testInfo) => {
+    const name = fixtureName("e2e keyboard drag task", testInfo);
+    await seedTaskPrerequisite(page, { name });
     await page.goto(`/tasks?view=board&q=${encodeURIComponent(name)}`);
-    await page.waitForLoadState("networkidle");
 
+    await expect(
+      page.getByRole("button", { name: `Drag ${name}` }),
+    ).toBeVisible({ timeout: 15_000 });
     const committed = waitForDndMutation(page, "task.update");
     await dragByKeyboard(page.getByRole("button", { name: `Drag ${name}` }), [
       "ArrowRight",
@@ -70,18 +72,17 @@ test.describe("Drag and drop", () => {
     await expect(taskDropTarget(page, "Later")).toContainText(name);
 
     await committed;
-    await page.reload({ waitUntil: "networkidle" });
+    await page.reload();
     await expect(taskDropTarget(page, "Later")).toContainText(name);
     await expect(taskDropTarget(page, "Not started")).not.toContainText(name);
   });
 
   test("stages a location in Unknown with the mouse and persists it", async ({
     page,
-  }) => {
-    const name = `E2E staged location ${Date.now()}`;
-    await createLocation(page, name);
+  }, testInfo) => {
+    const name = fixtureName("E2E staged location", testInfo);
+    await seedLocationPrerequisite(page, name);
     await page.goto("/locations/arrange");
-    await page.waitForLoadState("networkidle");
 
     const destination = page.getByRole("group", {
       name: "Unknown contents drop target",
@@ -95,19 +96,34 @@ test.describe("Drag and drop", () => {
     await expect(destination).toContainText(name);
 
     await committed;
-    await page.reload({ waitUntil: "networkidle" });
+    await page.reload();
     await expect(
       page.getByRole("group", { name: "Unknown contents drop target" }),
     ).toContainText(name);
   });
 
-  test("rejects dropping a location onto its own child", async ({ page }) => {
-    const stamp = Date.now();
-    const parentName = `E2E cycle parent ${stamp}`;
-    const childName = `E2E cycle child ${stamp}`;
-    const parentId = await createLocation(page, parentName);
-    await createLocation(page, childName, { parentName });
-    await page.goto(`/locations/arrange?at=${parentId}`);
+  test("rejects dropping a location onto its own child", async ({
+    page,
+  }, testInfo) => {
+    const parentName = fixtureName("E2E cycle parent", testInfo);
+    const childName = fixtureName("E2E cycle child", testInfo);
+    const parent = await seedLocationPrerequisite(page, parentName);
+    // Keep the child creation browser-driven: this test owns the parent picker
+    // contract as well as the drag rejection.
+    await page.goto("/locations/new");
+    await waitForFormHydration(page);
+    await page.getByPlaceholder("Enter location name").fill(childName);
+    await selectComboboxItem(
+      page,
+      page.getByRole("combobox", { name: /parent location/i }),
+      parentName,
+    );
+    await page.getByRole("button", { name: /^Create$/ }).click();
+    await expect(page).toHaveURL(
+      /\/locations\/LOC-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/,
+      { timeout: 15_000 },
+    );
+    await page.goto(`/locations/arrange?at=${parent.id}`);
 
     const parentColumn = page.getByRole("region", {
       name: `${parentName} column`,
@@ -123,7 +139,7 @@ test.describe("Drag and drop", () => {
     );
     await expect(parentColumn).toContainText(childName);
 
-    await page.reload({ waitUntil: "networkidle" });
+    await page.reload();
     await expect(
       page.getByRole("region", { name: `${parentName} column` }),
     ).toContainText(childName);
@@ -131,11 +147,10 @@ test.describe("Drag and drop", () => {
 
   test("moves a dated task one day with the mouse and persists it", async ({
     page,
-  }) => {
-    const name = `e2e calendar mouse task ${Date.now()}`;
-    await createTask(page, name, { dueDate: "2026-07-14" });
+  }, testInfo) => {
+    const name = fixtureName("e2e calendar mouse task", testInfo);
+    await seedTaskPrerequisite(page, { name, dueDate: "2026-07-14" });
     await page.goto("/calendar?date=2026-07-01");
-    await page.waitForLoadState("networkidle");
 
     const committed = waitForDndMutation(page, "task.update");
     await dragByMouse(
@@ -161,11 +176,10 @@ test.describe("Drag and drop", () => {
 
   test("moves a dated task one day with the keyboard and persists it", async ({
     page,
-  }) => {
-    const name = `e2e calendar keyboard task ${Date.now()}`;
-    await createTask(page, name, { dueDate: "2026-07-14" });
+  }, testInfo) => {
+    const name = fixtureName("e2e calendar keyboard task", testInfo);
+    await seedTaskPrerequisite(page, { name, dueDate: "2026-07-14" });
     await page.goto("/calendar?date=2026-07-01");
-    await page.waitForLoadState("networkidle");
 
     const committed = waitForDndMutation(page, "task.update");
     const source = page.getByRole("button", { name: `${name}, All day` });

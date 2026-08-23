@@ -1,11 +1,6 @@
 import { expect, test } from "@playwright/test";
-import {
-  addInventory,
-  createLocation,
-  createProduct,
-  selectComboboxItem,
-  waitForFormHydration,
-} from "./e2e-helpers";
+import { seedInventoryPrerequisites } from "./e2e-fixtures";
+import { selectComboboxItem, waitForFormHydration } from "./e2e-helpers";
 
 test.describe("Bulk Move Inventory - Selection", () => {
   test.describe.configure({ mode: "serial" });
@@ -17,9 +12,10 @@ test.describe("Bulk Move Inventory - Selection", () => {
     const sourceName = `E2E Source ${timestamp}`;
     const productName = `E2E BulkMove Product ${timestamp}`;
 
-    await createLocation(page, sourceName);
-    await createProduct(page, productName);
-    await addInventory(page, productName, sourceName, 10, "units");
+    await seedInventoryPrerequisites(page, {
+      locationName: sourceName,
+      products: [{ name: productName, quantity: 10, unit: "units" }],
+    });
 
     await page.goto("/inventory/bulk-move");
     await waitForFormHydration(page);
@@ -49,11 +45,13 @@ test.describe("Bulk Move Inventory - Selection", () => {
     const product1 = `E2E SelectAll Product1 ${timestamp}`;
     const product2 = `E2E SelectAll Product2 ${timestamp}`;
 
-    await createLocation(page, sourceName);
-    await createProduct(page, product1);
-    await createProduct(page, product2);
-    await addInventory(page, product1, sourceName, 5, "units");
-    await addInventory(page, product2, sourceName, 3, "units");
+    await seedInventoryPrerequisites(page, {
+      locationName: sourceName,
+      products: [
+        { name: product1, quantity: 5, unit: "units" },
+        { name: product2, quantity: 3, unit: "units" },
+      ],
+    });
 
     await page.goto("/inventory/bulk-move");
     await waitForFormHydration(page);

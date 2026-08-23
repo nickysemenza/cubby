@@ -1,11 +1,9 @@
 import { expect, test } from "@playwright/test";
 import {
-  addInventory,
-  createLocation,
-  createProduct,
-  selectComboboxItem,
-  waitForFormHydration,
-} from "./e2e-helpers";
+  seedInventoryPrerequisites,
+  seedLocationPrerequisite,
+} from "./e2e-fixtures";
+import { selectComboboxItem, waitForFormHydration } from "./e2e-helpers";
 
 test.describe("Bulk Move Inventory - Transfer", () => {
   test("can move inventory items between locations", async ({ page }) => {
@@ -14,10 +12,13 @@ test.describe("Bulk Move Inventory - Transfer", () => {
     const targetName = `E2E Move Target ${timestamp}`;
     const productName = `E2E Move Product ${timestamp}`;
 
-    await createLocation(page, sourceName);
-    await createLocation(page, targetName);
-    await createProduct(page, productName);
-    await addInventory(page, productName, sourceName, 10, "units");
+    await Promise.all([
+      seedInventoryPrerequisites(page, {
+        locationName: sourceName,
+        products: [{ name: productName, quantity: 10, unit: "units" }],
+      }),
+      seedLocationPrerequisite(page, targetName),
+    ]);
 
     await page.goto("/inventory/bulk-move");
     await waitForFormHydration(page);
