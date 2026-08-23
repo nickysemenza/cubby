@@ -743,6 +743,7 @@ export default function RTable<TItem extends RowData>(
           isTransitioning={isTransitioning}
           rowContentVersion={rowContentVersion}
           portalWorkbenchUtilities={externalToolbar}
+          emptyState={emptyState}
         />
       )}
 

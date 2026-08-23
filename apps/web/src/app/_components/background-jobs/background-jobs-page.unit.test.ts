@@ -14,4 +14,18 @@ describe("background jobs detail refresh", () => {
       expect(didBatchSettle(previous, current)).toBe(expected);
     },
   );
+
+  it.each([
+    [undefined, "running", false],
+    ["running", undefined, false],
+    ["running", "partial", true],
+    ["running", "cancelled", true],
+    ["queued", "queued", false],
+    ["failed", "cancelled", false],
+  ] as const)(
+    "handles the %s to %s boundary",
+    (previous, current, expected) => {
+      expect(didBatchSettle(previous, current)).toBe(expected);
+    },
+  );
 });

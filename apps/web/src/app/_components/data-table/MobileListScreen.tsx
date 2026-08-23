@@ -41,6 +41,7 @@ interface MobileListScreenProps<TItem extends RowData> {
   /** External cell-render state snapshot; see useTableConfig. */
   rowContentVersion?: unknown;
   portalWorkbenchUtilities?: boolean;
+  emptyState?: ReactNode;
 }
 
 export function MobileListScreen<TItem extends RowData>({
@@ -59,6 +60,7 @@ export function MobileListScreen<TItem extends RowData>({
   isTransitioning = false,
   rowContentVersion,
   portalWorkbenchUtilities = false,
+  emptyState,
 }: MobileListScreenProps<TItem>) {
   const listRef = useRef<HTMLDivElement>(null);
   // `useIsMobile` reports false until hydration (its server snapshot has to, to
@@ -134,6 +136,7 @@ export function MobileListScreen<TItem extends RowData>({
               grouped={grouped}
               isTransitioning={isTransitioning}
               rowContentVersion={rowContentVersion}
+              emptyState={emptyState}
             />
           );
           return refreshControls ? (
