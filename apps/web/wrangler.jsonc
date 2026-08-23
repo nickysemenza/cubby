@@ -118,6 +118,7 @@
     // Signup is closed (personal instance). Flip to "true" + deploy to
     // temporarily allow creating an account, then flip back.
     "ALLOW_SIGNUP": "false",
+    "E2E_AUTH_TEST_MODE": "false",
     "R2_ENDPOINT": "https://9f10f078d35d86c78dedece2300a6b88.r2.cloudflarestorage.com",
     "R2_BUCKET_NAME": "foo",
     "R2_PUBLIC_URL": "https://foobucket.nicky.fun",

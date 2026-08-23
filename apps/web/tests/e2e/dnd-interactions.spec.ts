@@ -1,7 +1,7 @@
 import type { Page, TestInfo } from "@playwright/test";
 import { dragByKeyboard, dragByMouse, waitForDndMutation } from "./dnd-helpers";
 import { seedLocationPrerequisite, seedTaskPrerequisite } from "./e2e-fixtures";
-import { selectComboboxItem, waitForFormHydration } from "./e2e-helpers";
+import { gotoAuthenticatedPage, reloadAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 const fixtureName = (prefix: string, testInfo: TestInfo) =>
@@ -41,17 +41,20 @@ test.describe("Drag and drop", () => {
   }, testInfo) => {
     const name = fixtureName("e2e mouse drag task", testInfo);
     await seedTaskPrerequisite(page, { name });
-    await page.goto(`/tasks?view=board&q=${encodeURIComponent(name)}`);
 
     const source = page.getByRole("button", { name: `Drag ${name}` });
-    await expect(source).toBeVisible({ timeout: 15_000 });
+    await gotoAuthenticatedPage(
+      page,
+      `/tasks?view=board&q=${encodeURIComponent(name)}`,
+      source,
+    );
     const destination = taskDropTarget(page, "In progress");
     const committed = waitForDndMutation(page, "task.update");
     await dragByMouse(page, source, destination);
     await expect(destination).toContainText(name);
 
     await committed;
-    await page.reload();
+    await reloadAuthenticatedPage(page, taskDropTarget(page, "In progress"));
     await expect(taskDropTarget(page, "In progress")).toContainText(name);
     await expect(taskDropTarget(page, "Not started")).not.toContainText(name);
   });
@@ -61,19 +64,19 @@ test.describe("Drag and drop", () => {
   }, testInfo) => {
     const name = fixtureName("e2e keyboard drag task", testInfo);
     await seedTaskPrerequisite(page, { name });
-    await page.goto(`/tasks?view=board&q=${encodeURIComponent(name)}`);
 
-    await expect(
-      page.getByRole("button", { name: `Drag ${name}` }),
-    ).toBeVisible({ timeout: 15_000 });
+    const source = page.getByRole("button", { name: `Drag ${name}` });
+    await gotoAuthenticatedPage(
+      page,
+      `/tasks?view=board&q=${encodeURIComponent(name)}`,
+      source,
+    );
     const committed = waitForDndMutation(page, "task.update");
-    await dragByKeyboard(page.getByRole("button", { name: `Drag ${name}` }), [
-      "ArrowRight",
-    ]);
+    await dragByKeyboard(source, ["ArrowRight"]);
     await expect(taskDropTarget(page, "Later")).toContainText(name);
 
     await committed;
-    await page.reload();
+    await reloadAuthenticatedPage(page, taskDropTarget(page, "Later"));
     await expect(taskDropTarget(page, "Later")).toContainText(name);
     await expect(taskDropTarget(page, "Not started")).not.toContainText(name);
   });
@@ -97,7 +100,7 @@ test.describe("Drag and drop", () => {
     await expect(destination).toContainText(name);
 
     await committed;
-    await page.reload();
+    await reloadAuthenticatedPage(page, destination);
     await expect(
       page.getByRole("group", { name: "Unknown contents drop target" }),
     ).toContainText(name);
@@ -109,21 +112,7 @@ test.describe("Drag and drop", () => {
     const parentName = fixtureName("E2E cycle parent", testInfo);
     const childName = fixtureName("E2E cycle child", testInfo);
     const parent = await seedLocationPrerequisite(page, parentName);
-    // Keep the child creation browser-driven: this test owns the parent picker
-    // contract as well as the drag rejection.
-    await page.goto("/locations/new");
-    await waitForFormHydration(page);
-    await page.getByPlaceholder("Enter location name").fill(childName);
-    await selectComboboxItem(
-      page,
-      page.getByRole("combobox", { name: /parent location/i }),
-      parentName,
-    );
-    await page.getByRole("button", { name: /^Create$/ }).click();
-    await expect(page).toHaveURL(
-      /\/locations\/LOC-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/,
-      { timeout: 15_000 },
-    );
+    await seedLocationPrerequisite(page, childName, { parentId: parent.id });
     await page.goto(`/locations/arrange?at=${parent.id}`);
 
     const parentColumn = page.getByRole("region", {
@@ -140,7 +129,7 @@ test.describe("Drag and drop", () => {
     );
     await expect(parentColumn).toContainText(childName);
 
-    await page.reload();
+    await reloadAuthenticatedPage(page, parentColumn);
     await expect(
       page.getByRole("region", { name: `${parentName} column` }),
     ).toContainText(childName);

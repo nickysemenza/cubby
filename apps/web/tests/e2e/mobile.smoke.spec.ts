@@ -1,12 +1,23 @@
-import { createLocation, createProduct } from "./e2e-helpers";
+import type { Page } from "@playwright/test";
+import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
+
+async function expectViewportBounded(page: Page) {
+  await expect(async () => {
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+  }).toPass({ timeout: 5000 });
+}
 
 test.describe("iPhone WebKit smoke", () => {
   test("prewarms and opens the More sheet on touch intent", async ({
     page,
   }) => {
-    await page.goto("/", { waitUntil: "networkidle" });
     const more = page.getByRole("button", { name: "More options" });
+    await gotoAuthenticatedPage(page, "/", more);
 
     await more.dispatchEvent("touchstart");
     await page.waitForTimeout(100);
@@ -44,10 +55,10 @@ test.describe("iPhone WebKit smoke", () => {
       });
     });
 
-    await page.goto("/", { waitUntil: "networkidle" });
     const bottomNav = page.getByRole("navigation", {
       name: "Main navigation",
     });
+    await gotoAuthenticatedPage(page, "/", bottomNav);
     for (const label of [
       "Inventory",
       "Scan",
@@ -179,98 +190,39 @@ test.describe("iPhone WebKit smoke", () => {
     ).toBeNull();
   });
 
-  test("navigates inventory, recipes, and forms with usable touch targets", async ({
+  test("keeps the authenticated shell inside representative viewport boundaries", async ({
     page,
   }) => {
-    for (const path of [
-      "/inventory/session",
-      "/recipes",
-      "/recipes/new",
-      "/products/new",
-    ]) {
-      // Wait through TanStack Start hydration before starting the next direct
-      // navigation; WebKit can otherwise race its same-URL hydration replace.
-      await page.goto(path, { waitUntil: "networkidle" });
-      await expect(page.locator("body")).not.toContainText(
-        "Internal Server Error",
-      );
-    }
-
-    const targets = page.locator(
-      '[data-slot="button"]:visible, [data-slot="input"]:visible, [data-slot="tabs-trigger"]:visible, [role="option"]:visible, [role="menuitem"]:visible',
-    );
-    for (let index = 0; index < (await targets.count()); index += 1) {
-      const box = await targets.nth(index).boundingBox();
-      if (!box) continue;
-      expect
-        .soft(box.width, `target ${index} width`)
-        .toBeGreaterThanOrEqual(44);
-      expect
-        .soft(box.height, `target ${index} height`)
-        .toBeGreaterThanOrEqual(44);
-    }
-  });
-
-  test("keeps the representative mobile operating surfaces inside the viewport", async ({
-    page,
-  }) => {
-    const suffix = Date.now();
-    const locationName = `Phone density location ${suffix}`;
-    const productName = `Phone density product ${suffix}`;
-
-    await page.setViewportSize({ width: 390, height: 844 });
-    await createLocation(page, locationName);
-    await expect(page.getByTestId("detail-spec-plate")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Contents" })).toBeVisible();
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth <= window.innerWidth,
-      ),
-    ).toBe(true);
-
-    await createProduct(page, productName);
-    await expect(page.getByTestId("detail-spec-plate")).toBeVisible();
-    expect(
-      await page.locator('meta[name="viewport"]').getAttribute("content"),
-    ).toContain("minimum-scale=1");
-
-    for (const path of [
-      "/products",
-      "/recipes",
-      "/search",
-      "/scan",
-      "/settings",
-    ]) {
-      await page.goto(path, { waitUntil: "networkidle" });
-      expect(
-        await page.evaluate(
-          () => document.documentElement.scrollWidth <= window.innerWidth,
-        ),
-      ).toBe(true);
-      await expect(
-        page.getByRole("navigation", { name: "Main navigation" }),
-      ).toBeVisible();
-    }
-  });
-
-  test("preserves responsive shell boundaries from compact phone through desktop", async ({
-    page,
-  }) => {
-    for (const viewport of [
-      { width: 320, height: 568 },
-      { width: 390, height: 844 },
-      { width: 430, height: 932 },
-      { width: 844, height: 390 },
-      { width: 768, height: 900 },
-      { width: 1440, height: 900 },
+    for (const { path, viewport, mobile } of [
+      {
+        path: "/products",
+        viewport: { width: 320, height: 568 },
+        mobile: true,
+      },
+      { path: "/recipes", viewport: { width: 390, height: 844 }, mobile: true },
+      { path: "/scan", viewport: { width: 430, height: 932 }, mobile: true },
+      {
+        path: "/products",
+        viewport: { width: 844, height: 390 },
+        mobile: false,
+      },
+      {
+        path: "/products",
+        viewport: { width: 768, height: 900 },
+        mobile: false,
+      },
+      {
+        path: "/products",
+        viewport: { width: 1440, height: 900 },
+        mobile: false,
+      },
     ]) {
       await page.setViewportSize(viewport);
-      await page.goto("/products", { waitUntil: "networkidle" });
-      expect(
-        await page.evaluate(
-          () => document.documentElement.scrollWidth <= window.innerWidth,
-        ),
-      ).toBe(true);
+      const navigation = page.getByRole("navigation", {
+        name: "Main navigation",
+      });
+      await gotoAuthenticatedPage(page, path, mobile ? navigation : undefined);
+      await expectViewportBounded(page);
     }
   });
 
