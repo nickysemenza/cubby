@@ -115,14 +115,14 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 ## 🧱 Tech Stack
 
 - **App:** TanStack Start (Router + Server) · React · TailwindCSS · shadcn/ui
-- **API:** tRPC + TanStack Query
+- **API:** Entity Kernel + thin tRPC/MCP transports + TanStack Query
 - **Data:** Drizzle ORM · PostgreSQL · Hyperdrive (edge pool)
 - **Auth:** Better-Auth (`@daveyplate/better-auth-ui` for routed UI)
 - **Edge:** Cloudflare Workers + Wrangler
 - **WASM:** `@cubby/recipebridge` wraps Rust [ingredient-parser](https://github.com/nickysemenza/ingredient-parser)
 - **Storage:** Cloudflare R2 (S3-compatible) for images
 - **Charts:** Nivo (bar, pie, treemap, sunburst, calendar, line) + d3-force, d3-hierarchy
-- **Tooling:** Biome (lint + format) · Vitest (unit/integration) · Playwright (E2E) · IntegresQL (test DB isolation)
+- **Tooling:** Biome (lint + format) · Vitest (unit/integration) · Playwright (E2E) · PGlite (fast PostgreSQL contracts) · IntegreSQL (deployment-parity isolation)
 - **Observability:** OpenTelemetry → Jaeger (dev only) · Sentry
 
 ## 📦 Monorepo Layout
@@ -152,16 +152,17 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 
 ## 🏗️ Architecture
 
-Request flow:
+Generic entity flow:
 
 ```
-Router (tRPC)  →  Service (optional, enrichment only)  →  Repo (data access)  →  Database
+tRPC / MCP / jobs  →  Entity Kernel  →  Repo  →  Database
 ```
 
-- Routers use the CRUD factory (`createEntityCrudProcedures` from `crud-factory.ts`) for standard CRUD operations.
-- Services exist only when entities need enrichment (e.g., USDA food data). Otherwise routers call repos directly.
+- Restricted literal specs in `scripts/entity-literals/entities/*.entity.ts` compile the exhaustive manifest, schema bindings, browser roster, filter URL catalog, kernel action capabilities, and contract cases. `pnpm entity:check` rejects stale or invalid artifacts; typecheck verifies referenced exports.
+- `executeEntity` is the baseline CRUD/filter/search/relation boundary. tRPC is a thin browser adapter; MCP invokes the kernel directly. Workflow-specific transports delegate to explicit services.
+- Services own workflows and external enrichment such as USDA data. Repositories retain transaction ownership, invariants, and entity-specific SQL.
 - The `Database` type is **opaque** — only repos can call `getDb(db)` to unwrap it. This enforces the layered architecture at the type level.
-- `server/entity-bindings.ts` is the server-side manifest spine: a `satisfies Record<ShortcodeEntity, EntityBinding>` table binding each entity to its schema contracts. Adding an entity to the manifest is one compile error enumerating everything unsupplied, not a silently missing integration — see [docs/entities.md](docs/entities.md) for the full genericization ledger, including every direction that was tried and rejected.
+- Adding a baseline entity starts with one compiler spec, followed by the repository adapter and any thin workflow or route extensions; see [docs/entities.md](docs/entities.md).
 
 See [CLAUDE.md](CLAUDE.md) for the prescriptive rules (branded IDs, soft delete, required helpers, React hooks pitfalls).
 

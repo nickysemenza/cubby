@@ -111,46 +111,22 @@ history is the archive. Permanent product constraints live in the
     `getByShortcode` cache/read behavior only after preview consumers handle the
     differing missing-entity contracts explicitly.
 
+24. **Consider deleting tRPC after the Entity Kernel ships.** Measure the
+    remaining tRPC source lines, typecheck/import cost, and whether batching,
+    middleware, error serialization, cancellation, or client integration still
+    provide unique value. If it is only a thin query/mutation adapter, replace
+    it with TanStack Start server functions in a dedicated deletion PR.
+
+25. **Consider deleting MCP Apps after generated registration ships.** Inventory
+    actual USDA-picker and shopping-list widget use, compare those workflows
+    with plain MCP tools/resources, and measure their source lines, build time,
+    bundle output, and test cost. Delete MCP Apps unless interactive rendering
+    demonstrates material household value.
+
 ---
 
 ## Triggered
 
-- **Single `filterable` declaration per field** — Promote when the next filter
-  drift appears (or the next entity ships): derive the server filter Zod
-  schema, the client search fragment, and the MCP list input from one
-  declaration, replacing the three hand-kept mirrors
-  (`entities/filter-manifest.tsx`, `entities/filter-search-fields.ts`, the
-  schemas package) and deleting the drift test that pins them — the guarantee
-  becomes by-construction, like `xMcpOut = xOut.pick()`. Fields with real
-  semantics (resolvers, deferred option sources) stay declared beside the
-  derivation per the fixed-point rule in [entities.md](entities.md).
-- **Presence-battery seed enrichment** — Promote to retire the remaining
-  `VACUOUS_PROBES` entries in `filter-application.integration.test.ts` (each
-  entry is a presence field the generic partition/soft-delete battery cannot
-  yet exercise because the seed world lacks a linked row). Every retirement
-  makes one more per-entity presence block in the entity integration tests
-  safely deletable — the kept blocks carry comments naming their vacuous field.
-- **`usdafoodlist.tsx` onto `useEntityList`** — Promote when the USDA list next
-  needs a workbench feature; it never adopted the shared list stack (bespoke
-  `useTableState` + `usda.listSummaries` + a second enrichment query +
-  relevance-sort override), so conversion is a rewrite, not a cleanup.
-- **Recipe and meal detail pages onto `DetailSections`** — Promote when either
-  page next changes shape; both compose bespoke `Stack`/`Card` layouts, which
-  is why the generic Activity section needed the extracted `EntityActivityCard`
-  workaround for them. Migration finishes detail-page unification and deletes
-  the workaround.
-- **Route-splitting conventions check** — Promote if the eager-bundle budget
-  regresses again. The router plugin only code-splits literal
-  `createFileRoute` option objects, and an inlined JSX-bearing call kills the
-  splitter silently (constraint documented in
-  `app/_components/routing/entity-routes.tsx`); a `check-conventions.ts` rule
-  asserting route files bind components to local consts would make the
-  constraint unbreakable instead of comment-guarded.
-- **Contract completeness: image delete + finance dialog nouns** — Promote when
-  touching either surface: the image contract has no `mutation.delete` (so
-  `imagelist` hand-wires `useDeletableConfig`), and the finance lists carry
-  non-registry dialog nouns ("Account", "Transaction"); a label-override slot
-  in the registry would let both drop their carve-outs.
 - **Persisted Collections and operational dashboard** — Promote when Collection
   tags need metadata, rename-safe empty identity, Smart Collection rules (for
   example, manufacturer plus minimum effective price), Trade links, or combined
@@ -237,12 +213,6 @@ history is the archive. Permanent product constraints live in the
   the answer: a meal repeating a recipe at different scales is intended behavior, and
   each occurrence must stay a distinguishable shopping-list contribution (see
   `api/routers/meal.integration.test.ts`). Retry-safety needs a caller-supplied key.
-- **`relation` enum for `attach_entity`/`detach_entity`** — Promote when a second
-  product-parented relation appears (accessories, replacement parts, consumable-for).
-  Dispatch currently reads the family off the parent's shortcode prefix, which is
-  unambiguous only while `PRD-` means kit components. Add an explicit `relation`
-  parameter then; do NOT add an optional one defaulting to "components", which
-  silently changes what existing calls mean.
 - **Per-edge breakdown for purchase merges** — Promote if `merge_entity`'s empty
   `moved` array on purchase is noticed in use. `foldChargeInto` moves expenses and
   documents without counting them, so purchase reports a measured `merged` count but
