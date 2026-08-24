@@ -124,7 +124,7 @@ history is the archive. Permanent product constraints live in the
     functions in a dedicated deletion PR.
 
 25. **Consider deleting MCP Apps after generated registration ships.** The
-    universal template is 358,078 bytes raw / 85,589 gzip and its five-file web
+    universal template is 358,078 bytes raw / 85,820 gzip and its five-file web
     contract tier runs in 3.72 seconds warm. Inventory actual USDA-picker and
     shopping-list use, compare them with plain tools/resources, and delete MCP
     Apps unless the interactions justify their source, bundle, and test cost.
