@@ -91,7 +91,6 @@ import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { ENTITY_BINDINGS } from "~/server/entity-bindings";
-import { entityServerPortRosters } from "~/server/generated/entity-runtime-ports.gen";
 import {
   createExpense,
   deleteExpensesWithPurchaseEffects,
@@ -439,7 +438,7 @@ async function linkedProductIngredientIds(db: Database, shortcodes: string[]) {
   return [...resolved.values()].map(unsafeIngredientId);
 }
 
-export const ENTITY_KERNEL_BINDINGS = {
+const ENTITY_ADAPTERS = {
   product: defineBinding({
     entity: "product",
     // Product orchestration already owns its side-effect wave: it couples the
@@ -1329,16 +1328,24 @@ export const ENTITY_KERNEL_BINDINGS = {
   }),
 } as const satisfies Record<EntityKernelEntity, unknown>;
 
-for (const entity of Object.keys(
-  ENTITY_KERNEL_BINDINGS,
-) as EntityKernelEntity[]) {
-  const ports = entityServerPortRosters[entity];
-  if (ports.repository === null || ports.lifecycle.runtime === null) {
-    throw new Error(
-      `Entity kernel binding ${entity} lacks its declared runtime port.`,
-    );
-  }
-}
+export const productEntityAdapter = ENTITY_ADAPTERS.product;
+export const recipeEntityAdapter = ENTITY_ADAPTERS.recipe;
+export const ingredientEntityAdapter = ENTITY_ADAPTERS.ingredient;
+export const locationEntityAdapter = ENTITY_ADAPTERS.location;
+export const inventoryEntityAdapter = ENTITY_ADAPTERS.inventory;
+export const mealEntityAdapter = ENTITY_ADAPTERS.meal;
+export const ledgerPartyEntityAdapter = ENTITY_ADAPTERS.ledgerParty;
+export const ledgerTransferEntityAdapter = ENTITY_ADAPTERS.ledgerTransfer;
+export const projectEntityAdapter = ENTITY_ADAPTERS.project;
+export const taskEntityAdapter = ENTITY_ADAPTERS.task;
+export const vendorEntityAdapter = ENTITY_ADAPTERS.vendor;
+export const purchaseEntityAdapter = ENTITY_ADAPTERS.purchase;
+export const financialAccountEntityAdapter = ENTITY_ADAPTERS.financialAccount;
+export const financialTransactionEntityAdapter =
+  ENTITY_ADAPTERS.financialTransaction;
+export const wishEntityAdapter = ENTITY_ADAPTERS.wish;
+export const expenseEntityAdapter = ENTITY_ADAPTERS.expense;
+export const imageEntityAdapter = ENTITY_ADAPTERS.image;
 
 const productShortcodes = bindShortcodeResolver("product");
 const locationShortcodes = bindShortcodeResolver("location");

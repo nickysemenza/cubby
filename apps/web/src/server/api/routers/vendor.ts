@@ -14,7 +14,7 @@ import {
 } from "@cubby/schemas/vendor";
 import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 import { executeEntity } from "~/server/entity-kernel";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/entity-kernel/registry";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { vendorOptions } from "~/server/repo/vendor";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 import { fetchAndAttachVendorLogo } from "~/server/services/vendor-logo.service";

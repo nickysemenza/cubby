@@ -809,6 +809,28 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
   const kernelEntities = entities
     .filter(({ contract, key }) => contract !== null || key === "image");
   const kernelEntityKeys = kernelEntities.map(({ key }) => key);
+  const runtimeAdapterImports = new Map<string, Set<string>>();
+  for (const entity of kernelEntities) {
+    const adapter = entity.ports.repository;
+    if (adapter === null) {
+      throw new LiteralSpecError(
+        `${entity.key}.ports.repository is required for a kernel entity.`,
+      );
+    }
+    const exports = runtimeAdapterImports.get(adapter.module) ?? new Set<string>();
+    exports.add(adapter.export);
+    runtimeAdapterImports.set(adapter.module, exports);
+  }
+  const runtimeAdapterImportSource = [...runtimeAdapterImports.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(
+      ([module, exports]) =>
+        `import { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
+    )
+    .join("\n");
+  const runtimeBindings = kernelEntities
+    .map(({ key, ports }) => `  ${JSON.stringify(key)}: ${ports.repository?.export},`)
+    .join("\n");
   const lifecycleFor = (entity: EntityLiteral) =>
     objectValue(
       required(entity.descriptor, "lifecycle", `${entity.key}.descriptor`),
@@ -1081,6 +1103,15 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         `export const generatedMergeEntityKernelEntities = ${compactLiteral(entitiesForAction("merge"))} as const;\n`,
     },
     {
+      relativePath: "apps/web/src/server/generated/entity-kernel-bindings.gen.ts",
+      source:
+        generatedHeader +
+        'import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";\n\n' +
+        `${runtimeAdapterImportSource}\n\n` +
+        "// biome-ignore format: generated runtime assembly stays one entity per line.\n" +
+        `export const ENTITY_KERNEL_BINDINGS = {\n${runtimeBindings}\n} as const satisfies Record<EntityKernelEntity, unknown>;\n`,
+    },
+    {
       relativePath: "apps/web/src/server/generated/entity-runtime-ports.gen.ts",
       source:
         generatedHeader +
@@ -1148,7 +1179,7 @@ const formatSource = (root: string, artifact: EntityArtifacts): string => {
   return result;
 };
 
-const generatedName = /^(?:entity-literal-.+|entity-manifest-data|entity-inspector|entity-details|entity-lists|entity-bindings|entity-routes|entity-kernel-entities|entity-runtime-ports|filter-search-fields|shortcode-registry)\.gen\.ts$/;
+const generatedName = /^(?:entity-literal-.+|entity-manifest-data|entity-inspector|entity-details|entity-lists|entity-bindings|entity-routes|entity-kernel-bindings|entity-kernel-entities|entity-runtime-ports|filter-search-fields|shortcode-registry)\.gen\.ts$/;
 
 const findExtraArtifacts = async (root: string, artifacts: readonly EntityArtifacts[]) => {
   const expected = new Set(artifacts.map(({ relativePath }) => relativePath));

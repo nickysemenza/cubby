@@ -11,6 +11,7 @@ import {
 import { searchableEntitySchema } from "@cubby/schemas/search";
 import { z } from "zod";
 import { createAppError } from "~/server/errors/app-error";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import {
   attachProductComponents,
   detachProductComponents,
@@ -45,11 +46,7 @@ import {
   type entityMutationResultSchema,
   type entityQueryResultSchema,
 } from "./contracts";
-import {
-  ENTITY_KERNEL_BINDINGS,
-  type EntityKernelBinding,
-  type EntityKernelContext,
-} from "./registry";
+import type { EntityKernelBinding, EntityKernelContext } from "./registry";
 
 const DEFAULT_PAGINATION: PaginationParams = { pageIndex: 0, pageSize: 10 };
 

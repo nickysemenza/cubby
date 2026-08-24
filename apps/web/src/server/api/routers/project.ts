@@ -42,8 +42,8 @@ import {
 } from "@cubby/schemas/project";
 import { z } from "zod";
 import { ENTITY_BINDINGS } from "~/server/entity-bindings";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/entity-kernel/registry";
 import { createAppError } from "~/server/errors/app-error";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import {
   attachProjectResources,
   detachProjectResources,

@@ -1,6 +1,6 @@
 import { financialAccountOptionsOut } from "@cubby/schemas/financial-account";
 import { ENTITY_BINDINGS } from "~/server/entity-bindings";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/entity-kernel/registry";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { financialAccountOptions } from "~/server/repo/financial-account";
 import { createEntityCompatibilityProcedures } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";

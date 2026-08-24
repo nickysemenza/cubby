@@ -31,7 +31,7 @@ import {
 import { z } from "zod";
 import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 import { executeEntity } from "~/server/entity-kernel";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/entity-kernel/registry";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import {
   getIngredientMatches,
   getRecipeUsagesForIngredient,

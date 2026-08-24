@@ -29,7 +29,7 @@ import {
 } from "@cubby/schemas/purchase";
 import { z } from "zod";
 import { ENTITY_BINDINGS } from "~/server/entity-bindings";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/entity-kernel/registry";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import {
   deleteEmptyPurchases,
   linkExpensesToPurchase,

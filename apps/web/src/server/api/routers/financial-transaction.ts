@@ -4,7 +4,7 @@ import {
   financialTransactionSourceOptionsOut,
 } from "@cubby/schemas/financial-transaction";
 import { ENTITY_BINDINGS } from "~/server/entity-bindings";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/entity-kernel/registry";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { previewFinancialStatementImport } from "~/server/repo/financial-statement-preview";
 import { financialTransactionSourceOptions } from "~/server/repo/financial-transaction";
 import { createEntityCompatibilityProcedures } from "../entity-compatibility";
