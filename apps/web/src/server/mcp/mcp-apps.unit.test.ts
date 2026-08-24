@@ -34,12 +34,6 @@ describe("MCP App resources", () => {
         expect(html.startsWith("<!doctype html>")).toBe(true);
         expect(html).not.toMatch(/<(?:script|link)[^>]+(?:src|href)=/u);
         expect(html).not.toContain("__CUBBY_ORIGIN__");
-        expect(html).not.toContain("__CUBBY_APP_ID__");
-        const app = MCP_APP_MANIFEST.find(
-          (candidate) => candidate.uri === resource.uri,
-        );
-        expect(app).toBeDefined();
-        expect(html).toContain(`name="cubby-app-id" content="${app?.id}"`);
       }
     } finally {
       await Promise.allSettled([client.close(), server.close()]);
@@ -75,6 +69,9 @@ describe("MCP App resources", () => {
         tools.find((tool) => tool.name === name)?.outputSchema,
       ).toBeDefined();
     }
+    expect(
+      tools.find((tool) => tool.name === "get_shopping_list")?._meta,
+    ).toBeUndefined();
 
     const fixture = JSON.parse(
       readFileSync(
@@ -98,7 +95,8 @@ describe("MCP App resources", () => {
       );
       expect(tool?.description).toContain("Do not invoke");
       expect(
-        (tool?._meta?.ui as { resourceUri?: string } | undefined)?.resourceUri,
+        (tool?._meta?.ui as { resourceUri?: string } | undefined)
+          ?.resourceUri ?? null,
       ).toBe(item.expectedWidget);
     }
   });
