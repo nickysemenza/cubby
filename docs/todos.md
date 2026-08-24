@@ -111,17 +111,23 @@ history is the archive. Permanent product constraints live in the
     `getByShortcode` cache/read behavior only after preview consumers handle the
     differing missing-entity contracts explicitly.
 
-24. **Consider deleting tRPC after the Entity Kernel ships.** Measure the
-    remaining tRPC source lines, typecheck/import cost, and whether batching,
-    middleware, error serialization, cancellation, or client integration still
-    provide unique value. If it is only a thin query/mutation adapter, replace
-    it with TanStack Start server functions in a dedicated deletion PR.
+24. **Consider deleting tRPC after the Entity Kernel ships.** The 2026-08-24
+    detail migration left about 806 dedicated transport/compatibility lines,
+    230 production browser imports, 246 query-option call sites, and 83 mutation
+    call sites. A warm web typecheck is 2.41 seconds; a cold Vite SSR load of
+    `appRouter` is 6.65 seconds on the local M3 development machine. It still
+    provides streamed batches capped at 50, deliberately
+    unbatched Problems calls, SuperJSON, middleware/error formatting, SSR's
+    in-process link, and shared cancellation/invalidation helpers. Re-measure
+    warm typecheck and import cost after lists and writes move to the kernel; if
+    those features no longer justify the adapter, replace it with Start
+    functions in a dedicated deletion PR.
 
-25. **Consider deleting MCP Apps after generated registration ships.** Inventory
-    actual USDA-picker and shopping-list widget use, compare those workflows
-    with plain MCP tools/resources, and measure their source lines, build time,
-    bundle output, and test cost. Delete MCP Apps unless interactive rendering
-    demonstrates material household value.
+25. **Consider deleting MCP Apps after generated registration ships.** The
+    universal template is 358,078 bytes raw / 85,589 gzip and its five-file web
+    contract tier runs in 3.72 seconds warm. Inventory actual USDA-picker and
+    shopping-list use, compare them with plain tools/resources, and delete MCP
+    Apps unless the interactions justify their source, bundle, and test cost.
 
 ---
 
