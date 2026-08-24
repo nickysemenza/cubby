@@ -309,10 +309,14 @@ jobs:
             args: --project unit --shard=1/2
           - tier: unit-2
             args: --project unit --shard=2/2
-          - tier: ui
-            args: --project unit-pure --project ui
-          - tier: pglite
-            args: --project pglite
+          - tier: ui-1
+            args: --project ui --shard=1/3
+          - tier: ui-2
+            args: --project ui --shard=2/3
+          - tier: ui-3
+            args: --project ui --shard=3/3
+          - tier: pure-pglite
+            args: --project unit-pure --project pglite
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
