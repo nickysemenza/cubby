@@ -4,6 +4,7 @@ import {
   gotoAuthenticatedPage,
   openCommandPalette,
   waitForAppHydration,
+  waitForEntityMutation,
 } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
@@ -183,12 +184,7 @@ test.describe("Project tracker", () => {
     const nameCell = page.getByRole("cell").filter({
       has: page.getByRole("link", { name, exact: true }),
     });
-    const committed = page.waitForResponse(
-      (response) =>
-        response.request().method() === "POST" &&
-        response.url().includes("/api/trpc/project.update") &&
-        response.ok(),
-    );
+    const committed = waitForEntityMutation(page);
     await editListCell(
       page,
       nameCell.getByRole("button", { name: "Edit value" }),

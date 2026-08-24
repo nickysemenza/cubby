@@ -83,7 +83,9 @@ export function waitForDndMutation(page: Page, operation: string) {
   return page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
-      response.url().includes(`/api/trpc/${operation}`) &&
+      (response.url().includes(`/api/trpc/${operation}`) ||
+        (operation === "task.update" &&
+          response.url().includes("/api/trpc/entity.mutate"))) &&
       response.ok(),
   );
 }

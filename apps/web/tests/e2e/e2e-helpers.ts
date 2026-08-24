@@ -187,6 +187,15 @@ export async function editListCell(
   }).toPass({ timeout: 30_000 });
 }
 
+export function waitForEntityMutation(page: Page) {
+  return page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().includes("/api/trpc/entity.mutate") &&
+      response.ok(),
+  );
+}
+
 export async function fillCellEditor(page: Page, value: string) {
   const input = cellEditorInput(page);
   await expect(input).toBeVisible();
