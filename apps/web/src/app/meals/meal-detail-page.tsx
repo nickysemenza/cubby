@@ -31,7 +31,12 @@ import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { Input } from "~/components/ui/input";
 import { NoneValue } from "~/components/ui/none-value";
 import { entityDetailLink } from "~/entities/entities";
-import { type RouterOutputs, useTRPC } from "~/integrations/trpc/react";
+import {
+  entityDetailQueryKey,
+  entityDetailQueryOptions,
+} from "~/entities/entity-detail";
+import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
+import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { cancelTRPCQueries } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
@@ -43,13 +48,13 @@ import {
 } from "./meal-options";
 import { useInvalidateMeals } from "./use-meal-mutations";
 
-type MealDetail = NonNullable<RouterOutputs["meal"]["getByShortcode"]>;
+type MealDetail = EntityDetailByEntity["meal"];
 
 export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
   const api = useTRPC();
   const queryClient = useQueryClient();
   const invalidate = useInvalidateMeals();
-  const mealKey = api.meal.getByShortcode.queryKey({ shortcode: mealId });
+  const mealKey = entityDetailQueryKey("meal", mealId);
   const [pendingRecipeName, setPendingRecipeName] = useState<string | null>(
     null,
   );
@@ -60,13 +65,7 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
     isError,
     error,
     refetch,
-    // Deliberately `getByShortcode`, matching the route loader
-    // (`meals.$shortcode.tsx`) that already suspense-loaded this exact row.
-    // `getByID` is a second procedure over the same record under a second
-    // react-query cache key, so using it here made the detail page fire a cold
-    // refetch of data the router had already resolved. Same key = one request,
-    // and invalidation still refreshes both.
-  } = useQuery(api.meal.getByShortcode.queryOptions({ shortcode: mealId }));
+  } = useQuery(entityDetailQueryOptions("meal", mealId));
 
   const updateMeal = useUpdateMutation({
     mutationFn: api.meal.update.mutationOptions,

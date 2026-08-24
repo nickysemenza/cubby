@@ -67,7 +67,6 @@ import {
 
 const {
   getByID,
-  getByShortcode,
   list,
   create,
   update,
@@ -280,7 +279,6 @@ const bulkSetCostType = createBulkUpdatedMutation({
 
 export const expenseRouter = createTRPCRouter({
   getByID,
-  getByShortcode,
   list,
   create,
   update,

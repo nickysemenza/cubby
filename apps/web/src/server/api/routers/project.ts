@@ -69,7 +69,6 @@ import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const {
   getByID,
-  getByShortcode,
   list,
   create,
   update,
@@ -269,7 +268,6 @@ const setToolUsage = protectedProcedure
 
 export const projectRouter = createTRPCRouter({
   getByID,
-  getByShortcode,
   list,
   tree,
   create,

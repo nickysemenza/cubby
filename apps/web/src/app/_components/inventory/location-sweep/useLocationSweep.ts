@@ -28,6 +28,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { ScanFeedbackEntry } from "~/app/_components/inventory/persistent-scanner";
+import { entityDetailQueryOptions } from "~/entities/entity-detail";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
@@ -275,15 +276,13 @@ export function useLocationSweep({
 
   const fetchLocation = useCallback(
     (shortcode: string) =>
-      queryClient.fetchQuery(
-        api.location.getByShortcode.queryOptions({ shortcode }),
-      ),
-    [queryClient, api],
+      queryClient.fetchQuery(entityDetailQueryOptions("location", shortcode)),
+    [queryClient],
   );
 
   /**
    * Both `.parent` chains come from the same read the scan needed anyway, so
-   * classification costs no tree: `getByShortcode` returns the ancestor chain
+   * classification costs no tree: the Location detail returns the ancestor chain
    * and the anchor's is already primed by the page that mounted the sweep.
    */
   const planBinScan = useCallback(

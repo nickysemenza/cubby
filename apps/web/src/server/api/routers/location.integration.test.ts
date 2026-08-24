@@ -3,6 +3,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { listBackgroundBatches } from "~/server/repo/background-jobs";
 import { createUploadedImageRecord } from "~/server/repo/image";
+import { getLocationByShortcode } from "~/server/repo/location";
 import {
   createProductFixture,
   makeLocationInput,
@@ -171,7 +172,7 @@ describe("location.bulkUpdateParent", () => {
     });
     expect(result).toEqual({ updated: 2 });
 
-    const settled = await caller.getByShortcode({ shortcode: elsewhere.id });
+    const settled = await getLocationByShortcode(ctx.db, elsewhere.id);
     expect(settled?.parent?.id).toBe(shelf.id);
 
     // Idempotent: the same batch again still resolves rather than throwing.
@@ -214,7 +215,7 @@ describe("reads tolerate a product-linked location's null type", () => {
   it("returns the location from every roster and detail read", async () => {
     const { caller, created } = await seedLinkedLocation("null-type bin");
 
-    const detail = await caller.getByShortcode({ shortcode: created.id });
+    const detail = await getLocationByShortcode(ctx.db, created.id);
     expect(detail?.type).toBeNull();
     expect(detail?.product?.name).toBe("Null Type Tote null-type bin");
 
@@ -242,7 +243,7 @@ describe("reads tolerate a product-linked location's null type", () => {
       makeLocationInput({ name: "null-type child", parentId: created.id }),
     );
 
-    const detail = await caller.getByShortcode({ shortcode: child.id });
+    const detail = await getLocationByShortcode(ctx.db, child.id);
     expect(detail?.parent?.type ?? null).toBeNull();
 
     const tree = await caller.makeTree();

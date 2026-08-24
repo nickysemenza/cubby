@@ -7,14 +7,15 @@ import {
 import { FinancialTransactionDetail } from "~/app/finance/financial-transaction-detail";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { DetailPagePending } from "~/components/route-pending";
+import { entityDetailQueryOptions } from "~/entities/entity-detail";
 import { shortcodeHead } from "~/lib/page-title";
 
 // Bound to consts, not inlined into the options object: the router plugin's
 // splitter re-parses an inlined call expression with a JSX-less babel config,
 // so only the identifier path survives a page body that renders JSX.
 const FinancialTransactionDetailPage = detailPage({
-  query: (api, shortcode) =>
-    api.financialTransaction.getByShortcode.queryOptions({ shortcode }),
+  query: (shortcode) =>
+    entityDetailQueryOptions("financialTransaction", shortcode),
   render: (transaction) => (
     <FinancialTransactionDetail transaction={transaction} />
   ),
@@ -33,9 +34,7 @@ export const Route = createFileRoute(
   loader: ({ params, context }) =>
     ensureDetailRecord(
       context.queryClient,
-      context.trpc.financialTransaction.getByShortcode.queryOptions({
-        shortcode: params.shortcode,
-      }),
+      entityDetailQueryOptions("financialTransaction", params.shortcode),
     ),
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,

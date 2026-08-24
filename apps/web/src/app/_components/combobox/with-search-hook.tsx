@@ -11,6 +11,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { lazy, Suspense } from "react";
 import { useUpcAwareCreate } from "~/app/_components/products/use-upc-aware-create";
+import { entityDetailQueryOptions } from "~/entities/entity-detail";
 import { useTRPC } from "~/integrations/trpc/react";
 import {
   buildIngredientComboboxItem,
@@ -85,10 +86,9 @@ export function WithIngredientSearch({
     enabled: enabled && !searchingByCode && searchQuery.trim() !== "",
   });
   const { data: exactItem, isLoading: isExactLoading } = useQuery(
-    api.ingredient.getByShortcode.queryOptions(
-      { shortcode: exactCode ?? "ING-2222" },
-      { enabled: exactCode != null },
-    ),
+    entityDetailQueryOptions("ingredient", exactCode ?? "ING-2222", {
+      enabled: exactCode != null,
+    }),
   );
 
   return (
@@ -180,10 +180,9 @@ export function WithLocationSearch({
     enabled: enabled && !searchingByCode && searchQuery.trim() !== "",
   });
   const { data: exactItem, isLoading: isExactLoading } = useQuery(
-    api.location.getByShortcode.queryOptions(
-      { shortcode: exactCode ?? "LOC-2222" },
-      { enabled: exactCode != null },
-    ),
+    entityDetailQueryOptions("location", exactCode ?? "LOC-2222", {
+      enabled: exactCode != null,
+    }),
   );
 
   return (
@@ -261,10 +260,9 @@ export function WithProductSearch({
     enabled: enabled && !searchingByCode,
   });
   const { data: exactItem, isLoading: isExactLoading } = useQuery(
-    api.product.getByShortcode.queryOptions(
-      { shortcode: exactCode ?? "PRD-2222" },
-      { enabled: exactCode != null },
-    ),
+    entityDetailQueryOptions("product", exactCode ?? "PRD-2222", {
+      enabled: exactCode != null,
+    }),
   );
 
   // A pasted/typed UPC skips the name-only dialog and resolves via the UPC
@@ -334,10 +332,9 @@ export function WithRecipeSearch({
     enabled: enabled && !searchingByCode && searchQuery.trim() !== "",
   });
   const { data: exactItem, isLoading: isExactLoading } = useQuery(
-    api.recipe.getByShortcode.queryOptions(
-      { shortcode: exactCode ?? "RCP-2222" },
-      { enabled: exactCode != null },
-    ),
+    entityDetailQueryOptions("recipe", exactCode ?? "RCP-2222", {
+      enabled: exactCode != null,
+    }),
   );
 
   // For recipes, we don't provide the ability to create from this interface
@@ -397,10 +394,9 @@ export function WithProjectSearch({
     enabled: enabled && !searchingByCode && searchQuery.trim() !== "",
   });
   const { data: exactItem, isLoading: isExactLoading } = useQuery(
-    api.project.getByShortcode.queryOptions(
-      { shortcode: exactCode ?? "PRJ-2222" },
-      { enabled: exactCode != null },
-    ),
+    entityDetailQueryOptions("project", exactCode ?? "PRJ-2222", {
+      enabled: exactCode != null,
+    }),
   );
 
   const items = searchingByCode
@@ -460,10 +456,9 @@ export function WithTaskSearch({
     enabled: enabled && !searchingByCode && searchQuery.trim() !== "",
   });
   const { data: exactItem, isLoading: isExactLoading } = useQuery(
-    api.task.getByShortcode.queryOptions(
-      { shortcode: exactCode ?? "TSK-2222" },
-      { enabled: exactCode != null },
-    ),
+    entityDetailQueryOptions("task", exactCode ?? "TSK-2222", {
+      enabled: exactCode != null,
+    }),
   );
 
   return (

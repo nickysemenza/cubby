@@ -12,7 +12,7 @@
  * Read off two `.parent` chains rather than a tree. Neither sweep mount point
  * has a location tree in scope, and the recount's tree carries none anyway —
  * `buildLocationTree` builds its nodes with `includeParent = false`. The chain
- * comes free with the `location.getByShortcode` both scans already need.
+ * comes free with the Location detail record both scans already need.
  */
 
 import type { InfLocation } from "@cubby/schemas/location";

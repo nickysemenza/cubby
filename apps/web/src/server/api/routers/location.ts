@@ -64,11 +64,6 @@ const {
 
 // Location detail carries tree and image relations that do not belong in the
 // baseline entity record.
-const getByShortcode = protectedProcedure
-  .input(z.object({ shortcode: locationShortcode }))
-  .output(strictOutput(infLocation.nullable()))
-  .query(({ ctx, input }) => getLocationByShortcode(ctx.db, input.shortcode));
-
 const getByID = protectedProcedure
   .input(z.object({ id: locationShortcode }))
   .output(strictOutput(infLocation))
@@ -157,7 +152,7 @@ const valuationSummary = protectedProcedure
 
 /**
  * The descendant forest under one location — every level, in one query. Powers
- * the location detail page's Contents tree table, where `getByShortcode`'s
+ * the location detail page's Contents tree table, where the detail read's
  * single level of children stops one twirl short.
  */
 const subtree = protectedProcedure
@@ -260,7 +255,6 @@ export const locationRouter = createTRPCRouter({
   search,
   options,
   getByID,
-  getByShortcode,
   getByShortcodes,
   makeTree,
   valuationSummary,

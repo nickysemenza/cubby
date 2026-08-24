@@ -22,7 +22,6 @@ const recipeShortcodes = bindShortcodeResolver("recipe");
 
 const {
   getByID,
-  getByShortcode,
   list,
   create,
   update,
@@ -88,7 +87,6 @@ const duplicate = protectedProcedure
 
 export const recipeCrudProcedures = {
   getByID,
-  getByShortcode,
   getManyByIDs,
   list,
   create,

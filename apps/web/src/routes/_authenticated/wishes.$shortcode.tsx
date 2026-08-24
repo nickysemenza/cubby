@@ -7,14 +7,14 @@ import {
 import { WishDetail } from "~/app/wishes/wish-detail";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { DetailPagePending } from "~/components/route-pending";
+import { entityDetailQueryOptions } from "~/entities/entity-detail";
 import { shortcodeHead } from "~/lib/page-title";
 
 // Bound to consts, not inlined into the options object: the router plugin's
 // splitter re-parses an inlined call expression with a JSX-less babel config,
 // so only the identifier path survives a page body that renders JSX.
 const WishDetailPage = detailPage({
-  query: (api, shortcode) =>
-    api.wish.getByShortcode.queryOptions({ shortcode }),
+  query: (shortcode) => entityDetailQueryOptions("wish", shortcode),
   render: (wish, shortcode) => <WishDetail key={shortcode} wish={wish} />,
   title: (wish) => wish.name,
 });
@@ -29,9 +29,7 @@ export const Route = createFileRoute("/_authenticated/wishes/$shortcode")({
   loader: ({ params, context }) =>
     ensureDetailRecord(
       context.queryClient,
-      context.trpc.wish.getByShortcode.queryOptions({
-        shortcode: params.shortcode,
-      }),
+      entityDetailQueryOptions("wish", params.shortcode),
     ),
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,

@@ -40,8 +40,8 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
+import { entityDetailQueryOptions } from "~/entities/entity-detail";
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
-import { useTRPC } from "~/integrations/trpc/react";
 import { pageTitle } from "~/lib/page-title";
 import { recipeExportSearchSchema } from "./-recipe-export-search";
 
@@ -64,9 +64,7 @@ export const Route = createFileRoute(
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   loader: async ({ params, context }) => {
     const data = await context.queryClient.ensureQueryData(
-      context.trpc.recipe.getByShortcode.queryOptions({
-        shortcode: params.shortcode,
-      }),
+      entityDetailQueryOptions("recipe", params.shortcode),
     );
     if (!data) throw notFound();
   },
@@ -81,9 +79,8 @@ export const Route = createFileRoute(
 /** Guard split — see the note on RecipeDetailPage in recipes.$shortcode.tsx. */
 function RecipeExportPage() {
   const { shortcode } = Route.useParams();
-  const api = useTRPC();
   const { data: recipe } = useSuspenseQuery(
-    api.recipe.getByShortcode.queryOptions({ shortcode }),
+    entityDetailQueryOptions("recipe", shortcode),
   );
   if (!recipe) return null;
   return <RecipeExportBody recipe={recipe} />;

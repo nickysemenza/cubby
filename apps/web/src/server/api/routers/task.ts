@@ -32,7 +32,6 @@ import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const {
   getByID,
-  getByShortcode,
   list,
   create,
   update,
@@ -157,7 +156,6 @@ const timeline = protectedProcedure
 
 export const taskRouter = createTRPCRouter({
   getByID,
-  getByShortcode,
   list,
   create,
   update,

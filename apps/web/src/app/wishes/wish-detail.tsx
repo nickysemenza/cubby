@@ -18,6 +18,7 @@ import { NoneValue } from "~/components/ui/none-value";
 import { wishEditRequest } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entities, entityDetailParams } from "~/entities/entities";
+import { entityDetailQueryKey } from "~/entities/entity-detail";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { formatCurrencyRange } from "~/lib/format-range";
@@ -91,7 +92,7 @@ export function WishDetail({ wish }: { wish: WishOut }) {
     redirectTo: "/wishes",
   });
 
-  const wishKey = api.wish.getByShortcode.queryKey({ shortcode: wish.id });
+  const wishKey = entityDetailQueryKey("wish", wish.id);
   const acquiredBase = api.wish.update.mutationOptions();
   const acquiredMutation = useMutation({
     mutationKey: acquiredBase.mutationKey,
@@ -203,7 +204,7 @@ export function WishDetail({ wish }: { wish: WishOut }) {
           </p>
         ) : (
           // Wishes own no images; the covers here belong to the candidate
-          // Products and are fetched independently of `wish.getByShortcode`, so
+          // Products are fetched independently of the Wish detail record, so
           // an unillustrated Tool stays an honest placeholder rather than making
           // every wish response heavier.
           <ProductImageSummariesProvider productIds={candidateProductIds}>

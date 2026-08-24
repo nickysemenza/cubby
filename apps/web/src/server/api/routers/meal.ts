@@ -38,7 +38,6 @@ import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const {
   getByID,
-  getByShortcode,
   list,
   create,
   update,
@@ -244,7 +243,6 @@ const getShoppingList = protectedProcedure
 
 export const mealRouter = createTRPCRouter({
   getByID,
-  getByShortcode,
   list,
   create,
   update,
