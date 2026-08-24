@@ -14,13 +14,9 @@ describe("productMcpOut", () => {
       manufacturer: "Milwaukee",
       model: "2744-20",
       notes: "Bare tool",
-      // Canonical GTIN-14 — this is a READ projection, derived from the primary
-      // `gtin` identifier row. The write input is the one that accepts any
-      // encoding; see `mcpProductCreateInput` below.
       primaryGtin: "00045242593057",
       category: "tools",
       tags: ["M18"],
-      // Raw manual override; `effectivePrice` is what it resolves to.
       price: 329,
       effectivePrice: 329,
       pricing: {
@@ -101,7 +97,6 @@ describe("mcpProductCreateInput", () => {
     ).toBe(false);
   });
 
-  // Create diverged from update, which had both fields optional all along.
   it("agrees with the update input that neither field is required", () => {
     for (const key of ["upc", "ingredientId"] as const) {
       expect(

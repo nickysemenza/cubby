@@ -21,8 +21,6 @@ import {
   makeSubRecipeEntry,
 } from "~/lib/recipe-costing.fixtures";
 
-// Build a single UnitMapping with the canonical test source/metadata, matching
-// the object shape used throughout this file ({ a, b, source, sourceMetadata }).
 const m = (aVal: number, aUnit: string, bVal: number, bUnit: string) =>
   manualUnitMapping(
     { value: aVal, unit: aUnit },
@@ -31,7 +29,6 @@ const m = (aVal: number, aUnit: string, bVal: number, bUnit: string) =>
   );
 
 describe("convertAmountToPrice", () => {
-  // Single-mapping conversions that succeed: assert the exact value + unit.
   it.each([
     {
       name: "successfully converts amount to price",
@@ -41,14 +38,12 @@ describe("convertAmountToPrice", () => {
     },
     {
       name: "handles case-insensitive unit names",
-      // WASM actually handles case-insensitive unit matching
       amount: { value: 1, unit: "CUP" } satisfies Amount, // Uppercase vs lowercase
       mappings: [m(1, "cup", 2.99, "dollar")],
       expectedValue: 2.99,
     },
     {
       name: "handles custom unit names",
-      // WASM handles custom unit names as "Other" type and can convert them
       amount: { value: 1, unit: "invalid_unit_xyz" } satisfies Amount,
       mappings: [m(1, "invalid_unit_xyz", 2.99, "dollar")],
       expectedValue: 2.99,
@@ -63,7 +58,6 @@ describe("convertAmountToPrice", () => {
     }
   });
 
-  // Conversions that fail: assert the error message substring.
   it.each([
     {
       name: "handles error when conversion fails",
@@ -103,12 +97,9 @@ describe("WASM Error Scenarios", () => {
 
     const result = convertAmountToPrice(amount, mappings);
 
-    // This might succeed or fail depending on WASM implementation
     if (result.isOk()) {
-      // If it succeeds, it should handle zero gracefully
       expect(result.value).toBeDefined();
     } else {
-      // If it fails, it should have an appropriate error
       expect(result.error).toBeDefined();
     }
   });
@@ -121,8 +112,6 @@ describe("WASM Error Scenarios", () => {
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
-      // Very large number conversions have floating point precision limits
-      // The result is close to the expected value but not exact
       expect(result.value.value).toBeGreaterThan(29e9); // At least 29 billion
       expect(result.value.value).toBeLessThan(31e9); // At most 31 billion
       expect(result.value.unit).toBe("$");
@@ -137,7 +126,6 @@ describe("WASM Error Scenarios", () => {
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
-      // Very small values might be rounded to zero by WASM/floating point precision
       expect(result.value.value).toBeGreaterThanOrEqual(0);
       expect(result.value.unit).toBe("$");
     }
@@ -155,8 +143,6 @@ describe("WASM Error Scenarios", () => {
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
-      // 1 cup -> 240ml -> 0.24 liter -> 0.24 * 3.99 = $0.9576
-      // WASM returns $0.94-0.96 depending on environment precision
       expect(result.value.value).toBeGreaterThanOrEqual(0.94);
       expect(result.value.value).toBeLessThanOrEqual(0.96);
       expect(result.value.unit).toBe("$");
@@ -181,7 +167,6 @@ describe("WASM Error Scenarios", () => {
 });
 
 describe("calculateTotals", () => {
-  // chicken: 1 lb = 453.59 g; 1 lb = $5.99; 100 g = 20 g protein = 200 kcal
   const chicken = ingredientFromMappings(
     "ing1",
     "chicken",
@@ -195,7 +180,6 @@ describe("calculateTotals", () => {
   );
 
   it("calculates totals with all data available", () => {
-    // rice: 1 cup = 200 g; 1 cup = $2.50; 100 g = 7 g protein = 130 kcal
     const rice = ingredientFromMappings(
       "ing2",
       "rice",
@@ -269,7 +253,6 @@ describe("calculateTotals", () => {
 
   it("handles missing only specific data types", () => {
     const name = "ingredient with weight only";
-    // weight mapping only — no price, no nutrition (food stays null).
     const weightOnly = ingredientFromMappings("ing1", name, [
       { a: { value: 1, unit: "cup" }, b: { value: 240, unit: "gram" } },
     ]);
@@ -303,7 +286,6 @@ describe("calculateTotals", () => {
     expect(result.weight).toBe(0);
     expect(result.nutrients["203"] ?? 0).toBe(0);
     expect(result.nutrients["208"] ?? 0).toBe(0);
-    // Error case should add to all missing categories
     expect(result.missingByType).toEqual({
       price: [name],
       weight: [name],
@@ -314,7 +296,6 @@ describe("calculateTotals", () => {
 
 describe("calculateTotals with sub-recipes", () => {
   it("rolls sub-recipe cost + calories into the parent totals, scaled by yield", () => {
-    // tomato: 1 cup = 100 g = $1; 100 g = 10 g protein = 50 kcal
     const tomato = ingredientFromMappings(
       "tomato",
       "tomato",
@@ -326,8 +307,6 @@ describe("calculateTotals with sub-recipes", () => {
       ],
       { "203": 10, "208": 50 },
     );
-    // pasta: 1 scoop = 100 g = $3; 100 g = 5 g protein = 100 kcal. "scoop" is a
-    // non-builtin unit so WASM uses the mapping (not a builtin like pound→gram).
     const pasta = ingredientFromMappings(
       "pasta",
       "pasta",
@@ -340,8 +319,6 @@ describe("calculateTotals with sub-recipes", () => {
       { "203": 5, "208": 100 },
     );
 
-    // Sub-recipe "tomato sauce" yields 4 cups; uses 4 cups of tomato.
-    // Its totals: $4, 400 g, 40 g protein, 200 kcal.
     const sauce = makeSubRecipe(
       "sauce",
       "tomato sauce",
@@ -349,7 +326,6 @@ describe("calculateTotals with sub-recipes", () => {
       [makeEntry("tomato", "tomato", [{ value: 4, unit: "cup" }])],
     );
 
-    // Parent "pasta dish": 1 scoop pasta + 2 cups of the 4-cup sauce (= half).
     const result = calculateTotals(
       [
         makeEntry("pasta", "pasta", [{ value: 1, unit: "scoop" }]),
@@ -359,15 +335,10 @@ describe("calculateTotals with sub-recipes", () => {
       { sauce },
     );
 
-    // pasta $3 + half of sauce ($4 → $2) = $5
     expect(result.price).toBeCloseTo(5, 2);
-    // pasta 100 g + half of sauce (400 g → 200 g) = 300 g
     expect(result.weight).toBeCloseTo(300, 1);
-    // protein: pasta 5 g + half of sauce (40 g → 20 g) = 25 g
     expect(result.nutrients["203"]).toBeCloseTo(25, 1);
-    // kcal: pasta 100 + half of sauce (200 → 100) = 200
     expect(result.nutrients["208"]).toBeCloseTo(200, 1);
-    // The sub-recipe contributed — it is NOT flagged as missing.
     expect(result.missingByType).toEqual({
       price: [],
       weight: [],
@@ -421,7 +392,6 @@ describe("calculateTotals with sub-recipes", () => {
     const recipeB = makeSubRecipe("recB", "B", { value: 1, unit: "batch" }, [
       makeSubRecipeEntry(recipeA, [{ value: 1, unit: "batch" }]),
     ]);
-    // Close the loop: A uses B, B uses A.
     recipeA.sections[0]!.ingredients.push(
       makeSubRecipeEntry(recipeB, [{ value: 1, unit: "batch" }]),
     );
@@ -460,7 +430,6 @@ describe("calculateTotals with sub-recipes", () => {
 });
 
 describe("calculateTotals with the consumption model", () => {
-  // flour: 1 cup = 100 g; 100 g = 364 kcal = 10 g protein; 1 cup = $1
   const flourMappings = [
     { a: { value: 1, unit: "cup" }, b: { value: 100, unit: "gram" } },
     { a: { value: 100, unit: "g" }, b: { value: 364, unit: "kcal" } },
@@ -468,29 +437,22 @@ describe("calculateTotals with the consumption model", () => {
     { a: { value: 1, unit: "cup" }, b: { value: 1, unit: "dollar" } },
   ];
   const flour = ingredientFromMappings("flour", "flour", flourMappings);
-  // Second flour identity, so a recipe can hold a normal flour row AND a
-  // dredging flour row without colliding ids.
   const flour2 = ingredientFromMappings("flour2", "flour", flourMappings);
-  // oil: 100 g = 884 kcal; 1000 g = $5
   const oil = ingredientFromMappings("oil", "neutral oil", [
     { a: { value: 100, unit: "g" }, b: { value: 884, unit: "kcal" } },
     { a: { value: 1000, unit: "g" }, b: { value: 5, unit: "dollar" } },
   ]);
-  // salt: 100 g = 38758 mg sodium; 100 g = $0.10
   const salt = ingredientFromMappings("salt", "salt", [
     { a: { value: 100, unit: "g" }, b: { value: 38758, unit: "mg sodium" } },
     { a: { value: 100, unit: "g" }, b: { value: 0.1, unit: "dollar" } },
   ]);
-  // butter: 100 g = 717 kcal; 100 g = $1
   const butter = ingredientFromMappings("butter", "butter", [
     { a: { value: 100, unit: "g" }, b: { value: 717, unit: "kcal" } },
     { a: { value: 100, unit: "g" }, b: { value: 1, unit: "dollar" } },
   ]);
-  // parsley: 100 g = 36 kcal (no price mapping on purpose)
   const parsley = ingredientFromMappings("parsley", "parsley", [
     { a: { value: 100, unit: "g" }, b: { value: 36, unit: "kcal" } },
   ]);
-  // soy sauce: 100 g = 53 kcal; 100 g = $1
   const soy = ingredientFromMappings("soy", "soy sauce", [
     { a: { value: 100, unit: "g" }, b: { value: 53, unit: "kcal" } },
     { a: { value: 100, unit: "g" }, b: { value: 1, unit: "dollar" } },
@@ -500,20 +462,13 @@ describe("calculateTotals with the consumption model", () => {
   const flourCup = makeEntry("flour", "flour", [{ value: 1, unit: "cup" }]);
   const fryingOil = makeEntry("oil", "neutral oil", [], "for frying");
 
-  // ── FryingMedium ──────────────────────────────────────────────────────────
-
   it("unmeasured frying oil: absorbed estimate (15% of batter weight)", () => {
     const r = calculateTotals([flourCup, fryingOil], ingMap);
 
-    // batter = 100 g flour; absorbed oil = 0.15 * 100 = 15 g
     expect(r.weight).toBeCloseTo(115, 0);
-    // kcal: flour 364 + oil (15/100 * 884 = 132.6) = 496.6
     expect(r.nutrients["208"]).toBeCloseTo(496.6, 0);
-    // protein comes from flour only
     expect(r.nutrients["203"]).toBeCloseTo(10, 0);
-    // price: flour $1 + oil (15/1000 * 5 ≈ $0.075); WASM rounds slightly
     expect(r.price).toBeCloseTo(1.075, 1);
-    // oil resolved → not flagged missing
     expect(r.missingByType).toEqual({ price: [], weight: [], nutrients: [] });
     expect(r.totalIngredients).toBe(2);
   });
@@ -526,7 +481,6 @@ describe("calculateTotals with the consumption model", () => {
   });
 
   it("MEASURED frying oil: full cost, absorbed weight/nutrients, excluded from basis", () => {
-    // "100 g oil, for frying" — the amount is the pot, not consumption.
     const measuredOil = makeEntry(
       "oil",
       "neutral oil",
@@ -539,9 +493,7 @@ describe("calculateTotals with the consumption model", () => {
     // Weight: flour 100 + absorbed 15 — NOT 200. The pot's own 100 g never
     // enters the basis either (15 = 0.15 × 100 flour, not 0.15 × 200).
     expect(r.weight).toBeCloseTo(115, 0);
-    // kcal: 364 + 132.6 — NOT 364 + 884 (the whole pot).
     expect(r.nutrients["208"]).toBeCloseTo(496.6, 0);
-    // Price: flour $1 + the FULL pot $0.50 (100 g of $5/kg) — you bought it.
     expect(r.price).toBeCloseTo(1.5, 2);
     expect(r.missingByType).toEqual({ price: [], weight: [], nutrients: [] });
   });
@@ -585,13 +537,10 @@ describe("calculateTotals with the consumption model", () => {
     expect(reversed.nutrients).toEqual(forward.nutrients);
   });
 
-  // ── Seasoning ─────────────────────────────────────────────────────────────
-
   it("'salt, to taste': 1% of dish weight through salt's own mappings", () => {
     const saltToTaste = makeEntry("salt", "salt", [], "to taste");
     const r = calculateTotals([flourCup, saltToTaste], ingMap);
 
-    // 1 g salt (0.01 × 100 g flour) → 387.58 mg sodium, ~$0.001
     expect(r.weight).toBeCloseTo(101, 0);
     expect(r.nutrients["307"]).toBeCloseTo(387.6, 0);
     expect(r.price).toBeCloseTo(1.001, 2);
@@ -610,8 +559,6 @@ describe("calculateTotals with the consumption model", () => {
     expect(r.weight).toBeCloseTo(105, 0);
     expect(r.nutrients["307"]).toBeCloseTo(1937.9, 0);
   });
-
-  // ── PanGrease / Garnish (flat estimates) ──────────────────────────────────
 
   it("'butter, for the pan': flat 10 g", () => {
     const panButter = makeEntry("butter", "butter", [], "for the pan");
@@ -632,13 +579,10 @@ describe("calculateTotals with the consumption model", () => {
     expect(r.missingByType.price).toEqual(["parsley"]);
   });
 
-  // ── Dredging ──────────────────────────────────────────────────────────────
-
   it("unmeasured 'flour, for dusting': 5% of dish weight", () => {
     const dusting = makeEntry("flour2", "flour", [], "for dusting");
     const r = calculateTotals([flourCup, dusting], ingMap);
 
-    // 5 g flour (0.05 × 100) → 18.2 kcal
     expect(r.weight).toBeCloseTo(105, 0);
     expect(r.nutrients["208"]).toBeCloseTo(364 + 18.2, 0);
   });
@@ -656,13 +600,9 @@ describe("calculateTotals with the consumption model", () => {
     // are an estimate and must not feed the fry-oil basis (oil = 15 g, not 19).
     // Weight: 100 + 20 (0.2 × 100) + 15 = 135.
     expect(r.weight).toBeCloseTo(135, 0);
-    // kcal: 364 + 72.8 (0.2 × 364) + 132.6 = 569.4
     expect(r.nutrients["208"]).toBeCloseTo(569.4, 0);
-    // Price: $1 + FULL $1 (you used the cup; discarding doesn't refund) + oil.
     expect(r.price).toBeCloseTo(2.075, 1);
   });
-
-  // ── Marinade ──────────────────────────────────────────────────────────────
 
   it("measured marinade (by section name): full cost, 15% retained", () => {
     const soyRow = makeEntry(
@@ -674,7 +614,6 @@ describe("calculateTotals with the consumption model", () => {
     );
     const r = calculateTotals([flourCup, soyRow], ingMap);
 
-    // Weight: 100 + 15 (retained); kcal: 364 + 7.95; price: $1 + FULL $1.
     expect(r.weight).toBeCloseTo(115, 0);
     expect(r.nutrients["208"]).toBeCloseTo(364 + 7.95, 0);
     expect(r.price).toBeCloseTo(2, 2);
@@ -688,8 +627,6 @@ describe("calculateTotals with the consumption model", () => {
     expect(r.missingByType.weight).toContain("soy sauce");
     expect(r.missingByType.price).toContain("soy sauce");
   });
-
-  // ── Classifier traps (through the real wasm classifier) ───────────────────
 
   it("'refried beans' / 'stir-fry sauce' are normal ingredients", () => {
     const beans = ingredientFromMappings("beans", "refried beans", [
@@ -711,8 +648,6 @@ describe("calculateTotals with the consumption model", () => {
     expect(r.weight).toBeCloseTo(430, 0);
   });
 
-  // ── Per-row view parity ───────────────────────────────────────────────────
-
   it("estimated rows carry the estimate, keyed off the shared basis", () => {
     const costing = costRecipe([flourCup, fryingOil], ingMap);
 
@@ -725,7 +660,6 @@ describe("calculateTotals with the consumption model", () => {
       oilRow?.priceInfo?.nutrient.isOk() &&
         oilRow.priceInfo.nutrient.value["208"],
     ).toBeCloseTo(132.6, 0);
-    // Non-estimated rows keep their own measures.
     const flourRow = costing.rows.find((r) => r.id === "flour");
     expect(
       flourRow?.priceInfo?.gram.isOk() && flourRow.priceInfo.gram.value.value,
@@ -743,11 +677,9 @@ describe("calculateTotals with the consumption model", () => {
 
     expect(costing.estimatedRows.get("oil")).toBe("frying_medium");
     const oilRow = costing.rows.find((r) => r.id === "oil");
-    // Displayed weight is the absorbed estimate, not the pot…
     expect(
       oilRow?.priceInfo?.gram.isOk() && oilRow.priceInfo.gram.value.value,
     ).toBeCloseTo(15, 0);
-    // …while cost stays the full written amount.
     expect(
       oilRow?.priceInfo?.price.isOk() && oilRow.priceInfo.price.value.value,
     ).toBeCloseTo(0.5, 2);
@@ -781,7 +713,6 @@ describe("calculateTotals with the consumption model", () => {
 });
 
 describe("calculateTotals diagnostics", () => {
-  // flour: 1 cup = 100 g = $1; per-100g kcal. oil: kcal + price per kg.
   const flour = ingredientFromMappings("flour", "flour", [
     { a: { value: 1, unit: "cup" }, b: { value: 100, unit: "gram" } },
     { a: { value: 100, unit: "g" }, b: { value: 364, unit: "kcal" } },
@@ -815,7 +746,6 @@ describe("calculateTotals diagnostics", () => {
     });
     expect(flourDiag?.price).toEqual({ ok: true, value: 1, unit: "$" });
 
-    // The oil row shows the consumption rule that fired AND the basis it used.
     expect(oilDiag).toMatchObject({
       name: "neutral oil",
       usage: "frying_medium",
@@ -830,9 +760,7 @@ describe("calculateTotals diagnostics", () => {
   it("keeps the exact error strings the cells swallow into '—'", () => {
     const r = calculateTotals(
       [
-        // No amounts on a normal row → "has no amounts" on all three.
         makeEntry("flour", "flour", []),
-        // Measured but no product/mappings → per-measure conversion errors.
         makeEntry("mystery", "mystery", [{ value: 1, unit: "cup" }]),
       ],
       ingMap,
@@ -846,7 +774,6 @@ describe("calculateTotals diagnostics", () => {
     expect(errOf(noMappings?.price)).toMatch(/money/i);
     expect(errOf(noMappings?.gram)).toMatch(/weight/i);
     expect(errOf(noMappings?.nutrient)).toMatch(/nutrient/i);
-    // missingByType (names only) is unchanged for existing consumers.
     expect(r.missingByType.price).toEqual(["flour", "mystery"]);
   });
 });

@@ -83,8 +83,6 @@ describe("duplicate spend section", () => {
   });
 
   it("declares coverage, so it groups as advisory rather than as a defect", () => {
-    // Forwarding `coverage` is what the page groups on. Omitting it renders a
-    // correct-looking section that silently sits in the defect list.
     expect(entry()?.coverage).toBeDefined();
     expect(PROBLEM_CLASS.duplicateSpendCandidates).not.toBe("defect");
   });
@@ -102,7 +100,6 @@ describe("duplicate spend section", () => {
       ]),
       undefined as never,
     );
-    // biome-ignore lint/complexity/noUselessFragments: `node` is a ReactNode; the fragment is what makes it a ReactElement for render()
     const { container } = render(<>{node}</>);
 
     expect(screen.getByText("washer stacking bracket")).toBeTruthy();
@@ -123,10 +120,6 @@ describe("duplicate spend section", () => {
   });
 
   it("renders the common row against the purchase's line sum, with no gap or alternate badges", () => {
-    // The default candidate is the shape most rows take: matched on the expense
-    // total, same day, nothing else in contention. Both conditional badges take
-    // their empty branch here, and the subtitle takes the expense-total side.
-    // biome-ignore lint/complexity/noUselessFragments: `node` is a ReactNode; the fragment is what makes it a ReactElement for render()
     render(<>{entry()?.node(problems([candidate()]), undefined as never)}</>);
 
     expect(screen.getByText(/Best Buy expense total of \$43\.44/)).toBeTruthy();
@@ -147,7 +140,6 @@ describe("duplicate spend section", () => {
       ]),
       undefined as never,
     );
-    // biome-ignore lint/complexity/noUselessFragments: `node` is a ReactNode; the fragment is what makes it a ReactElement for render()
     render(<>{node}</>);
 
     expect(screen.getByText(/deleted vendor expense total/)).toBeTruthy();
@@ -157,7 +149,6 @@ describe("duplicate spend section", () => {
   });
 
   it("renders the empty state when nothing is flagged", () => {
-    // biome-ignore lint/complexity/noUselessFragments: as above — ReactNode to ReactElement
     render(<>{entry()?.node(problems([]), undefined as never)}</>);
     expect(
       screen.getByText(

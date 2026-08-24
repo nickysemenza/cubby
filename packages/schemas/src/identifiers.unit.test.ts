@@ -72,9 +72,6 @@ describe("entity id lookups", () => {
   });
 
   it("keeps the three reasons a derived key would get wrong", () => {
-    // `${entity.toUpperCase()}_NOT_FOUND` works for twelve of fifteen and
-    // silently invents a key for these three — the reason this map is written
-    // out rather than computed.
     expect(ENTITY_NOT_FOUND_REASON.inventory).toBe("INVENTORY_NOT_FOUND");
     expect(ENTITY_NOT_FOUND_REASON.financialAccount).toBe(
       "FINANCIAL_ACCOUNT_NOT_FOUND",

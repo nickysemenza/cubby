@@ -105,11 +105,6 @@ describe("getAuditLog — source + time window", () => {
     await makeEntry({ createdAt: day3, source: "api" });
     await makeEntry({ createdAt: day3, source: "ui" });
 
-    // Cursor set to day3: only entries strictly older than it should return,
-    // narrowed further by source="api" — the "ui" row at day3 is excluded by
-    // source anyway, so this also confirms the two conditions AND rather than
-    // OR (an OR would let the "ui" row back in via the cursor having no
-    // effect on it).
     const { entries } = await getAuditLog(ctx.db, {
       limit: 50,
       source: "api",
@@ -215,10 +210,6 @@ describe("getAuditLog — entityName", () => {
   });
 
   it("names an inventory entry compositely, by its product and location", async () => {
-    // Inventory is the one shortcode entity with no name-shaped column of its
-    // own — its identity is relational, so the label is a join. Pinned because
-    // the home feed is mostly inventory rows, and a bare code there is the
-    // exact failure this resolution exists to prevent.
     const loc = await createLocation(
       ctx.db,
       makeLocationInput({ name: "Garage" }),
@@ -248,8 +239,6 @@ describe("getAuditLog — entityName", () => {
   });
 
   it("returns null when the referenced row cannot be named", async () => {
-    // A dangling id, not a statement about the entity type: the composite join
-    // above finds nothing, so the caller falls back to type-plus-shortcode.
     await auditRowFor("inventory", randomUUID());
 
     const { entries } = await getAuditLog(ctx.db, {

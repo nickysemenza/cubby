@@ -55,21 +55,16 @@ test.describe("Project tracker", () => {
     });
 
     await dialog.getByLabel("Name").fill(name);
-    // trade is required (NOT NULL) — same click-then-click-option drive as
-    // the Project SelectField below.
     await dialog.getByPlaceholder("Select trade").click();
     await page.getByRole("option", { name: "Other", exact: true }).click();
     await dialog.getByRole("button", { name: /^Create$/ }).click();
 
-    // Dialog closes on success (onSuccess resets + calls onOpenChange(false)).
     await expect(dialog).not.toBeVisible({ timeout: 10000 });
 
     await expect(page.getByText(name).first()).toBeVisible({
       timeout: 10000,
     });
 
-    // Command-palette deep link: /tasks?q=<name> seeds the "name" filter so
-    // the matched task is visible immediately instead of buried pages deep.
     await page.goto(`/tasks?q=${encodeURIComponent(name)}`);
 
     await expect(
@@ -79,7 +74,6 @@ test.describe("Project tracker", () => {
       timeout: 10000,
     });
 
-    // The name column links to the task's detail page (/tasks/$id).
     await page.getByRole("link", { name }).first().click();
     await expect(page.getByRole("heading", { level: 1, name })).toBeVisible({
       timeout: 10000,
@@ -109,7 +103,6 @@ test.describe("Project tracker", () => {
     // spinbutton role disambiguates from the "Open Select cost type" trigger,
     // whose accessible name also contains "Cost".
     await dialog.getByRole("spinbutton", { name: "Cost" }).fill("24.99");
-    // costType + trade are required (NOT NULL).
     await dialog.getByPlaceholder("Select cost type").click();
     await page.getByRole("option", { name: "Materials", exact: true }).click();
     await dialog.getByPlaceholder("Select trade").click();
@@ -125,8 +118,6 @@ test.describe("Project tracker", () => {
       timeout: 10000,
     });
 
-    // Command-palette deep link: /expenses?q=<name> seeds the "name" filter
-    // so the matched expense is visible immediately.
     await page.goto(`/expenses?q=${encodeURIComponent(name)}`);
 
     await expect(
@@ -172,7 +163,6 @@ test.describe("Project tracker", () => {
     await dialog.getByLabel("Name").fill(name);
     await dialog.getByRole("button", { name: /^Create$/ }).click();
 
-    // Dialog closes on success (onSuccess resets + calls onOpenChange(false)).
     await expect(dialog).not.toBeVisible({ timeout: 10000 });
 
     await page.getByRole("button", { name: "Data view" }).click();
@@ -221,10 +211,6 @@ test.describe("Project tracker", () => {
     await createDialog.getByRole("button", { name: /^Create$/ }).click();
     await expect(createDialog).not.toBeVisible({ timeout: 10000 });
 
-    // Open the palette via the header's search trigger — same affordance as
-    // Cmd/Ctrl+K (owned by __root.tsx), stabler to drive headlessly than a
-    // synthetic key chord. openCommandPalette waits out the just-closed create
-    // dialog's fading backdrop before clicking (see helper).
     const palette = await openCommandPalette(page);
     const searchInput = palette.getByPlaceholder(
       "Search, jump to a page, or ask Cubby…",
@@ -235,7 +221,6 @@ test.describe("Project tracker", () => {
     ).toBeVisible();
     await expect(palette.getByPlaceholder("Search Tasks…")).toHaveValue(name);
 
-    // Empty-query Backspace removes the scope without closing the palette.
     await palette.getByPlaceholder("Search Tasks…").fill("");
     await palette.getByPlaceholder("Search Tasks…").press("Backspace");
     await expect(
@@ -251,10 +236,6 @@ test.describe("Project tracker", () => {
       .first();
     await expect(resultName).toBeVisible({ timeout: 10000 });
     const resultItem = resultName.locator("xpath=ancestor::*[@cmdk-item]");
-    // The row's type label is the entity manifest's `label` ("Task"), not the
-    // raw `entityType` enum — it is rendered uppercase by CSS only, so the DOM
-    // text stays title-case. Asserting the visible label is the point: it is
-    // what tells a task apart from a product of the same name.
     await expect(resultItem.getByText("Task", { exact: true })).toBeVisible();
     await expect(resultItem).not.toContainText("pts");
     const optionTexts = await palette.getByRole("option").allTextContents();
@@ -275,7 +256,6 @@ test.describe("Project tracker", () => {
       timeout: 10000,
     });
 
-    // The exhaustive search page receives the clean query and selected type.
     const reopenedPalette = await openCommandPalette(page);
     await reopenedPalette
       .getByPlaceholder("Search, jump to a page, or ask Cubby…")
@@ -307,11 +287,6 @@ test.describe("Project tracker", () => {
     await projectDialog.getByRole("button", { name: /^Create$/ }).click();
     await expect(projectDialog).not.toBeVisible({ timeout: 10000 });
 
-    // Create a task and attach it to that project via the quick-add's
-    // Project field — a plain `FilterableCombobox` (base-ui), not the async
-    // `DialogCompatibleCombobox`: click to open, click the option, done (no
-    // search-input step, so it doesn't hit the nested-dialog flakiness the
-    // other quick-add tests avoid).
     await page.goto("/tasks");
     await waitForAppHydration(page);
     await page.getByRole("button", { name: "New", exact: true }).click();
@@ -328,8 +303,6 @@ test.describe("Project tracker", () => {
     await taskDialog.getByRole("button", { name: /^Create$/ }).click();
     await expect(taskDialog).not.toBeVisible({ timeout: 10000 });
 
-    // Navigate to the task's detail page via the filtered list link (same
-    // deep-link pattern the tasks quick-add test above already exercises).
     await page.goto(`/tasks?q=${encodeURIComponent(taskName)}`);
     await page.getByRole("link", { name: taskName }).first().click();
     await expect(
@@ -402,7 +375,6 @@ test.describe("Project tracker", () => {
       .getByText("Notion page", { exact: true })
       .locator("..");
 
-    // Both fixed rows are present before either optional URL has been set.
     await expect(driveRow.getByText("Add", { exact: true })).toBeVisible();
     await expect(notionRow.getByText("Add", { exact: true })).toBeVisible();
 
@@ -426,7 +398,6 @@ test.describe("Project tracker", () => {
     await expect(notionLink).toHaveAttribute("target", "_blank");
     await expect(notionLink).toHaveAttribute("rel", "noopener noreferrer");
 
-    // A provider mismatch is rejected and leaves the last valid anchor intact.
     await driveRow.getByRole("button", { name: "Edit value" }).click();
     const rejectedEditor = page.locator(
       '[data-slot="cell-editor-overlay"] input',
@@ -447,7 +418,6 @@ test.describe("Project tracker", () => {
     await expect(rejectedEditor).toHaveCount(0);
     await expect(driveLink).toHaveAttribute("href", driveUrl);
 
-    // Clearing the shared inline text editor removes each optional URL.
     await editDetailCell(
       page,
       driveRow.getByRole("button", { name: "Edit value" }),
@@ -497,15 +467,12 @@ test.describe("Project tracker", () => {
     // whose accessible name also contains "Cost" (same fix as the desktop
     // expenses quick-add test above).
     await sheet.getByRole("spinbutton", { name: "Cost" }).fill("12.34");
-    // costType + trade are required (NOT NULL).
     await sheet.getByPlaceholder("Select cost type").click();
     await page.getByRole("option", { name: "Materials", exact: true }).click();
     await sheet.getByPlaceholder("Select trade").click();
     await page.getByRole("option", { name: "Other", exact: true }).click();
     await sheet.getByRole("button", { name: /^Create$/ }).click();
 
-    // Sheet closes and the row lands, same round trip as the desktop
-    // expenses quick-add test above.
     await expect(sheet).not.toBeVisible({ timeout: 10000 });
     await expect(page.getByText(name).first()).toBeVisible({
       timeout: 10000,

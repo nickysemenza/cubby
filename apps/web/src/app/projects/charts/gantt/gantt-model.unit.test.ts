@@ -47,11 +47,6 @@ function project(params: {
     notes: null,
     googleDriveFolderUrl: null,
     notionPageUrl: null,
-    // The Gantt reads `dates.effectiveStart/End` (see gantt-model.ts's
-    // `ownStartDay`/`ownEndDay`), not the raw override columns above — these
-    // fixtures only ever exercise an explicit override, so `effective*`
-    // mirrors `startDate`/`endDate` directly and there's no derived content
-    // to fold in.
     dates: {
       derivedStart: params.startDate ?? null,
       derivedEnd: params.endDate ?? null,
@@ -185,8 +180,6 @@ describe("buildPortfolioRows", () => {
   });
 
   it("does not emit a right-side envelope on an open-ended parent whose child ends later", () => {
-    // The open-ended bar already runs to the window edge, so a child ending
-    // after the parent's start is not a meaningful extension — no whisker.
     const parent = project({ id: "parent", startDate: "2026-01-10" });
     const child = project({
       id: "child",
@@ -210,8 +203,6 @@ describe("buildPortfolioRows", () => {
     });
     const { rows } = buildPortfolioRows([parent, child], new Set(["parent"]));
     const parentRow = projectRowsOf(rows).find((r) => r.id === "parent");
-    // Whisker extends left to the child's start, but its end is clipped to the
-    // parent's own start — no right cap landing mid-bar over the open-ended bar.
     expect(parentRow?.envelope).toEqual({
       startDay: toDayIndex("2025-11-01"),
       endDay: toDayIndex("2026-01-10"),
@@ -340,7 +331,6 @@ describe("buildPortfolioRows", () => {
     expect(groupRows.map((g) => (g.kind === "group" ? g.label : null))).toEqual(
       ["Furniture", "Garden", "Other"],
     );
-    // Each group row is immediately followed by its own root project row.
     const kindOrder = rows.map((r) =>
       r.kind === "group" ? `group:${r.label}` : r.id,
     );
@@ -461,8 +451,6 @@ describe("buildProjectRows", () => {
 
     const result = buildPortfolioRows([a, b], new Set(["a", "b"]));
 
-    // Neither node is a root (each has a live parent), so no rows are emitted —
-    // the point of the test is that it returns at all.
     expect(result.rows).toEqual([]);
     expect(result.extent).toEqual({
       startDay: toDayIndex("2026-01-01"),

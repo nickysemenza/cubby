@@ -44,11 +44,8 @@ const projects: SuggestableProject[] = [
   },
 ];
 
-// Each sub-project dominates its own trade, as the real ledger does.
 const affinity: TradeAffinityCell[] = KITCHEN_SUBPROJECTS.flatMap((trade) => [
   { projectId: `kitchen-${trade}`, trade, count: 40 },
-  // The parent has absorbed a few of everything — enough to be a plausible
-  // wrong answer if trade weighting were ignored.
   { projectId: "kitchen-remodel", trade, count: 5 },
 ]);
 
@@ -81,19 +78,16 @@ describe("rankProjectSuggestions", () => {
       affinity,
       TODAY,
     );
-    // Landscaping ran in 2025 — right trade, wrong year.
     expect(suggestions.map((s) => s.id)).not.toContain("landscaping");
   });
 
   it("prefers the tighter window when trade history ties", () => {
     const suggestions = rankProjectSuggestions(
-      // A trade nothing has history for, so every candidate ties at 0.
       { date: "2024-06-15", trade: "auto" },
       projects,
       affinity,
       TODAY,
     );
-    // The 4-month sub-projects beat the 18-month parent that contains them.
     expect(suggestions[0]?.affinity).toBe(0);
     expect(suggestions.map((s) => s.id)).not.toContain("kitchen-remodel");
   });

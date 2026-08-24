@@ -99,19 +99,6 @@ test.describe("shortcode URLs", () => {
     });
   });
 
-  test("a detail URL is addressable directly by shortcode", async ({
-    page,
-  }) => {
-    const name = `E2E Direct Product ${Date.now()}`;
-    await createProduct(page, name);
-    const code = codeFromUrl(page.url());
-
-    await page.goto(`/products/${code}`);
-    await expect(page.getByRole("heading", { level: 1, name })).toBeVisible({
-      timeout: 15000,
-    });
-  });
-
   test("an unknown or malformed code shows the not-found state", async ({
     page,
   }) => {

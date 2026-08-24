@@ -14,10 +14,6 @@ import {
 
 const amt = (value: number, unit: string): Amount => ({ value, unit });
 
-// Stub of the WASM unit tools for the units under test. `kindOf` mirrors
-// `amount_kind`'s buckets (unknown units → per-unit "other:" islands like the
-// real engine); `convert` does within-kind conversion via a grams/canonical
-// factor table — exactly what `conv_amount_to_kind` does, but hand-rolled.
 const GRAMS: Record<string, number> = {
   g: 1,
   kg: 1000,
@@ -94,8 +90,6 @@ describe("harvestEquivalences", () => {
   });
 
   it("merges weight-unit variants of one density into a single row", () => {
-    // The reported redundancy: "1 cup ≈ 200 g" and "1 cup ≈ 7 oz" are the same
-    // sugar density. Grouping by dimension collapses them; g/oz/tbsp all normalize.
     const rows = [
       row("sugar", [amt(1, "cup"), amt(200, "g")], "a"),
       row("sugar", [amt(1, "cup"), amt(7, "oz")], "b"), // 7 oz ≈ 198 g
@@ -105,15 +99,11 @@ describe("harvestEquivalences", () => {
     expect(out).toHaveLength(1);
     const c = out[0]!;
     expect(c).toMatchObject({ unitA: "cup", unitB: "g", occurrences: 3 });
-    // All three land near ~200 g/cup (tbsp row: 12.5 g/tbsp × 16 ≈ 200; the
-    // 7 oz row ≈ 198), so the median is the dominant 200 and the spread is tight.
     expect(c.medianRatio).toBeCloseTo(200, 0);
     expect(c.ratioSpread.max / c.ratioSpread.min).toBeLessThan(1.05);
   });
 
   it("collapses a line's redundant same-kind measures (no double count)", () => {
-    // "5 oz sugar (about ¾ cup; 140 g)" — two weight measures + one volume.
-    // Should yield ONE volume↔weight observation, not two.
     const out = harvestEquivalences(
       [row("sugar", [amt(5, "oz"), amt(0.75, "cup"), amt(140, "g")])],
       tools,
@@ -125,9 +115,7 @@ describe("harvestEquivalences", () => {
   it("drops non-measurement kinds (temperature, length) before pairing", () => {
     const out = harvestEquivalences(
       [
-        // "350°F (175°C)" — a bake temp, not an ingredient equivalence.
         row("oven", [amt(350, "F"), amt(175, "C")], "a"),
-        // Butter line carrying a stray temp: keep stick↔g, ignore the °F + pan.
         row(
           "butter",
           [amt(1, "stick"), amt(113, "g"), amt(65, "F"), amt(9, '"')],

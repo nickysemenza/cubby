@@ -21,10 +21,6 @@ function keysReadBy(section: Section): ProblemKey[] {
   const read = new Set<string>();
   const probe = new Proxy({} as AllProblems, {
     get: (_target, property) => {
-      // `sectionTotals` is infrastructure, not a detector: `count` reads it so a
-      // view-backed section reports its population rather than the page it
-      // renders. Recording it would make every section look like it reads an
-      // unknown key.
       if (typeof property === "string" && property !== "sectionTotals") {
         read.add(property);
       }
@@ -47,9 +43,6 @@ describe("PROBLEM_SECTIONS", () => {
     },
   );
 
-  // A section renders one group's worth of rows in one style; merging a defect
-  // key into a coverage section (or the reverse) would put rows in a group that
-  // contradicts how they are counted.
   it.each(PROBLEM_SECTIONS.map((s) => [s.id, s] as const))(
     "%s renders keys of a single class",
     (_id, section) => {
@@ -60,8 +53,6 @@ describe("PROBLEM_SECTIONS", () => {
     },
   );
 
-  // The weld: the schema's class and the page's coverage marker are two
-  // declarations of one membership, and nothing but this tied them together.
   it.each(PROBLEM_SECTIONS.map((s) => [s.id, s] as const))(
     "%s declares coverage exactly when its keys are classed coverage",
     (_id, section) => {

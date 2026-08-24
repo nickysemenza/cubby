@@ -172,8 +172,6 @@ describe("createParentLinkColumn", () => {
     });
 
     const link = screen.getByRole("link", { name: /Frame the shed/ });
-    // The entity half of the href is what stops a task column from pointing at
-    // /project/… — the two call sites differ only in that argument.
     expect(link).toHaveAttribute("href", "/task/TSK-9QP2");
     expect(screen.getByText("Frame the shed")).toBeInTheDocument();
   });
@@ -209,11 +207,8 @@ describe("createParentLinkColumn", () => {
     expect(task.id).toBe("parentTask");
     expect(task.header).toBe("Parent Task");
     expect(task.meta?.className).toBe("w-40");
-    // Reparenting is not offered through this column at any call site.
     expect(task.enableSorting).toBe(false);
 
-    // A project's parent is another project, so "Parent Task" would be wrong
-    // and the shorter "Parent" reads correctly in the WBS tree.
     const project = projectColumn();
     expect(project.id).toBe("parent");
     expect(project.header).toBe("Parent");
@@ -345,7 +340,6 @@ function ImageHarness({ images }: { images: ImagesByRowId }) {
 
 describe("createImageColumn", () => {
   it("shows images that arrive after the first render", () => {
-    // Mount empty, the way a list renders before its images query resolves.
     const { rerender } = render(<ImageHarness images={{}} />);
     expect(screen.getByTestId("thumb")).toHaveTextContent("0");
 
@@ -490,9 +484,6 @@ const trackedColumn = (
   }) as ColumnDef<TrackedRow, string | null>;
 
 describe("createBooleanColumn", () => {
-  // The bug this factory exists to prevent: `false` is a decision somebody
-  // recorded, and it used to render as nothing (expense `future`) or as bare
-  // text indistinguishable from the undecided case.
   it("renders all three states distinctly, and false is not the dash", () => {
     const { unmount } = renderColumn<TrackedRow, string | null>(
       trackedColumn(),
@@ -509,7 +500,6 @@ describe("createBooleanColumn", () => {
     expect(screen.queryByText(DASH)).toBeNull();
     second.unmount();
 
-    // null is the ONE case the dash is correct for — undecided really is unknown.
     renderColumn<TrackedRow, string | null>(trackedColumn(), {
       stockTracked: null,
     });
@@ -517,9 +507,6 @@ describe("createBooleanColumn", () => {
     expect(screen.queryByText(/tracked/i)).toBeNull();
   });
 
-  // `stockTracked: false` reading back as `null` is a bug this codebase has
-  // already shipped once (see server/mcp/tools/product.tools.ts), so the
-  // string encoding the editor round-trips through is pinned here.
   it("round-trips false through the string encoding without collapsing to null", async () => {
     const saved: (boolean | null)[] = [];
     const onSave = async (v: boolean | null) => {
@@ -533,8 +520,6 @@ describe("createBooleanColumn", () => {
     const cellData = trackedColumn(onSave).meta?.cellData;
     if (!cellData?.applyPaste) throw new Error("expected a pasteable column");
 
-    // Paste accepts the human label as well as the encoded value — that is what
-    // makes a copied "Not tracked" land in another boolean column.
     await cellData.applyPaste({ stockTracked: null }, { text: "Not tracked" });
     await cellData.applyPaste({ stockTracked: null }, { json: "true" });
 
@@ -549,8 +534,6 @@ describe("createBooleanColumn", () => {
       text: "Not tracked",
       json: "false",
     });
-    // Nothing to copy beats copying the word "Undecided" — an empty TSV field
-    // is what an unknown value means to the range engine.
     expect(cellData.getCopyPayload({ stockTracked: null })).toBeNull();
   });
 
@@ -566,23 +549,16 @@ describe("createBooleanColumn", () => {
         },
       ) as ColumnDef<TrackedRow, string | null>;
 
-    // Asserted through the rendered editor rather than the config object: the
-    // config is internal, the clear button is the behaviour. The picker names it
-    // after the undecided label, so clearing reads as a state rather than an ✗.
     const withUndecided = renderColumn<TrackedRow, string | null>(
       boolColumn({ label: "Undecided" }),
       { stockTracked: true },
     );
     fireEvent.click(screen.getByText("Tracked"));
-    // Presence, not visibility: the editor renders through a body portal, which
-    // jsdom reports as not visible regardless of the real layout.
     expect(
       screen.getByRole("button", { name: /Clear Undecided/i }),
     ).toBeInTheDocument();
     withUndecided.unmount();
 
-    // Without a named undecided state there is nothing valid to clear TO — the
-    // field's schema may not accept null at all.
     renderColumn<TrackedRow, string | null>(boolColumn(), {
       stockTracked: true,
     });
@@ -646,12 +622,10 @@ describe("enum/boolean columns stay in the copy/paste range", () => {
 
     const cellData = column.meta?.cellData;
     expect(cellData?.kind).toBe("select");
-    // Copy carries the human label, not the raw enum the old text column emitted.
     expect(cellData?.getCopyPayload({ kind: "purchase" })).toEqual({
       text: "Purchase",
       json: "purchase",
     });
-    // Read-only: no editor means no paste target, same as before the conversion.
     expect(cellData?.applyPaste).toBeUndefined();
     // `filterConfig: null` must leave meta.filterConfig undefined so the
     // manifest's control is the one that attaches.
@@ -659,12 +633,6 @@ describe("enum/boolean columns stay in the copy/paste range", () => {
   });
 });
 
-// The factory used to hardcode `true → positive / false → slate`, which is only
-// right when "true" is the good outcome. `FinancialAccount.provisional` is the
-// inverse — provisional is the UNRESOLVED state — so the list cell rendered it
-// green while its own detail page rendered it amber, and a deliberately-amber
-// "Planned" expense silently went green (PR #766 review). The roster is now the
-// single source of both label and tone.
 describe("boolean tones come from the roster, not the factory", () => {
   type ProvisionalRow = { provisional: boolean | null };
 
@@ -763,13 +731,6 @@ describe("Product pricing cell (explicit vs derived legibility)", () => {
     );
   });
 
-  // The bug this cell rework fixes: the display showed `pricing.effectivePrice`
-  // (override OR derived) while the editor seeded from the raw `value`
-  // (override only) — so a derived-only product showed a real number, but
-  // opening it landed on a blank box with nothing on the cell explaining why.
-  // The glyph now tells the reader it's derived *before* they click; the blank
-  // box on open is then legible ("nothing WAS overridden") instead of looking
-  // like a lost value.
   it("a derived-only product's cell shows the derived cue, and its editor opens blank — the raw stored override, not the displayed fallback", async () => {
     render(
       <EditableCell

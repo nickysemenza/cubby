@@ -28,10 +28,6 @@ import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
-// The only stubbed seam in this file: the R2 network PUT. Everything else in
-// `attachFileToEntity` (target validation, PDF classification, key generation,
-// the row + join insert) runs for real against the test database — mirroring
-// image-storage.service.unit.test.ts, which mocks the same two functions.
 vi.mock("~/server/utils/s3", async (importOriginal) => ({
   ...(await importOriginal<typeof import("~/server/utils/s3")>()),
   uploadToS3: vi.fn(async () => undefined),
@@ -302,8 +298,6 @@ describe("purchase repository — charge resolution from {vendor, orderId}", () 
     expect(second.purchaseId).toBe(first.purchaseId);
     expect(second.vendorId).toBe(first.vendorId);
 
-    // `vendor` / `orderId` are no longer columns — they read back through the
-    // charge join, under the same output keys they always had.
     expect(first.vendor).toBe("Direct Tools Outlet");
     expect(first.orderId).toBe("DTO-9001");
     expect(first.purchaseDate).toBe("2026-07-15");
@@ -378,7 +372,6 @@ describe("purchase repository — charge resolution from {vendor, orderId}", () 
     expect(walkInA.purchaseId).not.toBeNull();
     expect(walkInB.purchaseId).not.toBeNull();
     expect(walkInB.purchaseId).not.toBe(walkInA.purchaseId);
-    // Same vendor either way — only the charge differs.
     expect(walkInB.vendorId).toBe(walkInA.vendorId);
     expect(walkInA.orderId).toBeNull();
   });
@@ -951,8 +944,6 @@ describe("purchase repository — splitExpense", () => {
     expect(parts.map((p) => p.cost).sort()).toEqual([25, 60]);
 
     const charge = await getPurchaseByID(ctx.db, chargeUuid);
-    // Nothing back-computed a cost: the stated total is still the original 100
-    // and the lines still sum to 85. The disagreement is REPORTED, not fixed.
     expect(charge.statedTotal).toBe(100);
     expect(
       (await getPurchaseExpenses(ctx.db, chargeUuid)).reduce(
@@ -962,11 +953,6 @@ describe("purchase repository — splitExpense", () => {
     ).toBe(85);
     expect(charge.expenseTotal).toBe(85);
     expect(reconcilePurchase(charge)).toBe("mismatch");
-
-    // The soft worklist that surfaces this now lives in Problems
-    // (`findPurchasesNotReconciling`), which does the comparison in SQL — see
-    // problems.integration.test.ts. `reconcilePurchase` above is the shared
-    // verdict both sides use, so asserting it here is asserting the same rule.
   });
 
   it("refuses to split an expense with no charge attached", async () => {
@@ -994,9 +980,6 @@ describe("purchase repository — splitExpense", () => {
   });
 
   it("defaults a food-linked part with no explicit project to Household, leaving explicit parts untouched", async () => {
-    // `createProject` always mints its own shortcode, so the only way to stand
-    // up the specific `HOUSEHOLD_PROJECT_SHORTCODE` row `resolveDefaultProjectId`
-    // looks up is to create a project and overwrite its shortcode directly.
     const { entityId: householdEntityId } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "Household" }),
@@ -1042,9 +1025,6 @@ describe("purchase repository — splitExpense", () => {
         expenseId: original.id,
         parts: [
           {
-            // No explicit projectId: a food productId with an untriaged split
-            // part is the exact "five lines off one receipt" case the default
-            // exists for.
             name: "food part",
             cost: 30,
             costType: "materials",
@@ -1313,8 +1293,6 @@ describe("purchase repository — mergePurchases", () => {
       ctx.actor,
     );
 
-    // Re-pointing a charge to another vendor would silently rewrite who was
-    // paid. Merging is a grouping operation, not a correction.
     await expect(
       mergePurchases(
         ctx.db,
@@ -1391,10 +1369,6 @@ describe("purchase repository — mergePurchases", () => {
       ctx.actor,
     );
 
-    // The keeper alone, and the keeper smuggled in alongside a genuine loser.
-    // The second is the dangerous shape: the old code filtered `keepId` out of
-    // `mergeIds` and went on to fold the bystander, reporting success for a
-    // request it had quietly rewritten.
     for (const mergeIds of [[keeper.id], [bystander.id, keeper.id]]) {
       const error = await mergePurchases(
         ctx.db,
@@ -2206,18 +2180,6 @@ describe("purchase repository — purchase worklist filters", () => {
   });
 });
 
-// The unresolvable-code and wrong-prefix halves of this guard now live in
-// `filter-application.integration.test.ts`, which runs both against every
-// declared id filter on every entity — `purchase.vendorId` included.
-//
-// `purchase.vendorId` lowercase canonicalization is now covered by the
-// generic #591 battery in filter-application.integration.test.ts: seedWorld
-// there gives every purchase a real, live vendorId (both seeded purchases
-// share one vendor), so `world.codes.vendor` genuinely matches ≥1 purchase
-// and the lowercase-vs-canonical comparison is no longer vacuous. This
-// per-entity guard (and the comment that used to justify it — the "seeded
-// world is deliberately unrelated" premise stopped being true once that file
-// linked purchase→vendor) is subsumed; deleted rather than kept duplicate.
 describe("purchase repository — rollups never see a charge", () => {
   const ctx = withTestDb();
 
@@ -2486,9 +2448,6 @@ describe("purchase repository — documents", () => {
       .from(image)
       .where(eq(image.shortcode, attached.imageId));
 
-    // `attached.imageId` is the public `IMG-` code, which is exactly what
-    // `removeImageIds` wants — a caller can now feed an attach response
-    // straight back in without a round trip through `getPurchaseByID`.
     const { detachedImageKeys } = await updatePurchase(
       ctx.db,
       charge.id,
@@ -2547,8 +2506,6 @@ describe("purchase repository — documents", () => {
 
     const [row] = await getDb(ctx.db)
       .select({
-        // `id` too: the join table keys on the uuid, while `result.imageId` is
-        // the public code, so the assertions below need both.
         id: image.id,
         key: image.key,
         contentType: image.contentType,

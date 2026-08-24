@@ -75,16 +75,8 @@ describe("purchase operation inputs", () => {
   });
 });
 
-/**
- * The single verdict function behind the charge list column, the charge detail
- * reconciliation strip, and the Problems detector — so all three agree by
- * construction. Nothing here rejects a write or back-computes a cost: a mismatch
- * is a SOFT flag, and is often correct (a partial refund reduces a line without
- * changing what the paperwork claimed).
- */
 describe("reconcilePurchase", () => {
   it('is "unknown" when no statedTotal has been recorded', () => {
-    // Distinct from a $0 stated total, which IS a claim and gets compared.
     expect(reconcilePurchase({ statedTotal: null, expenseTotal: 0 })).toBe(
       "unknown",
     );
@@ -107,7 +99,6 @@ describe("reconcilePurchase", () => {
         expenseCount: 0,
       }),
     ).toBe("unknown");
-    // One line that disagrees is a genuine mismatch, not an empty purchase.
     expect(
       reconcilePurchase({
         statedTotal: 25,
@@ -115,11 +106,9 @@ describe("reconcilePurchase", () => {
         expenseCount: 1,
       }),
     ).toBe("mismatch");
-    // A $0 stated total with no lines still agrees, and says so.
     expect(
       reconcilePurchase({ statedTotal: 0, expenseTotal: 0, expenseCount: 0 }),
     ).toBe("match");
-    // Callers that cannot count lines keep the pre-guard behaviour.
     expect(reconcilePurchase({ statedTotal: 25, expenseTotal: 0 })).toBe(
       "mismatch",
     );
@@ -132,7 +121,6 @@ describe("reconcilePurchase", () => {
     expect(reconcilePurchase({ statedTotal: 2516, expenseTotal: 2400 })).toBe(
       "mismatch",
     );
-    // Direction-agnostic — the lines may overshoot the stated total too.
     expect(reconcilePurchase({ statedTotal: 2400, expenseTotal: 2516 })).toBe(
       "mismatch",
     );
@@ -223,7 +211,6 @@ describe("reconcilePurchase", () => {
       reconcilePurchase({ statedTotal: 431.24, expenseTotal: 431.23 }),
     ).toBe("match");
 
-    // Anything a human would call a discrepancy is flagged.
     expect(reconcilePurchase({ statedTotal: 100, expenseTotal: 99.97 })).toBe(
       "mismatch",
     );

@@ -319,12 +319,17 @@ jobs:
             args: --project ui --shard=4/4
           - tier: pure-pglite
             args: --project unit-pure --project pglite
+          - tier: mcp-contract
+            args: --project mcp-contract
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: "restore"
       - uses: ./.github/actions/setup-web-env
+      - name: Build MCP App contract fixture
+        if: matrix.tier == 'mcp-contract'
+        run: node scripts/ensure-mcp-apps.ts
       - name: Run ${{ matrix.tier }} tests
         shell: bash
         env:
@@ -336,21 +341,9 @@ jobs:
             "${selected[@]}"
             --reporter=default
             --reporter=github-actions
-            --reporter=blob
-            --reporter=./tooling/timing-reporter.ts
           )
           if [[ "$COVERAGE" == "true" ]]; then args+=(--coverage); fi
-          VITEST_BLOB_LABEL=${{ matrix.tier }} pnpm --dir apps/web test "${args[@]}"
-      - name: Save web ${{ matrix.tier }} timings
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: timings-web-${{ matrix.tier }}
-          path: |
-            apps/web/.vitest/
-            apps/web/.vitest-reports/
-          if-no-files-found: warn
-          retention-days: 14
+          pnpm --dir apps/web exec vitest run "${args[@]}"
       - name: Save web ${{ matrix.tier }} coverage
         if: needs.scope.outputs.coverage == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -401,12 +394,6 @@ jobs:
         with:
           wasm: "restore"
       - uses: ./.github/actions/setup-web-env
-      - name: Restore green integration durations
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: apps/web/tooling/test-durations.json
-          key: vitest-durations-${{ runner.os }}-${{ github.run_id }}
-          restore-keys: vitest-durations-${{ runner.os }}-
       - name: Run integration tests
         shell: bash
         env:
@@ -417,21 +404,9 @@ jobs:
             --shard=${{ matrix.shard }}/${{ strategy.job-total }}
             --reporter=default
             --reporter=github-actions
-            --reporter=blob
-            --reporter=./tooling/timing-reporter.ts
           )
           if [[ "$COVERAGE" == "true" ]]; then args+=(--coverage); fi
-          VITEST_BLOB_LABEL=integration-${{ matrix.shard }} pnpm --dir apps/web test "${args[@]}"
-      - name: Save web integration timings
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: timings-web-integration-${{ matrix.shard }}
-          path: |
-            apps/web/.vitest/
-            apps/web/.vitest-reports/
-          if-no-files-found: warn
-          retention-days: 14
+          pnpm --dir apps/web test "${args[@]}"
       - name: Save web integration coverage
         if: needs.scope.outputs.coverage == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -440,32 +415,6 @@ jobs:
           path: apps/web/coverage/coverage-final.json
           if-no-files-found: error
           retention-days: 1
-
-  promote-integration-durations:
-    name: Promote green integration durations
-    needs: [scope, test-integration-web]
-    if: needs.scope.outputs.web == 'true' && needs.test-integration-web.result == 'success'
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Download integration timing artifacts
-        id: timings
-        continue-on-error: true
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          pattern: timings-web-integration-*
-          path: apps/web
-          merge-multiple: true
-      - name: Merge successful shard timings
-        if: hashFiles('apps/web/.vitest/timing/**/*.json') != ''
-        run: node apps/web/tooling/merge-test-durations.mjs apps/web/.vitest/timing apps/web/tooling/test-durations.json
-      - name: Save green integration durations
-        if: hashFiles('apps/web/tooling/test-durations.json') != ''
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: apps/web/tooling/test-durations.json
-          key: vitest-durations-${{ runner.os }}-${{ github.run_id }}
 
   test-unit-aux:
     name: Test auxiliary packages
@@ -608,12 +557,6 @@ jobs:
             exit 1
           fi
       - uses: ./.github/actions/setup-web-env
-      - name: Restore green Playwright durations
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: apps/web/tooling/playwright-durations.json
-          key: playwright-durations-${{ runner.os }}-${{ github.run_id }}
-          restore-keys: playwright-durations-${{ runner.os }}-
       - name: Wait for the shared Cloudflare bundle
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
@@ -655,25 +598,7 @@ jobs:
           path: apps/web/dist
       - name: Run Playwright tests
         shell: bash
-        run: |
-          mapfile -t specs < <(
-            node apps/web/tooling/playwright-shard.mjs \
-              apps/web \
-              apps/web/tooling/playwright-durations.json \
-              ${{ matrix.shard }} \
-              ${{ strategy.job-total }}
-          )
-          MATRIX_SHARD=${{ matrix.shard }} pnpm --filter @cubby/web run test:e2e "${specs[@]}"
-      - name: Save Playwright timing artifacts
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: timings-playwright-${{ matrix.shard }}
-          path: |
-            apps/web/playwright-blob-report/
-            apps/web/.playwright-timing/
-          if-no-files-found: warn
-          retention-days: 14
+        run: pnpm --filter @cubby/web run test:e2e --shard=${{ matrix.shard }}/${{ strategy.job-total }}
       - name: Save Playwright report
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -689,32 +614,6 @@ jobs:
           path: /github/home/.config/.wrangler/logs/
           if-no-files-found: ignore
           retention-days: 1
-
-  promote-playwright-durations:
-    name: Promote green Playwright durations
-    needs: [scope, test-e2e]
-    if: needs.scope.outputs.web == 'true' && needs.test-e2e.result == 'success'
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Download Playwright timing artifacts
-        id: timings
-        continue-on-error: true
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          pattern: timings-playwright-*
-          path: apps/web
-          merge-multiple: true
-      - name: Merge successful shard timings
-        if: hashFiles('apps/web/.playwright-timing/**/*.json') != ''
-        run: node apps/web/tooling/merge-playwright-durations.mjs apps/web/.playwright-timing apps/web/tooling/playwright-durations.json
-      - name: Save green Playwright durations
-        if: hashFiles('apps/web/tooling/playwright-durations.json') != ''
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: apps/web/tooling/playwright-durations.json
-          key: playwright-durations-${{ runner.os }}-${{ github.run_id }}
 
   report-coverage:
     name: Report scheduled coverage

@@ -53,7 +53,6 @@ const check = (
 describe("toolTimelineConflict", () => {
   describe("unknown never blocks", () => {
     it("passes a tool with no acquisition and no disposal", () => {
-      // 42 of 426 live tools carry no acquisition Expense at all.
       expect(check({}, window({}))).toBeNull();
     });
 
@@ -74,8 +73,6 @@ describe("toolTimelineConflict", () => {
 
   describe("acquired after the project ended", () => {
     it("flags an acquisition past an explicit end with no grace", () => {
-      // The live Kitchen Remodel shape: explicit 2024-11-30 end, tool bought
-      // 48 days later.
       const conflict = check(
         { acquiredAt: "2025-01-17" },
         window({ effectiveEnd: "2024-11-30", endSource: "explicit" }),
@@ -88,8 +85,6 @@ describe("toolTimelineConflict", () => {
     });
 
     it("allows the same gap when the end is merely derived", () => {
-      // Inside the grace window: a derived end is the last dated task/expense,
-      // which routinely stops short of the real last day of work.
       expect(
         check(
           { acquiredAt: "2022-07-20" },
@@ -104,8 +99,6 @@ describe("toolTimelineConflict", () => {
         window({ effectiveEnd: "2022-06-30", endSource: "derived" }),
       );
       expect(conflict?.kind).toBe("acquired_after_end");
-      // The reported boundary is the shifted one, so the message explains the
-      // slack rather than looking off by a month.
       expect(conflict?.boundary).toBe("2022-07-30");
       expect(TOOL_TIMELINE_GRACE_DAYS).toBe(30);
     });
@@ -160,7 +153,6 @@ describe("toolTimelineConflict", () => {
     });
 
     it("checks a live project's start like any other", () => {
-      // Only the END side is unbounded for a live project.
       expect(
         check(
           { acquiredAt: "2018-01-01", disposedAt: "2021-05-01" },

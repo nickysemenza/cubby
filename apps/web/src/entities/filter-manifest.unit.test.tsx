@@ -301,11 +301,6 @@ describe("expense order-id filters", () => {
   });
 
   it("stands alone without a vendor to disambiguate it", () => {
-    // It used to be a rule that `?order=` always rode with a `?vendor=`, since
-    // the group key was two loose string columns on the ledger row. The order id
-    // now resolves through `purchaseId` against a partial-unique
-    // `(vendorId, orderId)`, so a short id is unambiguous on its own — and the
-    // Purchase section links to the Purchase itself rather than to this scope.
     expect(build({ order: "WN63446464" })).toEqual({
       orderId: "WN63446464",
     });

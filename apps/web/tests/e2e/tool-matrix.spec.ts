@@ -6,14 +6,6 @@ test("tool matrix keeps angled project headers pinned below the nav", async ({
 }, testInfo) => {
   test.setTimeout(120_000);
 
-  // Unique per ATTEMPT, and deliberately computed inside the test body rather
-  // than at module scope. CI runs `retries: 2`, and these rows persist across
-  // attempts — so with the old fixed names a timed-out attempt left its
-  // projects behind, the retry created them again, and the `project=` prefix
-  // filter below then matched 3-4 headers instead of 2. The retry failed on its
-  // own leftovers rather than on the defect it was retrying, which is how this
-  // test blocked merges on two unrelated PRs. A module-scope constant would
-  // reintroduce exactly that, since every attempt shares it.
   const tag = `Matrix${Date.now()}x${testInfo.retry}`;
   const kitchen = `${tag} kitchen`;
   const garage = `${tag} garage`;

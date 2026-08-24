@@ -31,22 +31,17 @@ describe("isMoneyUnit", () => {
 
 describe("truncateToTwoDecimals", () => {
   const CASES: { input: number; expected: number }[] = [
-    // truncates to 2 decimal places
     { input: 12.999, expected: 13.0 },
     { input: 12.994, expected: 12.99 },
     { input: 12.995, expected: 13.0 },
-    // very small values
     { input: 0.001, expected: 0.0 },
     { input: 0.005, expected: 0.01 },
     { input: 0.004, expected: 0.0 },
-    // large values
     { input: 1000.0, expected: 1000.0 },
     { input: 9740.6784, expected: 9740.68 },
     { input: 1234567.895, expected: 1234567.9 },
-    // exact 2-decimal values
     { input: 12.5, expected: 12.5 },
     { input: 99.99, expected: 99.99 },
-    // negative values
     { input: -12.999, expected: -13.0 },
     { input: -12.994, expected: -12.99 },
   ];
@@ -143,8 +138,6 @@ describe("computeInventoryValuation", () => {
     mappings: UnitMapping[];
     expected: number | null;
   }[] = [
-    // The bug this signature exists to kill: four rolls out of an $8 four-pack
-    // is one pack of value, not four.
     {
       name: "sub-unit amount values through the pack mapping",
       amount: { value: 4, unit: "roll" },
@@ -157,8 +150,6 @@ describe("computeInventoryValuation", () => {
       mappings: graphFor(12),
       expected: null,
     },
-    // The two shapes production actually holds: 721 live entries in `each`,
-    // one in `can` (which carries its own `1 whole = 1 can` row).
     {
       name: "each amounts land on price × quantity",
       amount: { value: 5, unit: "each" },
@@ -171,8 +162,6 @@ describe("computeInventoryValuation", () => {
       mappings: graphFor(5.5, [CAN_IS_WHOLE]),
       expected: 44,
     },
-    // `each`/`whole`/`eaches` all normalize to one unit upstream — the reason a
-    // TS-side `unit === "each"` shortcut would be wrong even as an optimization.
     {
       name: "whole agrees with each",
       amount: { value: 1, unit: "whole" },
@@ -320,8 +309,6 @@ describe("computePerUnitPrices", () => {
   });
 
   it("reads a genuinely free product as $0, never as Infinity", () => {
-    // `1 each = $0` synthesizes a reverse edge of 1/0; a rendered Infinity
-    // would be worse than a blank.
     const prices = computePerUnitPrices(graphFor(0));
     expect(prices.natural?.price).toBe(0);
     expect(prices.perGram === null || Number.isFinite(prices.perGram)).toBe(

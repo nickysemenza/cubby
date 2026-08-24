@@ -52,8 +52,6 @@ describe("objectFitScale", () => {
 });
 
 describe("mapDisplayRectToSource — cover", () => {
-  // 16:9 camera painted into a 4:3 box: the frame overflows horizontally, so
-  // the source origin sits to the LEFT of the display origin (negative offset).
   it("maps a reticle through a horizontally-cropped cover frame", () => {
     const roi = mapDisplayRectToSource(
       { x: 30, y: 94, width: 340, height: 112 },
@@ -66,7 +64,6 @@ describe("mapDisplayRectToSource — cover", () => {
     );
   });
 
-  // Portrait camera in a landscape box: overflow is vertical instead.
   it("maps a reticle through a vertically-cropped cover frame", () => {
     const roi = mapDisplayRectToSource(
       { x: 0, y: 100, width: 400, height: 100 },
@@ -109,7 +106,6 @@ describe("mapDisplayRectToSource — contain", () => {
       "contain",
     );
     expect(roi).toEqual(closeTo({ x: 0, y: -280, width: 1280, height: 1280 }));
-    // ...which the clamp pulls back to the real frame.
     expect(clampRectToSize(roi, { width: 1280, height: 720 })).toEqual({
       x: 0,
       y: 0,
@@ -119,8 +115,6 @@ describe("mapDisplayRectToSource — contain", () => {
   });
 
   it("maps a pillarboxed (portrait-in-landscape) contain frame", () => {
-    // 720x1280 source in a 400x300 box: scale 300/1280, painted 168.75 wide,
-    // so there are ~115.6px bands left and right.
     const roi = mapDisplayRectToSource(
       { x: 115.625, y: 0, width: 168.75, height: 300 },
       { width: 720, height: 1280 },

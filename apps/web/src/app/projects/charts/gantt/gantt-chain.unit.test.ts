@@ -17,11 +17,9 @@ function node(params: {
 
 describe("longestChains", () => {
   it("finds two separate components independently, sorted by workDays descending", () => {
-    // Component 1: a -> b -> c, durations 1 each (undated) = 3 workDays.
     const a = node({ id: "a" });
     const b = node({ id: "b", blockedByIds: ["a"] });
     const c = node({ id: "c", blockedByIds: ["b"] });
-    // Component 2: x -> y, durations 1 each = 2 workDays.
     const x = node({ id: "x" });
     const y = node({ id: "y", blockedByIds: ["x"] });
 
@@ -38,7 +36,6 @@ describe("longestChains", () => {
   });
 
   it("never throws or loops forever on a cycle, and still returns a usable chain", () => {
-    // a blockedBy b, b blockedBy a (mutual cycle).
     const a = node({ id: "a", blockedByIds: ["b"] });
     const b = node({ id: "b", blockedByIds: ["a"] });
     expect(() => longestChains([a, b])).not.toThrow();
@@ -52,7 +49,6 @@ describe("longestChains", () => {
   });
 
   it("computes elapsedDays < workDays for overlapping dependency dates", () => {
-    // a: days 0-5 (duration 6), b blockedBy a: days 2-8 (duration 7) — overlapping.
     const a = node({ id: "a", startDay: 0, endDay: 5 });
     const b = node({ id: "b", startDay: 2, endDay: 8, blockedByIds: ["a"] });
     const [chain] = longestChains([a, b]);
@@ -66,8 +62,6 @@ describe("longestChains", () => {
     const b = node({ id: "b", blockedByIds: ["a"] }); // undated, duration 1
     const [chain] = longestChains([a, b]);
     expect(chain?.workDays).toBe(2);
-    // No dated nodes at all would fall back to elapsedDays === workDays; here
-    // `a` is dated so elapsedDays uses its single-day range.
     expect(chain?.elapsedDays).toBe(1);
   });
 
@@ -79,13 +73,11 @@ describe("longestChains", () => {
   });
 
   it("breaks a tie between two equal-length paths deterministically", () => {
-    // r (undated, duration 1) blocks both a and b, which have equal duration.
     const r = node({ id: "r" });
     const a = node({ id: "a", startDay: 0, endDay: 2, blockedByIds: ["r"] }); // duration 3
     const b = node({ id: "b", startDay: 0, endDay: 2, blockedByIds: ["r"] }); // duration 3
     const [chain] = longestChains([r, a, b]);
     expect(chain?.workDays).toBe(1 + 3);
-    // First-encountered successor (in input-array order) wins the tie.
     expect(chain?.ids).toEqual(["r", "a"]);
   });
 
