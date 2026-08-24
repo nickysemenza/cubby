@@ -65,17 +65,32 @@ describe("entity kernel registry", () => {
       for (const action of actions) {
         const actionInput =
           action === "create"
-            ? { data: mock(binding.schemas.create!) }
+            ? {
+                data: mock(binding.schemas.create!, {
+                  seed: 1,
+                  overrides:
+                    entity === "financialTransaction"
+                      ? { kind: "purchase", amount: 1 }
+                      : undefined,
+                }),
+              }
             : action === "update"
-              ? { id, data: mock(binding.schemas.update!) }
+              ? { id, data: mock(binding.schemas.update!, { seed: 1 }) }
               : action === "get"
                 ? { id }
                 : action === "delete"
                   ? { ids: [id] }
                   : samples[action];
+        const parsed = entityCommandSchema.safeParse({
+          entity,
+          action,
+          ...actionInput,
+        });
         expect(
-          entityCommandSchema.safeParse({ entity, action, ...actionInput })
-            .success,
+          parsed.success,
+          parsed.success
+            ? undefined
+            : `${entity}.${action}: ${parsed.error.message}`,
         ).toBe(true);
       }
     }

@@ -294,51 +294,62 @@ jobs:
           fi
 
   test-unit-web:
-    name: Unit Tests - web
+    name: Tests - web (${{ matrix.tier }})
     needs: scope
     if: |
       needs.scope.outputs.web == 'true' &&
       (needs.scope.outputs.verify == 'true' || needs.scope.outputs.coverage == 'true')
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - tier: unit-1
+            args: --project unit --shard=1/2
+          - tier: unit-2
+            args: --project unit --shard=2/2
+          - tier: ui
+            args: --project unit-pure --project ui
+          - tier: pglite
+            args: --project pglite
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: "restore"
       - uses: ./.github/actions/setup-web-env
-      - name: Run unit, UI, and PGlite tests
+      - name: Run ${{ matrix.tier }} tests
         shell: bash
         env:
           COVERAGE: ${{ needs.scope.outputs.coverage }}
+          VITEST_PROJECT_ARGS: ${{ matrix.args }}
         run: |
+          read -r -a selected <<< "$VITEST_PROJECT_ARGS"
           args=(
-            --project unit
-            --project unit-pure
-            --project ui
-            --project pglite
+            "${selected[@]}"
             --reporter=default
             --reporter=github-actions
             --reporter=blob
             --reporter=./tooling/timing-reporter.ts
           )
           if [[ "$COVERAGE" == "true" ]]; then args+=(--coverage); fi
-          VITEST_BLOB_LABEL=unit-ui pnpm --dir apps/web test "${args[@]}"
-      - name: Save web unit timings
+          VITEST_BLOB_LABEL=${{ matrix.tier }} pnpm --dir apps/web test "${args[@]}"
+      - name: Save web ${{ matrix.tier }} timings
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: timings-web-unit
+          name: timings-web-${{ matrix.tier }}
           path: |
             apps/web/.vitest/
             apps/web/.vitest-reports/
           if-no-files-found: warn
           retention-days: 14
-      - name: Save web unit coverage
+      - name: Save web ${{ matrix.tier }} coverage
         if: needs.scope.outputs.coverage == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: coverage-web-unit
+          name: coverage-web-${{ matrix.tier }}
           path: apps/web/coverage/coverage-final.json
           if-no-files-found: error
           retention-days: 1
