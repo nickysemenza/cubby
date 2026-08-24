@@ -422,6 +422,13 @@ const invalidationFanout = {
   },
 } as const;
 
+/**
+ * Exhaustiveness is enforced at the consumer, not by a `satisfies` clause
+ * here: `invalidatesFor` only accepts keys of the table, and every routed
+ * entity's contract calls `invalidatesFor(entity)` in `entity-contracts.ts` —
+ * so an entity missing a fan-out row is a compile error at its contract, the
+ * moment it gets one.
+ */
 export type InvalidationEntity = keyof typeof invalidationFanout;
 /** The wider-than-base operations declared for one entity, if any. */
 export type InvalidationOp<E extends InvalidationEntity> = Exclude<

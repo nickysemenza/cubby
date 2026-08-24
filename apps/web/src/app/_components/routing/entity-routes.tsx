@@ -59,28 +59,14 @@ interface ListPageOptions {
   actions?: () => ReactNode;
 }
 
-/** The standard `variant="list" listChrome="workbench"` page body. */
-export function listPage({
-  title,
-  list: List,
-  entity,
-  layout = "full",
-  actions,
-}: ListPageOptions) {
-  return function EntityListPage() {
-    return (
-      <Page
-        variant="list"
-        listChrome="workbench"
-        title={title}
-        entity={entity}
-        layout={layout}
-        actions={actions?.()}
-      >
-        <List />
-      </Page>
-    );
-  };
+/**
+ * The standard `variant="list" listChrome="workbench"` page body for an
+ * entity list. Same shell as {@link listChromePage}; this narrower signature
+ * exists so entity-list routes can't accidentally pass chrome the standard
+ * lists never use.
+ */
+export function listPage({ list, ...options }: ListPageOptions) {
+  return listChromePage({ ...options, page: list });
 }
 
 interface ListChromeOptions {
@@ -106,7 +92,7 @@ interface ListChromeOptions {
  * shell, so a route can't drift onto a different `Page` variant/chrome by
  * hand-writing the wrapper.
  */
-export function entityListSearchRoute({
+export function listChromePage({
   title,
   page: PageBody,
   entity,
@@ -116,7 +102,7 @@ export function entityListSearchRoute({
   decoration,
   actions,
 }: ListChromeOptions) {
-  return function ChromeShellPage() {
+  return function ListChromeShell() {
     return (
       <Page
         variant="list"

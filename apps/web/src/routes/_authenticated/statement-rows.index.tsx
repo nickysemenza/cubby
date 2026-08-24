@@ -4,7 +4,7 @@ import {
 } from "@cubby/schemas/statement-row";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
-import { entityListSearchRoute } from "~/app/_components/routing/entity-routes";
+import { listChromePage } from "~/app/_components/routing/entity-routes";
 import { StatementRowList } from "~/app/_components/statement-rows/statement-row-list";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
@@ -43,7 +43,7 @@ const searchDefaults = {
 // Bound to a const, not inlined into the options object below: see
 // `entity-routes.tsx`'s doc comment on why the splitter needs a literal
 // identifier here, not an inline factory call.
-const StatementRowsPage = entityListSearchRoute({
+const StatementRowsPage = listChromePage({
   title: "Statement Rows",
   layout: "full",
   compact: true,

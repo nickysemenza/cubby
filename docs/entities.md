@@ -22,9 +22,10 @@ Drizzle table, which columns, what the mutation's own predicates are).
 
 Generalize only a **mechanical transcription of a declaration that already
 exists** — the manifest already says an entity is `searchable`, `auditable`,
-or `mergeable`, so deriving an `IncomingEdgeKey<E>` or an `xMcpOut =
-xOut.pick({...})` from that declaration removes copy-paste without removing a
-decision. Never generalize **judgment**: a mutation's business rules, the SQL
+or `mergeable`, so deriving an `IncomingEdgeKey<E>` or building `xMcpOut`
+from the same private field map as `xOut` (the schemas package bans `.pick()`
+— see check-conventions' "Schema contract derivation" rule) removes
+copy-paste without removing a decision. Never generalize **judgment**: a mutation's business rules, the SQL
 a list query runs, the text an embedding is built from, and a search-document
 projection are where an entity's actual behavior lives, and collapsing them
 behind a shared abstraction hides the one place a reviewer needs to look.
@@ -37,8 +38,12 @@ vacated first — and several call sites depend on that order.
 `ShortcodeEntity` (`entity-manifest.ts`) and to the
 `satisfies Record<ShortcodeEntity, EntityBinding>` table in
 `apps/web/src/server/entity-bindings.ts` is **one compile error** enumerating
-every unsupplied Zod contract slot (create/update/output/MCP schemas, delete
-policy, MCP slim keys) — not a silent gap discovered at runtime. Layered on
+every unsupplied Zod contract slot (`crud`: create/update/id/output schemas;
+`mcpOut`: the slim MCP projection — each nullable only as a documented
+decision) — not a silent gap discovered at runtime. Delete policies and
+filter-option specs deliberately keep their own exhaustive registries
+(`entity-lifecycle-registry.ts`, `FILTER_OPTION_SPECS`) rather than living in
+this binding; the bindings file's header records why. Layered on
 top: `crud-factory.ts` derives standard router CRUD from those schemas plus
 repo functions; `registerEntityCrudToolset` derives the MCP tool family;
 `merge/core.ts` / `removal/core.ts` derive the embedding-cleanup and audit
@@ -210,11 +215,12 @@ revisit.
   rejected directions above.
 - **Product's hand-written MCP projection** (`productMcpFields` /
   `productMcpOut` in `packages/schemas/src/product.ts`) stays hand-written
-  rather than `xOut.pick()`-derived, because `price` and `effectivePrice` on
-  the MCP shape and `price` and `pricing.effectivePrice` on the plain shape
-  are the *same two concepts with swapped surface meaning* (MCP's `price` is
-  the raw manual override; the plain output's `pricing.effectivePrice` is the
-  resolved value) — a `pick()` can transcribe key names but can't reconcile
+  rather than sharing the plain shape's field map, because `price` and
+  `effectivePrice` on the MCP shape and `price` and `pricing.effectivePrice`
+  on the plain shape are the *same two concepts with swapped surface meaning*
+  (MCP's `price` is the raw manual override; the plain output's
+  `pricing.effectivePrice` is the resolved value) — a shared field map can
+  transcribe key names but can't reconcile
   that inversion. The doc comment at `product.ts` (search for "Hand-written
   rather than picked from `productTopLevelOut`") is the load-bearing
   explanation; keep it in sync with this entry if the shape changes again.

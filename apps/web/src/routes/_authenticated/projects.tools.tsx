@@ -5,7 +5,7 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { z } from "zod";
-import { entityListSearchRoute } from "~/app/_components/routing/entity-routes";
+import { listChromePage } from "~/app/_components/routing/entity-routes";
 import { ToolMatrixPage } from "~/app/projects/tool-matrix-page";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
@@ -52,7 +52,7 @@ export type ToolMatrixSearch = z.infer<typeof toolMatrixSearchSchema>;
 // Bound to a const, not inlined into the options object below: see
 // `entity-routes.tsx`'s doc comment on why the splitter needs a literal
 // identifier here, not an inline factory call.
-const ProjectToolMatrixRoute = entityListSearchRoute({
+const ProjectToolMatrixRoute = listChromePage({
   title: "Tool usage matrix",
   eyebrow: "Projects",
   layout: "full",

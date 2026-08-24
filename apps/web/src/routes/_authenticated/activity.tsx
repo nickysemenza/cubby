@@ -12,7 +12,7 @@ import {
 } from "@tanstack/react-router";
 import { z } from "zod";
 import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
-import { entityListSearchRoute } from "~/app/_components/routing/entity-routes";
+import { listChromePage } from "~/app/_components/routing/entity-routes";
 import { Row, Stack } from "~/components/layout";
 import { NativeSelect } from "~/components/ui/native-select";
 import { entityPluralLabel } from "~/entities/entities";
@@ -36,7 +36,7 @@ const searchDefaults = { entityType: undefined, source: undefined } as const;
 // identifier here, not an inline factory call. Must be defined (and
 // initialized) before `Route` reads it below — `const` isn't hoisted the way
 // `function ActivityBody` is.
-const ActivityPage = entityListSearchRoute({
+const ActivityPage = listChromePage({
   title: "Activity",
   page: ActivityBody,
 });

@@ -436,7 +436,10 @@ describe("project repository", () => {
     );
     await expect(
       deleteProjects(ctx.db, [projectWithTask.id], ctx.actor),
-    ).rejects.toThrow(/still have tasks/);
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      cause: { reason: "PROJECT_HAS_TASKS" },
+    });
 
     const { output: projectWithExpense } = await createProject(
       ctx.db,
@@ -456,7 +459,10 @@ describe("project repository", () => {
     );
     await expect(
       deleteProjects(ctx.db, [projectWithExpense.id], ctx.actor),
-    ).rejects.toThrow(/still have expenses/);
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      cause: { reason: "PROJECT_HAS_EXPENSES" },
+    });
   });
 
   /** PROJECT_HAS_CHILDREN: a live sub-project blocks delete. */

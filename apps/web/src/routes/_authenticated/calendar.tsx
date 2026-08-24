@@ -4,7 +4,7 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { useCallback, useMemo } from "react";
-import { entityListSearchRoute } from "~/app/_components/routing/entity-routes";
+import { listChromePage } from "~/app/_components/routing/entity-routes";
 import { CalendarFilterBar } from "~/app/calendar/calendar-filter-bar";
 import { buildCalendarFilters } from "~/app/calendar/calendar-filters";
 import {
@@ -18,7 +18,7 @@ import { pageTitle } from "~/lib/page-title";
 // Bound to a const, not inlined into the options object below: see
 // `entity-routes.tsx`'s doc comment on why the splitter needs a literal
 // identifier here, not an inline factory call.
-const CalendarRoute = entityListSearchRoute({
+const CalendarRoute = listChromePage({
   title: "Calendar",
   layout: "full",
   actions: () => <CalendarSubscribeDialog />,
