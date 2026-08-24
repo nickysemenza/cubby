@@ -1,3 +1,4 @@
+import { entitySchema } from "@cubby/schemas/entity";
 import { cookbookShortcode } from "@cubby/schemas/identifiers";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useId } from "react";
@@ -22,6 +23,7 @@ const searchSchema = z.object({
   // at the route boundary so garbage ?cookbookId= values are rejected here.
   cookbookId: cookbookShortcode.optional().catch(undefined),
   hide: z.boolean().optional().catch(true),
+  entity: entitySchema.optional().catch(undefined),
 });
 
 export const Route = createFileRoute("/_authenticated/entities")({
@@ -31,7 +33,7 @@ export const Route = createFileRoute("/_authenticated/entities")({
 });
 
 function EntitiesRoute() {
-  const { tab } = Route.useSearch();
+  const { tab, entity } = Route.useSearch();
   const navigate = useNavigate();
 
   const tabs = useTabParam(tab, "schema", (next) =>
@@ -47,7 +49,16 @@ function EntitiesRoute() {
           <TabsTrigger value="recipes">Recipe graph</TabsTrigger>
         </TabsList>
         <TabsContent value="schema">
-          <EntityManifestGrid />
+          <EntityManifestGrid
+            selected={entity ?? "product"}
+            active={tabs.value === "schema"}
+            onSelect={(selected) =>
+              navigate({
+                to: ".",
+                search: (prev) => ({ ...prev, entity: selected }),
+              })
+            }
+          />
         </TabsContent>
         {/* Same reasoning as the recipe graph below: the catalog query and the
             Problems audit it cross-references only fire once this tab opens. */}
