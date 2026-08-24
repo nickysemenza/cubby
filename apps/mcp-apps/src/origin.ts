@@ -29,6 +29,17 @@ export function withCubbyOrigin(html: string, origin: string): string {
   );
 }
 
+/** Inject both per-resource values into the shared universal app document. */
+export function withCubbyAppConfig(
+  html: string,
+  { origin, appId }: { origin: string; appId: string },
+): string {
+  return withCubbyOrigin(html, origin).replace(
+    /(<meta\s+name="cubby-app-id"\s+content=")[^"]*(")/,
+    `$1${appId}$2`,
+  );
+}
+
 /**
  * The origin to deep-link to, or `null` when the placeholder was never
  * substituted (degrade to no links rather than a page of broken ones).
@@ -50,4 +61,12 @@ export function readCubbyOrigin(doc: Document): string | null {
   } catch {
     return null;
   }
+}
+
+/** The static manifest id the resource registrar injected for this iframe. */
+export function readCubbyAppId(doc: Document): string | null {
+  const value = doc.querySelector<HTMLMetaElement>(
+    'meta[name="cubby-app-id"]',
+  )?.content;
+  return value && /^[a-z][a-z0-9-]*$/u.test(value) ? value : null;
 }

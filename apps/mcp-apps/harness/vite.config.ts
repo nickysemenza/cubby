@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { defineConfig, type Plugin } from "vite";
-import { withCubbyOrigin } from "../src/origin";
+import { MCP_APP_MANIFEST } from "../src/metadata";
+import { withCubbyAppConfig } from "../src/origin";
 
 /**
  * Dev server for the local MCP App harness
@@ -18,24 +19,31 @@ import { withCubbyOrigin } from "../src/origin";
  * origin (`_meta.ui.domain`), which this route stands in for.
  */
 /** Allowlist, not a pattern — the request path never reaches `resolve`. */
-const APPS = ["shopping-list", "usda-picker"];
+const APPS = MCP_APP_MANIFEST;
 
 function serveApps(): Plugin {
   return {
     name: "mcp-apps-harness",
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
-        const name = APPS.find((app) => req.url === `/app/${app}.html`);
-        if (!name) return next();
+        const app = APPS.find(
+          (candidate) => req.url === `/app/${candidate.id}.html`,
+        );
+        if (!app) return next();
         try {
           const html = await readFile(
-            resolve(__dirname, "..", "dist", `${name}.html`),
+            resolve(__dirname, "..", "dist", "app.html"),
             "utf-8",
           );
           res.setHeader("Content-Type", "text/html");
           // Same substitution the MCP server does, from the same helper — a
           // harness that rewrites differently would hide origin bugs.
-          res.end(withCubbyOrigin(html, "https://example.invalid"));
+          res.end(
+            withCubbyAppConfig(html, {
+              origin: "https://example.invalid",
+              appId: app.id,
+            }),
+          );
         } catch {
           res.statusCode = 404;
           res.end("run `pnpm --filter @cubby/mcp-apps build` first");

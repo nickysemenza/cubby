@@ -1,11 +1,12 @@
 /**
- * `apps/web` consumes this to register `ui://` resources, while `build.mjs`
- * discovers sibling HTML entry points. The built bundle is inlined because a
- * Cloudflare Worker has no filesystem to read at request time.
+ * `apps/web` consumes this to register `ui://` resources. The one built
+ * universal document is inlined because a Cloudflare Worker has no filesystem
+ * to read at request time; each resource injects its manifest app id on read.
  */
+import { MCP_APP_MANIFEST } from "./metadata";
 
 /**
- * Built bundles, keyed by `/absolute/path/to/dist/<id>.html`.
+ * Built universal document, keyed by `/absolute/path/to/dist/app.html`.
  *
  * A glob rather than one import line per app, so the list below stays the only
  * thing to edit. It resolves at build time exactly like a static import — but
@@ -32,31 +33,12 @@ function bundleFor(id: string): string {
   return entry[1];
 }
 
-export type McpAppBundle = {
-  uri: string;
-  name: string;
-  description: string;
+export type McpAppBundle = (typeof MCP_APP_MANIFEST)[number] & {
   html: string;
 };
 
-export const SHOPPING_LIST_UI = "ui://cubby/shopping-list.html";
-export const USDA_PICKER_UI = "ui://cubby/usda-picker.html";
-
 export const MCP_APP_BUNDLES: McpAppBundle[] = [
-  {
-    uri: SHOPPING_LIST_UI,
-    name: "Shopping List",
-    description:
-      "Checkable meal-plan shopping list grouped by availability, with price coverage, omissions, and per-meal detail.",
-    html: bundleFor("shopping-list"),
-  },
-  {
-    uri: USDA_PICKER_UI,
-    name: "USDA Food Picker",
-    description:
-      "Refinable USDA search results with source explanations, match evidence, existing Cubby links, and macros per 100g.",
-    html: bundleFor("usda-picker"),
-  },
+  ...MCP_APP_MANIFEST.map((app) => ({ ...app, html: bundleFor("app") })),
 ];
 
-export { withCubbyOrigin } from "./origin";
+export { withCubbyAppConfig } from "./origin";

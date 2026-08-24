@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { readCubbyOrigin, withCubbyOrigin } from "./origin";
+import {
+  readCubbyAppId,
+  readCubbyOrigin,
+  withCubbyAppConfig,
+  withCubbyOrigin,
+} from "./origin";
 
 /** A stand-in for a built bundle: the meta tag plus inlined app JS. */
 const BUNDLE = `<!doctype html><html><head>
 <meta name="cubby-origin" content="__CUBBY_ORIGIN__" />
+<meta name="cubby-app-id" content="__CUBBY_APP_ID__" />
 </head><body><script type="module">const P="__CUBBY_ORIGIN__";console.log(P)</script></body></html>`;
 
 function docFor(html: string): Document {
@@ -46,5 +52,31 @@ describe("readCubbyOrigin", () => {
   it("normalizes to the bare origin", () => {
     const out = withCubbyOrigin(BUNDLE, "https://cubby.example.com/some/path");
     expect(readCubbyOrigin(docFor(out))).toBe("https://cubby.example.com");
+  });
+});
+
+describe("withCubbyAppConfig", () => {
+  it("injects the manifest id alongside the origin", () => {
+    const out = withCubbyAppConfig(BUNDLE, {
+      origin: "https://cubby.example.com",
+      appId: "shopping-list",
+    });
+    const doc = docFor(out);
+    expect(readCubbyOrigin(doc)).toBe("https://cubby.example.com");
+    expect(readCubbyAppId(doc)).toBe("shopping-list");
+  });
+
+  it("rejects a missing or malformed app id", () => {
+    expect(readCubbyAppId(docFor(BUNDLE))).toBeNull();
+    expect(
+      readCubbyAppId(
+        docFor(
+          withCubbyAppConfig(BUNDLE, {
+            origin: "https://cubby.example.com",
+            appId: "<script>",
+          }),
+        ),
+      ),
+    ).toBeNull();
   });
 });

@@ -384,11 +384,13 @@ function render(
   return root;
 }
 
-void bootstrap<SearchResult, SearchInput>({
-  name: "Cubby USDA Picker",
-  invalid: "Could not read USDA results from the tool result.",
-  onResult: () => {
-    selected = null;
-  },
-  render,
-});
+export function bootstrapUsdaPicker(): Promise<void> {
+  return bootstrap<SearchResult, SearchInput>({
+    name: "Cubby USDA Picker",
+    invalid: "Could not read USDA results from the tool result.",
+    onResult: () => {
+      selected = null;
+    },
+    render,
+  });
+}
