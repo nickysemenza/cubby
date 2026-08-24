@@ -19,7 +19,11 @@ export const recipeTreeDisplayImage = (
 ): ImageUrlSummary | null =>
   "displayImage" in recipe ? recipe.displayImage : (recipe.images[0] ?? null);
 
-// Inject wasm ports so recipe export remains wasm-free.
+// Inject wasm ports so recipe export remains wasm-free. Root costing is already
+// UI-scaled, so its cumulativeFactor is 1. Sub-recipes are costed at their
+// native batch and use parent.factor * (asUsedGrams / childBatchGrams). The
+// nested-spec view renders native batches; prep and combined shopping multiply
+// by cumulativeFactor to render honest as-used amounts.
 
 export type RecipeTreeRow =
   | {

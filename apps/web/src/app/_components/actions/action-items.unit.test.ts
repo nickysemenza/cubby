@@ -2,7 +2,11 @@ import { allEntities } from "@cubby/schemas/entity-manifest";
 import { describe, expect, it } from "vitest";
 import { entities } from "~/entities/entities";
 import { entityEmptyConfigForTest } from "../data-table/entity-empty-states";
-import { actionsForSurface, createActionFor } from "./action-items";
+import {
+  actionItems,
+  actionsForSurface,
+  createActionFor,
+} from "./action-items";
 
 describe("createActionFor", () => {
   it("uses the /new route when the entity has one", () => {
@@ -61,7 +65,36 @@ describe("empty-state call-to-actions are reachable", () => {
   });
 });
 
-describe("action surfaces", () => {
+describe("action registry", () => {
+  it("has unique ids", () => {
+    const ids = actionItems.map((action) => action.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("gives each entity at most one create action", () => {
+    const claimed = actionItems.flatMap((action) =>
+      action.entity ? [action.entity] : [],
+    );
+    expect(new Set(claimed).size).toBe(claimed.length);
+  });
+
+  it("declares every action on at least one surface", () => {
+    for (const action of actionItems) {
+      expect(action.surfaces.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("keeps every surface non-empty", () => {
+    for (const surface of [
+      "navbar-create",
+      "palette-quick",
+      "inventory-page",
+      "home-quick",
+    ] as const) {
+      expect(actionsForSurface(surface).length).toBeGreaterThan(0);
+    }
+  });
+
   it("keeps Home focused on four recurring household verbs", () => {
     expect(actionsForSurface("home-quick").map((action) => action.id)).toEqual([
       "recount",

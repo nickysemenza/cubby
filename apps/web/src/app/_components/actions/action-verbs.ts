@@ -68,7 +68,7 @@ export interface ActionVerb {
   tone?: "destructive";
 }
 
-const actionVerbs = {
+export const actionVerbs = {
   // — navigation ————————————————————————————————————————————————————
   recount: { label: "Recount", icon: ScanBarcode },
   photoPass: { label: "Photo pass", icon: Camera },
@@ -111,6 +111,10 @@ const actionVerbs = {
 } as const satisfies Record<string, ActionVerb>;
 
 export type ActionVerbId = keyof typeof actionVerbs;
+
+export const actionVerbLabels: string[] = Object.values(actionVerbs).map(
+  (verb) => verb.label,
+);
 
 /**
  * Widen a verb to {@link ActionVerb}. The registry is `as const` so ids stay
