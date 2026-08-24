@@ -1,5 +1,6 @@
 const GITHUB_REPOSITORY_URL = "https://github.com/nickysemenza/cubby";
 const MAIN_VERSION_TAG = /^main-([0-9a-f]{40})$/;
+const PR_VERSION_TAG = /^pr-(\d+)-([0-9a-f]{40})$/;
 
 export type BuildProvenance = {
   branch: string;
@@ -23,9 +24,17 @@ export function resolveBuildProvenance({
   fallbackCommit,
 }: ResolveBuildProvenanceInput): BuildProvenance {
   const mainCommit = versionTag?.match(MAIN_VERSION_TAG)?.[1];
-  const branch = mainCommit ? "main" : fallbackBranch;
-  const commit = mainCommit ? mainCommit.slice(0, 7) : fallbackCommit;
-  const linkCommit = mainCommit ?? fallbackCommit;
+  const prMatch = versionTag?.match(PR_VERSION_TAG);
+  const prNumber = prMatch?.[1];
+  const prCommit = prMatch?.[2];
+  const deployedCommit = mainCommit ?? prCommit;
+  const branch = mainCommit
+    ? "main"
+    : prNumber
+      ? `PR#${prNumber}`
+      : fallbackBranch;
+  const commit = deployedCommit ? deployedCommit.slice(0, 7) : fallbackCommit;
+  const linkCommit = deployedCommit ?? fallbackCommit;
 
   return {
     branch,
