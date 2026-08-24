@@ -11,9 +11,12 @@ import { expenseRouter } from "./routers/expense";
 import { filterOptionsRouter } from "./routers/filter-options";
 import { financialAccountRouter } from "./routers/financial-account";
 import { financialTransactionRouter } from "./routers/financial-transaction";
+import { householdContributionRouter } from "./routers/household-contribution";
 import { imageRouter } from "./routers/image";
 import { ingredientRouter } from "./routers/ingredient";
 import { inventoryRouter } from "./routers/inventory";
+import { ledgerPartyRouter } from "./routers/ledger-party";
+import { ledgerTransferRouter } from "./routers/ledger-transfer";
 import { locationRouter } from "./routers/location";
 import { mcpRouter } from "./routers/mcp";
 import { mealRouter } from "./routers/meal";
@@ -48,10 +51,13 @@ export const domainRouterRecord = {
   relatedness: relatednessRouter,
   recommendations: recommendationsRouter,
   ingredient: ingredientRouter,
+  householdContribution: householdContributionRouter,
   location: locationRouter,
   product: productRouter,
   inventory: inventoryRouter,
   meal: mealRouter,
+  ledgerParty: ledgerPartyRouter,
+  ledgerTransfer: ledgerTransferRouter,
   project: projectRouter,
   task: taskRouter,
   expense: expenseRouter,

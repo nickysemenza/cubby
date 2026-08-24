@@ -7,6 +7,8 @@ import type {
   ImageShortcode,
   IngredientShortcode,
   InventoryShortcode,
+  LedgerPartyShortcode,
+  LedgerTransferShortcode,
   LocationShortcode,
   MealShortcode,
   ProductShortcode,
@@ -95,6 +97,18 @@ export type CookbookId = z.infer<typeof cookbookId>;
 export const [mealId, unsafeMealId] = brandedId("MealId");
 export type MealId = z.infer<typeof mealId>;
 
+export const [ledgerPartyId, unsafeLedgerPartyId] = brandedId("LedgerPartyId");
+export type LedgerPartyId = z.infer<typeof ledgerPartyId>;
+
+export const [expenseAttributionId, unsafeExpenseAttributionId] = brandedId(
+  "ExpenseAttributionId",
+);
+export type ExpenseAttributionId = z.infer<typeof expenseAttributionId>;
+
+export const [ledgerTransferId, unsafeLedgerTransferId] =
+  brandedId("LedgerTransferId");
+export type LedgerTransferId = z.infer<typeof ledgerTransferId>;
+
 export const [mealRecipeId, unsafeMealRecipeId] = brandedId("MealRecipeId");
 export type MealRecipeId = z.infer<typeof mealRecipeId>;
 
@@ -139,6 +153,8 @@ export {
   imageShortcode,
   ingredientShortcode,
   inventoryShortcode,
+  ledgerPartyShortcode,
+  ledgerTransferShortcode,
   locationShortcode,
   mealShortcode,
   productShortcode,
@@ -158,6 +174,8 @@ export type {
   ImageShortcode,
   IngredientShortcode,
   InventoryShortcode,
+  LedgerPartyShortcode,
+  LedgerTransferShortcode,
   LocationShortcode,
   MealShortcode,
   ProductShortcode,
@@ -178,6 +196,9 @@ export const unsafeFinancialTransactionShortcode =
 export const unsafeImageShortcode = makeUnsafeId<ImageShortcode>();
 export const unsafeIngredientShortcode = makeUnsafeId<IngredientShortcode>();
 export const unsafeInventoryShortcode = makeUnsafeId<InventoryShortcode>();
+export const unsafeLedgerPartyShortcode = makeUnsafeId<LedgerPartyShortcode>();
+export const unsafeLedgerTransferShortcode =
+  makeUnsafeId<LedgerTransferShortcode>();
 export const unsafeLocationShortcode = makeUnsafeId<LocationShortcode>();
 export const unsafeMealShortcode = makeUnsafeId<MealShortcode>();
 export const unsafeProductShortcode = makeUnsafeId<ProductShortcode>();
@@ -212,6 +233,8 @@ interface EntityIdBrand {
   financialTransaction: FinancialTransactionId;
   ingredient: IngredientId;
   inventory: InventoryId;
+  ledgerParty: LedgerPartyId;
+  ledgerTransfer: LedgerTransferId;
   location: LocationId;
   meal: MealId;
   product: ProductId;
@@ -261,6 +284,8 @@ export const unsafeIdForEntity: {
   financialTransaction: unsafeFinancialTransactionId,
   ingredient: unsafeIngredientId,
   inventory: unsafeInventoryId,
+  ledgerParty: unsafeLedgerPartyId,
+  ledgerTransfer: unsafeLedgerTransferId,
   location: unsafeLocationId,
   meal: unsafeMealId,
   product: unsafeProductId,
@@ -296,6 +321,8 @@ export const ENTITY_NOT_FOUND_REASON = {
   image: "IMAGE_NOT_FOUND",
   ingredient: "INGREDIENT_NOT_FOUND",
   inventory: "INVENTORY_NOT_FOUND",
+  ledgerParty: "LEDGER_PARTY_NOT_FOUND",
+  ledgerTransfer: "LEDGER_TRANSFER_NOT_FOUND",
   location: "LOCATION_NOT_FOUND",
   meal: "MEAL_NOT_FOUND",
   product: "PRODUCT_NOT_FOUND",
@@ -327,6 +354,8 @@ export const ENTITY_LABEL = {
   image: "Image",
   ingredient: "Ingredient",
   inventory: "Inventory entry",
+  ledgerParty: "Ledger party",
+  ledgerTransfer: "Ledger transfer",
   location: "Location",
   meal: "Meal",
   product: "Product",

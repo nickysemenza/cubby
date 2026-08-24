@@ -32,6 +32,8 @@ export const SHORTCODE_PREFIX = {
   ingredient: "ING-",
   inventory: "INV-",
   location: "LOC-",
+  ledgerParty: "LPY-",
+  ledgerTransfer: "LTR-",
   meal: "MEL-",
   product: "PRD-",
   project: "PRJ-",
@@ -42,6 +44,9 @@ export const SHORTCODE_PREFIX = {
   wish: "WSH-",
 } as const;
 export type ShortcodeType = keyof typeof SHORTCODE_PREFIX;
+
+/** Every canonical prefix that may legitimately cross an API or MCP boundary. */
+export const PUBLIC_SHORTCODE_PREFIXES = Object.values(SHORTCODE_PREFIX);
 
 /**
  * The single-letter prefixes minted before the 2026-07 cutover, kept forever so
@@ -155,6 +160,14 @@ export const locationShortcode = makeShortcodeSchema(
   "location",
   "LocationShortcode",
 );
+export const ledgerPartyShortcode = makeShortcodeSchema(
+  "ledgerParty",
+  "LedgerPartyShortcode",
+);
+export const ledgerTransferShortcode = makeShortcodeSchema(
+  "ledgerTransfer",
+  "LedgerTransferShortcode",
+);
 export const mealShortcode = makeShortcodeSchema("meal", "MealShortcode");
 export const productShortcode = makeShortcodeSchema(
   "product",
@@ -182,6 +195,8 @@ const SHORTCODE_SCHEMA = {
   image: imageShortcode,
   ingredient: ingredientShortcode,
   inventory: inventoryShortcode,
+  ledgerParty: ledgerPartyShortcode,
+  ledgerTransfer: ledgerTransferShortcode,
   location: locationShortcode,
   meal: mealShortcode,
   product: productShortcode,
@@ -213,6 +228,8 @@ export type FinancialTransactionShortcode = z.infer<
 export type ImageShortcode = z.infer<typeof imageShortcode>;
 export type IngredientShortcode = z.infer<typeof ingredientShortcode>;
 export type InventoryShortcode = z.infer<typeof inventoryShortcode>;
+export type LedgerPartyShortcode = z.infer<typeof ledgerPartyShortcode>;
+export type LedgerTransferShortcode = z.infer<typeof ledgerTransferShortcode>;
 export type LocationShortcode = z.infer<typeof locationShortcode>;
 export type MealShortcode = z.infer<typeof mealShortcode>;
 export type ProductShortcode = z.infer<typeof productShortcode>;

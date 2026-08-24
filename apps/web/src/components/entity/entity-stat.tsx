@@ -4,7 +4,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import { EntityIcon, entities } from "~/entities/entities";
+import {
+  EntityIcon,
+  entities,
+  isBrowserRoutedEntity,
+} from "~/entities/entities";
 
 interface EntityStatProps {
   entity: Entity;
@@ -18,6 +22,7 @@ interface EntityStatProps {
 
 function getLabel(entity: Entity, count: number, label: boolean | string) {
   if (typeof label === "string") return label;
+  if (!isBrowserRoutedEntity(entity)) return entity;
   const def = entities[entity];
   return count === 1 ? def.label.toLowerCase() : def.pluralLabel.toLowerCase();
 }
@@ -28,6 +33,7 @@ function getTooltipText(
   tooltip: boolean | string,
 ) {
   if (typeof tooltip === "string") return tooltip;
+  if (!isBrowserRoutedEntity(entity)) return `${count} ${entity}`;
   const def = entities[entity];
   const noun =
     count === 1 ? def.label.toLowerCase() : def.pluralLabel.toLowerCase();

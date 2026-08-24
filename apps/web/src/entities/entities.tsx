@@ -1,5 +1,8 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import type {
+  BrowserRoutedEntity,
+  ShortcodeEntity,
+} from "@cubby/schemas/entity-manifest";
 import {
   Apple,
   Barcode,
@@ -24,7 +27,7 @@ import { ENTITY_ACCENTS } from "./entity-accents";
 import type { EntityDefinition } from "./types";
 
 const entityColor = (
-  entity: Entity,
+  entity: BrowserRoutedEntity,
   {
     bg,
     text = "text-primary",
@@ -386,23 +389,47 @@ const entityDefinitions = {
       standardColumns: [],
     },
   },
-} as const satisfies Record<Entity, EntityDefinition>;
+} as const satisfies Record<BrowserRoutedEntity, EntityDefinition>;
 
 /** Route unions are derived from the definitions so links cannot drift. */
 export type EntityDetailRoute =
-  (typeof entityDefinitions)[Entity]["routes"]["detail"];
+  (typeof entityDefinitions)[BrowserRoutedEntity]["routes"]["detail"];
 export type EntityListRoute =
-  (typeof entityDefinitions)[Entity]["routes"]["list"];
+  (typeof entityDefinitions)[BrowserRoutedEntity]["routes"]["list"];
 export type EntityNewRoute = {
-  [E in Entity]: (typeof entityDefinitions)[E]["routes"] extends {
+  [E in BrowserRoutedEntity]: (typeof entityDefinitions)[E]["routes"] extends {
     new: infer TRoute extends string;
   }
     ? TRoute
     : never;
-}[Entity];
+}[BrowserRoutedEntity];
 
-export const entities = entityDefinitions as typeof entityDefinitions &
-  Record<Entity, EntityDefinition>;
+/** Browser presentation exists only for entities with browser routes. */
+export const entities = entityDefinitions;
+
+export const isBrowserRoutedEntity = (
+  entity: Entity,
+): entity is BrowserRoutedEntity => entity in entityDefinitions;
+
+/** Presentation metadata for an entity whose browser-route capability is known. */
+export const browserEntityDefinition = (
+  entity: BrowserRoutedEntity,
+): EntityDefinition => entities[entity];
+
+/**
+ * Human-readable labels for generic surfaces that include route-less entities.
+ * Routed entities keep their curated UI copy; route-less records deliberately
+ * avoid growing a parallel browser registry just to appear in audit tooling.
+ */
+export const entityLabel = (entity: Entity): string => {
+  if (isBrowserRoutedEntity(entity)) return entities[entity].label;
+  return entity === "ledgerParty" ? "Ledger party" : "Ledger transfer";
+};
+
+export const entityPluralLabel = (entity: Entity): string =>
+  isBrowserRoutedEntity(entity)
+    ? entities[entity].pluralLabel
+    : `${entityLabel(entity)} records`;
 
 /**
  * Path params for an entity's detail route.
@@ -432,7 +459,10 @@ export const entityDetailParams = (
  * is what lets every generic "link to this entity" surface pass a shortcode
  * without a cast.
  */
-export const entityDetailLink = (entity: ShortcodeEntity, shortcode: string) =>
+export const entityDetailLink = (
+  entity: Extract<ShortcodeEntity, BrowserRoutedEntity>,
+  shortcode: string,
+) =>
   ({
     to: entities[entity].routes.detail,
     params: entityDetailParams(shortcode),
@@ -453,6 +483,7 @@ export const EntityIcon = ({
   className,
   ...props
 }: { entity: Entity; colored?: boolean } & LucideProps) => {
+  if (!isBrowserRoutedEntity(entity)) return null;
   const def = entities[entity];
   return (
     <def.lucideIcon

@@ -13,6 +13,14 @@ import {
 import { imageFilterFields } from "@cubby/schemas/image";
 import { ingredientFilterFields } from "@cubby/schemas/ingredient";
 import { inventoryFilterFields } from "@cubby/schemas/inventory";
+import {
+  ledgerPartyCreateInput,
+  ledgerPartyFilterFields,
+} from "@cubby/schemas/ledger-party";
+import {
+  ledgerTransferCreateInput,
+  ledgerTransferFilterFields,
+} from "@cubby/schemas/ledger-transfer";
 import { locationFilterFields } from "@cubby/schemas/location";
 import { mealCreateInput, mealFilterFields } from "@cubby/schemas/meal";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
@@ -51,6 +59,8 @@ import {
 import { createUploadedImageRecord, imageList } from "./image";
 import { createIngredient, ingredientList } from "./ingredient";
 import { inventoryentryList } from "./inventory";
+import { createLedgerParty, listLedgerParties } from "./ledger-party";
+import { createLedgerTransfer, listLedgerTransfers } from "./ledger-transfer";
 import { createLocation, locationList } from "./location";
 import { createMeal, mealList } from "./meal";
 import { productList } from "./product";
@@ -368,6 +378,36 @@ const seedWorld = async (ctx: {
   const accountCode = accounts[0];
   if (!accountCode) throw new Error("seed: financial account not created");
 
+  const ledgerParties = [];
+  for (const name of ["Guard ledger member", "Guard ledger guest"]) {
+    const { output } = await createLedgerParty(
+      db,
+      ledgerPartyCreateInput.parse({
+        name,
+        kind: name.endsWith("member") ? "member" : "guest",
+      }),
+      actor,
+    );
+    ledgerParties.push(output);
+  }
+  const [firstLedgerParty, secondLedgerParty] = ledgerParties;
+  if (!firstLedgerParty || !secondLedgerParty)
+    throw new Error("seed: ledger parties not created");
+  const ledgerTransfers = [];
+  for (const date of ["2024-06-01", "2024-06-02"]) {
+    const { output } = await createLedgerTransfer(
+      db,
+      ledgerTransferCreateInput.parse({
+        fromPartyId: firstLedgerParty.id,
+        toPartyId: secondLedgerParty.id,
+        amount: 10,
+        date,
+      }),
+      actor,
+    );
+    ledgerTransfers.push(output);
+  }
+
   const transactions = [];
   for (const [index, date] of ["2024-04-01", "2024-04-02"].entries()) {
     const { output } = await createFinancialTransaction(
@@ -430,6 +470,8 @@ const seedWorld = async (ctx: {
       ingredient: first(ingredients, "ingredient").id,
       inventory: first(inventories, "inventory").id,
       location: first(locations, "location").id,
+      ledgerParty: firstLedgerParty.id,
+      ledgerTransfer: first(ledgerTransfers, "ledger transfer").id,
       meal: first(meals, "meal").id,
       product: first(products, "product").id,
       project: first(projects, "project").id,
@@ -495,6 +537,14 @@ const GUARDS = {
     list: listFor(inventoryentryList),
   },
   location: { fields: locationFilterFields, list: listFor(locationList) },
+  ledgerParty: {
+    fields: ledgerPartyFilterFields,
+    list: listFor(listLedgerParties),
+  },
+  ledgerTransfer: {
+    fields: ledgerTransferFilterFields,
+    list: listFor(listLedgerTransfers),
+  },
   meal: { fields: mealFilterFields, list: listFor(mealList) },
   product: { fields: productFilterFields, list: listFor(productList) },
   project: { fields: projectFilterFields, list: listFor(projectList) },

@@ -3,7 +3,7 @@ import type { RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import { isValidElement, type ReactNode, useMemo } from "react";
 import { NoneValue } from "~/components/ui/none-value";
-import { entities } from "~/entities/entities";
+import { entities, isBrowserRoutedEntity } from "~/entities/entities";
 import { extractEntityTitle } from "~/lib/entity-utils";
 import type { MobileColumnMeta, MobileSlot } from "./columnHelpers";
 import type {
@@ -211,7 +211,10 @@ export function useMobileListModel<TItem extends RowData>({
   rowContentVersion?: unknown;
 }): MobileListRowModel<TItem>[] {
   const rows = table.getRowModel().rows;
-  const basePath = entity ? entities[entity].basePath : undefined;
+  const basePath =
+    entity && isBrowserRoutedEntity(entity)
+      ? entities[entity].basePath
+      : undefined;
   // Per-list, not per-row: see `MobileListRowModel.reserveImageSlot`.
   const reserveImageSlot = mobileListShape(table).hasImage;
 

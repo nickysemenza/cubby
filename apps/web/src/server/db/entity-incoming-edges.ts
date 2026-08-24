@@ -44,10 +44,14 @@ import type { AnyColumn } from "drizzle-orm";
 import {
   cookbook,
   expense,
+  expenseAttribution,
+  financialAccount,
   financialTransaction,
   financialTransactionAllocation,
   ingredient,
   inventoryEntry,
+  ledgerSourceClaim,
+  ledgerTransfer,
   location,
   locationImage,
   mealRecipe,
@@ -138,6 +142,16 @@ export const INCOMING_EDGES = {
   meal: edges({
     "MealRecipe.mealId": { column: mealRecipe.mealId },
   }),
+  ledgerParty: edges({
+    "ExpenseAttribution.ledgerPartyId": {
+      column: expenseAttribution.ledgerPartyId,
+    },
+    "FinancialAccount.ledgerPartyId": {
+      column: financialAccount.ledgerPartyId,
+    },
+    "LedgerTransfer.fromPartyId": { column: ledgerTransfer.fromPartyId },
+    "LedgerTransfer.toPartyId": { column: ledgerTransfer.toPartyId },
+  }),
   product: edges({
     "ProductExternalId.productId": { column: productExternalId.productId },
     "ProductUnitMappings.productId": {
@@ -217,12 +231,23 @@ export const INCOMING_EDGES = {
   wish: edges({
     "WishCandidate.wishId": { column: wishCandidate.wishId },
   }),
-  // No table carries a live FK at these three: `expense`/`inventory` are leaf
-  // ledger/stock rows nothing else points back at, and `usda-food` has no
+  expense: edges({
+    "ExpenseAttribution.expenseId": { column: expenseAttribution.expenseId },
+    "LedgerSourceClaim.expenseId": { column: ledgerSourceClaim.expenseId },
+  }),
+  ledgerTransfer: edges({
+    "FinancialTransaction.ledgerTransferId": {
+      column: financialTransaction.ledgerTransferId,
+    },
+    "LedgerSourceClaim.ledgerTransferId": {
+      column: ledgerSourceClaim.ledgerTransferId,
+    },
+  }),
+  // No table carries a live FK at these two: `inventory` is a leaf stock row,
+  // and `usda-food` has no
   // local table at all (it's resolved at query time via `product.fdc_id`, a
   // cross-system id link rather than a DB FK — see usda-link-resolved-at-
   // query-time).
-  expense: edges({}),
   inventory: edges({}),
   "usda-food": edges({}),
 } as const satisfies Record<Entity, Record<string, IncomingEdge>>;

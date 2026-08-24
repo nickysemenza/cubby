@@ -20,7 +20,11 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { entities } from "~/entities/entities";
+import {
+  browserEntityDefinition,
+  entities,
+  isBrowserRoutedEntity,
+} from "~/entities/entities";
 import { getEntityContract } from "~/entities/entity-contracts";
 import { getSortableFields } from "~/entities/sortable-fields";
 import { viewsForEntity } from "~/entities/view-manifest";
@@ -140,19 +144,32 @@ const GROUPS: Group[] = [
       {
         label: "Default sort",
         cell: ({ entity }) => {
-          const sort = entities[entity].list?.defaultSort;
+          if (!isBrowserRoutedEntity(entity)) return dash;
+          const sort = browserEntityDefinition(entity).list?.defaultSort;
           return sort ? <span className={mono}>{sort}</span> : dash;
         },
       },
       {
         label: "Sortable fields",
-        cell: ({ entity }) => <Chips items={getSortableFields(entity)} />,
+        cell: ({ entity }) =>
+          isBrowserRoutedEntity(entity) ? (
+            <Chips items={getSortableFields(entity)} />
+          ) : (
+            dash
+          ),
       },
       {
         label: "Standard columns",
-        cell: ({ entity }) => (
-          <Chips items={entities[entity].list?.standardColumns ?? []} />
-        ),
+        cell: ({ entity }) =>
+          isBrowserRoutedEntity(entity) ? (
+            <Chips
+              items={
+                browserEntityDefinition(entity).list?.standardColumns ?? []
+              }
+            />
+          ) : (
+            dash
+          ),
       },
       {
         label: "Saved views",
@@ -160,16 +177,26 @@ const GROUPS: Group[] = [
       },
       {
         label: "Common sections",
-        cell: ({ entity }) => (
-          <Chips items={entities[entity].detail?.commonSections ?? []} />
-        ),
+        cell: ({ entity }) =>
+          isBrowserRoutedEntity(entity) ? (
+            <Chips
+              items={
+                browserEntityDefinition(entity).detail?.commonSections ?? []
+              }
+            />
+          ) : (
+            dash
+          ),
       },
       { label: "Has images", cell: ({ d }) => <Bool value={d.hasImages} /> },
       {
         label: "Can preview",
-        cell: ({ entity }) => (
-          <Bool value={getEntityContract(entity).canPreview} />
-        ),
+        cell: ({ entity }) =>
+          isBrowserRoutedEntity(entity) ? (
+            <Bool value={getEntityContract(entity).canPreview} />
+          ) : (
+            <Bool value={false} />
+          ),
       },
     ],
   },
@@ -181,7 +208,9 @@ const GROUPS: Group[] = [
         label: "Invalidation keys",
         cell: ({ entity }) => (
           <span className={mono}>
-            {getEntityContract(entity).invalidationKeys.length}
+            {isBrowserRoutedEntity(entity)
+              ? getEntityContract(entity).invalidationKeys.length
+              : "—"}
           </span>
         ),
       },
@@ -224,6 +253,9 @@ const GROUPS: Group[] = [
 ];
 
 function EntityHeader({ entity }: { entity: Entity }) {
+  if (!isBrowserRoutedEntity(entity)) {
+    return <span className="font-mono text-2xs">{entity}</span>;
+  }
   const def = entities[entity];
   const Icon = def.lucideIcon;
   return (

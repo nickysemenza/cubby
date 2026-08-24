@@ -21,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { isBrowserRoutedEntity } from "~/entities/entities";
 import { ENTITY_ACCENTS } from "~/entities/entity-accents";
 import type { QueryTiming } from "~/lib/query-timing";
 import { cn } from "~/lib/utils";
@@ -268,7 +269,7 @@ export default function RTable<TItem extends RowData>(
             table.resetColumnFilters();
           }
         : undefined;
-      return entity ? (
+      return entity && isBrowserRoutedEntity(entity) ? (
         <EntityEmptyState
           entity={entity}
           isFiltered={isFiltered}
@@ -531,7 +532,9 @@ export default function RTable<TItem extends RowData>(
             )}
             style={
               {
-                ...(entity ? { "--row-accent": ENTITY_ACCENTS[entity] } : {}),
+                ...(entity && isBrowserRoutedEntity(entity)
+                  ? { "--row-accent": ENTITY_ACCENTS[entity] }
+                  : {}),
                 // Embedded tables sit in a scrolling detail page, so they take a
                 // fixed ceiling instead of claiming the rest of the viewport.
                 maxHeight: embedded

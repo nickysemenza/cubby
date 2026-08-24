@@ -1,4 +1,7 @@
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import type {
+  BrowserRoutedEntity,
+  ShortcodeEntity,
+} from "@cubby/schemas/entity-manifest";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Search, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -16,7 +19,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
-import { entityDetailLink } from "~/entities/entities";
+import { entityDetailLink, isBrowserRoutedEntity } from "~/entities/entities";
 import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/ask")({
@@ -56,16 +59,16 @@ function AskPage() {
 
   // Mirror the palette's onSelectSource path so /ask sources also seed recents.
   const goToSource = (source: (typeof sources)[number]) => {
+    const entity = entityTypeMap[source.entityType];
+    if (!isBrowserRoutedEntity(entity) || entity === "usda-food") return;
     pushRecent({
       entityType: source.entityType,
       id: source.id,
       name: source.name,
     });
-    // Every searchable entity is also a shortcode entity, so the map's widened
-    // `Entity` return is safe to narrow here.
     navigate(
       entityDetailLink(
-        entityTypeMap[source.entityType] as ShortcodeEntity,
+        entity as Extract<ShortcodeEntity, BrowserRoutedEntity>,
         source.id,
       ),
     );

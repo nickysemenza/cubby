@@ -1,4 +1,4 @@
-import type { Entity } from "@cubby/schemas/entity";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
 import { locationTypeValues, productCategoryValues } from "@cubby/shared";
 import { ProjectMark } from "~/app/projects/project-mark";
@@ -15,7 +15,7 @@ import { getCategoryColor, getCategoryIcon } from "../products/category-theme";
 
 export type { SearchHit } from "@cubby/schemas/search";
 
-export const entityTypeMap: Record<SearchableEntity, Entity> = {
+export const entityTypeMap: Record<SearchableEntity, BrowserRoutedEntity> = {
   product: "product",
   recipe: "recipe",
   ingredient: "ingredient",
@@ -33,7 +33,7 @@ export const entityTypeMap: Record<SearchableEntity, Entity> = {
   wish: "wish",
 };
 
-function getSearchResultEntity(item: SearchHit): Entity {
+function getSearchResultEntity(item: SearchHit): BrowserRoutedEntity {
   return entityTypeMap[item.entityType];
 }
 

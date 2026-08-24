@@ -1,4 +1,4 @@
-import type { Entity } from "@cubby/schemas/entity";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { Link } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
 import { createActionFor } from "~/app/_components/actions/action-items";
@@ -21,7 +21,7 @@ interface EntityEmptyConfig {
   actionLabel?: string;
 }
 
-const entityEmptyConfig: Record<Entity, EntityEmptyConfig> = {
+const entityEmptyConfig: Record<BrowserRoutedEntity, EntityEmptyConfig> = {
   recipe: {
     title: "Your recipe book awaits",
     description:
@@ -122,7 +122,7 @@ const entityEmptyConfig: Record<Entity, EntityEmptyConfig> = {
 };
 
 interface EntityEmptyStateProps {
-  entity: Entity;
+  entity: BrowserRoutedEntity;
   isFiltered?: boolean;
   onClearFilters?: () => void;
 }

@@ -8,6 +8,8 @@ export const entitySchema = z.enum([
   "cookbook",
   "location",
   "inventory",
+  "ledgerParty",
+  "ledgerTransfer",
   "meal",
   "project",
   "task",

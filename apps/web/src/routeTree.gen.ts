@@ -24,6 +24,7 @@ import { Route as AuthenticatedBackgroundJobsRouteImport } from './routes/_authe
 import { Route as AuthenticatedCalendarRouteImport } from './routes/_authenticated/calendar'
 import { Route as AuthenticatedDesignRouteImport } from './routes/_authenticated/design'
 import { Route as AuthenticatedEntitiesRouteImport } from './routes/_authenticated/entities'
+import { Route as AuthenticatedHouseholdContributionRouteImport } from './routes/_authenticated/household-contribution'
 import { Route as AuthenticatedLabelsRouteImport } from './routes/_authenticated/labels'
 import { Route as AuthenticatedMcpRouteImport } from './routes/_authenticated/mcp'
 import { Route as AuthenticatedPantryViewRouteImport } from './routes/_authenticated/pantry-view'
@@ -184,6 +185,12 @@ const AuthenticatedEntitiesRoute = AuthenticatedEntitiesRouteImport.update({
   path: '/entities',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedHouseholdContributionRoute =
+  AuthenticatedHouseholdContributionRouteImport.update({
+    id: '/household-contribution',
+    path: '/household-contribution',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedLabelsRoute = AuthenticatedLabelsRouteImport.update({
   id: '/labels',
   path: '/labels',
@@ -660,6 +667,7 @@ export interface FileRoutesByFullPath {
   '/calendar': typeof AuthenticatedCalendarRoute
   '/design': typeof AuthenticatedDesignRoute
   '/entities': typeof AuthenticatedEntitiesRoute
+  '/household-contribution': typeof AuthenticatedHouseholdContributionRoute
   '/labels': typeof AuthenticatedLabelsRoute
   '/mcp': typeof AuthenticatedMcpRoute
   '/pantry-view': typeof AuthenticatedPantryViewRoute
@@ -755,6 +763,7 @@ export interface FileRoutesByTo {
   '/calendar': typeof AuthenticatedCalendarRoute
   '/design': typeof AuthenticatedDesignRoute
   '/entities': typeof AuthenticatedEntitiesRoute
+  '/household-contribution': typeof AuthenticatedHouseholdContributionRoute
   '/labels': typeof AuthenticatedLabelsRoute
   '/mcp': typeof AuthenticatedMcpRoute
   '/pantry-view': typeof AuthenticatedPantryViewRoute
@@ -853,6 +862,7 @@ export interface FileRoutesById {
   '/_authenticated/calendar': typeof AuthenticatedCalendarRoute
   '/_authenticated/design': typeof AuthenticatedDesignRoute
   '/_authenticated/entities': typeof AuthenticatedEntitiesRoute
+  '/_authenticated/household-contribution': typeof AuthenticatedHouseholdContributionRoute
   '/_authenticated/labels': typeof AuthenticatedLabelsRoute
   '/_authenticated/mcp': typeof AuthenticatedMcpRoute
   '/_authenticated/pantry-view': typeof AuthenticatedPantryViewRoute
@@ -951,6 +961,7 @@ export interface FileRouteTypes {
     | '/calendar'
     | '/design'
     | '/entities'
+    | '/household-contribution'
     | '/labels'
     | '/mcp'
     | '/pantry-view'
@@ -1046,6 +1057,7 @@ export interface FileRouteTypes {
     | '/calendar'
     | '/design'
     | '/entities'
+    | '/household-contribution'
     | '/labels'
     | '/mcp'
     | '/pantry-view'
@@ -1143,6 +1155,7 @@ export interface FileRouteTypes {
     | '/_authenticated/calendar'
     | '/_authenticated/design'
     | '/_authenticated/entities'
+    | '/_authenticated/household-contribution'
     | '/_authenticated/labels'
     | '/_authenticated/mcp'
     | '/_authenticated/pantry-view'
@@ -1346,6 +1359,13 @@ declare module '@tanstack/react-router' {
       path: '/entities'
       fullPath: '/entities'
       preLoaderRoute: typeof AuthenticatedEntitiesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/household-contribution': {
+      id: '/_authenticated/household-contribution'
+      path: '/household-contribution'
+      fullPath: '/household-contribution'
+      preLoaderRoute: typeof AuthenticatedHouseholdContributionRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/labels': {
@@ -1921,6 +1941,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedCalendarRoute: typeof AuthenticatedCalendarRoute
   AuthenticatedDesignRoute: typeof AuthenticatedDesignRoute
   AuthenticatedEntitiesRoute: typeof AuthenticatedEntitiesRoute
+  AuthenticatedHouseholdContributionRoute: typeof AuthenticatedHouseholdContributionRoute
   AuthenticatedLabelsRoute: typeof AuthenticatedLabelsRoute
   AuthenticatedMcpRoute: typeof AuthenticatedMcpRoute
   AuthenticatedPantryViewRoute: typeof AuthenticatedPantryViewRoute
@@ -2002,6 +2023,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedCalendarRoute: AuthenticatedCalendarRoute,
   AuthenticatedDesignRoute: AuthenticatedDesignRoute,
   AuthenticatedEntitiesRoute: AuthenticatedEntitiesRoute,
+  AuthenticatedHouseholdContributionRoute:
+    AuthenticatedHouseholdContributionRoute,
   AuthenticatedLabelsRoute: AuthenticatedLabelsRoute,
   AuthenticatedMcpRoute: AuthenticatedMcpRoute,
   AuthenticatedPantryViewRoute: AuthenticatedPantryViewRoute,

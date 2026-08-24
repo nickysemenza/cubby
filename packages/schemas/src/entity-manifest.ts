@@ -53,6 +53,8 @@ export const entityDescriptor = z.object({
   legacyShortcodePrefix: z.string().optional(),
   /** Has a `deletedAt` soft-delete column. */
   softDelete: z.boolean(),
+  /** Whether a shortcode resolves to a browser route. */
+  browserRoutes: z.boolean().optional(),
   /** Writes rows to the audit log (drives the audit entity union). */
   auditable: z.boolean(),
   /** Can carry images (drives the image entity enum). */
@@ -494,6 +496,80 @@ export const entityManifest = {
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
     mcp: ALL_MCP,
   },
+  ledgerParty: {
+    dbTable: "LedgerParty",
+    idBrand: "LedgerPartyId",
+    shortcodePrefix: SHORTCODE_PREFIX.ledgerParty,
+    softDelete: true,
+    browserRoutes: false,
+    auditable: true,
+    hasImages: false,
+    searchable: false,
+    countable: false,
+    relationships: [
+      path(
+        "expenses",
+        "Attributed expenses",
+        "expense",
+        inc("ExpenseAttribution.ledgerPartyId"),
+        out("ExpenseAttribution.expenseId"),
+      ),
+      path(
+        "financial-accounts",
+        "Financial accounts",
+        "financialAccount",
+        inc("FinancialAccount.ledgerPartyId"),
+      ),
+      path(
+        "outgoing-transfers",
+        "Outgoing transfers",
+        "ledgerTransfer",
+        inc("LedgerTransfer.fromPartyId"),
+      ),
+      path(
+        "incoming-transfers",
+        "Incoming transfers",
+        "ledgerTransfer",
+        inc("LedgerTransfer.toPartyId"),
+      ),
+    ],
+    lifecycle: { delete: { mode: "soft", bulk: true }, merge: true },
+    mcp: ALL_MCP,
+    mcpNames: { plural: "ledger_parties" },
+  },
+  ledgerTransfer: {
+    dbTable: "LedgerTransfer",
+    idBrand: "LedgerTransferId",
+    shortcodePrefix: SHORTCODE_PREFIX.ledgerTransfer,
+    softDelete: true,
+    browserRoutes: false,
+    auditable: true,
+    hasImages: false,
+    searchable: false,
+    countable: false,
+    relationships: [
+      path(
+        "from-party",
+        "From party",
+        "ledgerParty",
+        out("LedgerTransfer.fromPartyId"),
+      ),
+      path(
+        "to-party",
+        "To party",
+        "ledgerParty",
+        out("LedgerTransfer.toPartyId"),
+      ),
+      path(
+        "evidence-transactions",
+        "Evidence transactions",
+        "financialTransaction",
+        inc("FinancialTransaction.ledgerTransferId"),
+      ),
+    ],
+    lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
+    mcp: ALL_MCP,
+  },
   project: {
     dbTable: "Project",
     idBrand: "ProjectId",
@@ -703,6 +779,12 @@ export const entityManifest = {
     countable: true,
     relationships: [
       path(
+        "ledger-party",
+        "Ledger party",
+        "ledgerParty",
+        out("FinancialAccount.ledgerPartyId"),
+      ),
+      path(
         "transactions",
         "Transactions",
         "financialTransaction",
@@ -744,6 +826,12 @@ export const entityManifest = {
         "Financial account",
         "financialAccount",
         out("FinancialTransaction.accountId"),
+      ),
+      path(
+        "ledger-transfer",
+        "Ledger transfer",
+        "ledgerTransfer",
+        out("FinancialTransaction.ledgerTransferId"),
       ),
       path(
         "purchase",
@@ -935,6 +1023,23 @@ export const searchableEntities = entitiesWithTrait("searchable");
 export const countableEntities = entitiesWithTrait("countable");
 
 /**
+ * Entities that own a browser route. Route-less entities still have standard
+ * shortcode and MCP contracts, but UI registries must not invent placeholder
+ * route entries for them.
+ */
+type EntityWithBrowserRoute = {
+  [E in Entity]: EntityManifest[E] extends { browserRoutes: false } ? never : E;
+}[Entity];
+
+export const browserRoutedEntities: readonly EntityWithBrowserRoute[] =
+  Object.freeze(
+    allEntities.filter(
+      (entity): entity is EntityWithBrowserRoute =>
+        (entityManifest[entity] as EntityDescriptor).browserRoutes !== false,
+    ),
+  );
+
+/**
  * Entities addressable by a public shortcode — the roster behind the shortcode
  * resolvers, the shortcode detail routes, and every public MCP `id`. Derived
  * from the presence of `shortcodePrefix` rather than a second hand-kept list;
@@ -955,6 +1060,7 @@ export const shortcodeEntities: readonly EntityWithShortcode[] = Object.freeze(
 );
 
 export type ShortcodeEntity = EntityWithShortcode;
+export type BrowserRoutedEntity = EntityWithBrowserRoute;
 
 export type AuditableEntity = (typeof auditableEntities)[number];
 export type CountableEntity = (typeof countableEntities)[number];

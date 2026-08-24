@@ -154,6 +154,34 @@ export const ENTITY_EDGE_SEMANTICS = {
       liveness: { kind: "must-target-live" },
     },
   },
+  ledgerParty: {
+    "ExpenseAttribution.ledgerPartyId": {
+      role: "ledger",
+      label: "beneficiary attributions",
+      description:
+        "A weighted expense beneficiary or funder share; money remains on the expense itself.",
+      liveness: { kind: "must-target-live" },
+    },
+    "FinancialAccount.ledgerPartyId": {
+      role: "reference",
+      label: "financial accounts",
+      description:
+        "The member or household party an evidence account belongs to.",
+      liveness: { kind: "must-target-live" },
+    },
+    "LedgerTransfer.fromPartyId": {
+      role: "ledger",
+      label: "outgoing transfers",
+      description: "A transfer source endpoint.",
+      liveness: { kind: "must-target-live" },
+    },
+    "LedgerTransfer.toPartyId": {
+      role: "ledger",
+      label: "incoming transfers",
+      description: "A transfer target endpoint.",
+      liveness: { kind: "must-target-live" },
+    },
+  },
   product: {
     "ProductExternalId.productId": {
       role: "metadata",
@@ -420,7 +448,36 @@ export const ENTITY_EDGE_SEMANTICS = {
       liveness: { kind: "must-target-live" },
     },
   },
-  expense: {},
+  expense: {
+    "ExpenseAttribution.expenseId": {
+      role: "composition",
+      label: "party shares",
+      description:
+        "Unitless beneficiary or initial-funder weights that allocate this Expense without storing money.",
+      liveness: { kind: "must-target-live" },
+    },
+    "LedgerSourceClaim.expenseId": {
+      role: "metadata",
+      label: "import source references",
+      description:
+        "Durable external identity proving which normalized source row became this Expense.",
+      liveness: { kind: "must-target-live" },
+    },
+  },
+  ledgerTransfer: {
+    "FinancialTransaction.ledgerTransferId": {
+      role: "reference",
+      label: "evidence transactions",
+      description: "Posted settlement evidence for this transfer.",
+      liveness: { kind: "must-target-live" },
+    },
+    "LedgerSourceClaim.ledgerTransferId": {
+      role: "metadata",
+      label: "source claims",
+      description: "Canonical external evidence claimed by this transfer.",
+      liveness: { kind: "must-target-live" },
+    },
+  },
   inventory: {},
   "usda-food": {},
 } as const satisfies { [E in Entity]: IncomingEdgeMap<E, EdgeSemantics> };

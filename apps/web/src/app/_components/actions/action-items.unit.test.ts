@@ -18,7 +18,11 @@ describe("createActionFor", () => {
   it.each(["task", "project", "expense", "meal"] as const)(
     "resolves %s to its deep-linked create dialog",
     (entity) => {
-      expect(entities[entity].routes.new).toBeUndefined();
+      expect(
+        "new" in entities[entity].routes
+          ? entities[entity].routes.new
+          : undefined,
+      ).toBeUndefined();
       expect(createActionFor(entity)).toEqual({
         to: entities[entity].routes.list,
         search: { create: true },
@@ -29,6 +33,13 @@ describe("createActionFor", () => {
   it("returns null for an entity with no create affordance", () => {
     expect(createActionFor("usda-food")).toBeNull();
   });
+
+  it.each(["ledgerParty", "ledgerTransfer"] as const)(
+    "returns null for route-less %s",
+    (entity) => {
+      expect(createActionFor(entity)).toBeNull();
+    },
+  );
 
   it("never invents a target for an entity that has neither", () => {
     for (const entity of allEntities) {

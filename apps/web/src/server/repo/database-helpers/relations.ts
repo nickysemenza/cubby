@@ -106,6 +106,29 @@ const withProjectAndProductNameOnly = {
         },
       },
     },
+    attributions: {
+      columns: {
+        role: true,
+        ledgerPartyId: true,
+        weight: true,
+        deletedAt: true,
+      },
+      with: { ledgerParty: { columns: { shortcode: true, deletedAt: true } } },
+    },
+    sourceClaims: {
+      columns: {
+        source: true,
+        sourceKey: true,
+        sourceKeyVersion: true,
+        normalizedEvidence: true,
+        targetAmountAtClaim: true,
+        reconciliationDecision: true,
+        reconciliationNote: true,
+        createdAt: true,
+        updatedAt: true,
+        deletedAt: true,
+      },
+    },
   },
 } as const;
 

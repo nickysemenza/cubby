@@ -6,7 +6,10 @@
  * instead of hand-rolling `update`.
  */
 import type { ActorContext } from "@cubby/schemas/context";
-import type { ImpactItem } from "@cubby/schemas/entity-integrity";
+import type {
+  ImpactItem,
+  OperationDisposition,
+} from "@cubby/schemas/entity-integrity";
 import { inferExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import type {
   ExpenseId,
@@ -34,7 +37,14 @@ import type {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { entityEmbedding, expense, purchase } from "~/server/db/schema";
+import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import {
+  entityEmbedding,
+  expense,
+  expenseAttribution,
+  ledgerSourceClaim,
+  purchase,
+} from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
   type AuditEntryInput,
@@ -53,7 +63,12 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityCrud } from "~/server/repo/entity-crud-factory";
+import { replaceExpenseAttributionRole } from "~/server/repo/expense-attribution";
 import { countByTarget, impact, present } from "~/server/repo/impact";
+import {
+  assertExplicitSourceClaimsForAmountChange,
+  replaceLedgerSourceClaims,
+} from "~/server/repo/ledger-source-claim";
 import {
   pricingProductIds,
   syncChangedEffectivePrices,
@@ -78,6 +93,21 @@ import {
   resolveDefaultProjectId,
 } from "./helpers";
 
+export const EXPENSE_DELETE_EDGE_POLICY = {
+  "ExpenseAttribution.expenseId": {
+    code: "soft-delete-attributions",
+    effect: "soft-delete",
+    description:
+      "Deleting an Expense removes its unitless beneficiary and initial-funder shares; no money exists on those child rows.",
+  },
+  "LedgerSourceClaim.expenseId": {
+    code: "soft-delete-source-references",
+    effect: "soft-delete",
+    description:
+      "Deleting an Expense retires the normalized import references that identify that ledger row.",
+  },
+} as const satisfies IncomingEdgePolicy<"expense", OperationDisposition>;
+
 /** `expenseUpdateData` has no standalone type export — derive it from the input. */
 type ExpenseUpdateData = ExpenseUpdateInput["data"];
 
@@ -91,7 +121,14 @@ type ExpenseUpdateData = ExpenseUpdateInput["data"];
  */
 type ResolvedExpenseUpdate = Omit<
   ExpenseUpdateData,
-  "vendor" | "orderId" | "projectId" | "productId" | "purchaseId"
+  | "vendor"
+  | "orderId"
+  | "projectId"
+  | "productId"
+  | "purchaseId"
+  | "beneficiaries"
+  | "funders"
+  | "sourceClaims"
 > & {
   projectId?: ProjectId | null;
   productId?: ProductId | null;
@@ -365,6 +402,9 @@ export const updateExpense = async (
     projectId,
     productId,
     purchaseId,
+    beneficiaries,
+    funders,
+    sourceClaims,
     ...restColumns
   } = data;
 
@@ -374,6 +414,38 @@ export const updateExpense = async (
 
   return withTransaction(db, async (tx) => {
     const id = await resolveOrThrow(tx, "expense", shortcode);
+    const [lockedExpense] = await tx
+      .select({ id: expense.id })
+      .from(expense)
+      .where(and(eq(expense.id, id), notDeleted(expense)))
+      .for("update")
+      .limit(1);
+    if (!lockedExpense)
+      throw createAppError(
+        "EXPENSE_NOT_FOUND",
+        `Expense not found: ${shortcode}`,
+      );
+    const nestedBefore =
+      beneficiaries !== undefined ||
+      funders !== undefined ||
+      sourceClaims !== undefined
+        ? await getExpenseByID(tx, id)
+        : undefined;
+    const auditNestedChanges = async (output: ExpenseOut) => {
+      if (!nestedBefore) return;
+      const changes = computeChanges(nestedBefore, output, [
+        "beneficiaries",
+        "funders",
+        "sourceClaims",
+      ]);
+      if (changes)
+        await logAuditEntry(tx, actor, {
+          entityType: "expense",
+          entityId: id,
+          action: "update",
+          changes,
+        });
+    };
     const beforeQualityTargets = await tx.query.expense.findFirst({
       where: and(eq(expense.id, id), notDeleted(expense)),
       columns: {
@@ -385,6 +457,15 @@ export const updateExpense = async (
         lineBasis: true,
       },
     });
+    await assertExplicitSourceClaimsForAmountChange(
+      tx,
+      { expenseId: id },
+      beforeQualityTargets?.cost ?? null,
+      data.cost === undefined
+        ? (beforeQualityTargets?.cost ?? null)
+        : data.cost,
+      sourceClaims,
+    );
 
     const resolvedProjectId =
       projectId === undefined
@@ -462,6 +543,30 @@ export const updateExpense = async (
         : {}),
     };
 
+    const applyNested = async () => {
+      if (beneficiaries !== undefined)
+        await replaceExpenseAttributionRole(
+          tx,
+          id,
+          "beneficiary",
+          beneficiaries ?? [],
+        );
+      if (funders !== undefined)
+        await replaceExpenseAttributionRole(tx, id, "funder", funders ?? []);
+      if (sourceClaims !== undefined)
+        await replaceLedgerSourceClaims(
+          tx,
+          {
+            expenseId: id,
+            targetAmount:
+              data.cost === undefined
+                ? (beforeQualityTargets?.cost ?? null)
+                : data.cost,
+          },
+          sourceClaims ?? [],
+        );
+    };
+
     const priceCanChange =
       data.cost !== undefined ||
       data.future !== undefined ||
@@ -476,6 +581,7 @@ export const updateExpense = async (
     );
 
     if (!needsResolve) {
+      await applyNested();
       const output = await expenseCrud.update(
         tx,
         id,
@@ -487,6 +593,7 @@ export const updateExpense = async (
         },
         actor,
       );
+      await auditNestedChanges(output);
       if (
         data.cost !== undefined ||
         data.productId !== undefined ||
@@ -574,6 +681,8 @@ export const updateExpense = async (
       },
     );
 
+    await applyNested();
+
     const output = await expenseCrud.update(
       tx,
       id,
@@ -583,6 +692,7 @@ export const updateExpense = async (
       },
       actor,
     );
+    await auditNestedChanges(output);
     await touchDataQualityTargets(tx, {
       productIds: [beforeQualityTargets?.productId, resolvedProductId].filter(
         (value): value is ProductId => value !== null && value !== undefined,
@@ -698,6 +808,26 @@ export const createExpense = async (
       productQuantity: data.productQuantity,
       purchaseId,
     });
+    await replaceExpenseAttributionRole(
+      tx,
+      created.id,
+      "beneficiary",
+      data.beneficiaries ?? [],
+    );
+    await replaceExpenseAttributionRole(
+      tx,
+      created.id,
+      "funder",
+      data.funders ?? [],
+    );
+    await replaceLedgerSourceClaims(
+      tx,
+      {
+        expenseId: created.id,
+        targetAmount: data.cost,
+      },
+      data.sourceClaims ?? [],
+    );
     await logAuditEntry(tx, actor, {
       entityType: "expense",
       entityId: created.id,
@@ -915,6 +1045,18 @@ export const deleteExpensesWithPurchaseEffects = async (
       ids,
       removal: "soft",
       actor,
+      children: [
+        {
+          table: expenseAttribution,
+          parentColumns: [expenseAttribution.expenseId],
+          auditKey: "cascadedExpenseAttributions",
+        },
+        {
+          table: ledgerSourceClaim,
+          parentColumns: [ledgerSourceClaim.expenseId],
+          auditKey: "cascadedLedgerSourceClaims",
+        },
+      ],
     });
 
     await touchDataQualityTargets(tx, {
@@ -1001,10 +1143,9 @@ export const deleteExpenses = async (
 /**
  * What `deleteExpenses` would do to the given expenses, without doing it.
  *
- * `expense` has zero incoming edges (`INCOMING_EDGES.expense` is `{}` — see
- * `entity-incoming-edges.ts`), so unlike every other preview in this feature
- * there is nothing to block or cascade: `blockers` and `changes` are always
- * empty. That doesn't make an expense delete a no-op — its one real
+ * Attribution and normalized source-reference children are removed with the
+ * Expense; neither can outlive the money row it describes. Those owned edges
+ * never block deletion. The other real
  * consequence, read straight off `deleteExpenses` above, is the same-transaction
  * `removeEntity` cascade that removes the row from search. The
  * count here is the SAME predicate that call uses (entityType match +
@@ -1050,5 +1191,30 @@ export const previewDeleteExpenses = async (
     }),
   ]);
 
-  return { blockers: [], changes: [], sideEffects };
+  const changes = present([
+    impact({
+      disposition: EXPENSE_DELETE_EDGE_POLICY["ExpenseAttribution.expenseId"],
+      edgeKey: "ExpenseAttribution.expenseId",
+      label: "expense attributions removed",
+      byTargetId: await countByTarget(
+        dbClient,
+        expenseAttribution,
+        expenseAttribution.expenseId,
+        ids,
+      ),
+    }),
+    impact({
+      disposition: EXPENSE_DELETE_EDGE_POLICY["LedgerSourceClaim.expenseId"],
+      edgeKey: "LedgerSourceClaim.expenseId",
+      label: "expense source claims removed",
+      byTargetId: await countByTarget(
+        dbClient,
+        ledgerSourceClaim,
+        ledgerSourceClaim.expenseId,
+        ids,
+      ),
+    }),
+  ]);
+
+  return { blockers: [], changes, sideEffects };
 };

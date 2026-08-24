@@ -9,6 +9,8 @@ import {
   imageShortcode,
   ingredientShortcode,
   inventoryShortcode,
+  ledgerPartyShortcode,
+  ledgerTransferShortcode,
   locationShortcode,
   mealShortcode,
   productShortcode,
@@ -350,6 +352,8 @@ export const previewDeleteEntitySchema = z.enum([
   "ingredient",
   "cookbook",
   "meal",
+  "ledgerParty",
+  "ledgerTransfer",
   "location",
   "project",
   "task",
@@ -385,6 +389,7 @@ export const previewMergeEntitySchema = z.enum([
   "vendor",
   "purchase",
   "product",
+  "ledgerParty",
 ]);
 export type PreviewMergeEntity = z.infer<typeof previewMergeEntitySchema>;
 
@@ -398,6 +403,8 @@ const PREVIEW_TARGET_ID_SCHEMA = {
   ingredient: ingredientShortcode,
   cookbook: cookbookShortcode,
   meal: mealShortcode,
+  ledgerParty: ledgerPartyShortcode,
+  ledgerTransfer: ledgerTransferShortcode,
   location: locationShortcode,
   project: projectShortcode,
   task: taskShortcode,
@@ -425,6 +432,8 @@ const previewTargetId = anyShortcodeSchema([
   "ingredient",
   "cookbook",
   "meal",
+  "ledgerParty",
+  "ledgerTransfer",
   "location",
   "project",
   "task",

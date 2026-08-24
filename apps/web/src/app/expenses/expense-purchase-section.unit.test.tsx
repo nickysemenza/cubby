@@ -78,6 +78,9 @@ const expense: ExpenseOut = {
   vendorLogo: null,
   projectName: null,
   productName: null,
+  beneficiaries: [],
+  funders: [],
+  sourceClaims: [],
   createdAt: new Date("2026-07-31T12:00:00Z"),
   updatedAt: new Date("2026-07-31T12:00:00Z"),
 };

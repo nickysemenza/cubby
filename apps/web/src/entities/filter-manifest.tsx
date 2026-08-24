@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { financialAccountFilterFields } from "@cubby/schemas/financial-account";
 import { financialTransactionFilterFields } from "@cubby/schemas/financial-transaction";
 import {
@@ -480,7 +481,10 @@ const ENTITIES_WITHOUT_FILTERS = {
   "usda-food": "remote USDA search, not a local list",
 } as const satisfies Partial<Record<Entity, string>>;
 
-type FilteredEntity = Exclude<Entity, keyof typeof ENTITIES_WITHOUT_FILTERS>;
+type FilteredEntity = Exclude<
+  BrowserRoutedEntity,
+  keyof typeof ENTITIES_WITHOUT_FILTERS
+>;
 
 const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
   financialAccount: [

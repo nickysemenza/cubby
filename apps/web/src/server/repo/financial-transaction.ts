@@ -20,6 +20,7 @@ import {
   type FinancialTransactionShortcode,
   unsafeFinancialAccountShortcode,
   unsafeFinancialTransactionShortcode,
+  unsafeLedgerTransferShortcode,
   unsafePurchaseShortcode,
 } from "@cubby/schemas/identifiers";
 import {
@@ -113,6 +114,9 @@ const columns = {
   id: financialTransaction.id,
   shortcode: financialTransaction.shortcode,
   accountId: financialTransaction.accountId,
+  ledgerTransferShortcode: sql<
+    string | null
+  >`(SELECT shortcode FROM "LedgerTransfer" WHERE id = "FinancialTransaction"."ledgerTransferId")`,
   kind: financialTransaction.kind,
   status: financialTransaction.status,
   amount: financialTransaction.amount,
@@ -139,9 +143,10 @@ const columns = {
 
 type FinancialTransactionRow = Omit<
   typeof financialTransaction.$inferSelect,
-  "deletedAt"
+  "ledgerTransferId" | "deletedAt"
 > & {
   accountShortcode: string;
+  ledgerTransferShortcode: string | null;
   allocations: { purchaseId: string; amount: number }[];
   accountName: string | null;
 };
@@ -173,6 +178,9 @@ const toOut = (row: FinancialTransactionRow): FinancialTransactionOut => {
     sourceRefs: row.sourceRefs,
     notes: row.notes,
     allocations,
+    ledgerTransferId: row.ledgerTransferShortcode
+      ? unsafeLedgerTransferShortcode(row.ledgerTransferShortcode)
+      : null,
     accountName: row.accountName,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -490,6 +498,9 @@ export async function updateFinancialTransaction(
 ) {
   const id = await resolveOrThrow(db, "financialTransaction", shortcode);
   await withTransaction(db, async (tx) => {
+    // Funding-evidence advisory keys precede both entity rows and account keys.
+    // Evidence creation uses the same order, so it cannot validate an old row
+    // while this mutation commits a new amount/status/account.
     // LOCK ORDER: Purchase rows first, THEN the transaction row. Every purchase
     // operation locks purchases first (lockAndValidateForDelete, the merge) and
     // reaches FinancialTransaction afterwards via syncSettlementMirror, so
@@ -538,6 +549,18 @@ export async function updateFinancialTransaction(
       throw createAppError(
         "FINANCIAL_TRANSACTION_NOT_FOUND",
         `Financial transaction not found: ${shortcode}`,
+      );
+    if (
+      before.ledgerTransferId !== null &&
+      (data.accountId !== undefined ||
+        data.status !== undefined ||
+        data.amount !== undefined ||
+        data.allocations !== undefined ||
+        data.purchaseId !== undefined)
+    )
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "A financial transaction linked as ledger-transfer evidence cannot be changed in a way that could invalidate that evidence. Update the transfer evidence set first.",
       );
     const accountId =
       data.accountId === undefined
@@ -698,6 +721,13 @@ export const FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY = {
   OperationDisposition
 >;
 
+const TRANSFER_EVIDENCE_DELETE_BLOCKER = {
+  code: "block-transfer-evidence",
+  effect: "block",
+  description:
+    "A transfer retains each linked transaction until its complete evidence set is replaced or the transfer is deleted.",
+} as const satisfies OperationDisposition;
+
 export async function deleteFinancialTransactions(
   db: Database,
   shortcodes: FinancialTransactionShortcode[],
@@ -713,6 +743,22 @@ export async function deleteFinancialTransactions(
       ids,
       "FinancialTransaction",
     );
+    const [linkedEvidence] = await tx
+      .select({ id: financialTransaction.id })
+      .from(financialTransaction)
+      .where(
+        and(
+          inArray(financialTransaction.id, ids),
+          sql`${financialTransaction.ledgerTransferId} IS NOT NULL`,
+          notDeleted(financialTransaction),
+        ),
+      )
+      .limit(1);
+    if (linkedEvidence)
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "A financial transaction that evidences a ledger transfer cannot be deleted until the transfer releases it.",
+      );
     // Quality targets come from the allocations as well as the mirror: a
     // transaction split across two purchases has a NULL mirror, so reading only
     // that column would leave both purchases' data-quality exceptions stale.
@@ -744,10 +790,7 @@ export async function deleteFinancialTransactions(
   });
 }
 
-/**
- * Nothing refuses a transaction delete — its allocations are parts of it, not
- * dependents with a claim on it — but they do go with it, so the preview says so.
- */
+/** Preview both the transfer-evidence refusal and owned allocation cleanup. */
 export async function previewDeleteFinancialTransactions(
   db: Database | DrizzleTransaction,
   ids: FinancialTransactionId[],
@@ -758,7 +801,22 @@ export async function previewDeleteFinancialTransactions(
 }> {
   const dbClient = unwrapDb(db);
   return {
-    blockers: [],
+    blockers: present([
+      impact({
+        disposition: TRANSFER_EVIDENCE_DELETE_BLOCKER,
+        edgeKey: "FinancialTransaction.ledgerTransferId",
+        label: "ledger transfer evidence retained",
+        byTargetId: await countByTarget(
+          dbClient,
+          financialTransaction,
+          financialTransaction.id,
+          ids,
+          {
+            extraWhere: sql`${financialTransaction.ledgerTransferId} IS NOT NULL`,
+          },
+        ),
+      }),
+    ]),
     changes: present([
       impact({
         disposition:

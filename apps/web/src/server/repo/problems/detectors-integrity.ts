@@ -54,7 +54,7 @@
  * self-join query is most exposed to. Building one explicit `UNION ALL` of
  * hand-written, alias-qualified SQL fragments — table and column names always
  * routed through `sql.identifier()`, values always bound parameters — sidesteps
- * both problems and keeps every one of the 47 branches visually inspectable.
+ * both problems and keeps every branch visually inspectable.
  */
 
 import type { Entity } from "@cubby/schemas/entity";
@@ -99,7 +99,7 @@ const EXPECTED_HARD_DELETE_ONLY_TABLES = new Set([
 ]);
 
 /** The must-target-live edges this audit checks, derived (not hand-maintained) should equal this. */
-const EXPECTED_EDGE_COUNT = 50;
+const EXPECTED_EDGE_COUNT = 58;
 
 /**
  * Derive one {@link EdgeAuditSpec} per `must-target-live` edge in
@@ -110,9 +110,9 @@ const EXPECTED_EDGE_COUNT = 50;
  * (`column.table` / `column.name`), then checked against the edge's own key
  * string — a mis-derivation (wrong table, wrong column) throws instead of
  * silently querying the wrong data. The two structural counts this repo's
- * history depends on (47 audited edges, exactly `ProjectDependency` +
- * `TaskDependency` as the hard-delete-only source tables) are asserted at the
- * end for the same reason: drift should fail loudly, not read as "0 problems
+ * history depends on (the audited edge count and exact hard-delete-only source
+ * tables) are asserted at the end for the same reason: drift should fail
+ * loudly, not read as "0 problems
  * found" against a query that quietly stopped covering what it used to.
  */
 function buildEdgeAuditSpecs(): EdgeAuditSpec[] {
@@ -294,7 +294,7 @@ export const countReferentialLivenessViolations = async (
 };
 
 /**
- * Every live row whose FK points at a soft-deleted target, across all 49
+ * Every live row whose FK points at a soft-deleted target, across all 57
  * `must-target-live` incoming edges. See the file-level doc comment for the
  * invariant, why it's a regression guard, and the two audit exemptions
  * (`Ingredient.recipeId` skipped entirely, `Location.parentId` included

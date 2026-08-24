@@ -29,7 +29,12 @@ import {
 } from "~/components/ui/command";
 import { IconTile } from "~/components/ui/icon-tile";
 import { Spinner } from "~/components/ui/spinner";
-import { EntityIcon, entities, entityDetailParams } from "~/entities/entities";
+import {
+  EntityIcon,
+  entities,
+  entityDetailParams,
+  isBrowserRoutedEntity,
+} from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
 import { useTRPC } from "~/integrations/trpc/react";
 import { setFlag, useFlag } from "~/lib/flags";
@@ -168,6 +173,7 @@ export function GlobalCommandMenu({
           : null;
 
   const navigateToShortcode = (target: ParsedShortcode, name?: string) => {
+    if (!isBrowserRoutedEntity(target.type)) return;
     // Recents needs a name, so it only gets an entry once the preview query has
     // landed — navigation itself never waits on it. Only the three legacy
     // shortcode preview queries above can contribute a name on this fast path;
@@ -281,7 +287,7 @@ export function GlobalCommandMenu({
       selectionStart: event.currentTarget.selectionStart,
       selectionEnd: event.currentTarget.selectionEnd,
     });
-    if (!target) return;
+    if (!target || !isBrowserRoutedEntity(target.type)) return;
 
     event.preventDefault();
     navigateToShortcode(target);
@@ -404,7 +410,7 @@ export function GlobalCommandMenu({
 
             {/* A structurally valid shortcode can always navigate directly: the
                 prefix identifies its route, whose loader owns the live-row 404. */}
-            {parsedShortcode && (
+            {parsedShortcode && isBrowserRoutedEntity(parsedShortcode.type) && (
               <CommandGroup heading="Go to">
                 <CommandItem
                   onSelect={goToShortcode}

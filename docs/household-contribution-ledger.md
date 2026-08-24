@@ -1,0 +1,57 @@
+# Household contribution ledger
+
+Status: accepted architecture for the consolidated household ledger.
+
+## Domain boundary
+
+`Expense.cost` remains the only source of spend. Expense Attribution records consumption and initial funding against that existing cost. A Ledger Transfer records one later movement between Ledger Parties. Financial transactions and external records are evidence; they do not multiply transfers or become spend.
+
+The household report is cumulative as of a date. It includes only Expenses and
+Ledger Transfers dated through that day, and excludes planned future Expenses:
+
+```text
+net contribution = initially outlaid + transfers sent - transfers received
+position         = net contribution - consumed
+```
+
+Internal account moves have zero contribution effect. Positions are advisory when attribution or evidence is incomplete and are never labeled as debts.
+
+Evidence completeness is intentionally present-day rather than historical: a
+transfer shown in an as-of position is checked against the Financial Transaction
+evidence currently attached to it, including evidence attached after that date.
+This keeps historical positions date-bounded while surfacing whether their
+supporting evidence is complete now.
+
+## Standard mutations
+
+LedgerParty and LedgerTransfer are standard entities with the ordinary create, update, delete, list, and get surface. A LedgerParty's kind is `member`, `guest`, or `household`; it has no standalone browser route. A LedgerTransfer moves value between parties and likewise has no standalone route.
+
+Expense mutations carry the nested Expense Attribution and Source Claim fields needed to record consumption, initial funding, external source identity, source amount, and an explicit decision about any discrepancy. FinancialAccount mutations carry a nullable Ledger Party field identifying which party the account evidences. These fields preserve the surrounding Expense or FinancialAccount as the routed record.
+
+A Source Claim accepts a provider row ID only as write-time key material. The server hashes it with the provider namespace into the versioned source key, then discards it; reads expose the key and normalized evidence, never the raw provider identifier or payload.
+
+## Supported flows
+
+- Attribute an Expense to one or more parties, the household collectively, or null when attribution is unknown.
+- Claim an Expense's external source amount while retaining an explicit decision when amounts differ.
+- Create, update, or delete a Ledger Transfer between parties, including reimbursements and same-party internal moves.
+- List and get Ledger Parties and Ledger Transfers for review without presenting them as standalone navigation destinations.
+- Pair statement evidence to a transfer without treating mirrored rows as separate transfers.
+- Review household-global positions and project-local initial funding, consumption, and gaps.
+
+Project kind never implies attribution. Project reports include both recorded and
+planned future Expenses because they describe the project’s full intended cost;
+the household/as-of ledger excludes those future Expenses. Project reports do
+not apply later transfers: transfers are household-global.
+
+## Presentation and unknowns
+
+Client labels are derived from party kind. Route-capable entity references are links; Ledger Parties and Ledger Transfers intentionally render as text because they have no standalone browse route. Household attribution is intentional. Missing, partial, unavailable, and null-attributed values remain explicit gaps rather than inferred parties or automatic matches.
+
+## Import boundary
+
+Clients orchestrate provider reads from Splitwise, Gmail, Monarch, or local exports and send normalized reviewed changes through the standard mutations. Cubby receives no provider credentials, raw emails, file paths, or whole exports. There is no global transaction across providers or independent records. Each record can be resumed from durable Source Claims and evidence, so a partial import does not require a global rollback or batch receipt.
+
+## Production cutover
+
+The superseded branch-only ledger tables were verified to contain zero production rows before consolidation. The cutover therefore deliberately drops those empty structures and creates the canonical Ledger Party, Ledger Transfer, Expense Attribution, and Ledger Source Claim structures; it is not a data migration or rename. Immediately before applying the schema, the exclusive migration owner must repeat the zero-row checks and abort if any row exists. Ambiguous rename prompts are never accepted. Afterward, the owner reads back every table, column, foreign key, check, and partial index, then creates the singleton generic Household party through the standard repository path.

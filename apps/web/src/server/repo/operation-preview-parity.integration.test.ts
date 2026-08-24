@@ -11,6 +11,8 @@ import {
   unsafeFinancialTransactionId,
   unsafeImageId,
   unsafeImageShortcode,
+  unsafeLedgerPartyId,
+  unsafeLedgerTransferId,
   unsafeLocationId,
   unsafeProductId,
   unsafeProjectId,
@@ -77,6 +79,11 @@ import {
   deleteInventoryEntries,
   previewDeleteInventoryEntries,
 } from "./inventory/crud";
+import {
+  previewDeleteLedgerParties,
+  previewMergeLedgerParties,
+} from "./ledger-party";
+import { previewDeleteLedgerTransfers } from "./ledger-transfer";
 import { deleteLocations } from "./location";
 import { deleteMeals } from "./meal";
 import { previewDeleteMeals } from "./meal/crud";
@@ -1905,6 +1912,12 @@ describe("operation preview / mutation parity", () => {
         previewDeleteFinancialTransactions(db, [
           unsafeFinancialTransactionId(NONEXISTENT_UUID),
         ]),
+      ledgerParty: (db) =>
+        previewDeleteLedgerParties(db, [unsafeLedgerPartyId(NONEXISTENT_UUID)]),
+      ledgerTransfer: (db) =>
+        previewDeleteLedgerTransfers(db, [
+          unsafeLedgerTransferId(NONEXISTENT_UUID),
+        ]),
     };
 
     // `keepId` must differ from `mergeIds`: every planner now REFUSES a
@@ -1927,6 +1940,11 @@ describe("operation preview / mutation parity", () => {
         previewMergeProducts(db, {
           mergeIds: [unsafeProductId(NONEXISTENT_UUID)],
           keepId: unsafeProductId(NONEXISTENT_UUID_2),
+        }),
+      ledgerParty: (db) =>
+        previewMergeLedgerParties(db, {
+          mergeIds: [unsafeLedgerPartyId(NONEXISTENT_UUID)],
+          keepId: unsafeLedgerPartyId(NONEXISTENT_UUID_2),
         }),
     };
 

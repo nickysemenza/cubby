@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { QueryKey } from "@tanstack/react-query";
 import { entities } from "~/entities/entities";
 import { getSortableFields } from "~/entities/sortable-fields";
@@ -46,8 +47,8 @@ interface EntityQueryContract {
 }
 
 interface EntityContract {
-  entity: Entity;
-  route: (typeof entities)[Entity]["routes"];
+  entity: BrowserRoutedEntity;
+  route: (typeof entities)[BrowserRoutedEntity]["routes"];
   defaultSort: string;
   sortableFields: readonly string[];
   canPreview: boolean;
@@ -205,8 +206,11 @@ const entityContracts = {
     financialTransactionMutationInvalidateKeys,
   ),
   wish: standardContract("wish", wishMutationInvalidateKeys),
-} satisfies Record<Entity, EntityContract>;
+} satisfies Record<BrowserRoutedEntity, EntityContract>;
 
 export function getEntityContract(entity: Entity): EntityContract {
-  return entityContracts[entity];
+  if (!(entity in entityContracts)) {
+    throw new Error(`Entity ${entity} has no browser contract`);
+  }
+  return entityContracts[entity as BrowserRoutedEntity];
 }

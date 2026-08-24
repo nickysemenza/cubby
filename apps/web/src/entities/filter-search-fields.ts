@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import {
   unsafeIngredientId,
   unsafeLocationId,
@@ -352,7 +353,7 @@ export const entityFilterSemantics = {
   image: ["filename", "status", "entity", "createdAt", "updatedAt"],
   "usda-food": [],
   cookbook: [],
-} as const satisfies Record<Entity, readonly string[]>;
+} as const satisfies Record<BrowserRoutedEntity, readonly string[]>;
 
 /**
  * Server-safe semantic entries used by Problem Query assemblies.
@@ -552,7 +553,7 @@ export const problemFilterSemantics = {
 
 /** The URL keys an entity accepts for its canonical filter assembly. */
 export const entityFilterUrlKeys = (entity: Entity): readonly string[] =>
-  entityFilterSemantics[entity];
+  entityFilterSemantics[entity as BrowserRoutedEntity] ?? [];
 
 export function entityFilterSearchFields(
   entity: Entity,

@@ -5,7 +5,11 @@ import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
 import { Button } from "~/components/ui/button";
 import type { EntityDetailRoute } from "~/entities/entities";
-import { entities, entityDetailParams } from "~/entities/entities";
+import {
+  entities,
+  entityDetailParams,
+  isBrowserRoutedEntity,
+} from "~/entities/entities";
 import { cn } from "~/lib/utils";
 import { TableLink } from "../table/TableLink";
 
@@ -139,14 +143,20 @@ function EntityRow({
           displayImage={item.displayImage}
           size="row"
         />
-        <TableLink
-          to={entities[item.entity].routes.detail as EntityDetailRoute}
-          params={routeParams(item)}
-          className="min-w-0 truncate"
-          variant="muted"
-        >
-          {item.label}
-        </TableLink>
+        {isBrowserRoutedEntity(item.entity) ? (
+          <TableLink
+            to={entities[item.entity].routes.detail as EntityDetailRoute}
+            params={routeParams(item)}
+            className="min-w-0 truncate"
+            variant="muted"
+          >
+            {item.label}
+          </TableLink>
+        ) : (
+          <span className="min-w-0 truncate text-muted-foreground">
+            {item.label}
+          </span>
+        )}
         <span className="shrink-0 font-mono text-2xs text-slate">
           {item.id}
         </span>

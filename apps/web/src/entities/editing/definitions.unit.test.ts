@@ -7,7 +7,11 @@ import type { EditableEntity, EntityEditIntentDefinition } from "./types";
 
 const editableEntities = allEntities.filter(
   (entity): entity is EditableEntity =>
-    entity !== "image" && entity !== "usda-food" && entity !== "cookbook",
+    entity !== "image" &&
+    entity !== "usda-food" &&
+    entity !== "cookbook" &&
+    entity !== "ledgerParty" &&
+    entity !== "ledgerTransfer",
 );
 
 describe("entity edit definitions", () => {

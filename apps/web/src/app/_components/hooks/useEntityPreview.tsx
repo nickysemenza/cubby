@@ -2,6 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { Sheet, SheetContent } from "~/components/ui/sheet";
+import { isBrowserRoutedEntity } from "~/entities/entities";
 import { getEntityContract } from "~/entities/entity-contracts";
 import { entityQueryOptions } from "~/entities/entity-query";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -81,6 +82,7 @@ export function useEntityPreview(
         console.warn("useEntityPreview: could not resolve entity/id from row");
         return;
       }
+      if (!isBrowserRoutedEntity(resolved.entityType)) return;
       setPreview(resolved);
     },
     [resolveRow],
@@ -92,7 +94,11 @@ export function useEntityPreview(
   const onRowHover = useCallback(
     <T extends Record<string, unknown>>(row: { original: T }) => {
       const resolved = resolveRow(row);
-      if (!resolved || !getEntityContract(resolved.entityType).canPreview) {
+      if (
+        !resolved ||
+        !isBrowserRoutedEntity(resolved.entityType) ||
+        !getEntityContract(resolved.entityType).canPreview
+      ) {
         return;
       }
       void queryClient.prefetchQuery(

@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { entitySchema } from "@cubby/schemas/entity";
+import { browserRoutedEntities } from "@cubby/schemas/entity-manifest";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { FilterSpec } from "./filter-manifest";
@@ -37,7 +38,7 @@ describe("manifestFilterConfig", () => {
   // here for EVERY entity, which is why no entity keeps its own hand-written
   // copy of the list.
   it("keeps the eager route search keys aligned with the full UI manifest", () => {
-    for (const entity of entitySchema.options) {
+    for (const entity of browserRoutedEntities) {
       expect(Object.keys(entityFilterSearchFields(entity))).toEqual(
         getEntityFilters(entity).map((spec) => spec.urlKey ?? spec.columnId),
       );
@@ -45,7 +46,7 @@ describe("manifestFilterConfig", () => {
   });
 
   it("generates route fields from the dependency-light semantic registry", () => {
-    for (const entity of entitySchema.options) {
+    for (const entity of browserRoutedEntities) {
       expect(Object.keys(entityFilterSearchFields(entity))).toEqual(
         entityFilterSemantics[entity],
       );
@@ -235,7 +236,7 @@ describe("manifestFilterConfig", () => {
     // static buckets, checked by the schema suite below).
     const pickerKinds = new Set(["select", "multiselect", "presence", "id"]);
     const violations: string[] = [];
-    for (const entity of entitySchema.options) {
+    for (const entity of browserRoutedEntities) {
       for (const spec of getEntityFilters(entity)) {
         if (spec.urlOnly || !pickerKinds.has(spec.kind)) continue;
         // A nullable spec always has the two sentinels, so it is never empty.
@@ -298,7 +299,7 @@ describe("task subject-product filters", () => {
 describe("manifest naming invariant", () => {
   it("every nullable.field and presence field ends in PresenceFilter", () => {
     const violations: string[] = [];
-    for (const entity of entitySchema.options) {
+    for (const entity of browserRoutedEntities) {
       for (const spec of getEntityFilters(entity)) {
         if (spec.nullable && !spec.nullable.field.endsWith("PresenceFilter")) {
           violations.push(
@@ -327,7 +328,7 @@ describe("manifest naming invariant", () => {
 describe("manifest key uniqueness", () => {
   it("no two specs in an entity share a columnId or a URL key", () => {
     const violations: string[] = [];
-    for (const entity of entitySchema.options) {
+    for (const entity of browserRoutedEntities) {
       const seenColumns = new Set<string>();
       const seenUrlKeys = new Set<string>();
       for (const spec of getEntityFilters(entity)) {
@@ -1006,7 +1007,7 @@ describe("manifest fields exist on the server schema", () => {
     // Guards `entityFilterFieldMaps` against a new entity silently skipping
     // this check — and, since `auditFilterEntities` is derived from that same
     // map, against the audit specs quietly not being composed in for it.
-    const withSpecs = entitySchema.options.filter(
+    const withSpecs = browserRoutedEntities.filter(
       (entity) => getEntityFilters(entity).length > 0,
     );
     expect(withSpecs.sort()).toEqual(
@@ -1126,7 +1127,7 @@ describe("every server filter field is reachable from the manifest", () => {
     // silently returned `{}` for every option would under-report reachability
     // and quietly turn this whole guard into a formality.
     const silent: string[] = [];
-    for (const entity of entitySchema.options) {
+    for (const entity of browserRoutedEntities) {
       for (const spec of getEntityFilters(entity)) {
         if (spec.kind !== "range") continue;
         if (emittedFields(spec).length === 0) {

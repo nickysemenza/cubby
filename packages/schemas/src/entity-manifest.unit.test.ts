@@ -6,6 +6,7 @@ import { previewMergeEntitySchema } from "./entity-integrity";
 import {
   allEntities,
   auditableEntities,
+  browserRoutedEntities,
   countableEntities,
   entityDescriptor,
   type EntityDescriptor,
@@ -52,6 +53,14 @@ describe("entity manifest", () => {
       for (const rel of entityManifest[entity].relationships) {
         expect(entitySchema.options).toContain(rel.target);
       }
+    }
+  });
+
+  it("derives browser-routed entities and excludes route-less ledger entities", () => {
+    expect(browserRoutedEntities).not.toContain("ledgerParty");
+    expect(browserRoutedEntities).not.toContain("ledgerTransfer");
+    for (const entity of browserRoutedEntities) {
+      expect(descriptor(entity).browserRoutes).not.toBe(false);
     }
   });
 
@@ -113,6 +122,8 @@ describe("entity manifest", () => {
       "location",
       "inventory",
       "meal",
+      "ledgerParty",
+      "ledgerTransfer",
       "project",
       "task",
       "vendor",

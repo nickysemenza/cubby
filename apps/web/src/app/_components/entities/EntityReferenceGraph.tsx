@@ -13,6 +13,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { isBrowserRoutedEntity } from "~/entities/entities";
 import { ENTITY_ACCENTS } from "~/entities/entity-accents";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import { cn } from "~/lib/utils";
@@ -128,7 +129,7 @@ export function EntityReferenceGraph({
         if (mode === "soft") return "var(--primary)";
         return "var(--slate)";
       }
-      return ENTITY_ACCENTS[id];
+      return isBrowserRoutedEntity(id) ? ENTITY_ACCENTS[id] : "var(--slate)";
     },
     [lens, unhealthyEntities],
   );

@@ -21,6 +21,7 @@ import {
   type FinancialAccountId,
   type FinancialAccountShortcode,
   unsafeFinancialAccountShortcode,
+  unsafeLedgerPartyShortcode,
 } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { buildTakeSkip } from "@cubby/schemas/pagination";
@@ -53,6 +54,7 @@ import {
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
 import { countByTarget, impact, present } from "~/server/repo/impact";
+import { lockLedgerPartiesForReference } from "~/server/repo/ledger-party-reference";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
 import {
@@ -92,6 +94,9 @@ const columns = {
   identity: financialAccount.identity,
   provisional: financialAccount.provisional,
   sourceAliases: financialAccount.sourceAliases,
+  ledgerPartyShortcode: sql<
+    string | null
+  >`(SELECT shortcode FROM "LedgerParty" WHERE id = "FinancialAccount"."ledgerPartyId")`,
   notes: financialAccount.notes,
   createdAt: financialAccount.createdAt,
   updatedAt: financialAccount.updatedAt,
@@ -100,9 +105,10 @@ const columns = {
 
 type FinancialAccountRow = Omit<
   typeof financialAccount.$inferSelect,
-  "deletedAt"
+  "ledgerPartyId" | "deletedAt"
 > & {
   transactionCount: number;
+  ledgerPartyShortcode: string | null;
 };
 
 const toOut = (row: FinancialAccountRow): FinancialAccountOut =>
@@ -112,6 +118,9 @@ const toOut = (row: FinancialAccountRow): FinancialAccountOut =>
     identity: financialAccountIdentity.parse(row.identity),
     provisional: row.provisional,
     sourceAliases: row.sourceAliases,
+    ledgerPartyId: row.ledgerPartyShortcode
+      ? unsafeLedgerPartyShortcode(row.ledgerPartyShortcode)
+      : null,
     notes: row.notes,
     transactionCount: Number(row.transactionCount),
     createdAt: row.createdAt,
@@ -285,6 +294,20 @@ async function assertAliasesAvailable(
   }
 }
 
+async function resolveLedgerPartyForAccount(
+  tx: DrizzleTransaction,
+  shortcode: FinancialAccountCreateInput["ledgerPartyId"],
+) {
+  if (shortcode === null) return null;
+  const [party] = await lockLedgerPartiesForReference(tx, [shortcode]);
+  if (!party || party.kind === "guest")
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "A financial account may map only to a member or the household ledger party.",
+    );
+  return party.id;
+}
+
 export async function createFinancialAccount(
   db: Database,
   data: FinancialAccountCreateInput,
@@ -301,7 +324,11 @@ export async function createFinancialAccount(
       ),
     );
     await assertAliasesAvailable(tx, data.sourceAliases);
-    const created = await insertWithShortcode(tx, "financialAccount", data);
+    const { ledgerPartyId, ...columns } = data;
+    const created = await insertWithShortcode(tx, "financialAccount", {
+      ...columns,
+      ledgerPartyId: await resolveLedgerPartyForAccount(tx, ledgerPartyId),
+    });
     await logAuditEntry(tx, actor, {
       entityType: "financialAccount",
       entityId: created.id,
@@ -320,12 +347,14 @@ export async function updateFinancialAccount(
 ) {
   const accountId = await resolveOrThrow(db, "financialAccount", id);
   await withTransaction(db, async (tx) => {
-    const before = await tx.query.financialAccount.findFirst({
-      where: and(
-        eq(financialAccount.id, accountId),
-        notDeleted(financialAccount),
-      ),
-    });
+    const [before] = await tx
+      .select()
+      .from(financialAccount)
+      .where(
+        and(eq(financialAccount.id, accountId), notDeleted(financialAccount)),
+      )
+      .for("update")
+      .limit(1);
     if (!before)
       throw createAppError(
         "FINANCIAL_ACCOUNT_NOT_FOUND",
@@ -343,7 +372,33 @@ export async function updateFinancialAccount(
       );
       await assertAliasesAvailable(tx, data.sourceAliases, accountId);
     }
-    const values = buildPartialUpdateValues(data);
+    const ledgerPartyId =
+      data.ledgerPartyId === undefined
+        ? undefined
+        : await resolveLedgerPartyForAccount(tx, data.ledgerPartyId);
+    if (ledgerPartyId !== undefined && ledgerPartyId !== before.ledgerPartyId) {
+      const [linkedEvidence] = await tx
+        .select({ id: financialTransaction.id })
+        .from(financialTransaction)
+        .where(
+          and(
+            eq(financialTransaction.accountId, accountId),
+            sql`${financialTransaction.ledgerTransferId} IS NOT NULL`,
+            notDeleted(financialTransaction),
+          ),
+        )
+        .limit(1);
+      if (linkedEvidence)
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "Cannot change an account's ledger party while it evidences a ledger transfer.",
+        );
+    }
+    const { ledgerPartyId: _ledgerPartyId, ...accountData } = data;
+    const values = buildPartialUpdateValues({
+      ...accountData,
+      ...(ledgerPartyId === undefined ? {} : { ledgerPartyId }),
+    });
     await tx
       .update(financialAccount)
       .set(values)
@@ -357,6 +412,7 @@ export async function updateFinancialAccount(
       "provisional",
       "sourceAliases",
       "notes",
+      "ledgerPartyId",
     ]);
     if (changes)
       await logAuditEntry(tx, actor, {

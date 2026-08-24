@@ -1,4 +1,4 @@
-import type { Entity } from "@cubby/schemas/entity";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { describe, expect, it } from "vitest";
 import { entities } from "~/entities/entities";
 import {
@@ -106,7 +106,7 @@ describe("workspace navigation contract", () => {
 // covered vendor/purchase/wish at all). Deriving from `desktopNav` instead
 // means an entity list route can't silently point nowhere or somewhere wrong.
 describe("getEntityNavGroup", () => {
-  const entityKeys = Object.keys(entities) as Entity[];
+  const entityKeys = Object.keys(entities) as BrowserRoutedEntity[];
 
   it("covers every entity defined in entities.tsx", () => {
     expect(entityKeys.length).toBeGreaterThan(0);
@@ -133,7 +133,7 @@ describe("getEntityNavGroup", () => {
   // entity's list route to a different group is a visible, intentional test
   // change rather than a silent breadcrumb drift.
   it("derives the expected group label for every entity", () => {
-    const expected: Record<Entity, string> = {
+    const expected: Record<BrowserRoutedEntity, string> = {
       recipe: "Cook",
       cookbook: "Cook",
       ingredient: "Cook",

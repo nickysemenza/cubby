@@ -2317,6 +2317,64 @@ const mergeDispatch: Record<
     };
   },
 
+  ledgerParty: async (caller, keepId, mergeIds) => {
+    const { mergeSummary } = await (
+      caller as unknown as {
+        ledgerParty: {
+          merge: (input: { keepId: string; mergeIds: string[] }) => Promise<{
+            mergeSummary: {
+              deletedIds: string[];
+              merged: number;
+              attributionEdgesRepointed: number;
+              accountEdgesRepointed: number;
+              transferEdgesRepointed: number;
+              carriedFields: string[];
+            };
+          }>;
+        };
+      }
+    ).ledgerParty.merge({ keepId, mergeIds });
+    return {
+      merged: mergeSummary.merged,
+      moved: [
+        ...mergeImpact(
+          {
+            code: "attributions-repointed",
+            effect: "move-dedupe",
+            label: "attributions merged",
+            description:
+              "Expense shares re-pointed to the surviving ledger party and duplicate weights combined.",
+          },
+          mergeSummary.attributionEdgesRepointed,
+        ),
+        ...mergeImpact(
+          {
+            code: "accounts-repointed",
+            effect: "repoint",
+            label: "accounts re-pointed",
+            description: "Accounts now map to the surviving ledger party.",
+          },
+          mergeSummary.accountEdgesRepointed,
+        ),
+        ...mergeImpact(
+          {
+            code: "transfers-repointed",
+            effect: "repoint",
+            label: "transfers re-pointed",
+            description:
+              "Transfer endpoints now reference the surviving ledger party.",
+          },
+          mergeSummary.transferEdgesRepointed,
+        ),
+      ],
+      summary: {
+        deletedIds: mergeSummary.deletedIds,
+        carriedFields: mergeSummary.carriedFields,
+      },
+      sideEffects: [],
+    };
+  },
+
   purchase: async (caller, keepId, mergeIds) => {
     const { mergeSummary } = await (
       caller as unknown as {

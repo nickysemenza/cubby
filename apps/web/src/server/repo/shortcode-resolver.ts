@@ -33,6 +33,7 @@ import {
   image,
   ingredient,
   inventoryEntry,
+  ledgerParty,
   location,
   meal,
   product,
@@ -388,6 +389,8 @@ const DISPLAY_NAME_COLUMN = {
   inventory: null,
   location: location.name,
   meal: meal.name,
+  ledgerParty: ledgerParty.name,
+  ledgerTransfer: null,
   // Images have no `name`; the uploaded filename is the closest human handle.
   image: image.filename,
   product: product.name,

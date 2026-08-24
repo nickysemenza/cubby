@@ -16,13 +16,17 @@ import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
-import { entities, entityDetailParams } from "~/entities/entities";
+import {
+  entities,
+  entityDetailParams,
+  isBrowserRoutedEntity,
+} from "~/entities/entities";
 import { shortcodeHead } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/$shortcode")({
   loader: ({ params }) => {
     const parsed = parseShortcode(params.shortcode);
-    if (!parsed) throw notFound();
+    if (!parsed || !isBrowserRoutedEntity(parsed.type)) throw notFound();
 
     throw redirect({
       to: entities[parsed.type].routes.detail,

@@ -6,6 +6,7 @@ import {
   unsafeFinancialAccountId,
   unsafeFinancialTransactionId,
   unsafeIngredientId,
+  unsafeLedgerPartyId,
   unsafeLocationId,
   unsafeMealId,
   unsafeProductId,
@@ -23,7 +24,9 @@ import type { Database } from "~/server/db";
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import {
+  expenseAttribution,
   financialTransactionAllocation,
+  ledgerSourceClaim,
   locationImage,
   mealRecipe,
   productComponent,
@@ -51,7 +54,7 @@ import { findReferentialLivenessViolations } from "./detectors-integrity";
 /**
  * Regression suite for `findReferentialLivenessViolations` (detectors-integrity.ts)
  * — the audit that finds every LIVE row whose FK points at a SOFT-DELETED target,
- * across the 49 `must-target-live` incoming edges in `ENTITY_EDGE_SEMANTICS`.
+ * across the 58 `must-target-live` incoming edges in `ENTITY_EDGE_SEMANTICS`.
  *
  * The matrix below is driven from `INCOMING_EDGES` × `ENTITY_EDGE_SEMANTICS`
  * themselves (not a hand-copied edge list), so a newly-added `must-target-live`
@@ -166,6 +169,30 @@ const mkFinancialTransaction = async (db: Database) => {
 const mkWish = (db: Database) =>
   insertWithShortcode(db, "wish", { name: uniq("Wish") });
 
+const mkExpense = (db: Database) =>
+  insertWithShortcode(db, "expense", {
+    name: uniq("Expense"),
+    costType: "materials",
+    trade: "other",
+    date: "2024-01-15",
+  });
+
+const mkLedgerParty = (db: Database) =>
+  insertWithShortcode(db, "ledgerParty", {
+    name: uniq("Ledger party"),
+    kind: "member",
+  });
+
+const mkLedgerTransfer = async (db: Database) => {
+  const [from, to] = await Promise.all([mkLedgerParty(db), mkLedgerParty(db)]);
+  return insertWithShortcode(db, "ledgerTransfer", {
+    fromPartyId: from.id,
+    toPartyId: to.id,
+    amount: 1,
+    date: "2024-01-15",
+  });
+};
+
 const mkRecipeSection = async (db: Database) => {
   const r = await mkRecipe(db);
   return insertAndReturn(db, recipeSection, {
@@ -180,10 +207,13 @@ const TARGET_FACTORIES: Partial<
   Record<Entity, (db: Database) => Promise<{ id: string }>>
 > = {
   cookbook: mkCookbook,
+  expense: mkExpense,
   image: mkImage,
   recipe: mkRecipe,
   ingredient: mkIngredient,
   meal: mkMeal,
+  ledgerParty: mkLedgerParty,
+  ledgerTransfer: mkLedgerTransfer,
   product: mkProduct,
   location: mkLocation,
   project: mkProject,
@@ -202,6 +232,95 @@ const SOURCE_FACTORIES: Record<
   string,
   (db: Database, targetId: string) => Promise<{ id: string }>
 > = {
+  "ExpenseAttribution.expenseId": async (db, targetId) => {
+    const party = await mkLedgerParty(db);
+    return insertAndReturn(db, expenseAttribution, {
+      expenseId: targetId as never,
+      role: "funder",
+      ledgerPartyId: party.id,
+      weight: 1,
+    });
+  },
+  "FinancialTransaction.ledgerTransferId": async (db, targetId) => {
+    const account = await mkFinancialAccount(db);
+    return insertWithShortcode(db, "financialTransaction", {
+      accountId: account.id,
+      ledgerTransferId: targetId as never,
+      kind: "purchase",
+      status: "pending",
+      amount: 1,
+    });
+  },
+  "LedgerSourceClaim.expenseId": async (db, targetId) =>
+    insertAndReturn(db, ledgerSourceClaim, {
+      expenseId: targetId as never,
+      source: "synthetic-integrity",
+      sourceKey: uniq("claim"),
+      sourceKeyVersion: 1,
+      normalizedEvidence: {
+        amount: 1,
+        occurredOn: null,
+        description: null,
+        context: null,
+        disambiguator: null,
+      },
+      targetAmountAtClaim: 1,
+      reconciliationDecision: "amounts_match",
+    }),
+  "LedgerSourceClaim.ledgerTransferId": async (db, targetId) =>
+    insertAndReturn(db, ledgerSourceClaim, {
+      ledgerTransferId: targetId as never,
+      source: "synthetic-integrity",
+      sourceKey: uniq("claim"),
+      sourceKeyVersion: 1,
+      normalizedEvidence: {
+        amount: 1,
+        occurredOn: null,
+        description: null,
+        context: null,
+        disambiguator: null,
+      },
+      targetAmountAtClaim: 1,
+      reconciliationDecision: "amounts_match",
+    }),
+  "ExpenseAttribution.ledgerPartyId": async (db, targetId) => {
+    const expense = await insertWithShortcode(db, "expense", {
+      name: uniq("Expense"),
+      costType: "materials",
+      trade: "other",
+      date: "2024-01-15",
+    });
+    return insertAndReturn(db, expenseAttribution, {
+      expenseId: expense.id,
+      role: "funder",
+      ledgerPartyId: unsafeLedgerPartyId(targetId),
+      weight: 1,
+    });
+  },
+  "FinancialAccount.ledgerPartyId": (db, targetId) =>
+    insertWithShortcode(db, "financialAccount", {
+      name: uniq("Financial account"),
+      identity: { kind: "cash" },
+      ledgerPartyId: unsafeLedgerPartyId(targetId),
+    }),
+  "LedgerTransfer.fromPartyId": async (db, targetId) => {
+    const to = await mkLedgerParty(db);
+    return insertWithShortcode(db, "ledgerTransfer", {
+      fromPartyId: unsafeLedgerPartyId(targetId),
+      toPartyId: to.id,
+      amount: 1,
+      date: "2024-01-15",
+    });
+  },
+  "LedgerTransfer.toPartyId": async (db, targetId) => {
+    const from = await mkLedgerParty(db);
+    return insertWithShortcode(db, "ledgerTransfer", {
+      fromPartyId: from.id,
+      toPartyId: unsafeLedgerPartyId(targetId),
+      amount: 1,
+      date: "2024-01-15",
+    });
+  },
   "WishCandidate.wishId": async (db, targetId) => {
     const p = await mkProduct(db);
     return insertAndReturn(db, wishCandidate, {
@@ -683,11 +802,11 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
 
-  it("derives 50 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
+  it("derives 58 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
     // Mirrors EXPECTED_EDGE_COUNT in detectors-integrity.ts — an independent
     // spot check computed from the same two source-of-truth maps, not from the
     // detector's own (unexported) derivation.
-    expect(derivedMustTargetLiveEdges).toHaveLength(50);
+    expect(derivedMustTargetLiveEdges).toHaveLength(58);
   });
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {

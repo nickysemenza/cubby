@@ -7,6 +7,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import {
   unsafeExpenseShortcode,
+  unsafeLedgerPartyShortcode,
   unsafeProductShortcode,
   unsafeProjectId,
   unsafeProjectShortcode,
@@ -150,6 +151,25 @@ export type ExpenseRow = {
       } | null;
     } | null;
   } | null;
+  attributions: Array<{
+    role: "beneficiary" | "funder";
+    ledgerPartyId: string | null;
+    weight: number;
+    deletedAt: Date | null;
+    ledgerParty: { shortcode: string; deletedAt: Date | null } | null;
+  }>;
+  sourceClaims: Array<{
+    source: string;
+    sourceKey: string;
+    sourceKeyVersion: number;
+    normalizedEvidence: ExpenseOut["sourceClaims"][number]["normalizedEvidence"];
+    targetAmountAtClaim: number;
+    reconciliationDecision: "amounts_match" | "accept_target_amount";
+    reconciliationNote: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+    deletedAt: Date | null;
+  }>;
 };
 
 export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
@@ -213,6 +233,44 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
             orderId: purchaseRow.orderId,
           })
         : null,
+    beneficiaries: row.attributions
+      .filter(
+        (value) => value.deletedAt === null && value.role === "beneficiary",
+      )
+      .map((value) => ({
+        partyId:
+          value.ledgerParty?.deletedAt === null
+            ? unsafeLedgerPartyShortcode(value.ledgerParty.shortcode)
+            : null,
+        weight: value.weight,
+      })),
+    funders: row.attributions
+      .filter((value) => value.deletedAt === null && value.role === "funder")
+      .map((value) => ({
+        partyId:
+          value.ledgerParty?.deletedAt === null
+            ? unsafeLedgerPartyShortcode(value.ledgerParty.shortcode)
+            : null,
+        weight: value.weight,
+      })),
+    sourceClaims: row.sourceClaims
+      .filter((value) => value.deletedAt === null)
+      .map((value) => ({
+        source: value.source,
+        normalizedEvidence: value.normalizedEvidence,
+        reconciliation:
+          value.reconciliationDecision === "amounts_match"
+            ? { decision: "amounts_match" as const }
+            : {
+                decision: "accept_target_amount" as const,
+                note: value.reconciliationNote ?? "Reconciliation note missing",
+              },
+        sourceKey: value.sourceKey,
+        sourceKeyVersion: value.sourceKeyVersion,
+        targetAmountAtClaim: value.targetAmountAtClaim,
+        createdAt: value.createdAt,
+        updatedAt: value.updatedAt,
+      })),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

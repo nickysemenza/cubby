@@ -107,4 +107,34 @@ describe("RelationshipTree display images", () => {
       "https://example.com/next.png",
     );
   });
+
+  it("renders route-less ledger records as text instead of a broken link", () => {
+    render(
+      <RelationshipTree
+        presets={[
+          {
+            key: "ledger",
+            label: "Ledger",
+            groups: [
+              {
+                key: "account.party",
+                label: "Party",
+                totalCount: 1,
+                items: [
+                  {
+                    entity: "ledgerParty",
+                    id: "LPY-A234",
+                    label: "Household",
+                    displayImage: null,
+                  },
+                ],
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Household").closest("a")).toBeNull();
+  });
 });

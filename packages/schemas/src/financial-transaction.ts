@@ -18,6 +18,7 @@ import {
 import {
   financialAccountShortcode,
   financialTransactionShortcode,
+  ledgerTransferShortcode,
   purchaseShortcode,
 } from "./identifiers";
 import {
@@ -371,7 +372,7 @@ const validSettlementState = <T extends z.ZodType>(schema: T) =>
   });
 
 export const financialTransactionCreateInput = validSettlementState(
-  postedRequiresDate(z.object(financialTransactionCreateShape)),
+  postedRequiresDate(z.object(financialTransactionCreateShape).strict()),
 );
 export type FinancialTransactionCreateInput = z.infer<
   typeof financialTransactionCreateInput
@@ -381,7 +382,7 @@ export type FinancialTransactionCreateInput = z.infer<
 // repository validates the resulting persisted state after applying the patch.
 export const financialTransactionUpdateData = deriveUpdateData(
   financialTransactionCreateShape,
-);
+).strict();
 export type FinancialTransactionUpdateData = z.infer<
   typeof financialTransactionUpdateData
 >;
@@ -455,6 +456,7 @@ export const financialTransactionOut = postedRequiresDate(
      * reads.
      */
     allocations: z.array(financialTransactionAllocationOut),
+    ledgerTransferId: ledgerTransferShortcode.nullable(),
     accountName: z.string().nullable(),
     ...timestampedFields,
   }),

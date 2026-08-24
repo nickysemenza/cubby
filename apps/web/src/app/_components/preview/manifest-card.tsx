@@ -12,6 +12,7 @@ import {
   type EntityDetailRoute,
   entities,
   entityDetailParams,
+  isBrowserRoutedEntity,
 } from "~/entities/entities";
 import { formatCurrency } from "~/lib/utils";
 import { EntityInlineLink } from "../EntityInlineLink";
@@ -104,7 +105,7 @@ export function ManifestCard({
                 >
                   <ArrowUpRight className="size-3.5" />
                 </Link>
-              ) : (
+              ) : isBrowserRoutedEntity(entity) ? (
                 <Link
                   to={entities[entity].routes.detail}
                   params={entityDetailParams(routeParam)}
@@ -113,7 +114,7 @@ export function ManifestCard({
                 >
                   <ArrowUpRight className="size-3.5" />
                 </Link>
-              )}
+              ) : null}
               <span className="rounded-sm bg-muted px-2 py-px font-mono text-2xs text-muted-foreground uppercase tracking-wide">
                 {tag}
               </span>
