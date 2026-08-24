@@ -14,15 +14,15 @@ import {
 import { shortcodeSchema } from "@cubby/schemas/identifiers";
 import {
   ingredientCreateInput,
-  ingredientMcpOut,
   ingredientOut,
   ingredientUpdateData,
+  ingredientWithFoodOut,
 } from "@cubby/schemas/ingredient";
 import {
   inventoryCreatePayloadData,
   inventoryEntryOut,
-  inventoryMcpOut,
   inventoryUpdatePayloadData,
+  inventoryWithLocationAndProductOut,
 } from "@cubby/schemas/inventory";
 import {
   ledgerPartyCreateInput,
@@ -35,22 +35,17 @@ import {
   ledgerTransferUpdateData,
 } from "@cubby/schemas/ledger-transfer";
 import {
+  infLocation,
   locationCreateInput,
-  locationMcpOut,
   locationOut,
   locationUpdateData,
 } from "@cubby/schemas/location";
-import {
-  mealCreateInput,
-  mealMcpOut,
-  mealOut,
-  mealUpdateData,
-} from "@cubby/schemas/meal";
+import { mealCreateInput, mealOut, mealUpdateData } from "@cubby/schemas/meal";
 import {
   productCreateInput,
-  productMcpOut,
   productTopLevelOut,
   productUpdateData,
+  productWithFoodOut,
 } from "@cubby/schemas/product";
 import {
   expenseCreateInput,
@@ -70,7 +65,6 @@ import {
 } from "@cubby/schemas/purchase";
 import {
   recipeCreateInput,
-  recipeMcpOut,
   recipeOut,
   recipeUpdateData,
 } from "@cubby/schemas/recipe";
@@ -81,6 +75,7 @@ import {
 } from "@cubby/schemas/vendor";
 import { wishCreateInput, wishOut, wishUpdateData } from "@cubby/schemas/wish";
 import { type ZodSchema, z } from "zod";
+import type { DetailEntity } from "~/entities/generated/entity-details.gen";
 
 type CrudBinding = {
   idSchema: ZodSchema;
@@ -89,7 +84,7 @@ type CrudBinding = {
   output: ZodSchema;
 };
 
-type EntityBinding = { crud: CrudBinding | null; mcpOut: ZodSchema | null };
+type EntityBinding = { crud: CrudBinding | null };
 
 const crud = <
   E extends ShortcodeEntity,
@@ -101,26 +96,66 @@ const crud = <
 
 // biome-ignore format: generated bindings stay one entity per line.
 export const ENTITY_BINDINGS = {
-  "product": {crud:crud("product",{createInput:productCreateInput,updateInput:productUpdateData,output:productTopLevelOut}),mcpOut:productMcpOut},
-  "recipe": {crud:crud("recipe",{createInput:recipeCreateInput,updateInput:recipeUpdateData,output:recipeOut}),mcpOut:recipeMcpOut},
-  "ingredient": {crud:crud("ingredient",{createInput:ingredientCreateInput,updateInput:ingredientUpdateData,output:ingredientOut}),mcpOut:ingredientMcpOut},
-  "cookbook": { crud: null, mcpOut: null },
-  "location": {crud:crud("location",{createInput:locationCreateInput,updateInput:locationUpdateData,output:locationOut}),mcpOut:locationMcpOut},
-  "inventory": {crud:crud("inventory",{createInput:inventoryCreatePayloadData,updateInput:inventoryUpdatePayloadData,output:inventoryEntryOut}),mcpOut:inventoryMcpOut},
-  "meal": {crud:crud("meal",{createInput:mealCreateInput,updateInput:mealUpdateData,output:mealOut}),mcpOut:mealMcpOut},
-  "ledgerParty": {crud:crud("ledgerParty",{createInput:ledgerPartyCreateInput,updateInput:ledgerPartyUpdateData,output:ledgerPartyOut}),mcpOut:null},
-  "ledgerTransfer": {crud:crud("ledgerTransfer",{createInput:ledgerTransferCreateInput,updateInput:ledgerTransferUpdateData,output:ledgerTransferOut}),mcpOut:null},
-  "project": {crud:crud("project",{createInput:projectCreateInput,updateInput:projectUpdateData,output:projectOut}),mcpOut:null},
-  "task": {crud:crud("task",{createInput:taskCreateInput,updateInput:taskUpdateData,output:taskOut}),mcpOut:null},
-  "vendor": {crud:crud("vendor",{createInput:vendorCreateInput,updateInput:vendorUpdateData,output:vendorOut}),mcpOut:null},
-  "purchase": {crud:crud("purchase",{createInput:purchaseCreateInput,updateInput:purchaseUpdateData,output:purchaseOut}),mcpOut:null},
-  "financialAccount": {crud:crud("financialAccount",{createInput:financialAccountCreateInput,updateInput:financialAccountUpdateData,output:financialAccountOut}),mcpOut:null},
-  "financialTransaction": {crud:crud("financialTransaction",{createInput:financialTransactionCreateInput,updateInput:financialTransactionUpdateData,output:financialTransactionOut}),mcpOut:null},
-  "wish": {crud:crud("wish",{createInput:wishCreateInput,updateInput:wishUpdateData,output:wishOut}),mcpOut:null},
-  "expense": {crud:crud("expense",{createInput:expenseCreateInput,updateInput:expenseUpdateData,output:expenseOut}),mcpOut:null},
-  "image": { crud: null, mcpOut: null },
+  "product": {crud:crud("product",{createInput:productCreateInput,updateInput:productUpdateData,output:productTopLevelOut})},
+  "recipe": {crud:crud("recipe",{createInput:recipeCreateInput,updateInput:recipeUpdateData,output:recipeOut})},
+  "ingredient": {crud:crud("ingredient",{createInput:ingredientCreateInput,updateInput:ingredientUpdateData,output:ingredientOut})},
+  "cookbook": { crud: null },
+  "location": {crud:crud("location",{createInput:locationCreateInput,updateInput:locationUpdateData,output:locationOut})},
+  "inventory": {crud:crud("inventory",{createInput:inventoryCreatePayloadData,updateInput:inventoryUpdatePayloadData,output:inventoryEntryOut})},
+  "meal": {crud:crud("meal",{createInput:mealCreateInput,updateInput:mealUpdateData,output:mealOut})},
+  "ledgerParty": {crud:crud("ledgerParty",{createInput:ledgerPartyCreateInput,updateInput:ledgerPartyUpdateData,output:ledgerPartyOut})},
+  "ledgerTransfer": {crud:crud("ledgerTransfer",{createInput:ledgerTransferCreateInput,updateInput:ledgerTransferUpdateData,output:ledgerTransferOut})},
+  "project": {crud:crud("project",{createInput:projectCreateInput,updateInput:projectUpdateData,output:projectOut})},
+  "task": {crud:crud("task",{createInput:taskCreateInput,updateInput:taskUpdateData,output:taskOut})},
+  "vendor": {crud:crud("vendor",{createInput:vendorCreateInput,updateInput:vendorUpdateData,output:vendorOut})},
+  "purchase": {crud:crud("purchase",{createInput:purchaseCreateInput,updateInput:purchaseUpdateData,output:purchaseOut})},
+  "financialAccount": {crud:crud("financialAccount",{createInput:financialAccountCreateInput,updateInput:financialAccountUpdateData,output:financialAccountOut})},
+  "financialTransaction": {crud:crud("financialTransaction",{createInput:financialTransactionCreateInput,updateInput:financialTransactionUpdateData,output:financialTransactionOut})},
+  "wish": {crud:crud("wish",{createInput:wishCreateInput,updateInput:wishUpdateData,output:wishOut})},
+  "expense": {crud:crud("expense",{createInput:expenseCreateInput,updateInput:expenseUpdateData,output:expenseOut})},
+  "image": { crud: null },
 } satisfies Record<ShortcodeEntity, EntityBinding>;
 
+/** @lintignore Dynamically imported by the client-safe Start detail transport. */
+// biome-ignore format: generated detail schemas stay one entity per line.
+export const ENTITY_DETAIL_OUTPUT_SCHEMAS = {
+  "product": productWithFoodOut,
+  "recipe": recipeOut,
+  "ingredient": ingredientWithFoodOut,
+  "location": infLocation,
+  "inventory": inventoryWithLocationAndProductOut,
+  "meal": mealOut,
+  "ledgerParty": ledgerPartyOut,
+  "ledgerTransfer": ledgerTransferOut,
+  "project": projectOut,
+  "task": taskOut,
+  "vendor": vendorOut,
+  "purchase": purchaseOut,
+  "financialAccount": financialAccountOut,
+  "financialTransaction": financialTransactionOut,
+  "wish": wishOut,
+  "expense": expenseOut,
+} as const satisfies Record<DetailEntity, ZodSchema>;
+/** @lintignore Dynamically imported by the client-safe Start detail transport. */
+// biome-ignore format: one generated detail input variant per entity.
+export const entityDetailInputSchema = z.discriminatedUnion("entity", [
+  z.object({entity:z.literal("product"),shortcode:shortcodeSchema("product")}),
+  z.object({entity:z.literal("recipe"),shortcode:shortcodeSchema("recipe")}),
+  z.object({entity:z.literal("ingredient"),shortcode:shortcodeSchema("ingredient")}),
+  z.object({entity:z.literal("location"),shortcode:shortcodeSchema("location")}),
+  z.object({entity:z.literal("inventory"),shortcode:shortcodeSchema("inventory")}),
+  z.object({entity:z.literal("meal"),shortcode:shortcodeSchema("meal")}),
+  z.object({entity:z.literal("ledgerParty"),shortcode:shortcodeSchema("ledgerParty")}),
+  z.object({entity:z.literal("ledgerTransfer"),shortcode:shortcodeSchema("ledgerTransfer")}),
+  z.object({entity:z.literal("project"),shortcode:shortcodeSchema("project")}),
+  z.object({entity:z.literal("task"),shortcode:shortcodeSchema("task")}),
+  z.object({entity:z.literal("vendor"),shortcode:shortcodeSchema("vendor")}),
+  z.object({entity:z.literal("purchase"),shortcode:shortcodeSchema("purchase")}),
+  z.object({entity:z.literal("financialAccount"),shortcode:shortcodeSchema("financialAccount")}),
+  z.object({entity:z.literal("financialTransaction"),shortcode:shortcodeSchema("financialTransaction")}),
+  z.object({entity:z.literal("wish"),shortcode:shortcodeSchema("wish")}),
+  z.object({entity:z.literal("expense"),shortcode:shortcodeSchema("expense")})
+]);
 // biome-ignore format: one generated variant per entity.
 export const generatedEntityCreateCommandSchema = z.union([
   z.object({action:z.literal("create"),entity:z.literal("product"),data:productCreateInput}),

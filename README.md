@@ -208,10 +208,12 @@ unit-mapping ids, background job ids); none of them are manifest entities.
 
 The body is four characters from a 31-character alphabet (digits and uppercase
 letters minus the scan-confusable `0 O 1 I L`) — 923,521 codes per prefix.
-`P-`/`R-`/`L-` were the pre-2026-07 prefixes for product/recipe/location; they
-still resolve on input, forever, so labels printed before the cutover keep
-working. Because the swap preserved each code's body (`P-4K7M` → `PRD-4K7M`),
-that needs only a three-entry alias map, not an alias table. The registry lives
+`P-` and `L-` are permanent inbound aliases for Product and Location because
+physical labels using them already exist. Cubby emits only `PRD-` and `LOC-`;
+the four-character body is preserved during the prefix rewrite, so no alias
+table is needed. The former Recipe `R-` alias is intentionally no longer
+recognized; old `R-XXXX` links are a breaking compatibility removal and must be
+replaced with `RCP-XXXX`. The generated registry lives
 in `packages/shared/src/shortcode.ts`; resolution goes through
 `apps/web/src/server/repo/shortcode-resolver.ts` and nowhere else.
 

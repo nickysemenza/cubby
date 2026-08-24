@@ -1,5 +1,9 @@
 import { z } from "zod";
 import type { Entity } from "./entity-core";
+export {
+  entityInspectorMetadata,
+  type EntityInspectorMetadata,
+} from "./generated/entity-inspector.gen";
 import { generatedEntityManifest } from "./generated/entity-manifest-data.gen";
 import { relatednessSignalSchema } from "./relatedness";
 import {
@@ -9,7 +13,6 @@ import {
   type RelationshipPathStep,
 } from "./entity-integrity";
 
-/** The runtime descriptor shape emitted from the canonical literal declaration. */
 const mcpOp = z.enum(["get", "list", "create", "update", "delete"]);
 
 export const entityDescriptor = z.object({
