@@ -29,7 +29,7 @@ vi.mock("sonner", () => ({
 
 vi.mock("~/lib/query-keys", () => ({
   invalidateTRPCQueries: vi.fn(),
-  queryKeys: { location: { all: ["location"] } },
+  invalidatesFor: () => [["location"]],
 }));
 
 vi.mock("~/integrations/trpc/react", () => ({

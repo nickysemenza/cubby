@@ -31,7 +31,7 @@ import type { ScanFeedbackEntry } from "~/app/_components/inventory/persistent-s
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
-import { invalidateTRPCQueries, queryKeys } from "~/lib/query-keys";
+import { invalidatesFor, invalidateTRPCQueries } from "~/lib/query-keys";
 import { resolveLocationScan, resolveProductScan } from "~/lib/scan-code";
 import type { SweepFollowUp } from "./SweepProductFollowUp";
 import type { QueuedBin, SweepBinVerdict } from "./sweep-bin-plan";
@@ -485,10 +485,10 @@ export function useLocationSweep({
           // the number of ids REQUESTED, which is not evidence of a change.
           outcome.bins.moved = adoptedIds.length;
           setBins([]);
-          // The reparent moves rows in and out of every derived location view.
-          // Keep this broad rather than enumerating a dozen keys for a
-          // single-user app; nothing here touches inventory.
-          invalidateTRPCQueries(queryClient, [queryKeys.location.all]);
+          invalidateTRPCQueries(
+            queryClient,
+            invalidatesFor("location", "reparent"),
+          );
           onSettled();
         } catch (error) {
           // The item filter below assumes the reparents landed, so a bin
@@ -592,7 +592,10 @@ export function useLocationSweep({
       try {
         await reparentMutation.mutateAsync({ ids: [binId], parentId });
         setMissing((prev) => prev?.filter((bin) => bin.id !== binId) ?? null);
-        invalidateTRPCQueries(queryClient, [queryKeys.location.all]);
+        invalidateTRPCQueries(
+          queryClient,
+          invalidatesFor("location", "reparent"),
+        );
         onSettled();
       } catch (error) {
         toast.error(getErrorMessage(error));

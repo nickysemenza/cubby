@@ -11,36 +11,35 @@
  */
 
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { CircleHelp } from "lucide-react";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { optionalLocationField } from "~/app/_components/form-fields";
-import { ComboboxFieldWithSearch } from "~/app/_components/form-utils/combobox-field-with-search";
+import {
+  DestinationLocationField,
+  resolveDestination,
+  useDestinationLocationForm,
+} from "~/app/_components/inventory/destination-location-picker";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import type { MissingBin } from "./useLocationSweep";
 
-const relocateSchema = z.object({ newParent: optionalLocationField });
-
 function MissingRow({
   bin,
+  sweptLocationId,
   onRelocate,
   onSendToUnknown,
   busy,
 }: {
   bin: MissingBin;
+  sweptLocationId: LocationShortcode;
   onRelocate: (binId: string, parentId: string) => void;
   onSendToUnknown: (binId: string) => void;
   busy: boolean;
 }) {
-  const form = useForm<z.infer<typeof relocateSchema>>({
-    resolver: zodResolver(relocateSchema),
-    defaultValues: { newParent: null },
-  });
-  const selected = form.watch("newParent");
+  // The fourth "choose a target location" surface, after the two move dialogs
+  // and bulk move. Passing the swept location as the source is what disables
+  // it in the list: a bin cannot be relocated to where it already isn't.
+  const { form, error, setError } = useDestinationLocationForm();
 
   return (
     <Stack gap="xs" className="border border-[var(--border)] p-2">
@@ -53,18 +52,33 @@ function MissingRow({
       </Row>
       <Row align="end" gap="sm" className="min-w-0">
         <div className="min-w-0 flex-1">
-          <ComboboxFieldWithSearch
+          <DestinationLocationField
             form={form}
-            name="newParent"
             label="Move to"
-            searchType="location"
+            error={error}
+            sourceLocationIds={sweptLocationId}
           />
         </div>
         <Button
           type="button"
           className="min-h-10 shrink-0 px-3 text-xs" /* tight: inline with the picker */
-          disabled={!selected || busy}
-          onClick={() => selected && onRelocate(bin.id, selected.id)}
+          disabled={busy}
+          onClick={() => {
+            const target = resolveDestination(
+              form.getValues("targetLocation"),
+              sweptLocationId,
+              {
+                missingTarget: "Pick where it went.",
+                sameAsSource: "That's the shelf you just swept.",
+              },
+            );
+            if (!target.ok) {
+              setError(target.error);
+              return;
+            }
+            setError(null);
+            onRelocate(bin.id, target.id);
+          }}
         >
           Move
         </Button>
@@ -126,6 +140,7 @@ export function SweepMissingReview({
             <MissingRow
               key={bin.id}
               bin={bin}
+              sweptLocationId={locationId}
               busy={busy}
               onRelocate={onRelocate}
               onSendToUnknown={onSendToUnknown}
