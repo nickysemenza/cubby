@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   auditDateFilterFields,
   deriveUpdateData,
+  numericRangeFields,
   timestampedFields,
   uniqueBy,
 } from "./base-entity";
@@ -198,8 +199,7 @@ export const purchaseFilterFields = {
    * Purchases with at least one priced Expense, so empty or unpriced-only Purchases do
    * not masquerade as zero-dollar credits.
    */
-  expenseTotalMin: z.coerce.number().optional(),
-  expenseTotalMax: z.coerce.number().optional(),
+  ...numericRangeFields("expenseTotal"),
   dateFrom: plainDate
     .optional()
     .describe("Inclusive lower bound on purchase date"),

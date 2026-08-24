@@ -6,18 +6,15 @@ import {
   createNameColumn,
   renderOptionCell,
 } from "~/app/_components/data-table/columnHelpers";
-import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
+import { EntityListPage } from "~/app/_components/data-table/EntityListPage";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
-import { useEntityList } from "~/app/_components/hooks/useEntityList";
-import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { ImageAssociationLinks } from "~/app/_components/images/image-associations";
 import { imageStatusOptions } from "~/app/images/image-options";
-import { usePageCount } from "~/components/page/Page";
 import { useTRPC } from "~/integrations/trpc/react";
-import { imageMutationInvalidateKeys, queryKeys } from "~/lib/query-keys";
+import { queryKeys } from "~/lib/query-keys";
 import { UploadImageDialog } from "./upload-image-dialog";
 
 /** Module-level so the deletable config keeps a stable identity. */
@@ -29,7 +26,6 @@ export default function ImageList() {
     () => createCubbyColumnHelper<ImageWithEntity>(),
     [],
   );
-  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("image");
 
   // Images DO have a `deletedAt` column (like every other entity), but
   // `deleteImages` intentionally hard-deletes anyway — see its doc comment in
@@ -46,7 +42,6 @@ export default function ImageList() {
   const updateImageMutation = useUpdateMutation({
     mutationFn: api.image.update.mutationOptions,
     entity: "image",
-    invalidateKeys: imageMutationInvalidateKeys,
   });
   // Images use `filename`, not `name` — see useNameEditable's `field` param.
   const nameEditable = useNameEditable<ImageWithEntity, "filename">(
@@ -114,24 +109,13 @@ export default function ImageList() {
     [columnHelper, nameEditable],
   );
 
-  const { workbench, totalCount } = useEntityList({
-    entity: "image",
-    queryOptions: (params) => api.image.list.queryOptions(params),
-    columns,
-    deletable: deletableConfig,
-  });
-  usePageCount(totalCount);
-
   return (
-    <div>
-      <ListWorkbench
-        model={workbench}
-        ariaLabel="Images Table"
-        onRowClick={onRowClick}
-        onRowHover={onRowHover}
-        actions={<UploadImageDialog />}
-      />
-      <PreviewSheet />
-    </div>
+    <EntityListPage<ImageWithEntity>
+      entity="image"
+      columns={columns}
+      deletable={deletableConfig}
+      ariaLabel="Images Table"
+      actions={<UploadImageDialog />}
+    />
   );
 }

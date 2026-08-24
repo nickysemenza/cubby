@@ -23,10 +23,7 @@ import { Input } from "~/components/ui/input";
 import { useTRPC } from "~/integrations/trpc/react";
 import { BASE_KINDS, type BaseKind } from "~/lib/conversion-coverage";
 import { getErrorMessage } from "~/lib/error-utils";
-import {
-  ingredientAllMutationInvalidateKeys,
-  productMutationInvalidateKeys,
-} from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
 import type { EquivalenceDraft } from "./equivalence-workbench-link";
@@ -380,8 +377,8 @@ export function EnrichmentEditor({
     success: (d) =>
       savedWithBackgroundWork(d.sideEffects, `Enriched ${d.name}`),
     invalidateKeys: [
-      ...ingredientAllMutationInvalidateKeys,
-      ...productMutationInvalidateKeys,
+      ...invalidatesFor("ingredient"),
+      ...invalidatesFor("product"),
     ],
     onSuccess: () => onSaved?.(),
     error: (err) => `Failed to create product: ${getErrorMessage(err)}`,
@@ -393,8 +390,8 @@ export function EnrichmentEditor({
     mutationFn: api.product.update.mutationOptions,
     success: (d) => savedWithBackgroundWork(d.sideEffects, `Updated ${d.name}`),
     invalidateKeys: [
-      ...ingredientAllMutationInvalidateKeys,
-      ...productMutationInvalidateKeys,
+      ...invalidatesFor("ingredient"),
+      ...invalidatesFor("product"),
     ],
     onSuccess: () => onSaved?.(),
     error: (err) => `Failed to update: ${getErrorMessage(err)}`,
@@ -405,7 +402,7 @@ export function EnrichmentEditor({
     intent: "full",
     mutationFn: api.ingredient.update.mutationOptions,
     success: `Updated ${row.name}.`,
-    invalidateKeys: ingredientAllMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("ingredient"),
     error: (err) => `Failed to update: ${getErrorMessage(err)}`,
   });
 

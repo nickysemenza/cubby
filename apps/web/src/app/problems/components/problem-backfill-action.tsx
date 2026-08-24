@@ -7,10 +7,7 @@ import { Stack } from "~/components/layout";
 import { Progress } from "~/components/ui/progress";
 import { useTRPC, useTRPCClient } from "~/integrations/trpc/react";
 import type { BulkProgressEvent } from "~/lib/bulk-progress";
-import {
-  invalidateTRPCQueries,
-  problemsMutationInvalidateKeys,
-} from "~/lib/query-keys";
+import { invalidatesFor, invalidateTRPCQueries } from "~/lib/query-keys";
 import { ProblemActionButton } from "./problem-action-button";
 
 type TRPCApi = ReturnType<typeof useTRPC>;
@@ -69,7 +66,7 @@ export function BackfillButton<TResult>({
         const { tone, message } = toastResult(data);
         toast[tone](message);
         invalidateTRPCQueries(queryClient, [
-          ...problemsMutationInvalidateKeys,
+          ...invalidatesFor("problems"),
           ...(invalidateKeys?.(api) ?? []),
         ]);
       },

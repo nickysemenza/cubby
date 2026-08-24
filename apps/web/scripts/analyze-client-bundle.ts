@@ -57,9 +57,15 @@ import { gzipSync } from "node:zlib";
 // reports bring the Cloudflare build to 536.4 KiB on macOS and 537.4 KiB on
 // Linux across the same 146 chunks; 538 KiB leaves bounded cross-platform
 // headroom without permitting another eager chunk.
+//
+// Lowered 538 -> 500 KiB after the entity route factories: shared detail-route
+// shells and the single list-search schema module dedupe what were a dozen
+// eager per-route islands, measuring 486.8 KiB across 134 chunks on macOS.
+// 500 KiB / 140 chunks banks the win as a ratchet while keeping the usual
+// cross-platform headroom.
 export const CLIENT_BUNDLE_BUDGET = {
-  gzipBytes: 538 * 1024,
-  chunks: 146,
+  gzipBytes: 500 * 1024,
+  chunks: 140,
 } as const;
 
 const STATIC_FROM =

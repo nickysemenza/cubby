@@ -111,14 +111,51 @@ function expectOk(result: CallToolResult) {
   expect(result.isError, errorText(result)).not.toBe(true);
 }
 
+/**
+ * Call a plural batch create/update tool (`create_xs`/`update_xs`) with
+ * exactly one item and hand back the same shape the retired singular tool
+ * used to return, so call sites here can keep reading the entity's own
+ * fields off `structuredContent` directly. The singular tools were dropped
+ * because the plural ones accept a one-item array and made them strictly
+ * redundant — see `registerEntityCrudToolset` in tools/_shared.ts.
+ */
+async function callSingular(
+  tool: string,
+  args: Record<string, unknown>,
+  caller: DomainCaller,
+): Promise<CallToolResult> {
+  const result = await callTool(
+    tool,
+    { items: [args], resultDetail: "full" },
+    caller,
+  );
+  if (result.isError) return result;
+  const { results } = structured(result) as {
+    results: Array<Record<string, unknown>>;
+  };
+  const [only] = results;
+  if (only?.status === "failed") {
+    return {
+      ...result,
+      isError: true,
+      structuredContent: only,
+      content: [{ type: "text" as const, text: String(only.error ?? "") }],
+    };
+  }
+  return {
+    ...result,
+    structuredContent: only?.item as Record<string, unknown> | undefined,
+  };
+}
+
 describe("attach_file / detach cycle", () => {
   const ctx = withTestDb("mcp");
 
   const makeCaller = () => createTestCaller(domainRouter, ctx.db);
 
   const createProduct = async (caller: DomainCaller, name: string) => {
-    const created = await callTool(
-      "create_product",
+    const created = await callSingular(
+      "create_products",
       { name, manufacturer: "Test Mfg", upc: null, ingredientId: null },
       caller,
     );
@@ -174,8 +211,8 @@ describe("attach_file / detach cycle", () => {
     expect(await imageCountOf(caller, productCode)).toBe(1);
     vi.mocked(deleteS3Object).mockClear();
 
-    const removed = await callTool(
-      "update_product",
+    const removed = await callSingular(
+      "update_products",
       { id: productCode, removeImageIds: [firstImageId] },
       caller,
     );
@@ -234,8 +271,8 @@ describe("attach_file / detach cycle", () => {
 
     it("drops a deleted recipe's R2 object", async () => {
       const caller = makeCaller();
-      const created = await callTool(
-        "create_recipe",
+      const created = await callSingular(
+        "create_recipes",
         { name: "Doomed Recipe", meta: { url: null }, sections: [] },
         caller,
       );
@@ -279,8 +316,8 @@ describe("attach_entity / detach_entity", () => {
     name: string,
     category?: string,
   ) => {
-    const created = await callTool(
-      "create_product",
+    const created = await callSingular(
+      "create_products",
       {
         name,
         manufacturer: "Test Mfg",
@@ -295,7 +332,7 @@ describe("attach_entity / detach_entity", () => {
   };
 
   const createProjectCode = async (caller: DomainCaller, name: string) => {
-    const created = await callTool("create_project", { name }, caller);
+    const created = await callSingular("create_projects", { name }, caller);
     expectOk(created);
     return structured(created).id as string;
   };

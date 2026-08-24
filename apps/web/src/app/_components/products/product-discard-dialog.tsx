@@ -38,7 +38,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { useTRPC } from "~/integrations/trpc/react";
-import { expenseMutationInvalidateKeys } from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 import {
   NullableNumericField,
   PlainDateField,
@@ -127,7 +127,7 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
       `Discarded ${Math.abs(result.storedQuantity)} × ${product.name}${
         result.inventory?.removed ? " — shelf entry removed" : ""
       }`,
-    invalidateKeys: expenseMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("expense"),
     onSuccess: () => close(false),
   });
 

@@ -6,7 +6,7 @@ import {
   financialAccountShortcode,
   financialTransactionShortcode,
 } from "./identifiers";
-import { dateRangeFields, plainDate } from "./base-entity";
+import { dateRangeFields, numericRangeFields, plainDate } from "./base-entity";
 
 /**
  * The provider-statement ledger: what the card statements said, stored verbatim
@@ -124,8 +124,7 @@ export const statementRowFilters = z.object({
    */
   sourceCategory: z.string().optional(),
   ...dateRangeFields("date"),
-  amountMin: z.number().optional(),
-  amountMax: z.number().optional(),
+  ...numericRangeFields("amount", { coerce: false }),
   search: z.string().optional(),
 });
 export type StatementRowFilters = z.infer<typeof statementRowFilters>;

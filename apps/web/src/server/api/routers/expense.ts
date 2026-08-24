@@ -4,7 +4,6 @@
  */
 
 import {
-  type ExpenseShortcode,
   expenseShortcode,
   purchaseShortcode,
   unsafePurchaseId,
@@ -19,7 +18,6 @@ import {
   expenseBulkCostTypeInput,
   expenseBulkMoveInput,
   expenseBulkTradeInput,
-  expenseCreateInput,
   expenseFacetCountsInput,
   expenseFacetCountsOut,
   expenseFiltersSchema,
@@ -29,11 +27,11 @@ import {
   expenseOut,
   expenseSortableFields,
   expenseTradeAffinityOut,
-  expenseUpdateData,
   plainDate,
 } from "@cubby/schemas/project";
 import { vendorOptionsOut } from "@cubby/schemas/vendor";
 import { z } from "zod";
+import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 import {
   createExpense,
   deleteExpensesWithPurchaseEffects,
@@ -81,9 +79,7 @@ const {
   delete: deleteItem,
 } = createSearchableEntityCrudProcedures({
   schemas: {
-    createInput: expenseCreateInput,
-    updateInput: expenseUpdateData,
-    output: expenseOut,
+    ...ENTITY_BINDINGS.expense.crud,
     filters: expenseFiltersSchema,
     sort: {
       sortableFields: expenseSortableFields,
@@ -92,13 +88,8 @@ const {
       // sort keys from being accepted as group keys that do nothing.
       groupableFields: ["costType"] as const,
     },
-    idSchema: expenseShortcode,
   },
   repository: {
-    getByID: async (services, shortcode: ExpenseShortcode) => {
-      const id = await resolveOrThrow(services.db, "expense", shortcode);
-      return getExpenseByID(services.db, id);
-    },
     getByShortcode: (services, shortcode) =>
       getExpenseByShortcode(services.db, shortcode),
     list: async (services, filters, sort, pagination) =>
@@ -119,7 +110,7 @@ const {
       );
       return result;
     },
-    update: async (services, shortcode: ExpenseShortcode, data) => {
+    update: async (services, shortcode, data) => {
       const result = await updateExpense(
         services.db,
         shortcode,
@@ -134,7 +125,7 @@ const {
       );
       return result;
     },
-    delete: async (services, ids: ExpenseShortcode[]) => {
+    delete: async (services, ids) => {
       // The richer sibling of `deleteExpenses`, not the wrapper itself — this
       // is the one call site that needs `result.deleted` (measured off
       // `removeEntity`, not asserted from `ids.length`) alongside the

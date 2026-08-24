@@ -1,19 +1,21 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { Suspense } from "react";
-import { z } from "zod";
-import { tableSearchFields } from "~/app/_components/data-table/table-search";
+import { listPage } from "~/app/_components/routing/entity-routes";
 import ImageList from "~/app/images/imagelist";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
-import { Page } from "~/components/page/Page";
-import { entityFilterSearchFields } from "~/entities/filter-search-fields";
+import { imageListSearchSchema } from "~/entities/list-search";
 import { pageTitle } from "~/lib/page-title";
-import { urlEnumListParam } from "~/lib/search-params";
 
-export const imageListSearchSchema = z.object({
-  ...tableSearchFields,
-  ...entityFilterSearchFields("image"),
-  status: urlEnumListParam(ImageStatus),
-});
+const ImagesBody = () => (
+  <Suspense fallback={<SimpleLoading text="Loading images..." />}>
+    <ImageList />
+  </Suspense>
+);
+
+// Bound to a const, not inlined into the options object: the router plugin's
+// splitter re-parses an inlined call expression with a JSX-less babel config,
+// so only the identifier path survives a page body that renders JSX.
+const ImagesPage = listPage({ title: "Images", list: ImagesBody });
 
 export const Route = createFileRoute("/_authenticated/images/")({
   validateSearch: imageListSearchSchema,
@@ -21,15 +23,3 @@ export const Route = createFileRoute("/_authenticated/images/")({
   head: () => ({ meta: [{ title: pageTitle("Images") }] }),
   component: ImagesPage,
 });
-
-function ImagesPage() {
-  return (
-    <Page variant="list" listChrome="workbench" title="Images" layout="full">
-      <Suspense fallback={<SimpleLoading text="Loading images..." />}>
-        <ImageList />
-      </Suspense>
-    </Page>
-  );
-}
-
-import { ImageStatus } from "@cubby/schemas/image";

@@ -4,7 +4,7 @@ import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/integrations/trpc/react";
-import { ingredientMutationInvalidateKeys } from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 import { useEntityDelete } from "../hooks/useEntityDelete";
 
 interface IngredientBasicInfoProps {
@@ -24,7 +24,7 @@ export const IngredientBasicInfo: FC<IngredientBasicInfoProps> = ({
     entity: "ingredient",
     mutationOptions: (callbacks) =>
       api.ingredient.delete.mutationOptions(callbacks),
-    invalidateKeys: ingredientMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("ingredient", "list"),
     redirectTo: "/ingredients",
   });
 

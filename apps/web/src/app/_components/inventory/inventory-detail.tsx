@@ -10,7 +10,6 @@ import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
 import { useTRPC } from "~/integrations/trpc/react";
-import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDelete } from "../hooks/useEntityDelete";
@@ -46,7 +45,6 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
     entity: "inventory",
     mutationOptions: (callbacks) =>
       api.inventory.delete.mutationOptions(callbacks),
-    invalidateKeys: inventoryMutationInvalidateKeys,
     redirectTo: "/inventory",
   });
 

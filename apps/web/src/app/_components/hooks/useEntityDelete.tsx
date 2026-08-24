@@ -1,18 +1,15 @@
 import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
-import type { PreviewDeleteEntity } from "@cubby/schemas/entity-integrity";
+import type { Entity } from "@cubby/schemas/entity";
 import type { QueryKey } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Trash } from "lucide-react";
 import { type ReactElement, useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
-import {
-  OperationImpact,
-  useOperationPreview,
-} from "~/app/_components/impact/operation-impact";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Button } from "~/components/ui/button";
 import type { EditableEntity } from "~/entities/editing/types";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
+import { getEntityContract } from "~/entities/entity-contracts";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { type MutationOptionsFn, useActionMutation } from "./useActionMutation";
@@ -26,15 +23,18 @@ interface UseEntityDeleteOptions {
   name: string;
   /** Entity type label for dialog (e.g., "Product", "Ingredient") */
   entityLabel: string;
-  /** Entity slug for the operation-impact preview fetched while the confirm dialog is open. */
-  entity: PreviewDeleteEntity;
+  /** Entity slug — picks the registered-command delete path vs the legacy mutation. */
+  entity: Entity;
   /** tRPC delete mutation options factory */
   mutationOptions: (callbacks: {
     onSuccess: (data: { sideEffects?: MutationSideEffects }) => void;
     onError: (err: { message?: string }) => void;
   }) => unknown;
-  /** Query keys to invalidate on success */
-  invalidateKeys: readonly QueryKey[];
+  /**
+   * Override the fan-out invalidated on success. Omit it — the default is the
+   * entity's own `invalidatesFor(entity)` set, resolved through its contract.
+   */
+  invalidateKeys?: readonly QueryKey[];
   /** Route to navigate to after deletion */
   redirectTo: string;
   /**
@@ -84,14 +84,6 @@ export function useEntityDelete({
   ) as EditableEntity;
   const commands = useEntityCommands(commandEntity);
 
-  // Impact preview — fetched only while the dialog is open, always fresh for
-  // this id. See `useOperationPreview`'s doc comment for the gating rule.
-  const previewInput = useMemo(
-    () => ({ operation: "delete" as const, entity, ids: [id] }),
-    [entity, id],
-  );
-  const preview = useOperationPreview(previewInput, showDialog);
-
   // `mutationOptions`'s narrower callback shape isn't literally the
   // `MutationOptionsFn` signature `useActionMutation` is generic over (its
   // callbacks carry the delete-specific `{ sideEffects }` result), but it's
@@ -100,7 +92,8 @@ export function useEntityDelete({
   // toast all now come from `useActionMutation` itself.
   const legacyDeleteMutation = useActionMutation({
     mutationFn: mutationOptions as unknown as MutationOptionsFn,
-    invalidateKeys,
+    invalidateKeys:
+      invalidateKeys ?? getEntityContract(entity).invalidationKeys,
     success: (data) =>
       savedWithBackgroundWork(
         (data as { sideEffects?: MutationSideEffects }).sideEffects ??
@@ -174,18 +167,8 @@ export function useEntityDelete({
         isPending={
           registeredDelete ? commands.isPending : legacyDeleteMutation.isPending
         }
-        blocked={preview.data?.canProceed === false}
-      >
-        <OperationImpact
-          preview={preview.data}
-          isLoading={preview.isLoading}
-          isError={preview.isError}
-          onRetry={() => void preview.refetch()}
-        />
-      </BulkActionDialog>
+      />
     ),
-    // Not `preview` wholesale — react-query hands back a new result object
-    // every render; only the scalar fields are read.
     [
       showDialog,
       id,
@@ -199,10 +182,6 @@ export function useEntityDelete({
       legacyDeleteMutation.mutateAsync,
       navigate,
       redirectTo,
-      preview.data,
-      preview.isLoading,
-      preview.isError,
-      preview.refetch,
     ],
   );
 

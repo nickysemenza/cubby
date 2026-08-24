@@ -7,7 +7,11 @@ import type { ActorContext } from "@cubby/schemas/context";
 import type { Entity } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type { UserId } from "@cubby/schemas/identifiers";
-import { shortcodeSchema } from "@cubby/schemas/identifiers";
+import {
+  ENTITY_LABEL,
+  ENTITY_NOT_FOUND_REASON,
+  shortcodeSchema,
+} from "@cubby/schemas/identifiers";
 import {
   buildPaginatedResponse,
   createPaginatedResponseSchemaWithContext,
@@ -23,8 +27,10 @@ import { type ZodSchema, z } from "zod";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
+import { createAppError } from "~/server/errors/app-error";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 import type { AvailabilityService } from "~/server/services/availability.service";
+import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import type { LocationValuationService } from "~/server/services/location-valuation.service";
 import {
   mutationSideEffectEventSchema,
@@ -167,9 +173,15 @@ export function createBulkUpdatedMutation<
  * removes more rows than were requested, so an input-length count would
  * silently undercount there while looking correct everywhere else.
  * `backgroundBatches` is unrelated and optional, same as before.
+ *
+ * `detachedImageKeys` are the R2 objects the delete orphaned. Report them here
+ * rather than calling `deleteStoredObjects` in the adapter: the R2 delete has
+ * no rollback, so it must run AFTER the commit, and every adapter that did it
+ * by hand was re-deriving that ordering rule. The procedure below now owns it.
  */
 export type DeleteResult = {
   deleted: number;
+  detachedImageKeys?: string[];
   backgroundBatches?: BackgroundBatchRef[];
 };
 
@@ -199,7 +211,13 @@ const createDeleteProcedure = <TId extends string = string>(
       const ids = input.ids.map((id) =>
         idSchema ? (idSchema.parse(id) as TId) : (id as TId),
       );
-      const { deleted, backgroundBatches = [] } = await deleteFn(ctx, ids);
+      const {
+        deleted,
+        detachedImageKeys = [],
+        backgroundBatches = [],
+      } = await deleteFn(ctx, ids);
+      // After the commit, never inside it: an R2 delete has no rollback.
+      await deleteStoredObjects(detachedImageKeys);
       return { sideEffects: { backgroundBatches }, deleted };
     });
 
@@ -262,6 +280,40 @@ const createGetByShortcodeProcedure = <TSchema extends ZodSchema>(
     .query(async ({ ctx, input }) =>
       asResolvedOutput(await getByShortcodeFn(ctx, input.shortcode)),
     );
+
+/**
+ * The default `getByID`: the read `getByShortcode` already performs, with its
+ * `null` turned into the entity's own not-found error.
+ *
+ * Every router whose public id IS its shortcode was hand-writing this — nine
+ * copies of "call the shortcode reader, throw if it came back empty", four of
+ * which resolved the code to a uuid first only to hand it to a by-id reader
+ * that resolves it the same way. The reason and the prose come from
+ * `ENTITY_NOT_FOUND_REASON`/`ENTITY_LABEL`, so this raises exactly what
+ * `createEntityReader`'s throwing variant raises for the same entity, message
+ * included — a detail route and a repo read now fail identically.
+ *
+ * A router still supplies `getByID` explicitly when its by-id read is NOT the
+ * shortcode read (a different projection, or an id that isn't a shortcode).
+ */
+const requireByShortcode =
+  <TOutput, TId extends string>(
+    entityName: ShortcodeEntity,
+    getByShortcode: (
+      ctx: ProtectedCrudServices,
+      shortcode: string,
+    ) => Promise<TOutput | null>,
+  ) =>
+  async (ctx: ProtectedCrudServices, id: TId): Promise<TOutput> => {
+    const out = await getByShortcode(ctx, id);
+    if (out == null) {
+      throw createAppError(
+        ENTITY_NOT_FOUND_REASON[entityName],
+        `${ENTITY_LABEL[entityName]} ${id} not found`,
+      );
+    }
+    return out;
+  };
 
 // `inputSchema: S` (not `ZodSchema<TInput>`): annotating the param as
 // ZodSchema<T> erases the schema's *input* type to `unknown` (Zod 4's ZodType
@@ -413,7 +465,8 @@ export function createEntityDetailReadProcedures<
     idSchema?: z.ZodType<unknown>;
   };
   repository: {
-    getByID: (ctx: ProtectedCrudServices, id: TId) => Promise<TDetailOutput>;
+    /** Omit when it is `getByShortcode` + 404 — see {@link requireByShortcode}. */
+    getByID?: (ctx: ProtectedCrudServices, id: TId) => Promise<TDetailOutput>;
     /** Public-id read — `null` for an unknown code, which the route 404s on. */
     getByShortcode: (
       ctx: ProtectedCrudServices,
@@ -424,7 +477,11 @@ export function createEntityDetailReadProcedures<
   return {
     getByID: createGetByIdProcedure(
       schemas.output,
-      repository.getByID,
+      repository.getByID ??
+        requireByShortcode<TDetailOutput, TId>(
+          entityName,
+          repository.getByShortcode,
+        ),
       schemas.idSchema,
     ),
     getByShortcode: createGetByShortcodeProcedure(
@@ -492,7 +549,8 @@ export function createEntityCrudWithoutListProcedures<
     idSchema?: z.ZodType<unknown>;
   };
   repository: {
-    getByID: (ctx: ProtectedCrudServices, id: TId) => Promise<TDetailOutput>;
+    /** Omit when it is `getByShortcode` + 404 — see {@link requireByShortcode}. */
+    getByID?: (ctx: ProtectedCrudServices, id: TId) => Promise<TDetailOutput>;
     /** Public-id read — `null` for an unknown code, which the route 404s on. */
     getByShortcode: (
       ctx: ProtectedCrudServices,
@@ -640,7 +698,8 @@ function createEntityCrudProcedures<
     idSchema?: z.ZodType<unknown>;
   };
   repository: {
-    getByID: (ctx: ProtectedCrudServices, id: TId) => Promise<TDetailOutput>;
+    /** Omit when it is `getByShortcode` + 404 — see {@link requireByShortcode}. */
+    getByID?: (ctx: ProtectedCrudServices, id: TId) => Promise<TDetailOutput>;
     /** Public-id read — `null` for an unknown code, which the route 404s on. */
     getByShortcode: (
       ctx: ProtectedCrudServices,
@@ -738,6 +797,7 @@ function createEntityCrudProcedures<
 export function createSearchableEntityCrudProcedures<
   SCreate extends ZodSchema,
   SUpdate extends ZodSchema,
+  SId extends ZodSchema,
   TEntity extends SearchableEntity,
   TEntityId extends Extract<
     Parameters<typeof runMutationSideEffects>[1]["entity"],
@@ -745,7 +805,7 @@ export function createSearchableEntityCrudProcedures<
   >["entityId"],
   TOutput,
   TFilters,
-  TId extends string = string,
+  TId extends string = Extract<z.output<SId>, string>,
 >({
   schemas,
   repository,
@@ -761,10 +821,22 @@ export function createSearchableEntityCrudProcedures<
       defaultSort: string;
       groupableFields?: readonly [string, ...string[]];
     };
-    idSchema: z.ZodType<unknown>;
+    /**
+     * The entity's own shortcode schema, and the source of `TId`.
+     *
+     * Parameterized over the SCHEMA (`SId`) with `TId` defaulting to its parsed
+     * output, for the same reason `createCreateProcedure` takes `S` rather than
+     * `ZodSchema<TInput>`: a shortcode schema is a `$ZodBranded`, which does
+     * not match `z.ZodType<Branded>` structurally, so the brand can only be
+     * recovered through `z.output<SId>`. Recovering it is what retires the
+     * `unsafeVendorShortcode(id)` / `ids.map(unsafeVendorShortcode)` casts the
+     * adapters needed to re-brand a value zod had already branded.
+     */
+    idSchema: SId;
   };
   repository: {
-    getByID: (ctx: ProtectedCrudServices, id: TId) => Promise<TOutput>;
+    /** Omit when it is `getByShortcode` + 404 — see {@link requireByShortcode}. */
+    getByID?: (ctx: ProtectedCrudServices, id: TId) => Promise<TOutput>;
     /** Public-id read — `null` for an unknown code, which the route 404s on. */
     getByShortcode: (
       ctx: ProtectedCrudServices,

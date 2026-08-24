@@ -100,18 +100,41 @@ describe("findViewProblems", () => {
 
     expect(one.result.productsWithNoImages).toHaveLength(1);
     expect(page.result.productsWithNoImages).toHaveLength(12);
-    // Not exact equality, and deliberately not: on CI this lane issues 50 or 51
-    // statements depending on scheduling, and two runs of the SAME commit
-    // disagreed in OPPOSITE directions (51 then 50, then 50 then 51) while
-    // three consecutive local runs stayed flat at 51. One statement in here is
-    // therefore timing-dependent, not page-size-dependent, so pinning the two
-    // measurements to each other tests the scheduler as much as the SQL.
+    // Not exact equality, and deliberately not: the fast lane's statement
+    // count is scheduling-sensitive. Originally observed as 50↔51 on CI
+    // (opposite directions on the SAME commit); on 2026-08-24 it flaked at
+    // delta 2 — twice on CI and once locally under a statement-level capture —
+    // with NO change to this lane's code. The captured diffs showed the
+    // variance is ±1–2 issuances of idempotent, fixed-roster reads (edge
+    // counters, resolver lookups) sliding between the two measurement
+    // windows, so the tolerance is 2, calibrated to that evidence.
     //
-    // The guard is unweakened for the bug it exists to catch: a hydration query
-    // per card row would add ELEVEN here, not one. Widen this only with the
-    // same kind of evidence — a tolerance that grows to absorb a real
-    // regression is how this assertion stops meaning anything.
-    expect(Math.abs(page.queryCount - one.queryCount)).toBeLessThanOrEqual(1);
+    // The guard is unweakened for the bug it exists to catch: a hydration
+    // query per card row would add ELEVEN here, not two. Widen only with the
+    // same kind of evidence (the dump below names the culprit statements) —
+    // a tolerance that grows to absorb a real regression is how this
+    // assertion stops meaning anything.
+    //
+    // On failure, the statement multiset diff between the two measurements is
+    // dumped so the next failure is diagnosable from the CI log alone.
+    if (Math.abs(page.queryCount - one.queryCount) > 2) {
+      const tally = (list: string[]) => {
+        const m = new Map<string, number>();
+        for (const s of list) m.set(s, (m.get(s) ?? 0) + 1);
+        return m;
+      };
+      const a = tally(one.statements);
+      const b = tally(page.statements);
+      for (const [s, n] of b) {
+        const d = n - (a.get(s) ?? 0);
+        if (d !== 0)
+          console.error(`[query-diff] page${d > 0 ? "+" : ""}${d}× ${s}`);
+      }
+      for (const [s, n] of a) {
+        if (!b.has(s)) console.error(`[query-diff] one-only ${n}× ${s}`);
+      }
+    }
+    expect(Math.abs(page.queryCount - one.queryCount)).toBeLessThanOrEqual(2);
   });
 
   it("does not turn embedding coverage into one round trip per entity type", async () => {

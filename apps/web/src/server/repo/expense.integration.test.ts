@@ -7,7 +7,6 @@ import type {
 import {
   unsafeExpenseShortcode,
   unsafeProductId,
-  unsafeProductShortcode,
   unsafeProjectShortcode,
   unsafePurchaseId,
   unsafePurchaseShortcode,
@@ -1522,10 +1521,8 @@ describe("expense router", () => {
       const chargeDate = "2026-07-30";
       await updatePurchase(
         ctx.db,
-        {
-          id: purchaseIdOf(self),
-          data: { date: chargeDate },
-        },
+        purchaseIdOf(self),
+        { date: chargeDate },
         ctx.actor,
       );
 
@@ -2953,61 +2950,19 @@ describe("expense repository — product bridge", () => {
   });
 });
 
-// The unresolvable-code and wrong-prefix halves of this guard now live in
-// `filter-application.integration.test.ts`, which runs both against every
-// declared id filter on every entity — `productId`/`vendorId`/`purchaseId`
-// included.
+// `expense.{productId,vendorId,purchaseId}` lowercase canonicalization moved
+// to the generic #591 battery in filter-application.integration.test.ts:
+// seedWorld there gives expense Alpha real, live values for all three (a
+// purchaseId whose vendor resolves vendorId too), so `world.codes.{product,
+// vendor,purchase}` genuinely match a row and the lowercase-vs-canonical
+// comparisons are no longer vacuous — those per-entity cases are deleted.
 //
-// The POSITIVE lowercase cases stay here, because that generic probe cannot
-// express them: its seeded world is deliberately unrelated, so the canonical
-// form of a real code already matches zero rows and its
-// `lower.count === upper.count` check holds vacuously. It therefore still
-// catches #591's widening (`eqAny([])` is "no constraint" BY DESIGN, so a
-// dropped predicate returns the whole table) but NOT what a
-// supplied-but-unresolved code produces today — `sql\`false\``, a silent zero
-// on both sides. A real product/vendor/purchase link is what gives the
-// assertion teeth.
-describe("expense repository — id filter shortcode canonicalization guards", () => {
+// This one test stays: it isn't a lowercase-canonicalization case at all, but
+// an OR-combination invariant (`vendorId` + `vendorPresenceFilter: "none"`)
+// the generic battery doesn't probe (it never combines two filter fields).
+describe("expense repository — vendorId + vendorPresenceFilter OR guard", () => {
   const ctx = withTestDb();
   const pagination = { pageIndex: 0, pageSize: 50 };
-
-  it("a lowercase productId still resolves and filters correctly", async () => {
-    const product = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "widening guard product" }),
-      ctx.actor,
-    );
-    const { output: linked } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2024-01-15",
-        trade: "other",
-        costType: "materials",
-        name: "linked to lowercase product",
-        productId: product.id,
-      }),
-      ctx.actor,
-    );
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2024-01-15",
-        trade: "other",
-        costType: "materials",
-        name: "unrelated row",
-      }),
-      ctx.actor,
-    );
-
-    const lowercase = unsafeProductShortcode(product.id.toLowerCase());
-    const { data } = await expenseList(
-      ctx.db,
-      { productId: lowercase },
-      [],
-      pagination,
-    );
-    expect(data.map((p) => p.id)).toEqual([linked.id]);
-  });
 
   it("an unresolvable vendorId still ORs correctly with vendorPresenceFilter: none", async () => {
     // The vendor half must contribute `sql\`false\`` to the OR, not `undefined`
@@ -3048,76 +3003,6 @@ describe("expense repository — id filter shortcode canonicalization guards", (
       pagination,
     );
     expect(data.map((p) => p.name)).toEqual(["widening guard no-vendor row"]);
-  });
-
-  it("a lowercase vendorId still resolves and filters correctly", async () => {
-    const { output: lumber } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2024-01-15",
-        trade: "other",
-        costType: "materials",
-        name: "lowercase vendor lumber run",
-        vendor: "Widening Guard Lowercase Vendor",
-      }),
-      ctx.actor,
-    );
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2024-01-15",
-        trade: "other",
-        costType: "materials",
-        name: "lowercase vendor unrelated",
-        vendor: "Widening Guard Other Vendor",
-      }),
-      ctx.actor,
-    );
-
-    const lowercase = unsafeVendorShortcode(vendorIdOf(lumber).toLowerCase());
-    const { data } = await expenseList(
-      ctx.db,
-      { vendorId: lowercase },
-      [],
-      pagination,
-    );
-    expect(data.map((p) => p.id)).toEqual([lumber.id]);
-  });
-
-  it("a lowercase purchaseId still resolves and filters correctly", async () => {
-    const { output: first } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2024-01-15",
-        trade: "other",
-        costType: "materials",
-        name: "lowercase purchase row",
-        vendor: "Widening Guard Lowercase Purchase Vendor",
-      }),
-      ctx.actor,
-    );
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2024-01-15",
-        trade: "other",
-        costType: "materials",
-        name: "unrelated purchase row",
-        vendor: "Widening Guard Other Purchase Vendor",
-      }),
-      ctx.actor,
-    );
-
-    const lowercase = unsafePurchaseShortcode(
-      purchaseIdOf(first).toLowerCase(),
-    );
-    const { data } = await expenseList(
-      ctx.db,
-      { purchaseId: lowercase },
-      [],
-      pagination,
-    );
-    expect(data.map((p) => p.id)).toEqual([first.id]);
   });
 });
 
@@ -3709,7 +3594,8 @@ describe("expense repository — charge resolution on update", () => {
     // reconciliation cue the whole Purchase table exists to hold.
     await updatePurchase(
       ctx.db,
-      { id: chargeId, data: { statedTotal: 10, notes: "invoice on file" } },
+      chargeId,
+      { statedTotal: 10, notes: "invoice on file" },
       ctx.actor,
     );
 

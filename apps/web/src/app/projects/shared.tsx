@@ -118,11 +118,6 @@ import { multiSelectFilterFnBy } from "~/entities/filters";
 import { useTRPC } from "~/integrations/trpc/react";
 import type { ProjectRowsRenderer } from "~/lib/list-view-normalization";
 import { purchaseLabel } from "~/lib/purchase-label";
-import {
-  expenseMutationInvalidateKeys,
-  projectMutationInvalidateKeys,
-  taskMutationInvalidateKeys,
-} from "~/lib/query-keys";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn, formatCurrency } from "~/lib/utils";
 import { persistedVendorId } from "~/lib/vendor-logo";
@@ -346,7 +341,6 @@ export function TaskList({
   const updateTaskMutation = useUpdateMutation({
     mutationFn: api.task.update.mutationOptions,
     entity: "task",
-    invalidateKeys: taskMutationInvalidateKeys,
   });
   const nameEditable = useNameEditable<TaskOut>(updateTaskMutation.mutateAsync);
 
@@ -358,7 +352,6 @@ export function TaskList({
   const deletableConfig = useDeletableConfig({
     mutationFn: api.task.delete.mutationOptions,
     entityLabel: "Task",
-    invalidateKeys: taskMutationInvalidateKeys,
     entity: "task",
   });
   const { deleteBulkAction, combinedExtraActions, deleteDialog } =
@@ -1107,7 +1100,6 @@ export function ExpenseList({
   const updateExpenseMutation = useUpdateMutation({
     mutationFn: api.expense.update.mutationOptions,
     entity: "expense",
-    invalidateKeys: expenseMutationInvalidateKeys,
   });
   const nameEditable = useNameEditable<ExpenseOut>(
     updateExpenseMutation.mutateAsync,
@@ -1155,7 +1147,6 @@ export function ExpenseList({
   const deletableConfig = useDeletableConfig({
     mutationFn: api.expense.delete.mutationOptions,
     entityLabel: "Expense",
-    invalidateKeys: expenseMutationInvalidateKeys,
     entity: "expense",
   });
   // On a leaf project every row already belongs to this project, so moving one
@@ -1497,7 +1488,6 @@ export function ProjectTable({
   const updateProjectMutation = useUpdateMutation({
     mutationFn: api.project.update.mutationOptions,
     entity: "project",
-    invalidateKeys: projectMutationInvalidateKeys,
   });
 
   const nameEditable = useNameEditable<ProjectTreeRow>(
@@ -1507,7 +1497,6 @@ export function ProjectTable({
   const deletableConfig = useDeletableConfig({
     mutationFn: api.project.delete.mutationOptions,
     entityLabel: "Project",
-    invalidateKeys: projectMutationInvalidateKeys,
     entity: "project",
   });
 

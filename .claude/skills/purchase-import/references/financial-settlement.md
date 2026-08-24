@@ -30,10 +30,10 @@ receipt, and what a statement produces when it combines same-day refunds.
 Record it as **one** transaction carrying an `allocations` array:
 
 ```
-update_financial_transaction(FTX-…, { allocations: [
+update_financial_transactions({ items: [{ id: "FTX-…", allocations: [
   { purchaseId: "PUR-9QXK", amount: -8.96 },
   { purchaseId: "PUR-9ZMQ", amount: -7.80 },
-]})
+] }] })
 ```
 
 Allocations must sum to the transaction's amount to the cent and share its sign;
@@ -131,7 +131,7 @@ match.
 
 `list_statement_rows({matchState:"unmatched"})` is the worklist — a provider row
 with no live transaction carrying its source ref. To close one, append that ref
-to the right transaction with `update_financial_transaction` (read–merge–write
+to the right transaction with `update_financial_transactions` (read–merge–write
 on `sourceRefs`); the row flips to `matched` on the next read, with no write to
 the row itself. `update_statement_rows` takes a `{filter}` selector for the long
 tail that will never match; `disposition: "ignored"` requires BOTH a reason and

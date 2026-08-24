@@ -1,25 +1,19 @@
-import { displayGtin } from "@cubby/schemas/external-id";
 import type {
   DuplicateProductIdentity,
   DuplicateVendor,
 } from "@cubby/schemas/problems";
-import { Check } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
 import {
   OperationImpact,
   type PreviewOperationDraft,
   useOperationPreview,
 } from "~/app/_components/impact/operation-impact";
+import { EntityMergeDialog } from "~/app/_components/merge/entity-merge-dialog";
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/integrations/trpc/react";
-import {
-  productMergeMutationInvalidateKeys,
-  productMutationInvalidateKeys,
-  purchaseMutationInvalidateKeys,
-} from "~/lib/query-keys";
-import { cn } from "~/lib/utils";
+import { invalidatesFor } from "~/lib/query-keys";
 
 /**
  * Small inline fixes for problems whose resolution is a single field or a
@@ -45,7 +39,7 @@ export function OrphanedDeleteFix({
   const remove = useProblemCardMutation({
     mutationFn: api.product.delete.mutationOptions,
     success: "Product deleted",
-    invalidateKeys: productMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("product"),
     onSuccess: close,
   });
 
@@ -85,8 +79,8 @@ const purchases = (n: number) => `${n} purchase${n === 1 ? "" : "s"}`;
  *
  * Invalidates the PURCHASE key set, not just the vendor one: folding a purchase
  * re-parents its expenses, so the expense/project/dashboard rollups go stale too
- * — the same reason `purchaseMutationInvalidateKeys` is a superset of
- * `vendorMutationInvalidateKeys`.
+ * — the same reason `invalidatesFor("purchase")` is a superset of
+ * `invalidatesFor("vendor")`.
  */
 export function DuplicateVendorMergeFix({
   variant,
@@ -107,7 +101,7 @@ export function DuplicateVendorMergeFix({
         ? `Merged into ${vendor.name}`
         : `Merged into ${vendor.name} — ${moved} purchase(s) moved`;
     },
-    invalidateKeys: purchaseMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("purchase"),
     onSuccess: close,
   });
 
@@ -159,24 +153,22 @@ export function DuplicateVendorMergeFix({
 
 /**
  * Fold a cluster of duplicate product rows (same maker part number, split
- * across retailers) into one. Unlike {@link DuplicateVendorMergeFix}, the
- * detector (`findDuplicateProductIdentities`) has no canonical row to default
- * to — every member is an equally plausible keeper — so this renders a picker
- * (same toggle-button idiom as `IngredientMergeDialog`'s keeper picker) and
- * defaults to the first row.
+ * across retailers) into one, via the shared {@link EntityMergeDialog} —
+ * `entities.tsx`'s `product.mergeable` config (keeperMode "ranked") supplies
+ * the picker copy and row rendering. Unlike {@link DuplicateVendorMergeFix},
+ * the detector (`findDuplicateProductIdentities`) has no canonical row to
+ * default to — every member is an equally plausible keeper — so ranked mode's
+ * toggle-button picker (defaulting to the first row) fits, same as ingredient.
  *
- * Product merge has a real merge-time blocker that vendor merge doesn't:
- * `PRODUCT_MERGE_INVENTORY_UNIT_MISMATCH` when the keeper and a loser both
- * hold inventory at the same location in incompatible units. The preview is
- * advisory (`useOperationPreview`'s doc comment) — it never gates on loading
- * or erroring — but a POSITIVELY returned `canProceed: false` (that blocker,
- * surfaced in `OperationImpact`'s "Blocked by" section) disables the button so
- * the user sees why up front instead of a failed-mutation toast.
+ * The card's `close` doubles as the dialog's dismiss: this component only
+ * mounts while the problem/recommendation card is expanded, so there is no
+ * separate open state to track — Cancel or a successful merge both collapse
+ * the card the same way.
  *
  * Invalidates the MERGE key set, not the plain product one — for the same
  * reason {@link DuplicateVendorMergeFix} reaches past `vendorMutation…`. A
  * merge re-parents inventory, expenses, and projectUses and recomputes
- * dependent recipe costs, none of which `productMutationInvalidateKeys` covers.
+ * dependent recipe costs, none of which `invalidatesFor("product")` covers.
  */
 export function DuplicateProductMergeFix({
   variant,
@@ -186,109 +178,23 @@ export function DuplicateProductMergeFix({
   close: () => void;
 }) {
   const api = useTRPC();
-  const first = variant.products[0];
-  const [keepId, setKeepId] = useState<string | null>(first?.id ?? null);
-  // Memoized because `previewInput` below depends on it: computed inline, this
-  // would be a fresh array every render, which defeats that `useMemo` entirely
-  // (see apps/web/CLAUDE.md on unstable hook deps). Never a render loop —
-  // react-query hashes the query key structurally — but it did re-run the memo
-  // and the zod `.parse()` `useOperationPreview` does on its input every render.
-  const mergeIds = useMemo(
-    () => variant.products.map((p) => p.id).filter((id) => id !== keepId),
-    [variant.products, keepId],
-  );
-
   const merge = useProblemCardMutation({
     mutationFn: api.product.merge.mutationOptions,
     success: (result) => `Merged into ${result.product.name}`,
-    invalidateKeys: productMergeMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("product", "merge"),
     onSuccess: close,
   });
 
-  // Re-derived every time `keepId` changes (the user can switch keepers), so
-  // this can't reuse a static previewInput the way the vendor fix does.
-  const previewInput = useMemo<PreviewOperationDraft | null>(
-    () =>
-      keepId && mergeIds.length > 0
-        ? { operation: "merge", entity: "product", keepId, mergeIds }
-        : null,
-    [keepId, mergeIds],
-  );
-  const preview = useOperationPreview(previewInput, previewInput !== null);
-
-  // Only the detector's own invariant (group.length >= 2) makes this
-  // unreachable in practice; guard anyway rather than rendering a picker with
-  // nothing to pick.
-  if (!first) return null;
-
   return (
-    <Stack gap="sm">
-      <p className="text-muted-foreground text-xs">
-        {variant.products.length} rows share the {variant.manufacturer}{" "}
-        {variant.model} part number. Pick which one to keep — the rest merge
-        into it.
-      </p>
-      <Stack gap="xs">
-        {variant.products.map((p) => {
-          const selected = p.id === keepId;
-          return (
-            <Button
-              key={p.id}
-              type="button"
-              variant={selected ? "default" : "outline"}
-              size="sm"
-              className="h-auto justify-start py-1"
-              onClick={() => setKeepId(p.id)}
-            >
-              <Check
-                className={cn(
-                  "size-3.5 shrink-0",
-                  selected ? "opacity-100" : "opacity-0",
-                )}
-              />
-              <span className="flex min-w-0 flex-1 flex-col items-start gap-1">
-                <span className="truncate">{p.name}</span>
-                <span
-                  className={cn(
-                    "text-2xs",
-                    selected
-                      ? "text-primary-foreground/80"
-                      : "text-muted-foreground",
-                  )}
-                >
-                  {p.gtins.length > 0
-                    ? `UPC ${p.gtins.map(displayGtin).join(", ")} · `
-                    : ""}
-                  {p.sources.join(", ")}
-                </span>
-              </span>
-            </Button>
-          );
-        })}
-      </Stack>
-      <OperationImpact
-        preview={preview.data}
-        isLoading={preview.isLoading}
-        isError={preview.isError}
-        onRetry={() => void preview.refetch()}
-      />
-      <Button
-        size="sm"
-        onClick={() => {
-          if (!keepId || mergeIds.length === 0) return;
-          merge.mutate({ keepId, mergeIds });
-        }}
-        disabled={
-          !keepId ||
-          mergeIds.length === 0 ||
-          merge.isPending ||
-          preview.data?.canProceed === false
-        }
-      >
-        {merge.isPending
-          ? "Merging…"
-          : `Merge ${mergeIds.length === 1 ? "1 row" : `${mergeIds.length} rows`} in`}
-      </Button>
-    </Stack>
+    <EntityMergeDialog
+      entity="product"
+      rows={variant.products}
+      open
+      onOpenChange={(open) => {
+        if (!open) close();
+      }}
+      onConfirm={(keepId, mergeIds) => merge.mutate({ keepId, mergeIds })}
+      isPending={merge.isPending}
+    />
   );
 }

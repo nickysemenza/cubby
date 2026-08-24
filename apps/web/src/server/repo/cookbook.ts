@@ -9,10 +9,7 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
-import type {
-  ImpactItem,
-  OperationDisposition,
-} from "@cubby/schemas/entity-integrity";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type CookbookId,
   type CookbookShortcode,
@@ -24,7 +21,7 @@ import {
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 import { and, eq, sql } from "drizzle-orm";
-import type { Database, DrizzleTransaction } from "~/server/db";
+import type { Database } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { cookbook, image, product, recipe } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -33,11 +30,9 @@ import { logAuditEntry } from "~/server/repo/audit-log";
 import {
   getDb,
   notDeleted,
-  unwrapDb,
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { countByTarget, impact, present } from "~/server/repo/impact";
 import {
   type CookbookImportContext,
   upsertCookbookRecipeFromCookbook,
@@ -414,52 +409,3 @@ export async function* reprocessCookbookStream(
   }
   return { reprocessed: total, importableExtras, recipeIds };
 }
-
-/**
- * What {@link deleteCookbook} would do to the given cookbook(s), without doing
- * it.
- *
- * Reads the SAME `COOKBOOK_DELETE_EDGE_POLICY` `deleteCookbook` is described
- * by. Its one incoming edge, `Recipe.cookbookId`, is a `soft-delete` cascade —
- * there is nothing to block on, so `blockers` is always empty — counted with
- * the identical `eq(recipe.cookbookId, cookbookId) AND notDeleted(recipe)`
- * predicate {@link deleteRecipesByCookbookTx} fetches its recipe ids with (via
- * {@link countByTarget}).
- *
- * Cookbook delete is single-id (`entityManifest.cookbook.lifecycle.delete.bulk
- * === false`), but this still takes/returns the standard planner shape rather
- * than a bespoke one-id signature — callers can assume `ids.length === 1`
- * without the type forcing every caller to special-case cookbook.
- *
- * This is the highest-value preview in the PR: `useCookbookDelete`'s confirm
- * dialog today carries static prose ("Recipes used as a sub-recipe elsewhere
- * or currently planned into a meal are deleted too, with no separate
- * warning") in place of a live count — this planner is what turns that prose
- * into a number.
- *
- * Advisory only. `deleteCookbook` still re-runs its own cascade
- * (`deleteRecipesByCookbookTx`) inside its own transaction.
- */
-export const previewDeleteCookbooks = async (
-  db: Database | DrizzleTransaction,
-  ids: CookbookId[],
-): Promise<{ blockers: ImpactItem[]; changes: ImpactItem[] }> => {
-  if (ids.length === 0) return { blockers: [], changes: [] };
-
-  const disposition = COOKBOOK_DELETE_EDGE_POLICY["Recipe.cookbookId"];
-  const changes = present([
-    impact({
-      disposition,
-      edgeKey: "Recipe.cookbookId",
-      label: "imported recipes",
-      byTargetId: await countByTarget(
-        unwrapDb(db),
-        recipe,
-        recipe.cookbookId,
-        ids,
-      ),
-    }),
-  ]);
-
-  return { blockers: [], changes };
-};

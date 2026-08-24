@@ -40,10 +40,6 @@ import {
 } from "~/app/projects/shared";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { useTRPC } from "~/integrations/trpc/react";
-import {
-  expenseMutationInvalidateKeys,
-  taskMutationInvalidateKeys,
-} from "~/lib/query-keys";
 
 const EMBEDDED_TABLE_STATE = {
   urlSync: false,
@@ -71,13 +67,11 @@ export function ProjectDataTaskList({
   const update = useUpdateMutation({
     mutationFn: api.task.update.mutationOptions,
     entity: "task",
-    invalidateKeys: taskMutationInvalidateKeys,
   });
   const nameEditable = useNameEditable<TaskOut>(update.mutateAsync);
   const deletable = useDeletableConfig({
     mutationFn: api.task.delete.mutationOptions,
     entityLabel: "Task",
-    invalidateKeys: taskMutationInvalidateKeys,
     entity: "task",
   });
   const bulk = useTaskBulkActions({ includeDueDate: true });
@@ -159,13 +153,11 @@ export function ProjectDataExpenseList({
   const update = useUpdateMutation({
     mutationFn: api.expense.update.mutationOptions,
     entity: "expense",
-    invalidateKeys: expenseMutationInvalidateKeys,
   });
   const nameEditable = useNameEditable<ExpenseOut>(update.mutateAsync);
   const deletable = useDeletableConfig({
     mutationFn: api.expense.delete.mutationOptions,
     entityLabel: "Expense",
-    invalidateKeys: expenseMutationInvalidateKeys,
     entity: "expense",
   });
   const bulk = useExpenseBulkActions();

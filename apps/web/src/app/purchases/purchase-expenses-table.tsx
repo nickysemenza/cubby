@@ -32,7 +32,6 @@ import {
 } from "~/app/projects/shared";
 import { Stack } from "~/components/layout";
 import { useTRPC } from "~/integrations/trpc/react";
-import { expenseMutationInvalidateKeys } from "~/lib/query-keys";
 
 const EMBEDDED_TABLE_STATE = {
   initialSort: "date",
@@ -86,14 +85,12 @@ function PurchaseExpenseRows({
   const update = useUpdateMutation({
     mutationFn: api.expense.update.mutationOptions,
     entity: "expense",
-    invalidateKeys: expenseMutationInvalidateKeys,
   });
   const nameEditable = useNameEditable<ExpenseOut>(update.mutateAsync);
   const deletable = useDeletableConfig({
     mutationFn: api.expense.delete.mutationOptions,
     entityLabel: "Expense",
     entity: "expense",
-    invalidateKeys: expenseMutationInvalidateKeys,
   });
   const bulkActions = useExpenseBulkActions();
   // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrappers are functionally stable

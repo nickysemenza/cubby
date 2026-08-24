@@ -1,15 +1,9 @@
 import {
-  financialAccountCreateInput,
   financialAccountFiltersSchema,
   financialAccountOptionsOut,
-  financialAccountOut,
   financialAccountSortableFields,
-  financialAccountUpdateData,
 } from "@cubby/schemas/financial-account";
-import {
-  financialAccountShortcode,
-  unsafeFinancialAccountShortcode,
-} from "@cubby/schemas/identifiers";
+import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 import {
   createFinancialAccount,
   deleteFinancialAccounts,
@@ -23,43 +17,24 @@ import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const procedures = createSearchableEntityCrudProcedures({
   schemas: {
-    createInput: financialAccountCreateInput,
-    updateInput: financialAccountUpdateData,
-    output: financialAccountOut,
+    ...ENTITY_BINDINGS.financialAccount.crud,
     filters: financialAccountFiltersSchema,
     sort: {
       sortableFields: financialAccountSortableFields,
       defaultSort: "name",
     },
-    idSchema: financialAccountShortcode,
   },
   repository: {
-    getByID: async (services, id) => {
-      const out = await getFinancialAccountByShortcode(services.db, id);
-      if (!out) throw new Error(`Financial account not found: ${id}`);
-      return out;
-    },
     getByShortcode: (services, id) =>
       getFinancialAccountByShortcode(services.db, id),
     create: (services, data) =>
       createFinancialAccount(services.db, data, services.actorContext),
-    update: async (services, id, data) =>
-      updateFinancialAccount(
-        services.db,
-        unsafeFinancialAccountShortcode(id),
-        data,
-        services.actorContext,
-      ),
+    update: (services, id, data) =>
+      updateFinancialAccount(services.db, id, data, services.actorContext),
     list: (services, filters, sorts, pagination) =>
       listFinancialAccounts(services.db, filters, sorts, pagination),
-    delete: async (services, ids) => {
-      const { deleted } = await deleteFinancialAccounts(
-        services.db,
-        ids.map(unsafeFinancialAccountShortcode),
-        services.actorContext,
-      );
-      return { deleted };
-    },
+    delete: (services, ids) =>
+      deleteFinancialAccounts(services.db, ids, services.actorContext),
   },
   entityName: "financialAccount",
 });

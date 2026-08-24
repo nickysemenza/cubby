@@ -19,7 +19,6 @@ import {
   projectCreateInput,
   taskCreateInput,
 } from "@cubby/schemas/project";
-import { purchaseUpdateInput } from "@cubby/schemas/purchase";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { UPCLookupResponse } from "@cubby/upc-contract";
 import type { FoodSummary } from "@cubby/usda-schemas";
@@ -2995,13 +2994,7 @@ describe("problems — charges not reconciling", () => {
     );
 
   const setStated = (id: PurchaseShortcode, statedTotal: number) =>
-    unwrap(
-      updatePurchase(
-        ctx.db,
-        purchaseUpdateInput.parse({ id, data: { statedTotal } }),
-        ctx.actor,
-      ),
-    );
+    unwrap(updatePurchase(ctx.db, id, { statedTotal }, ctx.actor));
 
   it("flags charges whose lines don't add up, biggest gap first, and leaves a matching one alone", async () => {
     const big = await seedLine({
@@ -3192,13 +3185,7 @@ describe("problems — duplicate spend candidates", () => {
     );
 
   const setStated = (id: PurchaseShortcode, statedTotal: number) =>
-    unwrap(
-      updatePurchase(
-        ctx.db,
-        purchaseUpdateInput.parse({ id, data: { statedTotal } }),
-        ctx.actor,
-      ),
-    );
+    unwrap(updatePurchase(ctx.db, id, { statedTotal }, ctx.actor));
 
   const candidates = async () =>
     (await findFastProblems(ctx.db)).duplicateSpendCandidates;

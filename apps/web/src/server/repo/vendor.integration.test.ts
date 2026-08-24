@@ -132,10 +132,8 @@ describe("vendor repository — roster CRUD and list filters", () => {
 
     const { output: updated } = await updateVendor(
       ctx.db,
-      {
-        id: created.id,
-        data: { name: "  Masseria Calderisi Srl  ", notes: "COI on file" },
-      },
+      created.id,
+      { name: "  Masseria Calderisi Srl  ", notes: "COI on file" },
       ctx.actor,
     );
     expect(updated.name).toBe("Masseria Calderisi Srl");
@@ -184,11 +182,7 @@ describe("vendor repository — roster CRUD and list filters", () => {
     // `deletedAt` itself — otherwise a rename would silently resurrect it into
     // every name-based lookup.
     await expect(
-      updateVendor(
-        ctx.db,
-        { id: gone.id, data: { name: "Reopened" } },
-        ctx.actor,
-      ),
+      updateVendor(ctx.db, gone.id, { name: "Reopened" }, ctx.actor),
     ).rejects.toMatchObject({
       code: "NOT_FOUND",
       cause: { reason: "VENDOR_NOT_FOUND" },
@@ -197,12 +191,10 @@ describe("vendor repository — roster CRUD and list filters", () => {
     await expect(
       updateVendor(
         ctx.db,
-        {
-          // Well-formed but never minted in this test run — same "-2222"
-          // placeholder convention as shortcode.integration.test.ts.
-          id: unsafeVendorShortcode("VEN-2222"),
-          data: { name: "Never Existed" },
-        },
+        // Well-formed but never minted in this test run — same "-2222"
+        // placeholder convention as shortcode.integration.test.ts.
+        unsafeVendorShortcode("VEN-2222"),
+        { name: "Never Existed" },
         ctx.actor,
       ),
     ).rejects.toMatchObject({

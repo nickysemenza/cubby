@@ -147,16 +147,30 @@ export const queryKeys = {
   },
 } as const;
 
-export const inventoryMutationInvalidateKeys = [
+/**
+ * The surfaces that re-read whenever a product's price, quantity, or shelf
+ * moves. Shared by every money- or stock-moving fan-out (expense, purchase,
+ * product merge, ingredient merge) rather than re-listed at each.
+ */
+const costAndStockRipple = [
+  queryKeys.product.all,
   queryKeys.inventory.all,
   queryKeys.location.all,
-  queryKeys.product.all,
+  // Cost inputs changed → recipe totals and the meal rollups read off them.
+  queryKeys.recipe.all,
+  queryKeys.meal.all,
+  // Rows leave/enter the catalog: stale hits and detector rows both go.
   queryKeys.problems.all,
   queryKeys.search.all,
-  queryKeys.dashboard.counts,
-] as const satisfies readonly QueryKey[];
+] as const;
 
-export const productMutationInvalidateKeys = [
+/** Dedupe by key identity — the `queryKeys` entries are stable references, so
+ * a group spread into a fan-out that already names one of its keys collapses
+ * instead of invalidating the same prefix twice. */
+const fanout = (...keys: readonly QueryKey[]): readonly QueryKey[] =>
+  Object.freeze([...new Set(keys)]);
+
+const productBase = fanout(
   queryKeys.product.all,
   queryKeys.relatedData.all,
   // Task rows embed their subject product's display name. A product rename
@@ -164,259 +178,280 @@ export const productMutationInvalidateKeys = [
   queryKeys.task.all,
   queryKeys.dashboard.counts,
   queryKeys.wish.all,
-] as const satisfies readonly QueryKey[];
+);
+
+const ingredientAll = fanout(
+  queryKeys.ingredient.all,
+  queryKeys.dashboard.counts,
+);
 
 /**
- * Product MERGE, which moves far more than a product write does — the same
- * reason `ingredientMergeMutationInvalidateKeys` exists separately from
- * `ingredientMutationInvalidateKeys`.
+ * Per-entity invalidation fan-out. `base` is what an ordinary create/update/
+ * delete of that entity invalidates; the sibling ops name the writes that move
+ * MORE than the entity's own rows and would otherwise leave other views
+ * rendering pre-mutation state.
  *
- * A rename touches the product row and the surfaces that embed its name. A
- * merge re-parents rows across five other entities: inventory entries move and
- * re-value at the keeper's price (`planInventoryFold` →
- * `syncInventoryValuationsForProduct`), expenses and projectUses are
- * re-pointed, and dependent recipe costs are recomputed (#603). Left on the
- * narrow set, every one of those views kept rendering the pre-merge state —
- * including rows pointing at a now soft-deleted loser — until something else
- * happened to invalidate them.
+ * Deliberately NOT a blanket invalidation: every key here costs a refetch
+ * against Neon (#887), and `useOptimisticDelete` walks these same arrays to do
+ * per-key `setQueriesData` cache surgery — so they must stay real, narrow key
+ * lists rather than a catch-all prefix.
  */
-export const productMergeMutationInvalidateKeys = [
-  ...productMutationInvalidateKeys,
-  queryKeys.inventory.all,
-  queryKeys.location.all,
-  queryKeys.expense.all,
-  queryKeys.project.all,
-  // Cost inputs changed → recipe totals and the meal rollups read off them.
-  queryKeys.recipe.all,
-  queryKeys.meal.all,
-  // A loser leaves the catalog: stale hits and duplicate-detector rows both go.
-  queryKeys.search.all,
-  queryKeys.problems.all,
-] as const satisfies readonly QueryKey[];
+const invalidationFanout = {
+  product: {
+    base: productBase,
+    /**
+     * Product MERGE moves far more than a product write does. A rename touches
+     * the product row and the surfaces that embed its name; a merge re-parents
+     * rows across five other entities: inventory entries move and re-value at
+     * the keeper's price (`planInventoryFold` →
+     * `syncInventoryValuationsForProduct`), expenses and projectUses are
+     * re-pointed, and dependent recipe costs are recomputed (#603). Left on the
+     * narrow set, every one of those views kept rendering the pre-merge state —
+     * including rows pointing at a now soft-deleted loser.
+     */
+    merge: fanout(
+      ...productBase,
+      ...costAndStockRipple,
+      queryKeys.expense.all,
+      queryKeys.project.all,
+    ),
+    /** A product write that also changed recipe cost inputs → meal rollups
+     * (read from `recipe.totals`) go stale with them. */
+    recipe: fanout(...productBase, queryKeys.recipe.list, queryKeys.meal.all),
+    /** Price/valuation only — no name change, so no task/wish name echo. */
+    valuation: fanout(
+      queryKeys.product.all,
+      queryKeys.recipe.list,
+      queryKeys.location.all,
+      queryKeys.meal.all,
+      queryKeys.dashboard.counts,
+    ),
+    /** UPC/USDA lookup: identity resolves, detectors and search re-read. */
+    lookup: fanout(
+      queryKeys.product.all,
+      queryKeys.problems.all,
+      queryKeys.search.all,
+      queryKeys.dashboard.counts,
+    ),
+    /** A ProductComponent edge is a Product→Product link, visible from both
+     * ends (a kit's own component list, and the transpose kit-membership
+     * list). It carries no money of its own — the kit keeps its own Expense —
+     * so there's no spend, inventory, or calendar state to invalidate. */
+    component: fanout(queryKeys.product.all, queryKeys.relatedData.all),
+  },
+  inventory: {
+    base: fanout(
+      queryKeys.inventory.all,
+      queryKeys.location.all,
+      queryKeys.product.all,
+      queryKeys.problems.all,
+      queryKeys.search.all,
+      queryKeys.dashboard.counts,
+    ),
+  },
+  location: {
+    base: fanout(queryKeys.location.list, queryKeys.dashboard.counts),
+  },
+  // The broad `image.all` prefix, not `image.list`: a list-only invalidation
+  // doesn't refresh the image DETAIL page after a rename.
+  image: {
+    base: fanout(queryKeys.image.all, queryKeys.dashboard.counts),
+  },
+  "usda-food": {
+    base: fanout(queryKeys.usda.all),
+  },
+  ingredient: {
+    /** The broad prefix — list / getByName / getByID all re-read. */
+    base: ingredientAll,
+    /** List-only, for writes that cannot change an ingredient's identity. */
+    list: fanout(queryKeys.ingredient.list, queryKeys.dashboard.counts),
+    /** Ingredient↔Product link: visible from both ends. */
+    product: fanout(...ingredientAll, ...productBase),
+    /** Merge re-points recipes, products, and stock at the keeper. */
+    merge: fanout(
+      queryKeys.ingredient.all,
+      ...costAndStockRipple,
+      queryKeys.dashboard.counts,
+    ),
+    /** Unused-ingredient sweep — resolves the detector card that offered it. */
+    cleanup: fanout(
+      queryKeys.problems.all,
+      queryKeys.ingredient.list,
+      queryKeys.dashboard.counts,
+    ),
+  },
+  recipe: {
+    /** Broad prefix + meal rollups, which read recipe totals. */
+    base: fanout(
+      queryKeys.recipe.all,
+      queryKeys.meal.all,
+      queryKeys.dashboard.counts,
+    ),
+    list: fanout(queryKeys.recipe.list, queryKeys.dashboard.counts),
+    /** A recipe moving between cookbooks also moves the browse index. */
+    cookbook: fanout(
+      queryKeys.recipe.list,
+      queryKeys.recipe.listCookbooks,
+      queryKeys.dashboard.counts,
+    ),
+  },
+  cookbook: {
+    base: fanout(queryKeys.cookbook.all, queryKeys.dashboard.counts),
+    /** Linking or unlinking a cookbook's physical copy moves data on BOTH
+     * detail pages: the cookbook page reads the link off `listCookbooks`, and
+     * the product page reads the reverse embedded in its own detail payload.
+     * Invalidating only the cookbook side leaves a stale "Cookbook" panel on
+     * the product. */
+    productLink: fanout(queryKeys.recipe.listCookbooks, queryKeys.product.all),
+  },
+  meal: {
+    base: fanout(
+      queryKeys.meal.all,
+      queryKeys.calendar.all,
+      queryKeys.dashboard.counts,
+    ),
+  },
+  // Task/expense mutations also invalidate `project.all`: the dashboard and
+  // project rollups (spent/progress) aggregate over them.
+  project: {
+    base: fanout(
+      queryKeys.project.all,
+      queryKeys.relatedData.all,
+      queryKeys.calendar.all,
+      queryKeys.dashboard.counts,
+    ),
+    /** A reusable-resource edge is visible from both ends, but it does not
+     * change project spend, inventory quantity, or calendar state. */
+    resource: fanout(
+      queryKeys.project.all,
+      queryKeys.product.all,
+      queryKeys.relatedData.all,
+    ),
+  },
+  task: {
+    base: fanout(
+      queryKeys.task.all,
+      queryKeys.project.all,
+      queryKeys.calendar.all,
+      queryKeys.dashboard.counts,
+    ),
+  },
+  expense: {
+    base: fanout(
+      queryKeys.expense.all,
+      queryKeys.relatedData.all,
+      queryKeys.project.all,
+      queryKeys.calendar.all,
+      queryKeys.dashboard.counts,
+      // An expense can link to a product (cost basis / disposition) — recording
+      // one from the product page should refresh that product's hero/stamp too.
+      ...costAndStockRipple,
+      // Writing an expense's `vendor`/`orderId` resolves a Vendor and a Purchase
+      // into existence, and EVERY expense write moves a charge's `expenseTotal`
+      // and its vendor's `spend`/`purchaseCount` — all three are rollups over
+      // this table. Without these, a charge's reconciliation cue keeps showing
+      // a stale total.
+      queryKeys.vendor.all,
+      queryKeys.purchase.all,
+    ),
+  },
+  // A vendor's name is denormalized into `purchaseOut.vendorName`, so a rename
+  // has to refresh the charge queries too — otherwise the ledger keeps showing
+  // the old name until a hard reload. No expense/project keys: a vendor holds
+  // identity only, and every dollar lives on `Expense`.
+  vendor: {
+    base: fanout(
+      queryKeys.vendor.all,
+      queryKeys.purchase.all,
+      queryKeys.relatedData.all,
+      queryKeys.dashboard.counts,
+    ),
+  },
+  purchase: {
+    // Purchase mutations move MONEY-bearing rows around (`link` re-parents
+    // expenses, `split` replaces one with several, `merge` re-points a charge),
+    // so the expense and project rollups go stale alongside the vendor's own
+    // `purchaseCount`/`spend`. Splitting a purchase-owned Expense can also
+    // change Product quantity/cost basis, hence the ripple.
+    base: fanout(
+      queryKeys.purchase.all,
+      queryKeys.relatedData.all,
+      queryKeys.vendor.all,
+      queryKeys.expense.all,
+      queryKeys.project.all,
+      ...costAndStockRipple,
+      queryKeys.dashboard.counts,
+    ),
+    /** A purchase-product link is visible from both ends, but it carries no
+     * money or quantity — no spend, inventory, or calendar state. */
+    product: fanout(
+      queryKeys.purchase.all,
+      queryKeys.product.all,
+      queryKeys.relatedData.all,
+    ),
+  },
+  /** Finance entries are settlement evidence only, but changing one refreshes
+   * the purchase settlement summary and advisory problems. */
+  financialAccount: {
+    base: fanout(
+      queryKeys.financialAccount.all,
+      queryKeys.financialTransaction.all,
+      queryKeys.dashboard.counts,
+    ),
+  },
+  financialTransaction: {
+    base: fanout(
+      queryKeys.financialTransaction.all,
+      queryKeys.financialAccount.all,
+      queryKeys.purchase.all,
+      queryKeys.problems.all,
+      queryKeys.dashboard.counts,
+    ),
+  },
+  wish: {
+    base: fanout(
+      queryKeys.wish.all,
+      queryKeys.search.all,
+      queryKeys.dashboard.counts,
+    ),
+  },
+  /** Not an entity — the Problems page's own detector cards, resolved by a fix
+   * that touched nothing else. */
+  problems: {
+    base: fanout(queryKeys.problems.all),
+  },
+} as const;
 
-export const wishMutationInvalidateKeys = [
-  queryKeys.wish.all,
-  queryKeys.search.all,
-  queryKeys.dashboard.counts,
-] as const satisfies readonly QueryKey[];
+/**
+ * Exhaustiveness is enforced at the consumer, not by a `satisfies` clause
+ * here: `invalidatesFor` only accepts keys of the table, and every routed
+ * entity's contract calls `invalidatesFor(entity)` in `entity-contracts.ts` —
+ * so an entity missing a fan-out row is a compile error at its contract, the
+ * moment it gets one.
+ */
+export type InvalidationEntity = keyof typeof invalidationFanout;
+/** The wider-than-base operations declared for one entity, if any. */
+export type InvalidationOp<E extends InvalidationEntity> = Exclude<
+  keyof (typeof invalidationFanout)[E],
+  "base"
+>;
 
-export const productRecipeMutationInvalidateKeys = [
-  ...productMutationInvalidateKeys,
-  queryKeys.recipe.list,
-  // Recipe cost inputs changed → meal cost/calorie rollups (read from
-  // recipe.totals) go stale; meal queries are cheap to blanket-invalidate.
-  queryKeys.meal.all,
-] as const satisfies readonly QueryKey[];
-
-export const productValuationMutationInvalidateKeys = [
-  queryKeys.product.all,
-  queryKeys.recipe.list,
-  queryKeys.location.all,
-  // Recipe cost inputs changed → refresh meal cost/calorie rollups.
-  queryKeys.meal.all,
-  queryKeys.dashboard.counts,
-] as const satisfies readonly QueryKey[];
-
-export const productLookupMutationInvalidateKeys = [
-  queryKeys.product.all,
-  queryKeys.problems.all,
-  queryKeys.search.all,
-  queryKeys.dashboard.counts,
-] as const satisfies readonly QueryKey[];
-
-export const locationMutationInvalidateKeys = [
-  queryKeys.location.list,
-  queryKeys.dashboard.counts,
-] as const satisfies readonly QueryKey[];
-
-// Covers the detail query too — the list-only key (imagelist.tsx's
-// IMAGE_INVALIDATE_KEYS) doesn't refresh the image detail page after a rename.
-export const imageMutationInvalidateKeys = [
-  queryKeys.image.list,
-  queryKeys.image.getByID,
-  queryKeys.dashboard.counts,
-] as const satisfies readonly QueryKey[];
-
-export const ingredientMutationInvalidateKeys = [
-  queryKeys.ingredient.list,
-  queryKeys.dashboard.counts,
-] as const satisfies readonly QueryKey[];
-
-export const ingredientAllMutationInvalidateKeys = [
-  queryKeys.ingredient.all,
-  queryKeys.dashboard.counts,
-] as const satisfies readonly QueryKey[];
-
-export const ingredientProductMutationInvalidateKeys = [
-  ...ingredientAllMutationInvalidateKeys,
-  ...productMutationInvalidateKeys,
-] as const satisfies readonly QueryKey[];
-
-export const ingredientMergeMutationInvalidateKeys = [
-  queryKeys.ingredient.all,
-  queryKeys.product.all,
-  queryKeys.recipe.all,
-  queryKeys.meal.all,
-  queryKeys.inventory.all,
-  queryKeys.location.all,
-  queryKeys.problems.all,
-  queryKeys.search.all,
-  queryKeys.dashboard.counts,
-] as const satisfies readonly QueryKey[];
-
-export const unusedIngredientCleanupInvalidateKeys = [
-  queryKeys.problems.all,
-  ...ingredientMutationInvalidateKeys,
-] as const satisfies readonly QueryKey[];
-
-export const recipeMutationInvalidateKeys = [
-  queryKeys.recipe.list,
-  queryKeys.dashboard.counts,
-] as const satisfies readonly QueryKey[];
-
-export const recipeCookbookMutationInvalidateKeys = [
-  queryKeys.recipe.list,
-  queryKeys.recipe.listCookbooks,
-  queryKeys.dashboard.counts,
-] as const satisfies readonly QueryKey[];
-
-// Linking or unlinking a cookbook's physical copy moves data on BOTH detail
-// pages: the cookbook page reads the link off `listCookbooks`, and the product
-// page reads the reverse embedded in its own detail payload. Invalidating only
-// the cookbook side leaves a stale "Cookbook" panel on the product.
-export const cookbookProductLinkInvalidateKeys = [
-  queryKeys.recipe.listCookbooks,
-  queryKeys.product.all,
-] as const satisfies readonly QueryKey[];
-
-export const recipeAllMutationInvalidateKeys = [
-  queryKeys.recipe.all,
-  // Recipe totals changed → refresh meal cost/calorie rollups.
-  queryKeys.meal.all,
-  queryKeys.dashboard.counts,
-] as const satisfies readonly QueryKey[];
-
-export const problemsMutationInvalidateKeys = [
-  queryKeys.problems.all,
-] as const satisfies readonly QueryKey[];
-
-export const mealMutationInvalidateKeys = [
-  queryKeys.meal.all,
-  queryKeys.calendar.all,
-  queryKeys.dashboard.counts,
-] as const satisfies readonly QueryKey[];
-
-// Task/expense mutations also invalidate `project.all`: the dashboard and
-// project rollups (spent/progress) aggregate over them.
-export const projectMutationInvalidateKeys = [
-  queryKeys.project.all,
-  queryKeys.relatedData.all,
-  queryKeys.calendar.all,
-  queryKeys.dashboard.counts,
-] as const satisfies readonly QueryKey[];
-
-/** A reusable-resource edge is visible from both ends, but it does not change project
- * spend, inventory quantity, or calendar state. */
-export const projectResourceMutationInvalidateKeys = [
-  queryKeys.project.all,
-  queryKeys.product.all,
-  queryKeys.relatedData.all,
-] as const satisfies readonly QueryKey[];
-
-/** A purchase-product link is visible from both ends, but it carries no money
- * or quantity — no spend, inventory, or calendar state to invalidate. */
-export const purchaseProductMutationInvalidateKeys = [
-  queryKeys.purchase.all,
-  queryKeys.product.all,
-  queryKeys.relatedData.all,
-] as const satisfies readonly QueryKey[];
-
-/** A ProductComponent edge is a Product→Product link, visible from both ends
- * (a kit's own component list, and the transpose kit-membership list). It
- * carries no money of its own — the kit keeps its own Expense — so there's no
- * spend, inventory, or calendar state to invalidate, only both product reads. */
-export const productComponentMutationInvalidateKeys = [
-  queryKeys.product.all,
-  queryKeys.relatedData.all,
-] as const satisfies readonly QueryKey[];
-
-export const taskMutationInvalidateKeys = [
-  queryKeys.task.all,
-  queryKeys.project.all,
-  queryKeys.calendar.all,
-  queryKeys.dashboard.counts,
-] as const satisfies readonly QueryKey[];
-
-export const expenseMutationInvalidateKeys = [
-  queryKeys.expense.all,
-  queryKeys.relatedData.all,
-  queryKeys.project.all,
-  queryKeys.calendar.all,
-  queryKeys.dashboard.counts,
-  // An expense can link to a product (cost basis / disposition) — recording
-  // one from the product page should refresh that product's hero/stamp too.
-  queryKeys.product.all,
-  queryKeys.inventory.all,
-  queryKeys.location.all,
-  queryKeys.recipe.all,
-  queryKeys.meal.all,
-  queryKeys.problems.all,
-  queryKeys.search.all,
-  // Writing an expense's `vendor`/`orderId` resolves a Vendor and a Purchase into
-  // existence, and EVERY expense write moves a charge's `expenseTotal` and its
-  // vendor's `spend`/`purchaseCount` — all three are rollups over this table.
-  // Without these, a charge's reconciliation cue keeps showing a stale total.
-  queryKeys.vendor.all,
-  queryKeys.purchase.all,
-] as const satisfies readonly QueryKey[];
-
-// A vendor's name is denormalized into `purchaseOut.vendorName`, so a rename has
-// to refresh the charge queries too — otherwise the ledger keeps showing the old
-// name until a hard reload. No expense/project keys: a vendor holds identity
-// only, and every dollar lives on `Expense`.
-export const vendorMutationInvalidateKeys = [
-  queryKeys.vendor.all,
-  queryKeys.purchase.all,
-  queryKeys.relatedData.all,
-  queryKeys.dashboard.counts,
-] as const satisfies readonly QueryKey[];
-
-// Purchase mutations move MONEY-bearing rows around (`link` re-parents expenses,
-// `split` replaces one with several, `merge` re-points a charge), so the expense
-// and project rollups go stale alongside the vendor's own `purchaseCount`/`spend`.
-export const purchaseMutationInvalidateKeys = [
-  queryKeys.purchase.all,
-  queryKeys.relatedData.all,
-  queryKeys.vendor.all,
-  queryKeys.expense.all,
-  queryKeys.project.all,
-  // Splitting a purchase-owned Expense can change Product quantity/cost basis,
-  // which changes effective price and every cached valuation/cost consumer.
-  queryKeys.product.all,
-  queryKeys.inventory.all,
-  queryKeys.location.all,
-  queryKeys.recipe.all,
-  queryKeys.meal.all,
-  queryKeys.problems.all,
-  queryKeys.search.all,
-  queryKeys.dashboard.counts,
-] as const satisfies readonly QueryKey[];
-
-/** Finance entries are settlement evidence only, but changing one refreshes the
- * purchase settlement summary and advisory problems. */
-export const financialAccountMutationInvalidateKeys = [
-  queryKeys.financialAccount.all,
-  queryKeys.financialTransaction.all,
-  queryKeys.dashboard.counts,
-] as const satisfies readonly QueryKey[];
-
-export const financialTransactionMutationInvalidateKeys = [
-  queryKeys.financialTransaction.all,
-  queryKeys.financialAccount.all,
-  queryKeys.purchase.all,
-  queryKeys.problems.all,
-  queryKeys.dashboard.counts,
-] as const satisfies readonly QueryKey[];
+/**
+ * The query keys one write invalidates. `op` selects a declared wider fan-out
+ * (`invalidatesFor("product", "merge")`); omitted, you get the entity's `base`.
+ *
+ * Returns the SAME array reference for the same arguments, so the result is
+ * safe to pass straight into a hook dependency array or a memoized config.
+ */
+export function invalidatesFor<E extends InvalidationEntity>(
+  entity: E,
+  op?: InvalidationOp<E>,
+): readonly QueryKey[] {
+  const entry = invalidationFanout[entity] as { base: readonly QueryKey[] } & {
+    [key: string]: readonly QueryKey[] | undefined;
+  };
+  return (op === undefined ? undefined : entry[op as string]) ?? entry.base;
+}
 
 export function normalizeTRPCQueryKey(key: QueryKey): QueryKey {
   if (key.length === 0) return key;

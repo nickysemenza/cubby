@@ -7,7 +7,6 @@ import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
 import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
-import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import {
@@ -23,7 +22,6 @@ import { wishCreateRequest } from "~/entities/editing/editor-requests";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { formatCurrencyRange, rangeMidpoint } from "~/lib/format-range";
-import { wishMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { wishPriceRange } from "./wish-price-range";
 import { buildWishRows, type WishRow, wishSubRows } from "./wish-rows";
@@ -72,13 +70,6 @@ const WISH_TREE_CONFIG = {
 export function WishList() {
   const api = useTRPC();
   const columnHelper = useMemo(() => createCubbyColumnHelper<WishRow>(), []);
-
-  const deletableConfig = useDeletableConfig({
-    mutationFn: api.wish.delete.mutationOptions,
-    entityLabel: "Wish",
-    invalidateKeys: wishMutationInvalidateKeys,
-    entity: "wish",
-  });
 
   const columns = useMemo(
     () => [
@@ -268,9 +259,9 @@ export function WishList() {
     WishOut
   >({
     entity: "wish",
-    queryOptions: api.wish.list.queryOptions,
     columns,
-    deletable: deletableConfig,
+    // The wish contract's own list query, delete, and invalidation fan-out.
+    deletable: true,
     tree: WISH_TREE_CONFIG,
     filterOptions,
   });
@@ -286,6 +277,9 @@ export function WishList() {
     [data],
   );
 
+  // Not `EntityListPage`: this list reads the hook's `data` to collect its
+  // candidate product ids, and wraps the workbench in the image-summary
+  // provider those covers read from.
   return (
     <div>
       <ProductImageSummariesProvider productIds={candidateProductIds}>

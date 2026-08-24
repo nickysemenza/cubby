@@ -1,39 +1,41 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, notFound } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
+import { ensureDetailRecord } from "~/app/_components/routing/detail-loader";
+import {
+  detailPage,
+  notFoundPage,
+} from "~/app/_components/routing/entity-routes";
 import { MealDetailPage } from "~/app/meals/meal-detail-page";
-import { useDetailTitle } from "~/hooks/useDocumentTitle";
-import { useTRPC } from "~/integrations/trpc/react";
+import { RouteErrorComponent } from "~/components/lazy-route-error";
+import { DetailPagePending } from "~/components/route-pending";
 import { shortcodeHead } from "~/lib/page-title";
 
+// Bound to consts, not inlined into the options object: the router plugin's
+// splitter re-parses an inlined call expression with a JSX-less babel config,
+// so only the identifier path survives a page body that renders JSX.
+const MealDetailRoute = detailPage({
+  query: (api, shortcode) =>
+    api.meal.getByShortcode.queryOptions({ shortcode }),
+  render: (meal) => <MealDetailPage mealId={meal.id} />,
+  title: (meal) => meal.name,
+});
+
+const MealNotFound = notFoundPage(
+  "meal",
+  "Meal not found",
+  "This meal is no longer available.",
+);
+
 export const Route = createFileRoute("/_authenticated/meals/$shortcode")({
-  // The raw route param is validated by the query input schema; the loaded
-  // meal then carries the branded public MealShortcode used by the page.
-  loader: async ({ params, context }) => {
-    const data = await context.queryClient.ensureQueryData(
+  loader: ({ params, context }) =>
+    ensureDetailRecord(
+      context.queryClient,
       context.trpc.meal.getByShortcode.queryOptions({
         shortcode: params.shortcode,
       }),
-    );
-    if (!data) throw notFound();
-  },
-  component: MealDetailRoute,
+    ),
+  pendingComponent: DetailPagePending,
+  errorComponent: RouteErrorComponent,
+  notFoundComponent: MealNotFound,
   head: shortcodeHead,
+  component: MealDetailRoute,
 });
-
-function MealDetailRoute() {
-  const { shortcode } = Route.useParams();
-  const api = useTRPC();
-  const { data: meal } = useSuspenseQuery(
-    api.meal.getByShortcode.queryOptions({ shortcode }),
-  );
-
-  useDetailTitle(shortcode, meal?.name);
-
-  // The loader already threw notFound for an unknown code; this only satisfies
-  // the nullable output type.
-  if (!meal) return null;
-
-  // MealDetailPage renders its own <Page> shell (title/heroStats depend on the
-  // loaded meal), so the route doesn't wrap it.
-  return <MealDetailPage mealId={meal.id} />;
-}

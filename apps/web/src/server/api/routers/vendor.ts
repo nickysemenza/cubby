@@ -5,23 +5,17 @@
  * are the only procedures with no factory analogue and are spread in alongside.
  */
 
-import {
-  unsafeVendorId,
-  unsafeVendorShortcode,
-  vendorShortcode,
-} from "@cubby/schemas/identifiers";
+import { unsafeVendorId } from "@cubby/schemas/identifiers";
 import {
   fetchVendorLogoInput,
   mergeVendorsInput,
   mergeVendorsOut,
-  vendorCreateInput,
   vendorFiltersSchema,
   vendorOptionsOut,
   vendorOut,
   vendorSortableFields,
-  vendorUpdateData,
 } from "@cubby/schemas/vendor";
-import { createAppError } from "~/server/errors/app-error";
+import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import {
   createVendor,
@@ -40,43 +34,20 @@ import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const procedures = createSearchableEntityCrudProcedures({
   schemas: {
-    createInput: vendorCreateInput,
-    updateInput: vendorUpdateData,
-    output: vendorOut,
+    ...ENTITY_BINDINGS.vendor.crud,
     filters: vendorFiltersSchema,
     sort: {
       sortableFields: vendorSortableFields,
       defaultSort: "name",
     },
-    idSchema: vendorShortcode,
   },
   repository: {
-    getByID: async (ctx, id) => {
-      const out = await getVendorByShortcode(ctx.db, id);
-      if (!out) {
-        throw createAppError("VENDOR_NOT_FOUND", `Vendor not found: ${id}`);
-      }
-      return out;
-    },
     getByShortcode: (ctx, shortcode) => getVendorByShortcode(ctx.db, shortcode),
     list: (ctx, filters, sorts, pagination) =>
       vendorList(ctx.db, filters, sorts, pagination),
     create: (ctx, data) => createVendor(ctx.db, data, ctx.actorContext),
-    update: (ctx, id, data) =>
-      updateVendor(
-        ctx.db,
-        { id: unsafeVendorShortcode(id), data },
-        ctx.actorContext,
-      ),
-    delete: async (ctx, ids) => {
-      const { detachedImageKeys, deleted } = await deleteVendors(
-        ctx.db,
-        ids.map(unsafeVendorShortcode),
-        ctx.actorContext,
-      );
-      await deleteStoredObjects(detachedImageKeys);
-      return { deleted };
-    },
+    update: (ctx, id, data) => updateVendor(ctx.db, id, data, ctx.actorContext),
+    delete: (ctx, ids) => deleteVendors(ctx.db, ids, ctx.actorContext),
   },
   entityName: "vendor",
 });

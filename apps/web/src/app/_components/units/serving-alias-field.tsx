@@ -19,7 +19,6 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Spinner } from "~/components/ui/spinner";
 import { useTRPC } from "~/integrations/trpc/react";
-import { productMutationInvalidateKeys } from "~/lib/query-keys";
 import { wasm } from "~/lib/wasm";
 import { useUpdateMutation } from "../hooks/useUpdateMutation";
 import { NutrientsSummary } from "./NutrientsSummary";
@@ -60,7 +59,6 @@ export function ServingAliasField({
   const updateProductMutation = useUpdateMutation({
     mutationFn: api.product.update.mutationOptions,
     entity: "product",
-    invalidateKeys: productMutationInvalidateKeys,
   });
 
   const grams = Number(gramsInput);

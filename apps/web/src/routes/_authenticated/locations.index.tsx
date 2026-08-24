@@ -1,12 +1,9 @@
-import { locationTypeValues } from "@cubby/shared";
 import {
   createFileRoute,
   stripSearchParams,
   useNavigate,
 } from "@tanstack/react-router";
 import { Suspense } from "react";
-import { z } from "zod";
-import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import LocationTreeGraph from "~/app/_components/inventory/location-tree-graph";
 import LocationTreeView from "~/app/_components/inventory/location-tree-view";
 import LocationTreemap from "~/app/_components/inventory/location-treemap";
@@ -24,12 +21,14 @@ import {
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
 import { getEntityFilters } from "~/entities/filter-manifest";
-import { entityFilterSearchFields } from "~/entities/filter-search-fields";
+import {
+  type LOCATION_LIST_VIEWS,
+  locationSearchDefaults,
+  locationSearchSchema,
+} from "~/entities/list-search";
 import { pageTitle } from "~/lib/page-title";
-import { urlEnumListParam, urlShortcodeListParam } from "~/lib/search-params";
 
-const viewOptions = ["gallery", "table", "visualizations"] as const;
-type ViewOption = (typeof viewOptions)[number];
+type ViewOption = (typeof LOCATION_LIST_VIEWS)[number];
 
 const VIEW_SWITCHER_OPTIONS: ViewSwitcherOption<ViewOption>[] = [
   { value: "gallery", label: "Gallery" },
@@ -37,20 +36,9 @@ const VIEW_SWITCHER_OPTIONS: ViewSwitcherOption<ViewOption>[] = [
   { value: "visualizations", label: "Visualizations" },
 ];
 
-export const locationSearchSchema = z.object({
-  view: z.enum(viewOptions).optional().catch(undefined),
-  ...tableSearchFields,
-  ...entityFilterSearchFields("location"),
-  type: urlEnumListParam(z.enum(locationTypeValues)),
-  product: urlShortcodeListParam("product"),
-  parent: urlShortcodeListParam("location"),
-});
-
-const searchDefaults = { view: undefined } as const;
-
 export const Route = createFileRoute("/_authenticated/locations/")({
   validateSearch: locationSearchSchema,
-  search: { middlewares: [stripSearchParams(searchDefaults)] },
+  search: { middlewares: [stripSearchParams(locationSearchDefaults)] },
   component: LocationsPage,
   head: () => ({ meta: [{ title: pageTitle("Locations") }] }),
 });

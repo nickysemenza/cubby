@@ -25,7 +25,6 @@ import { Button } from "~/components/ui/button";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
-import { expenseMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { persistedVendorId } from "~/lib/vendor-logo";
 import {
@@ -67,7 +66,6 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
   const updateMutation = useUpdateMutation({
     mutationFn: api.expense.update.mutationOptions,
     entity: "expense",
-    invalidateKeys: expenseMutationInvalidateKeys,
   });
 
   // Common sections from entity config (History) — editMode/mappings unused
@@ -86,7 +84,6 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
     entity: "expense",
     mutationOptions: (callbacks) =>
       api.expense.delete.mutationOptions(callbacks),
-    invalidateKeys: expenseMutationInvalidateKeys,
     redirectTo: "/expenses",
   });
 

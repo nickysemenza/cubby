@@ -4,6 +4,7 @@ import {
   auditDateFilterFields,
   deriveUpdateData,
   deriveUpdateFields,
+  numericRangeFields,
   timestampedFields,
 } from "./base-entity";
 import { mutationSideEffectsSchema } from "./background-jobs";
@@ -337,15 +338,12 @@ export const recipeFilterFields = {
    */
   sourceTypeFilter: oneOrMany(z.enum(recipeSourceValues)).optional(),
   sourceTypePresenceFilter: presenceFilter,
-  costTotalMin: z.coerce.number().nonnegative().optional(),
-  costTotalMax: z.coerce.number().nonnegative().optional(),
-  caloriesTotalMin: z.coerce.number().nonnegative().optional(),
-  caloriesTotalMax: z.coerce.number().nonnegative().optional(),
+  ...numericRangeFields("costTotal", { nonnegative: true }),
+  ...numericRangeFields("caloriesTotal", { nonnegative: true }),
   // Total elapsed time in minutes — a real column, so this is a plain SQL
   // range. A recipe whose source printed no total time (or printed prose no
   // parser would commit to) has NULL here and matches neither bound.
-  totalMinutesMin: z.coerce.number().int().nonnegative().optional(),
-  totalMinutesMax: z.coerce.number().int().nonnegative().optional(),
+  ...numericRangeFields("totalMinutes", { int: true, nonnegative: true }),
 };
 
 export const recipeFiltersSchema = z.object(recipeFilterFields);
@@ -447,15 +445,17 @@ const mcpRecipeUpdateFields = {
 };
 export const mcpRecipeUpdateInput = z.object(mcpRecipeUpdateFields);
 
-/** Slim MCP projection of a recipe list row. */
-/** The lean recipe MCP surface, as a field map so derived shapes can compose it
- * without reaching into `.shape`. */
-export const recipeMcpFields = {
-  id: recipeShortcode,
-  name: z.string(),
-  yield: recipeYieldSchema.nullish(),
-  servings: recipeServings.nullish(),
-  tags: recipeTags.nullish(),
+/**
+ * Slim MCP projection of a recipe list row — built from the same field map as
+ * `recipeOut`, so it cannot drift from the plain shape. `recipeMcpFields` is
+ * shared with `recipeWithUsagesMcpOut` below, so that shape stays in sync too.
+ */
+const recipeMcpFields = {
+  id: recipeOutFields.id,
+  name: recipeOutFields.name,
+  yield: recipeOutFields.yield,
+  servings: recipeOutFields.servings,
+  tags: recipeOutFields.tags,
 };
 
 export const recipeMcpOut = z.object(recipeMcpFields);
@@ -473,17 +473,17 @@ export const recipeUsageMcpOut = z.object({
   modifier: z.string().nullable(),
 });
 
-const recipeWithUsagesMcpFields = {
+const recipeWithUsagesMcpOut = z.object({
   ...recipeMcpFields,
   usages: z.array(recipeUsageMcpOut),
-};
+});
 
 export const recipesUsingIngredientOut = z.object({
   // The ingredient shortcode the caller passed in — echoed back, not resolved
   // to a uuid (find_recipes_using_ingredient never needs the private id).
   ingredientId: ingredientShortcode,
   count: z.number().int().nonnegative(),
-  recipes: z.array(z.object(recipeWithUsagesMcpFields)),
+  recipes: z.array(recipeWithUsagesMcpOut),
 });
 
 export const recipeIdOut = z.object({ id: recipeShortcode });

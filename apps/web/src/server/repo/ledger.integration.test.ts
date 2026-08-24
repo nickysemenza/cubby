@@ -24,21 +24,18 @@ import {
 } from "~/server/repo/financial-account";
 import {
   deleteFinancialTransactions,
-  previewDeleteFinancialTransactions,
   updateFinancialTransaction,
 } from "~/server/repo/financial-transaction";
 import {
   createLedgerParty,
   deleteLedgerParties,
   mergeLedgerParties,
-  previewDeleteLedgerParties,
   previewMergeLedgerParties,
   updateLedgerParty,
 } from "~/server/repo/ledger-party";
 import {
   createLedgerTransfer,
   deleteLedgerTransfers,
-  previewDeleteLedgerTransfers,
   updateLedgerTransfer,
 } from "~/server/repo/ledger-transfer";
 import { makeExpenseInput } from "~/server/repo/repo.fixtures";
@@ -74,13 +71,6 @@ describe("consolidated household ledger", () => {
     await expect(
       deleteLedgerParties(ctx.db, [household.output.id], ctx.actor),
     ).rejects.toThrow("singleton household");
-    expect(
-      (await previewDeleteLedgerParties(ctx.db, [household.entityId])).blockers,
-    ).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ code: "protected-household" }),
-      ]),
-    );
     await expect(
       createFinancialAccount(
         ctx.db,
@@ -321,27 +311,14 @@ describe("consolidated household ledger", () => {
           "sourceClaims" in changes,
       ),
     ).toBe(true);
-    expect(
-      (await previewDeleteLedgerParties(ctx.db, [member.entityId])).blockers,
-    ).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ code: "block-accounts" }),
-        expect.objectContaining({ code: "block-outgoing-transfers" }),
-      ]),
-    );
-    expect(
-      (await previewDeleteLedgerTransfers(ctx.db, [transfer.entityId])).changes,
-    ).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ code: "clear-evidence-link", total: 1 }),
-      ]),
-    );
-    expect(
-      (await previewDeleteFinancialTransactions(ctx.db, [inflow.id])).blockers,
-    ).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ code: "block-transfer-evidence", total: 1 }),
-      ]),
+    // `member` still holds the live account and outgoing transfer set up
+    // above; deleteLedgerParties refuses on the same aggregate check that
+    // used to also back the preview's `block-accounts` /
+    // `block-outgoing-transfers` blockers.
+    await expect(
+      deleteLedgerParties(ctx.db, [member.output.id], ctx.actor),
+    ).rejects.toThrow(
+      "A ledger party with live attributions, accounts, or transfers cannot be deleted.",
     );
     await expect(
       deleteFinancialTransactions(

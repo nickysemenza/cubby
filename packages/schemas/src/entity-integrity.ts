@@ -2,24 +2,12 @@ import { z } from "zod";
 import { entitySchema } from "./entity-core";
 import {
   anyShortcodeSchema,
-  cookbookShortcode,
-  expenseShortcode,
-  financialAccountShortcode,
-  financialTransactionShortcode,
-  imageShortcode,
   ingredientShortcode,
-  inventoryShortcode,
   ledgerPartyShortcode,
-  ledgerTransferShortcode,
-  locationShortcode,
-  mealShortcode,
   productShortcode,
   projectShortcode,
   purchaseShortcode,
-  recipeShortcode,
-  taskShortcode,
   vendorShortcode,
-  wishShortcode,
 } from "./identifiers";
 
 /**
@@ -345,29 +333,6 @@ export const toPublicImpact = (
   return { ...item, byTargetId } as PublicImpactItem;
 };
 
-/** Entities whose delete has a preview planner. */
-export const previewDeleteEntitySchema = z.enum([
-  "product",
-  "recipe",
-  "ingredient",
-  "cookbook",
-  "meal",
-  "ledgerParty",
-  "ledgerTransfer",
-  "location",
-  "project",
-  "task",
-  "vendor",
-  "purchase",
-  "expense",
-  "financialAccount",
-  "financialTransaction",
-  "inventory",
-  "wish",
-  "image",
-]);
-export type PreviewDeleteEntity = z.infer<typeof previewDeleteEntitySchema>;
-
 /**
  * Entities that support merge. Hand-kept rather than derived from
  * `entityManifest[e].lifecycle.merge` — `entity-manifest.ts` itself imports
@@ -395,56 +360,39 @@ export type PreviewMergeEntity = z.infer<typeof previewMergeEntitySchema>;
 
 /**
  * The id schema each entity's preview targets must satisfy — the per-entity
- * prefix check the `.superRefine` below applies once `entity` is known.
+ * prefix check the `.superRefine` below applies once `entity` is known. Covers
+ * every entity `preview_entity_operation` can name anywhere in its input:
+ * merge's `mergeIds`/`keepId` (the `PreviewMergeEntity`s) plus attach/detach's
+ * `parentId` (the `RelationParentEntity`s, `project` being the one not already
+ * a merge entity). A delete preview no longer exists — deletes are "attempt
+ * and read the structured refusal" — so this is deliberately narrower than
+ * the full entity manifest.
  */
 const PREVIEW_TARGET_ID_SCHEMA = {
   product: productShortcode,
-  recipe: recipeShortcode,
   ingredient: ingredientShortcode,
-  cookbook: cookbookShortcode,
-  meal: mealShortcode,
   ledgerParty: ledgerPartyShortcode,
-  ledgerTransfer: ledgerTransferShortcode,
-  location: locationShortcode,
-  project: projectShortcode,
-  task: taskShortcode,
   vendor: vendorShortcode,
   purchase: purchaseShortcode,
-  expense: expenseShortcode,
-  financialAccount: financialAccountShortcode,
-  financialTransaction: financialTransactionShortcode,
-  wish: wishShortcode,
-  inventory: inventoryShortcode,
-  image: imageShortcode,
-} as const satisfies Record<PreviewDeleteEntity, z.ZodType<string, string>>;
+  project: projectShortcode,
+} as const satisfies Record<
+  PreviewMergeEntity | RelationParentEntity,
+  z.ZodType<string, string>
+>;
 
 /**
- * The field-level shape of one target id: any entity shortcode, `image`
- * included — it carries an `IMG-` code like every other local-table entity,
- * so no bare-uuid alternative belongs here. The entity isn't known until
- * `entity` is read, so the *exact* prefix is enforced in the refine below —
- * this alternation just keeps a real `pattern` in the advertised JSON Schema
- * instead of a bare string.
+ * The field-level shape of one target id: a shortcode for any entity that
+ * supports a merge preview. The entity isn't known until `entity` is read, so
+ * the *exact* prefix is enforced in the refine below — this alternation just
+ * keeps a real `pattern` in the advertised JSON Schema instead of a bare
+ * string.
  */
 const previewTargetId = anyShortcodeSchema([
   "product",
-  "recipe",
   "ingredient",
-  "cookbook",
-  "meal",
   "ledgerParty",
-  "ledgerTransfer",
-  "location",
-  "project",
-  "task",
   "vendor",
   "purchase",
-  "expense",
-  "financialAccount",
-  "financialTransaction",
-  "wish",
-  "inventory",
-  "image",
 ]);
 
 const previewMergeEntities = new Set<string>(previewMergeEntitySchema.options);
@@ -494,7 +442,7 @@ const relationParentEntities = new Set<string>(
 function rejectRelationFields(
   input: { parentId?: string; productIds?: string[] },
   ctx: z.core.$RefinementCtx,
-  operation: "delete" | "merge",
+  operation: "merge",
 ) {
   for (const key of ["parentId", "productIds"] as const) {
     if (input[key] !== undefined) {
@@ -507,24 +455,36 @@ function rejectRelationFields(
   }
 }
 
+/**
+ * Every entity `preview_entity_operation` can name: a merge's `entity`
+ * (`PreviewMergeEntity`) or attach/detach's parent relation
+ * (`RelationParentEntity`) — `project` is the one member of the latter that
+ * isn't already in the former. There is no delete preview: deletes are
+ * "attempt the mutation and read its structured refusal" (see the module
+ * doc), so `entity` no longer needs to name every deletable entity.
+ */
+export const previewOperationEntitySchema = z.enum([
+  "ingredient",
+  "vendor",
+  "purchase",
+  "product",
+  "ledgerParty",
+  "project",
+]);
+export type PreviewOperationEntity = z.infer<
+  typeof previewOperationEntitySchema
+>;
+
 export const previewOperationInputSchema = z
   .object({
     operation: z
-      .enum(["delete", "merge", "attach", "detach"])
+      .enum(["merge", "attach", "detach"])
       .describe(
-        "delete → pass `ids`. merge → pass `mergeIds` (and optionally `keepId`). attach/detach → pass `parentId` and `productIds`.",
+        "merge → pass `mergeIds` (and optionally `keepId`). attach/detach → pass `parentId` and `productIds`.",
       ),
-    entity: previewDeleteEntitySchema.describe(
-      `The entity the target ids name. Every entity here supports delete; only ${previewMergeEntitySchema.options.join(", ")} support merge.`,
+    entity: previewOperationEntitySchema.describe(
+      `The entity the target ids name. ${previewMergeEntitySchema.options.join(", ")} support merge; ${relationParentEntitySchema.options.join(", ")} support attach/detach.`,
     ),
-    ids: z
-      .array(previewTargetId)
-      .min(1)
-      .max(200)
-      .optional()
-      .describe(
-        "delete only: the shortcodes to preview deleting. Must match the `entity` prefix — e.g. PRD- codes when entity is `product`, IMG- codes when it is `image`.",
-      ),
     mergeIds: z
       .array(previewTargetId)
       .min(1)
@@ -568,10 +528,7 @@ export const previewOperationInputSchema = z
         message: `"${value}" is not ${expected}. Every id must match the \`entity\` you passed ("${input.entity}").`,
       });
     };
-    const checkIds = (
-      values: string[] | undefined,
-      key: "ids" | "mergeIds",
-    ) => {
+    const checkIds = (values: string[] | undefined, key: "mergeIds") => {
       for (const [index, value] of (values ?? []).entries()) {
         checkId(value, [key, index]);
       }
@@ -601,12 +558,12 @@ export const previewOperationInputSchema = z
           message: `operation "${input.operation}" requires \`productIds\` — the products on the other end of the edge.`,
         });
       }
-      for (const key of ["ids", "mergeIds", "keepId"] as const) {
+      for (const key of ["mergeIds", "keepId"] as const) {
         if (input[key] !== undefined) {
           ctx.addIssue({
             code: "custom",
             path: [key],
-            message: `\`${key}\` belongs to delete/merge; an ${input.operation} preview takes \`parentId\` plus \`productIds\`.`,
+            message: `\`${key}\` belongs to merge; an ${input.operation} preview takes \`parentId\` plus \`productIds\`.`,
           });
         }
       }
@@ -621,34 +578,11 @@ export const previewOperationInputSchema = z
       return;
     }
 
-    if (input.operation === "delete") {
-      if (!input.ids) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["ids"],
-          message:
-            'operation "delete" requires `ids` — the ids of the rows to preview deleting.',
-        });
-      }
-      for (const key of ["mergeIds", "keepId"] as const) {
-        if (input[key] !== undefined) {
-          ctx.addIssue({
-            code: "custom",
-            path: [key],
-            message: `\`${key}\` belongs to operation "merge"; a delete preview takes \`ids\`.`,
-          });
-        }
-      }
-      rejectRelationFields(input, ctx, "delete");
-      checkIds(input.ids, "ids");
-      return;
-    }
-
     if (!previewMergeEntities.has(input.entity)) {
       ctx.addIssue({
         code: "custom",
         path: ["entity"],
-        message: `merge is only supported for ${previewMergeEntitySchema.options.join(", ")}; "${input.entity}" supports delete only.`,
+        message: `merge is only supported for ${previewMergeEntitySchema.options.join(", ")}; "${input.entity}" has no merge preview.`,
       });
     }
     if (!input.mergeIds) {
@@ -657,14 +591,6 @@ export const previewOperationInputSchema = z
         path: ["mergeIds"],
         message:
           'operation "merge" requires `mergeIds` — the ids being merged together.',
-      });
-    }
-    if (input.ids !== undefined) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["ids"],
-        message:
-          '`ids` belongs to operation "delete"; a merge preview takes `mergeIds` plus an optional `keepId`.',
       });
     }
     const mergeIds = input.mergeIds ?? [];
@@ -697,7 +623,6 @@ export type PreviewOperationInput = z.infer<typeof previewOperationInputSchema>;
  * the narrowing always succeeds for a parsed input.
  */
 export type PreviewOperationRequest =
-  | { operation: "delete"; entity: PreviewDeleteEntity; ids: string[] }
   | {
       operation: "merge";
       entity: PreviewMergeEntity;
@@ -719,10 +644,6 @@ export type PreviewOperationRequest =
 export function narrowPreviewOperationInput(
   input: PreviewOperationInput,
 ): PreviewOperationRequest {
-  if (input.operation === "delete") {
-    if (!input.ids) throw new Error("preview delete requires ids");
-    return { operation: "delete", entity: input.entity, ids: input.ids };
-  }
   if (input.operation === "attach" || input.operation === "detach") {
     if (!input.parentId || !input.productIds) {
       throw new Error(
@@ -766,10 +687,8 @@ export const mergeCandidateSchema = z.object({
 export type MergeCandidate = z.infer<typeof mergeCandidateSchema>;
 
 export const previewOperationSchema = z.object({
-  operation: z.enum(["delete", "merge", "attach", "detach"]),
+  operation: z.enum(["merge", "attach", "detach"]),
   entity: entitySchema,
-  /** `soft` / `hard` for a delete; null for a merge, attach, or detach. */
-  mode: z.enum(["soft", "hard"]).nullable(),
   targetCount: z.number().int().nonnegative(),
   /**
    * False when a blocker will make the mutation throw. The dialog disables

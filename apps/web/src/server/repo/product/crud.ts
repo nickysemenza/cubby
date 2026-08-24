@@ -5,7 +5,6 @@
 
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
-import type { ImpactItem } from "@cubby/schemas/entity-integrity";
 import {
   displayGtin,
   type ExternalIdKind,
@@ -51,7 +50,7 @@ import {
   sql,
   sum,
 } from "drizzle-orm";
-import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
+import type { PgColumn } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
@@ -104,15 +103,14 @@ import {
   lockAndValidateForDelete,
   notDeleted,
   presenceCondition,
+  rangeConditions,
   relations,
-  unwrapDb,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
-import { countByTarget, impact, present } from "~/server/repo/impact";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import { resolveEstablishedManufacturer } from "~/server/repo/label-canonical";
 import { loadLocationAncestorsWithIds } from "~/server/repo/location/tree";
@@ -882,24 +880,21 @@ export const productList = async (
               ),
           )
         : undefined,
-      filters.expenseCountMin !== undefined
-        ? sql`(SELECT count(*) FROM "Expense" e WHERE e."productId" = ${product.id} AND e."deletedAt" IS NULL) >= ${filters.expenseCountMin}`
-        : undefined,
-      filters.expenseCountMax !== undefined
-        ? sql`(SELECT count(*) FROM "Expense" e WHERE e."productId" = ${product.id} AND e."deletedAt" IS NULL) <= ${filters.expenseCountMax}`
-        : undefined,
-      filters.expenseTotalMin !== undefined
-        ? sql`(SELECT COALESCE(sum(e."cost"), 0) FROM "Expense" e WHERE e."productId" = ${product.id} AND e."deletedAt" IS NULL) >= ${filters.expenseTotalMin}`
-        : undefined,
-      filters.expenseTotalMax !== undefined
-        ? sql`(SELECT COALESCE(sum(e."cost"), 0) FROM "Expense" e WHERE e."productId" = ${product.id} AND e."deletedAt" IS NULL) <= ${filters.expenseTotalMax}`
-        : undefined,
-      filters.expectedQuantityMin !== undefined
-        ? sql`${expectedQuantityFilterSql(product.id)} >= ${filters.expectedQuantityMin}`
-        : undefined,
-      filters.expectedQuantityMax !== undefined
-        ? sql`${expectedQuantityFilterSql(product.id)} <= ${filters.expectedQuantityMax}`
-        : undefined,
+      ...rangeConditions(
+        sql`(SELECT count(*) FROM "Expense" e WHERE e."productId" = ${product.id} AND e."deletedAt" IS NULL)`,
+        filters,
+        "expenseCount",
+      ),
+      ...rangeConditions(
+        sql`(SELECT COALESCE(sum(e."cost"), 0) FROM "Expense" e WHERE e."productId" = ${product.id} AND e."deletedAt" IS NULL)`,
+        filters,
+        "expenseTotal",
+      ),
+      ...rangeConditions(
+        expectedQuantityFilterSql(product.id),
+        filters,
+        "expectedQuantity",
+      ),
       // Scoped to products that are BOTH stocked and in the ledger. Neither
       // half is optional, and both were measured against production:
       //
@@ -2370,105 +2365,6 @@ export const deleteProducts = async (
   });
 };
 
-/**
- * What `deleteProducts` would do to the given products, without doing it.
- *
- * Reads the SAME `PRODUCT_DELETE_EDGE_POLICY` and the same per-edge dependent
- * fetchers the mutation does, so the preview cannot claim a delete will succeed
- * that the guard above then refuses — the two share one declaration of which
- * edges block, not two hand-kept copies.
- *
- * Advisory only. `deleteProducts` still re-runs every check inside its own
- * transaction; nothing here is a lock or a permission.
- */
-export const previewDeleteProducts = async (
-  db: Database | DrizzleTransaction,
-  ids: ProductId[],
-): Promise<{ blockers: ImpactItem[]; changes: ImpactItem[] }> => {
-  const dbClient = unwrapDb(db);
-
-  const blockers: (ImpactItem | null)[] = [];
-  for (const key of Object.keys(
-    PRODUCT_RETAINING_DEPENDENTS,
-  ) as Array<ProductRetainingEdgeKey>) {
-    // See the matching loop in `deleteProducts` above for why iteration is
-    // keyed off `PRODUCT_RETAINING_DEPENDENTS` (no cast) while the block
-    // decision still reads the delete policy's own `block` effect.
-    const disposition = PRODUCT_DELETE_EDGE_POLICY[key];
-    if (disposition.effect !== "block") continue;
-    const dependents = await PRODUCT_RETAINING_DEPENDENTS[key](dbClient, ids);
-    const byTargetId: Record<string, number> = {};
-    for (const { productId } of dependents) {
-      if (productId) byTargetId[productId] = (byTargetId[productId] ?? 0) + 1;
-    }
-    blockers.push(
-      impact({
-        disposition,
-        edgeKey: key,
-        label: disposition.label,
-        byTargetId,
-      }),
-    );
-  }
-
-  // Everything the delete cascades. Each is a `soft-delete` disposition on the
-  // same policy, so adding an edge there surfaces here without a code change.
-  // The first tuple element is typed to the policy's own `keyof` so a typo'd
-  // key is a compile error instead of an `undefined` disposition at runtime.
-  const cascades: Array<
-    [
-      keyof typeof PRODUCT_DELETE_EDGE_POLICY,
-      PgTable,
-      PgColumn,
-      string,
-      boolean?,
-    ]
-  > = [
-    [
-      "ProductExternalId.productId",
-      productExternalId,
-      productExternalId.productId,
-      "external ids",
-    ],
-    [
-      "ProductUnitMappings.productId",
-      productUnitMappings,
-      productUnitMappings.productId,
-      "unit mappings",
-    ],
-    ["ProductImage.productId", productImage, productImage.productId, "images"],
-    [
-      "ProductComponent.parentProductId",
-      productComponent,
-      productComponent.parentProductId,
-      "kit components",
-    ],
-    [
-      "ProductConversionCoverage.productId",
-      productConversionCoverage,
-      productConversionCoverage.productId,
-      "conversion coverage projections",
-      true,
-    ],
-  ];
-
-  const changes: (ImpactItem | null)[] = [];
-  for (const [edgeKey, table, column, label, includeDeleted] of cascades) {
-    const disposition = PRODUCT_DELETE_EDGE_POLICY[edgeKey];
-    changes.push(
-      impact({
-        disposition,
-        edgeKey,
-        label,
-        byTargetId: await countByTarget(dbClient, table, column, ids, {
-          includeDeleted,
-        }),
-      }),
-    );
-  }
-
-  return { blockers: present(blockers), changes: present(changes) };
-};
 export type ProductRepoCreateInput = Omit<
   ProductCreateInput,
   "ingredientId"

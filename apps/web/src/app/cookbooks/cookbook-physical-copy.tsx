@@ -22,7 +22,7 @@ import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Image } from "~/components/ui/image";
 import { Input } from "~/components/ui/input";
 import { useTRPC } from "~/integrations/trpc/react";
-import { cookbookProductLinkInvalidateKeys } from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 
 const SEARCH_PAGE_SIZE = 20;
@@ -62,7 +62,7 @@ export function CookbookPhysicalCopy({
       result.product
         ? `Linked to ${result.product.name}`
         : "Unlinked the physical copy",
-    invalidateKeys: cookbookProductLinkInvalidateKeys,
+    invalidateKeys: invalidatesFor("cookbook", "productLink"),
     onSuccess: () => setPickerOpen(false),
   });
 

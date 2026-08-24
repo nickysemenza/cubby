@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { projectSearchSchema } from "./projects.index";
+import { projectSearchSchema } from "~/entities/list-search";
 
 describe("project route search validation", () => {
   it("accepts dashboard arrays and table comma-separated multi-filters", () => {

@@ -1,7 +1,6 @@
 import type { FinancialAccountOut } from "@cubby/schemas/financial-account";
-import { Clock, Info, ReceiptText } from "lucide-react";
+import { Info, ReceiptText } from "lucide-react";
 import { useState } from "react";
-import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import { BasicInfo } from "~/components/common/basic-info";
 import { Page } from "~/components/page/Page";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
@@ -9,7 +8,6 @@ import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { financialAccountEditRequest } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { useTRPC } from "~/integrations/trpc/react";
-import { financialAccountMutationInvalidateKeys } from "~/lib/query-keys";
 import { renderOptionCell } from "../_components/data-table/columnHelpers";
 import { DetailSections } from "../_components/data-table/detail-page";
 import { useEntityDelete } from "../_components/hooks/useEntityDelete";
@@ -31,7 +29,6 @@ export function FinancialAccountDetail({
     entity: "financialAccount",
     entityLabel: "Account",
     mutationOptions: api.financialAccount.delete.mutationOptions,
-    invalidateKeys: financialAccountMutationInvalidateKeys,
     redirectTo: "/financial-accounts",
   });
   return (
@@ -108,19 +105,8 @@ export function FinancialAccountDetail({
             placement: "primary",
             content: <LinkedTransactions accountId={account.id} />,
           },
-          {
-            id: "history",
-            title: "History",
-            icon: Clock,
-            placement: "supporting",
-            content: (
-              <AuditLogList
-                entityType="financialAccount"
-                entityId={account.id}
-                showEntityLink={false}
-              />
-            ),
-          },
+          // History is appended automatically by `DetailSections` for every
+          // auditable entity — see `ACTIVITY_SECTION_ID` there.
         ]}
       />
       <EntityEditDialog

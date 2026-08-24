@@ -30,7 +30,6 @@ import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
 import { Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { useTRPC } from "~/integrations/trpc/react";
-import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
 import { ShelfEmpty } from "../data-table/shelf";
 import { EntityInlineLink } from "../EntityInlineLink";
 import { ProductDiscardDialog } from "./product-discard-dialog";
@@ -134,7 +133,6 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
   const update = useUpdateMutation({
     mutationFn: api.inventory.update.mutationOptions,
     entity: "inventory",
-    invalidateKeys: inventoryMutationInvalidateKeys,
   });
 
   // The shared Move/Delete dialogs name a row by its product; on this page the

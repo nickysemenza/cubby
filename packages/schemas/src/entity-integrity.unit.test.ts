@@ -20,73 +20,14 @@ const errorPaths = (input: unknown): string[] => {
 };
 
 describe("previewOperationInputSchema", () => {
-  describe("delete", () => {
-    it("accepts ids matching the entity", () => {
-      expect(
-        ok({ operation: "delete", entity: "product", ids: ["PRD-2CRC"] })
-          .success,
-      ).toBe(true);
-    });
-
-    it("requires ids", () => {
-      expect(errorPaths({ operation: "delete", entity: "product" })).toContain(
-        "ids",
-      );
-    });
-
-    it("rejects merge-only fields", () => {
-      expect(
-        errorPaths({
-          operation: "delete",
-          entity: "product",
-          ids: ["PRD-2CRC"],
-          mergeIds: ["PRD-2CRD"],
-          keepId: "PRD-2CRE",
-        }),
-      ).toEqual(expect.arrayContaining(["mergeIds", "keepId"]));
-    });
-
-    it("rejects an id whose prefix names a different entity", () => {
-      // The check the flattening most easily could have dropped: the old union
-      // pinned the id schema per member, so a LOC- code simply matched no arm.
-      expect(
-        errorPaths({
-          operation: "delete",
-          entity: "product",
-          ids: ["LOC-2CRC"],
-        }),
-      ).toContain("ids.0");
-    });
-
-    it("takes an IMG- shortcode for image, like every other entity", () => {
-      expect(
-        ok({
-          operation: "delete",
-          entity: "image",
-          ids: ["IMG-2CRC"],
-        }).success,
-      ).toBe(true);
-      expect(
-        errorPaths({ operation: "delete", entity: "image", ids: ["PRD-2CRC"] }),
-      ).toContain("ids.0");
-      // A raw uuid is no longer accepted now that image has a shortcode.
-      expect(
-        errorPaths({
-          operation: "delete",
-          entity: "image",
-          ids: ["3f2504e0-4f89-11d3-9a0c-0305e82c3301"],
-        }),
-      ).toContain("ids.0");
-    });
-
-    it("normalizes casing and surrounding whitespace", () => {
-      const parsed = ok({
-        operation: "delete",
-        entity: "product",
-        ids: [" prd-2crc "],
-      });
-      expect(parsed.success && parsed.data.ids).toEqual(["PRD-2CRC"]);
-    });
+  it("rejects delete outright — deletes have no preview any more", () => {
+    // Deletes used to be the largest branch here (ids, per-entity prefix
+    // checks, the image shortcode/uuid split). That planner is gone: a delete
+    // mutation's own structured refusal is the contract now, so "delete" isn't
+    // even a member of the `operation` enum any more.
+    expect(
+      ok({ operation: "delete", entity: "product", ids: ["PRD-2CRC"] }).success,
+    ).toBe(false);
   });
 
   describe("merge", () => {
@@ -135,17 +76,6 @@ describe("previewOperationInputSchema", () => {
       expect(
         errorPaths({ operation: "merge", entity: "ingredient" }),
       ).toContain("mergeIds");
-    });
-
-    it("rejects the delete-only ids field", () => {
-      expect(
-        errorPaths({
-          operation: "merge",
-          entity: "ingredient",
-          mergeIds: ["ING-2CRC"],
-          ids: ["ING-2CRD"],
-        }),
-      ).toContain("ids");
     });
 
     it("requires mergeIds to be distinct", () => {
@@ -227,7 +157,7 @@ describe("previewOperationInputSchema", () => {
       ).toContain("parentId");
     });
 
-    it("requires both relation fields, and refuses the delete/merge ones", () => {
+    it("requires both relation fields, and refuses the merge ones", () => {
       expect(errorPaths({ operation: "attach", entity: "product" })).toEqual(
         expect.arrayContaining(["parentId", "productIds"]),
       );
@@ -239,20 +169,12 @@ describe("previewOperationInputSchema", () => {
           entity: "product",
           parentId: "PRD-2CRC",
           productIds: ["PRD-2CRD"],
-          ids: ["PRD-2CRE"],
+          mergeIds: ["PRD-2CRE"],
         }),
-      ).toContain("ids");
+      ).toContain("mergeIds");
     });
 
-    it("refuses the relation fields on a delete or merge", () => {
-      expect(
-        errorPaths({
-          operation: "delete",
-          entity: "product",
-          ids: ["PRD-2CRC"],
-          productIds: ["PRD-2CRD"],
-        }),
-      ).toContain("productIds");
+    it("refuses the relation fields on a merge", () => {
       expect(
         errorPaths({
           operation: "merge",
@@ -267,11 +189,12 @@ describe("previewOperationInputSchema", () => {
 
   it("rejects an unknown operation or entity outright", () => {
     expect(
-      ok({ operation: "archive", entity: "product", ids: ["PRD-2CRC"] })
+      ok({ operation: "archive", entity: "product", mergeIds: ["PRD-2CRC"] })
         .success,
     ).toBe(false);
     expect(
-      ok({ operation: "delete", entity: "banana", ids: ["PRD-2CRC"] }).success,
+      ok({ operation: "merge", entity: "banana", mergeIds: ["PRD-2CRC"] })
+        .success,
     ).toBe(false);
   });
 });

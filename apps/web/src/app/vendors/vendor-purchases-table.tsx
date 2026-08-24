@@ -18,7 +18,6 @@ import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseIdentityLabel } from "~/lib/purchase-label";
-import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 
 const EMBEDDED_TABLE_STATE = {
@@ -43,7 +42,6 @@ export function VendorPurchasesTable({ vendor }: { vendor: VendorOut }) {
   const update = useUpdateMutation({
     mutationFn: api.purchase.update.mutationOptions,
     entity: "purchase",
-    invalidateKeys: purchaseMutationInvalidateKeys,
   });
   // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrapper is functionally stable
   const columns = useMemo(

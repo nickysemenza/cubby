@@ -4,8 +4,6 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { lazy, Suspense } from "react";
-import { z } from "zod";
-import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 import { TasksBoardView } from "~/app/tasks/board/TasksBoardView";
 import { NextTasks } from "~/app/tasks/next-tasks";
@@ -20,22 +18,13 @@ import {
 } from "~/components/ui/view-switcher";
 import { taskCaptureRequest } from "~/entities/editing/editor-requests";
 import { getEntityFilters } from "~/entities/filter-manifest";
-import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import {
   buildFiltersFromManifest,
   filterGetterFromSearch,
 } from "~/entities/filters";
-import {
-  isValidTaskStatusFilter,
-  normalizeTaskRenderer,
-  type TaskRenderer,
-} from "~/lib/list-view-normalization";
+import { taskSearchDefaults, taskSearchSchema } from "~/entities/list-search";
+import type { TaskRenderer } from "~/lib/list-view-normalization";
 import { pageTitle } from "~/lib/page-title";
-import {
-  urlEnumListParam,
-  urlShortcodeListParam,
-  urlStringParam,
-} from "~/lib/search-params";
 
 // Timeline is the Gantt + the Nivo calendar heatmap, and its tab is unmounted
 // until selected — lazy so that stack stays out of the default List view.
@@ -45,76 +34,16 @@ const TasksTimelineView = lazy(() =>
   })),
 );
 
-type ViewOption = TaskRenderer;
-
-const VIEW_SWITCHER_OPTIONS: ViewSwitcherOption<ViewOption>[] = [
+const VIEW_SWITCHER_OPTIONS: ViewSwitcherOption<TaskRenderer>[] = [
   { value: "next", label: "Next" },
   { value: "board", label: "Board" },
   { value: "timeline", label: "Timeline" },
   { value: "list", label: "List" },
 ];
 
-const taskStatusParam = urlStringParam
-  .refine(isValidTaskStatusFilter, "Invalid task status filter")
-  .catch(undefined);
-
-export const taskSearchSchema = z
-  .object({
-    ...tableSearchFields,
-    ...entityFilterSearchFields("task"),
-    q: urlStringParam,
-    status: taskStatusParam,
-    trade: urlEnumListParam(tradeSchema),
-    project: urlShortcodeListParam("project"),
-    parentTask: urlShortcodeListParam("task"),
-    // Declared by name as well as through the manifest so typed links can set an
-    // exact product scope and the visible "For" presence filter.
-    productId: urlShortcodeListParam("product"),
-    subjectProduct: urlShortcodeListParam("product"),
-    view: urlStringParam,
-    // Board layout: column axis + swimlane axis. `lane` is normalized to only
-    // apply when `cols === "status"` inside TasksBoardView.
-    cols: z.enum(["status", "project", "trade"]).optional().catch(undefined),
-    lane: z.enum(["project", "trade"]).optional().catch(undefined),
-    // Quick-capture deep link (navbar "+" / command palette) — there is no
-    // /tasks/new route, so the create dialog is opened by this param.
-    create: z.boolean().optional().catch(undefined),
-  })
-  .transform(({ view, ...rest }) => {
-    const normalized = normalizeTaskRenderer(view);
-    if (normalized.clearFilters) {
-      return {
-        ...rest,
-        view: normalized.view,
-        q: undefined,
-        status: undefined,
-        project: undefined,
-        parentTask: undefined,
-        dueDate: undefined,
-        trade: undefined,
-        subjectProduct: undefined,
-        productId: undefined,
-      };
-    }
-    return {
-      ...rest,
-      ...normalized,
-    };
-  });
-
-const searchDefaults = {
-  q: undefined,
-  productId: undefined,
-  subjectProduct: undefined,
-  view: undefined,
-  cols: undefined,
-  lane: undefined,
-  create: undefined,
-} as const;
-
 export const Route = createFileRoute("/_authenticated/tasks/")({
   validateSearch: taskSearchSchema,
-  search: { middlewares: [stripSearchParams(searchDefaults)] },
+  search: { middlewares: [stripSearchParams(taskSearchDefaults)] },
   component: TasksPage,
   head: () => ({ meta: [{ title: pageTitle("Tasks") }] }),
 });
@@ -173,5 +102,3 @@ function TasksPage() {
     </Page>
   );
 }
-
-import { tradeSchema } from "@cubby/schemas/project";

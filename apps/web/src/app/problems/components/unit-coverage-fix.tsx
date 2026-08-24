@@ -8,7 +8,7 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { type RouterOutputs, useTRPC } from "~/integrations/trpc/react";
-import { productMutationInvalidateKeys } from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 import type { UnitCoverageItem } from "./unit-coverage-items";
 
 type ProductDetail = NonNullable<RouterOutputs["product"]["getByID"]>;
@@ -117,7 +117,7 @@ function TitleSizeFix({
     mutationFn: api.product.update.mutationOptions,
     success: "Size saved",
     invalidateKeys: [
-      ...productMutationInvalidateKeys,
+      ...invalidatesFor("product"),
       api.product.getByID.queryKey({ id }),
     ],
     onSuccess: close,
@@ -175,7 +175,7 @@ function PriceFix({ id, close }: { id: string; close: () => void }) {
   const update = useProblemCardMutation({
     mutationFn: api.product.update.mutationOptions,
     success: "Price saved",
-    invalidateKeys: productMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("product"),
     onSuccess: close,
   });
 
@@ -243,7 +243,7 @@ function DisconnectedFix({
     mutationFn: api.product.update.mutationOptions,
     success: "Conversion saved",
     invalidateKeys: [
-      ...productMutationInvalidateKeys,
+      ...invalidatesFor("product"),
       api.product.getByID.queryKey({ id }),
     ],
     onSuccess: close,

@@ -11,7 +11,6 @@ import {
   unsafePurchaseId,
   unsafePurchaseShortcode,
   unsafeVendorId,
-  unsafeVendorShortcode,
 } from "@cubby/schemas/identifiers";
 import { isDocumentFile } from "@cubby/schemas/image";
 import {
@@ -1510,7 +1509,8 @@ describe("purchase repository — updatePurchase collision + liveness guards", (
 
     const { output: updated } = await updatePurchase(
       ctx.db,
-      { id: created.id, data: { displayLabel: "  pocket-hole tools  " } },
+      created.id,
+      { displayLabel: "  pocket-hole tools  " },
       ctx.actor,
     );
     expect(updated.orderId).toBe("11100722797");
@@ -1518,7 +1518,8 @@ describe("purchase repository — updatePurchase collision + liveness guards", (
 
     const { output: cleared } = await updatePurchase(
       ctx.db,
-      { id: created.id, data: { displayLabel: "   " } },
+      created.id,
+      { displayLabel: "   " },
       ctx.actor,
     );
     expect(cleared.orderId).toBe("11100722797");
@@ -1550,11 +1551,7 @@ describe("purchase repository — updatePurchase collision + liveness guards", (
     );
 
     await expect(
-      updatePurchase(
-        ctx.db,
-        { id: moving.id, data: { vendorId: homeDepot } },
-        ctx.actor,
-      ),
+      updatePurchase(ctx.db, moving.id, { vendorId: homeDepot }, ctx.actor),
     ).rejects.toMatchObject({
       cause: { reason: "PURCHASE_MERGE_ORDER_COLLISION" },
     });
@@ -1576,11 +1573,7 @@ describe("purchase repository — updatePurchase collision + liveness guards", (
       ctx.actor,
     );
     await expect(
-      updatePurchase(
-        ctx.db,
-        { id: sibling.id, data: { orderId: "#11325" } },
-        ctx.actor,
-      ),
+      updatePurchase(ctx.db, sibling.id, { orderId: "#11325" }, ctx.actor),
     ).rejects.toMatchObject({
       cause: { reason: "PURCHASE_MERGE_ORDER_COLLISION" },
     });
@@ -1593,7 +1586,8 @@ describe("purchase repository — updatePurchase collision + liveness guards", (
     // move to a vendor that doesn't hold this order id still goes through.
     const { output: moved } = await updatePurchase(
       ctx.db,
-      { id: moving.id, data: { orderId: "TN-99" } },
+      moving.id,
+      { orderId: "TN-99" },
       ctx.actor,
     );
     expect(moved.orderId).toBe("TN-99");
@@ -1616,11 +1610,7 @@ describe("purchase repository — updatePurchase collision + liveness guards", (
     await deleteVendors(ctx.db, [gone], ctx.actor);
 
     await expect(
-      updatePurchase(
-        ctx.db,
-        { id: charge.id, data: { vendorId: gone } },
-        ctx.actor,
-      ),
+      updatePurchase(ctx.db, charge.id, { vendorId: gone }, ctx.actor),
     ).rejects.toMatchObject({
       code: "NOT_FOUND",
       cause: { reason: "VENDOR_NOT_FOUND" },
@@ -1633,10 +1623,8 @@ describe("purchase repository — updatePurchase collision + liveness guards", (
     await expect(
       updatePurchase(
         ctx.db,
-        {
-          id: unsafePurchaseShortcode("PUR-9999"),
-          data: { notes: "no such charge" },
-        },
+        unsafePurchaseShortcode("PUR-9999"),
+        { notes: "no such charge" },
         ctx.actor,
       ),
     ).rejects.toMatchObject({
@@ -1923,11 +1911,7 @@ describe("purchase repository — deletion cascades", () => {
       ctx.actor,
     );
     const chargeId = only.purchaseId!;
-    await updatePurchase(
-      ctx.db,
-      { id: chargeId, data: { statedTotal: 431.24 } },
-      ctx.actor,
-    );
+    await updatePurchase(ctx.db, chargeId, { statedTotal: 431.24 }, ctx.actor);
 
     await deleteExpenses(ctx.db, [only.id], ctx.actor);
 
@@ -2297,49 +2281,14 @@ describe("purchase repository — purchase worklist filters", () => {
 // `filter-application.integration.test.ts`, which runs both against every
 // declared id filter on every entity — `purchase.vendorId` included.
 //
-// The POSITIVE lowercase case stays here, because that generic probe cannot
-// express it: its seeded world is deliberately unrelated, so the canonical
-// form of a real vendor code already matches zero purchases and its
-// `lower.count === upper.count` check holds vacuously. It therefore still
-// catches #591's widening (`eqAny([])` is "no constraint" BY DESIGN, so a
-// dropped predicate returns the whole table) but NOT what a
-// supplied-but-unresolved code produces today — `sql\`false\``, a silent zero
-// on both sides. A purchase that really does belong to the vendor is what
-// gives the assertion teeth.
-describe("purchase repository — vendorId canonicalization guard", () => {
-  const ctx = withTestDb();
-
-  it("a lowercase vendorId still resolves and filters correctly", async () => {
-    const vendorId = await vendorShortcodeByName(ctx.db, "Widening Guard C");
-    const { output: match } = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({ date: "2024-01-15", vendorId }),
-      ctx.actor,
-    );
-    const otherVendorId = await vendorShortcodeByName(
-      ctx.db,
-      "Widening Guard D",
-    );
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        date: "2024-01-16",
-        vendorId: otherVendorId,
-      }),
-      ctx.actor,
-    );
-
-    const lowercase = unsafeVendorShortcode(vendorId.toLowerCase());
-    const { data } = await purchaseList(
-      ctx.db,
-      { vendorId: lowercase },
-      [],
-      page,
-    );
-    expect(data.map((row) => row.id)).toEqual([match.id]);
-  });
-});
-
+// `purchase.vendorId` lowercase canonicalization is now covered by the
+// generic #591 battery in filter-application.integration.test.ts: seedWorld
+// there gives every purchase a real, live vendorId (both seeded purchases
+// share one vendor), so `world.codes.vendor` genuinely matches ≥1 purchase
+// and the lowercase-vs-canonical comparison is no longer vacuous. This
+// per-entity guard (and the comment that used to justify it — the "seeded
+// world is deliberately unrelated" premise stopped being true once that file
+// linked purchase→vendor) is subsumed; deleted rather than kept duplicate.
 describe("purchase repository — rollups never see a charge", () => {
   const ctx = withTestDb();
 
@@ -2457,11 +2406,7 @@ describe("purchase repository — rollups never see a charge", () => {
     // Now make the charge's OWN stated total disagree wildly with its lines.
     // `statedTotal` is a reconciliation cue and nothing else; if it could ever
     // reach spend, this is where 99999 would show up.
-    await updatePurchase(
-      ctx.db,
-      { id: charge.id, data: { statedTotal: 99999 } },
-      ctx.actor,
-    );
+    await updatePurchase(ctx.db, charge.id, { statedTotal: 99999 }, ctx.actor);
     expect(await snapshot()).toEqual(before);
     // ...including in the vendor bucket, which is the newest way spend could
     // have picked up a statedTotal by accident.
@@ -2629,10 +2574,8 @@ describe("purchase repository — documents", () => {
     // straight back in without a round trip through `getPurchaseByID`.
     const { detachedImageKeys } = await updatePurchase(
       ctx.db,
-      {
-        id: charge.id,
-        data: { removeImageIds: [attached.imageId] },
-      },
+      charge.id,
+      { removeImageIds: [attached.imageId] },
       ctx.actor,
     );
 
@@ -2846,7 +2789,8 @@ describe("purchase repository — audit log resolves FK values to shortcodes", (
 
     await updatePurchase(
       ctx.db,
-      { id: created.id, data: { vendorId: newVendor } },
+      created.id,
+      { vendorId: newVendor },
       ctx.actor,
     );
 
@@ -2883,11 +2827,7 @@ describe("purchase repository — order deeplinks", () => {
    */
   const setTemplate = async (vendorId: VendorId, template: string) => {
     const { id } = await getVendorByID(ctx.db, vendorId);
-    await updateVendor(
-      ctx.db,
-      { id, data: { orderUrlTemplate: template } },
-      ctx.actor,
-    );
+    await updateVendor(ctx.db, id, { orderUrlTemplate: template }, ctx.actor);
     return id;
   };
 

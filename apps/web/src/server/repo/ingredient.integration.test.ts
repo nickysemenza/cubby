@@ -18,6 +18,7 @@ import { findOrphanedEntityEmbeddings } from "./entity-embedding";
 import { createExpense } from "./expense";
 import {
   createIngredient,
+  deleteIngredients,
   enrichmentWorkbenchIngredients,
   findOrCreateIngredient,
   getIngredientByID,
@@ -27,6 +28,7 @@ import {
   resolveOrCreateIngredients,
   updateIngredient,
 } from "./ingredient";
+import { previewMergeIngredientCandidates } from "./ingredient/merge";
 import { deleteProducts } from "./product";
 import {
   createProductFixture as createProduct,
@@ -805,6 +807,217 @@ describe("ingredient", () => {
       expect(row).toBeDefined();
       expect(row?.appearsInRecipes).toEqual([]);
     });
+  });
+});
+
+describe("deleteIngredients", () => {
+  const ctx = withTestDb();
+
+  /** INGREDIENT_HAS_RECIPES: a live recipe usage blocks delete. */
+  it("rejects an ingredient still used in a live recipe, succeeds once the recipe is deleted", async () => {
+    const usedIngredient = await createIngredient(
+      ctx.db,
+      { name: "Recipe-Blocked Ingredient", aliases: [] },
+      ctx.actor,
+    );
+    const usedIngredientId = unsafeIngredientId(
+      (await resolveLiveShortcode(ctx.db, usedIngredient.id, "ingredient"))!,
+    );
+    const usingRecipe = await createRecipe(
+      ctx.db,
+      makeRecipeInput({
+        name: "Uses Recipe-Blocked Ingredient",
+        sections: [
+          {
+            name: "Main",
+            instructions: [{ instruction: "Mix" }],
+            ingredients: [ingredientRef(usedIngredient.id)],
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+
+    await expect(
+      deleteIngredients(ctx.db, [usedIngredientId], ctx.actor),
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      cause: { reason: "INGREDIENT_HAS_RECIPES" },
+    });
+
+    // Deleting the recipe cascade-soft-deletes its section ingredients,
+    // which is what clears the live usage.
+    await deleteRecipes(ctx.db, [usingRecipe.entityId], ctx.actor);
+
+    await expect(
+      deleteIngredients(ctx.db, [usedIngredientId], ctx.actor),
+    ).resolves.toEqual({ deleted: 1 });
+  });
+
+  /** INGREDIENT_HAS_PRODUCTS: a live linked product blocks delete. */
+  it("rejects an ingredient linked to a live product, succeeds once the product is deleted", async () => {
+    const linkedIngredient = await createIngredient(
+      ctx.db,
+      { name: "Product-Blocked Ingredient", aliases: [] },
+      ctx.actor,
+    );
+    const linkedIngredientId = unsafeIngredientId(
+      (await resolveLiveShortcode(ctx.db, linkedIngredient.id, "ingredient"))!,
+    );
+    const linkedProduct = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Links Product-Blocked Ingredient",
+        upc: "800000000903",
+        ingredientId: linkedIngredient.id,
+      }),
+      ctx.actor,
+    );
+
+    await expect(
+      deleteIngredients(ctx.db, [linkedIngredientId], ctx.actor),
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      cause: { reason: "INGREDIENT_HAS_PRODUCTS" },
+    });
+
+    await deleteProducts(ctx.db, [linkedProduct.entityId], ctx.actor);
+
+    await expect(
+      deleteIngredients(ctx.db, [linkedIngredientId], ctx.actor),
+    ).resolves.toEqual({ deleted: 1 });
+  });
+});
+
+describe("previewMergeIngredientCandidates", () => {
+  const ctx = withTestDb();
+
+  it("ranks USDA link > products > recipe usages > aliases, and carries the underlying counts in detail", async () => {
+    const entityIdOf = async (shortcode: string) =>
+      unsafeIngredientId(
+        (await resolveLiveShortcode(ctx.db, shortcode, "ingredient"))!,
+      );
+
+    const usdaLinked = await createIngredient(
+      ctx.db,
+      { name: "Rank USDA", aliases: [] },
+      ctx.actor,
+    );
+    await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Rank USDA Product",
+        upc: null,
+        fdc_id: 999111,
+        ingredientId: usdaLinked.id,
+      }),
+      ctx.actor,
+    );
+
+    const productOnly = await createIngredient(
+      ctx.db,
+      { name: "Rank Product Only", aliases: [] },
+      ctx.actor,
+    );
+    await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Rank Plain Product",
+        upc: null,
+        fdc_id: null,
+        ingredientId: productOnly.id,
+      }),
+      ctx.actor,
+    );
+
+    const recipeUsageOnly = await createIngredient(
+      ctx.db,
+      { name: "Rank Recipe Usage Only", aliases: [] },
+      ctx.actor,
+    );
+    await createRecipe(
+      ctx.db,
+      makeRecipeInput({
+        name: "Rank Usage Recipe",
+        sections: [
+          {
+            name: "Main",
+            instructions: [{ instruction: "Mix" }],
+            ingredients: [ingredientRef(recipeUsageOnly.id)],
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+
+    const aliasesOnly = await createIngredient(
+      ctx.db,
+      { name: "Rank Aliases Only", aliases: ["alias-one", "alias-two"] },
+      ctx.actor,
+    );
+
+    // `previewMergeIngredientCandidates` takes entity uuids but returns
+    // `MergeCandidate.id` as the public shortcode (see
+    // `mergeImpactForIngredients`'s final `unsafeIngredientShortcode(b.shortcode)`
+    // map) — two different id spaces, resolved and looked up accordingly.
+    const [usdaId, productId, recipeId, aliasId] = await Promise.all([
+      entityIdOf(usdaLinked.id),
+      entityIdOf(productOnly.id),
+      entityIdOf(recipeUsageOnly.id),
+      entityIdOf(aliasesOnly.id),
+    ]);
+
+    const candidates = await previewMergeIngredientCandidates(ctx.db, [
+      usdaId,
+      productId,
+      recipeId,
+      aliasId,
+    ]);
+
+    const byId = new Map(candidates.map((c) => [c.id, c]));
+    const usdaCandidate = byId.get(usdaLinked.id)!;
+    const productCandidate = byId.get(productOnly.id)!;
+    const recipeCandidate = byId.get(recipeUsageOnly.id)!;
+    const aliasCandidate = byId.get(aliasesOnly.id)!;
+
+    expect(usdaCandidate.weight).toBeGreaterThan(productCandidate.weight);
+    expect(productCandidate.weight).toBeGreaterThan(recipeCandidate.weight);
+    expect(recipeCandidate.weight).toBeGreaterThan(aliasCandidate.weight);
+
+    // Sorting by weight descending (what the merge dialog does to default the
+    // keeper) reproduces the expected ranking.
+    const ranked = [...candidates].sort((a, b) => b.weight - a.weight);
+    expect(ranked.map((c) => c.id)).toEqual([
+      usdaLinked.id,
+      productOnly.id,
+      recipeUsageOnly.id,
+      aliasesOnly.id,
+    ]);
+
+    expect(usdaCandidate.detail).toEqual([
+      { label: "USDA link", count: 1 },
+      { label: "products", count: 1 },
+      { label: "recipe usages", count: 0 },
+      { label: "aliases", count: 0 },
+    ]);
+    expect(productCandidate.detail).toEqual([
+      { label: "USDA link", count: 0 },
+      { label: "products", count: 1 },
+      { label: "recipe usages", count: 0 },
+      { label: "aliases", count: 0 },
+    ]);
+    expect(recipeCandidate.detail).toEqual([
+      { label: "USDA link", count: 0 },
+      { label: "products", count: 0 },
+      { label: "recipe usages", count: 1 },
+      { label: "aliases", count: 0 },
+    ]);
+    expect(aliasCandidate.detail).toEqual([
+      { label: "USDA link", count: 0 },
+      { label: "products", count: 0 },
+      { label: "recipe usages", count: 0 },
+      { label: "aliases", count: 2 },
+    ]);
   });
 });
 

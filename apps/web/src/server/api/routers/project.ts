@@ -18,11 +18,9 @@ import type {
   ProductShortcode,
   ProjectShortcode,
 } from "@cubby/schemas/identifiers";
-import { projectShortcode } from "@cubby/schemas/identifiers";
 import {
   createProjectFromTasksInput,
   createProjectFromTasksOut,
-  projectCreateInput,
   projectDashboardFiltersSchema,
   projectDashboardSummaryOut,
   projectFiltersSchema,
@@ -39,18 +37,17 @@ import {
   projectToolSuggestionsOut,
   projectToolUsageSetInput,
   projectToolUsageSetOut,
-  projectUpdateData,
   repointProjectUsesInput,
   repointProjectUsesOut,
 } from "@cubby/schemas/project";
 import { z } from "zod";
+import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 import { createAppError } from "~/server/errors/app-error";
 import {
   attachProjectResources,
   createProject,
   deleteProjects,
   detachProjectResources,
-  getProjectByID,
   getProjectByShortcode,
   listProjectResources,
   projectDashboardSummary,
@@ -69,7 +66,6 @@ import {
   resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
-import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 import {
   createEntityListProcedure,
@@ -86,36 +82,21 @@ const {
   delete: deleteItem,
 } = createSearchableEntityCrudProcedures({
   schemas: {
-    createInput: projectCreateInput,
-    updateInput: projectUpdateData,
-    output: projectOut,
+    ...ENTITY_BINDINGS.project.crud,
     filters: projectFiltersSchema,
     sort: { sortableFields: projectSortableFields, defaultSort: "createdAt" },
-    idSchema: projectShortcode,
   },
   repository: {
-    getByID: async (services, shortcode: ProjectShortcode) => {
-      const id = await resolveOrThrow(services.db, "project", shortcode);
-      return getProjectByID(services.db, id);
-    },
     getByShortcode: (services, shortcode) =>
       getProjectByShortcode(services.db, shortcode),
     list: async (services, filters, sort, pagination) =>
       projectList(services.db, filters, sort, pagination),
     create: async (services, data) =>
       createProject(services.db, data, services.actorContext),
-    update: async (services, shortcode: ProjectShortcode, data) =>
+    update: (services, shortcode, data) =>
       updateProject(services.db, shortcode, data, services.actorContext),
-    delete: async (services, ids: ProjectShortcode[]) => {
-      const { detachedImageKeys, deleted } = await deleteProjects(
-        services.db,
-        ids,
-        services.actorContext,
-      );
-      // After the commit, never inside it: an R2 delete has no rollback.
-      await deleteStoredObjects(detachedImageKeys);
-      return { deleted };
-    },
+    delete: (services, ids) =>
+      deleteProjects(services.db, ids, services.actorContext),
   },
   entityName: "project",
 });

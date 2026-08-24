@@ -3,7 +3,7 @@ import type {
   DataOf,
   MutationOptionsFn,
 } from "~/app/problems/components/use-problem-backfill";
-import { problemsMutationInvalidateKeys } from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 import { useActionMutation } from "./useActionMutation";
 
 /**
@@ -35,7 +35,7 @@ export function useProblemCardMutation<TFn extends MutationOptionsFn>({
   return useActionMutation({
     mutationFn,
     success,
-    invalidateKeys: [...problemsMutationInvalidateKeys, ...invalidateKeys],
+    invalidateKeys: [...invalidatesFor("problems"), ...invalidateKeys],
     onSuccess,
     error,
   });

@@ -66,7 +66,7 @@ import { humanize } from "~/entities/filters";
 import type { ProblemQuery } from "~/entities/problem-query";
 import { problemQuery } from "~/entities/problem-registry";
 import { useTRPC } from "~/integrations/trpc/react";
-import { productRecipeMutationInvalidateKeys } from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import type { ProductWithBetterUpcData } from "~/server/repo/problems";
 import { BACKFILL } from "./backfill-registry";
@@ -361,7 +361,7 @@ function UpcApplyAction({ product }: { product: ProductWithBetterUpcData }) {
     // The whole problems.* path is always invalidated by the hook (which also
     // feeds the navbar badge count); add the product/recipe lists (price feeds
     // cost).
-    invalidateKeys: productRecipeMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("product", "recipe"),
   });
   return (
     <Button

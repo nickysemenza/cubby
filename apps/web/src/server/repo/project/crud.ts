@@ -8,10 +8,7 @@
  * orphaning live tasks/expenses before hard-deleting the dependency edges.
  */
 import type { ActorContext } from "@cubby/schemas/context";
-import type {
-  ImpactItem,
-  OperationDisposition,
-} from "@cubby/schemas/entity-integrity";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { ProjectId, ProjectShortcode } from "@cubby/schemas/identifiers";
 import {
   MAX_PROJECT_TREE_DEPTH,
@@ -43,12 +40,10 @@ import {
   lockAndValidateForDelete,
   notDeleted,
   replaceDependencyEdges,
-  unwrapDb,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
-import { countByTarget, impact, present } from "~/server/repo/impact";
 import { removeEntity } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
@@ -339,9 +334,8 @@ export const updateProject = async (
 type ProjectQueryClient = DrizzleClient | DrizzleTransaction;
 
 /**
- * Live sub-projects of `ids`, keyed by `parentProjectId`. Shared by
- * `deleteProjects`' PROJECT_HAS_CHILDREN guard and
- * `previewDeleteProjects`' blocker count, so the two predicates can't drift.
+ * Live sub-projects of `ids`, keyed by `parentProjectId`. Used by
+ * `deleteProjects`' PROJECT_HAS_CHILDREN guard.
  */
 const fetchLiveChildProjects = (dbc: ProjectQueryClient, ids: ProjectId[]) =>
   dbc.query.project.findMany({
@@ -350,8 +344,7 @@ const fetchLiveChildProjects = (dbc: ProjectQueryClient, ids: ProjectId[]) =>
   });
 
 /**
- * Live tasks under `ids`. Shared by `deleteProjects`' PROJECT_HAS_TASKS guard
- * and `previewDeleteProjects`' blocker count.
+ * Live tasks under `ids`. Used by `deleteProjects`' PROJECT_HAS_TASKS guard.
  */
 const fetchLiveProjectTasks = (dbc: ProjectQueryClient, ids: ProjectId[]) =>
   dbc.query.task.findMany({
@@ -360,8 +353,8 @@ const fetchLiveProjectTasks = (dbc: ProjectQueryClient, ids: ProjectId[]) =>
   });
 
 /**
- * Live expenses under `ids`. Shared by `deleteProjects`' PROJECT_HAS_EXPENSES
- * guard and `previewDeleteProjects`' blocker count.
+ * Live expenses under `ids`. Used by `deleteProjects`' PROJECT_HAS_EXPENSES
+ * guard.
  */
 const fetchLiveProjectExpenses = (dbc: ProjectQueryClient, ids: ProjectId[]) =>
   dbc.query.expense.findMany({
@@ -465,124 +458,4 @@ export const deleteProjects = async (
       ],
     });
   });
-};
-
-/**
- * What `deleteProjects` would do to the given projects, without doing it.
- *
- * Reads the SAME `PROJECT_DELETE_EDGE_POLICY` and the same
- * `fetchLiveChildProjects`/`fetchLiveProjectTasks`/`fetchLiveProjectExpenses`
- * predicates the mutation's guards use, so the preview can't claim a delete
- * will succeed that those guards then refuse. `ProjectDependency`'s two edges
- * are counted with `includeDeleted: true` — it's one of the two hard-delete-
- * only source tables in the schema (no `deletedAt` column), so the default
- * `notDeleted` filter would throw.
- *
- * Advisory only. `deleteProjects` still re-runs every check inside its own
- * transaction; nothing here is a lock or a permission.
- */
-export const previewDeleteProjects = async (
-  db: Database | DrizzleTransaction,
-  ids: ProjectId[],
-): Promise<{ blockers: ImpactItem[]; changes: ImpactItem[] }> => {
-  if (ids.length === 0) return { blockers: [], changes: [] };
-
-  const dbClient = unwrapDb(db);
-
-  const [liveChildren, liveTasks, liveExpenses] = await Promise.all([
-    fetchLiveChildProjects(dbClient, ids),
-    fetchLiveProjectTasks(dbClient, ids),
-    fetchLiveProjectExpenses(dbClient, ids),
-  ]);
-
-  const childrenByTarget: Record<string, number> = {};
-  for (const { parentProjectId } of liveChildren) {
-    if (parentProjectId) {
-      childrenByTarget[parentProjectId] =
-        (childrenByTarget[parentProjectId] ?? 0) + 1;
-    }
-  }
-  const tasksByTarget: Record<string, number> = {};
-  for (const { projectId } of liveTasks) {
-    if (projectId)
-      tasksByTarget[projectId] = (tasksByTarget[projectId] ?? 0) + 1;
-  }
-  const expensesByTarget: Record<string, number> = {};
-  for (const { projectId } of liveExpenses) {
-    if (projectId)
-      expensesByTarget[projectId] = (expensesByTarget[projectId] ?? 0) + 1;
-  }
-
-  const blockers = present([
-    impact({
-      disposition: PROJECT_DELETE_EDGE_POLICY["Project.parentProjectId"],
-      edgeKey: "Project.parentProjectId",
-      label: "sub-projects",
-      byTargetId: childrenByTarget,
-    }),
-    impact({
-      disposition: PROJECT_DELETE_EDGE_POLICY["Task.projectId"],
-      edgeKey: "Task.projectId",
-      label: "tasks",
-      byTargetId: tasksByTarget,
-    }),
-    impact({
-      disposition: PROJECT_DELETE_EDGE_POLICY["Expense.projectId"],
-      edgeKey: "Expense.projectId",
-      label: "expenses",
-      byTargetId: expensesByTarget,
-    }),
-  ]);
-
-  const changes = present([
-    impact({
-      disposition: PROJECT_DELETE_EDGE_POLICY["ProjectDependency.projectId"],
-      edgeKey: "ProjectDependency.projectId",
-      label: "dependency edges (blocking others)",
-      byTargetId: await countByTarget(
-        dbClient,
-        projectDependency,
-        projectDependency.projectId,
-        ids,
-        { includeDeleted: true },
-      ),
-    }),
-    impact({
-      disposition:
-        PROJECT_DELETE_EDGE_POLICY["ProjectDependency.blockedByProjectId"],
-      edgeKey: "ProjectDependency.blockedByProjectId",
-      label: "dependency edges (blocked by others)",
-      byTargetId: await countByTarget(
-        dbClient,
-        projectDependency,
-        projectDependency.blockedByProjectId,
-        ids,
-        { includeDeleted: true },
-      ),
-    }),
-    impact({
-      disposition: PROJECT_DELETE_EDGE_POLICY["ProjectImage.projectId"],
-      edgeKey: "ProjectImage.projectId",
-      label: "images",
-      byTargetId: await countByTarget(
-        dbClient,
-        projectImage,
-        projectImage.projectId,
-        ids,
-      ),
-    }),
-    impact({
-      disposition: PROJECT_DELETE_EDGE_POLICY["ProjectToolUsage.projectId"],
-      edgeKey: "ProjectToolUsage.projectId",
-      label: "reusable-resource uses",
-      byTargetId: await countByTarget(
-        dbClient,
-        projectToolUsage,
-        projectToolUsage.projectId,
-        ids,
-      ),
-    }),
-  ]);
-
-  return { blockers, changes };
 };

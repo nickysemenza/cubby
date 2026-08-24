@@ -4,7 +4,6 @@ import {
   Apple,
   BookOpen,
   ClipboardList,
-  Clock,
   Coffee,
   GitBranch,
   ImageIcon,
@@ -34,7 +33,7 @@ import {
 } from "~/lib/recipe-costing";
 import { deriveRecipeTotalsGaps } from "~/lib/recipe-totals-gaps";
 import { cn } from "~/lib/utils";
-import { AuditLogList } from "../audit-log/audit-log-list";
+import { EntityActivityCard } from "../data-table/detail-page";
 import EntityImageList from "../EntityImageList";
 import { useRecipeCostingData } from "../hooks/useRecipeCostingData";
 import { NutritionLabel } from "../nutrition/NutritionLabel";
@@ -464,18 +463,9 @@ const RecipeDetailInner: React.FC<{
 
       <TicketDivider className="print:hidden" />
 
-      <Card className="print:hidden">
-        <CardHeader className="pb-2">
-          <CardTitle icon={Clock}>History</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <AuditLogList
-            entityType="recipe"
-            entityId={recipe.id}
-            showEntityLink={false}
-          />
-        </CardContent>
-      </Card>
+      <div className="print:hidden">
+        <EntityActivityCard entity="recipe" entityId={recipe.id} />
+      </div>
     </Stack>
   );
 };

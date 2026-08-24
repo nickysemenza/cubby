@@ -1,12 +1,11 @@
-import type { PreviewDeleteEntity } from "@cubby/schemas/entity-integrity";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
-import type { QueryKey } from "@tanstack/react-query";
 import { useSearch } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { browserEntityDefinition, entities } from "~/entities/entities";
+import { getEntityContract } from "~/entities/entity-contracts";
 import { getEntityFilters } from "~/entities/filter-manifest";
 import {
   buildFiltersFromManifest,
@@ -14,6 +13,7 @@ import {
   summarizeListState,
 } from "~/entities/filters";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
+import { useTRPC } from "~/integrations/trpc/react";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
 import type { RowLinkResolver } from "../data-table/columnHelpers";
 import type { ServerListWorkbenchModel } from "../data-table/ListWorkbench";
@@ -26,6 +26,10 @@ import type {
   useTableState,
 } from "../data-table/useTableState";
 import type { RuntimeFilterOptions } from "./filter-option-types";
+import {
+  type DeletableConfig,
+  useContractDeletable,
+} from "./useDeletableConfig";
 import {
   useEntityListPresentation,
   useEntityListPresentationState,
@@ -118,8 +122,13 @@ export interface UseEntityListOptions<
 > {
   /** The entity type */
   entity: BrowserRoutedEntity;
-  /** tRPC queryOptions function */
-  queryOptions: TRPCQueryOptionsFn<TFilters>;
+  /**
+   * tRPC queryOptions function. Omit it — the default is the entity's own
+   * `query.list` from `getEntityContract`, which is the same procedure every
+   * standard list page was naming by hand. Pass one only for a list backed by
+   * a different procedure.
+   */
+  queryOptions?: TRPCQueryOptionsFn<TFilters>;
   /**
    * Build filters from table state. Omit it to derive them from the entity's
    * filter manifest, which is what every list page should do — a hand-written
@@ -187,16 +196,18 @@ export interface UseEntityListOptions<
   hiddenFilterColumns?: string[];
   groupConfig?: GroupConfig<TData>;
   tree?: EntityListTreeConfig<TData, TRow>;
-  deletable?: {
-    mutationOptions: (callbacks: {
-      onSuccess: () => void;
-      onError: (err: { message?: string }) => void;
-    }) => unknown;
-    entityLabel: string;
-    invalidateKeys: readonly QueryKey[];
-    /** Entity slug for the operation-impact preview fetched while the confirm dialog is open. */
-    entity: PreviewDeleteEntity;
-  };
+  /**
+   * Delete affordances (row menu, bulk action, confirm dialog).
+   *
+   * `true` uses the entity's own contract delete — its `mutation.delete`, its
+   * base invalidation fan-out, and its registry label — which is what a
+   * top-level list page wants (`EntityListPage` passes it by default). Omitted
+   * still means NO delete: the embedded relationship ledgers rely on that,
+   * since deleting a purchase out of a vendor's ledger is not what that row's
+   * menu should offer. Pass a config for an entity whose contract has no
+   * delete (image) or a page that needs different copy.
+   */
+  deletable?: DeletableConfig | true;
   /**
    * Names a row in the delete confirm dialog when its `name` is null/empty.
    * Pass the same function given to `createNameColumn`'s `emptyLabel` so the
@@ -289,6 +300,20 @@ export function useEntityList<
     setGrouped(value);
   }, []);
 
+  // Contract-resolved defaults for the two arguments every standard list page
+  // used to restate. Both are built from module-level constants plus the
+  // context-stable tRPC proxy, so they never churn `usePaginatedTableCore`'s
+  // `memoizedQueryOptions` or `useOptimisticDelete`'s options memo.
+  const api = useTRPC();
+  const contractList = getEntityContract(entity).query.list;
+  const defaultQueryOptions = useCallback(
+    (params: Parameters<TRPCQueryOptionsFn<TFilters>>[0]) =>
+      contractList?.(api, params as never),
+    [api, contractList],
+  );
+  const effectiveQueryOptions = queryOptions ?? defaultQueryOptions;
+  const effectiveDeletable = useContractDeletable(entity, deletable);
+
   // Derive the groupBy field for server queries (only when grouped + groupConfig)
   const groupByField = grouped && groupConfig ? groupConfig.field : undefined;
 
@@ -325,7 +350,7 @@ export function useEntityList<
   const presentationState = useEntityListPresentationState<TData>({
     entity,
     tableStateOptions: serverTableStateOptions,
-    deletable,
+    deletable: effectiveDeletable,
     extraActions,
     bulkActions,
     deleteEmptyLabel,
@@ -361,7 +386,7 @@ export function useEntityList<
   );
 
   const infiniteResult = useInfiniteTableList<TFilters, TRow>({
-    queryOptions,
+    queryOptions: effectiveQueryOptions,
     buildFilters: effectiveBuildFilters,
     tableState,
     groupBy: groupByField,

@@ -2,7 +2,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useTRPC } from "~/integrations/trpc/react";
-import { recipeMutationInvalidateKeys } from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
 /**
@@ -16,7 +16,7 @@ export function useDuplicateRecipe() {
   const mutation = useActionMutation({
     mutationFn: api.recipe.duplicate.mutationOptions,
     success: (data) => savedWithBackgroundWork(data.sideEffects, "Duplicated"),
-    invalidateKeys: recipeMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("recipe", "list"),
     onSuccess: (data) => {
       navigate({ to: "/recipes/$shortcode", params: { shortcode: data.id } });
     },

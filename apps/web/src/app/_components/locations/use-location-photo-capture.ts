@@ -61,7 +61,7 @@ import {
 import { invalidateTRPCQueries, queryKeys } from "~/lib/query-keys";
 
 /**
- * Broad prefixes on purpose. `locationMutationInvalidateKeys` covers only
+ * Broad prefixes on purpose. `invalidatesFor("location")` covers only
  * `location.list`, which leaves `getByShortcode` / `makeTree` / `subtree` stale —
  * and those are exactly what a photo pass queue, the scan landing, and the
  * recount workbench read.

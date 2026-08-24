@@ -12,22 +12,17 @@ import {
   taskTradeColumn,
 } from "~/app/projects/shared";
 import { Row } from "~/components/layout";
-import { usePageCount } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { useTRPC } from "~/integrations/trpc/react";
-import { taskMutationInvalidateKeys } from "~/lib/query-keys";
 import {
   createParentLinkColumn,
   createProjectLinkColumn,
   createSubjectProductLinkColumn,
 } from "../_components/data-table/columnHelpers";
-import { ListWorkbench } from "../_components/data-table/ListWorkbench";
+import { EntityListPage } from "../_components/data-table/EntityListPage";
 import { ScopeChip } from "../_components/data-table/ScopeChip";
 import { useDeferredFilterOptions } from "../_components/hooks/useDeferredFilterOptions";
-import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
-import { useEntityList } from "../_components/hooks/useEntityList";
-import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { useNameEditable } from "../_components/hooks/useNameEditable";
 import { useSeededFilter } from "../_components/hooks/useSeededFilter";
@@ -78,17 +73,9 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
   const updateTaskMutation = useUpdateMutation({
     mutationFn: api.task.update.mutationOptions,
     entity: "task",
-    invalidateKeys: taskMutationInvalidateKeys,
   });
 
   const nameEditable = useNameEditable<TaskOut>(updateTaskMutation.mutateAsync);
-
-  const deletableConfig = useDeletableConfig({
-    mutationFn: api.task.delete.mutationOptions,
-    entityLabel: "Task",
-    invalidateKeys: taskMutationInvalidateKeys,
-    entity: "task",
-  });
 
   // Runtime picklist for the manifest's `project` spec (optionsKey: "project").
   const parentOptions = useDeferredFilterOptions("task");
@@ -175,7 +162,6 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
   );
 
   const tableStateOptions = useSeededFilter("name", initialSearch);
-  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("task");
 
   // Exact product scopes arrive from a product detail page and do not belong
   // to TanStack column state. Keep the scope visible and independently
@@ -208,42 +194,37 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
       actions
     );
 
-  const { workbench, totalCount } = useEntityList({
-    entity: "task",
-    queryOptions: api.task.list.queryOptions,
-    filterOptions: projectFilterOptions,
-    columns,
-    deletable: deletableConfig,
-    nameEditable,
-    nameSuffix: subtaskCountSuffix,
-    bulkActions: taskBulkActions.config,
-    tableStateOptions,
-  });
-  usePageCount(totalCount);
-
   return (
-    <div>
-      <ListWorkbench
-        model={workbench}
-        ariaLabel="Tasks Table"
-        actions={toolbarActions}
-        onRowClick={onRowClick}
-        onRowHover={onRowHover}
-      />
-      <PreviewSheet />
-      <TaskBulkActionDialogs
-        controller={taskBulkActions}
-        onComplete={() => workbench.table.resetRowSelection()}
-      />
-      {createProjectTaskIds && (
-        <CreateProjectFromTasksDialog
-          open
-          onOpenChange={(open) => {
-            if (!open) setCreateProjectTaskIds(null);
-          }}
-          taskIds={createProjectTaskIds}
-        />
+    <EntityListPage
+      entity="task"
+      filterOptions={projectFilterOptions}
+      columns={columns}
+      nameEditable={nameEditable}
+      nameSuffix={subtaskCountSuffix}
+      bulkActions={taskBulkActions.config}
+      tableStateOptions={tableStateOptions}
+      ariaLabel="Tasks Table"
+      actions={toolbarActions}
+    >
+      {/* The bulk dialogs need the table itself: every bulk write clears the
+          row selection when it completes. */}
+      {({ workbench }) => (
+        <>
+          <TaskBulkActionDialogs
+            controller={taskBulkActions}
+            onComplete={() => workbench.table.resetRowSelection()}
+          />
+          {createProjectTaskIds && (
+            <CreateProjectFromTasksDialog
+              open
+              onOpenChange={(open) => {
+                if (!open) setCreateProjectTaskIds(null);
+              }}
+              taskIds={createProjectTaskIds}
+            />
+          )}
+        </>
       )}
-    </div>
+    </EntityListPage>
   );
 }

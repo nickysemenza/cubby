@@ -64,11 +64,10 @@ export function registerFinancialTools(server: McpServer) {
   registerEntityCrudToolset(server, {
     entity: "financialAccount",
     entityPlural: "financial_accounts",
-    names: {
-      get: "get_financial_account",
-      create: "create_financial_account",
-      update: "update_financial_account",
-    },
+    // No `create`/`update` override: those singular tools no longer register
+    // (batch is on by default), so only `get`'s camelCase-vs-shortcode name
+    // needs correcting here.
+    names: { get: "get_financial_account" },
     createInput: financialAccountCreateInput.shape,
     updateShape: financialAccountUpdateData.shape,
     filterFields: financialAccountFilterFields,
@@ -92,11 +91,7 @@ export function registerFinancialTools(server: McpServer) {
   registerEntityCrudToolset(server, {
     entity: "financialTransaction",
     entityPlural: "financial_transactions",
-    names: {
-      get: "get_financial_transaction",
-      create: "create_financial_transaction",
-      update: "update_financial_transaction",
-    },
+    names: { get: "get_financial_transaction" },
     createInput: financialTransactionCreateInput.shape,
     updateShape: financialTransactionUpdateData.shape,
     filterFields: financialTransactionFilterFields,
@@ -142,7 +137,7 @@ export function registerFinancialTools(server: McpServer) {
   registerRouterTool(server, {
     name: "list_statement_rows",
     description:
-      "List recorded statement rows with their derived match state. `unmatched` is the drift worklist: a provider row with no live Financial Transaction carrying its source reference. `matched` returns the FTX- shortcode that claims it. `ignored` and `superseded` are off the worklist by an agent's explicit judgment. Filter by source, account (FAC- shortcode), match state, disposition, date range, amount range, or a search over the raw statement description. To close an unmatched row, append its source reference to the right transaction with update_financial_transaction (read–merge–write on sourceRefs); the row flips to matched on the next read, with no write to the row itself.",
+      "List recorded statement rows with their derived match state. `unmatched` is the drift worklist: a provider row with no live Financial Transaction carrying its source reference. `matched` returns the FTX- shortcode that claims it. `ignored` and `superseded` are off the worklist by an agent's explicit judgment. Filter by source, account (FAC- shortcode), match state, disposition, date range, amount range, or a search over the raw statement description. To close an unmatched row, append its source reference to the right transaction with update_financial_transactions (read–merge–write on sourceRefs); the row flips to matched on the next read, with no write to the row itself.",
     inputSchema: listStatementRowsInput.shape,
     outputSchema: statementRowListOut,
     annotations: READ_ONLY_CLOSED,

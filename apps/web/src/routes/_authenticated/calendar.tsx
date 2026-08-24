@@ -4,6 +4,7 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { useCallback, useMemo } from "react";
+import { listChromePage } from "~/app/_components/routing/entity-routes";
 import { CalendarFilterBar } from "~/app/calendar/calendar-filter-bar";
 import { buildCalendarFilters } from "~/app/calendar/calendar-filters";
 import {
@@ -12,8 +13,17 @@ import {
 } from "~/app/calendar/calendar-search";
 import { CalendarSubscribeDialog } from "~/app/calendar/calendar-subscribe-dialog";
 import { UnifiedCalendar } from "~/app/calendar/unified-calendar";
-import { Page } from "~/components/page/Page";
 import { pageTitle } from "~/lib/page-title";
+
+// Bound to a const, not inlined into the options object below: see
+// `entity-routes.tsx`'s doc comment on why the splitter needs a literal
+// identifier here, not an inline factory call.
+const CalendarRoute = listChromePage({
+  title: "Calendar",
+  layout: "full",
+  actions: () => <CalendarSubscribeDialog />,
+  page: CalendarBody,
+});
 
 export const Route = createFileRoute("/_authenticated/calendar")({
   validateSearch: calendarSearchSchema,
@@ -22,7 +32,7 @@ export const Route = createFileRoute("/_authenticated/calendar")({
   head: () => ({ meta: [{ title: pageTitle("Calendar") }] }),
 });
 
-function CalendarRoute() {
+function CalendarBody() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   // `search` is referentially stable per navigation, and `filters` is a
@@ -42,13 +52,7 @@ function CalendarRoute() {
   );
 
   return (
-    <Page
-      variant="list"
-      listChrome="workbench"
-      title="Calendar"
-      layout="full"
-      actions={<CalendarSubscribeDialog />}
-    >
+    <>
       <CalendarFilterBar search={search} onSearchChange={onSearchChange} />
       <UnifiedCalendar
         period={search.period ?? "month"}
@@ -77,6 +81,6 @@ function CalendarRoute() {
           })
         }
       />
-    </Page>
+    </>
   );
 }

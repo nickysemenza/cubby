@@ -1,6 +1,7 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import {
   unsafeImageShortcode,
+  unsafeInventoryId,
   unsafeLocationId,
   unsafeProductId,
 } from "@cubby/schemas/identifiers";
@@ -20,7 +21,7 @@ import {
   productImage,
 } from "~/server/db/schema";
 import { getDb, insertAndReturn } from "./database-helpers";
-import { createInventoryEntry } from "./inventory";
+import { createInventoryEntry, deleteInventoryEntries } from "./inventory";
 import {
   buildLocationTree,
   bulkReparentLocations,
@@ -641,6 +642,54 @@ describe("deleteLocations hierarchy", () => {
     await expect(
       deleteLocations(ctx.db, [TEST_HOME_ID], ctx.actor),
     ).rejects.toMatchObject({ cause: { reason: "LOCATION_IS_ROOT" } });
+  });
+
+  /** LOCATION_HAS_INVENTORY: live inventory blocks delete. */
+  it("rejects a location with live inventory, succeeds once the inventory is removed", async () => {
+    const stocked = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Inventory-Blocked Location" }),
+      ctx.actor,
+    );
+    const stockedId = unsafeLocationId(
+      (await resolveLiveShortcode(ctx.db, stocked.id, "location"))!,
+    );
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Location Inventory Blocker",
+        upc: "800000000904",
+      }),
+      ctx.actor,
+    );
+    const productId = unsafeProductId(
+      (await resolveLiveShortcode(ctx.db, product.id, "product"))!,
+    );
+    const entry = await createInventoryEntry(
+      ctx.db,
+      {
+        productId,
+        locationId: stockedId,
+        amount: { value: 1, unit: "each" },
+      },
+      ctx.actor,
+    );
+    const entryId = unsafeInventoryId(
+      (await resolveLiveShortcode(ctx.db, entry.id, "inventory"))!,
+    );
+
+    await expect(
+      deleteLocations(ctx.db, [stockedId], ctx.actor),
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      cause: { reason: "LOCATION_HAS_INVENTORY" },
+    });
+
+    await deleteInventoryEntries(ctx.db, [entryId], ctx.actor);
+
+    await expect(
+      deleteLocations(ctx.db, [stockedId], ctx.actor),
+    ).resolves.toMatchObject({ detachedImageKeys: [] });
   });
 });
 

@@ -4,6 +4,7 @@ import {
   type AuditSource,
   buildActorContext,
 } from "@cubby/schemas/context";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import {
   type InventoryShortcode,
   type LocationId,
@@ -36,7 +37,10 @@ let hash = "";
  * work within a lane count correctly without leaking setup/fixture SQL into a
  * measurement.
  */
-const queryMeasurement = new AsyncLocalStorage<{ count: number }>();
+const queryMeasurement = new AsyncLocalStorage<{
+  count: number;
+  statements: string[];
+}>();
 const QUERY_COUNTED = Symbol("test-query-counted");
 
 type QueryCountedClient = {
@@ -49,7 +53,19 @@ const countClientQueries = <T extends QueryCountedClient>(client: T): T => {
   const query = client.query.bind(client);
   client.query = (...args: unknown[]) => {
     const measurement = queryMeasurement.getStore();
-    if (measurement) measurement.count += 1;
+    if (measurement) {
+      measurement.count += 1;
+      const first = args[0] as { text?: string } | string | undefined;
+      const text = typeof first === "string" ? first : (first?.text ?? "");
+      // Normalize in-list arity (`in ($1, $2, …)` → `in (…)`) so a diff of
+      // two measurements compares statement SHAPES, not page sizes.
+      measurement.statements.push(
+        text
+          .replace(/\s+/g, " ")
+          .replace(/\(\s*\$\d+(?:\s*,\s*\$\d+)*\s*\)/g, "(…)")
+          .slice(0, 160),
+      );
+    }
     return query(...args);
   };
   client[QUERY_COUNTED] = true;
@@ -94,10 +110,14 @@ const countPoolQueries = (pool: Pool): Pool => {
  */
 export async function countTestDbQueries<T>(
   run: () => Promise<T>,
-): Promise<{ result: T; queryCount: number }> {
-  const measurement = { count: 0 };
+): Promise<{ result: T; queryCount: number; statements: string[] }> {
+  const measurement = { count: 0, statements: [] as string[] };
   const result = await queryMeasurement.run(measurement, run);
-  return { result, queryCount: measurement.count };
+  return {
+    result,
+    queryCount: measurement.count,
+    statements: measurement.statements,
+  };
 }
 
 // Standard test IDs used across all tests
@@ -547,4 +567,72 @@ export async function seedFromCSV(
   }
 
   return { productIds, locationIds, inventoryIds };
+}
+
+/**
+ * Seed one row of `entity` through its REAL tRPC create procedure.
+ *
+ * Introspects `${entity}.create`'s own declared input schema off the live
+ * router (`appRouter._def.procedures[...]`, the same device
+ * `server.unit.test.ts`'s "hands every entity get tool an argument its
+ * router's getByID accepts" guard uses for `getByID`) and feeds it straight
+ * to `mock()`. That means a seed can never drift out of sync with what
+ * create actually accepts — unlike a hand-written `make<Entity>Input()`
+ * builder, which is exactly the drift class `filter-application.integration.
+ * test.ts`'s per-field probes exist to catch. `overrides` layers onto the
+ * generated input via `mock()`'s own deep-merge; a test spells out only the
+ * fields it asserts on or needs to link (e.g. `{ vendorId }`).
+ *
+ * `appRouter` and `mock` are imported dynamically, mirroring every other
+ * repo import in this file: importing them at module scope would pull
+ * env.js's eager validation into the `globalSetup` phase, before `test.env`
+ * is applied (see the NOTE above `seedFromCSV`).
+ *
+ * `caller` is typed loosely (`object`, narrowed at runtime) rather than as a
+ * structural `Record<string, { create: ... }>`: the real caller this is
+ * called with (`createTestCaller(appRouter, ctx.db)`) is a giant router
+ * record whose OTHER branches (e.g. the nested `ai` sub-router) don't shape
+ * up to `{ create }`, and TypeScript checks an index-signature parameter
+ * against every property of the argument, not just the one this function
+ * reads.
+ */
+export async function seedEntity<E extends ShortcodeEntity>(
+  caller: object,
+  entity: E,
+  overrides?: Record<string, unknown>,
+): Promise<unknown> {
+  const { appRouter } = await import("../src/server/api/root");
+  const { mock } = await import("../src/lib/test/mock-schema");
+
+  const procedures = (
+    appRouter as unknown as {
+      _def: {
+        procedures: Record<string, { _def: { inputs: unknown[] } } | undefined>;
+      };
+    }
+  )._def.procedures;
+  const procedure = procedures[`${entity}.create`];
+  if (!procedure) {
+    throw new Error(
+      `seedEntity: "${entity}.create" is not a declared tRPC procedure`,
+    );
+  }
+  const inputSchema = procedure._def.inputs[0] as
+    | Parameters<typeof mock>[0]
+    | undefined;
+  if (!inputSchema) {
+    throw new Error(`seedEntity: "${entity}.create" declares no input schema`);
+  }
+
+  const input = mock(inputSchema, { overrides });
+  const entityCaller = (
+    caller as Record<string, { create?: (input: unknown) => Promise<unknown> }>
+  )[entity];
+  if (typeof entityCaller?.create !== "function") {
+    throw new Error(
+      `seedEntity: caller has no "${entity}.create" — build it from a ` +
+        `router that includes "${entity}" (e.g. createTestCaller(appRouter, ctx.db))`,
+    );
+  }
+  return entityCaller.create(input);
 }

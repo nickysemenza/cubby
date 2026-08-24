@@ -38,6 +38,7 @@ import {
   type ListReadIntent,
   notDeleted,
   presenceCondition,
+  rangeConditions,
   relations,
 } from "~/server/repo/database-helpers";
 import { disposalPurchaseIds } from "~/server/repo/product/ownership";
@@ -314,12 +315,7 @@ export const buildExpenseWhereClause = async (
       // those rows fall out of either bound by plain SQL comparison semantics;
       // that's intended. `costPresenceFilter: "none"` is the filter for
       // "no cost recorded".
-      filters.costMin !== undefined
-        ? gte(expense.cost, filters.costMin)
-        : undefined,
-      filters.costMax !== undefined
-        ? lte(expense.cost, filters.costMax)
-        : undefined,
+      ...rangeConditions(expense.cost, filters, "cost"),
       presenceCondition(expense.cost, filters.costPresenceFilter),
       filters.costSign === "negative" ? lt(expense.cost, 0) : undefined,
       filters.costSign === "positive" ? gt(expense.cost, 0) : undefined,
@@ -334,12 +330,7 @@ export const buildExpenseWhereClause = async (
       // Quantity is nullable evidence, never an inferred one-unit default.
       // Bounds naturally exclude unknown rows; the presence filter is the
       // explicit worklist for those receipts.
-      filters.productQuantityMin !== undefined
-        ? gte(expense.productQuantity, filters.productQuantityMin)
-        : undefined,
-      filters.productQuantityMax !== undefined
-        ? lte(expense.productQuantity, filters.productQuantityMax)
-        : undefined,
+      ...rangeConditions(expense.productQuantity, filters, "productQuantity"),
       presenceCondition(
         expense.productQuantity,
         filters.productQuantityPresenceFilter,

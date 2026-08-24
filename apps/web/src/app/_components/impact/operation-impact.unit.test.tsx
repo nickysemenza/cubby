@@ -25,9 +25,8 @@ import { OperationImpact } from "./operation-impact";
  */
 
 const preview = (over: Partial<PreviewOperation> = {}): PreviewOperation => ({
-  operation: "delete",
+  operation: "merge",
   entity: "product",
-  mode: "soft",
   targetCount: 1,
   canProceed: true,
   blockers: [],

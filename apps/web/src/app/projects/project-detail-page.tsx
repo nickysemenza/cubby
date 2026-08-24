@@ -11,7 +11,6 @@ import { useQuery } from "@tanstack/react-query";
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import {
   AlertTriangle,
-  Clock,
   ExternalLink,
   FileText,
   FolderTree,
@@ -27,7 +26,6 @@ import {
 } from "lucide-react";
 import { lazy, Suspense, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import { WithProjectSearch } from "~/app/_components/combobox/with-search-hook";
 import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
 import { DependencyPicker } from "~/app/_components/data-table/dependency-picker";
@@ -74,7 +72,6 @@ import {
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
-import { projectMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { BudgetStrip } from "./BudgetStrip";
 import type { TradeCostCell } from "./charts/trade-cost-matrix";
@@ -587,7 +584,6 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   const updateMutation = useUpdateMutation({
     mutationFn: api.project.update.mutationOptions,
     entity: "project",
-    invalidateKeys: projectMutationInvalidateKeys,
   });
 
   // `deleteProjects` refuses a project that still has sub-projects, tasks or
@@ -600,7 +596,6 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     entity: "project",
     mutationOptions: (callbacks) =>
       api.project.delete.mutationOptions(callbacks),
-    invalidateKeys: projectMutationInvalidateKeys,
     redirectTo: "/projects",
   });
 
@@ -1276,25 +1271,13 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     ),
   };
 
-  // The manifest's `history` common section, rendered inline rather than via
-  // `useEntityDetail` (task-detail/expense-detail's route): project also
-  // declares `images`, and that common section reads `data.images` — which
-  // ProjectOut doesn't carry (images come from the separate
-  // `imagesByProjectIds` query and already ride the hero), so it would render
-  // an always-empty Images card. Same content the helper produces.
-  const historySection: DetailSection = {
-    id: "history",
-    title: "History",
-    icon: Clock,
-    placement: "supporting",
-    content: (
-      <AuditLogList
-        entityType="project"
-        entityId={project.id}
-        showEntityLink={false}
-      />
-    ),
-  };
+  // History is appended automatically by `DetailSections` for every auditable
+  // entity — see `ACTIVITY_SECTION_ID` there. Not hand-wired here (previously
+  // duplicated `useEntityDetail`'s `history` commonSection, which this page
+  // can't use wholesale: project also declares `images`, and that common
+  // section reads `data.images` — which `ProjectOut` doesn't carry (images
+  // come from the separate `imagesByProjectIds` query and already ride the
+  // hero), so it would render an always-empty Images card).
 
   const sections: DetailSection[] = [
     // Main column: Notes (when populated), Budget, Tasks, then — for a leaf —
@@ -1318,8 +1301,6 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     ...(hasSubtree ? [expensesSection] : []),
     ...(hasSubtree ? [purchasesSection] : []),
     ...(hasSubtree ? [purchasedProductsSection] : []),
-    // Paper trail last, same position task/expense detail give it.
-    historySection,
   ];
 
   const heroStats: DetailHeroStat[] = [

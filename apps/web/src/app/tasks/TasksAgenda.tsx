@@ -4,7 +4,7 @@ import { keyBy } from "es-toolkit";
 import { useState } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useTRPC } from "~/integrations/trpc/react";
-import { taskMutationInvalidateKeys } from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 import type { BoardColumnKey } from "./board/board-types";
 import { TaskCard } from "./board/TaskCard";
 import { TaskDeleteDialog } from "./board/TaskDeleteDialog";
@@ -65,14 +65,14 @@ export function TasksAgenda({ tasks }: { tasks: TaskOut[] }) {
     operation: "update",
     intent: "status",
     mutationFn: api.task.update.mutationOptions,
-    invalidateKeys: taskMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("task"),
   });
   const remove = useActionMutation({
     entity: "task",
     operation: "delete",
     intent: "delete",
     mutationFn: api.task.delete.mutationOptions,
-    invalidateKeys: taskMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("task"),
     onSuccess: () => setPendingDelete(null),
   });
 

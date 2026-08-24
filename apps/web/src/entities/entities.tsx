@@ -3,6 +3,9 @@ import type {
   BrowserRoutedEntity,
   ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
+import { displayGtin } from "@cubby/schemas/external-id";
+import type { PurchaseOut } from "@cubby/schemas/purchase";
+import type { VendorOut } from "@cubby/schemas/vendor";
 import {
   Apple,
   Barcode,
@@ -22,23 +25,49 @@ import {
   ReceiptText,
   Store,
 } from "lucide-react";
-import { cn } from "~/lib/utils";
-import { ENTITY_ACCENTS } from "./entity-accents";
-import type { EntityDefinition } from "./types";
+import { purchaseLabel } from "~/lib/purchase-label";
+import { cn, formatCurrency } from "~/lib/utils";
+import type { EntityColor, EntityDefinition } from "./types";
 
-const entityColor = (
-  entity: BrowserRoutedEntity,
-  {
-    bg,
-    text = "text-primary",
-    border = "border-l-primary",
-  }: { bg: string; text?: string; border?: string },
-) => ({
-  accent: ENTITY_ACCENTS[entity],
-  bg,
-  text,
-  border,
-});
+/**
+ * The four inks an entity can wear. `accent` feeds the `--page-accent` /
+ * `--row-accent` CSS variables (styles.css) for decorative chrome — the
+ * page-hero accent bar, table row-hover/selected bars — while the tailwind
+ * trio dresses icon tiles and badges.
+ *
+ * Warm-Paper Ledger: there is no per-entity warm hue ladder anymore — the live
+ * accent is the lone ultramarine (`--primary`), and quieter surfaces fall to
+ * the neutral ink-slate. Status semantics (`--positive`/`--warning`) are the
+ * only colored exceptions, kept for the entities whose accent encodes state.
+ * The two entities that dress against their accent (ingredient, image) spell
+ * their color out rather than joining a hue.
+ */
+const INK = {
+  primary: {
+    accent: "var(--primary)",
+    bg: "bg-primary/10",
+    text: "text-primary",
+    border: "border-l-primary",
+  },
+  slate: {
+    accent: "var(--slate)",
+    bg: "bg-slate/20",
+    text: "text-slate",
+    border: "border-l-slate",
+  },
+  plum: {
+    accent: "var(--plum)",
+    bg: "bg-plum/15",
+    text: "text-plum",
+    border: "border-l-plum",
+  },
+  positive: {
+    accent: "var(--positive)",
+    bg: "bg-positive/15",
+    text: "text-positive",
+    border: "border-l-positive",
+  },
+} satisfies Record<string, EntityColor>;
 
 const entityDefinitions = {
   ingredient: {
@@ -46,11 +75,12 @@ const entityDefinitions = {
     pluralLabel: "Ingredients",
     basePath: "ingredients",
     lucideIcon: Carrot,
-    color: entityColor("ingredient", {
+    color: {
+      accent: INK.slate.accent,
       bg: "bg-warning/20",
       text: "text-accent-foreground",
       border: "border-l-warning",
-    }),
+    },
     routes: {
       detail: "/ingredients/$shortcode",
       list: "/ingredients",
@@ -59,14 +89,57 @@ const entityDefinitions = {
     // Note: ingredient uses UnitMappingsTable (different from UnitMappingDisplay),
     // so unit-mappings is handled as a custom section
     detail: { commonSections: ["history"] },
+    // appearsInRecipes/product are computed (recipe + product counts), sorted
+    // via correlated subqueries in ingredientList (not real columns).
+    sortableFields: [
+      "createdAt",
+      "updatedAt",
+      "name",
+      "appearsInRecipes",
+      "product",
+    ],
     // Ingredient supplies its domain columns explicitly; the shared list hook
     // still appends the default-hidden Created/Updated audit pair.
     list: {
       hasUnitMappings: true,
       defaultSort: "createdAt",
       standardColumns: [],
-      // appearsInRecipes/product are computed (recipe + product counts), sorted
-      // via correlated subqueries in ingredientList (not real columns).
+    },
+    // "ranked": the merge set is picked by the caller; ranked by weight
+    // (USDA link, then product/recipe/alias counts) to default the keeper.
+    mergeable: {
+      keeperMode: "ranked",
+      rowLabel: (row: { id: string; name: string }, candidate) => {
+        const usdaLinked =
+          candidate?.detail.some(
+            (d) => d.label === "USDA link" && d.count > 0,
+          ) ?? false;
+        return (
+          <>
+            <span className="truncate">{row.name}</span>
+            {usdaLinked && (
+              <EntityIcon
+                entity="usda-food"
+                size={12}
+                colored
+                className="shrink-0"
+                aria-label="Linked to USDA food data"
+              />
+            )}
+          </>
+        );
+      },
+      rowStat: (_row, candidate) =>
+        (candidate?.detail ?? [])
+          .filter((d) => d.label !== "USDA link")
+          .map((d) => (
+            <span key={d.label} className="tabular-nums">
+              <span className="font-medium">{d.count}</span> {d.label}
+            </span>
+          )),
+      copy: {
+        title: "Merge ingredients?",
+      },
     },
   },
   product: {
@@ -74,7 +147,7 @@ const entityDefinitions = {
     pluralLabel: "Products",
     basePath: "products",
     lucideIcon: Barcode,
-    color: entityColor("product", { bg: "bg-primary/10" }),
+    color: INK.primary,
     routes: {
       detail: "/products/$shortcode",
       list: "/products",
@@ -83,12 +156,65 @@ const entityDefinitions = {
     // Note: product renders unit mappings as a custom section (coverage grid +
     // rows table, like ingredient), so unit-mappings is not a common section.
     detail: { commonSections: ["history"] },
+    // `ingredient` and `location` are computed sorts handled explicitly by
+    // productList, not physical product columns.
+    sortableFields: [
+      "createdAt",
+      "updatedAt",
+      "name",
+      "manufacturer",
+      "model",
+      "primaryGtin",
+      "category",
+      "fdc_id",
+      "price",
+      "notes",
+      "location",
+      "ingredient",
+      "expenseTotal",
+      "expenses",
+      "expectedQuantity",
+      "quantityVariance",
+      "purchaseDate",
+      "related:product.projects",
+      "related:product.vendors",
+      "related:product.purchases",
+      "identity_strength",
+    ],
     list: {
       hasUnitMappings: true,
       defaultSort: "createdAt",
       standardColumns: ["image", "name"],
-      // `ingredient` and `location` are computed sorts handled explicitly by
-      // productList, not physical product columns.
+    },
+    // "ranked": the detector (duplicate maker part number across retailers)
+    // has no canonical row to default to — every member is an equally
+    // plausible keeper — so the picker defaults to selection order, same as
+    // ingredient. Unlike ingredient, the server has no rank-without-keeper
+    // arm for product (see `entity-integrity-preview.ts`'s `needsKeeperBlocker`
+    // doc comment), so the unkeyed ranking call never returns candidates and
+    // no row ever shows a "Best" badge — harmless, just unused.
+    mergeable: {
+      keeperMode: "ranked",
+      rowLabel: (row: { id: string; name: string }) => (
+        <span className="truncate">{row.name}</span>
+      ),
+      rowStat: (row: { gtins: string[]; sources: string[] }) => (
+        <>
+          {row.gtins.length > 0 && (
+            <span>UPC {row.gtins.map(displayGtin).join(", ")}</span>
+          )}
+          <span>
+            {row.sources.length > 0
+              ? row.sources.join(", ")
+              : "no external ids"}
+          </span>
+        </>
+      ),
+      copy: {
+        title: "Merge products?",
+        description:
+          "These rows share the same manufacturer part number, split across retailers. Pick which one to keep — the rest merge into it.",
+      },
     },
   },
   recipe: {
@@ -96,19 +222,31 @@ const entityDefinitions = {
     pluralLabel: "Recipes",
     basePath: "recipes",
     lucideIcon: ChefHat,
-    color: entityColor("recipe", { bg: "bg-primary/10" }),
+    color: INK.primary,
     routes: {
       detail: "/recipes/$shortcode",
       list: "/recipes",
       new: "/recipes/new",
     },
     detail: { commonSections: ["images", "history"] },
+    // costTotal/caloriesTotal live in the `totals` jsonb (not real columns);
+    // recipeList sorts them via a jsonb expression. `source` (SourceType+SourceData)
+    // and `yield` (→ servings) are also special-cased there. See recipe/crud.recipeList.
+    sortableFields: [
+      "createdAt",
+      "updatedAt",
+      "name",
+      "cookbook",
+      "costTotal",
+      "caloriesTotal",
+      "source",
+      "yield",
+      "tags",
+      "totalMinutes",
+    ],
     list: {
       defaultSort: "createdAt",
       standardColumns: ["image", "name"],
-      // costTotal/caloriesTotal live in the `totals` jsonb (not real columns);
-      // recipeList sorts them via a jsonb expression. `source` (SourceType+SourceData)
-      // and `yield` (→ servings) are also special-cased there. See recipe/crud.recipeList.
     },
   },
   cookbook: {
@@ -116,24 +254,21 @@ const entityDefinitions = {
     pluralLabel: "Cookbooks",
     basePath: "cookbooks",
     lucideIcon: BookOpen,
-    color: entityColor("cookbook", { bg: "bg-primary/10" }),
+    color: INK.primary,
     // Keyed by FK id (rename-safe); no generic list columns or "new" form
     // (cookbooks are created by EPUB import, not a create form).
     routes: {
       detail: "/cookbooks/$shortcode",
       list: "/cookbooks",
     },
+    sortableFields: [],
   },
   location: {
     label: "Location",
     pluralLabel: "Locations",
     basePath: "locations",
     lucideIcon: MapPin,
-    color: entityColor("location", {
-      bg: "bg-slate/20",
-      text: "text-slate",
-      border: "border-l-slate",
-    }),
+    color: INK.slate,
     routes: {
       detail: "/locations/$shortcode",
       list: "/locations",
@@ -142,6 +277,16 @@ const entityDefinitions = {
     // Note: location needs images in a specific position (before child locations),
     // so we handle it as a custom section and only use history from common
     detail: { commonSections: ["history"] },
+    sortableFields: [
+      "createdAt",
+      "updatedAt",
+      "name",
+      "type",
+      "parent",
+      "lastBulkInventory",
+      "valuation",
+      "inventoryEntries",
+    ],
     // Location supplies its domain columns explicitly; audit dates are shared.
     list: {
       defaultSort: "createdAt",
@@ -153,7 +298,7 @@ const entityDefinitions = {
     pluralLabel: "Inventory",
     basePath: "inventory",
     lucideIcon: Package,
-    color: entityColor("inventory", { bg: "bg-primary/10" }),
+    color: INK.primary,
     routes: {
       detail: "/inventory/$shortcode",
       list: "/inventory",
@@ -161,6 +306,16 @@ const entityDefinitions = {
     },
     // Inventory items have a simple single-section detail page
     detail: { commonSections: ["history"] },
+    sortableFields: [
+      "createdAt",
+      "updatedAt",
+      "name",
+      "product",
+      "location",
+      "amount",
+      "valuation",
+      "verifiedAt",
+    ],
     // Inventory list has custom columns (image from product, amount instead of name)
     list: {
       defaultSort: "createdAt",
@@ -172,18 +327,17 @@ const entityDefinitions = {
     pluralLabel: "Meals",
     basePath: "meals",
     lucideIcon: CalendarDays,
-    // Tracks ENTITY_ACCENTS.meal — see the note there for why a meal is no
-    // longer amber.
-    color: entityColor("meal", {
-      bg: "bg-slate/20",
-      text: "text-slate",
-      border: "border-l-slate",
-    }),
+    // Neutral, not amber: the status ramp is reserved for entities whose accent
+    // encodes state, and a meal's encodes none. Amber is also already spent on
+    // overdue/planned expenses inside the same planning calendar, so a meal
+    // wearing it read as a warning about nothing.
+    color: INK.slate,
     routes: {
       detail: "/meals/$shortcode",
       list: "/meals",
     },
     detail: { commonSections: ["history"] },
+    sortableFields: ["date", "name", "mealType", "createdAt", "updatedAt"],
     // Date/Name/Recipes/Cost columns are custom (meal-table.tsx) — Name needs
     // `emptyLabel`, which useStandardColumns's automatic "name" column
     // doesn't support. Audit dates are appended for every entity list.
@@ -197,11 +351,7 @@ const entityDefinitions = {
     pluralLabel: "Projects",
     basePath: "projects",
     lucideIcon: Hammer,
-    color: entityColor("project", {
-      bg: "bg-plum/15",
-      text: "text-plum",
-      border: "border-l-plum",
-    }),
+    color: INK.plum,
     // No "new" route — projects are created from a dialog on the list page
     // (mirrors meal), not a dedicated /projects/new form.
     routes: {
@@ -209,6 +359,15 @@ const entityDefinitions = {
       list: "/projects",
     },
     detail: { commonSections: ["images", "history"] },
+    sortableFields: [
+      "name",
+      "status",
+      "kind",
+      "startDate",
+      "costEstimate",
+      "createdAt",
+      "updatedAt",
+    ],
     list: {
       defaultSort: "createdAt",
       standardColumns: ["name"],
@@ -219,16 +378,22 @@ const entityDefinitions = {
     pluralLabel: "Tasks",
     basePath: "tasks",
     lucideIcon: ListChecks,
-    color: entityColor("task", {
-      bg: "bg-slate/20",
-      text: "text-slate",
-      border: "border-l-slate",
-    }),
+    color: INK.slate,
     routes: {
       detail: "/tasks/$shortcode",
       list: "/tasks",
     },
     detail: { commonSections: ["history"] },
+    sortableFields: [
+      "name",
+      "status",
+      "dueDate",
+      "trade",
+      "project",
+      "subjectProduct",
+      "createdAt",
+      "updatedAt",
+    ],
     list: {
       defaultSort: "createdAt",
       standardColumns: ["name"],
@@ -239,19 +404,55 @@ const entityDefinitions = {
     pluralLabel: "Vendors",
     basePath: "vendors",
     lucideIcon: Store,
-    color: entityColor("vendor", {
-      bg: "bg-slate/20",
-      text: "text-slate",
-      border: "border-l-slate",
-    }),
+    // A quiet roster, not a live money surface — same neutral as location/task.
+    color: INK.slate,
     routes: {
       detail: "/vendors/$shortcode",
       list: "/vendors",
     },
     detail: { commonSections: ["history"] },
+    sortableFields: [
+      "name",
+      "purchaseCount",
+      "spend",
+      "latestPurchaseDate",
+      "createdAt",
+      "updatedAt",
+    ],
     list: {
-      defaultSort: "name",
+      // Open on biggest spenders first: "where did the money go" is the
+      // question this roster exists to answer. (It used to be `name`, with the
+      // vendor list overriding it page-side — descending name would have
+      // landed the roster on Z→A.)
+      defaultSort: "spend",
       standardColumns: ["name"],
+    },
+    // "fixed": the keeper is the vendor being viewed; candidates are every
+    // OTHER vendor (mergeVendors has no cross-vendor refusal like
+    // mergePurchases' vendor-match check — any two vendors can fold together).
+    // The server has no rank-without-keeper arm for vendor either (only
+    // ingredient does — see `entity-integrity-preview.ts`), so "ranked" mode
+    // would never rank; "fixed" matches how the roster is small enough (~150
+    // rows) to browse in one page instead.
+    mergeable: {
+      keeperMode: "fixed",
+      candidateQuery: (api, _keeper: VendorOut) =>
+        api.vendor.list.queryOptions({
+          filters: {},
+          // Generous relative to the whole roster (~150 vendors), within
+          // MAX_PAGE_SIZE — every other vendor is a merge candidate.
+          pagination: { pageIndex: 0, pageSize: 200 },
+        }),
+      rowLabel: (row: VendorOut) => row.name,
+      rowStat: (row: VendorOut) =>
+        `${row.purchaseCount} purchase${row.purchaseCount === 1 ? "" : "s"} · ${formatCurrency(row.spend)}`,
+      copy: {
+        title: (keeperLabel) => <>Merge into {keeperLabel}</>,
+        description:
+          "Pick other vendors to fold in. Their purchases move onto this vendor — any purchases sharing an order id are folded together — and the folded vendors leave the roster. Website and notes carry over only where this vendor has none.",
+        emptyTitle: "Nothing to merge",
+        emptyDescription: "No other vendors are on file.",
+      },
     },
   },
   purchase: {
@@ -259,7 +460,7 @@ const entityDefinitions = {
     pluralLabel: "Purchases",
     basePath: "purchases",
     lucideIcon: Receipt,
-    color: entityColor("purchase", { bg: "bg-primary/10" }),
+    color: INK.primary,
     routes: {
       detail: "/purchases/$shortcode",
       list: "/purchases",
@@ -267,11 +468,49 @@ const entityDefinitions = {
     // A Purchase carries its documents (invoices/receipts), like
     // project's photos — same commonSections shape.
     detail: { commonSections: ["images", "history"] },
+    sortableFields: [
+      "orderId",
+      "displayLabel",
+      "date",
+      "statedTotal",
+      "vendor",
+      "expenseCount",
+      "expenseTotal",
+      "reconciliationGap",
+      "documentCount",
+      "createdAt",
+      "updatedAt",
+    ],
     // No `name` column — a purchase's identity is (vendor, orderId, date), not
     // a free-text name, so the list defines its columns explicitly (like location).
     list: {
       defaultSort: "date",
       standardColumns: [],
+    },
+    // "fixed": the keeper is the purchase being viewed; candidates are every
+    // OTHER purchase from the same vendor (mergePurchases refuses cross-vendor,
+    // and separately refuses when both sides carry a non-null order id — that
+    // refusal surfaces as the dialog's error toast, not pre-validated here).
+    mergeable: {
+      keeperMode: "fixed",
+      candidateQuery: (api, keeper: PurchaseOut) =>
+        api.purchase.list.queryOptions({
+          filters: { vendorId: keeper.vendorId },
+          // Generous relative to any one vendor's purchase count, within MAX_PAGE_SIZE.
+          pagination: { pageIndex: 0, pageSize: 200 },
+        }),
+      rowLabel: (row: PurchaseOut) => purchaseLabel(row),
+      rowStat: (row: PurchaseOut) =>
+        `${row.expenseCount} · ${formatCurrency(row.expenseTotal)}`,
+      copy: {
+        title: (keeperLabel) => <>Merge into {keeperLabel}</>,
+        description:
+          "Pick other purchases from the same vendor to fold in. Their expenses and documents move onto this purchase; the folded purchases are then deleted.",
+        emptyTitle: "Nothing to merge",
+        emptyDescription: "This vendor has no other purchases on file.",
+        caution:
+          "One purchase is one vendor order or receipt event, never a contract — a payment schedule stays as separate purchases. Merge only rows that are genuinely the same transaction.",
+      },
     },
   },
   expense: {
@@ -279,12 +518,27 @@ const entityDefinitions = {
     pluralLabel: "Expenses",
     basePath: "expenses",
     lucideIcon: ReceiptText,
-    color: entityColor("expense", { bg: "bg-primary/10" }),
+    color: INK.primary,
     routes: {
       detail: "/expenses/$shortcode",
       list: "/expenses",
     },
     detail: { commonSections: ["history"] },
+    sortableFields: [
+      "name",
+      "cost",
+      "lineKind",
+      "productQuantity",
+      "date",
+      "costType",
+      "trade",
+      "project",
+      "product",
+      "vendor",
+      "orderId",
+      "createdAt",
+      "updatedAt",
+    ],
     list: {
       defaultSort: "date",
       standardColumns: ["name"],
@@ -295,18 +549,24 @@ const entityDefinitions = {
     pluralLabel: "Accounts",
     basePath: "financial-accounts",
     lucideIcon: CreditCard,
-    color: entityColor("financialAccount", {
-      bg: "bg-slate/20",
-      text: "text-slate",
-      border: "border-l-slate",
-    }),
+    color: INK.slate,
     routes: {
       detail: "/financial-accounts/$shortcode",
       list: "/financial-accounts",
     },
     detail: { commonSections: ["history"] },
+    sortableFields: [
+      "name",
+      "provisional",
+      "transactionCount",
+      "createdAt",
+      "updatedAt",
+    ],
     list: {
       defaultSort: "name",
+      // A name roster reads A→Z; the table's blanket descending default was
+      // opening the account list backwards.
+      defaultSortDirection: "asc",
       standardColumns: [],
     },
   },
@@ -315,12 +575,22 @@ const entityDefinitions = {
     pluralLabel: "Transactions",
     basePath: "financial-transactions",
     lucideIcon: CreditCard,
-    color: entityColor("financialTransaction", { bg: "bg-primary/10" }),
+    color: INK.primary,
     routes: {
       detail: "/financial-transactions/$shortcode",
       list: "/financial-transactions",
     },
     detail: { commonSections: ["history"] },
+    sortableFields: [
+      "transactionDate",
+      "postedDate",
+      "amount",
+      "merchant",
+      "kind",
+      "status",
+      "createdAt",
+      "updatedAt",
+    ],
     list: {
       defaultSort: "transactionDate",
       standardColumns: [],
@@ -331,16 +601,19 @@ const entityDefinitions = {
     pluralLabel: "Wishlist",
     basePath: "wishes",
     lucideIcon: Heart,
-    color: entityColor("wish", {
-      bg: "bg-plum/15",
-      text: "text-plum",
-      border: "border-l-plum",
-    }),
+    color: INK.plum,
     routes: {
       detail: "/wishes/$shortcode",
       list: "/wishes",
     },
     detail: { commonSections: ["history"] },
+    sortableFields: [
+      "name",
+      "acquiredAt",
+      "priceRange",
+      "createdAt",
+      "updatedAt",
+    ],
     list: {
       defaultSort: "createdAt",
       standardColumns: ["name"],
@@ -351,16 +624,19 @@ const entityDefinitions = {
     pluralLabel: "USDA Foods",
     basePath: "usda",
     lucideIcon: Apple,
-    color: entityColor("usda-food", {
-      bg: "bg-positive/15",
-      text: "text-positive",
-      border: "border-l-positive",
-    }),
+    color: INK.positive,
     routes: {
       detail: "/usda/$id",
       list: "/usda",
       // no "new" - USDA foods are read-only
     },
+    sortableFields: [
+      "fdc_id",
+      "description",
+      "data_type",
+      "relevance",
+      "linkedProducts",
+    ],
     // USDA foods are read-only, no detail/list conventions needed
     list: {
       defaultSort: "fdc_id",
@@ -372,17 +648,19 @@ const entityDefinitions = {
     pluralLabel: "Images",
     basePath: "images",
     lucideIcon: Image,
-    color: entityColor("image", {
+    color: {
+      accent: INK.slate.accent,
       bg: "bg-muted",
       text: "text-muted-foreground",
       border: "border-l-muted-foreground",
-    }),
+    },
     routes: {
       detail: "/images/$shortcode",
       list: "/images",
       // no "new" - images are uploaded, not created via form
     },
     detail: { commonSections: ["history"] },
+    sortableFields: ["createdAt", "updatedAt", "filename", "size", "status"],
     // Note: images use 'filename' not 'name', so we define columns explicitly in ImageList
     list: {
       defaultSort: "createdAt",
@@ -415,6 +693,10 @@ export const isBrowserRoutedEntity = (
 export const browserEntityDefinition = (
   entity: BrowserRoutedEntity,
 ): EntityDefinition => entities[entity];
+
+/** Route-less entities have no sort contract to project. */
+export const getSortableFields = (entity: Entity): readonly string[] =>
+  isBrowserRoutedEntity(entity) ? entities[entity].sortableFields : [];
 
 /**
  * Human-readable labels for generic surfaces that include route-less entities.

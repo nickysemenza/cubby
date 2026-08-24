@@ -10,8 +10,8 @@ import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
   cancelTRPCQueries,
+  invalidatesFor,
   invalidateTRPCQueries,
-  inventoryMutationInvalidateKeys,
 } from "~/lib/query-keys";
 import { applyItemMove, applyLocationMove } from "./arrange-tree-utils";
 import type { ItemDragData } from "./arrange-types";
@@ -63,7 +63,7 @@ export function useArrangeMutations() {
       toast.error(getErrorMessage(err));
     },
     onSettled: () =>
-      invalidateTRPCQueries(queryClient, inventoryMutationInvalidateKeys),
+      invalidateTRPCQueries(queryClient, invalidatesFor("inventory")),
   });
 
   const moveBase = api.inventory.bulkMove.mutationOptions();
@@ -92,7 +92,7 @@ export function useArrangeMutations() {
       toast.error(getErrorMessage(err));
     },
     onSettled: () =>
-      invalidateTRPCQueries(queryClient, inventoryMutationInvalidateKeys),
+      invalidateTRPCQueries(queryClient, invalidatesFor("inventory")),
   });
 
   return {

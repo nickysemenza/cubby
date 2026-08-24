@@ -11,12 +11,7 @@
  */
 
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
-import {
-  purchaseShortcode,
-  unsafeExpenseId,
-  unsafePurchaseId,
-  unsafePurchaseShortcode,
-} from "@cubby/schemas/identifiers";
+import { unsafeExpenseId, unsafePurchaseId } from "@cubby/schemas/identifiers";
 import { expenseOut } from "@cubby/schemas/project";
 import {
   deleteEmptyPurchasesInput,
@@ -24,7 +19,6 @@ import {
   linkExpensesToPurchaseInput,
   mergePurchasesInput,
   mergePurchasesOut,
-  purchaseCreateInput,
   purchaseFiltersSchema,
   purchaseOut,
   purchaseProductMutationInput,
@@ -32,12 +26,11 @@ import {
   purchaseProductsInput,
   purchaseProductsOut,
   purchaseSortableFields,
-  purchaseUpdateData,
   reclassifyPurchaseDocumentInput,
   splitExpenseInput,
 } from "@cubby/schemas/purchase";
 import { z } from "zod";
-import { createAppError } from "~/server/errors/app-error";
+import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 import {
   createPurchase,
   deleteEmptyPurchases,
@@ -73,24 +66,14 @@ import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const procedures = createSearchableEntityCrudProcedures({
   schemas: {
-    createInput: purchaseCreateInput,
-    updateInput: purchaseUpdateData,
-    output: purchaseOut,
+    ...ENTITY_BINDINGS.purchase.crud,
     filters: purchaseFiltersSchema,
     sort: {
       sortableFields: purchaseSortableFields,
       defaultSort: "date",
     },
-    idSchema: purchaseShortcode,
   },
   repository: {
-    getByID: async (ctx, id) => {
-      const out = await getPurchaseByShortcode(ctx.db, id);
-      if (!out) {
-        throw createAppError("PURCHASE_NOT_FOUND", `Purchase not found: ${id}`);
-      }
-      return out;
-    },
     getByShortcode: (ctx, shortcode) =>
       getPurchaseByShortcode(ctx.db, shortcode),
     list: (ctx, filters, sorts, pagination) =>
@@ -99,7 +82,8 @@ const procedures = createSearchableEntityCrudProcedures({
     update: async (ctx, id, data) => {
       const { output, entityId, detachedImageKeys } = await updatePurchase(
         ctx.db,
-        { id: unsafePurchaseShortcode(id), data },
+        id,
+        data,
         ctx.actorContext,
       );
       // After the commit, never inside it: an R2 delete has no rollback. The
@@ -117,13 +101,7 @@ const procedures = createSearchableEntityCrudProcedures({
      * signal. Covered by searchable-crud.integration.test.ts.
      */
     delete: async (ctx, ids) => {
-      const detached = await deletePurchases(
-        ctx.db,
-        ids.map(unsafePurchaseShortcode),
-        ctx.actorContext,
-      );
-      // After the commit, never inside it: an R2 delete has no rollback.
-      await deleteStoredObjects(detached.detachedImageKeys);
+      const detached = await deletePurchases(ctx.db, ids, ctx.actorContext);
       const backgroundBatches = await runMutationSideEffectsForEntities(
         ctx.db,
         [
@@ -142,7 +120,11 @@ const procedures = createSearchableEntityCrudProcedures({
           })),
         ],
       );
-      return { deleted: detached.deleted, backgroundBatches };
+      return {
+        deleted: detached.deleted,
+        detachedImageKeys: detached.detachedImageKeys,
+        backgroundBatches,
+      };
     },
   },
   entityName: "purchase",

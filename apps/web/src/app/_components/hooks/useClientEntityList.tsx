@@ -3,6 +3,7 @@ import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
 import type { ListWorkbenchModel } from "../data-table/ListWorkbench";
 import type { CubbyRow as Row } from "../data-table/table-features";
 import { useTableConfig } from "../data-table/useTableConfig";
+import { useContractDeletable } from "./useDeletableConfig";
 import type {
   BaseListRow,
   UseEntityListOptions,
@@ -132,10 +133,11 @@ export function useClientEntityList<TData extends BaseListRow>({
     }),
     [tableStateOptions],
   );
+  const resolvedDeletable = useContractDeletable(entity, deletable);
   const presentationState = useEntityListPresentationState<TData>({
     entity,
     tableStateOptions: clientTableStateOptions,
-    deletable,
+    deletable: resolvedDeletable,
     extraActions,
     bulkActions,
     deleteEmptyLabel,

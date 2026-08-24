@@ -116,14 +116,23 @@ const snakeCase = (entity: string) =>
 /**
  * The MCP tool name for an (entity, operation) pair.
  *
- * `list` and `delete` act on a set, so they take the plural; the rest are
- * singular. That rule was previously reimplemented inline in the drift test.
+ * `get` is the only operation that stays singular. `list`/`delete` always
+ * acted on a set, so they took the plural from the start; `create`/`update`
+ * joined them once batching became the default for every toolset — the
+ * plural tool takes a one-item array, which made the singular `create_x`/
+ * `update_x` tool strictly redundant, so `registerEntityCrudToolset` (see
+ * `apps/web/src/server/mcp/tools/_shared.ts`) now registers ONLY the plural
+ * for those two operations. This derivation has to track that or the two
+ * naming schemes drift, which is exactly what
+ * `server.unit.test.ts`'s "keeps manifest MCP operations aligned with
+ * registered tools" catches.
  */
 /**
- * The plural slug an entity's set-shaped tools use. Batch tools are
- * `create_${plural}` / `update_${plural}`, which is why this is exposed
- * separately from {@link mcpToolName} — those are plural even though their
- * singular counterparts are not.
+ * The plural slug an entity's set-shaped tools use: `list_${plural}`,
+ * `delete_${plural}`, and (since batching is the default) `create_${plural}`/
+ * `update_${plural}` too. Exposed separately from {@link mcpToolName} for
+ * callers that only ever want the plural form (e.g. asserting the batch tool
+ * exists) without spelling out an operation.
  */
 export const mcpEntityPlural = (entity: Entity): string => {
   // Read through the declared type: the manifest literal is a union of 17
@@ -138,6 +147,18 @@ export const mcpEntityPlural = (entity: Entity): string => {
   return names?.plural ?? `${names?.singular ?? snakeCase(entity)}s`;
 };
 
+/**
+ * The singular slug `get_${singular}` uses — and, before batching became the
+ * default, what `create_x`/`update_x` used too. Exposed for exactly that
+ * historical case: reconstructing a pre-cutover singular tool name (e.g. a
+ * one-shot telemetry backfill mapping old `create_x` rows) now that
+ * {@link mcpToolName} itself only derives the plural for create/update.
+ */
+export const mcpEntitySingular = (entity: Entity): string => {
+  const descriptor: EntityDescriptor = entityManifest[entity];
+  return descriptor.mcpNames?.singular ?? snakeCase(entity);
+};
+
 export const mcpToolName = (
   entity: Entity,
   operation: z.infer<typeof mcpOp>,
@@ -147,8 +168,7 @@ export const mcpToolName = (
   const override = names?.overrides?.[operation];
   if (override) return override;
   const singular = names?.singular ?? snakeCase(entity);
-  const plural = names?.plural ?? `${singular}s`;
-  return `${operation}_${operation === "list" || operation === "delete" ? plural : singular}`;
+  return `${operation}_${operation === "get" ? singular : mcpEntityPlural(entity)}`;
 };
 
 const ALL_MCP = ["get", "list", "create", "update", "delete"] as const;

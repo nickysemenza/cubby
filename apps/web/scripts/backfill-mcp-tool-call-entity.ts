@@ -12,10 +12,11 @@
  * entity. Two disjoint sources feed the map built below:
  *
  * 1. **Manifest inversion** — every `get_/list_/create_/update_/delete_`
- *    (singular and batch-plural) name the entity manifest generates via
- *    `mcpToolName`/`mcpEntityPlural`, including override spellings like
- *    `search_products` (product's `mcpNames.overrides.list`) and
- *    `delete_recipe` (recipe's override). Built once, not per row.
+ *    (both the pre-cutover singular and the batch-plural spelling for
+ *    create/update) name the entity manifest generates via
+ *    `mcpToolName`/`mcpEntityPlural`/`mcpEntitySingular`, including override
+ *    spellings like `search_products` (product's `mcpNames.overrides.list`)
+ *    and `delete_recipe` (recipe's override). Built once, not per row.
  * 2. **Hand-authored map** — ~20 non-CRUD tools whose entity is unambiguous
  *    from what the tool DOES, even though it isn't a manifest CRUD name
  *    (`verify_product_images` → product, `split_expense` → expense, …).
@@ -70,6 +71,7 @@ import {
   type EntityDescriptor,
   entityManifest,
   mcpEntityPlural,
+  mcpEntitySingular,
   mcpToolName,
 } from "@cubby/schemas/entity-manifest";
 import { Pool } from "pg";
@@ -122,16 +124,21 @@ function buildToolNameEntityMap(): Map<string, Entity> {
     for (const op of descriptor.mcp) {
       map.set(mcpToolName(entity, op), entity);
     }
-    // Batch create/update tools are plural wrappers registerEntityCrudToolset
-    // adds by default (`create_${plural}` / `update_${plural}`) — not
-    // produced by `mcpToolName`, which only derives the five singular/plural
-    // CRUD names. A name that was never actually registered (batch disabled,
-    // or the entity lacks that op) simply matches zero rows below.
+    // `mcpToolName("create"/"update")` now derives the PLURAL name — batching
+    // became the default for every toolset, which made the singular
+    // `create_x`/`update_x` tool redundant and it stopped being registered.
+    // Historical rows can still carry either spelling: some were recorded
+    // while the singular tool was still live (pre-cutover), some after. Add
+    // both explicitly rather than relying on `mcpToolName` for one of them —
+    // a name that was never actually registered under either spelling (the
+    // entity lacks that op) simply matches zero rows below.
     if (descriptor.mcp.includes("create")) {
       map.set(`create_${mcpEntityPlural(entity)}`, entity);
+      map.set(`create_${mcpEntitySingular(entity)}`, entity);
     }
     if (descriptor.mcp.includes("update")) {
       map.set(`update_${mcpEntityPlural(entity)}`, entity);
+      map.set(`update_${mcpEntitySingular(entity)}`, entity);
     }
   }
 

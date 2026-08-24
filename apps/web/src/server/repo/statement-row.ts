@@ -29,6 +29,7 @@ import { createAppError } from "~/server/errors/app-error";
 import {
   formatSearchTerm,
   notDeleted,
+  rangeConditions,
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
@@ -213,10 +214,11 @@ const buildConditions = (filters: StatementRowFilters): SQL[] => {
     conditions.push(sql`${statementRow.statementDate} >= ${filters.dateFrom}`);
   if (filters.dateTo)
     conditions.push(sql`${statementRow.statementDate} <= ${filters.dateTo}`);
-  if (filters.amountMin !== undefined)
-    conditions.push(sql`${statementRow.amount} >= ${filters.amountMin}`);
-  if (filters.amountMax !== undefined)
-    conditions.push(sql`${statementRow.amount} <= ${filters.amountMax}`);
+  conditions.push(
+    ...rangeConditions(statementRow.amount, filters, "amount").filter(
+      (c): c is SQL => c !== undefined,
+    ),
+  );
   if (filters.search) {
     const search = formatSearchTerm(
       statementRow.rawDescription,

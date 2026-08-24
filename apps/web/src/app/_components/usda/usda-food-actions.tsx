@@ -16,10 +16,7 @@ import {
 import { EntityFormDialog } from "~/entities/editing/entity-form-dialog";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
-import {
-  ingredientProductMutationInvalidateKeys,
-  queryKeys,
-} from "~/lib/query-keys";
+import { invalidatesFor, queryKeys } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import type { ComboboxItem } from "../combobox/combobox-types";
 import { EntityPicker } from "../combobox/entity-picker";
@@ -109,7 +106,7 @@ function LinkFoodToIngredientButton({
         `Linked ${foodName} to ${ingredient?.name ?? "ingredient"}`,
       ),
     invalidateKeys: [
-      ...ingredientProductMutationInvalidateKeys,
+      ...invalidatesFor("ingredient", "product"),
       queryKeys.usda.all,
     ],
     onSuccess: () => {

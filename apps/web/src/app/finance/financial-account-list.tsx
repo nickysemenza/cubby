@@ -6,14 +6,12 @@ import { useMemo } from "react";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
-import { financialAccountMutationInvalidateKeys } from "~/lib/query-keys";
 import {
   createBooleanColumn,
   renderOptionCell,
 } from "../_components/data-table/columnHelpers";
-import { ListWorkbench } from "../_components/data-table/ListWorkbench";
+import { EntityListPage } from "../_components/data-table/EntityListPage";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
-import { useEntityList } from "../_components/hooks/useEntityList";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { TableLink } from "../_components/table/TableLink";
 import {
@@ -30,12 +28,10 @@ export function FinancialAccountList() {
     mutationFn: api.financialAccount.delete.mutationOptions,
     entityLabel: "Account",
     entity: "financialAccount",
-    invalidateKeys: financialAccountMutationInvalidateKeys,
   });
   const updateAccountMutation = useUpdateMutation({
     mutationFn: api.financialAccount.update.mutationOptions,
     entity: "financialAccount",
-    invalidateKeys: financialAccountMutationInvalidateKeys,
   });
   // biome-ignore lint/correctness/useExhaustiveDependencies: mutations change every render but are functionally stable
   const columns = useMemo(
@@ -83,13 +79,13 @@ export function FinancialAccountList() {
     ],
     [helper],
   );
-  const list = useEntityList<FinancialAccountOut, FinancialAccountFilters>({
-    entity: "financialAccount",
-    queryOptions: api.financialAccount.list.queryOptions,
-    columns,
-    deletable,
-  });
   return (
-    <ListWorkbench model={list.workbench} ariaLabel="Financial accounts" />
+    <EntityListPage<FinancialAccountOut, FinancialAccountFilters>
+      entity="financialAccount"
+      columns={columns}
+      deletable={deletable}
+      ariaLabel="Financial accounts"
+      preview={false}
+    />
   );
 }

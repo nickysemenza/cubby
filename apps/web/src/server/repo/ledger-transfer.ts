@@ -25,7 +25,6 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   financialAccount,
   financialTransaction,
-  ledgerSourceClaim,
   ledgerTransfer,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -42,7 +41,6 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
-import { countByTarget, impact, present } from "~/server/repo/impact";
 import { lockLedgerPartiesForReference } from "~/server/repo/ledger-party-reference";
 import {
   assertExplicitSourceClaimsForAmountChange,
@@ -488,50 +486,6 @@ export async function deleteLedgerTransfers(
       actor,
     });
   });
-}
-
-export async function previewDeleteLedgerTransfers(
-  db: Database,
-  ids: LedgerTransferId[],
-) {
-  const [evidence, claims] = await Promise.all([
-    countByTarget(
-      unwrapDb(db),
-      financialTransaction,
-      financialTransaction.ledgerTransferId,
-      ids,
-    ),
-    countByTarget(
-      unwrapDb(db),
-      ledgerSourceClaim,
-      ledgerSourceClaim.ledgerTransferId,
-      ids,
-    ),
-  ]);
-  return {
-    blockers: [],
-    changes: present([
-      impact({
-        disposition:
-          LEDGER_TRANSFER_DELETE_EDGE_POLICY[
-            "FinancialTransaction.ledgerTransferId"
-          ],
-        edgeKey: "FinancialTransaction.ledgerTransferId",
-        label: "evidence transactions detached",
-        byTargetId: evidence,
-      }),
-      impact({
-        disposition:
-          LEDGER_TRANSFER_DELETE_EDGE_POLICY[
-            "LedgerSourceClaim.ledgerTransferId"
-          ],
-        edgeKey: "LedgerSourceClaim.ledgerTransferId",
-        label: "source claims retired",
-        byTargetId: claims,
-      }),
-    ]),
-    sideEffects: [],
-  };
 }
 
 export async function listLedgerTransfers(

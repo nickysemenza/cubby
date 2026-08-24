@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { productSearchSchema } from "./products.index";
+import { productSearchSchema } from "~/entities/list-search";
 
 describe("product route timeline search validation", () => {
   it("accepts every renderer and independent movement state", () => {

@@ -12,8 +12,8 @@ import {
 } from "@tanstack/react-router";
 import { z } from "zod";
 import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
+import { listChromePage } from "~/app/_components/routing/entity-routes";
 import { Row, Stack } from "~/components/layout";
-import { Page } from "~/components/page/Page";
 import { NativeSelect } from "~/components/ui/native-select";
 import { entityPluralLabel } from "~/entities/entities";
 import { pageTitle } from "~/lib/page-title";
@@ -30,6 +30,16 @@ const searchSchema = z.object({
 });
 
 const searchDefaults = { entityType: undefined, source: undefined } as const;
+
+// Bound to a const, not inlined into the options object below: see
+// `entity-routes.tsx`'s doc comment on why the splitter needs a literal
+// identifier here, not an inline factory call. Must be defined (and
+// initialized) before `Route` reads it below — `const` isn't hoisted the way
+// `function ActivityBody` is.
+const ActivityPage = listChromePage({
+  title: "Activity",
+  page: ActivityBody,
+});
 
 export const Route = createFileRoute("/_authenticated/activity")({
   validateSearch: searchSchema,
@@ -122,45 +132,43 @@ function SourceFilter({
   );
 }
 
-function ActivityPage() {
+function ActivityBody() {
   const { entityType, source } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
 
   return (
-    <Page variant="list" listChrome="workbench" title="Activity">
-      <Stack className="max-w-3xl">
-        <Row justify="between" align="center" gap="sm" wrap>
-          {/* Every auditable entity writes here (products through projects,
-              tasks and expenses) — kept generic rather than listing a subset
-              that drifts as the manifest grows. */}
-          <p className="text-muted-foreground">
-            Recent changes across all entities.
-          </p>
-          <Row gap="sm" wrap>
-            <EntityTypeFilter
-              value={entityType}
-              onChange={(next) =>
-                navigate({
-                  search: (prev) => ({ ...prev, entityType: next }),
-                })
-              }
-            />
-            <SourceFilter
-              value={source}
-              onChange={(next) =>
-                navigate({
-                  search: (prev) => ({ ...prev, source: next }),
-                })
-              }
-            />
-          </Row>
+    <Stack className="max-w-3xl">
+      <Row justify="between" align="center" gap="sm" wrap>
+        {/* Every auditable entity writes here (products through projects,
+            tasks and expenses) — kept generic rather than listing a subset
+            that drifts as the manifest grows. */}
+        <p className="text-muted-foreground">
+          Recent changes across all entities.
+        </p>
+        <Row gap="sm" wrap>
+          <EntityTypeFilter
+            value={entityType}
+            onChange={(next) =>
+              navigate({
+                search: (prev) => ({ ...prev, entityType: next }),
+              })
+            }
+          />
+          <SourceFilter
+            value={source}
+            onChange={(next) =>
+              navigate({
+                search: (prev) => ({ ...prev, source: next }),
+              })
+            }
+          />
         </Row>
-        <AuditLogList
-          showEntityLink={true}
-          entityType={entityType}
-          source={source}
-        />
-      </Stack>
-    </Page>
+      </Row>
+      <AuditLogList
+        showEntityLink={true}
+        entityType={entityType}
+        source={source}
+      />
+    </Stack>
   );
 }

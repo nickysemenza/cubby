@@ -1,8 +1,8 @@
 import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
 import { CalendarClock } from "lucide-react";
 import { useMemo } from "react";
+import { SpendTrend } from "~/app/_components/charts/kit";
 import { ChartEmpty } from "./chart-empty";
-import { CurrencyTrend } from "./currency-trend";
 
 const SERIES_COLORS: Record<string, string> = {
   Actual: "var(--chart-1)",
@@ -47,7 +47,7 @@ export function MonthlyTrend({
   }
 
   return (
-    <CurrencyTrend
+    <SpendTrend
       data={data}
       margin={{ top: 20, right: 110, bottom: 50, left: 70 }}
       xScale={{ type: "point" }}

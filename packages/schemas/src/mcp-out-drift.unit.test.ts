@@ -1,14 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { ingredientMcpOut, ingredientOut } from "./ingredient";
-import {
-  inventoryMcpOut,
-  inventoryWithLocationAndProductOut,
-} from "./inventory";
-import { locationMcpOut, locationOut } from "./location";
-import { mealMcpOut, mealOut } from "./meal";
 import { productMcpOut, productTopLevelOut } from "./product";
-import { recipeMcpOut, recipeOut } from "./recipe";
+
+/**
+ * Product is the ONLY `xOut`/`xMcpOut` pair left that can drift.
+ *
+ * Every other slim MCP shape (recipe, meal, ingredient, location, inventory) is
+ * now DERIVED from its plain counterpart with `.pick()`/`.omit()`, so the type
+ * system enforces what this test used to assert by hand — a key that stops
+ * existing on the plain shape is a compile error, not a test failure.
+ *
+ * `productMcpOut` stays hand-written because it adds `effectivePrice` (the
+ * resolved costing price) next to `price` (the raw manual override), a pairing
+ * `productTopLevelOut` does not carry: `price` there is the override and the
+ * resolved value lives at `pricing.effectivePrice`. A `.pick()` cannot express
+ * that, so the guard below keeps the hand-written half honest instead.
+ */
 
 /**
  * Does `schema` accept `null` at this position? Unwraps `.optional()` /
@@ -20,17 +27,6 @@ import { recipeMcpOut, recipeOut } from "./recipe";
  * one `instanceof` checks work against) is its subtype, hence the localized
  * cast — same pattern `deriveUpdateFields` already uses for the same reason.
  */
-/**
- * Look up `key` in `shape`. The caller always got `key` from
- * `Object.keys(shape)` (or checked `key in shape` first), so the lookup is
- * never actually undefined — this just says so past `noUncheckedIndexedAccess`.
- */
-function field(shape: Record<string, z.ZodType>, key: string): z.ZodType {
-  const value = shape[key];
-  if (!value) throw new Error(`expected a schema at key "${key}"`);
-  return value;
-}
-
 function acceptsNull(schema: z.ZodType): boolean {
   if (schema instanceof z.ZodNullable) return true;
   if (schema instanceof z.ZodOptional)
@@ -40,131 +36,78 @@ function acceptsNull(schema: z.ZodType): boolean {
   return false;
 }
 
-interface McpOutPair {
-  entity: string;
-  plain: z.ZodObject<z.ZodRawShape>;
-  mcp: z.ZodObject<z.ZodRawShape>;
-  /**
-   * Set only when this pair is a documented, investigated exception — see the
-   * inline comment above the entry for what specifically diverges and why.
-   * Leave unset for a pair that is expected to actually pass; a pair with
-   * `except` set is asserted to be DOCUMENTED, not asserted to be a subset.
-   */
-  except?: string;
+/**
+ * Look up `key` in `shape`. The caller always got `key` from
+ * `Object.keys(shape)`, so the lookup is never actually undefined — this just
+ * says so past `noUncheckedIndexedAccess`.
+ */
+function field(shape: Record<string, z.ZodType>, key: string): z.ZodType {
+  const value = shape[key];
+  if (!value) throw new Error(`expected a schema at key "${key}"`);
+  return value;
 }
 
+// Cast to Record<string, z.ZodType>: zod's raw shape type is keyed by its
+// internal `$ZodType`, and a computed-key lookup by a key we just pulled from
+// `Object.keys(...)` is always defined — the cast just says so.
+const plainShape = productTopLevelOut.shape as Record<string, z.ZodType>;
+const mcpShape = productMcpOut.shape as Record<string, z.ZodType>;
+
 /**
- * Every currently-known `xOut`/`xMcpOut` pair that is a genuine "slim MCP
- * projection of the plain output" — i.e. the MCP shape is meant to be
- * assembled entirely from fields the plain shape already carries. Add a new
- * entity here in one line; the test below covers it automatically.
- *
- * Deliberately NOT every `*McpOut` in the package: several (e.g.
- * `purchaseProductsMcpOut`, `projectResourcesMcpOut`,
- * `cookbookSummariesMcpOut`, `recipeDetailMcpOut`) are
- * `createItemsResponseSchema(xOut)` / direct aliases of the plain schema
- * itself, not a separate hand-maintained projection — there is no drift
- * possible because there is no second declaration to drift from.
+ * The keys `productMcpOut` is allowed to hold that `productTopLevelOut` has no
+ * counterpart for. Each is a projection or a join the plain product row does
+ * not carry under that name — not a field that drifted.
  */
-const PAIRS: McpOutPair[] = [
-  { entity: "recipe", plain: recipeOut, mcp: recipeMcpOut },
-  { entity: "meal", plain: mealOut, mcp: mealMcpOut },
-  {
-    entity: "product",
-    plain: productTopLevelOut,
-    mcp: productMcpOut,
-    // `productMcpOut.price` means "effective/costing price" (what
-    // `productPricingOut` calls the resolved value); `productTopLevelOut.price`
-    // means "the raw manual override" ("null resumes the Expense-derived
-    // fallback"). Same key name, SWAPPED meaning — not just a nullability or
-    // constraint mismatch. MCP additionally has `priceOverride`, which carries
-    // what `productTopLevelOut.price` actually means, but productTopLevelOut
-    // has no field under that name at all. Needs a human naming decision, not
-    // a mechanical fix.
-    except:
-      "price/priceOverride: the `price` key means different things in each shape, and priceOverride has no counterpart key in productTopLevelOut",
-  },
-  {
-    entity: "ingredient",
-    plain: ingredientOut,
-    mcp: ingredientMcpOut,
-    // `ingredientMcpOut` (products/recipeCount/usdaFdcId) is a bespoke,
-    // hand-assembled aggregate — no single plain ingredient output
-    // (`ingredientOut`, `ingredientListItemOut`, `enrichmentRowOut`) carries
-    // that exact field combination under those names (the closest,
-    // `ingredientListItemOut`, has `product` — singular, full objects — and
-    // `ownRecipeCount`, not `products`/`recipeCount`).
-    except:
-      "products/recipeCount/usdaFdcId have no matching keys in ingredientOut",
-  },
-  {
-    entity: "location",
-    plain: locationOut,
-    mcp: locationMcpOut,
-    // `locationMcpOut` combines `parentName` + `parentId` + `children` in one
-    // object; no single plain location output carries all three under those
-    // names (`locationWithParentNameOut` has `parentName` only with no
-    // `children`; `locationListItemOut` has `parent`/`children` but not
-    // `parentId`/`parentName`).
-    except: "parentId/parentName/children have no matching keys in locationOut",
-  },
-  {
-    entity: "inventory",
-    plain: inventoryWithLocationAndProductOut,
-    mcp: inventoryMcpOut,
-    // `inventoryMcpOut.product` / `.location` are `.nullable()`; the plain
-    // counterpart's (`inventoryWithLocationAndProductOut`, via
-    // `inventoryWithLocationAndProductFields`) are REQUIRED objects — a real
-    // inventory entry always resolves both through its FK join. Worth a
-    // second look: this reads like the MCP side over-widened defensively
-    // rather than a real possibility, but that call belongs to whoever owns
-    // the MCP inventory tools, not this test.
-    except:
-      "product/location are .nullable() on the MCP side but required on inventoryWithLocationAndProductOut",
-  },
-];
+const DERIVED_KEYS = new Set([
+  // The resolved costing price; `productPricingOut.effectivePrice` is its
+  // counterpart, and it is deliberately hoisted next to the raw `price`.
+  "effectivePrice",
+  "imageCount",
+  "coverImageUrl",
+  // Resolved off the joined USDA food row, not stored on the product.
+  "usdaFdcId",
+  // The linked ingredient's public id; the plain row nests the whole row.
+  "ingredientId",
+  "unitMappings",
+  "primaryGtin",
+]);
 
-describe("MCP output shapes stay within their plain counterpart", () => {
-  it.each(PAIRS.filter((pair) => !pair.except))(
-    "$entity: every key in the MCP shape exists in the plain shape, with matching nullability",
-    ({ plain, mcp }) => {
-      // Cast to Record<string, z.ZodType>: zod's raw shape type is keyed by its
-      // internal `$ZodType`, and a computed-key lookup by a key we just pulled
-      // from `Object.keys(...)` is always defined — the cast just says so.
-      const plainShape = plain.shape as Record<string, z.ZodType>;
-      const mcpShape = mcp.shape as Record<string, z.ZodType>;
+describe("productMcpOut stays within productTopLevelOut", () => {
+  it("adds no key beyond the documented derived ones", () => {
+    const unexpected = Object.keys(mcpShape).filter(
+      (key) => !(key in plainShape) && !DERIVED_KEYS.has(key),
+    );
+    expect(
+      unexpected,
+      "keys present on productMcpOut but absent from productTopLevelOut",
+    ).toEqual([]);
+  });
 
-      const missingKeys = Object.keys(mcpShape).filter(
-        (key) => !(key in plainShape),
+  it("matches nullability on every shared key", () => {
+    const mismatches = Object.keys(mcpShape)
+      .filter((key) => key in plainShape)
+      .filter(
+        (key) =>
+          acceptsNull(field(mcpShape, key)) !==
+          acceptsNull(field(plainShape, key)),
+      )
+      .map(
+        (key) =>
+          `${key}: mcp accepts null = ${acceptsNull(field(mcpShape, key))}, plain accepts null = ${acceptsNull(field(plainShape, key))}`,
       );
-      expect(
-        missingKeys,
-        "keys present on the MCP shape but absent from the plain shape",
-      ).toEqual([]);
+    expect(mismatches).toEqual([]);
+  });
 
-      const nullabilityMismatches = Object.keys(mcpShape)
-        .filter((key) => key in plainShape)
-        .filter(
-          (key) =>
-            acceptsNull(field(mcpShape, key)) !==
-            acceptsNull(field(plainShape, key)),
-        )
-        .map(
-          (key) =>
-            `${key}: mcp accepts null = ${acceptsNull(field(mcpShape, key))}, plain accepts null = ${acceptsNull(field(plainShape, key))}`,
-        );
-      expect(nullabilityMismatches).toEqual([]);
-    },
-  );
-
-  // A pair on the exception list must still name a real, specific reason —
-  // this is what keeps the escape hatch from becoming a place to quietly
-  // stash a failure with an empty or vague comment.
-  it.each(PAIRS.filter((pair) => pair.except))(
-    "$entity is a documented, investigated exception",
-    ({ except }) => {
-      expect(typeof except).toBe("string");
-      expect((except as string).length).toBeGreaterThan(20);
-    },
-  );
+  /**
+   * The regression this file exists for: `price` used to mean the RESOLVED
+   * costing price on the MCP shape and the RAW manual override on the plain
+   * one — the same key, swapped meaning. Both now mean the override, and the
+   * resolved value has its own name on both sides.
+   */
+  it("keeps `price` the raw override on both sides, with the resolved value named separately", () => {
+    expect(Object.keys(mcpShape)).toContain("effectivePrice");
+    expect(Object.keys(mcpShape)).not.toContain("priceOverride");
+    expect(field(mcpShape, "price").description).toContain("override");
+    expect(field(plainShape, "price").description).toContain("override");
+  });
 });

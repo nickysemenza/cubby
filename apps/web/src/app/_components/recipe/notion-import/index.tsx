@@ -19,10 +19,7 @@ import {
   useTRPCClient,
 } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
-import {
-  invalidateTRPCQueries,
-  recipeAllMutationInvalidateKeys,
-} from "~/lib/query-keys";
+import { invalidatesFor, invalidateTRPCQueries } from "~/lib/query-keys";
 import type { ImportResult } from "../cookbook-import/types";
 import { RecipeImportCard } from "../recipe-import-card";
 import {
@@ -133,7 +130,7 @@ export function NotionImport() {
         onDone: (r) => {
           // Refresh the recipe list + re-run the preview (flips new → will-update).
           if (r.succeeded > 0) {
-            invalidateTRPCQueries(queryClient, recipeAllMutationInvalidateKeys);
+            invalidateTRPCQueries(queryClient, invalidatesFor("recipe"));
             invalidateTRPCQueries(queryClient, [
               api.recipe.previewNotionSync.queryKey(),
             ]);

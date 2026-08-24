@@ -46,7 +46,7 @@ import {
 import { Input } from "~/components/ui/input";
 import { useTRPC } from "~/integrations/trpc/react";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
-import { productComponentMutationInvalidateKeys } from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 
 const EMPTY_COMPONENTS: ProductComponentOut[] = [];
 const EMPTY_MEMBERSHIP: KitMembershipOut[] = [];
@@ -246,7 +246,7 @@ function AddComponentsDialog({
     mutationFn: api.product.attachComponents.mutationOptions,
     success: (result) =>
       `Added ${result.changed} component${result.changed === 1 ? "" : "s"}`,
-    invalidateKeys: productComponentMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("product", "component"),
     onSuccess: () => resetAndClose(false),
   });
 
@@ -461,12 +461,12 @@ export function ProductKitComponents({ productId }: { productId: string }) {
   const detachComponent = useActionMutation({
     mutationFn: api.product.detachComponents.mutationOptions,
     success: "Component removed",
-    invalidateKeys: productComponentMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("product", "component"),
   });
   const detachMembership = useActionMutation({
     mutationFn: api.product.detachComponents.mutationOptions,
     success: "Removed from kit",
-    invalidateKeys: productComponentMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("product", "component"),
   });
   const componentAction = useMemo(
     () => (row: ProductRow) => (

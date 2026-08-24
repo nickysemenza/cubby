@@ -13,83 +13,55 @@ import {
   toPublicImpact,
 } from "@cubby/schemas/entity-integrity";
 import {
-  unsafeCookbookId,
-  unsafeExpenseId,
-  unsafeFinancialAccountId,
-  unsafeFinancialTransactionId,
   unsafeIngredientId,
-  unsafeInventoryId,
   unsafeLedgerPartyId,
-  unsafeLedgerTransferId,
-  unsafeLocationId,
-  unsafeMealId,
   unsafeProductId,
   unsafeProjectId,
   unsafePurchaseId,
-  unsafeRecipeId,
-  unsafeTaskId,
   unsafeVendorId,
-  unsafeWishId,
 } from "@cubby/schemas/identifiers";
 import { match } from "ts-pattern";
 import type { Database } from "~/server/db";
-import { previewDeleteCookbooks } from "~/server/repo/cookbook";
-import { previewDeleteExpenses } from "~/server/repo/expense";
-import { previewDeleteFinancialAccounts } from "~/server/repo/financial-account";
-import { previewDeleteFinancialTransactions } from "~/server/repo/financial-transaction";
-import { previewDeleteImages } from "~/server/repo/image";
-import { previewDeleteIngredients } from "~/server/repo/ingredient/deletion";
 import {
   previewMergeIngredientCandidates,
   previewMergeIngredients,
 } from "~/server/repo/ingredient/merge";
-import { previewDeleteInventoryEntries } from "~/server/repo/inventory/crud";
-import {
-  previewDeleteLedgerParties,
-  previewMergeLedgerParties,
-} from "~/server/repo/ledger-party";
-import { previewDeleteLedgerTransfers } from "~/server/repo/ledger-transfer";
-import { previewDeleteLocations } from "~/server/repo/location/crud";
-import { previewDeleteMeals } from "~/server/repo/meal/crud";
-import { previewDeleteProducts } from "~/server/repo/product/crud";
+import { previewMergeLedgerParties } from "~/server/repo/ledger-party";
 import { previewMergeProducts } from "~/server/repo/product/merge";
 import {
   previewAttachProductComponents,
   previewDetachProductComponents,
 } from "~/server/repo/product-components";
-import { previewDeleteProjects } from "~/server/repo/project/crud";
 import {
   previewAttachProjectResources,
   previewDetachProjectResources,
 } from "~/server/repo/project/tools";
-import {
-  previewDeletePurchases,
-  previewMergePurchases,
-} from "~/server/repo/purchase";
+import { previewMergePurchases } from "~/server/repo/purchase";
 import {
   previewAttachPurchaseProducts,
   previewDetachPurchaseProducts,
 } from "~/server/repo/purchase-products";
-import { previewDeleteRecipes } from "~/server/repo/recipe/crud";
 import {
   lookupShortcodes,
   resolveLiveShortcodes,
 } from "~/server/repo/shortcode-resolver";
-import { previewDeleteTasks } from "~/server/repo/task/crud";
-import {
-  previewDeleteVendors,
-  previewMergeVendors,
-} from "~/server/repo/vendor";
-import { previewDeleteWishes } from "~/server/repo/wish";
+import { previewMergeVendors } from "~/server/repo/vendor";
 
 /**
  * Dispatch for `entityIntegrity.previewOperation`.
  *
  * Every arm calls a planner that lives beside the mutation it describes and
  * shares that mutation's own predicates — this file only routes. There is
- * deliberately no generic cascade walker: what a delete means is
+ * deliberately no generic cascade walker: what a merge means is
  * domain-specific, and a generic implementation would re-derive it and get it
  * subtly wrong.
+ *
+ * There is no delete arm. Delete previews were removed: they duplicated the
+ * structured refusal `delete_entity`/the delete mutations already return, so
+ * "attempt the delete and read the refusal" is the contract now. Only merge
+ * and attach/detach keep a live preview, because those really do benefit from
+ * seeing the plan before committing (which candidate to keep, which purchases
+ * fold together) rather than just a pass/fail refusal.
  *
  * The result is ADVISORY. Mutations re-check everything inside their own
  * transaction; a preview is not a lock, an authorization token, or a receipt,
@@ -125,30 +97,20 @@ const plan = async (
     publicIdByEntityId: Map<string, string>;
   } & PlanGap
 > => {
-  // Relation verbs are dispatched apart from delete/merge: their targets are
+  // Relation verbs are dispatched apart from merge: their targets are
   // PRODUCTS, in a different id space from the `entity` the parent names, so
   // they need two resolutions rather than one.
-  // Spelled as an EXCLUSION rather than `=== "attach" || === "detach"`: the
-  // relation member's discriminant is itself a union (`"attach" | "detach"`),
-  // and TypeScript does not remove such a member from the negative branch of an
-  // `||` — so the positive form left every arm below reading `ids`/`mergeIds`
-  // off a union that still contained it. `req` then carries the narrowing into
-  // the `match` and the closures.
-  if (input.operation !== "delete" && input.operation !== "merge") {
+  if (input.operation !== "merge") {
     return planRelation(db, input);
   }
   const req = input;
-  // Bound to a local const so the `!== "image"` narrowing survives into the
-  // closures below — TypeScript drops property-path narrowings inside callbacks.
   const entity = req.entity;
-  const publicIds =
-    req.operation === "delete"
-      ? req.ids
-      : [...req.mergeIds, ...(req.keepId ? [req.keepId] : [])];
-  const entityIdsByPublicId =
-    entity === "image"
-      ? new Map(publicIds.map((id) => [id, id]))
-      : await resolveLiveShortcodes(db, publicIds, entity);
+  const publicIds = [...req.mergeIds, ...(req.keepId ? [req.keepId] : [])];
+  const entityIdsByPublicId = await resolveLiveShortcodes(
+    db,
+    publicIds,
+    entity,
+  );
   // Every id the caller named that doesn't resolve to a live row. Reported
   // rather than dropped: a preview silently planned over the survivors renders
   // as "nothing will be affected", which reads as *this operation is harmless*
@@ -164,7 +126,7 @@ const plan = async (
   // has a candidate-ranking arm below. For the others there is nothing to
   // compute — the old sentinel passed `""` as the keeper, producing a confident
   // empty preview of a merge that could never run.
-  if (req.operation === "merge" && !req.keepId && entity !== "ingredient") {
+  if (!req.keepId && entity !== "ingredient") {
     return {
       planned: EMPTY_PLAN,
       publicIdByEntityId: new Map(),
@@ -187,69 +149,6 @@ const plan = async (
   };
 
   const planned = await match(req)
-    .with({ operation: "delete", entity: "product" }, ({ ids }) =>
-      previewDeleteProducts(db, entityIds(ids).map(unsafeProductId)),
-    )
-    .with({ operation: "delete", entity: "recipe" }, ({ ids }) =>
-      previewDeleteRecipes(db, entityIds(ids).map(unsafeRecipeId)),
-    )
-    .with({ operation: "delete", entity: "ingredient" }, ({ ids }) =>
-      previewDeleteIngredients(db, entityIds(ids).map(unsafeIngredientId)),
-    )
-    .with({ operation: "delete", entity: "cookbook" }, ({ ids }) =>
-      previewDeleteCookbooks(db, entityIds(ids).map(unsafeCookbookId)),
-    )
-    .with({ operation: "delete", entity: "meal" }, ({ ids }) =>
-      previewDeleteMeals(db, entityIds(ids).map(unsafeMealId)),
-    )
-    .with({ operation: "delete", entity: "location" }, ({ ids }) =>
-      previewDeleteLocations(db, entityIds(ids).map(unsafeLocationId)),
-    )
-    .with({ operation: "delete", entity: "project" }, ({ ids }) =>
-      previewDeleteProjects(db, entityIds(ids).map(unsafeProjectId)),
-    )
-    .with({ operation: "delete", entity: "task" }, ({ ids }) =>
-      previewDeleteTasks(db, entityIds(ids).map(unsafeTaskId)),
-    )
-    .with({ operation: "delete", entity: "vendor" }, ({ ids }) =>
-      previewDeleteVendors(db, entityIds(ids).map(unsafeVendorId)),
-    )
-    .with({ operation: "delete", entity: "purchase" }, ({ ids }) =>
-      previewDeletePurchases(db, entityIds(ids).map(unsafePurchaseId)),
-    )
-    .with({ operation: "delete", entity: "expense" }, ({ ids }) =>
-      previewDeleteExpenses(db, entityIds(ids).map(unsafeExpenseId)),
-    )
-    .with({ operation: "delete", entity: "financialAccount" }, ({ ids }) =>
-      previewDeleteFinancialAccounts(
-        db,
-        entityIds(ids).map(unsafeFinancialAccountId),
-      ),
-    )
-    .with({ operation: "delete", entity: "financialTransaction" }, ({ ids }) =>
-      previewDeleteFinancialTransactions(
-        db,
-        entityIds(ids).map(unsafeFinancialTransactionId),
-      ),
-    )
-    .with({ operation: "delete", entity: "inventory" }, ({ ids }) =>
-      previewDeleteInventoryEntries(db, entityIds(ids).map(unsafeInventoryId)),
-    )
-    .with({ operation: "delete", entity: "wish" }, ({ ids }) =>
-      previewDeleteWishes(db, entityIds(ids).map(unsafeWishId)),
-    )
-    .with({ operation: "delete", entity: "ledgerParty" }, ({ ids }) =>
-      previewDeleteLedgerParties(db, entityIds(ids).map(unsafeLedgerPartyId)),
-    )
-    .with({ operation: "delete", entity: "ledgerTransfer" }, ({ ids }) =>
-      previewDeleteLedgerTransfers(
-        db,
-        entityIds(ids).map(unsafeLedgerTransferId),
-      ),
-    )
-    .with({ operation: "delete", entity: "image" }, ({ ids }) =>
-      previewDeleteImages(db, ids),
-    )
     // Merge with no keeper named: the dialogs need per-candidate impact in
     // order to CHOOSE one, so this arm returns ranking data and no impact.
     .with(
@@ -299,24 +198,21 @@ const plan = async (
     )
     .exhaustive();
 
-  const publicIdByEntityId =
-    entity === "image"
-      ? new Map(entityIdsByPublicId.entries())
-      : await lookupShortcodes(
-          db,
-          [...entityIdsByPublicId.values()].map((id) => ({
-            entity,
-            id,
-          })),
-        ).then(
-          (codes) =>
-            new Map(
-              [...entityIdsByPublicId.values()].flatMap((id) => {
-                const code = codes.get(entityRefKey(entity, id));
-                return code ? [[id, code] as const] : [];
-              }),
-            ),
-        );
+  const publicIdByEntityId = await lookupShortcodes(
+    db,
+    [...entityIdsByPublicId.values()].map((id) => ({
+      entity,
+      id,
+    })),
+  ).then(
+    (codes) =>
+      new Map(
+        [...entityIdsByPublicId.values()].flatMap((id) => {
+          const code = codes.get(entityRefKey(entity, id));
+          return code ? [[id, code] as const] : [];
+        }),
+      ),
+  );
   return { planned, publicIdByEntityId };
 };
 
@@ -403,22 +299,13 @@ export const previewOperation = async (
     request,
   );
   const targetCount =
-    request.operation === "delete"
-      ? request.ids.length
-      : request.operation === "merge"
-        ? request.mergeIds.length
-        : request.productIds.length;
+    request.operation === "merge"
+      ? request.mergeIds.length
+      : request.productIds.length;
 
   return previewOperationSchema.parse({
     operation: request.operation,
     entity: request.entity,
-    // Only a delete has a mode, and `image` is the one hard delete.
-    mode:
-      request.operation === "delete"
-        ? request.entity === "image"
-          ? "hard"
-          : "soft"
-        : null,
     targetCount,
     canProceed: planned.blockers.length === 0 && !unresolved && !needsKeeper,
     // Gap blockers are appended AFTER translation on purpose: they are already

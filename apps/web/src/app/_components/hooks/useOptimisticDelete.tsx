@@ -1,14 +1,10 @@
-import type { PreviewDeleteEntity } from "@cubby/schemas/entity-integrity";
+import type { Entity } from "@cubby/schemas/entity";
 import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import pluralize from "pluralize";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import {
-  OperationImpact,
-  useOperationPreview,
-} from "~/app/_components/impact/operation-impact";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { DropdownMenuSeparator } from "~/components/ui/dropdown-menu";
 import type { EditableEntity } from "~/entities/editing/types";
@@ -29,8 +25,8 @@ interface DeletableConfig {
   }) => unknown;
   entityLabel: string;
   invalidateKeys: readonly QueryKey[];
-  /** Entity slug for the operation-impact preview fetched while the confirm dialog is open. */
-  entity: PreviewDeleteEntity;
+  /** Entity slug — picks the registered-command delete path vs the legacy mutation. */
+  entity: Entity;
 }
 
 interface UseOptimisticDeleteOptions<TData extends { id: string }> {
@@ -141,9 +137,9 @@ function removeDeletedIdsFromCache(
  * - Delete confirmation dialog
  *
  * Single-row delete (row menu / swipe action) and bulk delete (selection
- * toolbar) are the same flow over a list of targets — one preview, one
- * dialog — rather than two tiers with different confirmation UX. A bulk
- * delete of one row and a row-menu delete of that same row render identically.
+ * toolbar) are the same flow over a list of targets — one dialog — rather
+ * than two tiers with different confirmation UX. A bulk delete of one row and
+ * a row-menu delete of that same row render identically.
  */
 export function useOptimisticDelete<
   TData extends { id: string; name?: string | null },
@@ -283,7 +279,7 @@ export function useOptimisticDelete<
   }, []);
 
   // Build delete bulk action. `onExecute` doesn't delete anything itself — it
-  // opens the same preview-backed dialog `requestDelete` does, over the whole
+  // opens the same confirm dialog `requestDelete` does, over the whole
   // selection, and holds its returned promise open until the dialog resolves
   // it (submit or cancel). That's what lets `BulkActionBar` skip its own
   // generic "are you sure" dialog for this action (no `requiresConfirmation`)
@@ -334,22 +330,6 @@ export function useOptimisticDelete<
 
   const targetCount = deleteTargets?.length ?? 0;
 
-  // Impact preview — fetched only while the dialog is open, for the current
-  // target(s). See `useOperationPreview`'s doc comment for the gating rule: it
-  // never disables confirmation, except the one case handled below.
-  const previewInput = useMemo(
-    () =>
-      deletable && deleteTargets && deleteTargets.length > 0
-        ? {
-            operation: "delete" as const,
-            entity: deletable.entity,
-            ids: deleteTargets.map((target) => target.id),
-          }
-        : null,
-    [deletable, deleteTargets],
-  );
-  const preview = useOperationPreview(previewInput, targetCount > 0);
-
   // Build delete dialog element
   const deleteDialog = useMemo(
     () =>
@@ -385,20 +365,11 @@ export function useOptimisticDelete<
             settleBulkAction({ success: true });
           }}
           isPending={deletable ? deleteMutation.isPending : false}
-          blocked={preview.data?.canProceed === false}
-        >
-          <OperationImpact
-            preview={preview.data}
-            isLoading={preview.isLoading}
-            isError={preview.isError}
-            onRetry={() => void preview.refetch()}
-          />
-        </BulkActionDialog>
+        />
       ) : null,
-    // Not `deleteMutation`/`preview` wholesale — react-query hands back a new
-    // result object every render, so depending on either made this memo a
-    // no-op. `mutateAsync`/`refetch` are bound once by their observers; only
-    // the scalar fields are read.
+    // Not `deleteMutation` wholesale — react-query hands back a new result
+    // object every render, so depending on it made this memo a no-op.
+    // `mutateAsync` is bound once by its observer; only `isPending` is read.
     [
       deletable,
       deleteTargets,
@@ -407,10 +378,6 @@ export function useOptimisticDelete<
       deleteMutation.isPending,
       deleteMutation.mutateAsync,
       emptyLabel,
-      preview.data,
-      preview.isLoading,
-      preview.isError,
-      preview.refetch,
     ],
   );
 

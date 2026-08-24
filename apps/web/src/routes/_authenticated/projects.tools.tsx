@@ -5,8 +5,8 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { z } from "zod";
+import { listChromePage } from "~/app/_components/routing/entity-routes";
 import { ToolMatrixPage } from "~/app/projects/tool-matrix-page";
-import { Page } from "~/components/page/Page";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 
@@ -49,6 +49,16 @@ const toolMatrixSearchSchema = z
 
 export type ToolMatrixSearch = z.infer<typeof toolMatrixSearchSchema>;
 
+// Bound to a const, not inlined into the options object below: see
+// `entity-routes.tsx`'s doc comment on why the splitter needs a literal
+// identifier here, not an inline factory call.
+const ProjectToolMatrixRoute = listChromePage({
+  title: "Tool usage matrix",
+  eyebrow: "Projects",
+  layout: "full",
+  page: ToolMatrixBody,
+});
+
 export const Route = createFileRoute("/_authenticated/projects/tools")({
   component: ProjectToolMatrixRoute,
   validateSearch: toolMatrixSearchSchema,
@@ -58,27 +68,19 @@ export const Route = createFileRoute("/_authenticated/projects/tools")({
   head: () => ({ meta: [{ title: pageTitle("Tool usage matrix") }] }),
 });
 
-function ProjectToolMatrixRoute() {
+function ToolMatrixBody() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
 
   return (
-    <Page
-      variant="list"
-      listChrome="workbench"
-      title="Tool usage matrix"
-      eyebrow="Projects"
-      layout="full"
-    >
-      <ToolMatrixPage
-        search={search}
-        onSearchChange={(next) =>
-          navigate({
-            search: (prev) => ({ ...prev, ...next }),
-            replace: true,
-          })
-        }
-      />
-    </Page>
+    <ToolMatrixPage
+      search={search}
+      onSearchChange={(next) =>
+        navigate({
+          search: (prev) => ({ ...prev, ...next }),
+          replace: true,
+        })
+      }
+    />
   );
 }

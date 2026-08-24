@@ -16,7 +16,6 @@ import { EntityValueField } from "~/app/_components/form-utils/entity-value-fiel
 import { tradeOptions } from "~/app/projects/shared";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { useTRPC } from "~/integrations/trpc/react";
-import { expenseMutationInvalidateKeys } from "~/lib/query-keys";
 import {
   FormWrapper,
   NullableNumericField,
@@ -94,7 +93,6 @@ export function SettleExpenseDialog({
   const updateMutation = useUpdateMutation({
     mutationFn: api.expense.update.mutationOptions,
     entity: "expense",
-    invalidateKeys: expenseMutationInvalidateKeys,
   });
 
   const onSubmit = (values: SettleExpenseValues) => {

@@ -22,10 +22,7 @@ import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { useTabParam } from "~/hooks/useTabParam";
 import { useTRPC, useTRPCClient } from "~/integrations/trpc/react";
 import { shortcodeHead } from "~/lib/page-title";
-import {
-  invalidateTRPCQueries,
-  recipeMutationInvalidateKeys,
-} from "~/lib/query-keys";
+import { invalidatesFor, invalidateTRPCQueries } from "~/lib/query-keys";
 
 const searchSchema = z.object({
   // Active tab, deep-linkable. Default ("recipes") is omitted from the URL.
@@ -96,7 +93,7 @@ function CookbookDetailPage() {
           return `Reprocessed ${reprocessed} recipe${reprocessed === 1 ? "" : "s"} from ${name}${extra}`;
         },
         onDone: () => {
-          invalidateTRPCQueries(queryClient, recipeMutationInvalidateKeys);
+          invalidateTRPCQueries(queryClient, invalidatesFor("recipe", "list"));
         },
       },
     );

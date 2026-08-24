@@ -342,6 +342,30 @@ describe("purchase ↔ product links", () => {
     expect(again).toEqual({ changed: 0, attached: 1, alreadySatisfied: 1 });
   });
 
+  /**
+   * PRODUCT_NOT_FOUND: the shared `relation-preflight.ts` refusal for a
+   * target that plainly does not resolve any more — here, a soft-deleted
+   * product named by a stale id.
+   */
+  it("refuses to attach a soft-deleted product, naming it in the refusal", async () => {
+    const order = await mkPurchase("dead product order");
+    const gone = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Gone Before Attach" }),
+      ctx.actor,
+    );
+    await deleteProducts(ctx.db, [gone.entityId], ctx.actor);
+
+    await expect(
+      attachPurchaseProducts(ctx.db, order.id, [gone.entityId], ctx.actor),
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      cause: { reason: "PRODUCT_NOT_FOUND" },
+    });
+
+    expect(await livePairs(order.id)).toHaveLength(0);
+  });
+
   it("allows re-attaching a detached pair — the unique index is partial", async () => {
     const order = await mkPurchase("re-attach");
     const prod = await createProduct(

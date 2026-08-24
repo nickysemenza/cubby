@@ -81,11 +81,11 @@ record. Put maker-issued model/MPN in `model`; retailer SKUs belong in typed
 
 ## Apply metadata safely
 
-`create_product`/`create_products` silently snap `manufacturer` to the
+`create_products` silently snaps `manufacturer` to the
 established spelling already in use among live Products
 (`resolveEstablishedManufacturer` in `server/repo/label-canonical.ts`) — a
 returned `manufacturer` that differs from what you typed is expected, not a
-bug. `update_product` deliberately does **not** auto-snap, so before writing a
+bug. `update_products` deliberately does **not** auto-snap, so before writing a
 manual manufacturer correction, check what spelling is already established
 rather than assuming your typed value will be normalized.
 
@@ -94,11 +94,11 @@ Read the current product immediately before writing. Use
 batch) for identifier-only changes: upsert a precise
 `(source, kind)` slot and remove only an explicitly obsolete slot with its
 exact `expectedExternalId`. It preserves all unrelated identifiers and refuses
-the whole patch if the live slot changed. Use `update_product.externalIds` only
+the whole patch if the live slot changed. Use `update_products.externalIds` only
 when intentionally replacing the complete set; if so, preserve every desired
 identifier and remove MCP-only timestamps.
-When a researched item is absent, create it once with rich `create_product` or
-`create_products`: include manufacturer, model, category, aliases/tags, notes,
+When a researched item is absent, create it once with rich `create_products`:
+include manufacturer, model, category, aliases/tags, notes,
 expected quantity, price/mappings, UPC/FDC link, and verified external IDs.
 Do not create then update merely to add those fields. Product creation does not
 receive the item into inventory.
@@ -218,8 +218,8 @@ count. For cover replacement, never detach the old cover first.
 Call `verify_product_images` after attachment — or `verify_products_images` for
 the whole batch — and use the returned detailed Product rather than making a
 redundant immediate `get_product` call. Confirm the gallery is the snapshot plus
-the new verified file. Only then send one `update_product` (or one
-`update_products`) with any `removeImageIds` and complete `imageOrder`; verify
+the new verified file. Only then send one `update_products` call (a one-item
+array) with any `removeImageIds` and complete `imageOrder`; verify
 again after that change. Confirm:
 
 - UPC, model, manufacturer, metadata, and every prior external ID survived;

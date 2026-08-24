@@ -2,13 +2,13 @@
  * Vendor / purchase MCP tools — the two levels ABOVE the expense ledger.
  *
  * `Vendor ──< Purchase ──< Expense`. The ledger itself (`list_expenses`,
- * `create_expense`, the bulk classifiers, `get_expense_analytics`) lives in
+ * `create_expenses`, the bulk classifiers, `get_expense_analytics`) lives in
  * project.tools.ts; this file covers the roster of counterparties and the
  * individual vendor purchases they issue.
  *
  * ## The naming hazard
  *
- * `create_purchase` / `get_purchase` / `list_purchases` / `update_purchase`
+ * `create_purchases` / `get_purchase` / `list_purchases` / `update_purchases`
  * USED to mean the flat ledger row that is now `expense`. Those names are reused
  * here for the purchase, and the reuse is safe only because the schemas are
  * incompatible in a way that fails LOUDLY: `purchaseCreateInput` requires
@@ -135,10 +135,10 @@ export function registerPurchaseTools(server: McpServer) {
     sort: { orderBy: "name", direction: "asc" },
     operations: { delete: false },
     descriptions: {
-      list: "The vendor roster — every counterparty money has gone to, with website, notes, and two read-only rollups: `purchaseCount` (live purchases pointing at this vendor) and `spend` (SUM(cost) over the live expenses of those purchases — the blended net, and NEVER derived from purchase.statedTotal, which is not spend). This is the tool to start from whenever you need a `vendorId`: list_expenses, list_purchases and create_purchase all filter/write by vendor **id**, and they accept only the `VEN-` shortcode returned here. `search` matches vendor identity; related Expenses, Purchases, Products, and FinancialTransactions each expose exact-id, has/none, and terminal-name filters. Sorted by name; pass pageSize up to 100 to pull the whole roster in one call.",
+      list: "The vendor roster — every counterparty money has gone to, with website, notes, and two read-only rollups: `purchaseCount` (live purchases pointing at this vendor) and `spend` (SUM(cost) over the live expenses of those purchases — the blended net, and NEVER derived from purchase.statedTotal, which is not spend). This is the tool to start from whenever you need a `vendorId`: list_expenses, list_purchases and create_purchases all filter/write by vendor **id**, and they accept only the `VEN-` shortcode returned here. `search` matches vendor identity; related Expenses, Purchases, Products, and FinancialTransactions each expose exact-id, has/none, and terminal-name filters. Sorted by name; pass pageSize up to 100 to pull the whole roster in one call.",
       get: "Get one vendor by id: identity (name, website, notes) plus the `purchaseCount` and `spend` rollups. `spend` is SUM(cost) over the live expenses of this vendor's live purchases — never a sum of statedTotal. To see what the money actually went on, call list_expenses with this vendorId (the spend ledger) or list_purchases with it (the individual purchases).",
       create:
-        'Add a vendor to the roster — identity only, no money. `name` is required; `website` and `notes` are optional and default to null. Prefer NOT calling this directly for an import: create_expense accepts `vendor` by NAME and find-or-creates both the vendor and its purchase inside the same transaction, so a one-off purchase needs no roster call at all. Reach for create_vendor when you are deliberately seeding the roster (e.g. recording a contractor before any invoice exists) or when you need `website`/`notes` set, which the name-resolution path leaves null. Check list_vendors first — the roster already holds ~114 vendors and a near-duplicate ("Amazon" vs "Amazon Business") is a real, separate row, not a typo the system will fold together.',
+        'Add a vendor to the roster — identity only, no money. `name` is required; `website` and `notes` are optional and default to null. Prefer NOT calling this directly for an import: create_expenses accepts `vendor` by NAME and find-or-creates both the vendor and its purchase inside the same transaction, so a one-off purchase needs no roster call at all. Reach for create_vendors when you are deliberately seeding the roster (e.g. recording a contractor before any invoice exists) or when you need `website`/`notes` set, which the name-resolution path leaves null. Check list_vendors first — the roster already holds ~114 vendors and a near-duplicate ("Amazon" vs "Amazon Business") is a real, separate row, not a typo the system will fold together.',
       delete:
         "Soft-delete vendors. REFUSES while any live Purchase still points at one — the refusal names which vendors blocked and how many purchases each still holds. Move or delete those purchases first, or merge the vendor into its keeper with merge_entity (entity=vendor) instead of deleting it.",
       update:
@@ -165,7 +165,7 @@ export function registerPurchaseTools(server: McpServer) {
       delete:
         "Soft-delete purchases, and ONLY empty ones. Refuses any purchase still carrying live Expenses or holding settlement allocations, naming which and with how many — the UI's own delete detaches those references instead, which would silently strip real money of its provenance. Delete the linked Expenses first, and unlink or delete the linked Financial Transactions.",
       update:
-        "Update vendor-side purchase identity and paperwork. Nothing here changes spend or settlement: correct spend with update_expense and settlement evidence with update_financial_transaction. `displayLabel` is concise human-entered context rendered parenthetically after the order identity; do not put it in orderId or duplicate it across Expense names. `statedTotal` must remain the literal vendor-printed total and is never summed. Also writable: vendorId, orderId, displayLabel, vendor date, notes, and document ordering/removal.",
+        "Update vendor-side purchase identity and paperwork. Nothing here changes spend or settlement: correct spend with update_expenses and settlement evidence with update_financial_transactions. `displayLabel` is concise human-entered context rendered parenthetically after the order identity; do not put it in orderId or duplicate it across Expense names. `statedTotal` must remain the literal vendor-printed total and is never summed. Also writable: vendorId, orderId, displayLabel, vendor date, notes, and document ordering/removal.",
     },
     create: (caller, params) => caller.purchase.create(params),
   });
@@ -183,11 +183,11 @@ export function registerPurchaseTools(server: McpServer) {
   registerRouterTool(server, {
     name: "split_expense",
     description:
-      "Split ONE Expense into ≥2 Expenses on the SAME purchase — the way an aggregate spend record (a combo kit or multi-item receipt entered as one Expense) gets a real per-product cost basis instead of staying an unattributed blob. Any product in inventory whose only Expense is inside an aggregate has NO cost basis until it is split out. Each part gets its own name/cost/costType/trade/projectId/productId/productQuantity. productQuantity is SIGNED, and zero only on a negative-cost part (see create_expense); a part with a positive cost may not carry a negative quantity. Omitted notes inherit the original Expense notes; explicit null clears them for that part. The original URL, date and future state are preserved. " +
+      "Split ONE Expense into ≥2 Expenses on the SAME purchase — the way an aggregate spend record (a combo kit or multi-item receipt entered as one Expense) gets a real per-product cost basis instead of staying an unattributed blob. Any product in inventory whose only Expense is inside an aggregate has NO cost basis until it is split out. Each part gets its own name/cost/costType/trade/projectId/productId/productQuantity. productQuantity is SIGNED, and zero only on a negative-cost part (see create_expenses); a part with a positive cost may not carry a negative quantity. Omitted notes inherit the original Expense notes; explicit null clears them for that part. The original URL, date and future state are preserved. " +
       "This REPLACES the old `(combo, saw portion)` naming convention that used to encode a split inside a single expense's name — do not invent names like that anymore; give each part its own real name instead. " +
       "Parts are expected to sum to the original expense's cost, but that is a convention, NOT a rule this tool enforces: nothing validates the sum. The response's `originalCost`/`partsSum`/`delta` are a CUE, never a gate — parts are recorded exactly as entered, and a non-zero delta is EXPECTED, not an error, whenever a partial refund or a discount applied to only one part legitimately makes the parts disagree with the original. The same gap is separately DISPLAYED as a purchase-reconciliation cue against statedTotal/expenseTotal; posted refunds that exactly explain it are classified `refund_adjusted`, other differences remain `mismatch`. " +
       "The original Expense is soft-deleted and every part is created on the SAME purchase (`purchaseId`) the original had — this only re-labels how one purchase's money is attributed; it never creates a new purchase or moves money to a different vendor. If the purchase had no `statedTotal`, one is seeded from the original expense's cost so the parts have something to reconcile against. " +
-      "REFUSES when the Expense has no purchase attached (`purchaseId` is null). Call update_expense first with a `vendor` (and `orderId` if known) to give the Expense a purchase, then split it.",
+      "REFUSES when the Expense has no purchase attached (`purchaseId` is null). Call update_expenses first with a `vendor` (and `orderId` if known) to give the Expense a purchase, then split it.",
     inputSchema: splitExpenseInput.shape,
     outputSchema: splitExpenseMcpOut,
     annotations: WRITE_CLOSED,

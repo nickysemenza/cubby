@@ -4,10 +4,7 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
-import type {
-  ImpactItem,
-  OperationDisposition,
-} from "@cubby/schemas/entity-integrity";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type LocationId,
   type ProductId,
@@ -84,6 +81,7 @@ import {
   nextImageSortOrder,
   notDeleted,
   presenceCondition,
+  rangeConditions,
   relations,
   unwrapDb,
   updateLiveAndReturn,
@@ -91,12 +89,6 @@ import {
 } from "~/server/repo/database-helpers";
 import { detachImagesFromEntity } from "~/server/repo/image";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
-import {
-  countByTarget,
-  impact,
-  present,
-  sideEffect,
-} from "~/server/repo/impact";
 import { stockOnly } from "~/server/repo/inventory/placement";
 import { parseLocationType } from "~/server/repo/location/parse-type";
 import { loadProductPricing } from "~/server/repo/product/pricing";
@@ -137,10 +129,8 @@ export const LOCATION_DELETE_EDGE_POLICY = {
 } as const satisfies IncomingEdgePolicy<"location", OperationDisposition>;
 
 /**
- * Live inventory sitting in the given locations. Shared by `deleteLocations`
- * (which refuses when any exist) and `previewDeleteLocations` (which counts
- * them), so the two can't disagree about what counts as "still holding
- * inventory".
+ * Live inventory sitting in the given locations. Used by `deleteLocations`,
+ * which refuses when any exist.
  */
 const findLocationsWithLiveInventory = (
   db: Database | DrizzleTransaction,
@@ -621,8 +611,6 @@ export const deleteLocations = async (
       // Its own reason rather than the shared CONSTRAINT_VIOLATION: this is a
       // structural rule about one specific row, not a generic constraint, and
       // a caller could not previously tell it apart from any other refusal.
-      // `previewDeleteLocations` reports the same rule as a blocker, so a Home
-      // delete no longer previews clean and then throws.
       throw createAppError("LOCATION_IS_ROOT", "Home cannot be deleted");
     }
 
@@ -687,107 +675,6 @@ export const deleteLocations = async (
       ],
     });
   });
-};
-
-/**
- * What `deleteLocations` would do to the given locations, without doing it.
- *
- * Reads the SAME `LOCATION_DELETE_EDGE_POLICY` and the shared
- * `findLocationsWithLiveInventory` predicate the mutation's guard uses, so the
- * preview cannot claim a delete will succeed that the guard then refuses.
- * `Location.parentId` carries no FK — it's `unconstrained` in
- * `INCOMING_EDGES.location` — but the rows are real: `countByTarget` reads
- * the column directly and counts them like any other edge, exactly matching
- * the mutation's own child-promotion update.
- *
- * Advisory only. `deleteLocations` still re-runs every check inside its own
- * transaction; nothing here is a lock or a permission.
- */
-export const previewDeleteLocations = async (
-  db: Database | DrizzleTransaction,
-  ids: LocationId[],
-): Promise<{
-  blockers: ImpactItem[];
-  changes: ImpactItem[];
-  sideEffects: ImpactItem[];
-}> => {
-  if (ids.length === 0) return { blockers: [], changes: [], sideEffects: [] };
-  const dbClient = unwrapDb(db);
-
-  const withInventory = await findLocationsWithLiveInventory(db, ids);
-  const inventoryByTargetId: Record<string, number> = {};
-  for (const { locationId } of withInventory) {
-    inventoryByTargetId[locationId] =
-      (inventoryByTargetId[locationId] ?? 0) + 1;
-  }
-
-  // Home is a structural rule, not an FK edge, so it has no entry in
-  // LOCATION_DELETE_EDGE_POLICY and carries no `edgeKey` — which the impact
-  // shape already allows for exactly this case. Without it the mutation had a
-  // refusal the preview could not see, so deleting Home previewed as
-  // `canProceed: true` and then threw.
-  const home = await getHomeLocation(db);
-  const homeBlocker: ImpactItem[] = ids.includes(home.id)
-    ? [
-        {
-          code: "block-home-location",
-          effect: "block",
-          label: "the Home location",
-          description:
-            "Home is the root of the location tree and cannot be deleted.",
-          total: 1,
-          byTargetId: { [home.id]: 1 },
-        },
-      ]
-    : [];
-
-  const blockers = [
-    ...homeBlocker,
-    ...present([
-      impact({
-        disposition: LOCATION_DELETE_EDGE_POLICY["InventoryEntry.locationId"],
-        edgeKey: "InventoryEntry.locationId",
-        label: "inventory entries",
-        byTargetId: inventoryByTargetId,
-      }),
-    ]),
-  ];
-
-  const changes = present([
-    impact({
-      disposition: LOCATION_DELETE_EDGE_POLICY["LocationImage.locationId"],
-      edgeKey: "LocationImage.locationId",
-      label: "image associations",
-      byTargetId: await countByTarget(
-        dbClient,
-        locationImage,
-        locationImage.locationId,
-        ids,
-      ),
-    }),
-    impact({
-      disposition: LOCATION_DELETE_EDGE_POLICY["Location.parentId"],
-      edgeKey: "Location.parentId",
-      label: "child locations detached",
-      byTargetId: await countByTarget(
-        dbClient,
-        location,
-        location.parentId,
-        ids,
-      ),
-    }),
-  ]);
-
-  const sideEffects = [
-    sideEffect({
-      code: "recompute-location-valuation",
-      label: "location valuations recomputed",
-      description:
-        "Deleting these locations queues a valuation recompute for the location tree.",
-    }),
-  ];
-
-  return { blockers, changes, sideEffects };
 };
 
 /**
@@ -950,12 +837,11 @@ export const locationList = async (
       filters.directItemCountMax !== undefined
         ? notInArray(location.id, locationIdsExceedingInventoryMaximum)
         : undefined,
-      filters.valuationMin !== undefined
-        ? sql`COALESCE((${location.valuation}->>'directValuation')::numeric, 0) >= ${filters.valuationMin}`
-        : undefined,
-      filters.valuationMax !== undefined
-        ? sql`COALESCE((${location.valuation}->>'directValuation')::numeric, 0) <= ${filters.valuationMax}`
-        : undefined,
+      ...rangeConditions(
+        sql`COALESCE((${location.valuation}->>'directValuation')::numeric, 0)`,
+        filters,
+        "valuation",
+      ),
     ],
   );
 

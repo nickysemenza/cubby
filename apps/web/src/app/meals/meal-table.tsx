@@ -10,7 +10,6 @@ import { createCubbyColumnHelper } from "~/app/_components/data-table/table-feat
 import { Badge } from "~/components/ui/badge";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { useTRPC } from "~/integrations/trpc/react";
-import { mealMutationInvalidateKeys } from "~/lib/query-keys";
 import {
   createFilterableSelectColumn,
   createNameColumn,
@@ -48,7 +47,6 @@ export function MealTable() {
   const updateMealMutation = useUpdateMutation({
     mutationFn: api.meal.update.mutationOptions,
     entity: "meal",
-    invalidateKeys: mealMutationInvalidateKeys,
   });
 
   // NOT `useNameEditable` — it hardcodes `data: { name: newName } `, which
@@ -69,7 +67,6 @@ export function MealTable() {
   const deletableConfig = useDeletableConfig({
     mutationFn: api.meal.delete.mutationOptions,
     entityLabel: "Meal",
-    invalidateKeys: mealMutationInvalidateKeys,
     entity: "meal",
   });
 

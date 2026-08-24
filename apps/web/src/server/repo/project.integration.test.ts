@@ -436,7 +436,10 @@ describe("project repository", () => {
     );
     await expect(
       deleteProjects(ctx.db, [projectWithTask.id], ctx.actor),
-    ).rejects.toThrow(/still have tasks/);
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      cause: { reason: "PROJECT_HAS_TASKS" },
+    });
 
     const { output: projectWithExpense } = await createProject(
       ctx.db,
@@ -456,7 +459,40 @@ describe("project repository", () => {
     );
     await expect(
       deleteProjects(ctx.db, [projectWithExpense.id], ctx.actor),
-    ).rejects.toThrow(/still have expenses/);
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      cause: { reason: "PROJECT_HAS_EXPENSES" },
+    });
+  });
+
+  /** PROJECT_HAS_CHILDREN: a live sub-project blocks delete. */
+  it("blocks deletion while a live sub-project still references it, succeeds once the child is gone", async () => {
+    const { output: parent } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "Sub-Project-Blocked Parent" }),
+      ctx.actor,
+    );
+    const { output: child } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "Blocking Child",
+        parentProjectId: parent.id,
+      }),
+      ctx.actor,
+    );
+
+    await expect(
+      deleteProjects(ctx.db, [parent.id], ctx.actor),
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      cause: { reason: "PROJECT_HAS_CHILDREN" },
+    });
+
+    await deleteProjects(ctx.db, [child.id], ctx.actor);
+
+    await expect(
+      deleteProjects(ctx.db, [parent.id], ctx.actor),
+    ).resolves.toMatchObject({ detachedImageKeys: [] });
   });
 
   it("hard-deletes dependency edges (both directions) when a project is deleted", async () => {
@@ -1221,55 +1257,13 @@ describe("project repository — sub-projects (parentProjectId)", () => {
   });
 });
 
-// P0 regression guard for `resolveShortcodes`' canonical-key lookup: it keys
-// its result Map by the CANONICAL code, and the inlined resolver here indexed
-// it by the RAW input code, so a lowercase or legacy-prefix code resolved fine
-// in SQL but missed the Map and silently fell into the "unresolved" (zero-row)
-// branch.
-//
-// That zero-row branch is exactly why the generic probe in
-// `filter-application.integration.test.ts` cannot stand in for this case: its
-// seeded world is deliberately unrelated, so the canonical form already
-// matches zero rows and its `lower.count === upper.count` check holds
-// vacuously. It covers the widening half (a supplied-but-unresolved code must
-// not fall through to "no constraint" and return the whole table) for every
-// declared id filter, which is why only the positive case remains here.
-describe("project repository — parentProjectId canonicalization guard", () => {
-  const ctx = withTestDb();
-  const pagination = { pageIndex: 0, pageSize: 50 };
-
-  it("a lowercase parentProjectId still resolves and filters correctly", async () => {
-    const { output: parent } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "widening guard lowercase parent" }),
-      ctx.actor,
-    );
-    const { output: child } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({
-        name: "widening guard lowercase child",
-        parentProjectId: parent.id,
-      }),
-      ctx.actor,
-    );
-    await createProject(
-      ctx.db,
-      projectCreateInput.parse({
-        name: "widening guard lowercase unrelated project",
-      }),
-      ctx.actor,
-    );
-
-    const lowercase = unsafeProjectShortcode(parent.id.toLowerCase());
-    const { data } = await projectList(
-      ctx.db,
-      { parentProjectId: lowercase },
-      [],
-      pagination,
-    );
-    expect(data.map((row) => row.id)).toEqual([child.id]);
-  });
-});
+// `project.parentProjectId` lowercase canonicalization is now covered by the
+// generic #591 battery in filter-application.integration.test.ts: seedWorld
+// there gives project Beta a real, live parentProjectId (Alpha), so
+// `world.codes.project` genuinely matches a row and the lowercase-vs-
+// canonical comparison is no longer vacuous. This per-entity guard — and the
+// "seeded world is deliberately unrelated" premise that used to justify
+// keeping it — is subsumed; deleted rather than kept duplicate.
 
 /**
  * The WBS renderer's page reader. What's being pinned throughout: the tree page

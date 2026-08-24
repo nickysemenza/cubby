@@ -1,8 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type {
-  ImpactItem,
-  OperationDisposition,
-} from "@cubby/schemas/entity-integrity";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { MealId, MealRecipeId } from "@cubby/schemas/identifiers";
 import type {
   MealCreateInput,
@@ -21,7 +18,7 @@ import {
   type SortParams,
 } from "@cubby/schemas/pagination";
 import { and, eq, gte, inArray, lte, type SQL, sql } from "drizzle-orm";
-import type { Database, DrizzleTransaction } from "~/server/db";
+import type { Database } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { meal, mealRecipe, recipe } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -39,13 +36,11 @@ import {
   lockAndValidateForDelete,
   notDeleted,
   relations,
-  unwrapDb,
   updateAndReturn,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
-import { countByTarget, impact, present } from "~/server/repo/impact";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
 import {
@@ -449,40 +444,4 @@ export const removeMealRecipeWithEntityId = async (
   const mealId = await getMealIdForRecipe(db, id);
   const output = await removeMealRecipe(db, id, actor);
   return { output, entityId: mealId };
-};
-
-/**
- * What {@link deleteMeals} would do to the given meals, without doing it.
- *
- * Reads the SAME `MEAL_DELETE_EDGE_POLICY` `deleteMeals` is described by. Its
- * one incoming edge, `MealRecipe.mealId`, is a `soft-delete` cascade — there
- * is nothing to block on, so `blockers` is always empty — counted here with the
- * same {@link countByTarget} call `removeEntity` uses for the audit count of
- * that very cascade, so the preview and the delete cannot disagree.
- *
- * Advisory only. `deleteMeals` still re-runs its own cascade inside its own
- * transaction; nothing here is a lock or a permission.
- */
-export const previewDeleteMeals = async (
-  db: Database | DrizzleTransaction,
-  ids: MealId[],
-): Promise<{ blockers: ImpactItem[]; changes: ImpactItem[] }> => {
-  if (ids.length === 0) return { blockers: [], changes: [] };
-
-  const disposition = MEAL_DELETE_EDGE_POLICY["MealRecipe.mealId"];
-  const changes = present([
-    impact({
-      disposition,
-      edgeKey: "MealRecipe.mealId",
-      label: "planned recipes",
-      byTargetId: await countByTarget(
-        unwrapDb(db),
-        mealRecipe,
-        mealRecipe.mealId,
-        ids,
-      ),
-    }),
-  ]);
-
-  return { blockers: [], changes };
 };

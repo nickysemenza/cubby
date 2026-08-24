@@ -46,11 +46,6 @@ const procedures = createEntityCrudWithoutListProcedures({
     idSchema: ledgerPartyShortcode,
   },
   repository: {
-    getByID: async (services, id) => {
-      const out = await getLedgerPartyByShortcode(services.db, id);
-      if (!out) throw new Error(`Ledger party not found: ${id}`);
-      return out;
-    },
     getByShortcode: (services, id) =>
       getLedgerPartyByShortcode(services.db, id),
     create: async (services, data) =>

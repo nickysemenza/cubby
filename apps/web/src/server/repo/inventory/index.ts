@@ -30,7 +30,6 @@ export {
   deleteInventoryEntries,
   getInventoryByLocationIds,
   getInventoryCountsByLocations,
-  getInventoryEntryByID,
   getInventoryEntryByShortcode,
   getInventoryForProducts,
   inventoryentryList,

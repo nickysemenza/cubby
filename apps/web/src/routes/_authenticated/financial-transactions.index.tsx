@@ -1,58 +1,31 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
-import { z } from "zod";
-import { tableSearchFields } from "~/app/_components/data-table/table-search";
-import {
-  CreateDialogAction,
-  createDialogSearchField,
-} from "~/app/_components/forms/create-dialog-action";
+import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
+import { listPage } from "~/app/_components/routing/entity-routes";
 import { FinancialTransactionList } from "~/app/finance/financial-transaction-list";
-import { Page } from "~/components/page/Page";
 import { financialTransactionCaptureRequest } from "~/entities/editing/editor-requests";
-import { entityFilterSearchFields } from "~/entities/filter-search-fields";
-import { pageTitle } from "~/lib/page-title";
 import {
-  urlEnumListParam,
-  urlShortcodeListParam,
-  urlStringParam,
-} from "~/lib/search-params";
+  financeSearchDefaults,
+  financialTransactionSearchSchema,
+} from "~/entities/list-search";
+import { pageTitle } from "~/lib/page-title";
 
-export const financialTransactionSearchSchema = z.object({
-  ...entityFilterSearchFields("financialTransaction"),
-  q: urlStringParam,
-  merchant: urlStringParam,
-  kind: urlEnumListParam(financialTransactionKind),
-  status: urlEnumListParam(financialTransactionStatus),
-  accountId: urlShortcodeListParam("financialAccount"),
-  purchaseId: urlShortcodeListParam("purchase"),
-  ...tableSearchFields,
-  ...createDialogSearchField,
+// Bound to a const, not inlined into the options object: the router plugin's
+// splitter re-parses an inlined call expression with a JSX-less babel config,
+// so only the identifier path survives a page body that renders JSX.
+const TransactionsPage = listPage({
+  title: "Transactions",
+  entity: "financialTransaction",
+  list: FinancialTransactionList,
+  actions: () => (
+    <CreateDialogAction request={financialTransactionCaptureRequest()} />
+  ),
 });
-
-const searchDefaults = { q: undefined, create: undefined } as const;
 
 export const Route = createFileRoute("/_authenticated/financial-transactions/")(
   {
     validateSearch: financialTransactionSearchSchema,
-    search: { middlewares: [stripSearchParams(searchDefaults)] },
-    component: () => (
-      <Page
-        variant="list"
-        listChrome="workbench"
-        title="Transactions"
-        entity="financialTransaction"
-        layout="full"
-        actions={
-          <CreateDialogAction request={financialTransactionCaptureRequest()} />
-        }
-      >
-        <FinancialTransactionList />
-      </Page>
-    ),
+    search: { middlewares: [stripSearchParams(financeSearchDefaults)] },
     head: () => ({ meta: [{ title: pageTitle("Transactions") }] }),
+    component: TransactionsPage,
   },
 );
-
-import {
-  financialTransactionKind,
-  financialTransactionStatus,
-} from "@cubby/schemas/financial-transaction";

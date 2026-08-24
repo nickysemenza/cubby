@@ -47,6 +47,7 @@ export {
   matchesStringValues,
   notDeleted,
   presenceCondition,
+  rangeConditions,
   uuidArrayParam,
 } from "./query";
 // Relation loaders

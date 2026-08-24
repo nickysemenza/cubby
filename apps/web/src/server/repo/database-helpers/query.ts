@@ -87,6 +87,35 @@ export function auditDateWhereConditions(
 }
 
 /**
+ * Inclusive `{prefix}Min`/`{prefix}Max` numeric filter bounds against a
+ * single SQL expression — a real column, or a computed one (correlated
+ * subquery, jsonb extraction, COALESCE). Mirrors `auditDateWhereConditions`'s
+ * shape, specialized to the one-expression min/max-pair pattern instead of
+ * the fixed four created/updated date bounds.
+ *
+ * Only covers the plain `expr >= min` / `expr <= max` pair. A pair that
+ * layers extra SQL onto the comparison (`Purchase.expenseTotalMin`'s
+ * unpriced-expense guard), joins through a precomputed id set instead of
+ * comparing the expression directly (`Location.directItemCountMin`'s HAVING
+ * subquery), or isn't a min/max pair at all (a singleton bound with no other
+ * end) is a deliberate divergence, not an oversight — leave those
+ * hand-declared rather than forcing them through this helper and losing the
+ * extra condition.
+ */
+export function rangeConditions<P extends string>(
+  expr: SQL | AnyColumn,
+  filters: Partial<Record<`${P}Min` | `${P}Max`, number | undefined>>,
+  prefix: P,
+): Array<SQL | undefined> {
+  const min = filters[`${prefix}Min` as `${P}Min`];
+  const max = filters[`${prefix}Max` as `${P}Max`];
+  return [
+    min !== undefined ? sql`${expr} >= ${min}` : undefined,
+    max !== undefined ? sql`${expr} <= ${max}` : undefined,
+  ];
+}
+
+/**
  * Helper function to format search terms for PostgreSQL pattern matching.
  */
 export const formatSearchTerm = (

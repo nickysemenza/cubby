@@ -94,18 +94,59 @@ function expectShortcode(value: unknown, entity: string) {
   ).toMatchObject({ type: entity, legacy: false });
 }
 
+/**
+ * Call a plural batch create/update tool (`create_xs`/`update_xs`) with
+ * exactly one item and hand back the same shape the retired singular tool
+ * (`create_x`/`update_x`) used to return, so every call site here can keep
+ * reading the entity's own fields off `structuredContent` directly instead of
+ * unwrapping a batch envelope. The singular tools were dropped because the
+ * plural ones accept a one-item array and made them strictly redundant — see
+ * `registerEntityCrudToolset` in tools/_shared.ts.
+ */
+async function callSingular(
+  tool: string,
+  args: Record<string, unknown>,
+  caller: DomainCaller,
+): Promise<CallToolResult> {
+  const result = await callTool(
+    tool,
+    { items: [args], resultDetail: "full" },
+    caller,
+  );
+  if (result.isError) return result;
+  const { results } = structured(result) as {
+    results: Array<Record<string, unknown>>;
+  };
+  const [only] = results;
+  if (only?.status === "failed") {
+    return {
+      ...result,
+      isError: true,
+      structuredContent: only,
+      content: [{ type: "text" as const, text: JSON.stringify(only) }],
+    };
+  }
+  return {
+    ...result,
+    structuredContent: only?.item as Record<string, unknown> | undefined,
+  };
+}
+
 // 1. list -> create -> get -> update -> delete round trips, per entity
 
 describe("MCP CRUD round trips are driven by shortcodes only", () => {
   const ctx = withTestDb();
 
-  /** Create through a tool and hand back the public id it minted. */
+  /**
+   * Create through a batch tool's plural name (`create_xs`) with one item and
+   * hand back the public id it minted.
+   */
   async function createCode(
     caller: DomainCaller,
     tool: string,
     args: Record<string, unknown>,
   ): Promise<string> {
-    const result = await callTool(tool, args, caller);
+    const result = await callSingular(tool, args, caller);
     expectOk(result);
     return structured(result).id as string;
   }
@@ -144,7 +185,12 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
   interface RoundTrip {
     /** The entity every minted id must be stamped for, and the test's name. */
     entity: string;
-    /** Tool names in lifecycle order: `create list get update [delete]`. */
+    /**
+     * Tool names in lifecycle order: `create list get update [delete]`.
+     * `create`/`update` name the PLURAL batch tools (`create_xs`/`update_xs`)
+     * — the singular ones have no twin of their own anymore — and the
+     * generic body below drives them through `callSingular` with one item.
+     */
     tools: string;
     /** Prerequisite entities; everything below closes over the codes it returns. */
     setup?: (caller: DomainCaller) => Promise<Bag>;
@@ -215,9 +261,9 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
     {
       entity: "location",
       tools:
-        "create_location list_locations get_location update_location delete_locations",
+        "create_locations list_locations get_location update_locations delete_locations",
       setup: async (caller) => ({
-        parent: await createCode(caller, "create_location", {
+        parent: await createCode(caller, "create_locations", {
           name: "Shortcode Pantry",
           type: "room",
           parentId: null,
@@ -232,9 +278,10 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
       expectListLength: 1,
       updateArgs: { name: "Shortcode Shelf Renamed" },
       checks: (bag) => [
-        // parentId round-trips to the PARENT's public id, not its uuid.
-        ["parentId", bag.parent, "create", "get"],
-        ["parentName", "Shortcode Pantry", "get"],
+        // The parent round-trips as a nested ref keyed by the PARENT's public
+        // id, not its uuid.
+        ["parent.id", bag.parent, "create", "get"],
+        ["parent.name", "Shortcode Pantry", "get"],
         ["name", "Shortcode Shelf Renamed", "update"],
       ],
       getFailsAfterDelete: true,
@@ -242,7 +289,7 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
     {
       entity: "ingredient",
       tools:
-        "create_ingredient search_ingredients get_ingredient update_ingredient delete_ingredients",
+        "create_ingredients search_ingredients get_ingredient update_ingredients delete_ingredients",
       createArgs: () => ({ name: "Shortcode Basil", aliases: ["sweet basil"] }),
       listArgs: () => ({ nameFilter: "Shortcode Basil" }),
       updateArgs: { name: "Shortcode Basil Renamed" },
@@ -254,9 +301,9 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
     {
       entity: "product",
       tools:
-        "create_product search_products get_product update_product delete_products",
+        "create_products search_products get_product update_products delete_products",
       setup: async (caller) => ({
-        ingredient: await createCode(caller, "create_ingredient", {
+        ingredient: await createCode(caller, "create_ingredients", {
           name: "Shortcode Flour",
           aliases: [],
         }),
@@ -275,14 +322,14 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
     {
       entity: "inventory",
       tools:
-        "create_inventory_entry list_inventory get_inventory_entry update_inventory_entry delete_inventory_entries",
+        "create_inventory_entries list_inventory get_inventory_entry update_inventory_entries delete_inventory_entries",
       setup: async (caller) => ({
         product: await createCode(
           caller,
-          "create_product",
+          "create_products",
           productArgs("Shortcode Canned Beans"),
         ),
-        location: await createCode(caller, "create_location", {
+        location: await createCode(caller, "create_locations", {
           name: "Shortcode Cupboard",
           type: "shelf",
           parentId: null,
@@ -305,9 +352,9 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
     {
       entity: "recipe",
       tools:
-        "create_recipe list_recipes get_recipe update_recipe delete_recipe",
+        "create_recipes list_recipes get_recipe update_recipes delete_recipe",
       setup: async (caller) => ({
-        ingredient: await createCode(caller, "create_ingredient", {
+        ingredient: await createCode(caller, "create_ingredients", {
           name: "Shortcode Garlic",
           aliases: [],
         }),
@@ -340,9 +387,9 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
     },
     {
       entity: "meal",
-      tools: "create_meal list_meals get_meal update_meal delete_meals",
+      tools: "create_meals list_meals get_meal update_meals delete_meals",
       setup: async (caller) => ({
-        recipe: await createCode(caller, "create_recipe", {
+        recipe: await createCode(caller, "create_recipes", {
           name: "Shortcode Soup",
           meta: { url: null },
           sections: [],
@@ -378,7 +425,7 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
       entity: "vendor",
       // Four tools, not five: vendors have NO delete tool BY DESIGN. The
       // missing lifecycle step is deliberate, not an oversight.
-      tools: "create_vendor list_vendors get_vendor update_vendor",
+      tools: "create_vendors list_vendors get_vendor update_vendors",
       createArgs: () => ({ name: "Shortcode Hardware Co" }),
       listArgs: () => ({ search: "Shortcode Hardware Co" }),
       updateArgs: { name: "Shortcode Hardware Co Renamed" },
@@ -390,9 +437,9 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
     {
       entity: "project",
       tools:
-        "create_project list_projects get_project update_project delete_projects",
+        "create_projects list_projects get_project update_projects delete_projects",
       setup: async (caller) => ({
-        parent: await createCode(caller, "create_project", {
+        parent: await createCode(caller, "create_projects", {
           name: "Shortcode Kitchen Remodel",
         }),
       }),
@@ -414,14 +461,14 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
     },
     {
       entity: "task",
-      tools: "create_task list_tasks get_task update_task delete_tasks",
+      tools: "create_tasks list_tasks get_task update_tasks delete_tasks",
       setup: async (caller) => ({
-        project: await createCode(caller, "create_project", {
+        project: await createCode(caller, "create_projects", {
           name: "Shortcode Task Project",
         }),
         product: await createCode(
           caller,
-          "create_product",
+          "create_products",
           productArgs("Shortcode Task Product"),
         ),
       }),
@@ -448,14 +495,14 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
     {
       entity: "expense",
       tools:
-        "create_expense list_expenses get_expense update_expense delete_expenses",
+        "create_expenses list_expenses get_expense update_expenses delete_expenses",
       setup: async (caller) => ({
-        project: await createCode(caller, "create_project", {
+        project: await createCode(caller, "create_projects", {
           name: "Shortcode Expense Project",
         }),
         product: await createCode(
           caller,
-          "create_product",
+          "create_products",
           productArgs("Shortcode Expense Product"),
         ),
       }),
@@ -490,9 +537,9 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
     {
       entity: "purchase",
       tools:
-        "create_purchase list_purchases get_purchase update_purchase delete_empty_purchases",
+        "create_purchases list_purchases get_purchase update_purchases delete_empty_purchases",
       setup: async (caller) => ({
-        vendor: await createCode(caller, "create_vendor", {
+        vendor: await createCode(caller, "create_vendors", {
           name: "Shortcode Purchase Vendor",
         }),
       }),
@@ -512,7 +559,7 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
     {
       entity: "financialAccount",
       tools:
-        "create_financial_account list_financial_accounts get_financial_account update_financial_account delete_financial_accounts",
+        "create_financial_accounts list_financial_accounts get_financial_account update_financial_accounts delete_financial_accounts",
       createArgs: () =>
         financialAccountArgs("Shortcode Settlement Visa", "4242"),
       listArgs: () => ({ search: "Shortcode Settlement Visa" }),
@@ -525,11 +572,11 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
     {
       entity: "financialTransaction",
       tools:
-        "create_financial_transaction list_financial_transactions get_financial_transaction update_financial_transaction delete_financial_transactions",
+        "create_financial_transactions list_financial_transactions get_financial_transaction update_financial_transactions delete_financial_transactions",
       setup: async (caller) => ({
         account: await createCode(
           caller,
-          "create_financial_account",
+          "create_financial_accounts",
           financialAccountArgs("Shortcode Settlement Visa", "4242"),
         ),
       }),
@@ -559,7 +606,14 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
       const bag = (await row.setup?.(caller)) ?? {};
       const checks = row.checks?.(bag) ?? [];
 
-      const created = await callTool(tools.create, row.createArgs(bag), caller);
+      // `tools.create` names the plural batch tool (create_x has no singular
+      // twin anymore); `callSingular` sends the one item and unwraps the
+      // result back to the shape the retired singular tool used to return.
+      const created = await callSingular(
+        tools.create,
+        row.createArgs(bag),
+        caller,
+      );
       expectOk(created);
       const createdOut = structured(created);
       expectShortcode(createdOut.id, row.entity);
@@ -587,7 +641,7 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
       expectOk(got);
       runChecks(structured(got), checks, "get");
 
-      const updated = await callTool(
+      const updated = await callSingular(
         tools.update,
         { id: code, ...row.updateArgs },
         caller,
@@ -626,12 +680,12 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
     const caller = createTestCaller(domainRouter, ctx.db);
     const accountCode = await createCode(
       caller,
-      "create_financial_account",
+      "create_financial_accounts",
       financialAccountArgs("Shortcode Settlement Visa", "4242"),
     );
     const transactionCode = await createCode(
       caller,
-      "create_financial_transaction",
+      "create_financial_transactions",
       {
         accountId: accountCode,
         kind: "purchase",
@@ -708,8 +762,8 @@ describe("a wrong-entity shortcode prefix is rejected before any mutation", () =
 
   it("get_product with a LOC- code fails, naming the mismatch", async () => {
     const caller = createTestCaller(domainRouter, ctx.db);
-    const location = await callTool(
-      "create_location",
+    const location = await callSingular(
+      "create_locations",
       { name: "Wrong Prefix Location", type: "room", parentId: null },
       caller,
     );
@@ -725,16 +779,16 @@ describe("a wrong-entity shortcode prefix is rejected before any mutation", () =
 
   it("update_location's parentId rejects a PRODUCT code before writing, leaving the row unchanged", async () => {
     const caller = createTestCaller(domainRouter, ctx.db);
-    const location = await callTool(
-      "create_location",
+    const location = await callSingular(
+      "create_locations",
       { name: "Unchanged Location", type: "room", parentId: null },
       caller,
     );
     expectOk(location);
     const locationCode = structured(location).id as string;
 
-    const product = await callTool(
-      "create_product",
+    const product = await callSingular(
+      "create_products",
       {
         name: "Wrong Prefix Product",
         upc: null,
@@ -746,8 +800,8 @@ describe("a wrong-entity shortcode prefix is rejected before any mutation", () =
     expectOk(product);
     const productCode = structured(product).id as string;
 
-    const rejected = await callTool(
-      "update_location",
+    const rejected = await callSingular(
+      "update_locations",
       { id: locationCode, parentId: productCode },
       caller,
     );
@@ -757,14 +811,16 @@ describe("a wrong-entity shortcode prefix is rejected before any mutation", () =
     // Provably unchanged: the rejection happened before the mutation ran.
     const after = await callTool("get_location", { id: locationCode }, caller);
     expectOk(after);
-    expect(structured(after).parentId).toBe(TEST_HOME_SHORTCODE);
-    expect(structured(after).parentName).toBe("Home");
+    expect(structured(after).parent).toMatchObject({
+      id: TEST_HOME_SHORTCODE,
+      name: "Home",
+    });
   });
 
   it("create_inventory_entry rejects swapped product/location shortcodes before inserting a row", async () => {
     const caller = createTestCaller(domainRouter, ctx.db);
-    const product = await callTool(
-      "create_product",
+    const product = await callSingular(
+      "create_products",
       {
         name: "Swap Test Product",
         upc: null,
@@ -776,8 +832,8 @@ describe("a wrong-entity shortcode prefix is rejected before any mutation", () =
     expectOk(product);
     const productCode = structured(product).id as string;
 
-    const location = await callTool(
-      "create_location",
+    const location = await callSingular(
+      "create_locations",
       { name: "Swap Test Location", type: "shelf", parentId: null },
       caller,
     );
@@ -793,8 +849,8 @@ describe("a wrong-entity shortcode prefix is rejected before any mutation", () =
     const beforeCount = (structured(before).items as unknown[]).length;
 
     // productId/locationId swapped — a LOC- code where a PRD- code belongs.
-    const rejected = await callTool(
-      "create_inventory_entry",
+    const rejected = await callSingular(
+      "create_inventory_entries",
       {
         productId: locationCode,
         locationId: productCode,
@@ -816,8 +872,8 @@ describe("a wrong-entity shortcode prefix is rejected before any mutation", () =
 
   it("delete_entity rejects a PRODUCT shortcode for entity=location instead of silently deleting nothing or the wrong row", async () => {
     const caller = createTestCaller(domainRouter, ctx.db);
-    const product = await callTool(
-      "create_product",
+    const product = await callSingular(
+      "create_products",
       {
         name: "Survives Delete Product",
         upc: null,
@@ -846,16 +902,16 @@ describe("a wrong-entity shortcode prefix is rejected before any mutation", () =
 
   it("merge_entity rejects a PRODUCT shortcode as an ingredient keeper before merging anything", async () => {
     const caller = createTestCaller(domainRouter, ctx.db);
-    const ingredient = await callTool(
-      "create_ingredient",
+    const ingredient = await callSingular(
+      "create_ingredients",
       { name: "Merge Victim Ingredient", aliases: [] },
       caller,
     );
     expectOk(ingredient);
     const ingredientCode = structured(ingredient).id as string;
 
-    const product = await callTool(
-      "create_product",
+    const product = await callSingular(
+      "create_products",
       {
         name: "Merge Wrong Prefix Product",
         upc: null,
@@ -900,16 +956,16 @@ describe("a wrong-entity shortcode prefix is rejected before any mutation", () =
 
   it("merge_entity rejects a PRODUCT shortcode as a vendor keeper before merging anything", async () => {
     const caller = createTestCaller(domainRouter, ctx.db);
-    const vendor = await callTool(
-      "create_vendor",
+    const vendor = await callSingular(
+      "create_vendors",
       { name: "Merge Victim Vendor" },
       caller,
     );
     expectOk(vendor);
     const vendorCode = structured(vendor).id as string;
 
-    const product = await callTool(
-      "create_product",
+    const product = await callSingular(
+      "create_products",
       {
         name: "Merge Wrong Prefix Product",
         upc: null,
@@ -949,16 +1005,16 @@ describe("specialized tools round-trip on shortcodes", () => {
 
   it("merge_entity folds an ingredient into a keeper, addressed entirely by shortcode", async () => {
     const caller = createTestCaller(domainRouter, ctx.db);
-    const target = await callTool(
-      "create_ingredient",
+    const target = await callSingular(
+      "create_ingredients",
       { name: "Cilantro", aliases: [] },
       caller,
     );
     expectOk(target);
     const targetCode = structured(target).id as string;
 
-    const alias = await callTool(
-      "create_ingredient",
+    const alias = await callSingular(
+      "create_ingredients",
       { name: "Coriander Leaf", aliases: [] },
       caller,
     );
@@ -997,8 +1053,8 @@ describe("specialized tools round-trip on shortcodes", () => {
   it("merge_entity runs each cluster independently: a self-merge is refused while its neighbour still merges", async () => {
     const caller = createTestCaller(domainRouter, ctx.db);
     const make = async (name: string) => {
-      const created = await callTool(
-        "create_ingredient",
+      const created = await callSingular(
+        "create_ingredients",
         { name, aliases: [] },
         caller,
       );
@@ -1070,40 +1126,40 @@ describe("specialized tools round-trip on shortcodes", () => {
     const caller = createTestCaller(domainRouter, ctx.db);
 
     const create = async (tool: string, args: Record<string, unknown>) => {
-      const created = await callTool(tool, args, caller);
+      const created = await callSingular(tool, args, caller);
       expectOk(created);
       return structured(created).id as string;
     };
 
-    const widget = await create("create_product", {
+    const widget = await create("create_products", {
       name: "Many Move Widget",
       upc: null,
       manufacturer: "Test Mfg",
       ingredientId: null,
     });
-    const shelfA = await create("create_location", {
+    const shelfA = await create("create_locations", {
       name: "Many Move Shelf A",
       type: "shelf",
       parentId: null,
     });
-    const shelfB = await create("create_location", {
+    const shelfB = await create("create_locations", {
       name: "Many Move Shelf B",
       type: "shelf",
       parentId: null,
     });
-    const drawer = await create("create_location", {
+    const drawer = await create("create_locations", {
       name: "Many Move Drawer",
       type: "shelf",
       parentId: null,
     });
 
-    const fromA = await create("create_inventory_entry", {
+    const fromA = await create("create_inventory_entries", {
       productId: widget,
       locationId: shelfA,
       value: 4,
       unit: "each",
     });
-    const fromB = await create("create_inventory_entry", {
+    const fromB = await create("create_inventory_entries", {
       productId: widget,
       locationId: shelfB,
       value: 6,
@@ -1138,16 +1194,16 @@ describe("specialized tools round-trip on shortcodes", () => {
 
   it("add_recipe_to_meal plans a recipe by shortcode", async () => {
     const caller = createTestCaller(domainRouter, ctx.db);
-    const recipe = await callTool(
-      "create_recipe",
+    const recipe = await callSingular(
+      "create_recipes",
       { name: "Add To Meal Recipe", meta: { url: null }, sections: [] },
       caller,
     );
     expectOk(recipe);
     const recipeCode = structured(recipe).id as string;
 
-    const meal = await callTool(
-      "create_meal",
+    const meal = await callSingular(
+      "create_meals",
       { date: "2026-08-02", name: "Add Recipe Meal" },
       caller,
     );
@@ -1170,8 +1226,8 @@ describe("specialized tools round-trip on shortcodes", () => {
     // A location, not a product — isolates this test from the separate
     // create_product quickCreate double-slim bug documented above.
     const caller = createTestCaller(domainRouter, ctx.db);
-    const location = await callTool(
-      "create_location",
+    const location = await callSingular(
+      "create_locations",
       { name: "Globally Searchable Shelf", type: "shelf", parentId: null },
       caller,
     );
@@ -1205,8 +1261,8 @@ describe("specialized tools round-trip on shortcodes", () => {
 
   it("find_similar_entities takes the seed by shortcode (the intended contract)", async () => {
     const caller = createTestCaller(domainRouter, ctx.db);
-    const product = await callTool(
-      "create_product",
+    const product = await callSingular(
+      "create_products",
       {
         name: "Similarity Seed Product",
         upc: null,
@@ -1259,23 +1315,23 @@ describe("specialized tools round-trip on shortcodes", () => {
 
   it("split_expense takes its expenseId/projectId/productId by shortcode (the intended contract)", async () => {
     const caller = createTestCaller(domainRouter, ctx.db);
-    const vendor = await callTool(
-      "create_vendor",
+    const vendor = await callSingular(
+      "create_vendors",
       { name: "Split Expense Vendor" },
       caller,
     );
     expectOk(vendor);
     const vendorCode = structured(vendor).id as string;
 
-    const purchase = await callTool(
-      "create_purchase",
+    const purchase = await callSingular(
+      "create_purchases",
       { vendorId: vendorCode, date: "2024-01-15" },
       caller,
     );
     expectOk(purchase);
 
-    const expense = await callTool(
-      "create_expense",
+    const expense = await callSingular(
+      "create_expenses",
       {
         name: "Combo Kit",
         date: "2024-01-15",
@@ -1306,24 +1362,24 @@ describe("specialized tools round-trip on shortcodes", () => {
 
   it("merge_entity merges purchases by shortcode (the intended contract)", async () => {
     const caller = createTestCaller(domainRouter, ctx.db);
-    const vendor = await callTool(
-      "create_vendor",
+    const vendor = await callSingular(
+      "create_vendors",
       { name: "Merge Purchases Vendor" },
       caller,
     );
     expectOk(vendor);
     const vendorCode = structured(vendor).id as string;
 
-    const keep = await callTool(
-      "create_purchase",
+    const keep = await callSingular(
+      "create_purchases",
       { vendorId: vendorCode, date: "2024-01-15" },
       caller,
     );
     expectOk(keep);
     const keepCode = structured(keep).id as string;
 
-    const loser = await callTool(
-      "create_purchase",
+    const loser = await callSingular(
+      "create_purchases",
       { vendorId: vendorCode, date: "2024-01-15" },
       caller,
     );
@@ -1355,16 +1411,16 @@ describe("specialized tools round-trip on shortcodes", () => {
 
   it("merge_entity merges vendors by shortcode and tombstones the loser's own code", async () => {
     const caller = createTestCaller(domainRouter, ctx.db);
-    const keep = await callTool(
-      "create_vendor",
+    const keep = await callSingular(
+      "create_vendors",
       { name: "Merge Vendors Keeper" },
       caller,
     );
     expectOk(keep);
     const keepCode = structured(keep).id as string;
 
-    const loser = await callTool(
-      "create_vendor",
+    const loser = await callSingular(
+      "create_vendors",
       { name: "Merge Vendors Loser" },
       caller,
     );
@@ -1403,24 +1459,24 @@ describe("specialized tools round-trip on shortcodes", () => {
 
   it("link_expenses_to_purchase takes purchaseId/expenseIds by shortcode (the intended contract)", async () => {
     const caller = createTestCaller(domainRouter, ctx.db);
-    const vendor = await callTool(
-      "create_vendor",
+    const vendor = await callSingular(
+      "create_vendors",
       { name: "Link Expenses Vendor" },
       caller,
     );
     expectOk(vendor);
     const vendorCode = structured(vendor).id as string;
 
-    const purchase = await callTool(
-      "create_purchase",
+    const purchase = await callSingular(
+      "create_purchases",
       { vendorId: vendorCode, date: "2024-01-15" },
       caller,
     );
     expectOk(purchase);
     const purchaseCode = structured(purchase).id as string;
 
-    const expense = await callTool(
-      "create_expense",
+    const expense = await callSingular(
+      "create_expenses",
       {
         name: "Unlinked line",
         date: "2024-01-15",
@@ -1444,16 +1500,16 @@ describe("specialized tools round-trip on shortcodes", () => {
 
   it("update_tasks moves tasks onto a project by shortcode", async () => {
     const caller = createTestCaller(domainRouter, ctx.db);
-    const project = await callTool(
-      "create_project",
+    const project = await callSingular(
+      "create_projects",
       { name: "Bulk Move Tasks Project" },
       caller,
     );
     expectOk(project);
     const projectCode = structured(project).id as string;
 
-    const task = await callTool(
-      "create_task",
+    const task = await callSingular(
+      "create_tasks",
       { name: "Bulk Move Task", trade: "other" },
       caller,
     );

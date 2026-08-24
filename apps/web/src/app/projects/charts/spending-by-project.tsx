@@ -2,14 +2,10 @@ import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
 import { useNavigate } from "@tanstack/react-router";
 import { Wallet } from "lucide-react";
 import { useMemo } from "react";
+import { NetBarBreakdown } from "~/app/_components/charts/kit";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import { entityDetailLink } from "~/entities/entities";
-import { formatCurrency } from "~/lib/utils";
 import { ProjectChartLabel, ProjectChartTick } from "../project-mark";
-import { nivoBarChrome, nivoChartTheme, nivoCurrencyAxis } from "../shared";
-import { ChartTooltip } from "./ChartTooltip";
-import { ChartEmpty } from "./chart-empty";
-import { HorizontalBarChart } from "./horizontal-bar-chart";
 
 /**
  * `data` is `portfolioAnalytics`'s `spendingByProject` — subtree `spent`
@@ -25,80 +21,47 @@ export function SpendingByProject({
   const navigate = useNavigate();
   const { iconById } = useProjectOptions();
 
-  const data = useMemo(
-    () =>
-      rows
-        .filter((r) => r.spend > 0)
-        .slice(0, 10)
-        .map((r) => ({
-          id: r.projectId,
-          name: r.projectName,
-          cost: r.spend,
-        }))
-        .reverse(),
-    [rows],
-  );
+  const positiveRows = useMemo(() => rows.filter((r) => r.spend > 0), [rows]);
   const identityById = useMemo(
     () =>
       new Map<string, { name: string; icon: string | null }>(
-        data.map(
-          (row) =>
-            [
-              String(row.id),
-              { name: row.name, icon: iconById.get(row.id) ?? null },
-            ] as const,
-        ),
+        positiveRows.map((row) => [
+          row.projectId,
+          { name: row.projectName, icon: iconById.get(row.projectId) ?? null },
+        ]),
       ),
-    [data, iconById],
+    [positiveRows, iconById],
   );
 
-  if (data.length === 0) {
-    return <ChartEmpty icon={Wallet} title="No spending data." />;
-  }
-
   return (
-    <HorizontalBarChart
-      data={data}
+    <NetBarBreakdown
+      data={positiveRows}
+      valueKey="spend"
+      labelKey="projectName"
+      idKey="projectId"
+      topN={10}
       minHeight={250}
-      keys={["cost"]}
-      indexBy="id"
       margin={{ top: 10, right: 80, bottom: 30, left: 180 }}
-      padding={0.3}
-      colors={["var(--chart-1)"]}
-      {...nivoBarChrome}
-      axisBottom={nivoCurrencyAxis}
-      axisLeft={{
-        tickSize: 0,
-        tickPadding: 8,
-        renderTick: (tick) => (
-          <ProjectChartTick {...tick} identityById={identityById} />
-        ),
-      }}
-      label={(d) => (d.value && d.value > 0 ? formatCurrency(d.value, 0) : "")}
+      showValueLabel
       labelSkipWidth={50}
-      labelTextColor="var(--background)"
-      enableGridX
-      enableGridY={false}
-      onClick={(bar) => {
-        const shortcode = bar.data.id;
-        if (shortcode) navigate(entityDetailLink("project", String(shortcode)));
-      }}
-      tooltip={({ data: row, value }) => (
-        <ChartTooltip>
-          <strong>
-            <ProjectChartLabel
-              identity={
-                identityById.get(String(row.id)) ?? {
-                  name: String(row.name),
-                  icon: null,
-                }
-              }
-            />
-          </strong>
-          : {formatCurrency(value, 0)}
-        </ChartTooltip>
+      renderTick={(tick) => (
+        <ProjectChartTick {...tick} identityById={identityById} />
       )}
-      theme={nivoChartTheme}
+      renderLabel={(row) => (
+        <ProjectChartLabel
+          identity={
+            identityById.get(row.projectId) ?? {
+              name: row.projectName,
+              icon: null,
+            }
+          }
+        />
+      )}
+      onClick={(row) =>
+        navigate(entityDetailLink("project", String(row.projectId)))
+      }
+      emptyIcon={Wallet}
+      emptyTitle="No spending data."
     />
   );
 }

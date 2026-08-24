@@ -64,6 +64,55 @@ export const auditDateFilterFields = {
   ...dateRangeFields("updated"),
 } as const;
 
+type NumericRangeFields<Prefix extends string> = {
+  [K in `${Prefix}Min`]: z.ZodOptional<z.ZodNumber>;
+} & {
+  [K in `${Prefix}Max`]: z.ZodOptional<z.ZodNumber>;
+};
+
+/**
+ * Inclusive `{prefix}Min`/`{prefix}Max` numeric filter bounds. Same generator
+ * shape as `dateRangeFields` above — a spreadable field-map factory —
+ * specialized to the numeric-range-pair pattern instead of the calendar-day
+ * one.
+ *
+ * `opts.coerce` defaults to `true`: these arrive from the URL as strings
+ * (`?costMin=500`), and a bare `z.number()` rejects `"500"`. Pass
+ * `coerce: false` for a field that is never bound from a URL query string
+ * (e.g. an MCP-only filter already typed as a number).
+ *
+ * Only covers the plain, undecorated pair with a shared set of numeric
+ * constraints on both ends. A pair whose bounds carry DIFFERENT `.describe()`
+ * prose is still coverable via `opts.describe`, but a pair that isn't
+ * optional, isn't a Min/Max pair at all (a singleton bound with no other
+ * end), or layers on a constraint the options bag doesn't express (e.g.
+ * `.positive().max(...)`) is a deliberate divergence, not an oversight —
+ * leave those hand-declared rather than forcing them through this generator.
+ */
+export const numericRangeFields = <Prefix extends string>(
+  prefix: Prefix,
+  opts?: {
+    int?: boolean;
+    nonnegative?: boolean;
+    finite?: boolean;
+    /** @default true */
+    coerce?: boolean;
+    describe?: { min: string; max: string };
+  },
+): NumericRangeFields<Prefix> => {
+  const { int, nonnegative, finite, coerce = true, describe } = opts ?? {};
+  let base: z.ZodNumber = coerce ? z.coerce.number() : z.number();
+  if (int) base = base.int();
+  if (nonnegative) base = base.nonnegative();
+  if (finite) base = base.finite();
+  const min = base.optional();
+  const max = base.optional();
+  return {
+    [`${prefix}Min`]: describe ? min.describe(describe.min) : min,
+    [`${prefix}Max`]: describe ? max.describe(describe.max) : max,
+  } as NumericRangeFields<Prefix>;
+};
+
 type StripDefault<F> =
   F extends z.ZodDefault<infer Inner extends z.ZodType> ? Inner : F;
 

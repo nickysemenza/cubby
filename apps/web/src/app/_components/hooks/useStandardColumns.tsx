@@ -2,9 +2,12 @@ import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
-import { browserEntityDefinition } from "~/entities/entities";
+import {
+  browserEntityDefinition,
+  getSortableFields,
+} from "~/entities/entities";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
-import { getSortableFields } from "~/entities/sortable-fields";
+
 import {
   createActionsColumn,
   createCreatedAtColumn,

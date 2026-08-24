@@ -12,6 +12,7 @@ import {
   auditDateFilterFields,
   dateRangeFields,
   deriveUpdateData,
+  numericRangeFields,
   timestampedFields,
   uniqueBy,
 } from "./base-entity";
@@ -407,8 +408,7 @@ export const financialTransactionFilterFields = {
   source: oneOrMany(z.string().min(1)).optional(),
   externalId: oneOrMany(z.string().min(1)).optional(),
   merchant: z.string().optional(),
-  amountMin: z.coerce.number().finite().optional(),
-  amountMax: z.coerce.number().finite().optional(),
+  ...numericRangeFields("amount", { finite: true }),
   ...dateRangeFields("transactionDate"),
   ...dateRangeFields("postedDate"),
 };

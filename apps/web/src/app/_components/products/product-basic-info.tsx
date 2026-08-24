@@ -16,10 +16,7 @@ import { DetailEditAction } from "~/components/ui/detail-edit-action";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
-import {
-  productMutationInvalidateKeys,
-  productValuationMutationInvalidateKeys,
-} from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import {
   describeProductPricingSource,
@@ -64,7 +61,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
     mutationFn: api.product.update.mutationOptions,
     // Surface the eager recompute (dependent recipes / inventory valuations).
     success: (data) => savedWithBackgroundWork(data.sideEffects),
-    invalidateKeys: productValuationMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("product", "valuation"),
     error: (err) => getErrorMessage(err) || "Failed to update product",
   });
 
@@ -75,7 +72,6 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
     entity: "product",
     mutationOptions: (callbacks) =>
       api.product.delete.mutationOptions(callbacks),
-    invalidateKeys: productMutationInvalidateKeys,
     redirectTo: "/products",
   });
 

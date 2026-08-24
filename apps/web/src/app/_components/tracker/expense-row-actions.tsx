@@ -28,7 +28,6 @@ import type { ExpenseOut } from "@cubby/schemas/project";
 import { useCallback, useState } from "react";
 import { SettleExpenseDialog } from "~/app/expenses/settle-expense-dialog";
 import { useTRPC } from "~/integrations/trpc/react";
-import { expenseMutationInvalidateKeys } from "~/lib/query-keys";
 import { VerbMenuItem } from "../actions/action-verb-ui";
 import { useUpdateMutation } from "../hooks/useUpdateMutation";
 import { MoveToProjectDialog } from "./move-to-project-dialog";
@@ -60,7 +59,6 @@ export function useExpenseRowActions({
   const moveMutation = useUpdateMutation({
     mutationFn: api.expense.update.mutationOptions,
     entity: "expense",
-    invalidateKeys: expenseMutationInvalidateKeys,
   });
 
   const extraActions = useCallback(

@@ -194,11 +194,13 @@ export const inventoryListLocationOut = z.object({
 });
 export type InventoryListLocationOut = z.infer<typeof inventoryListLocationOut>;
 
-export const inventoryListItemOut = z.object({
+const inventoryListItemFields = {
   ...inventoryEntryFields,
   product: inventoryListProductOut,
   location: inventoryListLocationOut,
-});
+};
+
+export const inventoryListItemOut = z.object(inventoryListItemFields);
 export type InventoryListItemOut = z.infer<typeof inventoryListItemOut>;
 
 export const inventoryDetailProductOut = z.object({
@@ -389,29 +391,22 @@ export const inventoryLocationIdsInput = z.object({
   placement: inventoryPlacementFilter.optional(),
 });
 
-const inventoryMcpProductFields = {
-  id: productShortcode,
-  name: z.string(),
-  manufacturer: z.string(),
-  category: productCategory.nullable(),
-  model: z.string().nullable(),
-};
-
-const inventoryMcpLocationFields = {
-  id: locationShortcode,
-  name: z.string(),
-};
-
-/** Slim MCP projection of an inventory list/detail row. */
+/**
+ * Slim MCP projection of an inventory list/detail row: built from the same
+ * field map as `inventoryListItemOut` minus the audit columns, so it cannot
+ * drift from the plain shape. `product` and `location` are REQUIRED here as
+ * they are there — a live entry always resolves both through its FK join.
+ * `placement` is kept because an agent that can SET it but never see it
+ * cannot tell a fixture from stock when deciding what to recount, move, or
+ * discard.
+ */
 export const inventoryMcpOut = z.object({
-  id: inventoryShortcode,
-  amount,
-  valuation: moneyNullable,
-  // Without this an agent can SET placement but never see it, so it cannot tell
-  // a fixture from stock when deciding what to recount, move, or discard.
-  placement: inventoryPlacement,
-  product: z.object(inventoryMcpProductFields).nullable(),
-  location: z.object(inventoryMcpLocationFields).nullable(),
+  id: inventoryListItemFields.id,
+  amount: inventoryListItemFields.amount,
+  valuation: inventoryListItemFields.valuation,
+  placement: inventoryListItemFields.placement,
+  product: inventoryListItemFields.product,
+  location: inventoryListItemFields.location,
 });
 export type InventoryMcpOut = z.infer<typeof inventoryMcpOut>;
 

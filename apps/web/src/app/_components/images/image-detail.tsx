@@ -11,7 +11,7 @@ import { Description } from "~/components/ui/description";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { Image } from "~/components/ui/image";
 import { useTRPC } from "~/integrations/trpc/react";
-import { imageMutationInvalidateKeys, queryKeys } from "~/lib/query-keys";
+import { queryKeys } from "~/lib/query-keys";
 import { EditableCell } from "../data-table/editable-cell";
 import { useEntityDelete } from "../hooks/useEntityDelete";
 import { useUpdateMutation } from "../hooks/useUpdateMutation";
@@ -29,7 +29,6 @@ export function ImageDetail({ image }: ImageDetailProps) {
   const updateMutation = useUpdateMutation({
     mutationFn: api.image.update.mutationOptions,
     entity: "image",
-    invalidateKeys: imageMutationInvalidateKeys,
   });
 
   // Images DO have a `deletedAt` column (like every other entity), but

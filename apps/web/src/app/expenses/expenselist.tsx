@@ -22,7 +22,6 @@ import { usePageCount } from "~/components/page/Page";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseLabel } from "~/lib/purchase-label";
-import { expenseMutationInvalidateKeys } from "~/lib/query-keys";
 import {
   createProductLinkColumn,
   createProjectLinkColumn,
@@ -30,7 +29,6 @@ import {
 import { ListWorkbench } from "../_components/data-table/ListWorkbench";
 import { ScopeChip } from "../_components/data-table/ScopeChip";
 import { useDeferredFilterOptions } from "../_components/hooks/useDeferredFilterOptions";
-import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
@@ -93,19 +91,11 @@ export function ExpenseList() {
   const updateExpenseMutation = useUpdateMutation({
     mutationFn: api.expense.update.mutationOptions,
     entity: "expense",
-    invalidateKeys: expenseMutationInvalidateKeys,
   });
 
   const nameEditable = useNameEditable<ExpenseOut>(
     updateExpenseMutation.mutateAsync,
   );
-
-  const deletableConfig = useDeletableConfig({
-    mutationFn: api.expense.delete.mutationOptions,
-    entityLabel: "Expense",
-    invalidateKeys: expenseMutationInvalidateKeys,
-    entity: "expense",
-  });
 
   const { extraActions, dialogs: rowActionDialogs } = useExpenseRowActions();
 
@@ -404,10 +394,10 @@ export function ExpenseList() {
     ExpenseFilters
   >({
     entity: "expense",
-    queryOptions: api.expense.list.queryOptions,
     filterOptions: projectFilterOptions,
     columns,
-    deletable: deletableConfig,
+    // The expense contract's own list query, delete, and invalidation fan-out.
+    deletable: true,
     nameEditable,
     bulkActions: expenseBulkActions.config,
     extraActions,

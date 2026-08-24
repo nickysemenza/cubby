@@ -38,8 +38,8 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { patchListItem } from "~/lib/optimistic-list";
 import {
   cancelTRPCQueries,
+  invalidatesFor,
   invalidateTRPCQueries,
-  taskMutationInvalidateKeys,
 } from "~/lib/query-keys";
 import { DependencyPicker } from "../_components/data-table/dependency-picker";
 import {
@@ -135,8 +135,7 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
       }
       toast.error(getErrorMessage(error));
     },
-    onSettled: () =>
-      invalidateTRPCQueries(queryClient, taskMutationInvalidateKeys),
+    onSettled: () => invalidateTRPCQueries(queryClient, invalidatesFor("task")),
   });
 
   const createBase = api.task.create.mutationOptions();
@@ -176,7 +175,7 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
     },
     onSettled: () => {
       setPendingSubtaskName(null);
-      invalidateTRPCQueries(queryClient, taskMutationInvalidateKeys);
+      invalidateTRPCQueries(queryClient, invalidatesFor("task"));
     },
   });
 
@@ -260,7 +259,6 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
   const updateMutation = useUpdateMutation({
     mutationFn: api.task.update.mutationOptions,
     entity: "task",
-    invalidateKeys: taskMutationInvalidateKeys,
   });
 
   // Common sections from entity config (History) — editMode/mappings unused
@@ -279,7 +277,6 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
     entityLabel: "Task",
     entity: "task",
     mutationOptions: (callbacks) => api.task.delete.mutationOptions(callbacks),
-    invalidateKeys: taskMutationInvalidateKeys,
     redirectTo: "/tasks",
     description: `${
       task.subtaskCount > 0

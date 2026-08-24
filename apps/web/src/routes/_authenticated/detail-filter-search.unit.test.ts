@@ -1,17 +1,19 @@
 import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { describe, expect, it } from "vitest";
 import { mealCalendarSearchSchema } from "~/app/meals/meal-search";
-import { expenseSearchSchema } from "./expenses.index";
-import { financialAccountSearchSchema } from "./financial-accounts.index";
-import { financialTransactionSearchSchema } from "./financial-transactions.index";
-import { imageListSearchSchema } from "./images.index";
-import { inventorySearchSchema } from "./inventory.index";
-import { locationSearchSchema } from "./locations.index";
-import { productSearchSchema } from "./products.index";
-import { projectSearchSchema } from "./projects.index";
-import { purchaseSearchSchema } from "./purchases.index";
-import { recipeListSearchSchema } from "./recipes.index";
-import { taskSearchSchema } from "./tasks.index";
+import {
+  expenseSearchSchema,
+  financialAccountSearchSchema,
+  financialTransactionSearchSchema,
+  imageListSearchSchema,
+  inventorySearchSchema,
+  locationSearchSchema,
+  productSearchSchema,
+  projectSearchSchema,
+  purchaseSearchSchema,
+  recipeListSearchSchema,
+  taskSearchSchema,
+} from "~/entities/list-search";
 
 describe("detail filter link route contracts", () => {
   it("keeps Product, Location, and exact Inventory facets across navigation", () => {
@@ -173,6 +175,22 @@ describe("detail filter link route contracts", () => {
     expect(imageListSearchSchema.parse({ status: "UPLOADED" })).toMatchObject({
       status: "UPLOADED",
     });
+  });
+
+  it("exposes each entity's literal filter keys to typed links", () => {
+    const product = productSearchSchema.parse({ manufacturer: "Acme" });
+    const location = locationSearchSchema.parse({ type: "shelf" });
+    const task = taskSearchSchema.parse({ status: "in_progress" });
+
+    // Property access is the assertion here. At runtime these keys come from a
+    // computed `Record<string, …>`; they only survive in the *type* — where
+    // `Route.useSearch()` and `<Link search>` read them — because
+    // `listSearchSchema` keeps its overrides a literal type parameter.
+    expect(product.manufacturer).toBe("Acme");
+    expect(product.model).toBeUndefined();
+    expect(product.tags).toBeUndefined();
+    expect(location.type).toBe("shelf");
+    expect(task.status).toBe("in_progress");
   });
 
   it("keeps malformed filters safe without widening exact entity scopes", () => {

@@ -42,7 +42,7 @@ import {
 } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
 import { useTRPC } from "~/integrations/trpc/react";
-import { projectResourceMutationInvalidateKeys } from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { formatCurrency } from "~/lib/utils";
 
@@ -85,7 +85,7 @@ export function ProductProjectUses({ productId }: { productId: string }) {
   const detach = useActionMutation({
     mutationFn: api.project.setToolUsage.mutationOptions,
     success: "Removed from project",
-    invalidateKeys: projectResourceMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("project", "resource"),
   });
 
   const rows = useMemo<ProjectUseRow[]>(
@@ -286,7 +286,7 @@ function ProjectUsesDialog({
   const save = useActionMutation({
     mutationFn: api.product.setProjectUses.mutationOptions,
     success: "Project uses updated",
-    invalidateKeys: projectResourceMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("project", "resource"),
     onSuccess: () => resetAndClose(false),
   });
 

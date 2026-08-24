@@ -1,7 +1,6 @@
 import type { PurchaseOut, PurchaseProductOut } from "@cubby/schemas/purchase";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Clock,
   FileText,
   Info,
   Link2,
@@ -11,7 +10,6 @@ import {
   Scale,
 } from "lucide-react";
 import { type FC, useState } from "react";
-import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
@@ -25,7 +23,7 @@ import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseLabel } from "~/lib/purchase-label";
-import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { WithVendorShortcodeSearch } from "../_components/combobox/with-vendor-search";
 import {
@@ -34,13 +32,14 @@ import {
 } from "../_components/data-table/detail-page";
 import { EditableCell } from "../_components/data-table/editable-cell";
 import { EditableEntityCell } from "../_components/data-table/editable-entity-cell";
+import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { useEntityDelete } from "../_components/hooks/useEntityDelete";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
+import { EntityMergeDialog } from "../_components/merge/entity-merge-dialog";
 import { RelationshipSummaryTable } from "../_components/relationships/relationship-summary-table";
 import { FinancialSettlement } from "./financial-settlement";
 import { LinkExpensesDialog } from "./link-expenses-dialog";
 import { LinkProductsDialog } from "./link-products-dialog";
-import { MergePurchasesDialog } from "./merge-purchases-dialog";
 import { PurchaseDocuments } from "./purchase-documents";
 import { PurchaseExpensesTable } from "./purchase-expenses-table";
 import { PurchaseProductsTable } from "./purchase-products-table";
@@ -82,7 +81,13 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
   const updateMutation = useUpdateMutation({
     mutationFn: api.purchase.update.mutationOptions,
     entity: "purchase",
-    invalidateKeys: purchaseMutationInvalidateKeys,
+  });
+
+  const mergeMutation = useActionMutation({
+    mutationFn: api.purchase.merge.mutationOptions,
+    success: "Purchases merged",
+    invalidateKeys: invalidatesFor("purchase"),
+    onSuccess: () => setMergeOpen(false),
   });
 
   // `deletePurchases` NULLs `purchaseId` on the purchase's expenses rather than
@@ -95,7 +100,6 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
     entity: "purchase",
     mutationOptions: (callbacks) =>
       api.purchase.delete.mutationOptions(callbacks),
-    invalidateKeys: purchaseMutationInvalidateKeys,
     redirectTo: "/purchases",
     description:
       "The purchase and its documents go; its expenses stay in the ledger, unattached to any purchase.",
@@ -403,25 +407,13 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
         />
       ),
     },
-    {
-      // Rendered inline rather than through `useEntityDetail`'s commonSections.
-      // `purchase.images` would now satisfy that hook's `images` section, but
-      // that section hands the WHOLE list to `EntityImageList` unpartitioned —
-      // so a filed PDF invoice would render as a broken thumbnail, in a second
-      // card duplicating Documents above. This is the same content the helper
-      // produces for `history`, minus that.
-      id: "history",
-      title: "History",
-      icon: Clock,
-      placement: "supporting",
-      content: (
-        <AuditLogList
-          entityType="purchase"
-          entityId={purchase.id}
-          showEntityLink={false}
-        />
-      ),
-    },
+    // History is appended automatically by `DetailSections` for every
+    // auditable entity — see `ACTIVITY_SECTION_ID` there. Not hand-wired here
+    // (previously duplicated `useEntityDetail`'s `history` commonSection,
+    // which this page can't use wholesale: `purchase.images` would satisfy
+    // that hook's `images` section too, but that section hands the WHOLE
+    // list to `EntityImageList` unpartitioned — a filed PDF invoice would
+    // render as a broken thumbnail, duplicating Documents above).
   ];
 
   const heroStats: DetailHeroStat[] = [
@@ -490,10 +482,15 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
       }}
     >
       <DetailSections sections={sections} rawData={purchase} />
-      <MergePurchasesDialog
+      <EntityMergeDialog
+        entity="purchase"
+        keeper={purchase}
         open={mergeOpen}
         onOpenChange={setMergeOpen}
-        purchase={purchase}
+        onConfirm={(keepId, mergeIds) =>
+          mergeMutation.mutate({ keepId, mergeIds })
+        }
+        isPending={mergeMutation.isPending}
       />
       <LinkExpensesDialog
         open={linkOpen}

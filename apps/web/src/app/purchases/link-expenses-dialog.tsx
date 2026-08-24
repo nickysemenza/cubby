@@ -42,7 +42,7 @@ import { Input } from "~/components/ui/input";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseLabel } from "~/lib/purchase-label";
-import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 
 const NO_CANDIDATES: ExpenseOut[] = [];
@@ -117,7 +117,7 @@ export function LinkExpensesDialog({
   const linkMutation = useActionMutation({
     mutationFn: api.purchase.link.mutationOptions,
     success: "Expenses attached to this purchase",
-    invalidateKeys: purchaseMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("purchase"),
     onSuccess: () => resetAndClose(false),
   });
 

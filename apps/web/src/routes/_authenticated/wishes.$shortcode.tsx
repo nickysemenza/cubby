@@ -1,43 +1,41 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, notFound } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
+import { ensureDetailRecord } from "~/app/_components/routing/detail-loader";
+import {
+  detailPage,
+  notFoundPage,
+} from "~/app/_components/routing/entity-routes";
 import { WishDetail } from "~/app/wishes/wish-detail";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
-import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
-import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
-import { useDetailTitle } from "~/hooks/useDocumentTitle";
-import { useTRPC } from "~/integrations/trpc/react";
 import { shortcodeHead } from "~/lib/page-title";
 
+// Bound to consts, not inlined into the options object: the router plugin's
+// splitter re-parses an inlined call expression with a JSX-less babel config,
+// so only the identifier path survives a page body that renders JSX.
+const WishDetailPage = detailPage({
+  query: (api, shortcode) =>
+    api.wish.getByShortcode.queryOptions({ shortcode }),
+  render: (wish, shortcode) => <WishDetail key={shortcode} wish={wish} />,
+  title: (wish) => wish.name,
+});
+
+const WishNotFound = notFoundPage(
+  "wish",
+  "Wishlist item not found",
+  "It may have been deleted.",
+);
+
 export const Route = createFileRoute("/_authenticated/wishes/$shortcode")({
-  loader: async ({ params, context }) => {
-    const wish = await context.queryClient.ensureQueryData(
+  loader: ({ params, context }) =>
+    ensureDetailRecord(
+      context.queryClient,
       context.trpc.wish.getByShortcode.queryOptions({
         shortcode: params.shortcode,
       }),
-    );
-    if (!wish) throw notFound();
-  },
+    ),
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
-  notFoundComponent: () => (
-    <Page variant="list" entity="wish" title="Wishlist item not found" compact>
-      <Empty>
-        <EmptyTitle>Wishlist item not found</EmptyTitle>
-        <EmptyDescription>It may have been deleted.</EmptyDescription>
-      </Empty>
-    </Page>
-  ),
+  notFoundComponent: WishNotFound,
   head: shortcodeHead,
   component: WishDetailPage,
 });
-
-function WishDetailPage() {
-  const { shortcode } = Route.useParams();
-  const api = useTRPC();
-  const { data: wish } = useSuspenseQuery(
-    api.wish.getByShortcode.queryOptions({ shortcode }),
-  );
-  useDetailTitle(shortcode, wish?.name);
-  return wish ? <WishDetail key={shortcode} wish={wish} /> : null;
-}

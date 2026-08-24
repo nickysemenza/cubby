@@ -125,7 +125,6 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { shouldUseSemanticComboboxFallback } from "~/server/semantic/combobox-fallback";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
-import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import { verifyProductImages } from "~/server/services/image-verification.service";
 import {
   runMutationSideEffects,
@@ -751,8 +750,6 @@ const deleteItem = createDeleteProcedure<ProductShortcode>(
       ids,
       services.actorContext,
     );
-    // After the commit, never inside it: an R2 delete has no rollback.
-    await deleteStoredObjects(detachedImageKeys);
     const backgroundBatches = await runMutationSideEffectsForEntities(
       services.db,
       ids.map((id) => ({
@@ -770,6 +767,7 @@ const deleteItem = createDeleteProcedure<ProductShortcode>(
       );
     return {
       deleted,
+      detachedImageKeys,
       backgroundBatches: [...(backgroundBatches ?? []), ...recipeBatches],
     };
   },

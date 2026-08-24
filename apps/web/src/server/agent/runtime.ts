@@ -72,6 +72,10 @@ export function extractSources(records: ToolCallRecord[]): AgentSource[] {
     for (const obj of candidateObjects(record.result)) {
       const product = isRecord(obj.product) ? obj.product : null;
       const location = isRecord(obj.location) ? obj.location : null;
+      // A location row names its parent through a nested `{id,name,type}` ref
+      // (`locationMcpOut` picks it straight off the plain shape), not a
+      // flattened `parentName`.
+      const parent = isRecord(obj.parent) ? obj.parent : null;
 
       const id = typeof obj.id === "string" ? obj.id : null;
       const name =
@@ -91,8 +95,8 @@ export function extractSources(records: ToolCallRecord[]): AgentSource[] {
           ? location.name
           : typeof obj.manufacturer === "string"
             ? obj.manufacturer
-            : typeof obj.parentName === "string"
-              ? obj.parentName
+            : typeof parent?.name === "string"
+              ? parent.name
               : null;
 
       const parsed = agentSourceSchema.safeParse({

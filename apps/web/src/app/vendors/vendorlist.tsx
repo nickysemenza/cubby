@@ -4,28 +4,14 @@ import {
   createCurrencyColumn,
   createPlainDateColumn,
 } from "~/app/_components/data-table/columnHelpers";
-import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
+import { EntityListPage } from "~/app/_components/data-table/EntityListPage";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { ExternalLinkText } from "~/app/_components/ExternalLink";
-import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
-import { useEntityList } from "~/app/_components/hooks/useEntityList";
-import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { VendorMark } from "~/components/entity/vendor-cell";
-import { usePageCount } from "~/components/page/Page";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
-import { vendorMutationInvalidateKeys } from "~/lib/query-keys";
-
-/**
- * Open on biggest spenders first, overriding `entities.vendor.list.defaultSort`
- * ("name"). `useTableState`'s initial state is always DESCENDING, so defaulting
- * to name would land the roster on Z→A — and "where did the money go" is the
- * question this table exists to answer anyway. Module-level: it feeds
- * `useEntityList`'s tableState memo.
- */
-const VENDOR_TABLE_STATE = { initialSort: "spend" } as const;
 
 /**
  * The brand mark leading each vendor's name. Module-level for the same reason as
@@ -40,27 +26,15 @@ const VENDOR_NAME_PREFIX = (row: VendorOut): ReactNode => (
 export function VendorList() {
   const api = useTRPC();
   const columnHelper = useMemo(() => createCubbyColumnHelper<VendorOut>(), []);
-  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("vendor");
 
   const updateVendorMutation = useUpdateMutation({
     mutationFn: api.vendor.update.mutationOptions,
     entity: "vendor",
-    invalidateKeys: vendorMutationInvalidateKeys,
   });
 
   const nameEditable = useNameEditable<VendorOut>(
     updateVendorMutation.mutateAsync,
   );
-
-  // `deleteVendors` refuses while live purchases still point at the vendor
-  // (VENDOR_HAS_PURCHASES) — the server message surfaces in the delete dialog's
-  // error toast, which is the intended UX: re-point the purchases first.
-  const deletableConfig = useDeletableConfig({
-    mutationFn: api.vendor.delete.mutationOptions,
-    entityLabel: "Vendor",
-    invalidateKeys: vendorMutationInvalidateKeys,
-    entity: "vendor",
-  });
 
   const columns = useMemo(
     () => [
@@ -115,35 +89,28 @@ export function VendorList() {
   // Neither `buildFilters` nor `filters` is passed: the `vendor` entry in
   // `entities/filter-manifest.tsx` drives all three surfaces at once — the Name
   // search box, the server `VendorFilters` object, and the `?q=` URL round-trip
-  // that makes a filtered roster shareable.
-  const { workbench, totalCount } = useEntityList<VendorOut, VendorFilters>({
-    entity: "vendor",
-    queryOptions: api.vendor.list.queryOptions,
-    columns,
-    deletable: deletableConfig,
-    nameEditable,
-    tableStateOptions: VENDOR_TABLE_STATE,
-    // Sparse table (four columns), so the name gets a fixed width instead of
-    // ballooning to absorb the leftover space under the fixed layout.
-    nameClassName: "w-64",
-    // The roster reads by brand: the same mark the ledger's vendor cell leads
-    // with, so a vendor looks identical wherever it appears. `VendorMark` falls
-    // back to a monogram tile, so every row carries something (roughly half the
-    // roster is one-off local trades with no logo). It's a fixed-width
-    // `shrink-0` glyph, so the name keeps truncating at `w-64`.
-    namePrefix: VENDOR_NAME_PREFIX,
-  });
-  usePageCount(totalCount);
-
+  // that makes a filtered roster shareable. The roster opens on biggest
+  // spenders first — see `entities.vendor.list.defaultSort`.
+  //
+  // Delete comes from the vendor contract: `deleteVendors` refuses while live
+  // purchases still point at the vendor (VENDOR_HAS_PURCHASES) — the server
+  // message surfaces in the delete dialog's error toast, which is the intended
+  // UX: re-point the purchases first.
   return (
-    <div>
-      <ListWorkbench
-        model={workbench}
-        ariaLabel="Vendors Table"
-        onRowClick={onRowClick}
-        onRowHover={onRowHover}
-      />
-      <PreviewSheet />
-    </div>
+    <EntityListPage<VendorOut, VendorFilters>
+      entity="vendor"
+      columns={columns}
+      nameEditable={nameEditable}
+      // Sparse table (four columns), so the name gets a fixed width instead of
+      // ballooning to absorb the leftover space under the fixed layout.
+      nameClassName="w-64"
+      // The roster reads by brand: the same mark the ledger's vendor cell leads
+      // with, so a vendor looks identical wherever it appears. `VendorMark` falls
+      // back to a monogram tile, so every row carries something (roughly half the
+      // roster is one-off local trades with no logo). It's a fixed-width
+      // `shrink-0` glyph, so the name keeps truncating at `w-64`.
+      namePrefix={VENDOR_NAME_PREFIX}
+      ariaLabel="Vendors Table"
+    />
   );
 }
