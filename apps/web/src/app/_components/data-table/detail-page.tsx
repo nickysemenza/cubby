@@ -45,9 +45,24 @@ export interface DetailSection {
   headerAction?: ReactNode;
   /** Let inline popovers/comboboxes escape the ruled section card. */
   overflowVisible?: boolean;
+  /** Specialized workflows can supply their own internal surface while retaining
+   * the shared index, relationship, activity, and debug extensions. */
+  surface?: "card" | "plain";
 }
 
 function SectionCard({ section }: { section: DetailSection }) {
+  if (section.surface === "plain") {
+    return (
+      <section
+        id={section.id}
+        tabIndex={-1}
+        className="scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none"
+      >
+        {section.content}
+      </section>
+    );
+  }
+
   return (
     <section
       id={section.id}
@@ -389,33 +404,3 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     </div>
   );
 };
-
-/**
- * Standalone Activity card, for the couple of detail pages (recipe, meal) that
- * compose a bespoke layout instead of `DetailSections`'s section grid, so the
- * auto-append above never reaches them. Same content and copy as that
- * auto-appended section — this is the one place both share instead of each
- * hand-rolling its own `AuditLogList`-in-a-`Card`.
- */
-export function EntityActivityCard({
-  entity,
-  entityId,
-}: {
-  entity: AuditEntityType;
-  entityId: string;
-}) {
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle icon={Clock}>History</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <AuditLogList
-          entityType={entity}
-          entityId={entityId}
-          showEntityLink={false}
-        />
-      </CardContent>
-    </Card>
-  );
-}

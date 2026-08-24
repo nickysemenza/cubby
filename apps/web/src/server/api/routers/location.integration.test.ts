@@ -13,7 +13,6 @@ import { createTestCaller } from "../trpc";
 import { locationRouter } from "./location";
 import { problemsRouter } from "./problems";
 
-// Kinds enqueued for a given location id (metadata.entity.entityId), across all batches.
 const kindsForLocation = async (
   db: Parameters<typeof listBackgroundBatches>[0],
   locationId: string,
@@ -105,7 +104,6 @@ describe("location.create AI-description side-effect", () => {
       (await kindsForLocation(ctx.db, entityId!)).filter((kind) =>
         kind.startsWith("location-ai."),
       );
-    // The create attached photos, so it legitimately enqueued one round.
     const before = await visionKinds();
     expect(before.length).toBeGreaterThan(0);
 
@@ -227,8 +225,6 @@ describe("reads tolerate a product-linked location's null type", () => {
     });
     expect(list.items.some((l) => l.id === created.id)).toBe(true);
 
-    // `options` is the picker roster — a separate mapper from `list`, and the
-    // one whose output schema still refused a null.
     const options = await caller.options({
       filters: {},
       sort: [{ orderBy: "name", direction: "asc" }],
@@ -283,8 +279,6 @@ describe("problems tolerates a product-linked location's null type", () => {
     );
 
     const problems = createTestCaller(problemsRouter, ctx.db);
-    // `getViews` is the one that carries these rows — `emptyLocations` and
-    // `staleLocations` are saved-view-backed sections, not fast detectors.
     const views = await problems.getViews();
     expect(
       views.emptyLocations.some((l) => l.name === "problems null-type bin"),

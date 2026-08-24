@@ -98,8 +98,6 @@ describe("purchase ↔ product links", () => {
       const purchases = await listProductPurchases(ctx.db, drill.entityId);
       expect(purchases).toHaveLength(1);
       expect(purchases[0]?.source).toBe("expense");
-      // No link exists, so there is nothing for a detach to remove — this is
-      // what the UI reads to hide the action.
       expect(purchases[0]?.linkAttachedAt).toBeNull();
     });
 
@@ -109,9 +107,6 @@ describe("purchase ↔ product links", () => {
         makeProductInput({ name: "Union Bolt" }),
         ctx.actor,
       );
-      // A 30-line hardware order naming the same bolt three times is ordinary.
-      // The panel renders one row per PAIR, unlike the movement timeline which
-      // renders one per expense — so dedup is this module's own problem.
       for (const suffix of ["a", "b", "c"]) {
         await expenseOn({
           name: `Union Bolt ${suffix}`,
@@ -226,9 +221,6 @@ describe("purchase ↔ product links", () => {
         makeProductInput({ name: "Union Planned" }),
         ctx.actor,
       );
-      // A planned expense has not bought anything yet. Decided on its own
-      // terms rather than inherited from movement-timeline, which excludes
-      // future rows to answer a different question.
       await expenseOn({
         name: "Union Planned buy",
         cost: 500,
@@ -263,9 +255,6 @@ describe("purchase ↔ product links", () => {
       await attachPurchaseProducts(ctx.db, orderId, [both.entityId], ctx.actor);
 
       const purchases = await listProductPurchases(ctx.db, both.entityId);
-      // One row, not two: the overlap is folded, and unlike the movement
-      // timeline the Expense does NOT suppress the link — losing it would make
-      // a real link undetachable.
       expect(purchases).toHaveLength(1);
       expect(purchases[0]?.source).toBe("both");
       expect(purchases[0]?.linkAttachedAt).not.toBeNull();

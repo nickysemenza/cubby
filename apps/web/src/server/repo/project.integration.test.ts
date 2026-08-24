@@ -275,9 +275,6 @@ describe("project repository", () => {
     );
 
     const result = await getProjectByID(ctx.db, projectEntityId);
-    // spent includes the future expense — matches the retired Notion rollup's
-    // semantics (a planned spend still counts toward the running total).
-    // subtree equals own here — this project is a leaf (no sub-projects).
     expect(result.rollup).toEqual({
       spent: 150,
       actualSpent: 100,
@@ -332,7 +329,6 @@ describe("project repository", () => {
     const projectBAfter = await getProjectByID(ctx.db, projectBEntityId);
     expect(projectBAfter.blockingIds).toEqual([projectA.id]);
 
-    // Replace the set (drop C, keep B) — full replacement, not an append.
     const { output: updatedAgain } = await updateProject(
       ctx.db,
       projectA.id,
@@ -465,7 +461,6 @@ describe("project repository", () => {
     });
   });
 
-  /** PROJECT_HAS_CHILDREN: a live sub-project blocks delete. */
   it("blocks deletion while a live sub-project still references it, succeeds once the child is gone", async () => {
     const { output: parent } = await createProject(
       ctx.db,
@@ -515,8 +510,6 @@ describe("project repository", () => {
       ctx.actor,
     );
 
-    // B has no tasks/expenses, so deleting it is allowed even though A still
-    // references it — the dependency edge is hard-deleted, not a delete guard.
     await deleteProjects(ctx.db, [projectB.id], ctx.actor);
 
     const remainingEdges = await getDb(ctx.db)
@@ -655,12 +648,10 @@ describe("project repository — sub-projects (parentProjectId)", () => {
       ctx.actor,
     );
 
-    // C is a descendant of A — making A a child of C would create a cycle.
     await expect(
       updateProject(ctx.db, a.id, { parentProjectId: c.id }, ctx.actor),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
 
-    // Unaffected: the original chain still holds.
     const aAfter = await getProjectByID(ctx.db, aEntityId);
     expect(aAfter.parentProjectId).toBeNull();
   });
@@ -684,7 +675,6 @@ describe("project repository — sub-projects (parentProjectId)", () => {
       deleteProjects(ctx.db, [parent.id], ctx.actor),
     ).rejects.toThrow(/still have sub-projects/);
 
-    // Reparent the child away, then the delete succeeds — no cascade.
     await updateProject(ctx.db, child.id, { parentProjectId: null }, ctx.actor);
     await deleteProjects(ctx.db, [parent.id], ctx.actor);
 
@@ -824,8 +814,6 @@ describe("project repository — sub-projects (parentProjectId)", () => {
       costEstimate: null,
     });
 
-    // The list path aggregates the same way (batched over a page, not just
-    // the single-project reader).
     const { data } = await projectList(ctx.db, {}, [], {
       pageIndex: 0,
       pageSize: 50,
@@ -857,21 +845,18 @@ describe("project repository — sub-projects (parentProjectId)", () => {
         .costEstimate,
     ).toBe(150);
 
-    // A leaf's subtree estimate is just its own.
     const childAfter = await getProjectByID(ctx.db, childEntityId);
     expect(childAfter.rollup.subtree.costEstimate).toBe(
       childAfter.costEstimate,
     );
     expect(childAfter.rollup.subtree.costEstimate).toBe(50);
 
-    // Parent unestimated, child estimated — the child's value still surfaces.
     await updateProject(ctx.db, parent.id, { costEstimate: null }, ctx.actor);
     expect(
       (await getProjectByID(ctx.db, parentEntityId)).rollup.subtree
         .costEstimate,
     ).toBe(50);
 
-    // Nothing in the subtree estimated — null, not 0.
     await updateProject(ctx.db, child.id, { costEstimate: null }, ctx.actor);
     const allNull = await getProjectByID(ctx.db, parentEntityId);
     expect(allNull.rollup.subtree.costEstimate).toBeNull();
@@ -926,14 +911,12 @@ describe("project repository — sub-projects (parentProjectId)", () => {
       const { subtree, ...own } = row.rollup;
       expect(subtree.projectCount).toBe(0);
       expect(subtree).toEqual({ ...own, projectCount: 0, costEstimate: 42 });
-      // The two dead fallbacks, spelled out: neither branch can ever differ.
       expect(subtree.actualSpent).toBe(own.actualSpent);
       expect(subtree.costEstimate ?? row.costEstimate).toBe(
         subtree.costEstimate,
       );
     };
 
-    // Both read paths the UI uses: the single-project reader and the list.
     assertLeafInvariant(await getProjectByID(ctx.db, leafEntityId));
     const { data } = await projectList(ctx.db, {}, [], {
       pageIndex: 0,
@@ -943,7 +926,6 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     expect(listed).toBeDefined();
     if (listed) assertLeafInvariant(listed);
 
-    // ...and the dashboard summary, which is what ProjectCard renders.
     const summary = await projectDashboardSummary(ctx.db, {});
     const carded = summary.projects.find((p) => p.id === leaf.id);
     expect(carded).toBeDefined();
@@ -1233,7 +1215,6 @@ describe("project repository — sub-projects (parentProjectId)", () => {
 
     const pagination = { pageIndex: 0, pageSize: 50 };
 
-    // Direct-only (flag unset): just the parent's own expense.
     const directOnly = await expenseList(
       ctx.db,
       { projectId: parent.id },
@@ -1243,7 +1224,6 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     expect(directOnly.count).toBe(1);
     expect(directOnly.data.map((p) => p.name)).toEqual(["parent expense"]);
 
-    // Subtree: parent + child + grandchild.
     const subtree = await expenseList(
       ctx.db,
       { projectId: parent.id, includeSubProjects: true },
@@ -1257,25 +1237,9 @@ describe("project repository — sub-projects (parentProjectId)", () => {
   });
 });
 
-// `project.parentProjectId` lowercase canonicalization is now covered by the
-// generic #591 battery in filter-application.integration.test.ts: seedWorld
-// there gives project Beta a real, live parentProjectId (Alpha), so
-// `world.codes.project` genuinely matches a row and the lowercase-vs-
-// canonical comparison is no longer vacuous. This per-entity guard — and the
-// "seeded world is deliberately unrelated" premise that used to justify
-// keeping it — is subsumed; deleted rather than kept duplicate.
-
-/**
- * The WBS renderer's page reader. What's being pinned throughout: the tree page
- * selects the SAME projects the flat list would, and differs only in what a
- * "page" is — roots of the filtered forest, each carrying its matching
- * descendants. Every assertion here is about that boundary, because the whole
- * point of the endpoint is that the browser never gets to decide it.
- */
 describe("project repository — WBS tree page", () => {
   const ctx = withTestDb();
 
-  /** `parent → child → grandchild`, plus a standalone project. */
   const makeChain = async (prefix: string) => {
     const { output: parent } = await createProject(
       ctx.db,
@@ -1317,8 +1281,6 @@ describe("project repository — WBS tree page", () => {
 
     const result = await projectTreePage(ctx.db, {}, [], page(0, 50));
 
-    // Four projects, two roots — the count is the paging unit, which is what
-    // the infinite-scroll page arithmetic compares against.
     expect(result.count).toBe(2);
     expect(new Set(result.data.map((row) => row.id))).toEqual(
       new Set([parent.id, child.id, grandchild.id, standalone.id]),
@@ -1383,8 +1345,6 @@ describe("project repository — WBS tree page", () => {
     expect(ids).toContain(parent.id);
     expect(ids).toContain(grandchild.id);
     expect(ids).not.toContain(child.id);
-    // The grandchild's own parent is gone from the result, so it is a root
-    // too: two roots, not one.
     expect(result.count).toBe(2);
   });
 
@@ -1409,9 +1369,6 @@ describe("project repository — WBS tree page", () => {
       projectCreateInput.parse({ name: "deleted standalone" }),
       ctx.actor,
     );
-    // Bottom-up: `deleteProjects` refuses a project that still has children
-    // (PROJECT_HAS_CHILDREN), so a dangling middle link isn't a state the app
-    // can reach — the leaf is the real case.
     await deleteProjects(ctx.db, [grandchild.id, standalone.id], ctx.actor);
 
     const result = await projectTreePage(ctx.db, {}, [], page(0, 50));
@@ -1419,8 +1376,6 @@ describe("project repository — WBS tree page", () => {
     const ids = result.data.map((row) => row.id);
     expect(ids).toEqual(expect.arrayContaining([parent.id, child.id]));
     expect(ids).not.toContain(grandchild.id);
-    // ...and a deleted ROOT doesn't just vanish from the rows, it stops
-    // counting toward the page total.
     expect(ids).not.toContain(standalone.id);
     expect(result.count).toBe(1);
   });
@@ -1446,8 +1401,6 @@ describe("project repository — WBS tree page", () => {
       page(0, 50),
     );
 
-    // The client nests by preserving input order within each sibling group,
-    // so this ordering IS the rendered per-level ordering.
     expect(result.data.map((row) => row.name)).toEqual([
       "order alpha",
       "order mid",
@@ -1548,8 +1501,6 @@ describe("project repository — date windows (derivation)", () => {
       projectCreateInput.parse({
         name: "dates child propagation",
         parentProjectId: parent.id,
-        // A deliberate forward override, wider than the child's own dated
-        // work below — the parent should see THIS, not the narrower raw date.
         endDate: "2025-12-31",
       }),
       ctx.actor,
@@ -1670,8 +1621,6 @@ describe("project repository — date windows (derivation)", () => {
       ctx.actor,
     );
 
-    // No override, and its EXPENSE predates its task — the coalesce-chain bug
-    // sorted this by the task min (2024-08-01) instead of 2024-03-01.
     const { output: derived } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "sort derived middle" }),
@@ -1700,8 +1649,6 @@ describe("project repository — date windows (derivation)", () => {
       ctx.actor,
     );
 
-    // Neither override nor content — sorts last in BOTH directions (the
-    // house-wide nulls-last convention).
     const { output: undated } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "sort undated" }),
@@ -1736,8 +1683,6 @@ describe("project repository — date windows (derivation)", () => {
     expect(descPos.derived).toBeLessThan(descPos.overridden);
     expect(descPos.overridden).toBeLessThan(descPos.undated);
 
-    // The sort key and the displayed window agree: the derived row's start is
-    // the expense date, not the later task date.
     expect(
       asc.data.find((r) => r.id === derived.id)?.dates.effectiveStart,
     ).toBe("2024-03-01");
@@ -2039,8 +1984,6 @@ describe("project dashboard — attention detector + summary", () => {
       daysHidden: 204,
     });
 
-    // These two rows are the reason `key` exists: same type, same entityId, so
-    // a type+entityId React key collided and the list could silently drop one.
     expect(startItem?.key).toBe(`date_window_drift:${project.id}:start`);
     expect(endItem?.key).toBe(`date_window_drift:${project.id}:end`);
 
@@ -2162,9 +2105,6 @@ describe("project dashboard — attention detector + summary", () => {
       aAfter.rollup.subtree.committedSpent +
       bAfter.rollup.subtree.committedSpent;
 
-    // No statusScope = NO status condition: `done` is in scope like any other
-    // status. (This used to silently fall back to `!= 'done'` — an invisible
-    // filter nothing in the UI described.)
     const summary = await projectDashboardSummary(ctx.db, {});
     expect(summary.projects.map((p) => p.name)).toEqual([
       "summary spend a",
@@ -2177,12 +2117,9 @@ describe("project dashboard — attention detector + summary", () => {
     expect(summary.summary.committedSpend).toBe(
       liveCommitted + doneAfter.rollup.subtree.committedSpent,
     );
-    // The two portfolio headline stats keep a FIXED status regardless of the
-    // (here absent) statusScope.
     expect(summary.summary.activeProjectCount).toBe(2);
     expect(summary.completedCount).toBe(1);
 
-    // Excluding `done` is now something a caller opts into explicitly.
     const live = await projectDashboardSummary(ctx.db, {
       statusScope: [...LIVE_PROJECT_STATUSES],
     });
@@ -2266,7 +2203,6 @@ describe("project dashboard — attention detector + summary", () => {
 describe("project dashboard — summary scope filters", () => {
   const ctx = withTestDb();
 
-  /** Every fixture here is a bare project; only the scoped columns vary. */
   const mkProject = async (
     input: Partial<ProjectCreateInput> & { name: string },
   ) => {
@@ -2278,7 +2214,6 @@ describe("project dashboard — summary scope filters", () => {
     return output;
   };
 
-  /** Names of the projects the summary's scoped set actually returned. */
   const scopedNames = (summary: { projects: Array<{ name: string }> }) =>
     summary.projects.map((p) => p.name);
 
@@ -2338,7 +2273,6 @@ describe("project dashboard — summary scope filters", () => {
       "loc lake",
     ]);
 
-    // One known + one that exists nowhere: still ANY-of, not all-of.
     const oneUnknown = await projectDashboardSummary(ctx.db, {
       locations: ["Barn", "Lake House"],
     });
@@ -2349,7 +2283,6 @@ describe("project dashboard — summary scope filters", () => {
     });
     expect(scopedNames(noMatch)).toEqual([]);
 
-    // Unfiltered, the empty-locations project is in scope like any other.
     expect(scopedNames(await projectDashboardSummary(ctx.db, {}))).toEqual([
       "loc both",
       "loc cabin",
@@ -2380,10 +2313,6 @@ describe("project dashboard — summary scope filters", () => {
     ]);
   });
 
-  /**
-   * The four interval shapes a project's `[startDate, endDate]` can take, plus
-   * a fully-past control. Shared by the two date-window tests below.
-   */
   const seedDateShapes = async () => {
     await mkProject({
       name: "date bounded",
@@ -2411,7 +2340,6 @@ describe("project dashboard — summary scope filters", () => {
   it("a two-sided date window keeps overlapping intervals and drops the undated project", async () => {
     await seedDateShapes();
 
-    // No window: every shape is in scope, `date none` included.
     expect(scopedNames(await projectDashboardSummary(ctx.db, {}))).toEqual([
       "date bounded",
       "date early",
@@ -2424,9 +2352,6 @@ describe("project dashboard — summary scope filters", () => {
       dateFrom: "2025-01-01",
       dateTo: "2025-12-31",
     });
-    // `date old` ends before the window; `date none` has no interval at all
-    // (without the `start IS NOT NULL OR end IS NOT NULL` conjunct it would
-    // pass the other two vacuously and match every window ever chosen).
     expect(scopedNames(windowed)).toEqual([
       "date bounded",
       "date early",
@@ -2513,15 +2438,12 @@ describe("project dashboard — summary scope filters", () => {
       dateTo: "2025-12-31",
     });
     expect(scopedNames(summary)).toEqual(["hidden scoped"]);
-    // Projects and Tasks can still be undated. Expense dates are required, so
-    // an out-of-window Expense is excluded normally rather than counted here.
     expect(summary.hiddenByDate).toEqual({
       projects: 1,
       tasks: 2,
       expenses: 0,
     });
 
-    // Nothing is "hidden by date" when no window is set.
     const unwindowed = await projectDashboardSummary(ctx.db, {
       kinds: ["renovation"],
     });
@@ -2560,9 +2482,6 @@ describe("project dashboard — summary scope filters", () => {
     );
 
     const summary = await projectDashboardSummary(ctx.db, {});
-    // 2023 (task dueEndDate) > 2022 (project end) > 2021 (expense) > 2020
-    // (project start); 2019 is absent because `dueEndDate` supersedes
-    // `dueDate` — the same effective-due expression task/lookup.ts filters on.
     expect(summary.filterOptions.years).toEqual([
       "2023",
       "2022",
@@ -2622,13 +2541,6 @@ describe("project dashboard — portfolio analytics", () => {
       ctx.actor,
     );
 
-  /**
-   * parent (est 100) ── child (est 50); plus an unrelated `done` project.
-   *
-   *   parent own: +100 actual, +25 committed
-   *   child  own: +40 actual, −15 contribution
-   *   solo   own: +200 actual
-   */
   const seedPortfolio = async () => {
     const parent = await mkProject({
       name: "analytics parent",
@@ -2661,13 +2573,10 @@ describe("project dashboard — portfolio analytics", () => {
 
     const analytics = await projectPortfolioAnalytics(ctx.db, {});
 
-    // Ordered by project name (the scoped project query's `asc(project.name)`).
     expect(analytics.costVsEstimate).toEqual([
       {
         projectId: child.id,
         projectName: "analytics child",
-        // A leaf: subtree == own. The −15 contribution is NOT netted out of
-        // `actual` (that's `spent`'s job).
         actual: 40,
         committed: 0,
         estimate: 50,
@@ -2718,7 +2627,6 @@ describe("project dashboard — portfolio analytics", () => {
   it("keeps subtree totals whole while the expense-grouped aggregates stay own-only", async () => {
     const { parent } = await seedPortfolio();
 
-    // Scope to the parent alone — its child is NOT in the filtered id set.
     const analytics = await projectPortfolioAnalytics(ctx.db, {
       search: "analytics parent",
     });
@@ -2939,7 +2847,6 @@ describe("project dashboard — portfolio analytics", () => {
     expect(analytics.spendingByProject).toEqual([
       { projectId: project.id, projectName: "unrelated tag string", spend: 75 },
     ]);
-    // If `search` had leaked into the expense name filter, this would be empty.
     expect(analytics.monthlySpend[0]?.actual).toBe(75);
     expect(analytics.tradeActivity[0]?.actual).toBe(75);
   });
@@ -2965,8 +2872,6 @@ describe("project repository — sums.costEstimate", () => {
   });
 
   it("projectList sums the FULL filtered set, not the loaded page", async () => {
-    // 7 projects, page size 3 — three full pages' worth, so any one page's
-    // rows sum to well under the true total.
     const estimates = [10, 20, 30, 40, 50, 60, 70];
     for (const [i, costEstimate] of estimates.entries()) {
       await createProject(
@@ -2992,11 +2897,8 @@ describe("project repository — sums.costEstimate", () => {
       (acc, p) => acc + (p.costEstimate ?? 0),
       0,
     );
-    // The page-local reduction (10+20+30=60) is what the client-side fallback
-    // would compute — genuinely different from the true total.
     expect(pageSubtotal).toBe(60);
     expect(pageSubtotal).not.toBe(total);
-    // The server-supplied sum is the full 7-project total regardless of page.
     expect(firstPage.sums.costEstimate).toBe(total);
 
     const lastPage = await projectList(
@@ -3059,8 +2961,6 @@ describe("project repository — sums.costEstimate", () => {
   });
 
   it("projectTreePage sums the full matching set across MULTIPLE root pages, not just the page's roots", async () => {
-    // 5 standalone roots, page size 2 roots — so the true total spans more
-    // than any one root-page.
     const estimates = [11, 22, 33, 44, 55];
     for (const [i, costEstimate] of estimates.entries()) {
       await createProject(
@@ -3088,7 +2988,6 @@ describe("project repository — sums.costEstimate", () => {
     );
     expect(rootPageSubtotal).toBe(11 + 22);
     expect(rootPageSubtotal).not.toBe(total);
-    // The tree page reports the SAME full-set total the flat list would.
     expect(firstRootPage.sums.costEstimate).toBe(total);
   });
 
@@ -3167,7 +3066,6 @@ describe("project repository — imagePresenceFilter", () => {
 
   const page = { pageIndex: 0, pageSize: 50 };
 
-  /** Attach a fresh image to `entityId`, returning both rows for mutation. */
   const attachImage = async (
     entityId: ProjectId,
     overrides: {

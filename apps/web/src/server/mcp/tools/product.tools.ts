@@ -1,39 +1,30 @@
 import {
-  mcpProductCreateInput,
-  mcpProductUpdateInput,
   patchProductExternalIdsInput,
   productExternalIdCollisionInput,
   productExternalIdCollisionsOut,
-  productFilterFields,
   productLookupUpcOut,
   productMcpDetailOut,
-  productMcpListOut,
   productMcpOut,
 } from "@cubby/schemas/product";
 import {
   productComponentsInput,
   productComponentsMcpOut,
 } from "@cubby/schemas/product-components";
-import type { mcpUnitMappingInput } from "@cubby/schemas/unitmapping";
 import { upc } from "@cubby/usda-schemas";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
-  declareMergeableEntity,
-  declareRelationEntity,
   getCaller,
   idParam,
   READ_ONLY_CLOSED,
   READ_ONLY_OPEN,
   registerBatchTool,
-  registerEntityCrudToolset,
   registerMcpTool,
   registerRouterTool,
   rejectDuplicateIds,
   respond,
   slimProduct,
   slimProductDetail,
-  toUnitMappingInput,
   WRITE_CLOSED,
 } from "./_shared";
 
@@ -43,64 +34,14 @@ import {
  * The tRPC output carries `productTopLevelOut`, whose nested `images[].id` and
  * `externalIds[].id` are raw uuids — fine inside the app, but a uuid must never
  * reach an MCP payload. `slimProduct` is the same projection every other product
- * tool publishes, so the local match reads identically here and in
- * `search_products`.
+ * tool publishes, so the local match reads identically here and in the entity
+ * command's product search results.
  */
 const lookupUpcMcpOut = productLookupUpcOut.extend({
   localProduct: productMcpOut.nullable(),
 });
 
 export function registerProductTools(server: McpServer) {
-  registerEntityCrudToolset(server, {
-    entity: "product",
-    names: { list: "search_products" },
-    createInput: mcpProductCreateInput.shape,
-    updateShape: mcpProductUpdateInput.shape,
-    filterFields: productFilterFields,
-    mcpListOut: productMcpListOut,
-    out: productMcpOut,
-    detailOut: productMcpDetailOut,
-    detailSlim: slimProductDetail,
-    slim: slimProduct,
-    sort: { orderBy: "name" },
-    listSortInput: z.enum(["name", "identity_strength"]).optional(),
-    descriptions: {
-      list: "Search products by name, manufacturer, UPC/barcode/ISBN (upcFilter matches ANY of a product's barcodes and accepts ISBN-10 or ISBN-13), model, category, or computed completeness. Start a product audit with dataStatus=needs_data and optionally dataGap. For enrichment use sort=identity_strength. modelPresenceFilter and externalIdSource/externalIdPresenceFilter expose identity worklists such as Amazon-linked products lacking an Amazon external id. For the stocked product-enrichment worklist, pass inventoryPresenceFilter=has and imagePresenceFilter=none.",
-      get: "Get a detailed product by ID, including identifiers, coverImageId, every attached Product file with integrity metadata/display position, and computed dataQuality. This read does not contact R2; use verify_product_images for an on-demand storage check.",
-      create:
-        "Create a fully described product. Use for items not found via search_products; include maker model, category, tags, identifiers, and unit mappings when verified. Retailer SKUs belong in externalIds, not model.",
-      update:
-        "Update a product's fields, complete unit-mapping set, detached files, or cover/gallery order. externalIds replaces the full set when provided; use patch_product_external_ids to preserve unrelated identifier slots.",
-      delete:
-        "Soft-delete products by IDs. Fails while live inventory entries, expenses, or tasks still reference a product.",
-    },
-    // Spread, never enumerate. A field-by-field copy silently drops any field
-    // added to `mcpProductCreateInput` later and the created row reads back as
-    // if the agent never sent it — that is how `stockTracked: false` became
-    // `null` on every MCP-created product, erasing the reviewed/no-shelf-claim
-    // decision the create call actually made. Only fields whose MCP shape is
-    // genuinely looser than the router's are normalized here.
-    create: async (caller, params) =>
-      await caller.product.create({
-        ...params,
-        // Required (nullable, not optional) on the router's create input.
-        expectedQuantity: params.expectedQuantity ?? null,
-        upc: params.upc ?? null,
-        isbn: params.isbn ?? null,
-        ingredientId: params.ingredientId ?? null,
-        unitMappings: (params.unitMappings ?? []).map(toUnitMappingInput),
-      }),
-    resolveUpdateData: async (_caller, data) =>
-      data.unitMappings === undefined
-        ? data
-        : {
-            ...data,
-            unitMappings: (
-              data.unitMappings as Array<z.infer<typeof mcpUnitMappingInput>>
-            ).map(toUnitMappingInput),
-          },
-  });
-
   registerMcpTool(server, {
     name: "find_product_external_id_collisions",
     description:
@@ -171,12 +112,6 @@ export function registerProductTools(server: McpServer) {
       respond(await caller.product.verifyImages(item.id), slimProductDetail),
   });
 
-  declareMergeableEntity(
-    server,
-    "product",
-    "Moves the merged-away products' stock, ledger lines, identifiers, images, unit mappings, tasks, project uses, purchase links and wishlist candidacies onto the survivor, then soft-deletes them. Stock in a location the survivor already stocks is SUMMED into its entry; an identifier slot (source, kind) the survivor already fills keeps the survivor's value as PRIMARY and carries the other over as a secondary rather than destroying it (reported in `summary.externalIdsDemoted`). The survivor's cover image is preserved, and its null columns are filled from a loser but never overwritten. REFUSES when two entries in one location carry different units, and when the merge would create a kit-component cycle or leave one kit listing the same component at two different quantities.",
-  );
-
   registerMcpTool(server, {
     name: "lookup_upc",
     description:
@@ -232,16 +167,5 @@ export function registerProductTools(server: McpServer) {
     call: async (caller, params) => ({
       items: await caller.product.components(params),
     }),
-  });
-
-  // The prose that used to be `attach_product_components`' /
-  // `detach_product_components`' own descriptions, now composed into
-  // `attach_entity` / `detach_entity`'s `parentId` parameter. The tools
-  // collapsed; the kit semantics must not.
-  declareRelationEntity(server, "product", {
-    attach:
-      "PRD- parent = KIT COMPONENTS (`ProductComponent`). Records that existing Products are inside a kit or multi-pack. Each item names one component Product and how many of it the kit contains — a 4-pack of one part is ONE item at quantity 4, a 9-piece kit is nine items; omit `quantity` for 1. This creates no money and splits nothing: the kit keeps its own Expense and its own price, exactly as before attaching — use split_expense instead if the goal is a real per-component cost basis rather than a composition record. A barcode/model identifies the PACKAGE: the kit keeps its OWN UPC/model/ASIN and a component's identifiers stay its own — never copy one onto the other just because they ship together. REFUSES a self-referencing entry, a component that is not live, and a multi-hop cycle (A contains B contains A), naming the offending codes. Quantity is set at attach time; to change it, detach and reattach — there is no in-place update.",
-    detach:
-      "PRD- parent = KIT COMPONENTS. Soft-deletes component links from one kit Product. This removes only the composition record — the kit's Expense was never split across its components, so detaching touches no money, no inventory, and no price.",
   });
 }

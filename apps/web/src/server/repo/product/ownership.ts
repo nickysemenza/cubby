@@ -69,7 +69,6 @@ export const ownershipExitExpensePredicate = (dbc: DrizzleClient): SQL =>
   )!;
 
 type OwnershipLoadOptions = {
-  /** Plain-date override for deterministic project/timeline tests. */
   today?: string;
 };
 

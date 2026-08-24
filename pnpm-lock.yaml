@@ -45,6 +45,9 @@ importers:
       knip:
         specifier: ^6.27.0
         version: 6.32.0
+      oxc-parser:
+        specifier: 0.147.0
+        version: 0.147.0
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -102,7 +105,7 @@ importers:
         version: 10.70.0(@cloudflare/workers-types@5.20260816.1)(wrangler@4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1))
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(@cloudflare/workers-types@5.20260816.1)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@13.0.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))
+        version: 0.45.2(@cloudflare/workers-types@5.20260816.1)(@electric-sql/pglite@0.5.7)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@13.0.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))
       es-toolkit:
         specifier: ^1.49.0
         version: 1.50.0
@@ -169,7 +172,7 @@ importers:
         version: 7.0.1
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(@cloudflare/workers-types@5.20260816.1)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@13.0.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))
+        version: 0.45.2(@cloudflare/workers-types@5.20260816.1)(@electric-sql/pglite@0.5.7)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@13.0.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))
       hono:
         specifier: ^4.12.31
         version: 4.13.0
@@ -215,10 +218,10 @@ importers:
         version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.17)(date-fns@4.4.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@better-auth/oauth-provider':
         specifier: ^1.6.25
-        version: 1.6.25(8a3966bca47e48ee96678ee7f25cd017)
+        version: 1.6.25(9d33a786200dd2b0a98afefef54bb10e)
       '@better-auth/passkey':
         specifier: ^1.6.25
-        version: 1.6.25(3b1d90567613b616d78179b0e34b01e1)
+        version: 1.6.25(a6a826950c04c10f795b2f381726fd59)
       '@cloudflare/tanstack-ai':
         specifier: 0.2.1
         version: 0.2.1(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(@tanstack/ai@0.44.1(@opentelemetry/api@1.9.1)(zod@4.4.3))(ws@8.21.2)(zod@4.4.3)
@@ -251,10 +254,10 @@ importers:
         version: 1.5.0
       '@daveyplate/better-auth-tanstack':
         specifier: ^1.3.6
-        version: 1.3.6(128d9a64718e9bda16f186055c015560)
+        version: 1.3.6(e04c9090978c619467d679f79878d1ec)
       '@daveyplate/better-auth-ui':
         specifier: 3.4.0
-        version: 3.4.0(c483bb37745b464c10af653fa97bb847)
+        version: 3.4.0(e61bc47630b506ca5dee8108241b13eb)
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -404,7 +407,7 @@ importers:
         version: 3.2.1(@types/emscripten@1.41.5)
       better-auth:
         specifier: ^1.6.25
-        version: 1.6.25(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@tanstack/react-start@1.168.32(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(rolldown@1.2.3)(rollup@4.62.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0)))(better-sqlite3@12.11.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260816.1)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2)))(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(solid-js@1.9.10)(vitest@4.1.10)
+        version: 1.6.25(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@tanstack/react-start@1.168.32(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(rolldown@1.2.3)(rollup@4.62.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0)))(better-sqlite3@12.11.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260816.1)(@electric-sql/pglite@0.5.7)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2)))(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(solid-js@1.9.10)(vitest@4.1.10)
       chrono-node:
         specifier: ^2.10.1
         version: 2.10.1
@@ -428,7 +431,7 @@ importers:
         version: 4.4.0
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(@cloudflare/workers-types@5.20260816.1)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))
+        version: 0.45.2(@cloudflare/workers-types@5.20260816.1)(@electric-sql/pglite@0.5.7)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))
       es-toolkit:
         specifier: ^1.49.0
         version: 1.50.0
@@ -526,6 +529,12 @@ importers:
       '@devoxa/integresql-client':
         specifier: ^2.1.2
         version: 2.1.2
+      '@electric-sql/pglite':
+        specifier: 0.5.7
+        version: 0.5.7
+      '@electric-sql/pglite-pgvector':
+        specifier: 0.0.8
+        version: 0.0.8(@electric-sql/pglite@0.5.7)
       '@faker-js/faker':
         specifier: ^10.5.0
         version: 10.6.0
@@ -1337,6 +1346,14 @@ packages:
   '@edge-runtime/vm@3.2.0':
     resolution: {integrity: sha512-0dEVyRLM/lG4gp1R/Ik5bfPl/1wX00xFwd5KcNH602tzBa09oF7pbTKETEhR1GjZ75K6OJnYFu8II2dyMhONMw==}
     engines: {node: '>=16'}
+
+  '@electric-sql/pglite-pgvector@0.0.8':
+    resolution: {integrity: sha512-Ll1OEF7TLmcvDWT0RkaG/PjYbJ3Xj/YJ6L1GgLsyUp+9N8WIH4Dryj39D0IiEg8IeknZ6AKyBgpba4XJjABEQQ==}
+    peerDependencies:
+      '@electric-sql/pglite': 0.5.7
+
+  '@electric-sql/pglite@0.5.7':
+    resolution: {integrity: sha512-6WBks0NFO6YUhGP03mCNkbJuVFWwrZPrzZ/vsnAPnsCD28pybdZ+yoTrlLlWFoZst3kdaju5pxIslV/jrr36nQ==}
 
   '@emnapi/core@1.11.2':
     resolution: {integrity: sha512-TC8MkTuZUtcTSiFeuC0ksCh9QIJ5+F21MvZ4Wn4ORfYaFJ/0dsiudv5tVkejgwZlwQ39jL9WWDe2lz8x0WglOA==}
@@ -2655,6 +2672,12 @@ packages:
     cpu: [arm]
     os: [android]
 
+  '@oxc-parser/binding-android-arm-eabi@0.147.0':
+    resolution: {integrity: sha512-fOtoGvIoirkvxQVw9J1WJPxz571XPgLsPf9uhRD+PJteUnvrJHMDmK9pw2yZEGGyismtRoEsp+JcXUdF/JDMDw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm]
+    os: [android]
+
   '@oxc-parser/binding-android-arm64@0.120.0':
     resolution: {integrity: sha512-SEf80EHdhlbjZEgzeWm0ZA/br4GKMenDW3QB/gtyeTV1gStvvZeFi40ioHDZvds2m4Z9J1bUAUL8yn1/+A6iGg==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -2663,6 +2686,12 @@ packages:
 
   '@oxc-parser/binding-android-arm64@0.142.0':
     resolution: {integrity: sha512-WZkvGRLNQTz8lR9zP5nLjUdlroRCopBu3g9zF1p/laE6DzT1UbQo8Rdz5MWhaJUPYg/6gp+jo7HUgsyKaN1FtQ==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [android]
+
+  '@oxc-parser/binding-android-arm64@0.147.0':
+    resolution: {integrity: sha512-emjQHOYJaomo4ykaXQ1EItunr/I94Nk01oqBmU4dSkKSTupIDx6OysVDf2e8Eytm77rb+4ZxzgElyWP7rcEX7A==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [android]
@@ -2679,6 +2708,12 @@ packages:
     cpu: [arm64]
     os: [darwin]
 
+  '@oxc-parser/binding-darwin-arm64@0.147.0':
+    resolution: {integrity: sha512-kXvBPJL7RmDPJ2mze/vXPPVQimCDtFr9OFLjf7dyhV5Dx64cgcXh9KKrA1sMWvCObvJll9CZZUO0FBlFwD0l6A==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [darwin]
+
   '@oxc-parser/binding-darwin-x64@0.120.0':
     resolution: {integrity: sha512-xyHBbnJ6mydnQUH7MAcafOkkrNzQC6T+LXgDH/3InEq2BWl/g424IMRiJVSpVqGjB+p2bd0h0WRR8iIwzjU7rw==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -2687,6 +2722,12 @@ packages:
 
   '@oxc-parser/binding-darwin-x64@0.142.0':
     resolution: {integrity: sha512-QBsNF3nqlXmcH2B1YOPqQYmCJoy4HuIjUxGbBO/k5JAJUl68ghU2psRY2zPk+RyBaWqKP/qfL4oaFgEMCdwskA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [darwin]
+
+  '@oxc-parser/binding-darwin-x64@0.147.0':
+    resolution: {integrity: sha512-mgFF8pLU6R64LbT27lSrtVRspVC/3IcZ0qyIikzmi78Y3Ik2OPnlAHHI0UEBRcC3qmNgtjaef7zkFt7/uPxIcw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [darwin]
@@ -2703,6 +2744,12 @@ packages:
     cpu: [x64]
     os: [freebsd]
 
+  '@oxc-parser/binding-freebsd-x64@0.147.0':
+    resolution: {integrity: sha512-v38aiF11qufOTBcCAKL4skgQf0zJ4NEvRlivq7B5kHrlyvjCLjvNrMtNWDTz1SDUL6/xVsJRmLDxv2e+Cp4oWw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [freebsd]
+
   '@oxc-parser/binding-linux-arm-gnueabihf@0.120.0':
     resolution: {integrity: sha512-tkvn2CQ7QdcsMnpfiX3fd3wA3EFsWKYlcQzq9cFw/xc89Al7W6Y4O0FgLVkVQpo0Tnq/qtE1XfkJOnRRA9S/NA==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -2711,6 +2758,12 @@ packages:
 
   '@oxc-parser/binding-linux-arm-gnueabihf@0.142.0':
     resolution: {integrity: sha512-3riVS5IhdH3uCZj1Y9ftDQlR0dvLsIlw/edrRqk8JhgNd5K0XSs+UBtgh50N13CAlW9/TXj6sVGXaKNBocd0Yg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm]
+    os: [linux]
+
+  '@oxc-parser/binding-linux-arm-gnueabihf@0.147.0':
+    resolution: {integrity: sha512-AeIiBbwUaP0H1+4/qGW9l5qHecS/+XA5iMuieVcGb1T+tyc2dVGspFW13BWk/XrLsiGP/CiDJTJqAPLLCzZHkw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm]
     os: [linux]
@@ -2727,6 +2780,12 @@ packages:
     cpu: [arm]
     os: [linux]
 
+  '@oxc-parser/binding-linux-arm-musleabihf@0.147.0':
+    resolution: {integrity: sha512-/41MKPW4RgPY4DJco0NCF0RYX3IMZaVlRNMNzvhaxRavc7tN3Txm+qllZbh0aMRs0VHdgUlbI8TcAOiTai4TKg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm]
+    os: [linux]
+
   '@oxc-parser/binding-linux-arm64-gnu@0.120.0':
     resolution: {integrity: sha512-1GgQBCcXvFMw99EPdMy+4NZ3aYyXsxjf9kbUUg8HuAy3ZBXzOry5KfFEzT9nqmgZI1cuetvApkiJBZLAPo8uaw==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -2736,6 +2795,13 @@ packages:
 
   '@oxc-parser/binding-linux-arm64-gnu@0.142.0':
     resolution: {integrity: sha512-gc0EXsKtXgerujmU2Bql3u1L1HsSQ2774R83idq/FoNMPVV/RY/1ErFsvnit7KoiP/sLvzQixeUo4Ut0ic0wmw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@oxc-parser/binding-linux-arm64-gnu@0.147.0':
+    resolution: {integrity: sha512-bmpw/RPhVXgZbtb3xBDuwW5s8+LvZYdqcDSX/sP2ltL77aTio3DP/B5ZTwwgoJ6Mr9vJs4RrmgEKW9XkLNUU1g==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [linux]
@@ -2755,6 +2821,13 @@ packages:
     os: [linux]
     libc: [musl]
 
+  '@oxc-parser/binding-linux-arm64-musl@0.147.0':
+    resolution: {integrity: sha512-gd7VX/FDVOw6mjQcu45iIcp4QkgybgJwh3a0OFG2NxmPCj628mQWD96QGu1kK8+mZF9qK4b/gIEyC63vQoB7+Q==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
   '@oxc-parser/binding-linux-ppc64-gnu@0.120.0':
     resolution: {integrity: sha512-T/kZuU0ajop0xhzVMwH5r3srC9Nqup5HaIo+3uFjIN5uPxa0LvSxC1ZqP4aQGJVW5G0z8/nCkjIfSMS91P/wzw==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -2764,6 +2837,13 @@ packages:
 
   '@oxc-parser/binding-linux-ppc64-gnu@0.142.0':
     resolution: {integrity: sha512-wLMbT21U/QxknQsk+VvNF0b9D2/aGWhcaQQQ+VYlE8FwD5+GoWZIPPXNzyHmkYyhm0KB3itL+TBavjMatqNnYA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [ppc64]
+    os: [linux]
+    libc: [glibc]
+
+  '@oxc-parser/binding-linux-ppc64-gnu@0.147.0':
+    resolution: {integrity: sha512-HnAzcfki7dSUNHf510Q2NmbJlz8Ys7rn8l9l588Pkx0tYe1BHLZnmELIgqizJ4WPhHGSwN8Ce+B/menVxS3odA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [ppc64]
     os: [linux]
@@ -2783,6 +2863,13 @@ packages:
     os: [linux]
     libc: [glibc]
 
+  '@oxc-parser/binding-linux-riscv64-gnu@0.147.0':
+    resolution: {integrity: sha512-qlkOL6wT44U+fT5s/+sR6Shx0OdwvQF83JyIPZUxG/ovqZF5/7atOtjH+JPZ5/7ATQLbFBBSmghcy/+2NVB/ew==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [riscv64]
+    os: [linux]
+    libc: [glibc]
+
   '@oxc-parser/binding-linux-riscv64-musl@0.120.0':
     resolution: {integrity: sha512-SUbUxlar007LTGmSLGIC5x/WJvwhdX+PwNzFJ9f/nOzZOrCFbOT4ikt7pJIRg1tXVsEfzk5mWpGO1NFiSs4PIw==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -2792,6 +2879,13 @@ packages:
 
   '@oxc-parser/binding-linux-riscv64-musl@0.142.0':
     resolution: {integrity: sha512-hTsHtTLxMAfCo+rpF5K3qZJKW2NpPN/CHd4mYB3y7XlSdspHkd2gehDIofP64AacA9nWQw2tY3O7wR6UY8IVOA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [riscv64]
+    os: [linux]
+    libc: [musl]
+
+  '@oxc-parser/binding-linux-riscv64-musl@0.147.0':
+    resolution: {integrity: sha512-DlefD7L7sMXs/3hIBH23Egk0phj8kG0SA81dVGOQ3S1ekjOlmTLH2E+F2Thwfh1slKx6aH+lNc5fQYAw0GU7/g==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [riscv64]
     os: [linux]
@@ -2811,6 +2905,13 @@ packages:
     os: [linux]
     libc: [glibc]
 
+  '@oxc-parser/binding-linux-s390x-gnu@0.147.0':
+    resolution: {integrity: sha512-Xqpagk/031IvZ4svrk2FF01YEqM/iN3MJV3SVZadKg/CsGlDCGoREqKHXYnoV5+8SfGe/m6RM1szXFLusTu/Uw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [s390x]
+    os: [linux]
+    libc: [glibc]
+
   '@oxc-parser/binding-linux-x64-gnu@0.120.0':
     resolution: {integrity: sha512-q+5jSVZkprJCIy3dzJpApat0InJaoxQLsJuD6DkX8hrUS61z2lHQ1Fe9L2+TYbKHXCLWbL0zXe7ovkIdopBGMQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -2820,6 +2921,13 @@ packages:
 
   '@oxc-parser/binding-linux-x64-gnu@0.142.0':
     resolution: {integrity: sha512-i69kAWU+2LgoH5bR+zWiiu+UzAw7Oxkwv7COeJTeY19pn4e70nKQcr9Pm6cL2Z0Z54d+gl9qADlK/0yyuCPiBA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@oxc-parser/binding-linux-x64-gnu@0.147.0':
+    resolution: {integrity: sha512-QioQOeUbI4ATUr0S2z88uA3Cds2R3Mm5Ge7U8XNYtlTb2GJF3rWlcj70z0AJhhOlbdm0YgVjqPBldUNbFylDIg==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [linux]
@@ -2839,6 +2947,13 @@ packages:
     os: [linux]
     libc: [musl]
 
+  '@oxc-parser/binding-linux-x64-musl@0.147.0':
+    resolution: {integrity: sha512-NXy1tv/OdC+pPTwf9RiCZWPK53V/Xq/2cjSnjOSyKopajdaDqMIkgtDY+jXZemp2e8px5FeWfY2L2LwhKZQovg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
   '@oxc-parser/binding-openharmony-arm64@0.120.0':
     resolution: {integrity: sha512-TBU8ZwOUWAOUWVfmI16CYWbvh4uQb9zHnGBHsw5Cp2JUVG044OIY1CSHODLifqzQIMTXvDvLzcL89GGdUIqNrA==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -2847,6 +2962,12 @@ packages:
 
   '@oxc-parser/binding-openharmony-arm64@0.142.0':
     resolution: {integrity: sha512-YHpx9N7Ln3a++Tc8rv+H7mrK1zyJQOAwCFg8LZ3lTs1T5afGWeZrLPhPT9HLnIwSjCyJqPWVMIrMxbjcmBr2oQ==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [openharmony]
+
+  '@oxc-parser/binding-openharmony-arm64@0.147.0':
+    resolution: {integrity: sha512-GpGWZ6oKz4bjCWW9Mz5pCaGPyk2Aaze6zEoaslIQqpSLtpx5pXj/ap5gUNb5Jn2LIbqWyjkGLX9yv3NMuNcBVQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [openharmony]
@@ -2873,6 +2994,12 @@ packages:
     cpu: [arm64]
     os: [win32]
 
+  '@oxc-parser/binding-win32-arm64-msvc@0.147.0':
+    resolution: {integrity: sha512-a8mlt7CC8z7LUdCfaxhff4kCd+vSjE+NEFL0cxA8ukfuSnvAto/pWTjytW4BuVLnQGcCVdHJwcRKOfs++H+tjw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [win32]
+
   '@oxc-parser/binding-win32-ia32-msvc@0.120.0':
     resolution: {integrity: sha512-L7vfLzbOXsjBXV0rv/6Y3Jd9BRjPeCivINZAqrSyAOZN3moCopDN+Psq9ZrGNZtJzP8946MtlRFZ0Als0wBCOw==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -2881,6 +3008,12 @@ packages:
 
   '@oxc-parser/binding-win32-ia32-msvc@0.142.0':
     resolution: {integrity: sha512-GGi3+YphVHavvgs6gum2UXoNCqzHAmPt/nXkn8ZQZstV2Q1qZD1Mn8fz/nWrDkefHQtrG/+1/XrbMxsBTo6Svw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [ia32]
+    os: [win32]
+
+  '@oxc-parser/binding-win32-ia32-msvc@0.147.0':
+    resolution: {integrity: sha512-M5ViVDBcFLnl2632AuuWuP35zEL5oikK1jTx8r3+902VEDeSNHxFZAB6RZyfZ7MU6Oi5QTOG8MmMkIeHsudSaw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [ia32]
     os: [win32]
@@ -2897,6 +3030,12 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@oxc-parser/binding-win32-x64-msvc@0.147.0':
+    resolution: {integrity: sha512-DUaE13OwnUSlHpLZNcC/nuT10ivlWqc5EZgsfgXuAmWYw0r3nDxGeLD1zlGwYwIgVk1/ZMAxoXpV+05stvbHaA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [win32]
+
   '@oxc-project/types@0.120.0':
     resolution: {integrity: sha512-k1YNu55DuvAip/MGE1FTsIuU3FUCn6v/ujG9V7Nq5Df/kX2CWb13hhwD0lmJGMGqE+bE1MXvv9SZVnMzEXlWcg==}
 
@@ -2905,6 +3044,9 @@ packages:
 
   '@oxc-project/types@0.143.0':
     resolution: {integrity: sha512-u6JZdLBTLotrNC9Vd6vPssINdzcCzleKAH6EJKImQb7GtYvX5keN2dxkoK44stCc4tffE6QQRtZTXVSzsLUlWA==}
+
+  '@oxc-project/types@0.147.0':
+    resolution: {integrity: sha512-IJ3s6ltHLp45S0bh7phkX+gJO7A1Wuz2EaqpAhb8WjqDwbzMiWKHhyyT42tskaWjEYXtHtVCPpnBJVT9+dcRLg==}
 
   '@oxc-resolver/binding-android-arm-eabi@11.24.2':
     resolution: {integrity: sha512-y09e0L0SRI2OA2tUIrjBgoV3eH5hvUKXNkJqXmNo5V2WxIjyC7I7aJfRLMEVpA8yi95f90gFDvO0VMgrDw+vwA==}
@@ -7597,6 +7739,10 @@ packages:
     resolution: {integrity: sha512-kKR+jPiRJYJDexVoziIg/FVGvr1fT1FZSSJOk6tVoMKKSlsf1Cso+cgGCJkOEDWOP174vRntCPFKg+AS7InWvw==}
     engines: {node: ^20.19.0 || >=22.12.0}
 
+  oxc-parser@0.147.0:
+    resolution: {integrity: sha512-5xaug6t7GfV3BO5Iv+xHW1rmQkDEQ3BEu3L8g3InsvWO5i8CYGc4tCZ2X985QcwWNycFJam+aOns6Nr2XAThTA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+
   oxc-resolver@11.24.2:
     resolution: {integrity: sha512-FY91FiDBj7ls5MsFS9jN3tjz2o0/zsdSsymlakySaBwVJZorHhkWyICLZMKxlu1R9vYo+sd3z1jwb4J8x7bNDw==}
 
@@ -9348,11 +9494,11 @@ snapshots:
 
   '@bcoe/v8-coverage@1.0.2': {}
 
-  '@better-auth/api-key@1.6.23(90428e1a37b4aaa3a17ea6897306108a)':
+  '@better-auth/api-key@1.6.23(48e719c4fc6d98161a63b0ee4e996175)':
     dependencies:
       '@better-auth/core': 1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0)
       '@better-auth/utils': 0.4.2
-      better-auth: 1.6.25(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@tanstack/react-start@1.168.32(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(rolldown@1.2.3)(rollup@4.62.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0)))(better-sqlite3@12.11.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260816.1)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2)))(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(solid-js@1.9.10)(vitest@4.1.10)
+      better-auth: 1.6.25(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@tanstack/react-start@1.168.32(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(rolldown@1.2.3)(rollup@4.62.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0)))(better-sqlite3@12.11.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260816.1)(@electric-sql/pglite@0.5.7)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2)))(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(solid-js@1.9.10)(vitest@4.1.10)
       better-call: 2.0.2(zod@4.4.3)
       zod: 4.4.3
 
@@ -9371,12 +9517,12 @@ snapshots:
       '@cloudflare/workers-types': 5.20260816.1
       '@opentelemetry/api': 1.9.1
 
-  '@better-auth/drizzle-adapter@1.6.25(@better-auth/core@1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0))(@better-auth/utils@0.4.2)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260816.1)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2)))':
+  '@better-auth/drizzle-adapter@1.6.25(@better-auth/core@1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0))(@better-auth/utils@0.4.2)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260816.1)(@electric-sql/pglite@0.5.7)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2)))':
     dependencies:
       '@better-auth/core': 1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0)
       '@better-auth/utils': 0.4.2
     optionalDependencies:
-      drizzle-orm: 0.45.2(@cloudflare/workers-types@5.20260816.1)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))
+      drizzle-orm: 0.45.2(@cloudflare/workers-types@5.20260816.1)(@electric-sql/pglite@0.5.7)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))
 
   '@better-auth/kysely-adapter@1.6.25(@better-auth/core@1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0))(@better-auth/utils@0.4.2)(kysely@0.29.3)':
     dependencies:
@@ -9395,24 +9541,24 @@ snapshots:
       '@better-auth/core': 1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0)
       '@better-auth/utils': 0.4.2
 
-  '@better-auth/oauth-provider@1.6.25(8a3966bca47e48ee96678ee7f25cd017)':
+  '@better-auth/oauth-provider@1.6.25(9d33a786200dd2b0a98afefef54bb10e)':
     dependencies:
       '@better-auth/core': 1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0)
       '@better-auth/utils': 0.4.2
       '@better-fetch/fetch': 1.3.1
-      better-auth: 1.6.25(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@tanstack/react-start@1.168.32(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(rolldown@1.2.3)(rollup@4.62.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0)))(better-sqlite3@12.11.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260816.1)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2)))(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(solid-js@1.9.10)(vitest@4.1.10)
+      better-auth: 1.6.25(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@tanstack/react-start@1.168.32(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(rolldown@1.2.3)(rollup@4.62.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0)))(better-sqlite3@12.11.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260816.1)(@electric-sql/pglite@0.5.7)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2)))(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(solid-js@1.9.10)(vitest@4.1.10)
       better-call: 1.3.7(zod@4.4.3)
       jose: 6.2.8
       zod: 4.4.3
 
-  '@better-auth/passkey@1.6.25(3b1d90567613b616d78179b0e34b01e1)':
+  '@better-auth/passkey@1.6.25(a6a826950c04c10f795b2f381726fd59)':
     dependencies:
       '@better-auth/core': 1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0)
       '@better-auth/utils': 0.4.2
       '@better-fetch/fetch': 1.3.1
       '@simplewebauthn/browser': 13.3.0
       '@simplewebauthn/server': 13.3.2
-      better-auth: 1.6.25(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@tanstack/react-start@1.168.32(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(rolldown@1.2.3)(rollup@4.62.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0)))(better-sqlite3@12.11.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260816.1)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2)))(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(solid-js@1.9.10)(vitest@4.1.10)
+      better-auth: 1.6.25(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@tanstack/react-start@1.168.32(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(rolldown@1.2.3)(rollup@4.62.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0)))(better-sqlite3@12.11.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260816.1)(@electric-sql/pglite@0.5.7)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2)))(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(solid-js@1.9.10)(vitest@4.1.10)
       better-call: 1.3.7(zod@4.4.3)
       nanostores: 1.4.0
       zod: 4.4.3
@@ -9581,21 +9727,21 @@ snapshots:
 
   '@date-fns/tz@1.5.0': {}
 
-  '@daveyplate/better-auth-tanstack@1.3.6(128d9a64718e9bda16f186055c015560)':
+  '@daveyplate/better-auth-tanstack@1.3.6(e04c9090978c619467d679f79878d1ec)':
     dependencies:
       '@tanstack/query-core': 5.101.2
       '@tanstack/react-query': 5.101.2(react@19.2.7)
-      better-auth: 1.6.25(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@tanstack/react-start@1.168.32(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(rolldown@1.2.3)(rollup@4.62.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0)))(better-sqlite3@12.11.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260816.1)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2)))(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(solid-js@1.9.10)(vitest@4.1.10)
+      better-auth: 1.6.25(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@tanstack/react-start@1.168.32(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(rolldown@1.2.3)(rollup@4.62.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0)))(better-sqlite3@12.11.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260816.1)(@electric-sql/pglite@0.5.7)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2)))(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(solid-js@1.9.10)(vitest@4.1.10)
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
 
-  '@daveyplate/better-auth-ui@3.4.0(c483bb37745b464c10af653fa97bb847)':
+  '@daveyplate/better-auth-ui@3.4.0(e61bc47630b506ca5dee8108241b13eb)':
     dependencies:
-      '@better-auth/api-key': 1.6.23(90428e1a37b4aaa3a17ea6897306108a)
-      '@better-auth/passkey': 1.6.25(3b1d90567613b616d78179b0e34b01e1)
+      '@better-auth/api-key': 1.6.23(48e719c4fc6d98161a63b0ee4e996175)
+      '@better-auth/passkey': 1.6.25(a6a826950c04c10f795b2f381726fd59)
       '@better-fetch/fetch': 1.3.1
       '@captchafox/react': 1.10.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      '@daveyplate/better-auth-tanstack': 1.3.6(128d9a64718e9bda16f186055c015560)
+      '@daveyplate/better-auth-tanstack': 1.3.6(e04c9090978c619467d679f79878d1ec)
       '@hcaptcha/react-hcaptcha': 2.0.2
       '@hookform/resolvers': 5.9.0(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(effect@3.22.1)(react-hook-form@7.85.0(react@19.2.7))(zod@4.4.3)
       '@instantdb/react': 0.22.47(react@19.2.7)
@@ -9620,7 +9766,7 @@ snapshots:
       '@triplit/client': 1.0.50(better-sqlite3@12.11.1)(typescript@7.0.2)
       '@triplit/react': 1.0.51(better-sqlite3@12.11.1)(react@19.2.7)(typescript@7.0.2)
       '@wojtekmaj/react-recaptcha-v3': 0.1.4(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      better-auth: 1.6.25(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@tanstack/react-start@1.168.32(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(rolldown@1.2.3)(rollup@4.62.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0)))(better-sqlite3@12.11.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260816.1)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2)))(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(solid-js@1.9.10)(vitest@4.1.10)
+      better-auth: 1.6.25(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@tanstack/react-start@1.168.32(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(rolldown@1.2.3)(rollup@4.62.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0)))(better-sqlite3@12.11.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260816.1)(@electric-sql/pglite@0.5.7)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2)))(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(solid-js@1.9.10)(vitest@4.1.10)
       better-call: 2.0.2(zod@4.4.3)
       bowser: 2.14.1
       class-variance-authority: 0.7.1
@@ -9709,6 +9855,12 @@ snapshots:
     dependencies:
       '@edge-runtime/primitives': 4.1.0
     optional: true
+
+  '@electric-sql/pglite-pgvector@0.0.8(@electric-sql/pglite@0.5.7)':
+    dependencies:
+      '@electric-sql/pglite': 0.5.7
+
+  '@electric-sql/pglite@0.5.7': {}
 
   '@emnapi/core@1.11.2':
     dependencies:
@@ -11287,10 +11439,16 @@ snapshots:
   '@oxc-parser/binding-android-arm-eabi@0.142.0':
     optional: true
 
+  '@oxc-parser/binding-android-arm-eabi@0.147.0':
+    optional: true
+
   '@oxc-parser/binding-android-arm64@0.120.0':
     optional: true
 
   '@oxc-parser/binding-android-arm64@0.142.0':
+    optional: true
+
+  '@oxc-parser/binding-android-arm64@0.147.0':
     optional: true
 
   '@oxc-parser/binding-darwin-arm64@0.120.0':
@@ -11299,10 +11457,16 @@ snapshots:
   '@oxc-parser/binding-darwin-arm64@0.142.0':
     optional: true
 
+  '@oxc-parser/binding-darwin-arm64@0.147.0':
+    optional: true
+
   '@oxc-parser/binding-darwin-x64@0.120.0':
     optional: true
 
   '@oxc-parser/binding-darwin-x64@0.142.0':
+    optional: true
+
+  '@oxc-parser/binding-darwin-x64@0.147.0':
     optional: true
 
   '@oxc-parser/binding-freebsd-x64@0.120.0':
@@ -11311,10 +11475,16 @@ snapshots:
   '@oxc-parser/binding-freebsd-x64@0.142.0':
     optional: true
 
+  '@oxc-parser/binding-freebsd-x64@0.147.0':
+    optional: true
+
   '@oxc-parser/binding-linux-arm-gnueabihf@0.120.0':
     optional: true
 
   '@oxc-parser/binding-linux-arm-gnueabihf@0.142.0':
+    optional: true
+
+  '@oxc-parser/binding-linux-arm-gnueabihf@0.147.0':
     optional: true
 
   '@oxc-parser/binding-linux-arm-musleabihf@0.120.0':
@@ -11323,10 +11493,16 @@ snapshots:
   '@oxc-parser/binding-linux-arm-musleabihf@0.142.0':
     optional: true
 
+  '@oxc-parser/binding-linux-arm-musleabihf@0.147.0':
+    optional: true
+
   '@oxc-parser/binding-linux-arm64-gnu@0.120.0':
     optional: true
 
   '@oxc-parser/binding-linux-arm64-gnu@0.142.0':
+    optional: true
+
+  '@oxc-parser/binding-linux-arm64-gnu@0.147.0':
     optional: true
 
   '@oxc-parser/binding-linux-arm64-musl@0.120.0':
@@ -11335,10 +11511,16 @@ snapshots:
   '@oxc-parser/binding-linux-arm64-musl@0.142.0':
     optional: true
 
+  '@oxc-parser/binding-linux-arm64-musl@0.147.0':
+    optional: true
+
   '@oxc-parser/binding-linux-ppc64-gnu@0.120.0':
     optional: true
 
   '@oxc-parser/binding-linux-ppc64-gnu@0.142.0':
+    optional: true
+
+  '@oxc-parser/binding-linux-ppc64-gnu@0.147.0':
     optional: true
 
   '@oxc-parser/binding-linux-riscv64-gnu@0.120.0':
@@ -11347,10 +11529,16 @@ snapshots:
   '@oxc-parser/binding-linux-riscv64-gnu@0.142.0':
     optional: true
 
+  '@oxc-parser/binding-linux-riscv64-gnu@0.147.0':
+    optional: true
+
   '@oxc-parser/binding-linux-riscv64-musl@0.120.0':
     optional: true
 
   '@oxc-parser/binding-linux-riscv64-musl@0.142.0':
+    optional: true
+
+  '@oxc-parser/binding-linux-riscv64-musl@0.147.0':
     optional: true
 
   '@oxc-parser/binding-linux-s390x-gnu@0.120.0':
@@ -11359,10 +11547,16 @@ snapshots:
   '@oxc-parser/binding-linux-s390x-gnu@0.142.0':
     optional: true
 
+  '@oxc-parser/binding-linux-s390x-gnu@0.147.0':
+    optional: true
+
   '@oxc-parser/binding-linux-x64-gnu@0.120.0':
     optional: true
 
   '@oxc-parser/binding-linux-x64-gnu@0.142.0':
+    optional: true
+
+  '@oxc-parser/binding-linux-x64-gnu@0.147.0':
     optional: true
 
   '@oxc-parser/binding-linux-x64-musl@0.120.0':
@@ -11371,10 +11565,16 @@ snapshots:
   '@oxc-parser/binding-linux-x64-musl@0.142.0':
     optional: true
 
+  '@oxc-parser/binding-linux-x64-musl@0.147.0':
+    optional: true
+
   '@oxc-parser/binding-openharmony-arm64@0.120.0':
     optional: true
 
   '@oxc-parser/binding-openharmony-arm64@0.142.0':
+    optional: true
+
+  '@oxc-parser/binding-openharmony-arm64@0.147.0':
     optional: true
 
   '@oxc-parser/binding-wasm32-wasi@0.120.0(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.3)':
@@ -11398,10 +11598,16 @@ snapshots:
   '@oxc-parser/binding-win32-arm64-msvc@0.142.0':
     optional: true
 
+  '@oxc-parser/binding-win32-arm64-msvc@0.147.0':
+    optional: true
+
   '@oxc-parser/binding-win32-ia32-msvc@0.120.0':
     optional: true
 
   '@oxc-parser/binding-win32-ia32-msvc@0.142.0':
+    optional: true
+
+  '@oxc-parser/binding-win32-ia32-msvc@0.147.0':
     optional: true
 
   '@oxc-parser/binding-win32-x64-msvc@0.120.0':
@@ -11410,11 +11616,16 @@ snapshots:
   '@oxc-parser/binding-win32-x64-msvc@0.142.0':
     optional: true
 
+  '@oxc-parser/binding-win32-x64-msvc@0.147.0':
+    optional: true
+
   '@oxc-project/types@0.120.0': {}
 
   '@oxc-project/types@0.142.0': {}
 
   '@oxc-project/types@0.143.0': {}
+
+  '@oxc-project/types@0.147.0': {}
 
   '@oxc-resolver/binding-android-arm-eabi@11.24.2':
     optional: true
@@ -13895,10 +14106,10 @@ snapshots:
 
   baseline-browser-mapping@2.11.14: {}
 
-  better-auth@1.6.25(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@tanstack/react-start@1.168.32(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(rolldown@1.2.3)(rollup@4.62.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0)))(better-sqlite3@12.11.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260816.1)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2)))(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(solid-js@1.9.10)(vitest@4.1.10):
+  better-auth@1.6.25(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@tanstack/react-start@1.168.32(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(rolldown@1.2.3)(rollup@4.62.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0)))(better-sqlite3@12.11.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260816.1)(@electric-sql/pglite@0.5.7)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2)))(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(solid-js@1.9.10)(vitest@4.1.10):
     dependencies:
       '@better-auth/core': 1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0)
-      '@better-auth/drizzle-adapter': 1.6.25(@better-auth/core@1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0))(@better-auth/utils@0.4.2)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260816.1)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2)))
+      '@better-auth/drizzle-adapter': 1.6.25(@better-auth/core@1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0))(@better-auth/utils@0.4.2)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260816.1)(@electric-sql/pglite@0.5.7)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2)))
       '@better-auth/kysely-adapter': 1.6.25(@better-auth/core@1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0))(@better-auth/utils@0.4.2)(kysely@0.29.3)
       '@better-auth/memory-adapter': 1.6.25(@better-auth/core@1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0))(@better-auth/utils@0.4.2)
       '@better-auth/mongo-adapter': 1.6.25(@better-auth/core@1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0))(@better-auth/utils@0.4.2)
@@ -13919,7 +14130,7 @@ snapshots:
       '@tanstack/react-start': 1.168.32(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(rolldown@1.2.3)(rollup@4.62.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0))
       better-sqlite3: 12.11.1
       drizzle-kit: 0.31.10
-      drizzle-orm: 0.45.2(@cloudflare/workers-types@5.20260816.1)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))
+      drizzle-orm: 0.45.2(@cloudflare/workers-types@5.20260816.1)(@electric-sql/pglite@0.5.7)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))
       pg: 8.23.0
       prisma: 6.17.0(magicast@0.3.5)(typescript@7.0.2)
       react: 19.2.7
@@ -14435,9 +14646,10 @@ snapshots:
       esbuild: 0.28.1
       tsx: 4.23.1
 
-  drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260816.1)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2)):
+  drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260816.1)(@electric-sql/pglite@0.5.7)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2)):
     optionalDependencies:
       '@cloudflare/workers-types': 5.20260816.1
+      '@electric-sql/pglite': 0.5.7
       '@neondatabase/serverless': 1.0.2
       '@opentelemetry/api': 1.9.1
       '@prisma/client': 6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2)
@@ -14448,9 +14660,10 @@ snapshots:
       pg: 8.23.0
       prisma: 6.17.0(magicast@0.3.5)(typescript@7.0.2)
 
-  drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260816.1)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@13.0.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2)):
+  drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260816.1)(@electric-sql/pglite@0.5.7)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@13.0.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2)):
     optionalDependencies:
       '@cloudflare/workers-types': 5.20260816.1
+      '@electric-sql/pglite': 0.5.7
       '@neondatabase/serverless': 1.0.2
       '@opentelemetry/api': 1.9.1
       '@prisma/client': 6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2)
@@ -16074,6 +16287,30 @@ snapshots:
       '@oxc-parser/binding-win32-arm64-msvc': 0.142.0
       '@oxc-parser/binding-win32-ia32-msvc': 0.142.0
       '@oxc-parser/binding-win32-x64-msvc': 0.142.0
+
+  oxc-parser@0.147.0:
+    dependencies:
+      '@oxc-project/types': 0.147.0
+    optionalDependencies:
+      '@oxc-parser/binding-android-arm-eabi': 0.147.0
+      '@oxc-parser/binding-android-arm64': 0.147.0
+      '@oxc-parser/binding-darwin-arm64': 0.147.0
+      '@oxc-parser/binding-darwin-x64': 0.147.0
+      '@oxc-parser/binding-freebsd-x64': 0.147.0
+      '@oxc-parser/binding-linux-arm-gnueabihf': 0.147.0
+      '@oxc-parser/binding-linux-arm-musleabihf': 0.147.0
+      '@oxc-parser/binding-linux-arm64-gnu': 0.147.0
+      '@oxc-parser/binding-linux-arm64-musl': 0.147.0
+      '@oxc-parser/binding-linux-ppc64-gnu': 0.147.0
+      '@oxc-parser/binding-linux-riscv64-gnu': 0.147.0
+      '@oxc-parser/binding-linux-riscv64-musl': 0.147.0
+      '@oxc-parser/binding-linux-s390x-gnu': 0.147.0
+      '@oxc-parser/binding-linux-x64-gnu': 0.147.0
+      '@oxc-parser/binding-linux-x64-musl': 0.147.0
+      '@oxc-parser/binding-openharmony-arm64': 0.147.0
+      '@oxc-parser/binding-win32-arm64-msvc': 0.147.0
+      '@oxc-parser/binding-win32-ia32-msvc': 0.147.0
+      '@oxc-parser/binding-win32-x64-msvc': 0.147.0
 
   oxc-resolver@11.24.2:
     optionalDependencies:

@@ -1,7 +1,3 @@
-import type {
-  MergeCandidate,
-  PreviewMergeEntity,
-} from "@cubby/schemas/entity-integrity";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -41,26 +37,20 @@ export interface EntityColor {
 
 /**
  * Drives `EntityMergeDialog`. "ranked": the caller already picked the merge
- * set (bulk-selection, an AI-suggested pair); the dialog ranks it via
- * `previewOperation`'s no-`keepId` call and defaults to the best-weighted row,
- * picker overridable. "fixed": one row is already the keeper (the record
- * being viewed); the dialog fetches other same-type rows via `candidateQuery`
- * to fold in, no picker.
+ * set and its first row is the deterministic default keeper, with a picker for
+ * an intentional override. "fixed": the record being viewed stays keeper;
+ * the dialog fetches other same-type rows via `candidateQuery` to fold in.
  *
  * Row/candidate types are `any` on purpose — heterogeneous across entities by
  * design, and every real caller already has a fully-typed row.
  */
 export interface MergeableConfig {
   keeperMode: "ranked" | "fixed";
-  /** `previewOperation`'s entity key, only when it differs from the registry key. */
-  previewEntity?: PreviewMergeEntity;
-  /** Primary row line. Ranked mode also gets the ranking preview's candidate
-   * detail once loaded (e.g. a USDA-link badge riding the name). */
   // biome-ignore lint/suspicious/noExplicitAny: heterogeneous row shape, see doc comment above.
-  rowLabel: (row: any, candidate?: MergeCandidate) => ReactNode;
+  rowLabel: (row: any) => ReactNode;
   /** Secondary stat/chip line. */
   // biome-ignore lint/suspicious/noExplicitAny: heterogeneous row shape, see doc comment above.
-  rowStat?: (row: any, candidate?: MergeCandidate) => ReactNode;
+  rowStat?: (row: any) => ReactNode;
   /** Fixed mode only: query options for the other rows a keeper can absorb. */
   // biome-ignore lint/suspicious/noExplicitAny: heterogeneous row/query shape, see doc comment above.
   candidateQuery?: (api: any, keeper: any) => any;
@@ -77,6 +67,8 @@ export interface MergeableConfig {
 
 export interface EntityDefinition {
   label: string;
+  /** Short noun used in destructive dialogs when the full label is noisy. */
+  dialogLabel?: string;
   basePath: string;
   pluralLabel: string;
   lucideIcon: LucideIcon;

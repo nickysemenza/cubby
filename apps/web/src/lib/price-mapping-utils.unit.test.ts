@@ -282,17 +282,13 @@ const OLIVE_OIL_DENSITY = {
 
 describe("computePerUnitPrices", () => {
   it("prices a bagged good per ounce and per gram", () => {
-    // PRD-QQ9D: Bagged Yellow Onions, 32 OZ at $2.73 a bag.
     const prices = computePerUnitPrices(graphFor(2.73, [BAG_OF_32_OZ]));
     expect(prices.natural?.unit).toBe("oz");
     expect(prices.natural?.price).toBeCloseTo(2.73 / 32, 6);
-    // A shade over three tenths of a cent per gram — which the 2-decimal
-    // truncation valuation uses would have flattened to $0.00.
     expect(prices.perGram).toBeCloseTo(2.73 / (32 * 28.349523125), 6);
   });
 
   it("prefers a weight basis over each when the graph offers both", () => {
-    // The bag IS bought by the each, and $/each is still the less useful answer.
     expect(
       computePerUnitPrices(graphFor(2.73, [BAG_OF_32_OZ])).natural?.unit,
     ).not.toBe("each");

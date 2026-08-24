@@ -68,7 +68,7 @@ export interface ActionVerb {
   tone?: "destructive";
 }
 
-export const actionVerbs = {
+const actionVerbs = {
   // — navigation ————————————————————————————————————————————————————
   recount: { label: "Recount", icon: ScanBarcode },
   photoPass: { label: "Photo pass", icon: Camera },
@@ -118,8 +118,3 @@ export type ActionVerbId = keyof typeof actionVerbs;
  * making `tone` unreadable on the ones that omit it.
  */
 export const verbDef = (id: ActionVerbId): ActionVerb => actionVerbs[id];
-
-/** Every declared label, for the drift guard and its tests. */
-export const actionVerbLabels: string[] = Object.values(actionVerbs).map(
-  (verb) => verb.label,
-);

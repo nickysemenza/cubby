@@ -43,7 +43,7 @@ import {
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/integrations/trpc/react";
 import { pageTitle } from "~/lib/page-title";
-import { recipeExportSearchSchema } from "./recipe-export-search";
+import { recipeExportSearchSchema } from "./-recipe-export-search";
 
 export type ExportFormat = "prep" | "read" | "nested" | "matrix" | "flow";
 

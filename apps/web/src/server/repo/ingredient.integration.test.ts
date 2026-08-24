@@ -78,7 +78,6 @@ describe("ingredient", () => {
       return row;
     });
 
-    // Let tx1 reach (and hold) its uncommitted INSERT before tx2 starts.
     await new Promise((r) => setTimeout(r, 100));
 
     // tx2 races the same name; its INSERT will block on tx1's lock.
@@ -86,7 +85,6 @@ describe("ingredient", () => {
       findOrCreateIngredient(tx, name),
     );
 
-    // Give tx2 time to reach its blocked INSERT, then commit tx1 to unblock it.
     await new Promise((r) => setTimeout(r, 100));
     releaseTx1();
 
@@ -95,7 +93,6 @@ describe("ingredient", () => {
     // Both callers resolve to the same surviving row, no error thrown.
     expect(a.id).toEqual(b.id);
 
-    // Exactly one row exists.
     const [result] = await getDb(ctx.db)
       .select({ count: count() })
       .from(ingredient);
@@ -163,8 +160,6 @@ describe("ingredient", () => {
   });
 
   it("does not append casing-variant aliases", async () => {
-    // Alias dedup is case-insensitive: re-adding "scallion" when the ingredient
-    // already has alias "Scallion" is a no-op, not a second array entry.
     const first = await findOrCreateIngredient(ctx.db, "Allium", ["Scallion"]);
     expect(first.aliases).toEqual(["Scallion"]);
 
@@ -174,7 +169,6 @@ describe("ingredient", () => {
   });
 
   it("resolveOrCreateIngredients: matches existing, creates misses, in order", async () => {
-    // Seed one existing ingredient with an alias.
     const allium = await findOrCreateIngredient(ctx.db, "Allium", ["Scallion"]);
 
     const result = await resolveOrCreateIngredients(ctx.db, [
@@ -183,7 +177,6 @@ describe("ingredient", () => {
       "jasmine rice", // new
     ]);
 
-    // One entry per input name, in order.
     expect(result.map((r) => r.name)).toEqual([
       "Allium",
       "scallion",
@@ -230,7 +223,6 @@ describe("ingredient", () => {
       "Soy Sauce",
       "soy sauce", // casing-variant duplicate within the same call
     ]);
-    // Both input names resolve to the same row; the second is a same-call match.
     expect(first[0]!.id).toEqual(first[1]!.id);
     expect(first[0]!.created).toBe(true);
 
@@ -239,7 +231,6 @@ describe("ingredient", () => {
       .from(ingredient);
     expect(afterFirst!.count).toEqual(1);
 
-    // Re-running resolves everything as an existing match — no new rows.
     const second = await resolveOrCreateIngredients(ctx.db, ["soy sauce"]);
     expect(second[0]!.id).toEqual(first[0]!.id);
     expect(second[0]).toMatchObject({ matched: true, created: false });
@@ -299,8 +290,6 @@ describe("ingredient", () => {
     expect(updatedIngredient!.aliases).toContain(c.name);
     expect(updatedIngredient!.aliases).toContain("large eggs");
 
-    // Structured summary: both aliases absorbed, the one recipe using "eggs"
-    // moved, nothing-silently-nothing.
     expect(summary.deletedIds).toEqual(
       expect.arrayContaining([b.shortcode, c.shortcode]),
     );
@@ -310,7 +299,6 @@ describe("ingredient", () => {
       expect.arrayContaining([b.name, c.name, "large eggs"]),
     );
 
-    // Correctness floor: the absorbed recipe is marked stale in the same tx.
     const movedRecipe = await getDb(ctx.db).query.recipe.findFirst({
       where: eq(recipe.name, "egg recipe"),
     });
@@ -398,7 +386,6 @@ describe("ingredient", () => {
       ),
     ).rejects.toThrow(/not found/i);
 
-    // Nothing changed: the survivor still exists, gained no aliases.
     const keeper = await getDb(ctx.db).query.ingredient.findFirst({
       where: eq(ingredient.id, a.id),
     });
@@ -441,10 +428,8 @@ describe("ingredient", () => {
       ctx.actor,
     );
 
-    // No recipe used the alias, so nothing "moved"…
     expect(summary.recipesMoved).toEqual(0);
     expect(summary.productsMoved).toEqual(1);
-    // …but the target-using recipe is in the recompute set and marked stale.
     const pepperRecipe = await getDb(ctx.db).query.recipe.findFirst({
       where: eq(recipe.name, "pepper recipe"),
     });
@@ -461,8 +446,6 @@ describe("ingredient", () => {
     const b = await findOrCreateIngredient(ctx.db, "measured alias");
     const c = await findOrCreateIngredient(ctx.db, "measured alias two");
 
-    // `c` twice: a restatement of the same instruction, which collapses. A
-    // count of 3 here would be the request quoted back rather than measured.
     const summary = await mergeIngredients(
       ctx.db,
       {
@@ -520,11 +503,9 @@ describe("ingredient", () => {
     const flour = rows.find((r) => r.id === used.id);
     expect(flour).toBeDefined();
     expect(flour!.recipeCount).toBe(1);
-    // A plain web recipe isn't book-sourced, so bool_and(...) → false.
     expect(flour!.cookbookOnly).toBe(false);
     expect(flour!.product).toHaveLength(1);
     expect(flour!.product[0]!.name).toBe("Test flour");
-    // Every returned row is recipe-used; the orphan is absent.
     expect(rows.every((r) => r.recipeCount > 0)).toBe(true);
     expect(rows.some((r) => r.name === "orphan")).toBe(false);
   });
@@ -642,7 +623,6 @@ describe("ingredient", () => {
     expect(flour.appearsInRecipes).toEqual([
       { id: recipe.id, name: "Web Recipe" },
     ]);
-    // Lean: no per-usage recipe bodies, no recipeUsages.
     expect(flour).not.toHaveProperty("recipeUsages");
     expect(flour.appearsInRecipes[0]).not.toHaveProperty("sections");
   });
@@ -664,8 +644,6 @@ describe("ingredient", () => {
       { name: "presence-none sugar", aliases: [] },
       ctx.actor,
     );
-    // Two live products on the same ingredient - the case that would trip up
-    // an ungrouped count() on the "has" branch.
     await createProduct(
       ctx.db,
       makeProductInput({
@@ -813,7 +791,6 @@ describe("ingredient", () => {
 describe("deleteIngredients", () => {
   const ctx = withTestDb();
 
-  /** INGREDIENT_HAS_RECIPES: a live recipe usage blocks delete. */
   it("rejects an ingredient still used in a live recipe, succeeds once the recipe is deleted", async () => {
     const usedIngredient = await createIngredient(
       ctx.db,
@@ -854,7 +831,6 @@ describe("deleteIngredients", () => {
     ).resolves.toEqual({ deleted: 1 });
   });
 
-  /** INGREDIENT_HAS_PRODUCTS: a live linked product blocks delete. */
   it("rejects an ingredient linked to a live product, succeeds once the product is deleted", async () => {
     const linkedIngredient = await createIngredient(
       ctx.db,

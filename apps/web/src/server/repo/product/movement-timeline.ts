@@ -51,11 +51,6 @@ const emptyTimeline = (): ProductMovementTimelineOut => ({
   omitted: { productsWithoutMovements: 0, plannedMovements: 0 },
 });
 
-/**
- * The complete movement read for a Product cohort. Product membership is
- * delegated to `productList`, so every manifest-backed filter has exactly the
- * same meaning in the table and both timeline renderers.
- */
 export async function getProductMovementTimeline(
   db: Database,
   input: ProductMovementTimelineInput,

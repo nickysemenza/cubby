@@ -1,15 +1,4 @@
-/**
- * Vendor repository — the roster of places money goes.
- *
- * `Vendor ──< Purchase ──< Expense`. This table exists because `vendor` used to
- * be free text repeated on every ledger row, which left a vendor's own
- * documents and metadata with nowhere to live and made the ledger's Vendor
- * picklist an exact-string match over a `GROUP BY`.
- *
- * No money is stored or summed here. `vendorOut.spend` is a correlated rollup
- * over the vendor's live purchases' live expenses — `SUM(expense.cost)`, the one
- * place spend ever comes from.
- */
+/** Vendor spend is derived only from `SUM(Expense.cost)` through live purchases. */
 
 import type { ActorContext } from "@cubby/schemas/context";
 import type {
@@ -106,11 +95,6 @@ export const VENDOR_DELETE_EDGE_POLICY = {
 export const VENDOR_MERGE_EDGE_POLICY = {
   "Purchase.vendorId": {
     code: "repoint-or-fold-by-order",
-    // `move-dedupe`, not `repoint`: re-pointing is only the non-colliding half.
-    // Charges that collide on the same order id are folded — moved onto the
-    // survivor and soft-deleted — which is the same shape
-    // `PurchaseImage.purchaseId` classifies as `move-dedupe` in purchase.ts.
-    // Calling it `repoint` understated the destructive half of the operation.
     effect: "move-dedupe",
     description:
       "A merged vendor's purchases re-point onto the surviving vendor; purchases that collide on the same order id are folded into one instead.",
@@ -154,7 +138,6 @@ const vendorLatestPurchaseDate = correlated<string | null>(
      WHERE p."vendorId" = "Vendor"."id" AND p."deletedAt" IS NULL)`,
 );
 
-/** Whether the direct logo FK currently resolves to an image the UI can draw. */
 const vendorHasDisplayableLogo = sql<boolean>`EXISTS (
   SELECT 1 FROM "Image" logo
   WHERE logo."id" = ${sql.raw('"Vendor"."logoImageId"')}
@@ -238,9 +221,6 @@ const dbVendorToAPI = (row: VendorRow): VendorOut => ({
   orderUrlTemplate: row.orderUrlTemplate,
   notes: row.notes,
   purchaseCount: Number(row.purchaseCount),
-  // `sum()` comes back as a string over the wire on some drivers even when the
-  // column is double precision; Number() is the same defensive coercion
-  // product/mappers.ts applies to its own aggregates.
   spend: Number(row.spend),
   latestPurchaseDate: row.latestPurchaseDate,
   logo: row.logo && { ...row.logo, id: unsafeImageShortcode(row.logo.id) },
@@ -283,12 +263,6 @@ const buildVendorWhereClause = (filters: VendorFilters) =>
     ],
   );
 
-/**
- * Sorts the generic column path can't produce — the two rollups above aren't
- * columns on `Vendor`. NULLS LAST in both directions is the house convention
- * (see `buildOrderBy`), though neither aggregate is ever null: `count(*)` and
- * the `COALESCE`d sum both floor at 0.
- */
 const resolveVendorSort = (sort: SortParams) => {
   const dir = sort.direction === "asc" ? asc : desc;
   if (sort.orderBy === "purchaseCount") return [dir(vendorPurchaseCount)];
@@ -314,15 +288,12 @@ export const vendorList = async (
     return {
       data: [],
       count: await countWhere(db, vendor, whereClause),
-      // Count-only consumers deliberately do not request table footers.
       sums: { spend: 0, purchaseCount: 0 },
     };
   }
   const { take, skip } = buildTakeSkip(pagination);
 
-  // Footer totals over the WHOLE filtered set, not the loaded page. Summing the
-  // returned rows instead would quietly under-report the moment the roster
-  // outgrows one page — a wrong number is worse than no number.
+  // Footer totals cover the filtered set, not only the loaded page.
   const [rows, count, [totals]] = await Promise.all([
     getDb(db)
       .select(vendorColumns)
@@ -388,10 +359,6 @@ export const getVendorByID = async (
   return dbVendorToAPI(row);
 };
 
-/**
- * Get full vendor details by shortcode. Returns null if the code doesn't
- * resolve to a live vendor.
- */
 export const getVendorByShortcode = async (
   db: Database,
   shortcode: string,
@@ -400,16 +367,6 @@ export const getVendorByShortcode = async (
   return id ? getVendorByID(db, unsafeVendorId(id)) : null;
 };
 
-/**
- * The vendor picklist — every live vendor with how many live charges point at
- * it, ranked by frequency then alphabetically. Feeds the ledger's Vendor filter
- * and the purchase form's combobox.
- *
- * Unlike its free-text predecessor (`expenseVendorOptions`, a `GROUP BY vendor`
- * over the ledger), this lists vendors that exist but have no charges yet —
- * which is correct now that a vendor is a row you can create before you spend
- * anything at it.
- */
 export const vendorOptions = async (
   db: Database,
 ): Promise<VendorOptionsOut> => {
@@ -440,20 +397,7 @@ export const vendorOptions = async (
   }));
 };
 
-/**
- * Resolve a vendor NAME to a row, creating it if this is the first time money
- * went there. The import hot path: `createExpense` still accepts `vendor` as a
- * plain string, and this is what keeps that true — MCP, quick-add and the
- * purchase-import skill never learned about vendor ids.
- *
- * Race-free via `findOrCreate`, whose `where` must match the unique index that
- * backs the race — here the partial-unique on `name` where live. Two concurrent
- * imports naming the same new vendor therefore produce one row, not a 500.
- *
- * Names are matched EXACTLY, not case-insensitively. Folding case here would
- * silently merge a genuine "3M" / "3m" distinction on first sight; near-
- * duplicates are a merge decision, and merging is a user action.
- */
+/** Race-safe exact-name lookup; near-duplicates require an explicit merge. */
 export const findOrCreateVendor = async (
   db: Database | DrizzleTransaction,
   name: string,
@@ -539,19 +483,12 @@ export const updateVendor = async (
   return { output: await getVendorByID(db, id), entityId: id };
 };
 
-/**
- * Replace one vendor's direct logo relation with a freshly verified Image.
- *
- * The vendor row lock serializes concurrent fetch clicks. The old image is
- * reaped only after the FK moves, through the same global reference check used
- * by vendor merge/delete, so a logo shared with another vendor survives.
- */
+/** Row locking serializes logo replacement; shared old images are preserved. */
 export const replaceVendorLogo = async (
   db: Database,
   input: {
     id: VendorShortcode;
     expectedWebsite: string;
-    // `shortcode` too: it is minted here rather than supplied by the caller.
     image: Omit<typeof image.$inferInsert, "id" | "status" | "shortcode">;
   },
   actor: ActorContext,
@@ -600,9 +537,6 @@ export const replaceVendorLogo = async (
         entityId,
         action: "update",
         changes: {
-          // `to` records the public shortcode — the same value a reader gets
-          // back from `logo.id` — never the internal uuid `from` still holds
-          // (that's whatever the column already had before this migration).
           logoImageId: { from: before.logoImageId, to: created.shortcode },
         },
       });
@@ -621,38 +555,18 @@ export const replaceVendorLogo = async (
   };
 };
 
-/** What `mergeVendors` (and `previewMergeVendors`) does with one live charge. */
 type VendorMergePlan = {
-  /** Merged-away vendor rows, as shortcodes — ready for the merge summary
-   *  `mergeVendors` reports without a further query. */
   deletedIds: VendorShortcode[];
-  /** Live purchases that simply adopt `keepId` — no same-order collision. */
   repointed: Array<{ id: PurchaseId; vendorId: VendorId }>;
-  /** Live purchases folded into a same-order survivor (dead -> survivor pairs). */
   folded: Array<{
     deadId: PurchaseId;
     survivorId: PurchaseId;
     vendorId: VendorId;
   }>;
-  /** Fields the keeper is missing that a source vendor would fill. */
   carried: { website?: string; notes?: string; logoImageId?: string };
 };
 
-/**
- * The read-only plan behind `mergeVendors`: which of the losers' charges get
- * folded into a same-order survivor vs. simply re-pointed, and which of the
- * keeper's empty fields get filled from a source. Pulled out so
- * `previewMergeVendors` computes the SAME survivor-per-order-id resolution the
- * mutation is about to execute — the two must not be able to disagree about
- * which charges fold.
- *
- * See `mergeVendors`' own doc for why the partial-unique `(vendorId, orderId)`
- * index forces this: two of the merged vendors holding a charge with the same
- * non-null order id can't both survive a re-point, so one folds into the
- * other. The keeper's own charge always wins the survivor slot when it has
- * one; order-less charges (`orderId IS NULL`) never collide and are always
- * re-pointed, never folded.
- */
+/** Plan same-order folds before repointing through the partial unique index. */
 const planVendorMerge = async (
   dbClient: DrizzleClient | DrizzleTransaction,
   keepId: VendorId,
@@ -682,8 +596,6 @@ const planVendorMerge = async (
     })
     .from(vendor)
     .where(inArray(vendor.id, losers));
-  // Already fetched above for the carry-over check — just read back out as
-  // shortcodes rather than a second query, for `mergeVendors`' summary.
   const deletedIds = loserRows.map((r) => unsafeVendorShortcode(r.shortcode));
 
   const carried: VendorMergePlan["carried"] = {};
@@ -700,8 +612,6 @@ const planVendorMerge = async (
     if (found != null) carried.logoImageId = found;
   }
 
-  // Every live charge across the merge set, so collisions can be resolved
-  // against the whole group rather than pairwise.
   const allPurchases = await dbClient
     .select({
       id: purchase.id,
@@ -716,10 +626,6 @@ const planVendorMerge = async (
       ),
     );
 
-  // One survivor per order id, resolved over the whole merge set. The shared
-  // `planSlotCollisions` encodes the two rules this needs: the keeper's own
-  // charge wins its slot (so visible ids stay stable), and an order-less charge
-  // (`orderId IS NULL`) can never collide because the unique index is partial.
   const slotted = planSlotCollisions({
     keeperRows: allPurchases.filter((p) => p.vendorId === keepId),
     loserRows: allPurchases.filter((p) => p.vendorId !== keepId),
@@ -743,30 +649,8 @@ const planVendorMerge = async (
 };
 
 /**
- * Fold duplicate vendors into one — `Amazon` / `amazon` / `Amazon.com`.
- *
- * This exists because `findOrCreateVendor` matches names EXACTLY (see its note on
- * why case-folding on the write path would be worse), so an importer that meets a
- * new spelling mints a new roster row. Nothing on the write path can safely decide
- * two spellings are the same vendor; a human can, and this is how they say so.
- *
- * **The subtle part is the partial-unique `(vendorId, orderId)` index on
- * `Purchase`.** Re-pointing every loser's charges at the keeper collides whenever
- * two of the merged vendors hold a charge with the SAME non-null order id — which
- * is not an edge case here, it's the signature of the exact duplication being
- * fixed (the same Amazon order imported twice under two spellings). Those two
- * charges are one charge, so they get folded: the loser's expenses and documents
- * move to the survivor and the loser charge is soft-deleted, rather than
- * re-pointed into a constraint violation. `planVendorMerge` computes which
- * charges those are; `previewMergeVendors` below reads the same plan.
- *
- * Grouping is over the WHOLE merge set, not just keeper-vs-loser, so two losers
- * colliding with each other are handled too. The keeper's own charge always wins
- * the survivor slot when it has one, so ids the user can already see stay stable.
- *
- * Order-less charges (`orderId IS NULL`) are never folded — `(vendorId, null)`
- * isn't unique and two undated cash runs to one vendor are two real charges. They
- * all re-point and coexist, exactly as they do under one vendor today.
+ * Folds same-order charges before repointing vendors. Null order IDs never
+ * collide; the keeper's existing charge wins each non-null order slot.
  */
 export const mergeVendors = async (
   db: Database,
@@ -782,9 +666,6 @@ export const mergeVendors = async (
     keepId: input.keepId,
     mergeIds: input.mergeIds,
   });
-  // Filled in from `plan` below — the same plan the transaction executes —
-  // rather than computed separately, so the summary can't disagree with what
-  // actually moved.
   let planSummary: Omit<VendorMergeSummaryOut, "keepId"> | undefined;
 
   const detachedImageKeys = await withTransaction(db, async (tx) => {
@@ -793,7 +674,6 @@ export const mergeVendors = async (
     const plan = await planVendorMerge(tx, keepId, losers);
     planSummary = {
       deletedIds: plan.deletedIds,
-      // Overwritten below with what `finalizeMerge` actually removed.
       merged: 0,
       purchasesRepointed: plan.repointed.length,
       purchasesFolded: plan.folded.length,
@@ -859,10 +739,6 @@ export const mergeVendors = async (
   });
 
   const output = await getVendorByID(db, keepId);
-  // `planSummary` is always set by the time the transaction above returns: the
-  // transaction body builds it unconditionally, and `mergeIds` can never
-  // resolve to an empty loser set (it is `min(1)`, duplicates collapse, and a
-  // self-reference is refused by `resolveMergeTargets`).
   return {
     vendor: output,
     detachedImageKeys,
@@ -934,24 +810,6 @@ export const deleteVendors = async (
   });
 };
 
-/**
- * What `mergeVendors` would do to the given vendors, without doing it.
- *
- * Reads the SAME `planVendorMerge` the mutation is about to execute, so the
- * repointed/folded split and the field carry-over can't disagree between the
- * two. `VENDOR_MERGE_EDGE_POLICY` only declares one edge (`Purchase.vendorId`,
- * `repoint`); the fold is the SAME edge's `move-dedupe` refinement for charges
- * that collide on a shared order id, given its own disposition here since the
- * policy record (one entry per edge) has nowhere else to carry it. The
- * transitive expense/document moves those folds cause, the source vendors
- * removed, and the keeper's field carry-over aren't `Vendor` edges at all
- * (they're a `Purchase`/`PurchaseImage` consequence and the merge's own
- * row-removal), so they're reported as `sideEffects` rather than tied to a
- * declared edge key.
- *
- * Advisory only. `mergeVendors` still recomputes the same plan inside its own
- * transaction; nothing here is a lock or a permission.
- */
 export const previewMergeVendors = async (
   db: Database | DrizzleTransaction,
   input: { keepId: VendorId; mergeIds: VendorId[] },
@@ -961,9 +819,6 @@ export const previewMergeVendors = async (
   sideEffects: ImpactItem[];
 }> => {
   const { keepId } = input;
-  // Refuses exactly where the mutation refuses — see
-  // `assertDistinctMergeTargets` for why the silent filter this replaces made
-  // preview and mutation agree on the wrong answer.
   assertDistinctMergeTargets("vendor", keepId, input.mergeIds);
   const losers = input.mergeIds;
   if (losers.length === 0)
@@ -1001,9 +856,6 @@ export const previewMergeVendors = async (
     }),
   ]);
 
-  // Transitive counts: what each fold moves, re-keyed from the folded
-  // purchase's own id back to the loser vendor it came from so every item in
-  // this preview reads at the same "target = merge id" granularity.
   const foldedPurchaseIds = plan.folded.map((f) => f.deadId);
   const byVendorFromPurchase = (counts: Record<string, number>) => {
     const out: Record<string, number> = {};

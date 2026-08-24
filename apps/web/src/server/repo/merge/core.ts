@@ -1,46 +1,7 @@
 /**
- * The shared mechanics of every entity merge.
- *
- * Four merges exist (`mergeIngredients`, `mergeVendors`, `mergePurchases`,
- * `mergeProducts`). All four now take the same `{keepId, mergeIds}` shortcode
- * pair and resolve it through {@link resolveMergeTargets}; what still differs
- * is what each one carries over, which collisions it can legally resolve, and
- * whether it hard- or soft-deletes. The machinery *underneath* that contract is
- * what lives here:
- *
- *  - {@link resolveMergeTargets} — shortcode → id resolution plus the
- *    keeper/loser split and the fail-loud-on-a-missing-id rule.
- *  - {@link repointEdge} — re-point one *declared* incoming edge, looked up
- *    from `INCOMING_EDGES` by edge key so the column can't be mis-wired.
- *  - {@link finalizeMerge} — remove the losers, reporting how many rows
- *    actually went. **This is the reason the module exists.**
- *
- * ## Why `finalizeMerge` is not optional
- *
- * The removal-path invariant (root CLAUDE.md) says every path that removes an
- * entity must cascade its `EntityEmbedding` rows in the same transaction.
- * `mergeIngredients` simply forgot to, and nothing structural stopped it — the
- * omission shipped and was patched instance-by-instance in #591. So the loser
- * removal and the embedding cascade are now **one function call**: there is no
- * way to write a merge that deletes its losers without also cascading their
- * embeddings, because the delete and the cascade are the same statement pair
- * and the cascade is derived from the entity, not passed in. A future merge
- * that forgets it is not a test failure waiting to happen — it is unwritable.
- *
- * The cascade tail itself now lives in `repo/removal` — `cascadeRemoval` is the
- * same mechanism generalized to the non-merge removal paths, and it owns the
- * only mint site for a delete audit entry. `finalizeMerge` keeps the row
- * removal (its statement order is load-bearing for `mergeProducts`) and
- * delegates the tail.
- *
- * ## What deliberately stayed per-entity
- *
- * Which columns carry over, which rollups recompute, which collisions are
- * legal, and what the audit `changes` record is called (`mergedFrom` on a
- * vendor merge, `foldedIn` on a purchase fold) are all genuinely different per
- * entity. They are parameters or plain caller code, not core behavior — a core
- * that forced three different things into one shape would be worse than the
- * duplication it replaced.
+ * Shared merge mechanics. Finalization keeps row removal and embedding/audit
+ * cascade in one transaction; removal order remains caller-controlled because
+ * partial unique indexes make it load-bearing.
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
@@ -64,27 +25,11 @@ import type { RemovableEntity } from "~/server/repo/removal";
 import { cascadeRemoval } from "~/server/repo/removal";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
 
-/** A table a merge can remove rows from — soft (`deletedAt`) or hard. */
 type MergeableTable = PgTable & { id: AnyColumn; deletedAt: AnyColumn };
 
-/** Audit `changes` payload, matching {@link logAuditEntries}' entry shape. */
 type MergeAuditChanges = Record<string, { from: unknown; to: unknown }>;
 
-/**
- * Refuse a merge that names its own keeper among the rows to merge away.
- *
- * Lives here, and is exported, because the refusal has to be made in TWO
- * places that do not share a call path: {@link resolveMergeTargets} on the
- * mutation side, and each entity's merge PREVIEW planner, which takes ids
- * already resolved and so never reaches the resolver. They each used to filter
- * the keeper out silently and independently — which meant preview and mutation
- * agreed, on the wrong answer, and `operation-preview-parity` had nothing to
- * catch.
- *
- * The message names no id on purpose: the planners hold raw uuids, which may
- * never cross the API boundary, and the caller already knows which id it sent
- * twice.
- */
+/** Refuse self-merge instead of silently filtering the keeper from losers. */
 export const assertDistinctMergeTargets = (
   entity: Entity,
   keepId: string,
@@ -97,35 +42,7 @@ export const assertDistinctMergeTargets = (
   );
 };
 
-/**
- * Resolve `{keepId, mergeIds}` shortcodes to entity ids, failing loudly when
- * any of them doesn't name a live row — or when the call names its own keeper
- * among the rows to merge away.
- *
- * A self-reference used to be dropped silently, on the reasoning that a caller
- * handed `keepId` twice must not be able to soft-delete the survivor. Not
- * deleting the survivor is still the guarantee — but SILENCE is not how to
- * keep it. The dropped id was still counted in `mergeIds`, so the call
- * returned success for a merge that moved one row fewer than it was asked to,
- * and no caller could tell that apart from a real merge. Worse, the three
- * merge PREVIEW planners each re-implemented the same silent filter, which
- * meant "preview then mutate" agreed on the wrong answer twice.
- *
- * So the survivor is protected by REFUSING the call (`MERGE_SELF_REFERENCE`)
- * rather than by quietly editing it: nothing is written, the caller is told
- * exactly which id was wrong, and preview and mutation refuse identically.
- * Duplicates *within* `mergeIds` still collapse — repeating a loser is a
- * harmless restatement of the same instruction, not a contradiction.
- *
- * Fail-loud is the point: silently skipping an unresolvable id returns
- * "success" while changing nothing, which is how a typo'd code reads as a
- * completed merge.
- *
- * The error reason, the message label, and the id brand are all derived from
- * `entity` via `resolveAllOrThrow` — this used to take all three as arguments,
- * which meant every caller could pair a `"vendor"` merge with a
- * `PRODUCT_NOT_FOUND` reason or another entity's brander and still compile.
- */
+/** Resolve live targets, rejecting self-reference and every missing code. */
 export const resolveMergeTargets = async <E extends ShortcodeEntity>(
   db: Database,
   args: {
@@ -134,16 +51,9 @@ export const resolveMergeTargets = async <E extends ShortcodeEntity>(
     mergeIds: readonly string[];
   },
 ): Promise<{ keepId: BrandForEntity<E>; loserIds: BrandForEntity<E>[] }> => {
-  // Checked BEFORE any resolution: a self-merge is a malformed request, and a
-  // request that also carries a typo'd id should report the self-reference
-  // rather than the typo it never meant to send.
   assertDistinctMergeTargets(args.entity, args.keepId, args.mergeIds);
   const codes = uniq([args.keepId, ...args.mergeIds]);
-  // Deduped on the way in, so the positional result maps back cleanly.
   const ids = await resolveAllOrThrow(db, args.entity, codes);
-  // Explicitly generic: left to infer, `Map` widens `BrandForEntity<E>` into a
-  // union of all fifteen brands, which then can't flow back into the deferred
-  // `BrandForEntity<E>` the signature promises.
   const byCode = new Map<string, BrandForEntity<E>>(
     codes.map((code, i) => [code, ids[i]!]),
   );
@@ -152,15 +62,7 @@ export const resolveMergeTargets = async <E extends ShortcodeEntity>(
   return { keepId, loserIds };
 };
 
-/**
- * The Drizzle column behind a declared incoming edge.
- *
- * Looking the column up from `INCOMING_EDGES` — rather than letting each call
- * site name it — closes the "residual weakness" `product/edge-roles.ts`
- * documents: declaring an edge in a policy forced each consumer to have *an
- * entry* for it, but nothing stopped that entry from being wired to the wrong
- * column. Here the edge key IS the column.
- */
+/** Derive the column from the declared edge key so callers cannot miswire it. */
 const edgeColumn = <E extends Entity>(
   entity: E,
   edgeKey: IncomingEdgeKey<E>,
@@ -177,18 +79,8 @@ const edgeColumn = <E extends Entity>(
 };
 
 /**
- * Re-point one declared incoming edge from the merged-away ids onto the
- * survivor, returning the ids of the rows that moved (for audit entries).
- *
- * `liveOnly` is required rather than defaulted because both answers are
- * correct somewhere and getting it wrong is silent:
- *  - `false` — every row, soft-deleted ones included. What a HARD delete of the
- *    loser needs, since the FK constraint applies to every row regardless of
- *    `deletedAt` (`mergeIngredients`).
- *  - `true` — live rows only. What a merge needs when it has *already*
- *    soft-deleted some source rows to vacate a unique-index slot; re-pointing
- *    those would walk straight back into the collision the fold just resolved
- *    (`mergeVendors`).
+ * `liveOnly` is explicit: hard deletes must repoint tombstones too, while
+ * collision-folding merges must not revive rows soft-deleted to vacate a slot.
  */
 export const repointEdge = async <E extends Entity>(
   tx: DrizzleTransaction,
@@ -224,38 +116,8 @@ export const repointEdge = async <E extends Entity>(
 };
 
 /**
- * Remove a merge's losers: delete their rows, cascade their search embeddings,
- * and write the audit trail — as one indivisible step.
- *
- * The embedding cascade is derived from `entity` (searchable entities get one,
- * others don't) rather than passed in, so it cannot be forgotten, disabled, or
- * mis-targeted at the wrong entity type. A live `EntityEmbedding` pointing at a
- * merged-away id is permanent damage: there is no restore to heal it,
- * `findOrphanedEntityEmbeddings` flags it forever, and until then semantic
- * search keeps returning a result that renders blank.
- *
- * A hard-deleted row still gets a SOFT-deleted embedding — the same convention
- * `inventory/bulk.ts` uses for a collapsed source row. A soft-deleted embedding
- * is excluded from both semantic search and orphan detection, so one shared
- * cascade covers both removal modes rather than needing a hard-delete variant.
- *
- * `survivorChanges` is caller-supplied in full. The record's key is genuinely
- * per-operation vocabulary — `mergedFrom` naming an array on a vendor merge,
- * `foldedIn` naming one charge on a purchase fold — and normalizing it would
- * rewrite a trail that is already the historical record.
- *
- * The ids are branded to `entity` rather than a free `Id extends string`, so
- * `{entity: "vendor", loserIds: productIds}` no longer compiles — the same lock
- * {@link cascadeRemoval} applies, and what lets the tail below delegate to it
- * without a cast.
- *
- * Returns `removed` — the rows this call actually took out, read back from the
- * DELETE/UPDATE itself rather than assumed from `loserIds.length`. The two
- * differ whenever a caller has already removed a row before getting here
- * (`mergePurchases` soft-deletes its losers up front to vacate the partial
- * unique index, so the `finalizeMerge` inside each `foldChargeInto` reports 0),
- * and a caller that reports `loserIds.length` as "merged" would be quoting its
- * own request back at itself.
+ * Removes losers and cascades embeddings/audit atomically. `removed` comes from
+ * `returning()`, not requested IDs, because callers may pre-delete collisions.
  */
 export const finalizeMerge = async <E extends RemovableEntity>(
   tx: DrizzleTransaction,

@@ -113,8 +113,6 @@ describe("getLocationPutAwayCandidates", () => {
       "Shelf A",
     );
 
-    // itemCount is every product on the shelf, the source included; the sibling
-    // counts are the source's family, the source itself excluded.
     expect(row.itemCount).toBe(3);
     expect(row.tagSiblings).toBe(1);
     expect(row.manufacturerSiblings).toBe(1);
@@ -198,8 +196,6 @@ describe("getLocationPutAwayCandidates", () => {
       "Shelf A",
     );
 
-    // Sharing "(unspecified)" is not sharing a manufacturer, and two uncategorized
-    // products are not in the same category.
     expect(row).toMatchObject({
       itemCount: 1,
       manufacturerSiblings: 0,

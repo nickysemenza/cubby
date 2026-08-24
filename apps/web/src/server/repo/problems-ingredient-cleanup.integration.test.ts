@@ -68,7 +68,6 @@ describe("unused ingredients (saved-view backed)", () => {
       ctx.actor,
     );
 
-    // Unused, no product.
     await findOrCreateIngredient(ctx.db, "lonely spice");
 
     // Unused, linked to a product (no inventory).
@@ -79,7 +78,6 @@ describe("unused ingredients (saved-view backed)", () => {
       ctx.actor,
     );
 
-    // Sub-recipe pointer (recipeId set) → excluded even with no usage/product.
     const recipe = await upsertImportRecipe(
       makeImportRecipe({ meta: { title: "sub" } }),
       ctx.db,
@@ -98,7 +96,6 @@ describe("unused ingredients (saved-view backed)", () => {
     expect(withoutProduct.map((i) => i.name)).toEqual(["lonely spice"]);
     expect(withProduct.map((i) => i.name)).toEqual(["boxed thing"]);
     expect(withProduct[0]?.products.map((p) => p.name)).toEqual(["Boxed"]);
-    // carrot (in-recipe) and "Recipe: sub" (pointer) are absent from both.
     const allNames = [...withProduct, ...withoutProduct].map((i) => i.name);
     expect(allNames).not.toContain("carrot");
     expect(allNames).not.toContain("Recipe: sub");
@@ -240,7 +237,6 @@ describe("deleteUnusedIngredients", () => {
     });
     expect(gone?.deletedAt).not.toBeNull();
 
-    // No unused product-linked ingredient remains.
     const { withProduct } = await unusedIngredients(ctx.db);
     expect(withProduct.map((i) => i.name)).not.toContain(
       "deletable ingredient",

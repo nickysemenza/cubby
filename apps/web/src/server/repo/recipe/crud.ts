@@ -1,8 +1,3 @@
-/**
- * Recipe CRUD operations.
- * Core create, read, update, list operations for recipes.
- */
-
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
@@ -146,9 +141,6 @@ import {
   updateRecipeImages,
 } from "./update-helpers";
 
-/**
- * Get a recipe by ID.
- */
 export const getRecipeByID = async (
   db: Database | DrizzleTransaction,
   id: RecipeId,
@@ -160,11 +152,6 @@ export const getRecipeByID = async (
   return res === null || res === undefined ? null : dbRecipeToAPI(res);
 };
 
-/**
- * First displayable Recipe image in explicit display order, loaded once for a
- * batch of compact cross-entity surfaces such as the planning calendar.
- * Full Recipe reads still own galleries; this deliberately returns only URLs.
- */
 export const getRecipeCoverImageUrlsByShortcodes = async (
   db: Database,
   ids: RecipeShortcode[],
@@ -200,12 +187,6 @@ export const getRecipeCoverImageUrlsByShortcodes = async (
   return byId;
 };
 
-/**
- * Get many recipes by ID. Returns the full ingredient graph (including the
- * `ingredient.recipe` discriminator) plus a compact resolved cover, without
- * loading image collections. Used by client-side cost rollup to resolve
- * sub-recipes (recipe-as-ingredient). Missing/deleted ids are simply absent.
- */
 export const getRecipesByIDs = async (
   db: Database,
   ids: RecipeId[],
@@ -230,17 +211,7 @@ export const getRecipesByIDs = async (
   });
 };
 
-/**
- * Every sub-recipe transitively reachable from `roots`, keyed by shortcode.
- *
- * Both engines that recurse into sub-recipes need this closure — costing to
- * roll totals up, needs-expansion to flatten ingredients down — so it lives
- * here rather than being BFS'd separately in each service.
- *
- * Short-circuits when no root references a sub-recipe at all: most recipes are
- * flat, and the "what can I make?" fan-out evaluates hundreds of them per call,
- * so a flat recipe must cost exactly zero extra round trips.
- */
+/** Sub-recipe closure shared by costing and needs expansion. */
 export const getSubRecipeClosure = async (
   db: Database,
   roots: readonly Pick<RecipeOut, "id" | "sections">[],
@@ -273,11 +244,6 @@ export const getSubRecipeClosure = async (
   );
 };
 
-/**
- * Titles of non-deleted recipes already linked to a cookbook. Used by the import
- * preview to flag recipes that a re-import would update, and by reprocess to tell
- * already-imported recipes from importable extras.
- */
 export const getCookbookRecipeTitles = async (
   db: Database,
   cookbookId: CookbookId,
@@ -289,11 +255,6 @@ export const getCookbookRecipeTitles = async (
   return rows.map((r) => r.name);
 };
 
-/**
- * A cookbook's non-deleted recipes with their id and content signature — lets
- * the import preview show "no changes" vs "will update" per title and link to
- * the existing Cubby recipe. Title is the per-book key.
- */
 export const getCookbookRecipesForDiff = async (
   db: Database,
   cookbookId: CookbookId,
@@ -329,15 +290,9 @@ export const getCookbookRecipesForDiff = async (
   });
 };
 
-// Normalize a title for cross-recipe reference matching (trim + lowercase).
 export const normalizeTitle = (title: string): string =>
   title.trim().toLowerCase();
 
-/**
- * Map of normalized title → recipe id for a cookbook's non-deleted recipes. Used
- * to resolve cookbook cross-references (`RecipeRef.title`) to the recipe they
- * point at. A whole book is bounded, so one query over all its recipes is fine.
- */
 export const getCookbookRecipeIdsByTitle = async (
   db: Database,
   cookbookId: CookbookId,
@@ -349,10 +304,6 @@ export const getCookbookRecipeIdsByTitle = async (
   return new Map(rows.map((r) => [normalizeTitle(r.name), r.id]));
 };
 
-/**
- * Get a recipe by shortcode. Returns null if the code doesn't resolve to a
- * live recipe.
- */
 export const getRecipeByShortcode = async (
   db: Database,
   shortcode: string,
@@ -361,10 +312,6 @@ export const getRecipeByShortcode = async (
   return id ? getRecipeByID(db, unsafeRecipeId(id)) : null;
 };
 
-/**
- * Page ids (SourceData) of every non-deleted Notion-synced recipe — lets the
- * import preview flag which pages already exist (new vs. will-update).
- */
 export const getNotionRecipePageIds = async (
   db: Database,
 ): Promise<string[]> => {
@@ -375,11 +322,6 @@ export const getNotionRecipePageIds = async (
   return rows.map((r) => r.SourceData).filter((s): s is string => s !== null);
 };
 
-/**
- * Every non-deleted Notion-synced recipe with its page id and full content — so
- * the import preview can compare against what a re-import would produce ("no
- * changes" vs "will update") and link to the existing Cubby recipe.
- */
 export const getNotionRecipesForDiff = async (
   db: Database,
 ): Promise<Array<{ id: string; pageId: string; recipe: RecipeGraphOut }>> => {
@@ -400,20 +342,9 @@ export const getNotionRecipesForDiff = async (
   });
 };
 
-/**
- * "This recipe has no tags" — the empty state of a nullable `text[]`.
- *
- * Written as one parenthesized raw fragment rather than `or(isNull(...), ...)`
- * so it types as a plain `SQL` (drizzle's `or` is `SQL | undefined`) and so
- * `not()` wraps it correctly. Interpolating a COLUMN is safe here; the
- * row-constructor trap documented at the `arrayOverlaps` call below is about
- * interpolating a JS array.
- */
+/** A nullable tag array is empty when null or zero-length. */
 const TAGS_ARE_EMPTY = sql`(${recipe.tags} IS NULL OR cardinality(${recipe.tags}) = 0)`;
 
-/**
- * List recipes with filters, sorting, and pagination.
- */
 export const recipeList = async (
   db: Database,
   filters: RecipeFilters,
@@ -469,9 +400,7 @@ export const recipeList = async (
     .innerJoin(meal, and(eq(meal.id, mealRecipe.mealId), notDeleted(meal)))
     .where(notDeleted(mealRecipe));
 
-  // Recipes with at least one live, non-PDF image — mirrors the product list's
-  // `productIdsWithImages` (Image is separately soft-deletable from RecipeImage,
-  // and a PDF is a document attachment, not a displayable photo).
+  // PDFs are documents, not displayable recipe images.
   const recipeIdsWithImages = dbClient
     .select({ recipeId: recipeImage.recipeId })
     .from(recipeImage)
@@ -480,10 +409,6 @@ export const recipeList = async (
       and(notDeleted(recipeImage), ne(image.contentType, PDF_CONTENT_TYPE)),
     );
 
-  // Recipes carrying at least one live section with a non-empty instruction
-  // list. `instructions` is NOT NULL with a `'[]'` default, so the length test
-  // needs no COALESCE — and a recipe with sections that are all empty is still
-  // "no instructions", which is why this counts sections rather than recipes.
   const recipeIdsWithInstructions = dbClient
     .select({ recipeId: recipeSection.recipeId })
     .from(recipeSection)
@@ -494,16 +419,11 @@ export const recipeList = async (
       ),
     );
 
-  // `oneOrMany` on the wire, always a list here — `eqAnyRequested` needs to
-  // tell "unrestricted" (undefined) from "requested, matched nothing" (empty),
-  // which a bare scalar can't express.
   const sourceTypes =
     filters.sourceTypeFilter === undefined
       ? undefined
       : [filters.sourceTypeFilter].flat();
 
-  // Build where conditions - always filter out deleted items. Scope to one
-  // cookbook by FK id when browsing its detail page.
   const pickerSearch = filters.nameFilter
     ? or(
         formatSearchTerm(recipe.name, filters.nameFilter),
@@ -570,12 +490,7 @@ export const recipeList = async (
         filters.instructionsPresenceFilter,
         recipeIdsWithInstructions,
       ),
-      // Same `eqAnyRequested` + `presenceCondition` split as the cookbook
-      // filter above, and for the same reason on the presence half: it WIDENS
-      // rather than narrows, which is what lets the no-instructions view name
-      // "Website or Other or no source at all" as one filter. `SourceType` is
-      // nullable and a NULL is a legacy hand-entered recipe, so that third arm
-      // is load-bearing, not a convenience.
+      // Presence widens this filter; null is a valid legacy manual source.
       or(
         eqAnyRequested(recipe.SourceType, sourceTypes),
         presenceCondition(recipe.SourceType, filters.sourceTypePresenceFilter),
@@ -590,23 +505,10 @@ export const recipeList = async (
         filters,
         "caloriesTotal",
       ),
-      // A real column, so no jsonb extraction and no cast — and NULL (no
-      // printed total time) drops out of both bounds, which is what "under 30
-      // minutes" should mean for a recipe whose time is unknown.
       ...rangeConditions(recipe.totalMinutes, filters, "totalMinutes"),
     ],
   );
 
-  // Build orderBy using central sortableFields config. Several sortable columns
-  // aren't plain scalar columns, so a resolver special-cases them:
-  //  - costTotal/caloriesTotal live in the `totals` jsonb
-  //  - source = SourceType (groups Book/Website/Notion/Other) then SourceData
-  //    (name/url) — both columns are components of the field, so they stay
-  //    adjacent at any stack position
-  //  - yield = the `servings` integer (yield-only recipes have null servings → last)
-  //  - tags = first tag; its old trailing `name asc` was a cosmetic tie-break,
-  //    now the single tieBreaker so it can't swallow a stacked secondary sort
-  // everything else goes through the generic buildOrderBy column path.
   const resolveRecipeSort = (s: SortParams): SQL[] | null => {
     const isAsc = s.direction === "asc";
     const dir = (col: AnyColumn): SQL =>
@@ -649,12 +551,7 @@ export const recipeList = async (
 
   const { take, skip } = buildTakeSkip(pagination);
 
-  // Summary fetch: flat recipe rows (no section graph) + persisted totals via dbRecipeToListAPI — the nested graph nobody renders was the ~4.7s over-fetch.
-  // `images` is capped to a single (cover) row via recipeListCoverImageRelation
-  // — the list only ever renders a thumbnail, never the full gallery.
-  // `mealCount` is a scalar extra so the "Meals" column doesn't need a second
-  // round trip; same live-join semantics as `recipeIdsInLiveMeals` above (see
-  // liveMealCountForRecipeSql's doc comment).
+  // List reads fetch flat rows, one cover, and scalar meal count; never full graphs.
   const { data: results, count: totalCount } = await executeListQueryWithCount({
     kind: readIntent,
     rows: () =>
@@ -682,21 +579,9 @@ export const recipeList = async (
   return { data: items, count: totalCount };
 };
 
-// A cookbook the importer is writing into: its FK id plus its name (stamped onto
-// each recipe's SourceData). Created up-front by `upsertCookbook` (cookbook repo).
 export type CookbookRef = { id: CookbookId; name: string };
 
-/**
- * Create a new recipe, returning only its id. The whole insert (recipe +
- * sections + ingredients + images + audit) runs in one transaction; unlike
- * {@link createRecipe} it skips the heavy {@link getRecipeByID} re-read — callers
- * that only need the id (every upsert path) avoid a wasted full-graph join.
- *
- * `withinTransaction`, when given, runs after images are associated and before
- * the audit entry is written — same transaction, so a caller with extra rows to
- * insert (e.g. {@link duplicateRecipe}'s image-join-row copy) doesn't have to
- * hand-roll a second insert path just to keep them atomic with the graph.
- */
+/** Graph, images, callback, and audit all run in one transaction. */
 const createRecipeReturningId = async (
   db: Database,
   recipeInput: RecipeCreateInput,
@@ -762,11 +647,6 @@ const createRecipeReturningId = async (
   });
 };
 
-/**
- * Create a new recipe and return its full {@link RecipeOut}. Thin wrapper over
- * {@link createRecipeReturningId} + a post-commit {@link getRecipeByID} — for
- * callers (the CRUD create endpoint, tests) that need the materialized recipe.
- */
 export const createRecipe = async (
   db: Database,
   recipeInput: RecipeCreateInput,
@@ -821,8 +701,6 @@ const duplicateProvenance = async (
     sourceType: "Other",
     sourceData: null,
   };
-  // Resolved up front (only meaningful for "book") so the match arms below stay
-  // synchronous.
   const cookbookId =
     src?.type === "book" && src.cookbookId
       ? await resolveOrThrow(db, "cookbook", src.cookbookId)
@@ -851,14 +729,6 @@ const duplicateProvenance = async (
     .exhaustive();
 };
 
-/**
- * Duplicate a recipe: reshape the source graph into a fresh `RecipeCreateInput`
- * (section/line ids dropped, so the graph insert mints new ones for every row)
- * and write it — plus a same-image join-row copy — in one transaction, via
- * {@link createRecipeReturningId} (one insert path, not a hand-rolled second
- * one). Named "<name> (copy)". This is the pattern for entity duplication in
- * this repo; no other entity has a clone/duplicate operation yet.
- */
 export const duplicateRecipe = async (
   db: Database,
   id: RecipeId,
@@ -949,16 +819,6 @@ export const duplicateRecipe = async (
   return duplicated;
 };
 
-/**
- * Shared upsert core: find an existing recipe with `matchWhere`; if found,
- * refresh its provenance and replace its sections; otherwise create it. The two
- * public upserts differ only in how they identify "the same recipe" and what
- * provenance they stamp.
- */
-/**
- * What an upsert/create hands back: the private id AND the public shortcode.
- * The importers link the finished recipe, and a link needs the shortcode.
- */
 export type UpsertedRecipe = { id: RecipeId; shortcode: string };
 
 const upsertRecipeMatching = async (
@@ -972,7 +832,6 @@ const upsertRecipeMatching = async (
   // path (and a spurious re-SELECT) before re-throwing.
   constraint: string,
 ): Promise<UpsertedRecipe> => {
-  // Update an already-matched recipe: refresh provenance + replace sections.
   const updateMatched = (existingId: RecipeId): Promise<UpsertedRecipe> =>
     withTransaction(db, async (tx) => {
       const updatedRecipe = await updateLiveAndReturn(
@@ -987,19 +846,11 @@ const upsertRecipeMatching = async (
           // one. Safe: Notion names are exempt from Recipe_name_key (identity is the
           // page id via Recipe_notion_page_key), so the rename can't collide.
           name: input.name,
-          // Like sections, notes are replaced from the import source on re-import
-          // (a manual edit doesn't survive a re-import).
           notes: input.notes ?? null,
-          // yield/servings also reflect the source on re-import (every importer
-          // carries them, null when unparsed). Previously omitted -> stale forever.
           yield: input.yield ?? null,
           servings: input.servings ?? null,
-          // Same rule for times/equipment/page: the source owns them, so a
-          // re-import refreshes all three columns (clearing them when the source
-          // stopped printing a time) rather than leaving a stale row behind.
           ...recipeMetaToColumns(input.meta),
-          // Tags only when the importer actually supplies them (Notion page columns).
-          // Web/cookbook imports leave tags undefined, so don't clobber manual tags.
+          // Undefined imported tags preserve manual tags; supplied tags replace them.
           ...(input.tags !== undefined ? { tags: input.tags } : {}),
           updatedAt: new Date(),
         },
@@ -1023,7 +874,6 @@ const upsertRecipeMatching = async (
   // re-SELECTs the committed winner and takes the update path instead of 500ing.
   return runWithConflictRecovery(
     async () => {
-      // Only the id is used here — skip the full-graph re-read createRecipe does.
       return await createRecipeReturningId(db, input, actor, provenance);
     },
     async (error) => {
@@ -1038,13 +888,7 @@ const upsertRecipeMatching = async (
   );
 };
 
-/**
- * Upsert a recipe (create or update based on name match).
- *
- * Cookbook recipes are keyed by (cookbookId, title) via {@link upsertCookbookRecipe},
- * so they're excluded from the name match here — otherwise scraping a website
- * whose title matches a cookbook recipe would clobber the cookbook recipe.
- */
+/** Cookbook recipes are excluded because their identity is `(cookbookId, title)`. */
 export const upsertRecipe = (
   input: RecipeCreateInput,
   db: Database,
@@ -1063,16 +907,6 @@ export const upsertRecipe = (
     "Recipe_name_key",
   );
 
-/**
- * Upsert a recipe extracted from an EPUB cookbook.
- *
- * Unlike {@link upsertRecipe} (which keys on name alone and stamps Website/Other
- * provenance), a cookbook recipe's identity is **(cookbookId, title)**: we match
- * on cookbookId AND name, stamp the FK, and sync SourceData to the cookbook name.
- * This keeps the same title in two different books distinct, never collides with a
- * website-scraped recipe of the same name, and makes re-importing a book
- * idempotent for stable titles.
- */
 export const upsertCookbookRecipe = (
   input: RecipeCreateInput,
   cookbookRef: CookbookRef,
@@ -1096,14 +930,7 @@ export const upsertCookbookRecipe = (
     "Recipe_book_title_key",
   );
 
-/**
- * Upsert a recipe synced from a Notion page.
- *
- * A Notion recipe's identity is its **page id** (stored in SourceData) — not its
- * title — so a renamed page still updates the same row and never collides with a
- * same-named web/manual recipe (the `Recipe_name_key` index exempts Notion). This
- * is the Notion analogue of {@link upsertCookbookRecipe}.
- */
+/** Notion identity is page ID, so title changes update the same row. */
 export const upsertNotionRecipe = (
   input: RecipeCreateInput,
   pageId: string,
@@ -1126,9 +953,6 @@ export const upsertNotionRecipe = (
     "Recipe_notion_page_key",
   );
 
-/**
- * Update an existing recipe.
- */
 export const updateRecipe = async (
   db: Database,
   id: RecipeId,
@@ -1151,7 +975,6 @@ export const updateRecipe = async (
     throw createAppError("RECIPE_NOT_FOUND", `Recipe with ID ${id} not found`);
   }
 
-  // Store before state for audit logging
   const beforeState = { name: existingRecipe.name };
 
   const updatedRecipe = await withTransaction(db, async (tx) => {
@@ -1187,26 +1010,8 @@ export const updateRecipe = async (
 };
 
 /**
- * Soft-delete recipes along with their sections, section ingredients, images,
- * and meal-plan memberships.
- *
- * Joins the caller's transaction when one is open, so the cookbook delete —
- * which removes the book row in the same txn — shares the exact cascade,
- * embedding cleanup, and audit trail rather than reimplementing it.
- *
- * Three of the four child statements stay hand-rolled instead of becoming
- * `removeEntity`'s declared `children`, because `RecipeSectionIngredient` is
- * scoped by `sectionIds` and counted *through* `RecipeSection.recipeId` — a
- * child cascade addresses one parent column and counts what it removes, so
- * expressing this one would take both a scope override and a count override.
- * The invariant survives regardless: the delete audit entries are still minted
- * by the shared cascade below, which is the only thing that can mint them.
- * `recipeImage` is the exception and IS declared — see the note at the call.
- *
- * Returns the R2 keys of images the cascade reaped. Note this function joins a
- * caller's transaction when given one, so "the await resolved" does not mean
- * "committed" on that path — `deleteCookbook` passes the keys further up rather
- * than dropping the objects itself.
+ * Soft-deletes the recipe graph in the caller's transaction when provided.
+ * Returned R2 keys must not be dropped until that outer transaction commits.
  */
 export const deleteRecipes = async (
   dbOrTx: Database | DrizzleTransaction,
@@ -1216,8 +1021,7 @@ export const deleteRecipes = async (
   if (ids.length === 0) return { detachedImageKeys: [], deleted: 0 };
 
   return await withTransactionOn(dbOrTx, async (tx) => {
-    // Row-level locks: proves the ids exist and aren't already deleted, and
-    // keeps a concurrent delete from interleaving with the cascade below.
+    // Lock live rows before cascading so concurrent deletes cannot interleave.
     await lockAndValidateForDelete(tx, recipe, ids, "Recipe");
 
     const now = new Date();
@@ -1258,7 +1062,6 @@ export const deleteRecipes = async (
       });
     }
 
-    // Ingredients are counted via their section's recipe (no direct recipeId).
     const sectionToRecipe = new Map(sections.map((s) => [s.id, s.recipeId]));
     const sectionsByRecipe = countBy(sections, (s) => s.recipeId);
     const mealRecipesByRecipe = countBy(
@@ -1296,15 +1099,7 @@ export const deleteRecipes = async (
       .set({ deletedAt: now })
       .where(and(inArray(mealRecipe.recipeId, ids), notDeleted(mealRecipe)));
 
-    // `recipeImage` is DECLARED rather than hand-rolled like its three
-    // siblings above, and that is load-bearing: `removeEntity` reaps the
-    // `Image` rows (and returns their R2 keys) for the join tables it can see
-    // in `children`, and it can only see declared ones. A hand-rolled update
-    // here would leave the files behind — the leak this cascade closed.
-    // Unlike `RecipeSectionIngredient` (scoped by sectionIds, counted through
-    // `RecipeSection.recipeId`), this edge is a plain `recipeId` column, so it
-    // expresses cleanly as a `ChildCascade` and `removeEntity` derives
-    // `cascadedImages` itself — hence its removal from `extraCounts`.
+    // Declaring recipeImage lets removeEntity reap unreferenced Image/R2 rows.
     return await removeEntity(tx, {
       entity: "recipe",
       ids,
@@ -1326,13 +1121,6 @@ export const deleteRecipes = async (
   });
 };
 
-/**
- * Soft-delete every non-deleted recipe linked to a cookbook, inside the caller's
- * transaction — the cookbook repo removes the `Cookbook` row in the same txn, so
- * a book can't survive its recipes. Shares the section/ingredient/image cascade,
- * embedding cleanup, and audit trail with {@link deleteRecipes}; returns the
- * deleted ids so the caller can run mutation side-effects.
- */
 export const deleteRecipesByCookbookTx = async (
   tx: DrizzleTransaction,
   cookbookId: CookbookId,
@@ -1343,9 +1131,6 @@ export const deleteRecipesByCookbookTx = async (
     columns: { id: true, shortcode: true },
   });
   const ids = rows.map((r) => r.id);
-  // Runs on the CALLER's transaction, so the R2 keys ride out rather than being
-  // dropped here — the cookbook row is removed in that same txn and could still
-  // roll back.
   const { detachedImageKeys } = await deleteRecipes(tx, ids, actor);
   return { recipeIds: ids, detachedImageKeys };
 };

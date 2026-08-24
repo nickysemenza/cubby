@@ -20,7 +20,9 @@
         "scripts/ci-scope.test.ts!",
         "scripts/ensure-wasm.ts!",
         "scripts/ensure-mcp-apps.ts!",
-        "scripts/setup-agent-environment.ts!"
+        "scripts/setup-agent-environment.ts!",
+        "scripts/entity-literal-generator.ts!",
+        "scripts/entity-literals/entities/*.entity.ts!"
       ],
       "project": ["scripts/**/*.ts!"]
     },

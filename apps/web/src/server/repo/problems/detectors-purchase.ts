@@ -28,7 +28,6 @@ import type { Database } from "~/server/db";
 import { expense, product, purchase, vendor } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 
-/** What the pairing scan yields, before branding. */
 type DuplicateSpendRow = {
   id: ExpenseShortcode;
   expenseName: string;

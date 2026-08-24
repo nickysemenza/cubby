@@ -93,9 +93,8 @@ export function registerImageTools(server: McpServer) {
       "invoice gets filed against the vendor event it documents). Purchase attachments require " +
       "documentKind; order_confirmation, sales_order, invoice, and receipt count as primary evidence. " +
       `${ATTACH_FILE_SOURCE_PROSE} Resolve the ` +
-      "target shortcode first via search_products / list_recipes / list_locations / " +
-      "list_projects; for a purchase use list_purchases / get_purchase, or read " +
-      "`purchaseId` off any expense row (list_expenses / get_expense). " +
+      "target shortcode first via product, recipe, inventory, ingredient, or location tools; " +
+      "use entity list/get for a project or purchase, or read `purchaseId` from entity get(expense). " +
       "`reused: true` in the response means the idempotencyKey matched a file that is " +
       "still attached and nothing was uploaded; `false` means this call stored bytes.",
     // `entityType` is dropped on purpose: a shortcode's prefix already names

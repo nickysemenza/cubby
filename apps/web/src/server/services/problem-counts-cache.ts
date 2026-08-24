@@ -52,10 +52,6 @@ async function writeProblemCountsSnapshot(
   return snapshot;
 }
 
-/**
- * Cheap read-through interface used by tRPC. A cold/invalid cache computes once
- * through the canonical detector module, then seeds KV for later invocations.
- */
 export async function getCachedProblemCounts(
   db: Database,
   upcLookupClient: UPCLookupClient,

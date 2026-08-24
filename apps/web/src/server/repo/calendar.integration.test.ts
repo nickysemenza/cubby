@@ -214,8 +214,6 @@ describe("calendar repository", () => {
       new Set(["meal", "task", "expense", "project"]),
     );
 
-    // What the ICS feed asks for: the expense and project reads are skipped
-    // entirely, not filtered out afterwards.
     const feed = await getCalendarRange(ctx.db, {
       ...range,
       kinds: ["meal", "task"],
@@ -233,7 +231,6 @@ describe("calendar repository", () => {
   describe("filters", () => {
     const range = { startDate: "2026-10-01", endDateExclusive: "2026-10-15" };
 
-    /** One of every kind on 2026-10-05, plus a sub-project one level down. */
     const seed = async () => {
       const { output: parent } = await createProject(
         ctx.db,
@@ -372,8 +369,6 @@ describe("calendar repository", () => {
     it("treats meals as permanently unassigned rows under a project scope", async () => {
       const { parent } = await seed();
 
-      // Not a flat drop: `(none)` is the unassigned-work worklist, and a meal
-      // genuinely belongs in it.
       expect((await countByKind({ projectId: [parent.id] })).meal).toBe(0);
       expect((await countByKind({ projectPresenceFilter: "has" })).meal).toBe(
         0,
@@ -401,7 +396,6 @@ describe("calendar repository", () => {
         expense: 0,
         project: 0,
       });
-      // ...but the presence sentinel beside it still answers for itself.
       expect(
         await countByKind({
           projectId: [MISSING_PROJECT],
@@ -426,9 +420,6 @@ describe("calendar repository", () => {
   });
 
   it("orders a day's meals by slot, not by title", async () => {
-    // The exact case that was wrong before mealType existed: sorting fell
-    // through to the title, so a breakfast named "Oatmeal" landed after a
-    // dinner named "Chili".
     await createMeal(
       ctx.db,
       mealCreateInput.parse({
@@ -447,7 +438,6 @@ describe("calendar repository", () => {
       }),
       ctx.actor,
     );
-    // Unslotted sorts last regardless of where its title falls alphabetically.
     await createMeal(
       ctx.db,
       mealCreateInput.parse({ date: "2026-10-05", name: "Anytime" }),
@@ -485,7 +475,6 @@ describe("calendar repository", () => {
       kinds: ["meal"],
     });
 
-    // Unslotted keeps the old generic fallback — there is nothing better to say.
     expect(items.map((item) => item.title)).toEqual(["Breakfast", "Meal"]);
   });
 });

@@ -151,38 +151,18 @@ const resolveCoverage = (
   };
 };
 
-/**
- * One row of the Problems page: its scroll anchor, summary-chip label, count,
- * and card. Generic in its coverage declaration so the declared keys survive
- * into `PROBLEM_SECTIONS`, where the exhaustiveness assertion reads them back.
- */
 type ProblemSectionEntry<K extends CoverageProblemKey = CoverageProblemKey> = {
-  /** Scroll-anchor id; also the summary-chip key. */
   id: string;
-  /** Short label shown on the summary chip. */
   label: string;
-  /** Issue count, used to show/hide the summary chip. */
   count: (problems: AllProblems) => number;
-  /**
-   * The section card. `totals` carries the coverage denominators (loaded by a
-   * separate cheap query); defect sections ignore it.
-   */
   node: (
     problems: AllProblems,
     totals: CoverageTotals | undefined,
   ) => ReactNode;
-  /** Present ⇒ coverage, not a defect; absent ⇒ the main defect list. */
   coverage?: ProblemSectionDeclaredCoverage<K>;
-  /** Canonical query branches shown in this section's assembly. */
   problemKeys?: readonly ProblemKey[];
 };
 
-/**
- * Declare a section from data: static `ProblemSection` props plus a `select`
- * (the single source for both the count and the rendered items) and a
- * `renderItem`. The element type flows from `select` into `renderItem` with no
- * annotations. `headerAction` is a `<BackfillButton>` for the "fix all" sections.
- */
 function section<T, K extends CoverageProblemKey = never>(config: {
   id: string;
   label: string;
@@ -194,7 +174,6 @@ function section<T, K extends CoverageProblemKey = never>(config: {
    * count and the card's meter describe the backlog instead of the page.
    */
   totalKey?: ProblemKey;
-  /** Override only for a section that combines several Problem definitions. */
   title?: string;
   description?: string;
   emptyMessage?: string;
@@ -202,7 +181,6 @@ function section<T, K extends CoverageProblemKey = never>(config: {
   entity?: Entity;
   renderItem: (item: T) => RenderedProblemItem;
   groupBy?: (items: T[]) => Record<string, T[]>;
-  /** Registry keys represented by this section; multiple keys are OR branches. */
   problemKeys?: readonly ProblemKey[];
   /**
    * A static "fix all" node, or one built from the section's contents.
@@ -275,12 +253,10 @@ function section<T, K extends CoverageProblemKey = never>(config: {
   };
 }
 
-/** Escape hatch for a section that needs its own component (e.g. section-level state). */
 function customSection<T, K extends CoverageProblemKey = never>(def: {
   id: string;
   label: string;
   select: (problems: AllProblems) => readonly T[];
-  /** See `section`'s `totalKey` — set when `select` returns a page. */
   totalKey?: ProblemKey;
   render: (
     items: T[],
@@ -315,7 +291,6 @@ function customSection<T, K extends CoverageProblemKey = never>(def: {
   };
 }
 
-/** Resolve the currently migrated registry entries without making UI own SQL. */
 function problemAssembly(
   keys: readonly ProblemKey[] | undefined,
   problems: AllProblems,
@@ -400,12 +375,6 @@ function OrphanedEmbeddingCleanupFix({
   );
 }
 
-/**
- * "Backfill all" for entities semantic search can't see yet. A plain mutation
- * (it only enqueues), so it uses the card-mutation hook rather than the
- * BackfillButton stream — but the work itself is durable, hence the link out to
- * the queue.
- */
 function MissingEmbeddingsBackfillAction() {
   const api = useTRPC();
   const backfill = useProblemCardMutation({
@@ -426,16 +395,10 @@ function MissingEmbeddingsBackfillAction() {
   );
 }
 
-/**
- * `{pluralLabel} · {edgeKey}` — clusters violations first by the entity left
- * dangling, then by the specific FK column, so 34 possible edges don't render
- * as one flat wall of identical-looking rows.
- */
 function referentialLivenessGroup(v: ReferentialLivenessViolation): string {
   return `${entityPluralLabel(v.targetEntity)} · ${v.edgeKey}`;
 }
 
-/** `Table.column` — mono, the exact FK the audit failed on. */
 function edgeKeyDetail(edgeKey: string): ReactNode {
   return (
     <div key="edge" className="font-mono text-muted-foreground text-xs">
@@ -444,7 +407,6 @@ function edgeKeyDetail(edgeKey: string): ReactNode {
   );
 }
 
-/** `Source SourceTable #id` — the live row carrying the dangling pointer. */
 function sourceDetail(sourceTable: string, sourceId: string): ReactNode {
   return (
     <Row
@@ -485,13 +447,6 @@ function referentialTargetBadge(v: ReferentialLivenessViolation): ReactNode {
   );
 }
 
-/**
- * Household-tracker rules in display order (most actionable first) with each
- * rule's subsection title. The section merges the seven per-rule slices in
- * this order, then groups the merged list back by title — so the counts stay
- * first-class per detector (badge tooltip, MCP `type`) while the page shows one
- * "Tracker" card with a subsection per rule, like the unit-coverage merge.
- */
 const TRACKER_GROUPS: { type: ProjectAttentionType; title: string }[] = [
   { type: "overdue_task", title: "Overdue tasks" },
   { type: "blocked_work", title: "Blocked with no next action" },
@@ -506,11 +461,6 @@ const TRACKER_GROUP_TITLE = Object.fromEntries(
   TRACKER_GROUPS.map((g) => [g.type, g.title]),
 ) as Record<ProjectAttentionType, string>;
 
-/**
- * Split the spend for a project that has both kinds. A single total hides which
- * half is already out the door, which is the difference between "write an
- * estimate" and "the estimate is moot".
- */
 function missingBudgetDetail(item: ProjectAttentionItem): ReactNode[] {
   if (item.type !== "missing_budget") return [];
   const { actualSpend, committedSpend } = item.facts;
@@ -569,15 +519,6 @@ function RecountLink({ shortcode }: { shortcode: string }) {
   );
 }
 
-/**
- * "Show every row spelled this way" — the products list filtered to the
- * variant.
- *
- * The card's own `route` can only be an entity DETAIL route, so it links to one
- * sample record; this is the affordance for seeing the whole set. `manufacturer`
- * is a substring filter, which lands you on both spellings side by side —
- * arguably the more useful view when you're about to reconcile them.
- */
 function ManufacturerVariantLink({ manufacturer }: { manufacturer: string }) {
   return (
     <Button
@@ -592,15 +533,6 @@ function ManufacturerVariantLink({ manufacturer }: { manufacturer: string }) {
   );
 }
 
-/**
- * `1 product — "Ryobi" has 12`. Takes the noun as a parameter rather than
- * hardcoding "product" so a second free-text brand column's spelling-variant
- * section could reuse it.
- *
- * Phrased around the canonical rather than a verb ("12 use …") so the tie case
- * reads properly: with no majority the counts are 1 and 1, and "1 uses" is
- * correct English that still scans as a typo.
- */
 const variantSubtitle = (
   v: Pick<LabelVariant, "count" | "canonical" | "canonicalCount">,
   noun: string,
@@ -609,13 +541,6 @@ const variantSubtitle = (
     v.canonicalCount
   }`;
 
-/** Card for the merged "Unit coverage" section — core-4 chips + the inline fix. */
-/**
- * "Fix in workbench" action — the ingredient-enrichment workbench is the one
- * place to link USDA / set price / add conversions / merge (the Problems page no
- * longer hosts a second, worse inline editor for that). Deep-links to the exact
- * ingredient row via `?focus=` so a click lands ready to edit.
- */
 function WorkbenchFixLink({ ingredientId }: { ingredientId: string | null }) {
   return (
     <Button
@@ -649,7 +574,6 @@ function renderUnitCoverageItem(item: UnitCoverageItem): RenderedProblemItem {
   });
 
   if (item.kind === "partial") {
-    // Ingredient enrichment → the workbench (not a second inline editor).
     return {
       ...base,
       customActions: <WorkbenchFixLink ingredientId={item.ingredientId} />,
@@ -682,11 +606,9 @@ function renderUnitCoverageItem(item: UnitCoverageItem): RenderedProblemItem {
   }
 
   if (item.kind === "none" && item.isIngredient) {
-    // Bare ingredient product → the workbench creates/links it properly.
     return {
       ...base,
       customActions: <WorkbenchFixLink ingredientId={item.ingredientId} />,
-      // No badge: the group heading is already "No conversions · ingredient".
       details: [<CoverageChips key="cov" covered={[]} />],
     };
   }
@@ -714,34 +636,16 @@ function renderUnitCoverageItem(item: UnitCoverageItem): RenderedProblemItem {
     };
   }
 
-  // Remaining: `none` and not an ingredient — a non-food product that just needs
-  // a price. Keep the lightweight inline PriceFix.
   return {
     ...base,
     inlineFix: inlineFix("Set price"),
-    // No badge: the group heading is already "No conversions · other".
     details: [<CoverageChips key="cov" covered={[]} />],
   };
 }
 
-/**
- * A meal's day, always with the year.
- *
- * `mealDateLabel` is `EEE, MMM d` — right in the meals table, which is already
- * scoped to a period, but not here: this page lists whatever is unresolved
- * across all of history, so a bare "Tue, Mar 4" doesn't say which year's.
- */
 const mealDay = (meal: { date: string }): string =>
   `${mealDateLabel(meal)}, ${meal.date.slice(0, 4)}`;
 
-/**
- * Shortcodes rendered as linked chips rather than a comma-joined string.
- *
- * Every "these N records collide" card used to drop `ids.join(", ")` into an
- * unlabeled detail line: nothing said what the codes were, and none of them was
- * clickable even though they all resolve. The collision IS the finding, so the
- * colliding records have to be reachable from the card.
- */
 function shortcodeChips(
   key: string,
   label: string,
@@ -765,7 +669,6 @@ function shortcodeChips(
   );
 }
 
-/** `sum-mismatch` → `sum mismatch`. The enum is a schema detail, not a label. */
 const ALLOCATION_DEFECT_LABEL: Record<string, string> = {
   "sum-mismatch": "allocations don't sum to the transaction",
   "non-settlement-kind": "allocations on a non-settlement kind",
@@ -774,7 +677,6 @@ const ALLOCATION_DEFECT_LABEL: Record<string, string> = {
     "an allocation's sign differs from the transaction",
 };
 
-/** `by {mfr} · {n} unit(s) unvalued` — the unpriced-product card subtitle. */
 function unpricedSubtitle(product: ProductMissingPrice): string {
   const qty = product.inventoryQuantity;
   return `${byManufacturer(product.manufacturer)} · ${qty} ${qty === 1 ? "unit" : "units"} unvalued`;
@@ -840,7 +742,6 @@ function unlinkedExitSubtitle(row: UnlinkedExitExpense): string {
     .join(" · ");
 }
 
-/** No vendor to show — these rows have no Purchase — so the project stands in. */
 function purchaselessExitSubtitle(row: PurchaselessExitExpense): string {
   return [
     row.projectName,

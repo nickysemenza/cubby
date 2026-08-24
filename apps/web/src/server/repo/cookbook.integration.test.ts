@@ -76,9 +76,7 @@ describe("cookbook repository", () => {
     expect(entry).toBeDefined();
     // Only one of the two raw recipes was actually imported.
     expect(entry?.recipeCount).toBe(1);
-    // sourceRecipeCount reflects the full stored extraction (both recipes).
     expect(entry?.sourceRecipeCount).toBe(2);
-    // No cover uploaded in this test.
     expect(entry?.coverUrl).toBeNull();
   });
 
@@ -177,7 +175,6 @@ describe("cookbook repository", () => {
       ctx.actor,
     );
 
-    // Drain the streaming generator: collect progress events, read the summary.
     const gen = reprocessCookbookStream(ctx.db, id, ctx.actor);
     const events: { done: number; total: number }[] = [];
     let next = await gen.next();
@@ -187,14 +184,12 @@ describe("cookbook repository", () => {
     }
     const result = next.value;
 
-    // One progress tick for the single reprocessed recipe (extras aren't counted).
     expect(events).toEqual([{ done: 1, total: 1, recipeId: imported.id }]);
 
     // Pancakes was re-derived; Waffles (never imported) is surfaced, not created.
     expect(result.reprocessed).toBe(1);
     expect(result.importableExtras).toEqual(["Waffles"]);
 
-    // Reprocess upserts in place — no duplicate, same id.
     const pancakes = await getDb(ctx.db).query.recipe.findMany({
       where: eq(recipe.name, "Pancakes"),
     });
@@ -202,7 +197,6 @@ describe("cookbook repository", () => {
     expect(pancakes[0]!.id).toBe(imported.id);
     expect(pancakes[0]!.cookbookId).toBe(id);
 
-    // Waffles stayed unimported.
     const waffles = await getDb(ctx.db).query.recipe.findMany({
       where: eq(recipe.name, "Waffles"),
     });
@@ -381,7 +375,6 @@ describe("cookbook repository", () => {
         deleteProducts(ctx.db, [shelfCopy.entityId], ctx.actor),
       ).resolves.toBeDefined();
 
-      // The cookbook itself is untouched either way — that is the whole point.
       const survivors = await listCookbooks(ctx.db);
       expect(survivors.map((c) => c.id)).toContain(cb.output.id);
     });

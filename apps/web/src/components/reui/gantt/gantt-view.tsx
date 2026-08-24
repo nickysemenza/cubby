@@ -2014,11 +2014,6 @@ function GanttView({
   })
 }
 
-/**
- * The red now-line, self-ticking: only this component re-renders on the 30s
- * clock, never the grid around it. z-10 keeps it above row content but UNDER
- * the sticky header (z-30) - vertical scrolling slides it beneath, never over.
- */
 function GanttNowLine({
   rangeStartMs,
   rangeEndMs,
@@ -2041,10 +2036,6 @@ function GanttNowLine({
   )
 }
 
-/**
- * The now-line's dot cap, pinned INSIDE the sticky header at the header/body
- * boundary: it stays put while the line scrolls beneath the header.
- */
 function GanttNowDot({
   rangeStartMs,
   rangeEndMs,
@@ -2066,7 +2057,6 @@ function GanttNowDot({
   )
 }
 
-/** Memoized: only rows whose props actually changed re-render. */
 const GanttTreeRow = memo(function GanttTreeRow({
   row,
   heightRem,
@@ -2399,11 +2389,8 @@ interface OffscreenChip {
   top: number
   color?: string
   label: string
-  /** First bar start, shown in the chip tooltip. */
   startMs: number | null
-  /** scrollLeft that brings the bar back into view. */
   target: number
-  /** End-chip inset in px, widened to clear the zoom control when they overlap. */
   insetEnd: number
 }
 
@@ -2421,11 +2408,6 @@ function sameChips(a: OffscreenChip[], b: OffscreenChip[]): boolean {
   )
 }
 
-/**
- * Edge chips for rows whose bars sit entirely outside the visible timeline;
- * clicking scrolls the bar back into view. Reads geometry straight from the
- * DOM (row data attributes), so scrolling never re-renders the grid.
- */
 function GanttOffscreenChips({
   paneRef,
   occurrences,

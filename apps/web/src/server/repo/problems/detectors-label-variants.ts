@@ -89,7 +89,6 @@ const findSpellingVariants = async (
   column: Column,
   {
     extraWhere = sql`TRUE`,
-    /** Aggregate over one spelling's rows — see the `weight` note above. */
     weight = sql`count(*)`,
   }: { extraWhere?: SQL; weight?: SQL } = {},
 ): Promise<SpellingVariantRow[]> => {

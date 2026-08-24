@@ -75,6 +75,11 @@
  *     schema's input type; shortcode brands exist only in its parsed output, so
  *     a UUID brand is still assignable to the accepted plain string.
  *
+ * literal-route-options: TanStack Router only code-splits route component
+ *     properties when `createFileRoute(path)` receives a literal object. A
+ *     factory call there silently moves the page implementation into the eager
+ *     bundle, so factories may build property values but never the options bag.
+ *
  * fixed-table-column-width: a static UI `<Table>` using the primitive's
  *     default fixed layout must give every `<TableHead>` an unconditional
  *     `w-*` class. An unsized or conditionally-unsized head can collapse to
@@ -260,7 +265,7 @@ const menuItemText = (line: string) =>
 const actionVerbLabelSet = (() => {
   try {
     const src = readFileSync(join(repoRoot, ACTION_VERBS_PATH), "utf8");
-    const body = src.slice(src.indexOf("export const actionVerbs"));
+    const body = src.slice(src.indexOf("const actionVerbs"));
     return new Set(
       [...body.matchAll(/label:\s*"([^"]+)"/g)].flatMap((m) =>
         m[1] ? [m[1].replace(/\.\.\.$/, "").trim().toLowerCase()] : [],
@@ -305,6 +310,18 @@ const HAND_ROLLED_ANY_ARRAY_RE = /\bANY\s*\(\s*\$\{(?!uuidArrayParam\()/g;
 // An explicit router output without the parsed-output type narrowing. The empty
 // `.output()` spelling in prose is excluded so comments do not false-positive.
 const LOOSE_ROUTER_OUTPUT_RE = /\.output\((?!\s*(?:\)|strictOutput\())/g;
+
+const NON_LITERAL_ROUTE_OPTIONS_RE =
+  /createFileRoute\s*\([^)]*\)\s*\(\s*[A-Za-z_$]/g;
+
+assert.match(
+  'createFileRoute("/x")(routeFactory())',
+  NON_LITERAL_ROUTE_OPTIONS_RE,
+);
+assert.doesNotMatch(
+  'createFileRoute("/x")(\n  { component: Page }\n)',
+  NON_LITERAL_ROUTE_OPTIONS_RE,
+);
 
 // Detail routes whose param is a shortcode. `usda` keys on an external fdc id,
 // so it is absent here rather than exempted case-by-case below. `images` used
@@ -1035,6 +1052,22 @@ function scan(files: string[]): Violation[] {
       }
     }
 
+    if (
+      relPath(file).startsWith("apps/web/src/routes/") &&
+      !isTestOrFixture(file)
+    ) {
+      for (const match of content.matchAll(NON_LITERAL_ROUTE_OPTIONS_RE)) {
+        const line = content.slice(0, match.index).split("\n").length;
+        if (isCommentLine(lines[line - 1] ?? "")) continue;
+        violations.push({
+          file,
+          line,
+          snippet: (lines[line - 1] ?? "").trim(),
+          rule: "literal-route-options",
+        });
+      }
+    }
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i] ?? "";
 
@@ -1392,6 +1425,8 @@ const byRule: Record<string, string> = {
     "Hand-rolled `&& ${arr}` array overlap — drizzle interpolates a JS array into raw SQL as a row constructor (`($1,$2)`), not a `text[]`, so this silently matches nothing at every input size. Use `arrayOverlaps(col, arr)` instead.",
   "strict-router-output":
     "Loose tRPC output typing — wrap explicit router schemas in `strictOutput(...)` so resolvers are checked against parsed/brand-preserving z.output rather than permissive z.input.",
+  "literal-route-options":
+    "Non-literal createFileRoute options — keep the route options as an object literal so TanStack Router can code-split component/errorComponent/notFoundComponent; factories may only supply property values.",
   "script-target-exists":
     "Dead package.json script — the tsx/node target file doesn't exist; delete the script or fix the path.",
   "unstable-hook-default":

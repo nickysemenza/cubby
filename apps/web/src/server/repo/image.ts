@@ -1,30 +1,4 @@
-/**
- * Image repository — the single data-access boundary for the `image` entity and
- * its product / location / recipe / project / purchase association join
- * tables. The full set of incoming edges is declared once, in
- * `~/server/db/entity-incoming-edges.ts` (`INCOMING_EDGES.image`), and
- * cross-checked against schema.ts by entity-manifest-fk.unit.test.ts — that's
- * what stops a new join table from silently repeating the gap that broke
- * `PurchaseImage` (see `deleteImages` and `findCullablePendingImages` below).
- *
- * Public API (consumed by routers + services; keep these signatures stable):
- * - {@link imageList}                         — paginated/sorted/filtered list with entity associations
- * - {@link getImageById}                      — fetch one image with its entity association
- * - {@link updateImage}                       — rename an image (the one safely user-editable column)
- * - {@link markImageUploaded}                 — flip a PENDING row to UPLOADED once the R2 PUT succeeds
- * - {@link cullPendingImages}                 — delete stale unassociated PENDING rows and return their keys
- * - {@link countCullablePendingImages}        — how many rows that cull would remove
- * - {@link deleteImages}                      — hard-delete image rows (+ their associations) and return their keys
- * - {@link detachImagesFromEntity}            — remove one entity's associations, reaping images nothing else references
- * - {@link reapUnreferencedImages}           — delete whichever of these images nothing points at any more
- * - {@link imageJoinColumnFor}                — is this table an image join table? (drives removeEntity's cascade reap)
- * - {@link findUnreferencedImages}            — the backstop detector for images no edge reaches
- * - {@link countUnreferencedImages}           — how many rows that detector reports
- * - {@link associateImagesWithProduct}        — attach PENDING images to a product
- * - {@link associateImagesWithRecipe}         — attach PENDING images to a recipe
- *
- * Storage/network orchestration lives in image-storage.service.ts.
- */
+/** Image data boundary: derive association and cascade behavior from INCOMING_EDGES.image. */
 
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { ImageId, ProjectId, RecipeId } from "@cubby/schemas/identifiers";
@@ -180,8 +154,6 @@ const imageIntegrityFields = (imageData: typeof image.$inferSelect) => ({
   verifiedAt: imageData.verifiedAt,
 });
 
-// Type for image with pre-loaded entity relations
-// Note: Association deletedAt is filtered at query time, but we still need to check entity deletedAt
 type ImageWithRelations = typeof image.$inferSelect & {
   productImages: Array<{
     productId: string;
@@ -201,8 +173,6 @@ type ImageWithRelations = typeof image.$inferSelect & {
   }>;
   purchaseImages: Array<{
     purchaseId: string;
-    // Purchase has no `name` column (see purchase-label.ts); its vendor identity
-    // and optional human context stay separate.
     purchase: {
       orderId: string | null;
       displayLabel: string | null;
@@ -674,7 +644,6 @@ const findCullablePendingImages = async (
   return pendingImages;
 };
 
-/** How many abandoned uploads the cull would remove right now. */
 export const countCullablePendingImages = async (
   db: Database,
   olderThanHours: number,
@@ -833,19 +802,15 @@ const deleteImagesTx = async (
 
   for (const [key, disposition] of Object.entries(IMAGE_HARD_DELETE)) {
     const { column } = INCOMING_EDGES.image[key as IncomingEdgeKey<"image">];
+    const edgeColumn = column as PgColumn;
+    const edgeTable = column.table as PgTable;
     if (disposition.effect === "hard-delete") {
-      await tx
-        // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for delete()
-        .delete(column.table as any)
-        // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for inArray()
-        .where(inArray(column as any, ids));
+      await tx.delete(edgeTable).where(inArray(edgeColumn, ids));
     } else {
       await tx
-        // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for update()
-        .update(column.table as any)
+        .update(edgeTable)
         .set({ [column.name]: null })
-        // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for inArray()
-        .where(inArray(column as any, ids));
+        .where(inArray(edgeColumn, ids));
     }
   }
 
@@ -858,25 +823,7 @@ const deleteImagesTx = async (
   return { deletedIds: ids, deletedKeys: rows.map((row) => row.key) };
 };
 
-/**
- * Which of these images something still points at, reading the SAME edge set as
- * {@link deleteImages}'s cascade (`INCOMING_EDGES.image`) so "still referenced"
- * can never drift from "what a delete would have to clear". Omit `imageIds` to
- * scan every edge whole, for {@link findUnreferencedImages}.
- *
- * Liveness is per-disposition, and deliberately NOT uniform:
- *
- * - `hard-delete` edges are join rows, filtered by `notDeleted`. A tombstoned
- *   join row is not a reference: entity deletes cascade a *soft* delete onto it,
- *   so its owning product/recipe/location/project/purchase is already gone and
- *   nothing renders it. Reaping the image cannot strand the FK, because
- *   {@link deleteImagesTx} deletes tombstoned join rows along with live ones.
- * - the `detach` edge is a direct FK (`Cookbook.coverImageId`), counted with NO
- *   liveness filter, for the reason `findCullablePendingImages` documents above:
- *   `deleteCookbook` tombstones the row without nulling the FK, so a soft-deleted
- *   cookbook still holds a live cover reference. Leaking a cover's bytes is the
- *   cheaper mistake.
- */
+/** Referenced-image detection shares the image edge registry so delete and detach cannot drift. */
 const findReferencedImageIds = async (
   dbc: DrizzleClient | DrizzleTransaction,
   imageIds?: string[],
@@ -886,20 +833,18 @@ const findReferencedImageIds = async (
   // this runs inside the caller's.
   for (const [key, disposition] of Object.entries(IMAGE_HARD_DELETE)) {
     const { column } = INCOMING_EDGES.image[key as IncomingEdgeKey<"image">];
+    const edgeColumn = column as PgColumn;
+    const edgeTable = column.table as PgTable;
     const rows = (await dbc
-      // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for select()
-      .select({ imageId: column as any })
-      // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for from()
-      .from(column.table as any)
+      .select({ imageId: edgeColumn })
+      .from(edgeTable)
       .where(
         and(
-          // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for isNotNull()
-          isNotNull(column as any),
-          // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for inArray()
-          imageIds ? inArray(column as any, imageIds) : undefined,
+          isNotNull(edgeColumn),
+          imageIds ? inArray(edgeColumn, imageIds) : undefined,
           disposition.effect === "hard-delete"
             ? // biome-ignore lint/suspicious/noExplicitAny: Drizzle's table type is too narrow for notDeleted()
-              notDeleted(column.table as any)
+              notDeleted(edgeTable as any)
             : undefined,
         ),
       )) as Array<{ imageId: string | null }>;
@@ -910,29 +855,7 @@ const findReferencedImageIds = async (
   return referenced;
 };
 
-/**
- * Detach images from one entity — and hard-delete the ones that are now
- * unreachable, because the join row is not the only thing a removal has to take.
- *
- * Deleting only the association left an `Image` row with `deletedAt` NULL,
- * `status` UPLOADED, its `targetType`/`targetId`/`idempotencyKey` intact and its
- * R2 object still in the bucket: unreferenced, unrenderable, and invisible to
- * `cullPendingImages` (which only ever reaps PENDING). It also made
- * `findAttachmentByIdempotencyKey` report that detached row as a successful
- * re-attach, so an `attach_file` retry with the same key returned success having
- * uploaded nothing. 132 rows / 68 MB had accumulated in R2 before this landed.
- *
- * Runs on the caller's transaction so the detach and the reap commit together.
- * The returned keys are R2 objects, which have no rollback — drop them only
- * AFTER the outermost transaction commits, and best-effort.
- *
- * `imageIds` is typed `ImageId[]`, not `string[]`: every caller already
- * resolves the public `IMG-` shortcodes it receives (via `resolveAllPresent`)
- * before reaching here, since the join tables' `imageId` columns are
- * unbranded uuids. The brand turns a future caller that forgets that
- * resolution into a compile error instead of a silent
- * `invalid input syntax for type uuid` at runtime.
- */
+/** Detach joins and reap newly unreferenced uploaded images transactionally; drop R2 keys only after commit. */
 export const detachImagesFromEntity = async (
   tx: DrizzleTransaction,
   entityType: AttachableImageEntity,
@@ -1042,7 +965,6 @@ export const imageJoinColumnFor = (table: PgTable): PgColumn | undefined => {
   return undefined;
 };
 
-/** Grace window before an unattached UPLOADED row counts as orphaned. */
 export const UNREFERENCED_IMAGE_GRACE_HOURS = 1;
 
 const unreferencedImageWhere = (db: Database, cutoffDate: Date) =>
@@ -1106,7 +1028,6 @@ export const findUnreferencedImages = async (
   return candidates.map((img) => ({ ...img, id: unsafeImageId(img.id) }));
 };
 
-/** How many unreferenced files {@link findUnreferencedImages} would report. */
 export const countUnreferencedImages = async (
   db: Database,
   olderThanHours: number = UNREFERENCED_IMAGE_GRACE_HOURS,
@@ -1240,11 +1161,6 @@ export const assertAttachableEntityExists = async (
   }
 };
 
-/**
- * Is this image still LIVE-attached to that entity? The five-way dispatch
- * mirrors {@link countDisplayableAttachedImages}, minus the displayability
- * filter — a replay is about the attachment existing, not about it rendering.
- */
 const hasLiveAttachment = async (
   dbc: DrizzleClient | DrizzleTransaction,
   entityType: AttachableImageEntity,
@@ -1795,16 +1711,6 @@ export const createOrReuseAttachedImage = async (
     return { row: inserted, reused: false };
   });
 
-/**
- * Fetch images for a set of projects, grouped by project id and ordered
- * cover-first (sortOrder, then createdAt). The forward-direction counterpart
- * of `imageEntityRelations.projectImages` above (which resolves image → owning
- * project for the generic image browser) — this resolves project → images,
- * for the projects dashboard (card covers) and the project detail page
- * (gallery). Projects have no dedicated repo module of their own to host this
- * (see apps/web/src/server/repo/project/), so it lives alongside the other
- * entity-image joins here.
- */
 export const getImagesByProjectIds = async (
   db: Database,
   projectIds: ProjectId[],

@@ -82,7 +82,6 @@ describe("scanAtLocation", () => {
       TEST_ACTOR,
     );
 
-  /** Rows of one product at one location, read through the repo boundary. */
   const rowsAt = async (
     locationEntityId: ReturnType<typeof unsafeLocationId>,
     productShortcode: string,
@@ -152,7 +151,6 @@ describe("scanAtLocation", () => {
     expect(result.strays).toHaveLength(1);
     expect(result.strays[0]?.location.id).toBe(office.shortcode);
     expect(result.strays[0]?.ambiguousQuantity).toBe(false);
-    // Nothing moved yet — the sweep does not stop to write.
     expect(await rowsAt(shelf.entityId, product.shortcode)).toEqual([]);
     expect(await rowsAt(office.entityId, product.shortcode)).toHaveLength(1);
   });
@@ -174,7 +172,6 @@ describe("scanAtLocation", () => {
 
     const result = await scan(shelf.shortcode, "012345678908");
 
-    // The faucet plumbed into the wall is invisible: this is a new spare.
     expect(result.outcome).toBe("added");
     expect(result.strays).toEqual([]);
   });
@@ -198,9 +195,6 @@ describe("scanAtLocation", () => {
     expect(result.strays[0]?.ambiguousQuantity).toBe(true);
   });
 
-  // Cubby prints product labels as QR, and the sweep reads QR — so a printed
-  // label has to resolve. It names a product that already exists, so it looks
-  // up rather than creating.
   it("stocks a scanned Cubby product label without creating anything", async () => {
     const shelf = await makeLocation("Bookshelf E");
     const product = await makeProduct("Labelled thing", "012345678913");
@@ -324,7 +318,6 @@ describe("resolveScanStrays", () => {
       { productId, locationId: source.entityId, amount: each },
       TEST_ACTOR,
     );
-    // A row of the same product already sits at the destination.
     await createInventoryEntry(
       ctx.db,
       { productId, locationId: target.entityId, amount: each },

@@ -25,7 +25,6 @@ export function FinancialTransactionDetail({
     id: transaction.id,
     name: transaction.merchant || transaction.rawDescription || transaction.id,
     entity: "financialTransaction",
-    entityLabel: "Transaction",
     mutationOptions: api.financialTransaction.delete.mutationOptions,
     redirectTo: "/financial-transactions",
   });

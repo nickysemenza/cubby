@@ -1,7 +1,3 @@
-/**
- * Product repository type definitions.
- */
-
 import type { DataQuality } from "@cubby/schemas/data-quality";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import type { LocationAncestorOut } from "@cubby/schemas/location";
@@ -36,10 +32,6 @@ type ProductLocationAncestor = LocationAncestorOut & {
   displayImage: ImageUrlSummary | null;
 };
 
-/**
- * Type for deeply nested product query results.
- * Used when fetching products with full relations.
- */
 export type ProductDeepDB = ProductSelect & {
   pricing?: ProductPricing;
   ingredient: typeof ingredient.$inferSelect | null;
@@ -49,10 +41,7 @@ export type ProductDeepDB = ProductSelect & {
     typeof inventoryEntry.$inferSelect & {
       location: LocationSelect & {
         ancestors?: ProductLocationAncestor[];
-        /** Own photo, else the SKU it IS — hydrated, not selected. */
         displayImage?: ImageUrlSummary | null;
-        // The holding location's own identity SKU — the bin itself, not this
-        // product's stock in it.
         product?: LocationIdentityProductRow | null;
         images: Array<{
           image: MappableImageRecord;
@@ -61,7 +50,6 @@ export type ProductDeepDB = ProductSelect & {
       };
     }
   >;
-  /** Locations that ARE this product; scalar columns plus hydrated display. */
   locations?: Array<
     typeof location.$inferSelect & {
       ancestors?: ProductLocationAncestor[];
@@ -72,11 +60,8 @@ export type ProductDeepDB = ProductSelect & {
     image: MappableImageRecord;
     deletedAt?: Date | null;
   }>;
-  /** Attached by `enrichProductRowsWithQuantityLedger`, same as the list shape. */
   quantityLedger: QuantityLedger;
-  /** Live `ProductComponent` edges where this product is the parent. */
   componentCount: number;
-  /** The cookbook this product is the physical copy of; 0 or 1 in practice. */
   cookbooks?: Array<typeof cookbook.$inferSelect>;
   /** Live recipes reachable through {@link cookbooks}, counted in SQL. */
   cookbookRecipeCount: number;
@@ -97,22 +82,13 @@ export type ProductListDB = ProductSelect & {
     image: MappableImageRecord;
     deletedAt?: Date | null;
   }>;
-  // Scalar extras from `relations.product.list.extras` — count() returns
-  // bigint, which comes back as a string over the wire, hence the union.
   expenseCount: number | string;
-  /** Live `ProductComponent` edges where this product is the parent; > 0 is a kit. */
   componentCount: number | string;
   // `::double precision` cast in the extras SQL comes back as a plain
   // number (unlike the bigint count() above), but the mapper still coerces
   // with Number() defensively — same as `purchaseExpenseTotal` in
   // repo/purchase.ts.
   expenseTotal: number;
-  /** Latest live Purchase date across the Product's live Expense lines. */
   purchaseDate: string | null;
-  /**
-   * Units bought minus units gone. Attached by `loadProductQuantityLedgers`
-   * after the row loads, not an `extras` scalar — see the note at its call
-   * site in crud.ts.
-   */
   quantityLedger: QuantityLedger;
 };

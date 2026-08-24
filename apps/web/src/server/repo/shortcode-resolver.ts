@@ -1,16 +1,4 @@
-/**
- * Shortcode resolution — the read half of the public-id layer.
- *
- * The ONE place a public id becomes a private uuid, and back. Every surface that
- * speaks shortcodes (the detail routes, the `/<shortcode>` scan landing, every
- * MCP tool) resolves through here rather than growing its own
- * `findXByShortcode`; before the cutover there were three such helpers, one per
- * entity, each re-implementing the same uppercase-and-lookup.
- *
- * Both directions are batched, because both have a fan-out caller: `/labels`
- * prints a sheet of codes at once, and an MCP response has to stamp a shortcode
- * onto every id it returns.
- */
+/** Central, batched boundary between public shortcodes and private UUIDs. */
 
 import { entityRefKey } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
@@ -49,23 +37,14 @@ import { createAppError } from "~/server/errors/app-error";
 import { notDeleted, unwrapDb } from "./database-helpers";
 import { SHORTCODE_TABLE, type ShortcodeTable } from "./shortcode-utils";
 
-/** `{ id, shortcode }` read off a `ShortcodeTable`, whose columns are structural. */
 type IdAndCode = { id: string; shortcode: string };
 
-/** An entity id paired with the entity it belongs to. */
 export interface EntityRef {
   entity: ShortcodeEntity;
   id: string;
 }
 
-/**
- * Resolve one shortcode to its entity and uuid, or null when the code is
- * malformed or unknown.
- *
- * Accepts legacy single-letter codes (`P-4K7M`) as well as canonical ones —
- * `parseShortcode` normalizes to canonical first, which is exactly what the
- * column stores.
- */
+/** Accepts legacy codes; `parseShortcode` normalizes them before lookup. */
 export async function resolveShortcode(
   db: Database | DrizzleTransaction,
   code: string,
@@ -76,19 +55,7 @@ export async function resolveShortcode(
   return row ? { entity: row.entity, id: row.id } : null;
 }
 
-/**
- * Resolve a shortcode to a LIVE row's id of a specific entity, or null.
- *
- * The counterpart to {@link resolveShortcode}, and the one nearly every caller
- * wants: a detail page or a label lookup should 404 on a soft-deleted row, not
- * render it. The split is deliberate — `resolveShortcode` answers "what does
- * this code name", which stays true after a delete, while this answers "can I
- * still open it".
- *
- * The `entity` argument is not redundant with the code's own prefix: it pins the
- * caller's expectation, so a `LOC-` code handed to a product lookup returns null
- * rather than silently resolving to a location's uuid.
- */
+/** Resolves only live rows of the expected entity; a mismatched prefix is null. */
 export async function resolveLiveShortcode<E extends ShortcodeEntity>(
   db: Database | DrizzleTransaction,
   code: string,
@@ -106,13 +73,7 @@ export async function resolveLiveShortcode<E extends ShortcodeEntity>(
   return rows[0]?.id ?? null;
 }
 
-/**
- * Resolve many shortcodes of a SINGLE known entity to their LIVE uuids, in one
- * query — the batched counterpart to {@link resolveLiveShortcode}. Codes that
- * are malformed, belong to another entity, or name a soft-deleted row are
- * simply absent from the returned map (never thrown); callers that need every
- * input to resolve check the map's size against the input.
- */
+/** Invalid, cross-entity, and soft-deleted codes are absent from the result. */
 export async function resolveLiveShortcodes<E extends ShortcodeEntity>(
   db: Database | DrizzleTransaction,
   codes: readonly string[],
@@ -141,23 +102,6 @@ export async function resolveLiveShortcodes<E extends ShortcodeEntity>(
   return resolved;
 }
 
-/**
- * Resolve one shortcode to a LIVE branded id, or throw that entity's
- * not-found error.
- *
- * The throwing counterpart to {@link resolveLiveShortcode}, and what the large
- * majority of callers actually wanted: before this existed, ~37 sites spelled
- * out the same three steps by hand — resolve, `throw createAppError(<ENTITY>_
- * NOT_FOUND, …)`, then `unsafeXxxId(...)` the result. Both halves that made
- * those hand-rolled (the reason and the brand) are now derivable from the
- * entity, so the whole shape collapses to one call.
- *
- * Use {@link resolveLiveShortcode} directly where a miss is *not* a 404: a
- * nullable getter that returns `null`, a validation failure on caller-supplied
- * input (`REFERENCED_RECORD_MISSING`), or an invariant violation on a row the
- * same function just created (those throw a plain `Error` on purpose — turning
- * them into a client-facing 404 would be a regression).
- */
 export async function resolveOrThrow<E extends ShortcodeEntity>(
   db: Database | DrizzleTransaction,
   entity: E,
@@ -173,13 +117,7 @@ export async function resolveOrThrow<E extends ShortcodeEntity>(
   return unsafeIdForEntity[entity](id);
 }
 
-/**
- * Resolve a shortcode minted by the operation immediately before this call.
- *
- * This is deliberately an invariant error, not `resolveOrThrow`: a missing row
- * here means the write path violated its own contract, not that a caller asked
- * for an absent record.
- */
+/** A missing just-created row is an invariant failure, not a client 404. */
 export async function resolveCreatedOrInvariant<E extends ShortcodeEntity>(
   db: Database | DrizzleTransaction,
   entity: E,
@@ -194,20 +132,7 @@ export async function resolveCreatedOrInvariant<E extends ShortcodeEntity>(
   return unsafeIdForEntity[entity](id);
 }
 
-/**
- * Resolve many shortcodes to LIVE branded ids, throwing if ANY is missing —
- * and naming every one that was, not just the first.
- *
- * This replaced two separate hand-rolled behaviors. The throw-listing-all shape
- * (which {@link resolveMergeTargets} already had) is kept; the throw-on-first
- * shape is deliberately *not*, because no caller benefited from learning only
- * the first bad code — a bulk delete of five codes with three typos took three
- * round trips to diagnose.
- *
- * Returns ids **positionally**, one per input code, with duplicates preserved,
- * so a caller can zip the result against its input. Callers for which repeats
- * are meaningless (`resolveMergeTargets`) dedupe on the way in.
- */
+/** Throws with every missing code; returns IDs positionally with duplicates. */
 export async function resolveAllOrThrow<E extends ShortcodeEntity>(
   db: Database | DrizzleTransaction,
   entity: E,
@@ -222,25 +147,10 @@ export async function resolveAllOrThrow<E extends ShortcodeEntity>(
       `${ENTITY_LABEL[entity]} not found: ${uniq(missing).join(", ")}`,
     );
   }
-  // Non-null by construction: `missing` is empty, so every code is a key. The
-  // `!` is the sanctioned form for an access right after a membership check
-  // (see the `noUncheckedIndexedAccess` note in CLAUDE.md).
   return codes.map((code) => unsafeIdForEntity[entity](resolved.get(code)!));
 }
 
-/**
- * Resolve many shortcodes to LIVE branded ids, silently dropping any that
- * don't resolve.
- *
- * The third hand-rolled plural shape, and a genuine one: a filter built from
- * user-supplied codes narrows to what exists rather than 404-ing the whole
- * request. Named so the choice is visible at the call site — previously the
- * only way to tell "drops missing" from "throws" was to read the `.flatMap`
- * versus the `.filter` that followed.
- *
- * Order is preserved; the result is therefore shorter than the input when
- * something was dropped, so don't zip it against the input codes.
- */
+/** Drops unresolved codes while preserving the order of resolved ones. */
 export async function resolveAllPresent<E extends ShortcodeEntity>(
   db: Database | DrizzleTransaction,
   entity: E,
@@ -254,7 +164,6 @@ export async function resolveAllPresent<E extends ShortcodeEntity>(
   });
 }
 
-/** Bind one entity at a router boundary without hiding resolution semantics. */
 export const bindShortcodeResolver = <E extends ShortcodeEntity>(
   entity: E,
 ) => ({
@@ -266,21 +175,7 @@ export const bindShortcodeResolver = <E extends ShortcodeEntity>(
     resolveAllPresent(db, entity, codes),
 });
 
-/**
- * Resolve a list FILTER's shortcode value to live branded ids.
- *
- * Filters are the one place a shortcode becomes a uuid inside the repo rather
- * than in the router: a filter is user-supplied browse state, so an id it
- * names that no longer exists narrows the result to nothing — it is not a 404
- * for the whole page. That is why this wraps `resolveAllPresent` and not
- * `resolveAllOrThrow`.
- *
- * `undefined` in, `undefined` out: an omitted (or explicitly empty) filter is
- * unrestricted. A supplied value that resolves to nothing comes back as an
- * EMPTY ARRAY, which is a different thing entirely — feed it to
- * `eqAnyRequested`, which turns it into "match nothing" rather than dropping
- * the constraint.
- */
+/** Empty input is unrestricted; supplied-but-unresolved input returns `[]`. */
 export async function resolveFilterIds<E extends ShortcodeEntity>(
   db: Database | DrizzleTransaction,
   entity: E,
@@ -292,13 +187,7 @@ export async function resolveFilterIds<E extends ShortcodeEntity>(
   return resolveAllPresent(db, entity, codes);
 }
 
-/**
- * Resolve many shortcodes at once — one query per entity type present, not one
- * per code. Unknown or malformed codes are simply absent from the result.
- *
- * Keyed by the CANONICAL code, so a caller that passed a legacy code should look
- * its result up via `parseShortcode(code).shortcode`.
- */
+/** Resolves in one query per entity and keys results by canonical code. */
 export async function resolveShortcodes(
   db: Database | DrizzleTransaction,
   codes: readonly string[],
@@ -324,15 +213,7 @@ export async function resolveShortcodes(
   return resolved;
 }
 
-/**
- * The reverse direction: uuid → shortcode, batched per entity type.
- *
- * Needed wherever a payload assembled from internal ids has to be rendered
- * publicly — chiefly the MCP output projections, which carry FK ids the tRPC
- * layer never enriched with a code.
- *
- * Keyed `"<entity>:<uuid>"` so refs to different entities can't collide.
- */
+/** Reverse lookup, keyed by `entityRefKey` to prevent cross-entity collisions. */
 export async function lookupShortcodes(
   db: Database | DrizzleTransaction,
   refs: readonly EntityRef[],
@@ -363,23 +244,7 @@ export async function lookupShortcodes(
   return codes;
 }
 
-/**
- * Which column carries an entity's human display name, or `null` where the
- * entity genuinely has none.
- *
- * `ShortcodeTable` only guarantees `id`/`shortcode`/`deletedAt`, so the display
- * column can't be derived structurally — it is declared here once. The
- * `satisfies Record<ShortcodeEntity, …>` is the point: a new shortcode entity
- * fails to compile until someone decides what names it, rather than silently
- * rendering as a bare code.
- *
- * `null` is not "unnameable" — it means *no single column names it*. An
- * inventory entry is "N of a product on a shelf": its identity is relational,
- * so it is named by {@link inventoryEntryLabels} below instead. A purchase is
- * identified by its vendor + date, and `displayLabel` is its only name-shaped
- * column; it stays a plain column read because it is usually set when it
- * matters.
- */
+/** `null` means the label is relational or the entity has no display column. */
 const DISPLAY_NAME_COLUMN = {
   cookbook: cookbook.name,
   expense: expense.name,
@@ -391,7 +256,6 @@ const DISPLAY_NAME_COLUMN = {
   meal: meal.name,
   ledgerParty: ledgerParty.name,
   ledgerTransfer: null,
-  // Images have no `name`; the uploaded filename is the closest human handle.
   image: image.filename,
   product: product.name,
   project: project.name,
@@ -402,20 +266,7 @@ const DISPLAY_NAME_COLUMN = {
   wish: wish.name,
 } as const satisfies Record<ShortcodeEntity, PgColumn | null>;
 
-/**
- * uuid → human display name, batched per entity type — the sibling of
- * {@link lookupShortcodes} for surfaces that must render *what* a row is, not
- * just address it. The home activity feed is the motivating caller: a row
- * reading only "Inventory Item INV-KZYZ" carries no information.
- *
- * Deliberately separate from `lookupShortcodes` rather than folded into it:
- * that function's shape is shared with the MCP output projections, and most of
- * its callers want an id, not a label.
- *
- * Refs whose entity has no display column, or whose row has a null/empty one,
- * are simply absent from the map. Keyed by {@link entityRefKey}, same as
- * `lookupShortcodes`.
- */
+/** Batched UUID-to-label lookup; rows without a label are omitted. */
 export async function lookupEntityLabels(
   db: Database | DrizzleTransaction,
   refs: readonly EntityRef[],
@@ -457,21 +308,7 @@ export async function lookupEntityLabels(
   return names;
 }
 
-/**
- * Inventory entries, named compositely as `product · location`.
- *
- * An inventory row is the one shortcode entity whose identity is relational —
- * "N of a product on a shelf" — so it is named by a join rather than a column.
- * The pair is the same one global search already projects for these rows
- * (product as the title, location as the subtitle, see SearchDocument);
- * flattening it to one string keeps the two surfaces naming a row the same way
- * instead of inventing a second definition. Location is what disambiguates two
- * entries of the same product, which is exactly the case an activity feed shows.
- *
- * includes-deleted on the entry itself (see {@link lookupEntityLabels}), but
- * the joins are inner: a row whose product or location is gone has no readable
- * composite left, so it falls back to the caller's type-plus-code shape.
- */
+/** Inventory labels are relational: `product · location`. */
 async function inventoryEntryLabels(
   db: Database | DrizzleTransaction,
   ids: ReadonlySet<string>,
@@ -485,8 +322,6 @@ async function inventoryEntryLabels(
     .from(inventoryEntry)
     .innerJoin(product, eq(inventoryEntry.productId, product.id))
     .innerJoin(location, eq(inventoryEntry.locationId, location.id))
-    // Branded column, and `refs` carry ids as plain strings across the
-    // entity-agnostic boundary above — this is that boundary.
     .where(
       inArray(inventoryEntry.id, [...ids].map(unsafeIdForEntity.inventory)),
     );
@@ -504,7 +339,6 @@ async function inventoryEntryLabels(
   return labels;
 }
 
-/** One entity's codes → ids. Split out so both resolve paths share the query. */
 async function resolveParsed(
   db: Database | DrizzleTransaction,
   entity: ParsedShortcode["type"],

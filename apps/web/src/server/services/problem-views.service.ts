@@ -74,11 +74,6 @@ import { traceAllBounded } from "~/server/tracing";
  * `totals`, not `rows.length`. That is what `sectionTotals` is for.
  */
 
-/**
- * How many rows a view-backed card shows before deferring to the full list.
- * Matches `ProblemSection`'s own initial cap, so a converted card looks
- * identical to a detector-backed one at rest.
- */
 const SAMPLE_SIZE = 12;
 
 /**
@@ -262,7 +257,6 @@ validateCompleteProblemRegistry(problemQueryDeclarations(), {
   diagnostics: new Set(Object.keys(diagnosticAdapters) as DiagnosticKey[]),
 });
 
-/** A view's `{id, desc}` sort, in the shape the repos' `buildOrderBy` wants. */
 const toSortParams = (
   sort: readonly { id: string; desc: boolean }[] | undefined,
 ): SortParams[] =>
@@ -312,7 +306,6 @@ type ProblemRunStatus =
     };
 
 export type ProblemRunResult = {
-  /** `data` is retained while old list-card callers migrate to `items`. */
   data: ListRow[];
   items: readonly unknown[];
   count: number;
@@ -399,7 +392,6 @@ export const executeProblem = async (
     pageIndex?: number;
     sampleSize?: number;
     diagnostic?: DiagnosticRunOptions;
-    /** Lane orchestration may reuse one metadata read across exact pages. */
     projectionFreshness?: ProductConversionCoverageFreshness;
   } = {},
 ): Promise<ProblemRunResult> => {
@@ -556,7 +548,6 @@ const toNegativeExpectedQuantity = (row: ListRow): NegativeExpectedQuantity => {
     id: NegativeExpectedQuantity["id"];
     name: string;
     manufacturer: string;
-    // Field-for-field the five numbers the detector used to compute itself.
     quantityLedger: Omit<
       NegativeExpectedQuantity,
       "id" | "name" | "manufacturer"
@@ -589,13 +580,7 @@ const toProductMissingPrice = (row: ListRow): ProductMissingPrice => {
     id: r.id,
     name: r.name,
     manufacturer: r.manufacturer,
-    // A blind sum across entries, matching the detector — deliberately NOT
-    // `onHandUnits`, which returns null when a product's entries carry more
-    // than one unit. Here the number is a rough "how much is sitting unpriced",
-    // and a null would read as "none" rather than "mixed".
     inventoryQuantity: r.inventoryEntry.reduce((n, e) => n + e.amount.value, 0),
-    // One per ENTRY, not deduped by location — same as the detector, so a
-    // product on two shelves names both.
     locations: r.inventoryEntry.map((e) => ({
       id: e.location.id,
       name: e.location.name,
@@ -665,9 +650,6 @@ export const findViewProblems = async (
 ): Promise<ProblemsViewsOut> => {
   const declarations = viewProblemDeclarations();
 
-  // Remote query latency dominates connection checkout in production. Let four
-  // view tasks overlap against the max:5 request pool, retaining one slot for a
-  // list task's own count or bounded hydration query.
   const results = await traceAllBounded(
     Object.fromEntries(
       declarations.map((declaration) => [
@@ -695,9 +677,6 @@ export const findViewProblems = async (
     4,
   );
 
-  // The counts are what the badge, `totalProblems`, and the coverage meters
-  // read. `executeListQueryWithCount` computes each as its own `countWhere`
-  // alongside the page, so they are exact regardless of SAMPLE_SIZE.
   const sectionTotals: SectionTotals = {};
   for (const { problem } of declarations) {
     sectionTotals[problem.key] = results[problem.key]?.count ?? 0;

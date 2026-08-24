@@ -19,7 +19,6 @@ import type { DrizzleTransaction } from "~/server/db";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
 
-/** Product ids worth snapshotting, deduped and null-stripped. */
 export const pricingProductIds = (
   values: ReadonlyArray<ProductId | null | undefined>,
 ) =>

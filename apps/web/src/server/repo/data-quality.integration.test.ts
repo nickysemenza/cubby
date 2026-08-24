@@ -327,8 +327,6 @@ describe("computed purchase and product data quality", () => {
     );
     expect(gappy.data.map((item) => item.id)).toEqual([stocked.id]);
 
-    // A PDF manual is not a photo. Reading presence off ProductImage alone
-    // would close the gap here and leave the product looking enriched.
     const manual = await createImageFixture(ctx.db, "manual", {
       contentType: "application/pdf",
       filename: "manual.pdf",
@@ -365,9 +363,6 @@ describe("computed purchase and product data quality", () => {
     expect(afterPhoto.data.map((item) => item.id)).toEqual([]);
   });
 
-  // The whole point of the check is that "no canonical asset exists" becomes
-  // durable, queryable knowledge instead of a sentence in a notes field that
-  // the next enrichment sweep re-researches from scratch.
   it("admits an unavailable exception on product_image", async () => {
     const seeded = await seedPurchase("Image Exception Supply");
     const location = await createLocationFixture(
@@ -458,7 +453,6 @@ describe("computed purchase and product data quality", () => {
       ).data.map((purchase) => purchase.id),
     ).not.toContain(seeded.output.id);
 
-    // Booking one disagreeing line makes it a real mismatch on both paths.
     await createExpense(
       ctx.db,
       makeExpenseInput({ purchaseId: seeded.output.id, cost: 20 }),
@@ -745,8 +739,6 @@ describe("computed purchase and product data quality", () => {
       ctx.actor,
     );
 
-    // $100 stated vs. $50 of lines is a real paperwork_mismatch gap — except
-    // it as a known-wrong vendor invoice.
     const excepted = await setDataException(
       ctx.db,
       {
@@ -1137,7 +1129,6 @@ describe("computed purchase and product data quality", () => {
         ctx.actor,
       );
     }
-    // Stocked products owe a photo, so the "complete" one needs a real one.
     const photo = await createImageFixture(ctx.db, "worklist-cover");
     await insertAndReturn(ctx.db, productImage, {
       productId: complete.entityId,
@@ -1152,14 +1143,10 @@ describe("computed purchase and product data quality", () => {
       page,
     );
 
-    // The bug's whole signature: an empty worklist over a real backlog.
     expect(scoped.data.length).toBeGreaterThan(0);
     expect(scoped.data.map((item) => item.id)).toContain(incomplete.id);
     expect(scoped.data.map((item) => item.id)).not.toContain(complete.id);
     expect(scoped.data.map((item) => item.id)).not.toContain(elsewhere.id);
-    // `count` runs a SEPARATE unaliased query over the same where clause, so a
-    // predicate that renders differently there would show up as totalCount 0
-    // over a non-empty page (or the reverse).
     expect(scoped.count).toBe(scoped.data.length);
 
     // The contract the audit entry point actually depends on: filtering by both
@@ -1215,7 +1202,6 @@ describe("computed purchase and product data quality", () => {
       page,
     );
     expect(complete.data.map((row) => row.id)).not.toContain(seeded.output.id);
-    // The fixture really is a defect, not merely absent from every bucket.
     const defective = await purchaseList(
       ctx.db,
       { dataStatus: "defect" },

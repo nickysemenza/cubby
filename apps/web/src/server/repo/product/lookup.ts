@@ -1,8 +1,3 @@
-/**
- * Product lookup and search operations.
- * Find products by various identifiers (barcode, name, manufacturer).
- */
-
 import type { ProductId } from "@cubby/schemas/identifiers";
 import type {
   ProductListInventoryEntryOut,
@@ -25,9 +20,6 @@ import {
 } from "./mappers";
 import { enrichProductRowsWithPricing } from "./pricing";
 
-/**
- * Find products by barcode or fdc_id - used for food items in usda.ts
- */
 export const findProductsByFoodIdentifier = async (
   db: Database,
   rawLookup?: FoodLookupParam,
@@ -36,7 +28,6 @@ export const findProductsByFoodIdentifier = async (
     return [];
   }
 
-  // validate that lookup zod schema is good
   const lookup = foodLookupParam.parse(rawLookup);
 
   // Find all matching products (exclude soft-deleted). A product links to a food
@@ -179,7 +170,6 @@ export const findProductByNameFuzzyManufacturer = async (
     );
   }
 
-  // Incoming manufacturer is specific - try exact match first
   const exactMatch = await findProductByNameAndManufacturer(
     db,
     name,

@@ -6,17 +6,12 @@
  * See CLAUDE.md "Service Layer Architecture" for details.
  */
 
-import {
-  type LocationShortcode,
-  locationShortcode,
-} from "@cubby/schemas/identifiers";
+import { locationShortcode } from "@cubby/schemas/identifiers";
 import {
   infLocation,
   infLocationListOut,
-  infLocationWithSideEffects,
   locationBulkUpdateParentInput,
   locationBulkUpdateParentOut,
-  locationCreateInput,
   locationFiltersSchema,
   locationInventoryBreakdownOut,
   locationListItemOut,
@@ -25,72 +20,67 @@ import {
   locationPickerItemOut,
   locationPickerSortableFields,
   locationShortcodesInput,
-  locationSortableFields,
   locationsWithParentNameOut,
-  locationUpdateData,
   locationValuationSummaryOut,
   recomputeLocationValuationsOut,
 } from "@cubby/schemas/location";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
+import { ENTITY_BINDINGS } from "~/server/entity-bindings";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/entity-kernel/registry";
 import { createAppError } from "~/server/errors/app-error";
 import {
   buildLocationTree,
   bulkReparentLocations,
-  createLocation,
-  deleteLocations,
   ensureGlobalUnknownLocation,
-  getLocationById,
   getLocationByShortcode,
   getLocationInventoryBreakdown,
   getLocationsByShortcodes,
   getLocationValuationSummary,
-  locationList,
   locationOptions,
   locationParentOptions,
   locationSearch,
-  updateLocation,
-  updateLocationAiDescription,
 } from "~/server/repo/location";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
-import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
-import {
-  createDeleteProcedure,
-  createEntityCrudWithoutListProcedures,
-  createEntityListProcedure,
-} from "../crud-factory";
+import { createEntityListProcedure } from "../crud-factory";
+import { createEntityCompatibilityProcedures } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const locationShortcodes = bindShortcodeResolver("location");
 
-const { list } = createEntityListProcedure({
-  schemas: {
-    output: locationListItemOut,
-    filters: locationFiltersSchema,
-    sort: {
-      sortableFields: locationSortableFields,
-      defaultSort: "createdAt",
-      // See the note in product.ts — group keys must be real columns.
-      groupableFields: ["type"] as const,
-    },
-  },
-  repository: {
-    list: async (services, filters, sort, pagination, groupBy) => {
-      return await locationList(
-        services.db,
-        filters,
-        sort,
-        pagination,
-        groupBy,
-      );
-    },
-  },
-  entityName: "location",
+const {
+  list,
+  create,
+  update,
+  delete: deleteItem,
+} = createEntityCompatibilityProcedures(ENTITY_KERNEL_BINDINGS.location, {
+  ...ENTITY_BINDINGS.location.crud,
+  listOutput: locationListItemOut,
 });
+
+// Location detail carries tree and image relations that do not belong in the
+// baseline entity record.
+const getByShortcode = protectedProcedure
+  .input(z.object({ shortcode: locationShortcode }))
+  .output(strictOutput(infLocation.nullable()))
+  .query(({ ctx, input }) => getLocationByShortcode(ctx.db, input.shortcode));
+
+const getByID = protectedProcedure
+  .input(z.object({ id: locationShortcode }))
+  .output(strictOutput(infLocation))
+  .query(async ({ ctx, input }) => {
+    const location = await getLocationByShortcode(ctx.db, input.id);
+    if (!location)
+      throw createAppError(
+        "LOCATION_NOT_FOUND",
+        `Location ${input.id} not found`,
+      );
+    return location;
+  });
 
 /**
  * Explicit pick, not a spread: the roster reads ignore the date, valuation, and
@@ -156,71 +146,6 @@ const { list: search } = createEntityListProcedure({
   },
   entityName: "location",
 });
-
-const { getByID, getByShortcode, create, update } =
-  createEntityCrudWithoutListProcedures({
-    entityName: "location",
-    schemas: {
-      createInput: locationCreateInput,
-      updateInput: locationUpdateData,
-      output: infLocation,
-      createOutput: infLocationWithSideEffects,
-      updateOutput: infLocationWithSideEffects,
-      idSchema: locationShortcode,
-    },
-    repository: {
-      getByShortcode: (services, shortcode) =>
-        getLocationByShortcode(services.db, shortcode),
-      create: async (services, data) => {
-        const location = await createLocation(
-          services.db,
-          data,
-          services.actorContext,
-        );
-        const entityId = await locationShortcodes.one(services.db, location.id);
-        const backgroundBatches = await runMutationSideEffects(services.db, {
-          action: "created",
-          entity: { entityType: "location", entityId },
-          source: "location.create",
-          // A location created WITH photos must trigger the AI description /
-          // inventory refresh too — without this it's born with a NULL description
-          // (only location.update was setting the flag).
-          locationImagesChanged: (data.pendingImageIds?.length ?? 0) > 0,
-        });
-        return { ...location, sideEffects: { backgroundBatches } };
-      },
-      update: async (services, shortcode: LocationShortcode, data) => {
-        const id = await locationShortcodes.one(services.db, shortcode);
-        const imagesChanged =
-          (data.pendingImageIds?.length ?? 0) > 0 ||
-          (data.removeImageIds?.length ?? 0) > 0;
-        const { location: updated, detachedImageKeys } = await updateLocation(
-          services.db,
-          id,
-          data,
-          services.actorContext,
-        );
-        // After the commit, never inside it: an R2 delete has no rollback.
-        await deleteStoredObjects(detachedImageKeys);
-        const backgroundBatches = await runMutationSideEffects(services.db, {
-          action: "updated",
-          entity: { entityType: "location", entityId: id },
-          source: "location.update",
-          locationImagesChanged: imagesChanged,
-        });
-        if (!imagesChanged) {
-          return { ...updated, sideEffects: { backgroundBatches } };
-        }
-
-        if (updated.images.length === 0) {
-          await updateLocationAiDescription(services.db, id, null);
-        }
-
-        const refreshed = await getLocationById(services.db, id);
-        return { ...refreshed, sideEffects: { backgroundBatches } };
-      },
-    },
-  });
 
 const makeTree = protectedProcedure
   .output(strictOutput(infLocationListOut))
@@ -319,27 +244,6 @@ const getByShortcodes = protectedProcedure
   .query(async ({ ctx, input }) => {
     return await getLocationsByShortcodes(ctx.db, input.shortcodes);
   });
-
-const deleteItem = createDeleteProcedure<LocationShortcode>(
-  async (services, shortcodes) => {
-    const ids = uniq(await locationShortcodes.all(services.db, shortcodes));
-    const { detachedImageKeys, deleted } = await deleteLocations(
-      services.db,
-      ids,
-      services.actorContext,
-    );
-    const backgroundBatches = await runMutationSideEffectsForEntities(
-      services.db,
-      ids.map((id) => ({
-        action: "deleted" as const,
-        entity: { entityType: "location" as const, entityId: id },
-        source: "location.delete",
-      })),
-    );
-    return { deleted, detachedImageKeys, backgroundBatches };
-  },
-  locationShortcode,
-);
 
 // Manual whole-tree recompute of persisted location valuations. Used to populate
 // after the column is first added, and as a safety net for writes that bypass the

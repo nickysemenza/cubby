@@ -534,8 +534,6 @@ const SOURCE_FACTORIES: Record<
       parentId: unsafeLocationId(targetId),
     }),
 
-  // A location that IS a product carries no `type` — the SKU is its form
-  // factor — so this fixture deliberately leaves the column null.
   "Location.productId": (db, targetId) =>
     insertWithShortcode(db, "location", {
       name: uniq("Location"),
@@ -899,7 +897,6 @@ describe("findReferentialLivenessViolations", () => {
   });
 
   it("returns no violations for every derived edge while both sides are live", async () => {
-    // Authoritative owner for the old per-edge live-source/live-target cases.
     for (const spec of derivedMustTargetLiveEdges) {
       const target = await TARGET_FACTORIES[spec.targetEntity]!(ctx.db);
       await SOURCE_FACTORIES[spec.edgeKey]!(ctx.db, target.id);
@@ -916,8 +913,6 @@ describe("findReferentialLivenessViolations", () => {
   // tombstone) as a referential-integrity bug.
   it("does NOT report a live Ingredient tombstone pointing at a soft-deleted sub-recipe", async () => {
     const subRecipe = await mkRecipe(ctx.db);
-    // The "recipe-as-ingredient" pointer row `recipeRelations.pointerIngredient`
-    // describes: a live Ingredient whose recipeId names the sub-recipe.
     await insertWithShortcode(ctx.db, "ingredient", {
       name: uniq("Sub-recipe pointer"),
       recipeId: subRecipe.id,

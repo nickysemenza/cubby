@@ -55,8 +55,6 @@ import {
 } from "~/server/repo/database-helpers";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product";
 import { markProductConversionCoverageInputStale } from "~/server/repo/product/conversion-coverage";
-// The list-row assembly, reused so a component row and a top-level row are the
-// same shape by construction — see `listKitComponentRows`.
 import { dbProductToListAPI } from "~/server/repo/product/mappers";
 // `findMergeComponentCycle` is the SAME question `mergeProducts` already
 // answers — "does identifying/adding these edges make a product reach
@@ -88,7 +86,6 @@ import {
   throwRelationRefusal,
 } from "~/server/repo/relation-preflight";
 
-/** One entry to attach: which Product, and how many of it the kit contains. */
 export interface ProductComponentEntry {
   productId: ProductId;
   quantity: number;
@@ -183,8 +180,6 @@ export async function listKitComponentRows(
     ]),
   );
 
-  // Edge order (component name) is preserved; a component whose product row
-  // somehow did not load is dropped rather than emitted half-formed.
   return edges.flatMap((edge) => {
     const item = byId.get(edge.componentProductId);
     if (!item) return [];
@@ -198,7 +193,6 @@ export async function listKitComponentRows(
   });
 }
 
-/** A kit's own component list, alphabetically by name. */
 export async function listProductComponents(
   db: Database,
   parentProductId: ProductId,
@@ -250,7 +244,6 @@ export async function listProductComponents(
       quantity: row.quantity,
       price: prices.get(row.productId) ?? null,
       coverImageUrl: coverImageUrls.get(row.productId) ?? null,
-      // "none" is a real zero, not missing data — see `onHandUnits`' doc.
       onHandUnits:
         onHand?.state === "counted"
           ? onHand.units
@@ -286,17 +279,6 @@ async function loadLiveExpenseCountsByProductId(
   return counts;
 }
 
-/**
- * The kit's own most recent live purchase per parent id, for a direct link —
- * mirrors `listProductPurchases` in `repo/purchase-products.ts`, including its
- * two-legged shape, but batched and reduced to one (most recent) row per
- * product.
- *
- * The reduction is client-side because the rows arrive from two queries and
- * have to be ordered against each other anyway. (`.selectDistinctOn` does
- * exist — see `repo/project/tool-matrix.ts` — so the old note here claiming it
- * didn't was wrong, but it wouldn't help across a two-leg union.)
- */
 async function loadMostRecentPurchaseByProductId(
   db: Database,
   parentProductIds: ProductId[],
@@ -344,15 +326,12 @@ async function loadMostRecentPurchaseByProductId(
       ),
   ]);
 
-  // `date` is a plain-date string, so a lexical compare is a date compare.
   const rows = [...linkRows, ...expenseRows].sort((a, b) =>
     b.date.localeCompare(a.date),
   );
 
   const byProduct = new Map<ProductId, KitMembershipPurchaseOut>();
   for (const row of rows) {
-    // Rows arrive most-recent-date-first; the first row seen per product is
-    // the one to keep.
     if (row.productId === null) continue;
     if (byProduct.has(row.productId)) continue;
     byProduct.set(row.productId, {
@@ -366,7 +345,6 @@ async function loadMostRecentPurchaseByProductId(
   return byProduct;
 }
 
-/** The transpose: every kit one Product is listed inside, most recent first. */
 export async function listKitMembership(
   db: Database,
   componentProductId: ProductId,
@@ -490,14 +468,6 @@ async function liveComponentIds(
   return new Set(rows.map((row) => row.componentProductId));
 }
 
-/**
- * Everything that decides whether a component attach may proceed, computed
- * once and returned rather than thrown.
- *
- * Shared verbatim by `attachProductComponents` (which passes its `tx`) and
- * `previewAttachProductComponents` (which passes the pooled client). Queries
- * run SEQUENTIALLY for exactly that reason — see `repo/relation-preflight.ts`.
- */
 async function preflightAttachComponents(
   dbc: DrizzleClient | DrizzleTransaction,
   parentProductId: ProductId,
@@ -514,9 +484,6 @@ async function preflightAttachComponents(
   const missing = requested.filter((id) => !liveIds.has(id));
   const selfReference = requested.filter((id) => id === parentProductId);
 
-  // The parent being gone, a component being gone, or the one-hop
-  // self-reference all make the cycle walk meaningless — the proposed edge set
-  // it would project is not the one that would be written.
   if (parentMissing || missing.length > 0 || selfReference.length > 0) {
     return {
       ...emptyPreflight(),
@@ -570,8 +537,6 @@ async function preflightDetachComponents(
   return {
     ...emptyPreflight(),
     requested,
-    // Inverted from attach: a detach is already satisfied when there is NO
-    // live edge to remove.
     alreadySatisfied: requested.filter((id) => !alreadyLive.has(id)),
     codeById,
   };
@@ -582,8 +547,6 @@ function assertComponentsAttachable(
   parentProductId: ProductId,
   pre: RelationPreflight,
 ): void {
-  // Order matches the checks this replaced: dead parent, then self-reference,
-  // then dead components, then the multi-hop cycle.
   if (pre.parentMissing) {
     throwRelationRefusal({
       reason: "PRODUCT_NOT_FOUND",
@@ -668,7 +631,6 @@ export async function previewAttachProductComponents(
   });
 }
 
-/** Advisory impact for a component detach. */
 export async function previewDetachProductComponents(
   db: Database,
   parentProductId: ProductId,

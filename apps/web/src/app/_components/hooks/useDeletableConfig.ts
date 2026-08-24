@@ -2,7 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { QueryKey } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { entityLabel as labelFor } from "~/entities/entities";
+import { entityDialogLabel as labelFor } from "~/entities/entities";
 import { getEntityContract } from "~/entities/entity-contracts";
 import { useTRPC } from "~/integrations/trpc/react";
 

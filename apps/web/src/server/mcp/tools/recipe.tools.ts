@@ -5,60 +5,27 @@ import {
 } from "@cubby/schemas/import-recipe";
 import {
   cookbookSummariesMcpOut,
-  mcpRecipeCreateInput,
-  mcpRecipeUpdateInput,
   recipeAvailabilityMcpOut,
   recipeCostingExplainMcpOut,
-  recipeDetailMcpOut,
-  recipeMcpListOut,
   recipesUsingIngredientOut,
   recipeTagsListOut,
   scrapeRecipeMcpOut,
 } from "@cubby/schemas/mcp";
-import { recipeListFilterFields, recipeMcpOut } from "@cubby/schemas/recipe";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { groupBy } from "es-toolkit";
 import { z } from "zod";
 import {
-  defineSlim,
   getCaller,
   idParam,
   READ_ONLY_CLOSED,
   READ_ONLY_OPEN,
-  registerEntityCrudToolset,
   registerMcpTool,
   registerRouterTool,
   slimRecipe,
   WRITE_CLOSED,
 } from "./_shared";
 
-const slimRecipeDetail = defineSlim(recipeDetailMcpOut, (row) => row);
-
 export function registerRecipeTools(server: McpServer) {
-  registerEntityCrudToolset(server, {
-    entity: "recipe",
-    names: { delete: "delete_recipe" },
-    createInput: mcpRecipeCreateInput,
-    updateShape: {},
-    updateInput: mcpRecipeUpdateInput,
-    filterFields: recipeListFilterFields,
-    mcpListOut: recipeMcpListOut,
-    out: recipeMcpOut,
-    detailOut: recipeDetailMcpOut,
-    detailSlim: slimRecipeDetail,
-    slim: slimRecipe,
-    sort: { orderBy: "name" },
-    descriptions: {
-      list: "List recipes by name. Returns id, name, yield, servings, and tags.",
-      get: "Get a recipe by ID, including sections, ingredients, and instructions.",
-      create:
-        "Create a recipe from structured input (sections with ingredient shortcodes and instructions).",
-      update: "Update a recipe's fields. Only provided fields are changed.",
-      delete: "Soft-delete recipes by IDs.",
-    },
-    create: (caller, params) => caller.recipe.create(params),
-  });
-
   registerRouterTool(server, {
     name: "find_cookable_recipes",
     description:

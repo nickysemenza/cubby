@@ -19,29 +19,23 @@ import {
   linkExpensesToPurchaseInput,
   mergePurchasesInput,
   mergePurchasesOut,
-  purchaseFiltersSchema,
   purchaseOut,
   purchaseProductMutationInput,
   purchaseProductMutationOut,
   purchaseProductsInput,
   purchaseProductsOut,
-  purchaseSortableFields,
   reclassifyPurchaseDocumentInput,
   splitExpenseInput,
 } from "@cubby/schemas/purchase";
 import { z } from "zod";
 import { ENTITY_BINDINGS } from "~/server/entity-bindings";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/entity-kernel/registry";
 import {
-  createPurchase,
   deleteEmptyPurchases,
-  deletePurchases,
-  getPurchaseByShortcode,
   linkExpensesToPurchase,
   mergePurchases,
-  purchaseList,
   reclassifyPurchaseDocument,
   splitExpense,
-  updatePurchase,
 } from "~/server/repo/purchase";
 import {
   attachPurchaseProducts,
@@ -61,74 +55,13 @@ import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
-import { createSearchableEntityCrudProcedures } from "../crud-factory";
+import { createEntityCompatibilityProcedures } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
-const procedures = createSearchableEntityCrudProcedures({
-  schemas: {
-    ...ENTITY_BINDINGS.purchase.crud,
-    filters: purchaseFiltersSchema,
-    sort: {
-      sortableFields: purchaseSortableFields,
-      defaultSort: "date",
-    },
-  },
-  repository: {
-    getByShortcode: (ctx, shortcode) =>
-      getPurchaseByShortcode(ctx.db, shortcode),
-    list: (ctx, filters, sorts, pagination) =>
-      purchaseList(ctx.db, filters, sorts, pagination),
-    create: (ctx, data) => createPurchase(ctx.db, data, ctx.actorContext),
-    update: async (ctx, id, data) => {
-      const { output, entityId, detachedImageKeys } = await updatePurchase(
-        ctx.db,
-        id,
-        data,
-        ctx.actorContext,
-      );
-      // After the commit, never inside it: an R2 delete has no rollback. The
-      // keys are destructured off here so they never reach `strictOutput`.
-      await deleteStoredObjects(detachedImageKeys);
-      return { output, entityId };
-    },
-    /**
-     * NOT a plain repo passthrough. Deleting a purchase DETACHES the expenses
-     * and financial transactions that pointed at it, and those rows embed the
-     * purchase's identity — so each one has to be reindexed even though the
-     * factory's own delete side-effect only ever sees the purchase itself.
-     * `deletePurchases` returns exactly those detached ids for that purpose;
-     * dropping this dispatch would silently leave them stale, with no compiler
-     * signal. Covered by searchable-crud.integration.test.ts.
-     */
-    delete: async (ctx, ids) => {
-      const detached = await deletePurchases(ctx.db, ids, ctx.actorContext);
-      const backgroundBatches = await runMutationSideEffectsForEntities(
-        ctx.db,
-        [
-          ...detached.expenseIds.map((entityId) => ({
-            action: "updated" as const,
-            entity: { entityType: "expense" as const, entityId },
-            source: "purchase.delete",
-          })),
-          ...detached.financialTransactionIds.map((entityId) => ({
-            action: "updated" as const,
-            entity: {
-              entityType: "financialTransaction" as const,
-              entityId,
-            },
-            source: "purchase.delete",
-          })),
-        ],
-      );
-      return {
-        deleted: detached.deleted,
-        detachedImageKeys: detached.detachedImageKeys,
-        backgroundBatches,
-      };
-    },
-  },
-  entityName: "purchase",
-});
+const procedures = createEntityCompatibilityProcedures(
+  ENTITY_KERNEL_BINDINGS.purchase,
+  ENTITY_BINDINGS.purchase.crud,
+);
 
 /**
  * Attach existing expenses to a charge — one invoice spanning trades. The moved

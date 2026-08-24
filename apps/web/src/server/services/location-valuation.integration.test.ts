@@ -76,9 +76,7 @@ describe("LocationValuationService.recompute", () => {
     expect(storedBin.valuation).toMatchObject({
       directValuation: 20,
       totalValuation: 20,
-      // One entry of two units — itemCount counts placements, not units.
       directItemCount: 1,
-      // The bin's own $40 belongs to the room that holds it, not to itself.
       container: { directValuation: 0, totalValuation: 0, directItemCount: 0 },
     });
 

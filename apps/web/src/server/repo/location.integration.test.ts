@@ -98,18 +98,15 @@ describe("findOrCreateLocationByName", () => {
       await winnerCommitted; // hold the txn (and its lock) open
     });
 
-    // Let the winner reach (and hold) its uncommitted INSERT.
     await new Promise((r) => setTimeout(r, 100));
 
     const loser = findOrCreateLocationByName(ctx.db, name, null, "room");
 
-    // Give the call time to reach its blocked INSERT, then commit the winner.
     await new Promise((r) => setTimeout(r, 100));
     releaseWinner();
 
     const [, result] = await Promise.all([winner, loser]);
 
-    // Recovered onto the winner's row — no throw, no duplicate.
     expect(result.created).toBe(false);
     expect(result.locationId).toEqual(winnerId);
 
@@ -400,8 +397,6 @@ describe("getLocationById item counts", () => {
     await stockAt(rack.id, "Counted Rack Product A");
     await stockAt(rack.id, "Counted Rack Product B");
     const deadEntry = await stockAt(rack.id, "Counted Rack Deleted Product");
-    // Same predicate the persisted valuation rollup uses: a fixture is not
-    // stock on the shelf, so it stays out of the item count.
     await stockAt(rack.id, "Counted Rack Fixture", "installed");
 
     await getDb(ctx.db)
@@ -704,7 +699,6 @@ describe("locationSearch picker rows", () => {
       { pageIndex: 0, pageSize: 50 },
     );
 
-  /** Create a chain root → … → leaf, returning every created location. */
   const makeChain = async (names: string[]) => {
     const created = [];
     let parentId: LocationShortcode | null = null;
@@ -797,7 +791,6 @@ describe("locationSearch picker rows", () => {
 
     const found = await searchFor("Level 12");
     expect(found.data[0]!.id).toBe(chain.at(-1)!.id);
-    // 10 rungs above the leaf, not the full 12.
     expect(found.data[0]!.ancestors).toHaveLength(10);
     expect(found.data[0]!.ancestors.at(-1)!.name).toBe("Level 11");
   });
@@ -941,7 +934,6 @@ describe("locationSearch picker rows", () => {
     ]);
     expect(options.data[0]).not.toHaveProperty("coverImage");
 
-    // Same location, same page — the picker read still resolves the cover.
     const found = await searchFor("Optioned Bin");
     expect(found.data[0]!.coverImage?.id).toBe(
       unsafeImageShortcode(img.shortcode),
@@ -1331,7 +1323,6 @@ describe("attaching a photo as the new cover", () => {
     const after = await captureAsCover(shelf.id, img);
 
     expect(after?.images.map((i) => i.id)).toEqual([shortcodeOf(img)]);
-    // The attach is what flips PENDING → UPLOADED; without it the row is culled.
     expect(after?.images[0]?.status).toBe("UPLOADED");
   });
 

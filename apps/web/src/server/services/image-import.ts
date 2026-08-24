@@ -1,11 +1,3 @@
-/**
- * Service for importing images from external sources (UPC lookup, recipe
- * scrape, etc.)
- *
- * Each function here combines "resolve a source URL" + image import + entity
- * association in a single operation.
- */
-
 import type { ProductId, RecipeId } from "@cubby/schemas/identifiers";
 import { env } from "~/env";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
@@ -38,15 +30,12 @@ export const importImageFromUPC = async (
   productId: ProductId,
 ): Promise<{ imageId: string } | null> => {
   try {
-    // 1. Look up UPC to get image URL
     const upcData = await upcLookupClient.lookup(upc);
 
     if (!upcData?.imageUrl) {
       return null;
     }
 
-    // 2. Construct full URL from relative URL
-    // UPC worker returns relative URLs like "/images/123456789012.jpg"
     const fullImageUrl = new URL(
       upcData.imageUrl,
       env.UPC_LOOKUP_API_URL,
@@ -65,7 +54,6 @@ export const importImageFromUPC = async (
       return null;
     }
 
-    // 4. Associate image with product
     await associateImagesWithProduct(db, productId, [imported.imageId]);
 
     return { imageId: imported.imageId };

@@ -1,8 +1,3 @@
-/**
- * Database query helper functions.
- * Search formatting, ordering, and list queries with counts.
- */
-
 import type {
   InternalImpactItem,
   OperationDisposition,
@@ -33,10 +28,6 @@ import { TraceNames, withTrace } from "~/server/tracing";
 
 import { unwrapDb } from "./core";
 
-/**
- * Build a combined WHERE clause from notDeleted + search terms + extra conditions.
- * Reduces the repetitive filter-building pattern across repos.
- */
 export function buildSearchConditions(
   table: { deletedAt: AnyColumn },
   searchFilters: Array<{ column: AnyColumn; term: string | undefined }>,
@@ -115,9 +106,6 @@ export function rangeConditions<P extends string>(
   ];
 }
 
-/**
- * Helper function to format search terms for PostgreSQL pattern matching.
- */
 export const formatSearchTerm = (
   column: AnyColumn,
   term?: string,
@@ -128,10 +116,6 @@ export const formatSearchTerm = (
   return ilike(column, `%${term}%`);
 };
 
-/**
- * Helper to filter out soft-deleted records.
- * Use this in where clauses to exclude records where deletedAt is set.
- */
 export const notDeleted = <T extends { deletedAt: AnyColumn }>(table: T) =>
   isNull(table.deletedAt);
 
@@ -148,12 +132,6 @@ export const isNotDeleted = <T extends { deletedAt?: Date | null }>(
   row: T,
 ): boolean => row.deletedAt == null;
 
-/**
- * Count rows in a table matching an optional WHERE clause.
- * Wraps Drizzle's `db.$count`, which resolves directly to a number — replaces
- * the hand-rolled `select({ count: count() }).from(t).where(w)` + destructure.
- * For counts that need joins/group-by, query directly instead.
- */
 export const countWhere = (
   db: Database | DrizzleTransaction,
   table: PgTable,
@@ -228,17 +206,6 @@ export const buildOrderBy = <T extends PgTable & { id: AnyColumn }>(
   return clauses;
 };
 
-/**
- * Executes a data query and count query in parallel and wraps results in the standard
- * paginated list response format.
- *
- * This helper consolidates the common pattern of running two queries in parallel:
- * 1. The main data query (with pagination, filtering, sorting)
- * 2. The count query (total matching records without pagination)
- *
- * Note: If you need to transform results before returning, pass the transformation
- * as part of the data query promise chain, or manually destructure and transform.
- */
 export type ListReadIntent = "page" | "sample" | "count" | "ids";
 
 type ListQueryPlan<T> = {
@@ -251,7 +218,6 @@ type ListQueryPlan<T> = {
 export function executeListQueryWithCount<T>(
   plan: ListQueryPlan<T>,
 ): Promise<{ data: T[]; count: number }>;
-/** Compatibility overload for ordinary page readers while they adopt plans. */
 export function executeListQueryWithCount<T>(
   rows: Promise<T[]>,
   count: Promise<number>,
@@ -284,15 +250,6 @@ export async function executeListQueryWithCount<T>(
   });
 }
 
-/**
- * Locks entity records for update and validates they exist and aren't deleted.
- * Prevents race conditions by acquiring row-level locks before safety checks.
- *
- * Use this at the start of delete operations to ensure:
- * 1. Records are locked (prevents concurrent modifications)
- * 2. All requested IDs exist and aren't already deleted
- * 3. Other transactions wait until our transaction completes
- */
 export async function lockAndValidateForDelete<TId extends string>(
   tx: DrizzleTransaction,
   table: PgTable & { id: AnyColumn; deletedAt: AnyColumn },
@@ -318,14 +275,7 @@ export async function lockAndValidateForDelete<TId extends string>(
 }
 
 /**
- * Guard a soft-delete against orphaning dependents. Given the dependent rows'
- * parent ids (the offending entities), dedupes them, refetches their names, and
- * throws a typed AppError naming them. No-op when there are no dependents. The
- * caller runs its own (entity-specific) dependent query and supplies the name
- * fetch — the shared part is the dedupe + refetch + count + join + throw.
- */
-/**
- * The blocking half of {@link assertNoDependents}, as a VALUE.
+ * The blocking half of {@link assertNoDependents}, as a value.
  *
  * `assertNoDependents` had the offending ids and their dependent counts, joined
  * the names into a sentence, and returned `void` — so the structure existed for

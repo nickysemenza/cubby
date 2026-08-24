@@ -196,15 +196,9 @@ describe("mergeProducts", () => {
     const survivor = rows.find((row) => row.id === keeper.id);
     const dead = rows.find((row) => row.id === loser.id);
     expect(dead?.deletedAt).not.toBeNull();
-    // The loser's own name becomes a survivor alias, so a search for the old
-    // spelling still lands somewhere.
     expect(survivor?.aliases).toContain("20V MAX Drill Kit");
     expect(survivor?.price).toBe(199);
     expect(survivor?.notes).toBe("From the retailer import");
-    // The barcode is no longer a carried COLUMN — it rides the external-id
-    // fold, so it lands on the survivor as a `gtin` row instead of overwriting
-    // a scalar. Same guarantee the old `carriedFields` assertion gave (the
-    // loser's identifier is not lost), on the model that can hold two.
     expect(summary.carriedFields).not.toContain("upc");
     const survivorGtins = await getDb(ctx.db).query.productExternalId.findMany({
       where: and(
@@ -234,15 +228,12 @@ describe("mergeProducts", () => {
     const loser = await seedProduct("Loser Grinder", {
       model: "GRINDER-1",
       externalIds: [
-        // Same slot, different value — the conflict that makes a blind
-        // re-point violate `(productId, source, kind)`.
         {
           source: "homedepot",
           kind: "retailer_sku",
           externalId: "HD-LOSER",
           url: "https://example.test/loser",
         },
-        // A slot the keeper does NOT fill — this one simply moves.
         {
           source: "amazon",
           kind: "asin",
@@ -293,7 +284,6 @@ describe("mergeProducts", () => {
         .filter((row) => row.isPrimary)
         .map((row) => [`${row.source}/${row.kind}`, row]),
     );
-    // The keeper's SKU stays PRIMARY — the survivor's value still wins the slot.
     expect(bySlot.get("homedepot/retailer_sku")?.externalId).toBe("HD-KEEPER");
     // ...but the url the keeper's row lacked is carried over
     // (fill-never-overwrite).
@@ -301,7 +291,6 @@ describe("mergeProducts", () => {
       "https://example.test/loser",
     );
     expect(bySlot.get("amazon/asin")?.externalId).toBe("B00LOSER01");
-    // The loser's SKU is on the survivor as a SECONDARY, still resolvable.
     expect(
       survivorIds.filter((row) => !row.isPrimary).map((row) => row.externalId),
     ).toEqual(["HD-LOSER"]);
@@ -321,9 +310,6 @@ describe("mergeProducts", () => {
       model: "TWOASIN-1",
     });
     const loser = await seedProduct("Loser Two Asins", { model: "TWOASIN-1" });
-    // SECONDARY inserted first, on purpose. Without an explicit order the
-    // planner hands back heap order, so seeding the primary first would let the
-    // bug pass by luck — which it did until this was flipped.
     await getDb(ctx.db).insert(productExternalId).values({
       productId: loser.id,
       source: "amazon",
@@ -349,7 +335,6 @@ describe("mergeProducts", () => {
       .filter((row) => row.kind === "asin")
       .map((row) => [row.externalId, row.isPrimary] as const)
       .sort((a, b) => a[0].localeCompare(b[0]));
-    // Both identifiers survive, and the one that was primary still is.
     expect(survivor).toEqual([
       ["B0PRIMARY9", true],
       ["B0SECOND99", false],
@@ -366,7 +351,6 @@ describe("mergeProducts", () => {
     const loser = await seedProduct("Loser Cover", { model: "COVER-1" });
     const loserImage = await createImageFixture(ctx.db, "loser-barcode-scan");
     const keeperImage = await createImageFixture(ctx.db, "keeper-real-photo");
-    // The loser's row is OLDER, which is what made it win the tie-break.
     await insertAndReturn(ctx.db, productImage, {
       productId: loser.id,
       imageId: loserImage.id,
@@ -659,7 +643,6 @@ describe("mergeProducts", () => {
         TEST_ACTOR,
       );
 
-      // The preview predicted exactly what the mutation did.
       expect(summary.componentsMoved).toBe(1);
       expect(summary.componentsDeduped).toBe(1);
       expect((await componentCodes(keeper.id)).sort()).toEqual(
@@ -750,8 +733,6 @@ describe("mergeProducts", () => {
 
       expect(summary.kitLinksMoved).toBe(1);
       expect(summary.kitLinksSummed).toBe(2);
-      // 2 + 3 + 4 in ONE write. Folding per row would read the unmutated target
-      // each pass and persist 6, losing a part inside a destructive operation.
       expect(await componentQuantity(kit.id, keeper.shortcode)).toBe(9);
       expect(await componentCodes(kit.id)).toEqual([keeper.shortcode]);
       expect(await componentQuantity(otherKit.id, keeper.shortcode)).toBe(7);
@@ -812,7 +793,6 @@ describe("mergeProducts", () => {
    */
   describe("conversion edges", () => {
     it("discards a conflicting density and leaves the survivor one answer", async () => {
-      // The two olive oils: same pair, different ratio.
       const keeper = await seedProduct("Olive Oil, CA", {
         model: "OO-KEEP",
         unitMappings: [
@@ -862,7 +842,6 @@ describe("mergeProducts", () => {
         source: "unk",
       });
 
-      // The survivor holds ONE density. Holding both is the defect.
       const survivorMappings = await liveUnitMappings(keeper.id);
       expect(survivorMappings).toHaveLength(1);
       expect(survivorMappings[0]?.b.value).toBe(0.92);

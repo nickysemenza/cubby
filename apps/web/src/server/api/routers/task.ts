@@ -8,17 +8,14 @@ import {
   taskBulkTradeInput,
   taskFiltersSchema,
   taskOut,
-  taskSortableFields,
   taskSummaryOut,
   taskTimelineOut,
 } from "@cubby/schemas/project";
 import { z } from "zod";
 import { ENTITY_BINDINGS } from "~/server/entity-bindings";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/entity-kernel/registry";
 import {
-  createTask,
-  deleteTasks,
   getTaskBoard,
-  getTaskByShortcode,
   getTaskSummary,
   getTaskTimeline,
   listActionableTasks,
@@ -28,12 +25,9 @@ import {
   setTasksStatus,
   setTasksTrade,
   taskList,
-  updateTask,
 } from "~/server/repo/task";
-import {
-  createBulkUpdatedMutation,
-  createSearchableEntityCrudProcedures,
-} from "../crud-factory";
+import { createBulkUpdatedMutation } from "../crud-factory";
+import { createEntityCompatibilityProcedures } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const {
@@ -43,30 +37,10 @@ const {
   create,
   update,
   delete: deleteItem,
-} = createSearchableEntityCrudProcedures({
-  schemas: {
-    ...ENTITY_BINDINGS.task.crud,
-    filters: taskFiltersSchema,
-    sort: {
-      sortableFields: taskSortableFields,
-      defaultSort: "createdAt",
-      groupableFields: ["status"] as const,
-    },
-  },
-  repository: {
-    getByShortcode: (services, shortcode) =>
-      getTaskByShortcode(services.db, shortcode),
-    list: async (services, filters, sort, pagination) =>
-      taskList(services.db, filters, sort, pagination),
-    create: async (services, data) =>
-      createTask(services.db, data, services.actorContext),
-    update: (services, shortcode, data) =>
-      updateTask(services.db, shortcode, data, services.actorContext),
-    delete: (services, ids) =>
-      deleteTasks(services.db, ids, services.actorContext),
-  },
-  entityName: "task",
-});
+} = createEntityCompatibilityProcedures(
+  ENTITY_KERNEL_BINDINGS.task,
+  ENTITY_BINDINGS.task.crud,
+);
 
 /**
  * The computed "what can I actually do" read behind the /tasks Next view:

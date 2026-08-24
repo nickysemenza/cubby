@@ -71,7 +71,6 @@ export function FinancialTransactionList() {
   });
   const deletable = useDeletableConfig({
     mutationFn: api.financialTransaction.delete.mutationOptions,
-    entityLabel: "Transaction",
     entity: "financialTransaction",
   });
   const columns = useMemo(

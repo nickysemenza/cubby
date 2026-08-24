@@ -108,14 +108,6 @@ import type { FilterConfig, MobileColumnMeta } from "./table-meta";
 
 export type { FilterConfig, MobileColumnMeta, MobileSlot } from "./table-meta";
 
-/**
- * Options for a relation-presence header filter: pages map the selected value
- * ("has" | "none") to the entity's `*PresenceFilter` field, resolved server-side
- * as an exists / is-null condition. Clearing the filter means "any".
- */
-// Lives in `entities/filters.ts` (dependency-free, so the vitest `unit` project
-// can reach it — it can't resolve a `~/…` .tsx). Re-exported here because this
-// is where every column def picks it up.
 export { multiSelectFilterFn };
 
 /** Multiselect filterFn for an entity-reference column, matching on its id. */
@@ -162,12 +154,10 @@ interface BaseRow {
   updatedAt?: string | Date;
 }
 
-/** `TableLink` params for an entity's own row. */
 function nameColumnParams(row: BaseRow): { shortcode: string } {
   return { shortcode: String(row.id) };
 }
 
-/** Where a row's name and its "View details" action point. */
 type EntityRowLink = {
   to: EntityDetailRoute;
   params: EntityDetailParams;
@@ -200,16 +190,11 @@ interface ImageRow extends BaseRow {
   }>;
 }
 
-/**
- * Creates a standard name column that links to the detail page.
- * Optionally supports inline editing when `editable` option is provided.
- */
 export function createNameColumn<T extends BaseRow>(
   columnHelper: ColumnHelper<T>,
   entity: Entity,
   fieldName: keyof T = "name" as keyof T,
   options?: {
-    /** Filter configuration for inline header filter */
     filterConfig?: FilterConfig;
     /**
      * Override the column width class. Defaults to `w-64` (16rem). The fixed
@@ -221,11 +206,9 @@ export function createNameColumn<T extends BaseRow>(
      * proportion to their widths, so this reads as a *share* as much as a size.
      */
     className?: string;
-    /** Enable inline editing */
     editable?: {
       onSave: (newValue: string, row: T) => Promise<void>;
     };
-    /** Mobile projection metadata override */
     mobile?: MobileColumnMeta;
     /**
      * Override the header label. Defaults to the field name (TanStack's
@@ -446,9 +429,6 @@ export function createNameColumn<T extends BaseRow>(
   );
 }
 
-/**
- * Creates a relative timestamp column
- */
 export function createCreatedAtColumn<T extends BaseRow>(
   columnHelper: ColumnHelper<T>,
 ) {
@@ -491,9 +471,6 @@ export function createUpdatedAtColumn<T extends BaseRow>(
   });
 }
 
-/**
- * Creates an image column that displays the first image thumbnail
- */
 export function createImageColumn<T extends BaseRow>(
   columnHelper: ColumnHelper<T>,
   options: {
@@ -558,7 +535,6 @@ export function createImageColumn<T extends BaseRow>(
   });
 }
 
-// Entity-specific data types for columns
 type EntityColumnData =
   | { entity: "ingredient"; items: { name: string; id: string }[] }
   | {
@@ -571,9 +547,6 @@ type EntityColumnData =
       items: { name: string; id: string; type: LocationType | null }[];
     };
 
-/**
- * Creates a column that displays a list of related entities as inline links.
- */
 export function createEntityInlineLinkColumn<
   T extends Record<string, unknown>,
   K extends keyof T,
@@ -587,9 +560,7 @@ export function createEntityInlineLinkColumn<
     className?: string;
     filterConfig?: FilterConfig;
     enableSorting?: boolean;
-    /** Optional filter to deduplicate items */
     dedupe?: boolean;
-    /** Mobile projection metadata override */
     mobile?: MobileColumnMeta;
   },
 ) {
@@ -673,10 +644,6 @@ export function createUnitMappingsColumn<
   });
 }
 
-/**
- * Creates a column that displays inventory entries with amounts and related entity pills.
- * Used in ProductList (shows locations) and LocationList (shows products).
- */
 export function createInventoryEntriesColumn<
   T extends Record<string, unknown>,
   K extends keyof T,
@@ -694,11 +661,8 @@ export function createInventoryEntriesColumn<
     header?: string;
     className?: string;
     enableSorting?: boolean;
-    /** Layout variant: 'stacked' shows amounts then links, 'inline' shows amount+link per row */
     layout?: "stacked" | "inline";
-    /** Mobile projection metadata override */
     mobile?: MobileColumnMeta;
-    /** Filter configuration for inline header filter (e.g. presence filter) */
     filterConfig?: FilterConfig;
     /**
      * When set, rows with entries get a hover-revealed pencil that opens a
@@ -759,7 +723,6 @@ export function createInventoryEntriesColumn<
 }
 
 interface ActionsColumnOptions<T> {
-  /** Additional actions to render after "View details" */
   extraActions?: (row: T) => ReactNode;
   /**
    * Per-row detail link, for rows that aren't all `entity`. Keep it the same
@@ -769,10 +732,6 @@ interface ActionsColumnOptions<T> {
   rowLink?: RowLinkResolver<T>;
 }
 
-/**
- * Creates a standard actions column with a dropdown menu.
- * Includes "View details" link by default, with optional extra actions.
- */
 export function createActionsColumn<T extends { id: string | number }>(
   columnHelper: ColumnHelper<T>,
   entity: Entity,
@@ -785,11 +744,6 @@ export function createActionsColumn<T extends { id: string | number }>(
   );
 }
 
-/**
- * Base implementation for actions columns.
- * Use `createActionsColumn` for standard entity tables.
- * Call this directly for polymorphic rows where entity type varies per row.
- */
 export function createActionsColumnBase<T extends RowData>(
   columnHelper: ColumnHelper<T>,
   getLinkProps: RowLinkResolver<T>,
@@ -861,9 +815,6 @@ export function createActionsColumnBase<T extends RowData>(
   });
 }
 
-/**
- * Creates a simple text column with optional inline editing.
- */
 export function createTextColumn<
   T extends Record<string, unknown>,
   K extends keyof T,
@@ -883,9 +834,7 @@ export function createTextColumn<
      * order id is only unique within a vendor.
      */
     renderValue?: (value: string | null, row: T) => ReactNode;
-    /** Keep rich display content beside a dedicated pencil edit button. */
     trigger?: "wrap" | "pencil";
-    /** Enable inline editing */
     editable?: {
       onSave: (newValue: string | null, row: T) => Promise<void>;
     };
@@ -941,10 +890,6 @@ export function createTextColumn<
   });
 }
 
-/**
- * Creates a column that displays a currency value with proper formatting.
- * Optionally supports inline editing when `editable` option is provided.
- */
 export function createCurrencyColumn<
   T extends Record<string, unknown>,
   K extends keyof T,
@@ -983,7 +928,6 @@ export function createCurrencyColumn<
      * value (spend) renders neutral. Default false keeps the flat-green look.
      */
     signedTone?: boolean;
-    /** Enable inline editing */
     editable?: {
       onSave: (newValue: number | null, row: T) => Promise<void>;
     };
@@ -1073,7 +1017,6 @@ export function createCurrencyColumn<
   });
 }
 
-// Entity-specific single data types (nullable)
 type SingleEntityColumnData =
   | { entity: "ingredient"; data: { name: string; id: string } | null }
   | {
@@ -1094,7 +1037,6 @@ type SingleEntityColumnData =
       data: { fdc_id: number; description: string } | null;
     };
 
-// Branded id per pickable relation entity (usda-food has no picker).
 type SingleEntityIdMap = {
   ingredient: IngredientShortcode;
   product: ProductShortcode;
@@ -1140,9 +1082,7 @@ const entityPickers = {
  */
 interface SingleEntityEditableConfig<T, TId extends string> {
   onSave: (newId: TId | null, row: T) => Promise<void>;
-  /** Allow saving null (clear the relation). */
   clearable?: boolean;
-  /** Hide rows from the dropdown (e.g. a location can't be its own parent). */
   filterItems?: (item: ComboboxItem<TId>, row: T) => boolean;
   /**
    * Per-row gate. A false row falls through to the read-only render rather
@@ -1153,16 +1093,6 @@ interface SingleEntityEditableConfig<T, TId extends string> {
   isEditable?: (row: T) => boolean;
 }
 
-/**
- * Creates a column that displays a single related entity as an inline link.
- * Shows NoneValue when the entity is null/undefined.
- *
- * The name fills its column and truncates at the column edge (`truncate`), NOT
- * at `compact`'s fixed 8rem — every caller here declares an explicit width, and
- * clipping a name to 8rem inside a `w-64` column just wastes the column.
- * Optionally supports inline editing (async entity picker) via `editable` —
- * available for every entity except `usda-food` (no generic picker).
- */
 export function createSingleEntityInlineLinkColumn<
   T extends Record<string, unknown>,
   K extends keyof T,
@@ -1517,10 +1447,6 @@ export function createBooleanColumn<
   });
 }
 
-/**
- * Creates a column with a select-based inline filter.
- * Optionally supports inline editing when `editable` option is provided.
- */
 export function createFilterableSelectColumn<
   T extends Record<string, unknown>,
   K extends keyof T,
@@ -1552,7 +1478,6 @@ export function createFilterableSelectColumn<
      * and would otherwise silently AND a second, client-side filter on top.
      */
     filterConfig?: FilterConfig | null;
-    /** Enable inline editing */
     editable?: {
       onSave: (newValue: T[K], row: T) => Promise<void>;
     };
@@ -1618,11 +1543,6 @@ export function createFilterableSelectColumn<
   });
 }
 
-/**
- * Creates a column that displays a value as a link to an external/internal page.
- * Shows NoneValue when the value is null/undefined.
- * Optionally supports inline editing when `editable` option is provided.
- */
 export function createExternalLinkColumn<
   T extends Record<string, unknown>,
   K extends keyof T,
@@ -1632,7 +1552,6 @@ export function createExternalLinkColumn<
   linkTo: string,
   options?: {
     header?: string;
-    /** Name of the route param to use (default: "code") */
     paramName?: string;
     variant?: "mono" | "default";
     className?: string;
@@ -1644,7 +1563,6 @@ export function createExternalLinkColumn<
      * but is printed (and looked up) in its shortest encoding.
      */
     display?: (value: string) => string;
-    /** Enable inline editing */
     editable?: {
       onSave: (newValue: string | null, row: T) => Promise<void>;
     };
@@ -1727,10 +1645,6 @@ export function createExternalLinkColumn<
   );
 }
 
-/**
- * Creates a timestamp column with HoverableTimestamp display.
- * Generalization of createCreatedAtColumn for any timestamp field.
- */
 export function createTimestampColumn<
   T extends Record<string, unknown>,
   K extends keyof T,
@@ -1765,10 +1679,6 @@ export function createTimestampColumn<
   });
 }
 
-/**
- * Creates a column for editing inventory amounts (value + unit).
- * Displays amount using tryFormatAmount, inline editing with two inputs.
- */
 export function createEditableAmountColumn<T extends Record<string, unknown>>(
   columnHelper: ColumnHelper<T>,
   accessor: keyof T,
@@ -1777,9 +1687,7 @@ export function createEditableAmountColumn<T extends Record<string, unknown>>(
     className?: string;
     onSave: (newAmount: Amount, row: T) => Promise<void>;
     getUnitMappings?: (row: T) => UnitMapping[];
-    /** Mobile projection metadata override */
     mobile?: MobileColumnMeta;
-    /** Wrap the display-mode content (e.g. keep a detail-page link). */
     renderDisplay?: (content: ReactNode, row: T) => ReactNode;
     /**
      * Per-row gate — see {@link SingleEntityEditableConfig.isEditable}. A false
@@ -1942,26 +1850,11 @@ export function createPlainDateColumn<
   });
 }
 
-/** A row that carries a project reference as a flat id+name pair (not a
- * nested `{id,name}` object) — the task/expense list shape. `projectId` is
- * the project's shortcode (per the project shortcode cutover), so it is
- * also the link target — no separate denormalized shortcode field. */
 interface ProjectRefRow {
   projectId: string | null;
   projectName: string | null;
 }
 
-/**
- * Creates a column linking to a row's parent project (task
- * `projectId`/`projectName`, expense `projectId`/`projectName`). Unlike
- * {@link createSingleEntityInlineLinkColumn}, the source data is a flat
- * id+name pair rather than a nested relation object — that pair doesn't fit
- * `createSingleEntityInlineLinkColumn`'s single-object accessor shape (it
- * would need reshaping the row type), so this gets its own small `editable`
- * option instead of routing project through the generic single-entity helper.
- * Pass `editable` for an inline `EditableEntityCell` project picker
- * (`WithProjectSearch`); omit for the previous display-only behavior.
- */
 export function createProjectLinkColumn<T extends ProjectRefRow>(
   columnHelper: ColumnHelper<T>,
   options?: {
@@ -1969,8 +1862,6 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
     className?: string;
     mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
-    /** Enable inline editing via an async project picker. `clearable` always
-     * on — a task/expense's project is optional. */
     editable?: {
       onSave: (newProjectId: ProjectShortcode | null, row: T) => Promise<void>;
     };
@@ -2030,9 +1921,6 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
               renderValue={(v) => {
                 if (!v) return <NoneValue />;
                 return (
-                  // `row.projectId` is the project's shortcode (per the
-                  // project shortcode cutover) — the same value the combobox
-                  // carries, so it doubles as the link target.
                   <TableLink
                     to="/projects/$shortcode"
                     params={{ shortcode: row.projectId ?? "" }}
@@ -2060,28 +1948,16 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
   );
 }
 
-/** A row that carries a product reference as a flat id+name pair (not a
- * nested `{id,name}` object) — the expense list shape. */
 interface ProductRefRow {
   productId: string | null;
   productName: string | null;
 }
 
-/** A task's product subject uses explicit field names so it cannot be confused
- * with an expense's purchased product in shared row types. */
 interface SubjectProductRefRow {
   subjectProductId: string | null;
   subjectProductName: string | null;
 }
 
-/**
- * Creates a column linking to a row's associated product (expense
- * `productId`/`productName`). Mirrors {@link createProjectLinkColumn} — see
- * its doc comment for why this gets its own small `editable` option instead
- * of routing through the generic single-entity helper.
- * Pass `editable` for an inline `EditableEntityCell` product picker
- * (`WithProductSearch`); omit for the previous display-only behavior.
- */
 export function createProductLinkColumn<T extends ProductRefRow>(
   columnHelper: ColumnHelper<T>,
   options?: {
@@ -2089,8 +1965,6 @@ export function createProductLinkColumn<T extends ProductRefRow>(
     className?: string;
     mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
-    /** Enable inline editing via an async product picker. `clearable` always
-     * on — an expense's product is optional. */
     editable?: {
       onSave: (newProductId: ProductShortcode | null, row: T) => Promise<void>;
     };
@@ -2140,11 +2014,6 @@ export function createProductLinkColumn<T extends ProductRefRow>(
               onSave={(newId) => options.editable!.onSave(newId, row)}
               clipboard={specFromCellData(cellData, row)}
               SearchProvider={WithProductSearch}
-              // The previewing link, not a bare `TableLink`: an editable cell
-              // is where you most want the hovercard, since deciding whether
-              // this is the RIGHT product is the reason you opened the picker.
-              // Safe inside `EditableEntityCell` because its trigger is a
-              // pencil, not the whole cell — the link stays navigable.
               renderValue={(v) =>
                 v ? (
                   <EntityInlineLink
@@ -2175,11 +2044,6 @@ export function createProductLinkColumn<T extends ProductRefRow>(
   );
 }
 
-/**
- * Creates the task list's "For" column. This deliberately mirrors
- * {@link createProductLinkColumn}, while preserving the domain-specific
- * `subjectProduct*` field names all the way to the mutation boundary.
- */
 export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
   columnHelper: ColumnHelper<T>,
   options?: {
@@ -2236,11 +2100,6 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
               onSave={(newId) => options.editable!.onSave(newId, row)}
               clipboard={specFromCellData(cellData, row)}
               SearchProvider={WithProductSearch}
-              // The previewing link, not a bare `TableLink`: an editable cell
-              // is where you most want the hovercard, since deciding whether
-              // this is the RIGHT product is the reason you opened the picker.
-              // Safe inside `EditableEntityCell` because its trigger is a
-              // pencil, not the whole cell — the link stays navigable.
               renderValue={(v) =>
                 v ? (
                   <EntityInlineLink
@@ -2271,18 +2130,6 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
   );
 }
 
-/**
- * Creates a column linking to a row's parent entity of the SAME kind — a
- * task's `parentTaskId`/`parentTaskName`, or a project's
- * `parentProjectId`/`parentProjectName` (the WBS tree's "Parent" column).
- * Mirrors {@link createProjectLinkColumn}/{@link createProductLinkColumn} —
- * same flat id+name pair rather than a nested relation object — but unlike
- * those two, the field names and target entity vary per caller (task vs.
- * project), so this takes the id/name fields and entity explicitly instead
- * of hardcoding them. Read-only: none of the three call sites (the task
- * list, the project detail page's embedded task list, and the project
- * roster) support inline reparenting through this column.
- */
 export function createParentLinkColumn<
   T extends Record<string, unknown>,
   TEntity extends "task" | "project",

@@ -31,7 +31,6 @@ describe("AvailabilityService.getRecipeAvailability", () => {
       ],
     });
 
-  // Seed a "flour" ingredient with one linked product (cup<->g) holding `onHand`.
   const seedFlourWithStock = (onHand: Amount) =>
     seedIngredientWithStock(tdb.db, { name: "flour", onHand }, TEST_ACTOR);
 
@@ -106,7 +105,6 @@ describe("AvailabilityService.getRecipeAvailability", () => {
   });
 
   describe("sub-recipes", () => {
-    /** A recipe with a yield, usable as someone else's sub-recipe. */
     const createSub = (
       name: string,
       recipeYield: { value: number; unit: string } | null,
@@ -129,7 +127,6 @@ describe("AvailabilityService.getRecipeAvailability", () => {
         ],
       });
 
-    /** A parent that uses `amounts` of `subRecipeId`, plus optional extras. */
     const createParent = (
       subRecipeId: string,
       amounts: Amount[],
@@ -170,12 +167,10 @@ describe("AvailabilityService.getRecipeAvailability", () => {
         parent.id,
       );
 
-      // Half a dough batch → half its 2 cups of flour → 1 cup ≈ 120 g.
       const row = result.ingredients.find((i) => i.name === "flour");
       expect(row?.needValue).toBeCloseTo(120, 1);
       expect(row?.status).toBe("ok");
       expect(row?.via.map((v) => v.name)).toEqual(["Dough"]);
-      // The expanded sub-recipe leaves no placeholder row behind.
       expect(result.ingredients.some((i) => i.status === "subrecipe")).toBe(
         false,
       );
@@ -245,7 +240,6 @@ describe("AvailabilityService.getRecipeAvailability", () => {
         { ingredientId: flour.shortcode, amounts: [{ value: 1, unit: "cup" }] },
       ]);
       const b = await createParent(a.id, [{ value: 1, unit: "cup" }]);
-      // Close the loop: A now references B.
       await caller.update({
         id: a.id,
         data: {

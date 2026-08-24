@@ -36,11 +36,11 @@ export type SupportedChatModel = z.infer<typeof supportedChatModel>;
 const supportedEmbeddingModel = z.enum(["text-embedding-3-small"]);
 export type SupportedEmbeddingModel = z.infer<typeof supportedEmbeddingModel>;
 
-export const supportedAiModel = z.enum([
+const supportedAiModel = z.enum([
   ...supportedChatModel.options,
   ...supportedEmbeddingModel.options,
 ]);
-export type SupportedAiModel = z.infer<typeof supportedAiModel>;
+type SupportedAiModel = z.infer<typeof supportedAiModel>;
 
 export const DEFAULT_CHAT_MODEL =
   "claude-haiku-4-5" satisfies SupportedChatModel;
@@ -49,7 +49,7 @@ export const COOKBOOK_ESCALATION_MODEL =
 export const DEFAULT_EMBEDDING_MODEL =
   "text-embedding-3-small" satisfies SupportedEmbeddingModel;
 
-export const AI_MODEL_REGISTRY = {
+const AI_MODEL_REGISTRY = {
   // Provider list prices checked 2026-06-28. Cubby uses this table as the
   // canonical app-side cost source for AI Gateway calls it records.
   "claude-haiku-4-5": {

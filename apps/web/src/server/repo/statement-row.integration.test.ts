@@ -104,7 +104,6 @@ describe("statement row ledger", () => {
     const listed = await listStatementRows(ctx.db, {});
     expect(listed.count).toBe(2);
     const charge = listed.data.find((row) => row.providerAmount === -128.5);
-    // Provider sign preserved, Cubby sign normalized to outflow-positive.
     expect(charge).toMatchObject({
       amount: 128.5,
       providerAmount: -128.5,
@@ -116,9 +115,6 @@ describe("statement row ledger", () => {
   });
 
   it("splits unchanged into the three states it used to conflate", async () => {
-    // `rows.length - inserted.length` could not tell "recorded by this batch"
-    // from "recorded by another export" from "the payload holds it twice" —
-    // three states with three different remedies, reported as one number.
     const other = rowInput({
       statementDate: "2026-05-09",
       providerAmount: -11.11,
@@ -132,8 +128,6 @@ describe("statement row ledger", () => {
     const result = await record(
       ctx.db,
       ctx.actor,
-      // One novel row, one duplicated verbatim inside this payload, and one
-      // already recorded under a different batch.
       [rowInput(), rowInput(), other],
       { fingerprint: "fp-breakdown", rowCountDeclared: 4 },
     );
@@ -144,9 +138,6 @@ describe("statement row ledger", () => {
       alreadyInThisBatch: 0,
       alreadyInAnotherBatch: 1,
       indistinguishableDuplicates: 1,
-      // Declared 4, submitted 3 — the export had a row this payload left out.
-      // A prior ingest dropped 19 zero-amount rows with nothing recording it,
-      // so they re-presented as "new" on every later export.
       rowsOmitted: 1,
     });
 
@@ -203,9 +194,6 @@ describe("statement row ledger", () => {
     });
     expect(written).toMatchObject({ dryRun: false, inserted: 2 });
 
-    // The whole point: a second dryRun of an already-ingested chunk reports it
-    // as stored, which is what previously required reproducing the server's
-    // hash offline to learn.
     const replay = await record(
       ctx.db,
       ctx.actor,
@@ -236,9 +224,6 @@ describe("statement row ledger", () => {
           providerAmount: -9.99,
           rawDescription: "UNRELATED SAME DAY CHARGE",
         }),
-        // Same day, same card, same amount, different description — but from
-        // ONE export, so these are two real charges (two payroll deposits, two
-        // coffees), not one charge seen twice.
         rowInput({
           statementDate: "2026-05-21",
           providerAmount: -4.5,
@@ -287,7 +272,6 @@ describe("statement row ledger", () => {
       true,
       false,
     ]);
-    // Oldest first, so rows[0] is the likeliest predecessor.
     expect(candidate?.rows.map((row) => row.rawDescription)).toEqual([
       "AMAZON MKTPLACE PMTS",
       "AMAZON MKTPL*XD8AR9RG3",
@@ -297,7 +281,6 @@ describe("statement row ledger", () => {
       "fp-drift-second",
     ]);
 
-    // Linking the predecessor settles the question, and the worklist shrinks.
     await updateStatementRows(
       ctx.db,
       {
@@ -380,7 +363,6 @@ describe("statement row ledger", () => {
       fingerprint: "fp-two-refs-monarch",
     });
     expect(monarch.inserted).toBe(1);
-    // The same charge as a second provider dates it — different hash, own row.
     const copilot = await record(
       ctx.db,
       ctx.actor,
@@ -654,8 +636,6 @@ describe("statement row ledger", () => {
   });
 
   it("warns when a batch looks submitted with the wrong sign", async () => {
-    // 24 positive rows: the signature of a Copilot export passed through
-    // verbatim, where every identity is unmatched-forever.
     const wrongWay = Array.from({ length: 24 }, (_, i) =>
       rowInput({ providerAmount: 10 + i, rawDescription: `POSITIVE ROW ${i}` }),
     );
@@ -664,7 +644,6 @@ describe("statement row ledger", () => {
     });
     expect(flagged.signWarning).toContain("24 of 24");
 
-    // A normal charges-negative batch says nothing.
     const fine = await record(ctx.db, ctx.actor, [rowInput()], {
       fingerprint: "fp-sign-ok",
     });

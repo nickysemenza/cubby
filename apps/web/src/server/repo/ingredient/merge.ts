@@ -5,11 +5,7 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
-import type {
-  ImpactItem,
-  MergeCandidate,
-  OperationDisposition,
-} from "@cubby/schemas/entity-integrity";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { RecipeId } from "@cubby/schemas/identifiers";
 import {
   type IngredientId,
@@ -35,18 +31,18 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import {
-  countByTarget,
-  impact,
-  present,
-  sideEffect,
-} from "~/server/repo/impact";
-import {
-  assertDistinctMergeTargets,
   finalizeMerge,
   repointEdge,
   resolveMergeTargets,
 } from "~/server/repo/merge";
 import { mergeImpactForIngredients } from "./search";
+
+type MergeCandidate = {
+  id: string;
+  name: string;
+  weight: number;
+  detail: Array<{ label: string; count: number }>;
+};
 
 export const INGREDIENT_MERGE_EDGE_POLICY = {
   "RecipeSectionIngredient.ingredientId": {
@@ -337,144 +333,6 @@ export const mergeIngredients = async (
       affectedRecipeIds: r.affectedRecipeIds,
     };
   });
-};
-
-/**
- * Every alias-string a merged-away ingredient would contribute to the
- * survivor's alias list: its own name plus its existing aliases, minus
- * whatever the survivor (`keepId`) already carries. Not an incoming edge (it
- * mutates the survivor's own row, not a dependent table), so it isn't in
- * `INGREDIENT_MERGE_EDGE_POLICY` — reported as its own `changes` item instead.
- *
- * Approximate in one respect `resolve()` above is not: this dedupes each
- * source against the survivor only, not against the OTHER merged-away
- * ingredients too (resolve() folds the whole set through one `uniq()`). Two
- * sources sharing an alias neither already has would double-count by one
- * here. Acceptable for an advisory preview; the real merge is still the
- * source of truth for what actually lands in the alias list.
- */
-const foldedAliasCountsByTarget = async (
-  dbClient: ReturnType<typeof getDb>,
-  keepId: IngredientId,
-  mergeIds: IngredientId[],
-): Promise<Record<string, number>> => {
-  const survivor = await dbClient.query.ingredient.findFirst({
-    where: and(eq(ingredient.id, keepId), notDeleted(ingredient)),
-    columns: { name: true, aliases: true },
-  });
-  const existing = new Set(
-    [survivor?.name, ...(survivor?.aliases ?? [])]
-      .filter((v): v is string => !!v)
-      .map((v) => v.toLowerCase()),
-  );
-
-  const rows = await dbClient.query.ingredient.findMany({
-    where: and(inArray(ingredient.id, mergeIds), notDeleted(ingredient)),
-    columns: { id: true, name: true, aliases: true },
-  });
-
-  const out: Record<string, number> = {};
-  for (const row of rows) {
-    const contributed = uniq([row.name, ...row.aliases]).filter(
-      (n) => !existing.has(n.toLowerCase()),
-    );
-    if (contributed.length > 0) out[row.id] = contributed.length;
-  }
-  return out;
-};
-
-/**
- * What `mergeIngredients(db, keepId, mergeIds)` would do, without doing it.
- *
- * Reads the SAME `INGREDIENT_MERGE_EDGE_POLICY` the mutation writes against
- * for its two repoint edges (recipe lines, linked products) — `countByTarget`
- * runs the identical `inArray` + live-row predicate the mutation's own
- * `update(...).where(inArray(column, uniqueAliases))` touches. The
- * affected-recipe recompute side effect reuses
- * `recipeIdsUsingIngredients`, the exact function `resolve()` calls to
- * compute `affectedRecipeIds` for the real merge, so the two can't disagree
- * about which recipes go stale.
- *
- * Merging never blocks (no `block` disposition in the policy), so `blockers`
- * is always empty — a self-merge is REFUSED rather than reported as a blocker,
- * because the mutation refuses it too and a preview that reports must agree
- * with the mutation it previews.
- *
- * Advisory only. `mergeIngredients` still re-validates and recomputes
- * everything inside its own transaction.
- */
-export const previewMergeIngredients = async (
-  db: Database,
-  { mergeIds, keepId }: { mergeIds: IngredientId[]; keepId: IngredientId },
-): Promise<{
-  blockers: ImpactItem[];
-  changes: ImpactItem[];
-  sideEffects: ImpactItem[];
-}> => {
-  // Refuses exactly where the mutation refuses. The other three planners used
-  // to filter the keeper out silently; this one never filtered at all, so a
-  // self-merge preview double-counted the survivor's own rows before the
-  // mutation refused the call outright.
-  assertDistinctMergeTargets("ingredient", keepId, mergeIds);
-  if (mergeIds.length === 0) {
-    return { blockers: [], changes: [], sideEffects: [] };
-  }
-  const dbClient = getDb(db);
-
-  const changes = present([
-    impact({
-      disposition:
-        INGREDIENT_MERGE_EDGE_POLICY["RecipeSectionIngredient.ingredientId"],
-      edgeKey: "RecipeSectionIngredient.ingredientId",
-      label: "recipe usages re-pointed",
-      byTargetId: await countByTarget(
-        dbClient,
-        recipeSectionIngredient,
-        recipeSectionIngredient.ingredientId,
-        mergeIds,
-      ),
-    }),
-    impact({
-      disposition: INGREDIENT_MERGE_EDGE_POLICY["Product.ingredientId"],
-      edgeKey: "Product.ingredientId",
-      label: "products moved",
-      byTargetId: await countByTarget(
-        dbClient,
-        product,
-        product.ingredientId,
-        mergeIds,
-      ),
-    }),
-    impact({
-      disposition: {
-        code: "fold-aliases",
-        effect: "move-dedupe",
-        description:
-          "The merged ingredients' names and aliases are folded into the survivor's alias list.",
-      },
-      label: "aliases folded",
-      byTargetId: await foldedAliasCountsByTarget(dbClient, keepId, mergeIds),
-    }),
-  ]);
-
-  const affectedRecipeIds = await recipeIdsUsingIngredients(dbClient, [
-    ...mergeIds,
-    keepId,
-  ]);
-  const sideEffects =
-    affectedRecipeIds.length > 0
-      ? [
-          sideEffect({
-            code: "recompute-affected-recipes",
-            label: "recipes recomputed",
-            description:
-              "Recipes using the merged ingredients — or already using the survivor — have their totals marked stale and recomputed.",
-            total: affectedRecipeIds.length,
-          }),
-        ]
-      : [];
-
-  return { blockers: [], changes, sideEffects };
 };
 
 /**

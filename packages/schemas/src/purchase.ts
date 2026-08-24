@@ -35,22 +35,6 @@ import {
   tradeSchema,
 } from "./project";
 
-/**
- * Purchase — one vendor order, receipt, or deliberately separate purchase
- * event, and the home for purchase-level truth:
- * its stated total, documents, and identity.
- *
- * `Vendor ──< Purchase ──< Expense`. A purchase is identified by its `orderId`
- * when the vendor issues one, and is otherwise one per expense row. **All money
- * lives on `expense`** — every `SUM(cost)` in the codebase reads `Expense`
- * alone, and `statedTotal` below is never summed into spend.
- *
- * The consistency rule that keeps this honest: one purchase is one vendor-side
- * event, never a contract and never a card charge. Settlement is represented by
- * FinancialTransaction, so one Purchase may have installments, split tender,
- * shipment charges, and later refunds without changing its vendor identity.
- */
-
 const purchaseFields = {
   vendorId: vendorShortcode,
   orderId: z
@@ -127,14 +111,9 @@ export const purchaseUpdateInput = z.object({
 });
 export type PurchaseUpdateInput = z.infer<typeof purchaseUpdateInput>;
 
-/** Mutually exclusive health buckets for the Expenses under one Purchase. */
 export const purchaseExpenseStatus = z.enum(["empty", "unpriced", "priced"]);
 export type PurchaseExpenseStatus = z.infer<typeof purchaseExpenseStatus>;
 
-/**
- * The soft reconciliation verdict for a Purchase's stated total versus its Expenses.
- * `unknown` means there is no stated total to compare against.
- */
 export const purchaseReconciliation = z.enum([
   "unknown",
   "match",
@@ -183,14 +162,12 @@ export const purchaseFilterFields = {
   orderId: oneOrMany(z.string()).optional(),
   /** `"none"` matches purchases with no order id — the ~40% the vendor never issued one for. */
   orderIdPresenceFilter: presenceFilter,
-  /** `"none"` matches purchases with no `statedTotal` recorded yet. */
   statedTotalPresenceFilter: presenceFilter,
   /** Empty, partly unpriced, or fully priced Expense sets; several values OR. */
   expenseStatus: oneOrMany(purchaseExpenseStatus).optional(),
   /** Shared soft verdict over statedTotal versus SUM(expense.cost). */
   reconciliation: oneOrMany(purchaseReconciliation).optional(),
   financialReconciliation: z.enum(["mismatch"]).optional(),
-  /** `"none"` matches purchases with no live invoice/receipt document. */
   documentPresenceFilter: presenceFilter,
   dataStatus: dataQualityStatus.optional(),
   dataGap: oneOrMany(dataCheck).optional(),
@@ -215,7 +192,6 @@ export const purchaseSortableFields = [
   "displayLabel",
   "date",
   "statedTotal",
-  // Joined / rolled-up, resolved by correlated subqueries in repo/purchase.ts.
   "vendor",
   "expenseCount",
   "expenseTotal",
@@ -253,17 +229,7 @@ export const purchaseOut = z.object({
   reconciliation: purchaseReconciliation,
   /** Settlement evidence only; never participates in spend rollups. */
   financialReconciliation: financialReconciliationSummary,
-  /** Live invoice/receipt documents filed against this purchase. */
   documentCount: z.number().int(),
-  /**
-   * The purchase's filed documents — the emailed PDF invoice, a photo of the paper
-   * slip, or both, in display order.
-   *
-   * `contentType` is load-bearing, unlike the project analogue's summary shape:
-   * `partitionEntityFiles` / `isDocumentFile` split PDFs from images on it, and
-   * without it a PDF renders as a broken thumbnail instead of in the iframe
-   * viewer.
-   */
   images: z.array(
     z.object({
       id: imageShortcode,
@@ -312,17 +278,6 @@ export type ReclassifyPurchaseDocumentInput = z.infer<
  */
 export const RECONCILIATION_TOLERANCE = 0.01;
 
-/**
- * Compared in **cents**, not in floats.
- *
- * `Math.abs(100 - 99.99)` is `0.010000000000005116`, so a plain
- * `<= RECONCILIATION_TOLERANCE` made a nominal one-cent gap read `mismatch` at
- * `statedTotal: 100` and `match` at other magnitudes — the verdict depended on
- * where binary floating point happened to land, which is not something a
- * human-facing cue should do. Both operands are dollar amounts from
- * `double precision` columns, and the unit that matters is the cent, so rounding
- * to cents before comparing makes the boundary mean what it says.
- */
 export const reconcilePurchase = (p: {
   statedTotal: number | null;
   expenseTotal: number;
@@ -422,17 +377,6 @@ export const splitExpenseInput = z.object({
 });
 export type SplitExpenseInput = z.infer<typeof splitExpenseInput>;
 
-/**
- * The reconciliation cue `splitExpense` itself deliberately does not compute —
- * see its doc comment in `repo/purchase.ts`. This exists so the MCP tool can
- * hand a caller the same cue the web dialog shows live as the operator types,
- * without either side back-computing or rejecting anything.
- *
- * Compared in **cents**, like `reconcilePurchase` above and for the same
- * reason: both operands are dollar amounts off `double precision` columns, and
- * a plain float subtraction makes the verdict depend on where binary floating
- * point happens to land rather than on the actual cent gap.
- */
 export const splitExpenseDelta = (
   originalCost: number | null,
   partCosts: number[],
@@ -468,11 +412,6 @@ export const deleteEmptyPurchasesOut = z.object({
 export type DeleteEmptyPurchasesOut = z.infer<typeof deleteEmptyPurchasesOut>;
 
 /**
- * Merge purchases the backfill couldn't group — the 364 singletons with no order
- * id, which no key could have joined (`(vendor, date)` would have falsely merged
- * 71 rows across 31 groups). A user action, never a backfill guess.
- */
-/**
  * What a purchase merge actually moved.
  *
  * Added so `merge_entity` can report a MEASURED `merged` count for purchases
@@ -499,18 +438,6 @@ export const mergePurchasesInput = z.object({
 });
 export type MergePurchasesInput = z.infer<typeof mergePurchasesInput>;
 
-// Purchase ⟷ Product links (PurchaseProduct)
-//
-// Which Products a Purchase bought — nothing else. This carries NO money and
-// NO quantity: that stays on `expense` (all money lives on Expense;
-// `statedTotal` above is never summed into spend). It exists because an
-// installment/lump-sum Purchase's Expenses are `lineBasis: "allocation"` and
-// can never carry a `productId` (see `./expense-line-kind`) — an allocation
-// line splits one payment across trades/costTypes, it does not name a
-// product — so this link is otherwise the only way to say "this lump-sum
-// order was for these three tools." Mirrors `projectResource*` in
-// `./project` (the analogous Project ⟷ Product link) as closely as possible.
-
 export const purchaseProductsInput = z.object({
   purchaseId: purchaseShortcode,
 });
@@ -524,8 +451,6 @@ export const purchaseProductMutationInput = z.object({
   productIds: z.array(productShortcode).min(1).max(100),
 });
 
-/** See `relationMutationOut` (`./common`) for what `changed` / `attached` /
- * `alreadySatisfied` mean — this family's edge is `PurchaseProduct`. */
 export const purchaseProductMutationOut = relationMutationOut;
 export type PurchaseProductMutationOut = z.infer<
   typeof purchaseProductMutationOut
@@ -568,10 +493,6 @@ export const purchaseProductOut = z.object({
   coverImageUrl: z.url().nullable(),
   source: purchaseProductSource,
   linkAttachedAt,
-  /**
-   * Live `ProductComponent` edges where this product is the parent — non-zero
-   * means it is a kit, and its row can expand to show what it contains.
-   */
   componentCount: z.number().int().nonnegative(),
 });
 export type PurchaseProductOut = z.infer<typeof purchaseProductOut>;
@@ -583,7 +504,6 @@ export const purchaseProductsOut = z.array(purchaseProductOut);
 export const purchaseProductsMcpOut =
   createItemsResponseSchema(purchaseProductOut);
 
-/** The transpose: one Product's row on another Purchase's link list. */
 export const productPurchaseOut = z.object({
   purchaseId: purchaseShortcode,
   displayLabel: z.string().nullable(),

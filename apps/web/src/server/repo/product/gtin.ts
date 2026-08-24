@@ -23,7 +23,6 @@ import type { Database } from "~/server/db";
 import { product, productExternalId } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
-/** The live `gtin` rows for a product, primary first then oldest. */
 const liveGtinRows = (db: Database, ids: ProductId[]) =>
   getDb(db)
     .select({
@@ -39,9 +38,6 @@ const liveGtinRows = (db: Database, ids: ProductId[]) =>
         notDeleted(productExternalId),
       ),
     )
-    // `isPrimary DESC` first so `loadPrimaryGtins` can take the head, then
-    // `createdAt` so the fallback (a slot left with no primary) is stable
-    // rather than flipping between renders.
     .orderBy(
       sql`${productExternalId.isPrimary} DESC`,
       productExternalId.createdAt,
@@ -121,7 +117,6 @@ export const productMatchesGtinTerm = (term: string): SQL => {
       )}))`;
 };
 
-/** Does this product carry any barcode at all? */
 export const productHasAnyGtin = (): SQL => sql`EXISTS (
   SELECT 1 FROM "ProductExternalId" pei
   WHERE pei."productId" = ${product.id}

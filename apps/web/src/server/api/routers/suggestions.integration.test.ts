@@ -8,8 +8,6 @@ import { suggestionsRouter } from "./suggestions";
 
 describe("suggestions router", () => {
   const ctx = withTestDb();
-  // Built fresh per test — multiple independent contexts can land on divergent
-  // pooled-connection snapshots, so callers read the current `db` closure.
   let recipeCaller: ReturnType<
     typeof createTestCaller<(typeof recipeRouter)["_def"]["record"]>
   >;
@@ -22,7 +20,6 @@ describe("suggestions router", () => {
     suggestionsCaller = createTestCaller(suggestionsRouter, ctx.db);
   });
 
-  // Single-ingredient recipe asking for `need` of `ingredientId`.
   const createRecipe = (name: string, ingredientId: string, need: Amount) =>
     recipeCaller.create({
       name,
@@ -42,7 +39,6 @@ describe("suggestions router", () => {
       ],
     });
 
-  // Ingredient with a linked product (cup<->g mapped) holding `onHand`.
   const seedIngredientWithStock = (name: string, onHand: Amount) =>
     seedStock(ctx.db, { name, onHand }, TEST_ACTOR);
 
@@ -64,7 +60,6 @@ describe("suggestions router", () => {
   });
 
   it("getMakeable ranks by coverage desc and honors minCoverage", async () => {
-    // "Ready Recipe": fully stocked. "Short Recipe": stocked but insufficient.
     const flour = await seedIngredientWithStock("flour", {
       value: 500,
       unit: "g",

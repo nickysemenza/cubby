@@ -42,16 +42,13 @@ import {
 } from "@cubby/schemas/project";
 import { z } from "zod";
 import { ENTITY_BINDINGS } from "~/server/entity-bindings";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/entity-kernel/registry";
 import { createAppError } from "~/server/errors/app-error";
 import {
   attachProjectResources,
-  createProject,
-  deleteProjects,
   detachProjectResources,
-  getProjectByShortcode,
   listProjectResources,
   projectDashboardSummary,
-  projectList,
   projectNameOptions,
   projectPortfolioAnalytics,
   projectToolMatrix,
@@ -59,7 +56,6 @@ import {
   repointProjectUses,
   setProjectToolUsage,
   suggestProjectTools,
-  updateProject,
 } from "~/server/repo/project";
 import { createProjectFromTasks } from "~/server/repo/project/create-from-tasks";
 import {
@@ -67,10 +63,8 @@ import {
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
-import {
-  createEntityListProcedure,
-  createSearchableEntityCrudProcedures,
-} from "../crud-factory";
+import { createEntityListProcedure } from "../crud-factory";
+import { createEntityCompatibilityProcedures } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const {
@@ -80,26 +74,10 @@ const {
   create,
   update,
   delete: deleteItem,
-} = createSearchableEntityCrudProcedures({
-  schemas: {
-    ...ENTITY_BINDINGS.project.crud,
-    filters: projectFiltersSchema,
-    sort: { sortableFields: projectSortableFields, defaultSort: "createdAt" },
-  },
-  repository: {
-    getByShortcode: (services, shortcode) =>
-      getProjectByShortcode(services.db, shortcode),
-    list: async (services, filters, sort, pagination) =>
-      projectList(services.db, filters, sort, pagination),
-    create: async (services, data) =>
-      createProject(services.db, data, services.actorContext),
-    update: (services, shortcode, data) =>
-      updateProject(services.db, shortcode, data, services.actorContext),
-    delete: (services, ids) =>
-      deleteProjects(services.db, ids, services.actorContext),
-  },
-  entityName: "project",
-});
+} = createEntityCompatibilityProcedures(
+  ENTITY_KERNEL_BINDINGS.project,
+  ENTITY_BINDINGS.project.crud,
+);
 
 /**
  * `/projects?view=data&rows=tree`'s WBS page — same input and `{meta, items}`

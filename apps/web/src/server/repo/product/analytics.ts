@@ -33,10 +33,6 @@ import {
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { stockOnly } from "~/server/repo/inventory/placement";
-// Deep import, not the `~/server/repo/location` barrel: that barrel pulls in
-// `location/crud`, which imports `product/pricing` — a product module going
-// through it would close an import cycle. `location/tree` imports no product
-// code.
 import { loadLocationAncestors } from "~/server/repo/location/tree";
 import { loadPrimaryGtins, productHasAnyGtin } from "./gtin";
 
@@ -58,7 +54,6 @@ export const findDuplicateUniqueProducts = async (
 
   return duplicates.filter((prod) => {
     if (prod.inventoryEntry.length <= 1) return false;
-    // Skip duplicates that involve the excluded location entirely.
     if (
       excludeLocationId &&
       prod.inventoryEntry.some(
@@ -184,16 +179,6 @@ export const getProductTagOptions = async (
   return rows;
 };
 
-/**
- * The distinct external-ID source roster with product counts — feeds the
- * product list's External IDs filter picklist.
- *
- * A source is an open kebab-case slug minted by whichever importer wrote the
- * row (`amazon`, `home-depot`, `mcmaster`), so there is no enum to render a
- * static option list from; the roster has to come from the data. Counted over
- * DISTINCT products because one product can carry several ids from one source
- * (different `kind`s), and the filter narrows PRODUCTS.
- */
 export const getProductExternalIdSourceOptions = async (
   db: Database,
 ): Promise<Array<{ source: string; count: number }>> =>
@@ -211,7 +196,6 @@ export const getProductExternalIdSourceOptions = async (
       productExternalId.source,
     );
 
-/** Distinct server-backed manufacturer roster for exact list filtering. */
 export const getProductManufacturerOptions = async (
   db: Database,
 ): Promise<Array<{ manufacturer: string; count: number }>> =>
@@ -284,7 +268,6 @@ export const getProductsSharingTags = async (
     .orderBy(product.name);
 };
 
-/** Locations shown per tag before the list is truncated. */
 const TAG_STORAGE_LOCATION_LIMIT = 4;
 
 export interface TagSiblingStorage {
@@ -292,14 +275,11 @@ export interface TagSiblingStorage {
   locations: Array<{
     id: LocationShortcode;
     name: string;
-    /** Root → immediate parent. Empty for a top-level location. */
     ancestors: LocationAncestorOut[];
     /** Distinct sibling products stocked here — never counts `id` itself. */
     productCount: number;
-    /** `id` is stocked here too, so the family already has this product. */
     holdsSource: boolean;
   }>;
-  /** Locations past {@link TAG_STORAGE_LOCATION_LIMIT}, for disclosure. */
   omittedLocationCount: number;
 }
 
@@ -356,9 +336,6 @@ export const getTagSiblingStorage = async (
   const tags = (source[0]?.tags ?? []).filter((tag) => !isCollectionTag(tag));
   if (tags.length === 0) return [];
 
-  // One row per (product, entry) for every product sharing a tag, the source
-  // included. `stockOnly()` because this is a countable browse surface — a
-  // fixture wired into a wall is not somewhere to put a spare battery.
   const rows = await getDb(db)
     .select({
       productId: product.id,
@@ -414,7 +391,6 @@ export const getTagSiblingStorage = async (
         locations.set(row.locationId, tally);
       }
 
-      // The Set is what makes the count distinct-by-product across entries.
       if (row.productId === id) tally.holdsSource = true;
       else tally.productIds.add(row.productId);
     }
@@ -442,7 +418,6 @@ export const getTagSiblingStorage = async (
     ];
   });
 
-  // One batched CTE for every surviving location across all tags.
   const ancestorsById = await loadLocationAncestors(db, [
     ...new Set(ranked.flatMap((g) => g.tallies.map((t) => t.locationId))),
   ]);

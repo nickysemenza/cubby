@@ -2,13 +2,7 @@ import type {
   DuplicateProductIdentity,
   DuplicateVendor,
 } from "@cubby/schemas/problems";
-import { useMemo } from "react";
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
-import {
-  OperationImpact,
-  type PreviewOperationDraft,
-  useOperationPreview,
-} from "~/app/_components/impact/operation-impact";
 import { EntityMergeDialog } from "~/app/_components/merge/entity-merge-dialog";
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -105,20 +99,6 @@ export function DuplicateVendorMergeFix({
     onSuccess: close,
   });
 
-  // Impact preview — this card only exists while expanded, so there's no
-  // separate "open" state to gate on; fetch as soon as it mounts. See
-  // `useOperationPreview`'s doc comment for the gating rule.
-  const previewInput = useMemo<PreviewOperationDraft>(
-    () => ({
-      operation: "merge",
-      entity: "vendor",
-      keepId: variant.canonicalSampleId,
-      mergeIds: [variant.sampleId],
-    }),
-    [variant.canonicalSampleId, variant.sampleId],
-  );
-  const preview = useOperationPreview(previewInput, true);
-
   return (
     <Stack gap="sm">
       <p className="text-muted-foreground text-xs">
@@ -129,12 +109,6 @@ export function DuplicateVendorMergeFix({
         {variant.canonical} and {variant.value} leaves the roster. Its website
         and notes carry over only where {variant.canonical} has none.
       </p>
-      <OperationImpact
-        preview={preview.data}
-        isLoading={preview.isLoading}
-        isError={preview.isError}
-        onRetry={() => void preview.refetch()}
-      />
       <Button
         size="sm"
         onClick={() =>
@@ -143,7 +117,7 @@ export function DuplicateVendorMergeFix({
             mergeIds: [variant.sampleId],
           })
         }
-        disabled={merge.isPending || preview.data?.canProceed === false}
+        disabled={merge.isPending}
       >
         {merge.isPending ? "Merging…" : `Merge into ${variant.canonical}`}
       </Button>

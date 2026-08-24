@@ -1,8 +1,3 @@
-/**
- * Product CRUD operations.
- * Core create, read, update, list operations for products.
- */
-
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import {
@@ -180,8 +175,6 @@ const resolveProductSort = (sort: SortParams) => {
     sort.direction === "asc" ? "asc nulls last" : "desc nulls last";
 
   if (sort.orderBy === "location") {
-    // includes-installed: identity/location sort, not a browse/count
-    // surface — a fixture's location still sorts the row.
     return [
       sql.raw(
         `(SELECT min(l."name") FROM "InventoryEntry" ie ` +
@@ -199,8 +192,6 @@ const resolveProductSort = (sort: SortParams) => {
     ];
   }
 
-  // Same correlated-scalar shape as `relations.product.list.extras.expenseTotal`
-  // — the RQB data query's root alias for product is lowercase "product".
   if (sort.orderBy === "expenseTotal") {
     return [
       sql.raw(
@@ -273,9 +264,6 @@ const resolveProductSort = (sort: SortParams) => {
   }
 
   if (sort.orderBy === "primaryGtin") {
-    // Sorting on a derived value, so it has to be the same derivation the
-    // mappers use: the slot's primary, falling back to the oldest live barcode
-    // for a slot a replace-payload left with no primary.
     return [
       sql.raw(
         `(SELECT pei."externalId" FROM "ProductExternalId" pei ` +
@@ -333,23 +321,7 @@ const fetchProductById = async (
   )[0];
 };
 
-/**
- * Detail products can mention a holding location and a location whose identity
- * is the product. Resolve every breadcrumb — and every thumbnail the page draws
- * for a location, rung or leaf — in two queries for the entire result set,
- * rather than one parent walk per row in the mapper.
- *
- * The thumbnail policy is NOT reimplemented here: `resolveEntityDisplayImages`
- * is the same helper search and the enriched entity-link reads use, and it
- * already ranks a location's own photo above the cover of the SKU it IS. That
- * matters because the two ranks land on different rows of one table — a shelf
- * holding stock has its own photo, a bin that IS a photographed tote has only
- * its SKU's — and resolving them by two different rules is what left the whole
- * card drawing placeholder glyphs.
- *
- * Ancestors come back with their private ids attached because the resolver keys
- * on uuid and the wire rung carries only a shortcode.
- */
+/** Resolve location breadcrumbs and identity-product covers in batch; preserve both relationship directions. */
 const hydrateProductLocationBreadcrumbs = async (
   db: Database,
   rows: ProductDeepDB[],
@@ -519,33 +491,7 @@ export const productList = async (
     resolveAllPresent(db, "ingredient", requestedIngredientCodes),
   ]);
 
-  // Every cross-entity filter below is an UNCORRELATED subquery (it references
-  // only the child table, never back at product.id), applied with
-  // inArray/notInArray. That shape is load-bearing, not stylistic: THREE query
-  // builders share `whereClause` — the data query runs through Drizzle's
-  // relational query builder (which aliases the root table to "product"), the
-  // count runs a plain unaliased `$count`, and the price-sum runs a plain
-  // unaliased `.select().from(product)`. A correlated EXISTS referencing
-  // `product.id` from inside a subquery resolves against different table names
-  // in each context (and breaks the RQB data query, which only sees the
-  // "product" alias). inArray/notInArray sidestep it because `product.id` is
-  // referenced at the WHERE's top level, where all three rewrite it correctly.
-  //
-  // Every subquery is notDeleted-guarded at each join level. `pnpm check`'s
-  // soft-delete guard only scans exists()/notExists() bodies, so it cannot see
-  // these — the repo integration tests are the guard here.
-  // Inner-joins Location so this matches what `dbProductToListAPI` renders — it
-  // drops entries whose location is soft-deleted (`isNotDeleted(entry.location)`).
-  // The exact mirror of locationList's product join.
-  //
-  // DEFENSIVE, not a live bug: no write path can currently produce a live entry
-  // under a soft-deleted location. `deleteLocations` guards
-  // LOCATION_HAS_INVENTORY symmetrically with `deleteProducts`'
-  // PRODUCT_HAS_INVENTORY, and every inventory write rejects a soft-deleted
-  // parent (inventory-softdelete-guard.integration.test.ts). This is
-  // invariant-drift insurance: if a future bulk path ever breaks that pairing,
-  // the filter and the rendered cell stay in agreement instead of silently
-  // disagreeing — the failure mode of #428.
+  // Cross-entity filters must stay uncorrelated id-set subqueries shared by all product list query paths.
   const productIdsWithLiveInventory = dbClient
     .select({ productId: inventoryEntry.productId })
     .from(inventoryEntry)
@@ -593,9 +539,6 @@ export const productList = async (
       ),
     );
 
-  // `expense.productId` is NULLABLE, so `isNotNull` is load-bearing: a NULL
-  // inside a NOT IN list makes the whole predicate UNKNOWN and `notInArray`
-  // would match zero rows instead of "products with no expenses".
   const productIdsWithExpenses = dbClient
     .select({ productId: expense.productId })
     .from(expense)
@@ -676,28 +619,7 @@ export const productList = async (
     .from(productUnitMappings)
     .where(notDeleted(productUnitMappings));
 
-  // Kits: products that CONTAIN components. Edge-level liveness only, which is
-  // exact rather than approximate because three rules bracket it — attach
-  // requires both the parent and every component Product live
-  // (`product-components.ts`), deleting a parent soft-deletes the rows keyed by
-  // `parentProductId` (below), and deleting a *component* is refused outright
-  // while a live edge points at it (`edge-roles.ts`). It is that last,
-  // asymmetric guard that makes the component side safe; the parent cascade
-  // alone would not.
-  //
-  // `componentCount` in `relations.ts` MUST stay on this same predicate: a
-  // filter and a rendered cell that disagree is the #428 failure mode.
-  // How many WHOLE kits this product's live components account for.
-  //
-  // `min` over the components: two batteries and one charger make one starter
-  // kit, not two, and a component missing entirely makes zero. NULL for a
-  // product with no components (min over an empty set), which is what keeps
-  // every non-kit out of the comparison without a second predicate.
-  //
-  // A mixed-unit component has no honest on-hand number, so `onHandUnitsSql`
-  // returns NULL and the COALESCE reads it as zero — the kit then accounts for
-  // nothing and the detector stays silent, which is the right way to fail on a
-  // number nobody can compute.
+  // Kit membership requires live parent and component rows; do not approximate liveness with stale joins.
   const partsAccountedKitsSql = (productId: PgColumn) =>
     sql`(SELECT min(floor(COALESCE(${sql.raw(onHandUnitsSql("kac_p"))}, 0) / kac."quantity"))
            FROM "ProductComponent" kac
@@ -743,9 +665,6 @@ export const productList = async (
       ),
     );
 
-  // Barcode presence and barcode text-search both go through the identifier
-  // table now. Same shape as `productIdsWithExternalIds` above, narrowed to the
-  // `gtin` source; `idSetPresence` then reads it exactly as it reads that one.
   const gtinRows = dbClient
     .select({ productId: productExternalId.productId })
     .from(productExternalId)
@@ -777,7 +696,6 @@ export const productList = async (
       AND pei."source" = ${GTIN_SOURCE}
       AND pei."deletedAt" IS NULL))`;
 
-  // Untagged. Outer parens load-bearing for the same `not()` reason as above.
   const NO_TAGS = sql`(cardinality(${product.tags}) = 0)`;
 
   // Build where conditions - always filter out deleted items
@@ -833,10 +751,6 @@ export const productList = async (
         : undefined,
       filters.kitAccounting === "double_counted"
         ? and(
-            // Stocked under its own name, AND its parts account for whole kits
-            // too. Both halves are required: a kit over-stocked as itself alone
-            // is ordinary variance, and parts alone are the normal decomposed
-            // case this whole feature exists to bless.
             sql`${onHandUnitsFilterSql(product.id)} > 0`,
             sql`${partsAccountedKitsSql(product.id)} > 0`,
             // The defect is arithmetic, not shape: together they claim more
@@ -960,10 +874,6 @@ export const productList = async (
         filters.componentPresenceFilter,
         productIdsWithComponents,
       ),
-      // `isMiscProduct` is a case-insensitive prefix test on the name, so this
-      // is a LIKE rather than a presence over a column or an id set. `lower()`
-      // both sides — buckets are written as "misc: " by the capture flows but
-      // nothing enforces the case.
       filters.miscBucketFilter === "has"
         ? sql`lower(${product.name}) LIKE 'misc:%'`
         : filters.miscBucketFilter === "none"
@@ -1039,8 +949,6 @@ export const productList = async (
     };
   }
 
-  // Special list sort keys are correlated subqueries because Drizzle's
-  // relational query builder rewrites non-raw column refs to the root alias.
   const orderByArray = productListOrderBy(sorts, groupBy);
 
   const { take, skip } = buildTakeSkip(pagination);
@@ -1123,7 +1031,6 @@ export const productList = async (
   );
 
   const priceSum = Number(aggregates[0]?.priceSum ?? 0);
-  // `sum()` returns null over an empty set, and a string otherwise.
   const expenseTotalSum = Number(expenseAggregates[0]?.expenseTotalSum ?? 0);
 
   return {
@@ -1183,8 +1090,6 @@ export const getProductCoverImageUrlsByProductIds = async (
  */
 export const productSearch = async (
   db: Database,
-  // Narrowed on purpose: this path ignores the presence filters, and the type
-  // should say so rather than accept the full ProductFilters and drop them.
   filters: Pick<
     ProductFilters,
     "nameFilter" | "manufacturerFilter" | "upcFilter" | "categoryFilter"
@@ -1207,8 +1112,6 @@ export const productSearch = async (
     eqAny(product.category, filters.categoryFilter),
   );
 
-  // Same ordering rules as productList, so picker results match the table's sort
-  // for any shared query params.
   const orderByArray = productListOrderBy(sorts);
 
   const { take, skip } = buildTakeSkip(pagination);
@@ -1609,8 +1512,6 @@ export const updateProduct = async (
       if (unitMappings !== undefined)
         assertNoCanonicalPriceMapping(unitMappings);
 
-      // `upc` is deliberately split out of the column write: a barcode is a
-      // `gtin` identifier row now, applied below alongside `externalIds`.
       const { upc, isbn, ...columnData } = productData;
       const incomingGtin = resolvePrimaryProductCodeInput({ upc, isbn });
       const desiredExternalIds =
@@ -1641,7 +1542,6 @@ export const updateProduct = async (
         updateData.ingredientId = ingredientId;
       }
 
-      // Auto-correct category to "food" if the resulting product will have food indicators
       const resultingProduct = {
         fdc_id: updateData.fdc_id ?? beforeProduct.fdc_id,
         ingredientId: updateData.ingredientId ?? beforeProduct.ingredientId,
@@ -1713,10 +1613,6 @@ export const updateProduct = async (
       if (data.price !== undefined || unitMappings !== undefined) {
         await syncInventoryValuationsForProduct(tx, id);
       }
-      // Both inputs can arrive on one update and `syncProductExternalIds`
-      // REPLACES the set, so a bare `upc` has to be folded into that payload
-      // rather than applied after it — otherwise whichever ran second would
-      // silently discard the other.
       if (externalIds !== undefined) {
         const desired = desiredExternalIds!;
         await assertExternalIdsAvailable(tx, desired, id);
@@ -1864,7 +1760,6 @@ export const setProductsStockTracked = async (
   return getProductsByShortcodes(db, updatedShortcodes);
 };
 
-/** Patch selected external-ID slots without replacing unrelated identifiers. */
 export const patchProductExternalIds = async (
   db: Database,
   id: ProductId,
@@ -1874,7 +1769,6 @@ export const patchProductExternalIds = async (
       kind: ExternalIdKind;
       externalId: string;
       url?: string | null;
-      /** Omitted means primary — the value that stands for the slot. */
       isPrimary?: boolean;
     }>;
     remove: Array<{
@@ -1886,9 +1780,6 @@ export const patchProductExternalIds = async (
   actor: ActorContext,
 ): Promise<ProductTopLevelOut> =>
   await withTransaction(db, async (tx) => {
-    // Serialize slot patches for one Product while allowing other Products to
-    // proceed independently. The conflict target below still protects each
-    // individual slot at the database boundary.
     await lockAndValidateForDelete(tx, product, [id], "Product");
     const before = await tx.query.product.findFirst({
       where: and(eq(product.id, id), notDeleted(product)),
@@ -1902,8 +1793,6 @@ export const patchProductExternalIds = async (
       ),
     });
 
-    // A slot can now hold several rows, so the compare-and-swap addresses one
-    // ROW by its value rather than "whatever occupies the slot".
     for (const entry of input.remove) {
       const source = entry.source.trim().toLowerCase();
       const inSlot = beforeIds.filter(
@@ -1949,13 +1838,6 @@ export const patchProductExternalIds = async (
     for (const entry of input.upsert) {
       const source = entry.source.trim().toLowerCase();
       const isPrimary = entry.isPrimary ?? true;
-      // Read LIVE, not from `beforeIds`. Earlier entries in this same payload
-      // have already written to this slot: a primary upsert overwrites the
-      // primary row's `externalId` in place, so a later `isPrimary: false`
-      // entry naming the OLD value would match that same physical row in the
-      // pre-call snapshot and demote it — silently destroying the identifier it
-      // was trying to preserve, which is the loss this whole change exists to
-      // prevent.
       const slotRows = await tx.query.productExternalId.findMany({
         where: and(
           eq(productExternalId.productId, id),
@@ -1964,14 +1846,9 @@ export const patchProductExternalIds = async (
           notDeleted(productExternalId),
         ),
       });
-      // A secondary is addressed by its VALUE — there is no single occupant to
-      // overwrite, and overwriting an arbitrary one would destroy an id.
       const liveSlot = isPrimary
         ? slotRows.find((e) => e.isPrimary)
         : slotRows.find((e) => e.externalId === entry.externalId);
-      // A re-submission of the exact value already live in this slot is a
-      // no-op: skip it so it neither bumps `updatedAt` nor (via the
-      // conflict-target upsert) touches the row for no real change.
       if (
         liveSlot &&
         !removedSlots.has(`${source}\0${entry.kind}`) &&
@@ -2079,7 +1956,6 @@ export const patchProductExternalIds = async (
     });
   });
 
-// Quick create a product with minimal data
 export const quickCreateProduct = async (
   db: Database,
   data: {
@@ -2094,7 +1970,6 @@ export const quickCreateProduct = async (
     price?: number | null;
     category?: ProductCategory | null;
     shortcode?: string; // Optional shortcode from import (preserves sheet shortcodes)
-    // Timestamps (optional, for preserving through sync)
     createdAt?: Date;
     updatedAt?: Date;
   },
@@ -2125,7 +2000,6 @@ export const quickCreateProduct = async (
     ingredientId: data.ingredientId ?? null,
     price: data.price ?? null,
     category,
-    // Preserve timestamps if provided (for sync restore)
     ...(data.createdAt && { createdAt: data.createdAt }),
     ...(data.updatedAt && { updatedAt: data.updatedAt }),
   };
@@ -2284,22 +2158,7 @@ export const deleteProducts = async (
     // Prevents race conditions by acquiring row-level locks
     await lockAndValidateForDelete(tx, product, ids, "Product");
 
-    // Safety check: don't delete a product with live acquisition evidence or
-    // durable work history.
-    // This used to be two hand-written checks (inventory, then expenses) kept
-    // in sync with `findOrphanedProducts` (repo/problems/detectors-product.ts)
-    // only by a prose comment — "Inventory and expenses are Product's two
-    // acquisition edges, so findOrphanedProducts and this guard must agree on
-    // both" — which is exactly the kind of agreement a reviewer can miss
-    // (checking only inventory here once made that detector's false
-    // positives executable). Both now read `PRODUCT_EDGE_ROLES`, so which
-    // edges block a delete can't drift between the two call sites: adding an
-    // acquisition/history edge there is a compile error in both until each is
-    // wired up. Permitting an expense-linked delete used to be deliberate too — the
-    // dangling link degraded to a null display name via
-    // resolveLiveJoinName — but that was reversed: the ledger's net cost and
-    // owned/sold window are derived from these rows, and a nameless product
-    // silently corrupts that derivation with no restore path.
+    /** Product deletion must reject live acquisition/history evidence through the shared incoming-edge policy. */
     for (const key of Object.keys(
       PRODUCT_RETAINING_DEPENDENTS,
     ) as Array<ProductRetainingEdgeKey>) {

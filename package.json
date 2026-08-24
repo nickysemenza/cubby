@@ -15,6 +15,8 @@
     "typecheck:staged": "node scripts/typecheck-staged.ts",
     "types:check": "pnpm --filter @cubby/web --filter @cubby/upc-lookup --filter @cubby/usda-api --parallel types:check",
     "openapi:check": "pnpm --filter @cubby/usda-api generate:openapi:check",
+    "entity:generate": "node scripts/entity-literal-generator.ts",
+    "entity:check": "node scripts/entity-literal-generator.ts --check",
     "knip": "knip --no-config-hints",
     "dedupe:check": "pnpm dedupe --check",
     "docs:check": "node scripts/check-markdown-links.ts",
@@ -25,7 +27,9 @@
     "format:changed": "node scripts/format-changed.ts",
     "test": "pnpm -r test",
     "test:unit": "pnpm --filter @cubby/web test:unit",
+    "test:unit-pure": "pnpm --filter @cubby/web test:unit-pure",
     "test:ui": "pnpm --filter @cubby/web test:ui",
+    "test:pglite": "pnpm --filter @cubby/web test:pglite",
     "test:integration": "pnpm --filter @cubby/web test:integration",
     "test:changed": "pnpm --filter @cubby/web test:changed",
     "test:file": "pnpm --filter @cubby/web test:file",
@@ -40,6 +44,7 @@
     "@types/node": "^26.1.1",
     "husky": "^9.1.7",
     "knip": "^6.27.0",
+    "oxc-parser": "0.147.0",
     "typescript": "^7.0.2"
   }
 }

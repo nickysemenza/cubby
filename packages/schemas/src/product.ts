@@ -79,14 +79,12 @@ import {
   unitMappingWithMetadata,
 } from "./unitmapping";
 
-// Product category enum for filtering/organization
 export const productCategory = z
   .enum(productCategoryValues)
   .describe("Product category");
 
 export type ProductCategory = z.infer<typeof productCategory>;
 
-// Re-export for consumers that need the values array
 export { productCategoryValues } from "@cubby/shared";
 
 /**
@@ -97,15 +95,6 @@ export { productCategoryValues } from "@cubby/shared";
 export const hasFdcLink = (fdc_id: number | null | undefined): boolean =>
   fdc_id != null && fdc_id > 0;
 
-/**
- * Check if a product has USDA food data indicators that should force category to "food"
- *
- * A product is considered to have food data if it has:
- * - A USDA food link (`fdc_id`)
- * - An associated ingredient (used in recipes)
- *
- * Note: UPC is intentionally NOT included - barcodes are on all products, not just food
- */
 export const hasFoodIndicators = (product: {
   fdc_id?: number | null;
   // This presence-only predicate is shared by the public shortcode form and
@@ -115,8 +104,6 @@ export const hasFoodIndicators = (product: {
   hasFdcLink(product.fdc_id) ||
   (product.ingredientId != null && product.ingredientId.length > 0);
 
-// Input schema for creating products (includes relationships)
-// Note: category is optional in input (defaults to null) but required in output
 const productCreateShape = {
   // Override the output/read `name` (lax for reads) with a non-empty constraint on
   // the create/update boundary; keep the mock hint for test fixtures.
@@ -135,17 +122,7 @@ const productCreateShape = {
     .describe(
       'Free-form compatibility/grouping tags, e.g. "grinder-4.5in" or "M18". Tag the tool AND the consumables that fit it with the same value; `category` says which side each is. Replaces the existing list when provided.',
     ),
-  /**
-   * A barcode to record as this product's PRIMARY one. Normalized to GTIN-14
-   * and upserted onto the `gtin` external-id slot; it does not disturb the
-   * product's other identifiers. Pass `externalIds` to manage the full set.
-   */
   upc: gtin.nullable(),
-  /**
-   * A physical book's ISBN. ISBN-10 and ISBN-13 both normalize into the same
-   * primary `gtin` external-id row; this is a write convenience, not a second
-   * stored identifier namespace.
-   */
   isbn: isbn
     .nullable()
     .optional()
@@ -230,20 +207,11 @@ export const productUpdateData = deriveUpdateData(productCreateShape, {
   },
 });
 
-// Input schema for updating products (matches location/recipe/ingredient pattern)
 export const productUpdateInput = z.object({
   id: productShortcode,
   data: productUpdateData,
 });
 
-/**
- * Bulk stock-tracking write — the same tri-state as a single
- * `productUpdateData.stockTracked`, batched over `ids`.
- *
- * Nullable on purpose, and the `null` arm is not decoration: it is how a row
- * that was retired by mistake gets back onto the "Not on a shelf" worklist. A
- * write-once `false` would make the sweep irreversible in the UI.
- */
 export const productBulkStockTrackedInput = z.object({
   ids: z.array(productShortcode).min(1),
   stockTracked: z.boolean().nullable(),
@@ -252,19 +220,12 @@ export type ProductBulkStockTrackedInput = z.infer<
   typeof productBulkStockTrackedInput
 >;
 
-// Keep ancillary product hydration batches stricter than the general 1000-row
-// backend ceiling so each summary query has bounded database and serialization
-// work and retains useful cache granularity.
 export const PRODUCT_SUMMARY_BATCH_MAX = 50;
 
 export const productSummaryBatchInput = z.object({
   ids: z.array(productShortcode).max(PRODUCT_SUMMARY_BATCH_MAX),
 });
 
-// A recount reads every distinct product in one pass-scoped request. Keep that
-// request bounded without forcing the client back to a paginated product list;
-// 5,000 covers a whole-house pass (2,764 is the documented live scale) while
-// remaining comfortably below PostgreSQL's bind-parameter ceiling.
 export const PRODUCT_QUANTITY_SUMMARY_BATCH_MAX = 5_000;
 
 export const productQuantitySummaryBatchInput = z.object({
@@ -294,11 +255,8 @@ export const productFindOrCreateByUPCInput = z.object({
   defaultName: z.string().optional(),
 });
 
-/** A product identity captured by the universal scanner. */
 export const productFindOrCreateByCodeInput = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("barcode"), value: upc }),
-  // The ISBN transform makes ISBN-10, ISBN-13, and Cubby's canonical GTIN-14
-  // representation converge before the orchestration layer sees them.
   z.object({ kind: z.literal("isbn"), value: isbn }),
 ]);
 
@@ -323,8 +281,6 @@ export const productMarkUsdaUnavailableManyInput = z.object({
   ids: z.array(productShortcode).min(1).max(100),
 });
 
-// Filters accepted by the product list endpoint. Canonical shape shared by the
-// tRPC router (and available to any other list caller).
 export const productFilterFields = {
   ...auditDateFilterFields,
   ...productRelatedFilterFields,
@@ -418,22 +374,12 @@ export const productFilterFields = {
    * than narrowing it (see `taskFilterFields.projectPresenceFilter`).
    */
   tagsPresenceFilter: presenceFilter,
-  /**
-   * `product.category` is nullable, so `"none"` is the uncategorized worklist.
-   * OR-ed with `categoryFilter` — see `taskFilterFields.projectPresenceFilter`.
-   */
   categoryPresenceFilter: presenceFilter,
   expensePresenceFilter: presenceFilter.describe(
     "Filter to products that do / don't have at least one expense in the ledger. Both acquisitions and exits (negative rows) count.",
   ),
   ...numericRangeFields("expenseCount", { int: true, nonnegative: true }),
   ...numericRangeFields("expenseTotal"),
-  /**
-   * Inclusive, SIGNED bounds on units bought minus units gone.
-   * `expectedQuantityMax: -1` is the "sold or returned more than was ever
-   * bought" worklist — a real data defect, and the reason this is not clamped
-   * at zero.
-   */
   ...numericRangeFields("expectedQuantity"),
   /**
    * Products whose shelf disagrees with the ledger. Restricted to stocked
@@ -507,12 +453,6 @@ export const productFilterFields = {
   unitMappingPresenceFilter: presenceFilter.describe(
     "Filter to products that do / don't have at least one unit mapping (conversion edge).",
   ),
-  /**
-   * Products that CONTAIN components — kits and multi-packs. Named for what it
-   * tests rather than for "kit", because `kitMembership` already names the
-   * transpose (the kits a product is *inside*), and a `kitPresenceFilter` would
-   * read as either one.
-   */
   componentPresenceFilter: presenceFilter.describe(
     "Filter to products that are / aren't kits — i.e. that do or don't contain at least one component product.",
   ),
@@ -653,10 +593,7 @@ export const productSortableFields = [
   // the sort while the header still renders a sort affordance.
   "expectedQuantity",
   "quantityVariance",
-  // Latest linked Purchase date — resolved by a correlated subquery in
-  // repo/product/crud.ts.
   "purchaseDate",
-  // Alphabetically first linked Project name — same resolver file.
   "related:product.projects",
   "related:product.vendors",
   "related:product.purchases",
@@ -745,7 +682,6 @@ export type ProductDiscardInput = z.infer<typeof productDiscardInput>;
 
 export const productDiscardOut = z.object({
   expenseId: expenseShortcode,
-  /** Negative, as stored on the row. */
   storedQuantity: z.number().negative(),
   inventory: z
     .object({
@@ -786,11 +722,6 @@ const productTopLevelFields = {
     .describe(
       'Free-form compatibility/grouping tags, e.g. "grinder-4.5in", "M18"',
     ),
-  /**
-   * The barcode that stands for this product — DERIVED from its primary `gtin`
-   * external-id row, not stored. The full set is in `externalIds`; a product
-   * routinely carries more than one.
-   */
   primaryGtin: gtin.nullable(),
   fdc_id: fdcId
     .nullable()
@@ -827,7 +758,6 @@ const productTopLevelFields = {
   ...timestampedFields,
 };
 
-// Response schema for product data
 export const productTopLevelOut = z.object(productTopLevelFields);
 
 /**
@@ -904,29 +834,11 @@ const productInventoryFields = {
   ...timestampedFields,
 };
 
-/**
- * An ancestor rung on the product detail read, carrying the thumbnail the
- * breadcrumb draws.
- *
- * A product-side extension rather than a widening of the shared
- * `locationAncestorOut`, because that schema is also what
- * `locationParentOptions` returns — a 500-row picklist that documents
- * (location/crud.ts) that it deliberately declines to pay for cover images. A
- * nullable field there would have to mean both "no photo" and "not requested".
- */
 const productLocationAncestorOut = z.object({
   ...locationAncestorFields,
   displayImage: imageUrlSummary.nullable(),
 });
 
-/**
- * A location that IS this product, with its breadcrumb and thumbnail.
- *
- * Same reasoning as `productLocationAncestorOut`: `locationPathRefOut` is
- * shared with pickers and suggestion payloads that draw no thumbnail.
- */
-// The Cookbook this product IS — a shelf copy of a book whose recipes were
-// imported. At most one; `recipeCount` is what makes the panel worth drawing.
 export const productCookbookRefOut = z.object({
   id: cookbookShortcode,
   name: z.string(),
@@ -944,14 +856,7 @@ const productInventoryWithLocationOut = z.object({
   ...productInventoryFields,
   location: z.object({
     ...locationOutFields,
-    /**
-     * Own first displayable photo, else the cover of the SKU this location IS.
-     * Resolved server-side through the same helper search and the enriched
-     * entity-link reads use, so every surface on this page agrees; `images` and
-     * `product.coverImage` beside it are the raw inputs, not the policy.
-     */
     displayImage: imageUrlSummary.nullable(),
-    /** Root → immediate parent, hydrated once for the whole detail read. */
     ancestors: z.array(productLocationAncestorOut),
   }),
 });
@@ -998,12 +903,6 @@ export type ProductPickerOnHandOut = ProductPickerItemOut["onHand"];
  */
 export const productQuantityFields = {
   quantityLedger: productQuantityLedgerOut,
-  /**
-   * Live units across every shelf this product sits on. Null when it is not
-   * stocked at all, and null when its entries carry MORE THAN ONE unit — a
-   * count of `each` plus a volume of `can` has no meaningful sum, so callers
-   * render `—` rather than adding apples to oranges.
-   */
   onHandUnits: z.number().nullable(),
   /**
    * `onHandUnits - quantityLedger.expectedQuantity`. Null exactly when
@@ -1077,16 +976,11 @@ export type ProductInventoryEntriesByIdOut = z.infer<
   typeof productInventoryEntriesByIdOut
 >;
 
-// Product list rows stay list-shaped. USDA summaries and recipe usages hydrate
-// through separate/detail paths so list paint is not blocked by ancillary data.
 export const productListItemOut = z.object({
   ...productTopLevelFields,
   unitMappings: z.array(unitMappingOut),
   ingredient: productIngredientOut.nullable(),
   inventoryEntry: z.array(productListInventoryEntryOut),
-  // Live expenses (acquisitions + negative exit rows) linked to this
-  // product — backs the list's "Expenses" column + its deep link to
-  // `/expenses?productId=`.
   expenseCount: z.number().int(),
   // Live `ProductComponent` edges where this product is the parent — non-zero
   // means it's a kit or multi-pack. Counts distinct components, not units: a
@@ -1097,16 +991,11 @@ export const productListItemOut = z.object({
   // this ledger, so they telescope correctly. 0 for a product with no
   // expenses, never null.
   expenseTotal: money,
-  // A product can appear on several Expense lines/Purchases. The table shows
-  // the latest live Purchase date as the compact scalar provenance cue.
   purchaseDate: plainDate.nullable(),
   ...productQuantityFields,
 });
 export type ProductListItem = z.infer<typeof productListItemOut>;
 
-// Enriched product shape for detail/create/update responses. recipeUsages is
-// required here because this schema represents a fully hydrated product detail
-// response, not list rows or lazy-loaded recipe usage data.
 export const productWithFoodOut = z.object({
   ...productTopLevelFields,
   ingredient: productIngredientOut.nullable(),
@@ -1180,12 +1069,6 @@ export type ProductSummariesOut = z.infer<typeof productSummariesOut>;
 
 export const productShortcodeListOut = z.array(productTopLevelOut);
 
-/**
- * `product.tagOptions`' output — the distinct tag roster feeding the product
- * list's Tags filter picklist, ranked by how many products carry each tag.
- * Counted (unlike `recipeTagsOut`, a bare string array) so the picklist can
- * show usage and surface near-duplicate tags.
- */
 export const productTagOptionsOut = z.array(
   z.object({
     tag: z.string(),
@@ -1194,11 +1077,6 @@ export const productTagOptionsOut = z.array(
 );
 export type ProductTagOptionsOut = z.infer<typeof productTagOptionsOut>;
 
-/**
- * The external-ID source slugs actually stored, with the number of live
- * products carrying each. A static list would rot: sources are minted by
- * whichever importer wrote the row, so the roster comes from the data.
- */
 export const productExternalIdSourceOptionsOut = z.array(
   z.object({
     source: z.string(),
@@ -1219,18 +1097,6 @@ export type ProductManufacturerOptionsOut = z.infer<
   typeof productManufacturerOptionsOut
 >;
 
-/**
- * "Fits With" — the products sharing a tag with the one being viewed, plus
- * where each tag's family is stored.
- *
- * Each sibling carries its own full `tags` so the client can group by the
- * shared tag — `category` is what tells you which side of the pairing a
- * sibling is on (the tool or the consumable), which is why the tag itself
- * needs no direction.
- *
- * `tagStorage` is keyed by the same tags, so the two halves render as one
- * grouped list from a single round trip.
- */
 export const productTagSiblingsOut = z.object({
   siblings: z.array(
     z.object({
@@ -1248,15 +1114,12 @@ export const productTagSiblingsOut = z.object({
         z.object({
           id: locationShortcode,
           name: z.string(),
-          /** Root → immediate parent. Empty for a top-level location. */
           ancestors: z.array(locationAncestorOut),
           /** Distinct sibling products stocked here, never the viewed one. */
           productCount: z.number().int().positive(),
-          /** The viewed product is stocked here too. */
           holdsSource: z.boolean(),
         }),
       ),
-      /** Locations the server truncated away, for visible disclosure. */
       omittedLocationCount: z.number().int().nonnegative(),
     }),
   ),
@@ -1277,8 +1140,6 @@ export const productCategoryDistributionOut = z.array(
   }),
 );
 
-// Quick create schema - minimal required fields for rapid entry
-// Used for quick inventory capture workflow
 export const productQuickCreatePayload = z.object({
   name: requiredName("Product name"),
   manufacturer: z.string().default(UNSPECIFIED_MANUFACTURER),
@@ -1373,21 +1234,16 @@ export const mcpProductUpdateInput = z.object({
     .describe("Product name")
     .meta({ mock: "commerce.productName" })
     .optional(),
-  // Not inherited from productCreateShape (this MCP shape is hand-written), so
-  // aliases has to be listed explicitly to be editable by the agent.
   aliases: z
     .array(z.string())
     .optional()
     .describe("Alternate names (replaces the existing list)"),
-  // Same reason as aliases — hand-written shape, so this has to be listed.
   tags: z
     .array(z.string())
     .optional()
     .describe(
       'Compatibility/grouping tags, e.g. "grinder-4.5in" or "M18" (replaces the existing list). Tag a tool and the consumables that fit it with the same value; `category` distinguishes which is which.',
     ),
-  // Same reason as aliases — hand-written shape, so this has to be listed to be
-  // writable. Omitting it leaves existing rows untouched (see productUpdateData).
   externalIds: externalIdValues
     .optional()
     .describe(
@@ -1438,14 +1294,12 @@ export const mcpProductUpdateInput = z.object({
     .describe("Product image ids in display order; first valid image is cover"),
 });
 
-/** Slim MCP projection of a product list/detail row. */
 const productMcpFields = {
   id: productShortcode,
   name: z.string(),
   manufacturer: z.string(),
   model: z.string().nullable(),
   notes: z.string().nullable(),
-  /** Derived from the primary `gtin` external-id row; see `externalIds`. */
   primaryGtin: gtin.nullable(),
   category: productCategory.nullable(),
   tags: z.array(z.string()),
@@ -1510,7 +1364,6 @@ export const productMcpImageOut = z.object({
   isCover: z.boolean(),
 });
 
-/** Detailed MCP projection used only by get/mutations that need media state. */
 export const productMcpDetailOut = z.object({
   ...productMcpFields,
   coverImageId: imageShortcode.nullable(),
@@ -1558,12 +1411,6 @@ export const productExternalIdCollisionsOut = z.object({
 export const productExternalIdCollisionInput = z
   .object({
     source: z.union([externalIdSource, z.array(externalIdSource)]).optional(),
-    /**
-     * The product the caller is about to write these identifiers onto.
-     *
-     * Turns "is this id taken?" into "is this id taken by someone ELSE?", which
-     * is the question an enrichment sweep is actually asking.
-     */
     productId: productShortcode.optional(),
     identifiers: z
       .array(
@@ -1596,11 +1443,6 @@ export const patchProductExternalIdsInput = z
           kind: externalIdKind,
           externalId: z.string().min(1),
           url: z.string().url().nullish(),
-          /**
-           * Omitted means primary — the value that stands for the slot, and the
-           * one an upsert replaces. `false` adds an ADDITIONAL identifier
-           * alongside it, addressed by its own value.
-           */
           isPrimary: z.boolean().optional(),
         }),
       )
@@ -1679,11 +1521,6 @@ export const productMergeSummaryOut = z.object({
    */
   merged: z.number().int().nonnegative(),
   externalIdsMoved: z.number().int(),
-  /**
-   * Identifiers whose slot the survivor already filled, kept as SECONDARY rows
-   * rather than destroyed. Reported by value, not as a bare count: each one is
-   * a live listing, and knowing it survived is the point.
-   */
   externalIdsDemoted: z.array(
     z.object({
       source: z.string(),

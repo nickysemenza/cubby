@@ -11,11 +11,9 @@ import type { MealId } from "@cubby/schemas/identifiers";
 import {
   mealAddRecipeInput,
   mealDateRange,
-  mealFiltersSchema,
   mealListOut,
   mealOut,
   mealRecipeIdInput,
-  mealSortableFields,
   mealUpdateRecipeInput,
   type ShoppingListContribution,
   shoppingListOut,
@@ -24,22 +22,18 @@ import {
 import { contributesToShoppingList } from "@cubby/schemas/meal-classification";
 import { sumBy } from "es-toolkit";
 import { ENTITY_BINDINGS } from "~/server/entity-bindings";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/entity-kernel/registry";
 import {
   addRecipeToMeal,
-  createMealWithEntityId,
-  deleteMeals,
-  getMealByShortcode,
   getMealsByDateRange,
   getUpcomingMealSummary,
-  mealList,
   removeMealRecipeWithEntityId,
-  updateMeal,
   updateMealRecipeWithEntityId,
 } from "~/server/repo/meal";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import type { PlannedLine } from "~/server/services/availability.service";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
-import { createSearchableEntityCrudProcedures } from "../crud-factory";
+import { createEntityCompatibilityProcedures } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const {
@@ -49,36 +43,10 @@ const {
   create,
   update,
   delete: deleteItem,
-} = createSearchableEntityCrudProcedures({
-  schemas: {
-    ...ENTITY_BINDINGS.meal.crud,
-    filters: mealFiltersSchema,
-    sort: { sortableFields: mealSortableFields, defaultSort: "date" },
-  },
-  repository: {
-    getByShortcode: (services, shortcode) =>
-      getMealByShortcode(services.db, shortcode),
-    list: async (services, filters, sort, pagination) =>
-      mealList(services.db, filters, sort, pagination),
-    create: (services, data) =>
-      createMealWithEntityId(services.db, data, services.actorContext),
-    update: async (services, shortcode, data) => {
-      const id = await mealShortcodes.one(services.db, shortcode);
-      const output = await updateMeal(
-        services.db,
-        id,
-        data,
-        services.actorContext,
-      );
-      return { output, entityId: id };
-    },
-    delete: async (services, shortcodes) => {
-      const ids = await mealShortcodes.all(services.db, shortcodes);
-      return deleteMeals(services.db, ids, services.actorContext);
-    },
-  },
-  entityName: "meal",
-});
+} = createEntityCompatibilityProcedures(
+  ENTITY_KERNEL_BINDINGS.meal,
+  ENTITY_BINDINGS.meal.crud,
+);
 
 const mealShortcodes = bindShortcodeResolver("meal");
 

@@ -1,3 +1,4 @@
+import { mutationSideEffectsSchema } from "@cubby/schemas/background-jobs";
 import {
   imageShortcode,
   type ProjectShortcode,
@@ -21,28 +22,24 @@ import {
   initiateUploadWithoutEntitySchema,
   mcpAttachFileInput,
 } from "@cubby/schemas/image";
+import {
+  createPaginatedResponseSchemaWithContext,
+  createSortPaginationFields,
+  type PaginationParams,
+  type SortInput,
+} from "@cubby/schemas/pagination";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import {
-  createDeleteProcedure,
-  createEntityListProcedure,
-} from "~/server/api/crud-factory";
 import {
   createTRPCRouter,
   protectedProcedure,
   strictOutput,
 } from "~/server/api/trpc";
+import { executeEntity } from "~/server/entity-kernel";
 import { createAppError } from "~/server/errors/app-error";
-import {
-  getImageById,
-  getImagesByProjectIds,
-  imageList,
-  markImageUploaded,
-  updateImage,
-} from "~/server/repo/image";
+import { getImagesByProjectIds, markImageUploaded } from "~/server/repo/image";
 import {
   resolveAllOrThrow,
-  resolveAllPresent,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import {
@@ -50,7 +47,6 @@ import {
   cleanupUnreferencedImageStorage,
   createFileUpload,
   cullPendingImageStorage,
-  deleteImagesWithStorage,
   importImageFromUrl,
   initiateDocumentUpload,
   initiateImageUploadWithoutEntity,
@@ -64,69 +60,76 @@ const projectImageSummary = z.object({
   filename: z.string(),
 });
 
-// List images with standard pagination, sorting, and filtering. Uses the crud
-// factory so the response carries the per-record error-context wrapper every
-// other entity list uses.
-const { list } = createEntityListProcedure({
-  schemas: {
-    output: imageWithEntitySchema,
-    filters: imageListFiltersSchema,
-    sort: {
-      sortableFields: imageSortableFields,
-      defaultSort: "createdAt",
-    },
-  },
-  repository: {
-    list: async (services, filters, sort, pagination) => {
-      return await imageList(services.db, filters, sort, pagination);
-    },
-  },
-  entityName: "image",
-});
+const list = protectedProcedure
+  .input(
+    z.object({
+      filters: imageListFiltersSchema,
+      ...createSortPaginationFields({
+        sortableFields: imageSortableFields,
+        defaultSort: "createdAt",
+      }),
+    }),
+  )
+  .output(
+    strictOutput(
+      createPaginatedResponseSchemaWithContext(imageWithEntitySchema, "image"),
+    ),
+  )
+  .query(async ({ ctx, input }) => {
+    const result = await executeEntity(ctx, {
+      action: "list",
+      entity: "image",
+      filters: input.filters,
+      sort: input.sort as SortInput,
+      pagination: input.pagination as PaginationParams,
+      groupBy: input.groupBy,
+    });
+    if (result.action !== "list")
+      throw new Error("Entity kernel returned the wrong action");
+    return {
+      items: z.array(imageWithEntitySchema).parse(result.items),
+      meta: result.meta,
+    };
+  });
 
-/**
- * Hard-delete images (rows + associations + R2 objects).
- *
- * `Image` has a `deletedAt` column like every other entity; it's just never set.
- * Images are deleted for real rather than tombstoned — an image with no owning
- * entity has no use once removed — so this really removes the row and its R2
- * object. Shaped by `createDeleteProcedure` like every other entity delete, so the list
- * page's `deletable` config and bulk selection work unchanged; there are no
- * mutation side-effects to run (images carry no embedding / derived data).
- */
-const deleteItem = createDeleteProcedure(async (services, ids) => {
-  // The table and detail page hand back `IMG-` codes, so what arrives here is
-  // a shortcode; `deleteImagesWithStorage` keys on `Image.id`. Resolve first.
-  // `createDeleteProcedure` infers its id type from this callback and then
-  // casts, so the branded parameter alone does NOT catch a missed resolve —
-  // hence the explicit `imageShortcode` input schema below, which rejects a
-  // raw uuid at parse time rather than letting one through as a "code".
-  const imageIds = await resolveAllPresent(services.db, "image", ids);
-  const { deletedIds } = await deleteImagesWithStorage(services.db, imageIds);
-  return { deleted: deletedIds.length };
-}, imageShortcode);
+const deleteItem = protectedProcedure
+  .input(z.object({ ids: z.array(imageShortcode).min(1).max(500) }))
+  .output(
+    strictOutput(
+      z.object({
+        deleted: z.number().int().nonnegative(),
+        sideEffects: mutationSideEffectsSchema,
+      }),
+    ),
+  )
+  .mutation(async ({ ctx, input }) => {
+    const result = await executeEntity(ctx, {
+      action: "delete",
+      entity: "image",
+      ids: input.ids,
+    });
+    if (result.action !== "delete")
+      throw new Error("Entity kernel returned the wrong action");
+    return { deleted: result.deleted, sideEffects: result.sideEffects };
+  });
 
 export const imageRouter = createTRPCRouter({
   list,
   delete: deleteItem,
 
-  /**
-   * Rename an image. `filename` is the only safely user-editable column — see
-   * `imageUpdateInput`. Hand-written rather than `createUpdateProcedure`
-   * (private to crud-factory), but matches its input/output shape exactly so
-   * `useUpdateMutation`/`createNameColumn`'s editable wiring works unchanged.
-   *
-   * No try/catch wrapper: `updateImage`'s repo query can throw IMAGE_NOT_FOUND
-   * for a stale/deleted id (via the re-read in `getImageById`), which should
-   * propagate as a 4xx rather than be rewrapped into a 500 — same reasoning as
-   * `getByID` above.
-   */
   update: protectedProcedure
     .input(z.object({ id: imageShortcode, data: imageUpdateInput }))
     .output(strictOutput(imageWithEntitySchema))
     .mutation(async ({ ctx, input }) => {
-      const id = await resolveOrThrow(ctx.db, "image", input.id);
-      return await updateImage(ctx.db, id, input.data);
+      const result = await executeEntity(ctx, {
+        action: "update",
+        entity: "image",
+        id: input.id,
+        data: input.data,
+      });
+      if (result.action !== "update")
+        throw new Error("Entity kernel returned the wrong action");
+      return imageWithEntitySchema.parse(result.item);
     }),
 
   /**
@@ -281,21 +284,19 @@ export const imageRouter = createTRPCRouter({
       }
     }),
 
-  /**
-   * Get an image by its public `IMG-` shortcode, with entity association
-   * information.
-   *
-   * `resolveOrThrow` throws the same `IMAGE_NOT_FOUND` reason `getImageById`
-   * itself throws on a stale/deleted uuid, so this stays a clean 4xx either
-   * way — no try/catch wrapper needed, same reasoning as before the shortcode
-   * cutover.
-   */
   getByID: protectedProcedure
     .input(getImageByIdSchema)
     .output(strictOutput(imageWithEntitySchema))
     .query(async ({ ctx, input }) => {
-      const id = await resolveOrThrow(ctx.db, "image", input.id);
-      return await getImageById(ctx.db, id);
+      const result = await executeEntity(ctx, {
+        action: "get",
+        entity: "image",
+        id: input.id,
+        missing: "error",
+      });
+      if (result.action !== "get" || result.item === null)
+        throw new Error("Entity kernel returned the wrong action");
+      return imageWithEntitySchema.parse(result.item);
     }),
 
   /**

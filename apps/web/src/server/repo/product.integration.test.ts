@@ -66,9 +66,6 @@ describe("product repository", () => {
     expect(createdProduct.name).toEqual(productData.name);
     expect(createdProduct.manufacturer).toEqual(productData.manufacturer);
     expect(createdProduct.model).toEqual(productData.model);
-    // The barcode round-trips through the `gtin` identifier slot and comes
-    // back canonical, so the write input and the read projection differ by the
-    // GTIN-14 padding — that difference IS the migration.
     expect(createdProduct.primaryGtin).toEqual(
       productData.upc?.padStart(14, "0") ?? null,
     );
@@ -203,9 +200,6 @@ describe("product repository", () => {
       ).rejects.toThrow(new RegExp(`already belongs to ${first.id}`));
     });
 
-    // The bug `Product_upc_key` had: it compared 12 digits to 13, so one item
-    // could exist twice under two encodings of its own barcode. That is exactly
-    // how PRD 774cdbbd and 4182d4c9 both came to hold the Linzer foam brush.
     it("collides across ENCODINGS of one barcode, not just exact strings", async () => {
       const first = await createProduct(
         ctx.db,
@@ -219,8 +213,6 @@ describe("product repository", () => {
           makeProductInput({ name: "Foam Brush 13", upc: "0077089850017" }),
           ctx.actor,
         ),
-        // Canonical GTIN-14 in the message: both encodings are ONE identifier
-        // now, which is the whole point.
       ).rejects.toThrow(
         new RegExp(
           `gtin/gtin_14/00077089850017 already belongs to ${first.id}`,
@@ -235,15 +227,11 @@ describe("product repository", () => {
         ctx.actor,
       );
 
-      // 12-digit scan of a barcode stored from its 13-digit reprint.
       const found = await findProductByGtin(ctx.db, "077089850017");
       expect(found?.id).toBe(created.id);
       expect(found?.primaryGtin).toBe("00077089850017");
     });
 
-    // `syncProductExternalIds` REPLACES the identifier set, so applying a bare
-    // `upc` after it (or before it) would silently discard whichever ran first.
-    // The barcode is folded INTO the replacement payload for exactly this.
     it("keeps both when one update carries a barcode AND externalIds", async () => {
       const created = await createProduct(
         ctx.db,
@@ -284,10 +272,6 @@ describe("product repository", () => {
       expect(live).toHaveLength(2);
     });
 
-    // A product holds a SET of barcodes, so `upc: null` retires the one that
-    // stands for it and promotes the oldest survivor — the same rule
-    // patch_product_external_ids documents for removing a primary. Clearing the
-    // whole set means passing an explicit `externalIds` payload.
     it("clearing the barcode retires the primary and promotes a secondary", async () => {
       const created = await createProduct(
         ctx.db,
@@ -421,8 +405,6 @@ describe("product repository", () => {
       ["amazon", "retailer_sku"],
     ]);
 
-    // The legacy replacement endpoint remains compatible when every typed
-    // entry is supplied, then the patch endpoint preserves untouched slots.
     await updateProduct(
       ctx.db,
       created.entityId,
@@ -490,10 +472,6 @@ describe("product repository", () => {
   });
 
   it("holds a second identifier in one slot and promotes on removal", async () => {
-    // Amazon lists one item twice, so a product legitimately carries two ASINs.
-    // The slot used to hold exactly one row, which is why merging two such
-    // products destroyed one — and each destroyed id is a live listing that
-    // re-mints the duplicate the next time an order line quotes it.
     const created = await createProduct(
       ctx.db,
       makeProductInput({
@@ -526,8 +504,6 @@ describe("product repository", () => {
       },
       ctx.actor,
     );
-    // Sorted in the assertion: the read applies no ORDER BY, so heap order is
-    // whatever the last UPDATE left behind.
     const asins = async () =>
       (await getProductByID(ctx.db, created.entityId)).externalIds
         .filter((entry) => entry.source === "amazon" && entry.kind === "asin")
@@ -538,8 +514,6 @@ describe("product repository", () => {
       ["B0SECOND01", false],
     ]);
 
-    // An upsert of the PRIMARY replaces the primary only — it must not
-    // overwrite or destroy the secondary sharing the slot.
     await patchProductExternalIds(
       ctx.db,
       created.entityId,
@@ -561,8 +535,6 @@ describe("product repository", () => {
       ["B0SECOND01", false],
     ]);
 
-    // Removing the primary promotes the surviving secondary, so the slot is
-    // never left with only secondaries and nothing standing for it.
     await patchProductExternalIds(
       ctx.db,
       created.entityId,
@@ -639,9 +611,6 @@ describe("product repository", () => {
       ["B0CCC00003", false],
     ]);
 
-    // Two removals from ONE slot. Promoting inside the loop read the pre-call
-    // snapshot, so the second iteration saw a stale `isPrimary` for the row it
-    // had just promoted and skipped promoting again — leaving zero primaries.
     await patch(
       [],
       [
@@ -665,8 +634,6 @@ describe("product repository", () => {
     ]);
     expect(await asins()).toEqual([["B0CCC00003", true]]);
 
-    // Demote-and-replace in one call still does what it says: the pass only
-    // acts on a slot that has no primary left.
     await patch([
       {
         source: "amazon",
@@ -682,8 +649,6 @@ describe("product repository", () => {
       ["B0DDD00004", true],
     ]);
 
-    // And the restored primary is a real arbiter row: the next primary upsert
-    // must replace it rather than insert a second one.
     await patch([
       { source: "amazon", kind: "asin", externalId: "B0EEE00005", url: null },
     ]);
@@ -692,10 +657,6 @@ describe("product repository", () => {
       ["B0EEE00005", true],
     ]);
 
-    // Primary-then-demote in ONE call, the order the earlier test did not
-    // cover. Entry 1 overwrites the primary row's value in place; resolving
-    // entry 2 from the pre-call snapshot then matched that same physical row
-    // and demoted it, losing the value it was meant to keep.
     await patch([
       { source: "amazon", kind: "asin", externalId: "B0FFF00006", url: null },
       {
@@ -836,8 +797,6 @@ describe("product repository", () => {
         where: eq(productExternalId.productId, created.entityId),
       });
 
-    // Re-importing the exact same (source, kind, externalId, url) is a no-op:
-    // the write path must not soft-delete the live row and insert a copy.
     await updateProduct(
       ctx.db,
       created.entityId,
@@ -860,8 +819,6 @@ describe("product repository", () => {
       deletedAt: null,
     });
 
-    // A url-only change on the same slot IS a real change and must still
-    // replace: one live row with the new url, one tombstone of the old.
     await updateProduct(
       ctx.db,
       created.entityId,
@@ -941,10 +898,6 @@ describe("product repository", () => {
     const productAfterNoop = await getProductByID(ctx.db, created.entityId);
     expect(productAfterNoop.updatedAt).toEqual(productBefore.updatedAt);
 
-    // A remove and an upsert naming the SAME slot in one call: the removal must
-    // win. Without the removedSlots guard the unchanged-value check would
-    // short-circuit the upsert and leave the row soft-deleted-then-untouched,
-    // silently dropping the identifier the caller asked to re-add.
     await patchProductExternalIds(
       ctx.db,
       created.entityId,
@@ -971,8 +924,6 @@ describe("product repository", () => {
     const live = afterRemovePlusUpsert.filter((row) => row.deletedAt === null);
     expect(live).toHaveLength(1);
     expect(live[0]).toMatchObject({ externalId: "SKU-200" });
-    // This call DID change something (a real remove + re-add), so this time
-    // the product's `updatedAt` must advance.
     const productAfterRealChange = await getProductByID(
       ctx.db,
       created.entityId,
@@ -1095,8 +1046,6 @@ describe("product repository", () => {
     expect(filteredList.data[0]!.manufacturer).toEqual("Manufacturer X");
     expect(filteredList.data[1]!.manufacturer).toEqual("Manufacturer X");
 
-    // Stacked multi-sort: manufacturer asc groups X before Y, name desc
-    // orders within each manufacturer (C before A within X)
     const stacked = await productList(
       ctx.db,
       {},
@@ -1418,8 +1367,6 @@ describe("product repository", () => {
         { pageIndex: 0, pageSize: 50 },
       );
       expect(kits.data.map((p) => p.id)).toContain(kit.id);
-      // A component is not itself a kit — the filter tests the parent side of
-      // the edge, not membership (which is the transpose, `kitMembership`).
       expect(kits.data.map((p) => p.id)).not.toContain(part.id);
       expect(kits.data.map((p) => p.id)).not.toContain(plain.id);
 
@@ -1435,7 +1382,6 @@ describe("product repository", () => {
       expect(notKits.data.map((p) => p.id)).toContain(part.id);
       expect(notKits.data.map((p) => p.id)).not.toContain(kit.id);
 
-      // The rendered cell must agree with the filter that selected the row.
       const kitRow = kits.data.find((p) => p.id === kit.id);
       expect(kitRow?.componentCount).toBe(1);
       expect(notKits.data.find((p) => p.id === plain.id)?.componentCount).toBe(
@@ -1734,8 +1680,6 @@ describe("product repository", () => {
       const none = await listWith({ inventoryPresenceFilter: "none" });
       const row = none.data.find((p) => p.id === stranded.id);
       expect(row).toBeDefined();
-      // Assert BOTH halves — filter agreement alone would still pass if the
-      // mapper drifted.
       expect(row?.inventoryEntry).toEqual([]);
 
       const has = await listWith({ inventoryPresenceFilter: "has" });
@@ -1838,12 +1782,6 @@ describe("product repository", () => {
         expect(has.data.map((p) => p.id)).toContain(bought.id);
         expect(has.data.map((p) => p.id)).not.toContain(neverBought.id);
       });
-
-      // "a soft-deleted expense doesn't count as having one" moved to the
-      // generic soft-delete sweep in filter-application.integration.test.ts
-      // ("every relation-backed presence filter empties under a soft-delete
-      // sweep" > product): `product.expensePresenceFilter` is relation-backed
-      // AND non-vacuous there now, so the sweep genuinely proves it.
     });
 
     describe("purchase provenance", () => {
@@ -1980,10 +1918,6 @@ describe("product repository", () => {
       });
     });
 
-    // unitMappingPresenceFilter's plain has/none partition moved to the
-    // generic battery in filter-application.integration.test.ts — non-vacuous
-    // there now (seedWorld gives product Alpha a unitMapping).
-
     describe("usdaPresenceFilter", () => {
       it("matches on either key — an fdc_id or a upc to auto-match", async () => {
         const byFdcId = await createProduct(
@@ -2012,11 +1946,6 @@ describe("product repository", () => {
         expect(none.data.map((p) => p.id)).toEqual([neither.id]);
       });
 
-      /**
-       * Pins the deliberate decision NOT to fold `usdaUnavailable` into
-       * `"none"`: the flag doesn't clear the key, so the two questions stay
-       * independent and both remain answerable.
-       */
       it("usdaUnavailable does not clear the key", async () => {
         const flagged = await createProduct(
           ctx.db,
@@ -2073,8 +2002,6 @@ describe("product repository", () => {
         expect(has.count).toEqual(has.data.length);
         expect(has.data.map((p) => p.id)).toContain(mapped.id);
 
-        // The footer total must cover the FILTERED set, not the whole table —
-        // the 999 of the excluded product must not be in it.
         expect(has.sums.price).toEqual(
           has.data.reduce((acc, p) => acc + (p.pricing.effectivePrice ?? 0), 0),
         );
@@ -2324,10 +2251,6 @@ describe("product repository", () => {
         expect(none.data.map((p) => p.id)).not.toContain(product.id);
       });
 
-      /**
-       * The valuation-gap worklist the filter exists for: products physically
-       * in inventory that nobody has priced yet.
-       */
       it("combines with inventoryPresenceFilter: has for the valuation-gap worklist", async () => {
         const shelf = await createLocation(
           ctx.db,
@@ -2492,15 +2415,6 @@ describe("product repository", () => {
         expect(row?.expenseTotal).toEqual(live.cost);
       });
 
-      /**
-       * The footer total behind the Net basis column.
-       *
-       * `createCurrencyColumn` renders `sums[column.id]` when the server
-       * supplies it and otherwise reduces only the LOADED rows — so without
-       * this aggregate an infinite-scrolled list would silently under-report,
-       * which is the same wrong-but-plausible failure the column exists to
-       * make visible.
-       */
       describe("sums.expenseTotal", () => {
         const seed = async (name: string, upc: string, costs: number[]) => {
           const created = await createProduct(
@@ -2526,16 +2440,12 @@ describe("product repository", () => {
         it("nets across the filtered set, and is scoped BY the filter", async () => {
           await seed("SumScoped Alpha", "710000000031", [100, -30]);
           await seed("SumScoped Beta", "710000000032", [25]);
-          // Outside the filter — its cost must not leak into the total.
           await seed("SumOther Gamma", "710000000033", [9999]);
 
           const scoped = await listWith({ nameFilter: "SumScoped" });
           expect(scoped.data).toHaveLength(2);
-          // 100 - 30 + 25. Negative rows telescope; the total is a NET basis.
           expect(scoped.sums?.expenseTotal).toEqual(95);
 
-          // The aggregate is computed over the where clause, not the table —
-          // if it ignored the filter this would pick up the 9999.
           expect(scoped.sums?.expenseTotal).not.toEqual(10094);
         });
 
@@ -2544,7 +2454,6 @@ describe("product repository", () => {
 
           const found = await listWith({ nameFilter: "SumEmpty" });
           expect(found.data).toHaveLength(1);
-          // `sum()` returns NULL over an empty set — coerced, not passed through.
           expect(found.sums?.expenseTotal).toEqual(0);
         });
 
@@ -2699,7 +2608,6 @@ describe("product repository", () => {
         ctx.actor,
       );
 
-      // Should find exact match
       const found = await findProductByNameFuzzyManufacturer(
         ctx.db,
         "Power Drill",
@@ -2722,7 +2630,6 @@ describe("product repository", () => {
         ctx.actor,
       );
 
-      // Should find product when searching with "(unspecified)" - matches by name only
       const found = await findProductByNameFuzzyManufacturer(
         ctx.db,
         "Router Table",
@@ -2745,7 +2652,6 @@ describe("product repository", () => {
         ctx.actor,
       );
 
-      // Should find product when searching with empty string
       const found = await findProductByNameFuzzyManufacturer(
         ctx.db,
         "Table Saw",
@@ -2767,7 +2673,6 @@ describe("product repository", () => {
         ctx.actor,
       );
 
-      // Should find product when searching with null
       const found = await findProductByNameFuzzyManufacturer(
         ctx.db,
         "Circular Saw",
@@ -2789,7 +2694,6 @@ describe("product repository", () => {
         ctx.actor,
       );
 
-      // Should find product with "(unspecified)" when searching for specific manufacturer
       const found = await findProductByNameFuzzyManufacturer(
         ctx.db,
         "Hammer",
@@ -2812,7 +2716,6 @@ describe("product repository", () => {
         ctx.actor,
       );
 
-      // Should NOT find product when manufacturers are both specific and different
       const found = await findProductByNameFuzzyManufacturer(
         ctx.db,
         "Jigsaw",
@@ -2823,7 +2726,6 @@ describe("product repository", () => {
     });
 
     it("should prefer exact manufacturer match over (unspecified)", async () => {
-      // Create two products: one with specific manufacturer, one with (unspecified)
       await createProduct(
         ctx.db,
         makeProductInput({
@@ -2844,7 +2746,6 @@ describe("product repository", () => {
         ctx.actor,
       );
 
-      // Should find exact match first
       const found = await findProductByNameFuzzyManufacturer(
         ctx.db,
         "Screwdriver",
@@ -2876,7 +2777,6 @@ describe("product repository", () => {
         ctx.actor,
       );
 
-      // Should find with different case
       const found = await findProductByNameFuzzyManufacturer(
         ctx.db,
         "POWER DRILL PRO",
@@ -2977,14 +2877,12 @@ describe("product repository", () => {
       ).resolves.toMatchObject({ detachedImageKeys: [] });
     });
 
-    /** PRODUCT_HAS_WISH_CANDIDATES: a live wishlist candidate blocks delete. */
     it("rejects a product that is a live wish candidate, succeeds once the wish is deleted", async () => {
       const candidate = await createProduct(
         ctx.db,
         makeProductInput({
           name: "Wish-Blocked Product",
           upc: "800000000902",
-          // Wishlist candidates must be live Tool products.
           category: "tools",
         }),
         ctx.actor,
@@ -3044,33 +2942,7 @@ describe("product repository", () => {
     });
   });
 
-  /**
-   * Regression backstop for the completeness guarantee `PRODUCT_EDGE_ROLES`
-   * (repo/product/edge-roles.ts) buys: every edge classified "acquisition" or
-   * "history" must actually block `deleteProducts`, and every edge classified
-   * "metadata" must NOT block it — and must itself be cascade-soft-deleted
-   * once the product it's attached to is gone. A wrong classification, a
-   * wrong column, or a silently-dropped predicate in either
-   * `PRODUCT_RETAINING_DEPENDENTS` (product/crud.ts) or
-   * `PRODUCT_RETAINING_NOT_EXISTS` (problems/detectors-product.ts) fails a
-   * test here instead of shipping — declaring an edge's role only forces each
-   * consumer to have *an entry* for it, not that the entry is correct.
-   *
-   * Scoped to `product` alone — NOT written as a fully generic "loop every
-   * entity's edge-role plan" test. See the TODO at the end of this block for
-   * what a future entity needs before that generalization is worth building.
-   *
-   * Three retaining edges are covered elsewhere rather than here, so don't read
-   * this block as the complete roster:
-   *   - `Expense.productId` — `deleteProducts`' own describe above, which also
-   *     pins the error message and the post-delete NOT_FOUND.
-   *   - `InventoryEntry.productId` — `deleteProducts`' own describe above.
-   *   - `Task.subjectProductId` — `deleteProducts`' own describe above.
-   * That the roles map itself is EXHAUSTIVE over `INCOMING_EDGES.product` is a
-   * type-free unit assertion, not a database one: it lives in
-   * `entity-edge-operation-policies.unit.test.ts`, derived from the fact table
-   * rather than from a hand-kept key list.
-   */
+  /** Regression guard: acquisition/history edges block deletion; metadata edges cascade with required cleanup. */
   describe("PRODUCT_EDGE_ROLES backstop", () => {
     it("blocks delete while a location IS the product, and allows it once unlinked", async () => {
       // The `reference` edge retains for a reason the other blockers don't
@@ -3093,7 +2965,6 @@ describe("product repository", () => {
         ctx.actor,
       );
 
-      // The location took its form factor from the SKU rather than a type.
       const linked = await getDb(ctx.db).query.location.findFirst({
         where: eq(location.id, loc.entityId),
       });
@@ -3119,9 +2990,6 @@ describe("product repository", () => {
     });
 
     it("counts a location that IS the product as a unit on hand", async () => {
-      // The union rule: a packout in service as a bin is still a packout you
-      // own. Without this it reads as missing against a ledger that recorded
-      // buying it, and lights "Shelf disagrees" forever.
       const prod = await createProduct(
         ctx.db,
         makeProductInput({ name: "Backstop Union Count Tote" }),
@@ -3145,10 +3013,6 @@ describe("product repository", () => {
     });
 
     it("blocks delete while a purchase link is live, and allows it once detached", async () => {
-      // The provenance edge is `acquisition`, so it retains the product for the
-      // same reason a linked Expense does: for an installment order this link
-      // is often the ONLY record of which order bought the thing, since those
-      // Expenses are `lineBasis: "allocation"` and can never carry a productId.
       const prod = await createProduct(
         ctx.db,
         makeProductInput({ name: "Backstop Purchase Link Product" }),
@@ -3214,9 +3078,6 @@ describe("product repository", () => {
         ctx.actor,
       );
 
-      // Sanity: every metadata edge is actually live before the delete —
-      // otherwise a broken `createProduct` call would make the assertions
-      // below vacuously pass.
       const extIdBefore = await getDb(ctx.db).query.productExternalId.findFirst(
         {
           where: eq(productExternalId.productId, prod.entityId),
@@ -3234,8 +3095,6 @@ describe("product repository", () => {
       expect(mappingBefore).toBeDefined();
       expect(imageJoinBefore).toBeDefined();
 
-      // The image was the product's alone, so the delete reaps it and returns
-      // its R2 key for the caller to drop after the commit.
       const imageKeyBefore = await getDb(ctx.db).query.image.findFirst({
         where: eq(image.id, pendingImage.id),
         columns: { key: true },
@@ -3244,8 +3103,6 @@ describe("product repository", () => {
         deleteProducts(ctx.db, [prod.entityId], ctx.actor),
       ).resolves.toMatchObject({ detachedImageKeys: [imageKeyBefore!.key] });
 
-      // Cascade: the metadata rows are soft-deleted along with the product,
-      // not left live and pointing at a gone parent.
       const extIdAfter = await getDb(ctx.db).query.productExternalId.findFirst({
         where: eq(productExternalId.id, extIdBefore!.id),
       });
@@ -3275,28 +3132,7 @@ describe("product repository", () => {
       ).toHaveLength(0);
     });
 
-    // TODO(generic cascade backstop): this describe block is deliberately
-    // product-only, not the fully generic "loop every entity's edge-role
-    // plan, create a parent + one child per cascade edge, delete the parent,
-    // assert no live children" test sketched in the ethereal-drifting-wilkes
-    // plan (PR 5). Generalizing needs two things a future entity's plan must
-    // supply that `product`'s doesn't uniformly share with `image`'s yet:
-    //   1. A single edge-role/disposition map with a UNIFORM value shape
-    //      across entities. `product`'s axis is acquisition-vs-metadata
-    //      (blocks delete vs. doesn't); `image`'s IMAGE_HARD_DELETE
-    //      (repo/image.ts) is deleteRow-vs-clearFk (how a child is detached).
-    //      Those aren't the same boolean yet, so a generic runner can't ask
-    //      "is this edge cascaded away on delete?" of both without an
-    //      entity-specific branch — which defeats the point of a generic test.
-    //   2. A per-edge fixture factory (create one live dependent row of that
-    //      edge's shape, given a parent id). This block's own
-    //      createInventoryEntry / createExpense /
-    //      createProduct({unitMappings,externalIds,pendingImageIds}) calls
-    //      ARE exactly that, but hand-written per entity, not a lookup table
-    //      a generic runner could dispatch through.
-    // Extend this block by hand for each entity that gets its own edge-role
-    // map (`recipe` is next per the plan) and revisit genericizing once
-    // there are three real examples to generalize from, not two.
+    /** TODO(generic cascade backstop): keep product-specific coverage until generic fixtures model every edge shape. */
   });
 });
 
@@ -3337,14 +3173,8 @@ describe("product detail: where the product is", () => {
 
     expect(detail?.servingAsLocations).toHaveLength(1);
     expect(detail?.servingAsLocations[0]?.name).toBe("detail serving bin");
-    // This row's select carries no image columns on purpose, so the hydrated
-    // thumbnail is the only visual it can have — here, the cover of the SKU
-    // the bin IS, which is this very product.
     expect(detail?.servingAsLocations[0]?.displayImage?.url).toBe(cover.url);
-    // The two numbers the page shows side by side must come from the same set.
     expect(detail?.quantityLedger.locationCount).toBe(1);
-    // No shelf row, but a real unit — this is the shape that rendered
-    // "ON HAND 0 / NOT STOCKED" over a bin you own.
     expect(detail?.inventoryEntry).toHaveLength(0);
     expect(detail?.onHandUnits).toBe(1);
   });
@@ -3355,9 +3185,6 @@ describe("product detail: where the product is", () => {
       makeProductInput({ name: "Detail Mark Product" }),
       ctx.actor,
     );
-    // The bin the stock sits on IS a SKU of its own — a photographed metal
-    // rack whose picture lives on that product, never on the location. This is
-    // the case the card used to render as a bare placeholder glyph.
     const rackSku = await createProduct(
       ctx.db,
       makeProductInput({ name: "Detail Mark Rack SKU" }),
@@ -3401,11 +3228,8 @@ describe("product detail: where the product is", () => {
     const detail = await getProductByID(ctx.db, prod.entityId);
     const stockRow = detail?.inventoryEntry[0];
 
-    // Stock row: the location has no photo, so the SKU it IS supplies one.
     expect(stockRow?.location.name).toBe("Detail Mark Rack");
     expect(stockRow?.location.displayImage?.url).toBe(rackPhoto.url);
-    // Breadcrumb rungs resolve too, and a rung with nothing to draw reads
-    // null — proof the field is a real projection, not a constant.
     expect(
       stockRow?.location.ancestors.map((a) => [
         a.name,
@@ -3530,13 +3354,6 @@ describe("product detail: where the product is", () => {
   });
 });
 
-/**
- * The one write that makes a product vanish from the "Not on a shelf" /
- * "Consumed on projects" worklists, applied over a whole selection. Both halves
- * matter: the flag has to land on exactly the listed rows, and the audit trail
- * has to show which of them actually moved — a sweep of several hundred is only
- * reviewable after the fact if the no-op rows are absent from the log.
- */
 describe("product repository — setProductsStockTracked", () => {
   const ctx = withTestDb();
 
@@ -3546,8 +3363,6 @@ describe("product repository — setProductsStockTracked", () => {
       makeProductInput({ name: "sweep undecided" }),
       ctx.actor,
     );
-    // Already carries the target value: written harmlessly, but `computeChanges`
-    // returns null so the `if (changes)` arm must skip the audit entry.
     const already = await createProduct(
       ctx.db,
       makeProductInput({ name: "sweep already false", stockTracked: false }),
@@ -3566,8 +3381,6 @@ describe("product repository — setProductsStockTracked", () => {
     );
 
     expect(updated.map((row) => row.stockTracked)).toEqual([false, false]);
-    // The unlisted row keeps its undecided state — the sweep is scoped by id,
-    // not by the filter that produced the selection.
     expect(
       (await getProductsByShortcodes(ctx.db, [bystander.id]))[0]?.stockTracked,
     ).toBeNull();
@@ -3590,9 +3403,6 @@ describe("product repository — setProductsStockTracked", () => {
   });
 
   it("takes the decision back to undecided, returning the row to the worklist", async () => {
-    // The undo arm, and the reason the input is nullable rather than a boolean:
-    // a mistaken sweep over a durable silently hides a real object, so putting
-    // it back has to be the same call rather than a manual repair.
     const retired = await createProduct(
       ctx.db,
       makeProductInput({ name: "sweep undo", stockTracked: false }),
@@ -3675,8 +3485,6 @@ describe("product repository — a partly-used roll splits across placements", (
       },
       ctx.actor,
     );
-    // Same product, same room, other placement — legal precisely because
-    // placement is part of the unique slot.
     await createInventoryEntry(
       ctx.db,
       {
@@ -3694,7 +3502,6 @@ describe("product repository — a partly-used roll splits across placements", (
     expect(ledger?.expectedQuantity).toBe(1);
 
     const detail = await getProductByID(ctx.db, roll.entityId);
-    // Two distinct rows, not one folded 1.0 — the split is the record.
     expect(detail?.inventoryEntry).toHaveLength(2);
     expect(
       detail?.inventoryEntry
@@ -3702,8 +3509,6 @@ describe("product repository — a partly-used roll splits across placements", (
         .reduce((sum, value) => sum + value, 0),
     ).toBe(1);
 
-    // Only the remainder is countable: a fixture cannot be walked over and
-    // recounted, which is the whole reason `installed` exists.
     const stockRows = await inventoryentryList(
       ctx.db,
       { productIdFilter: roll.id },

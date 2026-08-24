@@ -31,7 +31,6 @@ describe("imageRouter.delete", () => {
       status: "UPLOADED",
     });
 
-  /** `getImageById` throws IMAGE_NOT_FOUND rather than returning null. */
   const stillExists = async (id: string) =>
     await getImageById(ctx.db, id).then(
       () => true,

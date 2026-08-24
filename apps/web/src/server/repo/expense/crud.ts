@@ -1,10 +1,3 @@
-/**
- * Expense CRUD operations.
- *
- * Expense has no dependency edges and no rollups — a plain diff-audited
- * column update, so (unlike project/task) it fits `createEntityCrud` directly
- * instead of hand-rolling `update`.
- */
 import type { ActorContext } from "@cubby/schemas/context";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import { inferExpenseLineKind } from "@cubby/schemas/expense-line-kind";
@@ -103,17 +96,8 @@ export const EXPENSE_DELETE_EDGE_POLICY = {
   },
 } as const satisfies IncomingEdgePolicy<"expense", OperationDisposition>;
 
-/** `expenseUpdateData` has no standalone type export — derive it from the input. */
 type ExpenseUpdateData = ExpenseUpdateInput["data"];
 
-/**
- * The DB-column shape `expenseCrud`'s `toUpdate` writes — `ExpenseUpdateData`
- * with `vendor`/`orderId` (resolved separately into `purchaseId`, never
- * columns) dropped and `projectId`/`purchaseId` narrowed from the PUBLIC
- * shortcode brand to the internal uuid FK. Resolution happens in
- * `updateExpense` before this shape is built — `toUpdate` is a pure
- * synchronous mapper and can't do the DB lookup itself.
- */
 type ResolvedExpenseUpdate = Omit<
   ExpenseUpdateData,
   | "vendor"
@@ -130,19 +114,16 @@ type ResolvedExpenseUpdate = Omit<
   purchaseId?: PurchaseId | null;
 };
 
-/** Resolve a project shortcode to a live uuid, or throw. */
 const resolveLiveProjectId = (
   tx: DrizzleTransaction,
   shortcode: ProjectShortcode,
 ): Promise<ProjectId> => resolveOrThrow(tx, "project", shortcode);
 
-/** Resolve a product shortcode to the live uuid stored in the expense FK. */
 const resolveLiveProductId = (
   tx: DrizzleTransaction,
   shortcode: ProductShortcode,
 ): Promise<ProductId> => resolveOrThrow(tx, "product", shortcode);
 
-/** Resolve a Purchase shortcode to a live uuid, or throw. */
 const resolveLivePurchaseId = (
   tx: DrizzleTransaction,
   shortcode: PurchaseShortcode,
@@ -161,11 +142,6 @@ const resolveLiveExpenseIds = (
   shortcodes: ExpenseShortcode[],
 ): Promise<ExpenseId[]> => resolveAllPresent(tx, "expense", shortcodes);
 
-// The union, not `Database`: the factory's `update` runs on a transaction and
-// reads the before-state through this. The return type is annotated explicitly
-// because `unwrapDb` hands back `DrizzleClient | DrizzleTransaction` and the
-// inferred `findFirst` result would union across the two relational clients —
-// structurally identical, but a union TS then has to re-check at every use.
 const fetchExpenseById = (
   db: Database | DrizzleTransaction,
   id: ExpenseId,
@@ -211,8 +187,6 @@ const expenseCrud = createEntityCrud({
     "projectId",
     "productId",
     "productQuantity",
-    // `purchaseId` is the audited column now; `vendor`/`orderId` are resolved
-    // into it by `resolveCharge` and are no longer columns on this table.
     "purchaseId",
   ],
 });
@@ -221,47 +195,9 @@ export const getExpenseByID = expenseCrud.getByID;
 export const getExpenseByShortcode = expenseCrud.getByShortcode;
 
 /**
- * Resolve the `{vendor, orderId}` a caller still passes by NAME into the charge
- * they describe, creating the vendor and/or the charge on first sight.
- *
- * This is the seam that makes the whole split invisible to callers:
- * `createExpense` and MCP `create_expense` accept exactly the same input they
- * accepted when `vendor` was a text column, and the purchase-import skill,
- * quick-add and the ledger's create dialog never learned about ids. Both
- * `findOrCreateVendor` and `findOrCreatePurchase` are race-free, and both run
- * inside the CALLER's transaction so a failed expense insert can't leave an
- * orphan vendor behind.
- *
- * Returns `undefined` when the caller said nothing about a vendor, which is
- * distinct from `null` (an explicit "detach this from its charge") — the
- * difference partial-update semantics turn on.
- *
- * A vendorless row with an order id gets NO charge: an order id alone can't name
- * a transaction (they're only unique per vendor), so writing one would create a
- * charge nobody can identify. The order id is dropped rather than half-recorded.
- *
- * `current` is the charge the row is already on, and passing it is what stops an
- * UPDATE leaking charges. Without it, re-writing the same `{vendor}` onto an
- * order-less row would mint a fresh charge every time (`orderId: null` can't
- * dedupe — see `findOrCreatePurchase`), re-point the row to it, and leave the
- * previous charge behind with no lines and possibly a `statedTotal` and documents
- * on it. Nothing sweeps up empty charges, so that leak would be permanent.
- *
- * There are **two** doors to that leak and both are closed here:
- *
- * 1. An unchanged `{vendor}` resubmit — short-circuited as a no-op below.
- * 2. **Correcting the order id** on a charge whose only line is this expense.
- *    Minting a new charge there would abandon the old one exactly as in (1); what
- *    the user means by fixing a typo'd order id on a single-line charge is *edit
- *    this charge*, so the charge is renamed IN PLACE and keeps its `statedTotal`
- *    and documents. If the charge has OTHER lines it is not renamed — the line is
- *    genuinely being reassigned to a different order, and the old charge keeps its
- *    remaining lines, so nothing is orphaned.
- *
- * The in-place rename can still collide with an existing charge for
- * `(vendor, newOrderId)` — the partial-unique index. `findOrCreatePurchase`
- * resolves that by returning the existing charge, and the now-empty old one is
- * folded away by the caller.
+ * Resolves vendor/order input inside the caller's transaction. `undefined`
+ * means unchanged, `null` means detach, and vendorless order IDs are discarded.
+ * Existing single-line charges are renamed rather than orphaned.
  */
 const resolveCharge = async (
   tx: DrizzleTransaction,
@@ -269,20 +205,17 @@ const resolveCharge = async (
   data: {
     vendor?: string | null;
     orderId?: string | null;
-    /** Effective ledger date used only when this resolution mints a charge. */
     date?: string | null;
   },
   current?: {
     purchaseId: PurchaseId | null;
     vendorName: string | null;
     orderId: string | null;
-    /** Live lines on the current charge, this expense included. */
     lineCount: number;
   },
 ): Promise<PurchaseId | null | undefined> => {
   if (data.vendor === undefined && data.orderId === undefined) return undefined;
 
-  // An explicit null is "detach from the charge", and outranks everything else.
   if (data.vendor === null) return null;
 
   // ⚠️ Falling back to the row's CURRENT vendor is load-bearing, not defensive.
@@ -299,19 +232,14 @@ const resolveCharge = async (
   const requestedOrderId = data.orderId?.trim() || null;
   const sameVendor = current?.vendorName === vendorName;
 
-  // Already on a charge that says exactly this? Then this write is a no-op, and
-  // creating a second identical charge would be the bug, not the fix.
   if (
     current?.purchaseId &&
     sameVendor &&
-    // An omitted `orderId` means "leave it alone", so it can't force a new charge.
     (data.orderId === undefined || current.orderId === requestedOrderId)
   ) {
     return undefined;
   }
 
-  // Door 2: same vendor, order id genuinely changing, and this expense is the
-  // charge's only line — rename the charge rather than abandoning it.
   if (
     current?.purchaseId &&
     sameVendor &&
@@ -325,8 +253,6 @@ const resolveCharge = async (
       actor,
     );
     if (renamed) return undefined;
-    // Collided with an existing charge for this (vendor, orderId): fall through
-    // and attach to that one, then fold the emptied charge below.
   }
 
   const vendorId = await findOrCreateVendor(tx, vendorName);
@@ -342,13 +268,10 @@ const resolveCharge = async (
       data.orderId === undefined
         ? (current?.orderId ?? null)
         : requestedOrderId,
-    // `findOrCreatePurchase` only applies this on INSERT. An existing Purchase's
-    // vendor date is purchase-level truth and must never be overwritten from a line.
+    // An existing purchase's date is purchase-level truth, not line-level input.
     date: data.date,
   });
 
-  // Leaving its last line behind makes the old charge dead weight. Fold it into
-  // the target so its documents and `statedTotal` survive rather than stranding.
   if (
     current?.purchaseId &&
     current.purchaseId !== target &&
@@ -502,9 +425,6 @@ export const updateExpense = async (
         "Product quantity requires a linked product.",
       );
     }
-    // Both sides resolve to the *resulting* row: a partial update that only
-    // flips the cost still has to be checked against the stored quantity, and
-    // vice versa.
     assertQuantitySignMatchesCost(
       data.cost === undefined
         ? (beforeQualityTargets?.cost ?? null)
@@ -514,10 +434,6 @@ export const updateExpense = async (
         : data.productQuantity,
     );
 
-    // An explicit `purchaseId` short-circuits `resolveCharge` entirely (see the
-    // field's doc): an id is never a guess, so there's nothing to resolve.
-    // Resolving THROUGH `resolveLivePurchaseId` (live-only) folds in what
-    // `assertPurchaseLive` used to check separately.
     const explicitPurchaseId =
       purchaseId === undefined
         ? undefined
@@ -621,8 +537,6 @@ export const updateExpense = async (
       };
     }
 
-    // The row's CURRENT charge, so an unchanged `{vendor}` write doesn't mint a
-    // duplicate — see `resolveCharge`.
     const existing = await tx.query.expense.findFirst({
       where: and(eq(expense.id, id), notDeleted(expense)),
       columns: { purchaseId: true, date: true },
@@ -633,9 +547,6 @@ export const updateExpense = async (
         },
       },
     });
-    // A soft-deleted charge (or vendor) reads as absent here for the same reason
-    // it does in `dbExpenseToAPI` — the row is effectively unattached, so a
-    // vendor write should give it a live charge rather than reuse a dead one.
     const live =
       existing?.purchase?.deletedAt === null ? existing.purchase : undefined;
 
@@ -661,8 +572,6 @@ export const updateExpense = async (
       actor,
       {
         ...data,
-        // Adding/changing a vendor without editing the line date still needs
-        // the date already carried by the expense when a new charge is minted.
         date: data.date === undefined ? existing?.date : data.date,
       },
       {
@@ -707,12 +616,6 @@ export const updateExpense = async (
   });
 };
 
-/**
- * Batch by-id read for `moveExpenses`'s bulk-write result — the same
- * row shape/join as `getExpenseByID`, fetched with one `inArray` query
- * instead of N one-by-one calls. File-local — only consumed by
- * `moveExpenses` below.
- */
 const getExpensesByIDs = async (
   db: Database,
   ids: ExpenseId[],
@@ -754,9 +657,6 @@ export const createExpense = async (
     const productId = data.productId
       ? await resolveLiveProductId(tx, data.productId)
       : null;
-    // Import-time triage default: an untriaged food line lands on Household
-    // instead of the inbox. `updateExpense`/`moveExpenses` deliberately skip
-    // this — see `resolveDefaultProjectId`'s own doc comment for why.
     const projectId = await resolveDefaultProjectId(tx, {
       projectId: explicitProjectId,
       productId,
@@ -847,23 +747,12 @@ export const createExpense = async (
   };
 };
 
-/**
- * Bulk "move to project" — a plain `projectId` column write over `ids`, one
- * transaction, one audit entry per row that actually changed. `projectId:
- * null` moves every listed expense to the inbox. Unlike the single-row
- * `updateExpense` there's no before/after row diff to lean on for
- * validation, so the target project's liveness is checked explicitly
- * (`assertProjectLive`) — the UI's project picker already filters to live
- * projects, but the tRPC API is callable directly.
- */
 export const moveExpenses = async (
   db: Database,
   input: ExpenseBulkMoveInput,
   actor: ActorContext,
 ): Promise<ExpenseOut[]> => {
   const updatedIds = await withTransaction(db, async (tx) => {
-    // Resolving THROUGH `resolveLiveProjectId` (live-only) is the liveness
-    // check itself.
     const projectId =
       input.projectId !== null
         ? await resolveLiveProjectId(tx, input.projectId)
@@ -904,11 +793,6 @@ export const moveExpenses = async (
   return getExpensesByIDs(db, updatedIds);
 };
 
-/**
- * Bulk trade write — a plain audited `trade` column write over `ids`,
- * mirroring `moveExpenses` minus the project-live assert (trade is a free
- * enum, no FK). One wave-wide side-effect dispatch happens in the router.
- */
 export const setExpensesTrade = async (
   db: Database,
   input: ExpenseBulkTradeInput,
@@ -949,7 +833,6 @@ export const setExpensesTrade = async (
   return getExpensesByIDs(db, updatedIds);
 };
 
-/** Bulk cost-type write — same shape as {@link setExpensesTrade}. */
 export const setExpensesCostType = async (
   db: Database,
   input: ExpenseBulkCostTypeInput,
@@ -992,11 +875,6 @@ export const setExpensesCostType = async (
   return getExpensesByIDs(db, updatedIds);
 };
 
-/**
- * Soft-delete expenses and return the public identifiers needed by the
- * import-cleanup MCP flow.  The legacy `deleteExpenses` wrapper below keeps
- * the repository's price-recompute contract intact for existing callers.
- */
 export const deleteExpensesWithPurchaseEffects = async (
   db: Database,
   shortcodes: ExpenseShortcode[],
@@ -1108,10 +986,6 @@ export const deleteExpensesWithPurchaseEffects = async (
         pricesBefore,
       ),
       result: {
-        // Measured off `removeEntity`'s return, not `qualityTargets.length` —
-        // expense has no cascade expansion so the two always agree, but
-        // reading the actual count keeps this in step with every other
-        // delete path rather than being the one exception that still asserts.
         deleted,
         deletedIds: qualityTargets.map((row) =>
           unsafeExpenseShortcode(row.shortcode),
@@ -1123,10 +997,6 @@ export const deleteExpensesWithPurchaseEffects = async (
   });
 };
 
-/**
- * Existing deletion seam: callers that only need derived-price invalidation
- * keep receiving product ids.  MCP uses the richer sibling above.
- */
 export const deleteExpenses = async (
   db: Database,
   shortcodes: ExpenseShortcode[],
@@ -1134,24 +1004,3 @@ export const deleteExpenses = async (
 ): Promise<ProductId[]> =>
   (await deleteExpensesWithPurchaseEffects(db, shortcodes, actor))
     .priceAffectedProductIds;
-
-/**
- * What `deleteExpenses` would do to the given expenses, without doing it.
- *
- * Attribution and normalized source-reference children are removed with the
- * Expense; neither can outlive the money row it describes. Those owned edges
- * never block deletion. The other real
- * consequence, read straight off `deleteExpenses` above, is the same-transaction
- * `removeEntity` cascade that removes the row from search. The
- * count here is the SAME predicate that call uses (entityType match +
- * `inArray` + `notDeleted`), via `countByTarget`, so the two can't disagree.
- *
- * Unlike `inventory`, deleting an expense does NOT trigger a valuation
- * recompute: `needsValuationRecompute` in `services/mutation-side-effects.ts`
- * only fires for `inventory`/`product`/`location` events, and `expense`'s own
- * manifest entry there declares `onDelete: []`. Nothing downstream recomputes
- * off an expense delete.
- *
- * Advisory only. `deleteExpenses` still re-runs its own transaction; nothing
- * here is a lock or a permission.
- */

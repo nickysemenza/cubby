@@ -87,24 +87,8 @@ import type { AppErrorReason } from "@cubby/shared";
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 
-/**
- * Product's incoming-edge roles. Re-exported from the shared semantics map so
- * the existing name keeps working and there is still exactly one place these
- * roles are declared.
- */
 export const PRODUCT_EDGE_ROLES = ENTITY_EDGE_SEMANTICS.product;
 
-/**
- * The roles that make a product worth keeping: acquisition evidence, durable
- * work history, or a live reference from another row that still needs it. An
- * allowlist on purpose — see the file doc.
- *
- * `usage` joined this set for `ProductComponent.componentProductId`: a
- * product still listed inside a live kit's component list is exactly as
- * undeletable as one still on a purchase order, for the same reason —
- * deleting it would silently shrink the kit's contents with no record of
- * what used to be there.
- */
 const RETAINING_ROLES = [
   "acquisition",
   "history",
@@ -126,21 +110,14 @@ export type ProductRetainingEdgeKey = {
     : never;
 }[keyof typeof PRODUCT_EDGE_ROLES];
 
-/** Narrows an edge key to one that blocks deletion. */
 export const isRetainingEdgeKey = (
   key: keyof typeof PRODUCT_EDGE_ROLES,
 ): key is ProductRetainingEdgeKey =>
   (RETAINING_ROLES as readonly string[]).includes(PRODUCT_EDGE_ROLES[key].role);
 
-/**
- * What `deleteProducts` does to each incoming edge. This — not the stable role
- * — is where delete behavior lives, so the `AppErrorReason` thrown and the
- * plural noun phrase in its message stay operation-local.
- */
 export type ProductDeleteDisposition =
   | (OperationDisposition & {
       effect: "block";
-      /** The `AppErrorReason` `deleteProducts` throws when this edge is live. */
       reason: AppErrorReason;
       /** Plural noun phrase naming the dependent rows, for the error message
        *  (e.g. "inventory entries", "expenses"). */

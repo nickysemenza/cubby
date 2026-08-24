@@ -27,13 +27,6 @@ interface MobileCardProps {
   titleIcon?: LucideIcon;
   subtitle?: ReactNode;
   imageSlot?: ReactNode;
-  /**
-   * Keep the thumbnail gutter even when this row has no image, so every title
-   * in the list starts at the same x. Decided per list — see
-   * `MobileListRowModel.reserveImageSlot`. The reserved slot stays empty
-   * rather than showing a placeholder glyph: alignment is the goal, and a
-   * repeated icon would be decoration charged at 44px a row.
-   */
   reserveImageSlot?: boolean;
   onClick?: () => void;
   onTouchStart?: () => void;
@@ -43,11 +36,6 @@ interface MobileCardProps {
    * take. Suppresses the subsequent click so holding doesn't also navigate.
    */
   onLongPress?: () => void;
-  /**
-   * Display variant:
-   * - "card" (default): bordered card, used by ProblemSection
-   * - "row": compact row with bottom divider, used by MobileCardView for dense lists
-   */
   variant?: "card" | "row";
   rightValues?: ReactNode[];
   /**
@@ -57,10 +45,6 @@ interface MobileCardProps {
    * clipped/cramped below a usable tap target. Omit for plain text values.
    */
   rightValueInteractive?: boolean[];
-  /**
-   * Labeled values rendered as a spec grid below the identity line. Unlabeled
-   * at six values these read as noise, so each carries its column's header.
-   */
   metaValues?: MobileMetaValue[];
 }
 
@@ -76,32 +60,13 @@ function activateCardFromKeyboard(
   onClick();
 }
 
-/**
- * Grows an editable cell's trigger to the phone touch floor from the OUTSIDE.
- *
- * The trigger's own box is tuned to the desktop compact row (24px, and 20px
- * for the icon-only pencil that sits beside a link), and that sizing is
- * correct there — so the card stretches it rather than the trigger shrinking
- * the desktop. This is the control that WRITES: a mis-tap edits a real record,
- * which is why it gets the 44pt floor before anything else on the card does.
- *
- * The `:has(>svg:only-child)` half is what separates the two trigger shapes: a
- * pencil-only trigger's lone child is the glyph, while a full-cell trigger
- * wraps text (plus a hover pencil), and centring THAT would pull the value
- * column off its left edge.
- */
+// Keep the desktop trigger compact; cards supply the 44px touch target.
 const TOUCH_TRIGGER_CLASS = cn(
   "[&_[data-cell-edit-trigger]]:min-h-11",
   "[&_[data-cell-edit-trigger]:has(>svg:only-child)]:min-w-11",
   "[&_[data-cell-edit-trigger]:has(>svg:only-child)]:justify-center",
 );
 
-/**
- * A single right-aligned value in the compact row variant's second line.
- * Plain values get the dense, truncating mono-2xs treatment; `interactive`
- * values (an editable cell's edit-trigger, a quick-edit pencil, …) render
- * without truncation/overflow-hidden so their tap targets stay intact.
- */
 function RightValueSlot({
   node,
   interactive,
@@ -139,16 +104,6 @@ function RightValueSlot({
   );
 }
 
-/**
- * The row variant's chrome — grid, divider, padding, and column derivation —
- * shared by `MobileCard` and the loading skeleton so the two can't drift
- * (they had already diverged on the divider: `border-border/30` vs `/60`).
- *
- * The outer grid stays two rows no matter how tall the content gets: the
- * identity line and the spec block are ONE grid item that stacks internally,
- * so `row-span-2` on the side cells stays correct and nothing has to count
- * lines.
- */
 export function MobileRowShell({
   leading = [],
   title,
@@ -159,13 +114,11 @@ export function MobileRowShell({
   className,
   ...divProps
 }: {
-  /** Checkbox / image cells, in order. Determines the column template. */
   leading?: ReactNode[];
   title: ReactNode;
   content?: ReactNode;
   actions?: ReactNode;
   footer?: ReactNode;
-  /** Content is taller than the side cells — align them to the top instead. */
   tall?: boolean;
   className?: string;
   // `title` and `content` above are nodes; both are also HTML attribute names
@@ -221,32 +174,9 @@ export function MobileRowShell({
   );
 }
 
-/**
- * The spec grid: a mono label gutter + value column. Exported so the skeleton
- * reproduces the exact geometry.
- *
- * The gutter is 6.5rem because the label is the half that must survive: at
- * 4.5rem a two-word header clipped to `PURCHASE D…` / `USED ON PR…`, cutting
- * the word that explains the number while the value beside it still had room.
- * Labels now wrap inside the gutter instead of truncating (see the `dt`), and
- * the value is the side that clamps.
- */
 export const MOBILE_SPEC_GRID_CLASS =
   "grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-x-2 gap-y-1";
 
-/**
- * A mobile-friendly card component with optional selection checkbox.
- * Provides consistent layout: [Checkbox] | Content | [Actions]
- *
- * Supports two modes:
- * - Structured: Pass title/subtitle props for automatic header rendering
- * - Flexible: Pass children for full control over content
- *
- * Used by:
- * - MobileCardView for entity lists (with optional selection)
- * - LocationInventoryTable for inventory items with inline editing
- * - ProblemSection for entity previews
- */
 export function MobileCard({
   selectable,
   actions,
@@ -441,7 +371,6 @@ export function MobileCard({
     );
   }
 
-  // Card layout: the same neutral border used by other compact surfaces.
   return (
     <Row
       align="start"

@@ -15,10 +15,6 @@ import { createTestCaller } from "../trpc";
 import { inventoryRouter } from "./inventory";
 import { recipeRouter } from "./recipe";
 
-/**
- * A well-formed code of the right entity that names no row. `9999` is outside
- * the minted alphabet's reachable space for these tables in a fresh template.
- */
 const unresolvable = (entity: keyof typeof SHORTCODE_PREFIX) =>
   `${SHORTCODE_PREFIX[entity]}9999`;
 

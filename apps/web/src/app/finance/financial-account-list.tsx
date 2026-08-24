@@ -26,7 +26,6 @@ export function FinancialAccountList() {
   );
   const deletable = useDeletableConfig({
     mutationFn: api.financialAccount.delete.mutationOptions,
-    entityLabel: "Account",
     entity: "financialAccount",
   });
   const updateAccountMutation = useUpdateMutation({

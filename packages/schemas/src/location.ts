@@ -32,10 +32,8 @@ export const locationType = z
   .describe("type of location (room, container, etc)");
 export type LocationType = z.infer<typeof locationType>;
 
-// Re-export for consumers that need the values array
 export { locationTypeValues } from "@cubby/shared";
 
-// Filters accepted by the location list endpoint.
 export const locationFilterFields = {
   ...auditDateFilterFields,
   ...locationRelatedFilterFields,
@@ -74,12 +72,6 @@ export const locationFilterFields = {
   childPresenceFilter: presenceFilter.describe(
     "Filter to locations that do / don't have at least one live child location.",
   ),
-  /**
-   * `location.aiDescription` is a nullable column on the root table, so `"none"`
-   * is the un-described worklist. Combine with `imagePresenceFilter: "has"` for
-   * the backlog that can actually be worked: describing a location with no
-   * photo to look at isn't possible.
-   */
   aiDescriptionPresenceFilter: presenceFilter.describe(
     "Filter to locations that do / don't have an AI-generated description.",
   ),
@@ -116,7 +108,6 @@ export const locationSortableFields = [
   "updatedAt",
   "name",
   "type",
-  // Joined parent name — resolved by a correlated subquery in repo/location.
   "parent",
   "lastBulkInventory",
   "valuation",
@@ -267,18 +258,11 @@ export const locationOutFields = {
     .array(z.string())
     .optional()
     .describe("Namespaced Collection tags assigned directly to this location"),
-  /**
-   * Null when `product` is set: form factor is a fact about the SKU, so a
-   * linked location does not restate it. Read the two together — the product
-   * wins when present.
-   */
   type: locationType.nullable(),
-  /** The SKU this location IS (the bin itself), not stock held in it. */
   product: locationIdentityProductOut.nullable(),
   lastBulkInventory: z.date().nullable(),
   aiDescription: z.string().nullable(),
   images: z.array(imageOut),
-  // Persisted valuation rollup; null until first recompute.
   valuation: locationValuation.nullable(),
   ...timestampedFields,
 };
@@ -307,10 +291,6 @@ export const locationAncestorFields = {
 export const locationAncestorOut = z.object(locationAncestorFields);
 export type LocationAncestorOut = z.infer<typeof locationAncestorOut>;
 
-/**
- * Small location identity plus its root-first breadcrumb.  Detail reads use
- * this instead of making consumers reconstruct a path from unrelated rows.
- */
 export const locationPathRefFields = {
   id: locationShortcode,
   name: z.string(),
@@ -353,7 +333,6 @@ export const locationInventoryBreakdownOut: z.ZodType<LocationInventoryBreakdown
 export const locationParentOptionsOut = z.object({
   id: locationShortcode,
   name: z.string(),
-  /** Root → immediate parent. Empty for a top-level location. */
   ancestors: z.array(locationAncestorOut),
 });
 export type LocationParentOptionsOut = z.infer<typeof locationParentOptionsOut>;
@@ -369,10 +348,8 @@ export type LocationParentOptionsOut = z.infer<typeof locationParentOptionsOut>;
 const locationOptionItemFields = {
   id: locationShortcode,
   name: z.string(),
-  /** Null when the location IS a product; the SKU carries its form factor. */
   type: locationType.nullable(),
   aliases: z.array(z.string()).default([]),
-  /** Root → immediate parent. Empty for a top-level location. */
   ancestors: z.array(locationAncestorOut),
 };
 
@@ -483,7 +460,6 @@ export const infLocationWithSideEffects = infLocation.and(
 
 const optionalLocationShortcode = locationShortcode.nullable().optional();
 
-// Input schema for creating locations
 const locationCreateShape = {
   // Override the output/read `name` (which stays lax for reads) with a non-empty
   // constraint on the create/update boundary.
@@ -498,10 +474,6 @@ const locationCreateShape = {
     .array(z.string())
     .optional()
     .describe("Tags assigned directly to this location"),
-  /**
-   * Omit when `productId` is set — the SKU carries the form factor and a
-   * linked location stores no type of its own.
-   */
   type: locationType.nullable().optional(),
   productId: productShortcode
     .nullable()
@@ -538,7 +510,6 @@ export const locationUpdateData = deriveUpdateData(locationCreateShape, {
   },
 });
 
-// Input schema for updating locations
 export const locationUpdateInput = z.object({
   id: locationShortcode,
   data: locationUpdateData,
@@ -590,12 +561,6 @@ export const mcpLocationCreateInput = z.object({
   ),
 });
 
-/**
- * Slim MCP projection of a location row (list or detail) — built from the
- * same field map as `locationListItemOut`, so it cannot drift from the plain
- * shape. `parent` is the nested `{id,name,type}` ref the plain shape carries,
- * not the flattened `parentId`/`parentName` pair this used to declare by hand.
- */
 export const locationMcpOut = z.object({
   id: locationListItemFields.id,
   name: locationListItemFields.name,

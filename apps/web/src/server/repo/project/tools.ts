@@ -74,10 +74,6 @@ import {
 import { maxPlainDate } from "./helpers";
 import { collectDescendantIds, loadProjectDateWindows } from "./subtree";
 
-// Exported for `./tool-matrix`, which runs both suggestion lanes across many
-// projects at once. It must rank with the SAME thresholds and the SAME
-// economics this file uses, or the grid and the project-detail suggestion list
-// disagree about the same tool — restating either is how that drift starts.
 export const EXPENSIVE_TOOL_THRESHOLD = 100;
 export const REUSED_CHEAP_TOOL_PROJECTS = 2;
 export const MAX_TRADE_SUGGESTIONS = 20;
@@ -165,7 +161,6 @@ export async function loadResourceMetrics(
 }
 
 type ResourceReadOptions = {
-  /** Plain date override for deterministic live-project window tests. */
   today?: string;
 };
 
@@ -213,12 +208,6 @@ function buildResourceWindowContexts(
   return result;
 }
 
-/**
- * The per-project half of the ownership gate: the folded window plus whether
- * the project is still running. Deliberately the same shape and the same fold
- * as {@link buildResourceWindowContexts} above — `toolTimelineConflict` owns
- * the grace and live-project rules, this only assembles its inputs.
- */
 export type ProjectTimelineGate = {
   window: ToolTimelineProjectWindow;
   isLive: boolean;
@@ -292,16 +281,7 @@ async function loadProjectSoftwareWindowCosts(
   return result;
 }
 
-/**
- * Tool spend charged to a project, per `(project, product)` pair.
- *
- * This predicate IS the `purchased_here` definition, and it decides three
- * different things, which is why it lives in exactly one place: the direct
- * suggestion lane, the matrix's purchase cells, and — since it is proof we owned
- * the tool for that project — the ownership guard's exemption. Three copies of
- * it disagreed once already: the guard didn't have it, so the grid offered a
- * `purchased_here` cell the server then refused.
- */
+/** Shared `purchased_here` definition for suggestions, matrix, and ownership. */
 export async function loadProjectToolPurchaseCosts(
   dbc: DrizzleClient,
   projectIds: ProjectId[],
@@ -514,15 +494,13 @@ type UsagePair = { projectId: ProjectId; productId: ProductId };
  *  - **Detach is never checked.** `used: false` and `detachProjectResources`
  *    don't call this at all.
  *
- * ⚠️ TRANSACTION BOUNDARY: this runs OUTSIDE `withTransaction`, and must. It
+ * TRANSACTION BOUNDARY: this runs OUTSIDE `withTransaction`. It
  * fans its six reads out with `Promise.all`, and pg refuses a second query on a
  * client that is already executing one — so pulling it under a transaction to
  * share it with `assertUsagePair` would break it. It also needs the opaque
  * `Database` for `loadProjectDateWindows`, which a transaction client is not.
- * Safe outside: it reads only ledger history, which a concurrent
- * `ProjectToolUsage` write can't move. The PREVIEW shares this predicate by
- * calling it the same way — outside a transaction — rather than by relocating
- * it (see `repo/relation-preflight.ts`: share the predicate, not the call site).
+ * Safe outside: it reads only ledger history, which a concurrent usage write
+ * cannot move.
  */
 interface ToolTimelineConflictRow {
   projectId: ProjectId;
@@ -585,7 +563,6 @@ async function findToolTimelineConflicts(
   const conflicts: ToolTimelineConflictRow[] = [];
   for (const { projectId, productId } of pairs) {
     if (alreadyLive.has(`${projectId}:${productId}`)) continue;
-    // Bought on this project — the same evidence lane A trusts.
     if ((purchaseCosts.get(projectId)?.get(productId) ?? 0) > 0) continue;
     const gate = gates.get(projectId);
     if (!gate) continue;
@@ -607,14 +584,6 @@ async function findToolTimelineConflicts(
   return conflicts;
 }
 
-/**
- * The throwing wrapper every attach path already called.
- *
- * Kept separate from {@link findToolTimelineConflicts} so a PREVIEW can ask the
- * same question without an exception being the answer — the standing rule that
- * a preview shares the mutation's predicate, not a copy of it. The refusal is
- * still first-conflict-wins, exactly as before.
- */
 async function assertNoTimelineConflict(
   db: Database,
   pairs: UsagePair[],
@@ -626,7 +595,6 @@ async function assertNoTimelineConflict(
   }
 }
 
-/** Which of the requested products this project already records, live. */
 async function liveResourceProductIds(
   dbc: DrizzleClient | DrizzleTransaction,
   projectId: ProjectId,
@@ -646,22 +614,7 @@ async function liveResourceProductIds(
   return new Set(rows.map((row) => row.productId));
 }
 
-/**
- * Everything that decides whether a project resource attach may proceed — with
- * the two cases the old gate conflated kept apart.
- *
- * The old check was one query with `notDeleted(product)` AND
- * `inArray(category, [tools, software])`, so a perfectly live `materials`
- * Product came back as `PRODUCT_NOT_FOUND`. That reason is a lie: the row
- * exists, the shortcode resolves, and the caller goes hunting for a typo. The
- * `missing`/`ineligible` split is the fix, and `PRODUCT_CATEGORY_INELIGIBLE`
- * is what the second one refuses with.
- *
- * ⚠️ TRANSACTION BOUNDARY: sequential queries only, so this runs on `tx` (the
- * mutation) or on the pooled client (the preview). The timeline guard is NOT in
- * here — it fans out with `Promise.all` and must stay outside a transaction;
- * see {@link findToolTimelineConflicts}.
- */
+/** Separates missing products from live products with an ineligible category. */
 async function preflightAttachProjectResources(
   dbc: DrizzleClient | DrizzleTransaction,
   projectId: ProjectId,
@@ -691,7 +644,6 @@ async function preflightAttachProjectResources(
   };
 }
 
-/** The detach counterpart: the only thing to know is which uses exist. */
 async function preflightDetachProjectResources(
   dbc: DrizzleClient | DrizzleTransaction,
   projectId: ProjectId,
@@ -703,13 +655,11 @@ async function preflightDetachProjectResources(
   return {
     ...emptyPreflight(),
     requested,
-    // A detach is already satisfied when there is NO live use to remove.
     alreadySatisfied: requested.filter((id) => !alreadyLive.has(id)),
     codeById,
   };
 }
 
-/** Refuse an attach, naming the offending shortcodes and saying WHICH problem. */
 function assertResourcesAttachable(
   projectId: ProjectId,
   pre: RelationPreflight,
@@ -760,14 +710,6 @@ const PROJECT_RESOURCE_EDGE = {
   label: "project resource uses",
 } as const;
 
-/**
- * Advisory impact for a project resource attach.
- *
- * Two predicates, called exactly the way the mutation calls them: the timeline
- * guard OUTSIDE any transaction (it fans out concurrently), then the sequential
- * preflight. Sharing the predicate rather than the call site is what keeps the
- * pg constraint intact.
- */
 export async function previewAttachProjectResources(
   db: Database,
   projectId: ProjectId,
@@ -801,15 +743,12 @@ export async function previewAttachProjectResources(
     blockers: timelineBlocker
       ? [...plan.blockers, timelineBlocker]
       : plan.blockers,
-    // A pair the timeline refuses is not going to be written, so it must not be
-    // counted among the changes either.
     changes: timelineBlocker
       ? plan.changes.map((item) => withoutTargets(item, conflicts))
       : plan.changes,
   };
 }
 
-/** Drop timeline-refused targets from a change item, keeping `total` honest. */
 function withoutTargets(
   item: ImpactItem,
   conflicts: ToolTimelineConflictRow[],
@@ -825,7 +764,6 @@ function withoutTargets(
   };
 }
 
-/** Advisory impact for a project resource detach. */
 export async function previewDetachProjectResources(
   db: Database,
   projectId: ProjectId,
@@ -882,10 +820,6 @@ export async function attachProjectResources(
         changes: { usedResourceIds: { from: before, to: after } },
       });
     }
-    // Every id in `uniqueProductIds` was already confirmed live (and
-    // timeline-clear) above, so the only reason one wouldn't land in
-    // `inserted` is `onConflictDoNothing` skipping an edge that was already
-    // there — the no-op bucket.
     return {
       changed: inserted.length,
       attached: after.length,
@@ -924,11 +858,6 @@ export async function detachProjectResources(
         changes: { usedResourceIds: { from: before, to: after } },
       });
     }
-    // Unlike attach, a requested id here was never confirmed live — it may
-    // never have been used on this project at all. Either way (never used, or
-    // used and already removed), the outcome is the same "no live edge", so
-    // whatever wasn't removed was already in the detached state being asked
-    // for.
     return {
       changed: removed.length,
       attached: after.length,
@@ -938,37 +867,14 @@ export async function detachProjectResources(
 }
 
 /**
- * Move a product's project-use history onto another product.
- *
- * The gap this closes is a *silent* one. `deleteProducts` blocks on live
- * `ProjectToolUsage` (`block-live-project-use`), and the only tools were attach
- * and detach — so unblocking a delete meant detaching, and a detach without a
- * matching attach discards the project's tool history with nothing to flag it.
- * Merge has no equivalent problem because `finalizeMerge` derives the cascade
- * from the entity; delete had no counterpart until this.
- *
- * Two gates deliberately differ from `attachProjectResources`:
- *
- *  - **The category gate is KEPT** on the destination. Repointing tool history
- *    onto something that is not a tool or software is a mistake worth blocking,
- *    and a split's destination component is a tool by construction.
- *  - **The timeline gate is SKIPPED.** `assertNoTimelineConflict` exempts pairs
- *    that already have a live edge, and that exemption cannot fire here: a
- *    repoint mints a new `(project, toProduct)` pair, and a freshly-created
- *    component product has no Expense of its own, so the `purchased_here`
- *    exemption is zero too. Every legitimate repoint would be rejected. Merge is
- *    exempt for the same structural reason — the survivor inherits the loser's
- *    Expense rows in the same transaction. A repoint corrects *where existing
- *    history is recorded*; it does not assert new ownership, so the ownership
- *    window is not the right question to ask. `findToolsUsedOutsideOwnership`
- *    remains the backstop if that judgment is ever wrong.
+ * Repoints existing usage history. Destination category is checked, but the
+ * ownership timeline is not: this corrects history rather than asserting use.
  */
 export async function repointProjectUses(
   db: Database,
   args: {
     fromProductId: ProductId;
     toProductId: ProductId;
-    /** Omit to repoint every live use. */
     projectIds?: ProjectId[];
   },
   actor: ActorContext,
@@ -1031,7 +937,6 @@ export async function repointProjectUses(
   });
 }
 
-/** Live project shortcodes a product is recorded on, for an audit diff. */
 async function liveProjectCodes(
   tx: DrizzleClient,
   productId: ProductId,
@@ -1061,24 +966,7 @@ async function liveProjectCodes(
   return rows.map((row) => row.shortcode).sort();
 }
 
-/**
- * Assert a `(project, product)` pair is a legal usage edge, in BOTH directions.
- *
- * `detachProjectResources` above deliberately skips this — a bulk detach of a
- * stale id list should no-op rather than throw. A single declarative setter
- * must not: without the check, `used: false` against a soft-deleted project
- * silently reports success and the UI shows a cleared checkbox that never
- * cleared anything.
- */
-/**
- * One Product must be live AND a reusable resource — and the two failures must
- * be told apart.
- *
- * The single query these three call sites used to share (`notDeleted` AND
- * `category IN (tools, software)`) collapsed both into `PRODUCT_NOT_FOUND`,
- * which is wrong for the second: the row exists, the shortcode resolves, and
- * the caller has no way to learn that the actual problem is a category.
- */
+/** Require a live reusable resource and preserve distinct failure reasons. */
 async function assertReusableResource(
   dbc: DrizzleClient | DrizzleTransaction,
   productId: ProductId,
@@ -1098,7 +986,6 @@ async function assertReusableResource(
   return { shortcode: row.shortcode };
 }
 
-/** The category half of {@link assertReusableResource}, for callers that already have the row. */
 function assertReusableCategory(
   productId: ProductId,
   row: { shortcode: string; category: string | null },
@@ -1160,9 +1047,6 @@ async function assertUsagePair(
  * grows with the project and forces a reader to diff two lists to learn which
  * one cell moved.
  *
- * Click-then-click-back is genuinely two state changes and honestly produces
- * two entries. Do not suppress that here; settle the cell on the client before
- * firing so a click-and-revert never reaches the server.
  */
 export async function setProjectToolUsage(
   db: Database,
@@ -1220,26 +1104,11 @@ export async function setProjectToolUsage(
       });
     }
 
-    // No metrics recomputed here on purpose: every caller refetches the grid
-    // (see `projectToolUsageSetOut`), so loading them would be two extra
-    // statements per checkbox for a payload nobody reads.
     return { changed };
   });
 }
 
-/**
- * Replace the whole set of projects one tool was used on — the product-keyed
- * mirror of the project-keyed bulk attach, for editing a tool's history from
- * its own detail page. `projectIds: []` clears it.
- *
- * One transaction and one audit entry, keyed to the **product** whose set
- * changed. N calls to {@link attachProjectResources} could leave the tool
- * attached to three of five projects on a partial failure, and would write N
- * project-keyed entries for a single user action.
- *
- * Projects already in the set are left strictly alone — same row id, same
- * `attachedAt` — so re-saving an unchanged list is a no-op.
- */
+/** Atomically replace one product's project-use set; unchanged rows stay untouched. */
 export async function setProductProjectUses(
   db: Database,
   productId: ProductId,
@@ -1771,9 +1640,6 @@ export async function listProductProjectUses(
   if (!productRow) {
     throw createAppError("PRODUCT_NOT_FOUND", `Product ${productId} not found`);
   }
-  // Distinct reason from the not-found above: this Product exists and is live,
-  // it is simply not a reusable resource. Reusing PRODUCT_NOT_FOUND here sent
-  // callers hunting for a typo in a code that resolves.
   assertReusableCategory(productId, productRow);
   const category = productRow.category;
 

@@ -19,39 +19,14 @@ export const recipeTreeDisplayImage = (
 ): ImageUrlSummary | null =>
   "displayImage" in recipe ? recipe.displayImage : (recipe.images[0] ?? null);
 
-// A recipe expanded into its full sub-recipe tree for the prep-sheet and
-// nested-spec views. The wasm-bound display formatting (buildDisplayQuantities)
-// is applied by the views at render — this module carries only structure +
-// numbers.
-//
-// It imports no wasm, but NOT because tests can't: `vitest.config.ts` inlines
-// the real module for every project, and this module's own test calls
-// `conv_amount_to_kind` directly. The live reason is `recipe-export-markdown`,
-// which imports the walkers below as values and is itself deliberately
-// wasm-free (it injects `quantityText` for the same reason) — a `~/lib/wasm`
-// import here would transitively bind the exporter to tracing/flags/perf-store.
-// So the engine arrives through injected ports, the pattern
-// `lib/harvest-equivalences.ts` already uses for its `UnitTools`.
-//
-// Two scaling representations coexist on purpose:
-//   - The ROOT node is the *scaled* recipe (RecipeDetail multiplies amounts
-//     upstream), so its costing grams already include the UI scale. Its
-//     `cumulativeFactor` is therefore 1.
-//   - SUB-recipe nodes are costed at their *native* batch. A sub's
-//     `cumulativeFactor` = parent.factor × (asUsedGrams ÷ childBatchGrams), so
-//     multiplying a sub's native leaf grams by it yields the as-used,
-//     UI-scaled amount (the UI scale rides in via the root's asUsedGrams).
-// The nested-spec view shows each node at its own batch (native % base); the
-// prep view + combined-shop use `cumulativeFactor` for honest as-used numbers.
+// Inject wasm ports so recipe export remains wasm-free.
 
 export type RecipeTreeRow =
   | {
       kind: "ingredient";
       id: string;
       row: SectionIngredientOut;
-      /** Resolved grams within THIS node's batch, or null when unweighable. */
       grams: number | null;
-      /** Scaling % vs this node's base row, or null. */
       pct: number | null;
     }
   | {
@@ -67,7 +42,6 @@ export type RecipeTreeRow =
       id: string;
       recipeId: RecipeShortcode;
       name: string;
-      /** Why the sub-recipe wasn't expanded. */
       reason: "cycle" | "missing";
     };
 
@@ -75,32 +49,21 @@ type RecipeTreeSection = {
   id: string;
   name: string | null;
   rows: RecipeTreeRow[];
-  /** Steps numbered continuously across this node's sections. */
   steps: { n: number; text: string }[];
 };
 
 export type RecipeTreeNode = {
   recipe: RecipeTreeRecipe;
   costing: RecipeCosting | null;
-  /** 0 = root. */
   depth: number;
-  /** Multiply this node's native leaf grams to get the as-used, UI-scaled amount. */
   cumulativeFactor: number;
-  /** True when the engine declined and the factor fell back to a batch-weight ratio. */
   batchEstimated: boolean;
-  /** Why the engine declined, when `batchEstimated`. Null otherwise. */
   batchEstimatedReason: SubRecipeBlockReason | null;
-  /**
-   * This node's yield in grams, resolved once at build time so the views never
-   * reach for wasm mid-render. Null when the yield isn't a mass.
-   */
   batchGrams: number | null;
-  /** This node's 100%-base row id (flour, else heaviest), for the spec view. */
   baseRowId: string | null;
   sections: RecipeTreeSection[];
 };
 
-/** Resolved numeric grams for a costing row, or null when it can't reach grams. */
 const numericGrams = (
   costing: RecipeCosting | null,
   rowId: string,
@@ -112,17 +75,11 @@ const numericGrams = (
 
 type UnitAmount = { value: number; unit: string };
 
-/**
- * How many batches of a sub-recipe a reference's written amounts represent —
- * or why the engine declines to say. Backed by recipebridge's
- * `recipe_yield_fraction`; see the header for why it arrives injected.
- */
 export type YieldFractionPort = (
   recipeYield: UnitAmount | null,
   amounts: readonly UnitAmount[],
 ) => { fraction: number | null; reason: SubRecipeBlockReason | null };
 
-/** An amount in grams, or null when it isn't a mass. Backed by `conv_amount_to_kind`. */
 export type MassGramsPort = (amount: UnitAmount) => number | null;
 
 export type YieldPorts = {
@@ -130,12 +87,6 @@ export type YieldPorts = {
   massGrams: MassGramsPort;
 };
 
-/**
- * Expand `root` (already scaled) plus its `recipeMap` sub-recipe closure (native)
- * into a tree. `costingById` must hold a costing per recipe id — produced by
- * calling `computeRecipeCosting([scaledRoot, ...Object.values(recipeMap)], …)`.
- * Cycles are guarded per-path and rendered as `stub` rows.
- */
 export const buildRecipeTree = (
   root: RecipeOut,
   costingById: Map<string, RecipeCosting>,
@@ -240,11 +191,6 @@ export const buildRecipeTree = (
   return buildNode(root, 0, 1, new Set<RecipeShortcode>([root.id]));
 };
 
-/**
- * The tree's nodes in prep order: every sub-recipe before the recipe that uses
- * it (post-order), deduped by recipe id, with the root assembly last. This is
- * the component order a prep sheet wants — make the dependencies, then assemble.
- */
 export const flattenComponents = (root: RecipeTreeNode): RecipeTreeNode[] => {
   const seen = new Set<string>();
   const out: RecipeTreeNode[] = [];
@@ -263,12 +209,6 @@ export const flattenComponents = (root: RecipeTreeNode): RecipeTreeNode[] => {
   return out;
 };
 
-/**
- * The set of sub-recipe ROW ids that get the full inline expansion: each
- * distinct sub-recipe is expanded only on its first occurrence in render order;
- * later references collapse to a "see above" pointer. Shared by the nested-spec
- * view and the markdown exporter so both agree on which rows are "first".
- */
 export const firstExpansionRowIds = (root: RecipeTreeNode): Set<string> => {
   const seenRecipes = new Set<string>();
   const expand = new Set<string>();
@@ -288,23 +228,14 @@ export const firstExpansionRowIds = (root: RecipeTreeNode): Set<string> => {
   return expand;
 };
 
-/** One ingredient's full-batch shopping need across all components. */
 export type CombinedNeed = {
   ingredientId: string;
   ingredientShortcode: string;
   name: string;
-  /** Summed full-batch grams, or null when nothing weighed in. */
   grams: number | null;
-  /** True when a contribution had no resolvable weight. */
   estimated: boolean;
 };
 
-/**
- * Per sub-recipe id, the total UI-scaled grams used across all its references
- * (used in 3 places → all 3 summed). The root isn't included. Powers the prep
- * sheet's "X used" note: each component shows its full batch, this says how much
- * of it this recipe actually consumes.
- */
 export const asUsedGramsByRecipe = (
   root: RecipeTreeNode,
 ): Map<string, number> => {
@@ -325,29 +256,15 @@ export const asUsedGramsByRecipe = (
   return map;
 };
 
-/**
- * One ingredient row of the matrix: its per-component grams + a row total. The
- * columns are the tree's {@link flattenComponents}, keyed by recipe id.
- */
 type MatrixRow = {
   ingredientId: string;
   ingredientShortcode: string;
   name: string;
-  /** componentRecipeId → full-batch grams that component contributes. */
   byComponent: Map<string, number>;
-  /** Sum across components — the ingredient's full-batch shopping total. */
   total: number;
   estimated: boolean;
 };
 
-/**
- * Pivot the tree into ingredient rows at FULL BATCH. Each distinct component
- * (deduped — you make one batch even if a sub-recipe is used 3×) contributes its
- * own direct leaf ingredients at native amounts; sub-recipes are their own
- * columns, not folded in. A row's `total` is therefore what you actually shop
- * for. Columns are {@link flattenComponents} (dependencies first); rows follow
- * first appearance.
- */
 export const buildIngredientMatrix = (root: RecipeTreeNode): MatrixRow[] => {
   const out: MatrixRow[] = [];
   const byId = new Map<string, MatrixRow>();

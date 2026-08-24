@@ -35,26 +35,17 @@ const COUNT = sql<number>`count(*)::int`;
 const first = (rows: Array<{ count: number }>): number =>
   Number(rows[0]?.count ?? 0);
 
-/**
- * The six coverage denominators, keyed by the detector each pairs with.
- *
- * `unvaluedBucketProducts` has none on purpose — a misc bucket isn't a fraction
- * of anything, so that section renders as a plain list (see
- * `coverageTotalsSchema`).
- */
 export const findCoverageTotals = async (
   db: Database,
 ): Promise<CoverageTotals> => {
   const dbClient = getDb(db);
   const childLocation = alias(location, "child_location");
 
-  // Matches findProductsWithNoImages(_, { excludeIngredients: true }).
   const products = await dbClient
     .select({ count: COUNT })
     .from(product)
     .where(and(notDeleted(product), isNull(product.ingredientId)));
 
-  // Matches the `location/empty-leaves` view' leaf test: no live child location.
   const leafLocations = await dbClient
     .select({ count: COUNT })
     .from(location)
@@ -107,11 +98,6 @@ export const findCoverageTotals = async (
     .from(inventoryEntry)
     .where(and(notDeleted(inventoryEntry), stockOnly()));
 
-  // Matches the `ingredient/needs-a-product` view's population: ingredients used by at
-  // least one live NON-cookbook recipe, excluding sub-recipe ingredients. The
-  // cookbook exclusion is load-bearing — without it the denominator counts the
-  // ~1000 EPUB-imported rows the numerator deliberately ignores, and the meter
-  // would read ~98% covered while nothing had been covered at all.
   const recipeIngredients = await dbClient
     .select({ count: sql<number>`count(distinct ${ingredient.id})::int` })
     .from(ingredient)
@@ -139,8 +125,6 @@ export const findCoverageTotals = async (
     )
     .where(and(notDeleted(ingredient), isNull(ingredient.recipeId)));
 
-  // Matches findVendorsWithoutLogos' population: live vendors referenced by at
-  // least one live purchase. Expense presence is deliberately irrelevant.
   const activeVendors = await dbClient
     .select({ count: COUNT })
     .from(vendor)

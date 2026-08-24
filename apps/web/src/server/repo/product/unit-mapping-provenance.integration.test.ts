@@ -44,7 +44,6 @@ describe("unit-mapping provenance is the public shortcode", () => {
       ctx.actor,
     );
 
-  /** The id a product mapping names, or null if it isn't product-sourced. */
   const provenanceIds = (mappings: readonly UnitMapping[]) =>
     mappings.map((m) =>
       m.sourceMetadata.type === "product" ? m.sourceMetadata.productId : null,

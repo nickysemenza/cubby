@@ -166,9 +166,6 @@ export async function applyUpcDataWithSideEffects(
   actor: ActorContext,
 ): Promise<ProductWithFoodAndSideEffectsOut> {
   const current = await services.product.getProductByID(input.id);
-  // Apply the same materialized proposal that the Problems card showed. This
-  // avoids a provider outage or a changed upstream answer turning one click
-  // into a different mutation from the reviewed proposal.
   const { lookups } = await readCachedUpcLookups(
     services.db,
     [input.upc],
@@ -260,7 +257,6 @@ const usdaIdentity = (food: NonNullable<UsdaFoodByUpc>) => ({
     UNSPECIFIED_MANUFACTURER,
 });
 
-/** The same, for a UPC-worker hit. */
 const externalIdentity = (hit: UPCLookupHit) => ({
   name: hit.name,
   manufacturer: hit.manufacturer ?? hit.brand ?? UNSPECIFIED_MANUFACTURER,
@@ -336,7 +332,6 @@ export async function findOrCreateByUPC(
   defaultName: string | undefined,
   actor: ActorContext,
 ): Promise<FindOrCreateByUPCResult> {
-  // 1. Check if product with this UPC already exists
   const existing = await findProductByGtin(db, upc);
   if (existing) {
     return { product: existing, created: false };
@@ -362,7 +357,6 @@ export async function findOrCreateByUPC(
   // is re-thrown unchanged.
   return runWithConflictRecovery(
     async () => {
-      // 2. Lookup in USDA database (food items)
       const food = await usdaClient.findFood({
         kind: "upc",
         gtin_upc: upc,
@@ -383,7 +377,6 @@ export async function findOrCreateByUPC(
         );
       }
 
-      // 3. Lookup in UPC worker (general products - tools, electronics, etc.)
       const upcLookup = await upcLookupClient.lookup(upc);
 
       if (upcLookup) {
@@ -398,7 +391,6 @@ export async function findOrCreateByUPC(
           actor,
         );
 
-        // Import image from UPC lookup if available (non-blocking)
         if (upcLookup.imageUrl) {
           try {
             await importImageFromUPC(
@@ -514,7 +506,6 @@ async function findOrCreateByISBN(
   );
 }
 
-/** Universal-scanner product resolution without changing UPC callers. */
 export function findOrCreateByCode(
   db: Database,
   usdaClient: USDAClient,

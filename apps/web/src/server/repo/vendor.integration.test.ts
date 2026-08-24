@@ -138,7 +138,6 @@ describe("vendor repository — roster CRUD and list filters", () => {
     );
     expect(updated.name).toBe("Masseria Calderisi Srl");
     expect(updated.notes).toBe("COI on file");
-    // Unwritten fields survive a partial update.
     expect(updated.website).toBe("https://example.com/masseria");
   });
 
@@ -178,9 +177,6 @@ describe("vendor repository — roster CRUD and list filters", () => {
     );
     await deleteVendors(ctx.db, [gone.id], ctx.actor);
 
-    // A tombstoned row still satisfies the id, so the update has to check
-    // `deletedAt` itself — otherwise a rename would silently resurrect it into
-    // every name-based lookup.
     await expect(
       updateVendor(ctx.db, gone.id, { name: "Reopened" }, ctx.actor),
     ).rejects.toMatchObject({
@@ -426,7 +422,6 @@ describe("vendor repository — vendorOptions picklist", () => {
 
     const options = await vendorOptions(ctx.db);
 
-    // Ranked by live-charge count desc, then name asc.
     expect(options).toEqual([
       { id: busy, name: "Busy Vendor", count: 2, logo: null },
       { id: quiet, name: "Quiet Vendor", count: 1, logo: null },
@@ -736,7 +731,6 @@ describe("vendor repository — mergeVendors", () => {
     return Number(row?.total ?? 0);
   };
 
-  /** The raw charge row, deleted ones included — `getPurchaseByID` hides those. */
   const chargeRow = async (id: PurchaseId) => {
     const [row] = await getDb(ctx.db)
       .select({
@@ -848,7 +842,6 @@ describe("vendor repository — mergeVendors", () => {
     ).toBeUndefined();
   });
 
-  /** An UPLOADED image + its `PurchaseImage` join row, filed against `id`. */
   const attachDocumentRow = async (purchaseId: PurchaseId, label: string) => {
     const img = await insertWithShortcode(ctx.db, "image", {
       key: `test-documents/${label}.pdf`,
@@ -895,8 +888,6 @@ describe("vendor repository — mergeVendors", () => {
 
     const keeperCharge = await charge(keeper, "KEEP-1");
     const loserOrdered = await charge(loser, "LOSE-1");
-    // An order-less charge on the loser: nothing to collide with, so it just
-    // re-points like any other row.
     const loserCashRun = await charge(loser, null);
 
     await addLine("keeper line", 100, keeperCharge);
@@ -920,9 +911,6 @@ describe("vendor repository — mergeVendors", () => {
     expect(merged.purchaseCount).toBe(3);
     expect(merged.spend).toBe(150);
 
-    // The summary reports what actually moved, straight off the plan: both of
-    // the loser's charges simply re-pointed (no order collision here), none
-    // folded, and the keeper had no empty fields to fill.
     expect(mergeSummary).toEqual({
       keepId: keeperCode,
       deletedIds: [loserCode],
@@ -972,18 +960,15 @@ describe("vendor repository — mergeVendors", () => {
     const keeperCode = await vendorCode(keeper);
     const loserCode = await vendorCode(loser);
 
-    // Does not throw — the fold happens BEFORE the bulk re-point.
     const { vendor: merged, mergeSummary } = await mergeVendors(
       ctx.db,
       { keepId: keeperCode, mergeIds: [loserCode] },
       ctx.actor,
     );
 
-    // One order, one charge: the two collapsed into a single live row.
     expect(merged.purchaseCount).toBe(1);
     expect(merged.spend).toBe(100);
 
-    // The fold, not a re-point, is what the summary counts here.
     expect(mergeSummary).toEqual({
       keepId: keeperCode,
       deletedIds: [loserCode],
@@ -999,8 +984,6 @@ describe("vendor repository — mergeVendors", () => {
       "survivor line",
     ]);
 
-    // Documents follow their charge: a live join row against the survivor for
-    // BOTH images, and the folded charge's own join row tombstoned.
     const survivorDocs = await getDb(ctx.db).query.purchaseImage.findMany({
       where: and(
         eq(purchaseImage.purchaseId, survivor),
@@ -1092,8 +1075,6 @@ describe("vendor repository — mergeVendors", () => {
   });
 
   it("keeps a loser's charge when only the loser holds that order id, and re-points it", async () => {
-    // The reverse construction: with no competitor there is no fold at all, so
-    // the loser's charge survives with its own id under the keeper.
     const keeper = await findOrCreateVendor(ctx.db, "Metal Supermarkets");
     const loser = await findOrCreateVendor(ctx.db, "Metal Supermarket");
 
@@ -1149,14 +1130,12 @@ describe("vendor repository — mergeVendors", () => {
     const survivorId = rowA?.deletedAt === null ? chargeA : chargeB;
     const deadId = survivorId === chargeA ? chargeB : chargeA;
 
-    // Exactly one of the colliding pair is live, and it belongs to the keeper.
     expect(
       [rowA?.deletedAt, rowB?.deletedAt].filter((d) => d === null),
     ).toHaveLength(1);
     expect((await chargeRow(survivorId))?.vendorId).toBe(keeper);
     expect((await chargeRow(deadId))?.deletedAt).not.toBeNull();
 
-    // Both losers' lines ended up on the one surviving charge.
     expect(
       (await getPurchaseExpenses(ctx.db, survivorId))
         .map((l) => l.cost)
@@ -1199,9 +1178,6 @@ describe("vendor repository — mergeVendors", () => {
   });
 
   it("carries website/notes the keeper LACKS and never overwrites one it has", async () => {
-    // The real first case: `B&H` held the website with 1 charge, `B&H Photo` had
-    // 4 charges and no website. The better-populated duplicate is rarely the one
-    // with more history, so the keeper fills its gaps from the losers.
     const { output: keeper } = await createVendor(
       ctx.db,
       vendorCreateInput.parse({ name: "B&H Photo", notes: "keeper notes" }),
@@ -1224,8 +1200,6 @@ describe("vendor repository — mergeVendors", () => {
     );
 
     expect(merged.website).toBe("https://bhphotovideo.example");
-    // The keeper already had notes, so the loser's are discarded rather than
-    // clobbering a value a human wrote.
     expect(merged.notes).toBe("keeper notes");
     // Only `website` was actually empty on the keeper — `notes` was already
     // set and so is never reported as carried.
@@ -1255,8 +1229,6 @@ describe("vendor repository — mergeVendors", () => {
       ctx.actor,
     );
 
-    // `statedTotal` is the reconciliation cue the `Purchase` table exists to
-    // hold; dropping it in the fold would destroy it silently.
     expect((await chargeRow(survivor))?.statedTotal).toBe(249.99);
     expect((await chargeRow(dead))?.deletedAt).not.toBeNull();
   });
@@ -1274,8 +1246,6 @@ describe("vendor repository — mergeVendors", () => {
       ctx.actor,
     );
 
-    // Two different stated totals is a real conflict: the survivor's stands, and
-    // the discarded value is recorded rather than vanishing.
     expect((await chargeRow(survivor))?.statedTotal).toBe(100);
     const [entry] = await auditRows("purchase", survivor, "update");
     expect(entry?.changes?.foldedIn).toEqual({ from: null, to: dead });
@@ -1313,8 +1283,6 @@ describe("vendor repository — mergeVendors", () => {
       to: survivor,
     });
 
-    // The folded charge is tombstoned in the log, the survivor names what it
-    // absorbed, and the losing vendors are logged as deleted.
     expect(await auditRows("purchase", dead, "delete")).toHaveLength(1);
     const [survivorEntry] = await auditRows("purchase", survivor, "update");
     expect(survivorEntry?.changes?.foldedIn).toEqual({ from: null, to: dead });

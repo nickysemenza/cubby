@@ -41,10 +41,6 @@ import {
   SHORTCODE_TABLE,
 } from "./shortcode-utils";
 
-/**
- * Lets one test pin the next generated code so a collision can be forced on
- * demand. Everything else falls through to the real generator.
- */
 let nextCode: string | null = null;
 vi.mock("@cubby/shared", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@cubby/shared")>();
@@ -83,8 +79,6 @@ describe("shortcode minting", () => {
   });
 
   it("covers every shortcode-bearing entity with a table", () => {
-    // Catches "added an entity to the manifest, forgot the table mapping" —
-    // which would otherwise surface as a runtime undefined deep in a resolver.
     for (const entity of shortcodeEntities) {
       expect(SHORTCODE_TABLE[entity]).toBeDefined();
     }
@@ -149,7 +143,6 @@ describe("insertWithShortcode", () => {
       await winnerCommitted; // hold the txn (and its index lock) open
     });
 
-    // Let the winner reach (and hold) its uncommitted INSERT.
     await new Promise((r) => setTimeout(r, 100));
 
     nextCode = contested;
@@ -158,7 +151,6 @@ describe("insertWithShortcode", () => {
       manufacturer: "ACME",
     });
 
-    // Give our insert time to reach its blocked state, then commit the winner.
     await new Promise((r) => setTimeout(r, 100));
     releaseWinner();
 
@@ -264,7 +256,6 @@ describe("resolution", () => {
 
     const byCanonical = await resolveShortcode(ctx.db, canonical);
     expect(byCanonical).toEqual({ entity: "product", id: created.entityId });
-    // The promise the cutover makes to labels already stuck to things.
     expect(await resolveShortcode(ctx.db, legacy)).toEqual(byCanonical);
     expect(await resolveShortcode(ctx.db, ` ${legacy.toLowerCase()} `)).toEqual(
       byCanonical,
@@ -273,7 +264,6 @@ describe("resolution", () => {
 
   it("returns null for a malformed or unknown code", async () => {
     expect(await resolveShortcode(ctx.db, "nonsense")).toBeNull();
-    // 0/O/I/L are outside the alphabet, so this is malformed, not just unknown.
     expect(await resolveShortcode(ctx.db, "PRD-0OIL")).toBeNull();
     expect(await resolveShortcode(ctx.db, "PRD-2222")).toBeNull();
   });
@@ -342,7 +332,6 @@ describe("resolution", () => {
     expect(await resolveLiveShortcode(ctx.db, prod.id, "product")).toBe(
       prod.entityId,
     );
-    // Legacy spelling resolves the same way here too.
     const legacy = `P-${prod.id.slice(SHORTCODE_PREFIX.product.length)}`;
     expect(await resolveLiveShortcode(ctx.db, legacy, "product")).toBe(
       prod.entityId,
@@ -380,7 +369,6 @@ describe("resolution", () => {
       id: loc.id,
     });
 
-    // Unknown, malformed, and wrong-entity codes all resolve to null.
     expect(await getProductByShortcode(ctx.db, "PRD-2222")).toBeNull();
     expect(await getProductByShortcode(ctx.db, "not-a-code")).toBeNull();
     expect(await getProductByShortcode(ctx.db, loc.id)).toBeNull();
@@ -399,8 +387,6 @@ describe("resolution", () => {
       .set({ deletedAt: new Date() })
       .where(eq(location.id, created.entityId));
 
-    // Deliberate: resolution answers "what does this code name", which stays
-    // true after a delete. The 404 comes from the subsequent live-row fetch.
     expect(await resolveShortcode(ctx.db, created.id)).toEqual({
       entity: "location",
       id: created.entityId,

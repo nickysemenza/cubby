@@ -28,7 +28,6 @@ import { CellEditTrigger } from "./cell-edit-trigger";
 import { CellEditorOverlay } from "./cell-editor-overlay";
 import { CellSelectionContext } from "./cell-selection-context";
 
-/** Re-export for convenience */
 export type { FilterableComboboxItem };
 
 type EditableInputConfig = {
@@ -42,7 +41,6 @@ type EditableInputConfig = {
    * inserts a newline). No-op for `type: "number"`.
    */
   multiline?: boolean;
-  /** Rows for the multiline textarea (default 4). */
   rows?: number;
 };
 
@@ -90,21 +88,11 @@ interface EditableCellProps<T> {
   onSave: (value: T | null) => Promise<void>;
   config: EditableConfig;
   renderValue: (value: T | null) => React.ReactNode;
-  /** Enable cmd-C / cmd-V on the focused display trigger. */
   clipboard?: CellClipboardSpec;
-  /** Keep rich content outside the button and edit through a sibling pencil. */
   trigger?: "wrap" | "pencil";
-  /** Opens this cell when its host explicitly directs attention to it. */
   autoOpen?: boolean;
 }
 
-/**
- * Unified editable cell component.
- * Use config to specify the input type:
- * - { type: "text" } or { type: "number", step, prefix }
- * - { type: "currency" }
- * - { type: "select", options }
- */
 export function EditableCell<T>({
   value,
   onSave,
@@ -114,7 +102,6 @@ export function EditableCell<T>({
   trigger = "wrap",
   autoOpen = false,
 }: EditableCellProps<T>) {
-  // Select type has its own specialized implementation
   if (config.type === "select") {
     return (
       <EditableSelectCellInternal
@@ -131,7 +118,6 @@ export function EditableCell<T>({
     );
   }
 
-  // Date type has its own specialized implementation
   if (config.type === "date") {
     return (
       <EditableDateCellInternal
@@ -146,7 +132,6 @@ export function EditableCell<T>({
     );
   }
 
-  // Text/number/currency use the text input
   return (
     <EditableInputCellInternal
       value={value}
@@ -160,13 +145,6 @@ export function EditableCell<T>({
   );
 }
 
-/**
- * Shared display/edit shell: the CellEditTrigger stays mounted in the cell as
- * the overlay's anchor (and clipboard/focus target); the editor renders over
- * it. Wires the clipboard spec's isEditing guard automatically, and routes a
- * successful paste's resolved value into `onPasted` so the hosting cell can
- * show it optimistically (same as a Check-button save).
- */
 export function useCellEditState(
   clipboard: CellClipboardSpec | undefined,
   onPasted?: (value: unknown) => void,
@@ -180,8 +158,6 @@ export function useCellEditState(
   const isEditingRef = useRef(false);
   isEditingRef.current = isEditing;
 
-  // Open the editor. Doubles as the `CellEditTrigger.onStartEdit` handler:
-  // click/double-click pass no arg (no seed), CELL_EDIT_EVENT threads the seed.
   const open = useCallback((seed?: string) => {
     setSeedText(seed ?? null);
     setIsEditing(true);
@@ -271,13 +247,6 @@ function EditableDisplay({
   );
 }
 
-/**
- * Optimistic display value for editable cells: after a successful save the new
- * value shows immediately, then hands back to the prop once react-query's
- * refetch catches up. `isEqual` must be referentially stable (module-level) —
- * pass one for object values (e.g. compare by id), where the default
- * reference equality would never release the optimistic value.
- */
 export function useOptimisticDisplayValue<T>(
   value: T | null,
   isEqual: (a: T | null, b: T | null) => boolean = referenceEquals,
@@ -432,8 +401,6 @@ function EditableInputEditor<T>({
   value: T | null;
   onSave: (value: T | null) => Promise<void>;
   config: EditableInputConfig | EditableCurrencyConfig;
-  /** Type-to-edit: the character that opened the editor, seeded as the initial
-   * input value (replacing the current value). `null` = normal open. */
   seedText: string | null;
   onCancel: () => void;
   onCommit: (value: T | null) => void;
@@ -472,8 +439,6 @@ function EditableInputEditor<T>({
     return String(v);
   }, []);
 
-  // Seeded (type-to-edit): the initial value IS the seed char (replaces the
-  // current value); autoFocus leaves the caret at the end of the single char.
   const [inputValue, setInputValue] = useState(() =>
     seedText != null ? seedText : value !== null ? format(value) : "",
   );
@@ -660,13 +625,6 @@ function EditableSelectCellInternal({
   );
 }
 
-/**
- * Commit-on-pick (matches the date editor): choosing an option saves + closes
- * immediately — no separate ✓ confirm step. Picking the SAME value closes
- * without a write (handleSave's old unchanged path); a save rejection toasts
- * and keeps the editor open with the current value intact. The ✗ button stays
- * as the explicit mouse cancel affordance (Escape via the overlay also works).
- */
 function EditableSelectEditor({
   value,
   onSave,
@@ -788,10 +746,6 @@ function EditableDateCellInternal({
   );
 }
 
-/**
- * Unlike the text/select editors, a valid typed date, cleared value, or picked
- * day commits immediately — there's no separate Check/X confirm step.
- */
 function EditableDateEditor({
   value,
   onSave,
@@ -852,17 +806,10 @@ interface EditableAmountCellProps {
    * createNameColumn's editable renderValue). Edit mode is unaffected.
    */
   renderDisplay?: (content: React.ReactNode) => React.ReactNode;
-  /** Rich displays (links/popovers) use a sibling pencil button. */
   trigger?: EditTriggerMode;
-  /** Enable cmd-C / cmd-V on the focused display trigger. */
   clipboard?: CellClipboardSpec;
 }
 
-/**
- * Editable cell for inventory amounts (value + unit).
- * Shows formatted amount (with price when unitMappings is provided) in
- * display mode. Shows two inputs (value, unit) in edit mode.
- */
 export function EditableAmountCell({
   amount,
   unitMappings,
@@ -900,8 +847,6 @@ export function EditableAmountCell({
     const current = optimisticAmount ?? amount;
     setEditingValue(current.value);
     setEditingUnit(current.unit);
-    // Amount is a compound (value + unit) editor; a type-to-edit seed isn't
-    // meaningful here, so open without one (the value input still autofocuses).
     edit.open();
   }, [amount, optimisticAmount]);
 
@@ -913,7 +858,6 @@ export function EditableAmountCell({
     });
   }, [editingValue, editingUnit, amount, commit]);
 
-  // Clear optimistic value when real value catches up
   useEffect(() => {
     if (
       optimisticAmount &&

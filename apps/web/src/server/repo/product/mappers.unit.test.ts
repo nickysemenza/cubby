@@ -300,8 +300,6 @@ describe("product mappers", () => {
     expect(result.inventoryEntry[0]?.location).not.toHaveProperty("images");
     expect(result.inventoryEntry[0]).not.toHaveProperty("productId");
     expect(result.inventoryEntry[0]).not.toHaveProperty("locationId");
-    // Net basis rollup: a plain number, not the bigint-string union
-    // expenseCount tolerates.
     expect(result.expenseTotal).toEqual(42.5);
     expect(productListItemOut.parse(result)).toEqual(result);
   });
@@ -459,7 +457,6 @@ describe("product mappers", () => {
     expect(result.externalIds).toHaveLength(1);
     expect(result.inventoryEntry[0]).not.toHaveProperty("productId");
     expect(result.inventoryEntry[0]).not.toHaveProperty("locationId");
-    // The dead-shelf entry is gone, matching `dbProductToListAPI`.
     expect(result.inventoryEntry).toHaveLength(1);
     expect(
       productWithIngredientAndInventoryAndMappingsOut.parse(result),
@@ -509,15 +506,12 @@ describe("on-hand counts units in service as locations", () => {
     }) satisfies ProductListDB;
 
   it("sums loose stock and in-use locations against the ledger", () => {
-    // One packout loose on a shelf, two in service as bins, three bought.
     const result = dbProductToListAPI(stockedRow(2, 1));
     expect(result.onHandUnits).toBe(3);
     expect(result.quantityVariance).toBe(0);
   });
 
   it("counts locations even when nothing is on a shelf", () => {
-    // The whole point: without this the containers read as missing and every
-    // one of them lights "Shelf disagrees" forever.
     const result = dbProductToListAPI(stockedRow(3, null));
     expect(result.onHandUnits).toBe(3);
     expect(result.quantityVariance).toBe(0);

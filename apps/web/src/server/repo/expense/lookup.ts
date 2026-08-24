@@ -51,16 +51,7 @@ import { relatedWhereConditions } from "~/server/repo/related-view";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 import { dbExpenseToAPI } from "./helpers";
 
-/**
- * Resolve a batch of shortcodes to their (unbranded) uuids for use in a WHERE
- * clause. Unknown/malformed codes simply drop out — a filter naming a code
- * that doesn't exist should match nothing, not throw. The `entity` parameter
- * pins the expected type so a wrong-prefix code is silently dropped rather than
- * matching an unrelated row.
- *
- * `resolveAllPresent` applies the same live-row semantics as the list itself,
- * including canonical/legacy shortcode normalization.
- */
+// Drop malformed, missing, soft-deleted, and wrong-prefix references.
 const toUuids = async (
   db: Database,
   codes: readonly string[],
@@ -130,30 +121,12 @@ const orderIdPresence = (
       );
 };
 
-/**
- * Translate `ExpenseFilters` into the exact Drizzle WHERE clause used to
- * scope expense rows. Shared by `expenseList` (the ledger), `expenseAnalytics`
- * (repo/expense/analytics.ts), and `projectPortfolioAnalytics`
- * (repo/project/portfolio-analytics.ts) so all three can never drift under the
- * same filter set — the plan's hard invariant is "ledger totals and analytics
- * totals always agree".
- *
- * `extraConditions` is an escape hatch for a caller that already has a
- * predicate the `ExpenseFilters` vocabulary can't express — e.g.
- * `projectPortfolioAnalytics` already holds resolved project **uuids** (not
- * the shortcodes `filters.projectId` expects), so it ANDs an `inArray`
- * straight onto the result instead of round-tripping uuids back to
- * shortcodes just to satisfy `toUuids`.
- */
+// Shared by list and analytics so identical filter sets produce identical totals.
 export const buildExpenseWhereClause = async (
   db: Database,
   filters: ExpenseFilters,
   options?: { extraConditions?: Array<SQL | undefined> },
 ): Promise<SQL | undefined> => {
-  // When scoped to a project subtree, resolve each selected project + every
-  // live descendant and match on the whole set; otherwise a plain match on the
-  // selection (one project or several — see `eqAny`). Filters arrive as
-  // shortcodes, resolved to the uuid FK the column actually stores.
   const selectedProjectCodes = filters.projectId
     ? [filters.projectId].flat()
     : [];
@@ -209,7 +182,6 @@ export const buildExpenseWhereClause = async (
       .map((term) => formatSearchTerm(expense.name, term)),
   );
 
-  // Resolved once up front, same as `selectedProjectIds` above.
   const vendorUuids = await toUuids(
     db,
     filters.vendorId ? [filters.vendorId].flat() : [],
@@ -243,11 +215,6 @@ export const buildExpenseWhereClause = async (
       ...(options?.extraConditions ?? []),
       nameSearch,
       eqAny(expense.lineKind, filters.lineKind),
-      // A plain column, deliberately: `lineBasis` lives on Expense rather than
-      // Purchase because allocation siblings routinely span separate Purchase
-      // rows (drywall 1/3, 2/3, 3/3 are three Purchases; so are the countertop
-      // deposit and balance). That also keeps this out of `chargeCondition`,
-      // so the 193 purchase-less rows need no `isNull(purchaseId)` arm here.
       eqAny(expense.lineBasis, filters.lineBasis),
       eqAny(expense.costType, filters.costType),
       eqAny(expense.trade, filters.trade),
@@ -296,9 +263,6 @@ export const buildExpenseWhereClause = async (
       filters.future !== undefined
         ? eq(expense.future, filters.future)
         : undefined,
-      // `expense.date` is NOT NULL (since #553 enforced the finance
-      // invariants), so unlike `cost` below there is no null-row case to
-      // reason about here — every row lands inside or outside the window.
       filters.dateFrom ? gte(expense.date, filters.dateFrom) : undefined,
       filters.dateTo ? lte(expense.date, filters.dateTo) : undefined,
       filters.dateRelative === "beforeToday"
@@ -357,20 +321,7 @@ export const buildExpenseWhereClause = async (
   );
 };
 
-/**
- * Sorts the generic column path can't produce: the joined project/product names
- * shown in those columns aren't columns on `expense`, and neither are `vendor`
- * and `orderId` any more — both live on the charge.
- *
- * Correlated subqueries rather than joins so `expenseList` stays a relational
- * `findMany` (its count query is then untouched). The soft-delete guard mirrors
- * what `resolveLiveJoinName` applies on read, so an expense whose project,
- * product or charge was deleted sorts as null — the same way it renders.
- *
- * NULLS LAST in both directions is the house convention (see `buildOrderBy`).
- * `trade` needs no entry: it's a plain text column, so it falls through to the
- * generic path and sorts alphabetically.
- */
+// Joined-name sorts stay correlated so the relational count query is untouched.
 const resolveExpenseSort = (sort: SortParams) => {
   const dirSql =
     sort.direction === "asc" ? "asc nulls last" : "desc nulls last";
