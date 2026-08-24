@@ -84,7 +84,7 @@ describe("literal entity generator", () => {
       'repository:{module:"~/server/example",export:"exampleRepository"}',
     );
     expect(artifact("entity-runtime-ports.gen.ts")).toContain(
-      'alpha:{attach:{module:"~/server/example",export:"attachExample"}',
+      'relationMutation:{attach:{module:"~/server/example",export:"attachExample"}',
     );
     expect(artifact("entity-runtime-ports.gen.ts")).toContain(
       'typeof import("~/server/example")["exampleRepository"]',

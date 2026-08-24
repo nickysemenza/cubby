@@ -12,11 +12,7 @@
  * The apps themselves (and the manifest below) live in `@cubby/mcp-apps`; this
  * file is only the MCP wiring, which needs cubby's origin and the SDK.
  */
-import {
-  MCP_APP_BUNDLES,
-  type McpAppBundle,
-  withCubbyAppConfig,
-} from "@cubby/mcp-apps";
+import { MCP_APP_MANIFEST } from "@cubby/mcp-apps/metadata";
 import {
   RESOURCE_MIME_TYPE,
   registerAppResource,
@@ -24,40 +20,49 @@ import {
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { APP_ORIGIN } from "~/lib/auth";
 
-function register(server: McpServer, app: McpAppBundle) {
+type McpApp = (typeof MCP_APP_MANIFEST)[number];
+
+function register(server: McpServer, app: McpApp) {
   registerAppResource(
     server,
     app.name,
     app.uri,
     { description: app.description },
-    () => ({
-      contents: [
-        {
-          uri: app.uri,
-          mimeType: RESOURCE_MIME_TYPE,
-          // The apps deep-link back into cubby, but a sandboxed iframe can't
-          // know what origin its server is served from. Substituting at read
-          // time keeps the origin out of tool payloads and out of the bundles.
-          text: withCubbyAppConfig(app.html, {
-            origin: APP_ORIGIN,
-            appId: app.id,
-          }),
-          _meta: {
-            ui: {
-              // CSP and domain are intentionally omitted. These personal,
-              // dev-only bundles are self-contained; omitted CSP denies
-              // network access, and a dedicated domain is submission-only.
-              // The apps draw their own hairline rules and ink top-rule; a
-              // host-supplied border/background frames a frame.
-              prefersBorder: false,
+    async () => {
+      const { MCP_APP_BUNDLES, withCubbyAppConfig } = await import(
+        "@cubby/mcp-apps"
+      );
+      const bundle = MCP_APP_BUNDLES.find(({ id }) => id === app.id);
+      if (!bundle) throw new Error(`Missing MCP App bundle for ${app.id}`);
+      return {
+        contents: [
+          {
+            uri: app.uri,
+            mimeType: RESOURCE_MIME_TYPE,
+            // The apps deep-link back into cubby, but a sandboxed iframe can't
+            // know what origin its server is served from. Substituting at read
+            // time keeps the origin out of tool payloads and out of the bundles.
+            text: withCubbyAppConfig(bundle.html, {
+              origin: APP_ORIGIN,
+              appId: app.id,
+            }),
+            _meta: {
+              ui: {
+                // CSP and domain are intentionally omitted. These personal,
+                // dev-only bundles are self-contained; omitted CSP denies
+                // network access, and a dedicated domain is submission-only.
+                // The apps draw their own hairline rules and ink top-rule; a
+                // host-supplied border/background frames a frame.
+                prefersBorder: false,
+              },
             },
           },
-        },
-      ],
-    }),
+        ],
+      };
+    },
   );
 }
 
 export function registerMcpApps(server: McpServer) {
-  for (const app of MCP_APP_BUNDLES) register(server, app);
+  for (const app of MCP_APP_MANIFEST) register(server, app);
 }
