@@ -759,6 +759,37 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         `z.object({entity:z.literal(${JSON.stringify(key)}),shortcode:shortcodeSchema(${JSON.stringify(key)})})`,
     )
     .join(",\n  ");
+
+  const browserEntities = entities.filter(
+    ({ descriptor }) => descriptor.browserRoutes !== false,
+  );
+  const browserCrudEntitySpecs = browserEntities.filter(
+    (entity): entity is EntityLiteral & {
+      contract: NonNullable<EntityLiteral["contract"]>;
+    } => entity.contract !== null,
+  );
+  const browserCrudEntities = browserCrudEntitySpecs.map(({ key }) => key);
+  const listTypeImports = new Map<string, Set<string>>();
+  for (const { contract } of browserCrudEntitySpecs) {
+    const exports = listTypeImports.get(contract.output.module) ?? new Set<string>();
+    exports.add(contract.output.export);
+    listTypeImports.set(contract.output.module, exports);
+  }
+  const listTypeImportSource = [
+    ...[...listTypeImports.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(
+        ([module, exports]) =>
+          `import type { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
+      ),
+    'import type { z } from "zod";',
+  ].join("\n");
+  const listResultTypes = browserCrudEntitySpecs
+    .map(
+      ({ key, contract }) =>
+        `  ${JSON.stringify(key)}: { items: z.output<typeof ${contract.output.export}>[]; meta: EntityListMeta };`,
+    )
+    .join("\n");
   const commandVariants = (
     action: "create" | "update",
     schema: "create" | "update",
@@ -775,12 +806,6 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         return `z.object({action:z.literal(${JSON.stringify(action)}),entity:z.literal(${JSON.stringify(entity.key)})${id},data:${schemaRef.export}})`;
       })
       .join(",\n  ");
-  const browserEntities = entities.filter(
-    ({ descriptor }) => descriptor.browserRoutes !== false,
-  );
-  const browserCrudEntities = browserEntities
-    .filter(({ contract }) => contract !== null)
-    .map(({ key }) => key);
   const kernelEntities = entities
     .filter(({ contract, key }) => contract !== null || key === "image");
   const kernelEntityKeys = kernelEntities.map(({ key }) => key);
@@ -972,6 +997,33 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         "};\n",
     },
     {
+      relativePath: "apps/web/src/entities/generated/entity-lists.gen.ts",
+      source:
+        generatedHeader +
+        `${listTypeImportSource}\n\n` +
+        `export const listEntities = ${compactLiteral(browserCrudEntities)} as const;\n` +
+        "export type ListEntity = (typeof listEntities)[number];\n\n" +
+        'export type EntityListSort = { orderBy: string; direction: "asc" | "desc" };\n' +
+        "export type EntityListInput = {\n" +
+        "  filters: Record<string, unknown>;\n" +
+        "  sort?: EntityListSort | EntityListSort[];\n" +
+        "  pagination?: { pageIndex: number; pageSize: number };\n" +
+        "  groupBy?: string;\n" +
+        "};\n" +
+        "export type EntityListInputByEntity = {\n" +
+        "  [E in ListEntity]: EntityListInput & { entity: E };\n" +
+        "};\n\n" +
+        "export type EntityListMeta = {\n" +
+        "  pageIndex: number;\n" +
+        "  pageSize: number;\n" +
+        "  totalCount: number;\n" +
+        "  sums?: Record<string, number>;\n" +
+        "};\n" +
+        "export type EntityListResultByEntity = {\n" +
+        `${listResultTypes}\n` +
+        "};\n",
+    },
+    {
       relativePath: "apps/web/src/server/generated/entity-bindings.gen.ts",
       source:
         generatedHeader +
@@ -1096,7 +1148,7 @@ const formatSource = (root: string, artifact: EntityArtifacts): string => {
   return result;
 };
 
-const generatedName = /^(?:entity-literal-.+|entity-manifest-data|entity-inspector|entity-details|entity-bindings|entity-routes|entity-kernel-entities|entity-runtime-ports|filter-search-fields|shortcode-registry)\.gen\.ts$/;
+const generatedName = /^(?:entity-literal-.+|entity-manifest-data|entity-inspector|entity-details|entity-lists|entity-bindings|entity-routes|entity-kernel-entities|entity-runtime-ports|filter-search-fields|shortcode-registry)\.gen\.ts$/;
 
 const findExtraArtifacts = async (root: string, artifacts: readonly EntityArtifacts[]) => {
   const expected = new Set(artifacts.map(({ relativePath }) => relativePath));

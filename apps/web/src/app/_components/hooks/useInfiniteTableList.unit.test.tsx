@@ -54,6 +54,30 @@ afterEach(() => {
 });
 
 describe("useInfiniteTableList", () => {
+  it("forwards TanStack cancellation to the list transport", async () => {
+    let receivedSignal: AbortSignal | undefined;
+    const queryOptions = () => ({
+      queryKey: ["table-abort"],
+      queryFn: ({ signal }: { signal?: AbortSignal }) => {
+        receivedSignal = signal;
+        return new Promise<ListQueryResponse<TestRow>>(() => {});
+      },
+    });
+    const { unmount } = renderHook(
+      () =>
+        useInfiniteTableList<TestFilters, TestRow>({
+          queryOptions,
+          buildFilters: () => ({ scope: "same" }),
+          tableState,
+        }),
+      { wrapper: createWrapper() },
+    );
+
+    await waitFor(() => expect(receivedSignal).toBeDefined());
+    unmount();
+    expect(receivedSignal?.aborted).toBe(true);
+  });
+
   it("coalesces overlapping next-page requests", async () => {
     const calls = new Map<number, number>();
     const queryOptions = vi.fn(

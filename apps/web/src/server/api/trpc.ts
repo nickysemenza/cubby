@@ -1,24 +1,20 @@
 import { buildActorContext } from "@cubby/schemas/context";
 import { type UserId, unsafeUserId } from "@cubby/schemas/identifiers";
-import * as Sentry from "@sentry/tanstackstart-react";
 import { initTRPC, TRPCError, type TRPCRouterRecord } from "@trpc/server";
-import { flatten } from "flat";
 import superjson from "superjson";
 import { ZodError, type ZodType, type z } from "zod";
-import { getErrorMessage } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 import {
   appErrorFromUnknown,
   createAppError,
-  isExpectedAppError,
   toPublicErrorPayload,
 } from "~/server/errors/app-error";
 import { translateDatabaseError } from "~/server/errors/db-errors";
+import { observeRequest } from "~/server/observed-request";
 import {
   buildCrudServices,
   createRequestContext,
 } from "~/server/request-context";
-import { type AppSpan, TraceNames, withTrace } from "~/server/tracing";
 import type { RequestOrigin } from "~/server/workload";
 import { classifyTrpcWorkload } from "~/server/workload";
 
@@ -97,100 +93,31 @@ export const createCallerFactory = t.createCallerFactory;
  */
 export const createTRPCRouter = t.router;
 
-/** Keys whose values must never reach a trace. */
-const SENSITIVE_KEY =
-  /pass|token|secret|cookie|authorization|api.?key|url|uri/i;
-/** Above this serialized size we record the byte count but not the values. */
-const INPUT_BYTES_CAP = 4096;
-
-/**
- * Record a tRPC input on the span under `rpc.input.*`, guarded: always emits
- * `rpc.input.bytes`, skips the value dump past {@link INPUT_BYTES_CAP} (setting
- * `rpc.input.truncated`), and redacts secret-ish keys — so traces stay lean and
- * never leak credentials.
- */
-export const recordInput = (
-  span: AppSpan,
-  input: unknown,
-  includeValues = true,
-): void => {
-  if (input == null || typeof input !== "object") return;
-  let serialized: string;
-  try {
-    serialized = JSON.stringify(input);
-  } catch {
-    return; // non-serializable (e.g. a stream) — skip rather than throw
-  }
-  span.setAttribute("rpc.input.bytes", serialized.length);
-  if (!includeValues) return;
-  if (serialized.length > INPUT_BYTES_CAP) {
-    span.setAttribute("rpc.input.truncated", true);
-    return;
-  }
-  const flat = flatten({ "rpc.input": input }) as Record<string, unknown>;
-  for (const [key, value] of Object.entries(flat)) {
-    if (
-      typeof value !== "string" &&
-      typeof value !== "number" &&
-      typeof value !== "boolean"
-    ) {
-      continue; // skip null/undefined/nested — primitives only
-    }
-    span.setAttribute(key, SENSITIVE_KEY.test(key) ? "[redacted]" : value);
-  }
-};
-
-const tracingMiddleWare = t.middleware(async (opts) =>
-  withTrace(TraceNames.trpc(opts.type, opts.path), async (span) => {
-    span.setAttributes({
-      "rpc.system": "trpc",
-      "rpc.method": opts.path,
-      "rpc.type": opts.type,
-      "enduser.id": opts.ctx.auth?.userId ?? "guest",
-      "cubby.request_origin": opts.ctx.requestOrigin,
-      "cubby.workload": classifyTrpcWorkload(opts.ctx.requestOrigin, opts.path),
-    });
-    recordInput(
-      span,
-      await opts.getRawInput(),
+const tracingMiddleWare = t.middleware(async (opts) => {
+  const input = await opts.getRawInput();
+  return await observeRequest({
+    system: "trpc",
+    method: opts.path,
+    type: opts.type,
+    origin: opts.ctx.requestOrigin,
+    actorId: opts.ctx.auth?.userId,
+    input,
+    workload: classifyTrpcWorkload(opts.ctx.requestOrigin, opts.path),
+    includeInputValues:
       opts.ctx.requestOrigin !== "mcp" && opts.ctx.requestOrigin !== "agent",
-    );
-    try {
-      const result = await opts.next();
-
-      if (result.ok) {
-        span.setAttribute(
-          "cubby.workload",
-          classifyTrpcWorkload(opts.ctx.requestOrigin, opts.path, result.data),
-        );
-      }
-
-      // tRPC returns errors as results with ok: false, not thrown.
-      if (!result.ok) {
-        span.setError(getErrorMessage(result.error));
-        // Only capture *unexpected* errors to Sentry. Expected 4xx business
-        // errors (NOT_FOUND, UNAUTHORIZED, validation, …) are normal responses
-        // — they already skip console logging in createAppError, have zero user
-        // impact, and would otherwise flood Sentry with thousands of events
-        // (e.g. a stale cached getByID for a deleted entity).
-        if (!isExpectedAppError(result.error)) {
-          Sentry.captureException(result.error, {
-            extra: { trpcPath: opts.path, trpcType: opts.type },
-          });
-        }
-      }
-
-      return result;
-    } catch (error) {
-      // Unexpected errors that bypass tRPC error handling. withTrace marks the
-      // span errored + records the exception; we add the Sentry capture.
-      Sentry.captureException(error, {
-        extra: { trpcPath: opts.path, trpcType: opts.type },
-      });
-      throw error;
-    }
-  }),
-);
+    run: opts.next,
+    inspectResult: (result) =>
+      result.ok
+        ? {
+            workload: classifyTrpcWorkload(
+              opts.ctx.requestOrigin,
+              opts.path,
+              result.data,
+            ),
+          }
+        : { error: result.error },
+  });
+});
 
 /**
  * Translate raw Postgres constraint errors (unique, FK, not-null, check) into

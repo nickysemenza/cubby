@@ -36,7 +36,7 @@ import {
 } from "./useEntityListPresentation";
 import { useInfiniteTableList } from "./useInfiniteTableList";
 import { ListBulkActionBar } from "./useListBulkActions";
-import type { TRPCQueryOptionsFn } from "./usePaginatedTableCore";
+import type { ListQueryOptionsFn } from "./usePaginatedTableCore";
 import type { FilterInput } from "./useStandardColumns";
 
 export interface BaseListRow {
@@ -121,12 +121,12 @@ export interface UseEntityListOptions<
 > {
   entity: BrowserRoutedEntity;
   /**
-   * tRPC queryOptions function. Omit it — the default is the entity's own
+   * Transport queryOptions function. Omit it — the default is the entity's own
    * `query.list` from `getEntityContract`, which is the same procedure every
    * standard list page was naming by hand. Pass one only for a list backed by
    * a different procedure.
    */
-  queryOptions?: TRPCQueryOptionsFn<TFilters>;
+  queryOptions?: ListQueryOptionsFn<TFilters>;
   /**
    * Build filters from table state. Omit it to derive them from the entity's
    * filter manifest, which is what every list page should do — a hand-written
@@ -284,7 +284,7 @@ export function useEntityList<
   const api = useTRPC();
   const contractList = getEntityContract(entity).query.list;
   const defaultQueryOptions = useCallback(
-    (params: Parameters<TRPCQueryOptionsFn<TFilters>>[0]) =>
+    (params: Parameters<ListQueryOptionsFn<TFilters>>[0]) =>
       contractList?.(api, params as never),
     [api, contractList],
   );

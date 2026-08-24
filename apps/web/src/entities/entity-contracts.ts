@@ -3,6 +3,8 @@ import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { QueryKey } from "@tanstack/react-query";
 import type { useTRPC } from "~/integrations/trpc/react";
 import { invalidatesFor } from "~/lib/query-keys";
+import { entityDetailQueryOptions } from "./entity-detail";
+import { entityListQueryOptions } from "./entity-list";
 import {
   type GeneratedBrowserCrudEntity,
   generatedBrowserCrudEntities,
@@ -11,9 +13,11 @@ import {
 type Api = ReturnType<typeof useTRPC>;
 
 type ListParams = {
-  sort: { orderBy: string; direction: "asc" | "desc" };
+  sort:
+    | { orderBy: string; direction: "asc" | "desc" }
+    | Array<{ orderBy: string; direction: "asc" | "desc" }>;
   pagination: { pageIndex: number; pageSize: number };
-  filters: unknown;
+  filters: Record<string, unknown>;
   groupBy?: string;
 };
 
@@ -41,35 +45,10 @@ export const fdcIdFromParam = (id: string): number => Number.parseInt(id, 10);
 export const usdaRouteId = (fdcId: number): string => String(fdcId);
 const listParams = (params: ListParams) => params as never;
 
-type ExecutableQueryOptions = {
-  queryKey: QueryKey;
-  queryFn?: (context: { queryKey: QueryKey }) => Promise<unknown>;
-  [key: string]: unknown;
-};
-
 type ExecutableMutationOptions = {
   mutationFn?: (variables: unknown) => Promise<unknown>;
   [key: string]: unknown;
 };
-
-function kernelQueryOptions(
-  api: Api,
-  command: Record<string, unknown>,
-  queryKey: QueryKey,
-  project: (result: Record<string, unknown>) => unknown,
-) {
-  const options = api.entity.query.queryOptions(
-    command as never,
-  ) as unknown as ExecutableQueryOptions;
-  const queryFn = options.queryFn;
-  if (!queryFn) throw new Error("Entity query has no executable transport");
-  return {
-    ...options,
-    queryKey,
-    queryFn: async (context: { queryKey: QueryKey }) =>
-      project((await queryFn(context)) as Record<string, unknown>),
-  };
-}
 
 function kernelMutationOptions(
   api: Api,
@@ -114,20 +93,8 @@ function standardContract(entity: StandardEntity): EntityContract {
     canPreview: true,
     invalidationKeys,
     query: {
-      list: (api, params) =>
-        kernelQueryOptions(
-          api,
-          { action: "list", entity, ...params },
-          [[entity, "list"], { input: params }],
-          (result) => ({ items: result.items, meta: result.meta }),
-        ),
-      detail: (api, id) =>
-        kernelQueryOptions(
-          api,
-          { action: "get", entity, id, missing: "error" },
-          [[entity, "getByID"], { input: { id } }],
-          (result) => result.item,
-        ),
+      list: (_api, params) => entityListQueryOptions(entity, params),
+      detail: (_api, id) => entityDetailQueryOptions(entity, id),
     },
     mutation: {
       create: (api, callbacks) =>
