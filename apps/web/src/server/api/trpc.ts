@@ -24,11 +24,9 @@ export const createTRPCContext = createRequestContext;
 const t = initTRPC.context<typeof createTRPCContext>().create({
   transformer: superjson,
   errorFormatter({ shape, error }) {
-    // If the error was caused by a Zod validation, add the full error details
     if (error.cause instanceof ZodError) {
       const zodError = error.cause;
 
-      // Log the detailed error for server-side debugging
       console.error("[TRPC ZodError]", {
         path: shape.data?.path,
         fullError: zodError.format(),
@@ -72,25 +70,8 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
   },
 });
 
-/**
- * Create a server-side caller.
- *
- * @see https://trpc.io/docs/server/server-side-calls
- */
 export const createCallerFactory = t.createCallerFactory;
 
-/**
- * 3. ROUTER & PROCEDURE (THE IMPORTANT BIT)
- *
- * These are the pieces you use to build your tRPC API. You should import these a lot in the
- * "/src/server/api/routers" directory.
- */
-
-/**
- * This is how you create new routers and sub-routers in your tRPC API.
- *
- * @see https://trpc.io/docs/router
- */
 export const createTRPCRouter = t.router;
 
 const tracingMiddleWare = t.middleware(async (opts) => {
@@ -150,8 +131,6 @@ const appErrorMiddleware = t.middleware(async (opts) => {
   return result;
 });
 
-// Check if the user is signed in and has actorContext
-// Otherwise, throw an UNAUTHORIZED code
 const isAuthed = t.middleware(({ next, ctx }) => {
   if (!ctx.auth?.userId) {
     throw createAppError("UNAUTHORIZED", "Unauthorized");
@@ -171,13 +150,6 @@ const isAuthed = t.middleware(({ next, ctx }) => {
   });
 });
 
-/**
- * Public (unauthenticated) procedure
- *
- * This is the base piece you use to build new queries and mutations on your tRPC API. It does not
- * guarantee that a user querying is authorized, but you can still access user session data if they
- * are logged in.
- */
 const publicProcedure = t.procedure
   .use(dbErrorMiddleware)
   .use(tracingMiddleWare)
@@ -201,17 +173,11 @@ export const protectedProcedure = publicProcedure.use(isAuthed);
 export const strictOutput = <TSchema extends ZodType>(schema: TSchema) =>
   schema as ZodType<z.output<TSchema>, z.output<TSchema>>;
 
-/**
- * Helper to create a minimal auth object for testing
- */
 const createTestAuth = (userId: UserId) => ({
   userId,
   sessionId: "test-session-id",
 });
 
-/**
- * Test helper to create a TRPC context for testing purposes
- */
 export const createTestTRPCContext = (
   db: Database,
   opts: {
@@ -219,15 +185,8 @@ export const createTestTRPCContext = (
     auth?: { userId: UserId };
   } = {},
 ) => {
-  // USDA is always-available in prod (CF Worker) and now throws on a real
-  // service error rather than degrading to null. Tests have no USDA backend, so
-  // stub the fetcher to mimic the worker's "food not found" contract — hermetic,
-  // no thrown network error, the same "no USDA data" the suite always assumed:
-  //   - the batch endpoint (/api/foods/search/batch) returns 200 with an empty
-  //     results array (per-item misses); findFoodsBatch maps every item to null.
-  //     It must NOT 404 — findFoodsBatch throws on a non-200 (a real service
-  //     error), and product/recipe enrichment runs through the batch path.
-  //   - every other lookup (getFood / search / list) 404s → `food: null`.
+  // Batch misses are 200s; single-food misses are 404s. A batch 404 represents
+  // a service failure and would make enrichment throw.
   const jsonResponse = (status: number, body: unknown) =>
     new Response(JSON.stringify(body), {
       status,
@@ -245,7 +204,6 @@ export const createTestTRPCContext = (
     ? createTestAuth(opts.auth.userId)
     : { userId: null, sessionId: null };
 
-  // Build actorContext if we have auth
   const actorContext = auth.userId
     ? buildActorContext(auth.userId, "ui")
     : null;

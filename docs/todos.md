@@ -112,22 +112,38 @@ history is the archive. Permanent product constraints live in the
     differing missing-entity contracts explicitly.
 
 24. **Consider deleting tRPC after the Entity Kernel ships.** The 2026-08-24
-    detail migration left about 806 dedicated transport/compatibility lines,
-    230 production browser imports, 246 query-option call sites, and 83 mutation
-    call sites. A warm web typecheck is 2.41 seconds; a cold Vite SSR load of
-    `appRouter` is 6.65 seconds on the local M3 development machine. It still
-    provides streamed batches capped at 50, deliberately
+    detail/list/filter migration leaves 365 dedicated transport lines, 222
+    production `useTRPC` imports, 243 query-option call sites, and 83 mutation
+    call sites. Generic `entity.query` has no callers and has been deleted. tRPC
+    still provides streamed batches capped at 50, deliberately
     unbatched Problems calls, SuperJSON, middleware/error formatting, SSR's
-    in-process link, and shared cancellation/invalidation helpers. Re-measure
-    warm typecheck and import cost after lists and writes move to the kernel; if
-    those features no longer justify the adapter, replace it with Start
-    functions in a dedicated deletion PR.
+    in-process link, and shared cancellation/invalidation helpers. Follow the
+    measured criteria in **TanStack Start and transport** below rather than
+    deleting it for dependency count alone.
 
-25. **Consider deleting MCP Apps after generated registration ships.** The
-    universal template is 358,078 bytes raw / 85,820 gzip and its five-file web
-    contract tier runs in 3.72 seconds warm. Inventory actual USDA-picker and
-    shopping-list use, compare them with plain tools/resources, and delete MCP
-    Apps unless the interactions justify their source, bundle, and test cost.
+25. **Reconsider the remaining USDA MCP App.** The Shopping List App is gone;
+    `get_shopping_list` is a plain structured/text tool. The remaining USDA
+    Picker template is 353,500 bytes raw / 85,380 gzip and builds in 113 ms on
+    the local M3 development machine. Keep it only while refinement and explicit
+    selection materially outperform a plain `search_usda_foods` result.
+
+---
+
+## TanStack Start and transport
+
+- Migrate additional route-owned reads when they do not benefit from batching;
+  keep public/external endpoints as server routes rather than Start functions.
+- Measure browser request count and route-ready time before moving Home or
+  dashboard reads. Do not trade one batch for a visible request fan-out.
+- Evaluate generic writes after the list/filter migration has settled, including
+  invalidation, optimistic updates, error serialization, and deployment overlap.
+- Reconsider streamed workflows only after Start has equivalent semantic logging,
+  cancellation, trace propagation, and incremental-result behavior.
+- Reconsider deleting tRPC only when its remaining middleware, batching,
+  streaming, SuperJSON, SSR-local transport, and debugging value is negligible.
+- Track upstream automatic observability support and remove Cubby's Start wrapper
+  when the framework supplies equivalent named request/result/error events and
+  trace hooks: <https://tanstack.com/start/latest/docs/framework/react/guide/observability>.
 
 ---
 

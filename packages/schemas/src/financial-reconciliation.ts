@@ -13,8 +13,7 @@ export type FinancialReconciliationStatus = z.infer<
 
 /**
  * The reconciliation numbers, as a field map so other contract modules can
- * restate this shape WITHOUT `.pick()`/`.extend()` (guard-enforced — see
- * `schema-contract-derivation` in `scripts/check-conventions.ts`).
+ * restate this shape without copying individual fields.
  *
  * Exported because `problems.ts` reports the same figures on its own detector
  * rows and used to hand-copy them, silently dropping every `.finite()` guard

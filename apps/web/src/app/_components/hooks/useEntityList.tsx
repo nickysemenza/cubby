@@ -50,38 +50,10 @@ export interface BaseListRow {
 // biome-ignore lint/suspicious/noExplicitAny: intentional
 type AnyColumnDef<TData extends BaseListRow> = CubbyColumnDef<TData, any>;
 
-/**
- * Expandable-tree rendering for a server-backed list.
- *
- * Presentation ONLY. The server still owns membership, ordering, totals, and
- * pagination — it just pages by tree ROOT instead of by row (see
- * repo/project/tree.ts), and `nest` reshapes the rows it returned into parents
- * and children. That's the whole difference from `useClientEntityList`'s
- * `ClientTreeConfig`, which nests rows the browser also filtered and paginated.
- *
- * Deliberately narrower than that config: `filterFromLeafRows` and
- * `paginateExpandedRows` are omitted because they're inert here — this table is
- * `manualFiltering`/`manualPagination`, so TanStack neither filters nor
- * paginates the rows they'd govern. Don't add them back by analogy.
- */
 interface EntityListTreeConfig<TData, TRow> {
-  /**
-   * Nest the accumulated server rows before they reach the table. MUST be
-   * referentially stable (module-level constant or `useMemo`d at the page).
-   *
-   * The input is the SERVER row and the output is the TABLE row; they differ
-   * whenever a wish's candidate Products become child rows of a different
-   * shape than their parent. They're the same type for a homogeneous tree
-   * (sub-projects), which is why `TRow` defaults to `TData`.
-   */
   nest: (rows: TRow[]) => TData[];
   getSubRows: (row: TData) => TData[] | undefined;
   expandable?: boolean;
-  /**
-   * Per-row detail link, when child rows are a DIFFERENT entity than the
-   * parents (the wishlist nests candidate Products under a Wish). Threaded to
-   * the name column and the actions menu together so they can't disagree.
-   */
   rowLink?: RowLinkResolver<TData>;
   /**
    * Whether a row is an instance of the table's own `entity`. Required when
@@ -120,18 +92,7 @@ export interface UseEntityListOptions<
   TRow extends BaseListRow = TData,
 > {
   entity: BrowserRoutedEntity;
-  /**
-   * Transport queryOptions function. Omit it — the default is the entity's own
-   * `query.list` from `getEntityContract`, which is the same procedure every
-   * standard list page was naming by hand. Pass one only for a list backed by
-   * a different procedure.
-   */
   queryOptions?: ListQueryOptionsFn<TFilters>;
-  /**
-   * Build filters from table state. Omit it to derive them from the entity's
-   * filter manifest, which is what every list page should do — a hand-written
-   * builder is for the leftovers a manifest spec can't express.
-   */
   buildFilters?: (tableState: TableStateReturn) => TFilters;
   /**
    * Contextual scope imposed by the surrounding page (for example, expenses
@@ -142,10 +103,6 @@ export interface UseEntityListOptions<
   scopeFilters?: Partial<TFilters>;
   columns: AnyColumnDef<TData>[];
   filters?: FilterInput[];
-  /**
-   * Option lists for manifest specs naming an `optionsKey` (project roster,
-   * recipe tags). MUST be referentially stable.
-   */
   filterOptions?: RuntimeFilterOptions;
   getMappings?: (item: TRow) => UnitMapping[];
   tableStateOptions?: Parameters<typeof useTableState>[0];
@@ -155,30 +112,12 @@ export interface UseEntityListOptions<
   layoutKey?: string;
   legacyLayoutVisibilityKey?: string;
   legacyLayoutSizingKey?: string;
-  /**
-   * Width class for the standard name column. Defaults to auto (`min-w-0`),
-   * which is right for dense tables. Pass a fixed width (e.g. `w-64`) on sparse
-   * tables (few columns) so the name doesn't balloon under the fixed layout.
-   */
   nameClassName?: string;
-  /**
-   * Enable inline editing on the standard name column (entities whose name
-   * column is hook-prepended, e.g. products/recipes). MUST be referentially
-   * stable — wrap in useMemo/useCallback at the page, or the columns memo
-   * churns every render.
-   */
   nameEditable?: {
     onSave: (newValue: string, row: TData) => Promise<void>;
   };
   nameSuffix?: (row: TData) => ReactNode;
   namePrefix?: (row: TData) => ReactNode;
-  /**
-   * Column ids to render with no filter control — for a page that pins that
-   * column's value via `scopeFilters` (which wins over the manifest-derived
-   * filters), so a header control would otherwise be interactive but inert.
-   * See `useStandardColumns`' doc comment. May be a fresh array literal each
-   * render — internally stabilized.
-   */
   hiddenFilterColumns?: string[];
   groupConfig?: GroupConfig<TData>;
   tree?: EntityListTreeConfig<TData, TRow>;
@@ -194,12 +133,6 @@ export interface UseEntityListOptions<
    * delete (image) or a page that needs different copy.
    */
   deletable?: DeletableConfig | true;
-  /**
-   * Names a row in the delete confirm dialog when its `name` is null/empty.
-   * Pass the same function given to `createNameColumn`'s `emptyLabel` so the
-   * dialog and the table agree — otherwise the dialog falls back to the raw
-   * id, which tells the user nothing about what they're deleting.
-   */
   deleteEmptyLabel?: (row: TData) => string;
 }
 
@@ -208,32 +141,11 @@ export interface UseEntityListReturn<
   TFilters = unknown,
   TRow = TData,
 > {
-  /** Complete page/embedded rendering model consumed by ListWorkbench. */
   workbench: ServerListWorkbenchModel<TData>;
-  /**
-   * The filter object the list query is running with (manifest-derived state
-   * plus `scopeFilters`). For a page that must call a second procedure over
-   * the SAME filtered set — the expenses ledger's totals row — so it can't
-   * drift from the table's own.
-   */
   currentFilters: TFilters;
   mappingsMap: Record<string, UnitMapping[]>;
-  /**
-   * Raw data array (for edge cases like card view). Always FLAT — in tree mode
-   * this is every loaded row, parents and children alike, not the nested shape
-   * the table renders.
-   */
   data: TRow[];
-  /** Opens the delete confirmation for one item (e.g. mobile swipe actions) */
   requestDelete: (item: TData) => void;
-  /**
-   * The true server-side filtered total — in infinite mode this is the
-   * server total, NOT the number of rows loaded/accumulated so far (`data.length`).
-   * `undefined` while the first page is loading (the underlying query hooks
-   * default totalCount to 0 pre-response, which would otherwise flash "0 …"
-   * in the eyebrow). Feed straight to `usePageCount` for the eyebrow record
-   * count.
-   */
   totalCount: number | undefined;
 }
 
@@ -277,10 +189,6 @@ export function useEntityList<
     setGrouped(value);
   }, []);
 
-  // Contract-resolved defaults for the two arguments every standard list page
-  // used to restate. Both are built from module-level constants plus the
-  // context-stable tRPC proxy, so they never churn `usePaginatedTableCore`'s
-  // `memoizedQueryOptions` or `useOptimisticDelete`'s options memo.
   const api = useTRPC();
   const contractList = getEntityContract(entity).query.list;
   const defaultQueryOptions = useCallback(
@@ -291,16 +199,11 @@ export function useEntityList<
   const effectiveQueryOptions = queryOptions ?? defaultQueryOptions;
   const effectiveDeletable = useContractDeletable(entity, deletable);
 
-  // Derive the groupBy field for server queries (only when grouped + groupConfig)
   const groupByField = grouped && groupConfig ? groupConfig.field : undefined;
 
   const hasUnitMappings =
     browserEntityDefinition(entity).list?.hasUnitMappings ?? false;
 
-  // Column-filter state → the server's `*Filters` object, driven by the
-  // entity's manifest. This replaced a hand-written `buildFilters` on every
-  // list page, all of which were the same mechanical column-id → field map.
-  // A page may still pass its own for anything a spec can't express.
   const manifestBuildFilters = useCallback(
     (ts: TableStateReturn) =>
       ({
@@ -335,15 +238,8 @@ export function useEntityList<
   });
   const { tableState } = presentationState;
 
-  // The exact filter object the list query runs with. Returned so a page
-  // needing the same set (the expenses ledger's totals row calls
-  // `expense.analytics` with it) reads it rather than rebuilding it from
-  // table state — two builds that disagree by so much as a scalar-vs-array
-  // shape open a second React Query cache entry for identical results.
   const currentFilters = presentationState.currentSelectionScope as TFilters;
 
-  // `worklist` is orientation only: exact matches reveal explanatory columns
-  // but never change the ordinary URL-derived membership.
   const routeSearch = useSearch({ strict: false }) as Record<string, unknown>;
   const worklist = problemWorklistState(
     entity,
@@ -372,14 +268,11 @@ export function useEntityList<
   const { data, totalCount, sums, isLoading, error, timing, refreshControls } =
     infiniteResult;
 
-  // Full-filtered-set totals for footer renderers — client rows only cover
-  // the loaded pages, so footers must not sum/count them.
   const serverTotals = useMemo(
     () => ({ totalCount, sums }),
     [totalCount, sums],
   );
 
-  // Load unit mappings synchronously if getMappings is provided
   const mappingsMap = useMemo(() => {
     if (!getMappings || !hasUnitMappings) return {};
 
@@ -388,7 +281,6 @@ export function useEntityList<
     );
   }, [data, getMappings, hasUnitMappings]);
 
-  // Track mappings only when they're actually used to avoid re-renders from useMemo returning new {} references
   const shouldUseMappings = hasUnitMappings && getMappings;
   const effectiveMappingsMap = shouldUseMappings ? mappingsMap : null;
 
@@ -457,8 +349,6 @@ export function useEntityList<
     [data, tree],
   );
 
-  // Feed all accumulated rows as a single "page" so TanStack Table doesn't
-  // try to paginate the infinite result.
   const table = useTableConfig({
     data: tableData,
     columns: allColumns,
@@ -515,7 +405,6 @@ export function useEntityList<
     }
   }, [infiniteResult.infiniteScroll, table, totalCount]);
 
-  // Build bulk action bar element if bulk actions configured.
   // In tree mode the two counts below measure different things — `data.length`
   // is loaded ROWS, `totalCount` is matching ROOTS — so the "select all N
   // matching" offer simply never fires. That's the honest outcome: it would

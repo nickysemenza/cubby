@@ -35,8 +35,9 @@ it. 24% of all test runs used to be a re-run of one that had just failed.
 
 Narrow the other gates too: `pnpm format:changed` (~1s) over `pnpm format:write`
 (~18s), and `pnpm typecheck:web` when only the web app is touched. `pnpm check`
-runs every gate concurrently via `scripts/run-checks.ts` and stays the single
-canonical pre-handoff command; CI runs exactly it.
+runs the fast core gates concurrently. `pnpm check:all` adds dependency,
+bindings, OpenAPI, security, and CI-scope validation; CI and pre-PR validation
+run that superset.
 
 One agent owns a particular gate; other agents continue useful work and consume
 the owner's distilled result instead of repeating it. At handoff report commands,

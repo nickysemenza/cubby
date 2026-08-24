@@ -2,17 +2,13 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     // Root-level gate scripts. They are listed individually rather than as a
-    // `scripts/**` glob so knip still reports a genuinely orphaned script:
-    // since `pnpm check` now spawns them from `run-checks.ts` (as argv, which
-    // knip cannot follow statically), a glob would make every file here
-    // permanently "used". `mtime.ts` is deliberately absent — it is reached
-    // through the `ensure-*` imports, so knip should keep proving that.
+    // `scripts/**` glob so knip still reports a genuinely orphaned script.
+    // `mtime.ts` is deliberately absent — it is reached through the
+    // `ensure-*` imports, so knip should keep proving that.
     ".": {
       "entry": [
-        "scripts/run-checks.ts!",
         "scripts/format-changed.ts!",
-        "scripts/typecheck-staged.ts!",
-        "scripts/check-conventions.ts!",
+        "scripts/check-sql-safety.ts!",
         "scripts/check-soft-delete-filters.ts!",
         "scripts/check-markdown-links.ts!",
         "scripts/check-security-audit.ts!",
@@ -76,7 +72,7 @@
         "src/bundles.ts!",
         "build.mjs!",
         "vite.config.ts!",
-        "src/{shopping-list,usda-picker}.ts!",
+        "src/usda-picker.ts!",
         "harness/{host.ts,vite.config.ts}!"
       ],
       "project": ["src/**/*.ts!", "harness/**/*.ts!"],
