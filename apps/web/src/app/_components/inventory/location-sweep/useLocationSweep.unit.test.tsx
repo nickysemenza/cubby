@@ -213,6 +213,11 @@ describe("useLocationSweep commit", () => {
     // The drill travelled in with Bin 9; moving it too would leave the bin we
     // just adopted empty.
     expect(mocks.calls).toEqual(["bulkUpdateParent"]);
+    // ...and the queue still empties. Left behind, the row would survive a
+    // successful commit, and the next click — with no adopted bins left to
+    // filter against — would pull it out of the bin.
+    expect(result.current.strays).toHaveLength(0);
+    expect(result.current.bins).toHaveLength(0);
     expect(outcome!.keptInAdoptedBin).toBe(1);
     expect(outcome!.bins.moved).toBe(1);
   });

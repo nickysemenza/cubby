@@ -528,7 +528,6 @@ export function useLocationSweep({
             targetLocationId: locationId,
             moves,
           });
-          setStrays([]);
           onSettled(result);
           outcome.products = { moved: result.moved, skipped: result.skipped };
         } catch (error) {
@@ -540,6 +539,15 @@ export function useLocationSweep({
           return { ...outcome, failed: "products" };
         }
       }
+
+      // Unconditional, and symmetric with the bin queue above. The loop
+      // resolves EVERY queued row — each one either joined `moves` or was
+      // deliberately left in the bin that came with it — so a commit carrying
+      // only kept-in-bin rows still empties the queue. Clearing this inside
+      // the `moves.length > 0` branch instead would leave those rows behind,
+      // and the next click would see no adopted bins to filter against and
+      // yank them out of the bin this ordering exists to protect.
+      setStrays([]);
 
       toast.success(commitSummary(outcome));
       return outcome;
