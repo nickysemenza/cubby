@@ -5,50 +5,47 @@ import {
 import { describe, expect, it } from "vitest";
 import { appRouter } from "~/server/api/root";
 import { createTestCaller } from "~/server/api/trpc";
+import { ENTITY_BINDINGS } from "~/server/entity-bindings";
+import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
 import { seedEntity, withTestDb } from "./test-setup";
 
 /**
  * `seedEntity` (test-setup.ts) exists so an integration test can seed ANY
- * entity through its real create procedure without a hand-written
+ * entity through the generic kernel without a hand-written
  * `make<Entity>Input()` builder that can drift from what create actually
  * accepts (see the file header there). This is the completeness guard: every
- * entity the manifest says is creatable — and every entity the live router
- * agrees has a create procedure — must actually be seedable, or `seedEntity`
+ * entity the manifest says is creatable — and every entity the kernel
+ * exposes as CRUD — must actually be seedable, or `seedEntity`
  * silently narrows to a subset of the entities callers assume it covers.
  */
 describe("seedEntity completeness", () => {
   const ctx = withTestDb();
+  const kernelEntities = new Set<string>(ENTITY_KERNEL_ENTITIES);
 
-  it("seeds one row of every entity with a declared MCP create / live create procedure", async () => {
+  it("seeds one row of every entity with a declared MCP create / kernel create binding", async () => {
     const caller = createTestCaller(appRouter, ctx.db);
-    const procedures = (
-      appRouter as unknown as {
-        _def: { procedures: Record<string, unknown> };
-      }
-    )._def.procedures;
-
     const declaresCreate = (entity: (typeof shortcodeEntities)[number]) =>
       (entityManifest[entity].mcp as readonly string[]).includes("create");
-    const hasProcedure = (entity: (typeof shortcodeEntities)[number]) =>
-      Boolean(procedures[`${entity}.create`]);
+    const hasKernelCreate = (entity: (typeof shortcodeEntities)[number]) =>
+      kernelEntities.has(entity) && ENTITY_BINDINGS[entity].crud !== null;
 
     const candidates = shortcodeEntities.filter(
-      (entity) => declaresCreate(entity) || hasProcedure(entity),
+      (entity) => declaresCreate(entity) || hasKernelCreate(entity),
     );
     expect(candidates.length).toBeGreaterThanOrEqual(14);
 
     // The two signals must agree for every candidate — a manifest entity with
-    // no router procedure (or vice versa) is exactly the drift `seedEntity`'s
-    // own "not a declared procedure" error exists to catch, and this asserts
+    // no kernel binding (or vice versa) is exactly the drift `seedEntity`'s
+    // own "not kernel-creatable" error exists to catch, and this asserts
     // it can never happen silently.
     for (const entity of candidates) {
       expect(
         {
           entity,
           declares: declaresCreate(entity),
-          live: hasProcedure(entity),
+          live: hasKernelCreate(entity),
         },
-        `${entity}: manifest and router disagree on whether create exists`,
+        `${entity}: manifest and kernel disagree on whether create exists`,
       ).toEqual({ entity, declares: true, live: true });
     }
 
