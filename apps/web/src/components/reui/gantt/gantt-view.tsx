@@ -863,7 +863,6 @@ function GanttView({
     minRowRem,
   ])
 
-  // ----- split panes: width state, splitter drag/keyboard, scroll sync -----
   const treeConfig = { ...DEFAULT_TREE_PANEL, ...viewConfig.treePanel }
   const clampTree = (width: number) =>
     Math.min(Math.max(width, treeConfig.minWidth), treeConfig.maxWidth)
@@ -1166,7 +1165,6 @@ function GanttView({
     instance,
   ])
 
-  // ----- infinite scroll: grow the range near an edge, keep the position -----
   // Restoration is anchored to a TIMESTAMP, not pixel deltas: it survives
   // growth, window slides, and zoom changes alike.
   const pendingRestoreRef = useRef<{
@@ -1373,7 +1371,6 @@ function GanttView({
     }
   }
 
-  // ----- ctrl/cmd + wheel (and trackpad pinch) zooms the time range -----
   // The listener is manual and non-passive because it must preventDefault:
   // React's synthetic wheel handler cannot. It attaches once and reads the
   // live logic through a ref, so a zoom step never re-binds mid-gesture.
@@ -1470,7 +1467,6 @@ function GanttView({
   // The body stays bare - rows separate by whitespace, never vertical borders.
   const showUnitLines = !uniform || showVerticalLines
 
-  // ----- tree pane content -----
   // Header label offset = the row cell's ps-3 (0.75rem) left gutter + the
   // collapse-toggle gutter (w-5 + me-1 = 1.5rem), so "Resources" lines up
   // with the row titles below it.
@@ -1542,7 +1538,6 @@ function GanttView({
     </div>
   )
 
-  // ----- timeline pane content -----
   const timelineContent = (
     <div
       className={cn(

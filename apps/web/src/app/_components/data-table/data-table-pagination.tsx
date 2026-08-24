@@ -1,5 +1,3 @@
-// cf https://ui.shadcn.com/docs/components/data-table#pagination-1
-
 import type { RowData } from "@tanstack/react-table";
 import {
   ChevronLeft,

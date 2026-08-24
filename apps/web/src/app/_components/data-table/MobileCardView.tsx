@@ -164,7 +164,6 @@ export function MobileCardView<TItem extends RowData>({
   const sentinelRef = useInfiniteScrollSentinel(infiniteScroll, "200px");
   const isFetchingNextPage = infiniteScroll?.isFetchingNextPage ?? false;
 
-  // Check if table has row selection enabled
   const hasRowSelection = table.options.enableRowSelection !== false;
   const hasSelectColumn = table
     .getAllColumns()
@@ -262,7 +261,6 @@ export function MobileCardView<TItem extends RowData>({
       </div>
     ) : undefined;
 
-    // Default compact row with right-aligned values
     const card = (
       <MobileCard
         variant="row"
