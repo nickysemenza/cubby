@@ -74,7 +74,7 @@ export function createAppError(
     code,
     reason,
     message,
-    cause: originalError,
+    cause: { reason, originalError },
   });
 }
 
@@ -107,6 +107,7 @@ export function createBlockedError(
     reason,
     message,
     blockers,
+    cause: { reason, blockers },
   });
 }
 
