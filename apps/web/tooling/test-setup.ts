@@ -57,7 +57,14 @@ const countClientQueries = <T extends QueryCountedClient>(client: T): T => {
       measurement.count += 1;
       const first = args[0] as { text?: string } | string | undefined;
       const text = typeof first === "string" ? first : (first?.text ?? "");
-      measurement.statements.push(text.replace(/\s+/g, " ").slice(0, 160));
+      // Normalize in-list arity (`in ($1, $2, …)` → `in (…)`) so a diff of
+      // two measurements compares statement SHAPES, not page sizes.
+      measurement.statements.push(
+        text
+          .replace(/\s+/g, " ")
+          .replace(/\(\s*\$\d+(?:\s*,\s*\$\d+)*\s*\)/g, "(…)")
+          .slice(0, 160),
+      );
     }
     return query(...args);
   };

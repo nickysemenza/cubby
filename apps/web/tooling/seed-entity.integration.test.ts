@@ -55,8 +55,15 @@ describe("seedEntity completeness", () => {
     // Independent prerequisites, seeded first so the few entities with a
     // required cross-entity foreign key have a real id to point at.
     const vendor = (await seedEntity(caller, "vendor")) as { id: string };
-    const partyA = (await seedEntity(caller, "ledgerParty")) as { id: string };
-    const partyB = (await seedEntity(caller, "ledgerParty")) as { id: string };
+    // `kind` is pinned to non-"household" values: createLedgerParty enforces a
+    // singleton household party, so letting mock() roll the enum makes the
+    // second create (or a template-seeded household) fail intermittently.
+    const partyA = (await seedEntity(caller, "ledgerParty", {
+      kind: "member",
+    })) as { id: string };
+    const partyB = (await seedEntity(caller, "ledgerParty", {
+      kind: "guest",
+    })) as { id: string };
     const account = (await seedEntity(caller, "financialAccount")) as {
       id: string;
     };
