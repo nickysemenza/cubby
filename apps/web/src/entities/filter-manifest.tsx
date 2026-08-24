@@ -842,6 +842,8 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       placeholder: "Filter by order id...",
     },
     {
+      // Deep-link scope with its own slot; sharing a columnId would make two
+      // specs read and write the same filter state.
       columnId: "purchaseId",
       urlOnly: true,
       kind: "id",
@@ -913,6 +915,9 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       placeholder: "Search display label...",
     },
     {
+      // This id roster is purchase-specific and intentionally has no `(none)`:
+      // Purchase.vendorId is non-null. Expense uses a different vendor roster,
+      // despite sharing the `vendor` options key; do not merge their loaders.
       columnId: "vendor",
       field: "vendorId",
       kind: "idMulti",
@@ -1793,6 +1798,8 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
     },
     {
       columnId: "name",
+      // The rendered column is `name`, but the repository/schema field is
+      // `search`; the manifest/schema parity test guards this mismatch.
       field: "search",
       kind: "text",
       placeholder: "Filter by project name...",

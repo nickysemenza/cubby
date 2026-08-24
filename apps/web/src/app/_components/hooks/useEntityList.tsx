@@ -53,7 +53,15 @@ export interface BaseListRow {
 // biome-ignore lint/suspicious/noExplicitAny: intentional
 type AnyColumnDef<TData extends BaseListRow> = CubbyColumnDef<TData, any>;
 
+/**
+ * Server-backed tree presentation. Filtering and pagination remain manual, so
+ * `filterFromLeafRows` and `paginateExpandedRows` would be inert here.
+ */
 interface EntityListTreeConfig<TData, TRow> {
+  /**
+   * Maps flat server rows to table rows and must be referentially stable. The
+   * two row types differ when foreign-entity children are nested under a row.
+   */
   nest: (rows: TRow[]) => TData[];
   getSubRows: (row: TData) => TData[] | undefined;
   expandable?: boolean;
@@ -106,6 +114,7 @@ export interface UseEntityListOptions<
   scopeFilters?: Partial<TFilters>;
   columns: AnyColumnDef<TData>[];
   filters?: FilterInput[];
+  /** Runtime roster options; must be referentially stable. */
   filterOptions?: RuntimeFilterOptions;
   getMappings?: (item: TRow) => UnitMapping[];
   tableStateOptions?: Parameters<typeof useTableState>[0];
@@ -116,6 +125,7 @@ export interface UseEntityListOptions<
   legacyLayoutVisibilityKey?: string;
   legacyLayoutSizingKey?: string;
   nameClassName?: string;
+  /** Inline-edit callbacks must be referentially stable. */
   nameEditable?: {
     onSave: (newValue: string, row: TData) => Promise<void>;
   };
