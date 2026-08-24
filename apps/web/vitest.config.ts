@@ -97,6 +97,20 @@ export default defineConfig({
     },
   },
   test: {
+    // NB: `deps.optimizer` (ssr + web) was measured and REJECTED on 2026-08-24.
+    // The unit tier's cost is overwhelmingly module import — `import 266.45s`
+    // cumulative against a 45.7s wall clock, with `tests` only 12.4s — so
+    // prebundling deps looks like the obvious lever. It is not: enabling it
+    // took the tier to **53.8s** (import 307s, transform 36.4s, up from 18.4s).
+    // Vite's prebundle step costs more than the per-worker resolution it saves
+    // at this graph size. Do not retry without a new measurement.
+    //
+    // The import cost is intrinsic to the graph, not to a bundler setting: a
+    // leaf test imports in 92ms, one reaching `~/lib/wasm` in 1.28s, and the
+    // suite averages 1.08s across 247 files. Inlining the 2.55MB WASM is NOT
+    // the cause either — base64 decode plus `WebAssembly.Module` compile of it
+    // measures 3ms total.
+
     // `default` keeps the familiar output (progress + full diffs); the second
     // reporter re-prints just the failing test names at the very end so a
     // `| tail` of the run still shows what broke. See the reporter for the

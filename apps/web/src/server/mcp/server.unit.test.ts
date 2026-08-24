@@ -1,3 +1,13 @@
+/**
+ * NB: this file is the unit tier's slowest by an order of magnitude — 7.8s
+ * standalone (import 5.3s, transform 2.1s, tests 2.5s) against a ~20ms median.
+ * Sharding it does NOT help and would make things worse: measured 2026-08-24,
+ * `import { appRouter } from "~/server/api/root"` alone costs **4.2s**, and
+ * every shard would pay that again in its own worker. (For scale: the MCP SDK
+ * import is 61ms, `~/server/db/schema` 464ms.) The cost is the tRPC router
+ * tree's module graph, so the only real fix is upstream in the router, not
+ * here. Split this file for readability if it helps, never for speed.
+ */
 import { readFileSync } from "node:fs";
 import type { Entity } from "@cubby/schemas/entity";
 import { previewOperationInputSchema } from "@cubby/schemas/entity-integrity";
