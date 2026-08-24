@@ -14,23 +14,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { QrCode } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import {
-  PersistentScanner,
-  QR_CODE_FORMATS,
-} from "~/app/_components/inventory/persistent-scanner";
-import { Row } from "~/components/layout";
+import { QR_CODE_FORMATS } from "~/app/_components/inventory/persistent-scanner";
+import { ScanSheet } from "~/app/_components/inventory/scan-sheet";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "~/components/ui/sheet";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
-import { resolveScanCode } from "~/lib/scan-code";
+import { resolveLocationScan } from "~/lib/scan-code";
 
 /**
  * Bare-UUID fallback for the manual field. `resolveScanCode` deliberately
@@ -101,31 +91,31 @@ export function LocationScanButton({
     const trimmed = raw.trim();
     if (!trimmed) return;
 
-    const parsed = resolveScanCode(raw);
+    const parsed = resolveLocationScan(raw);
     if (!parsed.ok) {
       const id = parseLocationIdFromInput(trimmed);
-      if (!id) {
-        toast.error("Enter a location shortcode or UUID.");
+      if (id) {
+        // A raw pasted UUID carries no shortcode — the caller degrades
+        // gracefully (e.g. skips a direct URL jump) rather than us doing a
+        // second network lookup just to backfill one.
+        finish(id, undefined);
         return;
       }
-      // A raw pasted UUID carries no shortcode — the caller degrades
-      // gracefully (e.g. skips a direct URL jump) rather than us doing a
-      // second network lookup just to backfill one.
-      finish(id, undefined);
-      return;
-    }
-
-    if (parsed.value.kind !== "shortcode" || parsed.value.type !== "location") {
-      toast.error("Not a location code.");
+      // A code for the wrong entity gets the shared sentence, which names what
+      // was actually scanned. Only the catch-all is ours, because this field
+      // accepts a form the shared helper deliberately knows nothing about.
+      toast.error(
+        parsed.reason === "wrong-kind"
+          ? parsed.error
+          : "Enter a location shortcode or UUID.",
+      );
       return;
     }
 
     setIsResolving(true);
     try {
       const location = await queryClient.fetchQuery(
-        api.location.getByShortcode.queryOptions({
-          shortcode: parsed.value.shortcode,
-        }),
+        api.location.getByShortcode.queryOptions({ shortcode: parsed.value }),
       );
       if (!location) {
         toast.error("No location found for that shortcode.");
@@ -175,45 +165,21 @@ export function LocationScanButton({
         <QrCode className="size-4" />
         {buttonLabel}
       </Button>
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="bottom" className="p-4" showCloseButton={false}>
-          <SheetHeader className="p-0 pb-4">
-            <SheetTitle>Scan location QR</SheetTitle>
-            <SheetDescription>{sheetDescription}</SheetDescription>
-          </SheetHeader>
-          <PersistentScanner
-            onScan={(value) => void handleLocationInput(value)}
-            formatsToSupport={QR_CODE_FORMATS}
-            scanHintText="Point at location QR code"
-          />
-          <Row
-            as="form"
-            align="center"
-            gap="sm"
-            className="mt-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void handleLocationInput(manualValue);
-            }}
-          >
-            <Input
-              value={manualValue}
-              onChange={(event) => setManualValue(event.target.value)}
-              placeholder="Can't scan? Shortcode / UUID"
-              className="h-9 flex-1 text-xs"
-              aria-label="Enter location shortcode or UUID"
-            />
-            <Button
-              type="submit"
-              variant="outline"
-              className="min-h-9 px-3 text-xs" /* tight: manual jump fallback */
-              disabled={isResolving || manualValue.trim().length === 0}
-            >
-              Jump
-            </Button>
-          </Row>
-        </SheetContent>
-      </Sheet>
+      <ScanSheet
+        open={open}
+        onOpenChange={setOpen}
+        title="Scan location QR"
+        description={sheetDescription}
+        formats={QR_CODE_FORMATS}
+        scanHintText="Point at location QR code"
+        onScan={(value) => void handleLocationInput(value)}
+        manualEntry={{
+          ariaLabel: "Enter location shortcode or UUID",
+          placeholder: "Can't scan? Shortcode / UUID",
+          submitLabel: "Jump",
+          disabled: isResolving,
+        }}
+      />
     </div>
   );
 }

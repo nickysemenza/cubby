@@ -146,6 +146,44 @@ describe("location.bulkUpdateParent", () => {
       message: "Cannot set parent: would create a circular reference",
     });
   });
+
+  /**
+   * The sweep is the first caller assembling a mixed batch out of separate
+   * scans, and its failure path retries the whole batch — safe only because a
+   * location already under `parentId` is a no-op rather than an error. The
+   * repo only audits rows whose parent actually changed, so a re-run adds no
+   * history either.
+   */
+  it("tolerates a location already under the target, without auditing it", async () => {
+    const caller = createTestCaller(locationRouter, ctx.db);
+    const shelf = await caller.create(
+      makeLocationInput({ name: "Batch shelf" }),
+    );
+    const room = await caller.create(makeLocationInput({ name: "Batch room" }));
+    const alreadyHere = await caller.create(
+      makeLocationInput({ name: "Batch bin here", parentId: shelf.id }),
+    );
+    const elsewhere = await caller.create(
+      makeLocationInput({ name: "Batch bin elsewhere", parentId: room.id }),
+    );
+
+    const result = await caller.bulkUpdateParent({
+      ids: [alreadyHere.id, elsewhere.id],
+      parentId: shelf.id,
+    });
+    expect(result).toEqual({ updated: 2 });
+
+    const settled = await caller.getByShortcode({ shortcode: elsewhere.id });
+    expect(settled?.parent?.id).toBe(shelf.id);
+
+    // Idempotent: the same batch again still resolves rather than throwing.
+    await expect(
+      caller.bulkUpdateParent({
+        ids: [alreadyHere.id, elsewhere.id],
+        parentId: shelf.id,
+      }),
+    ).resolves.toEqual({ updated: 2 });
+  });
 });
 
 /**

@@ -360,18 +360,7 @@ export function LocationContents({ location }: { location: InfLocation }) {
             }
           />
           {hasChildren && (
-            <>
-              <VerbButton
-                verb="validate"
-                render={
-                  <Link
-                    to="/problems"
-                    search={{ validateParent: location.id }}
-                  />
-                }
-              />
-              <VerbButton verb="printLabels" onClick={handlePrintLabels} />
-            </>
+            <VerbButton verb="printLabels" onClick={handlePrintLabels} />
           )}
         </div>
         <DropdownMenu>
@@ -413,18 +402,7 @@ export function LocationContents({ location }: { location: InfLocation }) {
               }
             />
             {hasChildren && (
-              <>
-                <VerbMenuItem
-                  verb="validate"
-                  render={
-                    <Link
-                      to="/problems"
-                      search={{ validateParent: location.id }}
-                    />
-                  }
-                />
-                <VerbMenuItem verb="printLabels" onSelect={handlePrintLabels} />
-              </>
+              <VerbMenuItem verb="printLabels" onSelect={handlePrintLabels} />
             )}
           </DropdownMenuContent>
         </DropdownMenu>
@@ -458,6 +436,7 @@ export function LocationContents({ location }: { location: InfLocation }) {
               <LocationSweep
                 locationId={location.id}
                 locationName={location.name}
+                hasItems={itemCount > 0}
                 onSettled={handleItemAdded}
               />
             )}

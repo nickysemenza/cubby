@@ -4,7 +4,6 @@ import {
   CalendarClock,
   Camera,
   CheckCircle2,
-  ClipboardCheck,
   ClipboardCopy,
   Copy,
   FolderInput,
@@ -77,7 +76,6 @@ export const actionVerbs = {
   printLabels: { label: "Print labels", icon: Printer },
   addToInventory: { label: "Add to inventory", icon: Package },
   bulkEdit: { label: "Bulk edit", icon: SquarePen },
-  validate: { label: "Validate", icon: ClipboardCheck },
   compare: { label: "Compare", icon: Scale },
 
   // — opens a dialog or picker (trailing `...`) —————————————————————

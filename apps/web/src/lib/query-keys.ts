@@ -251,6 +251,12 @@ const invalidationFanout = {
   },
   location: {
     base: fanout(queryKeys.location.list, queryKeys.dashboard.counts),
+    /**
+     * Reparenting changes tree SHAPE, so the list prefix is not enough: the
+     * detail page's subtree, the arrange forest, and both ends' parent chains
+     * all re-read. Nothing here touches stock — no inventory keys.
+     */
+    reparent: fanout(queryKeys.location.all, queryKeys.dashboard.counts),
   },
   // The broad `image.all` prefix, not `image.list`: a list-only invalidation
   // doesn't refresh the image DETAIL page after a rename.

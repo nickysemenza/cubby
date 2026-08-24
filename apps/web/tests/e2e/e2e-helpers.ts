@@ -271,11 +271,18 @@ export async function openCommandPalette(page: Page): Promise<Locator> {
 export async function createLocation(
   page: Page,
   name: string,
-  opts: { parentName?: string } = {},
+  opts: { parentName?: string; type?: string } = {},
 ): Promise<string> {
   await page.goto("/locations/new");
   await waitForFormHydration(page);
   await page.getByPlaceholder("Enter location name").fill(name);
+  // The form defaults to "room", which is a space: no QR label, and excluded
+  // from anything that reasons about portable bins. Pass a type when the test
+  // needs a container.
+  if (opts.type) {
+    await page.getByPlaceholder("Select a location type").click();
+    await page.getByRole("option", { name: opts.type, exact: true }).click();
+  }
   if (opts.parentName) {
     await selectComboboxItem(
       page,

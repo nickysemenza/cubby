@@ -68,8 +68,15 @@ interface PersistentScannerProps {
    * consumer's `onScan` all fire once per accepted read.
    */
   debounceMs?: number;
-  /** Running session tally shown in the viewfinder HUD. */
-  addedCount?: number;
+  /**
+   * Running session tally for the viewfinder HUD, preformatted by the caller.
+   *
+   * A string rather than a count because the scanner does not know what its
+   * consumer is tallying — the sweep reads two kinds of thing and the old
+   * `addedCount` badge said "added" for a number that already included
+   * confirmations. Empty hides the badge.
+   */
+  hudText?: string;
   /** Newest-first recently-scanned chips (the caller caps the length). */
   recentScans?: readonly ScanFeedbackEntry[];
 }
@@ -81,7 +88,7 @@ export function PersistentScanner({
   formatsToSupport,
   scanHintText,
   debounceMs,
-  addedCount = 0,
+  hudText = "",
   recentScans = NO_RECENT_SCANS,
 }: PersistentScannerProps) {
   const [scanFlash, setScanFlash] = useState(false);
@@ -199,9 +206,9 @@ export function PersistentScanner({
         )}
 
         {/* Session tally — eyes-free confirmation that the sweep is landing */}
-        {status === "scanning" && addedCount > 0 && (
+        {status === "scanning" && hudText !== "" && (
           <Badge className="absolute top-3 left-3 h-auto border-transparent bg-black/60 px-2 py-1 text-sm text-white">
-            {addedCount} added
+            {hudText}
           </Badge>
         )}
 

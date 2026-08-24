@@ -10,14 +10,8 @@
 import { Camera } from "lucide-react";
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "~/components/ui/sheet";
-import { BARCODE_FORMATS, PersistentScanner } from "./persistent-scanner";
+import { BARCODE_FORMATS } from "./persistent-scanner";
+import { ScanSheet } from "./scan-sheet";
 
 export function BarcodeScannerButton({
   onScan,
@@ -47,24 +41,26 @@ export function BarcodeScannerButton({
       >
         <Camera className="size-4" />
       </Button>
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="bottom" className="p-4" showCloseButton={false}>
-          <SheetHeader className="p-0 pb-4">
-            <SheetTitle>Scan barcode</SheetTitle>
-            <SheetDescription>
-              The first code read fills this row's product.
-            </SheetDescription>
-          </SheetHeader>
-          <PersistentScanner
-            onScan={(value) => {
-              onScan(value);
-              setOpen(false);
-            }}
-            formatsToSupport={BARCODE_FORMATS}
-            scanHintText="Point at a product barcode"
-          />
-        </SheetContent>
-      </Sheet>
+      <ScanSheet
+        open={open}
+        onOpenChange={setOpen}
+        title="Scan barcode"
+        description="The first code read fills this row's product."
+        formats={BARCODE_FORMATS}
+        scanHintText="Point at a product barcode"
+        // The raw string, unnarrowed: this field is fed by `useUpcLookup`,
+        // which is UPC-only. Routing it through the shared scan helpers would
+        // silently start accepting ISBNs and `PRD-` labels here.
+        onScan={(value) => {
+          onScan(value);
+          setOpen(false);
+        }}
+        manualEntry={{
+          ariaLabel: "Enter a product barcode",
+          placeholder: "Can't scan? Type a barcode",
+          submitLabel: "Use",
+        }}
+      />
     </>
   );
 }
