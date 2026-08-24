@@ -4,12 +4,16 @@ import { Image } from "./image";
 
 describe("Image", () => {
   it("renders an <img> for a valid src", () => {
-    render(<Image src="https://example.com/a.jpg" alt="a product" />);
+    render(
+      <Image src="https://example.com/a.jpg" alt="a product" unoptimized />,
+    );
     expect(screen.getByRole("img", { name: "a product" }).tagName).toBe("IMG");
   });
 
   it("renders the fallback instead of a broken <img> when src is missing", () => {
-    render(<Image src="" alt="no photo" fallback={<span>tile</span>} />);
+    render(
+      <Image src="" alt="no photo" fallback={<span>tile</span>} unoptimized />,
+    );
     expect(screen.queryByRole("img")).toBeNull();
     expect(screen.getByText("tile")).toBeInTheDocument();
   });
@@ -17,7 +21,7 @@ describe("Image", () => {
   it("falls back to a muted icon tile (not a broken glyph) with no custom fallback", () => {
     // Regression: a failed image used to reveal the browser's broken-image
     // glyph with the literal alt text ("Image"). It must degrade gracefully.
-    const { container } = render(<Image src="" alt="missing" />);
+    const { container } = render(<Image src="" alt="missing" unoptimized />);
     expect(screen.queryByRole("img")).toBeNull();
     expect(container.querySelector('[aria-label="missing"]')).not.toBeNull();
   });
@@ -28,6 +32,7 @@ describe("Image", () => {
         src="https://example.com/broken.jpg"
         alt="broken"
         fallback={<span>tile</span>}
+        unoptimized
       />,
     );
     fireEvent.error(screen.getByRole("img"));
@@ -41,6 +46,7 @@ describe("Image", () => {
         src="https://example.com/loading.jpg"
         alt="loading"
         loadingFallback={<span>entity icon</span>}
+        unoptimized
       />,
     );
     expect(screen.getByText("entity icon")).toBeInTheDocument();
@@ -60,7 +66,7 @@ describe("Image", () => {
   });
 
   it("uses the original src (no srcSet) when displayWidth is omitted", () => {
-    render(<Image src={BUCKET_SRC} alt="p" />);
+    render(<Image src={BUCKET_SRC} alt="p" unoptimized />);
     const img = screen.getByRole("img", { name: "p" });
     expect(img.getAttribute("src")).toBe(BUCKET_SRC);
     expect(img.getAttribute("srcset")).toBeNull();

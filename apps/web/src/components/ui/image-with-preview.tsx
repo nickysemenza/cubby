@@ -74,6 +74,7 @@ export function ImageWithPreview({
   fit = "cover",
   previewPositionerClassName,
 }: ImageWithPreviewProps) {
+  const thumbnailDisplayWidth = displayWidth ?? size ?? 40;
   const thumbnailClasses = cn(
     "bg-background relative flex-shrink-0 overflow-hidden rounded-none border transition-transform hover:scale-105",
     className,
@@ -99,7 +100,7 @@ export function ImageWithPreview({
           src={src}
           alt={alt}
           fallback={fallback}
-          displayWidth={displayWidth}
+          displayWidth={thumbnailDisplayWidth}
           className={cn(
             "absolute inset-0 h-full w-full",
             fit === "contain" ? "bg-card object-contain" : "object-cover",

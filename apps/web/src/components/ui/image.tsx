@@ -11,7 +11,11 @@ import { cn } from "~/lib/utils";
 export type ImageProps = Omit<
   ComponentProps<"img">,
   "loading" | "onError" | "onLoad" | "ref"
-> & {
+> &
+  (
+    | { displayWidth: number; unoptimized?: never }
+    | { displayWidth?: never; unoptimized: true }
+  ) & {
   /**
    * Rendered in place of the image when the src is missing or fails to load.
    * Should fill its box (h-full w-full). Defaults to a quiet muted icon tile.
@@ -23,12 +27,8 @@ export type ImageProps = Omit<
    * semantic entity icon so an image never creates a blank intermediate state.
    */
   loadingFallback?: ReactNode;
-  /**
-   * Display width in CSS pixels. When set, R2 images are served through
-   * Cloudflare Image Transformations at this width (plus a 2x srcSet for
-   * retina) instead of the full-size original. No-op for non-bucket URLs.
-   */
-  displayWidth?: number;
+  /** Skip transformations for a known non-bucket URL or an intentional test. */
+  unoptimized?: true;
 };
 
 // URLs that have successfully loaded this session. Virtualized tables
@@ -56,6 +56,7 @@ export function Image({
   fallback,
   loadingFallback,
   displayWidth,
+  unoptimized: _unoptimized,
   ...props
 }: ImageProps) {
   const hasSrc = typeof src === "string" && src.length > 0;

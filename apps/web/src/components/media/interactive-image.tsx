@@ -57,7 +57,7 @@ interface InteractiveImageProps
   imageTransition?: VariantProps<typeof imageContentVariants>["transition"];
   imageClassName?: string;
   /** Rendered tile width in CSS px, for CF image transforms. */
-  displayWidth?: number;
+  displayWidth: number;
 }
 
 export const InteractiveImage = ({
