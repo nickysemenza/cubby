@@ -28,7 +28,6 @@ import {
   type PaginationParams,
   type SortInput,
 } from "@cubby/schemas/pagination";
-import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
   createTRPCRouter,
@@ -36,7 +35,7 @@ import {
   strictOutput,
 } from "~/server/api/trpc";
 import { executeEntity } from "~/server/entity-kernel";
-import { createAppError } from "~/server/errors/app-error";
+import { AppError, createAppError } from "~/server/errors/app-error";
 import { getImagesByProjectIds, markImageUploaded } from "~/server/repo/image";
 import {
   resolveAllOrThrow,
@@ -252,7 +251,7 @@ export const imageRouter = createTRPCRouter({
       try {
         return await attachFileToEntity(ctx.db, input);
       } catch (error) {
-        if (error instanceof TRPCError) throw error;
+        if (error instanceof AppError) throw error;
         throw createAppError(
           "IMAGE_UPLOAD_FAILED",
           "Failed to attach file",
@@ -275,7 +274,7 @@ export const imageRouter = createTRPCRouter({
       try {
         return await createFileUpload(ctx.db, input);
       } catch (error) {
-        if (error instanceof TRPCError) throw error;
+        if (error instanceof AppError) throw error;
         throw createAppError(
           "IMAGE_UPLOAD_FAILED",
           "Failed to create file upload",

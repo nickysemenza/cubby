@@ -35,12 +35,6 @@ vi.mock("~/lib/query-keys", () => ({
 vi.mock("~/integrations/trpc/react", () => ({
   useTRPC: () => ({
     location: {
-      getByShortcode: {
-        queryOptions: (input: { shortcode: string }) => ({
-          queryKey: ["location.getByShortcode", input.shortcode],
-          queryFn: () => mocks.locations.get(input.shortcode) ?? null,
-        }),
-      },
       bulkUpdateParent: {
         mutationOptions: () => ({
           mutationFn: (input: unknown) => {
@@ -70,6 +64,13 @@ vi.mock("~/integrations/trpc/react", () => ({
         }),
       },
     },
+  }),
+}));
+
+vi.mock("~/entities/entity-detail", () => ({
+  entityDetailQueryOptions: (_entity: string, shortcode: string) => ({
+    queryKey: [["location", "detail"], { shortcode }],
+    queryFn: () => mocks.locations.get(shortcode) ?? null,
   }),
 }));
 

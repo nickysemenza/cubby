@@ -22,7 +22,6 @@ import {
  */
 describe("PROBLEM_CLASS", () => {
   const EXPECTED: Record<string, ProblemClass> = {
-    // Defects: wrong data, converges to zero, counts toward the badge.
     blockedWorkProjects: "defect",
     duplicateFinancialAccountSourceAliases: "defect",
     duplicateFinancialTransactionSourceRefs: "defect",
@@ -66,8 +65,6 @@ describe("PROBLEM_CLASS", () => {
     unusedIngredientsWithProduct: "defect",
     unusedIngredientsWithoutProduct: "defect",
 
-    // Coverage: a backlog with a denominator, plus the advisory cues that share
-    // its contract (reported, never counted, never red).
     duplicateSpendCandidates: "coverage",
     emptyLocations: "coverage",
     ingredientsWithoutProduct: "coverage",

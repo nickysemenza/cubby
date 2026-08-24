@@ -86,11 +86,6 @@ export function inspectExpenseLineKind(input: {
   if (/\b(?:fee|processing|assessment)\b/.test(normalized)) markers.add("fee");
   if (/\b(?:tip|gratuity)\b/.test(normalized)) markers.add("tip");
 
-  // A name that explicitly combines receipt-footer components is an
-  // adjustment, but assigning the whole amount to any one component would be
-  // false precision. Requiring order/charge language or an explicit connector
-  // after a recognized adjustment prefix avoids treating product titles such
-  // as "Shipping tape after discount" as combined adjustments.
   const explicitlyCombined =
     /^(?:sales tax|estimated tax|tax|shipping|delivery|freight|discount|fee|tip)\b.*(?:,|\s(?:and|&|\+|\/)\s)/.test(
       normalized,

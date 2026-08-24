@@ -32,7 +32,7 @@ describe("auditSourceSchema", () => {
   });
 
   it.each([
-    // A bare prefix carries no provenance, which is the whole point of allowing it.
+    // A bare prefix carries no provenance, which is the point of rejecting it.
     "script:",
     "",
     "ui ",
@@ -84,7 +84,6 @@ describe("oneOrMany(auditSourceSchema)", () => {
   );
 
   it("is exactly what auditLogListInput.source accepts", () => {
-    // auditLogListInput must not narrow the filter beyond oneOrMany(auditSourceSchema).
     expect(
       auditLogListInput.shape.source.parse(
         "script:vendor-normalization-2026-07-28",

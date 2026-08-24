@@ -41,7 +41,7 @@ import { recipeFilterFields } from "@cubby/schemas/recipe";
 import { vendorCreateInput, vendorFilterFields } from "@cubby/schemas/vendor";
 import { wishFilterFields } from "@cubby/schemas/wish";
 import type { ShortcodeType } from "@cubby/shared";
-import { SHORTCODE_PREFIX } from "@cubby/shared";
+import { SHORTCODE_PREFIX, UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
@@ -633,6 +633,11 @@ const GUARDS = {
 type GuardedEntity = keyof typeof GUARDS;
 const GUARDED_ENTITIES = Object.keys(GUARDS) as GuardedEntity[];
 
+const ROUTE_EMPTY_SENTINELS = [
+  ["inventory", "productIdFilter"],
+  ["recipe", "cookbookId"],
+] as const satisfies ReadonlyArray<[GuardedEntity, string]>;
+
 /**
  * Fields the guard KNOWS the repo ignores, so the suite stays green while the gap
  * stays visible. Every entry is a bug, not a carve-out — an entry that starts
@@ -640,6 +645,12 @@ const GUARDED_ENTITIES = Object.keys(GUARDS) as GuardedEntity[];
  * longer exists is stale (also asserted).
  */
 const KNOWN_GAPS: Record<string, string> = {};
+
+const isPresenceField = (field: string, schema: z.ZodType): boolean =>
+  field.endsWith("PresenceFilter") &&
+  accepts(schema, "has") &&
+  accepts(schema, "none") &&
+  !accepts(schema, IMPOSSIBLE_TEXT);
 
 /**
  * `id`-kind fields where NO seeded row carries a real id — the
@@ -802,6 +813,33 @@ describe("every declared filter field is applied by its repo", () => {
     expect(violations).toEqual([]);
     expect(passingKnownGaps).toEqual([]);
     expect(passingVacuousIdFields).toEqual([]);
+
+    const presenceBaseline = new Set((await list(ctx.db, {})).ids);
+    const presenceViolations: string[] = [];
+    for (const [field, schema] of Object.entries(fields)) {
+      if (!isPresenceField(field, schema as z.ZodType)) continue;
+      const has = new Set((await list(ctx.db, { [field]: "has" })).ids);
+      const none = new Set((await list(ctx.db, { [field]: "none" })).ids);
+      const overlap = [...has].filter((id) => none.has(id));
+      const union = new Set([...has, ...none]);
+      const missing = [...presenceBaseline].filter((id) => !union.has(id));
+      const extra = [...union].filter((id) => !presenceBaseline.has(id));
+      if (overlap.length > 0 || missing.length > 0 || extra.length > 0) {
+        presenceViolations.push(
+          `${entity}.${field}: overlap=${overlap.length}, missing=${missing.length}, extra=${extra.length}`,
+        );
+      }
+    }
+    expect(presenceViolations).toEqual([]);
+
+    for (const [sentinelEntity, sentinelField] of ROUTE_EMPTY_SENTINELS) {
+      if (entity !== sentinelEntity) continue;
+      const filtered = await list(ctx.db, {
+        [sentinelField]: UNRESOLVABLE_ENTITY_FILTER,
+      });
+      expect(filtered.ids, `${entity}.${sentinelField}`).toEqual([]);
+      expect(filtered.count, `${entity}.${sentinelField}`).toBe(0);
+    }
   });
 });
 
@@ -870,39 +908,5 @@ describe("guard coverage", () => {
       "skip:bounded-max",
       "skip:closed-domain",
     ]);
-  });
-});
-
-const isPresenceField = (field: string, schema: z.ZodType): boolean =>
-  field.endsWith("PresenceFilter") &&
-  accepts(schema, "has") &&
-  accepts(schema, "none") &&
-  !accepts(schema, IMPOSSIBLE_TEXT);
-
-describe("every presence filter partitions its baseline", () => {
-  const ctx = withTestDb();
-
-  it.each(GUARDED_ENTITIES)("%s", async (entity) => {
-    await seedWorld(ctx);
-    const { fields, list } = GUARDS[entity];
-    const baseline = new Set((await list(ctx.db, {})).ids);
-    const violations: string[] = [];
-
-    for (const [field, schema] of Object.entries(fields)) {
-      if (!isPresenceField(field, schema as z.ZodType)) continue;
-      const has = new Set((await list(ctx.db, { [field]: "has" })).ids);
-      const none = new Set((await list(ctx.db, { [field]: "none" })).ids);
-      const overlap = [...has].filter((id) => none.has(id));
-      const union = new Set([...has, ...none]);
-      const missing = [...baseline].filter((id) => !union.has(id));
-      const extra = [...union].filter((id) => !baseline.has(id));
-      if (overlap.length > 0 || missing.length > 0 || extra.length > 0) {
-        violations.push(
-          `${entity}.${field}: overlap=${overlap.length}, missing=${missing.length}, extra=${extra.length}`,
-        );
-      }
-    }
-
-    expect(violations).toEqual([]);
   });
 });

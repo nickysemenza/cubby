@@ -37,8 +37,6 @@ vi.mock("~/app/_components/visualizations/hierarchy-drilldown", () => ({
     return <div data-testid="location-breakdown" />;
   },
 }));
-// Render the row menu's items as plain buttons: Base UI's DropdownMenuItem
-// needs a menu root, and this test drives the actions directly.
 vi.mock("~/components/ui/dropdown-menu", () => ({
   DropdownMenuItem: ({
     children,
@@ -117,9 +115,6 @@ const product = {
   id: unsafeProductShortcode("PRD-AAAA"),
   name: "Bora Clamp",
   unitMappings: [],
-  // No manual override; the unit price is the one derived from Expense rows.
-  // This is the majority shape — 86 of the 111 live identity locations hang
-  // off a product with `price: null`.
   price: null,
   pricing: { effectivePrice: 26.26, derivedPrice: 26.26, source: "derived" },
   inventoryEntry: [
@@ -198,9 +193,6 @@ describe("ProductStockedAt", () => {
     expect(screen.getByText("Not stocked anywhere")).toBeInTheDocument();
   });
 
-  // 26 of the 27 products serving as locations carry no loose stock, so this is
-  // the common shape for them — and it used to render "Not stocked anywhere"
-  // over a bin you own and can walk to.
   it("tables a product held only as locations rather than calling it unstocked", () => {
     render(<ProductStockedAt product={locationsOnlyProduct} />);
     expect(screen.queryByText("Not stocked anywhere")).not.toBeInTheDocument();
@@ -212,11 +204,6 @@ describe("ProductStockedAt", () => {
     });
   });
 
-  // The stock rows' `valuation` is precomputed server-side from the EFFECTIVE
-  // price, so sourcing the identity row from the `price` override column left
-  // one table pricing its two row kinds two different ways — every bin whose
-  // product had no manual price read blank while the loose stock beside it
-  // showed a real number.
   it("values an identity row at the effective price when there is no override", () => {
     render(<ProductStockedAt product={locationsOnlyProduct} />);
     expect(mocks.rows.current[0]).toMatchObject({ valuation: 26.26 });
@@ -269,10 +256,6 @@ describe("ProductStockedAt", () => {
   });
 
   it("names a deleted row by the page's product", () => {
-    // The shared dialogs label rows by `product.name`, but
-    // `productWithFoodOut.inventoryEntry` carries no product embed — the page
-    // grafts its own on rather than refetching a list-shaped row. Without
-    // that, the confirm dialog reads "undefined - 2 each".
     fireRowAction("Delete", 0);
 
     const props = mocks.deleteDialog.mock.calls.at(-1)?.[0];
@@ -283,8 +266,6 @@ describe("ProductStockedAt", () => {
   });
 
   it("hands Move the row's own source location", () => {
-    // MoveInventoryDialog derives the source from items[0].location.id when no
-    // sourceLocationId is passed; this page has no single source to pass.
     fireRowAction("Move to...", 1);
 
     const props = mocks.moveDialog.mock.calls.at(-1)?.[0];
@@ -293,8 +274,6 @@ describe("ProductStockedAt", () => {
   });
 
   it("seeds Discard with the shelf whose row was clicked", () => {
-    // The product sits on two shelves, so nothing may guess which one a
-    // discard means — but a row click knows.
     fireRowAction("Discard...", 1);
 
     const props = mocks.discardDialog.mock.calls.at(-1)?.[0];

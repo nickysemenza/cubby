@@ -47,9 +47,6 @@ function field(shape: Record<string, z.ZodType>, key: string): z.ZodType {
   return value;
 }
 
-// Cast to Record<string, z.ZodType>: zod's raw shape type is keyed by its
-// internal `$ZodType`, and a computed-key lookup by a key we just pulled from
-// `Object.keys(...)` is always defined — the cast just says so.
 const plainShape = productTopLevelOut.shape as Record<string, z.ZodType>;
 const mcpShape = productMcpOut.shape as Record<string, z.ZodType>;
 
@@ -66,7 +63,6 @@ const DERIVED_KEYS = new Set([
   "coverImageUrl",
   // Resolved off the joined USDA food row, not stored on the product.
   "usdaFdcId",
-  // The linked ingredient's public id; the plain row nests the whole row.
   "ingredientId",
   "unitMappings",
   "primaryGtin",

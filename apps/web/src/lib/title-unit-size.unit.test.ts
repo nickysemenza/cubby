@@ -20,9 +20,6 @@ describe("proposeSizeFromTitle", () => {
     expect(proposal?.token).toBe("32 OZ");
   });
 
-  // Units come back CANONICALIZED by the Rust grammar ("gal" → "gallon"), which
-  // is the point of parsing there rather than in a TS regex: the graph gets one
-  // spelling per unit no matter how the title wrote it.
   it.each([
     ["15 oz. Fluorescent Red-Orange 2X Marking Spray Paint", 15, "oz"],
     ["Brushing Lacquer Aerosol Semi-Gloss Clear 12 oz.", 12, "oz"],
@@ -34,9 +31,6 @@ describe("proposeSizeFromTitle", () => {
   });
 
   describe("refuses anything carrying a pack count", () => {
-    // The core hazard: each of these parses to a per-each size that is 6-12x
-    // too small, i.e. too CHEAP per ounce — the direction that quietly wins a
-    // comparison. Refusing is the whole point.
     it.each([
       "Grapefruit Sparkling Water, 12-pack, 12 fl oz",
       "Unsweetened Almond Barista Blend Almond Milk, 32 Oz (Pack Of 6)",
@@ -50,10 +44,6 @@ describe("proposeSizeFromTitle", () => {
     });
 
     it("refuses even when the size IS the total, because the title can't say so", () => {
-      // The dog treats are the inverted case — 27 oz genuinely is the whole
-      // bag, so a naive parse would be RIGHT here. It is still refused: the
-      // grammar is identical to the 12-pack's, so accepting it means accepting
-      // that one too.
       expect(
         proposeSizeFromTitle(
           "Original Petite Dog Dental Treats (27 oz, 45 ct)",
@@ -72,7 +62,6 @@ describe("proposeSizeFromTitle", () => {
         ),
       ).toBeNull();
       expect(proposeSizeFromTitle("Protein Bars, 12 x 1.4 oz")).toBeNull();
-      // The real multiplication sign shows up in titles too.
       expect(proposeSizeFromTitle("Protein Bars, 12 × 1.4 oz")).toBeNull();
     });
 
@@ -90,7 +79,6 @@ describe("proposeSizeFromTitle", () => {
   });
 
   it("refuses a dimension rather than a pack size", () => {
-    // `weight`/`volume` only — no hand-maintained list of "not really units".
     expect(
       proposeSizeFromTitle("12 in. Pry Bar and 9 in. Nail Puller"),
     ).toBeNull();
@@ -100,14 +88,12 @@ describe("proposeSizeFromTitle", () => {
   });
 
   it("refuses when two different sizes appear", () => {
-    // Which one is the each? Unanswerable from the string.
     expect(
       proposeSizeFromTitle("Sanding Belts 2x42 Inch, 5 lb and 2 lb assortment"),
     ).toBeNull();
   });
 
   it("collapses a size repeated in the same title", () => {
-    // Same size twice is not ambiguity, so this still proposes.
     expect(
       proposeSizeFromTitle("Olive Oil 750 ml — Extra Virgin, 750 ml bottle")
         ?.amount,
@@ -115,15 +101,12 @@ describe("proposeSizeFromTitle", () => {
   });
 
   it("prefers fl oz over bare oz", () => {
-    // Volume, not weight — the alternation order is load-bearing.
     const proposal = proposeSizeFromTitle("Sparkling Water, 12 fl oz");
     expect(proposal?.amount.value).toBe(12);
     expect(proposal?.amount.unit).not.toBe("oz");
   });
 
   it("returns null for a title with no size at all", () => {
-    // The detector is silent on ~480 food products like this by construction,
-    // and that is correct — nothing establishes its bag size.
     expect(proposeSizeFromTitle("Bagged Yellow Onions")).toBeNull();
     expect(proposeSizeFromTitle("")).toBeNull();
   });
@@ -152,7 +135,6 @@ describe("proposeSizeFromTitle", () => {
     });
 
     it("treats a serving count as a pack marker", () => {
-      // 5 g is per SERVING; the tub holds 30 of them.
       expect(
         proposeSizeFromTitle(
           "Creatine Monohydrate Travel Packs, 5g (30 Servings)",
@@ -194,9 +176,7 @@ describe("proposeSizeFromTitle", () => {
       });
 
       it.each([
-        // A cavity count, not a volume.
         "Nonstick Muffin Pan, Set of 2, 12 Cups, Gray",
-        // What it treats, not what it contains.
         "Cooking Oil Solidifier Powder (Solidifies 20 Cups)",
         // A vessel's capacity is not a quantity you bought.
         "Sous Chef 16 Cup Food Processor",
@@ -208,9 +188,7 @@ describe("proposeSizeFromTitle", () => {
 
     describe("a range of sizes is not a size", () => {
       it.each([
-        // The quarts belong to the container the lid fits.
         "Commercial 6-8 Quart Lid (Yellow)",
-        // The litres belong to the backpack the cover fits.
         "Backpack Rain Cover, 40-55L",
         // The gallons belong to the vacuum, not the filter. Worded to avoid
         // "replacement for", so only the range guard can refuse this one.
@@ -254,9 +232,6 @@ describe("proposeSizeFromTitle", () => {
     });
 
     it("hands Postgres an alternation it can run verbatim", () => {
-      // Interpolated into `sql.raw` by `findProductsWithoutUnitMappings`, so a
-      // metacharacter arriving from the WASM side would be a broken predicate
-      // at best. Aliases are `[a-z ]` — assert that rather than trust it.
       const alternation = sizeUnitAlternation();
       expect(alternation).not.toBe("");
       for (const alias of alternation.split("|")) {
@@ -265,19 +240,12 @@ describe("proposeSizeFromTitle", () => {
     });
 
     it("orders the alternation longest-first", () => {
-      // Order IS semantics in an alternation: with "oz" first, "12 fl oz"
-      // matches the bare ounce and the proposal comes out a weight. Rust sorts
-      // it; this is the assertion that the sorted order survives the crossing.
       const aliases = sizeUnitAlternation().split("|");
       expect(aliases.indexOf("fl oz")).toBeLessThan(aliases.indexOf("oz"));
       expect(aliases.indexOf("ounces")).toBeLessThan(aliases.indexOf("ounce"));
     });
 
     it("pins every recipe-measure exclusion to a real alias", () => {
-      // The exclusions are the one hand-written thing left, so they are checked
-      // against the derived vocabulary: an entry that no longer names a real
-      // alias is a silent no-op, and the next person reads it as protection
-      // that isn't there.
       const aliases = new Set(sizeUnitAlternation().split("|"));
       for (const stem of [
         "c",

@@ -55,7 +55,6 @@ describe("useTableState — pageIndex reset on filter change", () => {
     expect(result.current.pagination.pageIndex).toBe(2);
 
     await act(async () => {
-      // Same value, re-set (e.g. re-applying an unchanged saved view).
       result.current.setColumnFilters([{ id: "status", value: "active" }]);
     });
 
@@ -327,7 +326,6 @@ describe("useTableState — URL-backed column filters", () => {
     );
     mockNavigate.mockClear();
 
-    // A saved view: filters and sort applied together.
     await act(async () => {
       result.current.setColumnFilters([
         { id: "name", value: "lemon" },
@@ -337,7 +335,6 @@ describe("useTableState — URL-backed column filters", () => {
     });
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledTimes(1));
 
-    // The URL has NOT caught up yet (mockSearch still empty) — re-render.
     rerender();
     rerender();
 
@@ -346,7 +343,6 @@ describe("useTableState — URL-backed column filters", () => {
       { id: "trade", value: ["demo"] },
     ]);
     expect(result.current.sorting).toEqual([{ id: "name", desc: false }]);
-    // No second navigation clearing the params it just wrote.
     expect(mockNavigate).toHaveBeenCalledTimes(1);
 
     // The router finally publishes it: state stands, still no re-navigation.
@@ -389,7 +385,6 @@ describe("useTableState — URL-backed column filters", () => {
  * must survive the write-through that owns the column-backed keys.
  */
 describe("useTableState — URL-only filter specs", () => {
-  // Module-level (stable reference): `filterSpecs` identity drives the memos.
   const SPECS: readonly FilterSpecCore[] = [
     { columnId: "vendor", kind: "multiselect" },
     { columnId: "productId", kind: "id", urlOnly: true },
@@ -417,8 +412,6 @@ describe("useTableState — URL-only filter specs", () => {
     mockSearch = { vendor: "Home Depot" };
     const { result } = renderHook(() => useTableState({ filterSpecs: SPECS }));
 
-    // Same reference, not just equal — a fresh array each render would churn
-    // every memo keyed on the built filters.
     expect(result.current.allFilters).toBe(result.current.columnFilters);
   });
 

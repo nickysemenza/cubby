@@ -14,12 +14,10 @@ import { foodSummaryWithLinkedProducts } from "./usda";
 // Confidence level values - single source of truth
 export const confidenceValues = ["high", "medium", "low"] as const;
 
-// Confidence level schema
 export const confidence = z.enum(confidenceValues);
 
 export type Confidence = z.infer<typeof confidence>;
 
-// Category suggestion schema
 export const categorySuggestionSchema = z.object({
   category: productCategory,
   confidence: confidence,
@@ -33,7 +31,6 @@ export const categorySuggestionInput = z.object({
   manufacturer: z.string().min(1),
 });
 
-// Location type suggestion schema
 export const locationTypeSuggestionSchema = z.object({
   type: locationType,
   confidence: confidence,
@@ -69,10 +66,6 @@ export type LocationSuggestionAiResult = z.infer<
   typeof locationSuggestionAiResultSchema
 >;
 
-// What the client gets: a resolved location carrying everything a picker row
-// renders, so the accepted suggestion looks like any other pick rather than a
-// bare name — the ancestor chain especially, since "shelf 1" exists in four
-// rooms and that is the whole reason the roster carries it.
 export const locationSuggestionSchema = z.object({
   location: z.object({
     id: locationShortcode,
@@ -85,7 +78,6 @@ export const locationSuggestionSchema = z.object({
 });
 export type LocationSuggestion = z.infer<typeof locationSuggestionSchema>;
 
-// Location description from photo analysis
 export const locationDescriptionSchema = z.object({
   description: z.string(),
   confidence: confidence,
@@ -127,15 +119,11 @@ const detectedInventoryItemFields = {
   isMisc: z.boolean(),
 };
 
-// Raw detected inventory item from photo analysis.
-// This is the model-owned shape before app-side product matching.
 export const detectedInventoryItemSchema = z.object(
   detectedInventoryItemFields,
 );
 export type DetectedInventoryItem = z.infer<typeof detectedInventoryItemSchema>;
 
-// Each detected item triggers product matching work after the model response.
-// Keep the structured-output fan-out bounded for a single photo analysis.
 export const MAX_DETECTED_INVENTORY_ITEMS = 20;
 
 export const detectedProductMatchSchema = z.object({
@@ -146,7 +134,6 @@ export const detectedProductMatchSchema = z.object({
 });
 export type DetectedProductMatch = z.infer<typeof detectedProductMatchSchema>;
 
-// Reviewable inventory suggestion returned to the UI after app-side matching.
 export const detectedItemSchema = z.object({
   ...detectedInventoryItemFields,
   matchedProduct: detectedProductMatchSchema.nullable(),
@@ -189,7 +176,6 @@ export type ApproveDetectedInventoryItemOut = z.infer<
   typeof approveDetectedInventoryItemOut
 >;
 
-// Product identification from photo analysis
 export const productIdentificationSchema = z.object({
   name: z.string(),
   manufacturer: z.string(),
@@ -216,9 +202,6 @@ const usdaFoodSuggestionFields = {
 
 export const usdaFoodSuggestionOut = z.object(usdaFoodSuggestionFields);
 
-// `id` alongside `name` lets a per-item infra failure (as opposed to a
-// genuine no-match) dispatch a background retry keyed on the real ingredient
-// — see `suggestUsdaFoodBatch`'s `Promise.allSettled` catch.
 export const usdaFoodSuggestionBatchInput = z.object({
   ingredients: z
     .array(z.object({ id: ingredientShortcode, name: z.string().min(1) }))
@@ -275,7 +258,6 @@ export const parseSearchInput = z.object({
   query: z.string().min(1),
 });
 
-// Parsed natural language search query
 export const parsedSearchSchema = z.object({
   productName: z.string().nullable(),
   locationName: z.string().nullable(),
@@ -283,7 +265,6 @@ export const parsedSearchSchema = z.object({
 });
 export type ParsedSearch = z.infer<typeof parsedSearchSchema>;
 
-// Category audit schema - AI suggests missing categories
 export const categoryAuditSchema = z.object({
   suggestions: z.array(
     z.object({

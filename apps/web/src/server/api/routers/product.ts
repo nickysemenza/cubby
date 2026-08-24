@@ -176,16 +176,6 @@ const getByID = protectedProcedure
     ),
   );
 
-const getByShortcode = protectedProcedure
-  .input(z.object({ shortcode: productShortcode }))
-  .output(strictOutput(productWithFoodOut.nullable()))
-  .query(async ({ ctx, input }) => {
-    const id = await resolveLiveShortcode(ctx.db, input.shortcode, "product");
-    return id
-      ? getProductWithFood(ctx.db, ctx.usdaClient, unsafeProductId(id))
-      : null;
-  });
-
 // Lightweight typeahead for product-picker comboboxes. Same filters/pagination
 // shape as `list`, but the repo replaces the full relation graph and per-row
 // USDA enrichment with small batched quantity and cover-photo reads tailored
@@ -856,7 +846,6 @@ const discard = protectedProcedure
 
 export const productRouter = createTRPCRouter({
   getByID,
-  getByShortcode,
   getByShortcodes,
   list,
   summaries,

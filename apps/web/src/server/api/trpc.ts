@@ -1,129 +1,29 @@
-import { type AuditSource, buildActorContext } from "@cubby/schemas/context";
+import { buildActorContext } from "@cubby/schemas/context";
 import { type UserId, unsafeUserId } from "@cubby/schemas/identifiers";
 import * as Sentry from "@sentry/tanstackstart-react";
-import { initTRPC, type TRPCRouterRecord } from "@trpc/server";
+import { initTRPC, TRPCError, type TRPCRouterRecord } from "@trpc/server";
 import { flatten } from "flat";
 import superjson from "superjson";
 import { ZodError, type ZodType, type z } from "zod";
-import { env } from "~/env";
-import { auth as betterAuth } from "~/lib/auth";
 import { getErrorMessage } from "~/lib/error-utils";
-import { getBindingFetcher } from "~/server/cf-env";
-import { NotionClient } from "~/server/clients/notion";
-import { createUpcLookupClient } from "~/server/clients/upc-lookup";
-import { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
-import { db } from "~/server/db";
 import {
+  appErrorFromUnknown,
   createAppError,
-  isExpectedTRPCError,
+  isExpectedAppError,
   toPublicErrorPayload,
 } from "~/server/errors/app-error";
 import { translateDatabaseError } from "~/server/errors/db-errors";
 import {
-  findProductsByFoodIdentifier,
-  getFoodLookupsForLinkedProducts,
-} from "~/server/repo/product";
-import { AvailabilityService } from "~/server/services/availability.service";
-import { LocationValuationService } from "~/server/services/location-valuation.service";
-import { RecipeCostingService } from "~/server/services/recipe-costing.service";
-import { USDAService } from "~/server/services/usda.service";
-import {
-  type AppSpan,
-  extractTraceContext,
-  TraceNames,
-  withTrace,
-} from "~/server/tracing";
-import { classifyTrpcWorkload, type RequestOrigin } from "~/server/workload";
+  buildCrudServices,
+  createRequestContext,
+} from "~/server/request-context";
+import { type AppSpan, TraceNames, withTrace } from "~/server/tracing";
+import type { RequestOrigin } from "~/server/workload";
+import { classifyTrpcWorkload } from "~/server/workload";
 
-export const buildCrudServices = (
-  db: Database,
-  opts?: { usdaFetcher?: typeof fetch },
-) => {
-  const notionClient = env.NOTION_API_KEY
-    ? new NotionClient(env.NOTION_API_KEY)
-    : null;
-  const usdaClient = new USDAClient(
-    env.USDA_API_URL,
-    opts?.usdaFetcher ?? getBindingFetcher("USDA_API"),
-  );
-  const upcLookupClient = createUpcLookupClient();
-  const usdaService = new USDAService(
-    usdaClient,
-    async (lookup) => {
-      return await findProductsByFoodIdentifier(db, lookup);
-    },
-    async () => await getFoodLookupsForLinkedProducts(db),
-  );
-  const services = {
-    availability: new AvailabilityService(db, usdaClient),
-    recipeCosting: new RecipeCostingService(db, usdaClient),
-    locationValuation: new LocationValuationService(db),
-  };
-
-  return {
-    db,
-    notionClient,
-    usdaClient,
-    upcLookupClient,
-    usdaService,
-    services,
-  };
-};
-
-export const createTRPCContext = async (opts: {
-  headers: Headers;
-  /**
-   * Pre-resolved actor, for callers that authenticated by some means other than
-   * a better-auth session cookie — currently only /api/mcp, which verifies an
-   * OAuth bearer token. Supplying this skips the `getSession` lookup entirely
-   * (there is no session to find) and sets the audit source directly.
-   */
-  actor?: { userId: UserId; sessionId: string | null; source: AuditSource };
-}) => {
-  // Extract trace context from headers and set it as active context (dev only —
-  // in the CF Worker the platform manages context, so this just runs the body).
-  const headersObj: Record<string, string> = {};
-  opts.headers.forEach((value, key) => {
-    headersObj[key] = value;
-  });
-
-  return await extractTraceContext(headersObj, async () => {
-    const crudServices = buildCrudServices(db);
-
-    if (opts.actor) {
-      const { userId, sessionId, source } = opts.actor;
-      const requestOrigin: RequestOrigin = source === "mcp" ? "mcp" : "api";
-      return {
-        ...crudServices,
-        auth: { userId, sessionId },
-        actorContext: buildActorContext(userId, source),
-        requestOrigin,
-        ...opts,
-      };
-    }
-
-    const betterSession = await betterAuth.api.getSession({
-      headers: opts.headers,
-    });
-
-    const userId = betterSession?.user?.id
-      ? unsafeUserId(betterSession.user.id)
-      : null;
-    const actorContext = userId ? buildActorContext(userId, "ui") : null;
-
-    return {
-      ...crudServices,
-      auth: {
-        userId,
-        sessionId: betterSession?.session?.id ?? null,
-      },
-      actorContext,
-      requestOrigin: "ui" as RequestOrigin,
-      ...opts,
-    };
-  });
-};
+export { buildCrudServices } from "~/server/request-context";
+export const createTRPCContext = createRequestContext;
 
 const t = initTRPC.context<typeof createTRPCContext>().create({
   transformer: superjson,
@@ -273,7 +173,7 @@ const tracingMiddleWare = t.middleware(async (opts) =>
         // — they already skip console logging in createAppError, have zero user
         // impact, and would otherwise flood Sentry with thousands of events
         // (e.g. a stale cached getByID for a deleted entity).
-        if (!isExpectedTRPCError(result.error)) {
+        if (!isExpectedAppError(result.error)) {
           Sentry.captureException(result.error, {
             extra: { trpcPath: opts.path, trpcType: opts.type },
           });
@@ -303,6 +203,22 @@ const dbErrorMiddleware = t.middleware(async (opts) => {
   if (!result.ok) {
     const translated = translateDatabaseError(result.error);
     if (translated) throw translated;
+  }
+  return result;
+});
+
+/** Convert the neutral application error at the tRPC seam. */
+const appErrorMiddleware = t.middleware(async (opts) => {
+  const result = await opts.next();
+  if (!result.ok) {
+    const appError = appErrorFromUnknown(result.error);
+    if (appError) {
+      throw new TRPCError({
+        code: appError.code,
+        message: appError.message,
+        cause: appError,
+      });
+    }
   }
   return result;
 });
@@ -337,7 +253,8 @@ const isAuthed = t.middleware(({ next, ctx }) => {
  */
 const publicProcedure = t.procedure
   .use(dbErrorMiddleware)
-  .use(tracingMiddleWare);
+  .use(tracingMiddleWare)
+  .use(appErrorMiddleware);
 
 export const protectedProcedure = publicProcedure.use(isAuthed);
 

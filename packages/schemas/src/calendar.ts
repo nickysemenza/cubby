@@ -45,7 +45,6 @@ export const calendarMealItem = z.object({
   kind: z.literal("meal"),
   id: mealShortcode,
   title: z.string(),
-  /** Persisted optional name, separate from the slot-derived display title. */
   name: z.string().nullable(),
   ...calendarItemDates,
   interaction: z.literal("move"),
@@ -55,7 +54,6 @@ export const calendarMealItem = z.object({
   mealType: mealTypeSchema.nullable(),
   mealKind: mealKindSchema,
   recipeNames: z.array(z.string()),
-  /** First displayable cover among the meal's ordered recipes. */
   coverImageUrl: z.url().nullable(),
   cost: money,
   calories: z.number(),
@@ -75,7 +73,6 @@ export const calendarTaskItem = z.object({
   trade: tradeSchema,
   projectName: z.string().nullable(),
   subjectProductName: z.string().nullable(),
-  /** Cover for the optional subject Product. */
   coverImageUrl: z.url().nullable(),
 });
 
@@ -91,7 +88,6 @@ export const calendarExpenseItem = z.object({
   trade: tradeSchema,
   projectName: z.string().nullable(),
   productName: z.string().nullable(),
-  /** Cover for the linked Product, when this is a product-backed line. */
   coverImageUrl: z.url().nullable(),
 });
 
@@ -134,12 +130,6 @@ export type CalendarItem = z.infer<typeof calendarItem>;
  * composable fragment, like `auditDateFilterFields`.
  */
 export const calendarFilterFields = {
-  /**
-   * Which item kinds to read. Omitted means all four — the in-app calendar
-   * wants everything, so that stays the default. Narrowing it lets a caller
-   * skip whole queries: asking for meals alone avoids the expense read and
-   * the project date fold entirely (see repo/calendar.ts).
-   */
   kinds: z.array(calendarItemKind).nonempty().optional(),
 
   /**
@@ -149,7 +139,6 @@ export const calendarFilterFields = {
    */
   projectId: oneOrMany(projectShortcode).optional(),
   projectPresenceFilter: presenceFilter,
-  /** Expand `projectId` to each project's live descendant subtree. */
   includeSubProjects: z.boolean().optional(),
 
   taskStatus: oneOrMany(taskStatusSchema).optional(),

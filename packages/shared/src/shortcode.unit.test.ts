@@ -27,6 +27,13 @@ describe("prefix registry", () => {
     }
   });
 
+  it("keeps only the two prefixes that were actually minted", () => {
+    expect(LEGACY_SHORTCODE_PREFIX).toEqual({
+      "P-": "product",
+      "L-": "location",
+    });
+  });
+
   it("has an alphabet free of scan-confusable characters", () => {
     // The comment on SHORTCODE_CHARS used to claim 32; it is 31, and the
     // namespace math (31^4) depends on that being right.
@@ -42,7 +49,6 @@ describe("shortcodeSchema", () => {
     const schema = shortcodeSchema(entity);
     const canonical = `${SHORTCODE_PREFIX[entity]}4K7M`;
     expect(schema.parse(canonical)).toBe(canonical);
-    // Leniency comes from .trim()/.toUpperCase() running before .regex().
     expect(schema.parse(`  ${canonical.toLowerCase()}  `)).toBe(canonical);
   });
 
@@ -110,7 +116,6 @@ describe("parseShortcode", () => {
     expect(parseShortcode(code)).toEqual({
       type: entity,
       shortcode: code,
-      id: code.slice(SHORTCODE_PREFIX[entity].length),
       legacy: false,
     });
   });
@@ -121,12 +126,6 @@ describe("parseShortcode", () => {
     expect(parseShortcode("P-4K7M")).toEqual({
       type: "product",
       shortcode: "PRD-4K7M",
-      id: "4K7M",
-      legacy: true,
-    });
-    expect(parseShortcode("r-4k7m")).toMatchObject({
-      type: "recipe",
-      shortcode: "RCP-4K7M",
       legacy: true,
     });
     expect(parseShortcode("  L-4K7M  ")).toMatchObject({
@@ -134,6 +133,7 @@ describe("parseShortcode", () => {
       shortcode: "LOC-4K7M",
       legacy: true,
     });
+    expect(parseShortcode("R-4K7M")).toBeNull();
   });
 
   it("rejects malformed input", () => {

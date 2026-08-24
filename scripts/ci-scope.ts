@@ -55,8 +55,6 @@ const upcPrefixes = [
 
 const rustPrefixes = ["recipebridge/"];
 
-// These files can affect every JS workspace or the CI machinery which decides
-// what to run. Keeping the list explicit makes a novel root path fail safe.
 const sharedRootExact = new Set([
   ".gitignore",
   ".mcp.json.example",

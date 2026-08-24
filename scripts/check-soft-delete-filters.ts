@@ -1,86 +1,8 @@
 #!/usr/bin/env node
 /**
- * Guard: an EXISTS / NOT EXISTS subquery over a soft-deletable table must
- * filter soft-deleted rows.
- *
- * Why this rule exists: we shipped the same bug three times in one file. A
- * subquery like
- *
- *   notExists(db.select().from(inventoryEntry).where(eq(inventoryEntry.productId, product.id)))
- *
- * reads as "this product has no inventory", but a soft-deleted row still
- * satisfies EXISTS — so the product silently fails the check. Emptying a shelf
- * soft-deletes rather than removes, so the deleted case is the COMMON path, not
- * the edge one: `findOrphanedProducts` was missing 18 of 20 real hits (#428).
- *
- * Scope is deliberately narrow — only `exists()` / `notExists()` arguments (and,
- * below, raw `sql\`...\`` EXISTS text), not every query. That is where all
- * three original bugs lived, and a subquery over a soft-deletable table
- * essentially always means "live rows only", so the false positive rate is ~0.
- * Ordinary top-level queries are left to review.
- *
- * Opt out for the rare subquery that genuinely wants deleted rows (cleanup and
- * orphan-detection paths) with a comment on or above the call:
- *
- *   // includes-deleted: orphan sweep must see rows whose entity is gone
- *
- * ---
- *
- * Second form: raw template-literal SQL text. Drizzle's exists()/notExists()
- * are JS-level function calls, easy to find with a balanced-paren scan of their
- * argument. But several repos build correlated EXISTS subqueries as raw SQL
- * text instead — `sql\`EXISTS (SELECT 1 FROM "Expense" e WHERE ... )\`` — because
- * the query needs a JOIN, an aggregate, or a jsonb operator drizzle's builder
- * can't express. Those are invisible to the scan above: there is no `.from(x)`
- * or `.join(x)` call to match, just a quoted SQL identifier or a `${tableVar}`
- * interpolation sitting inside a template string. A soft-deleted row still
- * satisfies raw-SQL EXISTS for exactly the same reason it satisfies drizzle's
- * — this is the same bug class, just a different surface.
- *
- * Some of these aren't even tagged `sql\`...\`` — data-quality.ts's
- * purchaseGapRaw/purchaseProductGapRaw build EXISTS text as a PLAIN backtick
- * string, concatenated across several template literals (`` `${base}
- * ${condition} AND ${exceptionAbsent})` ``) and handed to `sql.raw(...)` only
- * at the call site, several lines and a ternary away. That concatenation means
- * the "EXISTS (" and its matching ")" frequently live in DIFFERENT template
- * literals — the open paren has no balanced close within the literal that
- * contains it. A balanced-paren scan of that literal alone can't find it (and
- * chasing the concatenation across expressions is effectively evaluating the
- * program, not parsing it — the "real SQL parser" territory this check is
- * supposed to stay out of). So this scan does not require the parens to
- * balance within one literal:
- *
- *   1. Find every backtick template literal in the file — tagged or not —
- *      with a template-literal-aware scanner so a nested `${sql\`...\`}`
- *      interpolation doesn't prematurely close an outer one, and so a
- *      backtick inside a block or line comment (e.g. a markdown code span in
- *      a docblock) is never mistaken for a template start.
- *   2. Within each literal, find the FIRST `EXISTS (` / `NOT EXISTS (` and
- *      take everything from there to the end of that literal as the body —
- *      not the balanced-paren argument. That covers a self-contained EXISTS
- *      (the common case) and also the concatenated-`base`-string case, since
- *      whatever guards the table stays in the SAME source literal even when
- *      the closing paren doesn't. It deliberately does not reach into a
- *      later, separately-concatenated literal (e.g. `${exceptionAbsent}`) —
- *      only what's textually present alongside the reference counts.
- *   3. Within that body, find every `FROM "Table" alias` / `JOIN "Table"
- *      alias` (quoted identifier) and `FROM ${tableVar} alias` / `JOIN
- *      ${tableVar} alias` (drizzle table interpolation) reference to a
- *      soft-deletable table, and require an `alias."deletedAt" IS NULL`
- *      predicate for THAT alias somewhere in the body (or the table's own
- *      quoted name, for the rare unaliased reference). A following SQL
- *      keyword (WHERE, ON, JOIN, …) is never mistaken for an alias — see
- *      `SQL_KEYWORDS` — so `FROM "Table"\n WHERE "Table"."deletedAt" IS NULL`
- *      (no alias at all) is recognized as guarded rather than misread as
- *      `FROM "Table" WHERE` with alias `WHERE`.
- *
- * This intentionally does not resolve fully dynamic table references (e.g.
- * `FROM ${sql.raw(\`"${runtimeVar}"\`)}`) — that would need evaluating the
- * program, not just parsing it, and is the same blind spot the drizzle-form
- * scan already has for a dynamic `.from(someVar)`. A subquery like that is
- * left to review, same as before.
- *
- * Run standalone: node scripts/check-soft-delete-filters.ts
+ * EXISTS subqueries over soft-deletable tables must filter deleted rows.
+ * `// includes-deleted: <reason>` is the audited opt-out. Both Drizzle calls
+ * and raw/template SQL forms are scanned; parser constraints stay by helpers.
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -350,7 +272,6 @@ for (const file of serverSources()) {
   const hasOptOut = (callIndex: number) =>
     text.slice(Math.max(0, callIndex - 200), callIndex).includes(OPT_OUT);
 
-  // --- drizzle exists()/notExists() form ---
   if (text.includes("xists(")) {
     callPattern.lastIndex = 0;
     let call;
@@ -365,7 +286,6 @@ for (const file of serverSources()) {
 
       if (hasOptOut(call.index)) continue;
 
-      // notDeleted(table) is the helper; isNull(x.deletedAt) is the longhand.
       if (body.includes("notDeleted") || body.includes("deletedAt")) continue;
 
       violations.push({
@@ -376,7 +296,6 @@ for (const file of serverSources()) {
     }
   }
 
-  // --- raw template-literal EXISTS form (tagged sql`` or plain) ---
   if (text.includes("EXISTS")) {
     const seen = new Set<string>(); // dedupe safety net; occurrences are non-overlapping by construction
     const existsPattern = /\b(NOT\s+)?EXISTS\s*\(/g;

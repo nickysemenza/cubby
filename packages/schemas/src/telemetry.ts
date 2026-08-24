@@ -177,8 +177,6 @@ export const mcpUsageActivityInput = z.strictObject({
   outcome: mcpToolCallOutcomeSchema.optional(),
   entity: entitySchema.optional(),
   cursor: z.string().optional(),
-  // Added by @trpc/tanstack-react-query for infinite queries. Keep it explicit
-  // so this input remains strict while supporting the framework contract.
   direction: z.enum(["forward", "backward"]).optional(),
   limit: z.number().int().min(1).max(100).default(50),
 });

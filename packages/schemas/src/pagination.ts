@@ -8,7 +8,6 @@ const sortParams = z.object({
   direction: z.enum(["asc", "desc"]).default("asc"),
 });
 
-/** Hard cap on stacked sort columns (client and server both enforce it). */
 export const MAX_SORTS = 3;
 
 /**
@@ -36,10 +35,6 @@ const sortInput = z.union([
  */
 export type SortInput = SortParams | SortParams[];
 
-/**
- * Single-or-array → non-empty array, deduped by orderBy (first occurrence
- * wins — a stacked sort repeating a column adds nothing), capped at MAX_SORTS.
- */
 export const normalizeSorts = (sort: SortInput): SortParams[] => {
   const arr = Array.isArray(sort) ? sort : [sort];
   const seen = new Set<string>();
@@ -69,12 +64,6 @@ export const createSortParamsSchema = <
   return z.union([single, z.array(single).min(1).max(MAX_SORTS)]);
 };
 
-/**
- * Relation-presence filter for list endpoints: "has" keeps rows with the
- * relation, "none" keeps rows without it, unset means any. Sorting keeps the
- * NULLS-LAST-both-directions convention, so this filter (surfaced as a header
- * select on relation columns) is the way to find empty-relation rows.
- */
 export const presenceFilter = z.enum(["has", "none"]).optional();
 export type PresenceFilter = z.infer<typeof presenceFilter>;
 
@@ -129,7 +118,6 @@ export const entityFilter = <T extends z.ZodTypeAny>(schema: T): T => {
   }) as unknown as T;
 };
 
-/** One-or-many exact-entity filters with the same internal value. */
 export const entityFilterList = <T extends z.ZodTypeAny>(schema: T) =>
   oneOrMany(entityFilter(schema));
 
@@ -138,12 +126,6 @@ const paginationParams = z.object({
   pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE).default(10),
 });
 
-/**
- * Pagination fields for MCP list/search tools, as a raw shape to spread into a
- * tool's input schema: `{ ...mcpPaginationParams }`. Both are optional (the MCP
- * list handler defaults to page 0 / size 50) and the descriptions surface to MCP
- * clients. Kept here so every list tool stops re-declaring the same two fields.
- */
 export const mcpPaginationParams = {
   pageIndex: z
     .number()
@@ -256,7 +238,6 @@ const paginatedMetaSchema = z.object({
   pageIndex: z.number().int().nonnegative(),
   pageSize: z.number().int().positive().max(MAX_PAGE_SIZE),
   totalCount: z.number().int().nonnegative(),
-  // Full-filtered-set column aggregates (see buildPaginatedResponse).
   sums: z.record(z.string(), z.number()).optional(),
 });
 
@@ -269,7 +250,6 @@ export function createPaginatedResponseSchema<Entry extends z.ZodTypeAny>(
   });
 }
 
-/** Bulk tool result envelope: `{ items: T[] }` (replaces bare array roots). */
 export function createItemsResponseSchema<Entry extends z.ZodTypeAny>(
   entrySchema: Entry,
 ) {

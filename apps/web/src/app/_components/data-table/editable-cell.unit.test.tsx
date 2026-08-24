@@ -13,7 +13,6 @@ import {
 } from "./cell-selection-context";
 import { EditableCell } from "./editable-cell";
 
-// Mock sonner toast
 vi.mock("sonner", () => ({
   toast: {
     error: vi.fn(),
@@ -117,7 +116,6 @@ describe("EditableCell component", () => {
     fireEvent.click(screen.getByRole("button"));
 
     await waitFor(() => {
-      // Should have 3 buttons: check, cancel (plus the original that's now hidden)
       const buttons = screen.getAllByRole("button");
       expect(buttons.length).toBeGreaterThanOrEqual(2);
     });
@@ -134,19 +132,16 @@ describe("EditableCell component", () => {
       />,
     );
 
-    // Enter edit mode
     fireEvent.click(screen.getByRole("button"));
 
     await waitFor(() => {
       expect(screen.getByRole("textbox")).toBeInTheDocument();
     });
 
-    // Change value
     fireEvent.change(screen.getByRole("textbox"), {
       target: { value: "New" },
     });
 
-    // Click save (check button)
     const buttons = screen.getAllByRole("button");
     const saveButton = buttons.find((btn) =>
       btn.querySelector("svg.lucide-check"),
@@ -171,14 +166,12 @@ describe("EditableCell component", () => {
       />,
     );
 
-    // Enter edit mode
     fireEvent.click(screen.getByRole("button"));
 
     await waitFor(() => {
       expect(screen.getByRole("textbox")).toBeInTheDocument();
     });
 
-    // Click cancel (X button)
     const buttons = screen.getAllByRole("button");
     const cancelButton = buttons.find((btn) =>
       btn.querySelector("svg.lucide-x"),
@@ -209,7 +202,6 @@ describe("EditableCell component", () => {
 
     fireEvent.click(screen.getByRole("button"));
 
-    // Parent click should not be called due to stopPropagation
     expect(parentClick).not.toHaveBeenCalled();
   });
 });
@@ -348,10 +340,6 @@ describe("EditableCell select editor (commit-on-pick)", () => {
     expect(buttons.some((b) => b.querySelector("svg.lucide-x"))).toBe(true);
   });
 
-  // `clearable` is what lets a tri-state column (Product.stockTracked, where
-  // null is the undecided worklist) be put BACK into its undecided state. The
-  // select path accepted no such flag, so the editor could only ever move a row
-  // out of the backlog.
   it("saves null through the clear affordance when clearable", async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(
@@ -396,7 +384,6 @@ describe("EditableCell select editor (commit-on-pick)", () => {
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith("Save failed");
     });
-    // Editor stays open (combobox still mounted) with the current value intact.
     expect(screen.getByRole("combobox")).toBeInTheDocument();
     expect(screen.getByTestId("display")).toHaveTextContent("a");
   });
@@ -418,8 +405,6 @@ describe("overlay behavior", () => {
 
     const input = await screen.findByRole("textbox");
 
-    // The trigger stays exactly where it was rendered (it's the overlay's
-    // positioning anchor); the editor is portaled straight onto body.
     expect(container.contains(trigger)).toBe(true);
     expect(container.contains(input)).toBe(false);
     expect(document.body.contains(input)).toBe(true);
@@ -460,11 +445,9 @@ describe("overlay behavior", () => {
     fireEvent.click(screen.getByRole("button"));
     const input = await screen.findByRole("textbox");
 
-    // Inside the overlay: stays open.
     fireEvent.mouseDown(input);
     expect(screen.getByRole("textbox")).toBeInTheDocument();
 
-    // Outside: closes it.
     fireEvent.mouseDown(document.body);
     await waitFor(() => {
       expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
@@ -484,8 +467,6 @@ describe("overlay behavior", () => {
     fireEvent.click(screen.getByRole("button"));
     await screen.findByRole("textbox");
 
-    // Simulates a combobox dropdown's own body-level portal — the overlay
-    // treats it as "inside" even though it's DOM-siblings, not a descendant.
     const popup = document.createElement("div");
     popup.setAttribute("data-combobox-popup", "");
     document.body.appendChild(popup);
@@ -527,8 +508,6 @@ describe("overlay behavior", () => {
 });
 
 describe("EditableCell type-to-edit seeding", () => {
-  // In cell-selection mode a CELL_EDIT_EVENT carrying `seedText` opens the
-  // editor — see useCellSelection's printable-key branch, which dispatches it.
   function openWithEvent(trigger: HTMLElement, seedText?: string) {
     act(() => {
       trigger.dispatchEvent(
@@ -554,7 +533,6 @@ describe("EditableCell type-to-edit seeding", () => {
     openWithEvent(screen.getByRole("button"), "z");
 
     const input = await screen.findByRole("textbox");
-    // The seed REPLACES the current value (Google Sheets), not appends.
     expect(input).toHaveValue("z");
   });
 

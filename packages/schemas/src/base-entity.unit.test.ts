@@ -13,7 +13,6 @@ describe("deriveUpdateData", () => {
 
   it("makes every required create field optional", () => {
     const schema = deriveUpdateData(createShape);
-    // Omitting all fields parses cleanly — nothing is required on update.
     expect(schema.parse({})).toEqual({});
     expect(schema.parse({ name: "x", count: 1 })).toEqual({
       name: "x",
@@ -26,7 +25,6 @@ describe("deriveUpdateData", () => {
     // `tags` on update would coerce to [] and wipe the existing rows.
     const schema = deriveUpdateData(createShape);
     expect(schema.parse({}).tags).toBeUndefined();
-    // An explicit value still passes through.
     expect(schema.parse({ tags: ["a"] }).tags).toEqual(["a"]);
   });
 
@@ -40,7 +38,6 @@ describe("deriveUpdateData", () => {
 
   it("drops server-managed fields via `omit`", () => {
     const schema = deriveUpdateData(createShape, { omit: ["serverField"] });
-    // The field is gone from the shape (strict-style: not in output).
     expect("serverField" in schema.shape).toBe(false);
     expect("name" in schema.shape).toBe(true);
   });

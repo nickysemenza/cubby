@@ -67,9 +67,8 @@ async function flush(): Promise<void> {
 }
 
 async function loadWidget(module: "shopping-list" | "usda-picker") {
-  document.body.innerHTML = '<div id="root"></div>';
-  if (module === "shopping-list") await import("./shopping-list");
-  else await import("./usda-picker");
+  document.body.innerHTML = `<meta name="cubby-app-id" content="${module}" /><div id="root"></div>`;
+  await import("./app");
   await flush();
   const app = appState.instances.at(-1);
   if (!app) throw new Error("widget did not construct an App");

@@ -406,11 +406,6 @@ export const deleteUnusedIngredients = async (
   return { deleted, failed };
 };
 
-// Cheap always-on counts for the Settings → Maintenance "N affected" labels —
-// only DB detectors (no WASM sweep, no USDA/UPC network). The two WASM parse
-// sweeps (stale parses, unused aliases) are deliberately NOT counted here: they
-// re-parse every recipe line, so their numbers come from an on-demand dry run
-// (dryRunReparse / dryRunPruneAliases) rather than this eager query.
 export const findMaintenanceCounts = async (
   db: Database,
 ): Promise<MaintenanceCounts> => {
@@ -426,9 +421,6 @@ export const findMaintenanceCounts = async (
   });
 
   return {
-    // Deliberately a SUBSET of the Problems-page productsWithNoImages count:
-    // backfillUPCImages can only act on products that have a barcode to look
-    // up, so this scalar count is the same narrower population.
     productsWithNoImages: r.productsWithNoImages,
     locationsWithoutAiDescription: r.locationsWithoutAiDescription,
     staleRecipeTotals: r.staleRecipeTotals,
@@ -438,12 +430,7 @@ export const findMaintenanceCounts = async (
   };
 };
 
-// Settings → Maintenance: the two WASM parse-sweep detectors, re-homed off the
-// Problems hot path as manual dry-run + fix-all actions (they re-parse every
-// recipe line — ~30s CPU and heap pressure that blew the request budget).
-
-// Dry run for "Re-parse recipe lines": how many live imported lines would change
-// (the expensive WASM sweep) out of all re-parseable lines (a cheap count).
+// Parse sweeps are maintenance-only; never add them to the Problems hot path.
 export const dryRunReparse = async (
   db: Database,
 ): Promise<{ wouldChange: number; total: number }> => {
@@ -498,12 +485,6 @@ export async function* pruneAllUnusedAliases(
   yield { done: rows.length, total: rows.length };
   return { pruned };
 }
-
-// Cost-grouped detector bundles. The Problems page loads these as separate tRPC
-// queries routed through an UNBATCHED link, so each runs in its own Worker
-// invocation / CPU budget — no single invocation sums all the detector CPU (the
-// failure mode that exceeded the 30s limit). `findAllProblems` recomposes them
-// for the badge/homepage/MCP consumers that still want one combined payload.
 
 type ExactProblemPage = Awaited<ReturnType<typeof executeProblem>>;
 
@@ -912,8 +893,7 @@ const FAST_ENTITY_PROBLEM_KEYS = [
   "financialTransactionAllocationDefects",
 ] as const satisfies readonly ProblemKey[];
 
-// DB-only detectors — cheap (no WASM, no network). Bounded tracing keeps a
-// named span per detector for observability while overlapping remote I/O.
+/** Fast Problems stays DB-only: no WASM or provider calls. */
 export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
   const exactKeys = FAST_ENTITY_PROBLEM_KEYS;
 
@@ -924,8 +904,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
   const [r, exact] = await Promise.all([
     traceAllBounded(
       {
-        // One extra SELECT over Product + one over ProductExternalId, grouped in
-        // JS — same shape and cost class as the spelling-variant scans below.
         duplicateProductIdentities: () =>
           diagnosticItems<ProblemsFast["duplicateProductIdentities"]>(
             db,
@@ -966,16 +944,11 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
             db,
             "manufacturer-spelling-variants",
           ),
-        // Same shared spelling-key SQL as above, over the vendor roster instead —
-        // one grouped scan of 114 rows.
         duplicateVendors: () =>
           diagnosticItems<ProblemsFast["duplicateVendors"]>(
             db,
             "duplicate-vendors",
           ),
-        // Amount+date joins ~80 unlinked expenses against ~1.6k purchases, then
-        // scores trigram similarity on only the handful that survive — measured at
-        // ~31ms, all buffer hits. Cheap because the name comparison is post-join.
         duplicateSpendCandidates: () =>
           diagnosticItems<ProblemsFast["duplicateSpendCandidates"]>(
             db,
@@ -994,9 +967,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
             db,
             "invalid-financial-json",
           ),
-        // One grouped scan of the (small) import roster with a LEFT JOIN count.
-        // The ONLY statement-ledger detector: unmatched rows are the drift
-        // worklist, not defects, and 15k of them would make Problems unusable.
         incompleteStatementImports: () =>
           diagnosticItems<ProblemsFast["incompleteStatementImports"]>(
             db,
@@ -1138,10 +1108,6 @@ export const cleanupOrphanedEntityEmbeddings = async (
   return { found: orphaned.length, deleted };
 };
 
-// Population denominators for the coverage meters. Cheap count(*)s, pinned to
-// ONE connection like findFastProblems (the cost here is connection
-// acquisition, not the queries). Deliberately NOT on the unbatched hot path —
-// it's page-only, and neither the navbar badge nor MCP needs it.
 export const findCoverageTotals = (db: Database): Promise<CoverageTotals> =>
   withConnection(db, (scoped) => findCoverageTotalsRepo(scoped));
 
@@ -1195,12 +1161,6 @@ export const findCoverageProblems = async (
     ingredientsPage,
     islandsPage,
   );
-  // Runs through the diagnostic registry rather than inline, so the roster in
-  // `problem-registry` can describe it (a `derived` source names a
-  // DiagnosticKey). Independent of the USDA-enriched pair above: no network, no
-  // enrichment — just the Rust grammar over titles the DB already narrowed. It
-  // shares this lane rather than `fast` because that lane's contract is
-  // explicitly DB-only with no WASM.
   const titleSized = await diagnosticItems<ProductWithTitleDerivableSize[]>(
     db,
     "title-derivable-unit-size",
@@ -1311,10 +1271,6 @@ export const findTrackerProblems = async (
   db: Database,
 ): Promise<ProblemsTracker> => {
   const exactKeys = TRACKER_PROBLEM_KEYS;
-  // One rule-engine run for the whole lane. Three of these keys resolve their
-  // membership through the `attention` project filter, which calls this itself,
-  // and the drift key's diagnostic calls it again — so hoisting it here and
-  // handing it down is a net reduction in work, not an addition.
   const attentionItems = await computeAttentionItems(db);
   const exact = await runExactProblemPages(db, exactKeys, {
     diagnostic: { attentionItems },
@@ -1472,9 +1428,6 @@ export const findProblemByType = async (
     key !== "projectsWithDateDrift" &&
     (TRACKER_PROBLEM_KEYS as readonly ProblemKey[]).includes(key)
   ) {
-    // MCP-only path (`getByType` has no web client), so the extra rule-engine
-    // run is an agent-frequency cost, not a page-render one — and it buys the
-    // same measurements and wording every other consumer gets.
     const index = indexAttentionItems(await computeAttentionItems(db));
     return {
       type: key,

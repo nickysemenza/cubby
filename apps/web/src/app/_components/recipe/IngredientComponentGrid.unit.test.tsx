@@ -5,10 +5,6 @@ import { EMPTY_MARK } from "~/components/matrix/matrix-chrome";
 import { IngredientComponentGrid } from "./IngredientComponentGrid";
 import type { RecipeTreeNode } from "./recipe-tree";
 
-// The tree math is covered by recipe-tree's own tests; mocking at that seam
-// keeps this about the grid's rendering contract — the Total column, the
-// Subtotal/Cost footer rows, the empty mark, and the estimate marker — which
-// is what the CrossTabTable migration could plausibly break.
 const component = (id: string, name: string) =>
   ({ recipe: { id, name, yield: null }, costing: null }) as RecipeTreeNode;
 
@@ -94,8 +90,6 @@ describe("IngredientComponentGrid", () => {
   it("adds the Cost footer row when showCost is set", () => {
     render(<IngredientComponentGrid tree={tree} showCost />);
 
-    // The engine tracks an upper bound for ranged amounts; the grid used to
-    // drop it and show a point cost where every other surface showed a range.
     expect(rowCells("Cost")).toEqual([
       "$1.50 – $2.25",
       EMPTY_MARK,

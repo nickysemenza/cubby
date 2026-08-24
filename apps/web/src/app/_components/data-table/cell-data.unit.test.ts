@@ -82,7 +82,6 @@ describe("amountCellData", () => {
   // mixed numbers, and the units it invented ("1/2 cups", ",5 kg", "") reach no
   // edge in the unit graph, so costing/valuation downstream went blank or wrong.
   const CASES: { text: string; want: Amount; was: string }[] = [
-    // The headline bug: a 33% understatement plus an unresolvable unit.
     {
       text: "1 1/2 cups",
       want: { value: 1.5, unit: "cup" },
@@ -97,9 +96,6 @@ describe("amountCellData", () => {
       want: { value: 2.5, unit: "lb" },
       was: "2.5 / 'lb' (ok)",
     },
-    // "each" is a `whole` alias, and it's the unit essentially every inventory
-    // row uses — the written spelling is kept so a pasted row doesn't end up
-    // spelled differently from its neighbours.
     { text: "5 each", want: { value: 5, unit: "each" }, was: "5 / 'each'" },
     // Regression: trailing punctuation used to defeat the
     // `/([a-z]+)$/` anchor in preserveWrittenWholeUnit, so a spreadsheet cell
@@ -110,7 +106,6 @@ describe("amountCellData", () => {
       want: { value: 5, unit: "each" },
       was: "5 / 'whole' (trailing '.' broke the word match)",
     },
-    // A bare number has no written word to preserve.
     { text: "3", want: { value: 3, unit: "whole" }, was: "3 / '' (invalid)" },
   ];
 
@@ -148,10 +143,6 @@ describe("amountCellData", () => {
     expect(save).not.toHaveBeenCalled();
   });
 
-  // The point of routing both directions through the engine is that a trip out
-  // to a spreadsheet and back is lossless. `Unit::Whole` is canonically spelled
-  // as NOTHING, so a naive copy renders {5,"each"} as bare "5" and pasting that
-  // back yields "whole" — silently rewriting essentially every inventory row.
   it.each([
     [{ value: 5, unit: "each" }],
     [{ value: 7, unit: "ea" }],
@@ -182,8 +173,6 @@ describe("amountCellData", () => {
   it("copies via the canonical formatter, so text round-trips", async () => {
     const { data } = build({ value: 1.5, unit: "cup" });
     const payload = data.getCopyPayload(null);
-    // Not `${value} ${unit}` ("1.5 cup") — the engine's own rendering, vulgar
-    // fraction and plural unit included.
     expect(payload?.text).toBe("1½ cups");
     expect(await pasteText(payload?.text ?? "")).toEqual({
       value: 1.5,

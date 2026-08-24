@@ -13,10 +13,6 @@ test("calendar events open an anchored editor, save atomically, and restore focu
   await page.goto("/calendar?date=2026-07-01");
   await waitForAppHydration(page);
 
-  // Calendar renders the same task in its overlapping day and week surfaces;
-  // either button opens the one shared editor. Scope this interaction to one
-  // concrete rendered event rather than treating that presentation duplication
-  // as a second task.
   const event = page.getByRole("button", { name: `${name}, All day` }).first();
   await event.click();
   const editor = page.getByRole("dialog", { name });
@@ -73,10 +69,6 @@ test("calendar opens a date drawer and prefills quick creation", async ({
   ).toBeVisible();
   await expect(page.getByText("Nothing planned yet.")).toBeVisible();
 
-  // Scoped to the day sheet on purpose. This used to be `.last()`, which only
-  // disambiguated it from the kind-toggle row that the filter bar replaced —
-  // leaving the assertion silently dependent on there now being exactly one
-  // match anywhere on the page.
   const daySheet = page.getByRole("dialog", { name: "Tuesday, July 14" });
   await daySheet.getByRole("button", { name: "Meals" }).click();
   const mealDialog = page.getByRole("dialog", { name: "New Meal" });
@@ -92,8 +84,6 @@ test("calendar filters are URL-backed and survive a reload", async ({
 }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
-  // The pre-filter-bar URL shape. Both keys were kept verbatim so bookmarks
-  // and shared links from before the manifest bar still resolve.
   await page.goto(
     "/calendar?date=2026-07-01&kinds=meal,task&projectKinds=renovation",
   );
@@ -161,7 +151,6 @@ test("the fortnight grid spans two week-aligned rows and steps 14 days", async (
 }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
-  // A Thursday anchor: the grid has to snap back to its Sunday, not start here.
   await page.goto("/calendar?date=2026-08-20&period=fortnight&kinds=meal,task");
   await waitForAppHydration(page);
 
@@ -174,7 +163,6 @@ test("the fortnight grid spans two week-aligned rows and steps 14 days", async (
   await expect(
     page.locator('[data-slot="event-calendar-month-cell"]'),
   ).toHaveCount(14);
-  // Active === visible for a fortnight, so no day is dimmed as an outside day.
   await expect(
     page.locator('[data-slot="event-calendar-month-cell"][data-outside]'),
   ).toHaveCount(0);

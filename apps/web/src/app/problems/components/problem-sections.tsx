@@ -476,9 +476,6 @@ function missingBudgetDetail(item: ProjectAttentionItem): ReactNode[] {
 function renderTrackerItem(item: ProjectAttentionItem): RenderedProblemItem {
   return {
     key: item.key,
-    // The record's name, like every other section on this page. It used to be
-    // `item.description` — a whole sentence, which made the card unscannable
-    // and, for date-window rows, named no project at all.
     title: item.name,
     subtitle: attentionEvidence(item),
     tone: item.severity,
@@ -493,9 +490,6 @@ function renderTrackerItem(item: ProjectAttentionItem): RenderedProblemItem {
           ]
         : [],
     details: missingBudgetDetail(item),
-    // `href` is already a shortcode-bearing path built server-side
-    // (`/tasks/${row.shortcode}` etc. in server/repo/project/attention.ts) —
-    // no uuid-to-shortcode resolution is needed here.
     route: { href: item.href },
     editLabel: `Open ${item.entityType}`,
   };
@@ -682,41 +676,17 @@ function unpricedSubtitle(product: ProductMissingPrice): string {
   return `${byManufacturer(product.manufacturer)} · ${qty} ${qty === 1 ? "unit" : "units"} unvalued`;
 }
 
-/**
- * `by {mfr} · sold 1, 1 still on a shelf · $700.00 recovered`. Both quantities
- * remain useful context for the human review, while membership is decided by
- * the canonical quantity ledger. `proceeds` is stored negative because it is a
- * disposal.
- */
 function soldButStockedSubtitle(product: SoldButStillStocked): string {
   const live = product.liveQuantity;
   const stocked = `${live} still on a shelf`;
   return `${byManufacturer(product.manufacturer)} · sold ${product.soldQuantity}, ${stocked} · ${formatCurrency(Math.abs(product.proceeds))} recovered`;
 }
 
-/**
- * `by {mfr} · 1 stocked as itself, plus its parts · more than the 1 bought`.
- *
- * The arithmetic IS the finding, so it leads. It stops at what the row can
- * prove: membership already establishes that own stock plus whole kits in parts
- * EXCEEDS what was acquired, but the exact parts figure is not carried here, so
- * the copy says "more than" rather than inventing a second number.
- *
- * Which side is the mistake is the reader's call — the parent's entry, the
- * parts', or the ledger — so this names no fix.
- */
 function kitCountedTwiceSubtitle(product: KitCountedTwice): string {
   const bought = `${product.expectedUnits} bought`;
   return `${byManufacturer(product.manufacturer)} · ${product.ownUnits} stocked as itself, plus its parts · more than the ${bought}`;
 }
 
-/**
- * Leads with the arithmetic, because the arithmetic IS the finding — and names
- * the unquantified lines when there are any, since those change which fix
- * applies. Unknown acquisitions usually mean a receipt whose count was never
- * recorded; a fully quantified ledger that still goes negative means a real
- * acquisition row is missing or an exit is on the wrong product.
- */
 function negativeExpectedSubtitle(row: NegativeExpectedQuantity): string {
   const unknown = row.unknownAcquisitionLines + row.unknownExitLines;
   return [
@@ -728,10 +698,6 @@ function negativeExpectedSubtitle(row: NegativeExpectedQuantity): string {
     .join(" · ");
 }
 
-/**
- * The vendor and the money, because between them they are what identifies which
- * product a payout describes — which is the whole of the work on these rows.
- */
 function unlinkedExitSubtitle(row: UnlinkedExitExpense): string {
   return [
     row.vendorName,
@@ -752,11 +718,6 @@ function purchaselessExitSubtitle(row: PurchaselessExitExpense): string {
     .join(" · ");
 }
 
-/**
- * Both dates, because they are what tells you which of the two fixes applies:
- * an acquisition a few weeks late usually means a missing purchase Expense,
- * one a year late means the edge itself is wrong.
- */
 function outsideOwnershipSubtitle(row: ToolUsedOutsideOwnership): string {
   // `projectBoundary` already has the detector's grace period applied, so it is
   // not the project's stated date — say "grace" rather than let the reader
@@ -768,14 +729,6 @@ function outsideOwnershipSubtitle(row: ToolUsedOutsideOwnership): string {
     : `${byManufacturer(row.manufacturer)} · disposed of ${tool}, before ${row.projectName} started ${boundary}`;
 }
 
-/** Clickable location chips, matching the duplicate-products card. */
-/**
- * A linked entity as a badge: icon + its own name, not a mono stamp.
- *
- * One helper because this exact body had been copy-pasted four times (locations
- * on three sections, products on a fourth), each carrying its own duplicate of
- * the opt-out className and the comment explaining it.
- */
 function entityBadge(
   entity: ShortcodeEntity,
   ref: { id: string; name: string },
@@ -802,16 +755,11 @@ const locationBadges = (
 ): ReactNode[] =>
   locations.map((location) => entityBadge("location", location));
 
-/** `Stated $431.24 · expenses $416.24 across 3 expenses`. */
 function purchaseSubtitle(purchase: PurchaseNotReconciling): string {
   const expenses = `${purchase.expenseCount} ${purchase.expenseCount === 1 ? "expense" : "expenses"}`;
   return `Stated ${formatCurrency(purchase.statedTotal)} · expenses ${formatCurrency(purchase.expenseTotal)} across ${expenses}`;
 }
 
-/**
- * Names the unexplained discrepancy by direction. Refund-adjusted purchases are
- * excluded by the detector before reaching this worklist.
- */
 function purchaseDeltaHint(purchase: PurchaseNotReconciling): string | null {
   const delta = reconciliationDelta(purchase);
   if (delta === null) return null;
@@ -869,9 +817,6 @@ const DECLARED_SECTIONS = [
     entity: "product",
     renderItem: (product) => ({
       title: product.name,
-      // The count is the evidence: this product is unique-per-household, so
-      // "N entries" is what makes it a duplicate. It was on the wire and never
-      // rendered, leaving a card that asserted a problem without showing it.
       subtitle: [
         byManufacturer(product.manufacturer),
         `${product.locations.length} entries across ${product.locations.length === 1 ? "1 location" : `${product.locations.length} locations`}`,
@@ -893,19 +838,9 @@ const DECLARED_SECTIONS = [
     entity: "product",
     renderItem: (dupe) => ({
       key: `${dupe.manufacturer}/${dupe.model}`,
-      // The shared manufacturer + part number IS the cluster's identity — no one
-      // product's name can name the group.
       title: `${dupe.manufacturer} ${dupe.model}`,
       subtitle: `${dupe.products.length} products share this part number`,
       badges: dupe.products.map((p) => entityBadge("product", p)),
-      // The barcodes and external-id sources, which are what decide whether
-      // merging is safe — two rows carrying different barcodes are probably
-      // genuinely different variants. Both were on the wire and neither reached
-      // the card, so the merge button sat next to no evidence for pressing it.
-      //
-      // Every barcode on the row, not one: a set is exactly what distinguishes
-      // "two encodings of one barcode" (safe to merge) from "two barcodes"
-      // (probably not), which a single scalar could never show.
       details: [
         ...dupe.products.map((p) => (
           <div key={p.id} className="text-muted-foreground text-sm">

@@ -8,12 +8,6 @@ import {
 } from "./identifiers";
 import { cookbookSummary } from "./recipe";
 
-// The raw "import recipe" carrier: a recipe from any import source (EPUB cookbook
-// via food-cli/WASM, the URL scraper, Notion) before it's parsed and resolved
-// into the DB shape. Ingredient and instruction lines are raw strings — the
-// server parses them on import. Lenient by design: extractors omit empty
-// metadata, so most fields are optional.
-
 // Times arrive twice over: the prose string is verbatim what the source printed,
 // the `*_minutes` count is the same duration as a number. A present string does
 // NOT imply a present count — the scraper fills both from an ISO-8601 duration,
@@ -53,13 +47,6 @@ const importRecipeMeta = z.object({
   page: z.string().optional(),
 });
 
-/**
- * Compose a recipe's freeform `notes` markdown from an import source's
- * headnote (`description`) and tip list (`notes`): description as the opening
- * paragraph, notes as a bullet list. Null when both are empty/blank. Shared by
- * the server import paths and the client-side import preview so the preview
- * shows exactly what import will store.
- */
 export const composeNotesMarkdown = (
   description: string | undefined | null,
   notes: readonly string[] | undefined | null,
@@ -78,10 +65,6 @@ const importRecipeSection = z.object({
   instructions: z.array(z.string()).default([]),
 });
 
-// A detected reference from one recipe to another in the same cookbook
-// (recipe-epub's `resolve_references()`): the verbatim ingredient `line` points
-// at another recipe's `title`. `linked` = confirmed by an EPUB anchor href;
-// `title_match` = the title appears in the line.
 export const recipeRefSchema = z.object({
   title: z.string(),
   line: z.string(),
@@ -104,11 +87,7 @@ export const importRecipeSchema = z.object({
   source: z.string().optional(),
   // Synthetic `source#doc_path`, not a real URL; provenance only.
   url: z.string().optional(),
-  // Cross-recipe references (other recipes in the same book this one uses as
-  // ingredients). Defaults to empty for older JSON without the field.
   references: z.array(recipeRefSchema).default([]),
-  // Servings, pre-computed by the URL scraper (EPUB/Notion derive it from the
-  // yield line at import). Optional; the converter falls back to the parsed yield.
   servings: z.number().optional(),
   // Image URL extracted by the URL scraper (a public URL). EPUB hero photos are
   // not modeled yet — see the hero-photos backlog note above. Consumed twice:
@@ -118,7 +97,6 @@ export const importRecipeSchema = z.object({
 });
 export type ImportRecipe = z.infer<typeof importRecipeSchema>;
 
-// What an uploaded `--json` file / the WASM extractor produces.
 export const importRecipesSchema = z.array(importRecipeSchema);
 
 export const scrapeRecipeInput = z.url();
@@ -198,8 +176,6 @@ export const notionPreviewItem = z.object({
   status: z.enum(["new", "unchanged", "will-update", "needs-formatting"]),
   existingId: recipeShortcode.nullable(),
   reasons: z.array(z.string()),
-  // The mapped recipe in the shared cookbook shape, so the Notion and EPUB
-  // previews render with the exact same card.
   recipe: importRecipeSchema,
 });
 
@@ -211,8 +187,6 @@ export const importNotionSyncInput = z.object({
 
 export const cookbookSummariesOut = z.array(cookbookSummary);
 
-// Deleting a cookbook removes the book row itself plus every recipe imported
-// from it; the count is what the toast reports.
 export const deleteCookbookOut = z.object({
   deletedRecipes: z.number().int().nonnegative(),
 });
@@ -224,7 +198,6 @@ export const chunkRequestInput = z.object({
   system: z.string(),
   user: z.string(),
   toolName: z.string(),
-  // The output JSON Schema, built in WASM and forwarded verbatim.
   toolSchema: z.record(z.string(), z.unknown()),
   // Escalate this chunk to the stronger fallback model. The browser sets
   // this only after the default model fails to return parseable output. The
@@ -235,7 +208,6 @@ export const chunkRequestInput = z.object({
 
 export const chunkResponseOut = z.record(z.string(), z.unknown());
 
-/** MCP input for create_recipe_from_text — raw lines, no pre-resolved ingredient IDs. */
 export const mcpRecipeCreateFromTextSection = z.object({
   name: z
     .string()

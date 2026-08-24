@@ -112,7 +112,6 @@ const mcpBrandedServingOut = z.object({
   household_serving_fulltext: z.string().nullable(),
 });
 
-/** Everything a USDA food carries in both the search and detail shapes. */
 const usdaFoodSharedFields = {
   // USDA FoodData Central id — declared exception, USDA's own public id and
   // not a cubby shortcode; this IS the entity's id at the MCP boundary.
@@ -182,7 +181,6 @@ export {
   allProblemsSchema,
 };
 
-/** MCP adds opt-in semantic related results to the shared lexical request. */
 export const globalSearchMcpInputSchema = z.object({
   ...searchQueryInputFields,
   includeRelated: z
@@ -197,8 +195,6 @@ export const globalSearchMcpOut = z.object({
   relatedStatus: z.enum(["not_requested", "ready", "unavailable"]),
 });
 
-/** find_similar_entities — already a `{ source, results }` object, so the MCP
- * shape is the router output verbatim (each result carries its similarity). */
 export const similarEntitiesMcpOut = similarEntitiesOut;
 
 export { similarEntitiesInputSchema };
@@ -216,12 +212,6 @@ export const recipeCostingExplainMcpOut = recipeCostingExplain;
 export const problemsTypeSliceOut = z.object({
   type: z.string(),
   items: z.array(z.unknown()),
-  /**
-   * How many rows the type really has. `items` may be a PAGE — view-backed
-   * sections return page one of an entity list — so an agent that read
-   * `items.length` would take a sampled section for a complete one and report a
-   * 212-row backlog as 12. Always present, so there is no shape to miss.
-   */
   total: z.number().int(),
 });
 

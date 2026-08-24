@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
+import { entityDetailQueryOptions } from "~/entities/entity-detail";
 import { useTRPC } from "~/integrations/trpc/react";
 import {
   buildSearchHitComboboxItem,
@@ -52,10 +53,9 @@ function useVendorSearchRows() {
     enabled: enabled && !searchingByCode && searchQuery.trim() !== "",
   });
   const { data: exactItem, isLoading: isExactLoading } = useQuery(
-    api.vendor.getByShortcode.queryOptions(
-      { shortcode: exactCode ?? "VEN-2222" },
-      { enabled: exactCode != null },
-    ),
+    entityDetailQueryOptions("vendor", exactCode ?? "VEN-2222", {
+      enabled: exactCode != null,
+    }),
   );
 
   const rows = useMemo(

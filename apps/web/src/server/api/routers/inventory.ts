@@ -98,13 +98,6 @@ const {
 });
 
 // Inventory detail has product/location joins beyond the canonical CRUD row.
-const getByShortcode = protectedProcedure
-  .input(z.object({ shortcode: inventoryShortcode }))
-  .output(strictOutput(inventoryWithLocationAndProductOut.nullable()))
-  .query(({ ctx, input }) =>
-    getInventoryEntryByShortcode(ctx.db, input.shortcode),
-  );
-
 const getByID = protectedProcedure
   .input(z.object({ id: inventoryShortcode }))
   .output(strictOutput(inventoryWithLocationAndProductOut))
@@ -422,7 +415,6 @@ const resolveScanStrays = protectedProcedure
 
 export const inventoryRouter = createTRPCRouter({
   getByID,
-  getByShortcode,
   list,
   update,
   create,

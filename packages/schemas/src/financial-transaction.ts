@@ -86,8 +86,6 @@ const purchaseSettlementSignRules = {
   purchase: { sign: "positive", binds: "always" },
   refund: { sign: "negative", binds: "always" },
   adjustment: { sign: "any", binds: "always" },
-  // Sale proceeds. Unlinked income (salary, interest) carries no settlement
-  // semantics; income attached to a Purchase is a payout, and payouts are inflows.
   income: { sign: "negative", binds: "linked" },
 } as const satisfies Record<
   PurchaseSettlementKind,
@@ -123,7 +121,6 @@ export const financialTransactionSettlementViolation = (value: {
   }
   if (!isPurchaseSettlementKind(value.kind)) return null;
 
-  // Finite-key Record, so this stays defined under noUncheckedIndexedAccess.
   const rule = purchaseSettlementSignRules[value.kind];
   if (rule.binds === "linked" && !linked) return null;
   if (rule.sign === "positive" && value.amount <= 0) {
@@ -184,7 +181,6 @@ export const purchaseSettlementSignSatisfiedExpression = (columns: {
   return `(${clauses.join(" OR ")})`;
 };
 
-/** `kind IN (<settlement kinds>)` — the allowlist half, same single source. */
 export const purchaseSettlementKindAllowedExpression = (kindColumn: string) =>
   `${kindColumn} IN (${quoteKinds(purchaseSettlementKinds)})`;
 
@@ -257,13 +253,11 @@ const financialTransactionFields = {
   notes: z.string().nullable(),
 };
 
-/** One slice of a transaction's amount, attributed to one Purchase, as read. */
 export const financialTransactionAllocationOut = z.object({
   purchaseId: purchaseShortcode,
   amount: wholeCentAmount,
 });
 
-/** One slice of a transaction's amount, attributed to one Purchase. */
 export const financialTransactionAllocationInput = z.object({
   purchaseId: purchaseShortcode,
   amount: wholeCentAmount,
@@ -416,12 +410,6 @@ export const financialTransactionFiltersSchema = z.object(
   financialTransactionFilterFields,
 );
 
-/**
- * The distinct `sourceRefs[].source` values in use — feeds the transactions
- * table's Source filter. A static option list would rot: sources are minted by
- * whatever importer wrote the row (`monarch`, `zoro`, `amazon-order-export`,
- * `cb2-order-detail`), so the roster has to come from the data.
- */
 export const financialTransactionSourceOptionsOut = z.array(
   z.object({ source: z.string(), count: z.number().int() }),
 );
@@ -492,10 +480,6 @@ export const KNOWN_STATEMENT_SOURCES = [
  */
 export const financialStatementImportRow = z.strictObject({
   key: z.string().min(1),
-  /**
-   * Namespaces the derived source reference, so the same charge rendered by two
-   * providers stays two distinguishable rows. See `statement-row-identity.ts`.
-   */
   source: externalIdSource
     .default("monarch")
     .describe(
@@ -503,13 +487,11 @@ export const financialStatementImportRow = z.strictObject({
     ),
   account: z.string().min(1),
   date: plainDate,
-  /** Monarch signs charges negative and credits positive. */
   amount: nonZeroAmount,
   merchant: z.string().nullable().default(null),
   originalStatement: z.string().min(1),
   category: z.string().nullable().default(null),
   notes: z.string().nullable().default(null),
-  /** The client may classify non-purchase statement activity explicitly. */
   kind: financialTransactionKind.optional(),
 });
 export type FinancialStatementImportRow = z.infer<

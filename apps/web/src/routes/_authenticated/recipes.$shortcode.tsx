@@ -28,6 +28,7 @@ import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
 import { Button } from "~/components/ui/button";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
+import { entityDetailQueryOptions } from "~/entities/entity-detail";
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/integrations/trpc/react";
 import { shortcodeHead } from "~/lib/page-title";
@@ -72,9 +73,7 @@ export const Route = createFileRoute("/_authenticated/recipes/$shortcode")({
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   loader: async ({ params, context }) => {
     const data = await context.queryClient.ensureQueryData(
-      context.trpc.recipe.getByShortcode.queryOptions({
-        shortcode: params.shortcode,
-      }),
+      entityDetailQueryOptions("recipe", params.shortcode),
     );
     if (!data) throw notFound();
   },
@@ -95,14 +94,13 @@ export const Route = createFileRoute("/_authenticated/recipes/$shortcode")({
 /**
  * Splits the guard from the body so every hook below can treat the recipe as
  * loaded. The loader already threw notFound for an unknown code; this only
- * satisfies `getByShortcode`'s nullable output, and inlining the guard would
+ * satisfies the generic detail read's nullable output, and inlining the guard would
  * mean either a conditional hook or `?.` on a dozen call sites.
  */
 function RecipeDetailPage() {
   const { shortcode } = Route.useParams();
-  const api = useTRPC();
   const { data: recipe } = useSuspenseQuery(
-    api.recipe.getByShortcode.queryOptions({ shortcode }),
+    entityDetailQueryOptions("recipe", shortcode),
   );
   if (!recipe) return null;
   return <RecipeDetailBody recipe={recipe} />;

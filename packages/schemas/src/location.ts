@@ -129,19 +129,12 @@ export const locationPickerSortableFields = [
   "updatedAt",
 ] as const;
 
-// Per-category counts for a location's inventory (matches the client's
-// PricingStatus buckets in calculate-inventory-valuation).
 const pricingCounts = z.object({
   priced: z.number().int().nonnegative(),
   missingPricing: z.number().int().nonnegative(),
   miscNoPrice: z.number().int().nonnegative(),
 });
 
-/**
- * Precomputed inventory-valuation rollup stored on each location
- * (location.valuation), recomputed eagerly like recipe.totals.
- * `direct*` = items placed at this location; `total*` = direct + all descendants.
- */
 /**
  * The four headline figures are STOCK ONLY — what you could walk over and
  * count. Fixed installations roll up separately in `installed`, because
@@ -188,7 +181,6 @@ export const locationValuation = z.object({
 });
 export type LocationValuation = z.infer<typeof locationValuation>;
 
-/** Compact persisted-valuation projection for the Home dashboard. */
 export const locationValuationSummaryOut = z.object({
   total: money,
   locations: z.array(

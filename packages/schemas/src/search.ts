@@ -29,7 +29,6 @@ export const searchableEntityRefFields = {
 export const searchableEntityRefSchema = z.object(searchableEntityRefFields);
 export type SearchableEntityRef = z.infer<typeof searchableEntityRefSchema>;
 
-/** Search type options for filtering (includes "all"). */
 export const searchTypeOptions = ["all", ...searchableEntities] as const;
 export const searchTypeSchema = z.enum(searchTypeOptions);
 export type SearchType = z.infer<typeof searchTypeSchema>;
@@ -51,7 +50,6 @@ export const searchQueryInputFields = {
 export const searchQueryInputSchema = z.object(searchQueryInputFields);
 export type SearchQueryInput = z.infer<typeof searchQueryInputSchema>;
 
-/** Allowlisted entity-to-entity similarity directions. */
 export const similarEntityPairKeys = activeRelatednessPairKeys;
 export const similarEntityPairSchema = z.enum(similarEntityPairKeys);
 export type SimilarEntityPair = z.infer<typeof similarEntityPairSchema>;
@@ -176,7 +174,6 @@ export const relatedSearchOutSchema = z.object({
 });
 export type RelatedSearchOut = z.infer<typeof relatedSearchOutSchema>;
 
-/** One neighbour of the seed entity; higher similarity means closer. */
 export const similarEntityResultSchema = z.object({
   similarity: z.number(),
   entity: searchHitSchema,

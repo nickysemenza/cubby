@@ -1180,12 +1180,6 @@ describe("task repository — subject product filters and search", () => {
   });
 });
 
-// `task.subjectProductId` lowercase canonicalization moved to the generic
-// #591 battery in filter-application.integration.test.ts: seedWorld there
-// gives task Alpha a real, live subjectProductId, so `world.codes.product`
-// genuinely matches a row and the lowercase-vs-canonical comparison is no
-// longer vacuous — that per-entity case is deleted.
-//
 // `parentTaskId` stays, for a reason the generic probe can't cover at all
 // (not just a vacuity gap): it's filtered TWICE and both paths had to be
 // canonicalized independently for a lowercase code to work end-to-end — see

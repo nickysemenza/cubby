@@ -44,7 +44,6 @@ export const recipeSortableFields = [
   "createdAt",
   "updatedAt",
   "name",
-  // Joined cookbook name — resolved by a correlated subquery in repo/recipe.
   "cookbook",
   "costTotal",
   "caloriesTotal",
@@ -59,7 +58,6 @@ export type RecipeSortField = (typeof recipeSortableFields)[number];
 // The section-ingredient's ingredient carries its aliases so the editor can tell
 // real parser drift from a re-parse that just hit one of this ingredient's
 // aliases (e.g. "large eggs" → the "large brown eggs" ingredient that aliases it).
-/** The ingredient a recipe line points at, keyed by its public id. */
 const sectionIngredientRefFields = {
   name: z.string(),
   ...timestampedFields,
@@ -88,9 +86,6 @@ export const recipeTopLevelFields = {
 export const recipeTopLevel = z.object(recipeTopLevelFields);
 export type RecipeTopLevel = z.infer<typeof recipeTopLevel>;
 
-// Minimal recipe reference — just enough to link + label a recipe pill. Lets
-// list surfaces carry "appears in recipes" without the full recipe body per row
-// (the over-fetch the ingredient list paid via `appearsInRecipes: recipeTopLevel[]`).
 export const recipeRefOut = z.object({ id: recipeShortcode, name: z.string() });
 export type RecipeRef = z.infer<typeof recipeRefOut>;
 
@@ -99,7 +94,6 @@ export type RecipeRef = z.infer<typeof recipeRefOut>;
 // line, parser-derived modifier) and amounts so ingredient/product detail pages
 // can show usage and surface parser drift.
 export const recipeUsageOut = z.object({
-  // RecipeSectionIngredient id — stable row identity (a recipe can appear twice).
   id: z.uuid(),
   recipe: recipeTopLevel,
   sectionName: z.string().nullish(),
@@ -109,7 +103,6 @@ export const recipeUsageOut = z.object({
 });
 export type RecipeUsage = z.infer<typeof recipeUsageOut>;
 
-/** Fields every section line shares, whichever arm it is. */
 export const sectionLineFields = {
   // Declared exception: a recipe section/line id has no shortcode.
   id: z.uuid(),
@@ -138,7 +131,6 @@ export const sectionIngredientOut = z.discriminatedUnion("type", [
 
 export type SectionIngredient = z.infer<typeof sectionIngredientOut>;
 
-/** Section fields minus `ingredients`, which differs between UI and MCP. */
 export const recipeSectionFields = {
   // Declared exception: section ids have no shortcode.
   id: z.uuid(),
@@ -159,8 +151,6 @@ export const recipeGraphOut = z.object({
   ...recipeTopLevelFields,
   sections: z.array(recipeSectionOut),
   displayImage: imageUrlSummary.nullable(),
-  // Precomputed cost/calorie rollup (null until first computed). Populated by
-  // recipe.list; getByID may leave it null (the detail page computes its own).
   totals: recipeTotals.nullish(),
 });
 export type RecipeGraphOut = z.infer<typeof recipeGraphOut>;
@@ -168,8 +158,6 @@ export type RecipeGraphOut = z.infer<typeof recipeGraphOut>;
 export const recipeOutFields = {
   ...recipeTopLevelFields,
   sections: z.array(recipeSectionOut),
-  // Precomputed cost/calorie rollup (null until first computed). Populated by
-  // recipe.list; getByID may leave it null (the detail page computes its own).
   totals: recipeTotals.nullish(),
   images: z.array(imageOut),
 };
@@ -181,8 +169,6 @@ export const recipeWithSideEffectsOut = z.object({
   sideEffects: mutationSideEffectsSchema,
 });
 
-// Full recipe graph without image collections. A compact resolved cover keeps
-// nested record links image-aware without loading the media relation.
 export const recipeGraphListOut = z.array(recipeGraphOut);
 
 // Summary shape for `recipe.list`: scalar fields + persisted totals, no section
@@ -217,18 +203,12 @@ export const recipeDryRunRecomputeTotalsOut = z.object({
   total: z.number().int().nonnegative(),
 });
 
-// A cookbook as seen on the browse index: the `Cookbook` row plus how many
-// non-deleted recipes link to it. `book` is the cookbook name (kept for the
-// existing browse-by-name route + UI); `hasRawJson` gates the reprocess action.
 export const cookbookSummary = z.object({
   id: cookbookShortcode,
   book: z.string(),
   author: z.array(z.string()),
   subjects: z.array(z.string()),
   recipeCount: z.number().int().nonnegative(),
-  // Public URL of the cookbook's cover image, or null. Number of recipes in the
-  // stored extraction (rawJson) — `sourceRecipeCount - recipeCount` is how many
-  // could still be added from source.
   coverUrl: z.string().nullable(),
   sourceRecipeCount: z.number().int().nonnegative(),
   // The physical copy on the shelf, when one is linked. Deliberately thin —
@@ -290,20 +270,12 @@ export const recipeSectionInput = z.object({
   id: id.optional(),
 });
 
-// Descriptions live at the field level here (rather than on the shared building
-// blocks, which are also reused by the output/form layers) so they reliably
-// Filters accepted by the recipe list endpoint.
 export const recipeFilterFields = {
   ...auditDateFilterFields,
   ...recipeRelatedFilterFields,
   nameFilter: z.string().optional(),
   tagFilters: z.array(z.string()).optional(),
   cookbookId: entityFilterList(cookbookShortcode).optional(),
-  /**
-   * `"none"` matches recipes with no cookbook; `"has"` matches those with
-   * any cookbook. Combined with `cookbookId` it **widens** rather than
-   * narrows, same OR semantics as `taskFilterFields.projectPresenceFilter`.
-   */
   cookbookPresenceFilter: presenceFilter,
   /**
    * `recipe.tags` is a nullable array, so `"none"` means untagged —

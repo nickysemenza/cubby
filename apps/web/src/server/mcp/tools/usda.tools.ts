@@ -3,7 +3,6 @@ import { mcpPaginationParams } from "@cubby/schemas/pagination";
 import { dataTypeEnum, fdcId, ndb, upc } from "@cubby/usda-schemas";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { USDA_PICKER_UI } from "../apps";
 import {
   getCaller,
   READ_ONLY_OPEN,
@@ -34,7 +33,6 @@ export function registerUsdaTools(server: McpServer) {
     },
     outputSchema: usdaFoodMcpListOut,
     annotations: READ_ONLY_OPEN,
-    uiResourceUri: USDA_PICKER_UI,
     handler: async (params, extra) => {
       const caller = getCaller(extra);
       const result = await caller.usda.list({

@@ -119,8 +119,6 @@ describe("advanceToOutstanding", () => {
     expect(advanceToOutstanding(queue, 1, new Set(["A", "B", "C"]))).toBe(1);
   });
 
-  // A deferred stop is still outstanding, so a pass that skips everything and
-  // wraps lands back on the first skip rather than declaring itself done.
   it("treats a skipped stop as still reachable", () => {
     const settled = settledIds(progress(["B", "C"], []));
     expect(advanceToOutstanding(queue, 2, settled)).toBe(0);
@@ -172,8 +170,6 @@ describe("passCounts", () => {
     });
   });
 
-  // Progress survives a scope change in localStorage, so counting the sets
-  // directly could report more done than the queue holds.
   it("ignores progress for stops outside the queue", () => {
     const counts = passCounts(stops("A"), progress(["A", "OFFSCOPE"]));
     expect(counts.total).toBe(1);
@@ -218,8 +214,6 @@ describe("isStoredPassComplete", () => {
     expect(isStoredPassComplete(stored(["A"]), ["A", "B"])).toBe(false);
   });
 
-  // Measured against the live queue: a scope that has since grown is an
-  // unfinished pass, not a finished one with extra rows.
   it("is false when the queue has grown past the stored progress", () => {
     expect(isStoredPassComplete(stored(["A", "B"]), ["A", "B", "C"])).toBe(
       false,

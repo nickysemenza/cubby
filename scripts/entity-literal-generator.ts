@@ -18,21 +18,39 @@ interface LiteralObject {
 }
 
 type SourceRef = Readonly<{ module: string; export: string }>;
+type EntityPorts = Readonly<{
+  repository: SourceRef | null;
+  references: Readonly<{ label: SourceRef | null; resolver: SourceRef | null }>;
+  filters: SourceRef | null;
+  search: Readonly<{
+    projection: SourceRef | null;
+    semanticText: SourceRef | null;
+    dependentRefresh: SourceRef | null;
+  }>;
+  lifecycle: Readonly<{ policy: SourceRef | null; runtime: SourceRef | null }>;
+  relationMutation: Readonly<{ attach: SourceRef | null; detach: SourceRef | null }>;
+}>;
 export type EntityLiteral = Readonly<{
   key: string;
   shortcode: string | null;
-  /** Raw descriptor data; compiler emits the runtime shape without helper calls. */
+  legacyShortcode: string | null;
+  inspector: Readonly<{
+    singular: string;
+    plural: string | null;
+    titleField: string;
+  }>;
   descriptor: LiteralObject;
   contract:
     | Readonly<{
         create: SourceRef;
         update: SourceRef;
         output: SourceRef;
-        mcpOut: SourceRef | null;
+        detail: SourceRef;
       }>
     | null;
   route: Readonly<{ basePath: string; detailParam?: string }> | null;
   filterUrlKeys: readonly string[];
+  ports: EntityPorts;
 }>;
 
 export type EntityArtifacts = Readonly<{
@@ -110,10 +128,74 @@ const sourceRef = (value: LiteralValue, context: string): SourceRef => {
   };
 };
 
+const nullableSourceRef = (value: LiteralValue, context: string): SourceRef | null =>
+  value === null ? null : sourceRef(value, context);
+
+const entityPorts = (value: LiteralValue | undefined, context: string): EntityPorts => {
+  if (value === undefined) {
+    return {
+      repository: null,
+      references: { label: null, resolver: null },
+      filters: null,
+      search: { projection: null, semanticText: null, dependentRefresh: null },
+      lifecycle: { policy: null, runtime: null },
+      relationMutation: { attach: null, detach: null },
+    };
+  }
+  const ports = objectValue(value, context);
+  exactKeys(
+    ports,
+    ["repository", "references", "filters", "search", "lifecycle", "relationMutation"],
+    context,
+  );
+  const references = objectValue(required(ports, "references", context), `${context}.references`);
+  exactKeys(references, ["label", "resolver"], `${context}.references`);
+  const search = objectValue(required(ports, "search", context), `${context}.search`);
+  exactKeys(search, ["projection", "semanticText", "dependentRefresh"], `${context}.search`);
+  const lifecycle = objectValue(required(ports, "lifecycle", context), `${context}.lifecycle`);
+  exactKeys(lifecycle, ["policy", "runtime"], `${context}.lifecycle`);
+  const relationMutation = objectValue(
+    required(ports, "relationMutation", context),
+    `${context}.relationMutation`,
+  );
+  exactKeys(relationMutation, ["attach", "detach"], `${context}.relationMutation`);
+  return {
+    repository: nullableSourceRef(required(ports, "repository", context), `${context}.repository`),
+    references: {
+      label: nullableSourceRef(required(references, "label", `${context}.references`), `${context}.references.label`),
+      resolver: nullableSourceRef(required(references, "resolver", `${context}.references`), `${context}.references.resolver`),
+    },
+    filters: nullableSourceRef(required(ports, "filters", context), `${context}.filters`),
+    search: {
+      projection: nullableSourceRef(required(search, "projection", `${context}.search`), `${context}.search.projection`),
+      semanticText: nullableSourceRef(required(search, "semanticText", `${context}.search`), `${context}.search.semanticText`),
+      dependentRefresh: nullableSourceRef(required(search, "dependentRefresh", `${context}.search`), `${context}.search.dependentRefresh`),
+    },
+    lifecycle: {
+      policy: nullableSourceRef(required(lifecycle, "policy", `${context}.lifecycle`), `${context}.lifecycle.policy`),
+      runtime: nullableSourceRef(required(lifecycle, "runtime", `${context}.lifecycle`), `${context}.lifecycle.runtime`),
+    },
+    relationMutation: {
+      attach: nullableSourceRef(required(relationMutation, "attach", `${context}.relationMutation`), `${context}.relationMutation.attach`),
+      detach: nullableSourceRef(required(relationMutation, "detach", `${context}.relationMutation`), `${context}.relationMutation.detach`),
+    },
+  };
+};
+
 const policies = ["restrict", "cascade", "setNull", "detach"] as const;
 
 const legacyShape = (raw: LiteralObject, context: string): LiteralObject => {
-  if (raw.descriptor !== undefined) return { filters: { urlKeys: [] }, ...raw };
+  if (raw.descriptor !== undefined) {
+    return {
+      filters: { urlKeys: [] },
+      inspector: {
+        singular: required(raw, "key", context),
+        plural: null,
+        titleField: "name",
+      },
+      ...raw,
+    };
+  }
   exactKeys(raw, ["key", "names", "route", "table", "identifiers", "presentation", "fields", "filters", "relations", "search", "capabilities", "extensions"], context);
   const names = objectValue(required(raw, "names", context), `${context}.names`);
   exactKeys(names, ["singular", "plural"], `${context}.names`);
@@ -126,7 +208,7 @@ const legacyShape = (raw: LiteralObject, context: string): LiteralObject => {
   const capabilities = objectValue(required(raw, "capabilities", context), `${context}.capabilities`);
   exactKeys(capabilities, ["auditable", "images", "countable", "softDelete", "delete", "merge", "mcp"], `${context}.capabilities`);
   const extensions = objectValue(required(raw, "extensions", context), `${context}.extensions`);
-  exactKeys(extensions, ["countFilter", "relatednessSignals", "mcpNames"], `${context}.extensions`);
+  exactKeys(extensions, ["countFilter", "relatednessSignals", "mcpNames", "ports"], `${context}.extensions`);
   const deleteCapability = required(capabilities, "delete", `${context}.capabilities`);
   if (deleteCapability !== null) {
     const deletion = objectValue(deleteCapability, `${context}.capabilities.delete`);
@@ -167,6 +249,11 @@ const legacyShape = (raw: LiteralObject, context: string): LiteralObject => {
   return {
     key: required(raw, "key", context),
     route,
+    inspector: {
+      singular: required(names, "singular", `${context}.names`),
+      plural: names.plural ?? null,
+      titleField: required(presentation, "titleField", `${context}.presentation`),
+    },
     descriptor: {
       dbTable: required(raw, "table", context), idBrand: required(identifiers, "brand", `${context}.identifiers`),
       ...(identifiers.shortcode === null ? {} : { shortcodePrefix: identifiers.shortcode }),
@@ -183,6 +270,7 @@ const legacyShape = (raw: LiteralObject, context: string): LiteralObject => {
     },
     contract: required(raw, "fields", context),
     filters: required(raw, "filters", context),
+    ...(extensions.ports === undefined ? {} : { ports: extensions.ports }),
   };
 };
 
@@ -191,7 +279,7 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
   const object = legacyShape(objectValue(value, context), context);
   exactKeys(
     object,
-    ["key", "contract", "descriptor", "route", "filters"],
+    ["key", "contract", "descriptor", "route", "filters", "inspector", "ports"],
     context,
   );
 
@@ -201,6 +289,32 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
   }
 
   const descriptor = objectValue(required(object, "descriptor", context), `${context}.descriptor`);
+  const inspectorObject = objectValue(
+    required(object, "inspector", context),
+    `${context}.inspector`,
+  );
+  exactKeys(
+    inspectorObject,
+    ["singular", "plural", "titleField"],
+    `${context}.inspector`,
+  );
+  const inspector = {
+    singular: stringValue(
+      required(inspectorObject, "singular", `${context}.inspector`),
+      `${context}.inspector.singular`,
+    ),
+    plural:
+      inspectorObject.plural === null
+        ? null
+        : stringValue(
+            required(inspectorObject, "plural", `${context}.inspector`),
+            `${context}.inspector.plural`,
+          ),
+    titleField: stringValue(
+      required(inspectorObject, "titleField", `${context}.inspector`),
+      `${context}.inspector.titleField`,
+    ),
+  };
   const filters = objectValue(required(object, "filters", context), `${context}.filters`);
   exactKeys(filters, ["urlKeys"], `${context}.filters`);
   const rawFilterUrlKeys = required(filters, "urlKeys", `${context}.filters`);
@@ -223,6 +337,19 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
   if (shortcode !== null && !/^[A-Z]{3}-$/.test(shortcode)) {
     throw new LiteralSpecError(`${context}.descriptor.shortcodePrefix must be an XXX- prefix.`);
   }
+  const legacyShortcodeValue = descriptor.legacyShortcodePrefix;
+  const legacyShortcode =
+    legacyShortcodeValue === undefined
+      ? null
+      : stringValue(
+          legacyShortcodeValue,
+          `${context}.descriptor.legacyShortcodePrefix`,
+        );
+  if (legacyShortcode !== null && !/^[A-Z]-$/.test(legacyShortcode)) {
+    throw new LiteralSpecError(
+      `${context}.descriptor.legacyShortcodePrefix must be an X- prefix.`,
+    );
+  }
   booleanValue(required(descriptor, "auditable", `${context}.descriptor`), `${context}.descriptor.auditable`);
   if (descriptor.browserRoutes !== undefined) booleanValue(descriptor.browserRoutes, `${context}.descriptor.browserRoutes`);
   booleanValue(required(descriptor, "searchable", `${context}.descriptor`), `${context}.descriptor.searchable`);
@@ -235,10 +362,13 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
           const contractObject = objectValue(contractValue, `${context}.contract`);
           exactKeys(
             contractObject,
-            ["create", "update", "output", "mcpOut"],
+            ["create", "update", "output", "detail"],
             `${context}.contract`,
           );
-          const mcpOut = required(contractObject, "mcpOut", `${context}.contract`);
+          const output = sourceRef(
+            required(contractObject, "output", `${context}.contract`),
+            `${context}.contract.output`,
+          );
           return {
             create: sourceRef(
               required(contractObject, "create", `${context}.contract`),
@@ -248,27 +378,31 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
               required(contractObject, "update", `${context}.contract`),
               `${context}.contract.update`,
             ),
-            output: sourceRef(
-              required(contractObject, "output", `${context}.contract`),
-              `${context}.contract.output`,
-            ),
-            mcpOut:
-              mcpOut === null
-                ? null
-                : sourceRef(mcpOut, `${context}.contract.mcpOut`),
+            output,
+            detail:
+              contractObject.detail === undefined
+                ? output
+                : sourceRef(
+                    contractObject.detail,
+                    `${context}.contract.detail`,
+                  ),
           };
         })();
 
   if (shortcode === null && contract !== null) {
     throw new LiteralSpecError(`${context} cannot declare a contract without a shortcode.`);
   }
+  const ports = entityPorts(object.ports, `${context}.ports`);
   return {
     key,
     shortcode,
+    legacyShortcode,
+    inspector,
     contract,
     descriptor,
     route,
     filterUrlKeys,
+    ports,
   };
 };
 
@@ -346,6 +480,36 @@ const literalFromNode = (node: AstNode, context: string): LiteralValue => {
   );
 };
 
+const validateEntityIdentities = (entities: readonly EntityLiteral[]) => {
+  const keys = new Set<string>();
+  const prefixes = new Map<string, string>();
+  for (const entity of entities) {
+    if (keys.has(entity.key)) {
+      throw new LiteralSpecError(`Duplicate entity key ${entity.key}.`);
+    }
+    keys.add(entity.key);
+    if (entity.shortcode !== null) {
+      const owner = prefixes.get(entity.shortcode);
+      if (owner !== undefined) {
+        throw new LiteralSpecError(
+          `Canonical shortcode prefix ${entity.shortcode} for ${entity.key} conflicts with ${owner}.`,
+        );
+      }
+      prefixes.set(entity.shortcode, `${entity.key} canonical prefix`);
+    }
+  }
+  for (const entity of entities) {
+    if (entity.legacyShortcode === null) continue;
+    const owner = prefixes.get(entity.legacyShortcode);
+    if (owner !== undefined) {
+      throw new LiteralSpecError(
+        `Legacy shortcode prefix ${entity.legacyShortcode} for ${entity.key} conflicts with ${owner}.`,
+      );
+    }
+    prefixes.set(entity.legacyShortcode, `${entity.key} legacy prefix`);
+  }
+};
+
 export const parseEntityLiterals = (source: string, filename = SPEC_PATH): EntityLiteral[] => {
   const parsed = parseSync(filename, source, { lang: "ts", range: true });
   const firstError = parsed.errors.at(0);
@@ -392,13 +556,7 @@ export const parseEntityLiterals = (source: string, filename = SPEC_PATH): Entit
   if (entities.length === 0) {
     throw new LiteralSpecError("ENTITY_LITERALS must not be empty.");
   }
-  const keys = new Set<string>();
-  for (const [index, entity] of entities.entries()) {
-    if (keys.has(entity.key)) {
-      throw new LiteralSpecError(`ENTITY_LITERALS[${index}].key duplicates ${entity.key}.`);
-    }
-    keys.add(entity.key);
-  }
+  validateEntityIdentities(entities);
   return entities;
 };
 
@@ -442,11 +600,9 @@ export const parseEntityLiteralFiles = async (): Promise<EntityLiteral[]> => {
       ),
     ),
   );
-  const keys = new Set<string>();
   const routes = new Set<string>();
+  validateEntityIdentities(entities);
   for (const entity of entities) {
-    if (keys.has(entity.key)) throw new LiteralSpecError(`Duplicate entity key ${entity.key}.`);
-    keys.add(entity.key);
     if (entity.descriptor.browserRoutes === false) continue;
     for (const route of Object.values(browserRoutes(entity).routes)) {
       if (routes.has(route)) throw new LiteralSpecError(`Duplicate browser route ${route}.`);
@@ -518,8 +674,12 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
   const imports = new Map<string, Set<string>>();
   for (const { contract } of entities) {
     if (contract === null) continue;
-    for (const ref of [contract.create, contract.update, contract.output, contract.mcpOut]) {
-      if (ref === null) continue;
+    for (const ref of [
+      contract.create,
+      contract.update,
+      contract.output,
+      contract.detail,
+    ]) {
       const exports = imports.get(ref.module) ?? new Set<string>();
       exports.add(ref.export);
       imports.set(ref.module, exports);
@@ -547,11 +707,58 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
   const bindings = entities
     .filter((entity) => entity.shortcode !== null)
     .map((entity) => {
-      if (entity.contract === null) return `  ${JSON.stringify(entity.key)}: { crud: null, mcpOut: null },`;
-      const { create, update, output, mcpOut } = entity.contract;
-      return `  ${JSON.stringify(entity.key)}: {crud:crud(${JSON.stringify(entity.key)},{createInput:${create.export},updateInput:${update.export},output:${output.export}}),mcpOut:${mcpOut?.export ?? "null"}},`;
+      if (entity.contract === null) return `  ${JSON.stringify(entity.key)}: { crud: null },`;
+      const { create, update, output } = entity.contract;
+      return `  ${JSON.stringify(entity.key)}: {crud:crud(${JSON.stringify(entity.key)},{createInput:${create.export},updateInput:${update.export},output:${output.export}})},`;
     })
     .join("\n");
+  const detailEntities = entities.filter(
+    (entity): entity is EntityLiteral & { contract: NonNullable<EntityLiteral["contract"]> } =>
+      entity.contract !== null,
+  );
+  const detailSchemas = detailEntities
+    .map(
+      ({ key, contract }) =>
+        `  ${JSON.stringify(key)}: ${contract.detail.export},`,
+    )
+    .join("\n");
+  const detailTypeImports = new Map<string, Set<string>>();
+  for (const { contract } of detailEntities) {
+    const exports = detailTypeImports.get(contract.detail.module) ?? new Set<string>();
+    exports.add(contract.detail.export);
+    detailTypeImports.set(contract.detail.module, exports);
+  }
+  const detailSchemaImports = detailEntities
+    .map(({ key }) => `${key}Shortcode`)
+    .sort();
+  const detailTypeImportSource = [
+    ...[...detailTypeImports.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(
+        ([module, exports]) =>
+          `import type { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
+      ),
+    `import type { ${detailSchemaImports.join(", ")} } from "@cubby/shared";`,
+    'import type { z } from "zod";',
+  ].join("\n");
+  const detailOutputTypes = detailEntities
+    .map(
+      ({ key, contract }) =>
+        `  ${JSON.stringify(key)}: z.output<typeof ${contract.detail.export}>;`,
+    )
+    .join("\n");
+  const detailInputTypes = detailEntities
+    .map(
+      ({ key }) =>
+        `  ${JSON.stringify(key)}: { entity: ${JSON.stringify(key)}; shortcode: z.input<typeof ${key}Shortcode> };`,
+    )
+    .join("\n");
+  const detailInputVariants = detailEntities
+    .map(
+      ({ key }) =>
+        `z.object({entity:z.literal(${JSON.stringify(key)}),shortcode:shortcodeSchema(${JSON.stringify(key)})})`,
+    )
+    .join(",\n  ");
   const commandVariants = (
     action: "create" | "update",
     schema: "create" | "update",
@@ -575,26 +782,30 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
     .filter(({ contract }) => contract !== null)
     .map(({ key }) => key);
   const kernelEntities = entities
-    .filter(({ contract, key }) => contract !== null || key === "image")
+    .filter(({ contract, key }) => contract !== null || key === "image");
   const kernelEntityKeys = kernelEntities.map(({ key }) => key);
+  const lifecycleFor = (entity: EntityLiteral) =>
+    objectValue(
+      required(entity.descriptor, "lifecycle", `${entity.key}.descriptor`),
+      `${entity.key}.descriptor.lifecycle`,
+    );
+  const kernelActionsFor = (entity: EntityLiteral) => {
+    const lifecycle = lifecycleFor(entity);
+    return [
+      "get",
+      "list",
+      ...(entity.descriptor.searchable === true ? ["search"] : []),
+      ...(entity.contract === null ? [] : ["create"]),
+      "update",
+      ...(lifecycle.delete === null ? [] : ["delete"]),
+      ...(lifecycle.merge === true ? ["merge"] : []),
+    ];
+  };
   const kernelContractCases = Object.fromEntries(
     kernelEntities.map((entity) => {
-      const lifecycle = objectValue(
-        required(entity.descriptor, "lifecycle", `${entity.key}.descriptor`),
-        `${entity.key}.descriptor.lifecycle`,
-      );
-      const actions = [
-        "get",
-        "list",
-        ...(entity.descriptor.searchable === true ? ["search"] : []),
-        ...(entity.contract === null ? [] : ["create"]),
-        "update",
-        ...(lifecycle.delete === null ? [] : ["delete"]),
-        ...(lifecycle.merge === true ? ["merge"] : []),
-      ];
       return [
         entity.key,
-        { actions, filterUrlKeys: entity.filterUrlKeys },
+        { actions: kernelActionsFor(entity), filterUrlKeys: entity.filterUrlKeys },
       ];
     }),
   );
@@ -602,7 +813,103 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
     Object.entries(kernelContractCases)
       .filter(([, contractCase]) => contractCase.actions.includes(action))
       .map(([key]) => key);
+  const shortcodePrefixes = Object.fromEntries(
+    entities.flatMap(({ key, shortcode }) =>
+      shortcode === null ? [] : [[key, shortcode]],
+    ),
+  );
+  const legacyShortcodePrefixes = Object.fromEntries(
+    entities.flatMap(({ key, legacyShortcode }) =>
+      legacyShortcode === null ? [] : [[legacyShortcode, key]],
+    ),
+  );
+  const inspectorMetadata = Object.fromEntries(
+    entities.map((entity) => {
+      const lifecycle = lifecycleFor(entity);
+      const kernelActions = kernelEntityKeys.includes(entity.key)
+        ? kernelActionsFor(entity)
+        : [];
+      const mcpOperations = Array.isArray(entity.descriptor.mcp)
+        ? entity.descriptor.mcp
+        : [];
+      const sourceRefs =
+        entity.contract === null
+          ? null
+          : Object.fromEntries(
+              Object.entries(entity.contract).map(([operation, ref]) => [
+                operation,
+                `${ref.module}#${ref.export}`,
+              ]),
+            );
+      return [entity.key, {
+        singular: entity.inspector.singular,
+        plural: entity.inspector.plural,
+        titleField: entity.inspector.titleField,
+        shortcodePrefix: entity.shortcode,
+        legacyShortcodePrefix: entity.legacyShortcode,
+        searchable: entity.descriptor.searchable === true,
+        browserRouted: entity.descriptor.browserRoutes !== false,
+        auditable: entity.descriptor.auditable === true,
+        hasImages: entity.descriptor.hasImages === true,
+        countable: entity.descriptor.countable === true,
+        kernelActions,
+        filterUrlKeys: entity.filterUrlKeys,
+        mcpOperations,
+        lifecycle: {
+          softDelete: entity.descriptor.softDelete === true,
+          delete: lifecycle.delete,
+          merge: lifecycle.merge === true,
+        },
+        sourceRefs,
+        ports: entity.ports,
+        references: [
+          ...new Set(
+            ((entity.descriptor.relationships ?? []) as LiteralObject[]).map(
+              (relationship) => relationship.target,
+            ),
+          ),
+        ],
+      }];
+    }),
+  );
+  const serverPortRosters = Object.fromEntries(
+    entities.map((entity) => [entity.key, entity.ports]),
+  );
+  const portExportChecks = [
+    ...new Map(
+      entities.flatMap((entity) => {
+        const { ports } = entity;
+        const refs = [
+          ports.repository,
+          ports.references.label,
+          ports.references.resolver,
+          ports.filters,
+          ports.search.projection,
+          ports.search.semanticText,
+          ports.search.dependentRefresh,
+          ports.lifecycle.policy,
+          ports.lifecycle.runtime,
+          ports.relationMutation.attach,
+          ports.relationMutation.detach,
+        ].filter((ref): ref is SourceRef => ref !== null);
+        return refs.map((ref) => [`${ref.module}#${ref.export}`, ref] as const);
+      }),
+    ).values(),
+  ].sort((left, right) =>
+    `${left.module}#${left.export}`.localeCompare(`${right.module}#${right.export}`),
+  );
   return [
+    {
+      relativePath: "packages/shared/src/generated/shortcode-registry.gen.ts",
+      source:
+        generatedHeader +
+        "// biome-ignore format: generated shortcode registry stays one entity per line.\n" +
+        `export const SHORTCODE_PREFIX = ${compactLiteral(shortcodePrefixes)} as const;\n` +
+        "export type ShortcodeType = keyof typeof SHORTCODE_PREFIX;\n\n" +
+        "/** Inbound-only aliases; canonical generation never emits these prefixes. */\n" +
+        "// biome-ignore format: generated legacy aliases stay compact.\n" +
+        `export const LEGACY_SHORTCODE_PREFIX = ${compactLiteral(legacyShortcodePrefixes)} as const satisfies Record<string, ShortcodeType>;\n`,
+    },
     {
       relativePath: "packages/schemas/src/generated/entity-manifest-data.gen.ts",
       source:
@@ -615,25 +922,82 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         )} as const satisfies Record<Entity, EntityDescriptor>;\n`,
     },
     {
+      relativePath: "packages/schemas/src/generated/entity-inspector.gen.ts",
+      source:
+        generatedHeader +
+        'import type { Entity } from "../entity";\n\n' +
+        "export type EntityInspectorMetadata = {\n" +
+        "  singular: string;\n" +
+        "  plural: string | null;\n" +
+        "  titleField: string;\n" +
+        "  shortcodePrefix: string | null;\n" +
+        "  legacyShortcodePrefix: string | null;\n" +
+        "  searchable: boolean;\n" +
+        "  browserRouted: boolean;\n" +
+        "  auditable: boolean;\n" +
+        "  hasImages: boolean;\n" +
+        "  countable: boolean;\n" +
+        '  kernelActions: readonly ("get" | "list" | "search" | "create" | "update" | "delete" | "merge")[];\n' +
+        "  filterUrlKeys: readonly string[];\n" +
+        '  mcpOperations: readonly ("get" | "list" | "create" | "update" | "delete")[];\n' +
+        '  lifecycle: { softDelete: boolean; delete: { mode: "soft" | "hard"; bulk: boolean } | null; merge: boolean };\n' +
+        "  sourceRefs: { create: string; update: string; output: string; detail: string } | null;\n" +
+        "  ports: EntityPortSourceRoster;\n" +
+        "  references: readonly Entity[];\n" +
+        "};\n\n" +
+        "type EntityPortSourceRef = { module: string; export: string };\n" +
+        "type EntityPortSourceRoster = {\n" +
+        "  repository: EntityPortSourceRef | null;\n" +
+        "  references: { label: EntityPortSourceRef | null; resolver: EntityPortSourceRef | null };\n" +
+        "  filters: EntityPortSourceRef | null;\n" +
+        "  search: { projection: EntityPortSourceRef | null; semanticText: EntityPortSourceRef | null; dependentRefresh: EntityPortSourceRef | null };\n" +
+        "  lifecycle: { policy: EntityPortSourceRef | null; runtime: EntityPortSourceRef | null };\n" +
+        "  relationMutation: { attach: EntityPortSourceRef | null; detach: EntityPortSourceRef | null };\n" +
+        "};\n\n" +
+        "// biome-ignore format: generated inspector metadata stays one entity per line.\n" +
+        `export const entityInspectorMetadata = ${compactLiteral(inspectorMetadata)} as const satisfies Record<Entity, EntityInspectorMetadata>;\n`,
+    },
+    {
+      relativePath: "apps/web/src/entities/generated/entity-details.gen.ts",
+      source:
+        generatedHeader +
+        `${detailTypeImportSource}\n\n` +
+        `export const detailEntities = ${compactLiteral(detailEntities.map(({ key }) => key))} as const;\n` +
+        "export type DetailEntity = (typeof detailEntities)[number];\n\n" +
+        "export type EntityDetailByEntity = {\n" +
+        `${detailOutputTypes}\n` +
+        "};\n\n" +
+        "export type EntityDetailInputByEntity = {\n" +
+        `${detailInputTypes}\n` +
+        "};\n",
+    },
+    {
       relativePath: "apps/web/src/server/generated/entity-bindings.gen.ts",
       source:
         generatedHeader +
         'import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";\n' +
         `${schemaImports}\n` +
-        'import { type ZodSchema, z } from "zod";\n\n' +
+        'import { type ZodSchema, z } from "zod";\n' +
+        'import type { DetailEntity } from "~/entities/generated/entity-details.gen";\n\n' +
         "type CrudBinding = {\n" +
         "  idSchema: ZodSchema;\n" +
         "  createInput: ZodSchema;\n" +
         "  updateInput: ZodSchema;\n" +
         "  output: ZodSchema;\n" +
         "};\n\n" +
-        "type EntityBinding = { crud: CrudBinding | null; mcpOut: ZodSchema | null };\n\n" +
+        "type EntityBinding = { crud: CrudBinding | null };\n\n" +
         "const crud = <E extends ShortcodeEntity, S extends Omit<CrudBinding, \"idSchema\">>(\n" +
         "  entity: E,\n" +
         "  schemas: S,\n" +
         ") => ({ idSchema: shortcodeSchema(entity), ...schemas });\n\n" +
         "// biome-ignore format: generated bindings stay one entity per line.\n" +
         `export const ENTITY_BINDINGS = {\n${bindings}\n} satisfies Record<ShortcodeEntity, EntityBinding>;\n\n` +
+        "/** @lintignore Dynamically imported by the client-safe Start detail transport. */\n" +
+        "// biome-ignore format: generated detail schemas stay one entity per line.\n" +
+        `export const ENTITY_DETAIL_OUTPUT_SCHEMAS = {\n${detailSchemas}\n} as const satisfies Record<DetailEntity, ZodSchema>;\n` +
+        "/** @lintignore Dynamically imported by the client-safe Start detail transport. */\n" +
+        "// biome-ignore format: one generated detail input variant per entity.\n" +
+        `export const entityDetailInputSchema = z.discriminatedUnion("entity", [\n  ${detailInputVariants}\n]);\n` +
         "// biome-ignore format: one generated variant per entity.\n" +
         `export const generatedEntityCreateCommandSchema = z.union([\n  ${commandVariants("create", "create")}\n]);\n\n` +
         "// biome-ignore format: one generated variant per entity.\n" +
@@ -663,6 +1027,31 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         "// biome-ignore format: generated action rosters stay one line each.\n" +
         `export const generatedSearchEntityKernelEntities = ${compactLiteral(entitiesForAction("search"))} as const;\n` +
         `export const generatedMergeEntityKernelEntities = ${compactLiteral(entitiesForAction("merge"))} as const;\n`,
+    },
+    {
+      relativePath: "apps/web/src/server/generated/entity-runtime-ports.gen.ts",
+      source:
+        generatedHeader +
+        'import type { Entity } from "@cubby/schemas/entity";\n\n' +
+        "type EntityPortSourceRef = { module: string; export: string };\n" +
+        "type EntityServerPortRoster = {\n" +
+        "  repository: EntityPortSourceRef | null;\n" +
+        "  references: { label: EntityPortSourceRef | null; resolver: EntityPortSourceRef | null };\n" +
+        "  filters: EntityPortSourceRef | null;\n" +
+        "  search: { projection: EntityPortSourceRef | null; semanticText: EntityPortSourceRef | null; dependentRefresh: EntityPortSourceRef | null };\n" +
+        "  lifecycle: { policy: EntityPortSourceRef | null; runtime: EntityPortSourceRef | null };\n" +
+        "  relationMutation: { attach: EntityPortSourceRef | null; detach: EntityPortSourceRef | null };\n" +
+        "  readonly __exportChecks?: EntityPortExportChecks;\n" +
+        "};\n\n" +
+        "/** Each literal module/export source reference is checked without a runtime import. */\n" +
+        `type EntityPortExportChecks = readonly [${portExportChecks
+          .map(
+            (ref) =>
+              `typeof import(${JSON.stringify(ref.module)})[${JSON.stringify(ref.export)}]`,
+          )
+          .join(", ")}];\n\n` +
+        "// biome-ignore format: generated runtime port roster stays one entity per line.\n" +
+        `export const entityServerPortRosters = ${compactLiteral(serverPortRosters)} as const satisfies Record<Entity, EntityServerPortRoster>;\n`,
     },
   ];
 };
@@ -707,7 +1096,7 @@ const formatSource = (root: string, artifact: EntityArtifacts): string => {
   return result;
 };
 
-const generatedName = /^(?:entity-literal-.+|entity-manifest-data|entity-bindings|entity-routes|entity-kernel-entities|filter-search-fields)\.gen\.ts$/;
+const generatedName = /^(?:entity-literal-.+|entity-manifest-data|entity-inspector|entity-details|entity-bindings|entity-routes|entity-kernel-entities|entity-runtime-ports|filter-search-fields|shortcode-registry)\.gen\.ts$/;
 
 const findExtraArtifacts = async (root: string, artifacts: readonly EntityArtifacts[]) => {
   const expected = new Set(artifacts.map(({ relativePath }) => relativePath));

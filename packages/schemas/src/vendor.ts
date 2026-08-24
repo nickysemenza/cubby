@@ -57,7 +57,6 @@ export const vendorUpdateInput = z.object({
 });
 export type VendorUpdateInput = z.infer<typeof vendorUpdateInput>;
 
-/** Explicit, per-vendor logo sourcing from the website a human recorded. */
 export const fetchVendorLogoInput = z.object({ id: vendorShortcode });
 export type FetchVendorLogoInput = z.infer<typeof fetchVendorLogoInput>;
 
@@ -89,7 +88,6 @@ export type VendorSortField = (typeof vendorSortableFields)[number];
 export const vendorOut = z.object({
   id: vendorShortcode,
   ...vendorFields,
-  /** Live purchases pointing at this vendor. Gates deletion. */
   purchaseCount: z.number().int(),
   /**
    * `SUM(cost)` over the live expenses of this vendor's live purchases — the
@@ -107,11 +105,6 @@ export type VendorOut = z.infer<typeof vendorOut>;
 export const vendorListResponse = createPaginatedResponseSchema(vendorOut);
 export type VendorListResponse = z.infer<typeof vendorListResponse>;
 
-/**
- * The vendor picklist behind the ledger's Vendor filter and the purchase form's
- * combobox. `{id, name, count}` rather than the old `{vendor, count}`: the
- * filter now matches vendor **ids**, so the option has to carry one.
- */
 export const vendorOptionsOut = z.array(
   z.object({
     id: vendorShortcode,
@@ -122,15 +115,6 @@ export const vendorOptionsOut = z.array(
 );
 export type VendorOptionsOut = z.infer<typeof vendorOptionsOut>;
 
-/**
- * Fold duplicate vendors into one — the fix for the duplicate-vendor worklist.
- *
- * `findOrCreateVendor` matches names exactly, so an importer meeting a new
- * spelling mints a new roster row; nothing on the write path can safely decide
- * two spellings are the same vendor. This is how a human says so. See
- * `mergeVendors` in repo/vendor.ts for what happens to purchases the two vendors
- * hold under the same order id.
- */
 export const mergeVendorsInput = z.object({
   keepId: vendorShortcode,
   mergeIds: z.array(vendorShortcode).min(1),
@@ -152,7 +136,6 @@ export const vendorMergeSummaryOut = z.object({
    * itself (`finalizeMerge`) rather than assumed from `mergeIds.length`.
    */
   merged: z.number().int().nonnegative(),
-  /** Live purchases that simply adopted the keeper — no same-order collision. */
   purchasesRepointed: z.number().int().nonnegative(),
   /**
    * Purchases folded into a same-order survivor instead of re-pointed — their
@@ -164,7 +147,6 @@ export const vendorMergeSummaryOut = z.object({
    * for a finer breakdown, computed separately for that read-only preview).
    */
   purchasesFolded: z.number().int().nonnegative(),
-  /** Keeper fields (website/notes/logo) filled in from a source vendor. */
   carriedFields: z.array(z.string()),
 });
 export type VendorMergeSummaryOut = z.infer<typeof vendorMergeSummaryOut>;
@@ -175,7 +157,6 @@ export const mergeVendorsOut = z.object({
 });
 export type MergeVendorsOut = z.infer<typeof mergeVendorsOut>;
 
-/** The token a `vendor.orderUrlTemplate` substitutes the order id into. */
 const ORDER_ID_TOKEN = "{orderId}";
 
 /**

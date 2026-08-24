@@ -1,33 +1,3 @@
-/**
- * "Where should this go?" — the put-away suggester behind the Add to Inventory
- * dialog's Suggest button.
- *
- * A service rather than a router callback because it spans three things: the
- * product repo (what is this), the location repo (what is the board), and a
- * model call, with a validation step that only makes sense holding all three.
- *
- * ## Why a model and not a ranking
- *
- * The counts on each candidate were backtested as a ranking against every
- * existing inventory entry and land the right location 22% of the time (37% in
- * the top three). They are weak because `tools` alone spreads over 72
- * locations with the leader holding 8% — the signal that actually decides it
- * is that a PACKOUT wall plate goes on the PACKOUT Wall, which is a read of the
- * location's NAME. So the counts go into the prompt as corroboration and the
- * model does the choosing.
- *
- * ## Why the id is re-derived
- *
- * The model is handed real shortcodes and asked to return one, but what comes
- * back is a string it typed. `resolveSuggestedLocation` matches it against the
- * candidate roster and returns THAT row's identity — shortcode, name, type and
- * ancestor chain, everything the picker renders; an unrecognized code fails
- * loudly rather than reaching the client as a live-looking id.
- *
- * Runs inline: a rare, user-initiated press is exactly the work the background
- * queue is not for.
- */
-
 import type {
   LocationSuggestion,
   LocationSuggestionAiResult,
@@ -43,22 +13,13 @@ import {
 } from "~/server/repo/location";
 import { getProductByID } from "~/server/repo/product";
 
-/**
- * Locations per prompt. Well above the ~200 the house has, so today nothing is
- * dropped; it exists so a runaway roster degrades into a truncated prompt the
- * model is told about rather than an unbounded request.
- */
+/** Bound prompt size; tell the model when candidates are omitted. */
 const MAX_LOCATION_CANDIDATES = 400;
 
 /** `Garage > Shelving Unit > Shelf 3`, or just the name at top level. */
 const candidatePath = (candidate: LocationPutAwayCandidate): string =>
   [...candidate.ancestors.map((a) => a.name), candidate.name].join(" > ");
 
-/**
- * One line per location. Hints are omitted when zero rather than printed as
- * `0` — a roster where most lines end at the item count makes the few that
- * carry evidence stand out, and costs fewer tokens.
- */
 export const formatLocationCandidates = (
   candidates: readonly LocationPutAwayCandidate[],
 ): string => {

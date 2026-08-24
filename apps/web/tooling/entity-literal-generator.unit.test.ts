@@ -31,7 +31,14 @@ describe("literal entity generator", () => {
             create: { module: "@cubby/schemas/example", export: "create" },
             update: { module: "@cubby/schemas/example", export: "update" },
             output: { module: "@cubby/schemas/example", export: "output" },
-            mcpOut: null,
+          },
+          ports: {
+            repository: { module: "~/server/example", export: "exampleRepository" },
+            references: { label: { module: "~/entities/entities", export: "entityLabel" }, resolver: null },
+            filters: { module: "~/entities/filter-manifest", export: "getEntityFilters" },
+            search: { projection: null, semanticText: null, dependentRefresh: null },
+            lifecycle: { policy: null, runtime: null },
+            relationMutation: { attach: { module: "~/server/example", export: "attachExample" }, detach: null },
           },
         },
       ] as const;
@@ -39,16 +46,67 @@ describe("literal entity generator", () => {
 
     const artifacts = renderEntityArtifacts(entities);
 
-    expect(artifacts[0]?.source).toContain("{alpha:{");
-    expect(artifacts[1]?.source).toContain('"alpha": {');
-    expect(artifacts[1]?.source).toContain("mcpOut:null");
-    expect(artifacts[2]?.source).toContain('detail:"/alphas/$shortcode"');
-    expect(artifacts[2]?.source).toContain(
+    const artifact = (suffix: string) =>
+      artifacts.find(({ relativePath }) => relativePath.endsWith(suffix))
+        ?.source;
+    expect(artifact("shortcode-registry.gen.ts")).toContain('alpha:"ALP-"');
+    expect(artifact("entity-manifest-data.gen.ts")).toContain("{alpha:{");
+    expect(artifact("entity-bindings.gen.ts")).toContain('"alpha": {');
+    expect(artifact("entity-bindings.gen.ts")).not.toContain("mcpOut");
+    expect(artifact("entity-bindings.gen.ts")).toContain(
+      "ENTITY_DETAIL_OUTPUT_SCHEMAS",
+    );
+    expect(artifact("entity-bindings.gen.ts")).toContain('"alpha": output');
+    expect(artifact("entity-details.gen.ts")).toContain(
+      'detailEntities = ["alpha"]',
+    );
+    expect(artifact("entity-bindings.gen.ts")).toContain(
+      "shortcode:shortcodeSchema",
+    );
+    expect(artifact("entity-details.gen.ts")).toContain(
+      "export type EntityDetailByEntity",
+    );
+    expect(artifact("entity-details.gen.ts")).toContain("shortcode: z.input");
+    expect(artifact("entity-details.gen.ts")?.match(/^import .*$/gm)).toEqual(
+      expect.arrayContaining([expect.stringMatching(/^import type /)]),
+    );
+    expect(artifact("entity-details.gen.ts")).not.toMatch(/^import \{ /m);
+    expect(artifact("entity-routes.gen.ts")).toContain(
+      'detail:"/alphas/$shortcode"',
+    );
+    expect(artifact("entity-routes.gen.ts")).toContain(
       'generatedBrowserCrudEntities = ["alpha"]',
     );
-    expect(artifacts[3]?.source).toContain(
+    expect(artifact("entity-kernel-entities.gen.ts")).toContain(
       'alpha:{actions:["get","list","create","update"]',
     );
+    expect(artifact("entity-runtime-ports.gen.ts")).toContain(
+      'repository:{module:"~/server/example",export:"exampleRepository"}',
+    );
+    expect(artifact("entity-runtime-ports.gen.ts")).toContain(
+      'relationMutation:{attach:{module:"~/server/example",export:"attachExample"}',
+    );
+    expect(artifact("entity-runtime-ports.gen.ts")).toContain(
+      'typeof import("~/server/example")["exampleRepository"]',
+    );
+  });
+
+  it("rejects incomplete port declarations", () => {
+    expect(() =>
+      parseEntityLiterals(`
+        export const ENTITY_LITERALS = [{
+          key: "alpha", descriptor: { auditable: false, searchable: false }, contract: null,
+          ports: {
+            repository: null,
+            references: { label: null, resolver: null },
+            filters: null,
+            search: { projection: null, semanticText: null, dependentRefresh: null },
+            lifecycle: { policy: null, runtime: null },
+            relationMutation: { attach: null },
+          },
+        }];
+      `),
+    ).toThrow("relationMutation.detach is required");
   });
 
   it("rejects expressions and duplicate keys", () => {
@@ -64,7 +122,38 @@ describe("literal entity generator", () => {
           { key: "beta", descriptor: { auditable: false, searchable: false }, contract: null },
         ] as const;
       `),
-    ).toThrow("duplicates beta");
+    ).toThrow("Duplicate entity key beta");
+  });
+
+  it("rejects canonical and legacy shortcode-prefix conflicts", () => {
+    const entity = (
+      key: string,
+      shortcodePrefix: string,
+      legacyShortcodePrefix?: string,
+    ) => `{
+      key: ${JSON.stringify(key)},
+      descriptor: {
+        shortcodePrefix: ${JSON.stringify(shortcodePrefix)},
+        ${legacyShortcodePrefix === undefined ? "" : `legacyShortcodePrefix: ${JSON.stringify(legacyShortcodePrefix)},`}
+        auditable: false,
+        searchable: false,
+      },
+      contract: null,
+    }`;
+    const parse = (entries: string) =>
+      parseEntityLiterals(
+        `export const ENTITY_LITERALS = [${entries}] as const;`,
+      );
+
+    expect(() =>
+      parse(`${entity("alpha", "ALP-")},${entity("beta", "ALP-")}`),
+    ).toThrow("Canonical shortcode prefix ALP-");
+    expect(() =>
+      parse(`${entity("alpha", "ALP-", "B-")},${entity("beta", "BET-", "B-")}`),
+    ).toThrow("Legacy shortcode prefix B-");
+    expect(() =>
+      parse(`${entity("alpha", "ALP-", "B-")},${entity("beta", "BET-", "A-")}`),
+    ).not.toThrow();
   });
 
   it("requires local-view inverses and valid deletion policies", () => {
@@ -134,5 +223,28 @@ describe("literal entity generator", () => {
           "packages/schemas/src/generated/entity-manifest-data.gen.ts",
       )?.source,
     ).toContain("inverse:{steps:");
+    expect(
+      artifacts.find(
+        (artifact) =>
+          artifact.relativePath ===
+          "packages/shared/src/generated/shortcode-registry.gen.ts",
+      )?.source,
+    ).toContain('LEGACY_SHORTCODE_PREFIX = {"P-":"product","L-":"location"}');
+    expect(
+      artifacts.find(
+        (artifact) =>
+          artifact.relativePath ===
+          "packages/schemas/src/generated/entity-inspector.gen.ts",
+      )?.source,
+    ).toContain(
+      'kernelActions:["get","list","search","create","update","delete","merge"]',
+    );
+    expect(
+      artifacts.find(
+        (artifact) =>
+          artifact.relativePath ===
+          "apps/web/src/server/generated/entity-bindings.gen.ts",
+      )?.source,
+    ).toContain('"product": productWithFoodOut');
   });
 });

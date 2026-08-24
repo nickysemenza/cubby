@@ -283,7 +283,6 @@ describe("nullableSentinelOptions", () => {
 });
 
 describe("multiSelectFilterFn", () => {
-  /** Minimal stand-in for a TanStack row. */
   const row = (value: unknown) => ({ getValue: () => value });
   const run = (
     value: unknown,
@@ -304,14 +303,12 @@ describe("multiSelectFilterFn", () => {
   it("matches a value in the selected set, exactly", () => {
     expect(run("Amazon", ["Amazon", "eBay"])).toBe(true);
     expect(run("Lowe's", ["Amazon", "eBay"])).toBe(false);
-    // Exact, not substring — the whole point of the eqAny move server-side.
     expect(run("Amazon Business", ["Amazon"])).toBe(false);
   });
 
   it("finds empty rows via (none), and only those", () => {
     expect(run(null, [FILTER_NONE])).toBe(true);
     expect(run(undefined, [FILTER_NONE])).toBe(true);
-    // Clearing an inline text edit writes "", which is absent for our purposes.
     expect(run("", [FILTER_NONE])).toBe(true);
     expect(run("Amazon", [FILTER_NONE])).toBe(false);
   });
@@ -347,8 +344,6 @@ describe("multiSelectFilterFn", () => {
 });
 
 describe("summarizeListState", () => {
-  // A stand-in for the product manifest entry, exercising every kind the
-  // summarizer branches on.
   const specs: SummarizableSpec[] = [
     { columnId: "name", kind: "text" },
     {
@@ -395,9 +390,7 @@ describe("summarizeListState", () => {
         { value: "ytd", label: "Year to date" },
       ],
     },
-    // A range whose roster is supplied at runtime has no static label to find.
     { columnId: "expenseTotal", kind: "range" },
-    // `urlKey` differs from `columnId` — the summary must read the URL key.
     { columnId: "notes", urlKey: "q", kind: "text" },
   ];
 
@@ -406,7 +399,6 @@ describe("summarizeListState", () => {
 
   it("is undefined when nothing is filtered or sorted", () => {
     expect(summarize({})).toBeUndefined();
-    // An empty value is not a filter — it must not produce a dangling segment.
     expect(summarize({ name: "" })).toBeUndefined();
   });
 
@@ -430,14 +422,11 @@ describe("summarizeListState", () => {
   });
 
   it("renders a presence filter as Has/No, keeping the manifest's casing", () => {
-    // "UPC", not the "Upc" a humanized column id would produce.
     expect(summarize({ upcPresence: "has" })).toBe("Has UPC");
     expect(summarize({ upcPresence: "none" })).toBe("No UPC");
   });
 
   it("renders a presence filter with hand-written, non-'Has X' option labels", () => {
-    // The noun comes from the "has" option's label with any leading "has "
-    // stripped — "Reviewed" has no such prefix, so it passes through whole.
     expect(summarize({ stockTracked: "has" })).toBe("Has Reviewed");
     expect(summarize({ stockTracked: "none" })).toBe("No Reviewed");
   });
@@ -466,7 +455,6 @@ describe("summarizeListState", () => {
   it("names a range preset by its label, never the bare key", () => {
     expect(summarize({ purchaseDate: "30d" })).toBe("Last 30 days");
     expect(summarize({ purchaseDate: "ytd" })).toBe("Year to date");
-    // No static roster to look in — humanized key is the honest fallback.
     expect(summarize({ expenseTotal: "gte100" })).toBe("Gte100");
   });
 
@@ -474,7 +462,6 @@ describe("summarizeListState", () => {
     expect(summarize({ sort: "-price" })).toBe("↓price");
     expect(summarize({ sort: "name" })).toBe("↑name");
     expect(summarize({ sort: "name,-createdAt" })).toBe("↑name ↓createdAt");
-    // The reported URL, end to end.
     expect(summarize({ name: "packout", sort: "-price" })).toBe(
       "packout ↓price",
     );
@@ -503,7 +490,6 @@ describe("paramToSort / sortToParam", () => {
     expect(sortToParam([])).toBeUndefined();
     expect(paramToSort("")).toBeUndefined();
     expect(paramToSort(undefined)).toBeUndefined();
-    // A non-string reaches this from `validateSearch`'s `.catch(undefined)`.
     expect(paramToSort(42)).toBeUndefined();
   });
 });

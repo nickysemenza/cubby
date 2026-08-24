@@ -39,7 +39,6 @@ describe("listFoodsQuery", () => {
     // The bug being guarded: z.coerce.boolean() turned "false" into true.
     expect(listFoodsQuery.parse({ foodsOnly: "true" }).foodsOnly).toBe(true);
     expect(listFoodsQuery.parse({ foodsOnly: "false" }).foodsOnly).toBe(false);
-    // And the web client's real boolean still works.
     expect(listFoodsQuery.parse({ foodsOnly: true }).foodsOnly).toBe(true);
     expect(listFoodsQuery.parse({}).foodsOnly).toBeUndefined();
   });

@@ -91,9 +91,6 @@ describe("useTableVirtualizer pane scrolling", () => {
   it("scrolls the pane rather than the window", () => {
     render(<Harness />);
 
-    // The scroll element is the table's own pane. If this regresses to window
-    // virtualization, a wide table drags the whole page sideways and the nav
-    // rail, page header and column header all leave the viewport.
     const options = mocks.latestOptions;
     expect(options).not.toBeNull();
     const getScrollElement = options?.getScrollElement as
@@ -102,16 +99,12 @@ describe("useTableVirtualizer pane scrolling", () => {
     expect(typeof getScrollElement).toBe("function");
     expect(getScrollElement?.()).toBe(screen.getByTestId("pane"));
 
-    // scrollMargin is a window-virtualization concept: the table's distance
-    // from the top of the document. A pane's own scrollTop is already the
-    // right origin, so passing one would double-count the offset.
     expect(mocks.latestOptions).not.toHaveProperty("scrollMargin");
   });
 
   it("bounds the pane to the viewport left beneath the wrapper", () => {
     render(<Harness />);
 
-    // 900 viewport - 220 wrapper top - 8 gutter.
     expect(screen.getByTestId("pane")).toHaveAttribute(
       "data-max-height",
       "672",
@@ -146,8 +139,6 @@ describe("useTableVirtualizer pane scrolling", () => {
     wrapperTop = 260;
     render(<Harness />);
 
-    // Floor, not `300 - 260 - 8 = 32`: a couple of visible rows is worse than
-    // a pane that overflows a cramped viewport.
     expect(screen.getByTestId("pane")).toHaveAttribute(
       "data-max-height",
       "320",

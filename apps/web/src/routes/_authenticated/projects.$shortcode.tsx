@@ -14,16 +14,14 @@ import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
+import { entityDetailQueryOptions } from "~/entities/entity-detail";
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
-import { useTRPC } from "~/integrations/trpc/react";
 import { shortcodeHead } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/projects/$shortcode")({
   loader: async ({ params, context }) => {
     const data = await context.queryClient.ensureQueryData(
-      context.trpc.project.getByShortcode.queryOptions({
-        shortcode: params.shortcode,
-      }),
+      entityDetailQueryOptions("project", params.shortcode),
     );
     if (!data) throw notFound();
 
@@ -73,9 +71,8 @@ export const Route = createFileRoute("/_authenticated/projects/$shortcode")({
 
 function ProjectDetailRoute() {
   const { shortcode } = Route.useParams();
-  const api = useTRPC();
   const { data: project } = useSuspenseQuery(
-    api.project.getByShortcode.queryOptions({ shortcode }),
+    entityDetailQueryOptions("project", shortcode),
   );
 
   useDetailTitle(shortcode, project?.name);

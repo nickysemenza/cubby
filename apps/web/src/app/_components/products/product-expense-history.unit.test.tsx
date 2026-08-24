@@ -95,8 +95,6 @@ vi.mock("@tanstack/react-router", () => ({
   ),
 }));
 
-// The real link renders a hover-preview card that needs a query client; the
-// name and href are all this test asserts on.
 vi.mock("~/app/_components/EntityInlineLink", () => ({
   EntityInlineLink: ({
     entity,
@@ -188,7 +186,6 @@ describe("ProductExpenseHistory empty states", () => {
     expect(
       screen.getByText("Link one to track this product's cost basis."),
     ).toBeInTheDocument();
-    // Not the kit-component copy.
     expect(
       screen.queryByText("No expenses of its own"),
     ).not.toBeInTheDocument();
@@ -203,10 +200,7 @@ describe("ProductExpenseHistory empty states", () => {
       "/products/PRD-COMB",
     );
     expect(screen.getByText(/derived share/)).toBeInTheDocument();
-    // The kit has expenses of its own (expenseCount: 1), so the ledger link
-    // should be offered.
     expect(screen.getByText("See the kit's expenses →")).toBeInTheDocument();
-    // Not the generic "link one" copy — it would be wrong here.
     expect(screen.queryByText("No expenses linked")).not.toBeInTheDocument();
   });
 

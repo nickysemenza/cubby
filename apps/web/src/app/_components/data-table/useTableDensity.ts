@@ -5,7 +5,6 @@ export type TableDensity = "comfortable" | "compact" | "dense";
 const STORAGE_KEY = "table-density";
 const DEFAULT_DENSITY: TableDensity = "compact";
 
-// Module-level state for synchronous reads across components
 let currentDensity: TableDensity | null = null;
 
 function getStoredDensity(): TableDensity {
@@ -19,7 +18,6 @@ function getStoredDensity(): TableDensity {
   return currentDensity;
 }
 
-// Subscribers for useSyncExternalStore
 const listeners = new Set<() => void>();
 
 function subscribe(listener: () => void) {

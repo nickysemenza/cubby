@@ -12,6 +12,7 @@ import {
 import {
   imageShortcode,
   unsafeIngredientId,
+  unsafeProductId,
   unsafeVendorId,
 } from "@cubby/schemas/identifiers";
 import {
@@ -26,11 +27,13 @@ import {
   ingredientMergeInput,
   mergeSummary as ingredientMergeSummary,
   ingredientSortableFields,
+  ingredientWithFoodOut,
 } from "@cubby/schemas/ingredient";
 import {
   inventoryFiltersSchema,
   inventoryListItemOut,
   inventorySortableFields,
+  inventoryWithLocationAndProductOut,
 } from "@cubby/schemas/inventory";
 import {
   ledgerPartyFiltersSchema,
@@ -42,6 +45,7 @@ import {
   ledgerTransferSortableFields,
 } from "@cubby/schemas/ledger-transfer";
 import {
+  infLocation,
   locationFiltersSchema,
   locationListItemOut,
   locationSortableFields,
@@ -54,6 +58,7 @@ import {
   productListItemOut,
   productMergeSummaryOut,
   productSortableFields,
+  productWithFoodOut,
 } from "@cubby/schemas/product";
 import {
   expenseFiltersSchema,
@@ -86,6 +91,7 @@ import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { ENTITY_BINDINGS } from "~/server/entity-bindings";
+import { entityServerPortRosters } from "~/server/generated/entity-runtime-ports.gen";
 import {
   createExpense,
   deleteExpensesWithPurchaseEffects,
@@ -241,12 +247,16 @@ import {
   wishList,
 } from "~/server/repo/wish";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
+import { getIngredientByID as getIngredientDetail } from "~/server/services/ingredient.service";
 import type { LocationValuationService } from "~/server/services/location-valuation.service";
 import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
-import { createProductWriteActions } from "~/server/services/product.service";
+import {
+  createProductWriteActions,
+  getProductWithFood,
+} from "~/server/services/product.service";
 import {
   createProductWithSideEffects,
   updateProductWithSideEffects,
@@ -284,6 +294,7 @@ export interface EntityKernelBinding {
     create?: ZodSchema;
     update?: ZodSchema;
     output: ZodSchema;
+    detail: ZodSchema;
     list: ZodSchema;
     filters: ZodSchema;
   };
@@ -359,6 +370,7 @@ function defineBinding<
   sideEffects?: boolean;
   filters: SFilters;
   listOutput?: ZodSchema;
+  detailOutput?: ZodSchema;
   sort: EntityKernelBinding["sort"];
   lifecycle: EntityKernelBinding["lifecycle"];
   repository: {
@@ -410,6 +422,7 @@ function defineBinding<
       create: crud.createInput,
       update: crud.updateInput,
       output: crud.output,
+      detail: config.detailOutput ?? crud.output,
       list: config.listOutput ?? crud.output,
       filters: config.filters,
     },
@@ -434,6 +447,7 @@ export const ENTITY_KERNEL_BINDINGS = {
     // the generic wave a second time after that transaction has committed.
     sideEffects: false,
     filters: productFiltersSchema,
+    detailOutput: productWithFoodOut,
     listOutput: productListItemOut,
     sort: {
       fields: productSortableFields,
@@ -445,7 +459,12 @@ export const ENTITY_KERNEL_BINDINGS = {
       merge: PRODUCT_MERGE_EDGE_POLICY,
     },
     repository: {
-      get: (ctx, id) => getProductByShortcode(ctx.db, id),
+      get: async (ctx, shortcode) => {
+        const id = await resolveLiveShortcode(ctx.db, shortcode, "product");
+        return id
+          ? getProductWithFood(ctx.db, ctx.usdaClient, unsafeProductId(id))
+          : null;
+      },
       list: (ctx, filters, sorts, pagination, groupBy) =>
         productList(ctx.db, filters, sorts, pagination, groupBy),
       create: async (ctx, data) => {
@@ -587,6 +606,7 @@ export const ENTITY_KERNEL_BINDINGS = {
     // write payload rather than using the kernel's context-free default.
     sideEffects: false,
     filters: locationFiltersSchema,
+    detailOutput: infLocation,
     listOutput: locationListItemOut,
     sort: {
       fields: locationSortableFields,
@@ -666,6 +686,7 @@ export const ENTITY_KERNEL_BINDINGS = {
   inventory: defineBinding({
     entity: "inventory",
     filters: inventoryFiltersSchema,
+    detailOutput: inventoryWithLocationAndProductOut,
     listOutput: inventoryListItemOut,
     sort: { fields: inventorySortableFields, default: "createdAt" },
     lifecycle: { delete: INVENTORY_DELETE_EDGE_POLICY },
@@ -740,6 +761,7 @@ export const ENTITY_KERNEL_BINDINGS = {
   ingredient: defineBinding({
     entity: "ingredient",
     filters: ingredientFiltersSchema,
+    detailOutput: ingredientWithFoodOut,
     listOutput: ingredientListItemOut,
     sort: { fields: ingredientSortableFields, default: "createdAt" },
     lifecycle: {
@@ -747,11 +769,12 @@ export const ENTITY_KERNEL_BINDINGS = {
       merge: INGREDIENT_MERGE_EDGE_POLICY,
     },
     repository: {
-      get: async (ctx, shortcode) =>
-        getIngredientByID(
-          ctx.db,
-          await ingredientShortcodes.one(ctx.db, shortcode),
-        ),
+      get: async (ctx, shortcode) => {
+        const id = await resolveLiveShortcode(ctx.db, shortcode, "ingredient");
+        return id
+          ? getIngredientDetail(ctx.db, ctx.usdaClient, unsafeIngredientId(id))
+          : null;
+      },
       list: (ctx, filters, sorts, pagination) =>
         ingredientList(ctx.db, filters, sorts, pagination),
       create: async (ctx, data) => {
@@ -923,6 +946,7 @@ export const ENTITY_KERNEL_BINDINGS = {
       id: imageShortcode,
       update: imageUpdateInput,
       output: imageWithEntitySchema,
+      detail: imageWithEntitySchema,
       list: imageWithEntitySchema,
       filters: imageListFiltersSchema,
     },
@@ -1304,6 +1328,17 @@ export const ENTITY_KERNEL_BINDINGS = {
     },
   }),
 } as const satisfies Record<EntityKernelEntity, unknown>;
+
+for (const entity of Object.keys(
+  ENTITY_KERNEL_BINDINGS,
+) as EntityKernelEntity[]) {
+  const ports = entityServerPortRosters[entity];
+  if (ports.repository === null || ports.lifecycle.runtime === null) {
+    throw new Error(
+      `Entity kernel binding ${entity} lacks its declared runtime port.`,
+    );
+  }
+}
 
 const productShortcodes = bindShortcodeResolver("product");
 const locationShortcodes = bindShortcodeResolver("location");

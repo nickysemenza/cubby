@@ -27,8 +27,6 @@ describe("barcode canonicalization", () => {
     expect(gtin.safeParse("not-a-barcode").success).toBe(false);
   });
 
-  // The operator compares this against the package, and usda-api indexes
-  // `branded_food.gtin_upc` left-padded to twelve — a GTIN-14 lookup misses.
   it("renders and looks up in the printed encoding", () => {
     expect(displayGtin("00077089850017")).toBe("077089850017");
     expect(displayGtin("00000012345670")).toBe("000012345670");

@@ -1,19 +1,33 @@
-/**
- * Application Error Utilities
- *
- * Centralized error creation for the application.
- * Extracted from trpc.ts to avoid circular dependencies with repo files.
- */
-
 import {
   type PublicImpactItem,
   publicImpactItemSchema,
 } from "@cubby/schemas/entity-integrity";
 import { type AppErrorReason, AppErrors } from "@cubby/shared";
-import { TRPCError } from "@trpc/server";
-import type { TRPC_ERROR_CODE_KEY } from "@trpc/server/rpc";
 import { z } from "zod";
 import { annotateActiveSpanError } from "~/server/tracing";
+
+export type AppErrorCode = (typeof AppErrors)[AppErrorReason];
+
+/** Transport-neutral domain failure. Adapters decide its wire representation. */
+export class AppError extends Error {
+  readonly code: AppErrorCode;
+  readonly reason: AppErrorReason;
+  readonly blockers?: readonly PublicImpactItem[];
+
+  constructor(options: {
+    code: AppErrorCode;
+    reason: AppErrorReason;
+    message: string;
+    cause?: unknown;
+    blockers?: readonly PublicImpactItem[];
+  }) {
+    super(options.message, { cause: options.cause });
+    this.name = "AppError";
+    this.code = options.code;
+    this.reason = options.reason;
+    this.blockers = options.blockers;
+  }
+}
 
 // Expected 4xx errors that shouldn't be logged as failures
 const EXPECTED_ERROR_CODES: Set<string> = new Set([
@@ -26,8 +40,8 @@ const EXPECTED_ERROR_CODES: Set<string> = new Set([
 ]);
 
 /**
- * Create a TRPCError with consistent error handling:
- * - Derives tRPC error code from AppErrorReason
+ * Create an application error with consistent diagnostics:
+ * - Derives its transport-neutral code from AppErrorReason
  * - Logs unexpected errors to console (skips expected 4xx responses)
  * - Annotates the active tracing span with error details
  * - Records the original exception if provided
@@ -36,8 +50,8 @@ export function createAppError(
   reason: AppErrorReason,
   message: string,
   originalError?: unknown,
-): TRPCError {
-  const code = AppErrors[reason] as TRPC_ERROR_CODE_KEY;
+): AppError {
+  const code = AppErrors[reason];
   const isExpectedError = EXPECTED_ERROR_CODES.has(code);
 
   // Only log unexpected errors (5xx, etc.) - expected 4xx are normal business responses
@@ -56,8 +70,9 @@ export function createAppError(
     isExpectedError ? undefined : { message, exception: originalError },
   );
 
-  return new TRPCError({
+  return new AppError({
     code,
+    reason,
     message,
     cause: { reason, originalError },
   });
@@ -85,14 +100,13 @@ export function createBlockedError(
   reason: AppErrorReason,
   message: string,
   blockers: readonly PublicImpactItem[],
-): TRPCError {
+): AppError {
   const error = createAppError(reason, message);
-  // Rebuilt rather than mutated: `cause` is readonly on TRPCError, and
-  // reconstructing keeps `createAppError` the single place that derives the
-  // code, logs, and annotates the span.
-  return new TRPCError({
+  return new AppError({
     code: error.code,
+    reason,
     message,
+    blockers,
     cause: { reason, blockers },
   });
 }
@@ -120,8 +134,7 @@ export function createBlockedError(
  * makes "keyed by shortcode, never uuid" a checked property at the boundary.
  */
 export interface PublicErrorPayload {
-  /** The tRPC code, when the failure came through a `TRPCError`. */
-  code?: TRPC_ERROR_CODE_KEY;
+  code?: string;
   /** The `AppErrorReason` (or boundary slug) stamped onto `cause`. */
   reason?: string;
   /** Present only for a refusal built by {@link createBlockedError}. */
@@ -130,7 +143,16 @@ export interface PublicErrorPayload {
 
 export function toPublicErrorPayload(error: unknown): PublicErrorPayload {
   const payload: PublicErrorPayload = {};
-  if (error instanceof TRPCError) payload.code = error.code;
+  const appError = appErrorFromUnknown(error);
+  if (appError) {
+    payload.code = appError.code;
+    payload.reason = appError.reason;
+    if (appError.blockers) payload.blockers = [...appError.blockers];
+    return payload;
+  }
+
+  const directCode = (error as { code?: unknown } | null | undefined)?.code;
+  if (typeof directCode === "string") payload.code = directCode;
 
   const cause = (error as { cause?: unknown } | null | undefined)?.cause;
   if (!cause || typeof cause !== "object") return payload;
@@ -165,9 +187,11 @@ export function toPublicErrorPayload(error: unknown): PublicErrorPayload {
  * inside its own result rather than erroring the envelope.
  */
 export function isBlockedRefusal(error: unknown): boolean {
-  if (!(error instanceof TRPCError)) return false;
-  if (error.code === "PRECONDITION_FAILED") return true;
-  return (toPublicErrorPayload(error).blockers?.length ?? 0) > 0;
+  const payload = toPublicErrorPayload(error);
+  return (
+    payload.code === "PRECONDITION_FAILED" ||
+    (payload.blockers?.length ?? 0) > 0
+  );
 }
 
 /**
@@ -177,6 +201,13 @@ export function isBlockedRefusal(error: unknown): boolean {
  * and otherwise flood the issue stream (e.g. a stale cached getByID for a
  * deleted entity, or an unauthenticated request to a protected procedure).
  */
-export function isExpectedTRPCError(error: TRPCError): boolean {
-  return EXPECTED_ERROR_CODES.has(error.code);
+export function isExpectedAppError(error: unknown): boolean {
+  const code = toPublicErrorPayload(error).code;
+  return typeof code === "string" && EXPECTED_ERROR_CODES.has(code);
+}
+
+export function appErrorFromUnknown(error: unknown): AppError | null {
+  if (error instanceof AppError) return error;
+  const cause = (error as { cause?: unknown } | null | undefined)?.cause;
+  return cause instanceof AppError ? cause : null;
 }

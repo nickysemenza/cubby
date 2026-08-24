@@ -304,11 +304,13 @@ function render(app: App, list: ShoppingList): Node {
   return root;
 }
 
-void bootstrap<ShoppingList>({
-  name: "Cubby Shopping List",
-  invalid: "Could not read the shopping list from the tool result.",
-  onResult: () => {
-    checked.clear();
-  },
-  render,
-});
+export function bootstrapShoppingList(): Promise<void> {
+  return bootstrap<ShoppingList>({
+    name: "Cubby Shopping List",
+    invalid: "Could not read the shopping list from the tool result.",
+    onResult: () => {
+      checked.clear();
+    },
+    render,
+  });
+}

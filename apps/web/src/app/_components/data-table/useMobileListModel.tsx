@@ -19,15 +19,11 @@ interface MobileCellMeta {
 interface SlotValue {
   priority: number;
   value: ReactNode;
-  /** See `MobileColumnMeta.interactive`. */
   interactive?: boolean;
-  /** Column id — a stable React key for the spec grid. */
   id: string;
-  /** Label for the spec grid's gutter. */
   label: string;
 }
 
-/** One labeled row of the mobile card's spec grid. */
 export interface MobileMetaValue {
   id: string;
   label: string;
@@ -41,22 +37,8 @@ export interface MobileListRowModel<TItem extends RowData> {
   subtitle?: ReactNode;
   imageSlot?: ReactNode;
   actionsContent?: ReactNode;
-  /**
-   * The identity line's right-aligned values — the `trailing` slot, i.e. this
-   * row's headline number (cost, price, amount). Right-aligned and
-   * tabular-nums so they form a column down the list.
-   */
   rightValues: ReactNode[];
-  /**
-   * Parallel array to `rightValues` — `rightValueInteractive[i]` is true when
-   * `rightValues[i]`'s source column set `meta.mobile.interactive`.
-   */
   rightValueInteractive: boolean[];
-  /**
-   * Everything else, each labeled, rendered as a two-column spec grid below
-   * the identity line. Unlabeled at six values these read as noise, which is
-   * why they carry their column's header rather than flowing inline.
-   */
   metaValues: MobileMetaValue[];
   detailsHref?: string;
   /**
@@ -71,7 +53,6 @@ export interface MobileListRowModel<TItem extends RowData> {
   reserveImageSlot: boolean;
 }
 
-/** `costType` → `Cost Type`. Fallback when a column's header isn't a string. */
 function humanizeColumnId(colId: string): string {
   return colId
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
@@ -79,11 +60,6 @@ function humanizeColumnId(colId: string): string {
     .replace(/^./, (c) => c.toUpperCase());
 }
 
-/**
- * The name a column goes by on a phone: the spec grid's gutter label and the
- * sort sheet's option label. Shared so a column can't be called two different
- * things by the two surfaces.
- */
 export function mobileColumnLabel<TItem extends RowData>(
   column: Column<TItem, unknown>,
 ): string {

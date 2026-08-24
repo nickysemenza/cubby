@@ -27,23 +27,14 @@ import {
 
 type IngredientTotalsGap = Extract<RecipeTotalsGap, { source: "ingredient" }>;
 
-// One product with the fixture's canonical public id so single-product cases
-// can assert the link target.
 const prod = (opts?: Parameters<typeof makeProduct>[1]): Product =>
   makeProduct("p", opts);
 
-// ─── Classification corpus ───────────────────────────────────────────────────
-// Each case is one ingredient on one line: given the recipe-line amount and the
-// product setup, what fix (if any) do we suggest? `expected: null` means the
-// line should produce NO gap. Read top-to-bottom as the suggestion's decision
-// table — line kind (count/weight/volume) × what the product already has.
 interface Case {
   name: string;
   ingredient: string;
   line: Amount[];
   products: Product[];
-  // Subset asserted via toMatchObject (so `missing` may be partial too);
-  // null = no gap expected.
   expected:
     | (Partial<Omit<IngredientTotalsGap, "missing">> & {
         missing?: Partial<IngredientTotalsGap["missing"]>;
@@ -159,7 +150,6 @@ describe("deriveRecipeTotalsGaps — classification", () => {
   });
 });
 
-// ─── Aggregation across rows (not a per-line classification) ──────────────────
 describe("deriveRecipeTotalsGaps — multi-row", () => {
   it("same ingredient on two lines → one deduped gap", () => {
     const rows = [
@@ -277,9 +267,6 @@ describe("deriveRecipeTotalsGaps — sub-recipes", () => {
   });
 });
 
-// ─── Global workbench path: classifyIngredientFix + N/A (naKinds) ─────────────
-// classifyKind only reads `coverage.covered` + `tier`, so build minimal coverage
-// literals rather than driving the WASM engine.
 const cov = (covered: BaseKind[], tier: CoverageTier): ConversionCoverage => ({
   covered: new Set(covered),
   kindsCovered: covered.length,

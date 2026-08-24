@@ -87,22 +87,6 @@ export function createEntityCompatibilityProcedures<
       return asResolvedOutput(result.item as z.output<SOutput>);
     });
 
-  const getByShortcode = protectedProcedure
-    .input(z.object({ shortcode: idSchema }))
-    .output(strictOutput(schemas.output.nullable()))
-    .query(async ({ ctx, input }) => {
-      const { shortcode } = input as { shortcode: z.output<SId> };
-      const result = await executeEntity(ctx, {
-        action: "get",
-        entity: binding.entity,
-        id: shortcode as string,
-        missing: "null",
-      });
-      if (result.action !== "get")
-        throw new Error("Entity kernel returned the wrong action");
-      return asResolvedOutput(result.item as z.output<SOutput> | null);
-    });
-
   const list = protectedProcedure
     .input(listInput)
     .output(
@@ -193,5 +177,5 @@ export function createEntityCompatibilityProcedures<
       return { deleted: result.deleted, sideEffects: result.sideEffects };
     });
 
-  return { getByID, getByShortcode, list, create, update, delete: remove };
+  return { getByID, list, create, update, delete: remove };
 }

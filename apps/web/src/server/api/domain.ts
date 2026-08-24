@@ -16,8 +16,6 @@ import { householdContributionRouter } from "./routers/household-contribution";
 import { imageRouter } from "./routers/image";
 import { ingredientRouter } from "./routers/ingredient";
 import { inventoryRouter } from "./routers/inventory";
-import { ledgerPartyRouter } from "./routers/ledger-party";
-import { ledgerTransferRouter } from "./routers/ledger-transfer";
 import { locationRouter } from "./routers/location";
 import { mcpRouter } from "./routers/mcp";
 import { mealRouter } from "./routers/meal";
@@ -57,8 +55,6 @@ export const domainRouterRecord = {
   product: productRouter,
   inventory: inventoryRouter,
   meal: mealRouter,
-  ledgerParty: ledgerPartyRouter,
-  ledgerTransfer: ledgerTransferRouter,
   project: projectRouter,
   task: taskRouter,
   expense: expenseRouter,

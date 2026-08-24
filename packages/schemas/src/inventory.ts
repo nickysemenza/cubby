@@ -63,7 +63,6 @@ export const inventoryPlacementFilter = z.enum([
   "all",
 ]);
 
-// Filters accepted by the inventory list endpoint.
 export const inventoryFilterFields = {
   ...auditDateFilterFields,
   ...inventoryRelatedFilterFields,
@@ -189,7 +188,6 @@ export type InventoryListProductOut = z.infer<typeof inventoryListProductOut>;
 export const inventoryListLocationOut = z.object({
   id: locationShortcode,
   name: z.string(),
-  /** Null when the location IS a product; the SKU carries its form factor. */
   type: locationType.nullable(),
 });
 export type InventoryListLocationOut = z.infer<typeof inventoryListLocationOut>;
@@ -257,7 +255,6 @@ export const inventoryUpdatePayloadData = z.object({
     ),
 });
 
-// Input schema for updating inventory entries
 export const inventoryUpdateInput = z.object({
   id: inventoryShortcode,
   data: inventoryUpdatePayloadData,
@@ -274,7 +271,6 @@ export const inventoryCreatePayloadData = z.object({
     .describe("Defaults to 'stock'; pass 'installed' for a fixed fixture."),
 });
 
-// Schema for bulk inventory operations
 const inventoryBulkOperationItem = z.object({
   id: inventoryShortcode.optional(),
   productId: productShortcode,
@@ -287,7 +283,6 @@ export type InventoryBulkOperationItem = z.infer<
 >;
 
 export const inventoryBulkOperationPayload = z.object({
-  // All operations for a given location
   locationId: locationShortcode,
   items: z.array(inventoryBulkOperationItem),
   // When the snapshot was loaded — lets the server reject a stale commit that
@@ -296,7 +291,6 @@ export const inventoryBulkOperationPayload = z.object({
   loadedAt: z.date().optional(),
 });
 
-// Schema for bulk move operations (moving items between locations)
 const bulkMoveItem = z.object({
   inventoryEntryId: inventoryShortcode,
   quantity: positiveAmount, // How much to move (can be less than total for partial moves)
@@ -323,9 +317,6 @@ export type BulkMovePayload = z.infer<typeof bulkMovePayload>;
 const moveInventoryItem = z.object({
   inventoryEntryId: inventoryShortcode,
   targetLocationId: locationShortcode,
-  // Omit to move the entry entirely. Present = a partial move, leaving the
-  // remainder behind. Listing one entry twice with two quantities is how a bin
-  // gets split across several destinations.
   quantity: positiveAmount.optional(),
 });
 

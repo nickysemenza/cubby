@@ -93,19 +93,12 @@ import { findOrCreateVendor, getVendorByID, mergeVendors } from "./vendor";
 const unwrap = async <T>(p: Promise<{ output: T }>): Promise<T> =>
   (await p).output;
 
-// Repo-layer tests for the WASM-driven, highest-logic problem scans. The
-// coverage/UPC find* helpers are exercised through the public findAllProblems
-// aggregator; the stale-parse detector (now a Settings → Maintenance action, off
-// the aggregator) and reparseStaleIngredientParses are called directly.
-
 const drainGen = async <R>(gen: AsyncGenerator<unknown, R>): Promise<R> => {
   let next = await gen.next();
   while (!next.done) next = await gen.next();
   return next.value;
 };
 
-// Build a full UPCLookupResponse from a partial — only the fields a scan reads
-// (manufacturer/brand/priceDollars/imageUrl) usually matter per test.
 const upcResponse = (
   upc: string,
   overrides: Partial<UPCLookupResponse> = {},
@@ -141,9 +134,6 @@ const fakeUpcClient = (
   return { client, calls };
 };
 
-// USDA client stub. `findFoodsBatch` is the only method batchEnrichWithFood
-// touches; it returns the supplied foods positionally (one per valid lookup;
-// null = no link / no match). The default empty list means "no USDA data".
 const fakeUsdaClient = (foods: (FoodSummary | null)[] = []) =>
   ({
     findFoodsBatch: async (lookups: unknown[]) =>
@@ -229,8 +219,6 @@ describe("problems repo", () => {
     });
   });
 
-  // A recipe whose single ingredient row stores `amounts`/`rawLine`; a mismatch
-  // between rawLine's fresh parse and the stored amounts is parse drift.
   const recipeWithRow = (
     name: string,
     ingredientId: string,
@@ -258,12 +246,10 @@ describe("problems repo", () => {
         ctx.actor,
       );
 
-      // Drift: rawLine parses to 2 cup, but 99 cup is stored.
       const drifted = await recipeWithRow("Drifted", flour.id, {
         amounts: [{ value: 99, unit: "cup" }],
         rawLine: "2 cups flour",
       });
-      // No drift: stored amounts match the fresh parse.
       const clean = await recipeWithRow("Clean", flour.id, {
         amounts: [{ value: 2, unit: "cup" }],
         rawLine: "2 cups flour",
@@ -298,7 +284,6 @@ describe("problems repo", () => {
       expect(result.updated).toBeGreaterThanOrEqual(1);
       expect(result.recipesAffected).toContain(recipe.entityId);
 
-      // The drift is gone, and a second run finds nothing.
       const staleIngredientParses = await findStaleIngredientParses(ctx.db);
       expect(staleIngredientParses.some((s) => s.recipeId === recipe.id)).toBe(
         false,
@@ -309,7 +294,6 @@ describe("problems repo", () => {
     });
 
     it("find-or-creates the ingredient when the parsed name drifted", async () => {
-      // Stored name "flour" but the raw line parses to "sugar" → name drift.
       const flour = await createIngredient(
         ctx.db,
         { name: "flour", aliases: [] },
@@ -321,7 +305,6 @@ describe("problems repo", () => {
       });
 
       await drainGen(reparseStaleIngredientParses(ctx.db));
-      // The re-parse find-or-created the drifted-to ingredient.
       expect(await getIngredientByName(ctx.db, "sugar")).not.toBeNull();
     });
   });
@@ -367,7 +350,6 @@ describe("problems repo", () => {
         ctx.actor,
       );
 
-      // Live inventory on both — neither is orphaned yet.
       const before = await findAllProblems(
         ctx.db,
         fakeUpcClient().client,
@@ -427,7 +409,6 @@ describe("problems repo", () => {
 
       await deleteExpenses(ctx.db, [expense.id], ctx.actor);
 
-      // With the expense gone (and still no inventory), it's orphaned.
       const after = await findAllProblems(
         ctx.db,
         fakeUpcClient().client,
@@ -491,8 +472,6 @@ describe("problems repo", () => {
         makeProductInput({ name: "Priced Stocked Tool", price: 42 }),
         ctx.actor,
       );
-      // A `misc:` pile is a heterogeneous bucket with no meaningful unit price,
-      // so it belongs in the informational section, not the actionable one.
       const bucket = await createProduct(
         ctx.db,
         makeProductInput({ name: "misc: assorted clamps", price: null }),
@@ -565,8 +544,6 @@ describe("problems repo", () => {
       expect(flagged?.inventoryQuantity).toBe(3);
       expect(flagged?.locations.map((l) => l.id)).toEqual([loc.id]);
 
-      // A price (explicit OR projected from a kit), no inventory, or
-      // misc-bucket status each keep it out.
       for (const id of [priced.id, bucket.id, unstocked.id, kitPart.id]) {
         expect(found.productsMissingPrice.some((p) => p.id === id)).toBe(false);
       }
@@ -590,9 +567,6 @@ describe("problems repo", () => {
   });
 
   describe("findSoldButStillStocked", () => {
-    // Seed through the real door: `createExpense` resolves vendor + orderId into
-    // a Purchase, and it is that Purchase's net sign — not the sign of any one
-    // line — that makes a disposal.
     const seedLine = (overrides: Partial<ExpenseCreateInput>) =>
       unwrap(
         createExpense(
@@ -626,9 +600,6 @@ describe("problems repo", () => {
         makeProductInput({ name: "Parts Bin Case", price: 10 }),
         ctx.actor,
       );
-      // A negative line on a net-POSITIVE purchase: a partial refund, not a
-      // disposal. This is the case the naive "any negative line" predicate got
-      // wrong about half the time on production data.
       const refunded = await createProduct(
         ctx.db,
         makeProductInput({ name: "Partly Refunded Sander", price: 100 }),
@@ -734,17 +705,12 @@ describe("problems repo", () => {
       expect(flagged).toBeDefined();
       expect(flagged?.soldQuantity).toBe(1);
       expect(flagged?.liveQuantity).toBe(1);
-      // Stored as the ledger stores it — negative, because it is a disposal.
       expect(flagged?.proceeds).toBe(-320);
       expect(flagged?.locations.map((l) => l.id)).toEqual([loc.id]);
 
-      // Rule 2: both partial sales leave a positive ledger balance that exactly
-      // matches the shelf, regardless of how sold and stocked compare.
       for (const id of [partialEqual.id, partialLargeSale.id]) {
         expect(found.soldButStillStocked.some((p) => p.id === id)).toBe(false);
       }
-      // Rule 1: the refund sits on a purchase that nets +$200, so it is not a
-      // disposal at all.
       expect(found.soldButStillStocked.some((p) => p.id === refunded.id)).toBe(
         false,
       );
@@ -1078,11 +1044,6 @@ describe("problems repo", () => {
         productId: linked.id,
         productQuantity: -1,
       });
-      // THE false positive this predicate exists to avoid. A negative line with
-      // no product, sitting on a purchase that nets POSITIVE: a refund, a price
-      // adjustment, a family contribution. On production these outnumber real
-      // disposals, and keying on bare negative lines was wrong about half the
-      // time.
       await seedLine({
         name: "lumber",
         cost: 300,
@@ -1109,7 +1070,6 @@ describe("problems repo", () => {
           vendorName: "eBay",
         }),
       );
-      // Not a disposal — the purchase nets +$255.
       expect(
         found.unlinkedExitExpenses.some(
           (row) => row.name === "lumber overcharge refunded",
@@ -1446,8 +1406,6 @@ describe("problems repo", () => {
         );
       }
 
-      // Straight to the table: the write path now refuses exactly this, which
-      // is the point — these rows can only pre-date the gate.
       await getDb(ctx.db)
         .insert(projectToolUsage)
         .values([
@@ -1674,9 +1632,6 @@ describe("problems repo", () => {
         ),
       ).toBe(true);
 
-      // With the bridging USDA portion, the product is one component → not flagged.
-      // Provider-backed conversion membership is materialized; refresh the
-      // projection through its maintenance seam before reading the exact list.
       await rebuildProductConversionCoverageProjection(
         ctx.db,
         fakeUsdaClient([sugarFood]),
@@ -1726,7 +1681,6 @@ describe("problems repo", () => {
     };
 
     it("flags each fillable gap and skips fully-populated products without a lookup", async () => {
-      // (a) Unspecified manufacturer, but priced + imaged → only the manufacturer gap.
       const noManu = await createProduct(
         ctx.db,
         makeProductInput({ name: "No Manufacturer", upc: UPC_MANU }),
@@ -1738,7 +1692,6 @@ describe("problems repo", () => {
         .where(eq(product.id, noManu.entityId));
       await attachImage(noManu.entityId);
 
-      // (b) Has manufacturer + image, but no price → only the price gap.
       const noPrice = await createProduct(
         ctx.db,
         makeProductInput({ name: "No Price", upc: UPC_PRICE }),
@@ -1746,7 +1699,6 @@ describe("problems repo", () => {
       );
       await attachImage(noPrice.entityId);
 
-      // (c) Has manufacturer + price, but no image → only the image gap.
       const noImage = await createProduct(
         ctx.db,
         makeProductInput({ name: "No Image", upc: UPC_IMAGE }),
@@ -1821,7 +1773,6 @@ describe("problems repo", () => {
     });
 
     it("does not flag a gap the lookup itself can't fill", async () => {
-      // Missing price, but the lookup has no price either → nothing to re-import.
       const noPrice = await createProduct(
         ctx.db,
         makeProductInput({ name: "Still No Price", upc: UPC_PRICE }),
@@ -1886,10 +1837,6 @@ describe("problems repo", () => {
   });
 });
 
-// The household-tracker slice of the Problems payload. Detection itself lives in
-// repo/project/attention.ts (covered there); this asserts the service-layer
-// split — that the flat attention list lands in the right per-rule slices, and
-// that a removed project's rows don't leak into the always-on badge count.
 describe("problems service — tracker slice", () => {
   const ctx = withTestDb();
 
@@ -2148,9 +2095,6 @@ describe("problems service — tracker slice", () => {
   });
 });
 
-// The recount-staleness detectors (tenet 1: only a deliberate recount restores
-// inventory truth). All three are cheap SQL in the `fast` group, so drive them
-// through findFastProblems rather than the full findAllProblems scan.
 describe("problems service — recount staleness", () => {
   const ctx = withTestDb();
   const amount = { value: 2, unit: "each" };
@@ -2300,8 +2244,6 @@ describe("problems service — recount staleness", () => {
     const { unknownParkedItems } = await findFastProblems(ctx.db);
     expect(unknownParkedItems.map((i) => i.id)).toContain(parked.id);
     expect(unknownParkedItems.map((i) => i.id)).not.toContain(filed.entry.id);
-    // The location ref is what lets the Problems card offer a recount rooted at
-    // Unknown — the only thing that actually drains it.
     expect(unknownParkedItems.find((i) => i.id === parked.id)).toMatchObject({
       product: { id: parkedProduct.id, name: "Parked widget" },
       location: { name: "Unknown" },
@@ -2380,9 +2322,6 @@ describe("problems service — totals count defects only", () => {
     expect(all.emptyLocations.map((l) => l.id)).toContain(emptyLoc.id);
     expect(all.orphanedProducts.map((p) => p.id)).toContain(orphan.id);
 
-    // ...but only the defect moves the total. Compare against the summed
-    // defect sections rather than a literal, since the shared fixture DB may
-    // carry unrelated rows.
     const defectSum = sumProblemSections(
       Object.fromEntries(
         Object.entries(all).filter(([, v]) => Array.isArray(v)),
@@ -2660,9 +2599,6 @@ describe("problems — duplicate vendors", () => {
       ),
     );
 
-  // Idempotent by contract (vendor.integration.test pins it), so this reads an
-  // existing roster row's internal uuid rather than creating anything.
-  // The detector rows expose these entities by their canonical public ids.
   const vendorUuidOf = (name: string) => findOrCreateVendor(ctx.db, name);
 
   it("pairs two spellings of one vendor, keeping the one with more charges", async () => {
@@ -2711,9 +2647,6 @@ describe("problems — duplicate vendors", () => {
   });
 
   it("clears once merged with the two ids the row carries", async () => {
-    // The row's own `canonicalSampleId`/`sampleId` are exactly
-    // what the Problems card hands `mergeVendors` (which now speaks
-    // shortcodes) — this pins that they're the right way round.
     await seedCharge("Lowes", "LW-1");
     await seedCharge("Lowes", "LW-2");
     await seedCharge("Lowe's", "LW-3");
@@ -2949,8 +2882,6 @@ describe("problems — charges not reconciling", () => {
 
     const { purchasesNotReconciling } = await findFastProblems(ctx.db);
 
-    // The detector's id is the canonical public purchase id.
-    // Ordered by the size of the discrepancy: $200 before $15.
     expect(purchasesNotReconciling.map((c) => c.id)).toEqual([
       bigCharge.id,
       smallCharge.id,
@@ -3349,10 +3280,6 @@ describe("problems — purchase financial settlement mismatches", () => {
   });
 
   it("compares against incurred spend only, so a planned line can't manufacture a mismatch", async () => {
-    // The payment-schedule shape from FinancialReconciliationInput: a deposit
-    // has settled, the rest of the contract is booked but hasn't happened yet.
-    // Counting the planned $400 would report a mismatch against a purchase
-    // behaving exactly as intended.
     const deposit = await seedLine({
       name: "venue deposit",
       cost: 100,
@@ -3395,8 +3322,6 @@ describe("problems — purchase financial settlement mismatches", () => {
 
     const rows = await mismatches();
     expect(rows.map((row) => row.id)).toEqual([deposit.purchaseId]);
-    // The worklist row still names the purchase's real size, even though only
-    // the incurred $100 was compared.
     expect(rows[0]).toMatchObject({
       expenseTotal: 500,
       financialReconciliation: { delta: -12 },
@@ -3433,8 +3358,6 @@ describe("problems — purchase financial settlement mismatches", () => {
     await postCharge(account.id, unknown.purchaseId as PurchaseShortcode, 95);
     await postCharge(account.id, compared.purchaseId as PurchaseShortcode, 95);
 
-    // Cost unknown is not cost zero: with an incurred row unpriced there is no
-    // total to compare, so the first purchase is silence, not a mismatch.
     const rows = await mismatches();
     expect(rows.map((row) => row.id)).toEqual([compared.purchaseId]);
     expect(rows[0]?.financialReconciliation.delta).toBe(35);

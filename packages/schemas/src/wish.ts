@@ -24,7 +24,6 @@ export type WishCreateInput = z.infer<typeof wishCreateInput>;
 
 export const wishUpdateData = deriveUpdateData(wishFields, {
   extend: {
-    /** A server-time toggle; the stored historical value is `acquiredAt`. */
     acquired: z.boolean().optional(),
   },
 });

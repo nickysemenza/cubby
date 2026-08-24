@@ -154,7 +154,6 @@ export function useTableConfig<TData extends RowData>({
         ...(rowContentVersion !== undefined ? { rowContentVersion } : {}),
         defaultLayout: layout?.defaultLayout,
       },
-      // Row selection
       ...(getRowId ? { getRowId } : {}),
       ...(enableRowSelection !== undefined ? { enableRowSelection } : {}),
       ...(onRowSelectionChange ? { onRowSelectionChange } : {}),

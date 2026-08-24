@@ -1344,8 +1344,6 @@ export function ExpenseList({
   );
 }
 
-// -- Project Table --
-
 /**
  * `N sub` chip after a parent project's name. Module-level because
  * `nameSuffix` sits in useStandardColumns' columns-`useMemo` dependency array

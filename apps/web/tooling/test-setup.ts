@@ -569,69 +569,35 @@ export async function seedFromCSV(
 }
 
 /**
- * Seed one row of `entity` through its REAL tRPC create procedure.
+ * Seed one row of `entity` through the generic kernel mutation procedure.
  *
- * Introspects `${entity}.create`'s own declared input schema off the live
- * router (`appRouter._def.procedures[...]`, the same device
- * `server.unit.test.ts`'s "hands every entity get tool an argument its
- * router's getByID accepts" guard uses for `getByID`) and feeds it straight
- * to `mock()`. That means a seed can never drift out of sync with what
- * create actually accepts — unlike a hand-written `make<Entity>Input()`
- * builder, which is exactly the drift class `filter-application.integration.
- * test.ts`'s per-field probes exist to catch. `overrides` layers onto the
- * generated input via `mock()`'s own deep-merge; a test spells out only the
- * fields it asserts on or needs to link (e.g. `{ vendorId }`).
- *
- * `appRouter` and `mock` are imported dynamically, mirroring every other
- * repo import in this file: importing them at module scope would pull
- * env.js's eager validation into the `globalSetup` phase, before `test.env`
- * is applied (see the NOTE above `seedFromCSV`).
- *
- * `caller` is typed loosely (`object`, narrowed at runtime) rather than as a
- * structural `Record<string, { create: ... }>`: the real caller this is
- * called with (`createTestCaller(appRouter, ctx.db)`) is a giant router
- * record whose OTHER branches (e.g. the nested `ai` sub-router) don't shape
- * up to `{ create }`, and TypeScript checks an index-signature parameter
- * against every property of the argument, not just the one this function
- * reads.
+ * The generated binding supplies the authoritative create schema to `mock()`;
+ * overrides provide only required links or values a schema cannot synthesize.
  */
 export async function seedEntity<E extends ShortcodeEntity>(
   caller: object,
   entity: E,
   overrides?: Record<string, unknown>,
 ): Promise<unknown> {
-  const { appRouter } = await import("../src/server/api/root");
+  const { ENTITY_BINDINGS } = await import("../src/server/entity-bindings");
   const { mock } = await import("../src/lib/test/mock-schema");
 
-  const procedures = (
-    appRouter as unknown as {
-      _def: {
-        procedures: Record<string, { _def: { inputs: unknown[] } } | undefined>;
-      };
-    }
-  )._def.procedures;
-  const procedure = procedures[`${entity}.create`];
-  if (!procedure) {
-    throw new Error(
-      `seedEntity: "${entity}.create" is not a declared tRPC procedure`,
-    );
-  }
-  const inputSchema = procedure._def.inputs[0] as
-    | Parameters<typeof mock>[0]
-    | undefined;
-  if (!inputSchema) {
-    throw new Error(`seedEntity: "${entity}.create" declares no input schema`);
+  const binding = ENTITY_BINDINGS[entity].crud;
+  if (!binding) {
+    throw new Error(`seedEntity: "${entity}" is not kernel-creatable`);
   }
 
-  const input = mock(inputSchema, { overrides });
-  const entityCaller = (
-    caller as Record<string, { create?: (input: unknown) => Promise<unknown> }>
-  )[entity];
-  if (typeof entityCaller?.create !== "function") {
+  const input = mock(binding.createInput, { overrides });
+  const mutate = (
+    caller as {
+      entity?: { mutate?: (input: unknown) => Promise<unknown> };
+    }
+  ).entity?.mutate;
+  if (!mutate) {
     throw new Error(
-      `seedEntity: caller has no "${entity}.create" — build it from a ` +
-        `router that includes "${entity}" (e.g. createTestCaller(appRouter, ctx.db))`,
+      "seedEntity: caller has no generic entity.mutate procedure",
     );
   }
-  return entityCaller.create(input);
+  const result = await mutate({ action: "create", entity, data: input });
+  return (result as { item?: unknown }).item;
 }

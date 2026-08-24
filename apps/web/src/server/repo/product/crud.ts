@@ -311,8 +311,6 @@ const fetchProductById = async (
   });
   if (!row) return undefined;
   const priced = await enrichProductRowsWithPricing(db, [row]);
-  // The detail page shows Expected beside On hand, so it needs the same ledger
-  // the list does — one grouped query for the single row.
   return (
     await hydrateProductLocationBreadcrumbs(
       db,
@@ -426,8 +424,6 @@ export const getProductImagesByProductIds = async (
         notDeleted(image),
       ),
     )
-    // Display order: sortOrder first (0-default legacy rows tie-break on
-    // createdAt) — images[0] is the cover everywhere.
     .orderBy(asc(productImage.sortOrder), asc(productImage.createdAt));
 
   for (const row of rows) {
@@ -753,8 +749,6 @@ export const productList = async (
         ? and(
             sql`${onHandUnitsFilterSql(product.id)} > 0`,
             sql`${partsAccountedKitsSql(product.id)} > 0`,
-            // The defect is arithmetic, not shape: together they claim more
-            // units than the ledger says were acquired.
             sql`${onHandUnitsFilterSql(product.id)} + ${partsAccountedKitsSql(product.id)} > ${expectedQuantityFilterSql(product.id)}`,
           )
         : undefined,
@@ -954,9 +948,6 @@ export const productList = async (
   const { take, skip } = buildTakeSkip(pagination);
   const skipAggregates = readIntent === "sample";
 
-  // Execute queries in parallel and transform results. The aggregate query
-  // shares whereClause, so the footer's price total covers the FULL filtered
-  // set (the client only holds a page).
   const [{ data: results, count: totalCount }, aggregates, expenseAggregates] =
     await Promise.all([
       executeListQueryWithCount({
@@ -1015,10 +1006,6 @@ export const productList = async (
     results.map((row) => row.id),
   );
   const pricedResults = await enrichProductRowsWithPricing(db, results);
-  // One grouped query for the page, not a fourth correlated `extras` scalar:
-  // the ledger is four numbers, and four correlated subqueries per row would
-  // cost more than one grouped pass. On-hand needs no query at all — the
-  // `inventoryEntry` relation is already loaded above.
   const ledgeredResults = await enrichProductRowsWithQuantityLedger(
     db,
     pricedResults,
@@ -1441,11 +1428,6 @@ export const createProduct = async (
 
       return { ...newProduct, images, externalIds: createdExternalIds };
     });
-    // Read-after-commit on the outer `db`, same shape as `getPurchaseByID`.
-    // Every gap check below is gated on the product having live inventory or
-    // expenses, and a brand-new product has neither, so this always resolves
-    // to the empty-gaps case today — computed for real rather than
-    // hardcoded, so it stays correct if that gating ever changes.
     const qualities = await loadProductDataQualities(db, [created.id]);
     return dbProductToTopLevelAPI({
       ...created,
@@ -1648,10 +1630,6 @@ export const updateProduct = async (
         ),
       });
 
-      // `externalIds` is in the list because the barcode moved into it. Without
-      // that, a barcode edit through this path would be silently unaudited —
-      // `computeChanges` diffs DB ROWS, so it can no longer see one, and only
-      // `patchProductExternalIds` audited identifier changes before now.
       const changes = computeChanges(
         { ...beforeProduct, externalIds: beforeExternalIds },
         { ...updated, externalIds: currentExternalIdRows },

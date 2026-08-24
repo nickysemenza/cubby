@@ -108,7 +108,6 @@ export const soldButStillStockedSchema = z.object({
   // Units still owned according to the shared on-hand projection. Mixed-unit
   // stock has no honest number and is not reported.
   liveQuantity: z.number(),
-  // Net proceeds across those disposal lines (negative, as stored).
   proceeds: z.number(),
   locations: z.array(
     z.object({
@@ -180,14 +179,6 @@ export const toolUsedOutsideOwnershipSchema = z.object({
   projectBoundary: plainDate,
 });
 
-// Two Product rows for one physical SKU, keyed on (manufacturer, model) with
-// external ids from different sources — the cluster `merge_products` folds.
-//
-// Measured on the live 2,472-product catalog: 5 real duplicates found, ~6 false
-// positives, every one a legitimate variant separated by a distinct UPC or a
-// distinct retailer SKU (both of which the detector now suppresses on). Trigram
-// name similarity was near-useless for the same job — see the detector's own
-// header note before re-trying it.
 export const duplicateProductIdentitySchema = z.object({
   manufacturer: z.string(),
   model: z.string(),
@@ -236,7 +227,6 @@ export const ingredientWithPartialCoverageSchema = z.object({
   hasPrice: z.boolean(),
   hasUsdaLink: z.boolean(),
   usdaUnavailable: z.boolean(),
-  // Always set here (these rows are ingredient products) — see above.
   ingredientId: ingredientShortcode,
 });
 
@@ -333,9 +323,6 @@ export const unknownParkedItemSchema = z.object({
     id: productShortcode,
     name: z.string(),
   }),
-  // Always the global Unknown, but carried per row so the section can offer the
-  // same recount-session deep link the other recount detectors do — draining
-  // Unknown is a recount rooted there.
   location: z.object({
     id: locationShortcode,
     name: z.string(),
@@ -385,7 +372,6 @@ export const labelVariantSchema = z.object({
 export const duplicateVendorSchema = z.object({
   ...labelVariantFields,
   sampleId: vendorShortcode,
-  /** The vendor row a merge would KEEP — the majority spelling. */
   canonicalSampleId: vendorShortcode,
 });
 
@@ -616,7 +602,6 @@ export const duplicateSpendCandidateSchema = z.object({
   expenseName: z.string(),
   cost: money,
   expenseDate: plainDate.nullable(),
-  /** The itemized purchase that appears to already cover this money. */
   purchaseId: purchaseShortcode,
   /** Through the join; null only if the vendor was soft-deleted. */
   vendorName: z.string().nullable(),
@@ -626,7 +611,6 @@ export const duplicateSpendCandidateSchema = z.object({
   /** What the paperwork claimed. Never spend. Null if none recorded. */
   purchaseStatedTotal: moneyNullable,
   purchaseExpenseCount: z.number().int(),
-  /** Which total the expense's cost equalled. */
   matchedOn: z.enum(["expense_total", "stated_total"]),
   dayDelta: z.number().int(),
   nameSimilarity: z.number(),
@@ -674,11 +658,9 @@ export const duplicateFinancialAccountSourceAliasSchema = z.object({
 export const financialTransactionAllocationDefectReason = z.enum([
   /** Allocations exist but do not sum to the transaction's own amount. */
   "sum-mismatch",
-  /** A transaction of a non-settlement kind carries allocations. */
   "non-settlement-kind",
   /** The transaction's amount has the wrong sign for its kind. Replaces the DB CHECK, which passes vacuously once the mirror is NULL. */
   "kind-sign-violation",
-  /** An allocation's sign differs from the transaction it slices. */
   "allocation-sign-mismatch",
 ]);
 
@@ -897,8 +879,6 @@ const allProblemArrayFields = {
 export const allProblemsSchema = z.object({
   ...allProblemArrayFields,
   sectionTotals: sectionTotalsSchema.default({}),
-  // Grouped clients can be mid-load, so aggregate callers may omit this until
-  // the UPC lane resolves. A resolved UPC lane always supplies it.
   upcFreshness: upcEnrichmentFreshnessSchema.optional(),
   conversionCoverageFreshness: conversionCoverageFreshnessSchema.optional(),
   totalProblems: z.number(),
@@ -1052,7 +1032,6 @@ export const PROBLEM_CLASS = {
   blockedWorkProjects: "defect",
   projectsWithDateDrift: "defect",
 
-  // --- coverage: backlog size, never reaches zero ---
   // Misc buckets are *expected* to be unpriced — the `product/unpriced-buckets` view
   // already partitions them out for exactly this reason; classing them here is
   // what finally keeps them out of the total.
@@ -1138,12 +1117,10 @@ export const problemsCountSchema = z.object({
  * list.
  */
 export const coverageTotalsSchema = z.object({
-  /** Live non-ingredient products (the ones a photo backfill could cover). */
   productsWithNoImages: z.number(),
   /** Live leaf locations — the only ones that can hold inventory directly. */
   emptyLocations: z.number(),
   staleLocations: z.number(),
-  /** Live inventory entries. */
   neverVerifiedInventory: z.number(),
   ingredientsWithoutProduct: z.number(),
   vendorsWithPurchases: z.number(),

@@ -1,6 +1,6 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { SavedViewChips } from "./EntityManifestGrid";
+import { EntityInspector, SavedViewChips } from "./EntityManifestGrid";
 
 describe("SavedViewChips", () => {
   it("renders ordinary and problem-backed views in manifest order", () => {
@@ -12,19 +12,39 @@ describe("SavedViewChips", () => {
     expect(firstBadge.compareDocumentPosition(problemBadge)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
-    expect(firstBadge.querySelector("svg")).toBeNull();
-    expect(problemBadge.querySelector("svg")).toHaveClass("text-warning");
-    expect(
-      within(firstBadge).queryByText("Also appears on the Problems page."),
-    ).not.toBeInTheDocument();
-    expect(
-      within(problemBadge).getByText("Also appears on the Problems page."),
-    ).toHaveClass("sr-only");
+    expect(firstBadge).toBeInTheDocument();
+    expect(problemBadge).toBeInTheDocument();
   });
 
   it("renders a dash when an entity declares no saved views", () => {
     render(<SavedViewChips entity="vendor" />);
 
     expect(screen.getByText("—")).toBeInTheDocument();
+  });
+});
+
+describe("EntityInspector shortcode contracts", () => {
+  it("shows the permanent Product printed-label alias as inbound-only", () => {
+    render(<EntityInspector entity="product" count={12} />);
+
+    expect(screen.getByText("Printed-label contract")).toBeInTheDocument();
+    expect(screen.getAllByText("PRD-XXXX").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("P-XXXX").length).toBeGreaterThan(0);
+    expect(screen.getByText(/permanent inbound rewrite/i)).toBeInTheDocument();
+    expect(screen.getByText("inbound only")).toBeInTheDocument();
+    expect(screen.getByText("permanent — printed labels")).toBeInTheDocument();
+  });
+
+  it("shows Location label compatibility and rejects a Recipe alias", () => {
+    const { rerender } = render(
+      <EntityInspector entity="location" count={3} />,
+    );
+    expect(screen.getAllByText("LOC-XXXX").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("L-XXXX").length).toBeGreaterThan(0);
+
+    rerender(<EntityInspector entity="recipe" count={2} />);
+    expect(screen.getAllByText("RCP-XXXX").length).toBeGreaterThan(0);
+    expect(screen.queryByText("R-XXXX")).not.toBeInTheDocument();
+    expect(screen.getByText(/removed R- form/i)).toBeInTheDocument();
   });
 });

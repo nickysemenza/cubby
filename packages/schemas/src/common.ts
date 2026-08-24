@@ -101,7 +101,6 @@ export type RelationMutationOut = z.infer<typeof relationMutationOut>;
  * carries a `status`. Same field names, same meanings, one definition.
  */
 export const operationRefusalOut = z.object({
-  /** The rendered sentence a human reads. */
   error: z.string().min(1),
   /** tRPC code. Absent when the refusal wasn't thrown as a TRPCError. */
   code: z.string().optional(),
@@ -135,11 +134,8 @@ export const deleteEntityOut = z.object({
   sideEffects: z
     .array(
       z.object({
-        /** Stable slug, e.g. `"purchase-now-empty"`. */
         code: z.string().min(1),
-        /** One line an agent can act on. */
         description: z.string().min(1),
-        /** Public ids the effect touched. */
         ids: z.array(z.string()),
       }),
     )

@@ -7,6 +7,7 @@ import {
 import { PurchaseDetail } from "~/app/purchases/purchase-detail";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { DetailPagePending } from "~/components/route-pending";
+import { entityDetailQueryOptions } from "~/entities/entity-detail";
 import { shortcodeHead } from "~/lib/page-title";
 import { purchaseLabel } from "~/lib/purchase-label";
 
@@ -14,8 +15,7 @@ import { purchaseLabel } from "~/lib/purchase-label";
 // splitter re-parses an inlined call expression with a JSX-less babel config,
 // so only the identifier path survives a page body that renders JSX.
 const PurchaseDetailPage = detailPage({
-  query: (api, shortcode) =>
-    api.purchase.getByShortcode.queryOptions({ shortcode }),
+  query: (shortcode) => entityDetailQueryOptions("purchase", shortcode),
   render: (purchase, shortcode) => (
     <PurchaseDetail key={shortcode} purchase={purchase} />
   ),
@@ -32,9 +32,7 @@ export const Route = createFileRoute("/_authenticated/purchases/$shortcode")({
   loader: ({ params, context }) =>
     ensureDetailRecord(
       context.queryClient,
-      context.trpc.purchase.getByShortcode.queryOptions({
-        shortcode: params.shortcode,
-      }),
+      entityDetailQueryOptions("purchase", params.shortcode),
     ),
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,

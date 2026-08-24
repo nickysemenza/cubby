@@ -41,12 +41,7 @@ export default defineConfig({
   maxFailures: isCI ? 6 : 0,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: isCI
-    ? [
-        ["github"],
-        ["html"],
-        ["blob", { outputDir: "playwright-blob-report" }],
-        ["./tests/e2e/e2e-harness-reporter.ts"],
-      ]
+    ? [["github"], ["html"], ["./tests/e2e/e2e-harness-reporter.ts"]]
     : [["html"], ["./tests/e2e/e2e-harness-reporter.ts"]],
   expect: {
     // Allow a bit more time on CI for client-side navigations

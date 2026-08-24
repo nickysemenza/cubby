@@ -24,18 +24,11 @@ describe("urlStringParam", () => {
   });
 
   it("recovers an all-digits value parsed as a number", () => {
-    // Real order ids (Tool Nirvana's are pure digits) and the SKUs people
-    // search the ledger for.
     expect(urlStringParam.parse(11334)).toBe("11334");
     expect(urlStringParam.parse(486242)).toBe("486242");
   });
 
   it("drops a numeric value too long to have survived JSON.parse intact", () => {
-    // Lowe's order ids run past 2^53, so `?order=300902141253424770` reaches
-    // this schema already rounded to …800. Coercing that would filter on an id
-    // nobody typed and return a confidently empty ledger; dropping it at least
-    // shows up as a missing chip. `<Link search>` quotes the value, so app
-    // links keep working — only the hand-typed bare form is affected.
     expect(urlStringParam.parse(300902141253424770)).toBeUndefined();
     expect(urlStringParam.parse(Number.MAX_SAFE_INTEGER)).toBe(
       String(Number.MAX_SAFE_INTEGER),
@@ -43,8 +36,6 @@ describe("urlStringParam", () => {
   });
 
   it("recovers a true/false value parsed as a boolean", () => {
-    // The `future` filter's own option values are the literal strings
-    // "true"/"false", so its URL form is indistinguishable from a JSON boolean.
     expect(urlStringParam.parse(true)).toBe("true");
     expect(urlStringParam.parse(false)).toBe("false");
   });

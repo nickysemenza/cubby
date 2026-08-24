@@ -10,7 +10,6 @@ import { mutationSideEffectsSchema } from "@cubby/schemas/background-jobs";
 import {
   ingredientShortcode,
   recipeShortcode,
-  unsafeIngredientId,
 } from "@cubby/schemas/identifiers";
 import {
   enrichmentRowsOut,
@@ -38,10 +37,7 @@ import {
   getRecipeUsagesForIngredient,
   resolveOrCreateIngredients,
 } from "~/server/repo/ingredient";
-import {
-  bindShortcodeResolver,
-  resolveLiveShortcode,
-} from "~/server/repo/shortcode-resolver";
+import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import {
   enrichmentWorkbench as enrichmentWorkbenchService,
   getIngredientByID,
@@ -77,20 +73,6 @@ const getByID = protectedProcedure
       await ingredientShortcodes.one(ctx.db, input.id),
     ),
   );
-
-const getByShortcode = protectedProcedure
-  .input(z.object({ shortcode: ingredientShortcode }))
-  .output(strictOutput(ingredientWithFoodOut.nullable()))
-  .query(async ({ ctx, input }) => {
-    const id = await resolveLiveShortcode(
-      ctx.db,
-      input.shortcode,
-      "ingredient",
-    );
-    return id
-      ? getIngredientByID(ctx.db, ctx.usdaClient, unsafeIngredientId(id))
-      : null;
-  });
 
 const merge = protectedProcedure
   .input(ingredientMergeInput)
@@ -225,7 +207,6 @@ export const ingredientRouter = createTRPCRouter({
   matchNames,
   resolveOrCreate,
   getByID,
-  getByShortcode,
   getManyByIDs,
   list,
   merge,

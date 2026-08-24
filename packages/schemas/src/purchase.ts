@@ -163,7 +163,6 @@ export const purchaseFilterFields = {
   /** `"none"` matches purchases with no order id — the ~40% the vendor never issued one for. */
   orderIdPresenceFilter: presenceFilter,
   statedTotalPresenceFilter: presenceFilter,
-  /** Empty, partly unpriced, or fully priced Expense sets; several values OR. */
   expenseStatus: oneOrMany(purchaseExpenseStatus).optional(),
   /** Shared soft verdict over statedTotal versus SUM(expense.cost). */
   reconciliation: oneOrMany(purchaseReconciliation).optional(),
@@ -207,7 +206,6 @@ export const purchaseOut = z.object({
   ...purchaseFields,
   /** Resolved through the join; null only if the vendor was soft-deleted. */
   vendorName: z.string().nullable(),
-  /** The vendor's displayable logo for embedded purchase surfaces. */
   vendorLogo: imageUrlSummary.nullable(),
   /**
    * Link out to the vendor's own order page, derived at read time from
@@ -225,7 +223,6 @@ export const purchaseOut = z.object({
    * disagree — see the reconciliation note on `statedTotal`.
    */
   expenseTotal: money,
-  /** Shared stated-total verdict, including posted-refund explanations. */
   reconciliation: purchaseReconciliation,
   /** Settlement evidence only; never participates in spend rollups. */
   financialReconciliation: financialReconciliationSummary,
@@ -329,11 +326,6 @@ export type LinkExpensesToPurchaseInput = z.infer<
   typeof linkExpensesToPurchaseInput
 >;
 
-/**
- * Split one expense into parts against the same purchase — replaces the
- * `(combo, saw portion)` naming convention that encoded splits in 12 row names.
- * Each part keeps its own trade/costType/project/product.
- */
 export const splitExpenseInput = z.object({
   expenseId: expenseShortcode,
   /**
@@ -498,9 +490,6 @@ export const purchaseProductOut = z.object({
 export type PurchaseProductOut = z.infer<typeof purchaseProductOut>;
 export const purchaseProductsOut = z.array(purchaseProductOut);
 
-/** The MCP envelope: same rows, `{items}` root. See `productComponentsMcpOut`
- * (`./product-components`) — an array root fails the SDK's own re-validation of
- * `structuredContent`, so it broke every `list_purchase_products` call. */
 export const purchaseProductsMcpOut =
   createItemsResponseSchema(purchaseProductOut);
 

@@ -83,8 +83,6 @@ describe("foldForest", () => {
 
   it("emits each node exactly once even when every node is passed as a root", () => {
     const forest = buildForest([node("a"), node("b", "a"), node("c", "b")]);
-    // The Gantt's extent pass does exactly this: start everywhere so cyclic
-    // nodes are covered, and rely on emit-once to keep it O(n).
     expect(preorder(forest, [...forest.roots, ...forest.cyclicRoots])).toEqual([
       "a",
       "b",
@@ -93,10 +91,6 @@ describe("foldForest", () => {
   });
 
   it("folds each node once even when a root is listed before its own parent", () => {
-    // Leaf-first: every node is a starting root, and each one is also a
-    // descendant of a LATER root. Without the recursion-level memo, walking
-    // `a` re-folds `b` and `c` from scratch — quadratic on a deep chain, and
-    // a `roots` array in this order is what server-sorted rows produce.
     const items = [node("c", "b"), node("b", "a"), node("a")];
     const forest = buildForest(items);
     const folded: string[] = [];
@@ -110,8 +104,6 @@ describe("foldForest", () => {
     );
 
     expect(folded).toEqual(["c", "b", "a"]);
-    // `c` and `b` were folded as their own roots (depth 0), and `a`'s walk
-    // reused those results rather than re-folding them at depth 1/2.
     expect(depths).toEqual([0, 0, 0]);
   });
 
@@ -153,7 +145,6 @@ describe("foldForest", () => {
   });
 
   it("emits nothing when a cyclic forest is walked from `roots` alone", () => {
-    // The Gantt's policy: a project in a parent loop stays off the chart.
     const forest = buildForest([node("a", "b"), node("b", "a")]);
     expect(preorder(forest)).toEqual([]);
   });
@@ -164,8 +155,6 @@ describe("foldForest", () => {
       ids.map((id, i) => (i === 0 ? node(id) : node(id, ids[i - 1] ?? null))),
     );
     const walked = preorder(forest);
-    // The capped node itself is folded (with no children); only what's BELOW
-    // it is dropped. One root, no duplicates, strictly fewer than the input.
     expect(walked[0]).toBe("n0");
     expect(walked.length).toBe(101);
     expect(new Set(walked).size).toBe(walked.length);

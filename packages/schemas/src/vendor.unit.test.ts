@@ -69,7 +69,6 @@ describe("purchaseOrderUrl", () => {
     expect(isSyntheticOrderId("WN28187563")).toBe(false);
   });
 
-  // A half-typed template would otherwise link every purchase to one page.
   it("refuses a template with no {orderId} token", () => {
     expect(
       purchaseOrderUrl({
@@ -80,12 +79,9 @@ describe("purchaseOrderUrl", () => {
   });
 
   it("percent-encodes ids that carry URL-significant characters", () => {
-    // Tool Nirvana prints a leading '#', which would otherwise truncate the URL
-    // at the fragment.
     expect(
       purchaseOrderUrl({ orderUrlTemplate: EBAY, orderId: "#11325" }),
     ).toBe("https://www.ebay.com/mesh/ord/details?orderid=%2311325");
-    // An invoice-numbered vendor's slash would otherwise become a path segment.
     expect(
       purchaseOrderUrl({ orderUrlTemplate: EBAY, orderId: "C02791/2" }),
     ).toBe("https://www.ebay.com/mesh/ord/details?orderid=C02791%2F2");
@@ -109,8 +105,6 @@ describe("purchaseOrderUrl", () => {
     }
   });
 
-  // `z.url()` ACCEPTS `javascript:alert(1)`, so schema validity alone wouldn't
-  // catch this — and the result goes straight into an `href`.
   it("refuses non-http(s) schemes", () => {
     for (const template of [
       "javascript:alert('{orderId}')",

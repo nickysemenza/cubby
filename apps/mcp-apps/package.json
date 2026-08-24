@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/bundles.ts"
+    ".": "./src/bundles.ts",
+    "./metadata": "./src/metadata.ts"
   },
   "scripts": {
     "build": "node build.mjs",

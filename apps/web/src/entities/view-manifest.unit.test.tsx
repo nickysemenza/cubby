@@ -243,8 +243,6 @@ describe("isViewActive", () => {
   });
 
   it("drops the checkmark when a filter is edited by hand", () => {
-    // A view is a starting point, not a mode — keeping it lit while showing
-    // different rows would be the dishonest readout.
     expect(
       isViewActive(
         view,
@@ -330,13 +328,9 @@ describe("views reveal the columns they select on", () => {
     expect(shelfDisagrees?.layout?.columnVisibility).toEqual({
       expectedQuantity: true,
       quantityVariance: true,
-      // A product can be short while sitting in no inventory row at all, so
-      // the bins-in-service count has to be on screen to explain the variance.
       servingAsLocations: true,
     });
 
-    // Every product view filters on a column hidden by `initialColumnVisibility`,
-    // so each one has to name it.
     for (const view of productViews) {
       for (const filter of view.filters) {
         expect(
@@ -378,9 +372,6 @@ describe("the unlocated views stay one question at three widths", () => {
   });
 
   it("cannot overlap shelf-disagrees", () => {
-    // One view requires presence somewhere — its variance gate unions stock
-    // and locations — and the other requires absence from both. Disjoint by
-    // construction, not by the filters happening not to co-occur.
     const disagrees = productViews.find((v) => v.id === "shelf-disagrees");
     expect(disagrees?.filters).toContainEqual({
       id: "quantityVariance",
@@ -411,10 +402,6 @@ describe("the unlocated views stay one question at three widths", () => {
   });
 
   it("consumed-on-projects narrows by project presence, using the sentinel", () => {
-    // The one filter it adds, and the reason it costs no server predicate:
-    // FILTER_ANY on the related-projects column expands to the presence field
-    // `relatedWhereConditions` already implements generically for products. A
-    // hand-written `projectId` here would be an id, not a predicate.
     expect(consumed?.filters).toContainEqual({
       id: "related:product.projects",
       value: [FILTER_ANY],
@@ -427,9 +414,6 @@ describe("the unlocated views stay one question at three widths", () => {
   });
 
   it("reveals the related column it filters on", () => {
-    // `related:product.projects` is `defaultVisible: false` in the related
-    // registry, so without this the view would filter on a column the operator
-    // cannot see — an unexplained row count.
     expect(
       consumed?.layout?.columnVisibility?.["related:product.projects"],
     ).toBe(true);
@@ -449,8 +433,6 @@ describe("the unlocated views stay one question at three widths", () => {
   });
 
   it("never reveals Variance, which is `—` for every row it selects", () => {
-    // `onHandUnitsSql` returns NULL on a zero-entry shelf, so the variance
-    // subtraction is NULL across the whole cohort by construction.
     for (const view of [broad, durables, consumed]) {
       expect(view?.layout?.columnVisibility?.quantityVariance).toBeUndefined();
     }

@@ -21,6 +21,7 @@ import {
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Image } from "~/components/ui/image";
 import { Input } from "~/components/ui/input";
+import { entityDetailQueryOptions } from "~/entities/entity-detail";
 import { useTRPC } from "~/integrations/trpc/react";
 import { invalidatesFor } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
@@ -35,7 +36,7 @@ const SEARCH_PAGE_SIZE = 20;
  * books whose EPUB carries only a Calibre UUID, and the cookbooks imported
  * before that resolution existed.
  *
- * Price and shelf location come from a separate `product.getByShortcode`, fired
+ * Price and shelf location come from the generic Product detail read, fired
  * only once a link exists. That keeps `listCookbooks` — which also feeds the
  * browse gallery, the cookbook picker, the hover preview and MCP — free of
  * pricing and inventory joins that only this one panel reads.
@@ -67,11 +68,10 @@ export function CookbookPhysicalCopy({
   });
 
   const detail = useQuery({
-    // `shortcode` is non-null whenever this query is enabled; the fallback
-    // only satisfies the input type on the disabled render.
-    ...api.product.getByShortcode.queryOptions({
-      shortcode: product?.id ?? ("" as ProductShortcode),
-    }),
+    ...entityDetailQueryOptions(
+      "product",
+      product?.id ?? ("PRD-2222" as ProductShortcode),
+    ),
     enabled: product != null,
   });
 

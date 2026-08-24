@@ -13,8 +13,6 @@ import {
 
 const NONE: ReadonlySet<string> = new Set();
 
-// Ids are branded on the real types; the fixtures take plain strings and the
-// cast happens once, at the factory, rather than at every call site.
 type ContributionOverrides = Partial<
   Omit<ShoppingListContribution, "mealId" | "recipeId">
 > & { mealId?: string; recipeId?: string };
@@ -107,8 +105,6 @@ describe("buildShoppingRows", () => {
   });
 
   it("reports an unconvertible row's shortfall as unknown", () => {
-    // Stock exists but its units don't reconcile, so claiming a shortfall
-    // equal to the entire need would invent a number and sort it to the top.
     const row = buildShoppingRows(
       [item({ haveValue: null, status: "unconvertible" })],
       NONE,
@@ -120,9 +116,6 @@ describe("buildShoppingRows", () => {
   });
 
   it("still reports the full need for something you simply don't have", () => {
-    // `missing` also carries a null haveValue, but that's knowledge — buy all
-    // of it. Keying the unknown on haveValue instead of the status would turn
-    // every not-in-stock row into a "?".
     const row = buildShoppingRows(
       [
         item({
@@ -177,8 +170,6 @@ describe("status after exclusion", () => {
     )[0]?.status;
 
   it("keeps the server's verdict when haveValue is null", () => {
-    // null is either "no inventory" or "units don't reconcile" — collapsing
-    // both to one status would lose the distinction the server drew.
     expect(statusFor({ haveValue: null, status: "missing" }, 5)).toBe(
       "missing",
     );
@@ -206,7 +197,6 @@ describe("buildShoppingColumns", () => {
         meals,
         items: [
           item({
-            // MEL-1 is mentioned first, but MEL-2 comes first in `meals`.
             perMeal: [
               contribution({ mealId: "MEL-1", lineIndex: 0 }),
               contribution({ mealId: "MEL-2", lineIndex: 1 }),
@@ -221,8 +211,6 @@ describe("buildShoppingColumns", () => {
   });
 
   it("keeps a meal that plans the same recipe twice as two columns", () => {
-    // The whole reason `lineIndex` exists: keying on meal+recipe would
-    // silently merge two half-batches into one indistinguishable column.
     const { columns } = buildShoppingColumns(
       {
         meals,
@@ -290,7 +278,6 @@ describe("buildShoppingColumns", () => {
     );
 
     expect(groups.map((g) => g.mealId)).toEqual(["MEL-2", "MEL-1"]);
-    // A colSpan built from these has to cover every rendered column.
     expect(groups.reduce((n, g) => n + g.columnKeys.length, 0)).toBe(
       columns.length,
     );
@@ -331,12 +318,9 @@ describe("shoppingRowsToText", () => {
   const rangeLabel = { from: "2026-03-01", to: "2026-03-07" };
 
   it("keeps checked rows and marks them", () => {
-    // Copying mid-shop should hand over the whole list, cart included —
-    // dropping ticked rows would silently shorten someone else's errand.
     const rows = buildShoppingRows(
       [item({ name: "flour", haveValue: 0, perMeal: [contribution()] })],
       NONE,
-      // Rows key on `ingredientId ?? name`, so the check-off key is the id.
       new Set(["ING-1"]),
     );
 

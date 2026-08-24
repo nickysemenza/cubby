@@ -61,14 +61,6 @@ export const mealSortableFields = [
 
 export type MealSortField = (typeof mealSortableFields)[number];
 
-/**
- * Meal-planning schemas. A `meal` is a planned eating occasion on a calendar day
- * that groups one or more recipes (`mealRecipe`), each at a numeric `scale`
- * multiplier. Cost/calorie rollups are derived read-time from `recipe.totals ×
- * scale` (totals are linear in scale) — nothing is denormalized onto the tables.
- */
-
-/** A recipe to plan into a meal. */
 export const mealRecipeInput = z.object({
   recipeId: recipeShortcode.describe("Recipe ID to plan into the meal"),
   scale: mealScale.default(1).describe("Scale multiplier (1 = as written)"),
@@ -96,13 +88,11 @@ const mealCreateShape = {
     .describe(
       "How the meal is eaten. Defaults to `cooked`. Use `eating_out`/`takeout` for a placeholder meal that intentionally has no recipes; only `cooked` meals feed the shopping list.",
     ),
-  // Optional: create a meal with its recipes in one call.
   recipes: z.array(mealRecipeInput).optional(),
 };
 export const mealCreateInput = z.object(mealCreateShape);
 export type MealCreateInput = z.infer<typeof mealCreateInput>;
 
-/** Mutable meal fields (recipes are managed via addRecipe/updateRecipe/removeRecipe). */
 export const mealUpdateData = deriveUpdateData(mealCreateShape, {
   omit: ["recipes"],
 });
@@ -158,7 +148,6 @@ export const mealFilterFields = {
 export const mealFiltersSchema = z.object(mealFilterFields);
 export type MealFilters = z.infer<typeof mealFiltersSchema>;
 
-/** Cost/calorie totals scaled by a meal-recipe's multiplier. */
 export const scaledTotals = costCalorieTotals;
 export type ScaledTotals = z.infer<typeof scaledTotals>;
 
@@ -184,7 +173,6 @@ export const mealRecipeOut = z.object({
 });
 export type MealRecipeOut = z.infer<typeof mealRecipeOut>;
 
-/** Roll-up across a meal's recipes. `pending` means at least one recipe lacked totals. */
 export const mealTotals = z.object({
   costTotal: money,
   costTotalUpper: money.optional(),
@@ -232,7 +220,6 @@ export const mealMcpListOut = createPaginatedResponseSchema(mealMcpOut);
 
 export const mealListOut = z.array(mealOut);
 
-/** The display-ready subset used by Home's seven-day meal glance. */
 export const upcomingMealSummaryOut = z.array(
   z.object({
     id: mealShortcode,
@@ -245,7 +232,6 @@ export const upcomingMealSummaryOut = z.array(
 );
 export type UpcomingMealSummaryOut = z.infer<typeof upcomingMealSummaryOut>;
 
-/** Which meal/recipe contributed how much of an item's total need. */
 export const shoppingListContribution = z.object({
   mealId: mealShortcode,
   mealName: z.string().nullable(),
@@ -253,16 +239,8 @@ export const shoppingListContribution = z.object({
   recipeId: recipeShortcode,
   recipeName: z.string(),
   scale: mealScale,
-  /** This contribution's need, in the item's `basisUnit`. */
   needValue: z.number(),
-  /**
-   * Index into this response's own planned-line list — stable for the lifetime
-   * of one response, which is exactly as long as a matrix column needs. Without
-   * it a meal that plans the same recipe twice (two half-batches at different
-   * scales) collapses into a single indistinguishable column.
-   */
   lineIndex: z.number().int().nonnegative(),
-  /** Sub-recipe chain this contribution came through; empty when direct. */
   via: z.array(needViaOut),
 });
 export type ShoppingListContribution = z.infer<typeof shoppingListContribution>;
@@ -283,7 +261,6 @@ export const unexpandedSubRecipeOut = z.object({
   date: mealDate,
   parentRecipeId: recipeShortcode,
   parentRecipeName: z.string(),
-  /** The planned line this gap belongs to — a matrix column key. */
   lineIndex: z.number().int().nonnegative(),
 });
 export type UnexpandedSubRecipe = z.infer<typeof unexpandedSubRecipeOut>;
@@ -291,13 +268,10 @@ export type UnexpandedSubRecipe = z.infer<typeof unexpandedSubRecipeOut>;
 export const shoppingListItem = z.object({
   ingredientId: ingredientShortcode.nullable(),
   name: z.string(),
-  /** Unit `needValue`/`haveValue` are expressed in: grams when convertible, else the need's own unit. */
   basisUnit: z.string().nullable(),
   /** Total need across all meals in range (sum of scaled needs). */
   needValue: z.number(),
-  /** On-hand inventory, counted once for the ingredient; null if unconvertible. */
   haveValue: z.number().nullable(),
-  /** max(0, need - have). */
   /**
    * What you still need to buy. **Null when on-hand is unknown** (units that
    * don't reconcile): claiming a shortfall equal to the whole need asserts a
@@ -305,7 +279,6 @@ export const shoppingListItem = z.object({
    */
   shortfall: z.number().nullable(),
   status: ingredientAvailabilityStatus,
-  /** Cost of the shortfall; null when no price path exists. See `aggregatedNeedOut`. */
   estimatedCost: moneyNullable,
   perMeal: z.array(shoppingListContribution),
 });

@@ -1,5 +1,16 @@
 import { customAlphabet } from "nanoid";
 import { z } from "zod";
+import {
+  LEGACY_SHORTCODE_PREFIX,
+  SHORTCODE_PREFIX,
+  type ShortcodeType,
+} from "./generated/shortcode-registry.gen";
+
+export {
+  LEGACY_SHORTCODE_PREFIX,
+  SHORTCODE_PREFIX,
+  type ShortcodeType,
+} from "./generated/shortcode-registry.gen";
 
 /**
  * Character set: 31 chars — the digits and uppercase letters minus the
@@ -11,58 +22,18 @@ export const SHORTCODE_CHARS = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 const BODY_PATTERN = `[${SHORTCODE_CHARS}]{4}`;
 const BODY_RE = new RegExp(`^${BODY_PATTERN}$`);
 
-/**
- * Per-entity shortcode prefixes — the single source of truth for the "XXX-"
- * stamp. Keys match the `Entity` union in `@cubby/schemas/entity` (checked by
- * the entity-manifest drift test); everything below (the schemas, the parser,
- * the generator) derives from this, so a prefix is defined exactly once.
- *
- * Three letters throughout, so a code is self-describing when spoken, typed, or
- * pasted into an agent. `image` is included: it was the last local-table
- * holdout, addressed by raw uuid, which made it a permanent carve-out in every
- * shape that could name an entity — so it was given `IMG-` rather than kept as
- * an exception.
- */
-export const SHORTCODE_PREFIX = {
-  cookbook: "CKB-",
-  expense: "EXP-",
-  financialAccount: "FAC-",
-  financialTransaction: "FTX-",
-  image: "IMG-",
-  ingredient: "ING-",
-  inventory: "INV-",
-  location: "LOC-",
-  ledgerParty: "LPY-",
-  ledgerTransfer: "LTR-",
-  meal: "MEL-",
-  product: "PRD-",
-  project: "PRJ-",
-  purchase: "PUR-",
-  recipe: "RCP-",
-  task: "TSK-",
-  vendor: "VEN-",
-  wish: "WSH-",
-} as const;
-export type ShortcodeType = keyof typeof SHORTCODE_PREFIX;
-
 /** Every canonical prefix that may legitimately cross an API or MCP boundary. */
 export const PUBLIC_SHORTCODE_PREFIXES = Object.values(SHORTCODE_PREFIX);
 
 /**
- * The single-letter prefixes minted before the 2026-07 cutover, kept forever so
- * physical QR labels already stuck to shelves and products keep resolving.
+ * The single-letter prefixes still needed for physical location and product QR
+ * labels minted before the 2026-07 cutover.
  *
  * INBOUND ONLY. Nothing emits these — `parseShortcode` rewrites a legacy code to
- * its canonical form, which is possible precisely because the cutover preserved
- * each code's 4-char body (`P-4K7M` became `PRD-4K7M`). That is also why no alias
- * table is needed: the mapping is a pure prefix swap.
+ * its canonical form because the cutover preserved each code's 4-char body
+ * (`P-4K7M` became `PRD-4K7M`). The generated alias table declares the only
+ * accepted swaps.
  */
-export const LEGACY_SHORTCODE_PREFIX = {
-  "L-": "location",
-  "P-": "product",
-  "R-": "recipe",
-} as const satisfies Record<string, ShortcodeType>;
-
 const PREFIX_TO_TYPE = Object.fromEntries(
   (Object.keys(SHORTCODE_PREFIX) as ShortcodeType[]).map((type) => [
     SHORTCODE_PREFIX[type],
@@ -257,8 +228,6 @@ export interface ParsedShortcode {
   type: ShortcodeType;
   /** Always the canonical form, even when `code` used a legacy prefix. */
   shortcode: string;
-  /** Just the 4-char body ("4K7M"), shared between legacy and canonical forms. */
-  id: string;
   /** Whether `code` arrived with a legacy single-letter prefix. */
   legacy: boolean;
 }
@@ -288,7 +257,6 @@ export function parseShortcode(code: string): ParsedShortcode | null {
   return {
     type,
     shortcode: `${SHORTCODE_PREFIX[type]}${body}`,
-    id: body,
     legacy: legacyType !== undefined,
   };
 }

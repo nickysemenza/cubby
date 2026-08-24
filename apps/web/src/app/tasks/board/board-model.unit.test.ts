@@ -83,7 +83,6 @@ describe("compareCards", () => {
   });
 
   it("puts a ranked card ahead of an unranked one, even with a later due date", () => {
-    // Ranked card has the WORSE derived order (later due date) but wins.
     const ranked = task({ id: "a", dueDate: "2026-12-01", sortOrder: 1024 });
     const unranked = task({ id: "b", dueDate: "2026-01-01" });
     expect([unranked, ranked].sort(compareCards).map((t) => t.id)).toEqual([
@@ -100,13 +99,11 @@ describe("compareCards", () => {
 });
 
 describe("computeRank", () => {
-  // Helper: build a cell with the dragged card already inserted at `at`.
   const ordered = (
     specs: { id: string; sortOrder?: number | null }[],
   ): TaskOut[] => specs.map((s) => task({ id: s.id, sortOrder: s.sortOrder }));
 
   it("midpoints between two ranked neighbors", () => {
-    // [R1(1024), D, R2(2048)] — dragged at index 1, both neighbors ranked.
     const cards = ordered([
       { id: "r1", sortOrder: 1024 },
       { id: "d", sortOrder: null },
@@ -116,7 +113,6 @@ describe("computeRank", () => {
   });
 
   it("materializes the whole cell when the gap between ranks is degenerate", () => {
-    // Two adjacent ranks collide (gap 0) — re-space every card, dragged in place.
     const cards = ordered([
       { id: "r1", sortOrder: 1024 },
       { id: "d", sortOrder: null },
@@ -133,7 +129,6 @@ describe("computeRank", () => {
   });
 
   it("appends after the last ranked card (before ranked only)", () => {
-    // [R1(1024), D, U] — insert after the ranked prefix, before the unranked tail.
     const cards = ordered([
       { id: "r1", sortOrder: 1024 },
       { id: "d", sortOrder: null },
@@ -143,7 +138,6 @@ describe("computeRank", () => {
   });
 
   it("inserts above the top ranked card (after ranked only)", () => {
-    // [D, R1(1024), ...] — dragged at the very top, only the after-neighbor ranked.
     const cards = ordered([
       { id: "d", sortOrder: null },
       { id: "r1", sortOrder: 1024 },
@@ -152,7 +146,6 @@ describe("computeRank", () => {
   });
 
   it("materializes the prefix through the insert point in the unranked tail", () => {
-    // All unranked; dragged dropped between u1 and u2 → promote u1 + dragged.
     const cards = ordered([
       { id: "u1", sortOrder: null },
       { id: "d", sortOrder: null },
@@ -254,7 +247,6 @@ describe("cellTasks", () => {
       task({
         id: `d${i}`,
         status: "done",
-        // Later index = more recently updated.
         updatedAt: new Date(2026, 0, 1, 0, i),
       }),
     );
@@ -265,7 +257,6 @@ describe("cellTasks", () => {
     );
     expect(totalCount).toBe(DONE_COLUMN_CAP + 5);
     expect(cards).toHaveLength(DONE_COLUMN_CAP);
-    // Most-recent first: the highest index wins.
     expect(cards[0]?.id).toBe(`d${DONE_COLUMN_CAP + 4}`);
   });
 
@@ -310,7 +301,6 @@ describe("cellTasks", () => {
       { kind: "status", status: "done" },
       null,
     );
-    // Recency wins despite `recent` having the larger sortOrder.
     expect(cards.map((t) => t.id)).toEqual(["recent", "old"]);
   });
 
@@ -329,7 +319,6 @@ describe("cellTasks", () => {
       { kind: "status", status: "not_started" },
       null,
     );
-    // Ranked `b` leads even though `a` has the earlier due date.
     expect(cards.map((t) => t.id)).toEqual(["b", "a"]);
   });
 

@@ -132,8 +132,6 @@ export function ProjectsDashboard() {
   return <MainDashboard view={view} />;
 }
 
-// -- Toolbar (shared across every view) --
-
 function DashboardToolbar({ filterControl }: { filterControl: ReactNode }) {
   return (
     <Row justify="end" align="center" wrap gap="sm">
@@ -164,8 +162,6 @@ function DashboardErrorState({
     </Empty>
   );
 }
-
-// -- Main dashboard: overview / analytics / data / gallery --
 
 /**
  * `dashboardSummary` is fetched for all four of these views — it's the
@@ -370,8 +366,6 @@ function MainDashboard({ view }: { view: DashboardView }) {
   );
 }
 
-// -- Overview --
-
 function OverviewView({
   data,
   coverImages,
@@ -512,8 +506,6 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
   );
 }
 
-// -- Analytics --
-
 /**
  * Every chart here is sourced from `portfolioAnalytics`'s pre-aggregated
  * fields (see repo/project/portfolio-analytics.ts) — never raw
@@ -585,8 +577,6 @@ function AnalyticsView({
     </Suspense>
   );
 }
-
-// -- Data --
 
 function DataViewContent({
   projectScope,
@@ -678,8 +668,6 @@ function HiddenByDateNote({
     </button>
   );
 }
-
-// -- Project Cards (Overview + Gallery) --
 
 function ProjectCards({
   projects,

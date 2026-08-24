@@ -30,7 +30,6 @@ export const subRecipeBlockReason = z.enum([
 ]);
 export type SubRecipeBlockReason = z.infer<typeof subRecipeBlockReason>;
 
-/** One hop of the sub-recipe chain a need was reached through, outermost first. */
 export const needViaOut = z.object({
   recipeId: recipeShortcode,
   name: z.string(),
@@ -45,7 +44,6 @@ export const ingredientAvailabilityOut = z.object({
   needValue: z.number().nullable(),
   haveValue: z.number().nullable(),
   status: ingredientAvailabilityStatus,
-  /** Empty for an ingredient written directly on the recipe. */
   via: z.array(needViaOut),
   /** Set only on `subrecipe` rows — why the expansion failed. */
   blockedReason: subRecipeBlockReason.nullable(),
@@ -59,7 +57,6 @@ export const aggregatedNeedOut = z.object({
   needValue: z.number(),
   haveValue: z.number().nullable(),
   status: ingredientAvailabilityStatus,
-  /** `need - have`, floored at zero. Null when on-hand isn't known. */
   shortfall: z.number().nullable(),
   /**
    * What the shortfall would cost, in dollars.
@@ -80,14 +77,12 @@ export const aggregatedNeedOut = z.object({
 });
 export type AggregatedNeed = z.infer<typeof aggregatedNeedOut>;
 
-/** A sub-recipe whose ingredients are absent from the needs it fed into. */
 export const blockedSubRecipeOut = z.object({
   recipeId: recipeShortcode,
   name: z.string(),
   reason: subRecipeBlockReason,
   amount: amount.nullable(),
   via: z.array(needViaOut),
-  /** Index into the caller's own line list. */
   lineIndex: z.number().int(),
 });
 export type BlockedSubRecipe = z.infer<typeof blockedSubRecipeOut>;

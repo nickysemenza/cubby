@@ -8,8 +8,6 @@ import type { CubbyTable } from "../data-table/table-features";
 const mocks = vi.hoisted(() => ({
   queryOptions: vi.fn((input) => ({ queryKey: ["related-summary", input] })),
   summaryQuery: vi.fn(),
-  // The table object RTable was handed, so the test can drive sorting through
-  // the same API RTable's own header buttons use.
   lastTable: { current: null as CubbyTable<Record<string, unknown>> | null },
 }));
 
@@ -54,9 +52,6 @@ vi.mock("~/integrations/trpc/react", () => ({
     relatedData: { summary: { query: mocks.summaryQuery } },
   }),
 }));
-// RTable window-virtualizes its rows, which measure to zero height in jsdom.
-// Render the row model plainly instead: the column defs under test still run
-// for real, and sorting is driven through the table object below.
 vi.mock("../data-table/Table", () => ({
   default: ({
     table,
@@ -205,8 +200,6 @@ describe("RelationshipSummaryTable", () => {
     );
 
     await waitFor(() => expect(mocks.lastTable.current).not.toBeNull());
-    // `unpriced` has no server sort field; a sortable header there would do
-    // nothing under manualSorting.
     expect(mocks.lastTable.current?.getColumn("unpriced")?.getCanSort()).toBe(
       false,
     );

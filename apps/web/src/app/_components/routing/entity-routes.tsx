@@ -7,7 +7,6 @@ import type { PageLayout } from "~/components/layout/page-wrapper";
 import { Page } from "~/components/page/Page";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
-import { useTRPC } from "~/integrations/trpc/react";
 
 /**
  * The page bodies every entity route shares, as factories.
@@ -38,8 +37,6 @@ import { useTRPC } from "~/integrations/trpc/react";
  * Keep it that way: anything a route needs at `loader` / `head` / `search` time
  * belongs in `./detail-loader`, not here.
  */
-
-type TrpcApi = ReturnType<typeof useTRPC>;
 
 /* -------------------------------------------------------------------------- */
 /* List pages                                                                  */
@@ -126,19 +123,16 @@ export function listChromePage({
 /* -------------------------------------------------------------------------- */
 
 /**
- * Structural view of a tRPC `queryOptions()` result.
+ * Structural view of an entity detail `queryOptions()` result.
  *
  * The concrete `TRPCQueryOptionsOut` is not assignable to react-query's
  * `UseSuspenseQueryOptions`, so the read below takes a cast — the same boundary
  * technique as `entity-contracts.ts`'s `StandardRouter`. The record's own type
  * is still recovered exactly, by resolving `queryFn` on the concrete return
- * type rather than inferring through it: tRPC hides that signature behind an
+ * type rather than inferring through it: React Query hides that signature behind an
  * `Exclude<…>` conditional, which is a non-inferrable position.
  */
-type DetailQueryFactory = (
-  api: TrpcApi,
-  shortcode: string,
-) => {
+type DetailQueryFactory = (shortcode: string) => {
   queryKey: readonly unknown[];
   queryFn?: (...args: never[]) => unknown;
 };
@@ -178,10 +172,8 @@ export function detailPage<TQuery extends DetailQueryFactory>({
     const { shortcode } = useParams({ strict: false }) as {
       shortcode: string;
     };
-    const api = useTRPC();
     const { data } = useSuspenseQuery(
       query(
-        api,
         shortcode,
       ) as unknown as UseSuspenseQueryOptions<DetailRecord<TQuery> | null>,
     );

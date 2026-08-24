@@ -35,8 +35,8 @@ import {
   entityDetailParams,
   isBrowserRoutedEntity,
 } from "~/entities/entities";
+import { entityDetailQueryOptions } from "~/entities/entity-detail";
 import { useDebug } from "~/hooks/useDebug";
-import { useTRPC } from "~/integrations/trpc/react";
 import { setFlag, useFlag } from "~/lib/flags";
 import { cn } from "~/lib/utils";
 import { parsePastedShortcode } from "./command-menu/pasted-shortcode";
@@ -112,8 +112,6 @@ export function GlobalCommandMenu({
   );
   const conversion = useConversionAnswer(searchScope ? "" : search);
 
-  const trpc = useTRPC();
-
   // Opt-in: the agent only runs when the user explicitly selects the Ask item.
   // Keyword/shortcode fast paths stay instant and untouched. Streams the
   // answer for a progressive "typing" reveal.
@@ -143,23 +141,31 @@ export function GlobalCommandMenu({
   // one-shot user action distinct from incremental typing, so it jumps
   // regardless of scope.
   const parsedShortcode = searchScope ? null : parseShortcode(search);
-  const canonicalShortcode = parsedShortcode?.shortcode ?? "";
   const locationQuery = useQuery({
-    ...trpc.location.getByShortcode.queryOptions({
-      shortcode: canonicalShortcode,
-    }),
+    ...entityDetailQueryOptions(
+      "location",
+      parsedShortcode?.type === "location"
+        ? parsedShortcode.shortcode
+        : "LOC-2222",
+    ),
     enabled: parsedShortcode?.type === "location",
   });
   const productQuery = useQuery({
-    ...trpc.product.getByShortcode.queryOptions({
-      shortcode: canonicalShortcode,
-    }),
+    ...entityDetailQueryOptions(
+      "product",
+      parsedShortcode?.type === "product"
+        ? parsedShortcode.shortcode
+        : "PRD-2222",
+    ),
     enabled: parsedShortcode?.type === "product",
   });
   const recipeQuery = useQuery({
-    ...trpc.recipe.getByShortcode.queryOptions({
-      shortcode: canonicalShortcode,
-    }),
+    ...entityDetailQueryOptions(
+      "recipe",
+      parsedShortcode?.type === "recipe"
+        ? parsedShortcode.shortcode
+        : "RCP-2222",
+    ),
     enabled: parsedShortcode?.type === "recipe",
   });
 

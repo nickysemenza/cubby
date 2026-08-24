@@ -39,8 +39,6 @@ vi.mock("~/integrations/trpc/react", () => ({
   }),
 }));
 
-// The real link renders a hover-preview card that needs a query client; the
-// name/href pair is all this test asserts on.
 vi.mock("~/app/_components/EntityInlineLink", () => ({
   EntityInlineLink: ({
     entity,
@@ -141,9 +139,6 @@ describe("ProductPurchases empty states", () => {
     renderWith([]);
 
     expect(screen.getByText("No purchases recorded")).toBeInTheDocument();
-    // "Linked" would now be wrong: the panel also lists orders derived from
-    // this product's own acquisition expenses, so reaching this state means
-    // neither source has anything.
     expect(
       screen.getByText(
         "No expense on this product names an order, and no order has been linked to it directly. Record the spend on an expense, or attach it from a purchase's Products section when the order was never itemized.",
@@ -165,7 +160,6 @@ describe("ProductPurchases empty states", () => {
         "Attach this product from a purchase's Products section to record which order it came from.",
       ),
     ).not.toBeInTheDocument();
-    // The kit's own purchase is linked directly.
     expect(screen.getByRole("link", { name: "#11325" })).toHaveAttribute(
       "href",
       "/purchases/PUR-2345",
@@ -216,8 +210,6 @@ describe("ProductPurchases empty states", () => {
         vendorName: "Home Depot",
         date: "2026-08-01",
         orderId: "#expense",
-        // Derived from an itemized acquisition Expense: nothing was ever
-        // attached, so there is no link to stamp and none to remove.
         source: "expense",
         linkAttachedAt: null,
       },
@@ -225,7 +217,6 @@ describe("ProductPurchases empty states", () => {
 
     expect(screen.getByRole("link", { name: "#link" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "#expense" })).toBeInTheDocument();
-    // One badge for two rows — the marker belongs to the rarer, detachable kind.
     expect(screen.getAllByText("Linked")).toHaveLength(1);
   });
 

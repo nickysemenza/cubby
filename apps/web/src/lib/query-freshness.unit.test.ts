@@ -1,5 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
+import { entityDetailRootKey } from "~/entities/entity-detail";
 import { configureQueryFreshness } from "./query-freshness";
 import { normalizeTRPCQueryKey, queryKeys } from "./query-keys";
 
@@ -18,9 +19,7 @@ describe("configureQueryFreshness", () => {
       refetchOnReconnect: true,
     });
     expect(
-      client.getQueryDefaults(
-        normalizeTRPCQueryKey(queryKeys.product.getByShortcode),
-      ),
+      client.getQueryDefaults(entityDetailRootKey("product")),
     ).toMatchObject({ staleTime: 300_000 });
     expect(
       client.getQueryDefaults(

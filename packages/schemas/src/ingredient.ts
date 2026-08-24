@@ -27,11 +27,6 @@ export const ingredientBaseFields = {
 
 export const ingredientBase = z.object(ingredientBaseFields);
 
-/**
- * List/search filters for ingredients. Field names match the MCP
- * `search_ingredients` tool exactly; the MCP tool has its own explicit field
- * roster with matching names and descriptions.
- */
 export const ingredientFilterFields = {
   ...auditDateFilterFields,
   nameFilter: z
@@ -95,11 +90,9 @@ export type IngredientOut = z.infer<typeof ingredientOut>;
 export const mergeSummary = z.object({
   /** Names newly added to the target's `aliases` (excludes pre-existing). */
   aliasesAdded: z.array(z.string()),
-  /** Distinct recipes that had a line re-pointed onto the target. */
   recipesMoved: z.number().int().nonnegative(),
   /** Product rows re-pointed onto the target (incl. soft-deleted). */
   productsMoved: z.number().int().nonnegative(),
-  /** Ingredient ids absorbed and hard-deleted. */
   deletedIds: z.array(ingredientShortcode),
   /**
    * Ingredient rows the merge actually hard-deleted, read back from the DELETE
@@ -122,7 +115,6 @@ export const ingredientMatchOut = z
 export const ingredientMatchesOut = z.record(z.string(), ingredientMatchOut);
 
 export const ingredientResolveOrCreateResultOut = z.object({
-  /** The requested name, echoed back so a caller can key results by its input. */
   name: z.string(),
   id: ingredientShortcode,
   /**
@@ -184,8 +176,6 @@ export const ingredientMergeOut = z.object({
 });
 export type IngredientMergeOut = z.infer<typeof ingredientMergeOut>;
 
-// Lean ingredient+food shape: products (with food) without the per-usage recipe
-// bodies that detail responses carry. Used by workbench and costing paths.
 export const ingredientWithFoodLeanOut = z.object({
   ...ingredientOutFields,
   product: z.array(productWithMappingsAndFoodOut),
@@ -200,13 +190,10 @@ export const ingredientListItemOut = z.object({
   ...ingredientOutFields,
   product: z.array(productWithMappingsOut),
   appearsInRecipes: z.array(recipeRefOut),
-  /** Distinct live non-cookbook recipes using this ingredient. Separate from
-   *  `appearsInRecipes.length`, which counts every live recipe. */
   ownRecipeCount: z.number().int(),
 });
 export type IngredientListItem = z.infer<typeof ingredientListItemOut>;
 
-/** The single highest-leverage fix for an ingredient, or "done" when complete. */
 export const enrichmentFixKind = z.enum([
   "no-product",
   "link-usda",
@@ -221,11 +208,9 @@ export const enrichmentRowOut = z.object({
   ...ingredientOutFields,
   product: z.array(productWithMappingsAndFoodOut),
   recipeCount: z.number().int().nonnegative(),
-  // Every live recipe using this ingredient is book-sourced. Computed in SQL.
   cookbookOnly: z.boolean(),
   coverage: z.object({
     covered: z.array(baseKind),
-    // Kinds graded against (all four minus this ingredient's N/A opt-outs).
     applicable: z.array(baseKind),
     tier: z.enum(["complete", "good", "partial", "none"]),
   }),
@@ -235,7 +220,6 @@ export const enrichmentRowOut = z.object({
     z.object({
       id: ingredientShortcode,
       name: z.string(),
-      // pg_trgm similarity (0-1) to this row.
       similarity: z.number(),
     }),
   ),
@@ -273,10 +257,6 @@ export const ingredientUpdateData = deriveUpdateData(ingredientCreateShape, {
   },
 });
 
-/**
- * Input schema for updating ingredients
- *
- */
 export const ingredientUpdateInput = z.object({
   id: ingredientShortcode,
   data: ingredientUpdateData,
@@ -284,16 +264,6 @@ export const ingredientUpdateInput = z.object({
 
 export type IngredientUpdateInput = z.infer<typeof ingredientUpdateInput>;
 
-/**
- * `{keepId, mergeIds}` — the same pair `mergeProductsInput`,
- * `mergeVendorsInput`, and `mergePurchasesInput` take. It used to be
- * `{target, aliases}`, which made ingredient the one merge a generic caller
- * had to special-case.
- *
- * There is no `dryRun`: `previewMergeIngredients`
- * (`preview_entity_operation`) is the preview, and it reads the same edge
- * policy the mutation writes against.
- */
 export const ingredientMergeInput = z.object({
   keepId: ingredientShortcode,
   mergeIds: z.array(ingredientShortcode).min(1),

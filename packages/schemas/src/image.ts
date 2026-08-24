@@ -103,10 +103,6 @@ export type UpdateInputImages = z.infer<typeof updateInputImages>;
 // Max image upload size (~50MB) — server refuses presigned URLs for absurd sizes.
 export const MAX_IMAGE_UPLOAD_BYTES = 50 * 1024 * 1024;
 
-// Shared fields for upload initiation (image + document variants). Private
-// field map spread into both schemas — the sanctioned pattern (no .extend).
-// `entityType` is optional: every entity-form caller still passes it, but a
-// standalone `/images` upload has no owning entity yet at initiate time.
 const initiateUploadFields = {
   filename: z.string(),
   size: z.int().positive().max(MAX_IMAGE_UPLOAD_BYTES),
@@ -183,8 +179,6 @@ export const attachableImageEntity = z.enum([
   "recipe",
   "location",
   "project",
-  // The point of `PurchaseImage`: filing the metal store's emailed PDF invoice
-  // against the charge it documents.
   "purchase",
 ]);
 export type AttachableImageEntity = z.infer<typeof attachableImageEntity>;
@@ -340,11 +334,6 @@ export const createFileUploadResponse = z.object({
 });
 export type CreateFileUploadResponse = z.infer<typeof createFileUploadResponse>;
 
-/**
- * Age threshold (hours) past which an unassociated PENDING image counts as an
- * abandoned upload. Shared by the cull mutation's default and the Maintenance
- * card's "N affected" count, so the number shown and the number deleted match.
- */
 export const CULL_PENDING_IMAGES_DEFAULT_HOURS = 24;
 
 export const cullPendingImagesSchema = z.object({
@@ -423,7 +412,6 @@ export const imageWithEntitySchema = z.object({
   entityType: entityImage.nullable(),
   entityId: attachableImageEntityId.nullable(),
   entityName: z.string().nullable(),
-  /** Complete incoming ownership/reference relation. Images may be shared. */
   associations: z.array(imageAssociationSchema),
 });
 
@@ -436,10 +424,6 @@ export const importImageFromUrlResponseSchema = z.object({
   filename: z.string(),
 });
 
-/**
- * Shared by the pending cull and the unreferenced-file sweep — both delete rows
- * and hand back the R2 keys that went with them.
- */
 export const cullPendingImagesResponseSchema = z.object({
   count: z.int().nonnegative(),
   deletedIds: z.array(id),

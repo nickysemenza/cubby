@@ -85,7 +85,6 @@ export const resolveScanStraysInput = z.object({
     .array(
       z.object({
         entryId: inventoryShortcode,
-        /** Omitted moves the whole row — the right default for a single unit. */
         quantity: positiveAmount.optional(),
       }),
     )
@@ -102,7 +101,6 @@ export type ResolveScanStraysInput = z.infer<typeof resolveScanStraysInput>;
 export const scanStraySkipReason = z.enum([
   /** The source row is gone: a prior move in this batch consumed it. */
   "already-moved",
-  /** It was queued against a location it now sits in. */
   "already-here",
 ]);
 export type ScanStraySkipReason = z.infer<typeof scanStraySkipReason>;

@@ -14,11 +14,6 @@ test.describe("Unauthenticated access", () => {
     await expect(page).toHaveURL(/\/auth\/sign-in/);
   });
 
-  test("images page redirects to sign-in", async ({ page }) => {
-    await page.goto("/images");
-    await expect(page).toHaveURL(/\/auth\/sign-in/);
-  });
-
   test("product detail redirects to sign-in before rendering", async ({
     page,
   }) => {

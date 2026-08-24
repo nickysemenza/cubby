@@ -6,12 +6,6 @@ import {
   tableVirtualItemKey,
 } from "./useTableVirtualizer";
 
-// A small grouped layout:
-//   index 0: header "A"
-//   index 1: row 0
-//   index 2: row 1
-//   index 3: header "B"
-//   index 4: row 2
 const grouped: GroupedItem[] = [
   { kind: "header", title: "A", count: 2, color: "var(--chart-1)" },
   { kind: "row", rowIndex: 0, groupRowIndex: 0 },
@@ -52,8 +46,6 @@ describe("resolveVirtualIndex", () => {
       rowIndex: 1,
       groupRowIndex: 1,
     });
-    // index 4 sits after two headers + two rows, so it's flat row 2 — and the
-    // first row of group "B" (groupRowIndex restarts, which zebra relies on)
     expect(resolveVirtualIndex(4, grouped)).toEqual({
       kind: "row",
       rowIndex: 2,
@@ -94,10 +86,8 @@ describe("flatRowToVirtualIndex", () => {
   });
 
   it("skips past section headers when grouped", () => {
-    // flat row 0 lives at virtual index 1 (after header "A")
     expect(flatRowToVirtualIndex(0, grouped)).toBe(1);
     expect(flatRowToVirtualIndex(1, grouped)).toBe(2);
-    // flat row 2 lives at virtual index 4 (after both headers)
     expect(flatRowToVirtualIndex(2, grouped)).toBe(4);
   });
 

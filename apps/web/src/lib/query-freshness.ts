@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { entityDetailRootKey } from "~/entities/entity-detail";
 import { normalizeTRPCQueryKey, queryKeys } from "./query-keys";
 
 const MINUTE = 60 * 1000;
@@ -11,14 +12,16 @@ const MINUTE = 60 * 1000;
  */
 export function configureQueryFreshness(queryClient: QueryClient): void {
   const stableDetailKeys = [
+    entityDetailRootKey("product"),
+    entityDetailRootKey("location"),
+    entityDetailRootKey("recipe"),
+    entityDetailRootKey("ingredient"),
+  ];
+  const stableIdKeys = [
     queryKeys.product.getByID,
-    queryKeys.product.getByShortcode,
     queryKeys.location.getByID,
-    queryKeys.location.getByShortcode,
     queryKeys.recipe.getByID,
-    queryKeys.recipe.getByShortcode,
     queryKeys.ingredient.getByID,
-    queryKeys.ingredient.getByShortcode,
   ];
   const stableIndexKeys = [
     queryKeys.product.list,
@@ -33,6 +36,12 @@ export function configureQueryFreshness(queryClient: QueryClient): void {
     refetchOnReconnect: true,
   };
   for (const key of stableDetailKeys) {
+    queryClient.setQueryDefaults(key, {
+      staleTime: 5 * MINUTE,
+      ...revalidateOnFocus,
+    });
+  }
+  for (const key of stableIdKeys) {
     queryClient.setQueryDefaults(normalizeTRPCQueryKey(key), {
       staleTime: 5 * MINUTE,
       ...revalidateOnFocus,

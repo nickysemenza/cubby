@@ -1,5 +1,3 @@
-// cf https://ui.shadcn.com/docs/components/data-table
-
 import type { Entity } from "@cubby/schemas/entity";
 import type { RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";

@@ -18,7 +18,7 @@ import { QR_CODE_FORMATS } from "~/app/_components/inventory/persistent-scanner"
 import { ScanSheet } from "~/app/_components/inventory/scan-sheet";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityDetailQueryOptions } from "~/entities/entity-detail";
 import { getErrorMessage } from "~/lib/error-utils";
 import { resolveLocationScan } from "~/lib/scan-code";
 
@@ -69,7 +69,6 @@ export function LocationScanButton({
   manualEntry?: boolean;
   variant?: "default" | "outline";
 }) {
-  const api = useTRPC();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [manualValue, setManualValue] = useState("");
@@ -115,7 +114,7 @@ export function LocationScanButton({
     setIsResolving(true);
     try {
       const location = await queryClient.fetchQuery(
-        api.location.getByShortcode.queryOptions({ shortcode: parsed.value }),
+        entityDetailQueryOptions("location", parsed.value),
       );
       if (!location) {
         toast.error("No location found for that shortcode.");

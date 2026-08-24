@@ -14,7 +14,6 @@ import {
 } from "./recipe-tree";
 import { WASM_YIELD_PORTS } from "./yield-ports";
 
-// Minimal fixtures — only the fields buildRecipeTree reads (cast through unknown).
 const mkRow = (id: string, grams: number): IngredientDataItem =>
   ({
     id,
@@ -144,7 +143,6 @@ describe("buildRecipeTree", () => {
 
     const subRow = rows[0];
     if (subRow?.kind !== "subrecipe") throw new Error("expected subrecipe");
-    // as-used 360 of a 360 batch → factor 1
     expect(subRow.child.recipe.id).toBe("r-sof");
     expect(subRow.child.cumulativeFactor).toBe(1);
     expect(subRow.child.batchEstimated).toBe(false);
@@ -210,7 +208,6 @@ describe("buildRecipeTree", () => {
       ing("si-onion", "i-onion", "onion"),
     ]);
     const root = recipe("r-root", "R", [sub("sr-sof", "r-sof", "Soffritto")]);
-    // root costing lacks the sub row → no as-used grams
     const costingById = new Map<string, RecipeCosting>([
       ["r-root", mkCosting({}, 0)],
       ["r-sof", mkCosting({ "si-onion": 360 }, 360)],
@@ -262,9 +259,6 @@ describe("buildRecipeTree", () => {
 });
 
 describe("batchYieldGrams", () => {
-  // `batchGrams` is resolved by the engine once during buildNode, so this
-  // helper stands in for that — the function itself is now just the
-  // yield-else-ingredient-weight preference.
   const node = (
     recipeYield: { value: number; unit: string } | null,
     weight: number | null,
@@ -282,9 +276,6 @@ describe("batchYieldGrams", () => {
     expect(batchYieldGrams(node(null, null))).toBeNull();
   });
 
-  // The suite that pinned a hand-copied mass table against the engine is gone
-  // with the table. What survives is the boundary it also described: which
-  // units can be *weighed*, and which fall through to the ingredient sum.
   for (const unit of ["cup", "servings", "loaves", "whole", "ml"]) {
     it(`leaves the non-mass unit ${unit} to the weight fallback`, () => {
       expect(batchYieldGrams(node({ value: 8, unit }, 2000))).toBe(2000);
@@ -308,9 +299,6 @@ describe("yield fractions come from the engine", () => {
     ).toBeCloseTo(1);
   });
 
-  // Inverted from the old tripwire, which pinned these as a KNOWN MISS: the
-  // table's spellings were fixed, so a "kgs" yield fell through to null and
-  // quietly downgraded the node to `batchEstimated`. The parser singularizes.
   for (const unit of ["kgs", "ozs"]) {
     it(`resolves ${JSON.stringify(unit)}, which the old table missed`, () => {
       expect(
@@ -361,8 +349,6 @@ describe("yield fractions come from the engine", () => {
   });
 
   it("rejects a negative reference the old unit-ratio accepted", () => {
-    // `Number.isFinite(-0.5)` is true, so the old tier 2 happily produced a
-    // negative factor and scaled every descendant by it.
     expect(
       fraction({ value: 4, unit: "cup" }, [{ value: -2, unit: "cup" }])
         .fraction,
@@ -404,7 +390,6 @@ describe("fullBatchNeeds", () => {
       ing("ri-x", "i-x", "X"),
     ]);
     const costingById = new Map<string, RecipeCosting>([
-      // The root uses only 50 g of the Sof batch, but you make the whole 100 g.
       ["r-root", mkCosting({ "sr-sof": 50, "ri-x": 100 }, 150)],
       ["r-sof", mkCosting({ "si-x": 100 }, 100)],
     ]);
@@ -460,7 +445,6 @@ describe("buildIngredientMatrix", () => {
     const sof = recipe("r-sof", "Sof", [ing("si-x", "i-x", "X")], {
       yield: { value: 100, unit: "g" },
     });
-    // Root references Sof twice (chicken's white + dark meat) — one batch made.
     const root = recipe("r-root", "R", [
       sub("s1", "r-sof", "Sof"),
       sub("s2", "r-sof", "Sof"),
@@ -477,7 +461,6 @@ describe("buildIngredientMatrix", () => {
     );
     const rows = buildIngredientMatrix(tree);
 
-    // One Sof column at its full batch (100 g) — NOT 2× and NOT the as-used 80 g.
     expect(
       flattenComponents(tree).filter((n) => n.recipe.id === "r-sof"),
     ).toHaveLength(1);
@@ -498,8 +481,6 @@ describe("firstExpansionRowIds", () => {
       [ing("si-onion", "i-onion", "onion")],
       { yield: { value: 360, unit: "g" } },
     );
-    // Same sub-recipe (r-sof) referenced by two different rows, with a leaf in
-    // between: only the first row expands; the second is a "see above" pointer.
     const root = recipe("r-root", "R", [
       sub("sr-sof-1", "r-sof", "Soffritto"),
       ing("ri-x", "i-x", "x"),
@@ -552,8 +533,6 @@ describe("fullBatchCostByComponent", () => {
   });
 
   it("carries the upper bound a ranged amount produces", () => {
-    // The engine tracks an upper for "2–3 cups"; this used to drop it, so the
-    // prep sheet showed a point cost where every other surface showed a range.
     const { byComponent, total, totalUpper } = priced([
       mkPricedRow("a", 1.0, 2.0),
       mkPricedRow("b", 0.5),

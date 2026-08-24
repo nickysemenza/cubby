@@ -34,7 +34,7 @@ export default literalEntity({
     create: { module: "@cubby/schemas/example", export: "exampleCreateInput" },
     update: { module: "@cubby/schemas/example", export: "exampleUpdateInput" },
     output: { module: "@cubby/schemas/example", export: "exampleOut" },
-    mcpOut: null,
+    detail: { module: "@cubby/schemas/example", export: "exampleDetailOut" },
   },
   filters: { urlKeys: ["name", "createdAt"] },
   relations: [],
@@ -57,13 +57,31 @@ export default literalEntity({
 ```
 
 The exact accepted keys are enforced by the compiler. Source references name a
-module and export; they are not executable imports in the spec.
+module and export; they are not executable imports in the spec. `fields.detail`
+is optional and falls back to `fields.output`; declare it when the current
+detail read carries enriched relations or computed fields.
+
+`extensions.ports` is the explicit boundary map for behavior the compiler must
+not infer: the kernel repository binding, entity label and shortcode resolver,
+filter declaration, search-document projection/text/refresh hooks, lifecycle
+policy/runtime binding, and any attach/detach implementation. Each entry is a
+`{ module, export }` source reference or `null` when that port is intentionally
+absent or remains a workflow-only seam. The generated inspector projects these
+references as client-safe data; the server roster is a lookup catalog, not a
+dynamic importer. Repository closures still own transactions and service
+injection.
 
 Generated artifacts provide the exhaustive entity keys and traits, public
-shortcode contracts, schema bindings, browser route roster, filter URL catalog,
+shortcode contracts (including inbound-only legacy aliases), schema bindings,
+client-safe inspector metadata, browser route roster, filter URL catalog,
 kernel action capabilities, and contract cases. Shared browser helpers consume
 the roster, while TanStack route modules remain thin handwritten entrypoints.
 Specialized screens stay as extension slots in shared shells.
+
+Inspector metadata projects declared actions, filter keys, MCP operations,
+lifecycle/capability flags, reference targets, schema source-reference strings,
+and port source references. It is safe for browser imports because it contains
+data and type-only imports, never server bindings or executable schema modules.
 
 The declaration is authoritative only for declared mechanical behavior. A spec
 does not replace a repository's transactions, locking, SQL, or workflow rules.
@@ -87,10 +105,10 @@ Extensions delegate to those services instead of branching inside the kernel.
 
 ## Transports
 
-tRPC is a replaceable browser adapter. Generic behavior is exposed through only
-`entity.query` and `entity.mutate`; legacy entity-shaped procedures are thin
-typed compatibility aliases while callers migrate. They contain no business
-logic.
+tRPC is a replaceable browser adapter. Generic detail reads use one TanStack
+Start function and a generated entity-to-output map. Remaining generic lists and
+writes are exposed through `entity.query` and `entity.mutate`; workflow-shaped
+tRPC procedures remain thin adapters with no entity business logic.
 
 MCP invokes `executeEntity` directly through the `entity` tool and publishes its
 machine-readable contract at `entities://catalog`. Workflow-shaped MCP tools
@@ -114,8 +132,8 @@ after projection changes; source edits do not rewrite persisted rows.
 ## Relations, deletion, and merge
 
 Every local relation declares an inverse and an incoming deletion policy:
-`restrict`, `cascade`, `setNull`, or `detach`. Omission means `restrict`.
-Omission defaults to `restrict`. These semantic-edge declarations feed the
+`restrict`, `cascade`, `setNull`, or `detach`. Omission defaults to `restrict`.
+These semantic-edge declarations feed the
 catalog; repository edge-role policies remain the runtime authority until the
 relation-policy compiler replaces them.
 

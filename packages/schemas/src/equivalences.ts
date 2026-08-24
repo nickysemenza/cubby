@@ -2,9 +2,6 @@ import { z } from "zod";
 import { amount } from "./codec";
 import { ingredientShortcode, recipeShortcode } from "./identifiers";
 
-// One recipe line that expressed a candidate equivalence — the raw line plus the
-// two parsed measures it pairs (e.g. "1 bunch kale (about 5 cups)" → a={1 bunch},
-// b={5 cup}). Carried so the report can "show its work" per candidate.
 export const equivalenceExampleSchema = z.object({
   recipeId: recipeShortcode,
   recipeName: z.string(),

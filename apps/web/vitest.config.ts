@@ -5,7 +5,6 @@ import type { Plugin } from "vite";
 import topLevelAwait from "vite-plugin-top-level-await";
 import wasm from "vite-plugin-wasm";
 import { defineConfig, type TestProjectConfiguration } from "vitest/config";
-import DurationSequencer from "./tooling/duration-sequencer.ts";
 
 const gitCommit = execSync("git rev-parse --short HEAD", {
   encoding: "utf-8",
@@ -52,29 +51,7 @@ function wasmInlinedForVitest(): Plugin {
   };
 }
 
-/**
- * Whether the `integration` project should exist at all for this run.
- *
- * Measured over 21 days of real agent transcripts: the integration tier was
- * invoked **1,879 times for 12.0h**, more than unit (2.3h) + ui (1.3h) + e2e
- * (0.8h) combined three times over, and a further **705 runs / 10.2h** were a
- * bare `vitest` with no `--project` at all. Because an unscoped run executes
- * every project, "run the tests" silently meant "spin up IntegreSQL and pay up
- * to 10 minutes" — 83% of all time spent on tests went to those two shapes.
- *
- * So the tier is opt-in: it is only registered when something explicitly asked
- * for it, which makes the expensive path unreachable by accident rather than
- * merely discouraged in prose. `docs/agents/validation.md` already told agents
- * to run the narrowest tier and they did not, so this is a gate, not a hint.
- *
- * Opt in either way:
- *   - `--project integration` (what CI passes, and `pnpm test:integration`)
- *   - `CUBBY_TEST_INTEGRATION=1` (what the full `pnpm test` sets)
- *
- * Both matter: the env var alone would break ad-hoc `vitest --project
- * integration`, and argv alone would break the unscoped full-coverage `test`
- * script that CI and pre-PR rely on.
- */
+/** Keep IntegreSQL opt-in while supporting both direct and full-suite commands. */
 function wantsIntegrationTier(): boolean {
   if (process.env.CUBBY_TEST_INTEGRATION === "1") return true;
   return process.argv.some(
@@ -110,32 +87,14 @@ export default defineConfig({
     },
   },
   test: {
-    // NB: `deps.optimizer` (ssr + web) was measured and REJECTED on 2026-08-24.
-    // The unit tier's cost is overwhelmingly module import — `import 266.45s`
-    // cumulative against a 45.7s wall clock, with `tests` only 12.4s — so
-    // prebundling deps looks like the obvious lever. It is not: enabling it
-    // took the tier to **53.8s** (import 307s, transform 36.4s, up from 18.4s).
-    // Vite's prebundle step costs more than the per-worker resolution it saves
-    // at this graph size. Do not retry without a new measurement.
-    //
-    // The import cost is intrinsic to the graph, not to a bundler setting: a
-    // leaf test imports in 92ms, one reaching `~/lib/wasm` in 1.28s, and the
-    // suite averages 1.08s across 247 files. Inlining the 2.55MB WASM is NOT
-    // the cause either — base64 decode plus `WebAssembly.Module` compile of it
-    // measures 3ms total.
+    // Dependency prebundling regresses this import-heavy graph; remeasure before
+    // enabling it. WASM initialization is not the material cost.
 
     // `default` keeps the familiar output (progress + full diffs); the second
     // reporter re-prints just the failing test names at the very end so a
     // `| tail` of the run still shows what broke. See the reporter for the
     // measured re-run waste that motivated it.
-    reporters: [
-      "default",
-      "./tooling/failure-summary-reporter.ts",
-      ...(process.env.CI ? ["./tooling/timing-reporter.ts", "blob"] : []),
-    ],
-    sequence: {
-      sequencer: DurationSequencer,
-    },
+    reporters: ["default", "./tooling/failure-summary-reporter.ts"],
     coverage: {
       exclude: ["src/components/reui/**"],
     },
@@ -152,14 +111,15 @@ export default defineConfig({
               ...pureUnitTests,
               ...mcpContractTests,
             ],
-            // Threads, not forks. This tier is almost entirely module transform +
-            // import: 167 files and 1458 tests, but only `tests: 5.0s` inside a
-            // 56s wall clock. So the lever is cheaper worker startup, not faster
-            // assertions — measured **56s -> ~14s** (14.3s / 16.8s over two runs)
-            // with per-file isolation fully preserved. See the shared
-            // "measured and rejected" note on the integration project below for
-            // why `isolate: false` is not the answer, even though it is faster
-            // still.
+            // Threads reduce worker startup while preserving per-file isolation.
+            pool: "threads",
+          },
+        },
+        {
+          extends: true,
+          test: {
+            name: "mcp-contract",
+            include: mcpContractTests,
             pool: "threads",
           },
         },
@@ -184,10 +144,7 @@ export default defineConfig({
             environment: "jsdom",
             include: ["**/*.unit.test.tsx"],
             setupFiles: ["./tooling/ui-test-setup.ts"],
-            // Same reasoning as `unit` — jsdom construction dominates here
-            // (`environment: 59s` cumulative against a 28.4s wall clock), and a
-            // thread pays it far more cheaply than a forked process. Measured
-            // **28.4s -> ~19s** (19.7s / 18.9s), 697/697 green on both runs.
+            // Threads amortize jsdom construction without sharing test state.
             pool: "threads",
           },
         },
@@ -203,72 +160,13 @@ export default defineConfig({
             setupFiles: ["./tooling/integration-teardown.ts"],
             name: "integration",
             include: ["**/*.integration.test.ts"],
-            testTimeout: 10000, // Increase timeout for integration tests
-            // The `beforeEach` still does real work, so this stays above the 10s
-            // default. `withTestDb()` provisions one database per file and resets
-            // between tests. The reset used to be the dominant per-test cost —
-            // TRUNCATE of 40 tables at **266ms mean / 1.0s p99** — which is why
-            // these timeouts are generous.
-            //
-            // Re-measured 2026-08-17 after docker-compose.yml was tuned for test
-            // workloads (fsync/synchronous_commit/full_page_writes off, statement
-            // logging moved to docker-compose.debug.yml) and the 1603 leaked
-            // IntegreSQL databases were dropped: the whole reset is now **~31ms
-            // mean**, and the tier went **233s -> ~118s** with the previously
-            // failing test going green. The timeouts stay where they are — they
-            // cost nothing when unused, and the first-test-in-file provision is
-            // still the long tail. See tooling/test-setup.ts for why TRUNCATE
-            // survived the re-measurement and why the "truncate only dirty
-            // tables" variant is unsafe.
+            testTimeout: 10000,
+            // First-test database provisioning is the long tail; resets use the
+            // full safe TRUNCATE path documented in tooling/test-setup.ts.
             hookTimeout: 30000,
-            //
-            // NB: raising IntegreSQL's pool size does NOT help — measured with
-            // INTEGRESQL_TEST_INITIAL_POOL_SIZE 8 -> 32 (pool grew 8 -> 64 dbs)
-            // and the distribution was unchanged (mean 777ms vs 788ms). The wait
-            // is the per-database CREATE cost, not queueing for a free slot.
-            //
-            // NB: `poolOptions.forks.isolate: false` was tried to reuse the server
-            // module graph across files — it was measurably SLOWER (~50s vs ~27s)
-            // and dropped test discovery (161 vs 164), because the per-worker pg
-            // pools / IntegreSQL client don't share cleanly across files. Keep
-            // isolation on.
-            //
-            // Isolation is now load-bearing for CORRECTNESS, not just speed:
-            // test-setup.ts caches its database in module scope, which is
-            // per-file only because `isolate: true` gives each file a fresh module
-            // registry. Turning it off would silently share one database across
-            // files, and the suite's global "zero" invariants
-            // (findOrphanedEntityEmbeddings) and recent-N windows
-            // (listBackgroundBatches) are only meaningful within one file.
-            //
-            // NB: `pool: "threads"` — which IS a large win on the `unit` and `ui`
-            // projects above — was tried here and is a LOSS on both axes:
-            // **257.6s vs 233s** wall clock, and failures rose from 3 files to
-            // **9 files / 7 tests**. Same root cause as the `isolate: false` note
-            // above: the per-worker pg pools and the IntegreSQL client don't
-            // survive being shared inside one process. This tier stays on forks.
-            //
-            // NB: `--no-isolate` was measured and REJECTED repo-wide, not just
-            // here. It is genuinely the fastest option (unit 56s -> 7.2s), but
-            // over five runs it leaks cross-file state nondeterministically:
-            // ui failed 0, 2, 3, 7, and 9 tests on five consecutive runs, and
-            // unit — clean on four — failed 3 on the fifth. The leak surface
-            // shifts with file->worker assignment, so it is not a bounded "fix
-            // these N tests" job. `pool: "threads"` takes 4x on unit and 1.5x on
-            // ui with zero isolation trade-off; that is the deal we took.
-            //
-            // NB: the `--no-isolate` failures above are **`vi.mock` artifacts,
-            // not state leaks**, which is why they were never worth chasing.
-            // `vi.mock` replaces a module for one FILE; with a shared module
-            // registry whichever file imports a module first decides what every
-            // other file in that worker sees, so the mock silently does not
-            // apply. Diagnosed from the failures themselves — every failing file
-            // uses `vi.mock`, and the error is the un-mocked module talking
-            // ("useTRPC() can only be used inside of a <TRPCProvider>"). The
-            // 0/2/3/7/9 spread is just which file won the import race that run.
-            // 31 of 71 ui files and 14 of 173 unit files use `vi.mock`, so this
-            // is structural: `isolate: false` is permanently unavailable to these
-            // tiers, not merely slower or flakier. Nothing to fix in the tests.
+            // Integration stays on isolated forks: database clients and module
+            // caches are file-scoped, while shared registries make vi.mock order
+            // dependent. Larger IntegreSQL pools do not reduce CREATE latency.
           },
         },
         {

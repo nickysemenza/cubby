@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-/** All entity types in the system. Kept cycle-free for manifest derivations. */
 export const entitySchema = z.enum([
   "ingredient",
   "product",

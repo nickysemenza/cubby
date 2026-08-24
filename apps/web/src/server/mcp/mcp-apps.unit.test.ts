@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { MCP_APP_BUNDLES } from "@cubby/mcp-apps";
+import { MCP_APP_MANIFEST } from "@cubby/mcp-apps/metadata";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -33,6 +34,12 @@ describe("MCP App resources", () => {
         expect(html.startsWith("<!doctype html>")).toBe(true);
         expect(html).not.toMatch(/<(?:script|link)[^>]+(?:src|href)=/u);
         expect(html).not.toContain("__CUBBY_ORIGIN__");
+        expect(html).not.toContain("__CUBBY_APP_ID__");
+        const app = MCP_APP_MANIFEST.find(
+          (candidate) => candidate.uri === resource.uri,
+        );
+        expect(app).toBeDefined();
+        expect(html).toContain(`name="cubby-app-id" content="${app?.id}"`);
       }
     } finally {
       await Promise.allSettled([client.close(), server.close()]);
@@ -55,6 +62,14 @@ describe("MCP App resources", () => {
       MCP_APP_BUNDLES.map((app) => app.uri).sort(),
     );
     expect([...pointedAt].every((uri) => served.has(uri))).toBe(true);
+    for (const app of MCP_APP_MANIFEST) {
+      expect(
+        tools.find((tool) => tool.name === app.toolName)?._meta,
+      ).toMatchObject({
+        ui: { resourceUri: app.uri },
+        "ui/resourceUri": app.uri,
+      });
+    }
     for (const name of ["get_shopping_list", "search_usda_foods"]) {
       expect(
         tools.find((tool) => tool.name === name)?.outputSchema,

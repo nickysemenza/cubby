@@ -8,6 +8,7 @@ import {
   browserRoutedEntities,
   countableEntities,
   entityDescriptor,
+  entityInspectorMetadata,
   type EntityDescriptor,
   entityManifest,
   entityReferences,
@@ -27,7 +28,6 @@ const sorted = (xs: readonly string[]) => [...xs].sort();
 const descriptor = (entity: Entity): EntityDescriptor =>
   entityManifest[entity] as EntityDescriptor;
 
-/** The image storage enum is UPPERCASE; map manifest entity names to it. */
 const IMAGE_KEY: Record<string, string> = {
   product: "PRODUCT",
   recipe: "RECIPE",
@@ -41,7 +41,6 @@ describe("entity manifest", () => {
   it("covers every entity exactly once, each a valid descriptor", () => {
     expect(sorted(allEntities)).toEqual(sorted(entitySchema.options));
     for (const entity of allEntities) {
-      // Each entry validates against the zod descriptor.
       const entry = entityManifest[entity];
       expect(() => entityDescriptor.parse(entry)).not.toThrow();
     }
@@ -93,7 +92,6 @@ describe("entity manifest", () => {
       (e) => entityManifest[e].lifecycle.delete?.mode === "hard",
     );
     expect(hard).toEqual(["image"]);
-    // A soft delete still requires the column that makes it possible.
     for (const entity of allEntities) {
       if (entityManifest[entity].lifecycle.delete?.mode === "soft") {
         expect(entityManifest[entity].softDelete).toBe(true);
@@ -102,9 +100,6 @@ describe("entity manifest", () => {
   });
 
   it("every gallery-bearing entity references `image`", () => {
-    // `hasImages` drives the polymorphic Image.entityType gallery enum. A
-    // relationship to one specific Image (such as Vendor.logoImageId) belongs
-    // in the reference graph without making the entity a gallery owner.
     for (const entity of allEntities) {
       if (entityManifest[entity].hasImages) {
         expect(entityReferences(entity)).toContain("image");
@@ -200,10 +195,6 @@ describe("entity manifest", () => {
   });
 
   it("derives the shortcode contract from the shared prefix registry", () => {
-    // The manifest and `@cubby/shared`'s registry are two hand-kept lists of the
-    // same roster — one drives the resolvers and MCP ids, the other drives the
-    // parser and generators. Adding an entity to one and not the other would
-    // otherwise fail late and confusingly.
     expect(sorted(shortcodeEntities)).toEqual(
       sorted(Object.keys(SHORTCODE_PREFIX)),
     );
@@ -239,5 +230,47 @@ describe("entity manifest", () => {
     for (const [legacy, entity] of Object.entries(LEGACY_SHORTCODE_PREFIX)) {
       expect(descriptor(entity).legacyShortcodePrefix).toBe(legacy);
     }
+  });
+
+  it("publishes client-safe inspector identity and reference metadata", () => {
+    expect(Object.keys(entityInspectorMetadata).sort()).toEqual(
+      [...allEntities].sort(),
+    );
+    for (const entity of allEntities) {
+      const metadata = entityInspectorMetadata[entity];
+      expect(metadata.shortcodePrefix).toBe(
+        descriptor(entity).shortcodePrefix ?? null,
+      );
+      expect(metadata.references).toEqual(entityReferences(entity));
+    }
+    expect(entityInspectorMetadata.purchase.titleField).toBe("displayLabel");
+    expect(entityInspectorMetadata.inventory.titleField).toBe("name");
+    expect(entityInspectorMetadata.product).toMatchObject({
+      auditable: true,
+      hasImages: true,
+      countable: true,
+      kernelActions: [
+        "get",
+        "list",
+        "search",
+        "create",
+        "update",
+        "delete",
+        "merge",
+      ],
+      mcpOperations: ["get", "list", "create", "update", "delete"],
+      lifecycle: {
+        softDelete: true,
+        delete: { mode: "soft", bulk: true },
+        merge: true,
+      },
+      sourceRefs: {
+        output: "@cubby/schemas/product#productTopLevelOut",
+        detail: "@cubby/schemas/product#productWithFoodOut",
+      },
+    });
+    expect(entityInspectorMetadata.product.filterUrlKeys).toContain(
+      "related-vendor",
+    );
   });
 });

@@ -48,6 +48,7 @@ import { Card, CardContent } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Spinner } from "~/components/ui/spinner";
+import { entityDetailQueryOptions } from "~/entities/entity-detail";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { PhotoPassStop } from "./PhotoPassStop";
@@ -162,15 +163,13 @@ function PhotoPassStart() {
  * scan, shoot, scan the next one.
  */
 function ScanPass() {
-  const api = useTRPC();
   const [shortcode, setShortcode] = useState<LocationShortcode | null>(null);
   const { capture, discardCapture, isCapturing } = useLocationPhotoCapture();
 
   const { data: location, isLoading } = useQuery(
-    api.location.getByShortcode.queryOptions(
-      { shortcode: shortcode ?? "LOC-2222" },
-      { enabled: shortcode != null },
-    ),
+    entityDetailQueryOptions("location", shortcode ?? "LOC-2222", {
+      enabled: shortcode != null,
+    }),
   );
 
   const stop = useMemo<PhotoStop | null>(() => {

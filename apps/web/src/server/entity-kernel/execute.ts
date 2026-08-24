@@ -147,7 +147,7 @@ export async function executeEntity(
       return {
         action: command.action,
         entity: command.entity,
-        item: binding.schemas.output.parse(item),
+        item: binding.schemas.detail.parse(item),
       } as const;
     }
 

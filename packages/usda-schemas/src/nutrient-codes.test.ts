@@ -3,7 +3,6 @@ import { DAILY_VALUES, dailyValuePct, TIER1_NUTRIENTS } from "./nutrient-codes";
 
 describe("dailyValuePct", () => {
   it("computes the FDA label percent for a nutrient amount", () => {
-    // 18g fat against a 78g DV -> 23.07...%
     expect(dailyValuePct("fat", 18)).toBeCloseTo((18 / 78) * 100);
   });
 
