@@ -113,7 +113,31 @@ function gitTrackedSources() {
   return out
     .split("\n")
     .filter(Boolean)
-    .map((p) => join(repoRoot, p));
+    .map((p) => {
+      const abs = join(repoRoot, p);
+      relCache.set(abs, p);
+      return abs;
+    });
+}
+
+/**
+ * Repo-relative form of a scanned file path, memoized.
+ *
+ * The predicates below each want the repo-relative path, and every one of them
+ * used to recompute it with `path.relative`. That is ~8 calls per file, and a
+ * CPU profile put `node:path` (`relative` -> `resolve` -> `normalizeString`) at
+ * ~70% of this script's runtime — far above the regex matching it exists to do.
+ * `git ls-files` already emits the relative path, so `gitTrackedSources` primes
+ * the cache and nothing recomputes it; the `walk` fallback (no git) still fills
+ * it lazily here.
+ */
+const relCache = new Map<string, string>();
+function relPath(path: string): string {
+  const hit = relCache.get(path);
+  if (hit !== undefined) return hit;
+  const rel = relative(repoRoot, path);
+  relCache.set(path, rel);
+  return rel;
 }
 
 /** Recursive fallback if git is unavailable. @returns {string[]} */
@@ -374,12 +398,12 @@ function isTestOrFixture(path: string) {
 }
 
 function isResponseSidecar(path: string) {
-  const rel = relative(repoRoot, path);
+  const rel = relPath(path);
   return rel.startsWith("packages/schemas/src/") && rel.endsWith("-responses.ts");
 }
 
 function isSchemaContractFile(path: string) {
-  const rel = relative(repoRoot, path);
+  const rel = relPath(path);
   if (!rel.endsWith(".ts") || rel.endsWith(".unit.test.ts")) return false;
   if (rel.startsWith("packages/schemas/src/")) return true;
   return (
@@ -389,19 +413,19 @@ function isSchemaContractFile(path: string) {
 }
 
 function isQueryKeyHelperFile(path: string) {
-  return relative(repoRoot, path) === "apps/web/src/lib/query-keys.ts";
+  return relPath(path) === "apps/web/src/lib/query-keys.ts";
 }
 
 function isPaginationHelperFile(path: string) {
-  return relative(repoRoot, path) === "packages/schemas/src/pagination.ts";
+  return relPath(path) === "packages/schemas/src/pagination.ts";
 }
 
 function isCrudFactoryFile(path: string) {
-  return relative(repoRoot, path) === "apps/web/src/server/api/crud-factory.ts";
+  return relPath(path) === "apps/web/src/server/api/crud-factory.ts";
 }
 
 function isRouterFile(path: string) {
-  return relative(repoRoot, path).startsWith(
+  return relPath(path).startsWith(
     "apps/web/src/server/api/routers/",
   );
 }
@@ -450,7 +474,7 @@ function checkServicesHaveTests(): Violation[] {
 const GETDB_RE = /\bgetDb\b/;
 
 function isRepoFile(path: string) {
-  return relative(repoRoot, path).startsWith("apps/web/src/server/repo/");
+  return relPath(path).startsWith("apps/web/src/server/repo/");
 }
 
 // Rule 12: package.json scripts referencing a `tsx <path>`/`node <path>` file
@@ -899,7 +923,7 @@ function scan(files: string[]): Violation[] {
       !isTestOrFixture(file) &&
       content.includes('from "~/components/ui/table"')
     ) {
-      const isDynamicTableOrchestrator = relative(repoRoot, file) ===
+      const isDynamicTableOrchestrator = relPath(file) ===
         "apps/web/src/app/_components/data-table/Table.tsx";
       for (const finding of fixedTableColumnWidthViolations(
         content,
@@ -1068,7 +1092,7 @@ function scan(files: string[]): Violation[] {
         violations.push({
           file,
           line: i + 1,
-          snippet: relative(repoRoot, file),
+          snippet: relPath(file),
           rule: "schema-response-sidecar",
         });
       }
@@ -1396,7 +1420,7 @@ for (const rule of [...new Set(violations.map((v) => v.rule))].sort()) {
   const hits = violations.filter((v) => v.rule === rule);
   console.error(`▸ ${byRule[rule] ?? `${rule} (no description registered)`}`);
   for (const v of hits) {
-    console.error(`    ${relative(repoRoot, v.file)}:${v.line}: ${v.snippet}`);
+    console.error(`    ${relPath(v.file)}:${v.line}: ${v.snippet}`);
   }
   console.error("");
 }
