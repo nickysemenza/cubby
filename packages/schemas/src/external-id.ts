@@ -33,13 +33,10 @@ export const externalIdKind = z.enum([
 ]);
 export type ExternalIdKind = z.infer<typeof externalIdKind>;
 
-/** The slug barcodes are recorded under. */
 export const GTIN_SOURCE = "gtin";
 
-/** The single kind recorded under {@link GTIN_SOURCE}. */
 export const GTIN_KIND = "gtin_14" satisfies ExternalIdKind;
 
-/** True for the kind recorded under `GTIN_SOURCE`. */
 export const isGtinKind = (kind: ExternalIdKind): boolean => kind === GTIN_KIND;
 
 /**
@@ -54,14 +51,6 @@ export const isGtinKind = (kind: ExternalIdKind): boolean => kind === GTIN_KIND;
 export const normalizeGtin = (value: string): string | null =>
   /^\d{8,14}$/.test(value) ? value.padStart(14, "0") : null;
 
-/**
- * The shortest standard encoding — what to render next to a package, and what
- * to hand USDA.
- *
- * `usda-api`'s own `normalizeUpc` left-pads to TWELVE and its
- * `branded_food.gtin_upc` index is an exact string match, so a GTIN-14 lookup
- * misses nearly every branded food.
- */
 export const displayGtin = (value: string): string =>
   value.replace(/^0+/, "").padStart(12, "0");
 
@@ -95,7 +84,6 @@ export const canonicalExternalIdUrl = (value: {
     ? `https://www.amazon.com/dp/${encodeURIComponent(value.externalId)}`
     : (value.url ?? null);
 
-/** Canonical Amazon links are derived from ASIN rather than stored twice. */
 export const storedExternalIdUrl = (value: {
   source: string;
   kind: ExternalIdKind;
@@ -119,18 +107,6 @@ const externalIdValueFields = {
     .url()
     .nullish()
     .describe("Optional direct link to the product page"),
-  /**
-   * The value to show when one has to stand for the slot — the barcode on the
-   * package, the ASIN of the listing actually bought from.
-   *
-   * One primary per (product, source, kind), enforced by a partial unique;
-   * secondaries are unlimited. Omitted means primary, so a caller that knows
-   * nothing about this keeps working.
-   *
-   * `.optional()` rather than `.default(true)`: a zod default makes the parsed
-   * output type wider than the input, and react-hook-form's resolver requires
-   * the two to agree. The default lives on the column and in the repo layer.
-   */
   isPrimary: z.boolean().optional(),
 };
 
@@ -162,8 +138,6 @@ const uniqueExternalIdSlots = <T extends z.ZodType>(item: T) =>
         isPrimary?: boolean;
       };
       const slot = `${entry.source}\u0000${entry.kind}`;
-      // The same value twice in one slot is a duplicate however it is flagged;
-      // the database's global unique would reject it anyway, less legibly.
       const value_ = `${slot}\u0000${entry.externalId}`;
       if (seen.has(value_)) {
         ctx.addIssue({
@@ -219,7 +193,6 @@ export const externalIdOut = z.object({
     .url()
     .nullish()
     .describe("Optional direct link to the product page"),
-  /** One per (source, kind); see `externalIdValueFields.isPrimary`. */
   isPrimary: z.boolean(),
   createdAt: z.date(),
   updatedAt: z.date(),

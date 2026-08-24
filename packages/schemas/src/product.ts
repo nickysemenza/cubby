@@ -381,23 +381,12 @@ export const productFilterFields = {
   ...numericRangeFields("expenseCount", { int: true, nonnegative: true }),
   ...numericRangeFields("expenseTotal"),
   ...numericRangeFields("expectedQuantity"),
-  /**
-   * Products whose shelf disagrees with the ledger. Restricted to stocked
-   * products on purpose: an unstocked product with no expenses has a variance
-   * of 0 - 0 and would otherwise flood a worklist meant to surface real
-   * disagreements.
-   */
   quantityVarianceFilter: z
     .enum(["mismatched", "matched"])
     .optional()
     .describe(
       "mismatched: stocked products whose on-hand units differ from the expected quantity. matched: stocked products where they agree.",
     ),
-  /**
-   * Products carrying at least one product-linked Expense with no recorded
-   * quantity — the data-entry-debt worklist behind the `+N?` cue on the
-   * Expected column.
-   */
   unknownQuantityLinesFilter: presenceFilter,
   purchaseDatePresenceFilter: presenceFilter.describe(
     "Filter to products that do / don't have a dated live Purchase linked through an Expense.",
@@ -609,15 +598,8 @@ export type ProductSortField = (typeof productSortableFields)[number];
  * disposal-Purchase predicate).
  */
 export const productQuantityLedgerOut = z.object({
-  /** Units acquired: positive-cost lines, plus $0 lines with a positive quantity. */
   acquiredUnits: z.number().nonnegative(),
-  /** Units gone: negative-cost lines (returns, refunds, sales), plus $0 discards. */
   exitedUnits: z.number().nonnegative(),
-  /**
-   * `acquiredUnits - exitedUnits`. **May be negative** — more units left than
-   * the ledger can account for buying, which is a real data defect worth
-   * surfacing rather than a number to clamp at zero.
-   */
   expectedQuantity: z.number(),
   /**
    * Lines that carry no quantity, so they contribute nothing to the totals
@@ -904,14 +886,9 @@ export type ProductPickerOnHandOut = ProductPickerItemOut["onHand"];
 export const productQuantityFields = {
   quantityLedger: productQuantityLedgerOut,
   onHandUnits: z.number().nullable(),
-  /**
-   * `onHandUnits - quantityLedger.expectedQuantity`. Null exactly when
-   * `onHandUnits` is. Zero means the shelf and the ledger agree.
-   */
   quantityVariance: z.number().nullable(),
 };
 
-/** The quantity contract for a bounded batch reader such as a recount pass. */
 export const productQuantitySummaryOut = z.object(productQuantityFields);
 export type ProductQuantitySummaryOut = z.infer<
   typeof productQuantitySummaryOut
@@ -1510,7 +1487,6 @@ export const mergeProductsInput = z.object({
 });
 export type MergeProductsInput = z.infer<typeof mergeProductsInput>;
 
-/** What a merge actually moved, folded, or discarded. */
 export const productMergeSummaryOut = z.object({
   keepId: productShortcode,
   deletedIds: z.array(productShortcode),

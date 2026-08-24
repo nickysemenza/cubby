@@ -1,11 +1,9 @@
 import { z } from "zod";
 
 export interface NormalizedIsbn {
-  /** Canonical ISBN-13, without presentation separators. */
   isbn13: string;
   /** ISBN-10 exists only for the original 978 registration group. */
   isbn10: string | null;
-  /** The same printed identity in Cubby's canonical barcode representation. */
   gtin14: string;
 }
 
@@ -63,8 +61,6 @@ const fromIsbn13 = (isbn13: string): NormalizedIsbn => {
  */
 export const normalizeIsbn = (value: string): NormalizedIsbn | null => {
   const compact = compactIsbn(value);
-  // Zod transforms can cross more than one typed seam (MCP -> router -> repo).
-  // Accept our own canonical output so parsing is idempotent across them.
   if (/^0\d{13}$/.test(compact) && isValidIsbn13(compact.slice(1))) {
     return fromIsbn13(compact.slice(1));
   }
@@ -75,7 +71,6 @@ export const normalizeIsbn = (value: string): NormalizedIsbn | null => {
   return isValidIsbn13(compact) ? fromIsbn13(compact) : null;
 };
 
-/** Interpret a stored canonical GTIN as an ISBN, when it truly is one. */
 export const isbnFromGtin = (value: string): NormalizedIsbn | null => {
   if (!/^\d{14}$/.test(value) || value[0] !== "0") return null;
   return normalizeIsbn(value.slice(1));
@@ -119,7 +114,6 @@ export const productCodeSearchTerms = (value: string): string[] => {
   ];
 };
 
-/** Explicit ISBN write input; its output is the canonical GTIN-14 identity. */
 export const isbn = z
   .string()
   .trim()

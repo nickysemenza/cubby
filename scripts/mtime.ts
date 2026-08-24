@@ -1,7 +1,6 @@
 import { type Dirent, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-/** How to fold two mtimes together, and which entries to consider. */
 type ExtremeMtimeOptions = {
   pick: (a: number, b: number) => number;
   seed: number;
@@ -33,7 +32,6 @@ export const extremeMtime = (
       try {
         acc = pick(acc, statSync(full).mtimeMs);
       } catch {
-        // An entry can disappear between readdir and stat; ignore it.
       }
     }
   }

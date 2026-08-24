@@ -1,16 +1,11 @@
 import { z } from "zod";
 import { cookbookShortcode, recipeShortcode } from "./identifiers";
 
-// Node + edge shapes for the recipe-as-ingredient dependency graph.
-// An edge points parent → sub ("uses / depends on"): the source recipe contains
-// an ingredient row whose `recipeId` resolves to the target (sub-)recipe.
 const recipeDepNodeSchema = z.object({
   id: recipeShortcode,
   name: z.string(),
   cookbookId: cookbookShortcode.nullable(),
   cookbookName: z.string().nullable(),
-  // True when the recipe is referenced as a sub-recipe but falls outside the
-  // active cookbook filter — included so its inbound edge isn't dangling.
   external: z.boolean(),
 });
 

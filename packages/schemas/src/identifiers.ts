@@ -22,7 +22,6 @@ import type {
 import { z } from "zod";
 import type { ShortcodeEntity } from "./entity-manifest";
 
-// Generic entity ID (use sparingly - prefer specific branded types)
 export const id = z.uuid().describe("entity identifier");
 
 // Helper functions for unsafe casts (use only when you're certain the value is valid).
@@ -133,8 +132,6 @@ export type FinancialTransactionId = z.infer<typeof financialTransactionId>;
 export const [vendorId, unsafeVendorId] = brandedId("VendorId");
 export type VendorId = z.infer<typeof vendorId>;
 
-// The vendor purchase event an expense belongs to. `PurchaseId` used to brand
-// the ledger row itself; that row is now `ExpenseId`.
 export const [purchaseId, unsafePurchaseId] = brandedId("PurchaseId");
 export type PurchaseId = z.infer<typeof purchaseId>;
 

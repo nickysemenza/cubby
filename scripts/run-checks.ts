@@ -44,7 +44,6 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 type Gate = {
-  /** Label shown in the progress output. */
   name: string;
   command: string;
   args: string[];
@@ -181,14 +180,12 @@ function changedPaths(): Set<string> | null {
 
   const paths = new Set(committed.split("\n").filter(Boolean));
   for (const line of working.split("\n").filter(Boolean)) {
-    // "XY path", or "XY old -> new" for renames; the destination is what counts.
     const path = line.slice(3);
     paths.add(path.split(" -> ").at(-1) ?? path);
   }
   return paths;
 }
 
-/** @see Gate.triggers for the matching rules. */
 function isTriggered(gate: Gate, changed: Set<string> | null): boolean {
   if (!gate.triggers) return true;
   if (changed === null) return true;

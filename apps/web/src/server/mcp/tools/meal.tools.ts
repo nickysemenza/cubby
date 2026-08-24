@@ -7,7 +7,6 @@ import {
 } from "@cubby/schemas/meal";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { SHOPPING_LIST_UI } from "../apps";
 import {
   getCaller,
   READ_ONLY_CLOSED,
@@ -29,7 +28,6 @@ export function registerMealTools(server: McpServer) {
     },
     outputSchema: shoppingListOut,
     annotations: READ_ONLY_CLOSED,
-    uiResourceUri: SHOPPING_LIST_UI,
     handler: async (params, extra) => {
       const caller = getCaller(extra);
       return await caller.meal.getShoppingList({

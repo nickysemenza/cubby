@@ -19,22 +19,12 @@ import {
   wishShortcode,
 } from "./identifiers";
 
-/**
- * Curated relationship columns which supplement (rather than duplicate) the
- * direct relation columns already owned by each entity list.
- *
- * Paths use the same edge/direction vocabulary as entityManifest. Keeping the
- * declaration in schemas makes the API contract and the UI agree on the exact
- * set of paths the server is willing to execute; SQL remains server-owned.
- */
 interface RelatedViewPresentationDefinition {
   key: string;
   source: Entity;
-  /** `entityManifest[source].relationships[].key` — the canonical graph. */
   relationship?: string;
   defaultVisible: boolean;
   order: "alphabetical" | "newest" | "task";
-  /** Override when one source has multiple curated paths to the same target. */
   filterPrefix?: string;
   /**
    * The directional key that realizes this same relationship from the other
@@ -56,11 +46,6 @@ const relatedViewPresentationRegistry = [
     key: "product.vendors",
     source: "product",
     relationship: "vendors",
-    // Off by default: each of these relational previews is a wide column that
-    // renders the no-value placeholder on most products, and three of them
-    // together spent ~768px of a 1280px viewport — the single largest cause of
-    // the products list scrolling sideways. Reachable from the View menu for
-    // the rows that do have them.
     defaultVisible: false,
     order: "alphabetical",
     inverseKey: "vendor.products",
@@ -69,11 +54,6 @@ const relatedViewPresentationRegistry = [
     key: "product.projects",
     source: "product",
     relationship: "purchased-projects",
-    // Off by default: each of these relational previews is a wide column that
-    // renders the no-value placeholder on most products, and three of them
-    // together spent ~768px of a 1280px viewport — the single largest cause of
-    // the products list scrolling sideways. Reachable from the View menu for
-    // the rows that do have them.
     defaultVisible: false,
     order: "alphabetical",
     inverseKey: "project.purchasedProducts",
@@ -82,11 +62,6 @@ const relatedViewPresentationRegistry = [
     key: "product.usedOnProjects",
     source: "product",
     relationship: "project-uses",
-    // Off by default: each of these relational previews is a wide column that
-    // renders the no-value placeholder on most products, and three of them
-    // together spent ~768px of a 1280px viewport — the single largest cause of
-    // the products list scrolling sideways. Reachable from the View menu for
-    // the rows that do have them.
     defaultVisible: false,
     order: "alphabetical",
     filterPrefix: "usedOnProject",
@@ -429,7 +404,6 @@ export const relatedViewRegistry = relatedViewPresentationRegistry.map(
   label: string;
 })[];
 
-/** The executable path is resolved from the canonical manifest graph. */
 export const relatedViewPath = (
   view: Pick<RelatedViewDefinition, "source" | "key">,
 ) =>
@@ -452,10 +426,7 @@ type RelatedViewSource = (typeof relatedViewRegistry)[number]["source"];
  * same empty `.filter()` result.
  */
 const ENTITIES_WITHOUT_RELATED_VIEWS = {
-  // Reached through its recipes; an ingredient's own relationships are
-  // usage rollups the ingredient detail page already renders in full.
   ingredient: "usages are rendered in full on the detail page, not previewed",
-  // Browsed as a gallery, and its one relationship (its recipes) is the page.
   cookbook: "the cookbook page IS its recipe list",
   ledgerParty:
     "ledger party relationships are rendered in the household ledger",
@@ -467,20 +438,10 @@ const ENTITIES_WITHOUT_RELATED_VIEWS = {
   "usda-food": "remote USDA records have no local relationships",
 } as const satisfies Record<Exclude<Entity, RelatedViewSource>, string>;
 
-/**
- * A registry row with its literal `key` intact — callers derive
- * `RelatedViewKey[]` from these, so widening to `RelatedViewDefinition` here
- * would erase the union the preview endpoints validate against.
- */
 type RegisteredRelatedView = (typeof relatedViewRegistry)[number];
 
-/** Stable identity so a `useMemo` over the result doesn't churn. */
 const NO_RELATED_VIEWS: readonly RegisteredRelatedView[] = [];
 
-/**
- * The curated related views a source entity offers — the single reader of the
- * registry, so the opt-out above is load-bearing rather than decorative.
- */
 export const relatedViewsFor = (
   entity: Entity,
 ): readonly RegisteredRelatedView[] =>
@@ -522,7 +483,6 @@ export type RelatedPreviewGroup = z.infer<typeof relatedPreviewGroup>;
 
 export const relatedPreviewOutput = z.array(relatedPreviewGroup);
 
-/** A page of full related records for the detail-page outline tree. */
 export const relatedBranchInput = z.object({
   relationKey: relatedViewKeySchema,
   sourceId: z.string().min(1),
@@ -539,7 +499,6 @@ export const relatedBranchOutput = z.object({
   nextOffset: z.number().int().nonnegative().nullable(),
 });
 
-/** Expense-backed aggregates for the purchasing provenance mini tables. */
 export const relatedSummaryRelationKeys = [
   "vendor.products",
   "vendor.projects",
@@ -636,7 +595,6 @@ export const relatedSummaryOutput = z
 export type RelatedSummaryOutput = z.infer<typeof relatedSummaryOutput>;
 export type RelatedBranchOutput = z.infer<typeof relatedBranchOutput>;
 
-/** Searchable relation target options; count is distinct matching source rows. */
 export const relatedOptionsInput = z.object({
   relationKey: relatedViewKeySchema,
   search: z.string().trim().max(200).optional(),

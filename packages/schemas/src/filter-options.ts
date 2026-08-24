@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-/** High-cardinality rosters served to list filters without hydrating entities. */
 export const filterOptionKind = z.enum([
   "ingredientWithProduct",
   "locationIdentityProduct",

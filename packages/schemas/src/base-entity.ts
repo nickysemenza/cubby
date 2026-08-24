@@ -12,7 +12,6 @@ import { z } from "zod";
  * corresponding keys so field order (and the API contract) is preserved.
  */
 
-/** `createdAt` / `updatedAt` as they appear on every API read shape. */
 export const timestampedFields = {
   createdAt: z.date(),
   updatedAt: z.date(),
@@ -95,7 +94,6 @@ export const numericRangeFields = <Prefix extends string>(
     int?: boolean;
     nonnegative?: boolean;
     finite?: boolean;
-    /** @default true */
     coerce?: boolean;
     describe?: { min: string; max: string };
   },
@@ -151,10 +149,6 @@ export function deriveUpdateFields<
   const entries = Object.entries(createShape) as [keyof T, z.ZodType][];
   for (const [key, field] of entries) {
     if (omit.has(key)) continue;
-    // Strip a field-level `.default(...)` before making it optional, so an
-    // omitted key means "leave unchanged" rather than "reset to the default".
-    // `.unwrap()` is typed as Zod's core `$ZodType`; the public `z.ZodType` (the
-    // one with `.optional()`) is its subtype, hence the single localized cast.
     const base =
       field instanceof z.ZodDefault ? (field.unwrap() as z.ZodType) : field;
     shape[key as string] = base.optional();

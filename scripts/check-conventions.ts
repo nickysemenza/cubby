@@ -1,94 +1,6 @@
 #!/usr/bin/env node
 // @ts-check
-/**
- * Regression-guard for cubby conventions. Runs in `pnpm check` alongside
- * biome + typecheck. No dependencies; uses git ls-files (falls back to a
- * recursive walk) so it only scans tracked source.
- *
- * Checks:
- *  1. Hardcoded chromatic Tailwind colors in apps/web/src tsx — protects the
- *     Phase 1 color sweep (use design tokens, never `text-red-500` etc.).
- *  2. Reintroduction of a TS `calculateTotals` costing engine — costing must
- *     stay in the Rust/WASM crate (recipebridge), never reimplemented in TS.
- *  3. Off-scale Tailwind spacing — gap/space/padding/margin must use the strict
- *     {1,2,4,6} scale. Exempts components/ui (design-system primitives), the
- *     UI primitives and any line marked `/* tight *\/` (intentional density).
- *  4. Response schema sidecars — list/detail/hydrated variants live in owning
- *     entity modules; do not reintroduce *-responses.ts files.
- *  5. Schema contract derivation — schema contract modules must not compose
- *     response/input variants via `.extend()`, `.shape`, `.pick()`, `.omit()`,
- *     or `.partial()`; use private field maps plus explicit exported schemas.
- *  6. Query invalidation boundaries — app code must use the typed helpers in
- *     apps/web/src/lib/query-keys.ts instead of raw React Query invalidation.
- *  7. Raw Tailwind shadow utilities (shadow-sm|md|lg|xl|2xl, drop-shadow) in
- *     apps/web/src tsx — the Warm-Paper Ledger is zero-shadow; separation is a
- *     border hairline. (Bracket `shadow-[var(--token)]` syntax is NOT matched,
- *     so surviving flattened tokens don't false-positive.)
- *  8. bg-gradient-to-* surface washes in apps/web/src tsx — the matte-paper
- *     system uses flat tones; the audit-log timeline fade connector is exempt.
- *  9. Arbitrary text-[Npx] font sizes — snap to the sub-xs tokens
- *     (text-2xs / text-3xs) so the type scale stays closed.
- * 10. Untested services — every server/services/*.service.ts needs a sibling
- *     test file (a fixed legacy exemption list may only shrink).
- * 11. getDb() used outside server/repo/ — the opaque-Database boundary
- *     (CLAUDE.md "Opaque Database Type") only permits the unwrap in repos.
- * 12. Dead package.json scripts — a `tsx <path>`/`node <path>` script entry
- *     whose path doesn't exist on disk.
- * 13. Unstable hook-destructure defaults — `const { data = [] } = useQuery(...)`
- *     style inline `[]`/`{}`/`new …` defaults mint a fresh reference every
- *     render whenever the value is undefined (loading / disabled queries),
- *     destabilizing downstream memo/effect deps (infinite-render-loop hazard;
- *     froze the labels page). Use a module-level constant instead.
- * 14. Adjacent equal `h-N w-N` / `w-N h-N` Tailwind pairs in apps/web tsx — use
- *     the `size-N` shorthand. Keeps icon sizing single-token and greppable (the
- *     density pass normalized ~540 of these). No exemptions.
- *
- * (Numbering above has already drifted — see the two blocks both labelled
- * "Rule 11" — so newer checks are referenced by slug, not number.)
- *
- * uuid-entity-href: a link to a shortcode-bearing entity's detail page built
- *     from a uuid — either the pre-cutover `$id` route param (`/products/$id`)
- *     or a server-side template literal (`/tasks/${row.id}`). Shortcodes are
- *     the public id; a uuid must never reach a URL. Most call sites are caught
- *     by the router's typed params, but two classes are NOT: stringly-typed
- *     paths, and hrefs built as strings on the server (repo/project/attention.ts
- *     shipped eight of these). `usda`/`images` are exempt — they are the two
- *     detail routes that legitimately key on something other than a shortcode.
- *
- * hand-rolled-array-overlap: `&& ${arr}` in a raw `sql` template inside
- *     server/repo/ — drizzle interpolates a JS array into raw SQL as a ROW
- *     CONSTRUCTOR (`&& ($1, $2)`), not a `text[]`, so `sql`${col} && ${arr}``
- *     silently matches nothing at every input size. Use `arrayOverlaps(col,
- *     arr)` instead (see CLAUDE.md / dashboard-shared.ts).
- *
- * raw-control-byte: a literal C0 control character in tracked source (tab, LF
- *     and CR excepted). Written as a raw byte rather than an escape, it makes
- *     the whole file BINARY to the grep family — `file` reports "data", ripgrep
- *     skips it, and `grep -c` returns nothing for a symbol `git grep` finds 16
- *     times. Two `\0` composite-key separators did that to a 1,776-line repo
- *     file; nothing caught it, because this script and its siblings read via
- *     `git ls-files` + `readFileSync` and are unaffected, and in a diff a raw
- *     NUL renders as a space.
- *
- * strict-router-output: explicit tRPC router output schemas must be wrapped in
- *     `strictOutput(...)`. tRPC otherwise checks the resolver against the Zod
- *     schema's input type; shortcode brands exist only in its parsed output, so
- *     a UUID brand is still assignable to the accepted plain string.
- *
- * literal-route-options: TanStack Router only code-splits route component
- *     properties when `createFileRoute(path)` receives a literal object. A
- *     factory call there silently moves the page implementation into the eager
- *     bundle, so factories may build property values but never the options bag.
- *
- * fixed-table-column-width: a static UI `<Table>` using the primitive's
- *     default fixed layout must give every `<TableHead>` an unconditional
- *     `w-*` class. An unsized or conditionally-unsized head can collapse to
- *     zero while its nowrap content paints over adjacent columns. Explicit
- *     `table-auto` tables and the dynamic TanStack `<RTable>` orchestrator are
- *     exempt because they own sizing through different contracts.
- *
- * Exit 1 + a report on any violation; exit 0 + one-line OK when clean.
- */
+/** CI regression guards; rule constraints and exemptions stay by their implementations. */
 
 import { execFileSync } from "node:child_process";
 import assert from "node:assert/strict";
@@ -164,7 +76,6 @@ function listFiles() {
     const files = gitTrackedSources();
     if (files.length > 0) return files;
   } catch {
-    // fall through to walk
   }
   try {
     return [...walk(webSrc), ...walk(upcLookupSrc), ...walk(schemasSrc)];
@@ -173,7 +84,6 @@ function listFiles() {
   }
 }
 
-// Files allowed to use raw chromatic colors for authored illustration paint.
 const COLOR_EXCLUDE_BASENAMES = new Set([
   "IsometricPantry.tsx",
 ]);
@@ -196,8 +106,6 @@ const GRADIENT_RE = /\bbg-gradient-to-[a-z]/;
 // a fade-out connector, not a surface wash).
 const GRADIENT_EXCLUDE_BASENAMES = new Set(["audit-log-entry.tsx"]);
 
-// Arbitrary text-[Npx] font sizes bypass the closed type scale. The sub-xs
-// steps have tokens: text-[8px]→text-3xs, text-[9/10/11px]→text-2xs.
 const TEXT_PX_RE = /\btext-\[[0-9]+px\]/;
 
 // A `<NoneValue />` reached through a TRUTHINESS test rather than a null check.
@@ -249,11 +157,6 @@ const ACTION_VERBS_PATH = "apps/web/src/app/_components/actions/action-verbs.ts"
  */
 const menuItemText = (line: string) =>
   line
-    // Braces FIRST. `<[^>]*>` stops at the first `>`, so an attribute holding
-    // one — `onSelect={() => x()}`, `disabled={x > 0}` — truncates the tag
-    // strip and leaves the label glued to attribute debris, re-opening the
-    // single-line hole this rule exists to close. Removing the brace
-    // expressions first makes the tag strip unambiguous.
     .replace(/\{[^}]*\}/g, " ")
     .replace(/<[^>]*>/g, " ")
     .replace(/\s+/g, " ")
@@ -386,8 +289,6 @@ const RESPONSE_FIELD_MAP_RE =
 
 const LOOSE_SORT_PAGINATION_RE = /\.\.\.sortPaginationFields\b/;
 
-// components/ui and components/reui hold copied third-party primitives whose
-// internal layout/accessibility implementation is maintained as vendored source.
 function isUiPrimitive(path: string) {
   return (
     path.includes("/components/ui/") || path.includes("/components/reui/")
@@ -494,8 +395,6 @@ function isRepoFile(path: string) {
   return relPath(path).startsWith("apps/web/src/server/repo/");
 }
 
-// Rule 12: package.json scripts referencing a `tsx <path>`/`node <path>` file
-// that doesn't exist on disk (relative to that package's directory).
 const SCRIPT_TARGET_RE = /\b(?:tsx|node)\s+([^\s"']+\.(?:ts|mjs|js))\b/g;
 
 function checkPackageScriptTargets(): Violation[] {
@@ -580,7 +479,6 @@ const UNSTABLE_PARAM_DEFAULT_RE =
  */
 const DEPENDENCY_ARRAY_RE = /[}\])]\s*,\s*\[([^\]]*)\]\s*,?\s*\)/g;
 
-/** Identifiers named in any dependency array in this file. */
 function dependencyIdentifiers(content: string) {
   const names = new Set();
   for (const match of content.matchAll(DEPENDENCY_ARRAY_RE)) {
@@ -820,10 +718,6 @@ function hasUnconditionalTableAuto(tableTag: string) {
   return autoIndex !== -1 && (conjunction === -1 || autoIndex < conjunction);
 }
 
-/**
- * Offsets of fixed-layout table heads that can render without a width.
- *
- */
 function fixedTableColumnWidthViolations(
   content: string,
   dynamicOrchestrator = false,
@@ -932,9 +826,6 @@ function scan(files: string[]): Violation[] {
     // <DropdownMenuItem and its closing tag.
     let dropdownItemDepth = 0;
 
-    // Rule (fixed-table-column-width): fixed-layout static tables need a real
-    // width on every rendered head. `table-auto` explicitly chooses intrinsic
-    // content sizing; the TanStack orchestrator derives dynamic widths.
     if (
       isTsx &&
       !isTestOrFixture(file) &&
@@ -983,8 +874,6 @@ function scan(files: string[]): Violation[] {
         });
       }
 
-      // Rule 13b: the parameter-position form, narrowed to identifiers this
-      // file actually feeds to a dependency array.
       const deps = dependencyIdentifiers(content);
       if (deps.size > 0) {
         for (const match of content.matchAll(UNSTABLE_PARAM_DEFAULT_RE)) {
@@ -1086,7 +975,6 @@ function scan(files: string[]): Violation[] {
         });
       }
 
-      // Rule 2: reintroduced TS calculateTotals engine (any non-test source).
       if (
         !isTestOrFixture(file) &&
         !isCommentLine(line) &&
@@ -1120,7 +1008,6 @@ function scan(files: string[]): Violation[] {
         });
       }
 
-      // Rule 4: response contracts live in their owning schema modules.
       if (i === 0 && isResponseSidecar(file)) {
         violations.push({
           file,
@@ -1145,8 +1032,6 @@ function scan(files: string[]): Violation[] {
         });
       }
 
-      // Rule 6: all raw React Query invalidation/cancellation goes through the
-      // typed query-key helpers so tRPC's nested query-key shape stays correct.
       if (
         !isQueryKeyHelperFile(file) &&
         !isCommentLine(line) &&

@@ -5,12 +5,6 @@ import { type ImportRecipe, importRecipesSchema } from "./import-recipe";
 // its helpers now live in `./import-recipe` — it's shared across all import
 // sources (EPUB, URL scrape, Notion), not just cookbooks.
 
-// Optional power-user JSON-upload path: accept either the flat `ImportRecipe[]`
-// (what `food-cli` emits, and what the in-browser WASM extractor produces) or a
-// `{ book, recipes }[]` bundle, normalizing both to a flat array. For a bundle
-// entry, stamp its `book` onto each recipe's `source` so the importer's
-// group-by-source logic is uniform. The primary drag-EPUB path doesn't touch
-// this — it passes a flat `ImportRecipe[]` straight from WASM.
 const cookbookBundleEntry = z.object({
   book: z.string(),
   recipes: importRecipesSchema,

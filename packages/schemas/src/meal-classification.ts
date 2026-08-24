@@ -67,16 +67,11 @@ export const MEAL_KIND_LABELS: Record<MealKind, string> = {
   other: "Other",
 };
 
-/**
- * Sort position within a day. Unslotted meals sort last, preserving the
- * alphabetical-by-title order they had before slots existed.
- */
 export function mealTypeRank(type: MealType | null | undefined): number {
   if (!type) return mealTypeValues.length;
   return mealTypeValues.indexOf(type);
 }
 
-/** Whether this meal's ingredients should be bought — see `mealKindValues`. */
 export function contributesToShoppingList(kind: MealKind): boolean {
   return kind === "cooked";
 }

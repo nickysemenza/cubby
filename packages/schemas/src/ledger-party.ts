@@ -77,7 +77,6 @@ export const ledgerPartyOptionsOut = z.array(
 );
 export type LedgerPartyOptionsOut = z.infer<typeof ledgerPartyOptionsOut>;
 
-/** A unitless share of an Expense's beneficiary or funder role. */
 export const ledgerAttributionInput = z.strictObject({
   partyId: ledgerPartyShortcode.nullable(),
   weight: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),

@@ -64,14 +64,11 @@ export type DetachProductComponentsInput = z.infer<
   typeof detachProductComponentsInput
 >;
 
-/** See `relationMutationOut` (`./common`) for what `changed` / `attached` /
- * `alreadySatisfied` mean — this family's edge is `ProductComponent`. */
 export const productComponentMutationOut = relationMutationOut;
 export type ProductComponentMutationOut = z.infer<
   typeof productComponentMutationOut
 >;
 
-/** One row on a kit's own component list. */
 export const productComponentOut = z.object({
   productId: productShortcode,
   productName: z.string(),
@@ -131,10 +128,6 @@ export const kitComponentRowOut = z.object({
 export type KitComponentRowOut = z.infer<typeof kitComponentRowOut>;
 export const kitComponentRowsOut = z.array(kitComponentRowOut);
 
-/**
- * The kit's own most recent live purchase — enough to link straight to the
- * order that actually carries the money, since the component itself has none.
- */
 export const kitMembershipPurchaseOut = z.object({
   purchaseId: purchaseShortcode,
   displayLabel: z.string().nullable(),
@@ -144,7 +137,6 @@ export const kitMembershipPurchaseOut = z.object({
 });
 export type KitMembershipPurchaseOut = z.infer<typeof kitMembershipPurchaseOut>;
 
-/** The transpose: one kit a Product is listed inside, most recent first. */
 export const kitMembershipOut = z.object({
   parentProductId: productShortcode,
   parentProductName: z.string(),

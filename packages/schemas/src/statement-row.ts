@@ -35,7 +35,6 @@ export const statementRowDispositionReason = z.enum([
   "not_modeled",
   "not_a_purchase",
   "duplicate_of_other_source",
-  /** Predates the ledger; no Purchase was ever kept for it. */
   "pre_cubby",
   "other",
 ]);
@@ -96,7 +95,6 @@ export const statementRowOut = z.object({
   notes: z.string().nullable(),
 
   matchState: statementRowMatchState,
-  /** The transaction carrying this row's ref, when one does. */
   transactionId: financialTransactionShortcode.nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),

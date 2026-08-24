@@ -95,7 +95,6 @@ export const auditLogUserOut = z
   .nullable();
 
 export const auditLogEntryOut = z.object({
-  /** Opaque stable identity for rendering and page deduplication. */
   entryKey: z.string(),
   entityType: auditEntitySchema,
   entityId: auditableEntityIdSchema.nullable(),

@@ -110,7 +110,6 @@ export type { FilterConfig, MobileColumnMeta, MobileSlot } from "./table-meta";
 
 export { multiSelectFilterFn };
 
-/** Multiselect filterFn for an entity-reference column, matching on its id. */
 const projectRefFilterFn = multiSelectFilterFnBy(
   (v) => (v as { id?: string | null } | null)?.id ?? null,
 );
@@ -163,14 +162,6 @@ type EntityRowLink = {
   params: EntityDetailParams;
 };
 
-/**
- * Resolve a row's detail link per row instead of from the table's own entity.
- *
- * For a table whose rows aren't all the same entity — global search, or a tree
- * whose children are a different entity than its parents (the wishlist's
- * candidate Products nested under a Wish). Returning null renders the name as
- * plain text, for the rare row that names nothing openable.
- */
 export type RowLinkResolver<T> = (row: T) => EntityRowLink | null;
 
 const defaultRowLink = <T extends BaseRow>(
@@ -210,48 +201,11 @@ export function createNameColumn<T extends BaseRow>(
       onSave: (newValue: string, row: T) => Promise<void>;
     };
     mobile?: MobileColumnMeta;
-    /**
-     * Override the header label. Defaults to the field name (TanStack's
-     * column-id fallback), which reads fine as "NAME" on an index page but not
-     * in a table embedded under another entity — there the entity itself is the
-     * label ("Task", "Expense").
-     */
     header?: string;
-    /**
-     * Extra content rendered inline after the name (e.g. a subtask-count
-     * badge) — return `undefined`/`null` for rows with nothing to show.
-     */
     nameSuffix?: (row: T) => ReactNode;
-    /**
-     * Extra content rendered inline BEFORE the name — a brand mark or avatar that
-     * identifies the row at a glance (the vendor roster's logo glyph).
-     *
-     * Separate from `nameSuffix` because leading and trailing content mean
-     * different things: a suffix is a secondary affordance about the row, a prefix
-     * is part of how you recognize it. Putting a logo in `nameSuffix` reads
-     * backwards. Return `undefined`/`null` for rows with nothing to show.
-     */
     namePrefix?: (row: T) => ReactNode;
-    /**
-     * Render a tree expand/collapse affordance: a depth-proportional left
-     * indent plus a chevron toggle on rows that `getCanExpand()` (a fixed-width
-     * spacer keeps leaf names aligned). Only meaningful when the table wires
-     * `getSubRows`/`getExpandedRowModel`; inert (byte-identical output) when
-     * unset, so every non-tree entity table renders exactly as before.
-     */
     expandable?: boolean;
-    /**
-     * Label to render when the row's name is null/empty. The entity stays
-     * clickable and readable (see the "entity names are always readable and
-     * always clickable" rule) instead of showing a blank link — or, before
-     * this existed, the literal string "null".
-     */
     emptyLabel?: (row: T) => string;
-    /**
-     * Per-row detail link, for a table whose rows aren't all `entity` (a tree
-     * whose children are a different entity than its parents). Defaults to
-     * `entity`'s detail route keyed by `row.id`.
-     */
     rowLink?: RowLinkResolver<T>;
   },
 ) {
@@ -373,7 +327,6 @@ export function createNameColumn<T extends BaseRow>(
         );
       };
 
-      // If editable, show EditableCell instead of link
       if (options?.editable) {
         return wrapExpandable(
           <EditableCell
@@ -418,8 +371,6 @@ export function createNameColumn<T extends BaseRow>(
     },
   };
 
-  // Otherwise TanStack falls back to the column id ("name"), which is what
-  // every index page wants.
   const header =
     options?.header ?? (fieldName === "filename" ? "Filename" : undefined);
 

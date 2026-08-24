@@ -20,10 +20,6 @@ export const recipeSourceValues = [
 export const recipeYieldSchema = positiveAmount;
 export type RecipeYield = z.infer<typeof recipeYieldSchema>;
 
-// Precomputed cost/calorie rollup for a recipe, persisted as a `totals` jsonb
-// column and surfaced on `recipeOut.totals`. Covered counts (out of
-// ingredientCount) drive the list's coverage display. Computed server-side; see
-// recipe-costing.service.
 export const recipeTotalsFields = {
   costTotal: money,
   // Upper bound of the cost/calorie totals when the recipe has ranged amounts
@@ -32,8 +28,6 @@ export const recipeTotalsFields = {
   costTotalUpper: money.optional(),
   caloriesTotal: z.number(),
   caloriesTotalUpper: z.number().optional(),
-  // Whole-recipe macro rollup (grams; sodium in mg). Optional/additive so rows
-  // persisted before this was added still validate — they backfill on recompute.
   proteinTotal: z.number().optional(),
   fatTotal: z.number().optional(),
   carbsTotal: z.number().optional(),
@@ -88,7 +82,6 @@ export const ingredientUsage = z.enum([
   "marinade",
 ]);
 
-/** Where one measure of a row resolves from (mirrors ComponentSource). */
 const componentSource = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("own-full") }),
   z.object({ kind: z.literal("own-fraction"), fraction: z.number() }),
@@ -129,7 +122,6 @@ const rowMissing = z.object({
   nutrients: z.boolean(),
 });
 
-/** One hop of an explained unit-graph conversion (normalized nodes). */
 export const conversionStep = z.object({
   from_unit: z.string(),
   to_unit: z.string(),
@@ -169,12 +161,10 @@ export const recipeCostingExplain = z.object({
   persisted: z.object({
     totals: recipeTotals.nullable(),
     totalsComputedAt: z.date().nullable(),
-    /** true ⇒ the drain will recompute this recipe (totalsComputedAt is null). */
     stale: z.boolean(),
   }),
   computed: z.object({
     totals: recipeTotals,
-    /** false ⇒ a USDA lookup that should resolve came back null (retry later). */
     complete: z.boolean(),
     diagnostics: z.array(rowDiagnostic),
     usdaMisses: z.array(
@@ -215,7 +205,6 @@ const recipeSortableMinutes = {
   activeMinutes: positiveMinutes(),
   totalMinutes: positiveMinutes(),
 };
-// Nothing queries these, so they ride along inside the `meta` jsonb.
 const recipeStoredMinutes = {
   prepMinutes: positiveMinutes(),
   cookMinutes: positiveMinutes(),
@@ -239,19 +228,12 @@ export const recipeMeta = z
   .object({
     url: z.url().nullable(),
     times: recipeTimes.nullish(),
-    /** Special-equipment lines, e.g. "stand mixer". */
     equipment: z.array(z.string()).nullish(),
-    /** Printed page number — the cross-reference to the physical cookbook. */
     page: z.string().nullish(),
   })
   .nullable();
 export type RecipeMeta = z.infer<typeof recipeMeta>;
 
-/**
- * The `Recipe.meta` jsonb column's shape: `recipeMeta` minus `url` (derived)
- * and minus the two minute counts promoted to real columns. Split and rejoined
- * in exactly one place — `~/server/repo/recipe/meta`.
- */
 export const recipeStoredMeta = z.object({
   times: z.object({ ...recipeTimeProse, ...recipeStoredMinutes }).nullish(),
   equipment: z.array(z.string()).nullish(),
@@ -260,14 +242,8 @@ export const recipeStoredMeta = z.object({
 export type RecipeStoredMeta = z.infer<typeof recipeStoredMeta>;
 export const recipeServings = z.number().int().positive();
 export const recipeTags = z.array(z.string());
-// Freeform markdown: headnote/intro blurb plus tips. Imports compose it from
-// the source's description + notes (see composeNotesMarkdown).
 export const recipeNotes = z.string();
 
-// A recipe's provenance as a strong discriminated union — invalid pairings
-// (a Book with no book, a Website with no URL) are unrepresentable. Maps to/from
-// the DB's `SourceType` + `SourceData` columns via the repo-side codec
-// (`~/server/repo/recipe/source`); no migration.
 export const recipeSource = z.discriminatedUnion("type", [
   // `cookbookId` is the FK to the source Cookbook (nullable only for legacy book
   // rows predating the table); lets the UI link a recipe to its cookbook by id.
@@ -277,8 +253,6 @@ export const recipeSource = z.discriminatedUnion("type", [
     cookbookId: cookbookShortcode.nullable(),
   }),
   z.object({ type: z.literal("website"), url: z.url() }),
-  // Notion-synced: `pageId` is the stable idempotency key (stored in SourceData);
-  // `url` is the page link derived from it, for the source badge.
   z.object({
     type: z.literal("notion"),
     pageId: z.string().min(1),

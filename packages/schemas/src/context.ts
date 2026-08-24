@@ -42,25 +42,17 @@ export const auditSourceSchema = z.union([
 ]);
 export type AuditSource = z.infer<typeof auditSourceSchema>;
 
-/** True for a source written by a one-off script rather than the application. */
 export function isScriptAuditSource(
   source: AuditSource,
 ): source is `script:${string}` {
   return source.startsWith("script:");
 }
 
-/**
- * Context representing who is performing an action.
- */
 export interface ActorContext {
   userId: UserId;
   source: AuditSource;
 }
 
-/**
- * Build an ActorContext with the given values.
- * Source defaults to "ui" for standard web requests.
- */
 export function buildActorContext(
   userId: UserId,
   source: AuditSource = "ui",

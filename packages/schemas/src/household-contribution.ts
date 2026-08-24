@@ -11,7 +11,6 @@ import {
 import { ledgerPartyKind } from "./ledger-party";
 import { money } from "./money";
 
-/** Public party identity used by reports and transfer-pair suggestions. */
 export const ledgerReportPartyOut = z.object({
   id: ledgerPartyShortcode,
   kind: ledgerPartyKind,
@@ -43,7 +42,6 @@ export type HouseholdContributionGapCode = z.infer<
   typeof householdContributionGapCode
 >;
 
-/** An actionable report gap; EXP- references can be routed while LTR- stays text. */
 export const householdContributionGapOut = z.object({
   code: householdContributionGapCode,
   amount: money.optional(),

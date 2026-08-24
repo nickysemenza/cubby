@@ -486,13 +486,6 @@ export const taskBulkDueDateInput = z.object({
 });
 export type TaskBulkDueDateInput = z.infer<typeof taskBulkDueDateInput>;
 
-/**
- * The axis fields a board drag can change on the dragged card — the same
- * subset a single board drop writes (status/project/trade), minus `sortOrder`
- * (which the reorder carries separately). Folded into `taskBulkReorderInput`
- * so a cross-cell drop that materializes ranks applies its move in the same
- * transaction.
- */
 export const taskBoardMovePatch = z.object({
   status: taskStatusSchema.optional(),
   projectId: projectShortcode.nullable().optional(),
@@ -580,11 +573,6 @@ export type TaskListAndSideEffectsOut = z.infer<
   typeof taskListAndSideEffectsOut
 >;
 
-/**
- * Inbox → project promotion: create a new project and move the given tasks
- * onto it in one transaction (see `project.createFromTasks`). Neither side
- * persists if the other fails.
- */
 export const createProjectFromTasksInput = z.object({
   taskIds: z.array(taskShortcode).min(1),
   project: projectCreateInput,
@@ -717,14 +705,6 @@ const expenseFields = {
   productQuantity: signedProductQuantity
     .nullable()
     .describe(PRODUCT_QUANTITY_DESCRIPTION),
-  /**
-   * Where it was bought. **No longer a column** — resolved through
-   * `expense.purchaseId → Purchase → Vendor` (see `dbExpenseToAPI`). Still
-   * accepted by name on create/update, where the repo resolves it via
-   * `findOrCreateVendor` + `findOrCreatePurchase` inside the existing
-   * transaction; that's what keeps MCP, quick-add and the purchase-import skill
-   * unchanged across the split.
-   */
   vendor: z.string().nullable().describe("Where it was bought"),
   orderId: z
     .string()
@@ -768,8 +748,6 @@ const expenseCreateShape = {
 export const expenseCreateInput = z.object(expenseCreateShape);
 export type ExpenseCreateInput = z.infer<typeof expenseCreateInput>;
 
-// Every create field optional, with the create-time `.default(...)` stripped
-// (see deriveUpdateData).
 export const expenseUpdateData = deriveUpdateData(expenseCreateShape);
 export type ExpenseUpdateData = z.infer<typeof expenseUpdateData>;
 export const expenseUpdateInput = z.object({
@@ -790,7 +768,6 @@ export const expenseBulkTradeInput = z.object({
 });
 export type ExpenseBulkTradeInput = z.infer<typeof expenseBulkTradeInput>;
 
-/** Bulk cost-type write — same enum as a single `expenseUpdateData.costType`. */
 export const expenseBulkCostTypeInput = z.object({
   ids: z.array(expenseShortcode).min(1),
   costType: costTypeSchema,
@@ -856,7 +833,6 @@ export const expenseFilterFields = {
    * 3-value enum.
    */
   costPresenceFilter: presenceFilter,
-  /** Strict direction of a recorded cost. Zero and null match neither side. */
   costSign: z.enum(["negative", "positive"]).optional(),
   /**
    * Whether an Expense belongs to a disposal Purchase. This is a relationship
@@ -944,7 +920,6 @@ export const expenseOut = z.object({
    * a purchase that was never recorded.
    */
   purchaseId: purchaseShortcode.nullable(),
-  /** The linked purchase's own date, distinct from this expense's ledger date. */
   purchaseDate: plainDate.nullable(),
   purchaseDisplayLabel: z.string().nullable(),
   vendorId: vendorShortcode.nullable(),
@@ -1318,10 +1293,6 @@ export type ExpenseMatchRow = z.infer<typeof expenseMatchRow>;
 export const expenseMatchInput = z.object({
   rows: z.array(expenseMatchRow).min(1).max(MATCH_MAX_ROWS),
   dayWindow: z.number().int().min(0).max(365).default(30),
-  /**
-   * How far BELOW the row amount a ledger cost may sit, as a fraction — the
-   * pre-tax-entry direction.
-   */
   amountToleranceLow: z.number().min(0).max(1).default(MATCH_TOLERANCE_LOW),
   amountToleranceHigh: z.number().min(0).max(1).default(MATCH_TOLERANCE_HIGH),
   /**
@@ -1506,9 +1477,6 @@ export const projectResourceOut = z.object({
 export type ProjectResourceOut = z.infer<typeof projectResourceOut>;
 export const projectResourcesOut = z.array(projectResourceOut);
 
-/** The MCP envelope: same rows, `{items}` root. See `productComponentsMcpOut`
- * (`./product-components`) — an array root fails the SDK's own re-validation of
- * `structuredContent`, so it broke every `list_project_resources` call. */
 export const projectResourcesMcpOut =
   createItemsResponseSchema(projectResourceOut);
 
@@ -1797,11 +1765,6 @@ export const projectToolMatrixOut = z.object({
     matchingTools: z.number().int().nonnegative(),
     attachedCells: z.number().int().nonnegative(),
     suggestedCells: z.number().int().nonnegative(),
-    /**
-     * Visible cells the ownership gate locks. Counted server-side even though
-     * the client renders them, so the disclosure stays a server fact and the
-     * header can say how much of the grid is unreachable.
-     */
     timelineConflictCells: z.number().int().nonnegative(),
   }),
   truncated: z.object({
@@ -2052,13 +2015,6 @@ export const projectDashboardSummaryOut = z.object({
       projectsWithEstimate: z.number().int(),
       projectsInScope: z.number().int(),
     }),
-    /**
-     * Forward-looking committed (future, unpaid) spend, cumulative by day
-     * window — `in90Days` includes everything `in30Days` does. Each window
-     * counts spend due *by* that many days out, including anything already
-     * overdue-but-unspent (see `past_due_planned_expense` in attention.ts for
-     * that same population surfaced per-row).
-     */
     forwardCommittedSpend: z.object({
       in30Days: z.number(),
       in60Days: z.number(),

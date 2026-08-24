@@ -1,8 +1,6 @@
 import { z } from "zod";
 import { searchableEntities } from "./entity-manifest";
 
-// Keep background-job payload validation independent of search.ts so search
-// can reuse the generic batch-reference schema without a runtime import cycle.
 const backgroundSearchableEntitySchema = z.enum(searchableEntities);
 
 export const backgroundJobKinds = [
@@ -84,7 +82,6 @@ const workflowCursorSchema = z.object({
   entityId: z.string(),
 });
 
-/** Coordinator payloads carry their own durable page state for retry safety. */
 export const entityEmbeddingBackfillCoordinatorPayloadSchema = z.object({
   source: z.literal("search.debug.semanticBackfill"),
   workflow: z.object({

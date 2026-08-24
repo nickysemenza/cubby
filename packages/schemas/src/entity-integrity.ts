@@ -42,14 +42,12 @@ export const edgeRoleSchema = z.enum([
   "association",
   "composition",
   "metadata",
-  /** Evidence the target was actually acquired — inventory, spend. */
   "acquisition",
   "history",
   "hierarchy",
   "dependency",
   "contents",
   "media",
-  /** A money row rolled up under the target. */
   "ledger",
   "transaction",
   "reference",
@@ -105,15 +103,6 @@ export const operationDispositionSchema = z.object({
 });
 export type OperationDisposition = z.infer<typeof operationDispositionSchema>;
 
-/**
- * One hop along a relationship's FK path. `outgoing` walks the FK from the
- * table that holds the column toward the table it points at; `incoming` walks
- * it backwards, from the pointed-at table to the holder. A path mixes both:
- * recipe → recipe runs `RecipeSection.recipeId` incoming, then
- * `RecipeSectionIngredient.sectionId` incoming, then
- * `RecipeSectionIngredient.ingredientId` outgoing, then `Ingredient.recipeId`
- * outgoing.
- */
 export const relationshipPathStepSchema = z.object({
   edge: edgeKeySchema,
   direction: z.enum(["outgoing", "incoming"]),
@@ -152,7 +141,6 @@ export type RelationshipProvenance = z.infer<
 >;
 
 export const entityRelationshipSchema = z.object({
-  /** Stable, unique within the source entity — e.g. `"sub-recipes"`. */
   key: z.string().min(1),
   label: z.string().min(1),
   target: entitySchema,
@@ -193,7 +181,6 @@ export const physicalEdgeSchema = z.object({
 });
 export type PhysicalEdge = z.infer<typeof physicalEdgeSchema>;
 
-/** Every disposition one operation declares, keyed by edge. */
 export const lifecycleOperationSchema = z.object({
   entity: entitySchema,
   operation: z.enum(["delete", "merge"]),
@@ -206,11 +193,6 @@ export const lifecycleOperationSchema = z.object({
 });
 export type LifecycleOperation = z.infer<typeof lifecycleOperationSchema>;
 
-/**
- * The static architecture surface behind `/entities?tab=integrity`. Pure
- * projection of compile-time constants — the procedure that serves it runs no
- * queries at all.
- */
 export const integrityCatalogSchema = z.object({
   entities: z.array(
     z.object({

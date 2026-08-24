@@ -14,7 +14,6 @@ const entityImageValues = imageEntities.map((entity) =>
 export const entityImage = z.enum(entityImageValues);
 export type EntityImage = z.infer<typeof entityImage>;
 
-/** Stable key for a polymorphic entity reference. */
 export const entityRefKey = (entity: Entity, id: string): string =>
   `${entity}:${id}`;
 

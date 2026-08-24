@@ -1,3 +1,4 @@
+import { mcpAppResourceUriForTool } from "@cubby/mcp-apps/metadata";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { shortcodeSchema } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
@@ -65,12 +66,6 @@ type RegisterMcpToolConfig<
   annotations: ToolAnnotations;
   handler: McpToolHandler<TInput, TOutput>;
   /**
-   * `ui://` resource this tool renders through (MCP Apps / SEP-1865). Hosts that
-   * don't support the extension ignore it and show the structured output, so
-   * this is always additive.
-   */
-  uiResourceUri?: string;
-  /**
    * Which concrete entity a GENERIC tool acted on, read off the call's own
    * arguments.
    *
@@ -129,9 +124,8 @@ export function getToolEntityExtractor(
  * Both keys are emitted on purpose: `ui.resourceUri` is the current spec, and
  * the flat `ui/resourceUri` is the deprecated alias older hosts still read.
  */
-function uiToolMeta(
-  resourceUri: string | undefined,
-): Record<string, unknown> | undefined {
+function uiToolMeta(toolName: string): Record<string, unknown> | undefined {
+  const resourceUri = mcpAppResourceUriForTool(toolName);
   if (!resourceUri) return undefined;
   return { ui: { resourceUri }, "ui/resourceUri": resourceUri };
 }
@@ -480,7 +474,7 @@ export function registerMcpTool<
       inputSchema,
       outputSchema: sdkOutputSchema(config.outputSchema),
       annotations: config.annotations,
-      _meta: uiToolMeta(config.uiResourceUri),
+      _meta: uiToolMeta(config.name),
     },
     callback as unknown as ToolCallback<typeof inputSchema>,
   );
@@ -542,7 +536,7 @@ function describeToolError(error: unknown): ToolErrorDetail {
   const { code, reason } = toPublicErrorPayload(error);
   const message = error instanceof Error ? error.message : String(error);
   return {
-    ...(code ? { code } : {}),
+    ...(code ? { code: code as TRPC_ERROR_CODE_KEY } : {}),
     ...(reason ? { reason } : {}),
     message,
   };
@@ -847,7 +841,7 @@ function batchMutationOut(item: z.ZodType) {
            * branch on WHY item 3 failed without substring-matching this.
            */
           error: z.string(),
-          /** tRPC code. Absent when the item threw something that wasn't a TRPCError. */
+          /** Transport-neutral application error code, when available. */
           code: z.string().optional(),
           /** The `AppErrorReason` behind the refusal, when there was one. */
           reason: z.string().optional(),
@@ -1087,7 +1081,6 @@ export function registerRouterTool<
     inputSchema?: TInput;
     outputSchema: TOutput;
     annotations: ToolAnnotations;
-    uiResourceUri?: string;
     /** Which entity this tool acts on — see `RegisterMcpToolConfig.telemetryEntity`. */
     telemetryEntity?: (params: InferSchemaLike<TInput>) => string | undefined;
     call: (
@@ -1105,7 +1098,6 @@ export function registerRouterTool<
     inputSchema: config.inputSchema,
     outputSchema: config.outputSchema,
     annotations: config.annotations,
-    uiResourceUri: config.uiResourceUri,
     telemetryEntity: adaptEntityExtractor(config.telemetryEntity),
     handler: async (params, extra) => config.call(getCaller(extra), params),
   });

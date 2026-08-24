@@ -17,11 +17,6 @@ const sourceMetadata = z.discriminatedUnion("type", [
   }),
 ]);
 
-// Base unit mapping without sourceMetadata (for input).
-// A mapping is one conversion or price/nutrient edge in the unit graph, e.g.
-// "8 oz = $10". The costing engine treats a weight->money edge as the cost basis
-// for an ingredient measured by weight; money is the "dollar" unit and nutrient
-// edges use the b unit (e.g. "kcal" or "g protein").
 export const unitMappingBase = z.object({
   a: amount.describe('left side of the pair, e.g. { value: 8, unit: "oz" }'),
   b: amount.describe(
@@ -70,7 +65,6 @@ export type McpUnitMappingInput = z.infer<typeof mcpUnitMappingInput>;
 
 export type UnitMappingInput = z.infer<typeof unitMappingInput>;
 
-// Unit mapping with sourceMetadata (for output/computed)
 export const unitMappingWithMetadata = z.object({
   a: amount.describe('left side of the pair, e.g. { value: 8, unit: "oz" }'),
   b: amount.describe(
@@ -100,7 +94,6 @@ export const unitMappingOut = z.object({
 
 export type UnitMapping = z.infer<typeof unitMappingWithMetadata>;
 
-/** Slim MCP projection of a unit-mapping edge (no id/timestamps/sourceMetadata). */
 export const mcpUnitMappingOut = z.object({
   a: amount,
   b: amount,

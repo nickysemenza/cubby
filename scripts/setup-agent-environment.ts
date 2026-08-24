@@ -7,15 +7,12 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const LOCKFILE = join(ROOT, "pnpm-lock.yaml");
-// pnpm 10 writes an exact copy of the active workspace lockfile here.
 const INSTALLED_LOCKFILE = join(ROOT, "node_modules/.pnpm/lock.yaml");
 const worktreeOnly = process.argv.includes("--worktree-only");
 
 const run = (command: string, args: readonly string[]) =>
   execFileSync(command, args, {
     cwd: ROOT,
-    // SessionStart stdout is injected into Claude's context. Keep setup output
-    // visible to the user on stderr without spending model context on it.
     stdio: ["ignore", 2, 2],
   });
 
