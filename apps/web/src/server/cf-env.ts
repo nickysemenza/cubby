@@ -40,6 +40,9 @@ export const getProblemCountsCache = ():
   | undefined =>
   cfEnv?.PROBLEM_COUNTS_KV as ProblemCountsCacheAdapter | undefined;
 
+/** Runtime identity for the deployed Worker version; absent in plain Node dev. */
+export const getWorkerVersionMetadata = () => cfEnv?.CF_VERSION_METADATA;
+
 // Cubby's Cloudflare account + AI Gateway identifiers. Single source of truth
 // for the gateway binding (below) and the gateway-REST base URL built in
 // `~/server/clients/anthropic`.

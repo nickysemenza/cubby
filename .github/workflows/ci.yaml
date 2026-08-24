@@ -715,7 +715,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: 9f10f078d35d86c78dedece2300a6b88
-          command: deploy --config dist/server/wrangler.json
+          command: deploy --config dist/server/wrangler.json --tag main-${{ github.sha }}
           workingDirectory: apps/web
 
   deploy-worker:

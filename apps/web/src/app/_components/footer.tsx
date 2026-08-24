@@ -1,10 +1,15 @@
 import { GitGraph } from "lucide-react";
 import { Row } from "~/components/layout";
+import type { BuildProvenance } from "~/lib/build-provenance";
 import { formatBuildDate } from "~/lib/utils";
 
-const buildDate = formatBuildDate(__BUILD_DATE__);
-
-export function AppFooter() {
+export function AppFooter({
+  provenance,
+  buildDate = formatBuildDate(__BUILD_DATE__),
+}: {
+  provenance: BuildProvenance;
+  buildDate?: string;
+}) {
   return (
     <footer className="safe-bottom border-t print:hidden">
       <Row
@@ -15,8 +20,16 @@ export function AppFooter() {
       >
         <Row align="center" gap="sm">
           <span>
-            {buildDate} · <span>{__GIT_BRANCH__}</span>@
-            <span title={__GIT_COMMIT_MSG__}>{__GIT_COMMIT__}</span>
+            {buildDate} · <span>{provenance.branch}</span>@
+            <a
+              href={provenance.commitUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`View ${provenance.branch}@${provenance.commit} on GitHub`}
+              className="underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
+            >
+              {provenance.commit}
+            </a>
           </span>
         </Row>
         <Row align="center" gap="sm">

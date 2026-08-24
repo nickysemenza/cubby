@@ -8,6 +8,7 @@ import { Button } from "~/components/ui/button";
 import { useHydrated } from "~/hooks/useHydrated";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useVirtualKeyboard } from "~/hooks/useVirtualKeyboard";
+import type { BuildProvenance } from "~/lib/build-provenance";
 import { cn } from "~/lib/utils";
 import { resolveMobileRoute } from "./mobile-route-descriptor";
 import {
@@ -50,6 +51,7 @@ const WorkspaceNavigator = lazy(() =>
 );
 
 type AuthenticatedAppShellProps = {
+  buildProvenance: BuildProvenance;
   children: ReactNode;
   mainContentId: string;
   navigationProgress: ReactNode;
@@ -62,6 +64,7 @@ type AuthenticatedAppShellProps = {
  * full 224px sidebar, and a tablet visit must never overwrite that preference.
  */
 export function AuthenticatedAppShell({
+  buildProvenance,
   children,
   mainContentId,
   navigationProgress,
@@ -121,7 +124,7 @@ export function AuthenticatedAppShell({
         </main>
         {!viewportSurface && (
           <div className="hidden md:block">
-            <AppFooter />
+            <AppFooter provenance={buildProvenance} />
           </div>
         )}
       </div>
