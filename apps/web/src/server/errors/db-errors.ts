@@ -8,12 +8,10 @@
  * benefits — no per-router error handling needed.
  *
  * Entity-specific handlers (e.g. product NDB/UPC, which name the conflicting
- * record and suggest a merge) still run first inside their repos; because they
- * throw a translated TRPCError, this generic layer leaves them untouched.
+ * record and suggest a merge) still run first inside their repos.
  */
 
-import type { TRPCError } from "@trpc/server";
-import { createAppError } from "./app-error";
+import { type AppError, createAppError } from "./app-error";
 
 interface PgError {
   code: string;
@@ -112,11 +110,11 @@ export async function runWithConflictRecovery<T>(
 }
 
 /**
- * Translate a database constraint violation into a friendly TRPCError, or return
+ * Translate a database constraint violation into a friendly AppError, or return
  * null if the error isn't a recognized Postgres constraint error (so the caller
  * can rethrow the original).
  */
-export function translateDatabaseError(error: unknown): TRPCError | null {
+export function translateDatabaseError(error: unknown): AppError | null {
   const pg = findPgError(error);
   if (!pg) return null;
 

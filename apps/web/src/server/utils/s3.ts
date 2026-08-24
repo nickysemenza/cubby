@@ -7,10 +7,9 @@ import {
   readResponseWithLimit,
   sanitizeExternalUrl,
 } from "@cubby/shared/external-fetch";
-import { TRPCError } from "@trpc/server";
 import { AwsClient } from "aws4fetch";
 import { env } from "~/env";
-import { createAppError } from "~/server/errors/app-error";
+import { AppError, createAppError } from "~/server/errors/app-error";
 
 // SigV4 fetch signer for Cloudflare R2 (S3 API). aws4fetch is Workers-native and
 // runs identically in Node (vite dev) and Workers — no dev/prod split. R2 requires
@@ -257,10 +256,10 @@ export const fetchAndStoreImage = async (
       );
       return null;
     }
-    // The size-cap rejection is a typed AppError (TRPCError). Re-throw it so the
+    // The size-cap rejection is a typed AppError. Re-throw it so the
     // oversized-payload case surfaces as a real error rather than being masked as
     // a generic null import failure — createAppError already logged + annotated.
-    if (error instanceof TRPCError) {
+    if (error instanceof AppError) {
       throw error;
     }
     if (error instanceof ExternalFetchError) {
