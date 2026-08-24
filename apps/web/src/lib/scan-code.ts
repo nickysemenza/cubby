@@ -1,5 +1,7 @@
+import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
 import { normalizeIsbn } from "@cubby/schemas/isbn";
 import type { ProductFindOrCreateByCodeInput } from "@cubby/schemas/product";
+import type { ScanAtLocationCode } from "@cubby/schemas/scan";
 import type { ShortcodeType } from "@cubby/shared";
 import { extractShortcodeFromScan } from "@cubby/shared";
 import { upc } from "@cubby/usda-schemas";
@@ -81,5 +83,84 @@ export function resolveScanCode(raw: string): ScanCodeResolution {
   return {
     ok: false,
     error: "Use a Cubby shortcode, UPC/EAN/GTIN barcode, or valid ISBN.",
+  };
+}
+
+/**
+ * Narrow a scan to one surface's scope.
+ *
+ * `resolveScanCode` deliberately returns the whole union so callers can route
+ * on `type`, but "may I have this?" is a different question from "what is
+ * this?", and four surfaces had each answered it themselves — producing three
+ * different sentences for the single condition "that is not a location". These
+ * two helpers own the answer, and with it the rejection copy: the helper knows
+ * both what was scanned and what was wanted, so it can say which is which where
+ * a caller-supplied string could only ever name the want.
+ */
+export type ScopedScan<T> =
+  | { ok: true; value: T }
+  /**
+   * `reason` separates "that is not a code at all" from "that is a code for the
+   * wrong thing". Surfaces that accept more than a scan can name — the location
+   * field also takes a pasted UUID — need to try their extra forms before
+   * reporting, and only they can word the catch-all.
+   */
+  | { ok: false; reason: "unrecognized" | "wrong-kind"; error: string };
+
+/** A scan that must name a location: bin labels, and nothing else. */
+export function resolveLocationScan(raw: string): ScopedScan<string> {
+  const parsed = resolveScanCode(raw);
+  if (!parsed.ok) {
+    return { ok: false, reason: "unrecognized", error: parsed.error };
+  }
+
+  if (parsed.value.kind === "product") {
+    return {
+      ok: false,
+      reason: "wrong-kind",
+      error: "That's a product barcode — point at a location QR.",
+    };
+  }
+  if (parsed.value.type !== "location") {
+    return {
+      ok: false,
+      reason: "wrong-kind",
+      error: `That's a ${parsed.value.type} label — point at a location QR.`,
+    };
+  }
+  return { ok: true, value: parsed.value.shortcode };
+}
+
+/**
+ * A scan that must name something stockable at a location.
+ *
+ * Cubby's own product labels are QR and the sweep reads QR, so a printed `PRD-`
+ * label has to work here — rejecting it would make the label useless on the one
+ * screen most likely to see it.
+ */
+export function resolveProductScan(
+  raw: string,
+): ScopedScan<ScanAtLocationCode> {
+  const parsed = resolveScanCode(raw);
+  if (!parsed.ok) {
+    return { ok: false, reason: "unrecognized", error: parsed.error };
+  }
+
+  if (parsed.value.kind === "product") {
+    return { ok: true, value: parsed.value.code };
+  }
+  if (parsed.value.type === "product") {
+    return {
+      ok: true,
+      value: {
+        kind: "product",
+        value: unsafeProductShortcode(parsed.value.shortcode),
+      },
+    };
+  }
+  return {
+    ok: false,
+    reason: "wrong-kind",
+    error: `That's a ${parsed.value.type} label — nothing that sits on a shelf.`,
   };
 }

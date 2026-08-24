@@ -401,6 +401,7 @@ export function SessionCaptureActions({
             <LocationSweep
               locationId={location.id}
               locationName={location.name}
+              hasItems={(location.location.directItemCount ?? 0) > 0}
               onSettled={invalidateCapture}
             />
           )}
