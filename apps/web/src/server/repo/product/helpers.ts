@@ -1,8 +1,3 @@
-/**
- * Product repository helper functions.
- * Includes lookup utilities.
- */
-
 import { displayGtin, normalizeGtin } from "@cubby/schemas/external-id";
 import { type FoodLookupParam, foodLookupParam } from "@cubby/usda-schemas";
 
@@ -22,7 +17,6 @@ export const foodLookupParamFromProduct = (product: {
   primaryGtin: string | null;
   fdc_id: number | null;
 }): FoodLookupParam | null => {
-  // Explicit FDC link wins.
   if (product.fdc_id !== null) {
     const result = foodLookupParam.safeParse({
       kind: "fdc",
@@ -30,7 +24,6 @@ export const foodLookupParamFromProduct = (product: {
     });
     if (result.success) return result.data;
   }
-  // Otherwise auto-resolve a branded food from the barcode.
   const normalized =
     product.primaryGtin === null ? null : normalizeGtin(product.primaryGtin);
   if (normalized !== null) {

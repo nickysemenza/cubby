@@ -127,7 +127,6 @@ const TaskHeatmap = lazy(() =>
 const NO_IMAGES: Array<{ id: string; url: string; filename: string }> = [];
 const NO_TASKS: TaskOut[] = [];
 
-/** List/Board toggle for the project-detail Tasks section (local, no URL params). */
 const TASKS_VIEW_OPTIONS: ViewSwitcherOption<"list" | "board">[] = [
   { value: "list", label: "List" },
   { value: "board", label: "Board" },
@@ -148,10 +147,6 @@ interface ProjectDetailPageProps {
   project: ProjectOut;
 }
 
-/**
- * A blocked-by/blocking dependency link resolved from the lightweight project
- * identity list. Status tooltips still require a full `ProjectOut`.
- */
 function DependencyBadge({ id, name }: { id: string; name: string }) {
   return (
     <EntityInlineLink
@@ -163,13 +158,6 @@ function DependencyBadge({ id, name }: { id: string; name: string }) {
   );
 }
 
-/**
- * Read mode: location badges + an Edit pencil. Edit mode: the generic
- * `ChipsInput` + Save/Cancel. No suggestions — this page only has the current
- * project's own data loaded, so a corpus of "locations used elsewhere" isn't
- * cheaply available here (see the dashboard's `ProjectTable`/filters, which
- * DO have the full project list, for that kind of aggregate).
- */
 function EditableLocations({
   locations,
   onSave,
@@ -198,7 +186,6 @@ function EditableLocations({
             >
               <Badge
                 variant="outline"
-                // Free-form location names — opt out of the mono-uppercase stamp.
                 className="font-sans normal-case tracking-normal"
               >
                 {loc}
@@ -408,12 +395,6 @@ function ProjectResourceLink({
   );
 }
 
-/**
- * Direct children (arbitrary-depth sub-projects, but this section only lists
- * one level down — a child's own children show on ITS detail page) — name
- * link, status badge, own spent vs costEstimate. Always rendered (even with
- * zero children) so the "New sub-project" button stays discoverable.
- */
 function SubProjectsList({
   projects,
   onCreate,
@@ -435,11 +416,6 @@ function SubProjectsList({
       ) : (
         <Stack gap="xs">
           {projects.map((child) => {
-            // Subtree-aware, matching the projects table + hero: a child with
-            // its own descendants shows its whole subtree; `actualSpent` (money
-            // out, excluding planned + contributions) mirrors the hero's
-            // "Actual" so a sub-project's number never means something the
-            // parent's doesn't.
             const childHasSubtree = child.rollup.subtree.projectCount > 0;
             const spent = childHasSubtree
               ? child.rollup.subtree.actualSpent
@@ -502,8 +478,6 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     () => subtreeTasks.filter((t) => t.parentTaskId == null),
     [subtreeTasks],
   );
-  // Whether this project owns descendant sub-projects — gates the board's
-  // per-card project link (otherwise every card is the same project).
   const hasSubtree = project.rollup.subtree.projectCount > 0;
   const [tasksView, setTasksView] = useState<"list" | "board">("list");
 
@@ -534,10 +508,6 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     [chartExpenses],
   );
 
-  // Decompose spend into actual / committed / contributions rather than showing
-  // one blended figure. Own-scope split feeds the hero; the whole-subtree split
-  // + subtree estimate feed the Budget card's reconciliation (own == subtree for
-  // a leaf project, so both collapse there).
   const ownSpendSplit = useMemo(
     () =>
       splitExpenseSpend(
@@ -559,9 +529,6 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   });
   const images = imageMap?.[project.id] ?? NO_IMAGES;
 
-  // Live direct children — full ProjectOut (own rollup/status/costEstimate)
-  // so the Sub-projects section can render a status badge + spend-vs-estimate
-  // line per row without a second fetch.
   const { data: childProjectsPage } = useQuery(
     api.project.list.queryOptions({
       filters: { parentProjectId: project.id },
@@ -574,8 +541,6 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [isCreatingExpense, setIsCreatingExpense] = useState(false);
 
-  // The Gantt's sub-project rows need the whole descendant project subtree
-  // (separate from the direct-children query the Sub-projects section uses).
   const { data: ganttSubtreePage } = useQuery(
     api.project.list.queryOptions(projectGanttSubtreeQueryParams(project.id)),
   );
@@ -599,11 +564,6 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     redirectTo: "/projects",
   });
 
-  // Lightweight identity projection (no rollups/dependency joins) — enough
-  // to resolve blockedByIds/blockingIds into linked badges, and to populate
-  // the "Parent project" picker. A project with a dangling reference to a
-  // deleted project (excluded from `options`) just drops out of the list,
-  // same as the old full-ProjectOut lookup did.
   const { data: projectOptions } = useQuery(api.project.options.queryOptions());
   const projectNamesById = useMemo(() => {
     const map = new Map<string, { name: string; icon: string | null }>();
@@ -627,8 +587,6 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   const blockedBy = resolveDependencyNames(project.blockedByIds);
   const blocking = resolveDependencyNames(project.blockingIds);
 
-  // Excludes itself — a project can't be its own parent (the server also
-  // rejects self-parent/cycles, this just keeps the picker sane).
   const parentProjectOptions = useMemo(
     () =>
       (projectOptions ?? [])
@@ -641,8 +599,6 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     [projectOptions, project.id],
   );
 
-  // Notes: house pattern is textarea-in → MarkdownText-out, toggled via the
-  // section's headerAction — no rich markdown editor.
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [notesDraft, setNotesDraft] = useState(project.notes ?? "");
   const [notesPending, setNotesPending] = useState(false);
@@ -663,8 +619,6 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     }
   };
 
-  // Trade × Cost Type pivot → Expenses table filter + scroll-into-view.
-  // Clicking the same cell again clears the filter.
   const [activeMatrixCell, setActiveMatrixCell] =
     useState<TradeCostCell | null>(null);
   const expensesRef = useRef<HTMLDivElement>(null);
@@ -834,8 +788,6 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     },
     {
       label: "Progress",
-      // Subtree-aware to match the hero: a parent shows its whole subtree's
-      // task progress, a leaf its own (own == subtree for a leaf).
       value: (() => {
         const r = hasSubtree ? project.rollup.subtree : project.rollup;
         return r.taskCount > 0
@@ -910,9 +862,6 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     },
   ];
 
-  // Notes lead the main column when they have content (or are being edited);
-  // otherwise they collapse to a slim aside card whose "No notes yet." body +
-  // Edit action keep the section discoverable without eating the wide column.
   const hasNotesContent = isEditingNotes || !!project.notes?.trim();
   const notesSection: DetailSection = {
     id: "notes",
@@ -995,7 +944,6 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     id: "tasks",
     title: "Tasks",
     icon: ListChecks,
-    // The board needs the full width; the list is happy in the main column.
     placement: tasksView === "board" ? "full" : "primary",
     headerAction: (
       <Row align="center" gap="sm">
@@ -1030,8 +978,6 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
             filters: projectSubtreeTasksFilters(project.id),
           }}
           showProjectOnCards={hasSubtree}
-          // A card section on the detail page, not the whole viewport — a
-          // shorter fixed bound than the standalone board page's default.
           maxHeightClassName="max-h-[70vh]"
         />
       ) : (
@@ -1125,7 +1071,6 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
             label="project"
             excludeId={project.id}
             renderReadChip={(item) => {
-              // DependencyPicker's chip type is the generic {id,name} —
               return projectNamesById.has(item.id) ? (
                 <DependencyBadge id={item.id} name={item.name} />
               ) : null;
@@ -1200,8 +1145,6 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     ),
   };
 
-  // The vendor charges behind the ledger above, each twirling open to its own
-  // lines. Exact project, not the subtree — same scope as the Vendors card.
   const purchasesSection: DetailSection = {
     id: "purchases",
     title: "Purchases",
@@ -1280,8 +1223,6 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   // hero), so it would render an always-empty Images card).
 
   const sections: DetailSection[] = [
-    // Main column: Notes (when populated), Budget, Tasks, then — for a leaf —
-    // the expense ledger.
     ...(hasNotesContent ? [notesSection] : []),
     ...(showBudget ? [budgetSection] : []),
     contributionSection,
@@ -1290,22 +1231,18 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     ...(hasSubtree ? [] : [expensesSection]),
     ...(hasSubtree ? [] : [purchasesSection]),
     ...(hasSubtree ? [] : [purchasedProductsSection]),
-    // Aside rail: metadata + (when empty) the slim Notes card.
     overviewSection,
     resourcesSection,
     dependenciesSection,
     subProjectsSection,
     vendorsSection,
     ...(hasNotesContent ? [] : [notesSection]),
-    // Subtree projects show the ledger as a full-width band at the bottom.
     ...(hasSubtree ? [expensesSection] : []),
     ...(hasSubtree ? [purchasesSection] : []),
     ...(hasSubtree ? [purchasedProductsSection] : []),
   ];
 
   const heroStats: DetailHeroStat[] = [
-    // A sub-project surfaces its parent right in the spec-plate header, same
-    // treatment as the task subtask breadcrumb.
     ...(project.parentProjectId &&
     project.parentProjectName &&
     project.parentProjectId
@@ -1366,8 +1303,6 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           } satisfies DetailHeroStat,
         ]
       : []),
-    // Null when nothing in the subtree is estimated — skip the stat rather
-    // than showing $0.
     ...(hasSubtree && project.rollup.subtree.costEstimate !== null
       ? [
           {

@@ -1,12 +1,3 @@
-/**
- * Cookbook-centric Problems detectors.
- *
- * A cookbook retains its complete extracted source in `rawJson`, while recipes
- * are imported selectively. This surfaces books whose live imported relation
- * has fallen below that retained source count; deleted recipes deliberately do
- * not count as imported.
- */
-
 import type { PartiallyImportedCookbook } from "@cubby/schemas/problems";
 import { sql } from "drizzle-orm";
 import type { Database } from "~/server/db";

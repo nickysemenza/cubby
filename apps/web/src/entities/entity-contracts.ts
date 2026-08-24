@@ -4,6 +4,10 @@ import type { QueryKey } from "@tanstack/react-query";
 import { entities, getSortableFields } from "~/entities/entities";
 import type { useTRPC } from "~/integrations/trpc/react";
 import { invalidatesFor } from "~/lib/query-keys";
+import {
+  type GeneratedBrowserCrudEntity,
+  generatedBrowserCrudEntities,
+} from "./generated/entity-routes.gen";
 
 type Api = ReturnType<typeof useTRPC>;
 
@@ -42,44 +46,74 @@ interface EntityContract {
 
 export const fdcIdFromParam = (id: string): number => Number.parseInt(id, 10);
 export const usdaRouteId = (fdcId: number): string => String(fdcId);
-
 const listParams = (params: ListParams) => params as never;
 
-// The standard routed entities share a mechanically-identical contract whose axes
-// are the router key (== entity key), the invalidation-key list, and (product
-// only) a picker-search query — every one of them is a crud-factory router whose
-// `getByID` takes `{ id }`. image / usda-food / cookbook genuinely diverge
-// (different router keys, fdc_id coercion, list-backed detail) and stay spelled
-// out below.
-export const standardEntities = [
-  "product",
-  "ingredient",
-  "inventory",
-  "location",
-  "recipe",
-  "meal",
-  "project",
-  "task",
-  "expense",
-  "vendor",
-  "purchase",
-  "financialAccount",
-  "financialTransaction",
-  "wish",
-] as const;
-type StandardEntity = (typeof standardEntities)[number];
-
-// Indexing `api[entity]` yields a union of router proxies whose per-proc input
-// types differ, so the method calls aren't callable as a union. The contract
-// already erases those input/output types (QueryFactory takes `never`, returns
-// `unknown`), so we project the router through this minimal structural view.
-type StandardRouter = {
-  list: { queryOptions: (input: never) => unknown };
-  getByID: { queryOptions: (input: never) => unknown };
-  create: { mutationOptions: (input: never) => unknown };
-  update: { mutationOptions: (input: never) => unknown };
-  delete: { mutationOptions: (input: never) => unknown };
+type ExecutableQueryOptions = {
+  queryKey: QueryKey;
+  queryFn?: (context: { queryKey: QueryKey }) => Promise<unknown>;
+  [key: string]: unknown;
 };
+
+type ExecutableMutationOptions = {
+  mutationFn?: (variables: unknown) => Promise<unknown>;
+  [key: string]: unknown;
+};
+
+function kernelQueryOptions(
+  api: Api,
+  command: Record<string, unknown>,
+  queryKey: QueryKey,
+  project: (result: Record<string, unknown>) => unknown,
+) {
+  const options = api.entity.query.queryOptions(
+    command as never,
+  ) as unknown as ExecutableQueryOptions;
+  const queryFn = options.queryFn;
+  if (!queryFn) throw new Error("Entity query has no executable transport");
+  return {
+    ...options,
+    queryKey,
+    queryFn: async (context: { queryKey: QueryKey }) =>
+      project((await queryFn(context)) as Record<string, unknown>),
+  };
+}
+
+function kernelMutationOptions(
+  api: Api,
+  entity: StandardEntity,
+  action: "create" | "update" | "delete",
+  callbacks: unknown,
+) {
+  const options =
+    api.entity.mutate.mutationOptions() as unknown as ExecutableMutationOptions;
+  const mutationFn = options.mutationFn;
+  if (!mutationFn)
+    throw new Error("Entity mutation has no executable transport");
+  return {
+    ...options,
+    ...(callbacks as Record<string, unknown>),
+    mutationFn: async (variables: unknown) => {
+      const input = variables as {
+        id?: string;
+        ids?: string[];
+        data?: Record<string, unknown>;
+      };
+      const command =
+        action === "create"
+          ? { action, entity, data: variables as Record<string, unknown> }
+          : action === "update"
+            ? { action, entity, id: input.id, data: input.data }
+            : { action, entity, ids: input.ids };
+      const result = (await mutationFn(command)) as Record<string, unknown>;
+      return action === "delete"
+        ? { deleted: result.deleted, sideEffects: result.sideEffects }
+        : result.item;
+    },
+  };
+}
+
+export const standardEntities = generatedBrowserCrudEntities;
+type StandardEntity = GeneratedBrowserCrudEntity;
 
 function standardContract(
   entity: StandardEntity,
@@ -87,11 +121,7 @@ function standardContract(
     pickerSearch?: EntityQueryContract["pickerSearch"];
   },
 ): EntityContract {
-  const router = (api: Api): StandardRouter =>
-    api[entity] as unknown as StandardRouter;
   const { pickerSearch } = options ?? {};
-  // The entity's own base fan-out, straight from the invalidation table — the
-  // contract never declares a second, drifting copy of it.
   const invalidationKeys = invalidatesFor(entity);
   return {
     entity,
@@ -101,29 +131,51 @@ function standardContract(
     canPreview: true,
     invalidationKeys,
     query: {
-      list: (api, params) => router(api).list.queryOptions(listParams(params)),
-      detail: (api, id) => router(api).getByID.queryOptions({ id } as never),
+      list: (api, params) =>
+        kernelQueryOptions(
+          api,
+          { action: "list", entity, ...params },
+          [[entity, "list"], { input: params }],
+          (result) => ({ items: result.items, meta: result.meta }),
+        ),
+      detail: (api, id) =>
+        kernelQueryOptions(
+          api,
+          { action: "get", entity, id, missing: "error" },
+          [[entity, "getByID"], { input: { id } }],
+          (result) => result.item,
+        ),
       ...(pickerSearch ? { pickerSearch } : {}),
     },
     mutation: {
       invalidationKeys,
-      create: (api, input) => router(api).create.mutationOptions(input),
-      update: (api, input) => router(api).update.mutationOptions(input),
-      delete: (api, input) => router(api).delete.mutationOptions(input),
+      create: (api, callbacks) =>
+        kernelMutationOptions(api, entity, "create", callbacks),
+      update: (api, callbacks) =>
+        kernelMutationOptions(api, entity, "update", callbacks),
+      delete: (api, callbacks) =>
+        kernelMutationOptions(api, entity, "delete", callbacks),
     },
   };
 }
 
+const standardEntityContracts = Object.fromEntries(
+  standardEntities.map((entity) => [
+    entity,
+    standardContract(
+      entity,
+      entity === "product"
+        ? {
+            pickerSearch: (api, params) =>
+              api.product.search.queryOptions(listParams(params)),
+          }
+        : undefined,
+    ),
+  ]),
+) as Record<StandardEntity, EntityContract>;
+
 const entityContracts = {
-  product: standardContract("product", {
-    pickerSearch: (api, params) =>
-      api.product.search.queryOptions(listParams(params)),
-  }),
-  ingredient: standardContract("ingredient"),
-  inventory: standardContract("inventory"),
-  location: standardContract("location"),
-  recipe: standardContract("recipe"),
-  meal: standardContract("meal"),
+  ...standardEntityContracts,
   image: {
     entity: "image",
     route: entities.image.routes,
@@ -137,6 +189,7 @@ const entityContracts = {
     },
     mutation: {
       invalidationKeys: invalidatesFor("image"),
+      delete: (api, input) => api.image.delete.mutationOptions(input),
     },
   },
   "usda-food": {
@@ -174,14 +227,6 @@ const entityContracts = {
       invalidationKeys: invalidatesFor("cookbook"),
     },
   },
-  project: standardContract("project"),
-  task: standardContract("task"),
-  expense: standardContract("expense"),
-  vendor: standardContract("vendor"),
-  purchase: standardContract("purchase"),
-  financialAccount: standardContract("financialAccount"),
-  financialTransaction: standardContract("financialTransaction"),
-  wish: standardContract("wish"),
 } satisfies Record<BrowserRoutedEntity, EntityContract>;
 
 export function getEntityContract(entity: Entity): EntityContract {

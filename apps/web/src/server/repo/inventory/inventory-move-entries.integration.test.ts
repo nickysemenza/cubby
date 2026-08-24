@@ -112,9 +112,6 @@ describe("moveInventoryEntries", () => {
     ]);
     const fromA = await makeEntry(bolt, shelfA, 4);
     const fromB = await makeEntry(bolt, shelfB, 6);
-    // Same product already at the destination — all three rows collapse into
-    // this one. Against a stale pre-fetch the second arrival would compute from
-    // the pre-move value and silently discard the first.
     await makeEntry(bolt, drawer, 1);
 
     await moveInventoryEntries(
@@ -253,7 +250,6 @@ describe("moveInventoryEntries", () => {
       ),
     ).rejects.toThrow(/only 2 available/);
 
-    // The whole request rolls back, so the source is untouched.
     expect(await liveAt(from)).toEqual([{ productId: bolt, value: 2 }]);
   });
 

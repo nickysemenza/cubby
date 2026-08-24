@@ -30,7 +30,6 @@ export async function waitForAppHydration(page: Page) {
   }).toPass({ timeout: 15000 });
 }
 
-/** Navigate to an authenticated route and wait for the route's own ready UI. */
 export async function gotoAuthenticatedPage(
   page: Page,
   path: string,
@@ -41,7 +40,6 @@ export async function gotoAuthenticatedPage(
   if (ready) await expect(ready).toBeVisible({ timeout: 15000 });
 }
 
-/** Reload an authenticated route without coupling test progress to background IO. */
 export async function reloadAuthenticatedPage(page: Page, ready?: Locator) {
   await page.reload({ waitUntil: "domcontentloaded" });
   await waitForAppHydration(page);
@@ -57,7 +55,6 @@ export async function reloadAuthenticatedPage(page: Page, ready?: Locator) {
  */
 export async function waitForFormHydration(page: Page) {
   await waitForAppHydration(page);
-  // Match any common submit-button text (Create, Save, Move …)
   await expect(
     page.getByRole("button", { name: /Create|Save|Move/ }),
   ).toBeVisible({ timeout: 15000 });
@@ -107,12 +104,6 @@ export async function selectComboboxItem(
   }).toPass({ timeout: 10000 });
 }
 
-/**
- * Fill an input field with proper React event handling.
- *
- * Uses `pressSequentially` so that controlled inputs see each keystroke,
- * then blurs to trigger any `onBlur` validation.
- */
 export async function fillInput(
   page: Page,
   placeholder: string,
@@ -196,13 +187,15 @@ export async function editListCell(
   }).toPass({ timeout: 30_000 });
 }
 
-/**
- * Fill the open inline cell editor and commit with Enter.
- *
- * The caller opens the editor first (clicking "Edit value"). `.fill()` focuses
- * the element itself, so this never depends on `autoFocus` landing; the
- * `toBeEnabled` wait rides out the `disabled={isPending}` window.
- */
+export function waitForEntityMutation(page: Page) {
+  return page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().includes("/api/trpc/entity.mutate") &&
+      response.ok(),
+  );
+}
+
 export async function fillCellEditor(page: Page, value: string) {
   const input = cellEditorInput(page);
   await expect(input).toBeVisible();
@@ -215,12 +208,6 @@ export async function fillCellEditor(page: Page, value: string) {
   await expect(input).toHaveCount(0, { timeout: 15_000 });
 }
 
-/**
- * Open, fill, and commit a detail-page cell editor as one atomic retried unit.
- * Detail cards do not use RTable's transition curtain, but their portaled editor
- * still mounts asynchronously; retrying the entire interaction prevents a
- * stale trigger/overlay pair from racing the next edit.
- */
 export async function editDetailCell(
   page: Page,
   trigger: Locator,
@@ -276,9 +263,6 @@ export async function createLocation(
   await page.goto("/locations/new");
   await waitForFormHydration(page);
   await page.getByPlaceholder("Enter location name").fill(name);
-  // The form defaults to "room", which is a space: no QR label, and excluded
-  // from anything that reasons about portable bins. Pass a type when the test
-  // needs a container.
   if (opts.type) {
     await page.getByPlaceholder("Select a location type").click();
     await page.getByRole("option", { name: opts.type, exact: true }).click();
@@ -356,8 +340,6 @@ export async function createProduct(
       timeout: 15000,
     },
   );
-  // PageHero renders the entity label ("Product") as an eyebrow above the <h1>,
-  // which is the bare product name.
   await expect(page.getByRole("heading", { level: 1, name })).toBeVisible({
     timeout: 10000,
   });
@@ -366,9 +348,6 @@ export async function createProduct(
   ).toBeVisible();
 }
 
-// Asserts the ingredient detail URL and the <h1> name heading, so every spec
-// that seeds an ingredient this way also covers the create flow itself — the
-// standalone create-ingredient spec was deleted in favour of that.
 export async function createIngredientViaForm(page: Page, name: string) {
   await page.goto("/ingredients/new");
   await waitForFormHydration(page);
@@ -396,15 +375,12 @@ export async function createProductWithIngredientMappings(
   await fillInput(page, "Enter product name", opts.name);
   await fillInput(page, "Enter manufacturer", opts.manufacturer);
 
-  // Link to the ingredient through the picker’s single labeled search input.
   await selectComboboxItem(
     page,
     page.getByRole("combobox", { name: /ingredient/i }),
     opts.ingredientName,
   );
 
-  // Rows use compact "Qty"/"Unit" labels that repeat per row, so target the
-  // stable input ids instead. The "from" value defaults to 1.
   await page.getByRole("button", { name: "Add conversion" }).click();
   const firstFromUnit = page.locator('[id="unitMappings.0.a.unit"]');
   await expect(firstFromUnit).toBeVisible({ timeout: 10000 });
@@ -427,8 +403,6 @@ export async function createProductWithIngredientMappings(
       timeout: 15000,
     },
   );
-  // PageHero renders the entity label ("Product") as an eyebrow above the <h1>,
-  // which is the bare product name.
   await expect(
     page.getByRole("heading", { level: 1, name: opts.name }),
   ).toBeVisible({ timeout: 10000 });

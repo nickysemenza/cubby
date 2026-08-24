@@ -62,7 +62,6 @@ describe("image repository", () => {
     });
 
     expect(updated.filename).toEqual("renamed.jpg");
-    // Derived columns are untouched.
     expect(updated.key).toEqual(created.key);
     expect(updated.url).toEqual(created.url);
     expect(updated.size).toEqual(created.size);
@@ -228,8 +227,6 @@ describe("image repository", () => {
       { name: "Cover Test Book", rawJson: [], sourceLabel: "Cover Test Book" },
       ctx.actor,
     );
-    // Bypass upsertCookbook's normal coverImageId path (which would flip the
-    // image to UPLOADED) to reconstruct the PENDING+cover state directly.
     await getDb(ctx.db)
       .update(cookbook)
       .set({ coverImageId: pending.id })
@@ -426,11 +423,6 @@ describe("image repository — purchase (charge) documents", () => {
     expect(stillThere.status).toEqual("PENDING");
   });
 
-  /**
-   * `detachImagesFromEntity` decides, per removal, whether the file it just
-   * detached still has a reason to exist. These pin the reference rules — the
-   * cases where the answer differs are exactly where a "tidy-up" would break it.
-   */
   describe("detachImagesFromEntity", () => {
     const attachToProject = async (projectId: ProjectId, filename: string) =>
       await createAndAssociateUploadedImage(
@@ -744,7 +736,6 @@ describe("image repository — purchase (charge) documents", () => {
 
       expect(found).toContain(orphan.id);
       expect(found).not.toContain(attached.id);
-      // PENDING rows belong to the pending cull, not this sweep.
       expect(found).not.toContain(pending.id);
       expect(found).not.toContain(coverOnly.id);
       // `imageList` is a read API, so its rows carry shortcodes; the raw uuid

@@ -9,7 +9,6 @@
 import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import {
   type IngredientId,
-  type ProductShortcode,
   productShortcode,
   unsafeExpenseShortcode,
   unsafeIngredientId,
@@ -19,12 +18,10 @@ import {
 } from "@cubby/schemas/identifiers";
 import {
   mergeProductsInput,
-  mergeProductsOut,
   patchProductExternalIdsInput,
   productApplyUpcInput,
   productBulkStockTrackedInput,
   productCategoryDistributionOut,
-  productCreateInput,
   productCreateManyInput,
   productDiscardInput,
   productDiscardOut,
@@ -41,6 +38,7 @@ import {
   productLookupUpcOut,
   productManufacturerOptionsOut,
   productMarkUsdaUnavailableManyInput,
+  productMergeSummaryOut,
   productMovementTimelineInput,
   productMovementTimelineOut,
   productPickerItemOut,
@@ -55,7 +53,6 @@ import {
   productTagOptionsOut,
   productTagSiblingsOut,
   productTopLevelOut,
-  productUpdateInput,
   productWithFoodAndSideEffectsOut,
   productWithFoodOut,
 } from "@cubby/schemas/product";
@@ -82,11 +79,14 @@ import {
   productPurchasesOut,
 } from "@cubby/schemas/purchase";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import { z } from "zod";
 import { streamItems, streamProgress } from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
+import { ENTITY_BINDINGS } from "~/server/entity-bindings";
+import { executeEntity } from "~/server/entity-kernel";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/entity-kernel/registry";
 import { findProductExternalIdCollisions } from "~/server/repo/data-quality";
 import {
-  deleteProducts,
   discardProductUnits,
   getCategoryDistribution,
   getProductExternalIdSourceOptions,
@@ -97,9 +97,7 @@ import {
   getProductsSharingTags,
   getProductTagOptions,
   getTagSiblingStorage,
-  mergeProducts,
   patchProductExternalIds,
-  productList as productListRepo,
   productSearch,
   quickCreateProduct,
   setProductsStockTracked,
@@ -121,7 +119,6 @@ import { listProductPurchases } from "~/server/repo/purchase-products";
 import {
   bindShortcodeResolver,
   resolveLiveShortcode,
-  resolveLiveShortcodes,
 } from "~/server/repo/shortcode-resolver";
 import { shouldUseSemanticComboboxFallback } from "~/server/semantic/combobox-fallback";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
@@ -140,113 +137,54 @@ import {
 import {
   applyUpcDataWithSideEffects,
   backfillUPCImages as backfillUPCImagesService,
-  createProductWithSideEffects,
   findOrCreateByCode as findOrCreateByCodeService,
   findOrCreateByUPC as findOrCreateByUPCService,
   lookupUPC as lookupUPCService,
-  updateProductWithSideEffects,
 } from "~/server/services/product-orchestration.service";
 import { semanticProductCandidates } from "~/server/services/semantic-search.service";
 import {
   createBulkUpdatedMutation,
-  createDeleteProcedure,
-  createEntityDetailReadProcedures,
   createEntityListProcedure,
 } from "../crud-factory";
+import { createEntityCompatibilityProcedures } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const productShortcodes = bindShortcodeResolver("product");
 const projectShortcodes = bindShortcodeResolver("project");
 const inventoryShortcodes = bindShortcodeResolver("inventory");
 
-// Product lists are lean DB rows. Detail/create/update are enriched with USDA
-// food and recipe usages, so the list contract is split from the detail one.
-const { list } = createEntityListProcedure({
-  schemas: {
-    output: productListItemOut,
-    filters: productFiltersSchema,
-    sort: {
-      sortableFields: productSortableFields,
-      defaultSort: "createdAt",
-      // Pinned, not derived from sortableFields: `buildOrderBy`'s groupBy
-      // branch looks the field up as a real column, so a sort-only key like a
-      // joined name would be accepted and then silently emit no grouping.
-      groupableFields: ["category"] as const,
-    },
-  },
-  repository: {
-    list: async (services, filters, sort, pagination, groupBy) => {
-      return await productListRepo(
-        services.db,
-        filters,
-        sort,
-        pagination,
-        groupBy,
-      );
-    },
-  },
-  entityName: "product",
+const {
+  list,
+  create,
+  update,
+  delete: deleteItem,
+} = createEntityCompatibilityProcedures(ENTITY_KERNEL_BINDINGS.product, {
+  ...ENTITY_BINDINGS.product.crud,
+  listOutput: productListItemOut,
 });
 
-/**
- * Every product this router ships changes a costing input — `price`,
- * `ingredientId`, and the `productUnitMappings` costing reads conversions from —
- * so each write path has to recompute the recipes that depend on the product's
- * linked ingredient. This resolves that link for a set of products.
- *
- * Read this BEFORE the mutation runs. `deleteProducts` and `mergeProducts` both
- * soft-delete rows (the deleted products; the merged-away losers), and every
- * repo reader filters `notDeleted`, so afterwards the link is unreadable. For a
- * merge the pre-merge set is also a superset of the post-merge one: the keeper
- * can only ADOPT an `ingredientId` from a loser (CARRIED_COLUMNS, and only when
- * its own is null), never gain an id no input product had.
- */
-async function linkedIngredientIds(
-  db: Parameters<typeof getProductsByShortcodes>[0],
-  shortcodes: ProductShortcode[],
-): Promise<IngredientId[]> {
-  // `getProductsByShortcodes` is the one batch reader that carries the
-  // ingredient relation. Product delete/merge are rare interactive operations,
-  // so its extra joins are not worth a second reader.
-  const products = await getProductsByShortcodes(db, shortcodes);
-  const resolved = await resolveLiveShortcodes(
-    db,
-    products.flatMap((row) => (row.ingredient ? [row.ingredient.id] : [])),
-    "ingredient",
+// The product detail projection includes USDA and inventory-derived fields that
+// are intentionally outside the canonical kernel CRUD record.
+const getByID = protectedProcedure
+  .input(z.object({ id: productShortcode }))
+  .output(strictOutput(productWithFoodOut))
+  .query(async ({ ctx, input }) =>
+    getProductWithFood(
+      ctx.db,
+      ctx.usdaClient,
+      await productShortcodes.one(ctx.db, input.id),
+    ),
   );
-  // Map values are unique per ingredient, so this is already deduped — several
-  // products commonly share one ingredient.
-  return [...resolved.values()].map((id) => unsafeIngredientId(id));
-}
 
-const { getByID, getByShortcode } = createEntityDetailReadProcedures({
-  entityName: "product",
-  schemas: {
-    output: productWithFoodOut,
-    idSchema: productShortcode,
-  },
-  repository: {
-    getByID: async (services, shortcode: ProductShortcode) => {
-      const id = await productShortcodes.one(services.db, shortcode);
-      return await getProductWithFood(services.db, services.usdaClient, id);
-    },
-    // Resolves the shortcode itself rather than reusing a plain repo-level
-    // reader: `getByID` above returns the USDA-enriched shape
-    // (`productWithFoodOut`), and the factory requires both procedures to
-    // share one output schema, so this has to go through the same
-    // enrichment `getByID` does.
-    getByShortcode: async (services, shortcode) => {
-      const id = await resolveLiveShortcode(services.db, shortcode, "product");
-      return id
-        ? await getProductWithFood(
-            services.db,
-            services.usdaClient,
-            unsafeProductId(id),
-          )
-        : null;
-    },
-  },
-});
+const getByShortcode = protectedProcedure
+  .input(z.object({ shortcode: productShortcode }))
+  .output(strictOutput(productWithFoodOut.nullable()))
+  .query(async ({ ctx, input }) => {
+    const id = await resolveLiveShortcode(ctx.db, input.shortcode, "product");
+    return id
+      ? getProductWithFood(ctx.db, ctx.usdaClient, unsafeProductId(id))
+      : null;
+  });
 
 // Lightweight typeahead for product-picker comboboxes. Same filters/pagination
 // shape as `list`, but the repo replaces the full relation graph and per-row
@@ -313,48 +251,6 @@ const { list: search } = createEntityListProcedure({
   },
   entityName: "product",
 });
-
-// Custom create procedure: imports UPC images + eagerly recomputes the new
-// product's recipes (linking a product makes its ingredient costable). The bulk
-// `createMany` path stays deferred (mark-stale → drain) so it doesn't recompute
-// shared recipes once per product.
-const create = protectedProcedure
-  .input(productCreateInput)
-  .output(strictOutput(productWithFoodAndSideEffectsOut))
-  .mutation(async ({ ctx, input }) => {
-    return await createProductWithSideEffects(
-      {
-        db: ctx.db,
-        product: createProductWriteActions(ctx.db, ctx.usdaClient),
-        recipeCosting: ctx.services.recipeCosting,
-        locationValuation: ctx.services.locationValuation,
-        upcLookupClient: ctx.upcLookupClient,
-      },
-      input,
-      ctx.actorContext,
-    );
-  });
-
-// Custom update: a product's price/USDA link feeds recipe cost via its linked
-// ingredient, so recompute every dependent recipe eagerly (covers UI + MCP) and
-// report the count. Inventory-valuation recompute is added here too (stage D).
-const update = protectedProcedure
-  .input(productUpdateInput)
-  .output(strictOutput(productWithFoodAndSideEffectsOut))
-  .mutation(async ({ ctx, input }) => {
-    const id = await productShortcodes.one(ctx.db, input.id);
-    return await updateProductWithSideEffects(
-      {
-        db: ctx.db,
-        product: createProductWriteActions(ctx.db, ctx.usdaClient),
-        recipeCosting: ctx.services.recipeCosting,
-        locationValuation: ctx.services.locationValuation,
-      },
-      id,
-      input.data,
-      ctx.actorContext,
-    );
-  });
 
 /**
  * Bulk stock-tracking write, backing the products list's "Set stock tracking"
@@ -730,105 +626,27 @@ const markUsdaUnavailableMany = protectedProcedure
     );
   });
 
-/**
- * Deleting a product changes recipe cost: `deleteProducts` soft-deletes the
- * product's `productUnitMappings` (the conversion source costing reads) and
- * removes its price from the linked ingredient. `runMutationSideEffectsForEntities`
- * does NOT cover this — `needsValuationRecompute` is true only for
- * product + `updated`, and only for the location valuation rollup. Nothing else
- * recomputes recipe totals on a schedule, so without this dispatch a stale
- * `Recipe.totals` persists until someone runs the maintenance card by hand.
- */
-const deleteItem = createDeleteProcedure<ProductShortcode>(
-  async (services, shortcodes) => {
-    // Before the delete: the products (and their ingredient links) are
-    // unreadable once soft-deleted.
-    const ingredientIds = await linkedIngredientIds(services.db, shortcodes);
-    const ids = await productShortcodes.all(services.db, shortcodes);
-    const { detachedImageKeys, deleted } = await deleteProducts(
-      services.db,
-      ids,
-      services.actorContext,
-    );
-    const backgroundBatches = await runMutationSideEffectsForEntities(
-      services.db,
-      ids.map((id) => ({
-        action: "deleted" as const,
-        entity: { entityType: "product" as const, entityId: id },
-        source: "product.delete",
-      })),
-    );
-    // One deduped recompute over every affected recipe, the same shape
-    // `createMany` uses — not one dispatch per deleted product.
-    const recipeBatches =
-      await services.services.recipeCosting.recomputeForIngredients(
-        ingredientIds,
-        { source: "product.delete" },
-      );
-    return {
-      deleted,
-      detachedImageKeys,
-      backgroundBatches: [...(backgroundBatches ?? []), ...recipeBatches],
-    };
-  },
-  productShortcode,
-);
-
-/**
- * Fold duplicate products into one. See `mergeProducts` (repo/product/merge.ts)
- * for the two structural collisions — the per-product `(source, kind)`
- * identifier slot and the `(productId, locationId)` stock slot — and why an
- * identifier conflict discards the loser's value while stock in a shared
- * location is summed rather than dropped.
- *
- * Side effects run for the survivor AND every merged-away product: the survivor
- * absorbed names, aliases, and identifiers (so its embedding is stale), and the
- * losers are gone (so theirs must be cleaned up beyond the in-transaction
- * cascade `finalizeMerge` already did).
- *
- * Recipe totals need their own dispatch on top of that, for the same reason
- * `mergeProducts` ends with `syncInventoryValuationsForProduct`: the merge moves
- * costing inputs (`price` and `ingredientId` are in `CARRIED_COLUMNS`, and
- * `ProductUnitMappings.productId` is re-pointed), and nothing recomputes
- * `Recipe.totals` on a schedule, so a stale cost would persist indefinitely.
- */
 const merge = protectedProcedure
   .input(mergeProductsInput)
-  .output(strictOutput(mergeProductsOut))
+  .output(
+    strictOutput(
+      z.object({
+        product: productTopLevelOut,
+        mergeSummary: productMergeSummaryOut,
+      }),
+    ),
+  )
   .mutation(async ({ ctx, input }) => {
-    // Before the merge: the losers are soft-deleted by the time it returns, and
-    // the keeper's post-merge ingredient can only be one it already had or one
-    // adopted from a loser — so the pre-merge set covers every affected link.
-    const ingredientIds = await linkedIngredientIds(ctx.db, [
-      input.keepId,
-      ...input.mergeIds,
-    ]);
-    // Destructured, not stripped later: the internal uuids are the repo's
-    // channel to this dispatch and must never reach the wire (the merged-away
-    // rows are already soft-deleted, so their codes can't be re-resolved here).
-    const { keepEntityId, deletedEntityIds, ...mergeSummary } =
-      await mergeProducts(ctx.db, input, ctx.actorContext);
-    await runMutationSideEffectsForEntities(ctx.db, [
-      {
-        action: "updated" as const,
-        entity: { entityType: "product" as const, entityId: keepEntityId },
-        source: "product.merge",
-      },
-      ...deletedEntityIds.map((entityId) => ({
-        action: "deleted" as const,
-        entity: { entityType: "product" as const, entityId },
-        source: "product.merge",
-      })),
-    ]);
-    // `mergeProductsOut` carries no side-effects field, so the batches aren't
-    // surfaced — the dispatch itself is what keeps the totals honest.
-    await ctx.services.recipeCosting.recomputeForIngredients(ingredientIds, {
-      source: "product.merge",
-      entity: { entityType: "product", entityId: keepEntityId },
+    const result = await executeEntity(ctx, {
+      action: "merge",
+      entity: "product",
+      data: input,
     });
+    if (result.action !== "merge")
+      throw new Error("Entity kernel returned the wrong action");
     return {
-      product: await getProductWithFood(ctx.db, ctx.usdaClient, keepEntityId),
-      mergeSummary,
+      product: productTopLevelOut.parse(result.item),
+      mergeSummary: productMergeSummaryOut.parse(result.mergeSummary),
     };
   });
 

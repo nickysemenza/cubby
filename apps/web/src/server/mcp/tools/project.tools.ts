@@ -1,7 +1,7 @@
 /**
  * Project-tracker MCP tools — projects / tasks / expenses, DB-backed.
  * Successor of the retired Notion-proxy tools (notion.tools.ts): same
- * list_projects/list_tasks/list_expenses surface plus full CRUD. A project's
+ * workflow and synthesis surface. A project's
  * former Notion page body now lives on `notes` (markdown), returned by
  * get_project.
  */
@@ -10,49 +10,32 @@ import { projectShortcode } from "@cubby/schemas/identifiers";
 import {
   actionableTasksOut,
   expenseAnalyticsOut,
-  expenseCreateInput,
   expenseFilterFields,
   expenseMatchInput,
   expenseMatchOut,
-  expenseMcpListOut,
-  expenseOut,
-  expenseUpdateData,
   LIVE_PROJECT_STATUSES,
   productProjectUsesInput,
   productProjectUsesOut,
   projectAttentionItemSchema,
-  projectCreateInput,
   projectDashboardFiltersSchema,
   projectDashboardSummaryOut,
-  projectFilterFields,
-  projectMcpListOut,
   projectOut,
   projectPortfolioAnalyticsOut,
   projectResourceProjectInput,
   projectResourcesMcpOut,
   projectTaskStatusBreakdown,
   projectToolSuggestionsOut,
-  projectUpdateData,
   repointProjectUsesInput,
   repointProjectUsesOut,
-  taskCreateInput,
-  taskFilterFields,
-  taskMcpListOut,
   taskOut,
   taskSummaryOut,
-  taskUpdateData,
 } from "@cubby/schemas/project";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { sumBy } from "es-toolkit";
 import { z } from "zod";
 import {
-  declareRelationEntity,
   READ_ONLY_CLOSED,
-  registerEntityCrudToolset,
   registerRouterTool,
-  slimExpense,
-  slimProject,
-  slimTask,
   strictFilterInput,
   WRITE_CLOSED,
 } from "./_shared";
@@ -172,28 +155,6 @@ const expenseMatchMcpOut = expenseMatchOut.omit({ matches: true }).extend({
 });
 
 export function registerProjectTools(server: McpServer) {
-  registerEntityCrudToolset(server, {
-    entity: "project",
-    createInput: projectCreateInput.shape,
-    updateShape: projectUpdateData.shape,
-    filterFields: projectFilterFields,
-    mcpListOut: projectMcpListOut,
-    out: projectOut,
-    slim: slimProject,
-    sort: { orderBy: "startDate", direction: "desc" },
-    descriptions: {
-      list: "List household projects with status, kind, dates, cost estimate, canonical Google Drive/Notion resource URLs, spend/progress rollups (own + subtree), parent/child project links, and dependency ids. Read dates from the `dates` object (derivedStart/derivedEnd, effectiveStart/effectiveEnd, startSource/endSource), NOT from the top-level startDate/endDate — those two are manual overrides and are usually null. Filter by one or many statuses, kinds, locations, parent projects, parent presence, search, date bounds, completion year, topLevelOnly, and subtree inclusion. Omitted or empty filter fields are unrestricted. Pass topLevelOnly=true to exclude sub-projects; pass includeSubProjects=true with parentProjectId to match the whole live subtree under that parent, not just direct children.",
-      get: "Get a project by ID, including markdown notes (the former Notion page body), canonical googleDriveFolderUrl/notionPageUrl resource links, own + subtree rollups, parent/child project links, blocked-by/blocking project ids, and the `dates` object (derived vs effective window plus which source each side came from). Prefer dates.effectiveStart/dates.effectiveEnd over the raw startDate/endDate override columns.",
-      create:
-        "Create a household project (status planning|not_started|in_progress|done, kind furniture|workshop|household|renovation|garden). Set parentProjectId to create it as a sub-project (arbitrary depth) — a phase/trade with its own costEstimate budget envelope; tasks/expenses still attribute to it via their own projectId. startDate/endDate are OVERRIDES on a derived window, not the window itself: a project's dates are normally rolled up from its own tasks and expenses plus every live sub-project, and writing either column PINS that side and suppresses the roll-up for it. Leave both unset unless you are recording a date the work itself doesn't imply (a contracted start, a hard deadline) — a stale override does not widen to cover later activity, it just goes wrong quietly.",
-      update:
-        "Update a project's fields; `blockedByIds` replaces the full set of projects blocking this one. `parentProjectId` can be set/changed/cleared, subject to a cycle guard (a project can't become its own descendant). startDate/endDate are OVERRIDES on a derived window (see create): setting one pins that side and suppresses the roll-up from tasks/expenses/sub-projects; clearing it (null) hands that side back to the roll-up. Do not write today's derived value back into the column — that freezes a window which would otherwise keep tracking the work.",
-      delete:
-        "Soft-delete projects by IDs. Fails while live tasks, expenses, or sub-projects still reference a project.",
-    },
-    create: (caller, params) => caller.project.create(params),
-  });
-
   registerRouterTool(server, {
     name: "list_project_resources",
     description:
@@ -218,16 +179,6 @@ export function registerProjectTools(server: McpServer) {
   });
 
   // The prose that used to be `attach_project_resources`' /
-  // `detach_project_resources`' own descriptions, composed into `attach_entity`
-  // / `detach_entity`'s `parentId` parameter. The category rule is the part
-  // that must not evaporate.
-  declareRelationEntity(server, "project", {
-    attach:
-      "PRJ- parent = PROJECT RESOURCE USES (`ProjectToolUsage`). Records that existing Cubby Products were used on one exact project. ONLY category `tools` or `software` may be recorded this way — a live Product of any other category is refused with reason PRODUCT_CATEGORY_INELIGIBLE and its code named, which is a different problem from a code that does not resolve. Also refused: a tool we did not own while the project ran (TOOL_TIMELINE_CONFLICT — acquired after it ended or disposed of before it started; the fix is usually a missing acquisition Expense). This alters no project spend, no inventory, and no expense history, and carries NO quantity.",
-    detach:
-      "PRJ- parent = PROJECT RESOURCE USES. Soft-deletes explicit resource associations from one exact project, leaving the Product, its Expenses, its inventory, and its uses on other projects unchanged. To MOVE the history rather than drop it, use repoint_project_uses.",
-  });
-
   registerRouterTool(server, {
     name: "repoint_project_uses",
     description:
@@ -251,7 +202,7 @@ export function registerProjectTools(server: McpServer) {
   registerRouterTool(server, {
     name: "get_house_status",
     description:
-      'What needs attention around the house, in one call. Returns portfolio counts (active projects, open tasks, actual vs committed spend), the active projects with own + subtree rollups, a per-project task-status breakdown, the next upcoming tasks, and `attention[]` — overdue tasks, stalled projects, past-due planned expenses, missing budgets, unclassified expenses and blocked work, each with a severity, the entity it points at, and a link. Start here for "how are the projects going" / "what should I deal with", then drill in with get_project / list_tasks. Optional filters scope it to a status set, project kinds, locations, a search term, or a date window (dateFrom/dateTo — a project matches when its startDate/endDate override overlaps the window OR it has a task or expense of its own inside it; only projects with no override and no dated content at all are dropped, and that count comes back as hiddenByDate.projects). statusScope defaults to the live statuses (planning/not_started/in_progress) when omitted, so this payload does not balloon with completed history — pass statusScope explicitly (e.g. ["done"]) to include finished projects.',
+      'What needs attention around the house, in one call. Returns portfolio counts (active projects, open tasks, actual vs committed spend), the active projects with own + subtree rollups, a per-project task-status breakdown, the next upcoming tasks, and `attention[]` — overdue tasks, stalled projects, past-due planned expenses, missing budgets, unclassified expenses and blocked work, each with a severity, the entity it points at, and a link. Start here for "how are the projects going" / "what should I deal with", then drill in with entity get(project) or list(task). Optional filters scope it to a status set, project kinds, locations, a search term, or a date window (dateFrom/dateTo — a project matches when its startDate/endDate override overlaps the window OR it has a task or expense of its own inside it; only projects with no override and no dated content at all are dropped, and that count comes back as hiddenByDate.projects). statusScope defaults to the live statuses (planning/not_started/in_progress) when omitted, so this payload does not balloon with completed history — pass statusScope explicitly (e.g. ["done"]) to include finished projects.',
     inputSchema: projectDashboardFiltersSchema.shape,
     outputSchema: houseStatusOut,
     annotations: READ_ONLY_CLOSED,
@@ -320,28 +271,6 @@ export function registerProjectTools(server: McpServer) {
     },
   });
 
-  registerEntityCrudToolset(server, {
-    entity: "task",
-    createInput: taskCreateInput.shape,
-    updateShape: taskUpdateData.shape,
-    filterFields: taskFilterFields,
-    mcpListOut: taskMcpListOut,
-    out: taskOut,
-    slim: slimTask,
-    sort: { orderBy: "createdAt", direction: "desc" },
-    descriptions: {
-      list: 'List project tasks with status, due dates, trade, project name, optional subject product ("what this task is for"), parent task, and subtask counts. Filter by status/projectId/subjectProductId/trade/search/topLevelOnly/parentTaskId/parentTaskPresenceFilter/duePresenceFilter/includeSubProjects/projectPresenceFilter/subjectProductPresenceFilter. Omitted or empty filter fields are unrestricted. Search matches both task and subject-product names. Pass topLevelOnly=true to exclude checklist subtasks; pass includeSubProjects=true with projectId to also match tasks in that project\'s live descendant sub-projects. Presence filters widen an accompanying id selection: {subjectProductId, subjectProductPresenceFilter:"none"} means that product OR no product.',
-      get: "Get a task by ID, including its optional subject product, blocked-by/blocking task ids, parent task (if a subtask), and subtask counts.",
-      create:
-        "Create a task (status not_started|later|in_progress|blocked|done), optionally attached to a project and/or a subjectProductId describing what the work is for. Set parentTaskId to create it as a checklist subtask of another task — one level only; projectId and subjectProductId are each inherited from the parent when omitted. A subtask can later change either relation independently. A subtask's own status is independent — the parent never auto-completes.",
-      update:
-        "Update a task's fields, including setting or clearing subjectProductId; `blockedByIds` replaces the full set of tasks blocking this one. `parentTaskId` can be set/changed/cleared, subject to the one-level rule (a task with subtasks can't become a subtask, and a subtask can't itself be a parent).",
-      delete:
-        "Soft-delete tasks by IDs (dependency edges are cleaned up). Deleting a task cascades to its live subtasks.",
-    },
-    create: (caller, params) => caller.task.create(params),
-  });
-
   registerRouterTool(server, {
     name: "list_actionable_tasks",
     description:
@@ -354,46 +283,16 @@ export function registerProjectTools(server: McpServer) {
   registerRouterTool(server, {
     name: "get_task_summary",
     description:
-      "Task counts across the whole tracker in one cheap call: totalOpen, next (unblocked and actionable now), later, inbox (tasks with no project), overdue, dueThisWeek (rolling 7 days), blocked. Use it to size the backlog before paging list_tasks.",
+      "Task counts across the whole tracker in one cheap call: totalOpen, next (unblocked and actionable now), later, inbox (tasks with no project), overdue, dueThisWeek (rolling 7 days), blocked. Use it to size the backlog before paging entity list(task).",
     outputSchema: taskSummaryOut,
     annotations: READ_ONLY_CLOSED,
     call: (caller) => caller.task.summary(),
   });
 
-  registerEntityCrudToolset(server, {
-    entity: "expense",
-    createInput: expenseCreateInput.shape,
-    updateShape: expenseUpdateData.shape,
-    filterFields: expenseFilterFields,
-    mcpListOut: expenseMcpListOut,
-    out: expenseOut,
-    slim: slimExpense,
-    sort: { orderBy: "date", direction: "desc" },
-    descriptions: {
-      list: 'List expenses (the complete spend ledger) with cost, date, lineKind, costType/trade, project name, and the vendor/purchase this Expense is attributed to. lineKind is principal for purchased items/services or tax|shipping|discount|fee|tip|other_adjustment for productless receipt adjustments; all kinds remain real spend. lineBasis is ORTHOGONAL to lineKind and answers whether the row corresponds to something you can point at: item_line (the default) or allocation. An allocation is a slice of a total that was never itemized — a deposit and a balance on one vendor order, or an estimated materials/labor split of a single lump-sum contract. Two consequences when reading one: it can never carry a productId (the money buys no particular item, so it is correctly absent from every goods-without-a-product worklist — do NOT "fix" it by linking a Product, which would halve that Product\'s derived unit price), and its costType may be an estimate rather than a vendor-stated fact, so materials-vs-services breakdowns mix guesses with facts wherever allocations are included. Never inferred — set it explicitly when importing deposit/balance/numbered-payment rows. Filter by lineKind/lineBasis/costType/trade/projectId/future/search/notesSearch/urlSearch/includeSubProjects/dateFrom/dateTo (inclusive YYYY-MM-DD bounds on expense date)/costMin/costMax/productId/vendorId/orderId/purchaseId. search matches the expense NAME and accepts several terms, which OR — pass ["dust","vacuum"] when you are guessing at synonyms, because this ledger names the THING rather than the product (a Festool vacuum is booked as "dust extractor", a Bosch miter saw as "chop saw"). notesSearch and urlSearch are separate substring filters on those columns and AND with the name search; notes carry import provenance and url often holds a bare pre-roster store name. costMin/costMax are INCLUSIVE bounds on cost in dollars and are SIGNED — credits are real here (refunds and price adjustments), so costMax: 0 is the credits-only worklist and there is no implicit lower bound of zero. A row with no cost recorded falls out of any cost window (use costPresenceFilter: "none" to find those instead). Pass includeSubProjects=true with projectId to match the whole live subtree under that project, not just its own expenses. projectPresenceFilter="none" is the unassigned-spend worklist and "has" is attributed spend; combined with projectId it WIDENS rather than narrows — {projectId, projectPresenceFilter:"none"} means that project OR unassigned. productPresenceFilter/vendorPresenceFilter follow the same "none"/"has" shape against productId/vendorId; vendorPresenceFilter="none" is also "no purchase attached" (a purchase always has a vendor, so no vendor and no purchase are the same predicate). costPresenceFilter="none" finds expenses with no cost recorded yet — combine with trade:"other" for the Unclassified-spend worklist. orderIdPresenceFilter splits on whether the Expense\'s purchase carries a vendor order id ("none" = the ~40% that don\'t); orderId is an EXACT match on that id, meaningful only alongside vendorId (an order id is unique per vendor, not globally). purchaseId is the precise "every Expense in THIS purchase" scope — an exact match on the purchase\'s own id (from list_purchases/get_purchase), needing no vendorId/orderId pairing since the id alone identifies the purchase.',
-      get: "Get an expense by ID.",
-      create:
-        "Log an expense (costType materials|tools|services; set future=true for planned spend), optionally attached to a project. Set lineKind explicitly for an itemized tax, shipping, discount, fee, tip, or combined other_adjustment line. If omitted, Cubby only infers a strict adjustment-like Expense name when no Product is linked; otherwise it stores principal. Never estimate or allocate embedded tax. Non-principal Expenses cannot link productId or productQuantity. productQuantity may be FRACTIONAL — the unit is the shelf's unit, so half a coil thrown away is -0.5. productQuantity is SIGNED: money direction wins, so a positive-cost line is an acquisition of |qty| and a negative-cost line an exit of |qty|, and only on a $0 line does the sign carry the fact — positive is a free acquisition (promo pack, bundled accessory), NEGATIVE is a discard/write-off. A positive-cost line may not carry a negative quantity. Zero is legal ONLY on a negative-cost line and means the money came back but no unit left — a price concession with the item KEPT (an Amazon 'Account adjustment', a partial refund for shipping damage). Use 0 there, not null: null means the count is unknown and is reported as data-entry debt. A discard has no vendor charge behind it, so leave vendor/orderId/purchaseId unset on one.",
-      delete:
-        "Soft-delete expenses. Nothing blocks an expense delete — it is the leaf of the money ledger — but it has consequences: `sideEffects` reports which Purchases lost a line (their totals changed) and which are now empty, since an empty Purchase is a record of an order with no spend and usually wants deleting too.",
-      update:
-        "Update an expense's fields. Renaming never re-infers lineKind. Change lineKind explicitly when correcting a role. A non-principal Expense cannot link productId or productQuantity, and conflicting writes are rejected without unlinking anything. productQuantity is SIGNED — see create; flipping a $0 line's quantity to negative is how an already-logged row is corrected into a discard, setting a negative-cost line's quantity to 0 is how a refund is corrected into a price concession with the item kept, and a positive-cost line may not carry a negative quantity.",
-    },
-    create: (caller, params) => caller.expense.create(params),
-    operations: { delete: false },
-    resolveUpdateData: async (_caller, data) =>
-      data.productId === undefined
-        ? data
-        : {
-            ...data,
-            productId: data.productId,
-          },
-  });
-
   registerRouterTool(server, {
     name: "get_expense_analytics",
     description:
-      "Spend aggregates over the expense ledger, under the SAME filters as list_expenses (lineKind/costType/trade/projectId/includeSubProjects/future/search/notesSearch/urlSearch/dateFrom/dateTo/costMin/costMax/costPresenceFilter/projectPresenceFilter/vendorId/orderId), so ledger and analytics totals always agree. Returns summary (all line kinds), adjustments (the signed non-principal aggregate), principal-only byCostType/byTrade/trade x costType, and all-kind monthly, cumulative, byProject, and byVendor totals. Use summary.net = sum(Expense.cost); reconcile a category or trade total to it by adding adjustments.net. Credits are real (refunds and price adjustments) — net = actual + committed − credits, and cost bounds are signed, so costMax: 0 is the credits-only window. byProject and byVendor are INNER joins and deliberately do NOT sum to summary.net: byProject drops expenses with no project, byVendor drops rows with no purchase attached. Read each gap as the size of that unattributed tail, not as a bug.",
+      "Spend aggregates over the expense ledger, under the same filters as entity list(expense) (lineKind/costType/trade/projectId/includeSubProjects/future/search/notesSearch/urlSearch/dateFrom/dateTo/costMin/costMax/costPresenceFilter/projectPresenceFilter/vendorId/orderId), so ledger and analytics totals always agree. Returns summary (all line kinds), adjustments (the signed non-principal aggregate), principal-only byCostType/byTrade/trade x costType, and all-kind monthly, cumulative, byProject, and byVendor totals. Use summary.net = sum(Expense.cost); reconcile a category or trade total to it by adding adjustments.net. Credits are real (refunds and price adjustments) — net = actual + committed − credits, and cost bounds are signed, so costMax: 0 is the credits-only window. byProject and byVendor are INNER joins and deliberately do NOT sum to summary.net: byProject drops expenses with no project, byVendor drops rows with no purchase attached. Read each gap as the size of that unattributed tail, not as a bug.",
     // Strict: this tool takes `expenseFilterFields` directly rather than going
     // through registerEntityListTool, so it needs its own guard against a
     // silently-ignored filter key. No reserved keys — there's no pagination here.
@@ -411,7 +310,7 @@ export function registerProjectTools(server: McpServer) {
     name: "match_expenses",
     description:
       "Rank existing ledger rows as candidate matches for lines of a vendor export (an Amazon takeout row, an eBay OrdersReport line, a receipt). Pass up to 200 rows, each with your own `key` plus `date` and a SIGNED `amount`, optionally `label` (the export's description), `orderId` and `vendor`. Returns, per key, up to `maxCandidatesPerRow` candidates carrying expenseId/name/cost/date/vendorName/orderId/projectName/productName plus the evidence to judge them: `matchedOn` (order_id | amount_date), `dayDelta`, `amountDelta`, `ratio`, `ratioLabel` and `tokenOverlap`. Also returns `unmatched` keys and a summary. " +
-      "WARNING — this RANKS candidates, it does not VERIFY them, and it never writes anything. Run it BEFORE proposing any new expense, and again over each row you did create (same amount, ±30 days) to catch what slipped through. Then confirm every match with the user before a single update_expenses or create_expenses call. " +
+      "WARNING — this RANKS candidates, it does not VERIFY them, and it never writes anything. Run it BEFORE proposing any new expense, and again over each row you did create (same amount, ±30 days) to catch what slipped through. Then confirm every match with the user before entity update(expense) or create(expense). " +
       "Read `tokenOverlap` as a hint and NOTHING more. Zero overlap is routine on TRUE matches, because this ledger names the THING, not the product: a Festool vacuum is booked as `dust extractor`, a Bosch miter saw as `chop saw`. That is the exact trap this tool exists for — a keyword search for 'festool' found nothing and a duplicate row was added while the real one had sat there since 2024. Never discard a zero-overlap candidate on that basis, and note that tokenizers also miss compound words (`labelmaker` vs 'label maker', `stepstool` vs 'step stool'). Conversely, high overlap on a coincidental amount is not evidence either. " +
       "**Below about $20, READ the line descriptions before accepting anything.** A $0.93 order matched a $1.00 `5 yd nursery mix` row on amount+date and had to be reverted. Small amounts are inside any usable band by construction; the tool will surface them, and only you can tell them apart. " +
       "Genuine matches cluster at `dayDelta` 0–1. Candidates scattered across a ±14d window are usually coincidences — in one pass 209 amount matches graded down to 97 real ones. " +

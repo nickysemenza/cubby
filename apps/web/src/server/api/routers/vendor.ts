@@ -5,52 +5,26 @@
  * are the only procedures with no factory analogue and are spread in alongside.
  */
 
-import { unsafeVendorId } from "@cubby/schemas/identifiers";
 import {
   fetchVendorLogoInput,
   mergeVendorsInput,
   mergeVendorsOut,
-  vendorFiltersSchema,
   vendorOptionsOut,
   vendorOut,
-  vendorSortableFields,
 } from "@cubby/schemas/vendor";
 import { ENTITY_BINDINGS } from "~/server/entity-bindings";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
-import {
-  createVendor,
-  deleteVendors,
-  getVendorByShortcode,
-  mergeVendors,
-  updateVendor,
-  vendorList,
-  vendorOptions,
-} from "~/server/repo/vendor";
-import { deleteStoredObjects } from "~/server/services/image-storage.service";
+import { executeEntity } from "~/server/entity-kernel";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/entity-kernel/registry";
+import { vendorOptions } from "~/server/repo/vendor";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 import { fetchAndAttachVendorLogo } from "~/server/services/vendor-logo.service";
-import { createSearchableEntityCrudProcedures } from "../crud-factory";
+import { createEntityCompatibilityProcedures } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
-const procedures = createSearchableEntityCrudProcedures({
-  schemas: {
-    ...ENTITY_BINDINGS.vendor.crud,
-    filters: vendorFiltersSchema,
-    sort: {
-      sortableFields: vendorSortableFields,
-      defaultSort: "name",
-    },
-  },
-  repository: {
-    getByShortcode: (ctx, shortcode) => getVendorByShortcode(ctx.db, shortcode),
-    list: (ctx, filters, sorts, pagination) =>
-      vendorList(ctx.db, filters, sorts, pagination),
-    create: (ctx, data) => createVendor(ctx.db, data, ctx.actorContext),
-    update: (ctx, id, data) => updateVendor(ctx.db, id, data, ctx.actorContext),
-    delete: (ctx, ids) => deleteVendors(ctx.db, ids, ctx.actorContext),
-  },
-  entityName: "vendor",
-});
+const procedures = createEntityCompatibilityProcedures(
+  ENTITY_KERNEL_BINDINGS.vendor,
+  ENTITY_BINDINGS.vendor.crud,
+);
 
 /**
  * The vendor picklist — feeds the ledger's Vendor filter and the purchase form's
@@ -70,21 +44,17 @@ const merge = protectedProcedure
   .input(mergeVendorsInput)
   .output(strictOutput(mergeVendorsOut))
   .mutation(async ({ ctx, input }) => {
-    const { vendor, detachedImageKeys, mergeSummary } = await mergeVendors(
-      ctx.db,
-      input,
-      ctx.actorContext,
-    );
-    await deleteStoredObjects(detachedImageKeys);
-    const entityId = await resolveLiveShortcode(ctx.db, vendor.id, "vendor");
-    if (entityId) {
-      await runMutationSideEffects(ctx.db, {
-        action: "updated",
-        entity: { entityType: "vendor", entityId: unsafeVendorId(entityId) },
-        source: "vendor.merge",
-      });
-    }
-    return { vendor, mergeSummary };
+    const result = await executeEntity(ctx, {
+      action: "merge",
+      entity: "vendor",
+      data: input,
+    });
+    if (result.action !== "merge")
+      throw new Error("Entity kernel returned the wrong action");
+    return mergeVendorsOut.parse({
+      vendor: result.item,
+      mergeSummary: result.mergeSummary,
+    });
   });
 
 /** Explicitly source one missing logo from the vendor website on record. */

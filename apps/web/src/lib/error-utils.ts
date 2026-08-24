@@ -4,9 +4,7 @@ import {
 } from "@cubby/schemas/entity-integrity";
 import type { AppErrorReason } from "@cubby/shared";
 import { getErrorMessage } from "@cubby/shared";
-import type { TRPCClientErrorLike } from "@trpc/client";
 import { z } from "zod";
-import type { AppRouter } from "~/server/api/root";
 
 // Re-export from shared for convenience (22+ consumers)
 export { getErrorMessage } from "@cubby/shared";
@@ -55,9 +53,12 @@ export function isDynamicImportError(error: unknown): boolean {
   );
 }
 
-function isTRPCClientError(
-  err: unknown,
-): err is TRPCClientErrorLike<AppRouter> {
+type TransportError = {
+  message: string;
+  data: { code?: unknown; reason?: unknown; blockers?: unknown };
+};
+
+function isTransportError(err: unknown): err is TransportError {
   if (typeof err !== "object" || err === null) return false;
   const obj = err as Record<string, unknown>;
   const messageOk = typeof obj.message === "string";
@@ -70,18 +71,16 @@ type AppErrorDetails = {
   code?: string;
   reason?: AppErrorReason;
   /**
-   * Present when the server refused and could say what blocked it. Until now
-   * the UI had to run a separate `previewOperation` query to learn this, then
-   * show the mutation's flattened sentence when it threw anyway — so the two
-   * could disagree. These come from the refusal itself.
+   * Present when the server refused and could say what blocked it. These come
+   * from the real mutation refusal itself.
    */
   blockers?: PublicImpactItem[];
 };
 
 export function getAppErrorDetails(error: unknown): AppErrorDetails {
-  if (isTRPCClientError(error)) {
-    const code = error.data?.code as string | undefined;
-    const d = error.data as Record<string, unknown> | undefined;
+  if (isTransportError(error)) {
+    const code = error.data.code as string | undefined;
+    const d = error.data as Record<string, unknown>;
     const reason = typeof d?.reason === "string" ? d.reason : undefined;
     // Re-validated on arrival: `error.data` is server-shaped but untyped here,
     // and a malformed payload should read as "no blockers", not crash a toast.

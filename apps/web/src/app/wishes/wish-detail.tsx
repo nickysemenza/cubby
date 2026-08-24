@@ -117,10 +117,11 @@ export function WishDetail({ wish }: { wish: WishOut }) {
       return { previousDetail, previousLists };
     },
     onSuccess: (updated) => {
-      queryClient.setQueryData(wishKey, updated);
+      const { sideEffects: _sideEffects, ...wish } = updated;
+      queryClient.setQueryData(wishKey, wish);
       queryClient.setQueriesData<{ items: WishOut[] }>(
         { queryKey: normalizeTRPCQueryKey(queryKeys.wish.list) },
-        (current) => patchListItem(current, updated.id, () => updated),
+        (current) => patchListItem(current, wish.id, () => wish),
       );
     },
     onError: (error, _variables, context) => {

@@ -108,15 +108,6 @@ import {
 
 const page = { pageIndex: 0, pageSize: 100 };
 
-/**
- * Shortcode ⇄ uuid bridges for this test file. Post-cutover, `PurchaseOut`,
- * `ExpenseOut` and `VendorOut` speak PUBLIC shortcodes only — but a handful of
- * internal reads (`getPurchaseByID`, `getPurchaseExpenses`) and this file's
- * own white-box raw-schema assertions still key on the private uuid (see the
- * root CLAUDE.md note on shortcodes being the public id). These collapse the
- * `resolveLiveShortcode` + `unsafe*Id` dance to one call per direction instead
- * of hand-rolling it at every call site.
- */
 const purchaseUuid = async (
   db: Database,
   shortcode: PurchaseShortcode,
@@ -144,10 +135,6 @@ const expenseUuid = async (
   return unsafeExpenseId(id);
 };
 
-/** `findOrCreateVendor` hands back the internal uuid; `purchaseCreateInput`,
- * `updatePurchase`'s `data.vendorId`, and `PurchaseOut.vendorId` are all public
- * shortcodes now. Collapses the "create by name, get its shortcode" idiom used
- * throughout this file. */
 const vendorShortcodeByName = async (
   db: Database,
   name: string,
@@ -156,10 +143,6 @@ const vendorShortcodeByName = async (
   return (await getVendorByID(db, id)).id;
 };
 
-/** Every expense read in this file expects the row to be live — a throwing
- * wrapper around the shortcode-keyed reader, mirroring the throwing contract
- * `getExpenseByID` used to give this file before `ExpenseOut.id` became a
- * shortcode. */
 const expenseByShortcode = async (
   db: Database,
   shortcode: ExpenseShortcode,
@@ -185,8 +168,6 @@ describe("purchase repository — findOrCreatePurchase", () => {
       orderId: "111-1234567-1234567",
       date: "2024-03-01",
     });
-    // Trimmed before matching, so a padded id from a scraped receipt resolves to
-    // the charge already on file rather than creating a second one.
     const padded = await findOrCreatePurchase(ctx.db, {
       vendorId,
       orderId: "  111-1234567-1234567  ",
@@ -196,15 +177,10 @@ describe("purchase repository — findOrCreatePurchase", () => {
     expect(again).toBe(first);
     expect(padded).toBe(first);
     expect((await purchaseList(ctx.db, {}, [], page)).count).toBe(1);
-    // Re-resolution never rewrites the charge it found — the date from the
-    // first sighting survives.
     expect((await getPurchaseByID(ctx.db, first)).date).toBe("2024-03-01");
   });
 
   it("never merges two vendors that share an order-id string", async () => {
-    // An order id is only unique WITHIN a vendor. Short ones — Tool Nirvana's
-    // "#11325" — genuinely collide with other retailers, which is exactly what
-    // the two-column partial-unique index exists to keep apart.
     const toolNirvana = await findOrCreateVendor(ctx.db, "Tool Nirvana");
     const otherStore = await findOrCreateVendor(ctx.db, "Metal Supermarkets");
 
@@ -228,7 +204,6 @@ describe("purchase repository — findOrCreatePurchase", () => {
       (await getVendorByID(ctx.db, toolNirvana)).id,
     );
     expect(chargeB.vendorId).toBe((await getVendorByID(ctx.db, otherStore)).id);
-    // Each charge resolves its OWN vendor name through the join.
     expect(chargeA.vendorName).toBe("Tool Nirvana");
     expect(chargeB.vendorName).toBe("Metal Supermarkets");
   });
@@ -236,9 +211,6 @@ describe("purchase repository — findOrCreatePurchase", () => {
   it("two concurrent calls for one order produce exactly one purchase", async () => {
     const vendorId = await findOrCreateVendor(ctx.db, "Home Depot");
 
-    // This is what `findOrCreate`'s `ON CONFLICT DO NOTHING` + re-select is FOR:
-    // two concurrent imports of one order must land on a single charge instead of
-    // 500ing on `Purchase_vendorId_orderId_key`.
     const [a, b] = await Promise.all([
       findOrCreatePurchase(ctx.db, {
         vendorId,
@@ -273,7 +245,6 @@ describe("purchase repository — findOrCreatePurchase", () => {
       orderId: null,
       date: "2024-05-01",
     });
-    // Empty string is order-id-absent, not an order id — same "always new" rule.
     const blank = await findOrCreatePurchase(ctx.db, {
       vendorId,
       orderId: "  ",
@@ -299,8 +270,6 @@ describe("purchase repository — charge resolution from {vendor, orderId}", () 
   const ctx = withTestDb();
 
   it("creates the vendor + charge on first use and REUSES both on the second", async () => {
-    // The unchanged input shape is the point of the split: MCP, quick-add and
-    // the purchase-import skill never learned about vendor or purchase ids.
     const { output: first } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
@@ -343,7 +312,6 @@ describe("purchase repository — charge resolution from {vendor, orderId}", () 
     // Reusing the charge never overwrites its own date from a later line.
     expect(second.purchaseDate).toBe("2026-07-15");
 
-    // One vendor, one charge, two lines.
     expect((await purchaseList(ctx.db, {}, [], page)).count).toBe(1);
     const lines = await getPurchaseExpenses(
       ctx.db,
@@ -443,7 +411,6 @@ describe("purchase repository — charge resolution from {vendor, orderId}", () 
     expect(orphanOrderId.purchaseId).toBeNull();
     expect(orphanOrderId.vendorId).toBeNull();
     expect(orphanOrderId.orderId).toBeNull();
-    // Nothing was created on the side either.
     expect((await purchaseList(ctx.db, {}, [], page)).count).toBe(0);
   });
 });
@@ -452,9 +419,6 @@ describe("purchase repository — linkExpensesToPurchase", () => {
   const ctx = withTestDb();
 
   it("attaches order-less expenses to one charge (the contractor case)", async () => {
-    // Flow Form Plumbing's single invoice covering rough-in AND fixtures: one
-    // charge, two trades, and no order id anywhere — the shape this whole model
-    // exists to serve.
     const { output: roughIn } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
@@ -501,13 +465,11 @@ describe("purchase repository — linkExpensesToPurchase", () => {
       [roughIn.id, fixtures.id].sort(),
     );
 
-    // Both lines now read the vendor through the charge, still with no order id.
     const reread = await expenseByShortcode(ctx.db, roughIn.id);
     expect(reread.purchaseId).toBe(charge.id);
     expect(reread.vendor).toBe("Flow Form Plumbing");
     expect(reread.orderId).toBeNull();
 
-    // The charge's own rollup sees both lines, and the invoice reconciles.
     expect(after.expenseCount).toBe(2);
     expect(after.expenseTotal).toBe(2516);
     expect(reconcilePurchase(after)).toBe("match");
@@ -561,7 +523,6 @@ describe("purchase repository — linkExpensesToPurchase", () => {
       ctx.actor,
     );
 
-    // An FK would accept any existing row; this is the tombstone/nonexistent check.
     await expect(
       linkExpensesToPurchase(
         ctx.db,
@@ -588,8 +549,6 @@ describe("purchase repository — linkExpensesToPurchase", () => {
     );
     await deleteExpenses(ctx.db, [line.id], ctx.actor);
 
-    // Every named line is soft-deleted, so the write is skipped entirely rather
-    // than running an unbounded update — and the charge is returned untouched.
     const unchanged = await linkExpensesToPurchase(
       ctx.db,
       { purchaseId: target.id, expenseIds: [line.id] },
@@ -628,13 +587,8 @@ describe("purchase repository — splitExpense", () => {
       ctx.actor,
     );
     const chargeId = combo.purchaseId!;
-    // Resolved while everything is still live — `combo` (and its charge) survive
-    // this test, but the ORIGINAL expense row is soft-deleted by `splitExpense`
-    // below, so its own uuid must be captured before that happens.
     const chargeUuid = await purchaseUuid(ctx.db, chargeId);
     const comboUuid = await expenseUuid(ctx.db, combo.id);
-    // `findOrCreatePurchase` records no stated total, so the split has something
-    // to seed.
     expect((await getPurchaseByID(ctx.db, chargeUuid)).statedTotal).toBeNull();
 
     const { items: parts, priceAffectedProductIds } = await splitExpense(
@@ -663,19 +617,13 @@ describe("purchase repository — splitExpense", () => {
 
     expect(parts).toHaveLength(2);
     expect(priceAffectedProductIds).toEqual([]);
-    // Every part lands on the SAME charge — parts of one purchase must share one
-    // parent.
     for (const part of parts) {
       expect(part.purchaseId).toBe(chargeId);
       expect(part.vendor).toBe("Direct Tools Outlet");
       expect(part.orderId).toBe("DTO-SPLIT");
-      // Non-part fields are inherited from the original.
       expect(part.date).toBe("2024-06-01");
     }
 
-    // Each part keeps its OWN trade / costType / project / product — that's the
-    // point: a combo-kit charge's saw half is `tools` and its blade half is
-    // `materials`.
     const saw = parts.find((p) => p.name === "saw portion");
     const blade = parts.find((p) => p.name === "blade portion");
     expect(saw).toBeDefined();
@@ -689,7 +637,6 @@ describe("purchase repository — splitExpense", () => {
     expect(blade?.projectId).toBeNull();
     expect(blade?.productId).toBeNull();
 
-    // The original row is gone from every read path.
     const [originalRow] = await getDb(ctx.db)
       .select({ deletedAt: expense.deletedAt })
       .from(expense)
@@ -700,8 +647,6 @@ describe("purchase repository — splitExpense", () => {
       parts.map((p) => p.id).sort(),
     );
 
-    // `statedTotal` is seeded from the original cost so the parts have something
-    // to reconcile against.
     const charge = await getPurchaseByID(ctx.db, chargeUuid);
     expect(charge.statedTotal).toBe(100);
     expect(charge.expenseTotal).toBe(100);
@@ -1107,7 +1052,6 @@ describe("purchase repository — splitExpense", () => {
             productId: foodProduct.id,
           },
           {
-            // Same absent-project shape, but a non-food product — stays null.
             name: "tools part",
             cost: 30,
             costType: "tools",
@@ -1140,7 +1084,6 @@ describe("purchase repository — splitExpense", () => {
 describe("purchase repository — mergePurchases", () => {
   const ctx = withTestDb();
 
-  /** An UPLOADED image + its `PurchaseImage` join row, filed against `id`. */
   const attachDocumentRow = async (
     purchaseShortcodeId: PurchaseShortcode,
     label: string,
@@ -1317,7 +1260,6 @@ describe("purchase repository — mergePurchases", () => {
   });
 
   it("lets the keeper ADOPT a loser's order id when it had none", async () => {
-    // The common shape: a hand-entered charge later matched to a vendor export.
     const vendorId = await vendorShortcodeByName(ctx.db, "Adopt Vendor");
     const { output: keeper } = await createPurchase(
       ctx.db,
@@ -1383,7 +1325,6 @@ describe("purchase repository — mergePurchases", () => {
       cause: { reason: "PURCHASE_MERGE_VENDOR_MISMATCH" },
     });
 
-    // Nothing moved.
     expect(
       (await getPurchaseByID(ctx.db, await purchaseUuid(ctx.db, other.id)))
         .vendorId,
@@ -1468,7 +1409,6 @@ describe("purchase repository — mergePurchases", () => {
       );
     }
 
-    // Nothing was written: both charges are still live and unchanged.
     const survivor = await getPurchaseByID(
       ctx.db,
       await purchaseUuid(ctx.db, keeper.id),
@@ -1555,14 +1495,11 @@ describe("purchase repository — updatePurchase collision + liveness guards", (
     ).rejects.toMatchObject({
       cause: { reason: "PURCHASE_MERGE_ORDER_COLLISION" },
     });
-    // Refused, not partially applied.
     expect(
       (await getPurchaseByID(ctx.db, await purchaseUuid(ctx.db, moving.id)))
         .vendorId,
     ).toBe(toolNirvana);
 
-    // Same collision reached by moving the OTHER half of the key: retyping this
-    // charge's order id onto one its own vendor already holds.
     const { output: sibling } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({
@@ -1582,8 +1519,6 @@ describe("purchase repository — updatePurchase collision + liveness guards", (
         .orderId,
     ).toBe("#11325");
 
-    // The check is scoped to LIVE charges and to the key actually changing: a
-    // move to a vendor that doesn't hold this order id still goes through.
     const { output: moved } = await updatePurchase(
       ctx.db,
       moving.id,
@@ -1605,8 +1540,6 @@ describe("purchase repository — updatePurchase collision + liveness guards", (
       }),
       ctx.actor,
     );
-    // Deleting a vendor with zero charges is allowed, which is exactly how a
-    // tombstoned id stays reachable to a direct API caller.
     await deleteVendors(ctx.db, [gone], ctx.actor);
 
     await expect(
@@ -1915,8 +1848,6 @@ describe("purchase repository — deletion cascades", () => {
 
     await deleteExpenses(ctx.db, [only.id], ctx.actor);
 
-    // 0 rather than null so the reconciliation cue reads "stated $431.24, lines
-    // $0" instead of going blank.
     const charge = await getPurchaseByID(
       ctx.db,
       await purchaseUuid(ctx.db, chargeId),
@@ -1964,8 +1895,6 @@ describe("purchase repository — sorting purchase columns and rollups", () => {
       }),
       ctx.actor,
     );
-    // One line at $5 vs. two lines totalling $300 — so count and total rank the
-    // two charges the same way, and either could be read for the other.
     await createExpense(
       ctx.db,
       expenseCreateInput.parse(
@@ -2353,13 +2282,10 @@ describe("purchase repository — rollups never see a charge", () => {
       (await expenseAnalytics(ctx.db, {})).byVendor;
 
     const before = await snapshot();
-    // Sanity: the baseline is not vacuously empty.
     expect(before.analytics.summary.net).toBe(100);
     expect(before.rollups[projectId]?.spent).toBe(100);
-    // No charge yet, so nothing to group by vendor.
     expect(await vendorBuckets()).toEqual([]);
 
-    // Now attach every one of those expenses to a real charge.
     const vendorIdUuid = await findOrCreateVendor(
       ctx.db,
       "Rollup Guard Vendor",
@@ -2379,8 +2305,6 @@ describe("purchase repository — rollups never see a charge", () => {
       { purchaseId: charge.id, expenseIds: seeded.map((e) => e.id) },
       ctx.actor,
     );
-    // The lines really did land on the charge (the `purchaseId` column write —
-    // asserted before the charge's own rollup, which is a separate concern).
     expect(
       await getPurchaseExpenses(ctx.db, await purchaseUuid(ctx.db, charge.id)),
     ).toHaveLength(4);
@@ -2418,8 +2342,6 @@ describe("purchase repository — rollups never see a charge", () => {
     expect(vendorRow.spend).toBe(100);
     expect(vendorRow.spend).not.toBe(99999);
 
-    // Last, the charge's own reconciliation cue: the lines still sum to 100 and
-    // the stated total is the 99999 nobody should ever believe.
     const wild = await getPurchaseByID(
       ctx.db,
       await purchaseUuid(ctx.db, charge.id),
@@ -2449,8 +2371,6 @@ describe("purchase repository — a soft-deleted charge reads as absent", () => 
     );
     const chargeId = line.purchaseId!;
     const vendorId = line.vendorId!;
-    // Resolved while the charge is still live — the direct tombstone below
-    // takes it out of `resolveLiveShortcode`'s reach.
     const chargeUuid = await purchaseUuid(ctx.db, chargeId);
 
     // Tombstone the charge DIRECTLY, leaving the expense's `purchaseId` pointing
@@ -2477,7 +2397,6 @@ describe("purchase repository — a soft-deleted charge reads as absent", () => 
     expect(filtered.data.map((e) => e.id)).not.toContain(line.id);
     expect(filtered.count).toBe(0);
 
-    // Same for the order-id scope — both hop through the charge.
     const byOrder = await expenseList(ctx.db, { orderId: "GHOST-1" }, [], page);
     expect(byOrder.count).toBe(0);
   });
@@ -2520,12 +2439,10 @@ describe("purchase repository — a soft-deleted charge reads as absent", () => 
       await purchaseUuid(ctx.db, chargeId),
     );
     expect(charge.vendorName).toBeNull();
-    // The charge itself still exists and still points at the (tombstoned) vendor.
     expect(charge.vendorId).toBe(vendorId);
 
     const reread = await expenseByShortcode(ctx.db, line.id);
     expect(reread.vendor).toBeNull();
-    // The charge is still live, so its id and order id still resolve.
     expect(reread.purchaseId).toBe(chargeId);
     expect(reread.orderId).toBe("SG-1");
     // ...and the money is untouched.
@@ -2628,7 +2545,6 @@ describe("purchase repository — documents", () => {
     expect(result.entityId).toBe(charge.id);
     expect(isDocumentFile({ contentType: result.contentType })).toBe(true);
 
-    // MCP and browser uploads share the same purchase-scoped key allocator.
     const [row] = await getDb(ctx.db)
       .select({
         // `id` too: the join table keys on the uuid, while `result.imageId` is
@@ -2645,7 +2561,6 @@ describe("purchase repository — documents", () => {
     expect(row?.contentType).toBe("application/pdf");
     expect(row?.status).toBe("UPLOADED");
 
-    // ...and it's filed against the charge through `PurchaseImage`.
     const joins = await getDb(ctx.db).query.purchaseImage.findMany({
       where: eq(purchaseImage.purchaseId, chargeUuid),
     });
@@ -2851,8 +2766,6 @@ describe("purchase repository — order deeplinks", () => {
       "https://www.amazon.com/gp/your-account/order-details?orderID=111-4599076-5153040",
     );
 
-    // The same link resolves through the Expense read path, which reaches the
-    // template via a different join (expense → purchase → vendor).
     const { output: expenseRow } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
@@ -2869,7 +2782,6 @@ describe("purchase repository — order deeplinks", () => {
   });
 
   it("leaves orderUrl null without a template, and for synthetic order ids", async () => {
-    // A vendor with no template: nothing to substitute into.
     const noTemplate = await findOrCreateVendor(ctx.db, "Discount Builders");
     const { output: untemplated } = await createPurchase(
       ctx.db,
@@ -2900,7 +2812,6 @@ describe("purchase repository — order deeplinks", () => {
     );
     expect(inStore.orderUrl).toBeNull();
 
-    // ...but its online siblings link fine.
     const { output: online } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({

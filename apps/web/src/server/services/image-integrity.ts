@@ -47,7 +47,6 @@ const signatureContentType = (bytes: Uint8Array): string | undefined => {
     new TextDecoder().decode(bytes.slice(0, 5)) === "%PDF-"
   )
     return PDF_CONTENT_TYPE;
-  // ISO BMFF: HEIC/HEIF brands are held in ftyp at offset four.
   if (
     bytes.length >= 12 &&
     new TextDecoder().decode(bytes.slice(4, 8)) === "ftyp"
@@ -78,8 +77,6 @@ const sha256 = async (bytes: Uint8Array): Promise<string> => {
   ).join("");
 };
 
-/** Validate bytes against a declared MIME and calculate metadata entirely in
- * the Worker runtime. No filename or caller-provided extension is trusted. */
 export const inspectImageFile = async (
   bytes: Uint8Array,
   declaredContentType: string,
@@ -94,8 +91,6 @@ export const inspectImageFile = async (
       "IMAGE_ATTACH_FAILED",
       "File bytes do not match a supported image or PDF format",
     );
-  // HEIC is the canonical detected content type for image-dimensions' HEIF
-  // decoder; accept HEIF declarations for the same ISO-BMFF family.
   const compatible =
     signature === contentType ||
     ((signature === "image/heic" || signature === "image/heif") &&

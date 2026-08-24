@@ -286,8 +286,6 @@ describe("loadProductQuantityLedgers", () => {
       makeProductInput({ name: "Untouched" }),
       ctx.actor,
     );
-    // The caller substitutes EMPTY_QUANTITY_LEDGER — "no rows" and "nets zero"
-    // are different facts, and the map keeps them distinguishable.
     expect(await ledgerFor(prod.entityId)).toBeUndefined();
   });
 });

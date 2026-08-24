@@ -243,13 +243,6 @@ function EventCalendarMonthView({
   });
 }
 
-/**
- * One month week row. Multi-day / all-day events render as CONTINUOUS bars in
- * an overlay grid that spans day columns (colStart -> colSpan) and stacks by
- * lane; single-day timed events render inside each cell below the reserved bar
- * lanes. This is what makes a cross-day event read as one whole block instead
- * of a chip repeated per cell.
- */
 function EventCalendarMonthWeek({
   week,
   gridTemplateColumns,
@@ -262,10 +255,7 @@ function EventCalendarMonthWeek({
   gridTemplateColumns: string;
   cap: number;
   autoFit: boolean;
-  /** Weight of the boundary below this row. */
   divider: "hairline" | "rule";
-  /** Set on the first week only: forwarded to its first cell's content area so
-   *  the view can measure the per-cell event height for "auto". */
   contentRef?: Ref<HTMLDivElement>;
 }) {
   const settings = useEventCalendarSettings();
@@ -284,7 +274,6 @@ function EventCalendarMonthWeek({
       (zonedStartOfDay(d, settings.timeZone).getTime() - rowStartMs) / dayMs,
     ),
   );
-  /** Clamp a day-offset span onto the visible columns; null = fully hidden. */
   const gridPos = (colStart: number, colSpan: number) => {
     let start = -1;
     let end = -1;
@@ -325,7 +314,6 @@ function EventCalendarMonthWeek({
       (max, b) => (covers(b, offsets[col]!) ? Math.max(max, (b.lane ?? 0) + 1) : max),
       0,
     );
-  /** Height a cell must reserve to clear the first `lanes` bar rows. */
   const reservedHeight = (lanes: number) =>
     lanes === 0
       ? "0px"
@@ -583,7 +571,6 @@ function EventCalendarMonthCell({
   day: Date;
   cap: number;
   reservedLanes: number;
-  /** CSS height of the bar lanes above this cell's own chips. */
   reservedHeight: string;
   /** Occurrence keys of the bars hidden in THIS column (lane >= cap), from the
    *  week row. Lets the cell list hidden bars in its overflow popover without
@@ -594,10 +581,7 @@ function EventCalendarMonthCell({
    *  because the bar overlay renders after the cells, so `:last-child` is
    *  unreliable on rows that have bars. */
   isLast: boolean;
-  /** When true, the "+N more" chip is treated as taking a row so the visible
-   *  chips + indicator always fit the measured cell height. */
   autoFit: boolean;
-  /** Set on the first cell only: measured to derive the "auto" cap. */
   contentRef?: Ref<HTMLDivElement>;
 }) {
   const settings = useEventCalendarSettings();
@@ -912,10 +896,6 @@ interface EventCalendarMoreIndicatorProps {
   dropInto?: { color?: string; valid: boolean };
 }
 
-/**
- * "+N more" trigger opening a popover with the day's full event list.
- * onMoreClick returning false suppresses the built-in popover.
- */
 function EventCalendarMoreIndicator({
   day,
   count,

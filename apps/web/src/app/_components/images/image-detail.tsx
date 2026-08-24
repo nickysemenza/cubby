@@ -11,13 +11,9 @@ import { Description } from "~/components/ui/description";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { Image } from "~/components/ui/image";
 import { useTRPC } from "~/integrations/trpc/react";
-import { queryKeys } from "~/lib/query-keys";
 import { EditableCell } from "../data-table/editable-cell";
 import { useEntityDelete } from "../hooks/useEntityDelete";
 import { useUpdateMutation } from "../hooks/useUpdateMutation";
-
-/** Module-level so the delete hook's key list keeps a stable identity. */
-const IMAGE_INVALIDATE_KEYS = [queryKeys.image.list] as const;
 
 interface ImageDetailProps {
   image: ImageWithEntity;
@@ -40,10 +36,8 @@ export function ImageDetail({ image }: ImageDetailProps) {
   const { deleteButton, deleteDialog } = useEntityDelete({
     id: image.id,
     name: image.filename,
-    entityLabel: "Image",
     entity: "image",
     mutationOptions: (callbacks) => api.image.delete.mutationOptions(callbacks),
-    invalidateKeys: IMAGE_INVALIDATE_KEYS,
     redirectTo: "/images",
   });
 

@@ -49,19 +49,6 @@ import {
   relativeDateFilter,
 } from "./pagination";
 
-/**
- * Home-project tracker schemas: `project` (a household undertaking), `task`
- * (a step inside one), and `expense` (a spend, usually attached to one).
- * Migrated from the retired Notion databases; option sets are carried over
- * verbatim (emoji stripped). Cost/progress rollups are SQL aggregates over
- * live expenses/tasks — never denormalized onto the project row.
- *
- * `locations` is deliberately a free-form string array (house names live in
- * the DB, not in committed code); filter options derive from the data.
- */
-
-// `plainDate` is re-exported from `./base-entity` (the shared home) so existing
-// `@cubby/schemas/project` imports keep working.
 export { plainDate } from "./base-entity";
 
 /**
@@ -143,11 +130,6 @@ export const LIVE_PROJECT_STATUSES = [
   "in_progress",
 ] as const satisfies readonly ProjectStatus[];
 
-/**
- * Whether a project is still live (i.e. not `done`). Use this for rules that
- * only make sense on unfinished work — e.g. asking for a budget estimate, which
- * is a forecast and so is meaningless once the spend has already happened.
- */
 export const isLiveProjectStatus = (status: ProjectStatus): boolean =>
   (LIVE_PROJECT_STATUSES as readonly ProjectStatus[]).includes(status);
 
@@ -172,12 +154,6 @@ export const taskStatusValues = [
 export const taskStatusSchema = z.enum(taskStatusValues);
 export type TaskStatus = z.infer<typeof taskStatusSchema>;
 
-/**
- * Completion scope for a task list/board/summary query. Omitted (undefined)
- * means "all" — existing generic callers (e.g. `task.list`) keep today's
- * full-history behavior; daily-use views (Next, Board) pass `"open"`
- * explicitly.
- */
 export const taskCompletionValues = ["all", "open", "done"] as const;
 export const taskCompletionSchema = z.enum(taskCompletionValues);
 export type TaskCompletion = z.infer<typeof taskCompletionSchema>;
@@ -186,11 +162,6 @@ export const costTypeValues = ["materials", "tools", "services"] as const;
 export const costTypeSchema = z.enum(costTypeValues);
 export type CostType = z.infer<typeof costTypeSchema>;
 
-/**
- * The trade/discipline a task or expense belongs to (a phase of household
- * work — "plumbing", "electrical", etc.) — shared between `task.trade` and
- * `expense.trade`. Human labels in `TRADE_LABELS` below.
- */
 export const tradeValues = [
   "planning",
   "demolition",
@@ -215,11 +186,6 @@ export const tradeValues = [
 export const tradeSchema = z.enum(tradeValues);
 export type Trade = z.infer<typeof tradeSchema>;
 
-/**
- * Human-facing labels for `tradeValues` — single source of truth shared by
- * server (MCP descriptions, embedding text) and client (selects/badges/chart
- * labels). Never string-match/capitalize the raw enum value for display text.
- */
 export const TRADE_LABELS: Record<Trade, string> = {
   planning: "Planning",
   demolition: "Demo & Cleanup",
@@ -242,12 +208,6 @@ export const TRADE_LABELS: Record<Trade, string> = {
   other: "Other",
 };
 
-/**
- * Group labels for the rows a grouping key can't place — a tool with no
- * qualifying Expense to derive a trade from, or an empty `manufacturer`. Both
- * groups sort last. Beside {@link TRADE_LABELS} for the same reason: the
- * display string lives in one place, never inlined at a render site.
- */
 export const UNASSIGNED_TRADE_LABEL = "No trade signal";
 export const UNKNOWN_MANUFACTURER_LABEL = "Unknown manufacturer";
 
@@ -329,20 +289,10 @@ export const projectUpdateInput = z.object({
 });
 export type ProjectUpdateInput = z.infer<typeof projectUpdateInput>;
 
-/**
- * Lightweight `{id, name, icon}` identity for pickers/filter selects — no
- * rollups/dependency joins, a single indexed query (see
- * repo/project/lookup.ts's `projectNameOptions`).
- */
 export const projectOptionsOut = z.object({
   id: projectShortcode,
   name: z.string(),
   icon: z.string().nullable(),
-  // Carried so a picker can rank by "was this project running on that date?"
-  // without a second round trip — see rankProjectSuggestions. These are the
-  // EFFECTIVE bounds (override when set, else derived from tasks/expenses/
-  // sub-projects), deliberately not the raw override columns: ranking a
-  // expense against a stale hand-typed window is what made suggestions miss.
   effectiveStart: plainDate.nullable(),
   effectiveEnd: plainDate.nullable(),
 });
@@ -353,11 +303,6 @@ const completionYear = z
   .regex(/^\d{4}$/)
   .optional();
 
-/**
- * Visible `/projects` filter state forwarded to embedded Task/Expense lists.
- * Its presence means "must belong to a live project matching this scope";
- * unassigned rows are therefore excluded rather than silently unioned in.
- */
 export const embeddedProjectScopeSchema = z.object({
   statuses: z.array(projectStatusSchema).optional(),
   kinds: z.array(projectKindSchema).optional(),
@@ -383,14 +328,11 @@ export const projectFilterFields = {
   imagePresenceFilter: presenceFilter.describe(
     "Filter to projects that do / don't have at least one image (PDF attachments don't count).",
   ),
-  /** Exclude sub-projects (rows with a non-null `parentProjectId`) from the list. */
   topLevelOnly: z.boolean().optional(),
-  /** Only these parents' live sub-projects. */
   parentProjectId: entityFilterList(projectShortcode).optional(),
   // Only meaningful alongside `parentProjectId`: expands the filter to the
   // whole live subtree under that parent, not just direct children.
   includeSubProjects: z.boolean().optional(),
-  /** Exact project-grain tracker worklists, resolved by shared attention rules. */
   attention: z
     .enum(["stalled", "missing_budget", "blocked_no_next_action"])
     .optional(),
@@ -409,36 +351,6 @@ export const projectSortableFields = [
 ] as const;
 export type ProjectSortField = (typeof projectSortableFields)[number];
 
-/**
- * SUM/COUNT rollup over live tasks/expenses, at two scopes (see
- * repo/project/analytics.ts + repo/project/subtree.ts):
- *   - the top-level fields are this project's OWN aggregate (unchanged
- *     since before sub-projects existed);
- *   - `subtree` is the recursive total over this project + every live
- *     descendant — `projectCount` is the live descendant count (0 for a
- *     leaf, so a leaf's `subtree` always equals its own numbers). Computed
- *     in TS at read time, never denormalized onto the row.
- */
-/**
- * A project's date window, resolved at read time (see repo/project/subtree.ts's
- * `aggregateSubtreeDates`) and never denormalized — same contract as
- * `projectRollup` below.
- *
- *   content(node)   = min/max over the node's OWN live tasks
- *                     (`dueDate` … `dueEndDate ?? dueDate`) and expenses (`date`)
- *   derived(node)   = content(node) ∪ effective(child) for every live child
- *   effective(node) = the explicit `startDate`/`endDate` override when set,
- *                     otherwise derived(node)
- *
- * Start and end resolve **independently**: a project may carry an explicit start
- * and a derived end, hence the two separate `*Source` discriminators. Note that
- * an override wins even when it's *narrower* than the derived window — that
- * disagreement is surfaced as a `date_window_drift` attention item rather than
- * silently widened, so the stored intent stays visible.
- *
- * Every rendering surface reads `effectiveStart`/`effectiveEnd`.
- */
-/** Where one side of a resolved window came from. `none` = no boundary at all. */
 export const projectDateSourceSchema = z.enum(["explicit", "derived", "none"]);
 export type ProjectDateSource = z.infer<typeof projectDateSourceSchema>;
 
@@ -490,9 +402,7 @@ export type ProjectRollup = z.infer<typeof projectRollup>;
 export const projectOut = z.object({
   id: projectShortcode,
   ...projectFields,
-  /** Null when the project has no parent, or the parent is gone/soft-deleted. */
   parentProjectName: z.string().nullable(),
-  /** Live sub-project ids (direct children only). */
   childProjectIds: z.array(projectShortcode),
   blockedByIds: z.array(projectShortcode),
   blockingIds: z.array(projectShortcode),
@@ -506,7 +416,6 @@ const taskFields = {
   name: z.string().min(1),
   status: taskStatusSchema,
   projectId: projectShortcode.nullable(),
-  /** The optional product/item this task acts on. */
   subjectProductId: productShortcode.nullable(),
   // One level of checklist subtasks — a subtask's own parentTaskId must be
   // null (enforced in repo/task/crud.ts). Parent status stays fully manual;
@@ -526,13 +435,9 @@ const taskCreateShape = {
   status: taskStatusSchema.default("not_started"),
   projectId: projectShortcode.nullable().default(null),
   subjectProductId: productShortcode.nullable().default(null),
-  // If set and either relation is omitted/null, the created task inherits the
-  // parent's projectId and subjectProductId (see repo/task/crud.ts's
-  // createTask) — one-time at create, no ongoing sync afterwards.
   parentTaskId: taskShortcode.nullable().default(null),
   dueDate: plainDate.nullable().default(null),
   dueEndDate: plainDate.nullable().default(null),
-  // New tasks are unranked (land per derived sort); a drag assigns a rank.
   sortOrder: z.number().nullable().default(null),
 };
 
@@ -556,11 +461,6 @@ export const taskUpdateInput = z.object({
 });
 export type TaskUpdateInput = z.infer<typeof taskUpdateInput>;
 
-/**
- * Bulk "move to project" — `projectId: null` moves every listed task to the
- * inbox (no project). Same nullable-projectId semantics as a single
- * `taskUpdateData.projectId` write, batched over `ids`.
- */
 export const taskBulkMoveInput = z.object({
   ids: z.array(taskShortcode).min(1),
   projectId: projectShortcode.nullable(),
@@ -625,36 +525,19 @@ export const taskFilterFields = {
   subjectProductId: entityFilterList(productShortcode).optional(),
   trade: oneOrMany(tradeSchema).optional(),
   search: z.string().optional(),
-  /** Exclude subtasks (rows with a non-null `parentTaskId`) from the list. */
   topLevelOnly: z.boolean().optional(),
   /** Only these parents' live subtasks. */
   parentTaskId: entityFilterList(taskShortcode).optional(),
   parentTaskPresenceFilter: presenceFilter,
-  /**
-   * When combined with `projectId`, also match tasks in that project's live
-   * descendant sub-projects.
-   */
   includeSubProjects: z.boolean().optional(),
-  /** Inclusive lower bound on a task's due date (matches `dueDate`). */
   dueFrom: plainDate.optional().describe("Inclusive lower bound on due date"),
-  /** Inclusive upper bound on a task's due date (matches `dueDate`). */
   dueTo: plainDate.optional().describe("Inclusive upper bound on due date"),
   duePresenceFilter: presenceFilter,
-  /** Server-relative effective-due predicate, stable in saved URLs. */
   dueRelative: relativeDateFilter.optional(),
-  /** Completion scope — see `taskCompletionSchema`. Undefined = "all". */
   completion: taskCompletionSchema
     .optional()
     .describe('Undefined = "all" (today\'s default, unchanged)'),
-  /**
-   * `"none"` matches tasks with `projectId IS NULL` (the Inbox predicate);
-   * `"has"` matches those with any project. Combined with `projectId` it
-   * **widens** rather than narrows — the repo ORs the two, so
-   * `{projectId: [A], projectPresenceFilter: "none"}` means "project A or
-   * unassigned". That's what the header filter's `(none)` sentinel produces.
-   */
   projectPresenceFilter: presenceFilter,
-  /** Presence of a subject-product relationship. */
   subjectProductPresenceFilter: presenceFilter,
   projectScope: embeddedProjectScopeSchema.optional(),
 };
@@ -666,9 +549,7 @@ export const taskSortableFields = [
   "status",
   "dueDate",
   "trade",
-  // Joined project name — see the resolver in repo/task/lookup.ts.
   "project",
-  // Joined subject-product name — see the resolver in repo/task/lookup.ts.
   "subjectProduct",
   "createdAt",
   "updatedAt",
@@ -685,18 +566,12 @@ export const taskOut = z.object({
   parentTaskName: z.string().nullable(),
   blockedByIds: z.array(taskShortcode),
   blockingIds: z.array(taskShortcode),
-  /** Live subtask count (incl. done ones) — 0 for a subtask itself (one level). */
   subtaskCount: z.number().int(),
   doneSubtaskCount: z.number().int(),
   ...timestampedFields,
 });
 export type TaskOut = z.infer<typeof taskOut>;
 
-/**
- * Bulk task write output — the updated rows plus any background work the
- * write enqueued (embedding refresh), mirroring inventory's
- * `*ListAndSideEffectsOut` shape.
- */
 export const taskListAndSideEffectsOut = z.object({
   items: z.array(taskOut),
   sideEffects: mutationSideEffectsSchema,
@@ -726,15 +601,6 @@ export type CreateProjectFromTasksOut = z.infer<
   typeof createProjectFromTasksOut
 >;
 
-// Actionable tasks (computed unblocked/blocked read — see
-// repo/task/actionable.ts for the exact semantics)
-
-/**
- * Why a task is blocked, plus (for `task`/`project`) a transitive "why"
- * chain: the representative path of entities you'd need to unblock, nearest
- * blocker first. `manual` (the task's own status is `blocked`) carries no
- * chain — there's nothing upstream to walk.
- */
 export const blockedReasonSchema = z.object({
   kind: z.enum(["manual", "task", "project"]),
   chain: z.array(
@@ -774,13 +640,6 @@ export const blockedTaskOut = z.object({
 });
 export type BlockedTaskOut = z.infer<typeof blockedTaskOut>;
 
-/**
- * `task.listActionable`'s output: every live, non-done, unblocked task split
- * into `next` (status `not_started`/`in_progress`) and `later` (status
- * `later`) — separate arrays instead of one `actionable` array with an
- * `isLater` flag, since Next/Later render as distinct UI sections. `blocked`
- * carries the reason set + transitive why-chain, unchanged.
- */
 export const actionableTasksOut = z.object({
   next: z.array(actionableTaskOut),
   later: z.array(actionableTaskOut),
@@ -788,38 +647,19 @@ export const actionableTasksOut = z.object({
 });
 export type ActionableTasksOut = z.infer<typeof actionableTasksOut>;
 
-/**
- * `task.summary`'s output — cheap counts for the tasks-page summary strip,
- * replacing a full-history fetch. Each count corresponds to a `/tasks` view
- * or filter the UI links to directly.
- */
 export const taskSummaryOut = z.object({
   totalOpen: z.number().int(),
   next: z.number().int(),
   later: z.number().int(),
   inbox: z.number().int(),
   overdue: z.number().int(),
-  /**
-   * A rolling 7-day window (today through +7 days), NOT the calendar week
-   * `task-options.ts`'s `resolveDueRange("week")` filter preset uses — the UI
-   * labels this tile "Due in 7 days" rather than "Due this week" specifically
-   * to avoid implying they're the same count.
-   */
   dueThisWeek: z.number().int(),
   blocked: z.number().int(),
 });
 export type TaskSummaryOut = z.infer<typeof taskSummaryOut>;
 
-/** `task.board` accepts the ordinary task-list filters. Its top-level layout
- * and completed-card cap are renderer-intrinsic and disclosed by the UI. */
 export type TaskBoardInput = TaskFilters;
 
-/**
- * `task.board`'s output: every active (non-done) top-level task the board
- * renders, plus at most 20 recently-completed cards for the collapsed
- * History column/count — full completed history loads separately
- * (`completion: "done"` on `task.list`), not through the board.
- */
 export const taskBoardOut = z.object({
   active: z.array(taskOut),
   recentDone: z.array(taskOut),
@@ -827,8 +667,6 @@ export const taskBoardOut = z.object({
 });
 export type TaskBoardOut = z.infer<typeof taskBoardOut>;
 
-/** Timeline applies ordinary task filters, then intrinsically keeps dated
- * tasks. `undatedCount` makes that renderer limitation visible. */
 export const taskTimelineOut = z.object({
   tasks: z.array(taskOut),
   undatedCount: z.number().int(),
@@ -898,7 +736,6 @@ const expenseFields = {
 
 const expenseCreateShape = {
   ...expenseFields,
-  // Omitted means infer conservatively from the Expense name in the repo.
   lineKind: expenseLineKindSchema.optional(),
   // Deliberately never inferred — see `expenseLineBasisValues`.
   lineBasis: expenseLineBasisSchema.default("item_line"),
@@ -923,8 +760,6 @@ const expenseCreateShape = {
     .describe(PRODUCT_QUANTITY_DESCRIPTION),
   vendor: z.string().nullable().default(null),
   orderId: z.string().nullable().default(null),
-  // Replacement sets: omitted on update leaves the role unchanged; null clears
-  // it and an array replaces the complete role set.
   beneficiaries: ledgerAttributions.nullable().default([]),
   funders: ledgerAttributions.nullable().default([]),
   sourceClaims: ledgerSourceClaims.nullable().default([]),
@@ -943,11 +778,6 @@ export const expenseUpdateInput = z.object({
 });
 export type ExpenseUpdateInput = z.infer<typeof expenseUpdateInput>;
 
-/**
- * Bulk "move to project" — `projectId: null` moves every listed expense to
- * the inbox (no project). Same nullable-projectId semantics as a single
- * `expenseUpdateData.projectId` write, batched over `ids`.
- */
 export const expenseBulkMoveInput = z.object({
   ids: z.array(expenseShortcode).min(1),
   projectId: projectShortcode.nullable(),
@@ -970,8 +800,6 @@ export type ExpenseBulkCostTypeInput = z.infer<typeof expenseBulkCostTypeInput>;
 export const expenseFilterFields = {
   ...auditDateFilterFields,
   ...expenseRelatedFilterFields,
-  // `oneOrMany`: the header filters are multi-select, but scalar MCP callers
-  // stay valid. Resolved with `eqAny` in the repo.
   costType: oneOrMany(costTypeSchema).optional(),
   lineKind: oneOrMany(expenseLineKindSchema).optional(),
   lineBasis: oneOrMany(expenseLineBasisSchema).optional(),
@@ -988,44 +816,10 @@ export const expenseFilterFields = {
   projectPresenceFilter: presenceFilter,
   productId: entityFilter(productShortcode).optional(),
   productPresenceFilter: presenceFilter,
-  /**
-   * Vendor **ids**, resolved through `expense.purchaseId → Purchase.vendorId`.
-   *
-   * Ids rather than the old exact-match-on-free-text: `Vendor` is a real roster
-   * now, so the picklist has a primary key to filter on and the class of bug the
-   * exact match existed to prevent ("Amazon (254)" also dragging in "Amazon
-   * Business") is gone by construction rather than by discipline.
-   *
-   * Still its own filter, deliberately NOT folded into `search`:
-   * `buildSearchConditions` ANDs its entries, so a second predicate sharing the
-   * `search` term would mean `name ILIKE q AND vendor matches q` — and most rows
-   * have no vendor, which would silently zero out expense search.
-   */
   vendorId: entityFilterList(vendorShortcode).optional(),
-  /**
-   * `"none"` matches expenses with no purchase attached — the
-   * where-did-this-come-from worklist. Since `purchase.vendorId` is NOT NULL,
-   * "no vendor" and "no purchase" are the same predicate: `purchaseId IS NULL`.
-   * ORs with `vendorId` rather than ANDing, so "Amazon or no vendor recorded" is
-   * one filter.
-   */
   vendorPresenceFilter: presenceFilter,
   future: z.boolean().optional(),
-  /**
-   * Substring match on the expense NAME. `oneOrMany`, mirroring
-   * `costType`/`trade`/`projectId` — a bare string still behaves exactly as it
-   * always did, and several terms can now be passed at once.
-   *
-   * Several terms **OR** rather than AND. That's the point: the ledger names
-   * the *thing*, not the product (a Festool vacuum is booked as
-   * `dust extractor`, a Bosch miter saw as `chop saw`), so a caller guessing at
-   * synonyms wants any of them to hit. ANDing would make a two-term search
-   * strictly worse than a one-term search.
-   *
-   * Resolved in the repo as an OR of `formatSearchTerm`s passed as an extra
-   * condition, NOT as a `buildSearchConditions` search entry — that helper ANDs
-   * its `searchFilters`.
-   */
+  /** Expense-name terms are OR-matched case-insensitively; a bare string preserves existing behavior. */
   search: oneOrMany(z.string()).optional(),
   /**
    * Substring match on `notes`. Deliberately its OWN field rather than folded
@@ -1039,12 +833,6 @@ export const expenseFilterFields = {
    * you find the rows a previous pass touched.
    */
   notesSearch: z.string().optional(),
-  /**
-   * Substring match on `url`. Own field for the same AND-vs-OR reason as
-   * `notesSearch`. Pre-roster rows routinely carry a bare store name as the
-   * whole `url` value (`home depot`, `lowes`), so this is the vendor-marker
-   * sweep.
-   */
   urlSearch: z.string().optional(),
   dateFrom: plainDate
     .optional()
@@ -1052,25 +840,8 @@ export const expenseFilterFields = {
   dateTo: plainDate
     .optional()
     .describe("Inclusive upper bound on expense date"),
-  /** Server-relative expense-date predicate, stable in saved URLs. */
   dateRelative: relativeDateFilter.optional(),
-  /**
-   * Inclusive bounds on `cost`, in dollars — the money window the ledger has
-   * never had. (Its absence is why 61 of 318 audited raw-SQL statements existed
-   * at all: they were writing `cost BETWEEN a AND b` by hand.)
-   *
-   * `z.coerce` is load-bearing, not decoration: these arrive from the URL as
-   * strings (`?costMin=500`), and a bare `z.number()` rejects `"500"`.
-   *
-   * Rows with a null `cost` fall out of any window by plain SQL comparison
-   * semantics, exactly as null-`date` rows do for the date bounds. That is
-   * intended, not a gap: `costPresenceFilter: "none"` is the filter for "no
-   * cost recorded".
-   *
-   * Negative bounds are meaningful and supported — credits are real in this
-   * ledger (refunds, and the family wedding contributions), so `costMax: 0` is
-   * the credits-only worklist. Never assume a lower bound of zero.
-   */
+  /** Inclusive cost bounds are money filters; preserve coercion and decimal semantics at the schema boundary. */
   ...numericRangeFields("cost", {
     describe: {
       min: "Inclusive lower bound on expense cost, in dollars",
@@ -1154,8 +925,6 @@ export const expenseSortableFields = [
   "productQuantity",
   "date",
   "costType",
-  // `trade` is a plain text column (alphabetical). `project`/`product` are
-  // joined names, resolved by correlated subqueries in repo/expense/lookup.ts.
   "trade",
   "project",
   "product",
@@ -1177,11 +946,8 @@ export const expenseOut = z.object({
   purchaseId: purchaseShortcode.nullable(),
   /** The linked purchase's own date, distinct from this expense's ledger date. */
   purchaseDate: plainDate.nullable(),
-  /** Human-entered context carried by the linked Purchase. */
   purchaseDisplayLabel: z.string().nullable(),
-  /** The purchase's vendor, denormalized onto the expense so tables can link it. */
   vendorId: vendorShortcode.nullable(),
-  /** The linked vendor's displayable logo, resolved with the vendor identity. */
   vendorLogo: imageUrlSummary.nullable(),
   /**
    * Link out to the vendor's own order page for this expense's purchase,
@@ -1201,11 +967,6 @@ export const expenseOut = z.object({
 });
 export type ExpenseOut = z.infer<typeof expenseOut>;
 
-/**
- * Result of the import-oriented expense cleanup operation.  These public ids
- * let a caller safely continue the "remove bad lines, then inspect the now
- * empty purchases" workflow without exposing database UUIDs.
- */
 export const deleteExpensesWithPurchaseEffectsOut = z.object({
   deleted: z.number().int().nonnegative(),
   deletedIds: z.array(expenseShortcode),
@@ -1236,11 +997,6 @@ export const deleteExpensesWithPurchaseEffectsInput = z.strictObject({
     }),
 });
 
-/**
- * Bulk expense write output — the updated rows plus any background work the
- * write enqueued (embedding refresh), mirroring inventory's
- * `*ListAndSideEffectsOut` shape.
- */
 export const expenseListAndSideEffectsOut = z.object({
   items: z.array(expenseOut),
   sideEffects: mutationSideEffectsSchema,
@@ -1248,16 +1004,6 @@ export const expenseListAndSideEffectsOut = z.object({
 export type ExpenseListAndSideEffectsOut = z.infer<
   typeof expenseListAndSideEffectsOut
 >;
-
-// Expense analytics (server-side chart aggregates — see
-// repo/expense/analytics.ts for the SQL)
-
-/**
- * `expense.analytics`'s input is `expenseFiltersSchema` directly — the SAME
- * shape as the ledger's filters — so ledger totals and analytics totals
- * always agree under the same filter set. No separate alias: a value-level
- * re-export of the identical schema is a duplicate export, not a real type.
- */
 
 const expenseAggregateFields = {
   actual: money,
@@ -1343,12 +1089,6 @@ export const expenseVendorAggregate = z.object({
 });
 export type ExpenseVendorAggregate = z.infer<typeof expenseVendorAggregate>;
 
-/**
- * `expense.analytics`'s output — chart-ready aggregates computed server-side
- * (SQL GROUP BYs), replacing client-side computation over the full
- * `expense.chartData` fetch-all. Empty categories are omitted from each
- * array; the UI owns presentation ordering from the shared enum definitions.
- */
 export const expenseAnalyticsOut = z.object({
   summary: expenseAnalyticsSummary,
   adjustments: expenseAdjustmentsAggregate,
@@ -1362,11 +1102,6 @@ export const expenseAnalyticsOut = z.object({
 });
 export type ExpenseAnalyticsOut = z.infer<typeof expenseAnalyticsOut>;
 
-// Expense Analyze — complete server-side aggregates for the interactive
-// Expenses analyzer. These intentionally live beside `expenseAnalyticsOut`:
-// both contracts are scoped by the exact same `expenseFiltersSchema` as the
-// ledger, but Analyze is a bounded, user-configurable grid rather than the
-// chart payload above.
 export const expenseAnalyzeRowDimensionSchema = z.enum([
   "trade",
   "costType",
@@ -1438,7 +1173,6 @@ export const expenseAnalyzeAggregate = z.object({
 });
 export type ExpenseAnalyzeAggregate = z.infer<typeof expenseAnalyzeAggregate>;
 
-/** A dimension bucket carries an exact Ledger URL-filter fragment. */
 export const expenseAnalyzeBucket = z.object({
   key: z.string(),
   label: z.string(),
@@ -1564,13 +1298,10 @@ export const HOUSEHOLD_PROJECT_SHORTCODE = "PRJ-HSHD";
 
 export const MATCH_TOLERANCE_LOW = 0.1;
 export const MATCH_TOLERANCE_HIGH = 0.15;
-/** Dollars. Below this, a relative band is too narrow to be useful. */
 export const MATCH_AMOUNT_FLOOR = 1.0;
 export const MATCH_MAX_ROWS = 200;
 
-/** One line of a vendor export, to be matched against the ledger. */
 export const expenseMatchRow = z.object({
-  /** Caller's own id for this row, echoed back on the result. Must be unique. */
   key: z.string().min(1),
   date: plainDate,
   /**
@@ -1578,28 +1309,20 @@ export const expenseMatchRow = z.object({
    * computed on the signed value — see `expenseMatchInput`.
    */
   amount: z.number(),
-  /** The export's description. Used ONLY to grade candidates by name overlap. */
   label: z.string().optional(),
-  /** The vendor's own order/receipt id, when the export line carries one. */
   orderId: z.string().optional(),
-  /** Vendor name, echoed for context. Not used as a predicate. */
   vendor: z.string().optional(),
 });
 export type ExpenseMatchRow = z.infer<typeof expenseMatchRow>;
 
 export const expenseMatchInput = z.object({
   rows: z.array(expenseMatchRow).min(1).max(MATCH_MAX_ROWS),
-  /** Inclusive +/- day window for the amount arm. Order-id hits ignore it. */
   dayWindow: z.number().int().min(0).max(365).default(30),
   /**
    * How far BELOW the row amount a ledger cost may sit, as a fraction — the
    * pre-tax-entry direction.
    */
   amountToleranceLow: z.number().min(0).max(1).default(MATCH_TOLERANCE_LOW),
-  /**
-   * How far ABOVE, as a fraction — tax plus additive fees (shipping, core
-   * charges). Asymmetric on purpose: the two distortions are not symmetric.
-   */
   amountToleranceHigh: z.number().min(0).max(1).default(MATCH_TOLERANCE_HIGH),
   /**
    * Absolute dollar floor on the window: the half-width is
@@ -1638,7 +1361,6 @@ export const expenseMatchRatioLabel = z.enum([
 ]);
 export type ExpenseMatchRatioLabel = z.infer<typeof expenseMatchRatioLabel>;
 
-/** Compact order context when a matched Expense is already filed to a Purchase. */
 export const expenseMatchPurchaseContext = z.object({
   id: purchaseShortcode,
   vendorName: z.string().nullable(),
@@ -1654,14 +1376,12 @@ export const expenseMatchCandidate = z.object({
   name: z.string(),
   cost: moneyNullable,
   date: plainDate,
-  /** Planned spend. Included, never filtered — an export line often IS one. */
   future: z.boolean(),
   notes: z.string().nullable(),
   vendorName: z.string().nullable(),
   orderId: z.string().nullable(),
   projectName: z.string().nullable(),
   productName: z.string().nullable(),
-  /** Existing order context; null when the Expense has not been filed yet. */
   purchase: expenseMatchPurchaseContext.nullable(),
   matchedOn: expenseMatchedOn,
   /**
@@ -1676,11 +1396,8 @@ export const expenseMatchCandidate = z.object({
    * candidate rather than keeping the top slot it would otherwise take.
    */
   vendorMatch: z.boolean().nullable(),
-  /** `expense.date - row.date` in days. Null when the ledger row has no date. */
   dayDelta: z.number().int().nullable(),
-  /** `expense.cost - row.amount`, signed dollars. */
   amountDelta: z.number().nullable(),
-  /** `expense.cost / row.amount`. Null when the row amount is 0. */
   ratio: z.number().nullable(),
   ratioLabel: expenseMatchRatioLabel,
   /**
@@ -1699,22 +1416,15 @@ export const expenseMatchOut = z.object({
       candidates: z.array(expenseMatchCandidate),
     }),
   ),
-  /** Keys that produced no candidate at all. */
   unmatched: z.array(z.string()),
   summary: z.object({
     rowsIn: z.number().int(),
     rowsWithCandidates: z.number().int(),
-    /** Input rows that got at least one order-id hit — the strongest key. */
     exactOrderIdHits: z.number().int(),
   }),
 });
 export type ExpenseMatchOut = z.infer<typeof expenseMatchOut>;
 
-/**
- * One cell of the project x trade expense-count matrix — how many expenses of
- * a given trade a project has already absorbed. Ranks project suggestions for
- * an unassigned expense; see repo/expense/analytics.ts.
- */
 export const expenseTradeAffinityOut = z.object({
   projectId: projectShortcode,
   trade: tradeSchema,
@@ -1735,8 +1445,6 @@ export const projectResourceMutationInput = z.object({
   productIds: z.array(productShortcode).min(1).max(100),
 });
 
-/** See `relationMutationOut` (`./common`) for what `changed` / `attached` /
- * `alreadySatisfied` mean — this family's edge is `ProjectToolUsage`. */
 export const projectResourceMutationOut = relationMutationOut;
 
 // Move a product's project-use history onto another product. Distinct from
@@ -1746,7 +1454,6 @@ export const projectResourceMutationOut = relationMutationOut;
 export const repointProjectUsesInput = z.object({
   fromProductId: productShortcode,
   toProductId: productShortcode,
-  // Omit to repoint every live use.
   projectIds: z.array(projectShortcode).min(1).max(100).optional(),
 });
 
@@ -1782,7 +1489,6 @@ const projectResourceEconomicsFields = {
   projectUseCount: z.number().int().nonnegative(),
   netLifetimeCost: money,
   costPerProjectUse: moneyNullable,
-  // See the divergence note on projectToolEconomicsFields' sibling field above.
   grossLifetimeAcquisitionCost: positiveMoneyNullable,
 };
 
@@ -1806,12 +1512,6 @@ export const projectResourcesOut = z.array(projectResourceOut);
 export const projectResourcesMcpOut =
   createItemsResponseSchema(projectResourceOut);
 
-/**
- * Why a tool was suggested. `purchased_here` is exact — the tool's own purchase
- * Expense is charged to that project. `trade_match` is inferred — the project
- * signals a trade the tool has historically been bought under, and the tool is
- * still inventoried.
- */
 export const projectToolSuggestionLane = z.enum([
   "purchased_here",
   "trade_match",
@@ -1931,28 +1631,14 @@ export type ProductProjectUsesSetInput = z.infer<
   typeof productProjectUsesSetInput
 >;
 
-/**
- * Just the edge count that moved — same reasoning as
- * {@link projectToolUsageSetOut}. Returning the refreshed panel would be dead
- * payload: a save has to invalidate the project-side resource lists and the
- * related-view sections too, and that same invalidation refetches this panel,
- * so any returned copy is overwritten before it can be read. Rebuilding it here
- * would mean running `listProductProjectUses` (metrics + shared-window
- * rollups) twice per save.
- */
 export const productProjectUsesSetOut = z.object({
   changed: z.number().int().nonnegative(),
 });
 export type ProductProjectUsesSetOut = z.infer<typeof productProjectUsesSetOut>;
 
 export const projectMcpListOut = createPaginatedResponseSchema(projectOut);
-/** MCP aliases retained for the deliberately lean tool catalog imports. */
 export const taskMcpListOut = createPaginatedResponseSchema(taskOut);
 export const expenseMcpListOut = createPaginatedResponseSchema(expenseOut);
-
-// Project dashboard: bounded Overview summary + on-demand portfolio
-// analytics (replaces the old single `project.dashboard` fetch-all — see
-// repo/project/dashboard-summary.ts / repo/project/analytics.ts)
 
 /**
  * Shared scope filters for both dashboard endpoints. Empty/omitted
@@ -1982,45 +1668,22 @@ export type ProjectDashboardFilters = z.infer<
   typeof projectDashboardFiltersSchema
 >;
 
-/**
- * `project.dashboardSummary`'s input is `projectDashboardFiltersSchema`
- * directly — no separate value alias (a re-export of the identical schema is
- * a duplicate export, not a real type). Kept as a type-only alias since
- * `repo/project/dashboard-summary.ts` names it explicitly.
- */
 export type ProjectDashboardSummaryInput = ProjectDashboardFilters;
 
-/**
- * `project.portfolioAnalytics`'s input is now identical to
- * `projectDashboardFiltersSchema` (both scopes gained `dateFrom`/`dateTo`) —
- * no separate value alias, matching `ProjectDashboardSummaryInput` above.
- */
 export type ProjectPortfolioAnalyticsInput = ProjectDashboardFilters;
-
-// Project x tool matrix (repo/project/tool-matrix.ts)
-//
-// Lives here rather than in the reusable-resource block above only because it
-// composes `projectDashboardFilterFields`, which is declared below that block.
-// The column scope IS the dashboard scope — same fields, same
-// `buildDashboardProjectWhere` — so the matrix page reuses the Projects filter
-// vocabulary instead of inventing a parallel one.
 
 export const projectToolMatrixGroupBy = z.enum(["trade", "manufacturer"]);
 export type ProjectToolMatrixGroupBy = z.infer<typeof projectToolMatrixGroupBy>;
 
-/** Row membership floor. Matches the suggestion engine's own threshold. */
 export const DEFAULT_TOOL_MATRIX_COST_FLOOR = 100;
-/** Hard caps. Both axes are quadratic in the cell count; see `truncated`. */
 export const MAX_TOOL_MATRIX_COLUMNS = 40;
 export const DEFAULT_TOOL_MATRIX_COLUMNS = 24;
 
 export const projectToolMatrixInput = z.object({
   ...projectDashboardFilterFields,
-  /** Row filter — matches product name or manufacturer. */
   toolSearch: z.string().optional(),
   minNetLifetimeCost: positiveMoney.default(DEFAULT_TOOL_MATRIX_COST_FLOOR),
   groupBy: projectToolMatrixGroupBy.default("trade"),
-  /** Omit for both lanes. `["purchased_here"]` drops the inferred lane. */
   suggestionLanes: z.array(projectToolSuggestionLane).optional(),
   maxColumns: z
     .number()
@@ -2028,7 +1691,6 @@ export const projectToolMatrixInput = z.object({
     .min(1)
     .max(MAX_TOOL_MATRIX_COLUMNS)
     .default(DEFAULT_TOOL_MATRIX_COLUMNS),
-  /** One-based page through the priority-ranked project columns. */
   columnPage: z.number().int().positive().default(1),
 });
 export type ProjectToolMatrixInput = z.input<typeof projectToolMatrixInput>;
@@ -2040,14 +1702,8 @@ export const projectToolMatrixColumnOut = z.object({
   icon: z.string().nullable(),
   status: projectStatusSchema,
   kind: projectKindSchema.nullable(),
-  /** Recursive effective window — the chronological sort key, not the override. */
   startDate: plainDate.nullable(),
   endDate: plainDate.nullable(),
-  /**
-   * Where each side of that window came from. The ownership gate reads these:
-   * an `explicit` boundary is a date the user typed and is taken literally, a
-   * `derived` one is inferred from dated tasks/expenses and gets grace.
-   */
   startSource: projectDateSourceSchema,
   endSource: projectDateSourceSchema,
   attachedCount: z.number().int().nonnegative(),
@@ -2061,9 +1717,7 @@ export const projectToolMatrixRowOut = z.object({
   productId: productShortcode,
   productName: z.string(),
   manufacturer: z.string(),
-  /** Trade slug or manufacturer; `""` is the unassigned bucket. */
   groupKey: z.string(),
-  /** Derived from the ledger; null means no qualifying Expense at all. */
   trade: tradeSchema.nullable(),
   isInventoried: z.boolean(),
   /**
@@ -2095,10 +1749,6 @@ export const projectToolMatrixRowOut = z.object({
 });
 export type ProjectToolMatrixRowOut = z.infer<typeof projectToolMatrixRowOut>;
 
-/**
- * Emitted **sparsely** — an absent cell is empty. Dense would be rows x columns
- * objects for a grid that is ~96% empty today.
- */
 export const projectToolMatrixCellOut = z.object({
   projectId: projectShortcode,
   productId: productShortcode,
@@ -2115,7 +1765,6 @@ export const projectToolMatrixCellOut = z.object({
   state: z.enum(["attached", "suggested", "purchase_evidence"]),
   lane: projectToolSuggestionLane.nullable(),
   matchedTrade: tradeSchema.nullable(),
-  /** Populated on attached cells too, including below the suggestion floor. */
   projectPurchaseCost: positiveMoney,
 });
 export type ProjectToolMatrixCellOut = z.infer<typeof projectToolMatrixCellOut>;
@@ -2129,10 +1778,6 @@ export type ProjectToolMatrixGroupOut = z.infer<
   typeof projectToolMatrixGroupOut
 >;
 
-/**
- * `groups`, `columns`, and `rows` arrive in final display order and `cells` is
- * sparse — the client does no membership, sorting, or filtering work.
- */
 export const projectToolMatrixOut = z.object({
   groupBy: projectToolMatrixGroupBy,
   groups: z.array(projectToolMatrixGroupOut),
@@ -2140,18 +1785,14 @@ export const projectToolMatrixOut = z.object({
   rows: z.array(projectToolMatrixRowOut),
   cells: z.array(projectToolMatrixCellOut),
   columnPagination: z.object({
-    /** One-based, clamped to the available page range. */
     page: z.number().int().positive(),
     pageSize: z.number().int().positive(),
-    /** Zero only when no projects match the column scope. */
     pageCount: z.number().int().nonnegative(),
   }),
   filterOptions: z.object({
-    /** All live-project completion years, newest first. */
     completionYears: z.array(z.string()),
   }),
   totals: z.object({
-    /** Before column pagination / the row cap — what filters matched. */
     matchingProjects: z.number().int().nonnegative(),
     matchingTools: z.number().int().nonnegative(),
     attachedCells: z.number().int().nonnegative(),
@@ -2197,19 +1838,15 @@ export type ProjectAttentionType = z.infer<typeof projectAttentionTypeSchema>;
  */
 const attentionFacts = {
   overdue_task: z.object({
-    /** Effective due date — `dueEndDate ?? dueDate`. */
     due: plainDate,
     daysOverdue: z.number().int().positive(),
   }),
   stalled_project: z.object({
-    /** Latest of project/task/expense activity — NOT `project.updatedAt`. */
     lastActivity: plainDate,
     daysSinceActivity: z.number().int().nonnegative(),
-    /** The rule's no-activity window, so the card can cite its own threshold. */
     thresholdDays: z.number().int().positive(),
   }),
   missing_budget: z.object({
-    /** `actualSpend + committedSpend`, the subtree total the rule tested. */
     spend: money,
     actualSpend: money,
     committedSpend: money,
@@ -2217,7 +1854,6 @@ const attentionFacts = {
   past_due_planned_expense: z.object({
     plannedFor: plainDate,
     daysPastDue: z.number().int().positive(),
-    /** Null when the planned line never carried a cost. */
     cost: moneyNullable,
   }),
   unclassified_expense: z.object({
@@ -2227,11 +1863,8 @@ const attentionFacts = {
     blockedTasks: z.number().int().positive(),
   }),
   date_window_drift: z.object({
-    /** Which override was tested; a project can emit one row per side. */
     side: z.enum(["start", "end"]),
-    /** The manual `startDate`/`endDate` that hides work. */
     override: plainDate,
-    /** The derived bound it should have reached. */
     derived: plainDate,
     daysHidden: z.number().int().positive(),
   }),
@@ -2256,11 +1889,6 @@ const projectAttentionItemFields = {
    */
   key: z.string(),
   severity: z.enum(["info", "warning", "critical"]),
-  /**
-   * The entity's own name — what a card leads with. Distinct from
-   * `description`, which is a whole sentence and cannot be laid out as an
-   * identity line.
-   */
   name: z.string(),
   /**
    * One-sentence rendering of `name` + `facts`, for prose consumers (MCP
@@ -2274,11 +1902,6 @@ const projectAttentionItemFields = {
     ShortcodeEntity,
     ...ShortcodeEntity[],
   ]),
-  /**
-   * Generic scalars kept for consumers that sort or chip on "the date" / "the
-   * amount" without knowing the rule. Redundant with `facts`, which says WHICH
-   * date and WHICH amount — prefer `facts` in new code.
-   */
   date: plainDate.nullable(),
   amount: z.number().nullable(),
   href: z.string().describe("Direct link to the corrective view"),
@@ -2320,11 +1943,6 @@ export const projectAttentionItemSchema = z.discriminatedUnion("type", [
 
 export type ProjectAttentionItem = z.infer<typeof projectAttentionItemSchema>;
 
-/**
- * Compile-time proof the union above lists every rule. Adding a value to
- * `projectAttentionTypeValues` without a matching `attentionMember(...)` fails
- * here rather than silently producing a row shape nothing can parse.
- */
 type _AttentionUnionIsExhaustive =
   ProjectAttentionType extends ProjectAttentionItem["type"]
     ? true
@@ -2335,22 +1953,15 @@ type _AttentionUnionIsExhaustive =
 const _attentionUnionIsExhaustive: _AttentionUnionIsExhaustive = true;
 void _attentionUnionIsExhaustive;
 
-/** The measurements for one rule, narrowed by its `type`. */
 export type ProjectAttentionFacts<T extends ProjectAttentionType> = Extract<
   ProjectAttentionItem,
   { type: T }
 >["facts"];
 
-/**
- * `Pick` collapses a union instead of distributing over it, so a plain
- * `Pick<ProjectAttentionItem, "type" | "facts">` would pair every `type` with
- * every rule's `facts` and destroy the narrowing. This distributes first.
- */
 type DistributivePick<T, K extends keyof T> = T extends unknown
   ? Pick<T, K>
   : never;
 
-/** The minimum a caller needs to hold to render the sentence. */
 export type ProjectAttentionDescribable = DistributivePick<
   ProjectAttentionItem,
   "name" | "type" | "facts"
@@ -2415,25 +2026,10 @@ export const projectFilterOptionsOut = z.object({
   kinds: z.array(projectKindSchema),
   locations: z.array(z.string()),
   completionYears: z.array(z.string()),
-  /**
-   * Every calendar year (`"YYYY"`) the portfolio has data in — the union of
-   * expense dates, task effective due dates, and project start/end dates —
-   * newest first. Computed server-side (three `selectDistinct`s) so the Date
-   * filter row offers the same year chips on every tab; deriving it
-   * client-side from the Data view's fetch-alls made the chips disappear on a
-   * fresh Overview/Analytics load.
-   */
   years: z.array(z.string()),
 });
 export type ProjectFilterOptionsOut = z.infer<typeof projectFilterOptionsOut>;
 
-/**
- * `project.dashboardSummary`'s output — everything `/projects?view=overview`
- * renders: summary counts, the active-project list (with rollups, via
- * `projectOut`), per-project task-status breakdown, upcoming tasks, Needs
- * Attention items, filter option sets, and the completed-project count (for
- * the History view's link, without shipping the rows themselves).
- */
 export const projectDashboardSummaryOut = z.object({
   summary: z.object({
     activeProjectCount: z.number().int(),
@@ -2452,7 +2048,6 @@ export const projectDashboardSummaryOut = z.object({
      * projects") rather than presenting a partial sum as a complete total.
      */
     estimateTotal: moneyNullable,
-    /** How many of the scoped projects `estimateTotal` actually covers. */
     estimateCoverage: z.object({
       projectsWithEstimate: z.number().int(),
       projectsInScope: z.number().int(),
@@ -2475,13 +2070,6 @@ export const projectDashboardSummaryOut = z.object({
   nextTasks: z.array(taskOut),
   attention: z.array(projectAttentionItemSchema),
   filterOptions: projectFilterOptionsOut,
-  /**
-   * How many rows the active date window (`dateFrom`/`dateTo`) removed for
-   * having NO date at all, per entity — the honest footnote under the date
-   * chips ("12 undated expenses hidden"). All three are 0 when no window is
-   * set. A row that has a date but falls outside the window is NOT counted:
-   * it's excluded on its own merits, which the chip already says.
-   */
   hiddenByDate: z.object({
     projects: z.number().int(),
     tasks: z.number().int(),
@@ -2493,11 +2081,6 @@ export type ProjectDashboardSummaryOut = z.infer<
   typeof projectDashboardSummaryOut
 >;
 
-/**
- * `project.portfolioAnalytics`'s output — the chart aggregates that used to
- * ride along in `project.dashboard`'s full task/expense arrays, now computed
- * server-side and loaded only when `view=analytics` is selected.
- */
 export const projectPortfolioAnalyticsOut = z.object({
   costVsEstimate: z.array(
     z.object({

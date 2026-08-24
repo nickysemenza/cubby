@@ -249,7 +249,6 @@ const missingEmbeddingWhere = (
     ),
   );
 
-/** A capped sample plus the exact population, in one database round trip. */
 export const findEntitiesMissingEmbeddingsPage = async (
   db: Database,
   config: SemanticEmbeddingConfig,
@@ -302,7 +301,6 @@ export const findEntitiesMissingEmbeddings = async (
 ): Promise<EntityMissingEmbedding[]> =>
   (await findEntitiesMissingEmbeddingsPage(db, config, options)).items;
 
-/** Exact count without transferring the full missing population. */
 export const countEntitiesMissingEmbeddings = async (
   db: Database,
   config: SemanticEmbeddingConfig,

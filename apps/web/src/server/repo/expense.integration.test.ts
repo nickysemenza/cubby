@@ -70,20 +70,6 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { vendorOptions } from "~/server/repo/vendor";
 
-/**
- * `vendor` on the create input still resolves into a real `Vendor` + `Purchase`
- * (see `resolveCharge`), so a row created by NAME comes back carrying the ids
- * every filter and grouping assertion below needs. Throwing rather than
- * asserting inline keeps the id non-nullable at the call site.
- *
- * Both `vendorId` and `purchaseId` on `ExpenseOut` are shortcodes now (the
- * public boundary) — see `purchaseUuid` below for the call sites that still
- * need the internal uuid `getPurchaseByID`/`getPurchaseExpenses` key on.
- */
-/**
- * `createExpense`/`updateExpense` hand back `{ output, entityId }` — the uuid is
- * for audit/side-effect bookkeeping. These tests assert on the public shape.
- */
 const unwrap = async <T>(p: Promise<{ output: T }>): Promise<T> =>
   (await p).output;
 
@@ -101,16 +87,7 @@ const purchaseIdOf = (expense: ExpenseOut): PurchaseShortcode => {
   return expense.purchaseId;
 };
 
-/**
- * `getPurchaseByID`/`getPurchaseExpenses` still key on the charge's internal
- * uuid; `purchaseIdOf` only ever hands back the public shortcode. Resolve the
- * call sites that need it.
- *
- * Through `resolveShortcode`, NOT `resolveLiveShortcode` — a charge that just
- * got folded away (`foldChargeInto`) is soft-deleted but its uuid is still a
- * valid, queryable row (e.g. `getPurchaseExpenses` on a vacated charge must
- * still resolve, to prove it now has zero live lines).
- */
+/** Folded purchases are tombstoned but must remain resolvable for assertions. */
 const purchaseUuid = async (
   db: Database,
   code: PurchaseShortcode,
@@ -119,12 +96,6 @@ const purchaseUuid = async (
   if (!resolved) throw new Error(`purchase not found: ${code}`);
   return unsafePurchaseId(resolved.id);
 };
-
-// NB: project rollup contribution (spend/expenseCount/subtree) and
-// project-delete-blocking-on-live-expenses are already covered in
-// project.integration.test.ts ("rolls up spend..." and "blocks deletion
-// while live tasks or expenses still reference the project") — not
-// re-asserted here.
 
 describe("expense repository — CRUD", () => {
   const ctx = withTestDb();
@@ -180,8 +151,6 @@ describe("expense repository — CRUD", () => {
 
     await deleteExpenses(ctx.db, [created.id], ctx.actor);
 
-    // Unlike `getExpenseByID`, `getExpenseByShortcode` never throws — it
-    // resolves to null for a soft-deleted (or otherwise unresolvable) code.
     expect(await getExpenseByShortcode(ctx.db, created.id)).toBeNull();
 
     const { data } = await expenseList(ctx.db, {}, [], {
@@ -493,11 +462,6 @@ describe("expense repository — expenseList filters", () => {
   });
 
   it("filters by line basis, and keeps purchase-less rows in the item_line bucket", async () => {
-    // The purchase-less row is the point: `lineBasis` lives on Expense rather
-    // than Purchase precisely so a row with no purchase attached still answers
-    // this filter. A Purchase-level flag would have needed an explicit
-    // `isNull(purchaseId)` arm here, because `IN (SELECT ...)` goes NULL on a
-    // NULL left side — that is ~193 live rows silently dropped.
     await createExpense(
       ctx.db,
       expenseCreateInput.parse(
@@ -540,8 +504,6 @@ describe("expense repository — expenseList filters", () => {
     expect(new Set(itemLines.data.map((row) => row.name))).toEqual(
       new Set(["basis widget", "basis unattached"]),
     );
-    // Data and count agree — the filter is a plain column predicate, so the
-    // `$count` query sees the same where clause with no joins to diverge on.
     expect(itemLines.count).toBe(2);
 
     const allocations = await expenseList(
@@ -553,7 +515,6 @@ describe("expense repository — expenseList filters", () => {
     expect(allocations.data.map((row) => row.name)).toEqual(["basis deposit"]);
     expect(allocations.count).toBe(1);
 
-    // Unfiltered is unrestricted — an omitted `lineBasis` never narrows.
     const unfiltered = await expenseList(
       ctx.db,
       { search: "basis" },
@@ -739,7 +700,6 @@ describe("expense repository — expenseList filters", () => {
     expect(windowed.data.map((p) => p.id)).not.toContain(beforeWindow.id);
     expect(windowed.data.map((p) => p.id)).not.toContain(afterWindow.id);
 
-    // dateFrom alone — open upper bound.
     const fromOnly = await expenseList(
       ctx.db,
       { dateFrom: "2026-02-28" },
@@ -750,7 +710,6 @@ describe("expense repository — expenseList filters", () => {
       new Set([upperBoundary.id, afterWindow.id]),
     );
 
-    // dateTo alone — open lower bound.
     const toOnly = await expenseList(
       ctx.db,
       { dateTo: "2026-02-01" },
@@ -845,7 +804,6 @@ describe("expense repository — expenseList filters", () => {
     expect(windowed.data.map((p) => p.id)).not.toContain(belowWindow.id);
     expect(windowed.data.map((p) => p.id)).not.toContain(aboveWindow.id);
 
-    // costMin alone — open upper bound.
     const fromOnly = await expenseList(
       ctx.db,
       { costMin: 500 },
@@ -856,7 +814,6 @@ describe("expense repository — expenseList filters", () => {
       new Set([upperBoundary.id, aboveWindow.id]),
     );
 
-    // costMax alone — open lower bound. Credits are BELOW zero, so they are in.
     const toOnly = await expenseList(ctx.db, { costMax: 0 }, [], pagination);
     expect(new Set(toOnly.data.map((p) => p.id))).toEqual(
       new Set([credit.id, zero.id]),
@@ -1008,7 +965,6 @@ describe("expense repository — expenseList filters", () => {
     );
     expect(discard.productQuantity).toBe(-1);
 
-    // Flipping a mis-entered freebie into a discard is an ordinary update.
     const freebie = await unwrap(
       mk({ name: "promo pack", cost: 0, productQuantity: 1 }),
     );
@@ -1110,7 +1066,6 @@ describe("expense repository — expenseList filters", () => {
       ctx.actor,
     );
 
-    // A bare string behaves exactly as it always did.
     const single = await expenseList(
       ctx.db,
       { search: "extractor" },
@@ -1133,9 +1088,6 @@ describe("expense repository — expenseList filters", () => {
     );
     expect(either.data.map((p) => p.id)).not.toContain(unrelated.id);
 
-    // notesSearch is its own column, and ANDs with the name search rather than
-    // reusing its term — the bug that would otherwise zero out every search,
-    // since most rows have no notes.
     const byNotes = await expenseList(
       ctx.db,
       { notesSearch: "festool" },
@@ -1152,7 +1104,6 @@ describe("expense repository — expenseList filters", () => {
     );
     expect(nameAndNotes.data.map((p) => p.id)).toEqual([chopSaw.id]);
 
-    // `url` routinely holds a bare pre-roster store name.
     const byUrl = await expenseList(
       ctx.db,
       { urlSearch: "home depot" },
@@ -1161,8 +1112,6 @@ describe("expense repository — expenseList filters", () => {
     );
     expect(byUrl.data.map((p) => p.id)).toEqual([extractor.id]);
 
-    // An all-whitespace term degrades to no constraint rather than matching
-    // nothing (`formatSearchTerm` returns undefined, so `or()` collapses).
     const blank = await expenseList(ctx.db, { search: ["  "] }, [], pagination);
     expect(blank.data.map((p) => p.id)).toEqual(
       expect.arrayContaining([extractor.id, chopSaw.id, unrelated.id]),
@@ -1187,7 +1136,6 @@ describe("expense repository — expenseList filters", () => {
       }),
       ctx.actor,
     );
-    // Right project, wrong trade.
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
@@ -1200,7 +1148,6 @@ describe("expense repository — expenseList filters", () => {
       }),
       ctx.actor,
     );
-    // Right everything, wrong date.
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
@@ -1269,7 +1216,6 @@ describe("expense repository — sorting/pagination", () => {
       ctx.actor,
     );
 
-    // Default sort: date.
     const byDate = await expenseList(
       ctx.db,
       {},
@@ -1279,8 +1225,6 @@ describe("expense repository — sorting/pagination", () => {
     expect(byDate.data[0]?.date).toBe("2026-01-01");
     expect(byDate.data[2]?.date).toBe("2026-01-02");
 
-    // Multi-sort: date asc, then cost desc as a tiebreak among the two
-    // same-day rows.
     const multiSort = await expenseList(
       ctx.db,
       {},
@@ -1296,7 +1240,6 @@ describe("expense repository — sorting/pagination", () => {
       "b expense",
     ]);
 
-    // Small page size — count still reflects the full unpaginated total.
     const { data: page, count } = await expenseList(ctx.db, {}, [], {
       pageIndex: 0,
       pageSize: 2,
@@ -1385,7 +1328,6 @@ describe("expense router", () => {
   });
 
   describe("projectPresenceFilter", () => {
-    /** One assigned expense, one unassigned, plus a decoy in another project. */
     const seedProjectMix = async () => {
       const [{ output: projA }, { output: projB }] = await Promise.all([
         createProject(
@@ -1443,8 +1385,6 @@ describe("expense router", () => {
       expect(names).not.toContain("needs a project");
     });
 
-    // The case the old `noProject` boolean could not express at all: it AND-ed
-    // with projectId, so this pair matched nothing. Presence now ORs.
     it("combines with projectId as OR — that project plus the unassigned", async () => {
       const caller = createTestCaller(expenseRouter, ctx.db);
       const { projA } = await seedProjectMix();
@@ -1508,8 +1448,6 @@ describe("expense router", () => {
           ctx.actor,
         ),
       ]);
-      // A line of a DIFFERENT charge, to prove the scope is the charge and not
-      // the vendor.
       await createExpense(
         ctx.db,
         makeExpenseInput({ name: "unrelated amazon buy", vendor: "Amazon" }),
@@ -1535,9 +1473,6 @@ describe("expense router", () => {
         vendorId: vendorIdOf(self),
         vendorName: "Amazon",
       });
-      // `getPurchaseExpenses` includes the source row (the charge total needs
-      // it); the detail section filters itself out here, so a single-line charge
-      // renders nothing rather than a list of one.
       expect(context?.siblings.map((p) => p.id)).toEqual([sibling.id]);
     });
 
@@ -1551,11 +1486,6 @@ describe("expense router", () => {
       expect(chargeless.purchaseId).toBeNull();
       expect(await caller.chargeContext(chargeless.id)).toBeNull();
 
-      // The distinction the old `orderSiblings` got wrong: it bailed on a missing
-      // ORDER ID, which would have hidden this section for the 33% of
-      // vendor-bearing rows that have none — even though they sit on a real
-      // charge with real siblings. Gating on `purchaseId` instead is what fixed
-      // it.
       const { output: orderless } = await createExpense(
         ctx.db,
         makeExpenseInput({ name: "walk-in line a", vendor: "Tool Nirvana" }),
@@ -1597,7 +1527,6 @@ describe("expense router", () => {
         ctx.actor,
       );
     }
-    // Unassigned rows have no project to weight, so they must not appear.
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
@@ -1672,7 +1601,6 @@ describe("expense router", () => {
     ]);
     expect(toB.sideEffects).toBeDefined();
 
-    // expenseBulkMoveInput allows a null projectId — moves to the inbox.
     const toInbox = await caller.bulkMove({
       ids: [p1.id, p2.id],
       projectId: null,
@@ -1795,8 +1723,6 @@ describe("expense repository — moveExpenses", () => {
       { ids: [live.id, deleted.id], projectId: projectB.id },
       ctx.actor,
     );
-    // Only the live row comes back — the soft-deleted id is silently excluded,
-    // not moved.
     expect(moved.map((p) => p.id)).toEqual([live.id]);
   });
 
@@ -1868,14 +1794,6 @@ describe("expense repository — moveExpenses", () => {
   });
 });
 
-/**
- * The two bulk enum writers behind the ledger's selection toolbar
- * (`expense-bulk-actions.tsx` → `bulkSetTrade` / `bulkSetCostType`). Same shape
- * as `moveExpenses` minus the FK assert — a plain audited column write over
- * `ids` — so what's worth pinning is the part that isn't the column write: the
- * audit entry fires only for rows whose value actually CHANGED, and a
- * soft-deleted id is skipped rather than resurrected.
- */
 describe("expense repository — bulk trade / cost-type writes", () => {
   const ctx = withTestDb();
 
@@ -1886,7 +1804,6 @@ describe("expense repository — bulk trade / cost-type writes", () => {
       ctx.actor,
     );
 
-  /** `update` audit entries for one expense — keyed on the internal uuid. */
   const updateEntries = async (id: ExpenseId) =>
     (
       await getAuditLog(ctx.db, {
@@ -1930,7 +1847,6 @@ describe("expense repository — bulk trade / cost-type writes", () => {
       "electrical",
       "electrical",
     ]);
-    // Not in `ids` — a bulk write must never widen past its selection.
     expect((await getExpenseByShortcode(ctx.db, untouched.id))?.trade).toBe(
       "plumbing",
     );
@@ -2006,7 +1922,6 @@ describe("expense repository — expenseAnalytics", () => {
       ctx.actor,
     );
 
-    // p1: actual spend, plumbing/materials, projectA, dated Jan.
     const { output: p1 } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
@@ -2020,7 +1935,6 @@ describe("expense repository — expenseAnalytics", () => {
       }),
       ctx.actor,
     );
-    // p2: committed (future) spend, plumbing/materials, projectA, dated Jan.
     const { output: p2 } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
@@ -2034,7 +1948,6 @@ describe("expense repository — expenseAnalytics", () => {
       }),
       ctx.actor,
     );
-    // p3: a credit/refund (negative cost), electrical/materials, no project (inbox), dated Jan.
     const { output: p3 } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
@@ -2047,7 +1960,6 @@ describe("expense repository — expenseAnalytics", () => {
       }),
       ctx.actor,
     );
-    // p4: actual spend, electrical/services, projectB, dated Feb.
     const { output: p4 } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
@@ -2096,7 +2008,6 @@ describe("expense repository — expenseAnalytics", () => {
       result.monthly,
     );
 
-    // Summary/monthly/project totals retain every dollar, including adjustments.
     expect(result.summary).toEqual({
       actual: 153,
       committed: 50,
@@ -2242,9 +2153,7 @@ describe("expense repository — expenseAnalytics", () => {
     );
     expect(result.byProject).toHaveLength(2);
 
-    // --- core invariant: analytics totals agree with expenseList's visible
-    // rows under the SAME filter — sum expenseList's `cost` column and
-    // compare against summary.net (both should equal 178). ---
+    // Analytics totals must agree with the visible ledger under the same filter.
     const { data: listedRows } = await expenseList(ctx.db, filters, [], {
       pageIndex: 0,
       pageSize: 100,
@@ -2276,12 +2185,8 @@ describe("expense repository — expenseAnalytics", () => {
 
     const acmeA = await mk("vendor acme a", 100, "Analytics Acme");
     const acmeB = await mk("vendor acme b", 25, "Analytics Acme");
-    // A credit against the same vendor — negative rows are real here, and the
-    // vendor's net must telescope rather than being filtered out.
     await mk("vendor acme refund", -25, "Analytics Acme");
     await mk("vendor other", 40, "Analytics Other");
-    // No vendor recorded: no charge to attach to, so the inner join drops it.
-    // This is the row that makes byVendor disagree with summary.net.
     const vendorless = await mk("vendor none", 60);
     expect(vendorless.purchaseId).toBeNull();
 
@@ -2297,8 +2202,6 @@ describe("expense repository — expenseAnalytics", () => {
       net: 100,
       count: 3,
     });
-    // Both lines resolved onto the SAME vendor by name, so the group key is one
-    // id rather than two spellings.
     expect(vendorIdOf(acmeB)).toBe(vendorIdOf(acmeA));
 
     expect(
@@ -2306,9 +2209,6 @@ describe("expense repository — expenseAnalytics", () => {
     ).toBe(40);
     expect(result.byVendor.map((r) => r.vendorName)).not.toContain(null);
 
-    // --- the asymmetry, asserted rather than treated as a bug ---
-    // byVendor is an INNER join, so the charge-less row is excluded and the
-    // vendor nets total LESS than summary.net. The gap is exactly that row.
     const vendorNet = result.byVendor.reduce((sum, r) => sum + r.net, 0);
     expect(vendorNet).toBe(140);
     expect(result.summary.net).toBe(200);
@@ -2403,9 +2303,6 @@ describe("expense repository — expenseAnalytics", () => {
       dateFrom: "2026-05-30",
       dateTo: "2026-05-31",
     });
-    // The immediately preceding inclusive two-day range is May 30-31. The
-    // May 31 row proves both that boundary is included and that the previous
-    // query is not accidentally reusing the current date bounds.
     expect(result.cells).toEqual([
       expect.objectContaining({
         rowKey: "plumbing",
@@ -2443,7 +2340,6 @@ describe("expense repository — expenseAnalytics", () => {
       filters: { ...filters, trade: "plumbing" },
       facetIds: ["trade", "lineKind"],
     });
-    // Trade removes its own predicate, whereas lineKind retains trade.
     expect(
       facets.facets.find((facet) => facet.id === "trade")?.options,
     ).toEqual(
@@ -2471,8 +2367,6 @@ describe("expense repository — expenseAnalytics", () => {
     );
 
     expect(measured.result.status).toBe("ready");
-    // One grouped-row query plus one scope-total query. The cells are a
-    // projection of the grouped rows, not a duplicate database query.
     expect(measured.queryCount).toBe(2);
   });
 
@@ -2599,11 +2493,6 @@ describe("expense repository — expenseAnalytics", () => {
 describe("expense repository — embedding cascade invariant", () => {
   const ctx = withTestDb();
 
-  // Full cascade coverage (seeded embedding row -> soft-deleted + orphan
-  // check) lives in
-  // repo/inventory/embedding-cascade-invariant.integration.test.ts's
-  // "deleteExpenses leaves no orphan" case. This just re-confirms the
-  // no-orphan invariant holds from this file's own delete path too.
   it("deleteExpenses leaves no orphaned EntityEmbedding rows", async () => {
     const { output: expenseRow } = await createExpense(
       ctx.db,
@@ -2622,10 +2511,7 @@ describe("expense repository — embedding cascade invariant", () => {
   });
 });
 
-// The product bridge: an expense optionally points at the product it bought,
-// and a *negative* expense on the same product records the exit (sale, return,
-// or a 0-cost disposal). Money and ownership have deliberately separate
-// authorities — these cases pin the read side of that.
+// Money and ownership have separate authorities; negative lines record exits.
 describe("expense repository — product bridge", () => {
   const ctx = withTestDb();
   const pagination = { pageIndex: 0, pageSize: 50 };
@@ -2719,8 +2605,6 @@ describe("expense repository — product bridge", () => {
     );
     expect(count).toBe(2);
     expect(data.map((p) => p.id).sort()).toEqual([bought.id, sold.id].sort());
-    // Net basis is the sum of the linked rows — the derivation the product page
-    // renders, with nothing stored.
     expect(data.reduce((sum, p) => sum + (p.cost ?? 0), 0)).toBe(30);
   });
 
@@ -2782,10 +2666,6 @@ describe("expense repository — product bridge", () => {
   });
 
   it("can't leak a vendor whose name is a prefix of another's", async () => {
-    // The class of bug the old exact-string match existed to prevent ("Amazon
-    // (254)" also dragging in "Amazon Business") is gone by construction now:
-    // two names are two rows in the `Vendor` roster, so the filter compares
-    // primary keys and there is no substring to leak through.
     const { output: prime } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
@@ -2887,7 +2767,6 @@ describe("expense repository — product bridge", () => {
       }),
       ctx.actor,
     );
-    // Both lines resolved onto the same `Purchase` via `(vendor, orderId)`.
     expect(purchaseIdOf(second)).toBe(purchaseIdOf(first));
 
     const { data } = await expenseList(
@@ -2925,9 +2804,6 @@ describe("expense repository — product bridge", () => {
       ctx.actor,
     );
 
-    // "No vendor" and "no charge" are the same predicate — `purchase.vendorId`
-    // is NOT NULL, so a line either has a charge (and therefore a vendor) or has
-    // neither.
     const none = await expenseList(
       ctx.db,
       { vendorPresenceFilter: "none" },
@@ -2936,7 +2812,6 @@ describe("expense repository — product bridge", () => {
     );
     expect(none.data.map((p) => p.name)).toEqual(["cash at the yard"]);
 
-    // OR, not AND — "Tool Nirvana or nothing recorded" is one filter.
     const both = await expenseList(
       ctx.db,
       { vendorId: vendorIdOf(tileSaw), vendorPresenceFilter: "none" },
@@ -2950,16 +2825,6 @@ describe("expense repository — product bridge", () => {
   });
 });
 
-// `expense.{productId,vendorId,purchaseId}` lowercase canonicalization moved
-// to the generic #591 battery in filter-application.integration.test.ts:
-// seedWorld there gives expense Alpha real, live values for all three (a
-// purchaseId whose vendor resolves vendorId too), so `world.codes.{product,
-// vendor,purchase}` genuinely match a row and the lowercase-vs-canonical
-// comparisons are no longer vacuous — those per-entity cases are deleted.
-//
-// This one test stays: it isn't a lowercase-canonicalization case at all, but
-// an OR-combination invariant (`vendorId` + `vendorPresenceFilter: "none"`)
-// the generic battery doesn't probe (it never combines two filter fields).
 describe("expense repository — vendorId + vendorPresenceFilter OR guard", () => {
   const ctx = withTestDb();
   const pagination = { pageIndex: 0, pageSize: 50 };
@@ -3150,13 +3015,6 @@ describe("expense repository — productPresenceFilter", () => {
   });
 });
 
-/**
- * Charge grouping — what replaced `getExpenseOrderSiblings`. The group is a
- * parent link (`expense.purchaseId → Purchase`) resolved on write by
- * `resolveCharge`, not a `(vendor, orderId)` string match reconstructed on read,
- * so these pin where `createExpense` files a line and what
- * `getPurchaseExpenses` reads back out of one charge.
- */
 describe("expense repository — charge grouping", () => {
   const ctx = withTestDb();
 
@@ -3195,7 +3053,6 @@ describe("expense repository — charge grouping", () => {
       chargeLine("same id, other retailer", "Home Depot", orderId),
       ctx.actor,
     );
-    // Same vendor, different order — the other axis.
     const { output: otherOrder } = await createExpense(
       ctx.db,
       chargeLine("different order", "Amazon", "111-charge-0000002"),
@@ -3206,8 +3063,6 @@ describe("expense repository — charge grouping", () => {
     expect(purchaseIdOf(collision)).not.toBe(purchaseIdOf(first));
     expect(purchaseIdOf(otherOrder)).not.toBe(purchaseIdOf(first));
 
-    // Every line of the charge, source row included — the total needs it, and
-    // the detail section filters itself out (see `expense.chargeContext`).
     const lines = await getPurchaseExpenses(
       ctx.db,
       await purchaseUuid(ctx.db, purchaseIdOf(first)),
@@ -3301,16 +3156,6 @@ describe("expense repository — charge grouping", () => {
   });
 });
 
-/**
- * Charge resolution on UPDATE — `resolveCharge`'s `current` argument, which the
- * create path never exercises.
- *
- * An update is the side where a name-to-charge resolution can do damage rather
- * than just be wrong: the row is already ON a charge, so a careless re-resolve
- * re-points it and leaves the old charge behind. Nothing sweeps up empty charges
- * and there is no restore path, so a leak there is permanent — that's the bug
- * these pin.
- */
 describe("expense repository — charge resolution on update", () => {
   const ctx = withTestDb();
   const page = { pageIndex: 0, pageSize: 100 };
@@ -3321,7 +3166,6 @@ describe("expense repository — charge resolution on update", () => {
     orderId: string | null = null,
   ) => makeExpenseInput({ name, cost: 10, vendor, orderId });
 
-  /** Live charges belonging to one vendor — the orphan detector below. */
   const chargeCount = async (id: VendorShortcode) =>
     (await purchaseList(ctx.db, { vendorId: id }, [], page)).count;
 
@@ -3352,8 +3196,6 @@ describe("expense repository — charge resolution on update", () => {
     expect(rewritten.purchaseId).toBe(chargeBefore);
     expect(await chargeCount(vendorId)).toBe(1);
 
-    // Idempotent again when the unchanged order id is restated alongside it —
-    // the `current.orderId === requestedOrderId` arm of the same guard.
     const { output: withOrder } = await createExpense(
       ctx.db,
       line("online order", "Tool Nirvana", "#11325"),
@@ -3425,12 +3267,8 @@ describe("expense repository — charge resolution on update", () => {
 
     expect(corrected.purchaseId).not.toBe(wrongCharge);
     expect(corrected.vendor).toBe("Home Depot");
-    // An omitted `orderId` means "leave it alone" — the receipt number is still
-    // the receipt number, so it rides along to the new vendor's charge
-    // (`current?.orderId ?? null`).
     expect(corrected.orderId).toBe(orderId);
 
-    // The vacated charge is FOLDED into the new one, not left line-less: `resolveCharge` folds when the old charge loses its last line, so its statedTotal/notes/date and documents carry over rather than stranding. Same rule as detaching above.
     expect(
       await getPurchaseExpenses(
         ctx.db,
@@ -3451,7 +3289,6 @@ describe("expense repository — charge resolution on update", () => {
       line("second line, order id not known yet", "Amazon"),
       ctx.actor,
     );
-    // Two separate charges to start with — an order-less buy can't dedupe.
     expect(purchaseIdOf(loose)).not.toBe(purchaseIdOf(alreadyFiled));
 
     const { output: adopted } = await updateExpense(
@@ -3576,11 +3413,6 @@ describe("expense repository — charge resolution on update", () => {
     );
   });
 
-  // The OTHER half of door 2. The sibling test above ("adopts an order id
-  // written on its own") drives `renameChargeOrderId` into its collision arm and
-  // falls through to the existing charge; this one drives the arm that actually
-  // renames, which is the COMMON path — correcting a typo'd order number on a
-  // charge whose only line is the row being edited.
   it("corrects a typo'd order id IN PLACE on a single-line charge, keeping its statedTotal", async () => {
     const { output: typo } = await createExpense(
       ctx.db,
@@ -3590,8 +3422,6 @@ describe("expense repository — charge resolution on update", () => {
     const chargeId = purchaseIdOf(typo);
     const chargeUuid = await purchaseUuid(ctx.db, chargeId);
     const vendorId = vendorIdOf(typo);
-    // The two things a re-minted charge would strand. `statedTotal` is the
-    // reconciliation cue the whole Purchase table exists to hold.
     await updatePurchase(
       ctx.db,
       chargeId,
@@ -3606,7 +3436,6 @@ describe("expense repository — charge resolution on update", () => {
       ctx.actor,
     );
 
-    // SAME charge, renamed — not a fresh one with the old left behind.
     expect(fixed.purchaseId).toBe(chargeId);
     expect(fixed.orderId).toBe("WN63446464");
     expect(await chargeCount(vendorId)).toBe(1);
@@ -3633,8 +3462,6 @@ describe("expense repository — charge resolution on update", () => {
       ),
     ).toBe(true);
 
-    // Clearing it is the same in-place rename with no collision check to make —
-    // `(vendorId, null)` isn't in the partial-unique index at all.
     const { output: cleared } = await updateExpense(
       ctx.db,
       typo.id,
@@ -3673,8 +3500,6 @@ describe("expense repository — charge resolution on update", () => {
 
     await deleteExpenses(ctx.db, [doomed.id], ctx.actor);
 
-    // A brand-new vendor AND a brand-new charge, so both sides of the resolve
-    // have something to leak.
     await expect(
       updateExpense(
         ctx.db,
@@ -3730,8 +3555,6 @@ describe("expense repository — charge resolution on update", () => {
       cause: { reason: "PURCHASE_NOT_FOUND" },
     });
 
-    // Same guard on the update short-circuit: `rest.purchaseId` never passes
-    // through `resolveCharge`, so it is checked separately or it goes in unchecked.
     const { output: stray } = await createExpense(
       ctx.db,
       line("stray", null),
@@ -3747,7 +3570,6 @@ describe("expense repository — charge resolution on update", () => {
       (await getExpenseByShortcode(ctx.db, stray.id))?.purchaseId,
     ).toBeNull();
 
-    // A charge id that never existed is refused by the same assert.
     await expect(
       updateExpense(
         ctx.db,
@@ -3764,15 +3586,10 @@ describe("expense repository — charge resolution on update", () => {
   });
 });
 
-/**
- * `orderIdPresenceFilter` — presence resolved through the CHARGE, not a column
- * on the row. See `orderIdPresence` in repo/expense/lookup.ts.
- */
 describe("expense repository — orderIdPresenceFilter", () => {
   const ctx = withTestDb();
   const pagination = { pageIndex: 0, pageSize: 50 };
 
-  /** The three states the filter has to tell apart. */
   const seed = async () => {
     const { output: hasOrderId } = await createExpense(
       ctx.db,
@@ -3783,14 +3600,11 @@ describe("expense repository — orderIdPresenceFilter", () => {
       }),
       ctx.actor,
     );
-    // A contractor's progress payment: a real charge, but the vendor never
-    // issued an order number for it.
     const { output: chargeWithoutOrderId } = await createExpense(
       ctx.db,
       makeExpenseInput({ name: "progress payment", vendor: "Flow Form" }),
       ctx.actor,
     );
-    // No charge at all — cash at the yard, no vendor recorded.
     const { output: noCharge } = await createExpense(
       ctx.db,
       makeExpenseInput({ name: "cash at the yard" }),
@@ -3839,8 +3653,6 @@ describe("expense repository — orderIdPresenceFilter", () => {
   });
 
   it("contributes no constraint when unset", async () => {
-    // `orderIdPresence` returns undefined for an absent filter rather than an
-    // always-true clause, so an unfiltered ledger query still sees everything.
     const { hasOrderId, chargeWithoutOrderId, noCharge } = await seed();
 
     const { data } = await expenseList(ctx.db, {}, [], pagination);
@@ -3850,14 +3662,9 @@ describe("expense repository — orderIdPresenceFilter", () => {
   });
 });
 
-/**
- * The reconciliation matcher. Read-only — every assertion here is about what
- * gets RANKED and how it's explained, never about anything being applied.
- */
 describe("expense repository — matchExpenses", () => {
   const ctx = withTestDb();
 
-  /** `matchExpenses` takes the post-parse shape, so defaults come from zod. */
   const run = (
     rows: Array<Record<string, unknown>>,
     overrides: Record<string, unknown> = {},
@@ -4019,7 +3826,6 @@ describe("expense repository — matchExpenses", () => {
         },
       },
     });
-    // 151 days apart and $103 off — well outside both windows, found anyway.
     expect(candidates[0]?.dayDelta).toBe(-147);
     expect(candidates.map((c) => c.expenseId)).toContain(closerOnAmount.id);
     expect(result.summary.exactOrderIdHits).toBe(1);
@@ -4056,8 +3862,6 @@ describe("expense repository — matchExpenses", () => {
     const candidates = result.matches[0]?.candidates ?? [];
     const ids = candidates.map((candidate) => candidate.expenseId);
 
-    // Both lines on the exact order remain, even though neither needs to fit
-    // the date/amount window. That covers aggregate-vs-components imports.
     expect(ids).toEqual(expect.arrayContaining([component.id, aggregate.id]));
     expect(candidates).toEqual(
       expect.arrayContaining([
@@ -4211,15 +4015,12 @@ describe("expense repository — matchExpenses", () => {
     const rank = (id: string) =>
       candidates.findIndex((c) => c.expenseId === id);
 
-    // The right vendor's row keeps the top slot and reads as a clean order-id hit.
     expect(candidates[0]).toMatchObject({
       expenseId: rightVendor.id,
       matchedOn: "order_id",
       vendorMatch: true,
     });
 
-    // The collision is still RETURNED — spellings may merely differ, and silently
-    // dropping it is how a true match gets lost — but flagged and ranked last.
     const collision = candidates.find((c) => c.expenseId === wrongVendor.id);
     expect(collision).toMatchObject({
       matchedOn: "order_id",
@@ -4259,16 +4060,12 @@ describe("expense repository — matchExpenses", () => {
       matchedOn: "order_id",
       vendorMatch: true,
     });
-    // Case/whitespace normalization confirms the vendor, so the unrelated
-    // amount/date candidate is suppressed just like an exact spelling would be.
     expect(candidates.map((candidate) => candidate.expenseId)).not.toContain(
       coincidence.id,
     );
   });
 
   it("reports vendorMatch: null when there is nothing to compare", async () => {
-    // Unknown, NOT clean: the export line carried no vendor. An order-id hit
-    // keeps its top slot here, since nothing contradicts it.
     const row = await line("no vendor on the export line", {
       cost: 15,
       date: "2026-06-20",
@@ -4408,8 +4205,6 @@ describe("expense repository — matchExpenses", () => {
       (c) => c.expenseId === milwaukee.id,
     );
 
-    // "milwaukee", "packout", "rolling" — "tool"/"box" vs "toolbox" is the
-    // compound-word gap the description warns about, not something scored away.
     expect(hit?.tokenOverlap).toBe(3);
   });
 });
@@ -4417,11 +4212,6 @@ describe("expense repository — matchExpenses", () => {
 describe("expense repository — food-line default project", () => {
   const ctx = withTestDb();
 
-  /**
-   * `createProject` always mints its own shortcode, so the only way to stand
-   * up the specific `HOUSEHOLD_PROJECT_SHORTCODE` row `resolveDefaultProjectId`
-   * looks up is to create a project and overwrite its shortcode directly.
-   */
   const seedHousehold = async () => {
     const { entityId } = await createProject(
       ctx.db,
@@ -4507,8 +4297,6 @@ describe("expense repository — food-line default project", () => {
     expect(created.projectId).toBe(explicitProject.id);
   });
 
-  // The test that protects the entire pre-existing suite: absence of a
-  // Household project must degrade to today's behavior exactly, never throw.
   it("stays null when no Household project has been seeded", async () => {
     const prod = await foodProduct();
 

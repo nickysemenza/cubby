@@ -39,7 +39,6 @@ import { ListBulkActionBar } from "./useListBulkActions";
 import type { TRPCQueryOptionsFn } from "./usePaginatedTableCore";
 import type { FilterInput } from "./useStandardColumns";
 
-/** Base interface for entities in list views */
 export interface BaseListRow {
   id: string;
   name?: string | null;
@@ -120,7 +119,6 @@ export interface UseEntityListOptions<
   TFilters,
   TRow extends BaseListRow = TData,
 > {
-  /** The entity type */
   entity: BrowserRoutedEntity;
   /**
    * tRPC queryOptions function. Omit it — the default is the entity's own
@@ -142,30 +140,20 @@ export interface UseEntityListOptions<
    * manifest-derived filters. MUST be referentially stable.
    */
   scopeFilters?: Partial<TFilters>;
-  /** Custom columns (inserted between standard columns) - accepts any accessor type */
   columns: AnyColumnDef<TData>[];
-  /** Fallback filter definitions for columns the manifest doesn't cover. */
   filters?: FilterInput[];
   /**
    * Option lists for manifest specs naming an `optionsKey` (project roster,
    * recipe tags). MUST be referentially stable.
    */
   filterOptions?: RuntimeFilterOptions;
-  /** For unit mappings - function to extract mappings from each row (must be synchronous) */
   getMappings?: (item: TRow) => UnitMapping[];
-  /** Override table state options (initialSort / initialFilter / …) */
   tableStateOptions?: Parameters<typeof useTableState>[0];
-  /** Bulk actions configuration - automatically enables row selection */
   bulkActions?: BulkActionsConfig<TData>;
-  /** Extra actions to render in the row action menu (after "View details") */
   extraActions?: (row: TData) => ReactNode;
-  /** Columns hidden by default (user can toggle via View menu) */
   initialColumnVisibility?: Record<string, boolean>;
-  /** Stable identity for persisted ordering, pinning, visibility, and sizing. */
   layoutKey?: string;
-  /** Previous visibility key, used only for the one-time legacy preference import. */
   legacyLayoutVisibilityKey?: string;
-  /** Previous sizing key, used only for the one-time legacy preference import. */
   legacyLayoutSizingKey?: string;
   /**
    * Width class for the standard name column. Defaults to auto (`min-w-0`),
@@ -182,9 +170,7 @@ export interface UseEntityListOptions<
   nameEditable?: {
     onSave: (newValue: string, row: TData) => Promise<void>;
   };
-  /** Extra content rendered inline after the standard name column's name. */
   nameSuffix?: (row: TData) => ReactNode;
-  /** Leading content on the name cell — see `createNameColumn`'s `namePrefix`. */
   namePrefix?: (row: TData) => ReactNode;
   /**
    * Column ids to render with no filter control — for a page that pins that
@@ -251,15 +237,6 @@ export interface UseEntityListReturn<
   totalCount: number | undefined;
 }
 
-/**
- * Hook for managing entity list pages with common conventions.
- *
- * Handles:
- * - Infinite table query via useInfiniteTableList
- * - Unit mappings loading if getMappings provided
- * - Standard identity columns from entity config plus shared audit dates
- * - Filter expansion from simple string definitions
- */
 export function useEntityList<
   TData extends BaseListRow,
   TFilters,

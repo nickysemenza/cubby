@@ -53,9 +53,6 @@ describe("inventory router", () => {
     expect(createdEntry.id).toBeDefined();
     expect(createdEntry.amount.value).toEqual(5);
     expect(createdEntry.amount.unit).toEqual("lbs");
-    expect(createdEntry.product.name).toEqual("Test Flour");
-    expect(createdEntry.location.name).toEqual("Test Kitchen");
-
     const retrievedEntry = await caller.getByID({ id: createdEntry.id });
 
     expect(retrievedEntry.id).toEqual(createdEntry.id);
@@ -63,6 +60,8 @@ describe("inventory router", () => {
     expect(retrievedEntry.amount.unit).toEqual("lbs");
     expect(retrievedEntry.product.id).toEqual(product.id);
     expect(retrievedEntry.location.id).toEqual(location.id);
+    expect(retrievedEntry.product.name).toEqual("Test Flour");
+    expect(retrievedEntry.location.name).toEqual("Test Kitchen");
   });
 
   it("should list inventory entries with filtering", async () => {
@@ -215,10 +214,11 @@ describe("inventory router", () => {
     });
 
     expect(updatedEntry.id).toEqual(createdEntryShortcode);
-    expect(updatedEntry.product.id).toEqual(product2Shortcode);
-    expect(updatedEntry.location.id).toEqual(location1Shortcode);
     expect(updatedEntry.amount.value).toEqual(1);
     expect(updatedEntry.amount.unit).toEqual("piece");
+    const detailedUpdatedEntry = await caller.getByID({ id: updatedEntry.id });
+    expect(detailedUpdatedEntry.product.id).toEqual(product2Shortcode);
+    expect(detailedUpdatedEntry.location.id).toEqual(location1Shortcode);
 
     const updatedEntry2 = await caller.update({
       id: createdEntryShortcode,
@@ -227,8 +227,11 @@ describe("inventory router", () => {
       },
     });
 
-    expect(updatedEntry2.location.id).toEqual(location2Id);
-    expect(updatedEntry2.product.id).toEqual(product2Shortcode);
+    const detailedUpdatedEntry2 = await caller.getByID({
+      id: updatedEntry2.id,
+    });
+    expect(detailedUpdatedEntry2.location.id).toEqual(location2Id);
+    expect(detailedUpdatedEntry2.product.id).toEqual(product2Shortcode);
   });
 
   it("should perform bulk operations correctly", async () => {

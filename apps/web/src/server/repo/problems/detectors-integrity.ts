@@ -135,7 +135,6 @@ function buildEdgeAuditSpecs(): EdgeAuditSpec[] {
             "INCOMING_EDGES and ENTITY_EDGE_SEMANTICS have drifted out of key parity.",
         );
       }
-      // `Ingredient.recipeId` — deliberately preserved tombstone, not a bug.
       if (semantics.liveness.kind === "allow-target-deleted") continue;
 
       const column = edge.column;
@@ -243,7 +242,6 @@ function detailBranch(spec: EdgeAuditSpec): SQL {
   )`;
 }
 
-/** One `SELECT edgeKey, count(*)` branch — the true count behind a possibly-capped detail result. */
 function countBranch(spec: EdgeAuditSpec): SQL {
   return sql`
     SELECT ${spec.edgeKey}::text AS "edgeKey",
@@ -281,7 +279,6 @@ type CountRow = Record<string, unknown> & {
   count: number;
 };
 
-/** Exact emitted-edge count without running or transferring detail branches. */
 export const countReferentialLivenessViolations = async (
   db: Database,
 ): Promise<number> => {

@@ -1,4 +1,4 @@
-import { waitForFormHydration } from "./e2e-helpers";
+import { waitForEntityMutation, waitForFormHydration } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 test("tool matrix keeps angled project headers pinned below the nav", async ({
@@ -40,10 +40,7 @@ test("tool matrix keeps angled project headers pinned below the nav", async ({
       await iconRow.getByRole("button").first().click();
       const iconInput = page.getByPlaceholder("e.g. 🔧");
       await iconInput.fill("🛠️");
-      const updateResponse = page.waitForResponse(
-        (response) =>
-          response.url().includes("project.update") && response.ok(),
-      );
+      const updateResponse = waitForEntityMutation(page);
       await iconInput.press("Enter");
       await updateResponse;
       await expect(iconRow.getByText("🛠️")).toBeVisible();

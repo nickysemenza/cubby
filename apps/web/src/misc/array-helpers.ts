@@ -1,10 +1,4 @@
 /**
- * Flattens a nested array type by extracting the inner type.
- * @template T - The type to flatten
- */
-export type Flatten<T> = T extends Array<infer U> ? U : T;
-
-/**
  * Max ids per batched `getManyByIDs` query. Pair with es-toolkit's `chunk` to
  * bound database and serialization work per query; sort the input first if you
  * want stable cache keys.

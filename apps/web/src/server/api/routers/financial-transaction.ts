@@ -1,46 +1,19 @@
 import {
   financialStatementImportPreviewInput,
   financialStatementImportPreviewOut,
-  financialTransactionFiltersSchema,
-  financialTransactionSortableFields,
   financialTransactionSourceOptionsOut,
 } from "@cubby/schemas/financial-transaction";
 import { ENTITY_BINDINGS } from "~/server/entity-bindings";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/entity-kernel/registry";
 import { previewFinancialStatementImport } from "~/server/repo/financial-statement-preview";
-import {
-  createFinancialTransaction,
-  deleteFinancialTransactions,
-  financialTransactionSourceOptions,
-  getFinancialTransactionByShortcode,
-  listFinancialTransactions,
-  updateFinancialTransaction,
-} from "~/server/repo/financial-transaction";
-import { createSearchableEntityCrudProcedures } from "../crud-factory";
+import { financialTransactionSourceOptions } from "~/server/repo/financial-transaction";
+import { createEntityCompatibilityProcedures } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
-const procedures = createSearchableEntityCrudProcedures({
-  schemas: {
-    ...ENTITY_BINDINGS.financialTransaction.crud,
-    filters: financialTransactionFiltersSchema,
-    sort: {
-      sortableFields: financialTransactionSortableFields,
-      defaultSort: "transactionDate",
-    },
-  },
-  repository: {
-    getByShortcode: (services, id) =>
-      getFinancialTransactionByShortcode(services.db, id),
-    create: (services, data) =>
-      createFinancialTransaction(services.db, data, services.actorContext),
-    update: (services, id, data) =>
-      updateFinancialTransaction(services.db, id, data, services.actorContext),
-    list: (services, filters, sorts, pagination) =>
-      listFinancialTransactions(services.db, filters, sorts, pagination),
-    delete: (services, ids) =>
-      deleteFinancialTransactions(services.db, ids, services.actorContext),
-  },
-  entityName: "financialTransaction",
-});
+const procedures = createEntityCompatibilityProcedures(
+  ENTITY_KERNEL_BINDINGS.financialTransaction,
+  ENTITY_BINDINGS.financialTransaction.crud,
+);
 
 /** Client-parsed Monarch rows only: this is a read-only reconciliation preview. */
 const previewStatementImport = protectedProcedure

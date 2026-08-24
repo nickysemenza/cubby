@@ -15,7 +15,6 @@ import { proposeSizeFromTitle, sizeUnitAlternation } from "./title-unit-size";
  */
 describe("proposeSizeFromTitle", () => {
   it("proposes the pack size when the title states exactly one", () => {
-    // The worked example (PRD-QQ9D); shortcodes are safe under the rule above.
     const proposal = proposeSizeFromTitle("Bagged Yellow Onions, 32 OZ");
     expect(proposal?.amount).toEqual({ value: 32, unit: "oz" });
     expect(proposal?.token).toBe("32 OZ");

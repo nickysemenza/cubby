@@ -1,11 +1,5 @@
 /**
- * Shared project-scope filtering for the two dashboard endpoints
- * (`dashboard-summary.ts`, `portfolio-analytics.ts`) — both take the same
- * `statusScope`/`kinds`/`locations`/`search`/`dateFrom`/`dateTo` filter shape
- * (`projectDashboardFiltersSchema`) and need the same "which projects match"
- * condition, so the SQL lives here once instead of twice.
- *
- * Two honesty rules the UI depends on:
+ * Two honesty rules the dashboard UI depends on:
  *   - an empty/omitted `statusScope` adds NO status condition (all four
  *     statuses). It used to silently fall back to `!= 'done'`, which nothing
  *     in the chip bar said — callers that want the live-only default now pass
@@ -44,12 +38,6 @@ import {
 import { effectiveTaskDueDateSql } from "~/server/repo/task/helpers";
 import { loadProjectDateWindows, projectCompletionYear } from "./subtree";
 
-/**
- * `kinds`/`locations` conditions only (no status, no search, no date) —
- * factored out so `dashboard-summary.ts` can reuse them for the
- * `activeProjectCount`/`completedCount` portfolio stats, which need a FIXED
- * status condition regardless of what `statusScope` the caller passed.
- */
 export function dashboardKindLocationConditions(
   filters: Pick<ProjectDashboardFilters, "kinds" | "locations">,
 ): Array<SQL | undefined> {
@@ -73,12 +61,6 @@ export function dashboardKindLocationConditions(
   ];
 }
 
-/**
- * Status condition for the dashboard scope. Empty/omitted `statusScope` is
- * **no condition at all** (`undefined`) — every status, including `done`.
- * There is no implicit "hide completed" default: an invisible filter the chip
- * bar can't describe is the exact defect this replaced.
- */
 function dashboardStatusCondition(
   filters: Pick<ProjectDashboardFilters, "statusScope">,
 ): SQL | undefined {
@@ -87,13 +69,6 @@ function dashboardStatusCondition(
     : undefined;
 }
 
-/**
- * A standalone builder for the sub-selects below. These predicates are pure
- * SQL builders — every caller hands over `filters` and nothing else, never a
- * `Database` — so there is no `getDb(db)` to start a sub-select from. A
- * `QueryBuilder` compiles to byte-identical SQL (same default dialect, no
- * `casing` override on our drizzle instances).
- */
 const qb = new QueryBuilder();
 
 /**
@@ -227,10 +202,6 @@ export function dashboardProjectDateCondition(
   );
 }
 
-/**
- * The full non-search scope: status + kind/location + date window. What both
- * dashboard endpoints filter their project set by.
- */
 function dashboardScopeConditions(
   filters: ProjectDashboardFilters,
   completionIds?: ProjectId[],
@@ -245,11 +216,6 @@ function dashboardScopeConditions(
   ];
 }
 
-/**
- * WHERE clause for the dashboard's filtered project set: `statusScope`,
- * `kinds`/`locations`, the `dateFrom`/`dateTo` window, and `search` (name
- * ilike), always live (`notDeleted`, via `buildSearchConditions`).
- */
 export function buildDashboardProjectWhere(
   filters: ProjectDashboardFilters,
   completionIds?: ProjectId[],
@@ -301,7 +267,6 @@ export function buildUndatedProjectWhere(
   );
 }
 
-/** Resolve a visible Projects-page scope to live project ids for embedded lists. */
 export async function matchingEmbeddedProjectIds(
   db: Database,
   scope: EmbeddedProjectScope,

@@ -98,8 +98,6 @@ const unwrap = async <T>(p: Promise<{ output: T }>): Promise<T> =>
 // aggregator; the stale-parse detector (now a Settings → Maintenance action, off
 // the aggregator) and reparseStaleIngredientParses are called directly.
 
-// reparseStaleIngredientParses streams `{done,total}` progress and returns its
-// summary; drain to the return value for assertions.
 const drainGen = async <R>(gen: AsyncGenerator<unknown, R>): Promise<R> => {
   let next = await gen.next();
   while (!next.done) next = await gen.next();
@@ -125,10 +123,6 @@ const upcResponse = (
   ...overrides,
 });
 
-// A fake UPC lookup client: canned responses keyed by UPC, plus a record of which
-// UPCs were actually looked up (so tests can assert the no-network pre-filter).
-// The scan calls `lookupBatch` (one bulk request), so `calls` records every UPC
-// passed to it — fully-populated/misc products are pre-filtered out beforehand.
 const fakeUpcClient = (
   byUpc: Record<string, UPCLookupResponse | null> = {},
 ) => {
@@ -422,7 +416,6 @@ describe("problems repo", () => {
         ctx.actor,
       );
 
-      // A live expense disqualifies it — not orphaned yet.
       const before = await findAllProblems(
         ctx.db,
         fakeUpcClient().client,
@@ -505,8 +498,6 @@ describe("problems repo", () => {
         makeProductInput({ name: "misc: assorted clamps", price: null }),
         ctx.actor,
       );
-      // Unpriced but not stocked — contributes to no rollup, so not a problem
-      // here (findOrphanedProducts already covers it).
       const unstocked = await createProduct(
         ctx.db,
         makeProductInput({ name: "Unpriced Unstocked Tool", price: null }),
@@ -758,7 +749,6 @@ describe("problems repo", () => {
         false,
       );
 
-      // Clearing the stale shelf is the fix, and it resolves the row.
       await deleteInventoryEntries(ctx.db, [soldEntry.entityId], ctx.actor);
       const after = await findFastProblems(ctx.db);
       expect(after.soldButStillStocked.some((p) => p.id === sold.id)).toBe(
@@ -1073,8 +1063,6 @@ describe("problems repo", () => {
         ctx.actor,
       );
 
-      // The defect: a sale with nothing naming what left. Invisible to
-      // findSoldButStillStocked, which groups by productId.
       const unlinked = await seedLine({
         name: "ebay payout - unknown item",
         cost: -140,
@@ -1082,8 +1070,6 @@ describe("problems repo", () => {
         orderId: "UNLINKED-SALE",
         productId: null,
       });
-      // Same purchase shape, but linked — the mirror detector's territory, not
-      // this one's.
       await seedLine({
         name: "drill sold",
         cost: -90,
@@ -1129,7 +1115,6 @@ describe("problems repo", () => {
           (row) => row.name === "lumber overcharge refunded",
         ),
       ).toBe(false);
-      // Linked sales belong to the mirror detector.
       expect(
         found.unlinkedExitExpenses.some((row) => row.name === "drill sold"),
       ).toBe(false);
@@ -1168,7 +1153,6 @@ describe("problems repo", () => {
         orderId: null,
         productId: null,
       });
-      // Has a Purchase, so it belongs to findUnlinkedExitExpenses, not here.
       await seedLine({
         name: "ebay payout - unknown item",
         cost: -140,
@@ -1176,8 +1160,6 @@ describe("problems repo", () => {
         orderId: "PURCHASELESS-MIRROR",
         productId: null,
       });
-      // An adjustment is productless by definition, not by omission. Without
-      // the lineKind filter this row would be reported as a missing link.
       await seedLine({
         name: "ProXtra savings",
         cost: -20,
@@ -1215,7 +1197,6 @@ describe("problems repo", () => {
       expect(found.purchaselessExitExpenses).toContainEqual(
         expect.objectContaining({ id: cashSale.id, cost: -100 }),
       );
-      // Belongs to the mirror detector — it has a Purchase.
       expect(
         found.purchaselessExitExpenses.some(
           (row) => row.name === "ebay payout - unknown item",
@@ -1269,9 +1250,6 @@ describe("problems repo", () => {
         productId: unbalanced.id,
         productQuantity: -1,
       });
-      // Bought 8, returned 8. A return is a real exit, so this nets to zero —
-      // and it sits on a Purchase that nets POSITIVE, which is why
-      // `findSoldButStillStocked`'s stricter predicate would miss it entirely.
       await seedLine({
         name: "boxes bought",
         cost: 33.44,
@@ -1304,7 +1282,6 @@ describe("problems repo", () => {
         found.negativeExpectedQuantity.some((p) => p.id === balanced.id),
       ).toBe(false);
 
-      // Recording the missing acquisition is the fix, and it clears the row.
       await seedLine({
         name: "saw bought",
         cost: 200,
@@ -1337,7 +1314,6 @@ describe("problems repo", () => {
         },
         ctx.actor,
       );
-      // No productQuantity — the common shape for a hand-entered sale row.
       await seedLine({
         name: "pallet jack sold",
         cost: -120,
@@ -1392,14 +1368,11 @@ describe("problems repo", () => {
         productQuantity: -1,
       });
 
-      // Sold and nothing since — the shelf entry is stale, so it reports.
       const during = await findFastProblems(ctx.db);
       expect(during.soldButStillStocked.some((p) => p.id === rebought.id)).toBe(
         true,
       );
 
-      // Bought again afterwards: ownership reopened, so the entry on the shelf
-      // is this acquisition rather than the leftover.
       await seedLine({
         name: "grinder bought again",
         cost: 95,
@@ -1597,8 +1570,6 @@ describe("problems repo", () => {
 
   describe("findProductsWithIslandedMappings", () => {
     it("flags a product whose mappings form 2+ islands but not a connected one", async () => {
-      // widget↔gadget are custom units unreachable from the standard unit graph,
-      // so they island off from cup↔g.
       const islanded = await createProduct(
         ctx.db,
         makeProductInput({
@@ -1618,7 +1589,6 @@ describe("problems repo", () => {
         }),
         ctx.actor,
       );
-      // cup↔g and tsp↔ml all sit in the one connected standard graph.
       const connected = await createProduct(
         ctx.db,
         makeProductInput({
@@ -1661,20 +1631,17 @@ describe("problems repo", () => {
       // (1 cup packed = 220 g) that bridges the two — so it's fully convertible
       // and must NOT be flagged. The detector now runs on effective mappings.
       const storedIslands = [
-        // 1 cup packed = 1 cup → cup packed joins the volume cluster.
         {
           a: { value: 1, unit: "cup packed" },
           b: { value: 1, unit: "cup" },
           source: null,
         },
-        // 2 lb = $5 → lb normalizes to g; the {g, cent} island.
         {
           a: { value: 2, unit: "lb" },
           b: { value: 5, unit: "dollar" },
           source: null,
         },
       ];
-      // A USDA "Sugars, brown" food whose portion bridges cup packed ↔ g.
       const sugarFood: FoodSummary = {
         fdc_id: 168833,
         brandedFoodInfo: null,
@@ -1690,15 +1657,12 @@ describe("problems repo", () => {
         ctx.db,
         makeProductInput({
           name: "USDA-bridged sugar",
-          // The USDA link is what pulls in the bridging portion below; without an
-          // fdc_id no lookup fires and the stored mappings island on their own.
           fdc_id: sugarFood.fdc_id,
           unitMappings: storedIslands,
         }),
         ctx.actor,
       );
 
-      // Control: WITHOUT the USDA food, stored mappings alone island → flagged.
       const withoutFood = await findAllProblems(
         ctx.db,
         fakeUpcClient().client,
@@ -1729,7 +1693,6 @@ describe("problems repo", () => {
   });
 
   describe("findProductsWithBetterUpcData", () => {
-    // Valid UPC-A codes (12 digits) so the products clear the candidate query.
     const UPC_MANU = "012345678905";
     const UPC_PRICE = "036000291452";
     const UPC_IMAGE = "078000053258";
@@ -1806,7 +1769,6 @@ describe("problems repo", () => {
         .where(eq(product.id, full.entityId));
       await attachImage(full.entityId);
 
-      // (e) Misc product with a manufacturer gap → excluded regardless.
       const misc = await createProduct(
         ctx.db,
         makeProductInput({ name: "misc: Loose Screw", upc: UPC_MISC }),
@@ -1836,8 +1798,6 @@ describe("problems repo", () => {
 
       const byId = new Map(productsWithBetterUpcData.map((p) => [p.id, p]));
 
-      // `proposed` carries the value each gap would be filled with (null = no
-      // change). An absolute lookup image URL is returned unchanged.
       expect(byId.get(noManu.id)?.proposed).toEqual({
         manufacturer: "Acme",
         price: null,
@@ -1854,7 +1814,6 @@ describe("problems repo", () => {
         imageUrl: "https://example.com/p.jpg",
       });
 
-      // Fully-populated and misc products are neither flagged nor looked up.
       expect(byId.has(full.id)).toBe(false);
       expect(byId.has(misc.id)).toBe(false);
       expect(calls).not.toContain(UPC_FULL);
@@ -1953,7 +1912,6 @@ describe("problems service — tracker slice", () => {
       }),
       ctx.actor,
     );
-    // Control: a task due in the future is not overdue.
     const { output: upcoming } = await createTask(
       ctx.db,
       taskCreateInput.parse({
@@ -1987,7 +1945,6 @@ describe("problems service — tracker slice", () => {
     expect(tracker.pastDuePlannedExpenses.map((i) => i.entityId)).toContain(
       pastDuePlanned.id,
     );
-    // Rows carry the rule type + a route the Problems card can link to.
     expect(
       tracker.overdueTasks.find((i) => i.entityId === overdue.id),
     ).toMatchObject({ type: "overdue_task", entityType: "task" });
@@ -2000,11 +1957,6 @@ describe("problems service — tracker slice", () => {
       entityType: "expense",
     });
 
-    // The rows the Problems page renders are the RULE ENGINE's rows, not a
-    // second set rebuilt from generic list columns. That rebuild is what this
-    // change removed, and it is what silently dropped every measurement and
-    // flipped severities. Assert the presented row carries its name and the
-    // facts the rule actually tested.
     const presentedOverdue = tracker.overdueTasks.find(
       (i) => i.entityId === overdue.id,
     );
@@ -2088,8 +2040,6 @@ describe("problems service — tracker slice", () => {
       lastActivity: lastWork,
       thresholdDays: 30,
     });
-    // The project row was written seconds ago; dating it by `updatedAt` would
-    // report today and make the card contradict its own section.
     expect(stalled?.date).toBe(lastWork);
   });
 
@@ -2126,7 +2076,6 @@ describe("problems service — tracker slice", () => {
       ctx.actor,
     );
 
-    // Sanity: they're flagged while live.
     const before = await findTrackerProblems(ctx.db);
     expect(before.overdueTasks.map((i) => i.entityId)).toContain(task.id);
     expect(before.pastDuePlannedExpenses.map((i) => i.entityId)).toContain(
@@ -2263,7 +2212,6 @@ describe("problems service — recount staleness", () => {
 
     const { staleLocations } = await findViewProblems(ctx.db);
     const ids = staleLocations.map((l) => l.id);
-    // Nothing to recount — the `location/empty-leaves` view already owns these.
     expect(ids).not.toContain(empty.id);
     expect(ids).not.toContain(emptied.loc.id);
   });
@@ -2301,11 +2249,6 @@ describe("problems service — recount staleness", () => {
       .where(eq(inventoryEntry.id, verified.entry.entityId));
     await deleteInventoryEntries(ctx.db, [removed.entry.entityId], ctx.actor);
 
-    // Drives the SAVED VIEW's own declared filters through the ordinary list
-    // path — this is the parity assertion that let the detector be deleted.
-    // Taking the canonical assembly from the manifest rather than retyping it here is
-    // the point: a test that restated the predicate could agree with itself
-    // while disagreeing with what the app actually runs.
     const { data } = await inventoryentryList(
       ctx.db,
       {
@@ -2334,7 +2277,6 @@ describe("problems service — recount staleness", () => {
     );
     expect(verifiedRows.data.map((i) => i.id)).not.toContain(verified.entry.id);
 
-    // Rows carry both refs so the card can link product AND location.
     expect(data.find((i) => i.id === unverified.entry.id)).toMatchObject({
       product: { id: unverified.product.id },
       location: { id: unverified.loc.id, name: "Unverified bin" },
@@ -2371,12 +2313,6 @@ describe("problems service — recount staleness", () => {
     expect(after.unknownParkedItems.map((i) => i.id)).not.toContain(parked.id);
   });
 
-  // The original detector `.limit(25)`d, reporting 25 for a real population of
-  // 178 — a number both wrong and impossible to drive to zero. Uncapping fixed
-  // it. The view-backed section reintroduces a page cap ON THE ROWS, so the
-  // count has to come from somewhere else: `sectionTotals`, computed as the
-  // list's own `countWhere`. This test is what keeps that honest — if the
-  // meter ever went back to reading `rows.length`, it would read 12 of 212.
   it("reports the true population even though the rows are a page", async () => {
     const loc = await createLocation(
       ctx.db,
@@ -2402,7 +2338,6 @@ describe("problems service — recount staleness", () => {
     const { neverVerifiedInventory, sectionTotals } = await findViewProblems(
       ctx.db,
     );
-    // The rows are a page and are allowed to be.
     expect(neverVerifiedInventory.length).toBeLessThanOrEqual(
       sectionTotals.neverVerifiedInventory ?? 0,
     );
@@ -2425,7 +2360,6 @@ describe("problems service — totals count defects only", () => {
   const ctx = withTestDb();
 
   it("excludes coverage sections from totalProblems but still lists them", async () => {
-    // An empty leaf location is coverage; an orphaned product is a defect.
     const emptyLoc = await createLocation(
       ctx.db,
       makeLocationInput({ name: "Totals empty bin" }),
@@ -2443,7 +2377,6 @@ describe("problems service — totals count defects only", () => {
       fakeUsdaClient(),
     );
 
-    // Both are detected...
     expect(all.emptyLocations.map((l) => l.id)).toContain(emptyLoc.id);
     expect(all.orphanedProducts.map((p) => p.id)).toContain(orphan.id);
 
@@ -2459,8 +2392,6 @@ describe("problems service — totals count defects only", () => {
     expect(all.totalProblems).toBe(defectSum);
     expect(all.emptyLocations.length).toBeGreaterThan(0);
 
-    // countProblems reports the two populations separately, and byType keeps
-    // the FULL roster so per-detector consumers and MCP slices still work.
     const counts = countProblems(all);
     expect(counts.total).toBe(all.totalProblems);
     expect(counts.coverageTotal).toBeGreaterThanOrEqual(
@@ -2488,8 +2419,6 @@ describe("findDuplicateProductIdentities", () => {
       ],
     });
     const hdRow = await seed("Dewalt Cordless Drill Kit", {
-      // Different casing on purpose: the canonical manufacturer key has to
-      // hold the pair together, or the duplicate splits before it is found.
       manufacturer: "DEWALT",
       model: "DCD791D2",
       externalIds: [
@@ -2591,8 +2520,6 @@ describe("findDuplicateProductIdentities", () => {
     await seed("Milwaukee Grinder 6in", {
       manufacturer: "Milwaukee",
       model: "M18-GRINDER",
-      // A different retail package — positive evidence these are two products,
-      // not one entered twice.
       upc: "022222222229",
       externalIds: [
         {
@@ -2611,9 +2538,6 @@ describe("findDuplicateProductIdentities", () => {
   });
 
   it("does not flag rows whose identifiers all come from one source", async () => {
-    // Two Amazon rows for one model are far likelier to be two listings of a
-    // real variant than one item imported twice — the "different sources" half
-    // of the signal is what makes it high precision.
     await seed("Bosch Bit Set A", {
       manufacturer: "Bosch",
       model: "BOSCH-BITS",
@@ -2720,10 +2644,6 @@ describe("problems — brand-label spelling variants", () => {
 describe("problems — duplicate vendors", () => {
   const ctx = withTestDb();
 
-  // Seed through the door the duplicates actually come in: `createExpense`
-  // resolves its `vendor` name via findOrCreateVendor, which matches EXACTLY, so
-  // a second spelling mints a second roster row. Each distinct orderId is a
-  // separate charge on that vendor, which is what the detector weighs.
   const seedCharge = (vendor: string, orderId: string) =>
     unwrap(
       createExpense(
@@ -2842,8 +2762,6 @@ describe("problems — cooked meals with nothing planned", () => {
   });
 
   it("never flags a meal that is deliberately recipe-less", async () => {
-    // The whole reason this detector became writable: these are complete
-    // records, not gaps, and flagging them would argue with the stated intent.
     await makeMeal("2026-04-02", { mealKind: "eating_out" });
     await makeMeal("2026-04-03", { mealKind: "takeout" });
     await makeMeal("2026-04-04", { mealKind: "leftovers" });
@@ -2980,10 +2898,6 @@ describe("problems — vendor mini-logo coverage", () => {
 describe("problems — charges not reconciling", () => {
   const ctx = withTestDb();
 
-  // A charge is minted by the expense write (findOrCreateVendor +
-  // findOrCreatePurchase on vendor+orderId), so two lines sharing an order id
-  // land on ONE charge. `statedTotal` is charge-level and is set afterwards —
-  // there is deliberately no path that derives it from the lines.
   const seedLine = (overrides: Partial<ExpenseCreateInput>) =>
     unwrap(
       createExpense(
@@ -3009,8 +2923,6 @@ describe("problems — charges not reconciling", () => {
       vendor: "Reconcile Depot",
       orderId: "RD-SMALL",
     });
-    // Two lines on one order = one charge with two lines, which is the case a
-    // charge-level stated total exists to check.
     const okFirst = await seedLine({
       name: "matching line a",
       cost: 60,
@@ -3055,9 +2967,6 @@ describe("problems — charges not reconciling", () => {
   });
 
   it("doesn't compare a charge with no stated total recorded", async () => {
-    // `statedTotal` is null on ~every charge (nobody has keyed the paperwork in
-    // yet), which reconciles as "unknown" — absence of a claim is not a
-    // discrepancy, and flagging it would make the section permanently full.
     await seedLine({
       name: "no paperwork line",
       cost: 42,
@@ -3173,8 +3082,6 @@ describe("problems — charges not reconciling", () => {
 describe("problems — duplicate spend candidates", () => {
   const ctx = withTestDb();
 
-  // An expense with vendor+orderId mints a Purchase and lands linked; one with
-  // neither stays unlinked, which is the whole population this detector scans.
   const seedLine = (overrides: Partial<ExpenseCreateInput>) =>
     unwrap(
       createExpense(
@@ -3260,8 +3167,6 @@ describe("problems — duplicate spend candidates", () => {
       vendor: "Cable Mart",
       orderId: "CM-1",
     });
-    // Real case: a $22.00 pruners row collided with an unrelated $22.00 order.
-    // Amount and date alone would pair these; the name gate is what refuses.
     await seedLine({ name: "fiskars pruners", cost: 22, date: "2024-02-16" });
 
     expect(await candidates()).toEqual([]);
@@ -3314,8 +3219,6 @@ describe("problems — duplicate spend candidates", () => {
       vendor: "Nail Depot",
       orderId: "ND-NEAR",
     });
-    // Same total and an equally strong name, but further from the lump's date —
-    // so the tiebreak, not the score, decides which one is reported.
     await seedLine({
       name: "galvanized framing nails collated box",
       cost: 43.43,
@@ -3386,7 +3289,6 @@ describe("problems — purchase financial settlement mismatches", () => {
       notes: null,
     });
 
-  /** A posted card charge against the purchase an expense minted. */
   const postCharge = async (
     accountId: FinancialAccountId,
     purchaseShortcode: PurchaseShortcode,
@@ -3514,8 +3416,6 @@ describe("problems — purchase financial settlement mismatches", () => {
       vendor: "Unpriced Mart",
       orderId: "UM-UNKNOWN",
     });
-    // Same shape, except the unpriced row is planned — which takes it out of
-    // the settleable population and restores the comparison.
     const compared = await seedLine({
       name: "planned-unpriced order line",
       cost: 60,
@@ -3587,7 +3487,6 @@ describe("kits counted twice", () => {
       [{ productId: half.entityId, quantity: 2 }],
       ctx.actor,
     );
-    // Both halves on a shelf: the parts account for the one set that was bought.
     await createInventoryEntry(
       ctx.db,
       {
@@ -3601,7 +3500,6 @@ describe("kits counted twice", () => {
     const clean = await findFastProblems(ctx.db);
     expect(clean.kitsCountedTwice.some((row) => row.id === kit.id)).toBe(false);
 
-    // Now the set itself is stocked too — two sets claimed, one bought.
     await createInventoryEntry(
       ctx.db,
       {
@@ -3614,11 +3512,8 @@ describe("kits counted twice", () => {
 
     const found = await findFastProblems(ctx.db);
     const flagged = found.kitsCountedTwice.find((row) => row.id === kit.id);
-    // Presence AND shape: reaching this line at all proves the presenter exists.
     expect(flagged).toBeDefined();
     expect(flagged?.name).toBe("Twice Counted Set");
-    // One set on the shelf under its own name, one set ever bought — and its
-    // two halves already account for that one.
     expect(flagged?.ownUnits).toBe(1);
     expect(flagged?.expectedUnits).toBe(1);
   });

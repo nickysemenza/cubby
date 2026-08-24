@@ -114,7 +114,6 @@ import {
   verification,
 } from "./auth.schema";
 
-// JSON types for JSONB columns
 export type { Amount };
 export type Instruction = { text: string };
 
@@ -148,7 +147,6 @@ const pgTsVector = customType<{
   },
 });
 
-// Re-export Better-Auth tables for use throughout the app
 export {
   account,
   apikey,
@@ -163,7 +161,6 @@ export {
   verification,
 };
 
-// Enums - values derived from Zod schemas
 export const recipeSourceEnum = pgEnum("RecipeSource", recipeSourceValues);
 export const imageStatusEnum = pgEnum("ImageStatus", imageStatusValues);
 export const inventoryPlacementEnum = pgEnum(
@@ -220,7 +217,6 @@ export const backgroundBatchProcessorEnum = pgEnum("BackgroundBatchProcessor", [
   "inline",
 ]);
 
-// Column-set factories — fresh builders per call (avoid shared-builder state).
 const baseTimestamps = () => ({
   createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updatedAt", { mode: "date" })
@@ -254,7 +250,6 @@ const shortcodeColumn = () => text("shortcode").notNull();
 const shortcodeUnique = (tableName: string, column: AnyPgColumn) =>
   uniqueIndex(`${tableName}_shortcode_unique`).on(column);
 
-// Recipe table
 export const recipe = pgTable(
   "Recipe",
   {
@@ -265,17 +260,12 @@ export const recipe = pgTable(
     ...softDeletedAt(),
     SourceType: recipeSourceEnum("SourceType"),
     SourceData: text("SourceData"),
-    // For Book recipes, the cookbook this came from. Nullable: Website/Other
-    // recipes have no cookbook. SourceData is kept synced to the cookbook name
-    // so the source codec stays a pure recipe-row read.
     cookbookId: uuid("cookbookId")
       .$type<CookbookId>()
       .references(() => cookbook.id),
     yield: jsonb("yield").$type<RecipeYield>(),
     servings: integer("servings"),
     tags: text("tags").array(),
-    // Freeform markdown: headnote/intro blurb plus tips ("notes"). Imports
-    // compose it from the source's description + notes; null when absent.
     notes: text("notes"),
     // Precomputed cost/calorie rollup + when it was last computed. `null`
     // totalsComputedAt ⇒ stale (recomputed by the presence-driven drain). See
@@ -327,11 +317,9 @@ export const recipe = pgTable(
     index("Recipe_SourceType_idx").on(table.SourceType),
     index("Recipe_cookbookId_idx").on(table.cookbookId),
     index("Recipe_created_at_desc_idx").on(table.createdAt.desc()),
-    // Partial index for soft delete queries
     index("Recipe_name_active_idx")
       .on(table.name)
       .where(sql`${table.deletedAt} IS NULL`),
-    // Drain target: recipes whose totals need (re)computing.
     index("Recipe_totals_stale_idx")
       .on(table.totalsComputedAt)
       .where(sql`${table.totalsComputedAt} IS NULL`),
@@ -354,15 +342,10 @@ export const cookbook = pgTable(
     id: pkUuid<CookbookId>(),
     shortcode: shortcodeColumn(),
     name: text("name").notNull(),
-    // EPUB OPF <dc:creator> / <dc:subject>; empty arrays when the book has none.
     author: text("author").array().notNull().default(sql`'{}'::text[]`),
     subjects: text("subjects").array().notNull().default(sql`'{}'::text[]`),
-    // The EPUB `source` label (filename/path) from assembly.
     sourceLabel: text("sourceLabel").notNull(),
-    // The full assembled extraction — powers reprocess-without-LLM.
     rawJson: jsonb("rawJson").notNull().$type<ImportRecipe[]>(),
-    // The book's cover, extracted from the EPUB on import. Nullable: older
-    // cookbooks / cover-less EPUBs have none.
     coverImageId: uuid("coverImageId").references(() => image.id),
     // The physical copy on the shelf, when one is owned. Nullable: most
     // cookbooks are EPUB-only, and most shelf cookbooks were never imported.
@@ -394,7 +377,6 @@ export const cookbook = pgTable(
   ],
 );
 
-// RecipeSection table
 export const recipeSection = pgTable(
   "RecipeSection",
   {
@@ -421,7 +403,6 @@ export const recipeSection = pgTable(
   ],
 );
 
-// Ingredient table
 export const ingredient = pgTable(
   "Ingredient",
   {
@@ -448,21 +429,7 @@ export const ingredient = pgTable(
   },
   (table) => [
     shortcodeUnique("Ingredient", table.shortcode),
-    // Case-insensitive uniqueness: the matcher finds ingredients by lower(name)
-    // (buildIngredientWhere), so the unique key must agree — otherwise "Flour"
-    // and "flour" race past the matcher and both insert. The display value keeps
-    // its original casing (first writer wins via ON CONFLICT); only the key is
-    // lowercased. See findOrCreateIngredient's ON CONFLICT (lower(name)).
-    //
-    // `recipeId IS NULL` is the other half of that agreement: buildIngredientWhere
-    // only ever considers STANDALONE ingredients, so a name key spanning the
-    // recipe-link rows too constrains rows the matcher can't return. Sub-recipe
-    // links are named `Recipe: <title>` and identified by recipeId
-    // (Ingredient_recipeId_key), and Recipe_name_key deliberately exempts Book
-    // and Notion recipes — so one title can legitimately exist as a cookbook, a
-    // Notion and a web recipe, and each needs its own link row. Spanning them,
-    // the second link insert conflicted on an index its `where` couldn't see and
-    // reported as "3 shortcode collisions" (#716 follow-up).
+    // Case-insensitive uniqueness must match the lower(name) matcher to prevent concurrent duplicate ingredients.
     uniqueIndex("Ingredient_name_key")
       .on(sql`lower(${table.name})`)
       .where(sql`${table.deletedAt} IS NULL AND ${table.recipeId} IS NULL`),
@@ -471,19 +438,16 @@ export const ingredient = pgTable(
       .where(sql`${table.deletedAt} IS NULL`),
     index("Ingredient_recipeId_idx").on(table.recipeId),
     index("Ingredient_createdAt_idx").on(table.createdAt),
-    // GIN indexes for full-text search
     index("Ingredient_name_gin_idx").using(
       "gin",
       sql`${table.name} gin_trgm_ops`,
     ),
-    // Partial index for soft delete queries
     index("Ingredient_name_active_idx")
       .on(table.name)
       .where(sql`${table.deletedAt} IS NULL`),
   ],
 );
 
-// RecipeSectionIngredient table
 export const recipeSectionIngredient = pgTable(
   "RecipeSectionIngredient",
   {
@@ -506,7 +470,6 @@ export const recipeSectionIngredient = pgTable(
     // for rows created after this column was added.
     rawLine: text("rawLine"),
     modifier: text("modifier"),
-    // Position within the section; see recipeSection.sortOrder for null semantics.
     sortOrder: integer("sortOrder"),
     ...baseTimestamps(),
     ...softDeletedAt(),
@@ -519,11 +482,6 @@ export const recipeSectionIngredient = pgTable(
   ],
 );
 
-// Meal table — a planned eating occasion on a calendar day. Groups one or more
-// recipes (see mealRecipe). Multiple meals may share a date; an optional free-text
-// name ("Dinner", "Sunday prep") and sortOrder distinguish/order them. Pure
-// planning: no inventory mutation, no denormalized cost (rolled up read-time from
-// recipe.totals × scale).
 export const meal = pgTable(
   "Meal",
   {
@@ -555,14 +513,12 @@ export const meal = pgTable(
   },
   (table) => [
     shortcodeUnique("Meal", table.shortcode),
-    // The calendar's range query (date BETWEEN from AND to) is the hot path.
     index("Meal_date_active_idx")
       .on(table.date)
       .where(sql`${table.deletedAt} IS NULL`),
   ],
 );
 
-// MealRecipe — a recipe planned into a meal at a numeric scale multiplier.
 export const mealRecipe = pgTable(
   "MealRecipe",
   {
@@ -575,8 +531,6 @@ export const mealRecipe = pgTable(
       .notNull()
       .$type<RecipeId>()
       .references(() => recipe.id),
-    // Scale multiplier (>= 0.01, enforced at the schema/router layer). Totals are
-    // linear in this factor, so a meal's rollup is sum(recipe.totals × scale).
     scale: real("scale").notNull().default(1),
     sortOrder: integer("sortOrder"),
     ...baseTimestamps(),
@@ -588,7 +542,6 @@ export const mealRecipe = pgTable(
   ],
 );
 
-// Product table
 export const product = pgTable(
   "Product",
   {
@@ -612,7 +565,7 @@ export const product = pgTable(
       .references(() => ingredient.id),
     category: text("category", {
       enum: productCategoryValues,
-    }), // product category for filtering
+    }),
     // Free-form compatibility/grouping tags, same convention as `recipe.tags`.
     // The point is class compatibility, which a product→product edge table
     // models badly: 3 angle grinders × 2 disc products would be 6 edges for one
@@ -630,17 +583,7 @@ export const product = pgTable(
     // aggregate remains read-time so Expense stays the only historical-money
     // authority.
     price: real("price"),
-    // Operator confirmed there's no USDA food for this product, so the coverage
-    // fix stops suggesting a (futile) USDA link and expects manual entry of
-    // weight/volume/calories instead. Does not suppress the problem — the card
-    // stays flagged until those are filled manually.
     usdaUnavailable: boolean("usdaUnavailable"),
-    // Whether shelf records are kept for this KIND of thing — an operator
-    // bookkeeping decision, not a claim about the world. null = undecided (the
-    // "Not on a shelf" worklist), false = reviewed, no shelf claim wanted
-    // (bananas, software), true = tracked. Nullable on purpose: the whole point
-    // is that the undecided state is representable, so the worklist converges
-    // by decision rather than refilling on every grocery run.
     stockTracked: boolean("stockTracked"),
     dataExceptions: jsonb("dataExceptions")
       .notNull()
@@ -656,7 +599,6 @@ export const product = pgTable(
     index("Product_ingredientId_idx").on(table.ingredientId),
     index("Product_createdAt_idx").on(table.createdAt),
     index("Product_name_idx").on(table.name),
-    // GIN indexes for full-text search
     index("Product_name_gin_idx").using("gin", sql`${table.name} gin_trgm_ops`),
     // No GIN on `aliases` (here, Ingredient, or Location): every alias filter
     // is `unnest(aliases) ILIKE`, which an array GIN cannot serve — those
@@ -667,7 +609,6 @@ export const product = pgTable(
       sql`${table.manufacturer} gin_trgm_ops`,
     ),
     index("Product_name_manufacturer_idx").on(table.name, table.manufacturer),
-    // Partial indexes for soft delete queries
     index("Product_name_active_idx")
       .on(table.name)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -677,7 +618,6 @@ export const product = pgTable(
   ],
 );
 
-// ProductExternalId table - generic external identifiers (Amazon ASIN, McMaster part number, etc.)
 export const productExternalId = pgTable(
   "ProductExternalId",
   {
@@ -742,7 +682,6 @@ export const productExternalId = pgTable(
   ],
 );
 
-// ProductUnitMappings table
 export const productUnitMappings = pgTable(
   "ProductUnitMappings",
   {
@@ -822,7 +761,6 @@ export const upcLookupCache = pgTable(
   ],
 );
 
-// Location table
 export const location = pgTable(
   "Location",
   {
@@ -855,8 +793,6 @@ export const location = pgTable(
   },
   (table) => [
     shortcodeUnique("Location", table.shortcode),
-    // Case-insensitive uniqueness, matching the ilike lookup in
-    // findOrCreateLocationByName (see Ingredient_name_key for the rationale).
     uniqueIndex("Location_name_key")
       .on(sql`lower(${table.name})`)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -867,13 +803,11 @@ export const location = pgTable(
     index("Location_parentId_idx").on(table.parentId),
     index("Location_createdAt_idx").on(table.createdAt),
     index("Location_lastBulkInventory_idx").on(table.lastBulkInventory),
-    // GIN index for full-text search
     index("Location_name_gin_idx").using(
       "gin",
       sql`${table.name} gin_trgm_ops`,
     ),
     index("Location_type_name_idx").on(table.type, table.name),
-    // Partial indexes for soft delete queries
     index("Location_name_active_idx")
       .on(table.name)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -883,7 +817,6 @@ export const location = pgTable(
   ],
 );
 
-// EntityEmbedding table - persistent semantic index rows for searchable entities.
 export const entityEmbedding = pgTable(
   "EntityEmbedding",
   {
@@ -977,7 +910,6 @@ export const searchDocument = pgTable(
   ],
 );
 
-/** Durable suppression of an explicitly dismissed, source-scoped suggestion. */
 export const suggestionDismissal = pgTable(
   "SuggestionDismissal",
   {
@@ -1007,7 +939,6 @@ export const suggestionDismissal = pgTable(
   ],
 );
 
-// InventoryEntry table
 export const inventoryEntry = pgTable(
   "InventoryEntry",
   {
@@ -1054,7 +985,6 @@ export const inventoryEntry = pgTable(
   ],
 );
 
-// Image table
 export const image = pgTable(
   "Image",
   {
@@ -1100,7 +1030,6 @@ export const image = pgTable(
   ],
 );
 
-// ProductImage table
 export const productImage = pgTable(
   "ProductImage",
   {
@@ -1126,7 +1055,6 @@ export const productImage = pgTable(
   ],
 );
 
-// LocationImage table
 export const locationImage = pgTable(
   "LocationImage",
   {
@@ -1151,7 +1079,6 @@ export const locationImage = pgTable(
   ],
 );
 
-// RecipeImage table
 export const recipeImage = pgTable(
   "RecipeImage",
   {
@@ -1176,9 +1103,6 @@ export const recipeImage = pgTable(
   ],
 );
 
-// Project tracker tables (migrated from the retired Notion databases).
-// `locations` is deliberately free-form text[] — house names live in data, not
-// in a committed enum (public repo).
 export const project = pgTable(
   "Project",
   {
@@ -1203,7 +1127,6 @@ export const project = pgTable(
     startDate: date("startDate", { mode: "string" }),
     endDate: date("endDate", { mode: "string" }),
     icon: text("icon"),
-    // Freeform markdown, converted from the Notion page body at import.
     notes: text("notes"),
     googleDriveFolderUrl: text("googleDriveFolderUrl"),
     notionPageUrl: text("notionPageUrl"),
@@ -1228,7 +1151,6 @@ export const project = pgTable(
   ],
 );
 
-// Blocked-by edges; "blocking" is the reverse read of the same rows.
 export const projectDependency = pgTable(
   "ProjectDependency",
   {
@@ -1279,8 +1201,6 @@ export const projectToolUsage = pgTable(
   ],
 );
 
-// A tool purchase intention. Products are alternatives for one desired outcome;
-// inventory remains the proof of current ownership and is never changed here.
 export const wish = pgTable(
   "Wish",
   {
@@ -1299,8 +1219,6 @@ export const wish = pgTable(
   ],
 );
 
-// No option-specific data belongs here in v1: this edge says a live Tool
-// Product is one alternative for a Wish. One Product can serve many Wishes.
 export const wishCandidate = pgTable(
   "WishCandidate",
   {
@@ -1334,14 +1252,9 @@ export const task = pgTable(
     status: text("status", { enum: taskStatusValues })
       .notNull()
       .default("not_started"),
-    // Nullable so future inbox tasks can exist without a project; every
-    // Notion-imported row has one.
     projectId: uuid("projectId")
       .$type<ProjectId>()
       .references(() => project.id),
-    // Optional subject of the work — the product/item this task acts on.
-    // This is deliberately singular: one task may concern one product, while
-    // a product can accumulate a chronological history of many tasks.
     subjectProductId: uuid("subjectProductId")
       .$type<ProductId>()
       .references(() => product.id),
@@ -1413,11 +1326,6 @@ export const vendor = pgTable(
     shortcode: shortcodeColumn(),
     name: text("name").notNull(),
     website: text("website"),
-    /**
-     * The optional, first-class brand mark for this vendor. Unlike gallery
-     * attachments, a logo is one owned presentation asset. Its absence is
-     * meaningful: VendorMark intentionally renders a monogram instead.
-     */
     logoImageId: uuid("logoImageId").references(() => image.id),
     /**
      * URL pattern for this vendor's own order-details page, with `{orderId}`
@@ -1469,7 +1377,6 @@ export const ledgerParty = pgTable(
   ],
 );
 
-/** A settlement account, including provisional evidence from receipts. */
 export const financialAccount = pgTable(
   "FinancialAccount",
   {
@@ -1550,7 +1457,6 @@ export const purchase = pgTable(
       "Purchase_statedTotal_whole_cent_check",
       sql`${table.statedTotal} IS NULL OR abs(${table.statedTotal} * 100 - round(${table.statedTotal} * 100)) < 0.0000001`,
     ),
-    // Order ids are projected into SearchDocument identifiers/keywords.
     index("Purchase_orderId_gin_idx").using(
       "gin",
       sql`${table.orderId} gin_trgm_ops`,
@@ -1562,12 +1468,6 @@ export const purchase = pgTable(
   ],
 );
 
-/**
- * A Purchase's documents — the emailed PDF invoice, a photo of the paper slip, or
- * both. A join table rather than a direct `imageId?` on `purchase` so it reuses
- * `associatePendingImages` and the `attach_file` path, and so one statement
- * `Image` can be filed against several Purchases. Mirrors `projectImage` below.
- */
 export const purchaseImage = pgTable(
   "PurchaseImage",
   {
@@ -1598,22 +1498,6 @@ export const purchaseImage = pgTable(
   ],
 );
 
-// Provenance: this vendor order bought this Product. Deliberately NOT money —
-// `Expense` remains the only spend ledger and nothing here is ever summed.
-//
-// It exists because `Expense.productId` cannot answer the question. That edge is
-// a COST-BASIS link feeding `SUM(cost)/SUM(productQuantity)`, so it is only
-// available where the money decomposes per item. An order paid as a deposit plus
-// a balance is `lineBasis: "allocation"` — the deposit buys no particular item —
-// and pointing several products at it would halve every derived price and claim
-// phantom units. Those products are exactly the ones left with no navigable path
-// back to the order that bought them, which is the hole this fills.
-//
-// One live pair is one link. No quantity: `Expense.productQuantity` already owns
-// "how many units did this money buy", and a second copy here would answer the
-// same question from a second table with no rule for which wins when they
-// disagree. A real multi-unit need belongs on a line-item table with a unit
-// price beside it, not here.
 export const purchaseProduct = pgTable(
   "PurchaseProduct",
   {
@@ -1630,7 +1514,6 @@ export const purchaseProduct = pgTable(
     ...softDeletedAt(),
   },
   (table) => [
-    // Partial, so detaching and re-attaching the same pair stays legal.
     uniqueIndex("PurchaseProduct_purchaseId_productId_key")
       .on(table.purchaseId, table.productId)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -1667,8 +1550,6 @@ export const productComponent = pgTable(
     ...softDeletedAt(),
   },
   (table) => [
-    // Partial, so detaching and re-attaching the same pair stays legal — same
-    // rule as PurchaseProduct's.
     uniqueIndex("ProductComponent_parentProductId_componentProductId_key")
       .on(table.parentProductId, table.componentProductId)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -1759,32 +1640,6 @@ export const financialTransaction = pgTable(
   ],
 );
 
-// How much of ONE settlement transaction settled ONE Purchase.
-//
-// A real card line is not one-to-one with a vendor order: a return desk will
-// process items from several orders onto one receipt, and a statement will post
-// one combined line for several same-day refunds. Before this table the only way
-// to record that was to fabricate one *posted* FinancialTransaction per Purchase
-// — which made the database assert card events that never occurred, since every
-// consumer (the transaction API, the finance list, MCP, postedRefundTotal) reads
-// those rows as literal settlement evidence and no note can repair a typed field.
-//
-// EVIDENCE ONLY. `amount` never enters spend — spend is SUM(Expense.cost) and
-// nothing else. Nothing may sum this column into a project, calendar, or purchase
-// total; its readers are the settlement reconciliation cue and the Problems
-// detectors, and that is the whole list.
-//
-// INVARIANT: a live transaction has EITHER zero live allocations (unlinked
-// evidence) OR live allocations that sum to its own amount to the cent, all
-// carrying that amount's sign. Enforced in the repo write path under a FOR UPDATE
-// lock on the transaction row — a row-level CHECK cannot see sibling rows — and
-// audited after the fact by findFinancialTransactionAllocationDefects.
-//
-// Mixed-sign allocations are deliberately unsupported: same-sign is what makes
-// "sums to the amount" a decomposition rather than an arbitrary set of numbers
-// that happens to add up. A +$1,000/-$995 pair netting $5 would assert $1,000 of
-// settlement against one purchase. A genuinely two-directional event is two
-// transactions, which is how the statement will show it anyway.
 export const financialTransactionAllocation = pgTable(
   "FinancialTransactionAllocation",
   {
@@ -1862,21 +1717,12 @@ export const ledgerTransfer = pgTable(
   ],
 );
 
-/**
- * One provider export, as submitted.
- *
- * Cubby holds one side of a two-sided comparison; this and `StatementRow` are
- * the other side. They are evidence, not decisions: nothing here resolves an
- * account, links a Purchase, or declares two rows the same charge.
- */
 export const statementImport = pgTable(
   "StatementImport",
   {
     id: pkUuid(),
     source: text("source").notNull(),
-    /** The export's own filename or a human label: "copilot-2026-08-11.csv". */
     label: text("label").notNull(),
-    /** Client hash of the whole export — the find-or-create key. */
     fingerprint: text("fingerprint").notNull(),
     /**
      * Which date the provider's rows carry. Recorded, never resolved: one export
@@ -1885,11 +1731,6 @@ export const statementImport = pgTable(
      * transaction date. Stating it beats guessing per row.
      */
     dateKind: text("dateKind").notNull().default("unknown"),
-    /**
-     * Rows the client says the export contains. Compared against rows actually
-     * stored, a partial or abandoned chunked ingest becomes visible rather than
-     * looking like a complete import that happens to be short.
-     */
     rowCountDeclared: integer("rowCountDeclared"),
     notes: text("notes"),
     ...baseTimestamps(),
@@ -1937,13 +1778,10 @@ export const statementRow = pgTable(
       .notNull()
       .references(() => statementImport.id),
     source: text("source").notNull(),
-    /** `v1:<sha256>`, server-derived from the provider fields below. */
     externalId: text("externalId").notNull(),
 
-    // Verbatim provider evidence.
     accountDescriptor: text("accountDescriptor").notNull(),
     statementDate: date("statementDate", { mode: "string" }).notNull(),
-    /** Cubby convention: outflow positive. */
     amount: doublePrecision("amount").notNull(),
     /**
      * The export's own signed figure. Earns its bytes: with it,
@@ -1959,7 +1797,6 @@ export const statementRow = pgTable(
     providerStatus: text("providerStatus"),
     providerNotes: text("providerNotes"),
 
-    // Agent-written judgments.
     accountId: uuid("accountId")
       .$type<FinancialAccountId>()
       .references(() => financialAccount.id),
@@ -1986,7 +1823,6 @@ export const statementRow = pgTable(
     index("StatementRow_batchId_idx").on(table.batchId),
     index("StatementRow_accountId_idx").on(table.accountId),
     index("StatementRow_statementDate_idx").on(table.statementDate),
-    // The worklist: open, unsuperseded rows, newest first.
     index("StatementRow_worklist_idx")
       .on(table.statementDate.desc())
       .where(
@@ -2016,8 +1852,6 @@ export const statementRow = pgTable(
       "StatementRow_source_slug_check",
       sql`${table.source} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND ${table.source} = lower(trim(${table.source}))`,
     ),
-    // Same whole-cent rule as FinancialTransaction.amount, on both figures. A
-    // zero-amount statement row is not evidence of anything.
     check(
       "StatementRow_amount_whole_cent_check",
       sql`${table.amount} <> 0 AND abs(${table.amount} * 100 - round(${table.amount} * 100)) < 0.0000001`,
@@ -2095,51 +1929,7 @@ export const expense = pgTable(
     productId: uuid("productId")
       .$type<ProductId>()
       .references(() => product.id),
-    // Number of units of `productId` covered by this ledger line. Nullable is
-    // intentional: old receipts frequently prove the cost but not the count,
-    // and unknown must never be silently treated as one. Measured package
-    // conversions still belong on Product unit mappings, not here.
-    //
-    // FRACTIONAL since 2026-08-22, and `double precision` rather than integer
-    // for the same reason `cost` is. `InventoryEntry.amount` has always been a
-    // free float, so a shelf could hold `0.5 each` while this column could only
-    // ever say `1` — half a conduit coil installed and the rest binned had no
-    // representable exit, and every partially-used product sat in "Shelf
-    // disagrees" forever because the variance could not reach zero. The unit
-    // this counts is the shelf's unit, so it is divisible exactly when the
-    // shelf's is. Contrast `ProductComponent.quantity` (kit cardinality) and
-    // `Product.expectedQuantity` (a one-of-a-kind flag, tested only as `= 1`),
-    // both of which stay integral on purpose.
-    //
-    // SIGNED — money direction wins, and the quantity's own sign is consulted
-    // only when there is no money:
-    //   cost > 0  → acquisition of +|qty|
-    //   cost < 0  → exit of −|qty|   (enforced since 2026-08-16 by
-    //               `assertQuantitySignMatchesCost`; readers still abs() as
-    //               defence-in-depth rather than trusting the column)
-    //   cost = 0  → the sign IS the fact: +qty is a free acquisition (promo
-    //               pack, bundled accessory), −qty is a discard/write-off
-    //   qty 0     → KNOWN-NEGATIVE COST ONLY: money moved and no unit did. A
-    //               price concession with the item KEPT — an Amazon 'Account
-    //               adjustment', a partial refund for shipping damage. An
-    //               unclassified line (cost NULL) may NOT carry it: zero is a
-    //               claim about the money's direction, and that row has none
-    //               yet. See below.
-    //   qty NULL  → unknown; contributes nothing and is reported as uncertainty
-    //
-    // Before the signed rule a $0 line was ambiguous between those last two —
-    // see the essay above `findSoldButStillStocked` in
-    // repo/problems/detectors-product.ts for why that ambiguity needed a real
-    // signal on the row rather than a cleverer query.
-    //
-    // Zero was banned outright until 2026-08-17, which forced the concession
-    // class to borrow NULL — the one value that already meant 'unknown'. The
-    // cost was visible: `unknownExitLines` lit the warning `−N?` cue beside
-    // Expected on all eight of them, reporting a definitively-known quantity as
-    // data-entry debt. Zero is only legal on a negative-cost line because that
-    // is the only direction where 'money without units' is a real event: on a
-    // positive line it would be a fee or an allocation (neither carries a
-    // product), and on a $0 line it would say nothing at all.
+    // Optional signed product quantity: unknown is never guessed; settlement exits are represented as negative units.
     productQuantity: doublePrecision("productQuantity"),
     // The charge this line belongs to. Nullable: the 193 rows with no vendor
     // recorded have nothing to attach to, and forcing a synthetic charge on them
@@ -2295,7 +2085,6 @@ export const ledgerSourceClaim = pgTable(
   ],
 );
 
-// ProjectImage table
 export const projectImage = pgTable(
   "ProjectImage",
   {
@@ -2320,7 +2109,6 @@ export const projectImage = pgTable(
   ],
 );
 
-// Relations
 export const recipeRelations = relations(recipe, ({ one, many }) => ({
   sections: many(recipeSection),
   pointerIngredient: one(ingredient, {
@@ -2416,11 +2204,9 @@ export const productRelations = relations(product, ({ one, many }) => ({
   // Cookbooks whose physical copy this product is. `many` only because Drizzle
   // models the reverse of a nullable FK that way — in practice it's 0 or 1.
   cookbooks: many(cookbook),
-  // What's inside this product, when it's a kit — the parent side.
   components: many(productComponent, {
     relationName: "productComponent_parentProduct",
   }),
-  // The kits this product is listed inside — the component side.
   partOfKits: many(productComponent, {
     relationName: "productComponent_componentProduct",
   }),
@@ -2467,7 +2253,6 @@ export const locationRelations = relations(location, ({ one, many }) => ({
   }),
   inventoryEntries: many(inventoryEntry),
   images: many(locationImage),
-  // The SKU this location is an instance of; null for rooms, areas, drawers.
   product: one(product, {
     fields: [location.productId],
     references: [product.id],
@@ -2809,7 +2594,6 @@ export const recipeImageRelations = relations(recipeImage, ({ one }) => ({
   }),
 }));
 
-// AI Analysis table — general cache for entity-bound AI outputs.
 export const aiAnalysis = pgTable(
   "AiAnalysis",
   {
@@ -2840,7 +2624,6 @@ export const aiAnalysis = pgTable(
   ],
 );
 
-// AI usage table — lightweight app-side observability for AI Gateway/provider calls.
 export const aiUsage = pgTable(
   "AiUsage",
   {
@@ -3010,7 +2793,6 @@ export const backgroundJob = pgTable(
   ],
 );
 
-// Audit Log table
 export const auditLog = pgTable(
   "AuditLog",
   {
@@ -3049,28 +2831,13 @@ export const auditLogRelations = relations(auditLog, ({ one }) => ({
   }),
 }));
 
-// App Settings table - singleton table for app-wide configuration
 export const appSettings = pgTable("AppSettings", {
   id: pkUuid(),
   metadata: jsonb("metadata").$type<Record<string, unknown>>(),
   ...baseTimestamps(),
 });
 
-/**
- * Views owned by the `pg_stat_statements` extension, declared so Drizzle leaves
- * them alone.
- *
- * `drizzle-kit push` diffs the WHOLE public schema, so any object it cannot see
- * a declaration for is scheduled for a DROP. These two are created and owned by
- * the extension, and the drop fails at the dependency check — which aborted the
- * entire push, including unrelated additive changes. (Drizzle's own hint is to
- * drop the extension instead; that would remove production query-statistics
- * collection to satisfy a schema differ, which is backwards.)
- *
- * `.existing()` declares them WITHOUT Drizzle managing them: no create, no
- * drop, no diff. Nothing in the app reads these — they exist purely so the
- * differ stops proposing to delete them.
- */
+/** Declare extension-owned views so drizzle-kit does not schedule unrecognized public-schema objects for DROP. */
 export const pgStatStatements = pgView("pg_stat_statements", {
   // A representative column only: `.existing()` needs a shape, and since
   // Drizzle never creates or reads these, the shape is not verified against

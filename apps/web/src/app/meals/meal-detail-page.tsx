@@ -10,24 +10,21 @@ import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
-import { Trash2 } from "lucide-react";
+import { ClipboardList, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { WithRecipeSearch } from "~/app/_components/combobox/with-search-hook";
-import { EntityActivityCard } from "~/app/_components/data-table/detail-page";
+import { DetailSections } from "~/app/_components/data-table/detail-page";
 import { DatePickerInput } from "~/app/_components/date-picker-input";
 import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
-import { RelationshipExplorer } from "~/app/_components/relationships/relationship-explorer";
-import { relationshipsSectionIcon as RelationshipsIcon } from "~/app/_components/relationships/relationship-tree";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
@@ -186,164 +183,176 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
       heroActions={{ secondary: deleteButton }}
     >
       {deleteDialog}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle>
-            <RelationshipsIcon className="size-3.5 shrink-0 text-slate" />
-            Relationships
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <RelationshipExplorer entity="meal" sourceId={meal.id} />
-        </CardContent>
-      </Card>
-      <Stack>
-        <Row align="end" wrap gap="md">
-          <Stack gap="sm">
-            <Input
-              value={nameValue}
-              placeholder="Meal name (optional)"
-              className="h-9 w-64 font-medium"
-              onChange={(e) => setName(e.target.value)}
-              onBlur={() => {
-                const next = nameValue.trim() || null;
-                if (next !== (meal.name ?? null)) {
-                  updateMeal.mutate({ id: mealId, data: { name: next } });
-                }
-              }}
-            />
-            <DatePickerInput
-              value={meal.date}
-              aria-label="Meal date"
-              className="w-44"
-              required
-              onChange={(value) => {
-                if (!value) return;
-                updateMeal.mutate({
-                  id: mealId,
-                  data: { date: value },
-                });
-              }}
-            />
-          </Stack>
-          <Stack gap="sm">
-            <Row align="center" gap="tight">
-              <EditableCell
-                value={meal.mealType}
-                config={{ type: "select", options: mealTypeOptions }}
-                onSave={async (mealType) => {
-                  // Nullable on purpose — clearing it means "unslotted", which
-                  // is a real state, not a rejected edit.
-                  await updateMeal.mutateAsync({
-                    id: mealId,
-                    data: { mealType: (mealType as MealType | null) || null },
-                  });
-                }}
-                renderValue={(value) =>
-                  value ? (
-                    <Badge variant="outline">
-                      {MEAL_TYPE_LABELS[value as MealType]}
-                    </Badge>
+      <DetailSections
+        rawData={meal}
+        sections={[
+          {
+            id: "meal-plan",
+            title: "Meal plan",
+            icon: ClipboardList,
+            placement: "full",
+            surface: "plain",
+            content: (
+              <Stack>
+                <Row align="end" wrap gap="md">
+                  <Stack gap="sm">
+                    <Input
+                      value={nameValue}
+                      placeholder="Meal name (optional)"
+                      className="h-9 w-64 font-medium"
+                      onChange={(e) => setName(e.target.value)}
+                      onBlur={() => {
+                        const next = nameValue.trim() || null;
+                        if (next !== (meal.name ?? null)) {
+                          updateMeal.mutate({
+                            id: mealId,
+                            data: { name: next },
+                          });
+                        }
+                      }}
+                    />
+                    <DatePickerInput
+                      value={meal.date}
+                      aria-label="Meal date"
+                      className="w-44"
+                      required
+                      onChange={(value) => {
+                        if (!value) return;
+                        updateMeal.mutate({
+                          id: mealId,
+                          data: { date: value },
+                        });
+                      }}
+                    />
+                  </Stack>
+                  <Stack gap="sm">
+                    <Row align="center" gap="tight">
+                      <EditableCell
+                        value={meal.mealType}
+                        config={{ type: "select", options: mealTypeOptions }}
+                        onSave={async (mealType) => {
+                          // Nullable on purpose — clearing it means "unslotted", which
+                          // is a real state, not a rejected edit.
+                          await updateMeal.mutateAsync({
+                            id: mealId,
+                            data: {
+                              mealType: (mealType as MealType | null) || null,
+                            },
+                          });
+                        }}
+                        renderValue={(value) =>
+                          value ? (
+                            <Badge variant="outline">
+                              {MEAL_TYPE_LABELS[value as MealType]}
+                            </Badge>
+                          ) : (
+                            <NoneValue />
+                          )
+                        }
+                      />
+                      {meal.mealType ? (
+                        <EntityFilterLink
+                          to="/meals"
+                          search={{ view: "table", mealType: meal.mealType }}
+                          label={`Show all ${MEAL_TYPE_LABELS[meal.mealType]} meals`}
+                        />
+                      ) : null}
+                    </Row>
+                    <Row align="center" gap="tight">
+                      <EditableCell
+                        value={meal.mealKind}
+                        config={{ type: "select", options: mealKindOptions }}
+                        onSave={async (mealKind) => {
+                          // NOT NULL — a cleared select is a no-op, not a null write.
+                          if (!mealKind) return;
+                          await updateMeal.mutateAsync({
+                            id: mealId,
+                            data: { mealKind: mealKind as MealKind },
+                          });
+                        }}
+                        renderValue={(value) => (
+                          <Badge
+                            variant={mealKindBadgeVariant[value as MealKind]}
+                          >
+                            {MEAL_KIND_LABELS[value as MealKind]}
+                          </Badge>
+                        )}
+                      />
+                      <EntityFilterLink
+                        to="/meals"
+                        search={{ view: "table", mealKind: meal.mealKind }}
+                        label={`Show all ${MEAL_KIND_LABELS[meal.mealKind]} meals`}
+                      />
+                    </Row>
+                  </Stack>
+                </Row>
+
+                <Stack gap="sm">
+                  {meal.recipes.length === 0 ? (
+                    // A meal you aren't cooking is COMPLETE with no recipes — telling
+                    // someone to add one would be wrong, and it's also why this meal
+                    // contributes nothing to the shopping list.
+                    <Description>
+                      {meal.mealKind === "cooked"
+                        ? "No recipes yet — add one below."
+                        : `${MEAL_KIND_LABELS[meal.mealKind]} — no recipes needed.`}
+                    </Description>
                   ) : (
-                    <NoneValue />
-                  )
-                }
-              />
-              {meal.mealType ? (
-                <EntityFilterLink
-                  to="/meals"
-                  search={{ view: "table", mealType: meal.mealType }}
-                  label={`Show all ${MEAL_TYPE_LABELS[meal.mealType]} meals`}
-                />
-              ) : null}
-            </Row>
-            <Row align="center" gap="tight">
-              <EditableCell
-                value={meal.mealKind}
-                config={{ type: "select", options: mealKindOptions }}
-                onSave={async (mealKind) => {
-                  // NOT NULL — a cleared select is a no-op, not a null write.
-                  if (!mealKind) return;
-                  await updateMeal.mutateAsync({
-                    id: mealId,
-                    data: { mealKind: mealKind as MealKind },
-                  });
-                }}
-                renderValue={(value) => (
-                  <Badge variant={mealKindBadgeVariant[value as MealKind]}>
-                    {MEAL_KIND_LABELS[value as MealKind]}
-                  </Badge>
-                )}
-              />
-              <EntityFilterLink
-                to="/meals"
-                search={{ view: "table", mealKind: meal.mealKind }}
-                label={`Show all ${MEAL_KIND_LABELS[meal.mealKind]} meals`}
-              />
-            </Row>
-          </Stack>
-        </Row>
+                    meal.recipes.map((mr) => (
+                      <RecipeRow
+                        key={mr.id}
+                        mr={mr}
+                        mealKey={mealKey}
+                        onChanged={invalidate}
+                      />
+                    ))
+                  )}
+                  {pendingRecipeName && (
+                    <Row
+                      align="center"
+                      gap="sm"
+                      className="border border-[var(--border)] p-2 opacity-60"
+                    >
+                      <span className="flex-1 truncate font-medium text-sm">
+                        Adding recipe…
+                      </span>
+                    </Row>
+                  )}
+                </Stack>
 
-        <Stack gap="sm">
-          {meal.recipes.length === 0 ? (
-            // A meal you aren't cooking is COMPLETE with no recipes — telling
-            // someone to add one would be wrong, and it's also why this meal
-            // contributes nothing to the shopping list.
-            <Description>
-              {meal.mealKind === "cooked"
-                ? "No recipes yet — add one below."
-                : `${MEAL_KIND_LABELS[meal.mealKind]} — no recipes needed.`}
-            </Description>
-          ) : (
-            meal.recipes.map((mr) => (
-              <RecipeRow
-                key={mr.id}
-                mr={mr}
-                mealKey={mealKey}
-                onChanged={invalidate}
-              />
-            ))
-          )}
-          {pendingRecipeName && (
-            <Row
-              align="center"
-              gap="sm"
-              className="border border-[var(--border)] p-2 opacity-60"
-            >
-              <span className="flex-1 truncate font-medium text-sm">
-                Adding recipe…
-              </span>
-            </Row>
-          )}
-        </Stack>
-
-        <div className="max-w-sm">
-          <Description as="span" size="xs" className="mb-1 block">
-            Add a recipe
-          </Description>
-          <WithRecipeSearch>
-            {({ items, onSearchChange, isLoading, onOpenChange }) => (
-              <EntityPicker
-                entity="recipe"
-                label="recipe"
-                items={items}
-                value={null}
-                placeholder="Search recipes…"
-                disabled={addRecipe.isPending}
-                onSearchChange={onSearchChange}
-                onOpenChange={onOpenChange}
-                isLoading={isLoading}
-                setValue={(recipe) => {
-                  if (!recipe) return;
-                  addRecipe.mutate({ mealId, recipeId: recipe.id, scale: 1 });
-                }}
-              />
-            )}
-          </WithRecipeSearch>
-        </div>
-
-        <EntityActivityCard entity="meal" entityId={mealId} />
-      </Stack>
+                <div className="max-w-sm">
+                  <Description as="span" size="xs" className="mb-1 block">
+                    Add a recipe
+                  </Description>
+                  <WithRecipeSearch>
+                    {({ items, onSearchChange, isLoading, onOpenChange }) => (
+                      <EntityPicker
+                        entity="recipe"
+                        label="recipe"
+                        items={items}
+                        value={null}
+                        placeholder="Search recipes…"
+                        disabled={addRecipe.isPending}
+                        onSearchChange={onSearchChange}
+                        onOpenChange={onOpenChange}
+                        isLoading={isLoading}
+                        setValue={(recipe) => {
+                          if (!recipe) return;
+                          addRecipe.mutate({
+                            mealId,
+                            recipeId: recipe.id,
+                            scale: 1,
+                          });
+                        }}
+                      />
+                    )}
+                  </WithRecipeSearch>
+                </div>
+              </Stack>
+            ),
+          },
+        ]}
+      />
     </Page>
   );
 }

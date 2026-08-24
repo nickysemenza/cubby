@@ -182,8 +182,6 @@ describe("planProductComponentMerge", () => {
   });
 
   it("keeps a row whose two ends both merge out of the fold plans", () => {
-    // Both ends collapse to the survivor, so this row IS the cycle — planning a
-    // re-point for it would describe work the refusal is about to cancel.
     const plan = planProductComponentMerge({
       keepId: KIT,
       loserIds: [PART],
@@ -240,8 +238,6 @@ describe("planUnitMappingFold", () => {
   });
 
   it("treats the same edge stated in reverse as one slot", () => {
-    // `1 g = 1.087 ml` is `1 ml = 0.92 g` read the other way; an ordered
-    // (a.unit, b.unit) key would miss it and leave the survivor holding both.
     const plan = planUnitMappingFold({
       keeperRows: [mapping("keep", KIT, [1, "ml"], [0.92, "g"])],
       loserRows: [mapping("lose", OTHER, [1, "g"], [1 / 0.92, "ml"])],
@@ -259,7 +255,6 @@ describe("planUnitMappingFold", () => {
   });
 
   it("flags a disagreeing ratio as a conflict, the keeper's edge standing", () => {
-    // The olive oils: 0.9 vs 0.92 g/ml. Keeping both is the defect.
     const plan = planUnitMappingFold({
       keeperRows: [mapping("keep", KIT, [1, "ml"], [0.92, "g"])],
       loserRows: [mapping("lose", OTHER, [1, "ml"], [0.9, "g"], "unk")],
@@ -303,8 +298,6 @@ describe("planUnitMappingFold", () => {
   });
 
   it("folds two losers colliding with each other, not just with the keeper", () => {
-    // No keeper edge for this pair, so the first loser claims the slot and the
-    // second absorbs into it — otherwise the survivor still ends up with both.
     const plan = planUnitMappingFold({
       keeperRows: [],
       loserRows: [

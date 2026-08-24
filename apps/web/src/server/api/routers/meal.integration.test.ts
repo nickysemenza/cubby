@@ -14,8 +14,6 @@ import { createTestCaller } from "../trpc";
 import { mealRouter } from "./meal";
 import { recipeRouter } from "./recipe";
 
-// Router behavior against a real (IntegresQL) DB. The pure rollup/scale math
-// lives in repo/meal/helpers.unit.test.ts.
 describe("mealRouter", () => {
   const ctx = withTestDb();
 
@@ -70,7 +68,6 @@ describe("mealRouter", () => {
     expect(inRange[0]!.recipes).toHaveLength(1);
     expect(inRange[0]!.recipes[0]!.scale).toBe(2);
 
-    // Outside the range, nothing.
     const empty = await mealCaller().getByDateRange({
       from: "2026-07-01",
       to: "2026-07-31",
@@ -93,7 +90,6 @@ describe("mealRouter", () => {
 
     await mealCaller().delete({ ids: [meal.id] });
 
-    // The meal (and, via cascade, its recipes) are gone from all reads.
     const after = await getMealsByDateRange(ctx.db, "2026-06-14", "2026-06-16");
     expect(after).toHaveLength(0);
     await expect(mealCaller().getByID({ id: meal.id })).rejects.toThrow();
@@ -143,16 +139,12 @@ describe("mealRouter", () => {
     });
 
     const item = list.items.find((i) => i.name === "flour");
-    // 240 g at $6 per 120 g.
     expect(item?.estimatedCost).toBeCloseTo(12, 2);
     expect(list.pricedItems).toBe(1);
     expect(list.estimatedTotal).toBeCloseTo(12, 2);
   });
 
   it("omits non-cooked meals from the shopping list and discloses them", async () => {
-    // The double-count this prevents: a leftovers night still points at the
-    // recipe it was cooked from, so counting it would buy the ingredients a
-    // second time.
     const flour = await seedFlourWithStock({ value: 0, unit: "g" });
     const recipe = await createRecipe("Pancakes", flour.shortcode, {
       value: 1,
@@ -193,12 +185,10 @@ describe("mealRouter", () => {
 
     // Only the cooked meal is a column.
     expect(list.meals.map((m) => m.id)).toEqual([cooked.id]);
-    // 120 g, not 240 — the leftovers night contributed nothing.
     expect(list.items).toHaveLength(1);
     expect(list.items[0]!.needValue).toBeCloseTo(120, 1);
     expect(list.items[0]!.perMeal).toHaveLength(1);
 
-    // Omitted, not silently dropped — both kinds are named.
     expect(list.omittedMeals.map((m) => [m.id, m.mealKind]).sort()).toEqual(
       [
         [leftovers.id, "leftovers"],
@@ -208,7 +198,6 @@ describe("mealRouter", () => {
   });
 
   it("shopping list sums needs across meals but counts inventory ONCE", async () => {
-    // 500 g flour on hand. Two recipes, each using flour, in two meals.
     const flour = await seedFlourWithStock({ value: 500, unit: "g" });
     const recipeA = await createRecipe("A", flour.shortcode, {
       value: 2,
@@ -248,13 +237,10 @@ describe("mealRouter", () => {
     const item = list.items[0]!;
     expect(item.name).toBe("flour");
     expect(item.basisUnit).toBe("g");
-    // Need = 240 (A) + 240 (B×2) = 480 g.
     expect(item.needValue).toBeCloseTo(480, 1);
-    // Have is the on-hand 500 g counted ONCE — NOT 1000 (the double-count bug).
     expect(item.haveValue).toBeCloseTo(500, 1);
     expect(item.shortfall).toBe(0);
     expect(item.status).toBe("ok");
-    // Each meal's contribution is attributed in the breakdown.
     expect(item.perMeal).toHaveLength(2);
     expect(item.perMeal.map((c) => Math.round(c.needValue)).sort()).toEqual([
       240, 240,
@@ -297,7 +283,6 @@ describe("mealRouter", () => {
   });
 
   describe("shopping list sub-recipes", () => {
-    /** A yielding recipe usable as a sub-recipe. */
     const createSub = (
       name: string,
       recipeYield: { value: number; unit: string } | null,
@@ -355,7 +340,6 @@ describe("mealRouter", () => {
     };
 
     it("includes ingredients reached through a sub-recipe", async () => {
-      // Before expansion this list was EMPTY — the whole bug.
       const flour = await seedFlourWithStock({ value: 500, unit: "g" });
       const sub = await createSub(
         "Dough",
@@ -432,7 +416,6 @@ describe("mealRouter", () => {
 
       const list = await planOne(parent.id);
 
-      // No pseudo-item: a zero-shortfall row would sort last and read as fine.
       expect(list.items).toHaveLength(0);
       expect(list.unexpanded).toHaveLength(1);
       const gap = list.unexpanded[0]!;

@@ -8,12 +8,12 @@ async function handler({ request }: { request: Request }) {
     const { unauthorizedResponse, verifyMcpToken } = await import(
       "~/server/mcp/auth"
     );
-    const { domainRouter } = await import("~/server/api/domain");
+    const { mcpWorkflowRouter } = await import("~/server/api/mcp-workflows");
     const { createCallerFactory, createTRPCContext } = await import(
       "~/server/api/trpc"
     );
     const { emitTelemetry } = await import("~/server/telemetry");
-    const createCaller = createCallerFactory(domainRouter);
+    const createCaller = createCallerFactory(mcpWorkflowRouter);
 
     // OAuth 2.1 only. Clients (claude.ai connectors, Claude Code) discover the
     // flow from the WWW-Authenticate header on this 401, register dynamically,
@@ -34,6 +34,16 @@ async function handler({ request }: { request: Request }) {
       scopes: [],
       extra: {
         caller,
+        entityKernel: {
+          db: ctx.db,
+          actorContext: ctx.actorContext,
+          usdaClient: ctx.usdaClient,
+          upcLookupClient: ctx.upcLookupClient,
+          services: {
+            recipeCosting: ctx.services.recipeCosting,
+            locationValuation: ctx.services.locationValuation,
+          },
+        },
         telemetry: {
           identity: {
             userId: actor.userId,

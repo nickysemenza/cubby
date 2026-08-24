@@ -41,9 +41,7 @@
  * package.
  */
 
-// Cookbook source/import completeness
 export { findPartiallyImportedCookbooks } from "./detectors-cookbook";
-// Population counts behind the coverage meters (the "M" in "N of M")
 export { findCoverageTotals } from "./detectors-coverage";
 // Embedding-coverage detector (mirror of the orphaned-embedding sweep)
 export {
@@ -58,7 +56,6 @@ export {
   findInvalidFinancialJson,
   loadAllocationDefectPresenters,
 } from "./detectors-financial";
-// Ingredient-centric detectors
 export {
   findIngredientsWithUnusedAliases,
   pruneUnusedAliases,
@@ -73,7 +70,6 @@ export {
   findDuplicateVendors,
   findManufacturerSpellingVariants,
 } from "./detectors-label-variants";
-// Product-centric detectors (+ ProductWithBetterUpcData type re-export)
 export {
   findDuplicateProductIdentities,
   findLinkedProductIds,
@@ -87,16 +83,13 @@ export {
   recipeUsageCountsByProduct,
   synthesizeEffectiveMappings,
 } from "./detectors-product";
-// Purchase-centric detectors (the soft stated-total-vs-lines worklist)
 export { findDuplicateSpendCandidates } from "./detectors-purchase";
 // Recipe-centric detectors (derived-data-on-removal guardrail)
 export {
   findParentRecipesWithDeletedSubRecipes,
   type StaleParentRecipe,
 } from "./detectors-recipe";
-// Optional vendor presentation coverage
 export { loadVendorLogoPresenterCounts } from "./detectors-vendor";
-// Stale-parse detection + re-parse write path
 export {
   applyReparsedStaleLines,
   countReparseableLines,

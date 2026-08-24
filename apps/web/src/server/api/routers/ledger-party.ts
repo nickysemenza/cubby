@@ -1,73 +1,15 @@
-import {
-  ledgerPartyShortcode,
-  unsafeLedgerPartyShortcode,
-} from "@cubby/schemas/identifiers";
-import {
-  ledgerPartyCreateInput,
-  ledgerPartyFiltersSchema,
-  ledgerPartyOut,
-  ledgerPartySortableFields,
-  ledgerPartyUpdateData,
-} from "@cubby/schemas/ledger-party";
+import { ledgerPartyShortcode } from "@cubby/schemas/identifiers";
 import { z } from "zod";
-import {
-  createLedgerParty,
-  deleteLedgerParties,
-  getLedgerPartyByShortcode,
-  listLedgerParties,
-  mergeLedgerParties,
-  updateLedgerParty,
-} from "~/server/repo/ledger-party";
-import {
-  createEntityCrudWithoutListProcedures,
-  createEntityListProcedure,
-} from "../crud-factory";
+import { ENTITY_BINDINGS } from "~/server/entity-bindings";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/entity-kernel/registry";
+import { mergeLedgerParties } from "~/server/repo/ledger-party";
+import { createEntityCompatibilityProcedures } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
-const { list } = createEntityListProcedure({
-  schemas: {
-    output: ledgerPartyOut,
-    filters: ledgerPartyFiltersSchema,
-    sort: { sortableFields: ledgerPartySortableFields, defaultSort: "name" },
-  },
-  repository: {
-    list: (services, filters, sorts, pagination) =>
-      listLedgerParties(services.db, filters, sorts, pagination),
-  },
-  entityName: "ledgerParty",
-});
-
-const procedures = createEntityCrudWithoutListProcedures({
-  entityName: "ledgerParty",
-  schemas: {
-    createInput: ledgerPartyCreateInput,
-    updateInput: ledgerPartyUpdateData,
-    output: ledgerPartyOut,
-    idSchema: ledgerPartyShortcode,
-  },
-  repository: {
-    getByShortcode: (services, id) =>
-      getLedgerPartyByShortcode(services.db, id),
-    create: async (services, data) =>
-      (await createLedgerParty(services.db, data, services.actorContext))
-        .output,
-    update: async (services, id, data) =>
-      (
-        await updateLedgerParty(
-          services.db,
-          unsafeLedgerPartyShortcode(id),
-          data,
-          services.actorContext,
-        )
-      ).output,
-  },
-});
-
-const remove = protectedProcedure
-  .input(z.object({ ids: z.array(ledgerPartyShortcode).min(1) }))
-  .mutation(({ ctx, input }) =>
-    deleteLedgerParties(ctx.db, input.ids, ctx.actorContext),
-  );
+const procedures = createEntityCompatibilityProcedures(
+  ENTITY_KERNEL_BINDINGS.ledgerParty,
+  ENTITY_BINDINGS.ledgerParty.crud,
+);
 const merge = protectedProcedure
   .input(
     z.object({
@@ -81,7 +23,5 @@ const merge = protectedProcedure
 
 export const ledgerPartyRouter = createTRPCRouter({
   ...procedures,
-  list,
-  delete: remove,
   merge,
 });

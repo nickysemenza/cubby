@@ -67,12 +67,14 @@ describe("empty-state call-to-actions are reachable", () => {
 
 describe("action registry", () => {
   it("has unique ids", () => {
-    const ids = actionItems.map((a) => a.id);
+    const ids = actionItems.map((action) => action.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
   it("gives each entity at most one create action", () => {
-    const claimed = actionItems.flatMap((a) => (a.entity ? [a.entity] : []));
+    const claimed = actionItems.flatMap((action) =>
+      action.entity ? [action.entity] : [],
+    );
     expect(new Set(claimed).size).toBe(claimed.length);
   });
 

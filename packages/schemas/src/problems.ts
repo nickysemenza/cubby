@@ -31,29 +31,19 @@ const publicEntityIdSchema = anyShortcodeSchema(
   shortcodeEntities as unknown as [ShortcodeEntity, ...ShortcodeEntity[]],
 );
 
-// The four base measurement kinds a product's conversion graph can reach. The
-// single source for the BaseKind union: the costing lib (conversion-coverage)
-// re-exports BASE_KINDS/BaseKind from this, and the coverage-bearing problem
-// schemas below carry the union natively (no parallel repo type needed).
 export const baseKind = z.enum(["weight", "volume", "money", "calories"]);
 export type BaseKind = z.infer<typeof baseKind>;
 
-// Shared field fragments — the product-summary head and the coverage shape
-// repeat across many item schemas, so declare the reusable field maps once.
 const productProblemFields = {
   id: productShortcode,
   name: z.string(),
   manufacturer: z.string(),
 };
-// `covered` = kinds the graph can actually reach; `applicable` = the kinds graded
-// against (BASE_KINDS minus the ingredient's N/A opt-outs). A kind in `applicable`
-// but not `covered` is a real gap; a kind in neither is "not applicable" (—).
 const coverageFields = {
   covered: z.array(baseKind),
   applicable: z.array(baseKind),
 };
 
-// Output schemas for each problem type.
 export const duplicateUniqueProductSchema = z.object({
   ...productProblemFields,
   expectedQuantity: z.number().nullable(),
@@ -70,7 +60,6 @@ export const orphanedProductSchema = z.object({
   createdAt: z.date(),
 });
 
-/** A cookbook whose retained source extraction has recipes not currently live. */
 export const partiallyImportedCookbookSchema = z.object({
   id: cookbookShortcode,
   name: z.string(),
@@ -90,7 +79,6 @@ export type PartiallyImportedCookbook = z.infer<
 // per-location valuation summary already makes.
 export const productMissingPriceSchema = z.object({
   ...productProblemFields,
-  // Total live inventory quantity — how much value is going unrecorded.
   inventoryQuantity: z.number(),
   locations: z.array(
     z.object({
@@ -100,26 +88,8 @@ export const productMissingPriceSchema = z.object({
   ),
 });
 
-// A product whose ledger says more units left than ever arrived.
-//
-// You cannot sell, return, or discard something you never acquired, so a
-// negative expected quantity is unambiguously a data defect — a missing
-// acquisition line, an acquisition whose quantity was never recorded, or an
-// exit entered against the wrong product.
-//
-// Counts EVERY negative line as an exit, deliberately unlike its neighbour
-// `soldButStillStocked`, which requires a disposal Purchase. That detector asks
-// "was this sold off entirely?", where a refund is noise. This asks "do the
-// units balance?", where a return of 8 boxes is 8 real units going back — and
-// on live data returns and refunds are 218 of the 335 negative lines.
-//
-// The unknown-line counts ride along because they change what the row means: a
-// product with unquantified acquisitions is data-entry debt (the missing count
-// is probably the explanation), while one with a fully quantified ledger is a
-// genuine contradiction.
 export const negativeExpectedQuantitySchema = z.object({
   ...productProblemFields,
-  /** Negative by construction — that is the defect. */
   expectedQuantity: z.number(),
   acquiredUnits: z.number(),
   exitedUnits: z.number(),
@@ -127,21 +97,6 @@ export const negativeExpectedQuantitySchema = z.object({
   unknownExitLines: z.number().int(),
 });
 
-// A product still sitting on a shelf after it was sold off. The disposal is
-// already in the ledger — a Purchase whose Expenses are negative, the shape
-// `purchaseSettlementKinds` documents — but inventory never auto-decrements
-// (a binding tenet), so nothing walks the shelf back and the entry keeps
-// valuing at the product's price. That is the exact mirror of
-// `productsMissingPrice`: same location rollup, opposite failure. An unpriced
-// product silently omits value; this one silently invents it.
-//
-// Keyed on a *disposal Purchase*, not merely a negative Expense line. Negative
-// lines are common and mostly innocent — refunds, price adjustments, family
-// contributions — and on live data that looser predicate is wrong about half
-// the time (43 flagged, 20 real). Reported with both quantities so a partial
-// sale reads clearly rather than as a bug. Membership itself is decided by the
-// canonical quantity ledger: only a known balance of zero or less is fully
-// disposed, and an unknown acquisition suppresses the finding.
 export const soldButStillStockedSchema = z.object({
   ...productProblemFields,
   // Units accounted for by disposal lines. A line with no `productQuantity`
@@ -163,25 +118,8 @@ export const soldButStillStockedSchema = z.object({
   ),
 });
 
-// A kit counted in two places at once: stocked under its own name AND by its
-// components, together claiming more units than the ledger says were acquired.
-//
-// Splitting a kit moves its shelf claim to its parts; the parent keeps the
-// Expense and holds nothing. Stocking the parent as well then counts the same
-// physical thing twice, and inventory valuation doubles with it — the same
-// class of silently-invented value as `soldButStillStocked`, arriving by the
-// opposite route.
-//
-// Deliberately NOT "the parent is stocked XOR its parts are". A partially
-// opened multi-pack is legitimately both: two AirTag 4-packs, one opened into
-// four loose singles and one still sealed, is `1 parent + 4 components` and
-// values correctly. Only exceeding what was bought is always wrong, so the
-// predicate is arithmetic rather than shape. Parts count in WHOLE kits — two
-// batteries and one charger make one starter kit, not two — which also keeps a
-// half-present kit out, since a shortfall is variance, not a double count.
 export const kitCountedTwiceSchema = z.object({
   ...productProblemFields,
-  /** Units on shelves under the kit's OWN name — the half that should not be. */
   ownUnits: z.number(),
   /**
    * Units the LEDGER says were acquired and not disposed of.
@@ -193,28 +131,11 @@ export const kitCountedTwiceSchema = z.object({
   expectedUnits: z.number().int(),
 });
 
-// The exact inverse of `soldButStillStocked`: a disposal line that names no
-// product at all.
-//
-// That detector can only fire when the sale is linked, so an exit whose
-// `productId` is null is invisible to it BY CONSTRUCTION — and those are the
-// common case for marketplace sales, where rows arrive from a statement or an
-// export with a payout description and nothing tying them to a shelf. Both of
-// the finds that motivated this were exactly that shape, and neither showed up
-// anywhere.
-//
-// Keyed on a disposal Purchase for the same reason its mirror is, and the
-// reasoning is worth not restating: see `soldButStillStockedSchema` above and
-// the essay over `findSoldButStillStocked`. Negative Expense lines on their own
-// are overwhelmingly refunds and price adjustments —
-// every one of them legitimate, none of them a sale.
 export const unlinkedExitExpenseSchema = z.object({
   id: expenseShortcode,
   name: z.string(),
-  /** Negative, as stored. */
   cost: money,
   date: plainDate.nullable(),
-  /** The disposal Purchase this line sits on. */
   purchaseId: purchaseShortcode,
   /** Through the join; null only if the vendor was soft-deleted. */
   vendorName: z.string().nullable(),
@@ -234,10 +155,8 @@ export const unlinkedExitExpenseSchema = z.object({
 export const purchaselessExitExpenseSchema = z.object({
   id: expenseShortcode,
   name: z.string(),
-  /** Negative, as stored. */
   cost: money,
   date: plainDate.nullable(),
-  /** Present on most rows; the closest thing to a hint about what this was. */
   projectName: z.string().nullable(),
 });
 
@@ -257,9 +176,7 @@ export const toolUsedOutsideOwnershipSchema = z.object({
   projectId: projectShortcode,
   projectName: z.string(),
   conflict: z.enum(["acquired_after_end", "disposed_before_start"]),
-  /** The tool's first acquisition, or its last unreversed exit. */
   toolDate: plainDate,
-  /** The project boundary it falls outside, grace already applied. */
   projectBoundary: plainDate,
 });
 
@@ -273,19 +190,12 @@ export const toolUsedOutsideOwnershipSchema = z.object({
 // header note before re-trying it.
 export const duplicateProductIdentitySchema = z.object({
   manufacturer: z.string(),
-  /** The maker part number the cluster shares. */
   model: z.string(),
   products: z.array(
     z.object({
       id: productShortcode,
       name: z.string(),
-      /**
-       * Every barcode on this row, canonical GTIN-14. A set, not a scalar —
-       * which is the whole reason two encodings of one barcode used to look
-       * like two products. Render with `displayGtin`.
-       */
       gtins: z.array(z.string()),
-      /** Distinct external-id sources on this row (e.g. amazon, homedepot). */
       sources: z.array(z.string()),
     }),
   ),
@@ -296,8 +206,6 @@ export const productWithoutMappingsSchema = z.object({
   createdAt: z.date(),
   isIngredient: z.boolean(),
   usdaUnavailable: z.boolean(),
-  // The linked ingredient (null for non-food products), so the Problems card can
-  // deep-link the ingredient-enrichment workbench to this exact row.
   ingredientId: ingredientShortcode.nullable(),
 });
 
@@ -357,9 +265,6 @@ export const ingredientWithUnusedAliasesSchema = z.object({
   unusedAliases: z.array(z.string()),
 });
 
-// An ingredient used in no live recipe (and not a sub-recipe pointer). `products`
-// lists its non-deleted linked products ([] for the "no product" section); the
-// delete removes those products too.
 export const unusedIngredientSchema = z.object({
   id: ingredientShortcode,
   name: z.string(),
@@ -370,7 +275,6 @@ export const unusedIngredientSchema = z.object({
 export const emptyLocationSchema = z.object({
   id: locationShortcode,
   name: z.string(),
-  /** Null when the location IS a product — the SKU is its form factor. */
   type: z.string().nullable(),
   createdAt: z.date(),
   lastBulkInventory: z.date().nullable(),
@@ -391,7 +295,6 @@ export const emptyLocationSchema = z.object({
 export const staleLocationSchema = z.object({
   id: locationShortcode,
   name: z.string(),
-  /** Null when the location IS a product — the SKU is its form factor. */
   type: z.string().nullable(),
   itemCount: z.number(),
   lastBulkInventory: z.date().nullable(),
@@ -451,7 +354,6 @@ export const unknownParkedItemSchema = z.object({
 export const inventoryWithoutPricePathSchema = z.object({
   id: inventoryShortcode,
   amount,
-  /** What the unit would be worth against, if it could reach it. */
   effectivePrice: money,
   product: z.object({
     id: productShortcode,
@@ -463,16 +365,7 @@ export const inventoryWithoutPricePathSchema = z.object({
   }),
 });
 
-/**
- * One spelling of a brand name that collides with a more-used spelling of the
- * same name — `RYOBI` where 12 other products say `Ryobi`.
- *
- * Reported for the free-text `Product.manufacturer` column. The row is per
- * VARIANT, not per record, so one card covers however many rows carry the
- * misspelling.
- */
 const labelVariantFields = {
-  /** The minority spelling, exactly as stored. */
   value: z.string(),
   /**
    * How much backs this spelling: products carrying it for a manufacturer, live
@@ -480,45 +373,22 @@ const labelVariantFields = {
    * counting rows there could never produce a majority).
    */
   count: z.number().int(),
-  /** The most-used spelling sharing this canonical form. */
   canonical: z.string(),
   canonicalCount: z.number().int(),
 };
 
 export const labelVariantSchema = z.object({
   ...labelVariantFields,
-  /** One product bearing the minority spelling. */
   sampleId: productShortcode,
 });
 
-/**
- * Two vendors on the roster whose names normalize to the same thing — `Amazon`
- * and `Amazon.com` are one real vendor entered twice, splitting that vendor's
- * spend across two rows.
- *
- * A {@link labelVariantSchema} row plus the CANONICAL row's own id, which the
- * manufacturer sibling has no use for. A manufacturer is a free-text string, so
- * its fix is a rename; these are two real `Vendor` rows and the fix is
- * `mergeVendors({ keepId, mergeIds })`, which needs an id for BOTH sides —
- * `canonical` is a name and `sampleId` is the VARIANT's id, so neither answers
- * "what do we keep".
- *
- * Its own contract over the shared field map rather than a field ON
- * `labelVariantSchema`, so the manufacturer detector's wire shape is untouched
- * (they share one SQL helper, so the column is selected for both and this schema's
- * absence of it is what strips it there). Both ids stay plain strings for the same
- * reason `sampleId` does — a branded schema's tRPC *input* type is `string`, so
- * the merge call needs no cast.
- */
 export const duplicateVendorSchema = z.object({
   ...labelVariantFields,
-  /** The vendor row carrying the minority spelling. */
   sampleId: vendorShortcode,
   /** The vendor row a merge would KEEP — the majority spelling. */
   canonicalSampleId: vendorShortcode,
 });
 
-/** Optional presentation coverage: an active vendor with no seeded mini logo. */
 export const vendorWithoutLogoSchema = z.object({
   id: vendorShortcode,
   name: z.string(),
@@ -547,7 +417,6 @@ export const productWithIslandedMappingsSchema = z.object({
 export const locationWithoutAiDescriptionSchema = z.object({
   id: locationShortcode,
   name: z.string(),
-  /** Null when the location IS a product — the SKU is its form factor. */
   type: z.string().nullable(),
   imageCount: z.number(),
 });
@@ -640,7 +509,6 @@ export const understatedCostMealSchema = z.object({
   id: mealShortcode,
   name: z.string().nullable(),
   date: plainDate,
-  /** Live planned recipes carrying at least one unpriced ingredient. */
   recipeCount: z.number().int(),
 });
 
@@ -709,7 +577,6 @@ export const purchaseNotReconcilingSchema = z.object({
   /** Through the join; null only if the vendor was soft-deleted. */
   vendorName: z.string().nullable(),
   orderId: z.string().nullable(),
-  /** Derived link out to the vendor's own order page; null if not linkable. */
   orderUrl: z.url().nullable(),
   date: plainDate.nullable(),
   /** What the paperwork claimed. Never spend. */
@@ -744,28 +611,7 @@ export const purchaseFinancialSettlementMismatchSchema = z.object({
   }),
 });
 
-/**
- * An unlinked Expense that looks like the same money as an already-itemized
- * Purchase — the hand-entered lump that a later vendor import duplicated.
- *
- * **Advisory, not a defect.** The 2026-07/08 imports minted itemized purchases
- * for orders already booked as single 2024 lump rows; neither side knew about
- * the other, so seven orders were counted twice ($296.61). Nothing detected it.
- *
- * The row is keyed on the **Expense**, because that is what a human acts on: the
- * fix is to carry its project/trade onto the purchase's lines, preserve its name
- * in the purchase's `displayLabel`, then delete it. Never auto-applied — a
- * same-amount coincidence is real (a $22.00 "fiskars pruners" row collided with
- * an unrelated $22.00 Amazon order), so this reports and a human decides.
- *
- * `matchedOn` distinguishes the two arms. `stated_total` is not redundant with
- * `expense_total`: three of the seven real duplicates matched only the stated
- * total, because the import had left those purchases under-itemized (missing tax
- * or a line the vendor CSV never exported) — which made them the worst
- * double-counts, not the weakest signals.
- */
 export const duplicateSpendCandidateSchema = z.object({
-  /** The unlinked Expense — the row to act on. */
   id: expenseShortcode,
   expenseName: z.string(),
   cost: money,
@@ -783,36 +629,12 @@ export const duplicateSpendCandidateSchema = z.object({
   /** Which total the expense's cost equalled. */
   matchedOn: z.enum(["expense_total", "stated_total"]),
   dayDelta: z.number().int(),
-  /** Trigram score against the purchase's line and product names, 0–1. */
   nameSimilarity: z.number(),
-  /** Other purchases this expense also matched, all scoring lower. */
   alternateMatchCount: z.number().int(),
 });
 
-/**
- * Trigram floor for calling an unlinked Expense a duplicate of a Purchase.
- *
- * Calibrated against every duplicate ever resolved in this ledger — 22 rows that
- * a human deleted as duplicates, replayed through the detector. 21 of them score
- * **0.217–1.000**; the live same-amount coincidence that must NOT fire scores
- * 0.095, and matching the *wrong* one of two purchases sharing a price scores
- * 0.000. Any floor in (0.107, 0.217] yields 21/22 recall at 100% precision.
- *
- * The 22nd — "blum hardware test" against twelve SKU-described Blum parts — scores
- * 0.107 and is a deliberate miss. Its hand-entered name carries only a brand that
- * appears in none of the vendor's line names, so the signal genuinely is not there;
- * catching it would mean a floor of 0.10, which sits *below* the 0.088 median of
- * random pairs and would stop discriminating at all. A lump named only for a brand
- * the vendor doesn't print is the known false-negative class.
- *
- * This is a **secondary** gate and is worthless on its own — across all 127,686
- * orphan x purchase pairs the score has mean 0.10 and p95 0.25, so a fifth of
- * random pairs clear it. It only discriminates once amount + date has pruned the
- * field to a handful. Keep it applied after that join, never before.
- */
 export const DUPLICATE_SPEND_NAME_SIMILARITY = 0.15;
 
-/** Days either side of a purchase's date an unlinked expense may sit and still pair. */
 export const DUPLICATE_SPEND_DAY_WINDOW = 7;
 
 export const duplicateFinancialTransactionSourceRefSchema = z.object({
@@ -947,7 +769,6 @@ const problemsFastShape = {
   incompleteStatementImports: z.array(incompleteStatementImportSchema),
 };
 
-// DB-only detectors — cheap, no WASM/network.
 export const problemsFastSchema = z.object({
   ...problemsFastShape,
   sectionTotals: sectionTotalsSchema,
@@ -984,7 +805,6 @@ export const problemsCoverageSchema = z.object({
   freshness: conversionCoverageFreshnessSchema,
 });
 
-// UPC-lookup network detector.
 const problemsUpcShape = {
   productsWithBetterUpcData: z.array(productWithBetterUpcDataSchema),
 };
@@ -1009,47 +829,6 @@ export const problemsUpcSchema = z.object({
   freshness: upcEnrichmentFreshnessSchema,
 });
 
-// Household-tracker detectors (projects / tasks / expenses). Every row is a
-// `ProjectAttentionItem` — the exact shape `computeAttentionItems` already
-// produces for /projects?view=overview's Needs Attention, reused verbatim
-// rather than restated. The flat item list is split per rule so each detector
-// gets its own `problemsCount.byType` entry (and its own MCP `type` slice),
-// like every other detector; the Problems page merges them back into one
-// section with a subsection per rule. Cheap SQL — no WASM, no network — but its
-// own cost group so it runs in its own Worker invocation like the rest.
-/**
- * True population size for any section whose rows are a SAMPLE rather than the
- * whole set — keyed by `ProblemKey`, absent for a section that returns
- * everything.
- *
- * A view-backed section renders page 1 of the entity's list, so `items.length`
- * is the page size, not the answer. Every count downstream (the badge, the
- * homepage banner, `totalProblems`, and the coverage meters' "N of M") has to
- * read the total instead, or a 212-row backlog reports as 12.
- *
- * It's a sibling map rather than a richer per-section value on purpose:
- * `allProblemArrayFields` must stay arrays-only, because `byTypeShape`,
- * `EMPTY_PROBLEM_ARRAYS`, and `countProblems` are all mechanically derived from
- * its keys and would break on a non-array member.
- */
-/**
- * Sections backed by a saved view rather than a bespoke detector.
- *
- * The rows come from the entity's ordinary list procedure. Each key keeps the
- * row schema it already had, because the list-item shape is a strict SUPERSET
- * of it — `inventoryListItemOut` carries the `id`, `amount`, `createdAt`,
- * `product` and `location` that `neverVerifiedInventorySchema` declares, plus
- * `valuation`, `verifiedAt` and `placement` it doesn't — so the service narrows
- * rather than the card widening.
- *
- * Keeping the narrow schema is also what avoids an import cycle: `inventory.ts`
- * and `product.ts` both import FROM this module, so referencing their list
- * shapes here would make module init order load-bearing. If a card ever needs a
- * field only the list row has, widen that one schema; don't reach for the list
- * shape.
- *
- * These rows are a PAGE, not the population — see `sectionTotals`.
- */
 const problemsViewsShape = {
   ingredientsWithoutProduct: z.array(ingredientWithoutProductSchema),
   recipesWithoutInstructions: z.array(recipeWithoutInstructionsSchema),
@@ -1125,8 +904,6 @@ export const allProblemsSchema = z.object({
   totalProblems: z.number(),
 });
 
-/** Stable empty totals — shared identity, for the same memo-churn reason as
- *  {@link EMPTY_PROBLEM_ARRAYS}. */
 export const EMPTY_SECTION_TOTALS: SectionTotals = Object.freeze({});
 
 /**
@@ -1135,7 +912,6 @@ export const EMPTY_SECTION_TOTALS: SectionTotals = Object.freeze({});
  * accidentally count a page.
  */
 export const sectionSize = (
-  /** Absent for a section that returns its whole population. */
   key: string | undefined,
   items: readonly unknown[],
   totals: SectionTotals | undefined,
@@ -1143,7 +919,6 @@ export const sectionSize = (
 
 export type ProblemKey = keyof typeof allProblemArrayFields;
 
-/** The detector sections of `AllProblems`, without the derived `totalProblems`. */
 export type ProblemArrays = { [K in ProblemKey]: AllProblems[K] };
 
 /**
@@ -1164,34 +939,7 @@ export const EMPTY_PROBLEM_ARRAYS: ProblemArrays = Object.freeze(
   }, {} as ProblemArrays),
 );
 
-/**
- * What kind of thing each detector reports. This is the axis the Problems page
- * splits on, and it is deliberately INDEPENDENT of the cost grouping above
- * (`fast`/`coverage`/`upc`/`tracker`) — those group by how expensive a detector
- * is to run, not by what its rows mean. `productsWithoutMappings` is a cheap
- * `fast` detector but a defect; `emptyLocations` is equally cheap but coverage.
- *
- *  - `defect`   — something is *wrong* and can be driven to zero. These are the
- *                 only rows that count toward `totalProblems` and the badge.
- *  - `coverage` — a measure of how much of the house has been through a manual
- *                 data-entry workflow (itemized, photographed, recounted). These
- *                 never reach zero: new things arrive faster than they get
- *                 filed, so counting them as problems produced a permanently red
- *                 badge nobody could act on. They render as progress meters.
- *
- * `coverage` is really "the non-defect bucket", and it carries one more kind of
- * row: ADVISORY cues, which are frequently correct exactly as they stand
- * (`purchasesNotReconciling` — a partial refund legitimately leaves a purchase's expenses
- * disagreeing with what its paperwork stated). Those aren't a data-entry backlog,
- * but the operative contract is the same one this class exists to express — not
- * wrong, never forced to zero, never in `totalProblems` or the badge, never
- * rendered in the defect red. They differ from a coverage backlog only in having
- * no meaningful denominator, which `unvaluedBucketProducts` already models.
- *
- * `satisfies` makes a newly-added detector a compile error until it is classed.
- */
 export const PROBLEM_CLASS = {
-  // --- defects: wrong data, converges to zero ---
   duplicateInventory: "defect",
   // Two rows for one SKU is unambiguously wrong — spend, stock, and identifiers
   // are split across both — and it converges to zero: `mergeProducts` folds the
@@ -1255,9 +1003,6 @@ export const PROBLEM_CLASS = {
   unusedIngredientsWithoutProduct: "defect",
   locationsWithoutAiDescription: "defect",
   orphanedEntityEmbeddings: "defect",
-  // Every row is a removal path that dropped an association without taking the
-  // file with it. Converges to zero once each such path is fixed, so a row here
-  // names a bug rather than a backlog.
   unreferencedImages: "defect",
   entitiesMissingEmbeddings: "defect",
   staleParentRecipes: "defect",
@@ -1339,12 +1084,6 @@ export const PROBLEM_CLASS = {
 
 export type ProblemClass = "defect" | "coverage";
 
-/**
- * The keys classed `coverage`. Derived, so the Problems page can require that a
- * section marked coverage names the keys it renders and that every key classed
- * here has such a section — the two declarations agreed by hand before this,
- * with nothing to catch a new coverage detector rendered in the defect list.
- */
 export type CoverageProblemKey = {
   [K in ProblemKey]: (typeof PROBLEM_CLASS)[K] extends "coverage" ? K : never;
 }[ProblemKey];
@@ -1372,9 +1111,6 @@ export const sumProblemSections = (
     0,
   );
 
-// Count-only output schema for badge display. byType derives mechanically from
-// allProblemsSchema — every array key becomes a count — so the count roster
-// can't drift from the set of detectors (the runtime derives it the same way).
 const byTypeShape = Object.fromEntries(
   Object.keys(allProblemArrayFields).map((k) => [k, z.number()]),
 ) as { [K in keyof typeof allProblemArrayFields]: z.ZodNumber };
@@ -1406,13 +1142,10 @@ export const coverageTotalsSchema = z.object({
   productsWithNoImages: z.number(),
   /** Live leaf locations — the only ones that can hold inventory directly. */
   emptyLocations: z.number(),
-  /** Live locations currently holding stock. */
   staleLocations: z.number(),
   /** Live inventory entries. */
   neverVerifiedInventory: z.number(),
-  /** Live ingredients referenced by at least one live recipe. */
   ingredientsWithoutProduct: z.number(),
-  /** Live vendors referenced by at least one live purchase. */
   vendorsWithPurchases: z.number(),
 });
 export type CoverageTotals = z.infer<typeof coverageTotalsSchema>;
@@ -1501,7 +1234,6 @@ export const assembleAllProblems = (groups: {
     sectionTotals,
     upcFreshness: groups.upc.freshness,
     conversionCoverageFreshness,
-    // Counts the true population of a sampled section, not its page.
     totalProblems: sumProblemSections(sections, "defect", sectionTotals),
   };
 };
@@ -1607,15 +1339,8 @@ export type EntityMissingEmbedding = z.infer<
 export const maintenanceCountsSchema = z.object({
   productsWithNoImages: z.number().int(),
   locationsWithoutAiDescription: z.number().int(),
-  // Active recipes whose persisted totals are stale (pending recompute). The
-  // recompute queue normally drains these in seconds; a lingering count means a
-  // wave was lost (DLQ) — recompute-all clears it.
   staleRecipeTotals: z.number().int(),
-  // Unassociated PENDING image rows older than the cull threshold (24h) — the
-  // abandoned-upload backlog the "Cull pending images" tool clears.
   cullablePendingImages: z.number().int(),
-  // UPLOADED files no edge reaches — what the "Delete unreferenced files" tool
-  // clears. The same figure the matching Problems section lists (it is uncapped).
   unreferencedImages: z.number().int(),
   // Live entities with no embedding under the current model. The TRUE figure —
   // the matching Problems section only carries a capped sample, so this is what
@@ -1658,18 +1383,7 @@ export const recipeUsageByProductOut = z.record(z.string(), z.number());
 
 export const deleteUnusedIngredientsInput = z
   .object({
-    /** Explicit rows — what a per-card "Delete" acts on. */
     ingredientIds: z.array(ingredientShortcode).optional(),
-    /**
-     * Act on every row the named view-backed section selects, resolved
-     * SERVER-side.
-     *
-     * A view-backed card renders a page, so a "Delete all" wired to the rows it
-     * was handed would delete the page and call it all. Naming the section and
-     * letting the server re-run its filters is what keeps the label true —
-     * membership belongs on the server, not in the component that happened to
-     * render twelve of them.
-     */
     allFromProblem: z
       .enum(["unusedIngredientsWithProduct", "unusedIngredientsWithoutProduct"])
       .optional(),

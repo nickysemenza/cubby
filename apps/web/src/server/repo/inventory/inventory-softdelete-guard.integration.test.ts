@@ -180,7 +180,6 @@ describe("inventory soft-delete target guard", () => {
     const { entityId: productId } = await liveProduct();
     const { entityId: entryId } = await createTestEntry(productId, locationId);
 
-    // Submit an empty batch: the existing entry is omitted, so it is removed.
     await bulkProcessInventoryEntries(ctx.db, locationId, [], TEST_ACTOR);
 
     // The row must still exist with deletedAt set (soft delete), not be gone.
@@ -273,7 +272,6 @@ describe("inventory soft-delete target guard", () => {
     );
     expect(entry.id).toBeDefined();
 
-    // A normal move to another live location succeeds.
     const { output: otherLocation, entityId: otherLocationId } =
       await createTestLocation("Pantry");
     const moved = await updateInventoryEntry(

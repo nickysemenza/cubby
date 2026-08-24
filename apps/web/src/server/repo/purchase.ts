@@ -1,18 +1,4 @@
-/**
- * Purchase repository — one vendor order/receipt event per row.
- *
- * `Vendor ──< Purchase ──< Expense`. See packages/schemas/src/purchase.ts for
- * the domain doc: why 11 progress payments are 11 purchases and not one, why
- * `statedTotal` is never spend, and why there is deliberately no
- * `splitPurchase`.
- *
- * The partial-unique `(vendorId, orderId) WHERE orderId IS NOT NULL AND live`
- * index is the load-bearing constraint in this file. It is what makes
- * `findOrCreatePurchase` unambiguous on the import hot path (one order can only
- * ever be one Purchase, so there's no ambiguous branch), and it is what
- * `mergePurchases` has to defend against — two rows both carrying the same
- * non-null order id can't both survive a merge.
- */
+/** Purchase repository: one vendor event per row; Expense is the authoritative spend ledger. */
 
 import type { ActorContext } from "@cubby/schemas/context";
 import type {
@@ -221,18 +207,8 @@ export const PURCHASE_MERGE_EDGE_POLICY = {
 } as const satisfies IncomingEdgePolicy<"purchase", OperationDisposition>;
 
 /**
- * A charge's line count and line total, as correlated scalar subqueries.
- *
- * `expenseTotal` is `SUM(expense.cost)` — the charge's actual spend. It is
- * deliberately NOT `statedTotal`, and nothing in this file ever sums
- * `statedTotal` into anything: see the reconciliation note in the schema. A
- * charge with no lines totals 0, not null, so the reconciliation cue reads
- * "stated $431.24, lines $0" rather than going blank.
- *
- * Every fragment below is hand-qualified raw SQL wrapped in `correlated()` —
- * see its doc comment in `database-helpers/query.ts` for the
- * `buildSelection`-strips-prefixes trap that rule exists to avoid, and why
- * `"Purchase"."id"` must stay fully qualified.
+ * Actual spend is always `SUM(Expense.cost)`, never `statedTotal`. Keep raw SQL
+ * fully qualified because Drizzle strips aliases from correlated selections.
  */
 const purchaseExpenseCount = correlated<number>(
   `(SELECT count(*)::int FROM "Expense" e
@@ -250,11 +226,7 @@ const purchaseUnpricedExpenseCount = correlated<number>(
        AND e."cost" IS NULL AND e."deletedAt" IS NULL)`,
 );
 
-// Settlement compares against INCURRED spend only, so it gets its own pair of
-// numbers from the shared fragments rather than reusing the two above.
-// `expenseTotal` stays the full figure because that is what the purchase
-// displays — a contract's total is worth seeing — but a `future: true` row
-// cannot have settled, so including it would guarantee a mismatch.
+// Settlement compares only incurred spend; future rows cannot have settled.
 const purchaseSettleableExpenseTotal = correlated<number>(
   settleableExpenseTotalSql('"Purchase"'),
 );
@@ -278,21 +250,11 @@ const purchaseVendorName = correlated<string | null>(
      WHERE v."id" = "Purchase"."vendorId" AND v."deletedAt" IS NULL)`,
 );
 
-// The vendor's public id, denormalized alongside its name so a charge row can
-// link to the vendor without a second query. Deliberately NOT filtered on the
-// vendor's own `deletedAt`: `purchase.vendorId` is a NOT NULL FK, and a
-// shortcode is a permanent tombstone even past a soft delete (see
-// "Shortcodes are the public id" in root CLAUDE.md), so this must always
-// resolve — unlike `purchaseVendorName`, which deliberately goes null to
-// signal "this vendor was soft-deleted".
+// Public shortcodes remain resolvable tombstones after a vendor soft-delete.
 const purchaseVendorShortcode = correlated<string>(
   `(SELECT v."shortcode" FROM "Vendor" v WHERE v."id" = "Purchase"."vendorId")`,
 );
 
-// The vendor's order-page URL pattern, pulled alongside its name so `orderUrl`
-// can be derived without a second query. Gated on the vendor's liveness like
-// `purchaseVendorName` (not like the shortcode): a soft-deleted vendor's order
-// lookup is not an affordance worth offering.
 const purchaseVendorOrderUrlTemplate = correlated<string | null>(
   `(SELECT v."orderUrlTemplate" FROM "Vendor" v
      WHERE v."id" = "Purchase"."vendorId" AND v."deletedAt" IS NULL)`,
@@ -392,13 +354,6 @@ const dbPurchaseToAPI = (
   updatedAt: row.updatedAt,
 });
 
-/**
- * A charge's filed documents, in display order.
- *
- * Deliberately NOT loaded by `purchaseList`: the roster shows a document COUNT at
- * most, and a per-row join for files nobody renders is the kind of thing that
- * makes a list page slow for free. The detail read pays for it.
- */
 const loadPurchaseImages = async (
   db: Database | DrizzleTransaction,
   id: PurchaseId,
@@ -428,21 +383,7 @@ const loadPurchaseImages = async (
   }));
 };
 
-/**
- * Add newly-uploaded documents, remove requested ones, and apply an explicit
- * display order. Mirrors `syncProductImages` (repo/product/update-helpers.ts)
- * exactly, including applying the order BEFORE the append so new documents always
- * land after the reordered existing set.
- *
- * `pendingImageIds`/`removeImageIds`/`imageOrder` all arrive as public `IMG-`
- * shortcodes (what `PurchaseOut.images[].id` and `create_file_upload` hand
- * back); `applyImageOrder`, `detachImagesFromEntity`, and
- * `associatePendingImages` all still take uuids, so this is the boundary that
- * resolves one to the other. A code that doesn't resolve is dropped rather
- * than thrown on — same as today's silent no-op for a uuid naming no live
- * row, since none of the three helpers below errors on an id that doesn't
- * match.
- */
+/** Sync purchase documents transactionally with explicit ordering; defer R2 deletion until commit. */
 const syncPurchaseImages = async (
   tx: DrizzleTransaction,
   id: PurchaseId,
@@ -498,12 +439,6 @@ const syncPurchaseImages = async (
   return detachedImageKeys;
 };
 
-/**
- * `filters.vendorId` arrives as a public `VendorShortcode`, but the column is a
- * uuid — so it is resolved first (`vendorUuids`) rather than compared directly,
- * which Postgres rejects outright with `invalid input syntax for type uuid`.
- * Mirrors `toUuids` on the expense side.
- */
 const expenseStatusCondition = (
   values: PurchaseFilters["expenseStatus"],
 ): SQL | undefined => {
@@ -526,8 +461,6 @@ const reconciliationCondition = (
   const selected = values ? [values].flat() : [];
   if (selected.length === 0) return undefined;
   const toleranceInCents = Math.round(RECONCILIATION_TOLERANCE * 100);
-  // `floor(x + .5)` is PostgreSQL's exact twin of JS `Math.round`, including
-  // negative half-cent values (numeric `round()` rounds those away from zero).
   const gapInCents = sql`abs(
     floor((${purchase.statedTotal} * 100)::numeric + 0.5) -
     floor((${purchaseExpenseTotal} * 100)::numeric + 0.5)
@@ -578,9 +511,6 @@ const buildPurchaseWhereClause = (
     purchase,
     [{ column: purchase.displayLabel, term: filters.displayLabelSearch }],
     [
-      // The broad Purchase search is one term over two alternative identity
-      // fields. Passing both through `searchFilters` would AND them together,
-      // requiring the same text in both orderId AND displayLabel.
       filters.search
         ? or(
             formatSearchTerm(purchase.orderId, filters.search),
@@ -625,7 +555,6 @@ const buildPurchaseWhereClause = (
     ],
   );
 
-/** Sorts over the joined vendor name and rollups — none are table columns. */
 const resolvePurchaseSort = (sort: SortParams) => {
   const dir = sort.direction === "asc" ? asc : desc;
   if (sort.orderBy === "vendor") return [dir(purchaseVendorName)];
@@ -739,13 +668,6 @@ export type PurchaseLinkIdentity = Pick<
   "id" | "orderId" | "displayLabel" | "date" | "vendorId" | "vendorName"
 >;
 
-/**
- * The canonical identity needed to render a link to a charge.
- *
- * Kept smaller than `getPurchaseByID`: an expense detail already has a separate
- * hover-preview query for the full charge, so loading documents, reconciliation
- * aggregates, and notes just to label its parent link would duplicate work.
- */
 export const getPurchaseLinkIdentityByID = async (
   db: Database,
   id: PurchaseId,
@@ -775,10 +697,6 @@ export const getPurchaseLinkIdentityByID = async (
     : null;
 };
 
-/**
- * Get full purchase details by shortcode. Returns null if the code doesn't
- * resolve to a live purchase.
- */
 export const getPurchaseByShortcode = async (
   db: Database,
   shortcode: string,
@@ -793,10 +711,6 @@ export const reclassifyPurchaseDocument = async (
   actor: ActorContext,
 ): Promise<PurchaseOut> => {
   const id = await resolveOrThrow(db, "purchase", input.purchaseId);
-  // `input.imageId` is the public `IMG-` code `PurchaseOut.images[].id` handed
-  // back; resolving it here (throwing IMAGE_NOT_FOUND on an unknown code)
-  // subsumes the "not a real image" case the join lookup below used to be the
-  // only guard against.
   const imageId = await resolveOrThrow(db, "image", input.imageId);
   await withTransaction(db, async (tx) => {
     const before = await tx.query.purchaseImage.findFirst({
@@ -836,21 +750,7 @@ export const reclassifyPurchaseDocument = async (
   return getPurchaseByID(db, id);
 };
 
-/**
- * The lines of one charge — the "this charge" section on an expense detail page
- * and the expense list on a purchase detail page.
- *
- * Replaces `getExpenseOrderSiblings`, which had to reconstruct the group by
- * matching `(vendor, orderId)` across rows and needed a Problems detector to
- * catch rows of one order disagreeing on vendor. It's now the parent link.
- *
- * Deliberately NOT extended to "other charges sharing this order id": an order
- * id is only unique WITHIN a vendor — a short one like Tool Nirvana's "#11325"
- * genuinely collides with other retailers — and the partial-unique index means
- * a same-vendor collision can't exist. Grouping across vendors would merge two
- * unrelated transactions, which is exactly what the old two-column key existed
- * to prevent.
- */
+/** Order IDs are vendor-scoped; never group same-number orders across vendors. */
 export const getPurchaseExpenses = async (
   db: Database,
   id: PurchaseId,
@@ -864,24 +764,8 @@ export const getPurchaseExpenses = async (
 };
 
 /**
- * The import upsert: resolve `(vendorId, orderId)` to a charge, creating it on
- * first sight.
- *
- * Unambiguous by construction thanks to the partial-unique index — one order is
- * one charge, so there is never a "which of these charges did you mean?" branch
- * here. That is the whole reason the index is partial-unique rather than a plain
- * index.
- *
- * **`orderId: null` always creates a new charge.** It cannot do otherwise and
- * must not try: `(vendorId, null)` is not unique, and grouping by
- * `(vendor, date)` instead would have falsely merged 71 real ledger rows across
- * 31 groups. Two separate progress payments to one contractor on one day are two
- * charges. Merging near-duplicates is `mergePurchases`, a user action — never a
- * guess made on the write path.
- *
- * Races on the `orderId IS NOT NULL` path are handled by `findOrCreate`
- * (`ON CONFLICT DO NOTHING` + re-select), so two concurrent imports of the same
- * order produce exactly one charge.
+ * Import upsert. Null order IDs always create distinct charges; non-null IDs are
+ * vendor-scoped and race-safe through the partial unique index.
  */
 export const findOrCreatePurchase = async (
   db: Database | DrizzleTransaction,
@@ -899,8 +783,6 @@ export const findOrCreatePurchase = async (
   }
 
   const { row } = await findOrCreateWithShortcode(db, "purchase", {
-    // Must match the partial-unique index exactly — it's how `findOrCreate`
-    // re-finds the winner when it loses the insert race.
     where: and(
       eq(purchase.vendorId, input.vendorId),
       eq(purchase.orderId, orderId),
@@ -921,9 +803,6 @@ export const createPurchase = async (
   actor: ActorContext,
 ): Promise<{ output: PurchaseOut; entityId: PurchaseId }> => {
   const id = await withTransaction(db, async (tx) => {
-    // Resolving to a LIVE row is the FK-liveness check itself — an FK proves
-    // the vendor row exists, not that it's live, but `resolveOrThrow` throws
-    // for a soft-deleted one.
     const vendorId = await resolveOrThrow(tx, "vendor", data.vendorId);
     const created = await insertWithShortcode(tx, "purchase", {
       vendorId,
@@ -933,10 +812,7 @@ export const createPurchase = async (
       statedTotal: data.statedTotal,
       notes: data.notes,
     });
-    // Same transaction as the insert: a document uploaded alongside a new charge
-    // must not be left PENDING (and culled in 24h) if the insert fails.
-    // `removeImageIds`/`imageOrder` are update-only — there is nothing to remove
-    // or reorder on a charge that didn't exist a statement ago.
+    // Claim uploaded documents in the insert transaction so failure leaves no pending files.
     await syncPurchaseImages(
       tx,
       created.id,
@@ -985,7 +861,6 @@ export const updatePurchase = async (
       throw createAppError("PURCHASE_NOT_FOUND", `Purchase not found: ${id}`);
     }
 
-    // Resolving to a LIVE row is the liveness check itself.
     let resolvedVendorId: VendorId | undefined;
     if (data.vendorId !== undefined) {
       resolvedVendorId = await resolveOrThrow(tx, "vendor", data.vendorId);
@@ -1072,14 +947,6 @@ export const updatePurchase = async (
   };
 };
 
-/**
- * Attach existing expenses to a charge — one invoice spanning trades (Flow Form
- * Plumbing's $2,516 covering rough-in *and* fixtures).
- *
- * Explicitly NOT for payment schedules: those are separate charges, so they stay
- * separate purchases. Works for expenses with no `orderId`, which is the
- * contractor case this whole model exists to serve.
- */
 export const linkExpensesToPurchase = async (
   db: Database,
   input: LinkExpensesToPurchaseInput,
@@ -1164,19 +1031,7 @@ export const linkExpensesToPurchase = async (
   return getPurchaseByID(db, purchaseId);
 };
 
-/**
- * Split one expense into parts against the same charge, in one transaction.
- *
- * Replaces the `(combo, saw portion)` naming convention that encoded splits in
- * 12 row names. Each part keeps its own trade/costType/project/product — that's
- * the point: a combo-kit purchase is one vendor event whose saw half is `tools` and
- * whose blade half is `materials`.
- *
- * `statedTotal` is seeded from the original cost when the charge doesn't have one
- * yet, so the parts have something to reconcile against. A deliberately
- * mismatched sum is **displayed, never rejected** — nothing here validates that
- * the parts add up, and nothing back-computes a cost.
- */
+/** Split parts retain classifications; mismatched sums are displayed, never rejected. */
 export const splitExpense = async (
   db: Database,
   input: SplitExpenseInput,
@@ -1201,9 +1056,6 @@ export const splitExpense = async (
         );
       }
 
-      // Ensure the row HAS a Purchase before splitting: parts of one vendor event must
-      // share one parent, and a vendorless row has none yet. Nothing to invent a
-      // vendor from, so this is the one case a split can't proceed.
       const chargeId = original.purchaseId;
       if (!chargeId) {
         throw createAppError(
@@ -1261,7 +1113,6 @@ export const splitExpense = async (
       );
       const productIds = new Map(
         productShortcodes.map((code, i) => {
-          // Non-null: resolveAllOrThrow returns one id per input code, positionally.
           return [code, resolvedProductIds[i]!] as const;
         }),
       );
@@ -1300,10 +1151,6 @@ export const splitExpense = async (
         const explicitProjectId = part.projectId
           ? await resolveOrThrow(tx, "project", part.projectId)
           : null;
-        // Same import-time triage default `createExpense` applies: a split
-        // part carrying a food productId with no explicit project lands on
-        // Household rather than minting an untriaged line. See
-        // `resolveDefaultProjectId`'s doc comment for why updates/moves skip it.
         const projectId = await resolveDefaultProjectId(tx, {
           projectId: explicitProjectId,
           productId,
@@ -1411,19 +1258,7 @@ export const splitExpense = async (
   return { items: rows.map(dbExpenseToAPI), priceAffectedProductIds };
 };
 
-/**
- * Rename a charge's order id in place, or report that it can't be.
- *
- * Correcting a typo'd order id on a charge whose only line is the expense being
- * edited should EDIT that charge, not abandon it for a fresh one — the charge's
- * `statedTotal` and filed documents are the whole reason the row exists. See
- * `resolveCharge` for which writes reach this.
- *
- * Returns `false` when a live charge already holds `(vendorId, orderId)`, which
- * the partial-unique index would refuse. Detected with a SELECT rather than by
- * catching the constraint error: a failed statement poisons the surrounding
- * transaction, so the caller could not then fall back to attaching to the winner.
- */
+/** Pre-check collisions because a failed unique statement poisons the transaction. */
 export const renameChargeOrderId = async (
   tx: DrizzleTransaction,
   id: PurchaseId,
@@ -1471,25 +1306,7 @@ export const renameChargeOrderId = async (
   return true;
 };
 
-/**
- * Move one charge's contents onto another and soft-delete it.
- *
- * The shared core of both merges: `mergePurchases` (two charges of one vendor)
- * and `mergeVendors` (two charges that turned out to be the same order under two
- * spellings of one vendor). Extracted rather than duplicated because the
- * `onConflictDoNothing` below is a non-obvious correctness detail, and a second
- * hand-written copy would drift from it.
- *
- * Callers own the ordering constraints around the partial-unique
- * `(vendorId, orderId)` index — this helper only ever soft-deletes `deadId`, so
- * it frees a slot and never claims one.
- *
- * Re-pointing an expense is an AUDITED change to its `purchaseId`, exactly as it
- * is on the single-row `updateExpense` path (where `purchaseId` is in
- * `auditUpdateFields`) and in `linkExpensesToPurchase`. Without these rows a merge
- * would silently move money between charges with no trail — the one thing the
- * audit log exists to prevent.
- */
+/** Fold charge contents with audited expense re-pointing; callers own index ordering. */
 export const foldChargeInto = async (
   tx: DrizzleTransaction,
   deadId: PurchaseId,
@@ -1552,8 +1369,6 @@ export const foldChargeInto = async (
       ? dead.statedTotal
       : undefined;
 
-  // `repointEdge` returns the ids it moved, so the audit rows come from the
-  // update itself rather than a separate pre-select that could drift from it.
   const moved = await repointEdge(tx, "purchase", "Expense.purchaseId", {
     from: [deadId],
     to: survivorId,
@@ -1627,32 +1442,19 @@ export const foldChargeInto = async (
         .where(eq(financialTransactionAllocation.id, moving.id));
       continue;
     }
-    // Repoint in place rather than insert-then-delete: it is the same slice, so
-    // its row id and createdAt should survive the move.
     await tx
       .update(financialTransactionAllocation)
       .set({ purchaseId: survivorId, updatedAt: new Date() })
       .where(eq(financialTransactionAllocation.id, moving.id));
   }
 
-  // Audit entries, the mirror re-derivation, and the data-quality touch all come
-  // from the shared core rather than being written here.
-  //
-  // Its `changedTransactionIds` are deliberately unused: unlike the delete path,
-  // which returns them for the router to refresh after commit, a purchase merge
-  // has never refreshed its transactions' embeddings. Both purchases share a
-  // vendor here, so the embedded vendor/order text rarely moves — but if that is
-  // ever wired up, this is where the ids come from.
   await applyAllocationChanges(tx, {
     transactionIds: allocationTransactionIds,
     before: allocationsBefore,
     actor,
   });
 
-  // Documents follow their charge. `onConflictDoNothing` covers the case where
-  // the same Image is already filed against the survivor (a statement spanning
-  // both charges) — the partial-unique (purchaseId, imageId) would otherwise
-  // abort the whole merge.
+  // Duplicate document/product links collapse instead of aborting the merge.
   const movingImages = await tx.query.purchaseImage.findMany({
     where: and(eq(purchaseImage.purchaseId, deadId), notDeleted(purchaseImage)),
     columns: { imageId: true, sortOrder: true },
@@ -1676,9 +1478,6 @@ export const foldChargeInto = async (
       );
   }
 
-  // Product links follow their charge for the same reason, and need the same
-  // `onConflictDoNothing`: the partial-unique (purchaseId, productId) would
-  // abort the merge when both charges already name the same Product.
   const movingProducts = await tx.query.purchaseProduct.findMany({
     where: and(
       eq(purchaseProduct.purchaseId, deadId),
@@ -1736,11 +1535,6 @@ export const foldChargeInto = async (
       .filter((value): value is ProductId => value !== null),
   });
 
-  // Soft-delete the dead charge, cascade its search embedding, and write the
-  // trail — one call, so the embedding cascade can't be dropped (see
-  // `finalizeMerge`). The charge gets a `delete` entry and the survivor an
-  // `update` naming what it absorbed, so a fold is reconstructible from the log
-  // rather than inferable only from the absence of a row.
   await finalizeMerge(tx, {
     entity: "purchase",
     table: purchase,
@@ -1765,37 +1559,12 @@ export const foldChargeInto = async (
   });
 };
 
-/**
- * Merge charges the backfill couldn't group — the 364 singletons with no order
- * id, which no key could have joined. Re-points expenses, moves documents,
- * soft-deletes the losers.
- *
- * Two refusals, both structural rather than stylistic:
- *
- * 1. **Across vendors** — re-pointing a charge to another vendor would silently
- *    rewrite who was paid. The merge is a grouping operation, not a correction.
- * 2. **Two non-null order ids** — the partial-unique `(vendorId, orderId)` index
- *    means both sides can't survive, and one of them isn't the charge the caller
- *    named. Two real order ids are two real transactions; that's a no-op, not a
- *    merge.
- *
- * A loser's own null-`orderId` is fine, and a loser's order id can be adopted by
- * the keeper when the keeper has none — that's the common shape (a hand-entered
- * charge later matched to a vendor export).
- */
+/** Refuses cross-vendor merges and sets containing multiple non-null order IDs. */
 
-/** One of the two structural refusals {@link checkPurchaseMergeSet} enforces. */
 type PurchaseMergeViolation =
   | { kind: "cross-vendor"; offendingIds: PurchaseId[] }
   | { kind: "order-collision"; offendingIds: PurchaseId[]; orderIds: string[] };
 
-/**
- * The two refusals `mergePurchases` enforces — computed without throwing, so
- * `previewMergePurchases` can surface them as blockers instead of only an
- * error toast after the mutation has already been attempted. Both call sites
- * read the same rows and run the SAME two checks; see `mergePurchases`' own
- * doc for why each is structural rather than stylistic.
- */
 const checkPurchaseMergeSet = (
   rows: Array<{ id: PurchaseId; vendorId: VendorId; orderId: string | null }>,
   keeper: { id: PurchaseId; vendorId: VendorId },
@@ -1873,9 +1642,6 @@ export const mergePurchases = async (
       );
     }
 
-    // orderIdBearers is used below to decide which order id (if any) the
-    // keeper adopts — recomputed here rather than threaded through
-    // `checkPurchaseMergeSet` because that function's only job is validation.
     const orderIdBearers = rows.filter((r) => r.orderId !== null);
 
     // ORDER MATTERS: soft-delete the losers BEFORE the keeper adopts an order id.
@@ -1893,8 +1659,6 @@ export const mergePurchases = async (
       .returning({ id: purchase.id });
     mergedCount = removed.length;
 
-    // The keeper adopts the single surviving order id, if a loser held it — the
-    // common shape, a hand-entered charge later matched to a vendor export.
     const adopted = orderIdBearers[0];
     if (adopted && adopted.id !== keepId) {
       await tx
@@ -1903,13 +1667,6 @@ export const mergePurchases = async (
         .where(eq(purchase.id, keepId));
     }
 
-    // One `foldChargeInto` per loser rather than two bulk statements: it is the
-    // shared core (expenses re-pointed WITH audit rows, documents moved with the
-    // onConflictDoNothing that a statement spanning both charges needs, loser
-    // soft-deleted). Hand-writing it here is what let this path silently move
-    // money between charges with no audit trail while `linkExpensesToPurchase`
-    // logged the same change. The soft-delete above already vacated the index
-    // slot, so the one inside is a no-op.
     for (const loser of losers) {
       await foldChargeInto(tx, loser, keepId, actor);
     }
@@ -1956,7 +1713,6 @@ const deletePurchasesWithPolicy = async (
   financialTransactionIds: FinancialTransactionId[];
   /** R2 objects the image cascade reaped; drop them after this commit. */
   detachedImageKeys: string[];
-  /** Rows actually removed, measured by `removeEntity` rather than assumed. */
   deleted: number;
 }> => {
   if (shortcodes.length === 0)
@@ -1990,10 +1746,6 @@ const deletePurchasesWithPolicy = async (
       policy === "require-empty" &&
       (detaching.length > 0 || affectedTransactionIds.length > 0)
     ) {
-      // `detaching` already carries `purchaseId` per row, so the refusal can
-      // name WHICH purchases are non-empty and with how many expenses. The old
-      // message could not: one non-empty purchase anywhere in the batch refused
-      // every purchase in the call and left the caller to guess which.
       const expensesByPurchase: Record<string, number> = {};
       for (const row of detaching) {
         if (row.purchaseId)
@@ -2113,11 +1865,7 @@ export const deletePurchases = async (
   actor: ActorContext,
 ) => deletePurchasesWithPolicy(db, shortcodes, actor, "detach-references");
 
-/**
- * Agent-safe deletion for Purchase headers that carry no live spend or
- * settlement evidence. The reference check and soft delete happen under the
- * same Purchase row locks, so a clean preview is never trusted as a lock.
- */
+/** Reference checks and deletion share row locks; no earlier preview is trusted. */
 export const deleteEmptyPurchases = async (
   db: Database,
   shortcodes: PurchaseShortcode[],
@@ -2135,24 +1883,6 @@ export const deleteEmptyPurchases = async (
   return { shortcodes, detachedImageKeys };
 };
 
-/**
- * What `mergePurchases` would do to the given charges, without doing it.
- *
- * Reads the SAME `checkPurchaseMergeSet` the mutation calls before it writes
- * anything, so a cross-vendor or order-id-collision merge surfaces as a
- * `blocker` here instead of only an error toast after the dialog's already
- * confirmed. Reads the SAME `PURCHASE_MERGE_EDGE_POLICY` for the `changes` —
- * `mergePurchases` folds every loser directly into `keepId` (no per-order
- * survivor resolution like `mergeVendors`; see its own doc for why merging
- * MORE than one order-id-bearing charge is refused outright rather than
- * resolved), so both edges' counts are a plain `countByTarget` over the
- * losers. Source purchases removed has no declared `Purchase` edge (nothing
- * points a `Purchase` at another `Purchase`), so it's a `sideEffect`.
- *
- * Advisory only. `mergePurchases` still re-runs the same validation and
- * recomputes its own fold set inside its own transaction; nothing here is a
- * lock or a permission.
- */
 export const previewMergePurchases = async (
   db: Database,
   input: { keepId: PurchaseId; mergeIds: PurchaseId[] },
@@ -2162,9 +1892,6 @@ export const previewMergePurchases = async (
   sideEffects: ImpactItem[];
 }> => {
   const { keepId } = input;
-  // Refuses exactly where the mutation refuses — see
-  // `assertDistinctMergeTargets` for why the silent filter this replaces made
-  // preview and mutation agree on the wrong answer.
   assertDistinctMergeTargets("purchase", keepId, input.mergeIds);
   const losers = input.mergeIds;
   if (losers.length === 0)
@@ -2178,8 +1905,6 @@ export const previewMergePurchases = async (
 
   const keeper = rows.find((r) => r.id === keepId);
   if (!keeper) {
-    // Mirrors the mutation's own `PURCHASE_NOT_FOUND` refusal, surfaced as a
-    // blocker rather than thrown — a preview reports, it doesn't crash.
     return {
       blockers: present([
         impact({

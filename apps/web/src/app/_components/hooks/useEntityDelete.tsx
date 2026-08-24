@@ -9,6 +9,7 @@ import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Button } from "~/components/ui/button";
 import type { EditableEntity } from "~/entities/editing/types";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
+import { entityDialogLabel } from "~/entities/entities";
 import { getEntityContract } from "~/entities/entity-contracts";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
@@ -21,8 +22,8 @@ interface UseEntityDeleteOptions {
   id: string;
   /** Entity name for dialog display */
   name: string;
-  /** Entity type label for dialog (e.g., "Product", "Ingredient") */
-  entityLabel: string;
+  /** Dialog noun override; defaults to the entity registry. */
+  entityLabel?: string;
   /** Entity slug — picks the registered-command delete path vs the legacy mutation. */
   entity: Entity;
   /** tRPC delete mutation options factory */
@@ -74,6 +75,7 @@ export function useEntityDelete({
   redirectTo,
   description,
 }: UseEntityDeleteOptions): UseEntityDeleteReturn {
+  const label = entityLabel ?? entityDialogLabel(entity);
   const navigate = useNavigate();
   const [showDialog, setShowDialog] = useState(false);
   const registeredDelete = entity !== "image" && entity !== "cookbook";
@@ -98,13 +100,13 @@ export function useEntityDelete({
       savedWithBackgroundWork(
         (data as { sideEffects?: MutationSideEffects }).sideEffects ??
           emptySideEffects,
-        `${entityLabel} deleted`,
+        `${label} deleted`,
       ),
     onSuccess: () => {
       void navigate({ to: redirectTo });
     },
     error: (err) =>
-      getErrorMessage(err) || `Failed to delete ${entityLabel.toLowerCase()}`,
+      getErrorMessage(err) || `Failed to delete ${label.toLowerCase()}`,
   });
 
   const openDeleteDialog = useCallback(() => {
@@ -130,13 +132,13 @@ export function useEntityDelete({
         open={showDialog}
         onOpenChange={setShowDialog}
         items={[{ id, name }]}
-        itemNoun={entityLabel}
+        itemNoun={label}
         action="Delete"
         variant="destructive"
         pendingLabel="Deleting..."
         description={
           description ??
-          `This will permanently remove ${entityLabel.toLowerCase()} from your workspace. This action cannot be undone.`
+          `This will permanently remove ${label.toLowerCase()} from your workspace. This action cannot be undone.`
         }
         renderItem={(item) => item.name}
         onSubmit={async () => {
@@ -144,8 +146,7 @@ export function useEntityDelete({
             const execution = await commands.remove([id]);
             if (!execution.ok) {
               throw new Error(
-                execution.issues[0]?.message ??
-                  `Failed to delete ${entityLabel}`,
+                execution.issues[0]?.message ?? `Failed to delete ${label}`,
               );
             }
             toast.success(
@@ -155,7 +156,7 @@ export function useEntityDelete({
                     sideEffects?: MutationSideEffects;
                   }
                 ).sideEffects ?? emptySideEffects,
-                `${entityLabel} deleted`,
+                `${label} deleted`,
               ),
             );
             void navigate({ to: redirectTo });
@@ -173,7 +174,7 @@ export function useEntityDelete({
       showDialog,
       id,
       name,
-      entityLabel,
+      label,
       description,
       registeredDelete,
       commands.remove,

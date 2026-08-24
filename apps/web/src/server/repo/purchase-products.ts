@@ -202,7 +202,6 @@ const loadComponentCountsByProductId = async (
   return counts;
 };
 
-/** The Products linked to one Purchase, alphabetically by name. */
 export async function listPurchaseProducts(
   db: Database,
   purchaseId: PurchaseId,
@@ -263,7 +262,6 @@ export async function listPurchaseProducts(
   }));
 }
 
-/** The transpose: every Purchase one Product is linked to, most recent first. */
 export async function listProductPurchases(
   db: Database,
   productId: ProductId,
@@ -311,7 +309,6 @@ export async function listProductPurchases(
   const rows = mergeSources(
     linkRows.map((row) => ({ ...row, key: row.purchaseKey })),
     expenseRows.map((row) => ({ ...row, key: row.purchaseKey })),
-    // `date` is a plain-date string, so a lexical compare is a date compare.
   ).sort((a, b) => b.date.localeCompare(a.date));
 
   return rows.map((row) => ({
@@ -344,7 +341,6 @@ async function liveProductShortcodes(
   return rows.map((row) => row.shortcode);
 }
 
-/** Which of the requested products this Purchase already links, live. */
 async function livePurchaseProductIds(
   dbc: DrizzleClient | DrizzleTransaction,
   purchaseId: PurchaseId,
@@ -411,7 +407,6 @@ async function preflightDetachPurchaseProducts(
   return {
     ...emptyPreflight(),
     requested,
-    // A detach is already satisfied when there is NO live link to remove.
     alreadySatisfied: requested.filter((id) => !alreadyLive.has(id)),
     codeById,
   };
@@ -422,7 +417,6 @@ const PURCHASE_PRODUCT_EDGE = {
   label: "purchase product links",
 } as const;
 
-/** Advisory impact for a purchase→product attach, from the same predicate. */
 export async function previewAttachPurchaseProducts(
   db: Database,
   purchaseId: PurchaseId,
@@ -439,7 +433,6 @@ export async function previewAttachPurchaseProducts(
   });
 }
 
-/** Advisory impact for a purchase→product detach. */
 export async function previewDetachPurchaseProducts(
   db: Database,
   purchaseId: PurchaseId,

@@ -215,8 +215,6 @@ describe("mealList classification filters", () => {
     );
     expect(none.data.map((row) => row.id)).toEqual([unslotted.id]);
 
-    // "dinner OR unslotted" — the sentinel widens the picker rather than
-    // narrowing it, which is what makes it a value of the same control.
     const both = await mealList(
       ctx.db,
       { mealType: "dinner", mealTypePresenceFilter: "none" },
@@ -277,8 +275,6 @@ describe("mealList sorting", () => {
   });
 
   it("orders unnamed meals by date within the name-sort NULL block", async () => {
-    // An unnamed meal displays as its date, so the tie-breaker makes the NULL
-    // block read the way its labels do instead of by insertion order.
     await makeMeal("2026-05-06");
     await makeMeal("2026-05-08");
     await makeMeal("2026-05-07");

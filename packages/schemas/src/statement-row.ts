@@ -19,7 +19,6 @@ import { dateRangeFields, numericRangeFields, plainDate } from "./base-entity";
  * writable after ingest.
  */
 
-/** Which date convention an export's rows carry. Recorded, never resolved. */
 export const statementDateKind = z.enum(["posted", "transaction", "unknown"]);
 export type StatementDateKind = z.infer<typeof statementDateKind>;
 
@@ -34,9 +33,7 @@ export type StatementRowDisposition = z.infer<typeof statementRowDisposition>;
 export const statementRowDispositionReason = z.enum([
   /** Real spend, but of a kind Cubby does not model (consumer purchases). */
   "not_modeled",
-  /** Not a purchase at all: transfer, payment, interest, fee. */
   "not_a_purchase",
-  /** The same charge is already recorded from another provider's export. */
   "duplicate_of_other_source",
   /** Predates the ledger; no Purchase was ever kept for it. */
   "pre_cubby",
@@ -46,7 +43,6 @@ export type StatementRowDispositionReason = z.infer<
   typeof statementRowDispositionReason
 >;
 
-/** Provider-reported settlement state, kept because a pending row's hash moves. */
 export const statementRowProviderStatus = z.enum(["posted", "pending"]);
 
 /**
@@ -67,7 +63,6 @@ export const statementImportOut = z.object({
   fingerprint: z.string(),
   dateKind: statementDateKind,
   rowCountDeclared: z.number().int().nullable(),
-  /** Rows actually stored. Short of `rowCountDeclared` means a partial ingest. */
   rowCountStored: z.number().int(),
   notes: z.string().nullable(),
   createdAt: z.date(),
@@ -80,7 +75,6 @@ export const statementRowOut = z.object({
   // hash — not its uuid primary key, which stays inside the repo layer.
   source: z.string(),
   externalId: z.string(),
-  /** The export this row came from, by its client-supplied fingerprint. */
   importFingerprint: z.string(),
 
   accountDescriptor: z.string(),
@@ -137,14 +131,8 @@ export const statementRowSortableFields = [
   "createdAt",
 ] as const;
 
-/**
- * Rows per `record_statement_rows` call. Higher than the preview's 200 because
- * this is one multi-row INSERT with no per-row query; the full 15k-row backlog
- * is ~31 calls.
- */
 export const STATEMENT_ROW_RECORD_MAX_ROWS = 500;
 
-/** One export's identity. Found-or-created by `(source, fingerprint)`. */
 export const statementImportInput = z.strictObject({
   source: externalIdSource,
   label: z.string().min(1),
@@ -201,28 +189,13 @@ export const recordStatementRowsInput = z.strictObject({
 export type RecordStatementRowsInput = z.infer<typeof recordStatementRowsInput>;
 
 export const recordStatementRowsOut = z.object({
-  /** Null under `dryRun` — no batch is created, so there is no id to name. */
   batchId: z.string().nullable(),
   batchCreated: z.boolean(),
   /** Echoes the request, so a caller cannot mistake a preview for a write. */
   dryRun: z.boolean(),
   inserted: z.number().int(),
-  /**
-   * Already present under the same `(source, externalId)` — re-ingest is a
-   * no-op. The sum of the three fields below.
-   *
-   * Was `rows.length - inserted.length`, a subtraction that could not tell
-   * "recorded by this very batch" from "recorded by a different export" from
-   * "the payload contains the row twice" — three states with three different
-   * remedies, reported as one number.
-   */
   unchanged: z.number().int(),
-  /** Recorded by an earlier submission of THIS batch's fingerprint. */
   alreadyInThisBatch: z.number().int(),
-  /**
-   * Recorded by a DIFFERENT batch. Normal when exports overlap in date range;
-   * the row keeps its original batch.
-   */
   alreadyInAnotherBatch: z.number().int(),
   /**
    * Present more than once inside this payload. Two provider rows that hash
@@ -232,13 +205,6 @@ export const recordStatementRowsOut = z.object({
    * coffees) lands here and needs a distinguishing `rawDescription`.
    */
   indistinguishableDuplicates: z.number().int(),
-  /**
-   * `rowCountDeclared - rows.length`, when the caller declared a count.
-   *
-   * Non-zero means the export had rows this payload left out. A prior ingest
-   * silently dropped 19 zero-amount rows, and because nothing recorded the
-   * exclusion they re-presented as "new" on every later export.
-   */
   rowsOmitted: z.number().int().nullable(),
   rowCountStored: z.number().int(),
   /**
@@ -274,10 +240,6 @@ export const statementRowSelector = z.union([
   }),
   z.strictObject({
     filter: statementRowFilters.refine(
-      // `!== undefined` is not enough: a supplied-but-empty string is defined,
-      // and the repo's filter builder skips falsy strings, so `{search: ""}`
-      // would pass this check and then restrict nothing. The repo re-checks the
-      // conditions it actually built — this is the early, better-worded reject.
       (value) =>
         Object.values(value).some((field) =>
           typeof field === "string" ? field !== "" : field !== undefined,
@@ -297,7 +259,6 @@ export const statementRowUpdateData = z.strictObject({
   disposition: statementRowDisposition.optional(),
   dispositionReason: statementRowDispositionReason.nullable().optional(),
   dispositionNote: z.string().nullable().optional(),
-  /** The row that superseded this one, as `v1:<sha256>` under the same source. */
   supersededByExternalId: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
 });
@@ -337,7 +298,6 @@ export const statementRowDriftCandidate = z.object({
    * coincidences (two payroll deposits, a repeated coffee).
    */
   crossBatch: z.boolean(),
-  /** Oldest first, so `rows[0]` is the likeliest predecessor. */
   rows: z.array(
     z.object({
       externalId: z.string(),
@@ -357,7 +317,6 @@ export type StatementRowDriftCandidate = z.infer<
 export const findStatementRowDriftInput = z.object({
   source: z.string().optional(),
   ...dateRangeFields("date"),
-  /** Fingerprint of one export, to scope the sweep to a chunk just ingested. */
   importFingerprint: z.string().optional(),
   /**
    * Also report groups whose rows all came from ONE export.

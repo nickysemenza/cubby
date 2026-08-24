@@ -8,17 +8,12 @@ import {
 } from "~/app/_components/data-table/columnHelpers";
 import { EntityListPage } from "~/app/_components/data-table/EntityListPage";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
-import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { ImageAssociationLinks } from "~/app/_components/images/image-associations";
 import { imageStatusOptions } from "~/app/images/image-options";
 import { useTRPC } from "~/integrations/trpc/react";
-import { queryKeys } from "~/lib/query-keys";
 import { UploadImageDialog } from "./upload-image-dialog";
-
-/** Module-level so the deletable config keeps a stable identity. */
-const IMAGE_INVALIDATE_KEYS = [queryKeys.image.list] as const;
 
 export default function ImageList() {
   const api = useTRPC();
@@ -26,18 +21,6 @@ export default function ImageList() {
     () => createCubbyColumnHelper<ImageWithEntity>(),
     [],
   );
-
-  // Images DO have a `deletedAt` column (like every other entity), but
-  // `deleteImages` intentionally hard-deletes anyway — see its doc comment in
-  // server/repo/image.ts. Restore was never implemented for any entity, and
-  // an orphaned image (no owning product/location/recipe/project) has no use
-  // once removed, so there's no reason to carry the soft-delete indirection.
-  const deletableConfig = useDeletableConfig({
-    mutationFn: api.image.delete.mutationOptions,
-    entityLabel: "Image",
-    invalidateKeys: IMAGE_INVALIDATE_KEYS,
-    entity: "image",
-  });
 
   const updateImageMutation = useUpdateMutation({
     mutationFn: api.image.update.mutationOptions,
@@ -113,7 +96,7 @@ export default function ImageList() {
     <EntityListPage<ImageWithEntity>
       entity="image"
       columns={columns}
-      deletable={deletableConfig}
+      deletable
       ariaLabel="Images Table"
       actions={<UploadImageDialog />}
     />

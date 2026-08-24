@@ -1,5 +1,6 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
   InventoryId,
   LocationId,
@@ -33,6 +34,7 @@ import {
   computeInventoryValuations,
 } from "~/lib/price-mapping-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { inventoryEntry, location, product } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
@@ -63,6 +65,13 @@ import {
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
 import { resolveFilterIds } from "~/server/repo/shortcode-resolver";
+
+// InventoryEntry has no incoming foreign keys. Keep the empty policy explicit
+// so a newly introduced reference must be classified before kernel deletion
+// can remain registered.
+export const INVENTORY_DELETE_EDGE_POLICY =
+  {} as const satisfies IncomingEdgePolicy<"inventory", OperationDisposition>;
+
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { assertLiveTargets } from "./helpers";
 import {

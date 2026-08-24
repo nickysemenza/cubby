@@ -201,7 +201,6 @@ export const dbProductToPickerItemAPI = (
 export const dbProductToInventoryEmbedShape = (
   productData: RowWithOptionalAliases<typeof product.$inferSelect> & {
     pricing: ProductPricing;
-    /** Supplied by the caller (`loadPrimaryGtins`); not a Product column. */
     primaryGtin: string | null;
   },
 ): ProductInventoryEmbedOut => ({
@@ -223,7 +222,6 @@ export const dbProductToInventoryEmbedShape = (
 export const dbProductToInventoryListShape = (
   productData: RowWithOptionalAliases<typeof product.$inferSelect> & {
     pricing?: ProductPricing;
-    /** Supplied by the caller (`loadPrimaryGtins`); not a Product column. */
     primaryGtin: string | null;
   },
 ): InventoryListProductOut => ({
@@ -363,8 +361,6 @@ export const dbProductToListAPI = (
       productData.unitMappings,
     ),
     inventoryEntry,
-    // count() returns bigint (string over the wire), so coerce — mirrors the
-    // ingredient list's appearsInRecipes/recipeCount handling.
     expenseCount: Number(productData.expenseCount),
     componentCount: Number(productData.componentCount),
     // Net basis: SUM(expense.cost), 0 for a product with no expenses (never
@@ -419,7 +415,6 @@ export const dbProductToAPI = (
         lastBulkInventory: entry.location.lastBulkInventory,
         aiDescription: entry.location.aiDescription,
         images: mapImages(entry.location.images),
-        // The resolved thumbnail, beside the raw inputs it was chosen from.
         displayImage: entry.location.displayImage ?? null,
         valuation: entry.location.valuation,
         ancestors: entry.location.ancestors ?? [],

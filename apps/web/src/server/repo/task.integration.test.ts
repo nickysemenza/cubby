@@ -318,7 +318,6 @@ describe("task repository — listActionableTasks", () => {
     ]);
     expect(result.next.map((r) => r.id)).not.toContain(t.id);
 
-    // Unblocked once the root ancestor's blocker is marked done.
     await updateProject(
       ctx.db,
       blockerProject.id,
@@ -535,8 +534,6 @@ describe("task repository — listActionableTasks", () => {
       }),
       ctx.actor,
     );
-    // Touch noDueOlderUpdate's row after noDueNewerCreate was inserted, so its
-    // updatedAt is now the more recent of the two no-due rows.
     await updateTask(
       ctx.db,
       noDueOlderUpdate.id,
@@ -628,8 +625,6 @@ describe("task repository — listActionableTasks", () => {
 
 describe("task router — listActionable", () => {
   const ctx = withTestDb();
-  // Built fresh per test — see suggestions.integration.test.ts's comment on
-  // why callers read the current `db` closure via beforeEach.
   let taskCaller: ReturnType<
     typeof createTestCaller<(typeof taskRouter)["_def"]["record"]>
   >;
@@ -662,8 +657,6 @@ describe("task router — listActionable", () => {
   });
 });
 
-// One level of checklist subtasks (task.parentTaskId). Parent status stays
-// fully manual — none of these assert any auto-completion of the parent.
 describe("task repository — subtasks (parentTaskId)", () => {
   const ctx = withTestDb();
 
@@ -1283,8 +1276,6 @@ describe("task repository — projectPresenceFilter", () => {
     expect(names).not.toContain("inbox");
   });
 
-  // buildTaskProjectCondition folds presence INTO the id condition rather than
-  // adding a sibling — an AND there would make this pair match nothing.
   it("ORs with projectId instead of contradicting it", async () => {
     const project = await seedProjectMix();
     const names = await listNames({
@@ -1393,8 +1384,6 @@ describe("task repository — moveTasks (bulk move to project)", () => {
     );
     expect(moved.map((r) => r.projectId)).toEqual([null]);
 
-    // No project-scoped filter distinguishes "projectless" tasks beyond a
-    // plain read of projectId — assert directly against the re-read row.
     const reread = await getTaskByShortcode(ctx.db, t.id);
     expect(reread?.projectId).toBeNull();
   });
@@ -1516,8 +1505,6 @@ describe("task repository — moveTasks (bulk move to project)", () => {
       entityId: tId,
       limit: 20,
     });
-    // computeChanges sees no field diff (projectId unchanged) — moveTasks
-    // logs nothing for this row, same count as before the call.
     expect(after.entries.length).toBe(beforeCount);
   });
 });
@@ -1739,9 +1726,6 @@ describe("task repository — getTaskSummary", () => {
       }),
       ctx.actor,
     );
-    // A subtask of a counted top-level task — excluded from every top-level
-    // count (checklist items are represented via their parent) AND from
-    // next/later/blocked (listActionableTasks excludes subtask rows).
     await createTask(
       ctx.db,
       taskCreateInput.parse({
@@ -1754,22 +1738,14 @@ describe("task repository — getTaskSummary", () => {
 
     const summary = await getTaskSummary(ctx.db);
 
-    // totalOpen: every top-level non-done task above — openInProject,
-    // inboxOpen, laterTask, blockedTask, overdueTask, dueThisWeekTask, and the
-    // "due too far out" task = 7 (excludes the done task and the subtask).
     expect(summary.totalOpen).toBe(7);
-    // inbox: same set minus openInProject (has a projectId) = 6.
     expect(summary.inbox).toBe(6);
     expect(summary.overdue).toBe(1);
     expect(summary.dueThisWeek).toBe(1);
-    // next/later/blocked mirror listActionableTasks's partitioning: laterTask
-    // and blockedTask are pulled out of `next`.
     expect(summary.next).toBe(5);
     expect(summary.later).toBe(1);
     expect(summary.blocked).toBe(1);
 
-    // Sanity-check the specific rows landed where expected via the reused
-    // listActionableTasks call.
     const actionable = await listActionableTasks(ctx.db);
     expect(actionable.next.map((r) => r.id)).toEqual(
       expect.arrayContaining([
@@ -1838,12 +1814,8 @@ describe("task repository — getTaskBoard", () => {
       }),
       ctx.actor,
     );
-    // Touch doneOlder after doneNewer was created, so it becomes the more
-    // recently updated of the two done rows.
     await updateTask(ctx.db, doneOlder.id, { trade: "other" }, ctx.actor);
 
-    // Out-of-scope rows — a different project's active + done task, neither
-    // should appear in this project-scoped board read.
     await createTask(
       ctx.db,
       taskCreateInput.parse({
@@ -1870,8 +1842,6 @@ describe("task repository — getTaskBoard", () => {
       [active1.id, active2.id].sort(),
     );
     expect(board.doneCount).toBe(2);
-    // Most recently updated first — doneOlder was touched after doneNewer's
-    // creation, so it now sorts first.
     expect(board.recentDone.map((t) => t.id)).toEqual([
       doneOlder.id,
       doneNewer.id,

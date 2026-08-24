@@ -128,9 +128,6 @@ export const discardProductUnits = async (
       const entry = await tx.query.inventoryEntry.findFirst({
         where: and(
           eq(inventoryEntry.id, input.inventoryEntryId),
-          // Pinned to this product on purpose. A mismatch is a caller bug, and
-          // silently decrementing whichever shelf was named would take units
-          // off the wrong thing.
           eq(inventoryEntry.productId, input.productId),
           notDeleted(inventoryEntry),
         ),
@@ -163,8 +160,6 @@ export const discardProductUnits = async (
       // shelf holds" in discard.integration.test.ts.
       const remaining = entry.amount.value - Math.abs(input.quantity);
       if (remaining > 0) {
-        // The whole Amount, unit included — the scalar this used to pass made a
-        // partially-discarded `can` entry re-value as if it were `each`.
         const remainingAmount = { ...entry.amount, value: remaining };
         await tx
           .update(inventoryEntry)

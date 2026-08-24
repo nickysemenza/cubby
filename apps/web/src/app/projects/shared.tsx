@@ -132,15 +132,13 @@ import { tradeOptions } from "./trade-options";
  */
 const NO_COLUMN_FILTERS: ColumnFiltersState = [];
 
-/**
- * Human-facing labels for the raw DB enum values (`@cubby/schemas/project`).
- * Single source of truth for status column headers, badges, and filter chips
- * across the dashboard/detail page/charts — never string-match the raw enum
- * value for display text.
- */
-// Task labels live with the task options (see the note there on import
-// direction); re-exported here for this file's many existing consumers.
 export { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
+export {
+  nivoBarChrome,
+  nivoChartTheme,
+  nivoCurrencyAxis,
+} from "~/lib/nivo-theme";
+export { getCostTypeColor } from "~/lib/status-colors";
 export {
   capitalize,
   formatDate,
@@ -151,27 +149,8 @@ export {
   PROJECT_STATUS_LABELS,
   TRADE_LABELS,
 } from "./project-formatting";
-
 export { PROJECT_STATUS_OPTIONS } from "./project-options";
-
-// -- Cost-type colors --
-
-export { getCostTypeColor } from "~/lib/status-colors";
-
-// Trade glyphs / chips / select options moved to `./trade-options` so the
-// filter manifest can import `tradeOptions` without closing an import cycle
-// back through this file's tables. Re-exported so consumers don't care.
 export { TradeBadge, TradeIcon, tradeOptions } from "./trade-options";
-
-// -- Chart theme (consistent across all Nivo charts) --
-
-export {
-  nivoBarChrome,
-  nivoChartTheme,
-  nivoCurrencyAxis,
-} from "~/lib/nivo-theme";
-
-// -- Status Icon --
 
 export function StatusIcon({ status }: { status: ProjectStatus | TaskStatus }) {
   const { icon: Icon, className } = getStatusBadgeProps("project", status);
@@ -182,19 +161,8 @@ export function StatusIcon({ status }: { status: ProjectStatus | TaskStatus }) {
   return Icon ? <Icon className={cn("size-4 shrink-0", textClass)} /> : null;
 }
 
-// -- Task Table --
-
 const taskHelper = createCubbyColumnHelper<TaskOut>();
 
-// These bake the renderCell + select options + editable field-mapping shared by
-// the `/tasks` & `/expenses` index pages (tasklist.tsx / expenselist.tsx, via
-// `useEntityList`) and the embedded tables below (raw `useTable` over a
-// caller-supplied array). Each returns ONE column def; callers pass their own
-// `mobile` / `filterConfig` / density knobs. The project column already has its
-// own shared factory (`createProjectLinkColumn`); the name column differs per
-// caller, so both are left inline.
-
-/** Status column — dot + label render (from the roster) + `status` write. */
 export function taskStatusColumn(
   helper: ColumnHelper<TaskOut>,
   save: (status: TaskStatus, task: TaskOut) => Promise<void>,
@@ -215,9 +183,6 @@ export function taskStatusColumn(
   });
 }
 
-/** Trade column — the roster's trade glyph + label, and a required `trade`
- * write. `emptyAsNull` renders an
- * empty cell (embedded tables) instead of the muted dash (index pages). */
 export function taskTradeColumn(
   helper: ColumnHelper<TaskOut>,
   save: (trade: Trade, task: TaskOut) => Promise<void>,
@@ -246,7 +211,6 @@ export function taskTradeColumn(
   });
 }
 
-/** Due-date column — optionally edits the effective end of a due-date range. */
 export function taskDueColumn(
   helper: ColumnHelper<TaskOut>,
   save: (
@@ -280,11 +244,6 @@ export function taskDueColumn(
   });
 }
 
-/**
- * `N/M` checklist chip after a parent task's name — the twin of the /tasks
- * ledger's. Module-level so it stays referentially stable across renders (it
- * sits in the columns `useMemo`'s dependency graph).
- */
 const subtaskCountSuffix = (row: TaskOut): ReactNode =>
   row.subtaskCount > 0 ? (
     <Badge variant="outline">
@@ -292,10 +251,6 @@ const subtaskCountSuffix = (row: TaskOut): ReactNode =>
     </Badge>
   ) : undefined;
 
-/**
- * Columns off by default on the embedded task table. Provenance detail on a
- * project page, reachable from the column menu when you want it.
- */
 const EMBEDDED_TASK_COLUMNS: ColumnVisibilityState = { createdAt: false };
 
 /**
@@ -324,13 +279,7 @@ export function TaskList({
   defaultColumnFilters = NO_COLUMN_FILTERS,
 }: {
   tasks: TaskOut[];
-  /**
-   * The Project column is the inline move-to-sub-project affordance — useful
-   * when rows span a subtree, but pure noise on a leaf project's detail page
-   * where every row is the same project. Callers pass `false` there.
-   */
   showProjectColumn?: boolean;
-  /** Seeds the table's column filters once on mount; the table owns the state after that. */
   defaultColumnFilters?: ColumnFiltersState;
 }) {
   const api = useTRPC();
@@ -573,8 +522,6 @@ export function TaskList({
   );
 }
 
-// -- Expense Table --
-
 const expenseHelper = createCubbyColumnHelper<ExpenseOut>();
 
 export function expenseLineKindColumn(
@@ -626,7 +573,6 @@ export function expenseLineBasisColumn(
   });
 }
 
-/** Cost-type column — label render + required `costType` write. */
 export function expenseCostTypeColumn(
   helper: ColumnHelper<ExpenseOut>,
   save: (costType: CostType, expense: ExpenseOut) => Promise<void>,
@@ -649,11 +595,6 @@ export function expenseCostTypeColumn(
   });
 }
 
-/** Trade column — the roster's trade glyph + label, and a required `trade`
- * write. `emptyAsNull` renders
- * an empty cell instead of the muted dash. The multiselect `filterConfig` gives
- * the column `multiSelectFilterFn` (set membership), which the pivot's
- * single-trade selection satisfies as a one-element array. */
 export function expenseTradeColumn(
   helper: ColumnHelper<ExpenseOut>,
   save: (trade: Trade, expense: ExpenseOut) => Promise<void>,
@@ -685,8 +626,6 @@ export function expenseTradeColumn(
   });
 }
 
-/** Cost column — `decimals`/`signedTone` tune the embedded whole-dollar,
- * sign-tinted look; the index page omits them for default cents + flat green. */
 export function expenseCostColumn(
   helper: ColumnHelper<ExpenseOut>,
   save: (cost: number | null, expense: ExpenseOut) => Promise<void>,
@@ -776,7 +715,6 @@ export function expenseProductQuantityColumn(
   });
 }
 
-/** Date column — inline date-picker + `date` write. */
 export function expenseDateColumn(
   helper: ColumnHelper<ExpenseOut>,
   save: (date: string | null, expense: ExpenseOut) => Promise<void>,
@@ -795,8 +733,6 @@ export function expenseDateColumn(
   });
 }
 
-/** Future/Status column — the editable "Actual"/"Planned" select over the
- * boolean `future` field. */
 export function expenseFutureColumn(
   helper: ColumnHelper<ExpenseOut>,
   save: (future: boolean, expense: ExpenseOut) => Promise<void>,

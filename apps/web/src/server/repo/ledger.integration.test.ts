@@ -311,10 +311,6 @@ describe("consolidated household ledger", () => {
           "sourceClaims" in changes,
       ),
     ).toBe(true);
-    // `member` still holds the live account and outgoing transfer set up
-    // above; deleteLedgerParties refuses on the same aggregate check that
-    // used to also back the preview's `block-accounts` /
-    // `block-outgoing-transfers` blockers.
     await expect(
       deleteLedgerParties(ctx.db, [member.output.id], ctx.actor),
     ).rejects.toThrow(

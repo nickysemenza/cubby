@@ -1,6 +1,5 @@
 import type { ImageShortcode } from "@cubby/schemas/identifiers";
 import {
-  type ImageId,
   unsafeImageId,
   unsafeImageShortcode,
 } from "@cubby/schemas/identifiers";
@@ -58,9 +57,6 @@ import {
   uploadToS3,
 } from "~/server/utils/s3";
 
-// Shared by the image and document initiation paths — creates the PENDING row
-// and presigns the PUT. Content-type agnostic; the zod input schemas gate what
-// each endpoint accepts.
 const initiatePendingUpload = async (
   db: Database,
   input: { filename: string; contentType: string; size: number },
@@ -207,7 +203,6 @@ export const importImageFromUrl = async (
 // base64 marker, and the payload. Only base64 data: URIs are supported.
 const DATA_URI_RE = /^data:([^;,]*)(;base64)?,([\s\S]*)$/;
 
-/** Decode a base64 payload (raw or a `data:` URI) into bytes + any inline type. */
 function decodeBase64File(
   data: string,
   fallbackContentType: string | undefined,
@@ -306,9 +301,6 @@ const readStagedUpload = async (
   db: Database,
   uploadId: string,
 ): Promise<{ bytes: Buffer; contentType: string; filename: string }> => {
-  // `getImageById` THROWS `IMAGE_NOT_FOUND` on a miss rather than returning
-  // null, so a `if (!staged)` check here would be dead code and the caller
-  // would get a bare "Image not found" with no hint about which id it wanted.
   const staged = await getImageById(db, uploadId).catch((error: unknown) => {
     if (
       (error as { cause?: { reason?: string } })?.cause?.reason !==
@@ -398,7 +390,6 @@ export const attachFileToEntity = async (
     }
   }
 
-  // 1. Resolve bytes + content type + filename from whichever input mode.
   let bytes: Buffer;
   let contentType: string | undefined;
   let sourceFilename: string | undefined;
@@ -453,7 +444,6 @@ export const attachFileToEntity = async (
       throw error;
     }
   } else {
-    // Unreachable: mcpAttachFileInput.refine enforces exactly one source.
     throw createAppError(
       "IMAGE_ATTACH_FAILED",
       "Provide exactly one of `url`, `data`, or `uploadId`",
@@ -468,7 +458,6 @@ export const attachFileToEntity = async (
   }
   contentType = contentType.toLowerCase();
 
-  // 2. Classify (a "document" is just a PDF) + validate against the allowlists.
   const isDocument = contentType === PDF_CONTENT_TYPE;
   const isAllowed =
     isDocument ||
@@ -622,19 +611,4 @@ export const cleanupUnreferencedImageStorage = async (
   );
   await deleteStoredObjects(result.deletedKeys);
   return { count: result.deletedIds.length, ...result };
-};
-
-/**
- * Delete images outright: the DB rows (plus their entity associations) in one
- * transaction, then their R2 objects. The DB is the source of truth — an object
- * that fails to delete is logged and left behind rather than blocking the row
- * removal (same contract as the pending cull).
- */
-export const deleteImagesWithStorage = async (
-  db: Database,
-  imageIds: ImageId[],
-) => {
-  const result = await deleteImages(db, imageIds);
-  await deleteStoredObjects(result.deletedKeys);
-  return result;
 };

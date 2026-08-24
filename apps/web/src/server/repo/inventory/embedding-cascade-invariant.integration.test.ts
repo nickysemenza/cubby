@@ -272,11 +272,6 @@ describe("inventory removal cascades entity embeddings (no orphans)", () => {
   });
 });
 
-/**
- * One row per entrypoint that hands its whole write half to `removeEntity`.
- * The cascade itself is structural now; what a row proves is that this repo
- * function is wired to the shared machinery.
- */
 const REMOVAL_ENTRYPOINTS: ReadonlyArray<{
   label: string;
   entity: SearchableEntity;

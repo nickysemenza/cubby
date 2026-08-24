@@ -36,10 +36,6 @@ import { productRouter } from "./product";
 describe("product delete/merge propagate cost staleness to recipes", () => {
   const ctx = withTestDb();
 
-  // A fake BACKGROUND_QUEUE so dispatchRecompute marks the recipe stale and
-  // QUEUES it instead of draining inline and immediately re-stamping it fresh.
-  // Isolates "did the mutation propagate staleness" from drain timing — same
-  // technique as recipe-delete-staleness.integration.test.ts.
   const installFakeQueue = () => {
     setCfEnv({
       BACKGROUND_QUEUE: {

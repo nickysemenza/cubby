@@ -43,7 +43,7 @@ function Search({
   });
   const purchase = useQuery({
     ...api.purchase.list.queryOptions({
-      filters: { q: searchQuery },
+      filters: { search: searchQuery },
       pagination,
     }),
     enabled: enabled && kind === "purchase",

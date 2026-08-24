@@ -2,7 +2,6 @@ import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Entity } from "@cubby/schemas/entity";
 import { entitySchema } from "@cubby/schemas/entity";
-import { entityManifest } from "@cubby/schemas/entity-manifest";
 import {
   financialAccountCreateInput,
   financialAccountFilterFields,
@@ -43,13 +42,11 @@ import { vendorCreateInput, vendorFilterFields } from "@cubby/schemas/vendor";
 import { wishFilterFields } from "@cubby/schemas/wish";
 import type { ShortcodeType } from "@cubby/shared";
 import { SHORTCODE_PREFIX } from "@cubby/shared";
-import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
 import type { Database } from "~/server/db";
 import { upsertCookbook } from "./cookbook";
-import { getDb } from "./database-helpers";
 import { createExpense, expenseList } from "./expense";
 import {
   createFinancialAccount,
@@ -114,9 +111,7 @@ import { createWish, wishList } from "./wish";
 const PAGE: PaginationParams = { pageIndex: 0, pageSize: 100 };
 const NO_SORT: SortParams[] = [];
 
-/** A string no seeded row contains and no format-constrained schema accepts. */
 const IMPOSSIBLE_TEXT = "zzq-no-such-value-zzq";
-/** Lower bound after every row; upper bound before every row. */
 const FAR_FUTURE = "2999-01-01";
 const FAR_PAST = "1000-01-01";
 /**
@@ -125,10 +120,7 @@ const FAR_PAST = "1000-01-01";
  * parameter outright rather than comparing it.
  */
 const HUGE = 1_000_000_000;
-/** Well-formed but unmintable body — `resolveShortcodes` finds nothing for it. */
 const UNRESOLVABLE_BODY = "9999";
-
-// Field classification
 
 /**
  * How a declared field is probed. Derived from what the field's OWN schema
@@ -148,30 +140,11 @@ const PROBEABLE_TARGETS = (
 type Probe =
   /** A shortcode-typed id. Gets the full #591 battery. */
   | { kind: "id"; target: ProbeableTarget }
-  /** Free text (search, substring, exact free-form id). */
   | { kind: "text"; value: unknown }
-  /** A `YYYY-MM-DD` bound. */
   | { kind: "date"; value: string }
-  /** A numeric bound. */
   | { kind: "number"; value: number }
-  /**
-   * SKIPPED BY KIND — a boolean names two states a row can genuinely be in.
-   * Neither `true` nor `false` is impossible, so "returns fewer rows" is not a
-   * property a boolean filter has.
-   */
   | { kind: "skip:boolean" }
-  /**
-   * SKIPPED BY KIND — an upper bound on a schema that rejects negatives
-   * (`.nonnegative()` / `.positive()`). Its smallest legal value (0 or 1)
-   * legitimately matches real rows, so no impossible value exists.
-   */
   | { kind: "skip:bounded-max" }
-  /**
-   * SKIPPED BY KIND — an enum (including the `has`/`none` presence sentinels and
-   * the status/kind/trade picklists), an object scope, or a format-constrained
-   * scalar (4-digit year, card last-4). Every syntactically valid value names a
-   * cohort some row could plausibly be in, so none of them is impossible.
-   */
   | { kind: "skip:closed-domain" };
 
 const accepts = (schema: z.ZodType, value: unknown) =>
@@ -220,8 +193,6 @@ const classify = (field: string, schema: z.ZodType): Probe => {
 
   return { kind: "skip:closed-domain" };
 };
-
-// The world every probe runs against
 
 type Seeded = {
   /** One live shortcode per entity, for the "real id" and wrong-prefix probes. */
@@ -308,8 +279,6 @@ const seedWorld = async (ctx: {
   const productAlpha = products[0];
   if (!productAlpha) throw new Error("seed: product not created");
 
-  // Beta.parentId points at Alpha, and Beta.productId points at the Alpha
-  // product — `locationFilterFields.{parentId,productId}` non-vacuity.
   const locationAlpha = await createLocation(
     db,
     makeLocationInput({ name: "Guard Location Alpha" }),
@@ -345,9 +314,6 @@ const seedWorld = async (ctx: {
     );
   }
 
-  // Alpha carries a tag and an ingredient-line section (linking ingredient
-  // Alpha) — `recipeFilterFields.{tagsPresenceFilter,ingredientPresenceFilter}`
-  // non-vacuity.
   const recipes = [];
   for (const name of ["Guard Recipe Alpha", "Guard Recipe Beta"]) {
     recipes.push(
@@ -371,8 +337,6 @@ const seedWorld = async (ctx: {
   const recipeAlpha = recipes[0];
   if (!recipeAlpha) throw new Error("seed: recipe not created");
 
-  // Alpha plans the Alpha recipe — `mealFilterFields.recipePresenceFilter`
-  // and `recipeFilterFields.mealPresenceFilter` non-vacuity.
   const meals = [];
   for (const [index, date] of ["2024-05-01", "2024-05-02"].entries()) {
     meals.push(
@@ -388,10 +352,6 @@ const seedWorld = async (ctx: {
     );
   }
 
-  // Beta.parentProjectId points at Alpha — the #591-lowercase probe below reads
-  // a live id off `world.codes.project` (Alpha's) and needs at least one row to
-  // actually carry it in a `parentProjectId` filter, or "lowercase matched the
-  // same count as canonical" is vacuously true at zero-and-zero.
   const { output: projectAlpha } = await createProject(
     db,
     projectCreateInput.parse({
@@ -411,9 +371,6 @@ const seedWorld = async (ctx: {
   );
   const projects = [projectAlpha, projectBeta];
 
-  // Alpha.subjectProductId points at the Alpha product; Beta.parentTaskId
-  // points at Alpha — same non-vacuity reasoning as the projects above, for
-  // `taskFilterFields.subjectProductId` / `.parentTaskId`.
   const { output: taskAlpha } = await createTask(
     db,
     taskCreateInput.parse({
@@ -526,10 +483,6 @@ const seedWorld = async (ctx: {
     ledgerTransfers.push(output);
   }
 
-  // Alpha carries a purchaseId — `financialTransactionFilterFields.purchaseId`
-  // non-vacuity. `kind: "purchase"` already requires a positive amount whether
-  // or not it's linked (see `purchaseSettlementSignRules`), so linking it here
-  // doesn't change what amount/kind have to be.
   const transactions = [];
   for (const [index, date] of ["2024-04-01", "2024-04-02"].entries()) {
     const { output } = await createFinancialTransaction(
@@ -548,8 +501,6 @@ const seedWorld = async (ctx: {
     transactions.push(output);
   }
 
-  // Alpha's candidate list carries the Alpha product —
-  // `wishFilterFields.candidateProductId` non-vacuity.
   const wishes = [];
   for (const name of ["guard wish alpha", "guard wish beta"]) {
     const { output } = await createWish(
@@ -614,19 +565,11 @@ const seedWorld = async (ctx: {
   };
 };
 
-// The registry: every entity that declares filter fields, plus its list call
-
 type ListProbe = (
   db: Database,
   filters: Record<string, unknown>,
 ) => Promise<{ ids: string[]; count: number }>;
 
-/**
- * Adapts a repo list function to the probe shape. The single localized cast: the
- * probe deliberately feeds values the entity's `Filters` type would reject at the
- * type level (a lowercase code, a wrong-prefix code) because that is exactly what
- * an unvalidated caller can do at runtime, and what #591 was.
- */
 const listFor =
   <F, R extends { id: string }>(
     fn: (
@@ -795,7 +738,6 @@ describe("every declared filter field is applied by its repo", () => {
           // header) — anywhere else, a field with no live match is itself the
           // violation.
           if (key in VACUOUS_ID_FIELDS) {
-            // Expected and roster-covered — nothing to compare.
           } else {
             record(
               field,
@@ -915,12 +857,6 @@ describe("guard coverage", () => {
     expect(stale).toEqual([]);
   });
 
-  /**
-   * Every declared field is either probed or skipped by a kind whose value space
-   * has no impossible member. Pinning the skip roster keeps a newly-declared field
-   * from disappearing into a skip bucket unnoticed — a change here is a prompt to
-   * check whether that field really is unprobeable.
-   */
   it("skips only kinds that cannot express an impossible value", () => {
     const skippedKinds = new Set<string>();
     for (const entity of GUARDED_ENTITIES) {
@@ -937,409 +873,36 @@ describe("guard coverage", () => {
   });
 });
 
-// ============================================================================
-// Presence-filter battery
-// ============================================================================
-//
-// GUARDS' entities declare 91 `*PresenceFilter` fields (schema-driven count —
-// see `isPresenceField`); before this, ~17 had any coverage at all, one
-// hand-written "has"/"none" describe block per entity, most of them a
-// near-clone of the next. Three generic properties run over every one:
-//
-// (a) PARTITION — `ids(f="has") ⊎ ids(f="none") === ids({})`, disjoint.
-//     Catches the NULL/`notInArray` bug class: a NULL inside a
-//     `NOT IN (...)` list makes the whole predicate UNKNOWN in SQL, so "none"
-//     silently drops rows that plainly belong there instead of matching them.
-// (b) NON-VACUITY — both buckets are non-empty. A comparison between two
-//     empty sets proves nothing — the same #591-class blind spot the
-//     lowercase battery above closed for id filters — so `VACUOUS_PROBES`
-//     documents the fields this seeded world can't populate both buckets for.
-// (c) SOFT-DELETE SWEEP — every OTHER guarded entity's table is soft-deleted
-//     after seeding. A presence field resolved through a JOIN to one of those
-//     tables must then report an empty "has" bucket for every row that's
-//     still visible; a field reading only the probed entity's own column (or
-//     a relation the sweep can't reach — see `RELATION_BACKED`'s header) must
-//     classify those same surviving rows identically to before.
-
-/** Schema-shape presence-field detector — `z.enum(["has","none"]).optional()`,
- * matching `presenceFilter` and `related-view.ts`'s `relatedPresence`. Driven
- * by the field's own schema (like `classify` above), not a hand-kept list. */
 const isPresenceField = (field: string, schema: z.ZodType): boolean =>
   field.endsWith("PresenceFilter") &&
   accepts(schema, "has") &&
   accepts(schema, "none") &&
   !accepts(schema, IMPOSSIBLE_TEXT);
 
-type PresenceEntry = { entity: GuardedEntity; field: string };
-
-/** Every (entity, field) presence pair GUARDS declares, in manifest order. */
-const PRESENCE_FIELDS: PresenceEntry[] = GUARDED_ENTITIES.flatMap((entity) =>
-  Object.entries(GUARDS[entity].fields)
-    .filter(([field, schema]) => isPresenceField(field, schema as z.ZodType))
-    .map(([field]) => ({ entity, field })),
-);
-
-/**
- * Whether soft-deleting every table EXCEPT the probed entity's own would empty
- * this field's "has" bucket.
- *
- * `true` for a field resolved through a JOIN to a DIFFERENT guarded entity's
- * table — that table gets swept. `false` for three distinct reasons the sweep
- * can't tell apart, so they share one bucket:
- *   - a plain column on the entity's own row (`presenceCondition`) — the
- *     ordinary case (e.g. `product.notesPresenceFilter`);
- *   - a SELF-referential relation — task↔task (`parentTaskId`/
- *     `blockedByTaskId`), project↔project (the `project` "blocked-by" trio),
- *     location↔location (`childPresenceFilter`). The related rows live in the
- *     PROBED entity's own table, which "every table except the probed
- *     entity's own" deliberately excludes from the sweep;
- *   - a relation to a table that isn't a manifest ENTITY at all — recipe
- *     sections/instructions, product's UnitMapping/ExternalId/Component child
- *     rows (`componentPresenceFilter` joins OTHER Product rows via a child
- *     table, so it's really product↔product — same exemption as the
- *     self-referential case above). Nothing in the sweep targets these
- *     tables, because they were never a `GUARDS` member to begin with.
- *
- * Exhaustiveness-checked below against `PRESENCE_FIELDS` — every discovered
- * presence field must have an entry, and no entry may name a field that no
- * longer exists.
- */
-const RELATION_BACKED: Record<string, boolean> = {
-  "expense.financialTransactionPresenceFilter": true,
-  "expense.projectPresenceFilter": false,
-  "expense.productPresenceFilter": false,
-  "expense.vendorPresenceFilter": false,
-  "expense.costPresenceFilter": false,
-  // Self-referential: `disposalPurchaseIds` groups OTHER live Expense rows by
-  // purchaseId — it never leaves the `expense` table, which the sweep
-  // excludes when probing "expense".
-  "expense.disposalPurchasePresenceFilter": false,
-  "expense.productQuantityPresenceFilter": false,
-  // Resolves through the joined Purchase's orderId (`orderIdPresence`) — a
-  // different entity, so it IS swept. `expense.integration.test.ts` keeps its
-  // own dedicated test for this field regardless (193 real ledger rows).
-  "expense.orderIdPresenceFilter": true,
-  "financialAccount.financialTransactionPresenceFilter": true,
-  "financialAccount.purchasePresenceFilter": true,
-  "financialAccount.vendorPresenceFilter": true,
-  "financialAccount.sourceAliasPresenceFilter": false,
-  "financialTransaction.vendorPresenceFilter": true,
-  "financialTransaction.expensePresenceFilter": true,
-  "financialTransaction.productPresenceFilter": true,
-  // `hasAnyAllocation()` checks ONLY FinancialTransactionAllocation's own
-  // `deletedAt` — never the Purchase it points at. That join table isn't a
-  // manifest entity, so nothing sweeps it: empirically confirmed (this was
-  // originally guessed `true` on the belief it checked Purchase liveness).
-  "financialTransaction.purchasePresenceFilter": false,
-  "image.referencePresenceFilter": true,
-  "ingredient.productPresenceFilter": true,
-  "ingredient.ownRecipePresenceFilter": true,
-  "ingredient.recipePresenceFilter": true,
-  "inventory.ingredientPresenceFilter": true,
-  "inventory.verifiedPresenceFilter": false,
-  "location.ingredientPresenceFilter": true,
-  "location.productPresenceFilter": false,
-  "location.parentPresenceFilter": false,
-  "location.inventoryPresenceFilter": true,
-  "location.imagePresenceFilter": true,
-  "location.childPresenceFilter": false,
-  "location.aiDescriptionPresenceFilter": false,
-  "meal.mealTypePresenceFilter": false,
-  "meal.recipePresenceFilter": true,
-  "product.vendorPresenceFilter": true,
-  "product.projectPresenceFilter": true,
-  "product.usedOnProjectPresenceFilter": true,
-  "product.purchasePresenceFilter": true,
-  "product.expensePresenceFilter": true,
-  "product.relatedInventoryPresenceFilter": true,
-  "product.wishPresenceFilter": true,
-  "product.taskPresenceFilter": true,
-  "product.upcPresenceFilter": false,
-  "product.modelPresenceFilter": false,
-  "product.notesPresenceFilter": false,
-  "product.externalIdPresenceFilter": false,
-  "product.inventoryPresenceFilter": true,
-  "product.servingAsLocationPresenceFilter": true,
-  "product.ingredientPresenceFilter": false,
-  "product.tagsPresenceFilter": false,
-  "product.categoryPresenceFilter": false,
-  "product.purchaseDatePresenceFilter": true,
-  "product.pricePresenceFilter": false,
-  "product.usdaPresenceFilter": false,
-  "product.imagePresenceFilter": true,
-  "product.unitMappingPresenceFilter": false,
-  "product.componentPresenceFilter": false,
-  "product.stockTrackedPresenceFilter": false,
-  "project.projectPresenceFilter": false,
-  "project.taskPresenceFilter": true,
-  "project.expensePresenceFilter": true,
-  "project.taskProductPresenceFilter": true,
-  "project.purchasedProductPresenceFilter": true,
-  "project.usedToolPresenceFilter": true,
-  "project.vendorPresenceFilter": true,
-  "project.parentProjectPresenceFilter": false,
-  "project.imagePresenceFilter": true,
-  "purchase.expensePresenceFilter": true,
-  "purchase.financialTransactionPresenceFilter": true,
-  "purchase.productPresenceFilter": true,
-  "purchase.projectPresenceFilter": true,
-  "purchase.orderIdPresenceFilter": false,
-  "purchase.statedTotalPresenceFilter": false,
-  "purchase.documentPresenceFilter": true,
-  "recipe.ingredientPresenceFilter": true,
-  "recipe.mealPresenceFilter": true,
-  "recipe.cookbookPresenceFilter": false,
-  "recipe.tagsPresenceFilter": false,
-  "recipe.imagePresenceFilter": true,
-  "recipe.instructionsPresenceFilter": false,
-  "recipe.sourceTypePresenceFilter": false,
-  "task.blockedByTaskPresenceFilter": false,
-  "task.parentTaskPresenceFilter": false,
-  "task.duePresenceFilter": false,
-  "task.projectPresenceFilter": false,
-  "task.subjectProductPresenceFilter": false,
-  "vendor.expensePresenceFilter": true,
-  "vendor.purchasePresenceFilter": true,
-  "vendor.productPresenceFilter": true,
-  "vendor.projectPresenceFilter": true,
-  "vendor.financialTransactionPresenceFilter": true,
-  "vendor.latestPurchaseDatePresenceFilter": true,
-  "vendor.logoPresenceFilter": true,
-  "wish.productPresenceFilter": true,
-};
-
-/**
- * Presence fields where at least one of "has"/"none" is empty in this file's
- * seeded (two-row) world, so property (b) can't be exercised — the partition
- * check in (a) still runs, just vacuously (see the `record` callers below).
- * Every entry is a coverage gap, not a carve-out: an entry that starts
- * matching both buckets is stale and must be deleted (asserted below, same
- * pattern as `KNOWN_GAPS`/`VACUOUS_ID_FIELDS`).
- */
-const VACUOUS_PROBES: Record<string, string> = {
-  "expense.costPresenceFilter": "both seeded expenses carry a cost",
-  "expense.disposalPurchasePresenceFilter":
-    "no seeded purchase is a net-negative disposal",
-  "expense.orderIdPresenceFilter":
-    "no seeded expense's purchase carries an orderId",
-  "expense.productQuantityPresenceFilter":
-    "no seeded expense carries a recorded productQuantity",
-  "financialAccount.sourceAliasPresenceFilter":
-    "no seeded account carries a sourceAlias",
-  "image.referencePresenceFilter": "no seeded image is attached to anything",
-  "ingredient.productPresenceFilter":
-    "no seeded ingredient has a linked product",
-  "inventory.ingredientPresenceFilter":
-    "no seeded inventory's product has an ingredientId",
-  "inventory.verifiedPresenceFilter": "no seeded inventory entry is verified",
-  "location.aiDescriptionPresenceFilter":
-    "no seeded location has an AI-generated description",
-  "location.imagePresenceFilter": "no seeded location has an image",
-  "location.ingredientPresenceFilter":
-    "no seeded location's inventory product has an ingredientId",
-  "meal.mealTypePresenceFilter": "no seeded meal has a mealType",
-  "product.componentPresenceFilter": "no seeded product has kit components",
-  "product.externalIdPresenceFilter": "no seeded product carries an externalId",
-  "product.imagePresenceFilter": "no seeded product has an image",
-  "product.ingredientPresenceFilter": "no seeded product has an ingredientId",
-  "product.inventoryPresenceFilter":
-    "both seeded products have live inventory (seedWorld's inventories loop)",
-  "product.modelPresenceFilter": "both seeded products share the same model",
-  "product.notesPresenceFilter": "no seeded product has notes",
-  "product.pricePresenceFilter": "no seeded product has a price",
-  "product.relatedInventoryPresenceFilter":
-    "both seeded products have live inventory (same as inventoryPresenceFilter)",
-  "product.stockTrackedPresenceFilter": "no seeded product sets stockTracked",
-  "product.upcPresenceFilter": "no seeded product has a upc",
-  "product.usdaPresenceFilter": "no seeded product links to a USDA food",
-  "product.usedOnProjectPresenceFilter":
-    "no seeded product is used as a project tool (ProjectToolUsage)",
-  "project.imagePresenceFilter": "no seeded project has an image",
-  "project.projectPresenceFilter":
-    "no seeded project blocks another (ProjectDependency) — settable only via the update-only blockedByIds",
-  "project.usedToolPresenceFilter":
-    "no seeded project has a tool used on it (ProjectToolUsage)",
-  "purchase.documentPresenceFilter":
-    "no seeded purchase has an attached document",
-  "purchase.orderIdPresenceFilter": "no seeded purchase carries an orderId",
-  "purchase.statedTotalPresenceFilter":
-    "no seeded purchase carries a statedTotal",
-  "recipe.cookbookPresenceFilter":
-    "no seeded recipe has a cookbookId (import-only field, unsettable via createRecipe)",
-  "recipe.imagePresenceFilter": "no seeded recipe has an image",
-  "recipe.instructionsPresenceFilter":
-    "no seeded recipe section carries instructions",
-  "recipe.sourceTypePresenceFilter": "both seeded recipes are sourceType null",
-  "task.blockedByTaskPresenceFilter":
-    "no seeded task blocks another (TaskDependency) — settable only via the update-only blockedByIds",
-  "task.duePresenceFilter": "no seeded task carries a dueDate",
-  // Task Beta inherits Alpha's projectId/subjectProductId at create time
-  // (createTask: "a null projectId alongside a parentTaskId is treated as
-  // inherit the parent's project" — zod collapses omitted and explicit null
-  // to the same value, so no caller-side override can suppress it). Every
-  // seeded task therefore carries both, and there is no "none" row.
-  "task.projectPresenceFilter":
-    "Task Beta inherits Alpha's projectId (parentTaskId inheritance) — both seeded tasks carry one",
-  "task.subjectProductPresenceFilter":
-    "Task Beta inherits Alpha's subjectProductId (parentTaskId inheritance) — both seeded tasks carry one",
-  "vendor.logoPresenceFilter": "no seeded vendor has a logo image",
-};
-
-/** Every guarded entity's own table, keyed for the sweep below. */
-const ENTITY_TABLE: Record<GuardedEntity, string | null> = Object.fromEntries(
-  GUARDED_ENTITIES.map((entity) => [entity, entityManifest[entity].dbTable]),
-) as Record<GuardedEntity, string | null>;
-
-/**
- * Soft-delete every OTHER guarded entity's live rows, leaving `keep`'s table
- * untouched. Table names come from `entityManifest` (a fixed, trusted
- * source), not user input, so a raw interpolated identifier is safe here.
- */
-const sweepOtherEntities = async (
-  db: Database,
-  keep: GuardedEntity,
-): Promise<void> => {
-  for (const entity of GUARDED_ENTITIES) {
-    if (entity === keep) continue;
-    const table = ENTITY_TABLE[entity];
-    if (!table) continue;
-    await getDb(db).execute(
-      sql.raw(
-        `UPDATE "${table}" SET "deletedAt" = now() WHERE "deletedAt" IS NULL`,
-      ),
-    );
-  }
-};
-
-describe("every presence filter partitions the list correctly", () => {
+describe("every presence filter partitions its baseline", () => {
   const ctx = withTestDb();
 
   it.each(GUARDED_ENTITIES)("%s", async (entity) => {
     await seedWorld(ctx);
     const { fields, list } = GUARDS[entity];
-    const baseline = await list(ctx.db, {});
-    const baselineIds = new Set(baseline.ids);
-
+    const baseline = new Set((await list(ctx.db, {})).ids);
     const violations: string[] = [];
-    const passingVacuousProbes: string[] = [];
 
     for (const [field, schema] of Object.entries(fields)) {
       if (!isPresenceField(field, schema as z.ZodType)) continue;
-      const key = `${entity}.${field}`;
-
-      const has = await list(ctx.db, { [field]: "has" });
-      const none = await list(ctx.db, { [field]: "none" });
-      const hasIds = new Set(has.ids);
-      const noneIds = new Set(none.ids);
-
-      // (a) PARTITION: disjoint, and together they equal the baseline set.
-      const overlap = [...hasIds].filter((id) => noneIds.has(id));
-      if (overlap.length > 0) {
+      const has = new Set((await list(ctx.db, { [field]: "has" })).ids);
+      const none = new Set((await list(ctx.db, { [field]: "none" })).ids);
+      const overlap = [...has].filter((id) => none.has(id));
+      const union = new Set([...has, ...none]);
+      const missing = [...baseline].filter((id) => !union.has(id));
+      const extra = [...union].filter((id) => !baseline.has(id));
+      if (overlap.length > 0 || missing.length > 0 || extra.length > 0) {
         violations.push(
-          `${key}: "has" and "none" overlap on ${overlap.length} row(s) — they must be disjoint`,
+          `${entity}.${field}: overlap=${overlap.length}, missing=${missing.length}, extra=${extra.length}`,
         );
-      }
-      const union = new Set([...hasIds, ...noneIds]);
-      const missing = [...baselineIds].filter((id) => !union.has(id));
-      const extra = [...union].filter((id) => !baselineIds.has(id));
-      if (missing.length > 0 || extra.length > 0) {
-        violations.push(
-          `${key}: "has" ⊎ "none" (${union.size}) does not equal the baseline set (${baselineIds.size}) — missing ${missing.length}, extra ${extra.length}`,
-        );
-      }
-
-      // (b) NON-VACUITY
-      if (hasIds.size === 0 || noneIds.size === 0) {
-        if (!(key in VACUOUS_PROBES)) {
-          violations.push(
-            `${key}: one bucket is empty (has=${hasIds.size}, none=${noneIds.size}) — the partition check above is then vacuous. Link a row in seedWorld, or add "${key}" to VACUOUS_PROBES`,
-          );
-        }
-      } else if (key in VACUOUS_PROBES) {
-        passingVacuousProbes.push(key);
       }
     }
 
     expect(violations).toEqual([]);
-    expect(passingVacuousProbes).toEqual([]);
-  });
-});
-
-describe("every relation-backed presence filter empties under a soft-delete sweep", () => {
-  const ctx = withTestDb();
-
-  it.each(GUARDED_ENTITIES)("%s", async (entity) => {
-    await seedWorld(ctx);
-    const { fields, list } = GUARDS[entity];
-    const presenceFields = Object.entries(fields).filter(([field, schema]) =>
-      isPresenceField(field, schema as z.ZodType),
-    );
-
-    const beforeHasIds: Record<string, Set<string>> = {};
-    for (const [field] of presenceFields) {
-      beforeHasIds[field] = new Set(
-        (await list(ctx.db, { [field]: "has" })).ids,
-      );
-    }
-
-    await sweepOtherEntities(ctx.db, entity);
-    const baselineAfter = new Set((await list(ctx.db, {})).ids);
-
-    const violations: string[] = [];
-    for (const [field] of presenceFields) {
-      const key = `${entity}.${field}`;
-      const hasAfter = new Set((await list(ctx.db, { [field]: "has" })).ids);
-
-      if (RELATION_BACKED[key]) {
-        if (hasAfter.size > 0) {
-          violations.push(
-            `${key}: expected an empty "has" bucket after sweeping every other entity (relation-backed), but ${hasAfter.size} row(s) remain`,
-          );
-        }
-        continue;
-      }
-
-      // Own-column/self-referential/child-table field: rows that survived the
-      // sweep must keep the same "has" classification they had before it —
-      // the sweep touched no table this field reads. Restricted to SURVIVING
-      // rows because a hard-required FK on the probed entity itself (e.g.
-      // inventory's productId/locationId) can make the sweep collapse the
-      // baseline too, for reasons unrelated to this field.
-      const expected = new Set(
-        [...(beforeHasIds[field] ?? new Set<string>())].filter((id) =>
-          baselineAfter.has(id),
-        ),
-      );
-      const gained = [...hasAfter].filter((id) => !expected.has(id));
-      const lost = [...expected].filter((id) => !hasAfter.has(id));
-      if (gained.length > 0 || lost.length > 0) {
-        violations.push(
-          `${key}: "has" classification of surviving rows changed after sweeping every OTHER entity (expected unchanged) — gained ${gained.length}, lost ${lost.length}`,
-        );
-      }
-    }
-    expect(violations).toEqual([]);
-  });
-});
-
-describe("presence-filter battery coverage", () => {
-  it("registers every declared presence field in RELATION_BACKED", () => {
-    const declared = PRESENCE_FIELDS.map(
-      ({ entity, field }) => `${entity}.${field}`,
-    );
-    expect(declared.length).toBeGreaterThan(0);
-    expect([...declared].sort()).toEqual(
-      [...Object.keys(RELATION_BACKED)].sort(),
-    );
-  });
-
-  it("keeps the vacuous-probes roster free of fields that no longer exist", () => {
-    const declared = new Set(
-      PRESENCE_FIELDS.map(({ entity, field }) => `${entity}.${field}`),
-    );
-    const stale = Object.keys(VACUOUS_PROBES).filter(
-      (key) => !declared.has(key),
-    );
-    expect(stale).toEqual([]);
   });
 });

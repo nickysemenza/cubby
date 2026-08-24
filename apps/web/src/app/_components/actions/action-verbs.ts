@@ -112,14 +112,13 @@ export const actionVerbs = {
 
 export type ActionVerbId = keyof typeof actionVerbs;
 
+export const actionVerbLabels: string[] = Object.values(actionVerbs).map(
+  (verb) => verb.label,
+);
+
 /**
  * Widen a verb to {@link ActionVerb}. The registry is `as const` so ids stay
  * literal, which also narrows each entry to exactly the keys it declares —
  * making `tone` unreadable on the ones that omit it.
  */
 export const verbDef = (id: ActionVerbId): ActionVerb => actionVerbs[id];
-
-/** Every declared label, for the drift guard and its tests. */
-export const actionVerbLabels: string[] = Object.values(actionVerbs).map(
-  (verb) => verb.label,
-);

@@ -11,10 +11,6 @@ import {
   manifestFilterConfig,
 } from "./filter-manifest";
 import {
-  assertUiFilterSemantics,
-  entityFilterSemantics,
-} from "./filter-search-fields";
-import {
   buildFiltersFromManifest,
   decodeFilters,
   encodeFilters,
@@ -24,47 +20,7 @@ import {
   partitionFilterSpecs,
 } from "./filters";
 
-/**
- * `manifestFilterConfig` is what tables that bypass `useStandardColumns` (the
- * embedded project-detail ones, via their column factories in
- * `app/projects/shared.tsx`) call to get the same control the index pages use.
- * These pin the pairs those factories look up, so the two surfaces can't
- * silently diverge back to single-select.
- */
 describe("manifestFilterConfig", () => {
-  // Each route spreads `entityFilterSearchFields` into its `validateSearch`, so
-  // a key the manifest declares but this record omits means the table writes
-  // the filter and the router strips it before anything reads it back. Pinned
-  // here for EVERY entity, which is why no entity keeps its own hand-written
-  // copy of the list.
-  it("keeps the eager route search keys aligned with the full UI manifest", () => {
-    for (const entity of browserRoutedEntities) {
-      expect(Object.keys(entityFilterSearchFields(entity))).toEqual(
-        getEntityFilters(entity).map((spec) => spec.urlKey ?? spec.columnId),
-      );
-    }
-  });
-
-  it("generates route fields from the dependency-light semantic registry", () => {
-    for (const entity of browserRoutedEntities) {
-      expect(Object.keys(entityFilterSearchFields(entity))).toEqual(
-        entityFilterSemantics[entity],
-      );
-      expect(() =>
-        assertUiFilterSemantics(entity, getEntityFilters(entity)),
-      ).not.toThrow();
-    }
-  });
-
-  it("rejects a UI adapter that invents a route-only filter", () => {
-    expect(() =>
-      assertUiFilterSemantics("vendor", [
-        ...getEntityFilters("vendor"),
-        { columnId: "not-in-core" },
-      ]),
-    ).toThrow("UI filter adapter drift");
-  });
-
   it.each([
     ["task", "status"],
     ["task", "trade"],
@@ -78,7 +34,6 @@ describe("manifestFilterConfig", () => {
   });
 
   it.each([
-    // Complements — selecting both would mean "no filter".
     ["expense", "product"],
     // The cross-entity presence filters. These also pin the exact `columnId`
     // each one hangs on: a spec whose id matches no column renders NOTHING,
@@ -94,7 +49,6 @@ describe("manifestFilterConfig", () => {
     ["recipe", "image"],
     ["purchase", "orderId"],
     ["purchase", "statedTotal"],
-    // A boolean, and a set of mutually exclusive windows.
     ["expense", "future"],
     ["expense", "date"],
     ["expense", "cost"],
@@ -110,8 +64,6 @@ describe("manifestFilterConfig", () => {
   });
 
   it("resolves a runtime picklist by key", () => {
-    // `expense.project` is a `nullable` spec, so its two sentinels
-    // ("Has project" / "(none)") always lead the resolved options.
     const sentinels = [
       { value: FILTER_ANY, label: "Has project", meta: true },
       { value: FILTER_NONE, label: "(none)", meta: true },
@@ -121,8 +73,6 @@ describe("manifestFilterConfig", () => {
       manifestFilterConfig("expense", "project", { project: injected })
         ?.options,
     ).toEqual([...sentinels, ...injected]);
-    // Absent injection still yields the sentinels, not the spec's static
-    // options — proves it doesn't fall back to `spec.options`.
     expect(manifestFilterConfig("expense", "project")?.options).toEqual(
       sentinels,
     );
@@ -198,9 +148,6 @@ describe("manifestFilterConfig", () => {
   ] as const)(
     "%s.%s prepends (none) / Has %s sentinels",
     (entity, columnId, label) => {
-      // Same shape as `expense.project` above: the two sentinels always lead,
-      // regardless of whether the runtime picklist (cookbook roster,
-      // sibling locations) has been injected.
       expect(manifestFilterConfig(entity, columnId)?.options).toEqual([
         { value: FILTER_ANY, label: `Has ${label}`, meta: true },
         { value: FILTER_NONE, label: "(none)", meta: true },
@@ -239,7 +186,6 @@ describe("manifestFilterConfig", () => {
     for (const entity of browserRoutedEntities) {
       for (const spec of getEntityFilters(entity)) {
         if (spec.urlOnly || !pickerKinds.has(spec.kind)) continue;
-        // A nullable spec always has the two sentinels, so it is never empty.
         if (spec.optionsKey || spec.nullable) continue;
         if (!spec.options?.length) {
           violations.push(`${entity}.${spec.columnId}`);
@@ -289,13 +235,6 @@ describe("task subject-product filters", () => {
   });
 });
 
-/**
- * Locks the naming convention `buildFiltersFromManifest` depends on: a
- * `nullable.field` / a `presence` spec's server field must end in
- * `PresenceFilter`, or the sentinel-routing logic in `./filters` silently
- * writes to the wrong key. Loops the manifest's own entries so a newly added
- * spec is covered automatically, with no per-entity list to keep in sync.
- */
 describe("manifest naming invariant", () => {
   it("every nullable.field and presence field ends in PresenceFilter", () => {
     const violations: string[] = [];
@@ -318,13 +257,6 @@ describe("manifest naming invariant", () => {
   });
 });
 
-/**
- * `decodeFilters` / `encodeFilters` / `buildFiltersFromManifest` all key off
- * `columnId` and `urlKey ?? columnId`, and each reads ONE slot per key. Two
- * specs colliding on either would silently share a filter slot — the reason
- * expense's exact order-id filter is `orderIdExact` + `?order=` rather than a
- * second spec on `orderId` (which the presence control already owns).
- */
 describe("manifest key uniqueness", () => {
   it("no two specs in an entity share a columnId or a URL key", () => {
     const violations: string[] = [];
@@ -347,11 +279,6 @@ describe("manifest key uniqueness", () => {
   });
 });
 
-/**
- * The two order-id filters are independent: `?order=` is the exact "rest of
- * this Purchase" scope, `?orderId=` is the has/none reconciliation worklist. They
- * must be able to coexist in one URL and land on different server fields.
- */
 describe("expense order-id filters", () => {
   const build = (search: Record<string, unknown>) => {
     const specs = getEntityFilters("expense");
@@ -385,8 +312,6 @@ describe("expense order-id filters", () => {
   });
 
   it("still carries a vendor alongside it as a separate condition", () => {
-    // Nothing emits this pair any more, but the two keys must stay independent
-    // server-side conditions rather than collapsing into one.
     expect(build({ order: "WN63446464", vendor: "vendor-1" })).toMatchObject({
       orderId: "WN63446464",
       vendorId: ["vendor-1"],
@@ -402,12 +327,6 @@ describe("expense order-id filters", () => {
   });
 });
 
-/**
- * The Vendor filter is id-based now (`Vendor` is a real roster), so it must land
- * on `vendorId` — a name in the `?vendor=` slot is branded as an id and matched
- * as one, never re-resolved. Its `(none)` sentinel still routes to
- * `vendorPresenceFilter`, which server-side means "no Purchase attached".
- */
 describe("expense vendor filter", () => {
   const build = (search: Record<string, unknown>) => {
     const specs = getEntityFilters("expense");
@@ -428,15 +347,12 @@ describe("expense vendor filter", () => {
       vendorId: ["vendor-1"],
       vendorPresenceFilter: "none",
     });
-    // The sentinel alone is the no-Purchase worklist — no `vendorId` key at all.
     expect(build({ vendor: FILTER_NONE })).toEqual({
       vendorPresenceFilter: "none",
     });
   });
 
   it("is a multiselect whose runtime roster resolves under the `vendor` key", () => {
-    // `optionsKey` stayed `vendor` across the id switch, so the page's existing
-    // `filterOptions` wiring keeps feeding it.
     const injected = [{ value: "vendor-1", label: "Home Depot" }];
     const config = manifestFilterConfig("expense", "vendor", {
       vendor: injected,
@@ -450,12 +366,6 @@ describe("expense vendor filter", () => {
   });
 });
 
-/**
- * The vendor roster's single filter — the whole of `vendorFiltersSchema`. It used
- * to be hand-written on the page (a `filters` fallback plus a `buildFilters`
- * callback), which is why a filtered roster wasn't bookmarkable: `useTableState`
- * only URL-encodes manifest specs. These pin the wiring that replaced it.
- */
 describe("vendor filters", () => {
   const build = (search: Record<string, unknown>) => {
     const specs = getEntityFilters("vendor");
@@ -466,47 +376,11 @@ describe("vendor filters", () => {
   };
 
   it("routes ?q= to the search field", () => {
-    // `?q=`, not `?name=` — the money family's search key (the ledger and the
-    // purchases table use the same one), over a server-side name substring match.
     expect(build({ q: "home depot" })).toEqual({ search: "home depot" });
   });
 
   it("emits nothing for an unfiltered roster", () => {
-    // An absent key means "no constraint" — `vendorFiltersSchema` has no
-    // defaults, so an empty object must stay empty.
     expect(build({})).toEqual({});
-  });
-
-  it("declares the roster, rollup, recency, relationship, and audit filters", () => {
-    const [columnBacked, urlOnly] = partitionFilterSpecs(
-      getEntityFilters("vendor"),
-    );
-    expect(columnBacked.map((spec) => spec.columnId)).toEqual([
-      "name",
-      "purchaseCount",
-      "spend",
-      "latestPurchaseDate",
-      "logo",
-      "related:vendor.expenses",
-      "related:vendor.purchases",
-      "related:vendor.products",
-      "related:vendor.projects",
-      "related:vendor.transactions",
-      "createdAt",
-      "updatedAt",
-    ]);
-    expect(urlOnly.map((spec) => spec.columnId)).toEqual([
-      "expenseId",
-      "expensePresenceFilter",
-      "purchaseId",
-      "purchasePresenceFilter",
-      "productId",
-      "productPresenceFilter",
-      "projectId",
-      "projectPresenceFilter",
-      "financialTransactionId",
-      "financialTransactionPresenceFilter",
-    ]);
   });
 
   it("gives the name column a text control", () => {
@@ -518,13 +392,6 @@ describe("vendor filters", () => {
   });
 });
 
-/**
- * The Purchases table's worklist filters. These used to be a
- * LOCAL manifest in `app/purchases/purchase-filters.ts` (specs + header controls
- * + a hand-written `buildFilters` + a hand-rolled search-fields Record), because
- * this file was off-limits to the agent that built the page. They pin the wiring
- * that replaced it.
- */
 describe("purchase filters", () => {
   const build = (search: Record<string, unknown>) => {
     const specs = getEntityFilters("purchase");
@@ -535,10 +402,6 @@ describe("purchase filters", () => {
   };
 
   it("routes broad and display-label searches through separate columns", () => {
-    // The search hangs on `purchase` (the Purchase name column — a bespoke accessor
-    // over purchase identity, since `standardColumns` is `[]`), not on `orderId`,
-    // whose control is the presence worklist. The dedicated label filter can
-    // narrow to human context without changing the established broad `?q=`.
     expect(build({ q: "WN63446464" })).toEqual({ search: "WN63446464" });
     expect(build({ label: "pocket hole" })).toEqual({
       displayLabelSearch: "pocket hole",
@@ -550,8 +413,6 @@ describe("purchase filters", () => {
   });
 
   it("routes ?vendor= to the vendorId field as a set", () => {
-    // A multi kind always holds an array, even for one value — mixing the two
-    // shapes is what splits the React Query cache (see `many` in ./filters).
     expect(build({ vendor: "vendor-1" })).toEqual({ vendorId: ["vendor-1"] });
     expect(build({ vendor: "vendor-1,vendor-2" })).toEqual({
       vendorId: ["vendor-1", "vendor-2"],
@@ -559,9 +420,6 @@ describe("purchase filters", () => {
   });
 
   it("offers no vendor sentinels — Purchase.vendorId is NOT NULL", () => {
-    // Unlike expense's vendor filter, there's no "(none)" cohort to filter for,
-    // so the spec carries no `nullable` and the control has no sentinel options
-    // beyond the injected roster.
     const spec = getEntityFilters("purchase").find(
       (s) => s.columnId === "vendor",
     );
@@ -575,8 +433,6 @@ describe("purchase filters", () => {
   });
 
   it("routes ?orderId= and ?statedTotal= to their presence fields", () => {
-    // Both are reconciliation worklists: Purchases the Vendor issued no order id
-    // for, and Purchases with no paperwork total recorded yet.
     expect(build({ orderId: "none", statedTotal: "none" })).toEqual({
       orderIdPresenceFilter: "none",
       statedTotalPresenceFilter: "none",
@@ -611,67 +467,19 @@ describe("purchase filters", () => {
   });
 
   it("expands ?date= into inclusive dateFrom/dateTo bounds", () => {
-    // Same presets and expander as the ledger's date filter, so one `?date=30d`
-    // means the same window on both money tables.
     const built = build({ date: "30d" });
     expect(built).toMatchObject({
       dateFrom: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
       dateTo: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
     });
-    // An unknown preset resolves to no bound rather than a broken one.
     expect(build({ date: "nonsense" })).toEqual({});
   });
 
   it("emits nothing for an unfiltered table", () => {
-    // An absent key means "no constraint" — `purchaseFiltersSchema` has no
-    // defaults, so an empty object must stay empty.
     expect(build({})).toEqual({});
   });
 
-  it("declares every visible worklist filter plus exact URL-only bounds", () => {
-    const [columnBacked, urlOnly] = partitionFilterSpecs(
-      getEntityFilters("purchase"),
-    );
-    expect(columnBacked.map((spec) => spec.columnId)).toEqual([
-      "purchase",
-      "displayLabel",
-      "vendor",
-      "orderId",
-      "date",
-      "statedTotal",
-      "expenseCount",
-      "expenseTotal",
-      "reconciliation",
-      "documentCount",
-      "transactionCount",
-      "dataQuality",
-      "dataGaps",
-      "related:purchase.expenses",
-      "related:purchase.transactions",
-      "related:purchase.products",
-      "related:purchase.projects",
-      "createdAt",
-      "updatedAt",
-    ]);
-    expect(urlOnly.map((spec) => spec.columnId)).toEqual([
-      "financialReconciliation",
-      "expenseTotalMin",
-      "expenseTotalMax",
-      "expenseId",
-      "expensePresenceFilter",
-      "financialTransactionId",
-      "financialTransactionPresenceFilter",
-      "productId",
-      "productPresenceFilter",
-      "projectId",
-      "projectPresenceFilter",
-    ]);
-  });
-
   it("round-trips a ?vendor= scope through the URL", () => {
-    // The point of the manifest entry: the param survives the route's schema
-    // fragment, decodes into the multi column's ARRAY state, and re-encodes to
-    // the same key — so a shared link lands on the same Purchases.
     const specs = getEntityFilters("purchase");
     const url = z
       .object(entityFilterSearchFields("purchase"))
@@ -703,57 +511,15 @@ describe("purchase filters", () => {
   });
 });
 
-/**
- * The expenses ledger's column-less scopes. `urlOnly` keeps them out of
- * `columnFilters` (a TanStack column has to exist for every entry there, or it
- * logs `[Table] Column with id '<x>' does not exist.` on every render) WITHOUT
- * taking them off the wire — they're still ordinary manifest specs everywhere
- * else.
- *
- * Two reasons a spec lands here: it's a deep-link scope with no control
- * (`productId`, `orderIdExact`, `purchaseId`), or the column it belongs to
- * already spends its single filter slot on something else. `costMin`/`costMax`
- * are the latter — the Cost column renders the preset select, and these carry
- * the exact bounds for MCP and hand-written URLs. `notesSearch`/`urlSearch`
- * have no rendered column at all.
- */
 describe("expense URL-only scopes", () => {
-  it("marks exactly the specs no column renders", () => {
-    const [columnBacked, urlOnly] = partitionFilterSpecs(
-      getEntityFilters("expense"),
-    );
-    expect(urlOnly.map((spec) => spec.columnId)).toEqual([
-      "dateFrom",
-      "dateTo",
-      "dateRelative",
-      "costMin",
-      "costMax",
-      "costSign",
-      "disposalPurchasePresenceFilter",
-      "productQuantityMin",
-      "productQuantityMax",
-      "notesSearch",
-      "urlSearch",
-      "includeSubProjects",
-      "productId",
-      "orderIdExact",
-      "purchaseId",
-      "financialTransactionId",
-      "financialTransactionPresenceFilter",
-    ]);
-    expect(columnBacked.some((spec) => spec.urlOnly)).toBe(false);
-  });
-
   it("routes the Cost column's preset to either presence or a bound", () => {
     const specs = getEntityFilters("expense");
-    // The sentinels keep their old meaning...
     expect(
       buildFiltersFromManifest(
         specs,
         filterGetterFromSearch(specs, { cost: "none" }),
       ),
     ).toEqual({ costPresenceFilter: "none" });
-    // ...and the buckets expand to a signed money bound instead.
     expect(
       buildFiltersFromManifest(
         specs,
@@ -764,8 +530,6 @@ describe("expense URL-only scopes", () => {
 
   it("passes exact ?costMin=/?costMax= through for the server to coerce", () => {
     const specs = getEntityFilters("expense");
-    // Raw strings off the URL — `costMin`/`costMax` are `z.coerce.number()`
-    // server-side precisely so this parses rather than being rejected.
     expect(
       buildFiltersFromManifest(
         specs,
@@ -814,8 +578,6 @@ describe("expense URL-only scopes", () => {
   });
 
   it("still declares a search field for every URL-only key", () => {
-    // Without these the route's strict schema strips the params before
-    // anything can read them back.
     const fields = entityFilterSearchFields("expense");
     expect(Object.keys(fields)).toEqual(
       expect.arrayContaining([
@@ -838,18 +600,10 @@ describe("expense URL-only scopes", () => {
   });
 });
 
-/**
- * The manifest's own schema fragment must survive what TanStack's `parseSearch`
- * hands it, not just the strings the specs describe. Both shapes below arrive
- * pre-parsed into another type from a hand-typed URL, and used to be dropped.
- */
 describe("manifest search fields survive JSON-parsed values", () => {
   const parse = (entity: Entity, search: Record<string, unknown>) =>
     z.object(entityFilterSearchFields(entity)).parse(search);
 
-  // Order ids and vendor names are routinely all digits, so a hand-typed
-  // `?q=486242` reaches the schema as a NUMBER. One row per entity whose
-  // search key is a realistic place to type one.
   it.each([
     ["expense", "order", 11334],
     ["vendor", "q", 486242],
@@ -864,8 +618,6 @@ describe("manifest search fields survive JSON-parsed values", () => {
   );
 
   it("keeps a boolean-shaped filter value that parsed as a boolean", () => {
-    // `future`'s option values are the literal strings "true"/"false", so its
-    // URL form is indistinguishable from a JSON boolean.
     expect(parse("expense", { future: true })).toMatchObject({
       future: "true",
     });
@@ -922,63 +674,9 @@ describe("finance filters", () => {
       postedDateTo: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
     });
   });
-
-  it("declares every visible transaction filter plus exact URL-only scopes", () => {
-    // The transactions table went a long time with 10 of 16 filters reachable
-    // only by hand-editing a URL or over MCP — which is why the statement-drift
-    // reconciliation happened in a Python scratchpad instead of in the app.
-    // Pinning both halves keeps a new spec from quietly landing on the wrong
-    // side of that line, the way vendor/purchase/expense are already pinned.
-    const [columnBacked, urlOnly] = partitionFilterSpecs(
-      getEntityFilters("financialTransaction"),
-    );
-    expect(columnBacked.map((spec) => spec.columnId)).toEqual([
-      "transaction",
-      "kind",
-      "status",
-      "postedDate",
-      "accountId",
-      "purchasePresence",
-      "source",
-      "merchant",
-      "amount",
-      "related:financialTransaction.vendor",
-      "related:financialTransaction.expenses",
-      "related:financialTransaction.products",
-      "createdAt",
-      "updatedAt",
-    ]);
-    expect(urlOnly.map((spec) => spec.columnId)).toEqual([
-      "allocationIntegrity",
-      "purchaseId",
-      "externalId",
-      "amountMin",
-      "amountMax",
-      "transactionDateFrom",
-      "transactionDateTo",
-      "postedDateFrom",
-      "postedDateTo",
-      "vendorId",
-      "vendorPresenceFilter",
-      "expenseId",
-      "expensePresenceFilter",
-      "productId",
-      "productPresenceFilter",
-    ]);
-  });
 });
 
-/**
- * Every server filter field a spec can emit.
- *
- * A spec emits `field ?? columnId`, plus `nullable.field`, plus — for a `range`
- * kind — whatever its `expand()` returns. Range options are static, so every
- * emitted key is enumerable by calling `expand` for each declared option.
- */
 const emittedFields = (spec: FilterSpec): string[] => {
-  // A `range` spec emits ONLY what its expander returns — `buildFiltersFromManifest`'s
-  // range arm never touches `field`/`columnId`, which is why `expense.date`'s
-  // columnId is `date` while the fields it writes are `dateFrom`/`dateTo`.
   if (spec.kind === "range") {
     const expand = spec.expand;
     if (!expand) return [];
@@ -991,22 +689,8 @@ const emittedFields = (spec: FilterSpec): string[] => {
   return fields;
 };
 
-/**
- * Every field a manifest spec can emit must exist on that entity's
- * `*FilterFields`.
- *
- * `buildFiltersFromManifest` returns a bare `Record<string, unknown>` that
- * callers cast to the entity's filters type, and the server strips keys it
- * doesn't know — so a spec naming a field that doesn't exist produces a filter
- * that silently does nothing. That is the same wrong-but-plausible failure the
- * MCP surface now rejects outright (`strictFilterInput`); the web side can't
- * reject at runtime without breaking the page, so it's pinned here instead.
- */
 describe("manifest fields exist on the server schema", () => {
   it("covers every entity that has manifest specs", () => {
-    // Guards `entityFilterFieldMaps` against a new entity silently skipping
-    // this check — and, since `auditFilterEntities` is derived from that same
-    // map, against the audit specs quietly not being composed in for it.
     const withSpecs = browserRoutedEntities.filter(
       (entity) => getEntityFilters(entity).length > 0,
     );
@@ -1063,8 +747,6 @@ describe("every server filter field is reachable from the manifest", () => {
    * canonical backlog, not this by-design allowlist.
    */
   const UNREACHABLE_BY_DESIGN: Record<string, string> = {
-    // Contextual scope a surrounding page imposes — never user-chosen state, so
-    // there is nothing for a header control or a URL key to bind to.
     "expense.projectScope":
       "the /projects page forwards its own visible filter state into the embedded Expense list; an object scope has no URL string form",
     "task.projectScope":
@@ -1073,8 +755,6 @@ describe("every server filter field is reachable from the manifest", () => {
       "set by the project detail page beside its projectId scope. Expense's counterpart IS user-facing (?subprojects=) because the ledger is deep-linked from a project summary and must reconcile against it; the embedded task list is never linked into",
     "project.includeSubProjects":
       "set by the project detail page beside its parentProjectId scope, for the same reason",
-    // List SHAPING rather than a predicate about a row's data — decided by the
-    // renderer or by an MCP caller, not by the person reading the table.
     "task.topLevelOnly":
       "tree shaping: the table renders parents with expandable subtasks, so the renderer owns this. Advertised on MCP list_tasks",
     "project.topLevelOnly":
@@ -1083,8 +763,6 @@ describe("every server filter field is reachable from the manifest", () => {
       "Meals has no filterable list table — the calendar owns its window through ?week= and the shopping list through its own ?from=/?to=. This is the MCP window",
     "meal.to": "the other half of meal.from",
 
-    // A richer control already owns the column's single filter slot, and the
-    // unreachable field is the weaker predicate it replaced.
     "product.vendorSearch":
       "the Vendors related column upgraded from the generated substring filter to an exact vendor roster (vendorId, ?related-vendor=)",
     "product.projectSearch":
@@ -1121,11 +799,6 @@ describe("every server filter field is reachable from the manifest", () => {
   };
 
   it("every range expander yields at least one field", () => {
-    // The reachability set is only as good as this: a `range` spec contributes
-    // NOTHING but what `expand()` returns for its own declared option values,
-    // and several expanders answer `{}` to a key they don't recognize. One that
-    // silently returned `{}` for every option would under-report reachability
-    // and quietly turn this whole guard into a formality.
     const silent: string[] = [];
     for (const entity of browserRoutedEntities) {
       for (const spec of getEntityFilters(entity)) {

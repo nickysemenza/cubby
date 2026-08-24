@@ -25,15 +25,14 @@ import {
   expenseMatchOut,
   expenseMonthlySummaryOut,
   expenseOut,
-  expenseSortableFields,
   expenseTradeAffinityOut,
   plainDate,
 } from "@cubby/schemas/project";
 import { vendorOptionsOut } from "@cubby/schemas/vendor";
 import { z } from "zod";
 import { ENTITY_BINDINGS } from "~/server/entity-bindings";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/entity-kernel/registry";
 import {
-  createExpense,
   deleteExpensesWithPurchaseEffects,
   expenseAnalytics,
   expenseAnalyze,
@@ -42,12 +41,10 @@ import {
   expenseMonthlySummary,
   expenseTradeAffinity,
   getExpenseByID,
-  getExpenseByShortcode,
   matchExpenses,
   moveExpenses,
   setExpensesCostType,
   setExpensesTrade,
-  updateExpense,
 } from "~/server/repo/expense";
 import {
   getPurchaseExpenses,
@@ -60,10 +57,8 @@ import {
 import { vendorOptions as loadVendorOptions } from "~/server/repo/vendor";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
 import { TraceNames, withTrace } from "~/server/tracing";
-import {
-  createBulkUpdatedMutation,
-  createSearchableEntityCrudProcedures,
-} from "../crud-factory";
+import { createBulkUpdatedMutation } from "../crud-factory";
+import { createEntityCompatibilityProcedures } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 import {
   expenseAnalyzeTraceAttributes,
@@ -77,76 +72,10 @@ const {
   create,
   update,
   delete: deleteItem,
-} = createSearchableEntityCrudProcedures({
-  schemas: {
-    ...ENTITY_BINDINGS.expense.crud,
-    filters: expenseFiltersSchema,
-    sort: {
-      sortableFields: expenseSortableFields,
-      defaultSort: "date",
-      // No grouping on this table; an empty roster keeps the new joined-name
-      // sort keys from being accepted as group keys that do nothing.
-      groupableFields: ["costType"] as const,
-    },
-  },
-  repository: {
-    getByShortcode: (services, shortcode) =>
-      getExpenseByShortcode(services.db, shortcode),
-    list: async (services, filters, sort, pagination) =>
-      expenseList(services.db, filters, sort, pagination),
-    // The repo hands back the uuid alongside the output, so neither of these
-    // re-resolves a code it just had.
-    create: async (services, data) => {
-      const result = await createExpense(
-        services.db,
-        data,
-        services.actorContext,
-      );
-      await recomputeRecipesForPriceAffectedProducts(
-        services.db,
-        services.services.recipeCosting,
-        result.priceAffectedProductIds,
-        "expense.create",
-      );
-      return result;
-    },
-    update: async (services, shortcode, data) => {
-      const result = await updateExpense(
-        services.db,
-        shortcode,
-        data,
-        services.actorContext,
-      );
-      await recomputeRecipesForPriceAffectedProducts(
-        services.db,
-        services.services.recipeCosting,
-        result.priceAffectedProductIds,
-        "expense.update",
-      );
-      return result;
-    },
-    delete: async (services, ids) => {
-      // The richer sibling of `deleteExpenses`, not the wrapper itself — this
-      // is the one call site that needs `result.deleted` (measured off
-      // `removeEntity`, not asserted from `ids.length`) alongside the
-      // price-affected product ids the legacy wrapper already returned.
-      const { priceAffectedProductIds, result } =
-        await deleteExpensesWithPurchaseEffects(
-          services.db,
-          ids,
-          services.actorContext,
-        );
-      const backgroundBatches = await recomputeRecipesForPriceAffectedProducts(
-        services.db,
-        services.services.recipeCosting,
-        priceAffectedProductIds,
-        "expense.delete",
-      );
-      return { deleted: result.deleted, backgroundBatches };
-    },
-  },
-  entityName: "expense",
-});
+} = createEntityCompatibilityProcedures(
+  ENTITY_KERNEL_BINDINGS.expense,
+  ENTITY_BINDINGS.expense.crud,
+);
 
 const deleteWithPurchaseEffects = protectedProcedure
   .input(deleteExpensesWithPurchaseEffectsInput)

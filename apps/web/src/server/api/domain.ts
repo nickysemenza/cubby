@@ -6,6 +6,7 @@ import { calendarRouter } from "./routers/calendar";
 import { collectionRouter } from "./routers/collection";
 import { dashboardRouter } from "./routers/dashboard";
 import { dataQualityRouter } from "./routers/data-quality";
+import { entityRouter } from "./routers/entity";
 import { entityIntegrityRouter } from "./routers/entity-integrity";
 import { expenseRouter } from "./routers/expense";
 import { filterOptionsRouter } from "./routers/filter-options";
@@ -75,6 +76,7 @@ export const domainRouterRecord = {
   problems: problemsRouter,
   statementRow: statementRowRouter,
   entityIntegrity: entityIntegrityRouter,
+  entity: entityRouter,
   auditLog: auditLogRouter,
   search: searchRouter,
   suggestions: suggestionsRouter,

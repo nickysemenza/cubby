@@ -49,11 +49,6 @@ const failedChunksSchema = z.array(
     ),
 );
 
-// Chunks per book extracted concurrently, passed to the Rust driver
-// (`wasm.extract_cookbook`). Matches the native `recipe-epub` extractor's default
-// (`Options.concurrency`). Books extract one at a time, so this is the ceiling on
-// simultaneous gateway calls. (In dev over HTTP/1.1 the browser caps ~6 in-flight
-// to one origin anyway; prod is HTTP/2 and multiplexes.)
 const CHUNK_CONCURRENCY = 8;
 
 // Min gap between live-preview re-renders during extraction. Each re-assemble
@@ -61,18 +56,6 @@ const CHUNK_CONCURRENCY = 8;
 // without this an 8-chunk burst would fire 8 heavy renders back-to-back.
 const PREVIEW_THROTTLE_MS = 600;
 
-/**
- * Import cookbooks by dragging `.epub` files straight into Cubby. Each book is
- * extracted in the browser: WASM (`recipebridge.chunk_epub`) splits the EPUB into
- * text chunks, then `recipebridge.extract_cookbook` DRIVES the whole per-chunk
- * loop in Rust (retry → model escalation → salvage → assemble, shared with the
- * native CLI/desktop path). This component supplies only transport (`callChunk` →
- * `recipe.extractCookbookChunk`, which holds the gateway key) and rendering (the
- * `onProgress` live preview). Reviewed recipes import in ONE streamed request via
- * `recipe.importCookbookStream` (server-side loop + a single batched recompute,
- * progress streamed back), upserting by (book, title). A flat/bundled JSON file is
- * still accepted as a power-user path.
- */
 export function CookbookImport({
   loadCookbookId,
 }: {
@@ -280,7 +263,6 @@ export function CookbookImport({
       // (`callChunk`, the one authenticated network hop) and RENDERING
       // (`onProgress`, the live preview). See recipebridge `extract_cookbook`.
 
-      // --- profiling: per-call latency + live concurrency (assembly is in WASM) ---
       const tBook = performance.now();
       const latencies: number[] = [];
       let inFlight = 0;
@@ -408,8 +390,6 @@ export function CookbookImport({
         toast.warning(`No recipes found in ${deriveBookName(source)}`);
       }
 
-      // --- profiling summary ---
-      // Flush any pending longtask entries, then stop observing.
       observer?.takeRecords?.().forEach((e) => {
         longTasks++;
         longTaskMs += e.duration;

@@ -60,11 +60,6 @@ const LIVE_REFS = sql`(
   WHERE ft."deletedAt" IS NULL
 )`;
 
-/**
- * The table plus its match evidence. Every read goes through this so the join —
- * and therefore the meaning of `matchState` — cannot differ between the list,
- * the count and the summary.
- */
 const FROM_WITH_REFS = sql`FROM "StatementRow"
   LEFT JOIN ${LIVE_REFS} lr
     ON lr.source = "StatementRow"."source"
@@ -72,11 +67,6 @@ const FROM_WITH_REFS = sql`FROM "StatementRow"
 
 const matchedTransaction = sql<string | null>`lr.shortcode`;
 
-/**
- * Four states, computed in SQL so filtering and pagination stay server-side.
- * Order matters: an ignored row is ignored whether or not it matched, and a
- * superseded row is off the worklist regardless of its own match state.
- */
 const matchStateSql = sql<string>`CASE
   WHEN ${statementRow.disposition} = 'ignored' THEN 'ignored'
   WHEN ${statementRow.supersededByRowId} IS NOT NULL THEN 'superseded'
@@ -153,7 +143,6 @@ type StatementRowRow = {
 const asDate = (value: unknown): Date =>
   value instanceof Date ? value : new Date(String(value));
 
-/** pg builds a `date` at LOCAL midnight, so read the local parts back out. */
 const asPlainDate = (value: unknown): string => {
   if (!(value instanceof Date)) return String(value).slice(0, 10);
   const month = String(value.getMonth() + 1).padStart(2, "0");
@@ -280,13 +269,6 @@ export async function listStatementRows(
   };
 }
 
-/**
- * Header summary for the active filter, in one pass.
- *
- * `matchState` is computed once per row in a subselect and the aggregates read
- * that column, rather than each FILTER re-deriving it. With the old correlated
- * probe that repetition was the difference between one scan and six.
- */
 export async function getStatementRowSummary(
   db: Database,
   filters: StatementRowFilters,
@@ -644,13 +626,6 @@ export async function findStatementRowDrift(
   };
 }
 
-/**
- * Resolve a selector to the SQL that addresses its rows.
- *
- * Both shapes route through `buildConditions`, so a filtered bulk write
- * addresses exactly the rows the same filter would have listed — there is no
- * second, subtly different notion of "which rows" to drift out of sync.
- */
 const selectorConditions = (selector: StatementRowSelector): SQL => {
   if ("externalIds" in selector)
     return and(
@@ -678,11 +653,6 @@ const selectorConditions = (selector: StatementRowSelector): SQL => {
   return and(...conditions)!;
 };
 
-/**
- * Write agent judgments onto the selected rows. Accepts only judgment fields —
- * provider evidence is immutable after ingest, enforced by the input schema's
- * shape rather than by convention.
- */
 export async function updateStatementRows(
   db: Database,
   input: UpdateStatementRowsInput,
@@ -789,7 +759,6 @@ export async function deleteStatementRows(
   });
 }
 
-/** The recorded exports, newest first, with what actually landed for each. */
 export async function listStatementImports(db: Database, source?: string) {
   const rows = await unwrapDb(db)
     .select({

@@ -47,7 +47,6 @@ describe("product component procedures", () => {
         { productId: battery.id, quantity: 2 },
       ],
     });
-    // `alreadySatisfied` names the no-op bucket: 0 here, since both links are new.
     expect(attached).toEqual({ changed: 2, attached: 2, alreadySatisfied: 0 });
 
     const components = await caller.components({ parentProductId: kit.id });
@@ -86,8 +85,6 @@ describe("product component procedures", () => {
       parentProductId: kit.id,
       componentProductIds: [battery.id],
     });
-    // The point of `alreadySatisfied`: `changed: 0` alone could not distinguish
-    // "already detached" from "refused". Now it says which.
     expect(detachedAgain).toEqual({
       changed: 0,
       attached: 1,
@@ -131,7 +128,6 @@ describe("product component procedures", () => {
       ctx.actor,
     );
 
-    // Two rooms, one unit each — the production shape of PRD-SKNH.
     for (const name of ["Sunroom", "Guest bedroom"]) {
       const room = await createLocationFixture(
         ctx.db,

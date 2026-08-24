@@ -137,12 +137,6 @@ describe("factory-migrated routers expose the standard getByID/delete contract",
       sideEffects: { backgroundBatches: expect.any(Array) },
     });
 
-  /**
-   * What a row hands the shared body. The three calls are pre-bound closures
-   * rather than a shared caller type: each router's ids are branded to its own
-   * entity, so nothing narrower than "call it for me" is assignable across all
-   * three.
-   */
   interface FactoryCrudSubject {
     id: string;
     /** Fields `getByID` must read back beyond the id. */

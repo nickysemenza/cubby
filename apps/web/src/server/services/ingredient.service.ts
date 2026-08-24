@@ -1,4 +1,3 @@
-import type { ActorContext } from "@cubby/schemas/context";
 import type {
   IngredientId,
   IngredientShortcode,
@@ -8,14 +7,11 @@ import type {
   EnrichmentRow,
   IngredientWithFoodLeanOut,
   IngredientWithFoodOut,
-  ingredientCreateInput,
-  ingredientUpdateData,
 } from "@cubby/schemas/ingredient";
 import type {
   ProductWithMappingsOut as ProductWithMappings,
   ProductWithMappingsAndFoodOut,
 } from "@cubby/schemas/product";
-import type { z } from "zod";
 import { conversionCoverage, gradedKinds } from "~/lib/conversion-coverage";
 import { classifyIngredientFix } from "~/lib/recipe-totals-gaps";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
@@ -23,13 +19,11 @@ import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 import type { Database } from "~/server/db";
 import type { USDAClient } from "../clients/usda";
 import {
-  createIngredient as createIngredientRepo,
   enrichmentWorkbenchIngredients as enrichmentWorkbenchIngredientsRepo,
   findFuzzyMergeCandidates,
   getIngredientByID as getIngredientByIDRepo,
   getIngredientByName as getIngredientByNameRepo,
   getIngredientsByIDsLean as getIngredientsByIDsLeanRepo,
-  updateIngredient as updateIngredientRepo,
 } from "../repo/ingredient";
 import { foodLookupParamFromProduct } from "../repo/product";
 import { recipeTreeLeafIngredientIds } from "../repo/recipe/totals";
@@ -187,43 +181,4 @@ export const enrichmentWorkbench = async (
     ...r,
     mergeCandidates: fuzzy.get(r.id) ?? [],
   }));
-};
-
-export const createIngredient = async (
-  db: Database,
-  usdaClient: USDAClient,
-  data: z.input<typeof ingredientCreateInput>,
-  actor: ActorContext,
-): Promise<IngredientWithFoodOut> => {
-  const ingredient = await createIngredientRepo(db, data, actor);
-  const enrichedProducts = await enrichProductsWithFood(
-    usdaClient,
-    ingredient.product,
-  );
-
-  return {
-    ...ingredient,
-    product: enrichedProducts,
-  };
-};
-
-export const updateIngredient = async (
-  db: Database,
-  usdaClient: USDAClient,
-  id: IngredientId,
-  data: z.infer<typeof ingredientUpdateData>,
-  actor: ActorContext,
-): Promise<IngredientWithFoodOut> => {
-  const ingredient = await updateIngredientRepo(db, id, data, actor);
-  // Dependent recipes are recomputed eagerly at the router layer (covers UI +
-  // MCP) — see the ingredient router's update proc.
-  const enrichedProducts = await enrichProductsWithFood(
-    usdaClient,
-    ingredient.product,
-  );
-
-  return {
-    ...ingredient,
-    product: enrichedProducts,
-  };
 };

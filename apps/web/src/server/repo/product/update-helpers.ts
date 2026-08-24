@@ -1,9 +1,3 @@
-/**
- * Product update helper functions.
- * Private helpers used by updateProduct in crud.ts to reconcile child collections
- * (unit mappings, external IDs, images) against an incoming desired state.
- */
-
 import {
   type ExternalIdInput,
   GTIN_KIND,
@@ -182,8 +176,6 @@ export function externalIdSlotUnchanged(
     existing.kind === incoming.kind &&
     existing.externalId === incoming.externalId &&
     existing.url === storedExternalIdUrl(incoming) &&
-    // Promoting or demoting a row IS a change, and skipping it here would
-    // silently discard the caller's intent.
     existing.isPrimary === (incoming.isPrimary ?? true)
   );
 }
@@ -251,7 +243,6 @@ export function resolvePrimaryProductCodeInput(input: {
   return input.isbn === null || input.upc === null ? null : undefined;
 }
 
-/** True when the identifier set contains a validated physical-book ISBN. */
 export function externalIdsContainIsbn(
   externalIds: ReadonlyArray<{
     source: string;
@@ -335,12 +326,6 @@ export async function syncPrimaryGtin(
   ]);
 }
 
-/**
- * Fold a bare `upc` write into an explicit `externalIds` replacement payload.
- *
- * Both can arrive on one update, and `syncProductExternalIds` replaces the set
- * — so without this, whichever ran second would silently discard the other.
- */
 export function foldGtinIntoExternalIds(
   externalIds: ExternalIdInput[],
   raw: string | null,
@@ -387,8 +372,6 @@ export async function syncProductExternalIds(
   const unchangedExistingIds = new Set<string>();
   const toCreate = normalized.filter((eid) => {
     if (eid.id !== undefined) return false;
-    // Matched by VALUE within the slot: a slot now holds one primary plus any
-    // number of secondaries, so "the row in this slot" is no longer singular.
     const liveSlot = existingExternalIds.find(
       (e) =>
         e.source === eid.source &&

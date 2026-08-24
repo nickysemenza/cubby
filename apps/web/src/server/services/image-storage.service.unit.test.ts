@@ -65,7 +65,6 @@ import {
   initiateDocumentUpload,
 } from "./image-storage.service";
 
-// 1×1 transparent PNG.
 const PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
@@ -220,7 +219,6 @@ describe("attachFileToEntity", () => {
 
     expect(result.kind).toBe("image");
     expect(result.imageId).toBe("IMG-9999");
-    // A real upload, so the caller can tell this apart from a replay.
     expect(result.reused).toBe(false);
     expect(result.entityId).toBe("PRD-TEST");
     expect(mocks.uploadToS3).toHaveBeenCalledWith(
@@ -477,7 +475,6 @@ describe("attachFileToEntity", () => {
       });
 
       expect(result.kind).toBe("image");
-      // The attachment owns its own copy, so the staging row goes away.
       expect(mocks.deleteImages).toHaveBeenCalledWith({}, ["upl-1"]);
     });
 
@@ -500,9 +497,6 @@ describe("attachFileToEntity", () => {
     });
 
     it("names create_file_upload when the uploadId does not exist", async () => {
-      // `getImageById` throws rather than returning null, so without catching
-      // its reason the caller gets a bare "Image not found" and no hint about
-      // which id was wanted.
       mocks.getImageById.mockRejectedValue(
         Object.assign(new Error("Image not found"), {
           cause: { reason: "IMAGE_NOT_FOUND" },

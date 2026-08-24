@@ -1,128 +1,5 @@
-/**
- * Product merge — fold duplicate SKUs into one surviving Product.
- *
- * Duplicates are minted, not typed: `create_product` and the importers can each
- * land a row for the same physical thing under a different name/manufacturer
- * spelling, and `Product_name_manufacturer_key` only stops an *exact* repeat.
- * `findDuplicateProductIdentities` (repo/problems/detectors-product.ts) reports
- * them; this is how a human resolves one.
- *
- * ## Why this is harder than the other three merges
- *
- * Product has **thirteen** declared incoming edges. Six association shapes sit
- * under a partial unique index, so a blind re-point aborts the transaction
- * rather than producing a wrong answer:
- *
- *  | edge                          | index                          |
- *  |-------------------------------|--------------------------------|
- *  | `ProductExternalId.productId` | `(productId, source, kind)`    |
- *  | `InventoryEntry.productId`    | `(productId, locationId, placement)` |
- *  | `ProductImage.productId`      | `(productId, imageId)`         |
- *  | `ProjectToolUsage.productId`  | `(projectId, productId)`       |
- *  | `PurchaseProduct.productId`   | `(purchaseId, productId)`      |
- *  | `WishCandidate.productId`     | `(wishId, productId)`          |
- *
- * All six are planned through the shared `planSlotCollisions`; what happens to
- * an *absorbed* row is per-edge and deliberately not shared (see below).
- * `ProductUnitMappings` is planned through it too, for a different reason — it
- * has NO unique index, so nothing would have refused a duplicate (see the fourth
- * rule). ProductComponent is the seventh slotted relationship and is treated
- * as a graph below. `Expense`, `Task.subjectProductId`, and `Location` are
- * plain re-points; conversion coverage is a rebuildable projection.
- *
- * ### The two rules worth writing down
- *
- * **External ids: the keeper's slot wins.** `(productId, source, kind)` is
- * single-valued identity — one Amazon ASIN, one McMaster part number. When both
- * products fill the same slot with *different* values (they cannot fill it with
- * the same value: the global `(source, kind, externalId)` unique index already
- * forbids two live rows sharing a triple), that is a genuine conflict, and the
- * keeper is the row the operator chose to keep, so its identifier stays
- * primary. The loser's row moves onto the survivor as a secondary identifier
- * and is named in the audit entry rather than vanishing. A "richer row wins"
- * rule was rejected: richness is not evidence of correctness, and silently
- * swapping a verified ASIN for a stale one is the worse failure. The one thing
- * that *is* carried is a `url` the keeper's row lacks —
- * fill-never-overwrite, the house rule from `planVendorMerge` and
- * `foldChargeInto`.
- *
- * Re-pointing can never violate the *global* `(source, kind, externalId)` index:
- * a re-point changes only `productId`, and two live rows can't already share the
- * triple. Only the per-product slot index needs planning.
- *
- * **Inventory: same-location entries are summed, not dropped.** Two products
- * stocked on the same shelf collide on `(productId, locationId)`. Doing this by
- * hand meant deleting the now-duplicate stock row, which silently discarded its
- * quantity; here the quantities add and the absorbed entry is soft-deleted (with
- * its own embedding cascade — `inventory` is searchable). Summing follows the
- * precedent in `inventory/bulk.ts`'s full-move collapse. Units that don't match
- * refuse the whole merge (`PRODUCT_MERGE_INVENTORY_UNIT_MISMATCH`) rather than
- * being converted: unit conversion is WASM's job and doesn't belong in a repo
- * transaction, and adding "2 box" to "3 each" is a data lie either way. The
- * preview surfaces it as a blocker so the refusal is visible before confirming.
- *
- * Every re-pointed inventory entry then re-values at the KEEPER's effective
- * price, so `syncInventoryValuationsForProduct` runs at the end — otherwise a
- * moved entry keeps a valuation derived from a product that no longer exists.
- *
- * ### The third rule: kit composition is a graph, not a slot
- *
- * `ProductComponent` points Product at Product, so a merge doesn't just move
- * rows between two disjoint sets — it **identifies two nodes of a DAG**, and
- * that can make a product contain itself. Both directions are real: merging a
- * kit into one of its own (possibly several-hops-down) components, and merging
- * a component into the kit that lists it. The DB CHECK
- * `ProductComponent_not_self_check` only refuses the one-hop case; the
- * multi-hop one is a reachability question, answered here by
- * {@link findMergeComponentCycle} over the WHOLE projected post-merge edge set.
- * Two individually-acyclic products can produce a cycle once their edge sets
- * are unioned, so checking only the touched edge is not enough.
- *
- * On top of that, `(parentProductId, componentProductId)` is another partial
- * unique slot, and the two directions want *opposite* fold rules:
- *
- *  - **Two kits merging, both listing the same part.** Same quantity → dedupe;
- *    different quantities → refuse the whole merge
- *    (`PRODUCT_MERGE_COMPONENT_QUANTITY_MISMATCH`). Only one row can survive
- *    the index, and silently keeping either number invents or destroys units of
- *    a real part. Same refusal shape as the inventory unit mismatch, and for
- *    the same reason: there is no honest answer, so the operator picks one
- *    first.
- *  - **Two components merging, both listed in one kit.** Quantities **sum**.
- *    Two rows saying "this kit holds 2 of A" and "this kit holds 3 of B", once
- *    A and B are established to be the same part, say the kit holds 5 of it —
- *    the identical argument that makes same-location stock sum rather than
- *    collapse.
- *
- * ### The fourth rule: conversion edges dedupe, and the keeper's ratio wins
- *
- * `ProductUnitMappings` is the one slotted edge with **no unique index**, so it
- * is here for meaning rather than for index safety: nothing in the database
- * would have refused the duplicate, and before this fold a merge simply
- * accumulated both rows. Merging two olive oils that each stated a density left
- * the survivor holding `1 ml = 0.9 g` AND `1 ml = 0.92 g` — one product, two
- * answers, and which one a valuation used came down to row order.
- *
- * That failure was invisible from every direction: the write said nothing, the
- * preview reported a plain re-point, and `detect_unit_mapping_islands` — the
- * detector that watches this area — fires when a graph splits into 2+ islands,
- * i.e. on too FEW connections. A redundant edge adds a connection, so a bad
- * merge made the graph look healthier and the alarm quieter.
- *
- * The slot is the unordered unit pair, so `1 ml = 0.92 g` and `1 g = 1.087 ml`
- * collide. Within a slot:
- *
- *  - **Ratios agree** → the loser's row is a true duplicate. Soft-deleted
- *    silently and counted in `unitMappingsDeduped`; reporting it as data loss
- *    would be a lie.
- *  - **Ratios disagree** → the keeper's edge stands and the loser's is
- *    soft-deleted and named in `unitMappingsDiscarded` + the audit entry. This
- *    follows the external-id rule ("the keeper is the row the operator chose")
- *    rather than the inventory/kit rule of refusing outright, because dropping
- *    a conversion edge destroys no units — the survivor is left with a
- *    complete, self-consistent graph, which is precisely what keeping both
- *    denies it.
- */
+/** Merge duplicate Products without silently discarding identity, stock, or conversion evidence.
+ * Preserve keeper values; validate component cycles and surface irreconcilable slot conflicts. */
 
 import type { Amount } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
@@ -346,15 +223,10 @@ interface ProductMergeSummary {
   }>;
 
   inventoryMoved: number;
-  /** Loser stock rows summed into a survivor entry in the same location. */
   inventoryMerged: number;
   expensesMoved: number;
   imagesMoved: number;
   unitMappingsMoved: number;
-  /**
-   * Loser conversion edges dropped because the survivor already stated the same
-   * pair at the same ratio. A true duplicate — nothing was lost.
-   */
   unitMappingsDeduped: number;
   /**
    * Loser conversion edges dropped because the survivor already answered that
@@ -393,7 +265,6 @@ interface ProductMergeSummary {
   carriedFields: string[];
 }
 
-/** `(source, kind)` — the per-product identifier slot. */
 const externalIdSlot = (row: { source: string; kind: string }) =>
   `${row.source}\u0000${row.kind}`;
 
@@ -435,7 +306,6 @@ const planInventoryFold = (args: {
   return { ...plan, mismatches };
 };
 
-/** One live `ProductUnitMappings` row: one conversion edge and where it came from. */
 type UnitMappingRow = {
   id: string;
   productId: ProductId;
@@ -506,7 +376,6 @@ const unitMappingRatio = (row: { a: Amount; b: Amount }): number | null => {
   return ratioPerUnit(row, x <= y ? x : y);
 };
 
-/** Two ratios agree to within double-precision noise, compared relatively. */
 const sameRatio = (left: number | null, right: number | null): boolean =>
   left !== null &&
   right !== null &&
@@ -544,7 +413,6 @@ export const planUnitMappingFold = (args: {
   return { ...plan, absorbed };
 };
 
-/** One live `ProductComponent` row: a kit, one part it contains, how many. */
 interface ComponentRow {
   id: string;
   parentProductId: ProductId;
@@ -552,35 +420,7 @@ interface ComponentRow {
   quantity: number;
 }
 
-/**
- * Would merging `loserIds` into `keepId` make some product contain itself?
- *
- * Pure, and deliberately so — the whole question is decidable from the edge
- * set, so it is unit-tested directly rather than only through a real merge.
- *
- * **The projection.** A merge identifies nodes: every occurrence of a loser id,
- * on either end of an edge, becomes `keepId`. The check runs over that whole
- * projected edge set, not just the edges the merge happens to re-point — a kit
- * two hops above the survivor and a part two hops below it are individually
- * fine and close a loop the moment the two nodes become one.
- *
- * **Why searching from the survivor is exhaustive.** Any cycle in the projected
- * graph that does *not* pass through `keepId` consists entirely of edges whose
- * endpoints the projection left alone, so it already existed and the merge did
- * not cause it. Every cycle the merge *creates* therefore contains `keepId`,
- * which makes "does the survivor reach itself" the exact question — and one
- * ordinary traversal answers it, rather than a full-graph SCC pass.
- *
- * **Termination.** `seen` admits each node once, so a pre-existing corrupt
- * cycle anywhere downstream is walked into and then dropped instead of spun on.
- * That does not cost completeness: this asks whether *some* reachable node has
- * an edge back to `keepId`, and that edge is examined when the node is expanded
- * regardless of which path first reached it. O(V + E) over the reachable
- * projected subgraph, one visit per node, one look per edge.
- *
- * Returns the offending cycle as a closed path (`[keepId, …, keepId]`, in
- * post-merge ids), or null when the merge is safe.
- */
+/** Reject a merge when the complete projected component graph contains a direct or transitive cycle. */
 export const findMergeComponentCycle = (args: {
   edges: readonly {
     parentProductId: ProductId;
@@ -632,7 +472,6 @@ export const findMergeComponentCycle = (args: {
 interface ComponentMergePlan {
   /** Non-null when the merge would make a product contain itself. */
   cycle: ProductId[] | null;
-  /** Rows where a LOSER is the kit — its component list moving to the survivor. */
   kit: {
     repoint: ComponentRow[];
     /** Same part, same quantity, already on the survivor's list — drop. */
@@ -640,7 +479,6 @@ interface ComponentMergePlan {
     /** Same part, DIFFERENT quantity — the merge must refuse. */
     conflicts: Array<{ into: ComponentRow; rows: ComponentRow[] }>;
   };
-  /** Rows where a LOSER is the part — kits that listed it now list the survivor. */
   part: {
     repoint: ComponentRow[];
     /** One kit listed two merged parts; the quantities sum into `into`. */
@@ -706,7 +544,6 @@ export const planProductComponentMerge = (args: {
   };
 };
 
-/** Every live component row. See {@link planProductComponentMerge} on why all of them. */
 const loadComponentRows = async (
   db: DrizzleClient | DrizzleTransaction,
 ): Promise<ComponentRow[]> =>
@@ -1203,8 +1040,6 @@ export const mergeProducts = async (
       for (const row of rows) {
         summary.externalIdsDemoted.push({
           source: row.source,
-          // The column is text and predates the enum, so legacy rows can hold
-          // a value outside it — same cast `mapProductExternalIds` makes.
           kind: row.kind as ExternalIdKind,
           externalId: row.externalId,
         });
@@ -1234,9 +1069,6 @@ export const mergeProducts = async (
     }
     let inventoryMerged = 0;
     for (const { into, rows } of inventoryPlan.absorb) {
-      // Sum the WHOLE group in one write. Per-row updates would each read the
-      // unmutated `into.amount` and overwrite rather than accumulate, quietly
-      // dropping stock when a shelf takes more than one absorbed entry.
       const absorbed = sumBy(rows, (row) => row.amount.value);
       const to = { ...into.amount, value: into.amount.value + absorbed };
       await tx
@@ -1248,8 +1080,6 @@ export const mergeProducts = async (
         .update(inventoryEntry)
         .set({ deletedAt: now })
         .where(inArray(inventoryEntry.id, absorbedIds));
-      // The survivor's `update` entry and the absorbed rows' `delete` entries
-      // land in one batch, so the buffered arm rather than the immediate one.
       const entries: AuditEntryInput[] = [
         {
           entityType: "inventory",
@@ -1417,9 +1247,6 @@ export const mergeProducts = async (
       summary.unitMappingsMoved = unitMappingPlan.repoint.length;
     }
     if (unitMappingPlan.absorbed.length > 0) {
-      // Absorbed edges are DROPPED, not moved as secondaries: there is no
-      // `isPrimary` to hide behind here, and a second live row for the same
-      // pair is exactly the defect this fold exists to prevent.
       await tx
         .update(productUnitMappings)
         .set({ deletedAt: now })
@@ -1434,10 +1261,6 @@ export const mergeProducts = async (
           summary.unitMappingsDeduped += 1;
           continue;
         }
-        // BOTH ratios are stated per 1 of the discarded row's own `from` unit,
-        // so the two numbers are directly comparable and agree with the
-        // `from`/`to` labels beside them. Reporting each in its own canonical
-        // direction would print reciprocals of what the rows say.
         summary.unitMappingsDiscarded.push({
           from: row.a.unit,
           to: row.b.unit,
@@ -1678,8 +1501,6 @@ export const previewMergeProducts = async (
       },
       edgeKey: "ProductComponent.parentProductId",
       label: cycleLabel ?? "kit graph cycles",
-      // One per loser: the cycle is a property of the identification itself,
-      // not of any single row, so there is no row to attribute it to.
       byTargetId: cycleLabel
         ? Object.fromEntries(losers.map((id) => [id, 1]))
         : {},

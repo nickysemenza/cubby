@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { cn, formatCurrency } from "~/lib/utils";
+import { generatedBrowserRoutes } from "./generated/entity-routes.gen";
 import type { EntityColor, EntityDefinition } from "./types";
 
 /**
@@ -69,11 +70,19 @@ const INK = {
   },
 } satisfies Record<string, EntityColor>;
 
+const newRouteExtensions = {
+  ingredient: { new: "/ingredients/new" },
+  inventory: { new: "/inventory/new" },
+  location: { new: "/locations/new" },
+  product: { new: "/products/new" },
+  recipe: { new: "/recipes/new" },
+} as const;
+
 const entityDefinitions = {
   ingredient: {
     label: "Ingredient",
     pluralLabel: "Ingredients",
-    basePath: "ingredients",
+    ...generatedBrowserRoutes.ingredient,
     lucideIcon: Carrot,
     color: {
       accent: INK.slate.accent,
@@ -82,9 +91,8 @@ const entityDefinitions = {
       border: "border-l-warning",
     },
     routes: {
-      detail: "/ingredients/$shortcode",
-      list: "/ingredients",
-      new: "/ingredients/new",
+      ...generatedBrowserRoutes.ingredient.routes,
+      ...newRouteExtensions.ingredient,
     },
     // Note: ingredient uses UnitMappingsTable (different from UnitMappingDisplay),
     // so unit-mappings is handled as a custom section
@@ -105,38 +113,13 @@ const entityDefinitions = {
       defaultSort: "createdAt",
       standardColumns: [],
     },
-    // "ranked": the merge set is picked by the caller; ranked by weight
-    // (USDA link, then product/recipe/alias counts) to default the keeper.
+    // The caller supplies a duplicate group in a deterministic order; the
+    // first ingredient starts as keeper, with a deliberate picker override.
     mergeable: {
       keeperMode: "ranked",
-      rowLabel: (row: { id: string; name: string }, candidate) => {
-        const usdaLinked =
-          candidate?.detail.some(
-            (d) => d.label === "USDA link" && d.count > 0,
-          ) ?? false;
-        return (
-          <>
-            <span className="truncate">{row.name}</span>
-            {usdaLinked && (
-              <EntityIcon
-                entity="usda-food"
-                size={12}
-                colored
-                className="shrink-0"
-                aria-label="Linked to USDA food data"
-              />
-            )}
-          </>
-        );
-      },
-      rowStat: (_row, candidate) =>
-        (candidate?.detail ?? [])
-          .filter((d) => d.label !== "USDA link")
-          .map((d) => (
-            <span key={d.label} className="tabular-nums">
-              <span className="font-medium">{d.count}</span> {d.label}
-            </span>
-          )),
+      rowLabel: (row: { id: string; name: string }) => (
+        <span className="truncate">{row.name}</span>
+      ),
       copy: {
         title: "Merge ingredients?",
       },
@@ -145,13 +128,12 @@ const entityDefinitions = {
   product: {
     label: "Product",
     pluralLabel: "Products",
-    basePath: "products",
+    ...generatedBrowserRoutes.product,
     lucideIcon: Barcode,
     color: INK.primary,
     routes: {
-      detail: "/products/$shortcode",
-      list: "/products",
-      new: "/products/new",
+      ...generatedBrowserRoutes.product.routes,
+      ...newRouteExtensions.product,
     },
     // Note: product renders unit mappings as a custom section (coverage grid +
     // rows table, like ingredient), so unit-mappings is not a common section.
@@ -186,13 +168,8 @@ const entityDefinitions = {
       defaultSort: "createdAt",
       standardColumns: ["image", "name"],
     },
-    // "ranked": the detector (duplicate maker part number across retailers)
-    // has no canonical row to default to — every member is an equally
-    // plausible keeper — so the picker defaults to selection order, same as
-    // ingredient. Unlike ingredient, the server has no rank-without-keeper
-    // arm for product (see `entity-integrity-preview.ts`'s `needsKeeperBlocker`
-    // doc comment), so the unkeyed ranking call never returns candidates and
-    // no row ever shows a "Best" badge — harmless, just unused.
+    // The detector supplies duplicate rows in a stable order; the first starts
+    // as keeper and the picker remains available for an intentional change.
     mergeable: {
       keeperMode: "ranked",
       rowLabel: (row: { id: string; name: string }) => (
@@ -220,13 +197,12 @@ const entityDefinitions = {
   recipe: {
     label: "Recipe",
     pluralLabel: "Recipes",
-    basePath: "recipes",
+    ...generatedBrowserRoutes.recipe,
     lucideIcon: ChefHat,
     color: INK.primary,
     routes: {
-      detail: "/recipes/$shortcode",
-      list: "/recipes",
-      new: "/recipes/new",
+      ...generatedBrowserRoutes.recipe.routes,
+      ...newRouteExtensions.recipe,
     },
     detail: { commonSections: ["images", "history"] },
     // costTotal/caloriesTotal live in the `totals` jsonb (not real columns);
@@ -252,27 +228,22 @@ const entityDefinitions = {
   cookbook: {
     label: "Cookbook",
     pluralLabel: "Cookbooks",
-    basePath: "cookbooks",
+    ...generatedBrowserRoutes.cookbook,
     lucideIcon: BookOpen,
     color: INK.primary,
     // Keyed by FK id (rename-safe); no generic list columns or "new" form
     // (cookbooks are created by EPUB import, not a create form).
-    routes: {
-      detail: "/cookbooks/$shortcode",
-      list: "/cookbooks",
-    },
     sortableFields: [],
   },
   location: {
     label: "Location",
     pluralLabel: "Locations",
-    basePath: "locations",
+    ...generatedBrowserRoutes.location,
     lucideIcon: MapPin,
     color: INK.slate,
     routes: {
-      detail: "/locations/$shortcode",
-      list: "/locations",
-      new: "/locations/new",
+      ...generatedBrowserRoutes.location.routes,
+      ...newRouteExtensions.location,
     },
     // Note: location needs images in a specific position (before child locations),
     // so we handle it as a custom section and only use history from common
@@ -296,13 +267,12 @@ const entityDefinitions = {
   inventory: {
     label: "Inventory Item",
     pluralLabel: "Inventory",
-    basePath: "inventory",
+    ...generatedBrowserRoutes.inventory,
     lucideIcon: Package,
     color: INK.primary,
     routes: {
-      detail: "/inventory/$shortcode",
-      list: "/inventory",
-      new: "/inventory/new",
+      ...generatedBrowserRoutes.inventory.routes,
+      ...newRouteExtensions.inventory,
     },
     // Inventory items have a simple single-section detail page
     detail: { commonSections: ["history"] },
@@ -325,17 +295,13 @@ const entityDefinitions = {
   meal: {
     label: "Meal",
     pluralLabel: "Meals",
-    basePath: "meals",
+    ...generatedBrowserRoutes.meal,
     lucideIcon: CalendarDays,
     // Neutral, not amber: the status ramp is reserved for entities whose accent
     // encodes state, and a meal's encodes none. Amber is also already spent on
     // overdue/planned expenses inside the same planning calendar, so a meal
     // wearing it read as a warning about nothing.
     color: INK.slate,
-    routes: {
-      detail: "/meals/$shortcode",
-      list: "/meals",
-    },
     detail: { commonSections: ["history"] },
     sortableFields: ["date", "name", "mealType", "createdAt", "updatedAt"],
     // Date/Name/Recipes/Cost columns are custom (meal-table.tsx) — Name needs
@@ -349,15 +315,11 @@ const entityDefinitions = {
   project: {
     label: "Project",
     pluralLabel: "Projects",
-    basePath: "projects",
+    ...generatedBrowserRoutes.project,
     lucideIcon: Hammer,
     color: INK.plum,
     // No "new" route — projects are created from a dialog on the list page
     // (mirrors meal), not a dedicated /projects/new form.
-    routes: {
-      detail: "/projects/$shortcode",
-      list: "/projects",
-    },
     detail: { commonSections: ["images", "history"] },
     sortableFields: [
       "name",
@@ -376,13 +338,9 @@ const entityDefinitions = {
   task: {
     label: "Task",
     pluralLabel: "Tasks",
-    basePath: "tasks",
+    ...generatedBrowserRoutes.task,
     lucideIcon: ListChecks,
     color: INK.slate,
-    routes: {
-      detail: "/tasks/$shortcode",
-      list: "/tasks",
-    },
     detail: { commonSections: ["history"] },
     sortableFields: [
       "name",
@@ -402,14 +360,10 @@ const entityDefinitions = {
   vendor: {
     label: "Vendor",
     pluralLabel: "Vendors",
-    basePath: "vendors",
+    ...generatedBrowserRoutes.vendor,
     lucideIcon: Store,
     // A quiet roster, not a live money surface — same neutral as location/task.
     color: INK.slate,
-    routes: {
-      detail: "/vendors/$shortcode",
-      list: "/vendors",
-    },
     detail: { commonSections: ["history"] },
     sortableFields: [
       "name",
@@ -430,10 +384,6 @@ const entityDefinitions = {
     // "fixed": the keeper is the vendor being viewed; candidates are every
     // OTHER vendor (mergeVendors has no cross-vendor refusal like
     // mergePurchases' vendor-match check — any two vendors can fold together).
-    // The server has no rank-without-keeper arm for vendor either (only
-    // ingredient does — see `entity-integrity-preview.ts`), so "ranked" mode
-    // would never rank; "fixed" matches how the roster is small enough (~150
-    // rows) to browse in one page instead.
     mergeable: {
       keeperMode: "fixed",
       candidateQuery: (api, _keeper: VendorOut) =>
@@ -458,13 +408,9 @@ const entityDefinitions = {
   purchase: {
     label: "Purchase",
     pluralLabel: "Purchases",
-    basePath: "purchases",
+    ...generatedBrowserRoutes.purchase,
     lucideIcon: Receipt,
     color: INK.primary,
-    routes: {
-      detail: "/purchases/$shortcode",
-      list: "/purchases",
-    },
     // A Purchase carries its documents (invoices/receipts), like
     // project's photos — same commonSections shape.
     detail: { commonSections: ["images", "history"] },
@@ -516,13 +462,9 @@ const entityDefinitions = {
   expense: {
     label: "Expense",
     pluralLabel: "Expenses",
-    basePath: "expenses",
+    ...generatedBrowserRoutes.expense,
     lucideIcon: ReceiptText,
     color: INK.primary,
-    routes: {
-      detail: "/expenses/$shortcode",
-      list: "/expenses",
-    },
     detail: { commonSections: ["history"] },
     sortableFields: [
       "name",
@@ -546,14 +488,11 @@ const entityDefinitions = {
   },
   financialAccount: {
     label: "Financial Account",
+    dialogLabel: "Account",
     pluralLabel: "Accounts",
-    basePath: "financial-accounts",
+    ...generatedBrowserRoutes.financialAccount,
     lucideIcon: CreditCard,
     color: INK.slate,
-    routes: {
-      detail: "/financial-accounts/$shortcode",
-      list: "/financial-accounts",
-    },
     detail: { commonSections: ["history"] },
     sortableFields: [
       "name",
@@ -572,14 +511,11 @@ const entityDefinitions = {
   },
   financialTransaction: {
     label: "Financial Transaction",
+    dialogLabel: "Transaction",
     pluralLabel: "Transactions",
-    basePath: "financial-transactions",
+    ...generatedBrowserRoutes.financialTransaction,
     lucideIcon: CreditCard,
     color: INK.primary,
-    routes: {
-      detail: "/financial-transactions/$shortcode",
-      list: "/financial-transactions",
-    },
     detail: { commonSections: ["history"] },
     sortableFields: [
       "transactionDate",
@@ -599,13 +535,9 @@ const entityDefinitions = {
   wish: {
     label: "Wish",
     pluralLabel: "Wishlist",
-    basePath: "wishes",
+    ...generatedBrowserRoutes.wish,
     lucideIcon: Heart,
     color: INK.plum,
-    routes: {
-      detail: "/wishes/$shortcode",
-      list: "/wishes",
-    },
     detail: { commonSections: ["history"] },
     sortableFields: [
       "name",
@@ -622,14 +554,9 @@ const entityDefinitions = {
   "usda-food": {
     label: "USDA Food",
     pluralLabel: "USDA Foods",
-    basePath: "usda",
+    ...generatedBrowserRoutes["usda-food"],
     lucideIcon: Apple,
     color: INK.positive,
-    routes: {
-      detail: "/usda/$id",
-      list: "/usda",
-      // no "new" - USDA foods are read-only
-    },
     sortableFields: [
       "fdc_id",
       "description",
@@ -646,18 +573,13 @@ const entityDefinitions = {
   image: {
     label: "Image",
     pluralLabel: "Images",
-    basePath: "images",
+    ...generatedBrowserRoutes.image,
     lucideIcon: Image,
     color: {
       accent: INK.slate.accent,
       bg: "bg-muted",
       text: "text-muted-foreground",
       border: "border-l-muted-foreground",
-    },
-    routes: {
-      detail: "/images/$shortcode",
-      list: "/images",
-      // no "new" - images are uploaded, not created via form
     },
     detail: { commonSections: ["history"] },
     sortableFields: ["createdAt", "updatedAt", "filename", "size", "status"],
@@ -707,6 +629,12 @@ export const entityLabel = (entity: Entity): string => {
   if (isBrowserRoutedEntity(entity)) return entities[entity].label;
   return entity === "ledgerParty" ? "Ledger party" : "Ledger transfer";
 };
+
+/** Concise noun for confirmation dialogs and destructive-action feedback. */
+export const entityDialogLabel = (entity: Entity): string =>
+  isBrowserRoutedEntity(entity)
+    ? (browserEntityDefinition(entity).dialogLabel ?? entities[entity].label)
+    : entityLabel(entity);
 
 export const entityPluralLabel = (entity: Entity): string =>
   isBrowserRoutedEntity(entity)

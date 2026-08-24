@@ -70,8 +70,6 @@ import type { USDAClient } from "../clients/usda";
 import { getIngredientsByIDs } from "./ingredient.service";
 
 const toRecipeTotals = (t: CalculateTotalsResult): RecipeTotals => {
-  // Upper bounds only when the recipe has ranged amounts (additive — absent
-  // means "no range", so the headline renders one number).
   const caloriesUpper = t.nutrientsUpper
     ? getNutrientValueByKey(t.nutrientsUpper, "kcal")
     : undefined;
@@ -80,8 +78,6 @@ const toRecipeTotals = (t: CalculateTotalsResult): RecipeTotals => {
     ...(t.priceUpper != null ? { costTotalUpper: t.priceUpper } : {}),
     caloriesTotal: getNutrientValueByKey(t.nutrients, "kcal") ?? 0,
     ...(caloriesUpper != null ? { caloriesTotalUpper: caloriesUpper } : {}),
-    // Whole-recipe macros — already computed by the engine, carried through from
-    // the single RECIPE_MACRO_KEYS roster (no per-macro list to drift from read).
     ...RECIPE_MACRO_KEYS.reduce<Pick<RecipeTotals, RecipeMacroColumn>>(
       (acc, key) => {
         acc[`${key}Total`] = getNutrientValueByKey(t.nutrients, key);
@@ -105,7 +101,6 @@ const TOTALS_EPSILON: Partial<Record<keyof RecipeTotals, number>> = {
   caloriesTotal: 0.5,
 };
 
-/** Whether one RecipeTotals field differs beyond its tolerance. */
 const fieldDiffers = (
   a: RecipeTotals,
   b: RecipeTotals,
@@ -134,11 +129,7 @@ interface RecipeRecomputeDispatchMetadata {
 const batchLog = (batchId?: string): string =>
   batchId ? ` batch=${batchId}` : "";
 
-/**
- * Products with a confirmed USDA match (`fdc_id`) whose food failed to resolve —
- * a transient backend miss, not real no-data. Doubles as the completeness
- * predicate (empty ⇒ complete) and the named list the explain payload surfaces.
- */
+// An fdc_id lookup miss is transient, not evidence of absent nutrition data.
 const usdaMissesFor = (
   rows: CostingRow[],
   ingMap: Record<string, IngredientWithFoodLeanOut>,
@@ -172,11 +163,6 @@ export class RecipeCostingService {
     private usdaClient: USDAClient,
   ) {}
 
-  /**
-   * Load everything a costing pass needs for these recipes: the transitive
-   * closure of sub-recipes (recipe-as-ingredient, cycle-guarded) and the
-   * USDA-enriched ingredient map.
-   */
   private async loadContext(recipes: RecipeCostingInput[]): Promise<{
     ingMap: Record<string, IngredientWithFoodLeanOut>;
     recipeMap: Record<string, RecipeGraphOut>;
@@ -266,12 +252,6 @@ export class RecipeCostingService {
     return result;
   }
 
-  /**
-   * Full costing explanation for one recipe: the persisted state (totals,
-   * computed-at, staleness), a fresh compute with per-row diagnostics enriched
-   * with unit-graph conversion paths, named USDA misses, and persisted-vs-live
-   * drift. Read-only — never stamps or recomputes persisted state.
-   */
   async explainRecipe(recipeId: RecipeId): Promise<RecipeCostingExplain> {
     const [state, recipes] = await Promise.all([
       getRecipeTotalsState(this.db, recipeId),
@@ -327,13 +307,6 @@ export class RecipeCostingService {
     };
   }
 
-  /**
-   * Wrap a recompute bulk operation in the canonical span + log so every
-   * recompute entry point reports its duration the same way: a
-   * `service.recipeCosting.{operation}` span carrying `recipe.recomputed` +
-   * `duration_ms` (and any extra attrs), plus a `[recipe-totals]` console line
-   * for `wrangler tail`. Owns the format so it can't drift per call site.
-   */
   private async tracedRecompute(
     operation: string,
     extraAttrs: Record<string, string | number | boolean | undefined>,
@@ -358,12 +331,6 @@ export class RecipeCostingService {
     );
   }
 
-  /**
-   * Public, timed entry for recomputing a known set of recipes (recipe
-   * create/update/import/reprocess). Wraps the recursive {@link recomputeTree}
-   * with one span + log. Returns the count of recipes recomputed (the set plus
-   * any cascaded parents).
-   */
   async recompute(recipeIds: RecipeId[]): Promise<number> {
     return this.tracedRecompute("recompute", {}, async () => {
       const visited = new Set<RecipeId>();
@@ -543,13 +510,6 @@ export class RecipeCostingService {
     return dispatched.batch;
   }
 
-  /**
-   * Recompute every recipe whose cost depends on an ingredient — its product's
-   * price/USDA-link changed, the ingredient was edited, or a merge repointed rows
-   * onto it. Routes through {@link dispatchRecompute}, so all mutation-triggered
-   * recomputes are persisted as background jobs. Dev drains those jobs inline;
-   * production sends them through the queue. Returns the count dispatched.
-   */
   async recomputeForIngredient(
     ingredientId: IngredientId,
     metadata: RecipeRecomputeDispatchMetadata = {
@@ -559,11 +519,6 @@ export class RecipeCostingService {
     return this.recomputeForIngredients([ingredientId], metadata);
   }
 
-  /**
-   * Batched {@link recomputeForIngredient}: dedupe the affected recipes across
-   * many ingredients (e.g. a bulk product-create) so recipes shared by several
-   * are dispatched once.
-   */
   async recomputeForIngredients(
     ingredientIds: IngredientId[],
     metadata: RecipeRecomputeDispatchMetadata = {},
@@ -610,11 +565,6 @@ export class RecipeCostingService {
     return [batch];
   }
 
-  /**
-   * Dry run: compute every recipe's totals in memory and count how many would
-   * actually change vs what's persisted — without writing. ~As costly as
-   * recomputeAll (full engine pass, no DB write), so call it on demand only.
-   */
   async dryRunRecomputeTotals(): Promise<{
     wouldChange: number;
     total: number;

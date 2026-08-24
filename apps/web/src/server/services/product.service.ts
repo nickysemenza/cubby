@@ -60,11 +60,9 @@ export const getProductWithFood = async (
 ): Promise<ProductWithFoodOut> => {
   const product = await getProductByIDRepo(db, id);
 
-  // Resolve the linked food: explicit fdc_id wins, else UPC auto-match.
   const lookupParam = foodLookupParamFromProduct(product);
   const food = lookupParam ? await usdaClient.findFood(lookupParam) : null;
 
-  // Recipes the product appears in, resolved through its linked ingredient.
   const ingredientEntityId = product.ingredient
     ? await resolveLiveShortcode(db, product.ingredient.id, "ingredient")
     : null;
@@ -116,7 +114,6 @@ export const getProductSummaries = async (
   const ids = await resolveAllOrThrow(db, "product", shortcodes);
   const shortcodeById = new Map(
     shortcodes.map((shortcode, i) => {
-      // Non-null: resolveAllOrThrow returns one id per input code, positionally.
       return [ids[i]!, shortcode] as const;
     }),
   );
@@ -186,9 +183,6 @@ export const createProductWithFood = async (
     },
     actor,
   );
-  // Dependent recipes are recomputed eagerly at the router (the single `create`
-  // proc per product, `createMany` once over the deduped union) — covers UI +
-  // MCP. No mark-stale; there is no drain anymore.
   const productId = await resolveCreatedOrInvariant(db, "product", product.id);
   return {
     output: await getProductWithFood(db, usdaClient, productId),

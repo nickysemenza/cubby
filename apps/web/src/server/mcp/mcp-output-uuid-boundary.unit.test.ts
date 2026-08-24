@@ -23,18 +23,8 @@ interface UuidFinding {
 const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "add_recipe_to_meal.recipes[].id",
   "find_recipes_using_ingredient.recipes[].usages[].lineId",
-  "get_meal.recipes[].id",
-  "get_recipe.sections[].id",
-  "get_recipe.sections[].ingredients[].id",
-  "list_meals.items[].recipes[].id",
   "remove_meal_recipe.recipes[].id",
   "update_meal_recipe.recipes[].id",
-  // Plural mirrors of the singular exceptions above. A batch tool wraps its
-  // singular's own output in `results[].item`, so it re-exposes exactly the
-  // same declared-uuid leaves — the mealRecipe row id, which has no shortcode
-  // because it names a join row rather than an entity.
-  "create_meals.results[].item.recipes[].id",
-  "update_meals.results[].item.recipes[].id",
   // The staged-upload handle is a transient raw Image UUID, deliberately
   // returned by create_file_upload only so the caller can pass it to attach_file.
   // Image records otherwise expose IMG- codes, so this is a narrow protocol

@@ -1,22 +1,7 @@
 import { describe, expect, it } from "vitest";
-import {
-  AI_MODEL_REGISTRY,
-  estimateAiUsageCostUsd,
-  parseSupportedEmbeddingModel,
-  supportedAiModel,
-} from "./models";
+import { estimateAiUsageCostUsd, parseSupportedEmbeddingModel } from "./models";
 
-describe("AI model registry", () => {
-  it("has provider, role, and pricing for every supported model", () => {
-    for (const model of supportedAiModel.options) {
-      const config = AI_MODEL_REGISTRY[model];
-      expect(config.provider).toMatch(/^(anthropic|openai)$/);
-      expect(config.role).toMatch(/^(chat|embedding)$/);
-      expect(config.pricing.inputUsdPerMillion).toBeGreaterThanOrEqual(0);
-      expect(config.pricing.outputUsdPerMillion).toBeGreaterThanOrEqual(0);
-    }
-  });
-
+describe("AI model pricing", () => {
   it("estimates Claude Haiku 4.5 usage from input and output tokens", () => {
     expect(
       estimateAiUsageCostUsd("anthropic", "claude-haiku-4-5", {

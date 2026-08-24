@@ -30,21 +30,9 @@ import {
 
 interface TableStateOptions {
   initialSort?: string;
-  /**
-   * Direction of the opening sort. Defaults to descending - right for the
-   * date/amount columns most lists open on, wrong for a name roster, which
-   * would otherwise open Z-to-A. Entity lists get this from the registry's
-   * `list.defaultSortDirection`.
-   */
   initialSortDesc?: boolean;
   initialFilter?: ColumnFiltersState;
   initialPagination?: PaginationState;
-  /**
-   * The entity's filter manifest. When given (with `urlSync`), column filters
-   * round-trip through the URL alongside sort/page — so a filtered view is
-   * shareable and survives a reload, on every table rather than only the ones
-   * that hand-rolled it.
-   */
   filterSpecs?: readonly FilterSpecCore[];
   /**
    * Mirror sort + pagination to the URL search params (bookmarkable / shareable
@@ -63,31 +51,17 @@ interface TableStateOptions {
    * reads, regardless of this value.
    */
   readUrlState?: boolean;
-  /**
-   * Include pagination in URL sync. Infinite lists set this false because
-   * their page index is an internal fetch cursor, not a user-visible page.
-   */
   syncPaginationToUrl?: boolean;
 }
 
-/** Stable empty default (a fresh `[]` per render would churn the memos). */
 const NO_SPECS: readonly FilterSpecCore[] = [];
 const NO_URL_STATE: Record<string, unknown> = {};
-/**
- * Same reason as `NO_SPECS`, for the caller's filter seed: an inline `= []`
- * default allocates a new array on every render for every caller that omits
- * `initialFilter` (which is most of them), and `initialFilter` is a dependency
- * of the `urlState` memo — so the URL-reconciliation effect below would re-run
- * on EVERY render rather than only when the URL changes.
- */
 const NO_INITIAL_FILTER: ColumnFiltersState = [];
 
-// URL search keys for table state.
 const SORT_KEY = "sort";
 const PAGE_KEY = "page";
 const SIZE_KEY = "pageSize";
 
-/** The canonical, URL-owned slice of a table's controlled state. */
 function serializeUrlState(
   sorting: SortingState,
   columnFilters: ColumnFiltersState,
@@ -127,10 +101,6 @@ export interface TableStateReturn {
   setSorting: (
     value: SortingState | ((old: SortingState) => SortingState),
   ) => void;
-  /**
-   * The table's own filter state — column-backed specs only, so every entry
-   * resolves to a real column. Feed this to TanStack.
-   */
   columnFilters: ColumnFiltersState;
   /**
    * `columnFilters` plus the URL-only scopes (see `urlOnly` in
@@ -149,11 +119,8 @@ export interface TableStateReturn {
     value: PaginationState | ((old: PaginationState) => PaginationState),
   ) => void;
   getColumnFilter: (columnId: string) => string | undefined;
-  /** Multi-value read for `multiselect` columns; scalars normalize to `[v]`. */
   getColumnFilterValues: (columnId: string) => string[] | undefined;
-  /** Primary sort only — single-sort consumers (remote USDA list API). */
   getSortParams: () => SortParams;
-  /** Full shift-click sort stack — the tRPC list input. */
   getSorts: () => SortParams[];
 }
 
@@ -181,8 +148,6 @@ export function useTableState(
     [filterSpecs],
   );
 
-  // Router hooks are called unconditionally (Rules of Hooks); their results are
-  // only consumed when this table reads or writes URL state.
   const search = useSearch({ strict: false }) as Record<string, unknown>;
   const navigate = useNavigate();
   const urlStateSource = urlSync || readUrlState ? search : NO_URL_STATE;
@@ -358,7 +323,6 @@ export function useTableState(
   // initializers already read that URL).
   const lastObservedSearch = useRef(serializedRawSearchState);
 
-  // Wrap state setters in startTransition to prevent UI freezing
   const setSorting = useCallback(
     (value: SortingState | ((old: SortingState) => SortingState)) =>
       startTransition(() => {
@@ -428,7 +392,6 @@ export function useTableState(
     [],
   );
 
-  // Memoize getColumnFilter to prevent recreating on every render - CRITICAL
   const getColumnFilter = useCallback(
     (columnId: string): string | undefined => {
       const value = columnFilters.find(
@@ -448,7 +411,6 @@ export function useTableState(
     [columnFilters],
   );
 
-  /** Multi-value counterpart, normalizing a scalar up into a one-element set. */
   const getColumnFilterValues = useCallback(
     (columnId: string): string[] | undefined => {
       const value = columnFilters.find(
@@ -461,7 +423,6 @@ export function useTableState(
     [columnFilters],
   );
 
-  // Memoize getSortParams to prevent recreating on every render - CRITICAL
   const getSortParams = useCallback(() => {
     return buildSortParams(sorting, initialSort);
   }, [sorting, initialSort]);
@@ -541,7 +502,6 @@ export function useTableState(
     navigate,
   ]);
 
-  // Memoize the entire return object to prevent recreating on every render - CRITICAL
   return useMemo(
     () => ({
       sorting,

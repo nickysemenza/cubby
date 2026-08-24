@@ -702,8 +702,6 @@ describe("repointProjectUses", () => {
     expect(await liveProjectIdsFor(component.entityId)).toEqual(
       [kitchen.entityId, yard.entityId].sort(),
     );
-    // The whole point: the block is gone because the history moved, not because
-    // it was discarded.
     await expect(
       deleteProducts(ctx.db, [kit.entityId], ctx.actor),
     ).resolves.toMatchObject({ detachedImageKeys: [] });
@@ -899,9 +897,6 @@ describe("project tool matrix", () => {
       }),
       ctx.actor,
     );
-    // No non-principal case here: `createExpense` refuses to link a Product to
-    // anything but a principal line, so the derivation's `lineKind` filter is
-    // belt-and-braces rather than something a fixture can exercise.
     await createExpense(
       ctx.db,
       toolExpense({
@@ -1308,10 +1303,6 @@ describe("project tool matrix", () => {
   });
 
   it("locks trade matches for tools we did not own, and keeps the grid honest", async () => {
-    // The live Kitchen Remodel shape: an explicit end date a year before the
-    // tool was bought. `trade_match` used to draw from the whole present-day
-    // tool shelf, which on production made 80-99% of an old project's
-    // suggestions impossible.
     const { output: finished, entityId: finishedId } = await createProject(
       ctx.db,
       projectCreateInput.parse({
@@ -1367,8 +1358,6 @@ describe("project tool matrix", () => {
     await stock(owned.id);
     await stock(undated.id);
 
-    // A separate project carries the acquisitions, so `finished`'s own window
-    // stays exactly the explicit override.
     const { output: elsewhere } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "Other work" }),
@@ -1396,8 +1385,6 @@ describe("project tool matrix", () => {
     const suggested = suggestions.items.map((item) => item.productId);
     expect(suggested).toContain(owned.id);
     expect(suggested).not.toContain(boughtLater.id);
-    // Disclosed, not silently dropped — a lane that quietly shrinks reads as
-    // "nothing else to suggest".
     expect(suggestions.timelineConflicts).toEqual({ count: 1 });
 
     // `undated` has no acquisition Expense at all. Unknown must never restrict:
@@ -1766,7 +1753,6 @@ describe("project tool matrix", () => {
         ctx.actor,
       ),
     ).resolves.toEqual({ changed: true });
-    // ...through every attach path, not just the single setter.
     await detachProjectResources(
       ctx.db,
       finishedId,
@@ -1819,7 +1805,6 @@ describe("project tool matrix", () => {
     await expect(
       setProjectToolUsage(ctx.db, finishedId, stuck.entityId, false, ctx.actor),
     ).resolves.toEqual({ changed: true });
-    // And once removed it can no longer be re-created.
     await expect(
       setProjectToolUsage(ctx.db, finishedId, stuck.entityId, true, ctx.actor),
     ).rejects.toMatchObject({ cause: { reason: "TOOL_TIMELINE_CONFLICT" } });
@@ -1891,8 +1876,6 @@ describe("project tool matrix", () => {
     await expect(
       setProjectToolUsage(ctx.db, projectId, tool.entityId, true, ctx.actor),
     ).resolves.toEqual({ changed: false });
-    // The economics the toggle moves are asserted through the grid, which is
-    // what actually renders them — the setter itself returns no metrics.
     await expect(listProjectResources(ctx.db, projectId)).resolves.toEqual([
       expect.objectContaining({
         projectUseCount: 1,
@@ -2059,7 +2042,6 @@ describe("project tool matrix", () => {
       to: [add.output.id, keep.output.id].sort(),
     });
 
-    // Clearing the set is a legal replacement, not a rejected empty input.
     await expect(
       setProductProjectUses(ctx.db, tool.entityId, [], ctx.actor),
     ).resolves.toEqual({ changed: 2 });

@@ -66,8 +66,6 @@ const verifyEntityImages = async (
       await updateImageIntegrity(db, row.id, inspected);
       results.push({ imageId: row.id, storageStatus: "available" });
     } catch (_error) {
-      // A valid object whose bytes disagree with the DB metadata is retained
-      // for diagnosis but removed from gallery/cover eligibility.
       await updateImageIntegrity(db, row.id, {
         renderStatus: "failed",
         storageStatus: "metadata_mismatch",

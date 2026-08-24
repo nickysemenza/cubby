@@ -140,7 +140,6 @@ describe("kit component projection", () => {
       { id: single.entityId, price: null },
       { id: double.entityId, price: null },
     ]);
-    // $10 of $30 against one unit; $20 of $30 against two.
     expect(pricing.get(single.entityId)?.knownUnitCount).toBe(1);
     expect(pricing.get(double.entityId)?.knownUnitCount).toBe(2);
     expect(pricing.get(single.entityId)?.derivedPrice).toBe(10);
@@ -157,7 +156,6 @@ describe("kit component projection", () => {
     const part = await makeProduct("Packed Unit", {
       ingredientId: ingredient.entityId,
     });
-    // Nothing was ever booked against this one, on its own or through a kit.
     const unbought = await makeProduct("Unbought Part");
     await attach(kit.entityId, [{ productId: part.entityId, quantity: 4 }]);
     await seedExpense({
@@ -212,7 +210,6 @@ describe("kit component projection", () => {
       productQuantity: 1,
     });
 
-    // $40 projected over one unit plus $20 own over one unit: $60 / 2.
     const pricing = await loadProductPricing(ctx.db, [
       { id: part.entityId, price: null },
     ]);
@@ -286,7 +283,6 @@ describe("kit component projection", () => {
       sql`UPDATE "ProductComponent" SET "deletedAt" = now()
            WHERE "componentProductId" = ${dropped.entityId}`,
     );
-    // The whole $50 now sits on the one live component, not $25 with $25 lost.
     expect(await derivedPriceFor(kept.entityId)).toBe(50);
   });
 
@@ -303,7 +299,6 @@ describe("kit component projection", () => {
       productQuantity: 1,
     });
 
-    // $60 / 1 outer → $60 over 2 middles ($30) → $60 over 6 leaves ($10).
     expect(await derivedPriceFor(middle.entityId)).toBe(30);
     expect(await derivedPriceFor(leaf.entityId)).toBe(10);
     expect(await listSortPriceFor(leaf.entityId)).toBe(10);
@@ -348,7 +343,6 @@ describe("kit component projection", () => {
     });
 
     const bought = await loadProductQuantityLedgers(ctx.db, [part.entityId]);
-    // Two kits with two of the part inside each.
     expect(bought.get(part.entityId)?.acquiredUnits).toBe(4);
     expect(bought.get(part.entityId)?.expectedQuantity).toBe(4);
 
@@ -361,7 +355,6 @@ describe("kit component projection", () => {
     const afterReturn = await loadProductQuantityLedgers(ctx.db, [
       part.entityId,
     ]);
-    // The exit carries through the same edge: two of the part went back.
     expect(afterReturn.get(part.entityId)?.exitedUnits).toBe(2);
     expect(afterReturn.get(part.entityId)?.expectedQuantity).toBe(2);
   });

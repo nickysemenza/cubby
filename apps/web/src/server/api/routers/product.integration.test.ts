@@ -55,7 +55,6 @@ describe("product.tagSiblings", () => {
       },
     ]);
     expect(result.siblings[0]?.id).not.toBe(sibling.entityId);
-    // Nothing is stocked, so the storage half has nothing to say.
     expect(result.tagStorage).toEqual([]);
   });
 });
@@ -122,7 +121,6 @@ describe("product.tagSiblings storage rollup", () => {
     await stock(a.id, shelf.id);
     await stock(b.id, shelf.id);
     await stock(c.id, bin.id);
-    // The viewed product is on the shelf too: it marks, it does not count.
     await stock(source.id, shelf.id);
 
     const caller = createTestCaller(productRouter, ctx.db);
@@ -198,7 +196,6 @@ describe("product.tagSiblings storage rollup", () => {
       ctx.actor,
     );
 
-    // Six locations, each holding one sibling, so ranking is by name.
     for (const n of [1, 2, 3, 4, 5, 6]) {
       const loc = await createLocationFixture(
         ctx.db,
@@ -248,8 +245,6 @@ describe("product.tagSiblings storage rollup", () => {
     const { siblings, tagStorage } = await caller.tagSiblings(source.id);
 
     expect(siblings).toHaveLength(1);
-    // `holdsSource` alone is not a reason to show a row — that is just this
-    // product's own Stocked At table, restated.
     expect(tagStorage).toEqual([]);
   });
 });
@@ -290,7 +285,6 @@ describe("product.list quantity ledger", () => {
       makeLocationInput({ name: "Ledger shelf" }),
       ctx.actor,
     );
-    // Bought 5, returned 1 → expected 4, and 4 on the shelf. Agrees.
     const agreeing = await createProductFixture(
       ctx.db,
       makeProductInput({ name: "Agreeing Box" }),
@@ -378,7 +372,6 @@ describe("product.list quantity ledger", () => {
       onHandUnits: 1,
       quantityVariance: -1,
     });
-    // Not stocked: on-hand and variance are null rather than a misleading 0.
     expect(byId.get(negative.id)).toMatchObject({
       quantityLedger: { expectedQuantity: -1 },
       onHandUnits: null,
@@ -399,8 +392,6 @@ describe("product.list quantity ledger", () => {
       .map((row) => row.id);
     expect(ranked).toEqual([negative.id, mismatched.id, agreeing.id]);
 
-    // Filtering uses the interpolated-column form instead, because one where
-    // clause is shared by three different query builders.
     const negatives = await list({ expectedQuantityMax: -1 });
     expect(negatives.items.map((row) => row.id)).toContain(negative.id);
     expect(negatives.items.map((row) => row.id)).not.toContain(agreeing.id);
@@ -633,7 +624,6 @@ describe("product.list unlocated cohort", () => {
     const unlocated = await make("A Unlocated Rack", "tools");
     // Same ledger, but it is on a shelf — that is `shelf-disagrees` territory.
     const stocked = await make("B Stocked Rack", "tools");
-    // Bought one, sold one: nets to zero, so nothing is owned to be missing.
     const soldOff = await make("C Sold Off Rack", "tools");
     // No ledger at all — a provenance gap, not a location one.
     const noLedger = await make("D Ledgerless Rack", "tools");
@@ -710,7 +700,6 @@ describe("product.list unlocated cohort", () => {
     const agreeing = await list({ quantityVarianceFilter: "matched" });
     expect(agreeing.items.map((row) => row.id)).not.toContain(unlocated.id);
 
-    // `unlocated-durables` adds one category predicate and drops the snacks.
     const durables = await list({
       expectedQuantityMin: 1,
       inventoryPresenceFilter: "none",
@@ -764,8 +753,6 @@ describe("product.list unlocated cohort", () => {
     });
     expect(cohort.items.map((item) => item.id)).not.toContain(tote.id);
 
-    // The filter is a real predicate in both directions, not a no-op that
-    // happens to leave the set unchanged.
     const inService = await list({ servingAsLocationPresenceFilter: "has" });
     expect(inService.items.map((item) => item.id)).toContain(tote.id);
   });
@@ -829,15 +816,11 @@ describe("product.list unlocated cohort", () => {
       componentPresenceFilter: "none",
     });
     const ids = cohort.items.map((item) => item.id);
-    // The kit: its stock is on the shelf, under another name.
     expect(ids).not.toContain(kit.id);
     // The stocked part: present, so it was never in this cohort anyway.
     expect(ids).not.toContain(stockedPart.id);
-    // The gap that is actually real, and the row worth acting on.
     expect(ids).toContain(missingPart.id);
 
-    // The predicate does the work, rather than the kit happening to fall out
-    // for some other reason: drop it and the parent is admitted again.
     const withoutFilter = await list({
       expectedQuantityMin: 1,
       inventoryPresenceFilter: "none",
@@ -876,7 +859,6 @@ describe("product.list kits counted twice", () => {
     const mk = (name: string) =>
       createProductFixture(ctx.db, makeProductInput({ name }), ctx.actor);
 
-    // One set bought; its two halves are on shelves. Accounted for exactly once.
     const kit = await mk("A Counted Twice Set");
     const half = await mk("B Counted Twice Half");
     await createExpense(
@@ -905,12 +887,10 @@ describe("product.list kits counted twice", () => {
       ctx.actor,
     );
 
-    // Parts account for 1 of the 1 bought, and nothing is on the parent yet.
     expect((await doubleCounted()).items.map((i) => i.id)).not.toContain(
       kit.id,
     );
 
-    // Now stock the set itself as well: 1 + 1 = 2 sets claimed, 1 bought.
     await createInventoryFixture(
       ctx.db,
       {
@@ -961,7 +941,6 @@ describe("product.list kits counted twice", () => {
       parentProductId: pack.id,
       components: [{ productId: single.id, quantity: 4 }],
     });
-    // One pack opened into four singles...
     await createInventoryFixture(
       ctx.db,
       {
@@ -971,7 +950,6 @@ describe("product.list kits counted twice", () => {
       },
       ctx.actor,
     );
-    // ...the other still sealed.
     await createInventoryFixture(
       ctx.db,
       {

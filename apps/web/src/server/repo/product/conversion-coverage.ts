@@ -163,7 +163,6 @@ export const writeProductConversionCoverageProjection = async (
     });
 };
 
-/** Mark rows stale synchronously when a product mutation changes graph inputs. */
 const markProductConversionCoverageStale = async (
   db: Database | DrizzleTransaction,
   productIds: readonly ProductId[],

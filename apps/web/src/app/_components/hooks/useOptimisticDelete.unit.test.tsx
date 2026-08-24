@@ -29,8 +29,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("~/integrations/trpc/react", () => ({
   useTRPC: () => ({
-    product: {
-      delete: {
+    entity: {
+      mutate: {
         mutationOptions: () => ({ mutationFn: mocks.commandMutation }),
       },
     },
@@ -183,6 +183,8 @@ describe("useOptimisticDelete", () => {
     });
 
     expect(mocks.commandMutation).toHaveBeenCalledWith({
+      action: "delete",
+      entity: "product",
       ids: ["PRD-2222", "PRD-3333"],
     });
     await waitFor(() => expect(bulkResult).toEqual({ success: true }));

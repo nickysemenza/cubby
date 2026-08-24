@@ -90,37 +90,10 @@ import {
   presenceFilterOptions,
 } from "./filters";
 
-/**
- * The filter manifest: what each entity's list table can be filtered by.
- *
- * One entry drives the toolbar filter control, the server filter field, and
- * (via `kind`) how the column's state is shaped. The pure builders that
- * consume it live in `./filters`, kept separate so they're unit-testable.
- *
- * Import direction matters: `useStandardColumns` imports this, so nothing
- * here may import a module that reaches back into the table hooks. That's why
- * `tradeOptions` lives in a leaf module rather than in `app/projects/shared.tsx`.
- */
 export interface FilterSpec extends FilterSpecCore {
-  /** Full placeholder. The toolbar shortens it for select controls. */
   placeholder: string;
-  /** Static options. Mutually exclusive with `optionsKey`. */
   options?: FilterableComboboxItem[];
-  /**
-   * Names a runtime option list the page supplies via `filterOptions` — for
-   * picklists that come from the server (the project roster, a recipe's tag
-   * universe) and so can't be static module data.
-   */
   optionsKey?: string;
-  /**
-   * Control label. Defaults to `humanize(columnId)`.
-   *
-   * Only a bar with no table under it needs this — a column-backed control
-   * reads its label off the column header. Set it where the column id doesn't
-   * read as one on its own, which on a cross-kind surface is most of them
-   * ("taskStatus" has to render as "Task status", because the whole point is
-   * that it constrains tasks and nothing else).
-   */
   label?: string;
 }
 
@@ -182,11 +155,6 @@ const resolveNetBasis = (value: string | undefined) => {
   return {};
 };
 
-/**
- * Units bought minus units gone. "Negative" is the defect worklist — you cannot
- * have sold or returned more than you ever bought — and is the reason the
- * server-side bounds are signed rather than clamped at zero.
- */
 const priceOptions: FilterableComboboxItem[] = [
   ...presenceFilterOptions("price"),
   { value: "none-real", label: "No price (excluding buckets)" },
@@ -231,11 +199,6 @@ const resolveExpectedQuantity = (value: string | undefined) => {
   return {};
 };
 
-/**
- * Shelf against ledger. Both options are scoped server-side to stocked
- * products — see `quantityVarianceFilter` in the product schema for why an
- * unscoped "matched" would be meaningless.
- */
 const quantityVarianceOptions: FilterableComboboxItem[] = [
   { value: "mismatched", label: "Shelf disagrees with ledger" },
   { value: "matched", label: "Shelf matches ledger" },
@@ -308,8 +271,6 @@ const recountAgeOptions: FilterableComboboxItem[] = [
   { value: "90", label: "Not counted in 90 days" },
 ];
 
-/** Each option is "older than N days, or never recounted" — see the field's
- *  schema doc for why the never-recounted half is part of the predicate. */
 const resolveRecountAge = (value: string | undefined) => {
   const days = Number(value);
   return Number.isInteger(days) && days > 0
@@ -353,8 +314,6 @@ const resolveRecipeCost = (value: string | undefined) =>
         ? { costTotalMin: 25 }
         : {};
 
-// The weeknight axis: "what can I actually cook tonight". Buckets, not a free
-// numeric input, because that's how the decision is actually made.
 const recipeTotalTimeOptions: FilterableComboboxItem[] = [
   { value: "under30", label: "Under 30 min" },
   { value: "30to60", label: "30–60 min" },
@@ -383,22 +342,6 @@ const resolveCalories = (value: string | undefined) =>
         ? { caloriesTotalMin: 1000 }
         : {};
 
-/**
- * Every entity's own `*FilterFields` map, keyed by entity — the single place
- * that has to be kept current when a new filterable entity is added.
- * `auditFilterEntities` below is DERIVED from this rather than hand-listing
- * entity names a second time: that hand-kept list had already drifted —
- * `projectFilterFields` and `mealFilterFields` both spread
- * `auditDateFilterFields`, so the server accepted `createdFrom`/`updatedTo`
- * for project and meal while no UI control could ever send them. Deriving
- * means a `*FilterFields` gaining `auditDateFilterFields` later (or losing
- * it) doesn't also require a matching edit to a second set here.
- *
- * Exported for the two drift guards in `filter-manifest.unit.test.tsx`, which
- * compare the manifest against these maps in both directions. They must read
- * the map `auditFilterEntities` is derived from, not a second copy — a copy
- * would agree with itself while this one went stale.
- */
 export const entityFilterFieldMaps: Partial<
   Record<Entity, Record<string, unknown>>
 > = {
@@ -459,25 +402,13 @@ const imageAuditFilterSpecs: readonly FilterSpec[] = [
   auditFilterSpecs[1]!,
 ];
 
-/** The control a kind renders as. */
 const filterTypeForKind = (
   kind: FilterKind,
 ): "text" | "select" | "multiselect" =>
   kind === "text" ? "text" : isMultiFilterKind(kind) ? "multiselect" : "select";
 
-/**
- * Entities that deliberately declare no filters, so "nobody has added them yet"
- * stops looking identical to "there is nothing to add". `entityFilters` below is
- * a TOTAL record over the remainder, so a new Entity must either bring a filter
- * list or be named here with the reason — the `?? []` fallback used to swallow
- * both cases silently.
- */
 const ENTITIES_WITHOUT_FILTERS = {
-  // No list table of its own: cookbooks are browsed as a gallery, and the
-  // recipe list carries the `cookbookId` filter that scopes into one.
   cookbook: "browsed as a gallery; recipe.cookbookId is the way in",
-  // Not a local entity — the USDA surface is a remote search box against the
-  // usda-api worker, with no column set to filter.
   "usda-food": "remote USDA search, not a local list",
 } as const satisfies Partial<Record<Entity, string>>;
 
@@ -2038,13 +1969,11 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
 
 const NO_FILTERS: readonly FilterSpec[] = [];
 
-/** The declared specs for an entity, or nothing for an opted-out one. */
 const declaredFilters = (entity: Entity): readonly FilterSpec[] =>
   entity in ENTITIES_WITHOUT_FILTERS
     ? NO_FILTERS
     : entityFilters[entity as FilteredEntity];
 
-/** The specs for an entity, or an empty list when it has no list table. */
 const relatedFilterSpecs = Object.fromEntries(
   uniq(relatedViewRegistry.map((view) => view.source)).map((entity) => {
     const existing = declaredFilters(entity);
@@ -2314,7 +2243,6 @@ export function manifestFilterConfig(
   return specFilterConfig(spec, runtimeOptions);
 }
 
-/** A spec's rendered options: runtime roster or static list, sentinels first. */
 function resolveSpecOptions(
   spec: FilterSpec,
   runtimeOptions?: RuntimeFilterOptions,

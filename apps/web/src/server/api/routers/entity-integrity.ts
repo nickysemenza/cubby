@@ -117,9 +117,8 @@ export function buildIntegrityCatalog(): IntegrityCatalog {
 
 export const entityIntegrityRouter = createTRPCRouter({
   /**
-   * What a merge or attach/detach would do, without doing it. Read-only; the
-   * mutation remains authoritative and rechecks inside its transaction. There
-   * is no delete arm — a delete's structured refusal is the contract instead.
+   * What an attach or detach would do, without doing it. Read-only; the
+   * mutation remains authoritative and rechecks inside its transaction.
    */
   previewOperation: protectedProcedure
     .input(previewOperationInputSchema)

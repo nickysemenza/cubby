@@ -1,49 +1,4 @@
-/**
- * How many units of a Product *should* be on hand, derived from the ledger.
- *
- * Nothing is stored: `Expense.productId`'s doc note is explicit that ownership
- * is derived from Expense rows plus inventory. This module is the one place the
- * quantity side of that derivation lives — the mirror of `pricing.ts`, which
- * owns the money side — so the products list, its filters, and the Problems
- * detector all read the same number.
- *
- * The rule (documented in full on `Expense.productQuantity` in schema.ts):
- * money direction wins, and the quantity's own sign is consulted only when
- * there is no money.
- *
- *   cost > 0 → acquisition of +|qty|
- *   cost < 0 → exit of −|qty|          (both stored signs are legal here)
- *   cost = 0 → signed: +qty is a free acquisition, −qty is a discard
- *   qty 0    → negative cost only: money moved, no unit did — a price
- *              concession with the item kept. Sums to nothing, and is
- *              deliberately NOT an unknown line
- *   qty NULL → unknown; contributes nothing, reported as a line count instead
- *
- * Two deliberate divergences from neighbouring predicates:
- *
- *  - **Every negative line counts as an exit**, not only those inside a
- *    disposal Purchase the way `findSoldButStillStocked` requires. That
- *    detector asks "was this sold off entirely?", where a refund or price
- *    adjustment is noise. This asks "how many units left?", and on live data
- *    218 of 335 negative lines are named returns/refunds sitting inside a
- *    Purchase that nets *positive* — real units going back to the store. The
- *    strict predicate would miss 348 of the 492 exited units.
- *
- *  - **$0 lines participate**, unlike `loadProductPricing`'s `cost > 0`. A free
- *    promo battery on the shelf is genuinely owned, and a discard is genuinely
- *    gone; excluding both would report a shelf full of freebies as expected 0.
- *
- * Unknowns are never guessed at. A quantity-less line contributes nothing to
- * the number and is surfaced as a count, so a partially-quantified product
- * reads as data-entry debt rather than as a confident total.
- *
- * That count is why `0` exists as a distinct value from `NULL`. Both add
- * nothing to the sum, but only NULL is debt. Until 2026-08-17 zero was banned
- * by the CHECK, so the price-concession class had to borrow NULL, and all eight
- * such rows in the ledger lit the `−N?` uncertainty cue beside Expected on
- * products whose count was in fact exactly known. `unknownExitLines` now counts
- * only genuine unknowns — as of the backfill, none.
- */
+/** Canonical read-time quantity ledger: known balance is acquired minus exited; unknown quantities stay explicit. */
 import type { ProductId } from "@cubby/schemas/identifiers";
 import type {
   ProductPickerOnHandOut,
@@ -77,53 +32,14 @@ export const EMPTY_QUANTITY_LEDGER: QuantityLedger = {
   locationCount: 0,
 };
 
-/**
- * The signed per-line contribution — the ledger rule as one SQL expression.
- *
- * Every other query in this module is derived from it rather than restating it:
- * {@link QUANTITY_OWN_AGGREGATE} splits it into its positive and negative
- * halves, and the loader and both correlated scalars read those two numbers.
- * That is deliberate. A hand-written FILTER predicate beside it would be a
- * second copy of the rule, free to drift, and the failure would be a list that
- * *sorts* by a different number than it *renders*.
- *
- * A NULL cost (an Unclassified row) falls to the ELSE and is read by its
- * quantity's sign, the same as a $0 line — cost unknown is not cost zero, but
- * neither says anything about direction, so the quantity is all there is.
- * NULL quantity yields NULL, which `sum` skips: unknown never guesses at one.
- *
- * `alias` is the Expense alias in the enclosing query.
- */
-// Module-private since the over-exited detector became a saved view — the
-// three remaining callers are all in this file.
+/** Shared signed per-line SQL contribution; derive all ledger aggregates from this expression. */
 const expenseSignedUnitsSql = (alias: string) =>
   `CASE WHEN ${alias}."cost" > 0 THEN abs(${alias}."productQuantity")
         WHEN ${alias}."cost" < 0 THEN -abs(${alias}."productQuantity")
         ELSE ${alias}."productQuantity"
    END`;
 
-/**
- * This product's OWN ledger lines, split into the two halves of the signed
- * expression so `acquired - exited` is `sum(signedUnits)` by construction.
- *
- * Correlated on `ka."productId"`, because a kit's lines are also its parts'
- * lines: buying one 9-piece kit brought nine parts into the house, and buying a
- * 4-pack with `quantity: 4` brought four. `Expense` never records that — the
- * money stays on the kit — so the units reach the parts through
- * `ProductComponent`, weighted by the same `Πqty` the price projection uses.
- * Returning a kit (a negative line) carries back through it unchanged, since the
- * weight is positive and the sign lives in the halves.
- *
- * `GREATEST`/`LEAST` ignore NULLs, so a quantity-less line contributes 0 to both
- * halves rather than poisoning the sum — the same reason the `productQuantity IS
- * NOT NULL` predicate the scalars used to carry is not needed here, and the
- * reason this one aggregate can also count the unknown lines. An unknown line
- * has no direction of its own, so it is bucketed by its money: a NULL cost sits
- * with the acquisitions, matching the signed expression's ELSE.
- *
- * `ledgerLines` is what keeps "no ledger at all" distinguishable from "a ledger
- * that nets to zero" now that the seed emits a row per requested product.
- */
+/** Own ledger contributions use signed known quantities only; kit projection is intentionally excluded. */
 const QUANTITY_OWN_AGGREGATE = `SELECT COALESCE(sum(GREATEST(${expenseSignedUnitsSql("kqe")}, 0)), 0) AS "acquiredUnits",
          COALESCE(sum(-LEAST(${expenseSignedUnitsSql("kqe")}, 0)), 0) AS "exitedUnits",
          count(*) FILTER (WHERE kqe."productQuantity" IS NULL AND (kqe."cost" IS NULL OR kqe."cost" >= 0)) AS "unknownAcquisitionLines",
@@ -154,44 +70,7 @@ export const expectedQuantitySql = (productAlias = '"product"') =>
     SELECT ${PROJECTED_EXPECTED}
     ${QUANTITY_PROJECTION_FROM})`;
 
-/**
- * Live units on shelves — NULL wherever `deriveOnHandUnits` in mappers.ts
- * renders `—`, so nothing can be filtered or ordered by a number the cell never
- * shows. Two predicates carry that, and both mirror the render exactly:
- *
- *  - **The `Location` join.** `relations.product.list` loads live entries and
- *    the mapper drops any whose *location* is soft-deleted.
- *    `InventoryEntry.locationId` is `must-target-live` and production has zero
- *    violations today — exactly why the divergence would go unnoticed.
- *
- *  - **The mixed-unit guard.** Summing `each` against `can` produces a number
- *    that means nothing, so the mapper returns null rather than adding them;
- *    without the same rule here a mixed-unit product could be pulled in by
- *    "Shelf disagrees" on a meaningless sum while its Variance cell read `—`.
- *    Live inventory is essentially all `each`, which again is what would have
- *    kept this quiet.
- *
- * NULL propagates the way the render does: through the subtraction in
- * {@link quantityVarianceSql} (so the sort puts these last, `nulls last`), and
- * through both `<>` and `=` in the variance filter — a mixed-unit product
- * matches neither "mismatched" nor "matched", which is the honest answer.
- *
- * The zero-entry case returns NULL for the same reason (the mapper does too),
- * though the filters also gate on `productIdsWithLiveInventory` and never see
- * it.
- *
- * includes-installed: `expectedQuantitySql` sums Expense rows unconditionally,
- * and a fixture's purchase Expense is one of them — excluding installed rows
- * here would manufacture a permanent negative variance and light "Shelf
- * disagrees" forever on every fixture in the house.
- *
- * includes-locations: on-hand is the UNION of stock and identity — inventory
- * units PLUS the Locations that ARE this product. A packout in service as a
- * bin is a unit you own; counting only the shelf would show it missing against
- * a ledger that recorded buying it. Locations are one unit each, so they add
- * to the sum but never to the distinct-unit test: a mixed-unit shelf is still
- * NULL, and a product with neither entries nor locations is still NULL.
- */
+/** On-hand filters are null wherever the UI shows an unavailable value; include shelf and installed placements consistently. */
 export const onHandUnitsSql = (productAlias = '"product"') =>
   `(SELECT CASE
              WHEN ohu_inv.n = 0 AND ohu_loc.n = 0 THEN NULL
@@ -222,21 +101,7 @@ export const onHandUnitsSql = (productAlias = '"product"') =>
 export const quantityVarianceSql = (productAlias = '"product"') =>
   `(${onHandUnitsSql(productAlias)} - ${expectedQuantitySql(productAlias)})`;
 
-/**
- * The same three scalars as Drizzle fragments, for the Product list's shared
- * `whereClause`.
- *
- * Filters interpolate `product.id` rather than hand-qualifying an alias — the
- * opposite of the sort helpers above, and deliberately so: one `whereClause`
- * is handed to three different query builders (the RQB data query aliased
- * `"product"`, a plain `$count`, and a plain select over `"Product"`), and only
- * an interpolated Drizzle column is rewritten to whichever alias is in scope.
- * A hardcoded alias would be wrong in two of the three.
- *
- * The `eq_e` alias on the inner Expense is not cosmetic: the footer-total query
- * nests this whole where-clause inside a statement that already has `"Expense"`
- * in scope.
- */
+/** Shared SQL fragments for product-list filters; interpolate product.id rather than a hand-qualified alias. */
 export const expectedQuantityFilterSql = (productId: AnyColumn) =>
   sql`(${kitAncestorCteSql(
     sql`SELECT ${productId}, ${productId}, 1::numeric, 1::numeric, 0`,
@@ -244,13 +109,6 @@ export const expectedQuantityFilterSql = (productId: AnyColumn) =>
       SELECT ${sql.raw(PROJECTED_EXPECTED)}
       ${sql.raw(QUANTITY_PROJECTION_FROM)})`;
 
-/**
- * Same predicates as {@link onHandUnitsSql} — the live-Location join AND the
- * mixed-unit/zero-entry NULLs. Keep the two in step; they are the filter and
- * the sort halves of one rule.
- *
- * includes-installed: inherited from `onHandUnitsSql` — see that doc.
- */
 export const onHandUnitsFilterSql = (productId: AnyColumn) =>
   sql`(SELECT CASE
                 WHEN ohu_inv.n = 0 AND ohu_loc.n = 0 THEN NULL
@@ -319,9 +177,6 @@ export const loadProductQuantityLedgers = async (
     ledgerLines: number;
   }>(await unwrapDb(db).execute(query));
 
-  // Second grouped query rather than a join: the Expense aggregate above is
-  // grouped by product already, and folding a second one-to-many in would
-  // multiply its rows.
   const locationRows = await unwrapDb(db)
     .select({
       productId: location.productId,

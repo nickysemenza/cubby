@@ -115,7 +115,6 @@ describe("inventoryentryList product-attribute filters", () => {
       ),
     ).rejects.toThrow(/already sits at this location/);
 
-    // And the refusal is clean: the spare is untouched, not half-written.
     const rows = await list({
       locationIdFilter: locationShortcode,
       placementFilter: "all",
@@ -252,7 +251,6 @@ describe("inventoryentryList product-attribute filters", () => {
         category: "tools",
       }),
     );
-    // Matches both.
     const milwaukeeTool = await createTestProduct(
       makeProductInput({
         name: "Drill",
@@ -346,7 +344,6 @@ describe("inventoryentryList product-attribute filters", () => {
       { pageSize: 1, pageIndex: 0 },
     );
 
-    // 2 * 5 + 4 * 3 = 22, matching flour + sugar, NOT the drill.
     expect(result.data.length).toEqual(1);
     expect(result.count).toEqual(2);
     expect(result.sums.valuation).toEqual(22);

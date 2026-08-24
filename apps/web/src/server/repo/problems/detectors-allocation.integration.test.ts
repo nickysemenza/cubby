@@ -96,8 +96,6 @@ describe("findFinancialTransactionAllocationDefects", () => {
   const ctx = withTestDb();
 
   it("passes a split that sums to the transaction amount with a NULL mirror", async () => {
-    // The real 2026-08-10 Home Depot case: one -$16.76 card credit settling two
-    // different orders. This is the shape the table exists to make legal.
     const [a, b] = await Promise.all([mkPurchase(ctx.db), mkPurchase(ctx.db)]);
     const txn = await mkTransaction(ctx.db, { amount: -16.76 });
     await allocate(ctx.db, txn.id, a.id, -8.96);
@@ -114,8 +112,6 @@ describe("findFinancialTransactionAllocationDefects", () => {
 
   it("passes a single allocation whose mirror agrees, and an unallocated transaction", async () => {
     const purchase = await mkPurchase(ctx.db);
-    // mkTransaction allocates when given a purchaseId, so this is already the
-    // ordinary single-allocation shape.
     await mkTransaction(ctx.db, { amount: -32.55, purchaseId: purchase.id });
     await mkTransaction(ctx.db, { amount: -5 }); // unlinked evidence, no allocations
 

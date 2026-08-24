@@ -411,8 +411,6 @@ describe("SearchDocument indexed retrieval", () => {
       batch: { id: expect.any(String) },
       reused: false,
     });
-    // Repair is now a bounded durable workflow; the browser receives its batch
-    // reference rather than a synchronous full-corpus diagnosis.
     expect(await inspectSearchDocumentHealth(ctx.db)).toMatchObject({
       state: "completed",
       findings: { missing: 2, stale: 1, orphaned: 1, total: 4 },

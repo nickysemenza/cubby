@@ -7,7 +7,6 @@
  */
 
 import {
-  type InventoryShortcode,
   inventoryShortcode,
   unsafeInventoryId,
   unsafeLocationId,
@@ -19,15 +18,10 @@ import {
   bulkMovePayload,
   inventoryBulkOperationPayload,
   inventoryCountsByLocationOut,
-  inventoryCreatePayloadData,
   inventoryDuplicateUniqueProductsOut,
-  inventoryFiltersSchema,
   inventoryFindDuplicatesInput,
   inventoryListItemOut,
   inventoryLocationIdsInput,
-  inventorySortableFields,
-  inventoryUpdatePayloadData,
-  inventoryWithLocationAndProductAndSideEffectsOut,
   inventoryWithLocationAndProductListAndSideEffectsOut,
   inventoryWithLocationAndProductListOut,
   inventoryWithLocationAndProductOut,
@@ -42,43 +36,33 @@ import {
 } from "@cubby/schemas/scan";
 import { uniq } from "es-toolkit";
 import { match } from "ts-pattern";
+import { z } from "zod";
+import { ENTITY_BINDINGS } from "~/server/entity-bindings";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/entity-kernel/registry";
 import { createAppError } from "~/server/errors/app-error";
 import {
   bulkMoveInventoryEntries,
   bulkProcessInventoryEntries,
-  checkUniqueProductDuplicate,
-  createInventoryEntry,
-  deleteInventoryEntries,
   getInventoryByLocationIds,
   getInventoryCountsByLocations,
   getInventoryEntryByShortcode,
-  inventoryentryList,
   moveInventoryEntries,
   reconcileLocationSession,
-  updateInventoryEntry,
 } from "~/server/repo/inventory";
 import { findDuplicateUniqueProducts } from "~/server/repo/product";
 import {
   bindShortcodeResolver,
   resolveLiveShortcodes,
 } from "~/server/repo/shortcode-resolver";
-import {
-  runMutationSideEffects,
-  runMutationSideEffectsForEntities,
-} from "~/server/services/mutation-side-effects";
+import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 import {
   resolveScanStrays as resolveScanStraysService,
   scanAtLocation as scanAtLocationService,
 } from "~/server/services/scan-into-location.service";
-import {
-  createBulkUpdatedMutation,
-  createDeleteProcedure,
-  createEntityCrudWithoutListProcedures,
-  createEntityListProcedure,
-} from "../crud-factory";
+import { createBulkUpdatedMutation } from "../crud-factory";
+import { createEntityCompatibilityProcedures } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
-const productShortcodes = bindShortcodeResolver("product");
 const locationShortcodes = bindShortcodeResolver("location");
 const inventoryShortcodes = bindShortcodeResolver("inventory");
 
@@ -103,116 +87,36 @@ async function resolveEntityIds<T extends string>(
   return resolved as Map<T, string>;
 }
 
-const { list } = createEntityListProcedure({
-  schemas: {
-    output: inventoryListItemOut,
-    filters: inventoryFiltersSchema,
-    sort: {
-      sortableFields: inventorySortableFields,
-      defaultSort: "createdAt",
-    },
-  },
-  repository: {
-    list: async (services, filters, sort, pagination) => {
-      // The repo resolves `locationIdFilter`/`productIdFilter` itself — a
-      // browse filter naming a dead code narrows to nothing rather than 404ing
-      // the page, which `resolveOrThrow` here could not express.
-      return await inventoryentryList(services.db, filters, sort, pagination);
-    },
-  },
-  entityName: "inventory",
+const {
+  list,
+  create,
+  update,
+  delete: deleteItem,
+} = createEntityCompatibilityProcedures(ENTITY_KERNEL_BINDINGS.inventory, {
+  ...ENTITY_BINDINGS.inventory.crud,
+  listOutput: inventoryListItemOut,
 });
 
-const { getByID, getByShortcode, create, update } =
-  createEntityCrudWithoutListProcedures({
-    entityName: "inventory",
-    schemas: {
-      createInput: inventoryCreatePayloadData,
-      updateInput: inventoryUpdatePayloadData,
-      output: inventoryWithLocationAndProductOut,
-      createOutput: inventoryWithLocationAndProductAndSideEffectsOut,
-      updateOutput: inventoryWithLocationAndProductAndSideEffectsOut,
-      idSchema: inventoryShortcode,
-    },
-    repository: {
-      getByShortcode: (services, shortcode) =>
-        getInventoryEntryByShortcode(services.db, shortcode),
-      create: async (services, data) => {
-        const [productId, locationId] = await Promise.all([
-          productShortcodes.one(services.db, data.productId),
-          locationShortcodes.one(services.db, data.locationId),
-        ]);
-        // Check if this is a unique product that already exists elsewhere
-        const duplicate = await checkUniqueProductDuplicate(
-          services.db,
-          productId,
-          locationId,
-        );
+// Inventory detail has product/location joins beyond the canonical CRUD row.
+const getByShortcode = protectedProcedure
+  .input(z.object({ shortcode: inventoryShortcode }))
+  .output(strictOutput(inventoryWithLocationAndProductOut.nullable()))
+  .query(({ ctx, input }) =>
+    getInventoryEntryByShortcode(ctx.db, input.shortcode),
+  );
 
-        if (duplicate) {
-          throw createAppError(
-            "PRODUCT_ALREADY_EXISTS",
-            `This unique item "${duplicate.productName}" is already inventoried at "${duplicate.locationName}". Please update the existing entry instead of creating a duplicate.`,
-          );
-        }
-
-        const created = await createInventoryEntry(
-          services.db,
-          { ...data, productId, locationId },
-          services.actorContext,
-        );
-        const entityId = await inventoryShortcodes.one(services.db, created.id);
-        const backgroundBatches = await runMutationSideEffects(services.db, {
-          action: "created",
-          entity: { entityType: "inventory", entityId },
-          source: "inventory.create",
-        });
-        return { ...created, sideEffects: { backgroundBatches } };
-      },
-      update: async (services, shortcode: InventoryShortcode, data) => {
-        const id = await inventoryShortcodes.one(services.db, shortcode);
-        const productId = data.productId
-          ? await productShortcodes.one(services.db, data.productId)
-          : undefined;
-        const locationId = data.locationId
-          ? await locationShortcodes.one(services.db, data.locationId)
-          : undefined;
-        const updated = await updateInventoryEntry(
-          services.db,
-          id,
-          { ...data, productId, locationId },
-          services.actorContext,
-        );
-        const backgroundBatches = await runMutationSideEffects(services.db, {
-          action: "updated",
-          entity: { entityType: "inventory", entityId: id },
-          source: "inventory.update",
-        });
-        return { ...updated, sideEffects: { backgroundBatches } };
-      },
-    },
+const getByID = protectedProcedure
+  .input(z.object({ id: inventoryShortcode }))
+  .output(strictOutput(inventoryWithLocationAndProductOut))
+  .query(async ({ ctx, input }) => {
+    const item = await getInventoryEntryByShortcode(ctx.db, input.id);
+    if (!item)
+      throw createAppError(
+        "INVENTORY_NOT_FOUND",
+        `Inventory entry ${input.id} not found`,
+      );
+    return item;
   });
-
-const deleteItem = createDeleteProcedure<InventoryShortcode>(
-  async (services, shortcodes) => {
-    const ids = await inventoryShortcodes.all(services.db, shortcodes);
-    const { deleted } = await deleteInventoryEntries(
-      services.db,
-      ids,
-      services.actorContext,
-    );
-    const backgroundBatches = await runMutationSideEffectsForEntities(
-      services.db,
-      ids.map((id) => ({
-        action: "deleted" as const,
-        entity: { entityType: "inventory" as const, entityId: id },
-        source: "inventory.delete",
-      })),
-    );
-    return { deleted, backgroundBatches };
-  },
-  inventoryShortcode,
-);
 
 // Bulk process inventory entries (creates and updates in one call)
 const bulkProcess = createBulkUpdatedMutation({

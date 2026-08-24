@@ -1,31 +1,6 @@
 import { partition } from "es-toolkit";
 import { match } from "ts-pattern";
 
-/**
- * The filter manifest's pure core: the spec shape plus the builders that turn
- * column-filter state into a server filter object.
- *
- * Every list table used to declare its filters THREE times — a `filters:`
- * array on `useEntityList`, a per-column `filterConfig` in the column defs,
- * and a hand-written `buildFilters(tableState)` mapping column id → server
- * filter field. All nine `buildFilters` callbacks were the same mechanical
- * shape, which is what made a change like "multi-select on every table"
- * expensive. One manifest entry now drives all three.
- *
- * This module is deliberately dependency-free apart from ts-pattern: no React,
- * no `~/` imports. The vitest unit project can't resolve `~/…` .tsx, so
- * keeping the builders here is what makes them unit-testable. The registry
- * DATA lives in `filter-manifest.tsx`, which needs the icon-bearing option
- * lists.
- */
-
-/**
- * How a column filter's string state maps onto a server filter field.
- *
- * `presence` is the shared "has"/"none" relation filter — deliberately NOT a
- * multiselect: the two values are complements, so selecting both would mean
- * "no filter", which is strictly worse than the single-select it replaces.
- */
 export type FilterKind =
   | "text" // substring match
   | "select" // one enum value

@@ -113,11 +113,9 @@ const KIT_ANCESTOR_COLUMNS = `(target, "productId", "costWeight", "unitWeight", 
 const cteOpen = `WITH RECURSIVE kit_anc ${KIT_ANCESTOR_COLUMNS} AS (`;
 const cteClose = `UNION ALL ${KIT_ANCESTOR_STEP})`;
 
-/** The CTE as raw text, for the hand-qualified correlated scalars. */
 export const kitAncestorCteText = (seed: string) =>
   `${cteOpen} ${seed} ${cteClose}`;
 
-/** The same CTE with a bound seed, for the batch loaders. */
 export const kitAncestorCteSql = (seed: SQL): SQL =>
   sql`${sql.raw(cteOpen)} ${seed} ${sql.raw(cteClose)}`;
 
@@ -183,7 +181,6 @@ export const unitWeighted = (column: string) =>
 export const ownOnly = (column: string) =>
   `sum(ko.${column}) FILTER (WHERE ka.depth = 0)`;
 
-/** `db.execute` returns a pg `QueryResult`; older drivers hand back the array. */
 export const projectionRows = <T>(result: unknown): T[] => {
   if (Array.isArray(result)) return result as T[];
   if (result && typeof result === "object" && "rows" in result) {

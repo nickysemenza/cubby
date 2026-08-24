@@ -312,8 +312,6 @@ describe("product ⟷ product component links (kit composition)", () => {
       ]);
       expect(rows).toHaveLength(3);
 
-      // One product, two parents — the pair identifies the row, which is why
-      // the UI keys child rows by parent+component rather than by product.
       const sharedRows = rows.filter((r) => r.product.id === shared.id);
       expect(sharedRows).toHaveLength(2);
       expect(sharedRows.map((r) => r.parentProductId).sort()).toEqual(
@@ -374,9 +372,6 @@ describe("product ⟷ product component links (kit composition)", () => {
         [detached.entityId],
         ctx.actor,
       );
-      // Deleting a component product is refused while a live edge points at
-      // it, so the edge has to go first — which is exactly why the edge-level
-      // predicate is sufficient for the filter and this count.
       await detachProductComponents(
         ctx.db,
         kit.entityId,
@@ -418,7 +413,6 @@ describe("product ⟷ product component links (kit composition)", () => {
         ctx.actor,
       );
 
-      // A lists B, B lists C — individually acyclic, two hops deep.
       await attachProductComponents(
         ctx.db,
         a.entityId,
@@ -446,7 +440,6 @@ describe("product ⟷ product component links (kit composition)", () => {
         cause: { reason: "PRODUCT_COMPONENT_CYCLE" },
       });
 
-      // The refused attach wrote nothing.
       expect(await livePairs(c.entityId)).toHaveLength(0);
     });
 
@@ -652,7 +645,6 @@ describe("product ⟷ product component links (kit composition)", () => {
         ctx.actor,
       );
 
-      // Two live Expenses on the kit itself — the component carries neither.
       await insertWithShortcode(ctx.db, "expense", {
         name: "Kit deposit",
         cost: 100,

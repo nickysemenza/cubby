@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { recipeExportSearchSchema } from "./recipe-export-search";
+import { recipeExportSearchSchema } from "./-recipe-export-search";
 
 describe("recipe export format contract", () => {
   it("accepts the plain Read sheet with scaling", () => {

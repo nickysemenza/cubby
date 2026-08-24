@@ -96,11 +96,8 @@ describe("bulkProcessInventoryEntries staleness guard", () => {
     // instead of silently making the `>` comparison ambiguous.
     const loaded = await readEntry(first.id);
     if (!loaded) throw new Error("seed entry missing");
-    // Subtract 1 ms so first.updatedAt > loadedAt is guaranteed even if
-    // sneakedIn gets the same millisecond timestamp as first.
     const loadedAt = new Date(loaded.at.getTime() - 1);
 
-    // Another surface adds an entry after the snapshot was loaded.
     const sneakedIn = await addEntry(locationEntityId, "sneaked");
 
     // Submitting the stale snapshot (only the original entry) would delete-on-omit
@@ -115,7 +112,6 @@ describe("bulkProcessInventoryEntries staleness guard", () => {
       ),
     ).rejects.toThrow(/changed since/i);
 
-    // The sneaked-in entry survives (the throw happened before the delete pass).
     expect((await readEntry(sneakedIn.id))?.deletedAt).toBeNull();
   });
 
@@ -141,7 +137,6 @@ describe("bulkProcessInventoryEntries staleness guard", () => {
     const { locationEntityId, first } = await seedLocation("NoGuard");
     const other = await addEntry(locationEntityId, "other");
 
-    // No loadedAt → no staleness check; the omitted entry is deleted as before.
     await bulkProcessInventoryEntries(
       ctx.db,
       locationEntityId,

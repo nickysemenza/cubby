@@ -84,8 +84,6 @@ import { loadProductPricing } from "~/server/repo/product/pricing";
 import { loadProjectDateWindows } from "~/server/repo/project/subtree";
 import { buildTimelineGates } from "~/server/repo/project/tools";
 
-// ProductWithBetterUpcData is re-exported from the package barrel for the
-// Problems-page components that import it from there.
 export type { ProductWithBetterUpcData };
 
 type ProductWithUpcGapCandidate = {
@@ -98,39 +96,7 @@ type ProductWithUpcGapCandidate = {
   hasImage: boolean;
 };
 
-/**
- * NOT convertible to a saved view, and the reason is the safety property rather
- * than the predicate.
- *
- * The predicate itself is expressible — it's six `notExists` over incoming
- * edges, and the product list already carries presence filters for most of
- * them. What a view cannot carry is the weld: `PRODUCT_RETAINING_NOT_EXISTS` is
- * a `Record<ProductRetainingEdgeKey, ...>` derived from `PRODUCT_EDGE_ROLES`,
- * so adding a retaining edge is a COMPILE ERROR until it is wired in here. A
- * view's `filters` array is plain data — a new retaining edge would simply not
- * be checked, and this section is the one that offers a one-click Delete.
- * Over-reporting here is executable data loss, not noise.
- *
- * Converting would trade a compile-time guarantee for a filter list somebody
- * has to remember to update. Keep the detector.
- */
-/**
- * Correlated `notExists` builder per retaining edge, keyed off
- * `ProductRetainingEdgeKey` (derived from `PRODUCT_EDGE_ROLES`, see
- * `~/server/repo/product/edge-roles`). `Record` over that type requires an
- * entry for every acquisition/history edge, so adding one to
- * `PRODUCT_EDGE_ROLES` is a compile error here until it's wired up — mirroring
- * `PRODUCT_RETAINING_DEPENDENTS` in `product/crud.ts`'s `deleteProducts`,
- * which reads the same map to build a different shape (`inArray` fetch +
- * `assertNoDependents`) over the same retaining edges. That's the guarantee this
- * file replaces a prose "must agree on both" comment with: the *set* of
- * edges can't drift between the two consumers, even though their SQL does.
- *
- * Each builder stays a literal `.from(<table>)` (not a generic `column.table`
- * walk) on purpose — `scripts/check-soft-delete-filters.ts` matches incoming
- * edges by literal table identifier, so a fully-generic loop here would be
- * invisible to that guard.
- */
+/** Orphan suggestions are not a saved predicate: delete eligibility must use the canonical incoming-edge policy. */
 const PRODUCT_RETAINING_NOT_EXISTS: Record<
   ProductRetainingEdgeKey,
   (dbClient: DrizzleClient) => SQL
@@ -229,29 +195,7 @@ const PRODUCT_RETAINING_NOT_EXISTS: Record<
     ),
 };
 
-// Find products nothing meaningful points at — no live inventory, expense,
-// task subject, or ingredient link. This drives a one-click Delete on the
-// Problems page, so a false positive here is executable data loss, not noise.
-//
-// Two distinct traps, both of which this predicate got wrong at some point:
-//
-//  1. *Liveness* — the `notDeleted(...)` inside each subquery is load-bearing:
-//     a soft-deleted row still satisfies EXISTS, so a product whose inventory
-//     was deleted (rather than never created) stays invisible — the common
-//     case, since emptying a shelf soft-deletes instead of removing. That blind
-//     spot hid 18 of the 20 genuinely-uninventoried products.
-//
-//  2. *Completeness* — Product has several incoming FK edges, and checking only
-//     some of them yields a confident wrong answer. Omitting `expense` made 32
-//     of 40 flagged "orphans" false positives: a tool that was bought, logged in
-//     the ledger, and later sold looks exactly like one that was never real.
-//     Note the soft-delete guard script can catch (1) but by construction cannot
-//     catch (2) — a missing subquery is invisible to it.
-//
-// Inventory/expenses prove acquisition; a task subject proves the product is
-// still part of a useful work history. Those disqualify it. Metadata edges
-// (productExternalId, productUnitMappings, productImage) deliberately don't:
-// an ASIN or a conversion says nothing about whether the thing was ever owned.
+/** Orphan candidates have no live evidence; deletion remains a transactional canonical-policy decision. */
 export const findOrphanedProducts = async (
   db: Database,
 ): Promise<OrphanedProduct[]> => {
@@ -270,11 +214,6 @@ export const findOrphanedProducts = async (
       and(
         notDeleted(product),
         isNull(product.ingredientId),
-        // Allowlist, not `!== "metadata"`: the roles are shared vocabulary now,
-        // so excluding one role would silently promote every *other* new role
-        // (e.g. `media`, which `ProductImage.productId` carries) into a
-        // retaining edge and stop this detector reporting any product with a
-        // photo. See `isRetainingEdgeKey`'s file doc.
         ...(
           Object.keys(PRODUCT_EDGE_ROLES) as Array<
             keyof typeof PRODUCT_EDGE_ROLES
@@ -367,18 +306,6 @@ export const loadSoldButStockedPresenterTotals = async (
   );
 };
 
-/**
- * Recorded tool→project uses that the ownership timeline says are impossible.
- *
- * The `trade_match` suggestion lane shipped without consulting ownership dates,
- * so an old project's candidate pool was the present-day tool shelf. Every read
- * and write path now applies `toolTimelineConflict`; this reports the edges
- * that predate that gate (four on production, all on one renovation whose
- * explicit end date is a year before the tools were bought).
- *
- * Uses the exact same inputs as the gate — same fold, same ownership loader,
- * same predicate — so a row here is a row the UI would refuse to create today.
- */
 export const findToolsUsedOutsideOwnership = async (
   db: Database,
   options: { today?: string } = {},
@@ -449,57 +376,7 @@ export const findToolsUsedOutsideOwnership = async (
   );
 };
 
-// Two Product rows for one physical SKU — the thing `mergeProducts` exists to
-// fix. Nothing on the write path can prevent it: `Product_name_manufacturer_key`
-// only stops an EXACT repeat, and two retailer importers naturally spell the
-// same item differently ("DeWalt DCD791D2" vs "DEWALT 20V MAX XR Drill Kit").
-//
-// **The signal is `(manufacturer, model)` with external ids from different
-// sources**, and the reason it is worth encoding rather than guessing is that it
-// was measured: on the then-2,472-product catalog it found all 5 real duplicates
-// with ~6 false positives, and every false positive was a legitimate variant
-// that a distinct identifier separates. Two rows carrying the same maker part
-// number, entered from two different retailers, are one thing.
-//
-// Those numbers are the RECORD OF THE CHOICE, not a current reading. The
-// catalog is 5,708 live products as of 2026-08-22 and the detector flags
-// nothing — the duplicates that measurement found have since been merged.
-// Re-measured when barcodes became `gtin` identifier rows (PR #853), because
-// that makes `gtin` count toward the "different sources" gate below and could
-// have widened recall: groups reaching suppression and groups flagged were
-// identical with and without it. If you change the gate or the suppression,
-// re-measure rather than reasoning from these figures.
-//
-// **Trigram name similarity was near-useless here and must not be re-tried.**
-// The same measurement that validated the model key rejected the fuzzy one:
-// product names are dominated by size/colour/pack variants ("... 4.5in", "...
-// 2-Pack", "... Blue"), so the score tracks the shared product family rather
-// than the part that distinguishes two rows — exactly the failure
-// `detectors-label-variants.ts` records for vendor names, one level down. A
-// model number is an exact key; use it.
-//
-// The false-positive class is suppressed with positive evidence of distinctness,
-// never with a similarity threshold:
-//
-//  *Distinct identifiers.* Both rows filling the SAME (source, kind) slot with
-//  different values is the issuer itself saying they are two products — a
-//  retailer with two SKUs, or a manufacturer with two barcodes. They cannot
-//  fill it with the same value: the global `(source, kind, externalId)` unique
-//  index forbids it, so a shared slot is always evidence of difference, never
-//  of sameness.
-//
-//  Barcodes used to be a SECOND, separate rule, because `Product.upc` was a
-//  scalar with its own unique index. They are `gtin` identifier rows now and
-//  fall out of the rule above — but only because they are stored in ONE
-//  canonical encoding. Under the old per-length kinds, `077089850017` and
-//  `0077089850017` were different slots, and this rule would have read one
-//  barcode each, found no conflict, and let a real duplicate through. That is
-//  not hypothetical: it is exactly the pair `Product_upc_key` missed.
-//
-// Suppression is per GROUP, not per pair: one distinguishable member is enough
-// to make the whole cluster a variant family rather than a duplicate, which is
-// the conservative direction for a list a human acts on with a destructive
-// merge.
+/** Name variants are merge suggestions only: candidates must not share live evidence and never auto-merge. */
 export const findDuplicateProductIdentities = async (
   db: Database,
 ): Promise<DuplicateProductIdentity[]> => {
@@ -535,9 +412,6 @@ export const findDuplicateProductIdentities = async (
     .having(sql`count(*) > 1`)
     .as("duplicate_product_identity_ascii_groups");
 
-  // Returning every model for these manufacturers is intentionally broader
-  // than the final detector: it guarantees a Unicode-normalized model and its
-  // otherwise-ASCII peer arrive together for the canonical JS grouping.
   const manufacturersWithNonAsciiModels = dbClient
     .select({
       manufacturerKey: manufacturerKey.as("manufacturerKey"),
@@ -648,8 +522,6 @@ export const findDuplicateProductIdentities = async (
   for (const group of groups.values()) {
     if (group.length < 2) continue;
 
-    // "External ids from different sources": at least two members carry
-    // identifiers at all, and between them they name more than one source.
     const withIds = group.filter(
       (row) => (byProduct.get(row.id) ?? []).length > 0,
     );
@@ -661,7 +533,6 @@ export const findDuplicateProductIdentities = async (
     );
     if (sources.length < 2) continue;
 
-    // Positive evidence of distinctness — see the rule above.
     const bySlot = new Map<string, Set<string>>();
     for (const row of group) {
       for (const id of byProduct.get(row.id) ?? []) {
@@ -882,8 +753,6 @@ export const loadProductsForCoverage = async (
   const pricing = await loadProductPricing(db, rows, {
     wholeCatalog: productIds == null,
   });
-  // Carried on the row because `foodLookupParamFromProduct` resolves the USDA
-  // link from it, and the service runs that over this whole scan.
   const gtins = await loadPrimaryGtins(
     db,
     rows.map((row) => row.id),
@@ -895,27 +764,7 @@ export const loadProductsForCoverage = async (
   }));
 };
 
-/**
- * DB-only prefilter for the title-derived unit-size proposals: live, non-misc
- * products with NO conversion edge whose name plausibly states a size.
- *
- * ⚠️ THE SIZE PREDICATE IS LOAD-BEARING FOR COST, NOT FOR CORRECTNESS. Without
- * it this hands every mapping-less product (~5,500 rows) to JS to be parsed —
- * the exact shape that took the Worker down once: `findStaleIngredientParses`
- * re-parsed ~4,000 recipe lines through WASM on every Problems load and
- * produced p99 CPU ~38s with OOM kills, and the post-mortem found the heap
- * pressure was **JS-side row marshalling, not the WASM crate**. Filtering in
- * Postgres cuts the crossing to ~1,500.
- *
- * ⚠️ It MUST stay a strict SUPERSET of `proposeSizeFromTitle`'s own matching.
- * It exists only to avoid hauling obviously-sizeless rows across the boundary;
- * `proposeSizeFromTitle` remains the sole authority on what a title says and
- * re-checks every row this returns. Broadening it is always safe; narrowing it
- * silently hides candidates.
- *
- * Same repo/service split as `findProductsWithUpcGaps`: the repo identifies
- * candidates, the service builds the proposal.
- */
+/** Title-size proposals use the shared grammar only to narrow candidates; canonical costing remains authoritative. */
 export const findProductsWithoutUnitMappings = async (
   db: Database,
 ): Promise<
@@ -938,25 +787,7 @@ export const findProductsWithoutUnitMappings = async (
     .where(
       and(
         notDeleted(product),
-        // The unit spellings come from the GRAMMAR (`wasm.size_unit_aliases()`,
-        // via `sizeUnitAlternation`), not from a list kept here. When they were
-        // hand-copied this predicate carried singular spellings only, and
-        // Postgres's `\M` word-end anchor then rejected "5 pounds" on the
-        // trailing "s" — rows the parser would have accepted never reached it.
-        //
-        // Matching the parser's vocabulary exactly is what keeps this a
-        // superset: `~*` is case-insensitive here, while the parser narrows
-        // single-letter units to lowercase. Looser than the parser in every
-        // other respect too — no fraction, pack, multiplier or compatibility
-        // exclusion and no unit-kind check. All of those are the refinement's
-        // job.
-        //
-        // ⚠️ `[[:space:]]*`, not `[ ]?`. The parser separates the digits from
-        // the unit with `\s*` — ANY run of ANY whitespace — so the narrower
-        // form dropped `"Bag of Sugar, 5  lb"` (two spaces) and any tab-
-        // separated title: accepted by `proposeSizeFromTitle`, never
-        // shortlisted, therefore never proposed. Same silent-narrowing failure
-        // as the singular-spellings bug above, one character wide.
+        // Derive unit spellings from the WASM grammar; hand-maintained SQL aliases drifted from parser semantics.
         sql.raw(
           `"Product"."name" ~* '[0-9][[:space:]]*(${sizeUnitAlternation()})\\M'`,
         ),

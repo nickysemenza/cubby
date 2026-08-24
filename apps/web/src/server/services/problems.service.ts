@@ -1,18 +1,4 @@
-/**
- * Problems Service
- *
- * Orchestrates the Problems-page detectors. This is the layer that mixes repos
- * with other services:
- * - USDA enrichment (batchEnrichWithFood) for the coverage / islanding detectors
- * - cross-entity deletes (products + ingredients) with audit logging
- * - the re-parse mutation (find-or-create ingredient + transactional writes)
- * - the full findAllProblems / findMaintenanceCounts scans that fan out over the
- *   repo-layer detectors
- *
- * Pure detection/query helpers (all DB + WASM access) live in
- * ~/server/repo/problems; this service composes them — it never touches the DB
- * directly (enforced by the services-layer noRestrictedImports rule).
- */
+/** Problems service composes detector repos and cross-entity services without direct database access. */
 
 import type { ActorContext } from "@cubby/schemas/context";
 import {
@@ -155,8 +141,6 @@ const findProductCoverageProblems = async (
   productsWithIslandedMappings: ProductWithIslandedMappings[];
   projection: ProductConversionCoverageProjection[];
 }> => {
-  // One scan, a superset of both detectors' needs: all non-deleted products with
-  // their stored mappings + the linked ingredient's N/A opt-outs.
   const products = await loadProductsForCoverage(db);
 
   // Candidate sets are pure DB/WASM (no network). Partial coverage wants
@@ -185,9 +169,6 @@ const findProductCoverageProblems = async (
       wasm.detect_unit_mapping_islands(p.unitMappings).length >= 2,
   );
 
-  // One USDA enrichment over the union of both candidate sets (the client memo
-  // dedupes the overlap so each food is fetched once), then synthesize each
-  // product's effective mappings once, keyed by id, for both detectors.
   const toEnrich = uniqBy(
     [...partialCandidates, ...islandedCandidates],
     (p) => p.id,
@@ -453,8 +434,6 @@ export const findMaintenanceCounts = async (
     staleRecipeTotals: r.staleRecipeTotals,
     cullablePendingImages: r.cullablePendingImages,
     unreferencedImages: r.unreferencedImages,
-    // Uncapped, unlike the Problems section's sampled item rows — this is what
-    // the auto-fix button counts.
     entitiesMissingEmbeddings: r.entitiesMissingEmbeddings,
   };
 };
@@ -475,8 +454,6 @@ export const dryRunReparse = async (
   return { wouldChange: stale.length, total };
 };
 
-// Dry run for "Prune unused aliases": how many aliases would be stripped, across
-// how many ingredients.
 export const dryRunPruneAliases = async (
   db: Database,
 ): Promise<{ wouldPrune: number; ingredients: number }> => {
@@ -551,18 +528,12 @@ const diagnosticItems = async <T extends readonly unknown[]>(
   return { ...result, items: result.items as T };
 };
 
-/** Run exact entity Problems with a caller-selected request-local bound. */
 const runExactProblemPages = async (
   db: Database,
   keys: readonly ProblemKey[],
   options?: {
     projectionFreshness?: ProductConversionCoverageFreshness;
     concurrency?: number;
-    /**
-     * Work a derived Problem's diagnostic may reuse instead of recomputing.
-     * Lets a lane compute an expensive shared input (e.g. the attention rules)
-     * once and hand it to every key that needs it.
-     */
     diagnostic?: DiagnosticRunOptions;
   },
 ): Promise<Partial<Record<ProblemKey, ExactProblemPage>>> => {
@@ -970,11 +941,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
             db,
             "partially-imported-cookbooks",
           ),
-        // One grouped scan of the product-linked Expense rows, filtered down to
-        // the offenders by a HAVING rather than in JS.
-        // One scan of the ~90 usage edges plus the whole-tree date fold. Cheap
-        // enough for this group; the fold is the same two queries
-        // `projectToolMatrix` already runs per page load.
         toolsUsedOutsideOwnership: () =>
           diagnosticItems<ProblemsFast["toolsUsedOutsideOwnership"]>(
             db,
@@ -985,8 +951,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
             db,
             "orphaned-entity-embeddings",
           ),
-        // One UNION across searchable entity tables, with its exact count
-        // carried by a window — one round trip rather than one per type.
         entitiesMissingEmbeddings: () =>
           diagnosticItems<ProblemsFast["entitiesMissingEmbeddings"]>(
             db,
@@ -1254,7 +1218,6 @@ export const findCoverageProblems = async (
   };
 };
 
-// UPC-lookup network detector.
 const findProductsWithBetterUpcData = async (
   db: Database,
   upcLookupClient: UPCLookupClient,
@@ -1300,17 +1263,10 @@ type TrackerEntityProblemKey = Exclude<
   "projectsWithDateDrift"
 >;
 
-/** The rule each tracker key selects, derived from the schema's own map. */
 const TRACKER_TYPE_BY_KEY = Object.fromEntries(
   Object.entries(TRACKER_PROBLEM_KEY_BY_TYPE).map(([type, key]) => [key, type]),
 ) as Record<ProblemKey, ProjectAttentionType>;
 
-/**
- * The attention rows, keyed the way `attentionKey` keys them for rules that
- * emit at most one row per entity. `date_window_drift` is excluded because it
- * can emit two rows per project — it is served by its own derived page, which
- * carries the discriminator.
- */
 const indexAttentionItems = (
   items: readonly ProjectAttentionItem[],
 ): Map<string, ProjectAttentionItem> =>
@@ -1400,8 +1356,6 @@ export const findTrackerProblems = async (
       page("blockedWorkProjects"),
       index,
     ),
-    // This remains derived because one project may produce two date-window
-    // rows.  Its typed adapter computes the complete relation before sampling.
     projectsWithDateDrift: page("projectsWithDateDrift")
       .items as ProjectAttentionItem[],
     sectionTotals: {
@@ -1421,7 +1375,6 @@ export const findUpcProblems = async (
   } = await findProductsWithBetterUpcData(db, upcLookupClient);
   return {
     productsWithBetterUpcData,
-    // Proposal membership is materialized by UPC and can be counted exactly.
     sectionTotals: {
       productsWithBetterUpcData: count,
     },

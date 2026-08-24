@@ -178,10 +178,8 @@ describe("wishList price ranges", () => {
 
     expect(rowPrices(sawWish.id)).toEqual(expect.arrayContaining([200, 650]));
     expect(rowPrices(sawWish.id)).toHaveLength(2);
-    // A lone candidate is both the high and the low.
     expect(rowPrices(dominoWish.id)).toEqual([425]);
 
-    // Footer totals: sum of each row's low, and of each row's high.
     expect(sums.priceLow).toBeCloseTo(200 + 425, 2);
     expect(sums.priceHigh).toBeCloseTo(650 + 425, 2);
   });

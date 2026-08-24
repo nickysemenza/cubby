@@ -27,7 +27,6 @@ export function FinancialAccountDetail({
     id: account.id,
     name: account.name,
     entity: "financialAccount",
-    entityLabel: "Account",
     mutationOptions: api.financialAccount.delete.mutationOptions,
     redirectTo: "/financial-accounts",
   });
