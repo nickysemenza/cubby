@@ -5,14 +5,14 @@ import { translateDatabaseError } from "~/server/errors/db-errors";
 import { observeRequest } from "~/server/observed-request";
 import { createRequestContext, requireActor } from "~/server/request-context";
 
-export type PublicEntityTransportError = {
+type PublicEntityTransportError = {
   message: string;
   code?: string;
   reason?: string;
   blockers?: PublicImpactItem[];
 };
 
-export type EntityReadTransportResult<T> =
+type EntityReadTransportResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: PublicEntityTransportError };
 
@@ -44,6 +44,7 @@ function publicFailure(
 
 type AuthenticatedContext = ReturnType<typeof requireActor>;
 
+/** @lintignore Dynamically imported by the client-safe Start transports. */
 export async function runEntityReadTransport<T>(options: {
   operation: "entity.list" | "entity.detail" | "entity.filterOptions";
   input: unknown;

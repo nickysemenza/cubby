@@ -80,14 +80,11 @@ describe("literal entity generator", () => {
     expect(artifact("entity-kernel-entities.gen.ts")).toContain(
       'alpha:{actions:["get","list","create","update"]',
     );
-    expect(artifact("entity-runtime-ports.gen.ts")).toContain(
-      'repository:{module:"~/server/example",export:"exampleRepository"}',
-    );
-    expect(artifact("entity-runtime-ports.gen.ts")).toContain(
-      'relationMutation:{attach:{module:"~/server/example",export:"attachExample"}',
-    );
-    expect(artifact("entity-runtime-ports.gen.ts")).toContain(
+    expect(artifact("entity-kernel-bindings.gen.ts")).toContain(
       'typeof import("~/server/example")["exampleRepository"]',
+    );
+    expect(artifact("entity-kernel-bindings.gen.ts")).toContain(
+      'typeof import("~/server/example")["attachExample"]',
     );
   });
 

@@ -946,9 +946,6 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
       }];
     }),
   );
-  const serverPortRosters = Object.fromEntries(
-    entities.map((entity) => [entity.key, entity.ports]),
-  );
   const portExportChecks = [
     ...new Map(
       entities.flatMap((entity) => {
@@ -1052,8 +1049,8 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         `${listTypeImportSource}\n\n` +
         `export const listEntities = ${compactLiteral(browserCrudEntities)} as const;\n` +
         "export type ListEntity = (typeof listEntities)[number];\n\n" +
-        'export type EntityListSort = { orderBy: string; direction: "asc" | "desc" };\n' +
-        "export type EntityListInput = {\n" +
+        'type EntityListSort = { orderBy: string; direction: "asc" | "desc" };\n' +
+        "type EntityListInput = {\n" +
         "  filters: Record<string, unknown>;\n" +
         "  sort?: EntityListSort | EntityListSort[];\n" +
         "  pagination?: { pageIndex: number; pageSize: number };\n" +
@@ -1062,7 +1059,7 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         "export type EntityListInputByEntity = {\n" +
         "  [E in ListEntity]: EntityListInput & { entity: E };\n" +
         "};\n\n" +
-        "export type EntityListMeta = {\n" +
+        "type EntityListMeta = {\n" +
         "  pageIndex: number;\n" +
         "  pageSize: number;\n" +
         "  totalCount: number;\n" +
@@ -1143,25 +1140,6 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
       source:
         generatedHeader +
         'import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";\n\n' +
-        `${runtimeAdapterImportSource}\n\n` +
-        "// biome-ignore format: generated runtime assembly stays one entity per line.\n" +
-        `export const ENTITY_KERNEL_BINDINGS = {\n${runtimeBindings}\n} as const satisfies Record<EntityKernelEntity, unknown>;\n`,
-    },
-    {
-      relativePath: "apps/web/src/server/generated/entity-runtime-ports.gen.ts",
-      source:
-        generatedHeader +
-        'import type { Entity } from "@cubby/schemas/entity";\n\n' +
-        "type EntityPortSourceRef = { module: string; export: string };\n" +
-        "type EntityServerPortRoster = {\n" +
-        "  repository: EntityPortSourceRef | null;\n" +
-        "  references: { label: EntityPortSourceRef | null; resolver: EntityPortSourceRef | null };\n" +
-        "  filters: EntityPortSourceRef | null;\n" +
-        "  search: { projection: EntityPortSourceRef | null; semanticText: EntityPortSourceRef | null; dependentRefresh: EntityPortSourceRef | null };\n" +
-        "  lifecycle: { policy: EntityPortSourceRef | null; runtime: EntityPortSourceRef | null };\n" +
-        "  relationMutation: { attach: EntityPortSourceRef | null; detach: EntityPortSourceRef | null };\n" +
-        "  readonly __exportChecks?: EntityPortExportChecks;\n" +
-        "};\n\n" +
         "/** Each literal module/export source reference is checked without a runtime import. */\n" +
         `type EntityPortExportChecks = readonly [${portExportChecks
           .map(
@@ -1169,8 +1147,9 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
               `typeof import(${JSON.stringify(ref.module)})[${JSON.stringify(ref.export)}]`,
           )
           .join(", ")}];\n\n` +
-        "// biome-ignore format: generated runtime port roster stays one entity per line.\n" +
-        `export const entityServerPortRosters = ${compactLiteral(serverPortRosters)} as const satisfies Record<Entity, EntityServerPortRoster>;\n`,
+        `${runtimeAdapterImportSource}\n\n` +
+        "// biome-ignore format: generated runtime assembly stays one entity per line.\n" +
+        `export const ENTITY_KERNEL_BINDINGS = {\n${runtimeBindings}\n} as const satisfies Record<EntityKernelEntity, unknown> & { readonly __portExportChecks?: EntityPortExportChecks };\n`,
     },
   ];
 };

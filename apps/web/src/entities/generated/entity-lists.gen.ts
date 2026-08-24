@@ -32,8 +32,8 @@ export const listEntities = [
 ] as const;
 export type ListEntity = (typeof listEntities)[number];
 
-export type EntityListSort = { orderBy: string; direction: "asc" | "desc" };
-export type EntityListInput = {
+type EntityListSort = { orderBy: string; direction: "asc" | "desc" };
+type EntityListInput = {
   filters: Record<string, unknown>;
   sort?: EntityListSort | EntityListSort[];
   pagination?: { pageIndex: number; pageSize: number };
@@ -43,7 +43,7 @@ export type EntityListInputByEntity = {
   [E in ListEntity]: EntityListInput & { entity: E };
 };
 
-export type EntityListMeta = {
+type EntityListMeta = {
   pageIndex: number;
   pageSize: number;
   totalCount: number;

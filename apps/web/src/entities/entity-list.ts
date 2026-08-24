@@ -71,7 +71,7 @@ type EntityListParams<E extends ListEntity> = Omit<
   "entity"
 >;
 
-export async function getEntityList<E extends ListEntity>(options: {
+async function getEntityList<E extends ListEntity>(options: {
   data: EntityListInputByEntity[E];
   signal?: AbortSignal;
 }): Promise<EntityListResultByEntity[E]> {
@@ -82,13 +82,10 @@ export async function getEntityList<E extends ListEntity>(options: {
   });
 }
 
-export const entityListQueryKey = <E extends ListEntity>(
+const entityListQueryKey = <E extends ListEntity>(
   entity: E,
   input: EntityListParams<E>,
 ) => [[entity, "list"], { input }] as const;
-
-export const entityListRootKey = <E extends ListEntity>(entity: E) =>
-  [[entity, "list"]] as const;
 
 export function entityListQueryOptions<E extends ListEntity>(
   entity: E,

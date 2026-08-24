@@ -32,7 +32,7 @@ const getEntityFilterOptionsTransport = createServerFn({ method: "POST" })
     });
   });
 
-export async function getEntityFilterOptions(options: {
+async function getEntityFilterOptions(options: {
   data: FilterOptionsInput;
   signal?: AbortSignal;
 }): Promise<FilterOptionsOut> {

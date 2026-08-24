@@ -45,7 +45,7 @@ const listFields = {
   groupBy: z.string().min(1).optional(),
 };
 
-export const entityQueryCommandSchema = z.discriminatedUnion("action", [
+const entityQueryCommandSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("get"),
     entity: entityKernelEntitySchema,
