@@ -1,7 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
-import { financialAccountFilterFields } from "@cubby/schemas/financial-account";
-import { financialTransactionFilterFields } from "@cubby/schemas/financial-transaction";
 import {
   unsafeCookbookId,
   unsafeFinancialAccountShortcode,
@@ -13,25 +11,11 @@ import {
   unsafeTaskId,
   unsafeVendorId,
 } from "@cubby/schemas/identifiers";
-import { imageFilterFields } from "@cubby/schemas/image";
-import { ingredientFilterFields } from "@cubby/schemas/ingredient";
-import { inventoryFilterFields } from "@cubby/schemas/inventory";
-import { locationFilterFields } from "@cubby/schemas/location";
-import { mealFilterFields } from "@cubby/schemas/meal";
-import { productFilterFields } from "@cubby/schemas/product";
-import {
-  expenseFilterFields,
-  projectFilterFields,
-  taskFilterFields,
-} from "@cubby/schemas/project";
-import { purchaseFilterFields } from "@cubby/schemas/purchase";
-import { recipeFilterFields, recipeSourceValues } from "@cubby/schemas/recipe";
+import { recipeSourceValues } from "@cubby/schemas/recipe";
 import {
   relatedFilterPrefix,
   relatedViewRegistry,
 } from "@cubby/schemas/related-view";
-import { vendorFilterFields } from "@cubby/schemas/vendor";
-import { wishFilterFields } from "@cubby/schemas/wish";
 import { uniq } from "es-toolkit";
 import type { FilterConfig } from "~/app/_components/data-table/columnHelpers";
 import {
@@ -89,6 +73,7 @@ import {
   nullableSentinelOptions,
   presenceFilterOptions,
 } from "./filters";
+import { entityFilterFieldMaps } from "./generated/entity-filter-fields.gen";
 
 export interface FilterSpec extends FilterSpecCore {
   placeholder: string;
@@ -342,25 +327,7 @@ const resolveCalories = (value: string | undefined) =>
         ? { caloriesTotalMin: 1000 }
         : {};
 
-export const entityFilterFieldMaps: Partial<
-  Record<Entity, Record<string, unknown>>
-> = {
-  financialAccount: financialAccountFilterFields,
-  financialTransaction: financialTransactionFilterFields,
-  expense: expenseFilterFields,
-  vendor: vendorFilterFields,
-  purchase: purchaseFilterFields,
-  task: taskFilterFields,
-  product: productFilterFields,
-  recipe: recipeFilterFields,
-  ingredient: ingredientFilterFields,
-  inventory: inventoryFilterFields,
-  location: locationFilterFields,
-  image: imageFilterFields,
-  meal: mealFilterFields,
-  project: projectFilterFields,
-  wish: wishFilterFields,
-};
+export { entityFilterFieldMaps };
 
 const auditFilterEntities = new Set<Entity>(
   (Object.entries(entityFilterFieldMaps) as [Entity, Record<string, unknown>][])

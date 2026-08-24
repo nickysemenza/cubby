@@ -50,6 +50,7 @@ export type EntityLiteral = Readonly<{
     | null;
   route: Readonly<{ basePath: string; detailParam?: string }> | null;
   filterUrlKeys: readonly string[];
+  filterSchema: SourceRef | null;
   ports: EntityPorts;
 }>;
 
@@ -316,7 +317,7 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
     ),
   };
   const filters = objectValue(required(object, "filters", context), `${context}.filters`);
-  exactKeys(filters, ["urlKeys"], `${context}.filters`);
+  exactKeys(filters, ["urlKeys", "schema"], `${context}.filters`);
   const rawFilterUrlKeys = required(filters, "urlKeys", `${context}.filters`);
   if (!Array.isArray(rawFilterUrlKeys)) {
     throw new LiteralSpecError(`${context}.filters.urlKeys must be an array.`);
@@ -327,6 +328,10 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
   if (new Set(filterUrlKeys).size !== filterUrlKeys.length) {
     throw new LiteralSpecError(`${context}.filters.urlKeys contains duplicates.`);
   }
+  const filterSchema =
+    filters.schema === undefined || filters.schema === null
+      ? null
+      : sourceRef(filters.schema, `${context}.filters.schema`);
   const routeValue = object.route;
   const route = routeValue === undefined || routeValue === null ? null : (() => {
     const value = objectValue(routeValue, `${context}.route`);
@@ -402,6 +407,7 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
     descriptor,
     route,
     filterUrlKeys,
+    filterSchema,
     ports,
   };
 };
@@ -831,6 +837,27 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
   const runtimeBindings = kernelEntities
     .map(({ key, ports }) => `  ${JSON.stringify(key)}: ${ports.repository?.export},`)
     .join("\n");
+  const filterFieldImports = new Map<string, Set<string>>();
+  for (const { filterSchema } of entities) {
+    if (filterSchema === null) continue;
+    const exports = filterFieldImports.get(filterSchema.module) ?? new Set<string>();
+    exports.add(filterSchema.export);
+    filterFieldImports.set(filterSchema.module, exports);
+  }
+  const filterFieldImportSource = [...filterFieldImports.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(
+      ([module, exports]) =>
+        `import { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
+    )
+    .join("\n");
+  const filterFieldBindings = entities
+    .flatMap(({ key, filterSchema }) =>
+      filterSchema === null
+        ? []
+        : [`  ${JSON.stringify(key)}: ${filterSchema.export},`],
+    )
+    .join("\n");
   const lifecycleFor = (entity: EntityLiteral) =>
     objectValue(
       required(entity.descriptor, "lifecycle", `${entity.key}.descriptor`),
@@ -1046,6 +1073,15 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         "};\n",
     },
     {
+      relativePath: "apps/web/src/entities/generated/entity-filter-fields.gen.ts",
+      source:
+        generatedHeader +
+        'import type { Entity } from "@cubby/schemas/entity";\n' +
+        `${filterFieldImportSource}\n\n` +
+        "// biome-ignore format: generated filter field assembly stays one entity per line.\n" +
+        `export const entityFilterFieldMaps: Partial<Record<Entity, Record<string, unknown>>> = {\n${filterFieldBindings}\n};\n`,
+    },
+    {
       relativePath: "apps/web/src/server/generated/entity-bindings.gen.ts",
       source:
         generatedHeader +
@@ -1179,7 +1215,7 @@ const formatSource = (root: string, artifact: EntityArtifacts): string => {
   return result;
 };
 
-const generatedName = /^(?:entity-literal-.+|entity-manifest-data|entity-inspector|entity-details|entity-lists|entity-bindings|entity-routes|entity-kernel-bindings|entity-kernel-entities|entity-runtime-ports|filter-search-fields|shortcode-registry)\.gen\.ts$/;
+const generatedName = /^(?:entity-literal-.+|entity-manifest-data|entity-inspector|entity-details|entity-lists|entity-filter-fields|entity-bindings|entity-routes|entity-kernel-bindings|entity-kernel-entities|entity-runtime-ports|filter-search-fields|shortcode-registry)\.gen\.ts$/;
 
 const findExtraArtifacts = async (root: string, artifacts: readonly EntityArtifacts[]) => {
   const expected = new Set(artifacts.map(({ relativePath }) => relativePath));
