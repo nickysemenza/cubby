@@ -37,7 +37,10 @@ let hash = "";
  * work within a lane count correctly without leaking setup/fixture SQL into a
  * measurement.
  */
-const queryMeasurement = new AsyncLocalStorage<{ count: number }>();
+const queryMeasurement = new AsyncLocalStorage<{
+  count: number;
+  statements: string[];
+}>();
 const QUERY_COUNTED = Symbol("test-query-counted");
 
 type QueryCountedClient = {
@@ -50,7 +53,12 @@ const countClientQueries = <T extends QueryCountedClient>(client: T): T => {
   const query = client.query.bind(client);
   client.query = (...args: unknown[]) => {
     const measurement = queryMeasurement.getStore();
-    if (measurement) measurement.count += 1;
+    if (measurement) {
+      measurement.count += 1;
+      const first = args[0] as { text?: string } | string | undefined;
+      const text = typeof first === "string" ? first : (first?.text ?? "");
+      measurement.statements.push(text.replace(/\s+/g, " ").slice(0, 160));
+    }
     return query(...args);
   };
   client[QUERY_COUNTED] = true;
@@ -95,10 +103,14 @@ const countPoolQueries = (pool: Pool): Pool => {
  */
 export async function countTestDbQueries<T>(
   run: () => Promise<T>,
-): Promise<{ result: T; queryCount: number }> {
-  const measurement = { count: 0 };
+): Promise<{ result: T; queryCount: number; statements: string[] }> {
+  const measurement = { count: 0, statements: [] as string[] };
   const result = await queryMeasurement.run(measurement, run);
-  return { result, queryCount: measurement.count };
+  return {
+    result,
+    queryCount: measurement.count,
+    statements: measurement.statements,
+  };
 }
 
 // Standard test IDs used across all tests

@@ -111,6 +111,25 @@ describe("findViewProblems", () => {
     // per card row would add ELEVEN here, not one. Widen this only with the
     // same kind of evidence — a tolerance that grows to absorb a real
     // regression is how this assertion stops meaning anything.
+    // TEMPORARY CI instrumentation (delta-2 reproduces only on CI): dump the
+    // statement multiset diff between the two measurements before asserting.
+    if (Math.abs(page.queryCount - one.queryCount) > 1) {
+      const tally = (list: string[]) => {
+        const m = new Map<string, number>();
+        for (const s of list) m.set(s, (m.get(s) ?? 0) + 1);
+        return m;
+      };
+      const a = tally(one.statements);
+      const b = tally(page.statements);
+      for (const [s, n] of b) {
+        const d = n - (a.get(s) ?? 0);
+        if (d !== 0)
+          console.error(`[query-diff] page${d > 0 ? "+" : ""}${d}× ${s}`);
+      }
+      for (const [s, n] of a) {
+        if (!b.has(s)) console.error(`[query-diff] one-only ${n}× ${s}`);
+      }
+    }
     expect(Math.abs(page.queryCount - one.queryCount)).toBeLessThanOrEqual(1);
   });
 
