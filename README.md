@@ -504,7 +504,7 @@ because it's a separate build target with a different runtime (sandboxed iframe,
 no React, no tRPC, no Tailwind). It doesn't deploy on its own: it builds to
 self-contained HTML that [server/mcp/apps/](apps/web/src/server/mcp/apps/)
 inlines and serves as `ui://` resources, driven off the manifest in
-[src/bundles.ts](apps/mcp-apps/src/bundles.ts) — the one place an app is
+[src/metadata.ts](apps/mcp-apps/src/metadata.ts) — the one place an app is
 declared. `scripts/ensure-mcp-apps.ts` gates apps/web's `dev`, `test`, and
 `build:cf`, rebuilding only when a source is newer than the bundles.
 

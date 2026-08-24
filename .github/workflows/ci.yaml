@@ -406,7 +406,7 @@ jobs:
             --reporter=github-actions
           )
           if [[ "$COVERAGE" == "true" ]]; then args+=(--coverage); fi
-          pnpm --dir apps/web test "${args[@]}"
+          pnpm --dir apps/web exec vitest run "${args[@]}"
       - name: Save web integration coverage
         if: needs.scope.outputs.coverage == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
