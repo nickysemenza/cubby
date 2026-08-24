@@ -13,7 +13,6 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
-import { createServerFn } from "@tanstack/react-start";
 import type { TRPCOptionsProxy } from "@trpc/tanstack-react-query";
 import * as React from "react";
 import {
@@ -32,7 +31,6 @@ import { useDebug } from "~/hooks/useDebug";
 import { useNavAuthed } from "~/hooks/useNavAuthed";
 import type { TRPCRouter } from "~/integrations/trpc/router";
 import { getClientAuthed, getGuardSession } from "~/lib/auth-guard";
-import { resolveBuildProvenance } from "~/lib/build-provenance";
 import { useFlag } from "~/lib/flags";
 import { scheduleIdlePreload } from "~/lib/lazy-preload";
 import { PerfProfiler } from "~/lib/perf/PerfProfiler";
@@ -67,17 +65,6 @@ interface MyRouterContext {
   trpc: TRPCOptionsProxy<TRPCRouter>;
 }
 
-const getBuildProvenance = createServerFn({ method: "GET" }).handler(
-  async () => {
-    const { getWorkerVersionMetadata } = await import("~/server/cf-env");
-    return resolveBuildProvenance({
-      versionTag: getWorkerVersionMetadata()?.tag,
-      fallbackBranch: __GIT_BRANCH__,
-      fallbackCommit: __GIT_COMMIT__,
-    });
-  },
-);
-
 export const Route = createRootRouteWithContext<MyRouterContext>()({
   // Resolve `isAuthed` for nav chrome (MainNav, BottomNav) + the child guards
   // (`/`, `_authenticated`). On the SERVER (SSR / direct + refresh loads) read
@@ -94,10 +81,6 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
     }
     return { isAuthed: getClientAuthed() };
   },
-  loader: () => getBuildProvenance(),
-  // A Worker version cannot change underneath a loaded document. Keep this
-  // root datum for the router lifetime instead of refetching it on navigation.
-  staleTime: Infinity,
   head: () => ({
     meta: [
       {
@@ -238,7 +221,6 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  const buildProvenance = Route.useLoaderData();
   const mainContentId = React.useId();
   const authed = useNavAuthed();
   const isWorkspaceRoute = useRouterState({
@@ -299,7 +281,6 @@ function RootComponent() {
       </a>
       {authed && isWorkspaceRoute ? (
         <AuthenticatedAppShell
-          buildProvenance={buildProvenance}
           mainContentId={mainContentId}
           onSearchClick={openCommandMenu}
           navigationProgress={<NavigationProgress />}
@@ -321,7 +302,7 @@ function RootComponent() {
           >
             {routeContent}
           </main>
-          <AppFooter provenance={buildProvenance} />
+          <AppFooter />
         </div>
       )}
       <BottomNav />

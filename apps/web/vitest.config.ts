@@ -76,6 +76,9 @@ const mcpContractTests = [
 export default defineConfig({
   define: {
     __GIT_COMMIT__: JSON.stringify(gitCommit),
+    __SOURCE_COMMIT__: JSON.stringify(gitCommit),
+    __SOURCE_BRANCH__: JSON.stringify("test"),
+    __BUILD_DATE__: JSON.stringify("2026-01-01T00:00:00.000Z"),
   },
   // https://github.com/Menci/vite-plugin-wasm#usage
   plugins: [wasmInlinedForVitest(), topLevelAwait()],

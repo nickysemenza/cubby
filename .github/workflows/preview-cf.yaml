@@ -68,7 +68,7 @@ jobs:
           pr_url="https://github.com/${{ github.repository }}/pull/${PR_NUMBER}"
           wrangler versions upload --config dist/server/wrangler.json \
             --var "COOKIE_DOMAIN:.nicky.workers.dev" \
-            --tag "pr-${PR_NUMBER}-${PR_HEAD_SHA}" \
+            --tag "pr-${PR_NUMBER}" \
             --message "${pr_url} @ ${PR_HEAD_SHA}" 2>&1 | tee upload.log
           url=$(grep -oE 'https://[a-z0-9-]+-cubby\.nicky\.workers\.dev' upload.log | head -1)
           echo "url=$url" >> "$GITHUB_OUTPUT"

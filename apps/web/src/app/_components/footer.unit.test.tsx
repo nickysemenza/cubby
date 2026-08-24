@@ -4,26 +4,19 @@ import { AppFooter } from "./footer";
 
 describe("AppFooter", () => {
   it("links only the displayed commit to its canonical GitHub page", () => {
-    render(
-      <AppFooter
-        buildDate="24 AUG 2026"
-        provenance={{
-          branch: "main",
-          commit: "f8d6c22",
-          commitUrl:
-            "https://github.com/nickysemenza/cubby/commit/f8d6c22e0c1571fe1f3951b58324824451364b23",
-        }}
-      />,
-    );
+    render(<AppFooter />);
 
-    expect(screen.getByText("main")).not.toHaveAttribute("href");
-    const commitLink = screen.getByRole("link", { name: "f8d6c22" });
+    expect(screen.getByText("test")).not.toHaveAttribute("href");
+    const commitLink = screen.getByRole("link", { name: __SOURCE_COMMIT__ });
     expect(commitLink).toHaveAttribute(
       "href",
-      "https://github.com/nickysemenza/cubby/commit/f8d6c22e0c1571fe1f3951b58324824451364b23",
+      `https://github.com/nickysemenza/cubby/commit/${__SOURCE_COMMIT__}`,
     );
     expect(commitLink).toHaveAttribute("target", "_blank");
     expect(commitLink).toHaveAttribute("rel", "noopener noreferrer");
-    expect(commitLink).toHaveAttribute("title", "View main@f8d6c22 on GitHub");
+    expect(commitLink).toHaveAttribute(
+      "title",
+      `View test@${__SOURCE_COMMIT__} on GitHub`,
+    );
   });
 });
