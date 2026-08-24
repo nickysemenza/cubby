@@ -228,8 +228,6 @@ export interface ParsedShortcode {
   type: ShortcodeType;
   /** Always the canonical form, even when `code` used a legacy prefix. */
   shortcode: string;
-  /** Just the 4-char body ("4K7M"), shared between legacy and canonical forms. */
-  id: string;
   /** Whether `code` arrived with a legacy single-letter prefix. */
   legacy: boolean;
 }
@@ -259,7 +257,6 @@ export function parseShortcode(code: string): ParsedShortcode | null {
   return {
     type,
     shortcode: `${SHORTCODE_PREFIX[type]}${body}`,
-    id: body,
     legacy: legacyType !== undefined,
   };
 }

@@ -1,7 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { QueryKey } from "@tanstack/react-query";
-import { entities, getSortableFields } from "~/entities/entities";
 import type { useTRPC } from "~/integrations/trpc/react";
 import { invalidatesFor } from "~/lib/query-keys";
 import {
@@ -21,7 +20,6 @@ type ListParams = {
 type QueryFactory = (api: Api, input: never) => unknown;
 
 interface EntityMutationContract {
-  invalidationKeys: readonly QueryKey[];
   create?: QueryFactory;
   update?: QueryFactory;
   delete?: QueryFactory;
@@ -30,14 +28,9 @@ interface EntityMutationContract {
 interface EntityQueryContract {
   list?: (api: Api, params: ListParams) => unknown;
   detail?: (api: Api, id: string) => unknown;
-  pickerSearch?: (api: Api, params: ListParams) => unknown;
 }
 
 interface EntityContract {
-  entity: BrowserRoutedEntity;
-  route: (typeof entities)[BrowserRoutedEntity]["routes"];
-  defaultSort: string;
-  sortableFields: readonly string[];
   canPreview: boolean;
   invalidationKeys: readonly QueryKey[];
   query: EntityQueryContract;
@@ -112,22 +105,12 @@ function kernelMutationOptions(
   };
 }
 
-export const standardEntities = generatedBrowserCrudEntities;
+const standardEntities = generatedBrowserCrudEntities;
 type StandardEntity = GeneratedBrowserCrudEntity;
 
-function standardContract(
-  entity: StandardEntity,
-  options?: {
-    pickerSearch?: EntityQueryContract["pickerSearch"];
-  },
-): EntityContract {
-  const { pickerSearch } = options ?? {};
+function standardContract(entity: StandardEntity): EntityContract {
   const invalidationKeys = invalidatesFor(entity);
   return {
-    entity,
-    route: entities[entity].routes,
-    defaultSort: entities[entity].list?.defaultSort ?? "createdAt",
-    sortableFields: getSortableFields(entity),
     canPreview: true,
     invalidationKeys,
     query: {
@@ -145,10 +128,8 @@ function standardContract(
           [[entity, "getByID"], { input: { id } }],
           (result) => result.item,
         ),
-      ...(pickerSearch ? { pickerSearch } : {}),
     },
     mutation: {
-      invalidationKeys,
       create: (api, callbacks) =>
         kernelMutationOptions(api, entity, "create", callbacks),
       update: (api, callbacks) =>
@@ -160,27 +141,12 @@ function standardContract(
 }
 
 const standardEntityContracts = Object.fromEntries(
-  standardEntities.map((entity) => [
-    entity,
-    standardContract(
-      entity,
-      entity === "product"
-        ? {
-            pickerSearch: (api, params) =>
-              api.product.search.queryOptions(listParams(params)),
-          }
-        : undefined,
-    ),
-  ]),
+  standardEntities.map((entity) => [entity, standardContract(entity)]),
 ) as Record<StandardEntity, EntityContract>;
 
 const entityContracts = {
   ...standardEntityContracts,
   image: {
-    entity: "image",
-    route: entities.image.routes,
-    defaultSort: entities.image.list?.defaultSort ?? "createdAt",
-    sortableFields: getSortableFields("image"),
     canPreview: true,
     invalidationKeys: invalidatesFor("image"),
     query: {
@@ -188,15 +154,10 @@ const entityContracts = {
       detail: (api, id) => api.image.getByID.queryOptions({ id }),
     },
     mutation: {
-      invalidationKeys: invalidatesFor("image"),
       delete: (api, input) => api.image.delete.mutationOptions(input),
     },
   },
   "usda-food": {
-    entity: "usda-food",
-    route: entities["usda-food"].routes,
-    defaultSort: entities["usda-food"].list?.defaultSort ?? "description",
-    sortableFields: getSortableFields("usda-food"),
     canPreview: true,
     invalidationKeys: invalidatesFor("usda-food"),
     query: {
@@ -204,15 +165,9 @@ const entityContracts = {
       detail: (api, id) =>
         api.usda.getByID.queryOptions({ id: fdcIdFromParam(id) }),
     },
-    mutation: {
-      invalidationKeys: invalidatesFor("usda-food"),
-    },
+    mutation: {},
   },
   cookbook: {
-    entity: "cookbook",
-    route: entities.cookbook.routes,
-    defaultSort: "title",
-    sortableFields: [],
     // Cookbooks are searchable, so a search-result row must open a preview
     // rather than a dead click. There is no cookbook getByID — the browse index
     // carries every field the preview needs, so `detail` warms that same query
@@ -223,9 +178,7 @@ const entityContracts = {
       list: (api) => api.recipe.listCookbooks.queryOptions(),
       detail: (api) => api.recipe.listCookbooks.queryOptions(),
     },
-    mutation: {
-      invalidationKeys: invalidatesFor("cookbook"),
-    },
+    mutation: {},
   },
 } satisfies Record<BrowserRoutedEntity, EntityContract>;
 

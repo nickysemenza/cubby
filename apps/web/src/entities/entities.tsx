@@ -594,15 +594,6 @@ const entityDefinitions = {
 /** Route unions are derived from the definitions so links cannot drift. */
 export type EntityDetailRoute =
   (typeof entityDefinitions)[BrowserRoutedEntity]["routes"]["detail"];
-export type EntityListRoute =
-  (typeof entityDefinitions)[BrowserRoutedEntity]["routes"]["list"];
-export type EntityNewRoute = {
-  [E in BrowserRoutedEntity]: (typeof entityDefinitions)[E]["routes"] extends {
-    new: infer TRoute extends string;
-  }
-    ? TRoute
-    : never;
-}[BrowserRoutedEntity];
 
 /** Browser presentation exists only for entities with browser routes. */
 export const entities = entityDefinitions;

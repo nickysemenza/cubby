@@ -116,7 +116,6 @@ describe("parseShortcode", () => {
     expect(parseShortcode(code)).toEqual({
       type: entity,
       shortcode: code,
-      id: code.slice(SHORTCODE_PREFIX[entity].length),
       legacy: false,
     });
   });
@@ -127,7 +126,6 @@ describe("parseShortcode", () => {
     expect(parseShortcode("P-4K7M")).toEqual({
       type: "product",
       shortcode: "PRD-4K7M",
-      id: "4K7M",
       legacy: true,
     });
     expect(parseShortcode("  L-4K7M  ")).toMatchObject({

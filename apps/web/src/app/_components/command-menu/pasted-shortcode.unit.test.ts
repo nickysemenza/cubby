@@ -13,7 +13,6 @@ describe("parsePastedShortcode", () => {
     ).toEqual({
       type: "product",
       shortcode: "PRD-4K7M",
-      id: "4K7M",
       legacy: false,
     });
   });
@@ -29,7 +28,6 @@ describe("parsePastedShortcode", () => {
     ).toEqual({
       type: "product",
       shortcode: "PRD-4K7M",
-      id: "4K7M",
       legacy: true,
     });
   });
