@@ -62,6 +62,20 @@ type Gate = {
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 const GATES: Gate[] = [
+  {
+    name: "entity:check",
+    command: "pnpm",
+    args: ["entity:check"],
+    weight: 3,
+    triggers: [
+      "scripts/entity-literal-generator.ts",
+      "scripts/entity-literals/",
+      "packages/schemas/src/generated/",
+      "apps/web/src/server/generated/",
+      "apps/web/src/entities/filter-search-fields.gen.ts",
+      "apps/web/src/entities/filter-manifest.tsx",
+    ],
+  },
   { name: "typecheck", command: "pnpm", args: ["typecheck"], weight: 43 },
   {
     name: "dedupe:check",

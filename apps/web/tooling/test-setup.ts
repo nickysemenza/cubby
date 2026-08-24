@@ -120,7 +120,6 @@ export async function countTestDbQueries<T>(
   };
 }
 
-// Standard test IDs used across all tests
 export const TEST_USER_ID = "test-user-id";
 export const TEST_HOME_ID = unsafeLocationId(
   "00000000-0000-4000-8000-000000000001",

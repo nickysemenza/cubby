@@ -13,3 +13,5 @@ count.txt
 .vinxi
 todos.json
 coverage/
+tooling/test-durations.json
+tooling/playwright-durations.json

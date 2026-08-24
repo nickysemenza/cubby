@@ -5,6 +5,7 @@ import type { Plugin } from "vite";
 import topLevelAwait from "vite-plugin-top-level-await";
 import wasm from "vite-plugin-wasm";
 import { defineConfig, type TestProjectConfiguration } from "vitest/config";
+import DurationSequencer from "./tooling/duration-sequencer.ts";
 
 const gitCommit = execSync("git rev-parse --short HEAD", {
   encoding: "utf-8",
@@ -83,6 +84,18 @@ function wantsIntegrationTier(): boolean {
   );
 }
 
+const pureUnitTests = [
+  "src/entities/entity-contracts.unit.test.ts",
+  "src/entities/entities.unit.test.ts",
+];
+const mcpContractTests = [
+  "src/server/mcp/catalog-schema.unit.test.ts",
+  "src/server/mcp/mcp-apps.unit.test.ts",
+  "src/server/mcp/mcp-output-uuid-boundary.unit.test.ts",
+  "src/server/mcp/mcp-protocol.unit.test.ts",
+  "src/server/mcp/mcp-workflow-tools.unit.test.ts",
+];
+
 export default defineConfig({
   define: {
     __GIT_COMMIT__: JSON.stringify(gitCommit),
@@ -92,8 +105,8 @@ export default defineConfig({
   resolve: {
     alias: {
       // https://github.com/juliusmarminge/t3-complete/blob/main/vitest.config.ts
-      "~/": join(__dirname, "./src/"),
-      "tooling/": join(__dirname, "./tooling/"),
+      "~/": join(import.meta.dirname, "./src/"),
+      "tooling/": join(import.meta.dirname, "./tooling/"),
     },
   },
   test: {
@@ -115,7 +128,14 @@ export default defineConfig({
     // reporter re-prints just the failing test names at the very end so a
     // `| tail` of the run still shows what broke. See the reporter for the
     // measured re-run waste that motivated it.
-    reporters: ["default", "./tooling/failure-summary-reporter.ts"],
+    reporters: [
+      "default",
+      "./tooling/failure-summary-reporter.ts",
+      ...(process.env.CI ? ["./tooling/timing-reporter.ts", "blob"] : []),
+    ],
+    sequence: {
+      sequencer: DurationSequencer,
+    },
     coverage: {
       exclude: ["src/components/reui/**"],
     },
@@ -127,6 +147,11 @@ export default defineConfig({
           test: {
             name: "unit",
             include: ["**/*.unit.test.ts"],
+            exclude: [
+              "**/node_modules/**",
+              ...pureUnitTests,
+              ...mcpContractTests,
+            ],
             // Threads, not forks. This tier is almost entirely module transform +
             // import: 167 files and 1458 tests, but only `tests: 5.0s` inside a
             // 56s wall clock. So the lever is cheaper worker startup, not faster
@@ -136,6 +161,18 @@ export default defineConfig({
             // why `isolate: false` is not the answer, even though it is faster
             // still.
             pool: "threads",
+          },
+        },
+        {
+          // Catalog and schema invariants only: no mocks, databases, env
+          // mutation, or global singleton state. Sharing their module graph is
+          // therefore safe and removes the isolation startup tax.
+          extends: true,
+          test: {
+            name: "unit-pure",
+            include: pureUnitTests,
+            pool: "threads",
+            isolate: false,
           },
         },
         {
@@ -220,18 +257,6 @@ export default defineConfig({
             // these N tests" job. `pool: "threads"` takes 4x on unit and 1.5x on
             // ui with zero isolation trade-off; that is the deal we took.
             //
-            // NB: **splitting a slow test file is not a speed fix here.** With
-            // per-file isolation each file builds its own module registry, so
-            // splitting one file into two makes the shared graph get built
-            // TWICE. Measured on server.unit.test.ts, whose lone `appRouter`
-            // import makes it cost 12.83s ALONE vs 2.40s without: moving that one
-            // test to its own file did cut the file to 2.37s, but the unit tier's
-            // CPU went from ~97-109s to ~122-153s and wall clock did not improve.
-            // Reverted. The lesson generalises — an isolated per-file duration
-            // measures cold-graph cost that a full parallel run amortizes, so it
-            // OVERSTATES that file's contribution to the tier. Compare tiers by
-            // `user + system` CPU across the whole run, never by timing one file.
-            //
             // NB: the `--no-isolate` failures above are **`vi.mock` artifacts,
             // not state leaks**, which is why they were never worth chasing.
             // `vi.mock` replaces a module for one FILE; with a shared module
@@ -244,6 +269,19 @@ export default defineConfig({
             // 31 of 71 ui files and 14 of 173 unit files use `vi.mock`, so this
             // is structural: `isolate: false` is permanently unavailable to these
             // tiers, not merely slower or flakier. Nothing to fix in the tests.
+          },
+        },
+        {
+          // PGlite is an embedded real Postgres: this project is deliberately
+          // tiny and proves schema/extensions plus one production SQL path
+          // without provisioning an IntegreSQL database.
+          extends: true,
+          test: {
+            name: "pglite",
+            include: ["**/*.pglite.test.ts"],
+            pool: "forks",
+            fileParallelism: false,
+            testTimeout: 30000,
           },
         },
       ] satisfies TestProjectConfiguration[]
