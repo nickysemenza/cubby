@@ -5,15 +5,18 @@ import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { browserEntityDefinition, entities } from "~/entities/entities";
-import { getEntityContract } from "~/entities/entity-contracts";
+import { entityListQueryOptions } from "~/entities/entity-list";
 import { getEntityFilters } from "~/entities/filter-manifest";
 import {
   buildFiltersFromManifest,
   filterGetterFromColumnFilters,
   summarizeListState,
 } from "~/entities/filters";
+import {
+  type ListEntity,
+  listEntities,
+} from "~/entities/generated/entity-lists.gen";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
-import { useTRPC } from "~/integrations/trpc/react";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
 import type { RowLinkResolver } from "../data-table/columnHelpers";
 import type { ServerListWorkbenchModel } from "../data-table/ListWorkbench";
@@ -189,12 +192,13 @@ export function useEntityList<
     setGrouped(value);
   }, []);
 
-  const api = useTRPC();
-  const contractList = getEntityContract(entity).query.list;
+  if (!queryOptions && !listEntities.includes(entity as ListEntity)) {
+    throw new Error(`${entity} requires an explicit list transport`);
+  }
   const defaultQueryOptions = useCallback(
     (params: Parameters<ListQueryOptionsFn<TFilters>>[0]) =>
-      contractList?.(api, params as never),
-    [api, contractList],
+      entityListQueryOptions(entity as ListEntity, params as never),
+    [entity],
   );
   const effectiveQueryOptions = queryOptions ?? defaultQueryOptions;
   const effectiveDeletable = useContractDeletable(entity, deletable);
