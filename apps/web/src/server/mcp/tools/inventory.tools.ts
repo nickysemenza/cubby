@@ -23,12 +23,12 @@ export function registerInventoryTools(server: McpServer) {
     entity: "inventory",
     // Every tool here is renamed: the entity is "inventory" but a row is an
     // "inventory entry", so the derived `${entityPlural}` names would read
-    // `create_inventorys`.
+    // `create_inventorys`. No `create`/`update` override: those singular
+    // tools no longer register (batch is on by default) — only the batch
+    // names need the "entry"/"entries" correction.
     names: {
       list: "list_inventory",
       get: "get_inventory_entry",
-      create: "create_inventory_entry",
-      update: "update_inventory_entry",
       delete: "delete_inventory_entries",
       batchCreate: "create_inventory_entries",
       batchUpdate: "update_inventory_entries",

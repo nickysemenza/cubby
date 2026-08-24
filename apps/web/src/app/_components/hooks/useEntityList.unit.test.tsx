@@ -52,6 +52,18 @@ vi.mock("~/entities/entities", () => ({
     pluralLabel: "Products",
     list: { hasUnitMappings: false, defaultSort: "name" },
   }),
+  entityLabel: () => "Product",
+}));
+// Both hooks resolve their default list query and delete affordance through the
+// contract registry, which builds an entry for EVERY routed entity at import
+// time — one stub entity above would crash it. The contract's own wiring is
+// covered where it lives; this file is about the table contract.
+vi.mock("~/entities/entity-contracts", () => ({
+  getEntityContract: () => ({
+    invalidationKeys: [],
+    query: {},
+    mutation: {},
+  }),
 }));
 vi.mock("~/entities/filter-manifest", () => ({
   getEntityFilters: () => [],

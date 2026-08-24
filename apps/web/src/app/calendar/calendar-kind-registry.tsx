@@ -19,7 +19,7 @@ import type {
   EditableEntity,
   EntityEditRecord,
 } from "~/entities/editing/types";
-import { ENTITY_ACCENTS } from "~/entities/entity-accents";
+import { entities } from "~/entities/entities";
 import { mealKindBadgeVariant, mealTypeIcon } from "../meals/meal-options";
 import {
   capitalize,
@@ -125,7 +125,7 @@ const calendarKindRegistry: {
         item.mealKind === "cooked"
           ? undefined
           : "border border-dashed border-slate",
-      color: ENTITY_ACCENTS.meal,
+      color: entities.meal.color.accent,
       priority: 10,
     }),
   },
@@ -158,7 +158,7 @@ const calendarKindRegistry: {
       },
     }),
     event: (item) => ({
-      color: ENTITY_ACCENTS.task,
+      color: entities.task.color.accent,
       priority: item.endDateExclusive > item.startDate ? 50 : 10,
     }),
   },
@@ -218,7 +218,7 @@ const calendarKindRegistry: {
           ? "var(--destructive)"
           : item.future
             ? "var(--warning)"
-            : ENTITY_ACCENTS.expense,
+            : entities.expense.color.accent,
       priority: 10,
     }),
   },
@@ -248,7 +248,7 @@ const calendarKindRegistry: {
     event: () => ({
       className:
         "bg-muted py-1 hover:bg-muted dark:bg-muted dark:hover:bg-muted",
-      color: ENTITY_ACCENTS.project,
+      color: entities.project.color.accent,
       priority: 100,
     }),
   },

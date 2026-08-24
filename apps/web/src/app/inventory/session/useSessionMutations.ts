@@ -5,12 +5,7 @@ import {
   makeBatchStatusFetcher,
   watchBatchesAndInvalidate,
 } from "~/lib/background-batch-polling";
-import {
-  invalidateTRPCQueries,
-  inventoryMutationInvalidateKeys,
-  locationMutationInvalidateKeys,
-  productLookupMutationInvalidateKeys,
-} from "~/lib/query-keys";
+import { invalidatesFor, invalidateTRPCQueries } from "~/lib/query-keys";
 
 interface SessionInvalidateOptions {
   // Also refresh the product-lookup caches (review/capture panes need this;
@@ -35,10 +30,7 @@ export function useSessionMutations() {
   const queryClient = useQueryClient();
 
   const sessionInvalidateKeys = useMemo(
-    () => [
-      ...inventoryMutationInvalidateKeys,
-      ...locationMutationInvalidateKeys,
-    ],
+    () => [...invalidatesFor("inventory"), ...invalidatesFor("location")],
     [],
   );
 
@@ -49,7 +41,7 @@ export function useSessionMutations() {
       result,
     }: SessionInvalidateOptions = {}) => {
       const keys = includeProductLookup
-        ? [...sessionInvalidateKeys, ...productLookupMutationInvalidateKeys]
+        ? [...sessionInvalidateKeys, ...invalidatesFor("product", "lookup")]
         : sessionInvalidateKeys;
       invalidateTRPCQueries(queryClient, keys);
       if (watch) {

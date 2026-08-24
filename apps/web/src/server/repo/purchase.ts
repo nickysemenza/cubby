@@ -46,7 +46,7 @@ import type {
   PurchaseCreateInput,
   PurchaseFilters,
   PurchaseOut,
-  PurchaseUpdateInput,
+  PurchaseUpdateData,
   ReclassifyPurchaseDocumentInput,
   SplitExpenseInput,
 } from "@cubby/schemas/purchase";
@@ -965,7 +965,8 @@ const PURCHASE_AUDIT_FIELDS = [
 
 export const updatePurchase = async (
   db: Database,
-  input: PurchaseUpdateInput,
+  shortcode: PurchaseShortcode,
+  data: PurchaseUpdateData,
   actor: ActorContext,
 ): Promise<{
   output: PurchaseOut;
@@ -973,8 +974,7 @@ export const updatePurchase = async (
   /** R2 objects `removeImageIds` reaped; drop them after this commit. */
   detachedImageKeys: string[];
 }> => {
-  const { data } = input;
-  const id = await resolveOrThrow(db, "purchase", input.id);
+  const id = await resolveOrThrow(db, "purchase", shortcode);
   let detachedImageKeys: string[] = [];
 
   await withTransaction(db, async (tx) => {
@@ -2133,68 +2133,6 @@ export const deleteEmptyPurchases = async (
     "require-empty",
   );
   return { shortcodes, detachedImageKeys };
-};
-
-/**
- * What `deletePurchases` would do to the given charges, without doing it.
- *
- * Reads the SAME `PURCHASE_DELETE_EDGE_POLICY` this file's mutation
- * implements. Both edges are non-blocking (`detach`/`soft-delete`), so this
- * preview has only `changes` — nothing refuses a purchase delete. Embedding
- * cleanup is an implementation invariant rather than a user-visible impact.
- *
- * Advisory only. `deletePurchases` still re-runs its own transaction; nothing
- * here is a lock or a permission.
- */
-export const previewDeletePurchases = async (
-  db: Database,
-  ids: PurchaseId[],
-): Promise<{
-  blockers: ImpactItem[];
-  changes: ImpactItem[];
-  sideEffects: ImpactItem[];
-}> => {
-  if (ids.length === 0) return { blockers: [], changes: [], sideEffects: [] };
-
-  const dbClient = getDb(db);
-
-  const changes = present([
-    impact({
-      disposition: PURCHASE_DELETE_EDGE_POLICY["Expense.purchaseId"],
-      edgeKey: "Expense.purchaseId",
-      label: "expenses detached",
-      byTargetId: await countByTarget(
-        dbClient,
-        expense,
-        expense.purchaseId,
-        ids,
-      ),
-    }),
-    impact({
-      disposition: PURCHASE_DELETE_EDGE_POLICY["PurchaseImage.purchaseId"],
-      edgeKey: "PurchaseImage.purchaseId",
-      label: "documents removed",
-      byTargetId: await countByTarget(
-        dbClient,
-        purchaseImage,
-        purchaseImage.purchaseId,
-        ids,
-      ),
-    }),
-    impact({
-      disposition: PURCHASE_DELETE_EDGE_POLICY["PurchaseProduct.purchaseId"],
-      edgeKey: "PurchaseProduct.purchaseId",
-      label: "product links removed",
-      byTargetId: await countByTarget(
-        dbClient,
-        purchaseProduct,
-        purchaseProduct.purchaseId,
-        ids,
-      ),
-    }),
-  ]);
-
-  return { blockers: [], changes, sideEffects: [] };
 };
 
 /**

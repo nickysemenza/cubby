@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import {
   type IngredientId,
   type IngredientShortcode,
@@ -16,13 +17,12 @@ import {
   type LocationCreateInput,
   locationCreateInput,
 } from "@cubby/schemas/location";
-import type { MealCreateInput } from "@cubby/schemas/meal";
 import type { ProductCreateInput } from "@cubby/schemas/product";
 import type { ExpenseCreateInput } from "@cubby/schemas/project";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { eq } from "drizzle-orm";
 import { mock } from "~/lib/test/mock-schema";
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import { type image, product } from "~/server/db/schema";
 import { getDb } from "./database-helpers";
 import { createIngredient, findOrCreateIngredient } from "./ingredient";
@@ -84,12 +84,33 @@ export const makeProductInput = <
   }) as ProductFixtureInput<Ingredient>;
 
 /**
- * Create a product for a repo integration test while retaining both sides of
- * the boundary. Public assertions use `id`; UUID-only repo writes use
- * `entityId`. A public ingredient id is resolved here so callers never cast a
- * shortcode into a FK brand.
+ * Wraps `createX(db, data, actor)` with the create → resolve → throw → brand
+ * tail every fixture below repeated: re-resolve the shortcode into its live
+ * uuid and attach it as `entityId`, for callers (e.g. `createInventoryEntry`)
+ * that take UUID-only branded ids. `createFn` may return `null` (as
+ * `createLocation` does) — treated the same as a resolve failure.
  */
-export const createProductFixture = async (
+const retainEntityId =
+  <
+    TOut extends { id: string },
+    TBrand extends string,
+    TArgs extends [Database | DrizzleTransaction, ...unknown[]],
+  >(
+    entity: ShortcodeEntity,
+    brand: (id: string) => TBrand,
+    createFn: (...args: TArgs) => Promise<TOut | null | undefined>,
+  ) =>
+  async (...args: TArgs): Promise<TOut & { entityId: TBrand }> => {
+    const [db] = args;
+    const output = await createFn(...args);
+    if (!output) throw new Error(`fixture: ${entity} not created`);
+    const resolvedId = await resolveLiveShortcode(db, output.id, entity);
+    if (!resolvedId) throw new Error(`fixture: created ${entity} not found`);
+    return { ...output, entityId: brand(resolvedId) };
+  };
+
+/** Resolves a public ingredient id before handing off to `createProduct`. */
+const createProductWithResolvedIngredient = async (
   db: Database,
   data: Omit<ProductCreateInput, "ingredientId"> & {
     ingredientId?: string | null;
@@ -103,7 +124,7 @@ export const createProductFixture = async (
   if (rawIngredientId && !resolvedIngredientId) {
     throw new Error(`fixture: ingredient ${rawIngredientId} not found`);
   }
-  const output = await createProduct(
+  return createProduct(
     db,
     {
       ...data,
@@ -113,14 +134,19 @@ export const createProductFixture = async (
     },
     actor,
   );
-  const resolvedProductId = await resolveLiveShortcode(
-    db,
-    output.id,
-    "product",
-  );
-  if (!resolvedProductId) throw new Error("fixture: created product not found");
-  return { ...output, entityId: unsafeProductId(resolvedProductId) };
 };
+
+/**
+ * Create a product for a repo integration test while retaining both sides of
+ * the boundary. Public assertions use `id`; UUID-only repo writes use
+ * `entityId`. A public ingredient id is resolved here so callers never cast a
+ * shortcode into a FK brand.
+ */
+export const createProductFixture = retainEntityId(
+  "product",
+  unsafeProductId,
+  createProductWithResolvedIngredient,
+);
 
 /** Simulate an out-of-band source edit without running mutation side effects. */
 export const updateProductNameFixtureRaw = async (
@@ -134,43 +160,20 @@ export const updateProductNameFixtureRaw = async (
     .where(eq(product.id, unsafeProductId(productId)));
 };
 
-export const createIngredientFixture = async (
-  db: Database,
-  data: Parameters<typeof createIngredient>[1],
-  actor: ActorContext,
-) => {
-  const output = await createIngredient(db, data, actor);
-  const resolvedIngredientId = await resolveLiveShortcode(
-    db,
-    output.id,
-    "ingredient",
-  );
-  if (!resolvedIngredientId) throw new Error("fixture: ingredient not found");
-  return { ...output, entityId: unsafeIngredientId(resolvedIngredientId) };
-};
+export const createIngredientFixture = retainEntityId(
+  "ingredient",
+  unsafeIngredientId,
+  createIngredient,
+);
 
-export const createLocationFixture = async (
-  db: Database,
-  data: LocationCreateInput,
-  actor: ActorContext,
-) => {
-  const output = await createLocation(db, data, actor);
-  if (!output) throw new Error("fixture: location not created");
-  const resolvedLocationId = await resolveLiveShortcode(
-    db,
-    output.id,
-    "location",
-  );
-  if (!resolvedLocationId)
-    throw new Error("fixture: created location not found");
-  return { ...output, entityId: unsafeLocationId(resolvedLocationId) };
-};
+export const createLocationFixture = retainEntityId(
+  "location",
+  unsafeLocationId,
+  createLocation,
+);
 
-/**
- * Create inventory from canonical public product/location ids and retain the
- * private row id for direct repo reads and reconciliation fixtures.
- */
-export const createInventoryFixture = async (
+/** Resolves canonical public product/location ids before `createInventoryEntry`. */
+const createInventoryWithResolvedIds = async (
   db: Database,
   data: {
     productId: string;
@@ -193,7 +196,7 @@ export const createInventoryFixture = async (
   if (!rawProductId || !rawLocationId) {
     throw new Error("fixture: product/location not found");
   }
-  const output = await createInventoryEntry(
+  return createInventoryEntry(
     db,
     {
       ...data,
@@ -202,14 +205,17 @@ export const createInventoryFixture = async (
     },
     actor,
   );
-  const resolvedInventoryId = await resolveLiveShortcode(
-    db,
-    output.id,
-    "inventory",
-  );
-  if (!resolvedInventoryId) throw new Error("fixture: inventory not found");
-  return { ...output, entityId: unsafeInventoryId(resolvedInventoryId) };
 };
+
+/**
+ * Create inventory from canonical public product/location ids and retain the
+ * private row id for direct repo reads and reconciliation fixtures.
+ */
+export const createInventoryFixture = retainEntityId(
+  "inventory",
+  unsafeInventoryId,
+  createInventoryWithResolvedIds,
+);
 
 /** An expense create input; every link (project/product/purchase) defaults to
  * unset so a test spells out only the relation it's asserting on. Passing
@@ -304,27 +310,17 @@ export const makeRecipeInput = (
   ...("tags" in opts ? { tags: opts.tags } : {}),
 });
 
-export const createRecipeFixture = async (
-  db: Database,
-  input: RecipeCreateInput,
-  actor: ActorContext,
-) => {
-  const output = await createRecipe(db, input, actor);
-  const resolvedRecipeId = await resolveLiveShortcode(db, output.id, "recipe");
-  if (!resolvedRecipeId) throw new Error("fixture: created recipe not found");
-  return { ...output, entityId: unsafeRecipeId(resolvedRecipeId) };
-};
+export const createRecipeFixture = retainEntityId(
+  "recipe",
+  unsafeRecipeId,
+  createRecipe,
+);
 
-export const createMealFixture = async (
-  db: Database,
-  input: MealCreateInput,
-  actor: ActorContext,
-) => {
-  const output = await createMeal(db, input, actor);
-  const resolvedMealId = await resolveLiveShortcode(db, output.id, "meal");
-  if (!resolvedMealId) throw new Error("fixture: created meal not found");
-  return { ...output, entityId: unsafeMealId(resolvedMealId) };
-};
+export const createMealFixture = retainEntityId(
+  "meal",
+  unsafeMealId,
+  createMeal,
+);
 
 export const makeImportRecipe = (
   overrides: Partial<ImportRecipe> = {},

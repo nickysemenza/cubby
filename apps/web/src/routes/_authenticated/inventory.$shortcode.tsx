@@ -1,56 +1,43 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, notFound } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { InventoryDetail } from "~/app/_components/inventory/inventory-detail";
+import { ensureDetailRecord } from "~/app/_components/routing/detail-loader";
+import {
+  detailPage,
+  notFoundPage,
+} from "~/app/_components/routing/entity-routes";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
-import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
-import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
-import { useDetailTitle } from "~/hooks/useDocumentTitle";
-import { useTRPC } from "~/integrations/trpc/react";
 import { shortcodeHead } from "~/lib/page-title";
 
+// Bound to consts, not inlined into the options object: the router plugin's
+// splitter re-parses an inlined call expression with a JSX-less babel config,
+// so only the identifier path survives a page body that renders JSX.
+const InventoryDetailPage = detailPage({
+  query: (api, shortcode) =>
+    api.inventory.getByShortcode.queryOptions({ shortcode }),
+  render: (inventory, shortcode) => (
+    <InventoryDetail key={shortcode} inventoryitem={inventory} />
+  ),
+  title: (inventory) => inventory.product?.name,
+});
+
+const InventoryNotFound = notFoundPage(
+  "inventory",
+  "Inventory item not found",
+  "This pantry item is no longer available.",
+);
+
 export const Route = createFileRoute("/_authenticated/inventory/$shortcode")({
-  loader: async ({ params, context }) => {
-    const data = await context.queryClient.ensureQueryData(
+  loader: ({ params, context }) =>
+    ensureDetailRecord(
+      context.queryClient,
       context.trpc.inventory.getByShortcode.queryOptions({
         shortcode: params.shortcode,
       }),
-    );
-    if (!data) throw notFound();
-  },
+    ),
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
-  notFoundComponent: () => (
-    <Page
-      variant="list"
-      title="Inventory item not found"
-      entity="inventory"
-      compact
-    >
-      <Empty>
-        <EmptyTitle>Inventory item not found</EmptyTitle>
-        <EmptyDescription>
-          This pantry item is no longer available.
-        </EmptyDescription>
-      </Empty>
-    </Page>
-  ),
+  notFoundComponent: InventoryNotFound,
   head: shortcodeHead,
   component: InventoryDetailPage,
 });
-
-function InventoryDetailPage() {
-  const { shortcode } = Route.useParams();
-  const api = useTRPC();
-  const { data: inventory } = useSuspenseQuery(
-    api.inventory.getByShortcode.queryOptions({ shortcode }),
-  );
-
-  useDetailTitle(shortcode, inventory?.product?.name);
-
-  // The loader already threw notFound for an unknown code; this guard only
-  // satisfies the nullable output type.
-  if (!inventory) return null;
-
-  return <InventoryDetail key={shortcode} inventoryitem={inventory} />;
-}

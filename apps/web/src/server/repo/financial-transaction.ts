@@ -1,8 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type {
-  ImpactItem,
-  OperationDisposition,
-} from "@cubby/schemas/entity-integrity";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
   FinancialTransactionCreateInput,
   FinancialTransactionFilters,
@@ -68,7 +65,6 @@ import {
   resolveAllocationInputs,
   writeAllocationSet,
 } from "~/server/repo/financial-transaction-allocations";
-import { countByTarget, impact, present } from "~/server/repo/impact";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
 import {
@@ -721,13 +717,6 @@ export const FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY = {
   OperationDisposition
 >;
 
-const TRANSFER_EVIDENCE_DELETE_BLOCKER = {
-  code: "block-transfer-evidence",
-  effect: "block",
-  description:
-    "A transfer retains each linked transaction until its complete evidence set is replaced or the transfer is deleted.",
-} as const satisfies OperationDisposition;
-
 export async function deleteFinancialTransactions(
   db: Database,
   shortcodes: FinancialTransactionShortcode[],
@@ -788,53 +777,6 @@ export async function deleteFinancialTransactions(
     });
     return { deleted };
   });
-}
-
-/** Preview both the transfer-evidence refusal and owned allocation cleanup. */
-export async function previewDeleteFinancialTransactions(
-  db: Database | DrizzleTransaction,
-  ids: FinancialTransactionId[],
-): Promise<{
-  blockers: ImpactItem[];
-  changes: ImpactItem[];
-  sideEffects: ImpactItem[];
-}> {
-  const dbClient = unwrapDb(db);
-  return {
-    blockers: present([
-      impact({
-        disposition: TRANSFER_EVIDENCE_DELETE_BLOCKER,
-        edgeKey: "FinancialTransaction.ledgerTransferId",
-        label: "ledger transfer evidence retained",
-        byTargetId: await countByTarget(
-          dbClient,
-          financialTransaction,
-          financialTransaction.id,
-          ids,
-          {
-            extraWhere: sql`${financialTransaction.ledgerTransferId} IS NOT NULL`,
-          },
-        ),
-      }),
-    ]),
-    changes: present([
-      impact({
-        disposition:
-          FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY[
-            "FinancialTransactionAllocation.transactionId"
-          ],
-        edgeKey: "FinancialTransactionAllocation.transactionId",
-        label: "settlement allocations removed",
-        byTargetId: await countByTarget(
-          dbClient,
-          financialTransactionAllocation,
-          financialTransactionAllocation.transactionId,
-          ids,
-        ),
-      }),
-    ]),
-    sideEffects: [],
-  };
 }
 
 /**

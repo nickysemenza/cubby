@@ -1,51 +1,43 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, notFound } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
+import { ensureDetailRecord } from "~/app/_components/routing/detail-loader";
+import {
+  detailPage,
+  notFoundPage,
+} from "~/app/_components/routing/entity-routes";
 import { ExpenseDetail } from "~/app/expenses/expense-detail";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
-import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
-import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
-import { useDetailTitle } from "~/hooks/useDocumentTitle";
-import { useTRPC } from "~/integrations/trpc/react";
 import { shortcodeHead } from "~/lib/page-title";
 
+// Bound to consts, not inlined into the options object: the router plugin's
+// splitter re-parses an inlined call expression with a JSX-less babel config,
+// so only the identifier path survives a page body that renders JSX.
+const ExpenseDetailPage = detailPage({
+  query: (api, shortcode) =>
+    api.expense.getByShortcode.queryOptions({ shortcode }),
+  render: (expense, shortcode) => (
+    <ExpenseDetail key={shortcode} expense={expense} />
+  ),
+  title: (expense) => expense.name,
+});
+
+const ExpenseNotFound = notFoundPage(
+  "expense",
+  "Expense not found",
+  "This expense is no longer available.",
+);
+
 export const Route = createFileRoute("/_authenticated/expenses/$shortcode")({
-  loader: async ({ params, context }) => {
-    const data = await context.queryClient.ensureQueryData(
+  loader: ({ params, context }) =>
+    ensureDetailRecord(
+      context.queryClient,
       context.trpc.expense.getByShortcode.queryOptions({
         shortcode: params.shortcode,
       }),
-    );
-    if (!data) throw notFound();
-  },
+    ),
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
-  notFoundComponent: () => (
-    <Page variant="list" title="Expense not found" entity="expense" compact>
-      <Empty>
-        <EmptyTitle>Expense not found</EmptyTitle>
-        <EmptyDescription>
-          This expense is no longer available.
-        </EmptyDescription>
-      </Empty>
-    </Page>
-  ),
+  notFoundComponent: ExpenseNotFound,
   head: shortcodeHead,
   component: ExpenseDetailPage,
 });
-
-function ExpenseDetailPage() {
-  const { shortcode } = Route.useParams();
-  const api = useTRPC();
-  const { data: expense } = useSuspenseQuery(
-    api.expense.getByShortcode.queryOptions({ shortcode }),
-  );
-
-  useDetailTitle(shortcode, expense?.name);
-
-  // The loader already threw notFound for an unknown code; this guard only
-  // satisfies the nullable output type.
-  if (!expense) return null;
-
-  return <ExpenseDetail key={shortcode} expense={expense} />;
-}

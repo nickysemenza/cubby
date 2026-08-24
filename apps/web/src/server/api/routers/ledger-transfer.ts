@@ -45,11 +45,6 @@ const procedures = createEntityCrudWithoutListProcedures({
     idSchema: ledgerTransferShortcode,
   },
   repository: {
-    getByID: async (services, id) => {
-      const out = await getLedgerTransferByShortcode(services.db, id);
-      if (!out) throw new Error(`Ledger transfer not found: ${id}`);
-      return out;
-    },
     getByShortcode: (services, id) =>
       getLedgerTransferByShortcode(services.db, id),
     create: async (services, data) =>

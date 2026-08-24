@@ -16,10 +16,7 @@ import {
 } from "~/components/ui/tooltip";
 import { useTRPC, useTRPCClient } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
-import {
-  invalidateTRPCQueries,
-  problemsMutationInvalidateKeys,
-} from "~/lib/query-keys";
+import { invalidatesFor, invalidateTRPCQueries } from "~/lib/query-keys";
 import { PROBLEMS_QUERY_STALE_TIME } from "../problem-query-freshness";
 import { type AutoFixTask, buildAutoFixPlan } from "./auto-fix-registry";
 
@@ -73,7 +70,7 @@ export function AutoFixButton({ problems }: { problems: AllProblems }) {
     const clauses: string[] = [];
     const failures: string[] = [];
     const batchIds: string[] = [];
-    const invalidate = new Set<QueryKey>(problemsMutationInvalidateKeys);
+    const invalidate = new Set<QueryKey>(invalidatesFor("problems"));
 
     for (const [index, task] of tasks.entries()) {
       try {

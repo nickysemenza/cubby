@@ -10,6 +10,7 @@ import {
   auditDateFilterFields,
   dateRangeFields,
   deriveUpdateData,
+  numericRangeFields,
   timestampedFields,
 } from "./base-entity";
 import {
@@ -425,18 +426,15 @@ export const productFilterFields = {
   expensePresenceFilter: presenceFilter.describe(
     "Filter to products that do / don't have at least one expense in the ledger. Both acquisitions and exits (negative rows) count.",
   ),
-  expenseCountMin: z.coerce.number().int().nonnegative().optional(),
-  expenseCountMax: z.coerce.number().int().nonnegative().optional(),
-  expenseTotalMin: z.coerce.number().optional(),
-  expenseTotalMax: z.coerce.number().optional(),
+  ...numericRangeFields("expenseCount", { int: true, nonnegative: true }),
+  ...numericRangeFields("expenseTotal"),
   /**
    * Inclusive, SIGNED bounds on units bought minus units gone.
    * `expectedQuantityMax: -1` is the "sold or returned more than was ever
    * bought" worklist — a real data defect, and the reason this is not clamped
    * at zero.
    */
-  expectedQuantityMin: z.coerce.number().optional(),
-  expectedQuantityMax: z.coerce.number().optional(),
+  ...numericRangeFields("expectedQuantity"),
   /**
    * Products whose shelf disagrees with the ledger. Restricted to stocked
    * products on purpose: an unstocked product with no expenses has a variance
@@ -1451,8 +1449,17 @@ const productMcpFields = {
   primaryGtin: gtin.nullable(),
   category: productCategory.nullable(),
   tags: z.array(z.string()),
-  price: moneyNullable.describe("Effective valuation/costing price"),
-  priceOverride: moneyNullable,
+  /**
+   * Hand-written rather than picked from `productTopLevelOut`: this shape adds
+   * `effectivePrice` alongside `price`, and the two must keep the SAME meaning
+   * their `productTopLevelOut`/`productPricingOut` counterparts have.
+   */
+  price: moneyNullable.describe(
+    "Manual per-item valuation/replacement-price override, exactly as stored; null means no override and `effectivePrice` falls back to the Expense-derived value.",
+  ),
+  effectivePrice: moneyNullable.describe(
+    "Resolved valuation/costing price: the manual `price` override when set, else the Expense-derived price. Same number as `pricing.effectivePrice` — this is what values stock and costs recipes.",
+  ),
   pricing: productPricingOut,
   expectedQuantity: z.number().int().positive().nullable(),
   imageCount: z.number().int().nonnegative(),

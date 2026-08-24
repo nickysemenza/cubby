@@ -1,17 +1,11 @@
 import {
   financialStatementImportPreviewInput,
   financialStatementImportPreviewOut,
-  financialTransactionCreateInput,
   financialTransactionFiltersSchema,
-  financialTransactionOut,
   financialTransactionSortableFields,
   financialTransactionSourceOptionsOut,
-  financialTransactionUpdateData,
 } from "@cubby/schemas/financial-transaction";
-import {
-  financialTransactionShortcode,
-  unsafeFinancialTransactionShortcode,
-} from "@cubby/schemas/identifiers";
+import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 import { previewFinancialStatementImport } from "~/server/repo/financial-statement-preview";
 import {
   createFinancialTransaction,
@@ -26,43 +20,24 @@ import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const procedures = createSearchableEntityCrudProcedures({
   schemas: {
-    createInput: financialTransactionCreateInput,
-    updateInput: financialTransactionUpdateData,
-    output: financialTransactionOut,
+    ...ENTITY_BINDINGS.financialTransaction.crud,
     filters: financialTransactionFiltersSchema,
     sort: {
       sortableFields: financialTransactionSortableFields,
       defaultSort: "transactionDate",
     },
-    idSchema: financialTransactionShortcode,
   },
   repository: {
-    getByID: async (services, id) => {
-      const out = await getFinancialTransactionByShortcode(services.db, id);
-      if (!out) throw new Error(`Financial transaction not found: ${id}`);
-      return out;
-    },
     getByShortcode: (services, id) =>
       getFinancialTransactionByShortcode(services.db, id),
     create: (services, data) =>
       createFinancialTransaction(services.db, data, services.actorContext),
-    update: async (services, id, data) =>
-      updateFinancialTransaction(
-        services.db,
-        unsafeFinancialTransactionShortcode(id),
-        data,
-        services.actorContext,
-      ),
+    update: (services, id, data) =>
+      updateFinancialTransaction(services.db, id, data, services.actorContext),
     list: (services, filters, sorts, pagination) =>
       listFinancialTransactions(services.db, filters, sorts, pagination),
-    delete: async (services, ids) => {
-      const { deleted } = await deleteFinancialTransactions(
-        services.db,
-        ids.map(unsafeFinancialTransactionShortcode),
-        services.actorContext,
-      );
-      return { deleted };
-    },
+    delete: (services, ids) =>
+      deleteFinancialTransactions(services.db, ids, services.actorContext),
   },
   entityName: "financialTransaction",
 });

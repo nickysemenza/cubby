@@ -10,12 +10,12 @@ import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
-import { Clock, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { WithRecipeSearch } from "~/app/_components/combobox/with-search-hook";
+import { EntityActivityCard } from "~/app/_components/data-table/detail-page";
 import { DatePickerInput } from "~/app/_components/date-picker-input";
 import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
@@ -36,10 +36,7 @@ import { NoneValue } from "~/components/ui/none-value";
 import { entityDetailLink } from "~/entities/entities";
 import { type RouterOutputs, useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
-import {
-  cancelTRPCQueries,
-  mealMutationInvalidateKeys,
-} from "~/lib/query-keys";
+import { cancelTRPCQueries } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { EditableCell } from "../_components/data-table/editable-cell";
 import {
@@ -77,7 +74,6 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
   const updateMeal = useUpdateMutation({
     mutationFn: api.meal.update.mutationOptions,
     entity: "meal",
-    invalidateKeys: mealMutationInvalidateKeys,
   });
   const addRecipeBase = api.meal.addRecipe.mutationOptions();
   const addRecipe = useMutation({
@@ -115,7 +111,6 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
     entityLabel: "Meal",
     entity: "meal",
     mutationOptions: api.meal.delete.mutationOptions,
-    invalidateKeys: mealMutationInvalidateKeys,
     redirectTo: "/meals",
   });
 
@@ -347,21 +342,7 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
           </WithRecipeSearch>
         </div>
 
-        {/* The manifest's `history` common section. Rendered inline (not via
-            `useEntityDetail`) because this page composes its own body rather
-            than a `DetailSections` grid — same content the helper produces. */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle icon={Clock}>History</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <AuditLogList
-              entityType="meal"
-              entityId={mealId}
-              showEntityLink={false}
-            />
-          </CardContent>
-        </Card>
+        <EntityActivityCard entity="meal" entityId={mealId} />
       </Stack>
     </Page>
   );

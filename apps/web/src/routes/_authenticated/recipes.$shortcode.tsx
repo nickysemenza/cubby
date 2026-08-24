@@ -31,7 +31,7 @@ import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/integrations/trpc/react";
 import { shortcodeHead } from "~/lib/page-title";
-import { recipeMutationInvalidateKeys } from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 
 const searchSchema = z.object({
@@ -149,7 +149,7 @@ function RecipeDetailBody({ recipe }: { recipe: RecipeOut }) {
     entity: "recipe",
     mutationOptions: (callbacks) =>
       api.recipe.delete.mutationOptions(callbacks),
-    invalidateKeys: recipeMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("recipe", "list"),
     redirectTo: "/recipes",
   });
 

@@ -14,7 +14,6 @@ import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { dataQualityOptions } from "~/lib/data-quality-options";
 import { purchaseIdentityLabel } from "~/lib/purchase-label";
-import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import {
   createCurrencyColumn,
@@ -24,7 +23,6 @@ import {
 } from "../_components/data-table/columnHelpers";
 import { ListWorkbench } from "../_components/data-table/ListWorkbench";
 import { useDeferredFilterOptions } from "../_components/hooks/useDeferredFilterOptions";
-import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
@@ -65,17 +63,9 @@ export function PurchaseList() {
     project: projectOptions,
   });
 
-  const deletableConfig = useDeletableConfig({
-    mutationFn: api.purchase.delete.mutationOptions,
-    entityLabel: "Purchase",
-    invalidateKeys: purchaseMutationInvalidateKeys,
-    entity: "purchase",
-  });
-
   const update = useUpdateMutation({
     mutationFn: api.purchase.update.mutationOptions,
     entity: "purchase",
-    invalidateKeys: purchaseMutationInvalidateKeys,
   });
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrapper is functionally stable
@@ -290,10 +280,9 @@ export function PurchaseList() {
     PurchaseFilters
   >({
     entity: "purchase",
-    queryOptions: api.purchase.list.queryOptions,
     filterOptions,
     columns,
-    deletable: deletableConfig,
+    deletable: true,
     initialColumnVisibility: {
       transactionCount: false,
       dataQuality: false,

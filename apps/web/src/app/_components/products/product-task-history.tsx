@@ -14,7 +14,6 @@ import { taskDueColumn, taskStatusColumn } from "~/app/projects/shared";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { useTRPC } from "~/integrations/trpc/react";
-import { taskMutationInvalidateKeys } from "~/lib/query-keys";
 import { ShelfEmpty } from "../data-table/shelf";
 import {
   createCubbyColumnHelper,
@@ -58,7 +57,6 @@ export const ProductTaskHistory: FC<{ product: ProductWithFoodOut }> = ({
   const update = useUpdateMutation({
     mutationFn: api.task.update.mutationOptions,
     entity: "task",
-    invalidateKeys: taskMutationInvalidateKeys,
   });
   const nameEditable = useNameEditable<TaskOut>(update.mutateAsync);
   // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrapper is functionally stable

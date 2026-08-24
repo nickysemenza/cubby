@@ -7,6 +7,7 @@ import type { EntityEditDraft } from "~/entities/editing/intent-types";
 import type { EditableEntity } from "~/entities/editing/types";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import { entityLabel } from "~/entities/entities";
+import { getEntityContract } from "~/entities/entity-contracts";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import {
@@ -31,9 +32,16 @@ export function useUpdateMutation<TFn extends MutationOptionsFn>({
 }: {
   mutationFn: TFn;
   entity: Entity;
-  invalidateKeys: readonly QueryKey[];
+  /**
+   * Override the fan-out. Omit it — the default is the entity's own
+   * `invalidatesFor(entity)` set, resolved through its contract, which is what
+   * an ordinary update wants. Pass one only for a write that moves MORE than
+   * the entity's own rows (a valuation edit, a link that both ends read).
+   */
+  invalidateKeys?: readonly QueryKey[];
 }) {
   const label = entityLabel(entity);
+  const keys = invalidateKeys ?? getEntityContract(entity).invalidationKeys;
   const registered =
     entity !== "image" && entity !== "usda-food" && entity !== "cookbook";
   const commandEntity = (registered ? entity : "product") as EditableEntity;
@@ -41,7 +49,7 @@ export function useUpdateMutation<TFn extends MutationOptionsFn>({
 
   const externalMutation = useActionMutation({
     mutationFn,
-    invalidateKeys,
+    invalidateKeys: keys,
     // Collapse repeated "{Entity} updated" toasts (rapid inline edits, range
     // cell-paste fan-out) into one refreshing toast instead of a stack.
     successToastId: `entity-updated:${entity}`,

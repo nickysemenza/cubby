@@ -36,7 +36,7 @@ import { Input } from "~/components/ui/input";
 import { useTRPC } from "~/integrations/trpc/react";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { purchaseLabel } from "~/lib/purchase-label";
-import { purchaseProductMutationInvalidateKeys } from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 
 const SEARCH_PAGE_SIZE = 50;
 type PickerRow = ProductPickerItemOut & {
@@ -97,7 +97,7 @@ export function LinkProductsDialog({
     mutationFn: api.purchase.attachProducts.mutationOptions,
     success: (result) =>
       `Attached ${result.changed} product${result.changed === 1 ? "" : "s"}`,
-    invalidateKeys: purchaseProductMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("purchase", "product"),
     onSuccess: () => resetAndClose(false),
   });
 

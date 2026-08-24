@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { match } from "ts-pattern";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useBulkActionMutation } from "~/app/_components/hooks/useBulkActionMutation";
-import { IngredientMergeDialog } from "~/app/_components/ingredient/ingredient-merge-dialog";
+import { EntityMergeDialog } from "~/app/_components/merge/entity-merge-dialog";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -29,10 +29,7 @@ import {
 import { useHydrated } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
-import {
-  ingredientMergeMutationInvalidateKeys,
-  ingredientProductMutationInvalidateKeys,
-} from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import {
   type EquivalenceDraft,
@@ -211,7 +208,7 @@ export function EnrichmentWorkbench({
       data.failed.length === 0
         ? `Created ${data.created} product${data.created === 1 ? "" : "s"}.`
         : `Created ${data.created}, ${data.failed.length} failed.`,
-    invalidateKeys: ingredientProductMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("ingredient", "product"),
     onSuccess: (data) => {
       // Drop only the suggestions that actually created; keep failed rows (and
       // their selection) so they can be retried without re-suggesting.
@@ -245,7 +242,7 @@ export function EnrichmentWorkbench({
       vars: Parameters<typeof client.product.markUsdaUnavailableMany.mutate>[0],
     ) => client.product.markUsdaUnavailableMany.mutate(vars),
     success: "Marked: no USDA entry.",
-    invalidateKeys: ingredientProductMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("ingredient", "product"),
     onSuccess: clearSelection,
     error: (err) => `Failed: ${getErrorMessage(err)}`,
   });
@@ -255,7 +252,7 @@ export function EnrichmentWorkbench({
   const mergeMutation = useActionMutation({
     mutationFn: api.ingredient.merge.mutationOptions,
     success: (data) => savedWithBackgroundWork(data.sideEffects, "Merged"),
-    invalidateKeys: ingredientMergeMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("ingredient", "merge"),
     error: (err) => `Merge failed: ${getErrorMessage(err)}`,
   });
 
@@ -588,8 +585,9 @@ export function EnrichmentWorkbench({
             </Row>
           )}
 
-          <IngredientMergeDialog
-            ingredients={mergeConfirm ?? []}
+          <EntityMergeDialog
+            entity="ingredient"
+            rows={mergeConfirm ?? []}
             open={mergeConfirm != null}
             onOpenChange={(o) => {
               if (!o) setMergeConfirm(null);

@@ -1,12 +1,9 @@
 import type { ExpenseCumulativePoint } from "@cubby/schemas/project";
-import { ResponsiveLine } from "@nivo/line";
 import { TrendingUp } from "lucide-react";
 import { useMemo } from "react";
-import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
+import { SpendTrend } from "~/app/_components/charts/kit";
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
 import { monthLabel } from "~/app/projects/project-formatting";
-import { nivoChartTheme, nivoMotion } from "~/lib/nivo-theme";
-import { formatCurrency } from "~/lib/utils";
 
 /**
  * Monthly cumulative net spend — the analytics-view lens over
@@ -37,48 +34,20 @@ export function CumulativeSpend({
   const monthTicks = points.map((p) => p.x).filter((_, i) => i % stride === 0);
 
   return (
-    <div className="h-[300px]">
-      <ResponsiveLine
-        {...nivoMotion}
-        data={[{ id: "Cumulative net", data: points }]}
-        margin={{ top: 20, right: 30, bottom: 50, left: 70 }}
-        xScale={{ type: "point" }}
-        yScale={{
-          type: "linear",
-          min: minY < 0 ? minY * 1.1 : 0,
-          max: Math.max(maxY * 1.1, 10),
-        }}
-        axisBottom={{
-          tickRotation: -45,
-          tickValues: monthTicks,
-        }}
-        axisLeft={{
-          format: (v: number) => formatCurrency(v, 0),
-        }}
-        enableArea
-        areaOpacity={0.1}
-        colors={["var(--chart-1)"]}
-        pointSize={6}
-        pointColor="var(--card)"
-        pointBorderWidth={2}
-        pointBorderColor="var(--chart-1)"
-        useMesh
-        enableSlices="x"
-        sliceTooltip={({ slice }) => (
-          <ChartTooltip>
-            {slice.points.map((point) => (
-              <div key={point.id}>
-                <span className="text-muted-foreground">
-                  {point.data.xFormatted}
-                </span>
-                {": "}
-                <strong>{formatCurrency(point.data.y as number, 0)}</strong>
-              </div>
-            ))}
-          </ChartTooltip>
-        )}
-        theme={nivoChartTheme}
-      />
-    </div>
+    <SpendTrend
+      data={[{ id: "Cumulative net", data: points }]}
+      margin={{ top: 20, right: 30, bottom: 50, left: 70 }}
+      xScale={{ type: "point" }}
+      yScale={{
+        type: "linear",
+        min: minY < 0 ? minY * 1.1 : 0,
+        max: Math.max(maxY * 1.1, 10),
+      }}
+      axisBottom={{
+        tickRotation: -45,
+        tickValues: monthTicks,
+      }}
+      colors={["var(--chart-1)"]}
+    />
   );
 }

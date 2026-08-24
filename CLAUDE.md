@@ -50,6 +50,8 @@ roadmap context.
 - **React, routes, browser behavior, styling, images, tables, or web UI:**
   [apps/web/CLAUDE.md](apps/web/CLAUDE.md). For visual/design choices, also read
   [DESIGN.md](apps/web/DESIGN.md).
+- **Entity genericization, the manifest/binding spine, or new-entity work:**
+  [docs/entities.md](docs/entities.md).
 
 Open PRs ready for review unless the work is intentionally incomplete or the
 user asks for a draft.

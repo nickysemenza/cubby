@@ -1,56 +1,43 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, notFound } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { IngredientDetail } from "~/app/_components/ingredients/ingredient-detail";
+import { ensureDetailRecord } from "~/app/_components/routing/detail-loader";
+import {
+  detailPage,
+  notFoundPage,
+} from "~/app/_components/routing/entity-routes";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
-import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
-import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
-import { useDetailTitle } from "~/hooks/useDocumentTitle";
-import { useTRPC } from "~/integrations/trpc/react";
 import { shortcodeHead } from "~/lib/page-title";
 
+// Bound to consts, not inlined into the options object: the router plugin's
+// splitter re-parses an inlined call expression with a JSX-less babel config,
+// so only the identifier path survives a page body that renders JSX.
+const IngredientDetailPage = detailPage({
+  query: (api, shortcode) =>
+    api.ingredient.getByShortcode.queryOptions({ shortcode }),
+  render: (ingredient, shortcode) => (
+    <IngredientDetail key={shortcode} ingredient={ingredient} />
+  ),
+  title: (ingredient) => ingredient.name,
+});
+
+const IngredientNotFound = notFoundPage(
+  "ingredient",
+  "Ingredient not found",
+  "This ingredient is no longer available.",
+);
+
 export const Route = createFileRoute("/_authenticated/ingredients/$shortcode")({
-  loader: async ({ params, context }) => {
-    const data = await context.queryClient.ensureQueryData(
+  loader: ({ params, context }) =>
+    ensureDetailRecord(
+      context.queryClient,
       context.trpc.ingredient.getByShortcode.queryOptions({
         shortcode: params.shortcode,
       }),
-    );
-    if (!data) throw notFound();
-  },
+    ),
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
-  notFoundComponent: () => (
-    <Page
-      variant="list"
-      title="Ingredient not found"
-      entity="ingredient"
-      compact
-    >
-      <Empty>
-        <EmptyTitle>Ingredient not found</EmptyTitle>
-        <EmptyDescription>
-          This ingredient is no longer available.
-        </EmptyDescription>
-      </Empty>
-    </Page>
-  ),
+  notFoundComponent: IngredientNotFound,
   head: shortcodeHead,
   component: IngredientDetailPage,
 });
-
-function IngredientDetailPage() {
-  const { shortcode } = Route.useParams();
-  const api = useTRPC();
-  const { data: ingredient } = useSuspenseQuery(
-    api.ingredient.getByShortcode.queryOptions({ shortcode }),
-  );
-
-  useDetailTitle(shortcode, ingredient?.name);
-
-  // The loader already threw notFound for an unknown code; this guard only
-  // satisfies the nullable output type.
-  if (!ingredient) return null;
-
-  return <IngredientDetail key={shortcode} ingredient={ingredient} />;
-}

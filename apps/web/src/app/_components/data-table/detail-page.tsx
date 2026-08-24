@@ -1,4 +1,8 @@
+import type { AuditEntityType } from "@cubby/schemas/audit";
+import type { Entity } from "@cubby/schemas/entity";
+import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { relatedViewRegistry } from "@cubby/schemas/related-view";
+import { Clock } from "lucide-react";
 import { type FC, type ReactNode, useEffect, useMemo, useState } from "react";
 import { usePageDetailContext } from "~/components/page/Page";
 import {
@@ -11,10 +15,19 @@ import {
 import { useDebug } from "~/hooks/useDebug";
 import { useIsMobile } from "~/hooks/useMobile";
 import { cn } from "~/lib/utils";
+import { AuditLogList } from "../audit-log/audit-log-list";
 import { EntityHero } from "../EntityHero";
 import JsonRenderer from "../json-renderer";
 import { RelationshipExplorer } from "../relationships/relationship-explorer";
 import { relationshipsSectionIcon } from "../relationships/relationship-tree";
+
+/** Stable id every auto-appended Activity section uses — also the opt-out key: a
+ * caller that already supplies a section with this id (e.g. a page composing its
+ * own custom activity placement) keeps its own instead of getting a second one. */
+const ACTIVITY_SECTION_ID = "history";
+
+const isAuditableEntity = (entity: Entity): entity is AuditEntityType =>
+  entityManifest[entity].auditable;
 
 type DetailPlacement = "primary" | "supporting" | "full";
 
@@ -312,9 +325,38 @@ export const DetailSections: FC<DetailSectionsProps> = ({
           ),
         }
       : undefined;
-  const allSections = (
-    relationshipSection ? [...sections, relationshipSection] : sections
-  ).filter(
+  // Every auditable entity gets its audit trail for free — callers used to
+  // hand-wire an identical `AuditLogList` card themselves (five detail pages did,
+  // byte-for-byte). The id check is the opt-out: a page that already places its
+  // own `id: "history"` section (e.g. via `useEntityDetail`'s commonSections, or
+  // a custom placement) keeps that one instead of getting a second.
+  const hasOwnActivitySection = sections.some(
+    (section) => section.id === ACTIVITY_SECTION_ID,
+  );
+  const activitySection: DetailSection | undefined =
+    pageDetail &&
+    sourceId &&
+    !hasOwnActivitySection &&
+    isAuditableEntity(pageDetail.entity)
+      ? {
+          id: ACTIVITY_SECTION_ID,
+          title: "History",
+          icon: Clock,
+          placement: "supporting",
+          content: (
+            <AuditLogList
+              entityType={pageDetail.entity}
+              entityId={sourceId}
+              showEntityLink={false}
+            />
+          ),
+        }
+      : undefined;
+  const allSections = [
+    ...sections,
+    ...(activitySection ? [activitySection] : []),
+    ...(relationshipSection ? [relationshipSection] : []),
+  ].filter(
     (section) => section.content !== null && section.content !== undefined,
   );
   const ids = allSections.map((section) => section.id);
@@ -347,3 +389,33 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     </div>
   );
 };
+
+/**
+ * Standalone Activity card, for the couple of detail pages (recipe, meal) that
+ * compose a bespoke layout instead of `DetailSections`'s section grid, so the
+ * auto-append above never reaches them. Same content and copy as that
+ * auto-appended section — this is the one place both share instead of each
+ * hand-rolling its own `AuditLogList`-in-a-`Card`.
+ */
+export function EntityActivityCard({
+  entity,
+  entityId,
+}: {
+  entity: AuditEntityType;
+  entityId: string;
+}) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle icon={Clock}>History</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <AuditLogList
+          entityType={entity}
+          entityId={entityId}
+          showEntityLink={false}
+        />
+      </CardContent>
+    </Card>
+  );
+}

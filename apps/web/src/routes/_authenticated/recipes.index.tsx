@@ -4,73 +4,51 @@ import {
   stripSearchParams,
 } from "@tanstack/react-router";
 import { BookOpen, Link2, Plus, Share2 } from "lucide-react";
-import { z } from "zod";
-import { tableSearchFields } from "~/app/_components/data-table/table-search";
+import { listPage } from "~/app/_components/routing/entity-routes";
 import { RecipeList } from "~/app/recipes/recipelist";
-import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
-import { entityFilterSearchFields } from "~/entities/filter-search-fields";
+import { recipeListSearchSchema } from "~/entities/list-search";
 import { pageTitle } from "~/lib/page-title";
-import {
-  urlEnumListParam,
-  urlShortcodeListParam,
-  urlStringParam,
-} from "~/lib/search-params";
 
-export const recipeListSearchSchema = z.object({
-  ...tableSearchFields,
-  ...entityFilterSearchFields("recipe"),
-  tags: urlStringParam,
-  source: urlShortcodeListParam("cookbook"),
-  sourceType: urlEnumListParam(z.enum(recipeSourceValues)),
+// Bound to a const, not inlined into the options object: the router plugin's
+// splitter re-parses an inlined call expression with a JSX-less babel config,
+// so only the identifier path survives a page body that renders JSX.
+const RecipesPage = listPage({
+  title: "Recipes",
+  list: RecipeList,
+  actions: () => (
+    <>
+      <Link to="/entities" search={{ tab: "recipes" }}>
+        <Button variant="outline">
+          <Share2 />
+          Graph
+        </Button>
+      </Link>
+      <Link to="/recipes/new" search={{ scrape: true }}>
+        <Button variant="outline">
+          <Link2 />
+          Import from URL
+        </Button>
+      </Link>
+      <Link to="/recipes/import">
+        <Button variant="outline">
+          <BookOpen />
+          Import
+        </Button>
+      </Link>
+      <Link to="/recipes/new">
+        <Button>
+          <Plus />
+          New
+        </Button>
+      </Link>
+    </>
+  ),
 });
 
 export const Route = createFileRoute("/_authenticated/recipes/")({
   validateSearch: recipeListSearchSchema,
   search: { middlewares: [stripSearchParams({})] },
-  component: RecipesPage,
   head: () => ({ meta: [{ title: pageTitle("Recipes") }] }),
+  component: RecipesPage,
 });
-
-function RecipesPage() {
-  return (
-    <Page
-      variant="list"
-      listChrome="workbench"
-      title="Recipes"
-      layout="full"
-      actions={
-        <>
-          <Link to="/entities" search={{ tab: "recipes" }}>
-            <Button variant="outline">
-              <Share2 />
-              Graph
-            </Button>
-          </Link>
-          <Link to="/recipes/new" search={{ scrape: true }}>
-            <Button variant="outline">
-              <Link2 />
-              Import from URL
-            </Button>
-          </Link>
-          <Link to="/recipes/import">
-            <Button variant="outline">
-              <BookOpen />
-              Import
-            </Button>
-          </Link>
-          <Link to="/recipes/new">
-            <Button>
-              <Plus />
-              New
-            </Button>
-          </Link>
-        </>
-      }
-    >
-      <RecipeList />
-    </Page>
-  );
-}
-
-import { recipeSourceValues } from "@cubby/schemas/recipe-shared";

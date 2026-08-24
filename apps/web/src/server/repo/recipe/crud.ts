@@ -5,10 +5,7 @@
 
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
-import type {
-  ImpactItem,
-  OperationDisposition,
-} from "@cubby/schemas/entity-integrity";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type CookbookId,
   type RecipeId,
@@ -35,19 +32,16 @@ import {
   arrayOverlaps,
   asc,
   eq,
-  gte,
   inArray,
   isNotNull,
-  lte,
   ne,
   notInArray,
   or,
   type SQL,
   sql,
 } from "drizzle-orm";
-import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { alias } from "drizzle-orm/pg-core";
-import { countBy, sum, uniq } from "es-toolkit";
+import { countBy } from "es-toolkit";
 import { match, P } from "ts-pattern";
 import { collectSubRecipeIds } from "~/lib/recipe-graph";
 import { recipeOutSignature } from "~/lib/recipe-signature";
@@ -81,6 +75,7 @@ import {
   lockAndValidateForDelete,
   notDeleted,
   presenceCondition,
+  rangeConditions,
   relations,
   unwrapDb,
   updateLiveAndReturn,
@@ -89,12 +84,6 @@ import {
 } from "~/server/repo/database-helpers";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
-import {
-  countByTarget,
-  impact,
-  present,
-  sideEffect,
-} from "~/server/repo/impact";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
 import {
@@ -149,7 +138,6 @@ import {
   recipeSourceToColumns,
   webProvenance,
 } from "./source";
-import { findParentRecipeIdsBatch } from "./totals";
 import {
   createSectionWithIngredients,
   handleSectionUpdates,
@@ -592,27 +580,20 @@ export const recipeList = async (
         eqAnyRequested(recipe.SourceType, sourceTypes),
         presenceCondition(recipe.SourceType, filters.sourceTypePresenceFilter),
       ),
-      filters.costTotalMin !== undefined
-        ? sql`(${recipe.totals}->>'costTotal')::numeric >= ${filters.costTotalMin}`
-        : undefined,
-      filters.costTotalMax !== undefined
-        ? sql`(${recipe.totals}->>'costTotal')::numeric <= ${filters.costTotalMax}`
-        : undefined,
-      filters.caloriesTotalMin !== undefined
-        ? sql`(${recipe.totals}->>'caloriesTotal')::numeric >= ${filters.caloriesTotalMin}`
-        : undefined,
-      filters.caloriesTotalMax !== undefined
-        ? sql`(${recipe.totals}->>'caloriesTotal')::numeric <= ${filters.caloriesTotalMax}`
-        : undefined,
+      ...rangeConditions(
+        sql`(${recipe.totals}->>'costTotal')::numeric`,
+        filters,
+        "costTotal",
+      ),
+      ...rangeConditions(
+        sql`(${recipe.totals}->>'caloriesTotal')::numeric`,
+        filters,
+        "caloriesTotal",
+      ),
       // A real column, so no jsonb extraction and no cast — and NULL (no
       // printed total time) drops out of both bounds, which is what "under 30
       // minutes" should mean for a recipe whose time is unknown.
-      filters.totalMinutesMin !== undefined
-        ? gte(recipe.totalMinutes, filters.totalMinutesMin)
-        : undefined,
-      filters.totalMinutesMax !== undefined
-        ? lte(recipe.totalMinutes, filters.totalMinutesMax)
-        : undefined,
+      ...rangeConditions(recipe.totalMinutes, filters, "totalMinutes"),
     ],
   );
 
@@ -1367,151 +1348,4 @@ export const deleteRecipesByCookbookTx = async (
   // roll back.
   const { detachedImageKeys } = await deleteRecipes(tx, ids, actor);
   return { recipeIds: ids, detachedImageKeys };
-};
-
-/**
- * Recompute-worthy parents of the given (about-to-be-deleted) recipes,
- * reshaped for {@link previewDeleteRecipes}' "parent recipes recomputed" side
- * effect: which of `ids` has surviving parents, and the deduped id set of
- * those parents.
- *
- * This mirrors — without literally sharing code with, since that logic lives
- * outside this file's ownership for this change — the
- * `uniq([...parentsByRecipe.values()].flat().filter((id) => !deletedSet.has(id)))`
- * step both `deleteItem` (`api/routers/recipe/crud.ts`) and
- * `deleteCookbookEndpoint` (`api/routers/recipe/import.ts`) run on
- * {@link findParentRecipeIdsBatch}'s result before calling
- * `dispatchRecompute`. Preview and mutation both read off the SAME
- * `findParentRecipeIdsBatch` query, so they cannot disagree about WHICH rows
- * are parents — only this reshaping (per-sub-recipe breakdown vs. a flat
- * dispatch list) differs, and only because the router owns the dispatch call
- * and this file cannot import from it.
- */
-const resolveRecomputeParents = async (
-  db: Database,
-  ids: RecipeId[],
-): Promise<{ parentIds: RecipeId[]; byTargetId: Record<string, number> }> => {
-  const deletedSet = new Set(ids);
-  const parentsBySubRecipe = await findParentRecipeIdsBatch(db, ids);
-  const byTargetId: Record<string, number> = {};
-  const allParents = new Set<RecipeId>();
-  for (const [subRecipeId, parents] of parentsBySubRecipe) {
-    // A sub-recipe deleted alongside its own parent (both selected in the
-    // same bulk delete) has nothing left to recompute — excluded the same
-    // way the router excludes it before dispatching.
-    const survivingParents = uniq(parents.filter((id) => !deletedSet.has(id)));
-    if (survivingParents.length === 0) continue;
-    byTargetId[subRecipeId] = survivingParents.length;
-    for (const parentId of survivingParents) allParents.add(parentId);
-  }
-  return { parentIds: [...allParents], byTargetId };
-};
-
-/**
- * What {@link deleteRecipes} would do to the given recipes, without doing it.
- *
- * Reads the SAME `RECIPE_DELETE_EDGE_POLICY` `deleteRecipes` is described
- * by. The policy has no `block`-effect edge — a recipe delete never refuses on
- * an incoming edge, unlike `previewDeleteProducts` — so `blockers` is always
- * empty here.
- *
- * `RecipeSection.recipeId` / `MealRecipe.recipeId` / `RecipeImage.recipeId`
- * cascade (`soft-delete`) and become `changes`, counted with the identical
- * `inArray(column, ids) AND notDeleted(table)` predicate `deleteRecipes`
- * fetches its `cascadedX` rows with (via {@link countByTarget}). Two things
- * that are NOT row cascades become `sideEffects`: `Ingredient.recipeId`'s
- * `preserve` disposition (the sub-recipe pointer deliberately left untouched —
- * see `deleteRecipes`'s comment on `cascadedMealRecipes`), and the
- * parent-recipe recomputes that pointer triggers (see
- * {@link resolveRecomputeParents}).
- *
- * Advisory only. `deleteRecipes` still re-runs its own cascade inside its own
- * transaction; nothing here is a lock or a permission.
- */
-export const previewDeleteRecipes = async (
-  db: Database,
-  ids: RecipeId[],
-): Promise<{
-  blockers: ImpactItem[];
-  changes: ImpactItem[];
-  sideEffects: ImpactItem[];
-}> => {
-  if (ids.length === 0) return { blockers: [], changes: [], sideEffects: [] };
-
-  const dbClient = getDb(db);
-
-  const cascades: Array<
-    [keyof typeof RECIPE_DELETE_EDGE_POLICY, PgTable, PgColumn, string]
-  > = [
-    [
-      "RecipeSection.recipeId",
-      recipeSection,
-      recipeSection.recipeId,
-      "sections",
-    ],
-    [
-      "MealRecipe.recipeId",
-      mealRecipe,
-      mealRecipe.recipeId,
-      "meal-plan associations",
-    ],
-    ["RecipeImage.recipeId", recipeImage, recipeImage.recipeId, "images"],
-  ];
-
-  const changes: (ImpactItem | null)[] = [];
-  for (const [edgeKey, table, column, label] of cascades) {
-    const disposition = RECIPE_DELETE_EDGE_POLICY[edgeKey];
-    changes.push(
-      impact({
-        disposition,
-        edgeKey,
-        label,
-        byTargetId: await countByTarget(dbClient, table, column, ids),
-      }),
-    );
-  }
-
-  const sideEffects: ImpactItem[] = [];
-
-  const preserveDisposition = RECIPE_DELETE_EDGE_POLICY["Ingredient.recipeId"];
-  const preservedByTargetId = await countByTarget(
-    dbClient,
-    ingredient,
-    ingredient.recipeId,
-    ids,
-  );
-  const preservedTotal = sum(Object.values(preservedByTargetId));
-  if (preservedTotal > 0) {
-    sideEffects.push(
-      sideEffect({
-        code: preserveDisposition.code,
-        label: "sub-recipe pointers preserved",
-        description: preserveDisposition.description,
-        effect: preserveDisposition.effect,
-        total: preservedTotal,
-        byTargetId: preservedByTargetId,
-      }),
-    );
-  }
-
-  const { parentIds, byTargetId: parentsByTargetId } =
-    await resolveRecomputeParents(db, ids);
-  if (parentIds.length > 0) {
-    sideEffects.push(
-      sideEffect({
-        code: "recompute-parent-recipes",
-        label: "parent recipes recomputed",
-        description:
-          "Recipes that use a deleted recipe as a sub-recipe have their persisted cost and nutrition totals recomputed.",
-        total: parentIds.length,
-        byTargetId: parentsByTargetId,
-      }),
-    );
-  }
-
-  return {
-    blockers: [],
-    changes: present(changes),
-    sideEffects,
-  };
 };

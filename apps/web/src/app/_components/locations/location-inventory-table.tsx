@@ -14,7 +14,6 @@ import {
 } from "~/app/_components/actions/action-verb-ui";
 import type { TRPCQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import { useTRPC } from "~/integrations/trpc/react";
-import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
 import {
   createEditableAmountColumn,
   createSingleEntityInlineLinkColumn,
@@ -97,7 +96,6 @@ export function LocationInventoryTable({
   const updateMutation = useUpdateMutation({
     mutationFn: api.inventory.update.mutationOptions,
     entity: "inventory",
-    invalidateKeys: inventoryMutationInvalidateKeys,
   });
 
   // Dialog states for bulk actions

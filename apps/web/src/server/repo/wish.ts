@@ -1,8 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type {
-  ImpactItem,
-  OperationDisposition,
-} from "@cubby/schemas/entity-integrity";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type ProductId,
   unsafeProductId,
@@ -21,7 +18,7 @@ import type {
   WishCreateInput,
   WishFilters,
   WishOut,
-  WishUpdateInput,
+  WishUpdateData,
 } from "@cubby/schemas/wish";
 import { wishSortableFields } from "@cubby/schemas/wish";
 import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
@@ -45,7 +42,6 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { countByTarget, impact, present } from "~/server/repo/impact";
 import {
   effectiveProductPriceSql,
   loadProductPricing,
@@ -206,23 +202,47 @@ const resolveWishSort = (sort: SortParams) => {
   ];
 };
 
-const buildWishWhere = (filters: WishFilters) => {
+const buildWishWhere = async (
+  db: Database | DrizzleTransaction,
+  filters: WishFilters,
+) => {
   const candidateProductIds = filters.candidateProductId
     ? Array.isArray(filters.candidateProductId)
       ? filters.candidateProductId
       : [filters.candidateProductId]
     : undefined;
-  const candidateFilter = candidateProductIds
-    ? sql`EXISTS (
+  // Resolved to uuids up front, same idiom as `expense/lookup.ts`'s
+  // `toUuids`: matching the raw shortcode STRING against `p.shortcode`
+  // (the previous shape here) compares byte-for-byte, so a lowercase code
+  // silently matched nothing instead of being canonicalized — the #591 bug
+  // class, caught by filter-application.integration.test.ts's generic guard.
+  // `resolveLiveShortcodes` also means an unknown/malformed/soft-deleted code
+  // resolves to nothing rather than throwing, matching every other filter
+  // here.
+  const candidateProductUuids = candidateProductIds
+    ? [
+        ...(
+          await resolveLiveShortcodes(db, candidateProductIds, "product")
+        ).values(),
+      ]
+    : undefined;
+  const candidateFilter = candidateProductUuids
+    ? candidateProductUuids.length > 0
+      ? sql`EXISTS (
         SELECT 1 FROM "WishCandidate" wc
         JOIN "Product" p ON p."id" = wc."productId" AND p."deletedAt" IS NULL
         WHERE wc."wishId" = ${wish.id}
           AND wc."deletedAt" IS NULL
-          AND p."shortcode" IN (${sql.join(
-            candidateProductIds.map((id) => sql`${id}`),
+          AND p."id" IN (${sql.join(
+            candidateProductUuids.map((id) => sql`${id}::uuid`),
             sql`, `,
           )})
       )`
+      : // A candidateProductId WAS supplied but none of it resolved to a live
+        // product — must match nothing, not drop the constraint (same
+        // requested-but-unresolved handling `expense/lookup.ts` uses for
+        // `productId`/`vendorId`/`purchaseId`).
+        sql`false`
     : undefined;
   const search = filters.search
     ? or(
@@ -273,7 +293,7 @@ export const wishList = async (
   count: number;
   sums: { priceLow: number; priceHigh: number };
 }> => {
-  const where = buildWishWhere(filters);
+  const where = await buildWishWhere(db, filters);
   const { take, skip } = buildTakeSkip(pagination);
   // Footer totals over the WHOLE filtered set, not the loaded page. Summing the
   // returned rows instead would quietly under-report the moment the wishlist
@@ -406,23 +426,21 @@ const candidateShortcodes = async (tx: DrizzleTransaction, id: WishId) => {
 
 export const updateWish = async (
   db: Database,
-  input: WishUpdateInput,
+  shortcode: WishShortcode,
+  data: WishUpdateData,
   actor: ActorContext,
 ): Promise<{ output: WishOut; entityId: WishId }> => {
-  const id = await resolveOrThrow(db, "wish", input.id);
+  const id = await resolveOrThrow(db, "wish", shortcode);
   await withTransaction(db, async (tx) => {
     const before = await tx.query.wish.findFirst({
       where: and(eq(wish.id, id), notDeleted(wish)),
     });
     if (!before)
-      throw createAppError("WISH_NOT_FOUND", `Wish not found: ${input.id}`);
+      throw createAppError("WISH_NOT_FOUND", `Wish not found: ${shortcode}`);
     const beforeCandidates = await candidateShortcodes(tx, id);
     let afterCandidates = beforeCandidates;
-    if (input.data.candidateProductIds !== undefined) {
-      const nextIds = await resolveToolProductIds(
-        tx,
-        input.data.candidateProductIds,
-      );
+    if (data.candidateProductIds !== undefined) {
+      const nextIds = await resolveToolProductIds(tx, data.candidateProductIds);
       const currentRows = await tx.query.wishCandidate.findMany({
         where: and(eq(wishCandidate.wishId, id), notDeleted(wishCandidate)),
         columns: { productId: true },
@@ -454,23 +472,23 @@ export const updateWish = async (
       afterCandidates = await candidateShortcodes(tx, id);
     }
     const acquiredAt =
-      input.data.acquired === undefined
+      data.acquired === undefined
         ? undefined
-        : input.data.acquired
+        : data.acquired
           ? (before.acquiredAt ?? new Date())
           : null;
     const updated = await updateLiveAndReturn(
       tx,
       wish,
       {
-        name: input.data.name,
-        notes: input.data.notes,
+        name: data.name,
+        notes: data.notes,
         acquiredAt,
         updatedAt:
-          input.data.candidateProductIds === undefined &&
+          data.candidateProductIds === undefined &&
           acquiredAt === undefined &&
-          input.data.name === undefined &&
-          input.data.notes === undefined
+          data.name === undefined &&
+          data.notes === undefined
             ? undefined
             : new Date(),
       },
@@ -515,28 +533,4 @@ export const deleteWishes = async (
     });
     return { deleted };
   });
-};
-
-/** Advisory impact for the owned candidate rows soft-deleted with a wish. */
-export const previewDeleteWishes = async (
-  db: Database | DrizzleTransaction,
-  ids: WishId[],
-): Promise<{ blockers: ImpactItem[]; changes: ImpactItem[] }> => {
-  if (ids.length === 0) return { blockers: [], changes: [] };
-  return {
-    blockers: [],
-    changes: present([
-      impact({
-        disposition: WISH_DELETE_EDGE_POLICY["WishCandidate.wishId"],
-        edgeKey: "WishCandidate.wishId",
-        label: "Tool alternatives",
-        byTargetId: await countByTarget(
-          unwrapDb(db),
-          wishCandidate,
-          wishCandidate.wishId,
-          ids,
-        ),
-      }),
-    ]),
-  };
 };

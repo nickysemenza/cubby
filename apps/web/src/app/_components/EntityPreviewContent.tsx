@@ -1,26 +1,14 @@
 import { displayGtin } from "@cubby/schemas/external-id";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
-import {
-  type LocationIdentityProductOut,
-  type LocationType,
-  locationCoverImage,
-} from "@cubby/schemas/location";
-import type {
-  CostType,
-  ProjectKind,
-  ProjectStatus,
-  TaskStatus,
-  Trade,
-} from "@cubby/schemas/project";
+import { locationCoverImage } from "@cubby/schemas/location";
 import { RECIPE_MACRO_KEYS } from "@cubby/schemas/recipe-shared";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
-import type { DataType, NutrientKey } from "@cubby/usda-schemas";
+import type { NutrientKey } from "@cubby/usda-schemas";
 import { buildNutrients, dataTypeLabel } from "@cubby/usda-schemas";
 import { useQuery } from "@tanstack/react-query";
 import { sumBy } from "es-toolkit";
 import { ListChecks } from "lucide-react";
 import type { ReactNode } from "react";
-import { match } from "ts-pattern";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { costTypeLabels } from "~/app/expenses/expense-options";
 import {
@@ -35,7 +23,7 @@ import { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
 import { Row } from "~/components/layout";
 import { EntityIcon } from "~/entities/entities";
 import { fdcIdFromParam } from "~/entities/entity-query";
-import { useTRPC } from "~/integrations/trpc/react";
+import { type RouterOutputs, useTRPC } from "~/integrations/trpc/react";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
@@ -53,6 +41,8 @@ import type { HoverPreviewEntity } from "./preview/preview-entities";
 import { PreviewQuery } from "./preview/preview-query";
 import { coverageLabel, formatYield } from "./recipe/recipe-utils";
 
+type Api = ReturnType<typeof useTRPC>;
+
 // Cross-link to the USDA food behind an ingredient/product (built identically
 // for both). The food description is too long to use as the label, so the
 // apple icon + type label carry it.
@@ -63,56 +53,30 @@ const usdaCrossLink = (fdcId: number): CrossLink => ({
   label: "USDA food",
 });
 
-// Per-entity preview "specs": each toXCard maps a small view-model into the
-// declarative ManifestCardProps the shared <ManifestCard> renders. The fetch
-// wrappers (*PreviewContent) fetch via tRPC getByID (React-Query cached, only
-// mounts while the hovercard is open) and feed the view-model in. The view-model
-// Shared preview contracts keep hover-card renderers aligned across entities.
+// Cross-link to a task/expense's parent project (built identically for both).
+//
+// `taskOut`/`expenseOut` carry `projectId` (the project's shortcode, per the
+// project/task/expense shortcode cutover) alongside `projectName`, so the
+// cross-link needs no lookup of its own.
+const projectCrossLink = (shortcode: string, name: string): CrossLink => ({
+  to: "/projects/$shortcode",
+  params: { shortcode },
+  icon: <ProjectMarkById projectId={shortcode} size={12} />,
+  label: name,
+});
 
-export function EntityPreviewContent({
-  entity,
-  id,
-}: {
-  entity: HoverPreviewEntity;
-  id: string;
-}) {
-  return match(entity)
-    .with("recipe", () => <RecipePreviewContent recipeId={id} />)
-    .with("ingredient", () => <IngredientPreviewContent ingredientId={id} />)
-    .with("product", () => <ProductPreviewContent productId={id} />)
-    .with("usda-food", () => (
-      <UsdaFoodPreviewContent fdcId={fdcIdFromParam(id)} />
-    ))
-    .with("cookbook", () => <CookbookPreviewContent cookbookId={id} />)
-    .with("location", () => <LocationPreviewContent locationId={id} />)
-    .with("inventory", () => <InventoryPreviewContent inventoryId={id} />)
-    .with("meal", () => <MealPreviewContent mealId={id} />)
-    .with("project", () => <ProjectPreviewContent projectId={id} />)
-    .with("task", () => <TaskPreviewContent taskId={id} />)
-    .with("expense", () => <ExpensePreviewContent expenseId={id} />)
-    .with("purchase", () => <PurchasePreviewContent purchaseId={id} />)
-    .with("vendor", () => <VendorPreviewContent vendorId={id} />)
-    .exhaustive();
-}
-
-// ── Recipe ──────────────────────────────────────────────────────────────────
-
-export type RecipePreview = {
-  id: string;
-  name: string;
-  yieldText?: string;
-  cost?: number;
-  calories?: number;
-  /** Whole-recipe macros (nutrient-code map); paired with nutrientsLabel. */
-  nutrients?: Record<string, number>;
-  nutrientsLabel?: string;
-  ingredientCount: number;
-  /** Ingredients contributing to cost / nutrition — drives a "N/total" caption. */
-  costCovered?: number;
-  nutritionCovered?: number;
-  stepCount: number;
-  thumbUrl?: string;
-};
+/**
+ * Cross-link to the vendor that issued a purchase — the purchase's primary
+ * context. `purchaseOut.vendorId` is the vendor's shortcode (per the
+ * vendor/purchase shortcode cutover), denormalized alongside `vendorName` by
+ * the purchase query, so the cross-link needs no lookup of its own.
+ */
+const vendorCrossLink = (shortcode: string, name: string): CrossLink => ({
+  to: "/vendors/$shortcode",
+  params: { shortcode },
+  icon: <EntityIcon entity="vendor" size={12} colored />,
+  label: name,
+});
 
 /** "9/13" when partial, undefined when fully covered (or unknown). */
 const coverageCaption = (
@@ -123,44 +87,73 @@ const coverageCaption = (
   return complete ? undefined : fraction;
 };
 
-export function toRecipeCard(vm: RecipePreview): ManifestCardProps {
+// Each toXCard maps a tRPC `getByID` payload straight into the declarative
+// ManifestCardProps the shared <ManifestCard> renders — no intermediate
+// view-model. <GenericPreviewContent> below pairs each one with its query in
+// PREVIEW_TABLE; usda-food and cookbook stay their own tiny components
+// because their fetch shape genuinely diverges (fdc_id coercion, list-backed
+// detail with no getByID).
+
+// ── Recipe ──────────────────────────────────────────────────────────────────
+
+export function toRecipeCard(
+  data: RouterOutputs["recipe"]["getByID"],
+): ManifestCardProps {
+  // Whole-recipe macros from persisted totals. Older rows may not have them
+  // yet, so buildNutrients drops missing values.
+  const macros = buildNutrients(
+    RECIPE_MACRO_KEYS.reduce<Partial<Record<NutrientKey, number | undefined>>>(
+      (acc, key) => {
+        acc[key] = data.totals?.[`${key}Total`];
+        return acc;
+      },
+      {},
+    ),
+  );
+  const ingredientCount =
+    data.totals?.ingredientCount ??
+    sumBy(data.sections, (s) => s.ingredients.length);
+  const stepCount = sumBy(data.sections, (s) => s.instructions.length);
+  const yieldText = data.yield?.value
+    ? `makes ${formatYield(data.yield)}`
+    : data.servings
+      ? `${data.servings} servings`
+      : undefined;
+  const thumbUrl = data.images.find(isDisplayableImageFile)?.url;
+
   const stats: { label: string; value: ReactNode; caption?: string }[] = [];
-  if (vm.cost != null)
+  if (data.totals?.costTotal != null)
     stats.push({
       label: "Cost",
-      value: formatCurrency(vm.cost),
-      caption: coverageCaption(vm.costCovered, vm.ingredientCount),
+      value: formatCurrency(data.totals.costTotal),
+      caption: coverageCaption(data.totals?.costCovered, ingredientCount),
     });
-  if (vm.calories != null)
+  if (data.totals?.caloriesTotal != null)
     stats.push({
       label: "Calories",
-      value: `${Math.round(vm.calories)} kcal`,
-      caption: coverageCaption(vm.nutritionCovered, vm.ingredientCount),
+      value: `${Math.round(data.totals.caloriesTotal)} kcal`,
+      caption: coverageCaption(data.totals?.caloriesCovered, ingredientCount),
     });
-  stats.push({ label: "Ingredients", value: vm.ingredientCount });
-  if (vm.stepCount > 0) stats.push({ label: "Steps", value: vm.stepCount });
+  stats.push({ label: "Ingredients", value: ingredientCount });
+  if (stepCount > 0) stats.push({ label: "Steps", value: stepCount });
 
   const body: BodyBlock[] = [];
-  if (vm.thumbUrl) body.push({ kind: "thumb", url: vm.thumbUrl });
-  if (vm.nutrients)
-    body.push({
-      kind: "nutrients",
-      nutrients: vm.nutrients,
-      label: vm.nutrientsLabel,
-    });
+  if (thumbUrl) body.push({ kind: "thumb", url: thumbUrl });
+  if (Object.keys(macros).length > 0)
+    body.push({ kind: "nutrients", nutrients: macros, label: "Per recipe" });
   body.push({ kind: "stats", stats });
 
   return {
     entity: "recipe",
-    routeParam: vm.id,
+    routeParam: data.id,
     icon: <EntityIcon entity="recipe" size={14} colored />,
-    name: vm.name,
+    name: data.name,
     tag: "recipe",
-    identity: vm.yieldText,
+    identity: yieldText,
     crossLinks: [
       {
         to: "/recipes/$shortcode",
-        params: { shortcode: vm.id },
+        params: { shortcode: data.id },
         search: { view: "prep" },
         icon: <ListChecks className="size-3" />,
         label: "Prep sheet",
@@ -170,296 +163,182 @@ export function toRecipeCard(vm: RecipePreview): ManifestCardProps {
   };
 }
 
-export function RecipePreviewContent({ recipeId }: { recipeId: string }) {
-  const trpc = useTRPC();
-  const query = useQuery(trpc.recipe.getByID.queryOptions({ id: recipeId }));
-
-  return (
-    <PreviewQuery query={query} label="Recipe">
-      {(data) => {
-        // Whole-recipe macros from persisted totals. Older rows may not have
-        // them yet, so buildNutrients drops missing values.
-        const macros = buildNutrients(
-          RECIPE_MACRO_KEYS.reduce<
-            Partial<Record<NutrientKey, number | undefined>>
-          >((acc, key) => {
-            acc[key] = data.totals?.[`${key}Total`];
-            return acc;
-          }, {}),
-        );
-        return (
-          <ManifestCard
-            {...toRecipeCard({
-              id: data.id,
-              name: data.name,
-              yieldText: data.yield?.value
-                ? `makes ${formatYield(data.yield)}`
-                : data.servings
-                  ? `${data.servings} servings`
-                  : undefined,
-              cost: data.totals?.costTotal,
-              calories: data.totals?.caloriesTotal,
-              nutrients: Object.keys(macros).length > 0 ? macros : undefined,
-              nutrientsLabel: "Per recipe",
-              costCovered: data.totals?.costCovered,
-              nutritionCovered: data.totals?.caloriesCovered,
-              ingredientCount:
-                data.totals?.ingredientCount ??
-                sumBy(data.sections, (s) => s.ingredients.length),
-              stepCount: sumBy(data.sections, (s) => s.instructions.length),
-              thumbUrl: data.images.find(isDisplayableImageFile)?.url,
-            })}
-          />
-        );
-      }}
-    </PreviewQuery>
-  );
-}
-
 // ── Ingredient ──────────────────────────────────────────────────────────────
 
-export type IngredientPreview = {
-  id: string;
-  name: string;
-  aliases: string[];
-  nutrients?: Record<string, number>;
-  cheapestPrice?: number;
-  multiplePrices: boolean;
-  recipeCount: number;
-  usdaFdcId?: number;
-  /** An ingredient has no images of its own — the first product's cover stands in. */
-  thumbUrl?: string;
-  products: {
-    id: string;
-    name: string;
-    manufacturer: string;
-  }[];
-};
+export function toIngredientCard(
+  data: RouterOutputs["ingredient"]["getByID"],
+): ManifestCardProps {
+  const prices = data.product
+    .map((prod) => prod.pricing.effectivePrice)
+    .filter((value): value is number => value != null);
+  const cheapestPrice = prices.length > 0 ? Math.min(...prices) : undefined;
+  const multiplePrices = prices.length > 1;
+  // An ingredient has no images of its own — the first product's cover
+  // stands in.
+  const thumbUrl = data.product
+    .flatMap((prod) => prod.images)
+    .find(isDisplayableImageFile)?.url;
+  const nutrients = data.product.find((prod) => prod.food?.nutritionInfo)?.food
+    ?.nutritionInfo.nutrientsPer100;
+  const usdaFdcId = data.product.find((prod) => prod.food)?.food?.fdc_id;
+  const aliases = data.aliases ?? [];
 
-export function toIngredientCard(vm: IngredientPreview): ManifestCardProps {
   const stats: { label: string; value: ReactNode }[] = [];
-  if (vm.cheapestPrice != null)
+  if (cheapestPrice != null)
     stats.push({
       label: "Price",
-      value: <PriceValue amount={vm.cheapestPrice} from={vm.multiplePrices} />,
+      value: <PriceValue amount={cheapestPrice} from={multiplePrices} />,
     });
-  stats.push({ label: "Recipes", value: vm.recipeCount });
+  stats.push({ label: "Recipes", value: data.appearsInRecipes.length });
 
   const body: BodyBlock[] = [];
-  if (vm.thumbUrl) body.push({ kind: "thumb", url: vm.thumbUrl });
-  if (vm.nutrients) body.push({ kind: "nutrients", nutrients: vm.nutrients });
+  if (thumbUrl) body.push({ kind: "thumb", url: thumbUrl });
+  if (nutrients) body.push({ kind: "nutrients", nutrients });
   body.push({ kind: "stats", stats });
-  if (vm.products.length > 0)
-    body.push({ kind: "products", products: vm.products });
+  if (data.product.length > 0)
+    body.push({
+      kind: "products",
+      products: data.product.map((prod) => ({
+        id: prod.id,
+        name: prod.name,
+        manufacturer: prod.manufacturer,
+      })),
+    });
 
   return {
     entity: "ingredient",
-    routeParam: vm.id,
+    routeParam: data.id,
     icon: <EntityIcon entity="ingredient" size={14} colored />,
-    name: vm.name,
+    name: data.name,
     tag: "ingredient",
-    identity:
-      vm.aliases.length > 0 ? `aka ${vm.aliases.join(", ")}` : undefined,
-    crossLinks:
-      vm.usdaFdcId != null ? [usdaCrossLink(vm.usdaFdcId)] : undefined,
+    identity: aliases.length > 0 ? `aka ${aliases.join(", ")}` : undefined,
+    crossLinks: usdaFdcId != null ? [usdaCrossLink(usdaFdcId)] : undefined,
     body,
   };
 }
 
-export function IngredientPreviewContent({
-  ingredientId,
-}: {
-  ingredientId: string;
-}) {
-  const trpc = useTRPC();
-  const query = useQuery(
-    trpc.ingredient.getByID.queryOptions({ id: ingredientId }),
-  );
-
-  return (
-    <PreviewQuery query={query} label="Ingredient">
-      {(data) => {
-        const prices = data.product
-          .map((prod) => prod.pricing.effectivePrice)
-          .filter((value): value is number => value != null);
-        return (
-          <ManifestCard
-            {...toIngredientCard({
-              id: data.id,
-              name: data.name,
-              aliases: data.aliases ?? [],
-              nutrients: data.product.find((prod) => prod.food?.nutritionInfo)
-                ?.food?.nutritionInfo.nutrientsPer100,
-              cheapestPrice:
-                prices.length > 0 ? Math.min(...prices) : undefined,
-              multiplePrices: prices.length > 1,
-              recipeCount: data.appearsInRecipes.length,
-              usdaFdcId: data.product.find((prod) => prod.food)?.food?.fdc_id,
-              thumbUrl: data.product
-                .flatMap((prod) => prod.images)
-                .find(isDisplayableImageFile)?.url,
-              products: data.product.map((prod) => ({
-                id: prod.id,
-                name: prod.name,
-                manufacturer: prod.manufacturer,
-              })),
-            })}
-          />
-        );
-      }}
-    </PreviewQuery>
-  );
-}
-
 // ── Product ─────────────────────────────────────────────────────────────────
 
-export type ProductPreview = {
-  id: string;
-  name: string;
-  identity?: string;
-  nutrients?: Record<string, number>;
-  price?: number;
-  upc?: string;
-  thumbUrl?: string;
-  usdaFdcId?: number;
-  /** Null when unstocked OR when the entries mix units — render `—`, never a sum. */
-  onHandUnits?: number | null;
-  /** Live stock locations, name only. Collapsed past two. */
-  locationNames?: string[];
-};
+export function toProductCard(
+  data: RouterOutputs["product"]["getByID"],
+): ManifestCardProps {
+  const isMisc = isMiscProduct(data.name);
+  const manufacturer =
+    !isMisc &&
+    data.manufacturer &&
+    !isUnspecifiedManufacturer(data.manufacturer)
+      ? data.manufacturer
+      : null;
+  const identity =
+    [isMisc ? "misc" : manufacturer, data.category]
+      .filter(Boolean)
+      .join(" · ") || undefined;
+  const thumbUrl = data.images.find(isDisplayableImageFile)?.url;
+  const usdaFdcId = data.food?.fdc_id ?? data.fdc_id ?? undefined;
 
-export function toProductCard(vm: ProductPreview): ManifestCardProps {
   const body: BodyBlock[] = [];
-  if (vm.thumbUrl) body.push({ kind: "thumb", url: vm.thumbUrl });
-  if (vm.nutrients) body.push({ kind: "nutrients", nutrients: vm.nutrients });
+  if (thumbUrl) body.push({ kind: "thumb", url: thumbUrl });
+  if (data.food?.nutritionInfo.nutrientsPer100)
+    body.push({
+      kind: "nutrients",
+      nutrients: data.food.nutritionInfo.nutrientsPer100,
+    });
   const stats: { label: string; value: ReactNode }[] = [];
-  if (vm.price != null)
-    stats.push({ label: "Price", value: <PriceValue amount={vm.price} /> });
-  if (vm.upc)
+  if (data.pricing.effectivePrice != null)
+    stats.push({
+      label: "Price",
+      value: <PriceValue amount={data.pricing.effectivePrice} />,
+    });
+  if (data.primaryGtin !== null)
     stats.push({
       label: "UPC",
-      value: <span className="font-mono text-xs">{vm.upc}</span>,
+      value: (
+        <span className="font-mono text-xs">
+          {displayGtin(data.primaryGtin)}
+        </span>
+      ),
     });
   // "How many, and where" is the question a product hover is usually asking —
   // and the detail read behind this card already carries both, so showing them
   // costs nothing. Omitted entirely for a product that isn't stocked, rather
   // than shown as a zero it never counted.
-  if (vm.onHandUnits != null)
-    stats.push({ label: "On hand", value: vm.onHandUnits });
-  if (vm.locationNames && vm.locationNames.length > 0)
+  if (data.onHandUnits != null)
+    stats.push({ label: "On hand", value: data.onHandUnits });
+  // Stock entries plus the bins that ARE this product — a tote in service is
+  // just as much an answer to "where is it".
+  const locationNames = [
+    ...data.inventoryEntry.map((entry) => entry.location.name),
+    ...data.servingAsLocations.map((location) => location.name),
+  ];
+  if (locationNames.length > 0)
     stats.push({
-      label: vm.locationNames.length === 1 ? "Location" : "Locations",
+      label: locationNames.length === 1 ? "Location" : "Locations",
       value:
-        vm.locationNames.length > 2
-          ? `${vm.locationNames.length} locations`
-          : vm.locationNames.join(", "),
+        locationNames.length > 2
+          ? `${locationNames.length} locations`
+          : locationNames.join(", "),
     });
   if (stats.length > 0) body.push({ kind: "stats", stats });
 
   return {
     entity: "product",
-    routeParam: vm.id,
+    routeParam: data.id,
     icon: <EntityIcon entity="product" size={14} colored />,
-    name: vm.name,
+    name: isMisc ? getMiscDisplayName(data.name) : data.name,
     tag: "product",
-    identity: vm.identity,
-    crossLinks:
-      vm.usdaFdcId != null ? [usdaCrossLink(vm.usdaFdcId)] : undefined,
+    identity,
+    crossLinks: usdaFdcId != null ? [usdaCrossLink(usdaFdcId)] : undefined,
     body,
   };
 }
 
-export function ProductPreviewContent({ productId }: { productId: string }) {
-  const trpc = useTRPC();
-  const query = useQuery(trpc.product.getByID.queryOptions({ id: productId }));
-
-  return (
-    <PreviewQuery query={query} label="Product">
-      {(data) => {
-        const isMisc = isMiscProduct(data.name);
-        const manufacturer =
-          !isMisc &&
-          data.manufacturer &&
-          !isUnspecifiedManufacturer(data.manufacturer)
-            ? data.manufacturer
-            : null;
-        return (
-          <ManifestCard
-            {...toProductCard({
-              id: data.id,
-              name: isMisc ? getMiscDisplayName(data.name) : data.name,
-              identity:
-                [isMisc ? "misc" : manufacturer, data.category]
-                  .filter(Boolean)
-                  .join(" · ") || undefined,
-              nutrients: data.food?.nutritionInfo.nutrientsPer100,
-              price: data.pricing.effectivePrice ?? undefined,
-              upc:
-                data.primaryGtin === null
-                  ? undefined
-                  : displayGtin(data.primaryGtin),
-              thumbUrl: data.images.find(isDisplayableImageFile)?.url,
-              usdaFdcId: data.food?.fdc_id ?? data.fdc_id ?? undefined,
-              onHandUnits: data.onHandUnits,
-              // Stock entries plus the bins that ARE this product — a tote in
-              // service is just as much an answer to "where is it".
-              locationNames: [
-                ...data.inventoryEntry.map((entry) => entry.location.name),
-                ...data.servingAsLocations.map((location) => location.name),
-              ],
-            })}
-          />
-        );
-      }}
-    </PreviewQuery>
-  );
-}
-
 // ── USDA food ───────────────────────────────────────────────────────────────
 
-export type UsdaPreview = {
-  fdcId: number;
-  name: string;
-  dataType?: DataType;
-  brand?: string;
-  nutrients: Record<string, number>;
-  linkedProductShortcode?: string;
-  linkedProductName?: string;
-};
+export function toUsdaCard(
+  fdcId: number,
+  data: NonNullable<RouterOutputs["usda"]["getByID"]>,
+): ManifestCardProps {
+  const dataType = data.foodInfo.data_type;
+  const brand =
+    data.brandedFoodInfo?.brand_name ??
+    data.brandedFoodInfo?.brand_owner ??
+    undefined;
+  const linkedProduct = data.linkedProducts[0];
 
-export function toUsdaCard(vm: UsdaPreview): ManifestCardProps {
   return {
     entity: "usda-food",
-    routeParam: String(vm.fdcId),
-    icon: vm.dataType ? (
+    routeParam: String(fdcId),
+    icon: dataType ? (
       <EntityIcon
         entity="usda-food"
         size={14}
-        style={{ color: dataTypeColor(vm.dataType) }}
+        style={{ color: dataTypeColor(dataType) }}
       />
     ) : (
       <EntityIcon entity="usda-food" size={14} colored />
     ),
-    name: vm.name,
+    name: data.foodInfo.description || "Unnamed Food",
     tag: "usda",
-    identity: vm.dataType ? (
+    identity: dataType ? (
       <>
-        <UsdaDataTypeDot dataType={vm.dataType} />
-        {dataTypeLabel(vm.dataType)}
-        {vm.brand && <span>· {vm.brand}</span>}
+        <UsdaDataTypeDot dataType={dataType} />
+        {dataTypeLabel(dataType)}
+        {brand && <span>· {brand}</span>}
       </>
     ) : undefined,
-    crossLinks: vm.linkedProductShortcode
+    crossLinks: linkedProduct
       ? [
           {
             to: "/products/$shortcode",
-            params: { shortcode: vm.linkedProductShortcode },
+            params: { shortcode: linkedProduct.id },
             icon: <EntityIcon entity="product" size={12} colored />,
-            label: vm.linkedProductName ?? "Product",
+            label: linkedProduct.name ?? "Product",
           },
         ]
       : undefined,
-    body: [{ kind: "nutrients", nutrients: vm.nutrients }],
+    body: [
+      { kind: "nutrients", nutrients: data.nutritionInfo.nutrientsPer100 },
+    ],
   };
 }
 
@@ -469,72 +348,49 @@ export function UsdaFoodPreviewContent({ fdcId }: { fdcId: number }) {
 
   return (
     <PreviewQuery query={query} label="Food">
-      {(data) => (
-        <ManifestCard
-          {...toUsdaCard({
-            fdcId,
-            name: data.foodInfo.description || "Unnamed Food",
-            dataType: data.foodInfo.data_type,
-            brand:
-              data.brandedFoodInfo?.brand_name ??
-              data.brandedFoodInfo?.brand_owner ??
-              undefined,
-            nutrients: data.nutritionInfo.nutrientsPer100,
-            linkedProductShortcode: data.linkedProducts[0]?.id,
-            linkedProductName: data.linkedProducts[0]?.name,
-          })}
-        />
-      )}
+      {(data) => <ManifestCard {...toUsdaCard(fdcId, data)} />}
     </PreviewQuery>
   );
 }
 
 // ── Location ────────────────────────────────────────────────────────────────
 
-export type LocationPreview = {
-  id: string;
-  name: string;
-  type: LocationType | null;
-  /** The SKU this location IS — drives the glyph when `type` is null. */
-  product: LocationIdentityProductOut | null;
-  parent?: { id: string; name: string };
-  itemCount?: number;
-  subCount?: number;
-  thumbUrl?: string;
-};
+export function toLocationCard(
+  data: RouterOutputs["location"]["getByID"],
+): ManifestCardProps {
+  const itemCount = data.totalItemCount ?? data.directItemCount ?? undefined;
+  const subCount = data.childCount ?? data.children?.length ?? undefined;
+  const thumbUrl = locationCoverImage(data)?.url;
 
-export function toLocationCard(vm: LocationPreview): ManifestCardProps {
   const stats: { label: string; value: ReactNode }[] = [];
-  if (vm.itemCount != null)
-    stats.push({ label: "On hand", value: vm.itemCount });
-  if (vm.subCount != null)
-    stats.push({ label: "Sub-locations", value: vm.subCount });
+  if (itemCount != null) stats.push({ label: "On hand", value: itemCount });
+  if (subCount != null) stats.push({ label: "Sub-locations", value: subCount });
 
   const body: BodyBlock[] = [];
-  if (vm.thumbUrl) body.push({ kind: "thumb", url: vm.thumbUrl });
+  if (thumbUrl) body.push({ kind: "thumb", url: thumbUrl });
   if (stats.length > 0) body.push({ kind: "stats", stats });
 
   return {
     entity: "location",
-    routeParam: vm.id,
+    routeParam: data.id,
     // `product` is load-bearing, not decoration: a location that IS a SKU has a
     // null `type`, and getLocationGlyph falls back to the product's category.
     icon: (
-      <LocationIcon type={vm.type} product={vm.product} size={14} colored />
+      <LocationIcon type={data.type} product={data.product} size={14} colored />
     ),
-    name: vm.name,
+    name: data.name,
     tag: "location",
     // Parent isn't repeated here — it lives in the cross-link below.
     // `type ?? product.name` is LocationTypeLabel's rule: a product-linked
     // location has no type, and this line read blank for every one of them.
-    identity: vm.type ?? vm.product?.name,
-    crossLinks: vm.parent
+    identity: data.type ?? data.product?.name,
+    crossLinks: data.parent
       ? [
           {
             to: "/locations/$shortcode",
-            params: { shortcode: vm.parent.id },
+            params: { shortcode: data.parent.id },
             icon: <EntityIcon entity="location" size={12} colored />,
-            label: vm.parent.name,
+            label: data.parent.name,
           },
         ]
       : undefined,
@@ -542,169 +398,94 @@ export function toLocationCard(vm: LocationPreview): ManifestCardProps {
   };
 }
 
-export function LocationPreviewContent({ locationId }: { locationId: string }) {
-  const trpc = useTRPC();
-  const query = useQuery(
-    trpc.location.getByID.queryOptions({ id: locationId }),
-  );
-
-  return (
-    <PreviewQuery query={query} label="Location">
-      {(data) => (
-        <ManifestCard
-          {...toLocationCard({
-            id: data.id,
-            name: data.name,
-            type: data.type,
-            product: data.product,
-            thumbUrl: locationCoverImage(data)?.url,
-            parent: data.parent
-              ? { id: data.parent.id, name: data.parent.name }
-              : undefined,
-            itemCount: data.totalItemCount ?? data.directItemCount ?? undefined,
-            subCount: data.childCount ?? data.children?.length ?? undefined,
-          })}
-        />
-      )}
-    </PreviewQuery>
-  );
-}
-
 // ── Inventory ───────────────────────────────────────────────────────────────
 
-export type InventoryPreview = {
-  id: string;
-  /** An entry has no name of its own — the product it holds identifies it. */
-  productName: string;
-  productId: string;
-  locationName: string;
-  locationId: string;
-  locationType: LocationType | null;
-  amountText: string;
-  valuation?: number | null;
-  thumbUrl?: string;
-};
+export function toInventoryCard(
+  data: RouterOutputs["inventory"]["getByID"],
+): ManifestCardProps {
+  const productName = isMiscProduct(data.product.name)
+    ? getMiscDisplayName(data.product.name)
+    : data.product.name;
+  const thumbUrl = data.product.images.find(isDisplayableImageFile)?.url;
 
-export function toInventoryCard(vm: InventoryPreview): ManifestCardProps {
   const stats: { label: string; value: ReactNode }[] = [
-    { label: "On hand", value: vm.amountText },
+    { label: "On hand", value: tryFormatAmount(data.amount) },
   ];
   // Plain currency, not PriceValue — valuation is amount × price, a total, so
   // PriceValue's "/ea" unit-price suffix would misread it.
-  if (vm.valuation != null)
-    stats.push({ label: "Value", value: formatCurrency(vm.valuation) });
+  if (data.valuation != null)
+    stats.push({ label: "Value", value: formatCurrency(data.valuation) });
 
   const body: BodyBlock[] = [];
-  if (vm.thumbUrl) body.push({ kind: "thumb", url: vm.thumbUrl });
+  if (thumbUrl) body.push({ kind: "thumb", url: thumbUrl });
   body.push({ kind: "stats", stats });
 
   return {
     entity: "inventory",
-    routeParam: vm.id,
+    routeParam: data.id,
     icon: <EntityIcon entity="inventory" size={14} colored />,
-    name: vm.productName,
+    name: productName,
     tag: "inventory",
-    identity: vm.locationName,
+    identity: data.location.name,
     crossLinks: [
       {
         to: "/products/$shortcode",
-        params: { shortcode: vm.productId },
+        params: { shortcode: data.product.id },
         icon: <EntityIcon entity="product" size={12} colored />,
-        label: vm.productName,
+        label: productName,
       },
       {
         to: "/locations/$shortcode",
-        params: { shortcode: vm.locationId },
+        params: { shortcode: data.location.id },
         icon: (
           <LocationIcon
-            type={vm.locationType}
+            type={data.location.type}
             product={null}
             size={12}
             colored
           />
         ),
-        label: vm.locationName,
+        label: data.location.name,
       },
     ],
     body,
   };
 }
 
-export function InventoryPreviewContent({
-  inventoryId,
-}: {
-  inventoryId: string;
-}) {
-  const trpc = useTRPC();
-  const query = useQuery(
-    trpc.inventory.getByID.queryOptions({ id: inventoryId }),
-  );
-
-  return (
-    <PreviewQuery query={query} label="Inventory item">
-      {(data) => (
-        <ManifestCard
-          {...toInventoryCard({
-            id: data.id,
-            productName: isMiscProduct(data.product.name)
-              ? getMiscDisplayName(data.product.name)
-              : data.product.name,
-            productId: data.product.id,
-            locationName: data.location.name,
-            locationId: data.location.id,
-            locationType: data.location.type,
-            amountText: tryFormatAmount(data.amount),
-            valuation: data.valuation,
-            thumbUrl: data.product.images.find(isDisplayableImageFile)?.url,
-          })}
-        />
-      )}
-    </PreviewQuery>
-  );
-}
-
 // ── Cookbook ────────────────────────────────────────────────────────────────
 
-export type CookbookPreview = {
-  id: string;
-  name: string;
-  authors: string[];
-  subjects: string[];
-  recipeCount: number;
-  sourceRecipeCount: number;
-  coverUrl?: string | null;
-};
-
-export function toCookbookCard(vm: CookbookPreview): ManifestCardProps {
+export function toCookbookCard(
+  data: RouterOutputs["recipe"]["listCookbooks"][number],
+): ManifestCardProps {
   const body: BodyBlock[] = [];
-  if (vm.coverUrl) body.push({ kind: "thumb", url: vm.coverUrl });
+  if (data.coverUrl) body.push({ kind: "thumb", url: data.coverUrl });
   body.push({
     kind: "stats",
     stats: [
       {
         label: "Recipes",
-        value: vm.recipeCount,
+        value: data.recipeCount,
         // How many of the book's extracted recipes are actually imported.
         caption:
-          vm.sourceRecipeCount > vm.recipeCount
-            ? `of ${vm.sourceRecipeCount}`
+          data.sourceRecipeCount > data.recipeCount
+            ? `of ${data.sourceRecipeCount}`
             : undefined,
       },
       {
         label: "Subjects",
         value:
-          vm.subjects.length > 0 ? vm.subjects.slice(0, 2).join(", ") : "—",
+          data.subjects.length > 0 ? data.subjects.slice(0, 2).join(", ") : "—",
       },
     ],
   });
 
   return {
     entity: "cookbook",
-    routeParam: vm.id,
+    routeParam: data.id,
     icon: <EntityIcon entity="cookbook" size={14} colored />,
-    name: vm.name,
+    name: data.book,
     tag: "cookbook",
-    identity: vm.authors.length > 0 ? vm.authors.join(", ") : undefined,
+    identity: data.author.length > 0 ? data.author.join(", ") : undefined,
     body,
   };
 }
@@ -722,165 +503,104 @@ export function CookbookPreviewContent({ cookbookId }: { cookbookId: string }) {
       query={{ data: cookbook, isLoading: query.isLoading }}
       label="Cookbook"
     >
-      {(data) => (
-        <ManifestCard
-          {...toCookbookCard({
-            id: data.id,
-            name: data.book,
-            authors: data.author,
-            subjects: data.subjects,
-            recipeCount: data.recipeCount,
-            sourceRecipeCount: data.sourceRecipeCount,
-            coverUrl: data.coverUrl,
-          })}
-        />
-      )}
+      {(data) => <ManifestCard {...toCookbookCard(data)} />}
     </PreviewQuery>
   );
 }
 
 // ── Meal ────────────────────────────────────────────────────────────────────
 
-export type MealPreview = {
-  id: string;
-  name: string | null;
-  date: string;
-  recipeNames: string[];
-  cost: number;
-  calories: number;
-  /** At least one planned recipe has no computed totals yet. */
-  pending: boolean;
-};
-
-export function toMealCard(vm: MealPreview): ManifestCardProps {
+export function toMealCard(
+  data: RouterOutputs["meal"]["getByID"],
+): ManifestCardProps {
   return {
     entity: "meal",
-    routeParam: vm.id,
+    routeParam: data.id,
     icon: <EntityIcon entity="meal" size={14} colored />,
     // An unnamed meal is identified by its date — the same fallback the
     // calendar uses.
-    name: vm.name || formatDate(vm.date),
+    name: data.name || formatDate(data.date),
     tag: "meal",
-    identity: vm.name ? formatDate(vm.date) : undefined,
+    identity: data.name ? formatDate(data.date) : undefined,
     body: [
       {
         kind: "stats",
         stats: [
           {
             label: "Recipes",
-            value: vm.recipeNames.length,
+            value: data.recipes.length,
             caption:
-              vm.recipeNames.length > 0
-                ? vm.recipeNames.slice(0, 2).join(", ")
+              data.recipes.length > 0
+                ? data.recipes
+                    .slice(0, 2)
+                    .map((r) => r.recipe.name)
+                    .join(", ")
                 : undefined,
           },
           {
             label: "Cost",
-            value: formatCurrency(vm.cost),
-            caption: vm.pending ? "partial" : undefined,
+            value: formatCurrency(data.totals.costTotal),
+            caption: data.totals.pending ? "partial" : undefined,
           },
-          { label: "Calories", value: `${Math.round(vm.calories)} kcal` },
+          {
+            label: "Calories",
+            value: `${Math.round(data.totals.caloriesTotal)} kcal`,
+          },
         ],
       },
     ],
   };
 }
 
-export function MealPreviewContent({ mealId }: { mealId: string }) {
-  const trpc = useTRPC();
-  const query = useQuery(trpc.meal.getByID.queryOptions({ id: mealId }));
-
-  return (
-    <PreviewQuery query={query} label="Meal">
-      {(data) => (
-        <ManifestCard
-          {...toMealCard({
-            id: data.id,
-            name: data.name,
-            date: data.date,
-            recipeNames: data.recipes.map((r) => r.recipe.name),
-            cost: data.totals.costTotal,
-            calories: data.totals.caloriesTotal,
-            pending: data.totals.pending,
-          })}
-        />
-      )}
-    </PreviewQuery>
-  );
-}
-
 // ── Project ─────────────────────────────────────────────────────────────────
 
-// Cross-link to a task/expense's parent project (built identically for both).
-//
-// `taskOut`/`expenseOut` carry `projectId` (the project's shortcode, per the
-// project/task/expense shortcode cutover) alongside `projectName`, so the
-// cross-link needs no lookup of its own.
-const projectCrossLink = (shortcode: string, name: string): CrossLink => ({
-  to: "/projects/$shortcode",
-  params: { shortcode },
-  icon: <ProjectMarkById projectId={shortcode} size={12} />,
-  label: name,
-});
-
-export type ProjectPreview = {
-  id: string;
-  name: string;
-  icon?: string | null;
-  status: ProjectStatus;
-  kind: ProjectKind | null;
-  locations: string[];
-  spent: number;
-  costEstimate?: number | null;
-  taskCount: number;
-  doneTaskCount: number;
-  expenseCount: number;
-  // The EFFECTIVE window (derived rollup or manual override, whichever
-  // wins) — see `projectDateWindow` in packages/schemas/src/project.ts.
-  // Never the raw `startDate`/`endDate` override columns. Optional (like
-  // `costEstimate` above) so existing static callers (design gallery
-  // samples) aren't forced to supply it.
-  effectiveStart?: string | null;
-  effectiveEnd?: string | null;
-  thumbUrl?: string;
-};
-
-export function toProjectCard(vm: ProjectPreview): ManifestCardProps {
+export function toProjectCard(
+  data: RouterOutputs["project"]["getByID"] & { thumbUrl?: string },
+): ManifestCardProps {
   const identity = [
-    PROJECT_STATUS_LABELS[vm.status],
-    vm.kind ? capitalize(vm.kind) : null,
-    vm.locations.length > 0 ? vm.locations.join(", ") : null,
+    PROJECT_STATUS_LABELS[data.status],
+    data.kind ? capitalize(data.kind) : null,
+    data.locations.length > 0 ? data.locations.join(", ") : null,
   ]
     .filter(Boolean)
     .join(" · ");
 
   return {
     entity: "project",
-    routeParam: vm.id,
-    icon: <ProjectMark icon={vm.icon} />,
-    name: vm.name,
+    routeParam: data.id,
+    icon: <ProjectMark icon={data.icon} />,
+    name: data.name,
     tag: "project",
     identity,
     body: [
-      ...(vm.thumbUrl ? [{ kind: "thumb" as const, url: vm.thumbUrl }] : []),
+      ...(data.thumbUrl
+        ? [{ kind: "thumb" as const, url: data.thumbUrl }]
+        : []),
       {
         kind: "stats",
         stats: [
           {
             label: "Spent",
-            value: formatCurrency(vm.spent),
+            value: formatCurrency(data.rollup.spent),
             caption:
-              vm.costEstimate != null
-                ? `of ${formatCurrency(vm.costEstimate, 0)}`
+              data.costEstimate != null
+                ? `of ${formatCurrency(data.costEstimate, 0)}`
                 : undefined,
           },
-          { label: "Tasks", value: `${vm.doneTaskCount}/${vm.taskCount}` },
-          { label: "Expenses", value: vm.expenseCount },
+          {
+            label: "Tasks",
+            value: `${data.rollup.doneTaskCount}/${data.rollup.taskCount}`,
+          },
+          { label: "Expenses", value: data.rollup.expenseCount },
           {
             label: "Dates",
+            // The EFFECTIVE window (derived rollup or manual override,
+            // whichever wins) — see `projectDateWindow` in
+            // packages/schemas/src/project.ts. Never the raw
+            // `startDate`/`endDate` override columns.
             value: formatDateRange(
-              vm.effectiveStart ?? null,
-              vm.effectiveEnd ?? null,
+              data.dates.effectiveStart ?? null,
+              data.dates.effectiveEnd ?? null,
             ),
           },
         ],
@@ -889,85 +609,37 @@ export function toProjectCard(vm: ProjectPreview): ManifestCardProps {
   };
 }
 
-export function ProjectPreviewContent({ projectId }: { projectId: string }) {
-  const trpc = useTRPC();
-  const query = useQuery(trpc.project.getByID.queryOptions({ id: projectId }));
-  // Projects deliberately carry no `images` on `getByID` — `projectOut` is also
-  // `project.list`'s output, so widening it would buy a per-row image join on
-  // every list page (see repo/image.ts's getImagesByProjectIds). This endpoint
-  // is the established path, already displayable-filtered and cover-first, and
-  // the projects dashboard usually leaves it warm in the cache. The card never
-  // waits on it: the thumb just appears when it lands.
-  const coverQuery = useQuery(
-    trpc.image.imagesByProjectIds.queryOptions({ projectIds: [projectId] }),
-  );
-
-  return (
-    <PreviewQuery query={query} label="Project">
-      {(data) => (
-        <ManifestCard
-          {...toProjectCard({
-            id: projectId,
-            name: data.name,
-            icon: data.icon,
-            status: data.status,
-            kind: data.kind,
-            locations: data.locations,
-            spent: data.rollup.spent,
-            costEstimate: data.costEstimate,
-            taskCount: data.rollup.taskCount,
-            doneTaskCount: data.rollup.doneTaskCount,
-            expenseCount: data.rollup.expenseCount,
-            effectiveStart: data.dates.effectiveStart,
-            effectiveEnd: data.dates.effectiveEnd,
-            thumbUrl: coverQuery.data?.[projectId]?.[0]?.url,
-          })}
-        />
-      )}
-    </PreviewQuery>
-  );
-}
-
 // ── Task ────────────────────────────────────────────────────────────────────
 
-export type TaskPreview = {
-  id: string;
-  name: string;
-  status: TaskStatus;
-  trade: Trade | null;
-  dueDate: string | null;
-  dueEndDate: string | null;
-  projectId?: string | null;
-  projectName?: string | null;
-};
-
-export function toTaskCard(vm: TaskPreview): ManifestCardProps {
+export function toTaskCard(
+  data: RouterOutputs["task"]["getByID"],
+): ManifestCardProps {
   const identity = [
-    TASK_STATUS_LABELS[vm.status],
-    vm.trade ? TRADE_LABELS[vm.trade] : null,
+    TASK_STATUS_LABELS[data.status],
+    data.trade ? TRADE_LABELS[data.trade] : null,
   ]
     .filter(Boolean)
     .join(" · ");
 
   return {
     entity: "task",
-    routeParam: vm.id,
+    routeParam: data.id,
     icon: <EntityIcon entity="task" size={14} colored />,
-    name: vm.name,
+    name: data.name,
     tag: "task",
     identity,
     crossLinks:
-      vm.projectId && vm.projectName
-        ? [projectCrossLink(vm.projectId, vm.projectName)]
+      data.projectId && data.projectName
+        ? [projectCrossLink(data.projectId, data.projectName)]
         : undefined,
     body: [
       {
         kind: "stats",
         stats: [
-          { label: "Status", value: TASK_STATUS_LABELS[vm.status] },
+          { label: "Status", value: TASK_STATUS_LABELS[data.status] },
           {
             label: "Due",
-            value: formatDateRange(vm.dueDate, vm.dueEndDate),
+            value: formatDateRange(data.dueDate, data.dueEndDate),
           },
         ],
       },
@@ -975,71 +647,37 @@ export function toTaskCard(vm: TaskPreview): ManifestCardProps {
   };
 }
 
-export function TaskPreviewContent({ taskId }: { taskId: string }) {
-  const trpc = useTRPC();
-  const query = useQuery(trpc.task.getByID.queryOptions({ id: taskId }));
-
-  return (
-    <PreviewQuery query={query} label="Task">
-      {(data) => (
-        <ManifestCard
-          {...toTaskCard({
-            id: taskId,
-            name: data.name,
-            status: data.status,
-            trade: data.trade,
-            dueDate: data.dueDate,
-            dueEndDate: data.dueEndDate,
-            projectId: data.projectId,
-            projectName: data.projectName,
-          })}
-        />
-      )}
-    </PreviewQuery>
-  );
-}
-
 // ── Expense ────────────────────────────────────────────────────────────────
 
-export type ExpensePreview = {
-  id: string;
-  name: string;
-  cost: number | null;
-  date: string | null;
-  costType: CostType | null;
-  trade: Trade | null;
-  future: boolean;
-  vendor?: string | null;
-  orderId?: string | null;
-  orderUrl?: string | null;
-  projectId?: string | null;
-  projectName?: string | null;
-};
-
-export function toExpenseCard(vm: ExpensePreview): ManifestCardProps {
+export function toExpenseCard(
+  data: RouterOutputs["expense"]["getByID"],
+): ManifestCardProps {
   const identity =
     [
-      vm.costType ? costTypeLabels[vm.costType] : null,
-      vm.trade ? TRADE_LABELS[vm.trade] : null,
+      data.costType ? costTypeLabels[data.costType] : null,
+      data.trade ? TRADE_LABELS[data.trade] : null,
     ]
       .filter(Boolean)
-      .join(" · ") + (vm.future ? " · planned" : "");
+      .join(" · ") + (data.future ? " · planned" : "");
 
   const stats: { label: string; value: ReactNode }[] = [
-    { label: "Cost", value: vm.cost != null ? formatCurrency(vm.cost) : "—" },
-    { label: "Date", value: vm.date ? formatDate(vm.date) : "—" },
+    {
+      label: "Cost",
+      value: data.cost != null ? formatCurrency(data.cost) : "—",
+    },
+    { label: "Date", value: data.date ? formatDate(data.date) : "—" },
   ];
-  if (vm.vendor) stats.push({ label: "Vendor", value: vm.vendor });
-  if (vm.orderId)
+  if (data.vendor) stats.push({ label: "Vendor", value: data.vendor });
+  if (data.orderId)
     stats.push({
       label: "Order #",
       value: (
         <Row align="center" gap="xs">
-          <span className="font-mono text-xs">{vm.orderId}</span>
+          <span className="font-mono text-xs">{data.orderId}</span>
           <OrderIdLink
-            orderUrl={vm.orderUrl}
-            orderId={vm.orderId}
-            vendorName={vm.vendor}
+            orderUrl={data.orderUrl}
+            orderId={data.orderId}
+            vendorName={data.vendor}
           />
         </Row>
       ),
@@ -1047,88 +685,36 @@ export function toExpenseCard(vm: ExpensePreview): ManifestCardProps {
 
   return {
     entity: "expense",
-    routeParam: vm.id,
+    routeParam: data.id,
     icon: <EntityIcon entity="expense" size={14} colored />,
-    name: vm.name,
+    name: data.name,
     tag: "expense",
     identity: identity || undefined,
     crossLinks:
-      vm.projectId && vm.projectName
-        ? [projectCrossLink(vm.projectId, vm.projectName)]
+      data.projectId && data.projectName
+        ? [projectCrossLink(data.projectId, data.projectName)]
         : undefined,
     body: [{ kind: "stats", stats }],
   };
 }
 
-export function ExpensePreviewContent({ expenseId }: { expenseId: string }) {
-  const trpc = useTRPC();
-  const query = useQuery(trpc.expense.getByID.queryOptions({ id: expenseId }));
-
-  return (
-    <PreviewQuery query={query} label="Expense">
-      {(data) => (
-        <ManifestCard
-          {...toExpenseCard({
-            id: expenseId,
-            name: data.name,
-            cost: data.cost,
-            date: data.date,
-            costType: data.costType,
-            trade: data.trade,
-            future: data.future,
-            vendor: data.vendor,
-            orderId: data.orderId,
-            orderUrl: data.orderUrl,
-            projectId: data.projectId,
-            projectName: data.projectName,
-          })}
-        />
-      )}
-    </PreviewQuery>
-  );
-}
-
 // ── Purchase ────────────────────────────────────────────────────────────────
 
-/**
- * Cross-link to the vendor that issued a purchase — the purchase's primary
- * context. `purchaseOut.vendorId` is the vendor's shortcode (per the
- * vendor/purchase shortcode cutover), denormalized alongside `vendorName` by
- * the purchase query, so the cross-link needs no lookup of its own.
- */
-const vendorCrossLink = (shortcode: string, name: string): CrossLink => ({
-  to: "/vendors/$shortcode",
-  params: { shortcode },
-  icon: <EntityIcon entity="vendor" size={12} colored />,
-  label: name,
-});
-
-export type PurchasePreview = {
-  id: string;
-  orderId: string | null;
-  displayLabel?: string | null;
-  date: string | null;
-  statedTotal: number | null;
-  expenseCount: number;
-  expenseTotal: number;
-  vendorId?: string | null;
-  vendorName?: string | null;
-  orderUrl?: string | null;
-};
-
-export function toPurchaseCard(vm: PurchasePreview): ManifestCardProps {
+export function toPurchaseCard(
+  data: RouterOutputs["purchase"]["getByID"],
+): ManifestCardProps {
   return {
     entity: "purchase",
-    routeParam: vm.id,
+    routeParam: data.id,
     icon: <EntityIcon entity="purchase" size={14} colored />,
     // No `name` column on a purchase — the shared label ladder owns this so the
     // hovercard and every inline link read the same purchase the same way.
-    name: purchaseLabel(vm),
+    name: purchaseLabel(data),
     tag: "purchase",
-    identity: vm.date ? formatDate(vm.date) : undefined,
+    identity: data.date ? formatDate(data.date) : undefined,
     crossLinks:
-      vm.vendorId && vm.vendorName
-        ? [vendorCrossLink(vm.vendorId, vm.vendorName)]
+      data.vendorId && data.vendorName
+        ? [vendorCrossLink(data.vendorId, data.vendorName)]
         : undefined,
     body: [
       {
@@ -1139,78 +725,45 @@ export function toPurchaseCard(vm: PurchasePreview): ManifestCardProps {
             // rather than a peer stat — it is what the paperwork claimed, never
             // money (see purchase.ts), and the two legitimately disagree.
             label: "Expense total",
-            value: formatCurrency(vm.expenseTotal),
+            value: formatCurrency(data.expenseTotal),
             caption:
-              vm.statedTotal != null
-                ? `of ${formatCurrency(vm.statedTotal, 0)} stated`
+              data.statedTotal != null
+                ? `of ${formatCurrency(data.statedTotal, 0)} stated`
                 : undefined,
           },
-          { label: "Expenses", value: vm.expenseCount },
+          { label: "Expenses", value: data.expenseCount },
           {
             label: "Order #",
-            value: vm.orderId ? (
+            value: data.orderId ? (
               <Row align="center" gap="xs">
-                <span className="font-mono text-xs">{vm.orderId}</span>
+                <span className="font-mono text-xs">{data.orderId}</span>
                 <OrderIdLink
-                  orderUrl={vm.orderUrl}
-                  orderId={vm.orderId}
-                  vendorName={vm.vendorName}
+                  orderUrl={data.orderUrl}
+                  orderId={data.orderId}
+                  vendorName={data.vendorName}
                 />
               </Row>
             ) : (
               "—"
             ),
           },
-          { label: "Date", value: vm.date ? formatDate(vm.date) : "—" },
+          { label: "Date", value: data.date ? formatDate(data.date) : "—" },
         ],
       },
     ],
   };
 }
 
-export function PurchasePreviewContent({ purchaseId }: { purchaseId: string }) {
-  const trpc = useTRPC();
-  const query = useQuery(
-    trpc.purchase.getByID.queryOptions({ id: purchaseId }),
-  );
-
-  return (
-    <PreviewQuery query={query} label="Purchase">
-      {(data) => (
-        <ManifestCard
-          {...toPurchaseCard({
-            id: purchaseId,
-            orderId: data.orderId,
-            displayLabel: data.displayLabel,
-            date: data.date,
-            statedTotal: data.statedTotal,
-            expenseCount: data.expenseCount,
-            expenseTotal: data.expenseTotal,
-            vendorId: data.vendorId,
-            vendorName: data.vendorName,
-            orderUrl: data.orderUrl,
-          })}
-        />
-      )}
-    </PreviewQuery>
-  );
-}
-
 // ── Vendor ──────────────────────────────────────────────────────────────────
 
-export type VendorPreview = {
-  id: string;
-  name: string;
-  purchaseCount: number;
-  spend: number;
-};
-
-export function toVendorCard(vm: VendorPreview): ManifestCardProps {
+export function toVendorCard(
+  data: RouterOutputs["vendor"]["getByID"],
+): ManifestCardProps {
   return {
     entity: "vendor",
-    routeParam: vm.id,
+    routeParam: data.id,
     icon: <EntityIcon entity="vendor" size={14} colored />,
-    name: vm.name,
+    name: data.name,
     tag: "vendor",
     body: [
       {
@@ -1218,30 +771,153 @@ export function toVendorCard(vm: VendorPreview): ManifestCardProps {
         stats: [
           // `spend` is SUM(expense.cost) over this vendor's purchases' lines — a
           // rollup, never a column on the vendor row.
-          { label: "Spend", value: formatCurrency(vm.spend, 0) },
-          { label: "Purchases", value: vm.purchaseCount },
+          { label: "Spend", value: formatCurrency(data.spend, 0) },
+          { label: "Purchases", value: data.purchaseCount },
         ],
       },
     ],
   };
 }
 
-export function VendorPreviewContent({ vendorId }: { vendorId: string }) {
+// ── Generic dispatch ────────────────────────────────────────────────────────
+
+interface PreviewSpec<D> {
+  label: string;
+  useDetail: (
+    trpc: Api,
+    id: string,
+  ) => { data: D | undefined; isLoading: boolean };
+  toCard: (data: D) => ManifestCardProps;
+}
+
+// Type-erasure boundary: each entry below is fully checked against its own
+// concrete `RouterOutputs["<entity>"]["getByID"]` type at the call site (D is
+// inferred from `toCard`/`useDetail`), then widened to `unknown` so the table
+// can hold every entity's spec side by side. Same escape hatch this codebase
+// already uses for the union of `getByID` queryOptions (see entity-query.ts).
+function defineSpec<D>(spec: PreviewSpec<D>): PreviewSpec<unknown> {
+  return spec as PreviewSpec<unknown>;
+}
+
+type StandardPreviewEntity = Exclude<
+  HoverPreviewEntity,
+  "usda-food" | "cookbook"
+>;
+
+const PREVIEW_TABLE: Record<StandardPreviewEntity, PreviewSpec<unknown>> = {
+  recipe: defineSpec({
+    label: "Recipe",
+    useDetail: (trpc, id) => useQuery(trpc.recipe.getByID.queryOptions({ id })),
+    toCard: toRecipeCard,
+  }),
+  ingredient: defineSpec({
+    label: "Ingredient",
+    useDetail: (trpc, id) =>
+      useQuery(trpc.ingredient.getByID.queryOptions({ id })),
+    toCard: toIngredientCard,
+  }),
+  product: defineSpec({
+    label: "Product",
+    useDetail: (trpc, id) =>
+      useQuery(trpc.product.getByID.queryOptions({ id })),
+    toCard: toProductCard,
+  }),
+  location: defineSpec({
+    label: "Location",
+    useDetail: (trpc, id) =>
+      useQuery(trpc.location.getByID.queryOptions({ id })),
+    toCard: toLocationCard,
+  }),
+  inventory: defineSpec({
+    label: "Inventory item",
+    useDetail: (trpc, id) =>
+      useQuery(trpc.inventory.getByID.queryOptions({ id })),
+    toCard: toInventoryCard,
+  }),
+  meal: defineSpec({
+    label: "Meal",
+    useDetail: (trpc, id) => useQuery(trpc.meal.getByID.queryOptions({ id })),
+    toCard: toMealCard,
+  }),
+  project: defineSpec({
+    label: "Project",
+    useDetail: (trpc, id) => {
+      const query = useQuery(trpc.project.getByID.queryOptions({ id }));
+      // Projects deliberately carry no `images` on `getByID` — `projectOut` is
+      // also `project.list`'s output, so widening it would buy a per-row image
+      // join on every list page (see repo/image.ts's getImagesByProjectIds).
+      // This endpoint is the established path, already displayable-filtered
+      // and cover-first, and the projects dashboard usually leaves it warm in
+      // the cache. The card never waits on it: the thumb just appears when it
+      // lands.
+      const coverQuery = useQuery(
+        trpc.image.imagesByProjectIds.queryOptions({ projectIds: [id] }),
+      );
+      return {
+        data: query.data
+          ? { ...query.data, thumbUrl: coverQuery.data?.[id]?.[0]?.url }
+          : undefined,
+        isLoading: query.isLoading,
+      };
+    },
+    toCard: toProjectCard,
+  }),
+  task: defineSpec({
+    label: "Task",
+    useDetail: (trpc, id) => useQuery(trpc.task.getByID.queryOptions({ id })),
+    toCard: toTaskCard,
+  }),
+  expense: defineSpec({
+    label: "Expense",
+    useDetail: (trpc, id) =>
+      useQuery(trpc.expense.getByID.queryOptions({ id })),
+    toCard: toExpenseCard,
+  }),
+  purchase: defineSpec({
+    label: "Purchase",
+    useDetail: (trpc, id) =>
+      useQuery(trpc.purchase.getByID.queryOptions({ id })),
+    toCard: toPurchaseCard,
+  }),
+  vendor: defineSpec({
+    label: "Vendor",
+    useDetail: (trpc, id) => useQuery(trpc.vendor.getByID.queryOptions({ id })),
+    toCard: toVendorCard,
+  }),
+};
+
+function GenericPreviewContent({
+  entity,
+  id,
+}: {
+  entity: StandardPreviewEntity;
+  id: string;
+}) {
   const trpc = useTRPC();
-  const query = useQuery(trpc.vendor.getByID.queryOptions({ id: vendorId }));
+  const spec = PREVIEW_TABLE[entity];
+  const query = spec.useDetail(trpc, id);
 
   return (
-    <PreviewQuery query={query} label="Vendor">
-      {(data) => (
-        <ManifestCard
-          {...toVendorCard({
-            id: vendorId,
-            name: data.name,
-            purchaseCount: data.purchaseCount,
-            spend: data.spend,
-          })}
-        />
-      )}
+    <PreviewQuery query={query} label={spec.label}>
+      {(data) => <ManifestCard {...spec.toCard(data)} />}
     </PreviewQuery>
   );
+}
+
+export function EntityPreviewContent({
+  entity,
+  id,
+}: {
+  entity: HoverPreviewEntity;
+  id: string;
+}) {
+  // usda-food and cookbook fetch differently enough (fdc_id coercion,
+  // list-backed detail with no getByID) to stay their own small components.
+  // Every other entity is a uniform `getByID` fetch, keyed here so switching
+  // entities remounts rather than changing the hooks a single instance calls
+  // (project's extra cover-image query is one more hook than the rest).
+  if (entity === "usda-food")
+    return <UsdaFoodPreviewContent fdcId={fdcIdFromParam(id)} />;
+  if (entity === "cookbook") return <CookbookPreviewContent cookbookId={id} />;
+  return <GenericPreviewContent key={entity} entity={entity} id={id} />;
 }

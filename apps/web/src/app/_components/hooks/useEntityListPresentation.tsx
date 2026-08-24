@@ -1,4 +1,4 @@
-import type { PreviewDeleteEntity } from "@cubby/schemas/entity-integrity";
+import type { Entity } from "@cubby/schemas/entity";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { relatedViewsFor } from "@cubby/schemas/related-view";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
@@ -6,7 +6,7 @@ import type { QueryKey } from "@tanstack/react-query";
 import { useStore } from "@tanstack/react-store";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef } from "react";
-import { entities } from "~/entities/entities";
+import { browserEntityDefinition } from "~/entities/entities";
 import { getEntityFilters } from "~/entities/filter-manifest";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
 import type { RowLinkResolver } from "../data-table/columnHelpers";
@@ -44,7 +44,7 @@ type DeleteConfig = {
   }) => unknown;
   entityLabel: string;
   invalidateKeys: readonly QueryKey[];
-  entity: PreviewDeleteEntity;
+  entity: Entity;
 };
 
 /** Shared state/action half: it must run before a server adapter fetches rows. */
@@ -80,21 +80,23 @@ export function useEntityListPresentationState<TData extends BaseListRow>({
     bulkActions,
     deleteBulkAction,
   });
-  const defaultSort = useMemo(() => {
-    const definition = entities[entity];
-    return (
-      ("list" in definition ? definition.list?.defaultSort : undefined) ??
-      "createdAt"
-    );
-  }, [entity]);
+  const listConfig = useMemo(
+    () => browserEntityDefinition(entity).list,
+    [entity],
+  );
+  const defaultSort = listConfig?.defaultSort ?? "createdAt";
+  // The registry declares direction alongside the field, so a name-sorted
+  // roster opens A→Z instead of the table's blanket descending default.
+  const defaultSortDesc = listConfig?.defaultSortDirection !== "asc";
   const mergedTableStateOptions = useMemo(
     () => ({
       initialSort: defaultSort,
+      initialSortDesc: defaultSortDesc,
       urlSync: true,
       filterSpecs: getEntityFilters(entity),
       ...tableStateOptions,
     }),
-    [defaultSort, entity, tableStateOptions],
+    [defaultSort, defaultSortDesc, entity, tableStateOptions],
   );
   const tableState = useTableState(mergedTableStateOptions);
   const currentSelectionScope = selectionScope(tableState);

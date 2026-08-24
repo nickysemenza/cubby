@@ -64,7 +64,7 @@ staged object is not referenced afterwards — **delete it**. A deleted staged
 object may still return 200 from CDN cache; re-check with a cache-busting query
 before concluding the cleanup failed.
 
-To remove a bad attachment, `update_purchase` takes `removeImageIds`. Verify the
+To remove a bad attachment, `update_purchases` takes `removeImageIds`. Verify the
 `paperwork` gap reappears afterwards — that is the signal the bogus file is
 really gone. Staged objects are
 world-readable while they exist, so use unguessable names for anything carrying an

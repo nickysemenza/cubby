@@ -27,8 +27,8 @@ Expense → Purchase ← Allocation → FinancialTransaction → FinancialAccoun
   not the mechanism: it fires only for an adjustment-like name on a Product-less
   Expense and never re-runs on rename. Read the kind back off the write response
   instead of assuming it.
-  **`lineKind` is a documented, optional field on `create_expense(s)`,
-  `update_expense(s)`, and `split_expense` (per part)** — all three store it
+  **`lineKind` is a documented, optional field on `create_expenses`,
+  `update_expenses`, and `split_expense` (per part)** — all three store it
   and echo it back. `splitExpenseInput.parts` carries an optional `lineKind`,
   and `splitExpense` resolves `part.lineKind ?? infer(...)`, so an explicit
   kind on a part wins over inference: splitting a receipt with an `Outside
@@ -133,7 +133,7 @@ Expense → Purchase ← Allocation → FinancialTransaction → FinancialAccoun
 
 - Create or update `Expense` for money. Use `Purchase` only for order/receipt
   identity, vendor documents, notes, date, order ID, and stated total.
-- `create_expense` and `update_expense` may resolve a vendor name and order ID,
+- `create_expenses` and `update_expenses` may resolve a vendor name and order ID,
   but use an existing `purchaseId` for several rows belonging to one order-less
   Purchase. Do not repeatedly rewrite vendor/order fields on an order-less row.
 - Make a new Vendor deliberately when its identity should include website or
@@ -229,7 +229,7 @@ a fuzzy or generic name is not.
   candidate must be promoted, explicitly skipped, conflicted, or presented for
   a decision.
 
-- Use the rich `create_product`/`create_products` surface in one call. Include
+- Use the rich `create_products` surface in one call. Include
   category, manufacturer, maker model, tags, price/mappings, and typed external
   IDs when verified.
 - Keep products with the same name but different brands separate. The SupplyHouse

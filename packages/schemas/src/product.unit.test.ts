@@ -20,8 +20,9 @@ describe("productMcpOut", () => {
       primaryGtin: "00045242593057",
       category: "tools",
       tags: ["M18"],
+      // Raw manual override; `effectivePrice` is what it resolves to.
       price: 329,
-      priceOverride: 329,
+      effectivePrice: 329,
       pricing: {
         derivedPrice: 300,
         effectivePrice: 329,
@@ -58,7 +59,7 @@ describe("productMcpOut", () => {
       imageCount: 2,
       coverImageUrl: "https://images.example.test/2744-20.webp",
       price: 329,
-      priceOverride: 329,
+      effectivePrice: 329,
       pricing: { source: "explicit", effectivePrice: 329 },
     });
   });

@@ -6,10 +6,7 @@
  * instead of hand-rolling `update`.
  */
 import type { ActorContext } from "@cubby/schemas/context";
-import type {
-  ImpactItem,
-  OperationDisposition,
-} from "@cubby/schemas/entity-integrity";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import { inferExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import type {
   ExpenseId,
@@ -39,7 +36,6 @@ import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
-  entityEmbedding,
   expense,
   expenseAttribution,
   ledgerSourceClaim,
@@ -64,7 +60,6 @@ import {
 } from "~/server/repo/database-helpers";
 import { createEntityCrud } from "~/server/repo/entity-crud-factory";
 import { replaceExpenseAttributionRole } from "~/server/repo/expense-attribution";
-import { countByTarget, impact, present } from "~/server/repo/impact";
 import {
   assertExplicitSourceClaimsForAmountChange,
   replaceLedgerSourceClaims,
@@ -1160,61 +1155,3 @@ export const deleteExpenses = async (
  * Advisory only. `deleteExpenses` still re-runs its own transaction; nothing
  * here is a lock or a permission.
  */
-export const previewDeleteExpenses = async (
-  db: Database | DrizzleTransaction,
-  ids: ExpenseId[],
-): Promise<{
-  blockers: ImpactItem[];
-  changes: ImpactItem[];
-  sideEffects: ImpactItem[];
-}> => {
-  if (ids.length === 0) return { blockers: [], changes: [], sideEffects: [] };
-
-  const dbClient = unwrapDb(db);
-
-  const sideEffects = present([
-    impact({
-      disposition: {
-        code: "soft-delete-search-index",
-        effect: "soft-delete",
-        description:
-          "The expense's search-index entry is soft-deleted in the same transaction as the delete.",
-      },
-      label: "search index entries",
-      byTargetId: await countByTarget(
-        dbClient,
-        entityEmbedding,
-        entityEmbedding.entityId,
-        ids,
-        { extraWhere: eq(entityEmbedding.entityType, "expense") },
-      ),
-    }),
-  ]);
-
-  const changes = present([
-    impact({
-      disposition: EXPENSE_DELETE_EDGE_POLICY["ExpenseAttribution.expenseId"],
-      edgeKey: "ExpenseAttribution.expenseId",
-      label: "expense attributions removed",
-      byTargetId: await countByTarget(
-        dbClient,
-        expenseAttribution,
-        expenseAttribution.expenseId,
-        ids,
-      ),
-    }),
-    impact({
-      disposition: EXPENSE_DELETE_EDGE_POLICY["LedgerSourceClaim.expenseId"],
-      edgeKey: "LedgerSourceClaim.expenseId",
-      label: "expense source claims removed",
-      byTargetId: await countByTarget(
-        dbClient,
-        ledgerSourceClaim,
-        ledgerSourceClaim.expenseId,
-        ids,
-      ),
-    }),
-  ]);
-
-  return { blockers: [], changes, sideEffects };
-};

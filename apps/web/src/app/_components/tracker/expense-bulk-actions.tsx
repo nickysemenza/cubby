@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { costTypeOptions } from "~/app/expenses/expense-options";
 import { tradeOptions } from "~/app/projects/trade-options";
 import { useTRPC } from "~/integrations/trpc/react";
-import { expenseMutationInvalidateKeys } from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { verbBulkAction } from "../actions/action-verb-ui";
 import type {
@@ -101,7 +101,7 @@ export function ExpenseBulkActionDialogs({
 
   const moveMutation = useActionMutation({
     mutationFn: api.expense.bulkMove.mutationOptions,
-    invalidateKeys: expenseMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("expense"),
     success: resultMessage("Moved"),
     onSuccess: () => {
       setMoveItems([]);
@@ -110,7 +110,7 @@ export function ExpenseBulkActionDialogs({
   });
   const tradeMutation = useActionMutation({
     mutationFn: api.expense.bulkSetTrade.mutationOptions,
-    invalidateKeys: expenseMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("expense"),
     success: resultMessage("Updated"),
     onSuccess: () => {
       setTradeItems([]);
@@ -119,7 +119,7 @@ export function ExpenseBulkActionDialogs({
   });
   const costTypeMutation = useActionMutation({
     mutationFn: api.expense.bulkSetCostType.mutationOptions,
-    invalidateKeys: expenseMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("expense"),
     success: resultMessage("Updated"),
     onSuccess: () => {
       setCostTypeItems([]);

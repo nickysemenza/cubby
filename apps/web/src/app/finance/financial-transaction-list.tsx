@@ -10,7 +10,6 @@ import { createCubbyColumnHelper } from "~/app/_components/data-table/table-feat
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
-import { financialTransactionMutationInvalidateKeys } from "~/lib/query-keys";
 import { presenceCellOptions } from "~/lib/select-options";
 import { formatCurrency } from "~/lib/utils";
 import {
@@ -19,9 +18,8 @@ import {
   createTextColumn,
   renderOptionCell,
 } from "../_components/data-table/columnHelpers";
-import { ListWorkbench } from "../_components/data-table/ListWorkbench";
+import { EntityListPage } from "../_components/data-table/EntityListPage";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
-import { useEntityList } from "../_components/hooks/useEntityList";
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { TableLink } from "../_components/table/TableLink";
 import {
@@ -33,6 +31,16 @@ const PURCHASE_PRESENCE_OPTIONS = presenceCellOptions("purchase");
 
 const NO_OPTIONS: FinancialAccountOptionsOut = [];
 const NO_SOURCES: FinancialTransactionSourceOptionsOut = [];
+
+/**
+ * Module-level: this feeds the merged-visibility `useMemo`, so an inline object
+ * literal would rebuild the table's column visibility on every render.
+ */
+const INITIAL_COLUMN_VISIBILITY = {
+  purchasePresence: false,
+  merchant: false,
+  source: false,
+};
 
 export function FinancialTransactionList() {
   const api = useTRPC();
@@ -65,7 +73,6 @@ export function FinancialTransactionList() {
     mutationFn: api.financialTransaction.delete.mutationOptions,
     entityLabel: "Transaction",
     entity: "financialTransaction",
-    invalidateKeys: financialTransactionMutationInvalidateKeys,
   });
   const columns = useMemo(
     () => [
@@ -171,22 +178,15 @@ export function FinancialTransactionList() {
     ],
     [helper],
   );
-  const list = useEntityList<
-    FinancialTransactionOut,
-    FinancialTransactionFilters
-  >({
-    entity: "financialTransaction",
-    queryOptions: api.financialTransaction.list.queryOptions,
-    columns,
-    deletable,
-    filterOptions,
-    initialColumnVisibility: {
-      purchasePresence: false,
-      merchant: false,
-      source: false,
-    },
-  });
   return (
-    <ListWorkbench model={list.workbench} ariaLabel="Financial transactions" />
+    <EntityListPage<FinancialTransactionOut, FinancialTransactionFilters>
+      entity="financialTransaction"
+      columns={columns}
+      deletable={deletable}
+      filterOptions={filterOptions}
+      initialColumnVisibility={INITIAL_COLUMN_VISIBILITY}
+      ariaLabel="Financial transactions"
+      preview={false}
+    />
   );
 }

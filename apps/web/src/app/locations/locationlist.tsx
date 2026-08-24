@@ -12,9 +12,7 @@ import {
   verbBulkAction,
 } from "~/app/_components/actions/action-verb-ui";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
-import { usePageCount } from "~/components/page/Page";
 import { useTRPC } from "~/integrations/trpc/react";
-import { locationMutationInvalidateKeys } from "~/lib/query-keys";
 import {
   createEntityInlineLinkColumn,
   createFilterableSelectColumn,
@@ -25,12 +23,9 @@ import {
   createTextColumn,
   createTimestampColumn,
 } from "../_components/data-table/columnHelpers";
-import { ListWorkbench } from "../_components/data-table/ListWorkbench";
+import { EntityListPage } from "../_components/data-table/EntityListPage";
 import type { GroupConfig } from "../_components/data-table/useGroupedList";
 import { useDeferredFilterOptions } from "../_components/hooks/useDeferredFilterOptions";
-import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
-import { useEntityList } from "../_components/hooks/useEntityList";
-import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { useLocationParentOptions } from "../_components/hooks/useLocationParentOptions";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
@@ -40,6 +35,18 @@ import { LocationTypeLabel } from "../_components/locations/LocationTypeLabel";
 import { locationTypeOptionsWithTheme } from "../_components/locations/location-icons";
 import { typeSupportsQrCode } from "../_components/locations/location-type-theme";
 
+/**
+ * Module-level: `initialColumnVisibility` sits in the merged-visibility
+ * `useMemo`'s dependency array, so an inline object literal would rebuild it
+ * (and the table's column visibility) on every render.
+ */
+const LOCATION_INITIAL_COLUMN_VISIBILITY = {
+  children: false,
+  aiDescription: false,
+  createdAt: false,
+  inventoryEntries: false,
+};
+
 export function LocationList() {
   const api = useTRPC();
   const navigate = useNavigate();
@@ -47,7 +54,6 @@ export function LocationList() {
     () => createCubbyColumnHelper<LocationListItemOut>(),
     [],
   );
-  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("location");
   const [reparentLocations, setReparentLocations] = useState<
     LocationListItemOut[]
   >([]);
@@ -67,14 +73,6 @@ export function LocationList() {
 
   const updateLocationMutation = useUpdateMutation({
     mutationFn: api.location.update.mutationOptions,
-    entity: "location",
-    invalidateKeys: locationMutationInvalidateKeys,
-  });
-
-  const deletableConfig = useDeletableConfig({
-    mutationFn: api.location.delete.mutationOptions,
-    entityLabel: "Location",
-    invalidateKeys: locationMutationInvalidateKeys,
     entity: "location",
   });
 
@@ -277,44 +275,32 @@ export function LocationList() {
     [groupKeyFn, groupColorFn],
   );
 
-  const { workbench, totalCount } = useEntityList({
-    entity: "location",
-    queryOptions: api.location.list.queryOptions,
-    filterOptions,
-    columns,
-    deletable: deletableConfig,
-    bulkActions,
-    extraActions,
-    initialColumnVisibility: {
-      children: false,
-      aiDescription: false,
-      createdAt: false,
-      inventoryEntries: false,
-    },
-    groupConfig,
-  });
-  usePageCount(totalCount);
-
   return (
-    <>
-      <ListWorkbench
-        model={workbench}
-        ariaLabel="Locations Table"
-        onRowClick={onRowClick}
-        onRowHover={onRowHover}
-      />
-      <PreviewSheet />
-      <BulkReparentLocationsDialog
-        open={reparentLocations.length > 0}
-        onOpenChange={(open) => {
-          if (!open) setReparentLocations([]);
-        }}
-        locations={reparentLocations}
-        onSuccess={() => {
-          setReparentLocations([]);
-          workbench.table.resetRowSelection();
-        }}
-      />
-    </>
+    <EntityListPage
+      entity="location"
+      filterOptions={filterOptions}
+      columns={columns}
+      bulkActions={bulkActions}
+      extraActions={extraActions}
+      initialColumnVisibility={LOCATION_INITIAL_COLUMN_VISIBILITY}
+      groupConfig={groupConfig}
+      ariaLabel="Locations Table"
+    >
+      {/* Needs the table itself: a completed bulk reparent clears the row
+          selection it acted on. */}
+      {({ workbench }) => (
+        <BulkReparentLocationsDialog
+          open={reparentLocations.length > 0}
+          onOpenChange={(open) => {
+            if (!open) setReparentLocations([]);
+          }}
+          locations={reparentLocations}
+          onSuccess={() => {
+            setReparentLocations([]);
+            workbench.table.resetRowSelection();
+          }}
+        />
+      )}
+    </EntityListPage>
   );
 }

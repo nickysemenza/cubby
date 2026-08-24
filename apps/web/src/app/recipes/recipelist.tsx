@@ -10,26 +10,25 @@ import {
 } from "~/app/_components/actions/action-verb-ui";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { Row, Stack } from "~/components/layout";
-import { usePageCount } from "~/components/page/Page";
+
 import { Button } from "~/components/ui/button";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useTRPC } from "~/integrations/trpc/react";
 import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
-import { recipeMutationInvalidateKeys } from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 import {
   numberCellData,
   specFromCellData,
   tagsCellData,
 } from "../_components/data-table/cell-data";
+import { EntityListPage } from "../_components/data-table/EntityListPage";
 import { EditableCell } from "../_components/data-table/editable-cell";
-import { ListWorkbench } from "../_components/data-table/ListWorkbench";
 import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { useCookbookOptions } from "../_components/hooks/useCookbookOptions";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
-import { useEntityList } from "../_components/hooks/useEntityList";
-import { useEntityPreview } from "../_components/hooks/useEntityPreview";
+
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { useRecipeTagOptions } from "../_components/hooks/useRecipeTagOptions";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
@@ -98,7 +97,7 @@ function StuckTotalsCell({
   const recompute = useActionMutation({
     mutationFn: api.recipe.recomputeOne.mutationOptions,
     success: "Recomputed recipe totals.",
-    invalidateKeys: recipeMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("recipe", "list"),
   });
   const notCosted = (
     <span className="text-2xs text-muted-foreground italic">not costed</span>
@@ -155,7 +154,7 @@ export function RecipeList({
     () => createCubbyColumnHelper<RecipeListItem>(),
     [],
   );
-  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("recipe");
+
   // Runtime picklists for the manifest's `tags`/`source` specs (optionsKey:
   // "tags" / "cookbook"). Constant scope when rendered on a cookbook page.
   const cookbookScope = useMemo(
@@ -190,7 +189,7 @@ export function RecipeList({
   const updateRecipeMutation = useUpdateMutation({
     mutationFn: api.recipe.update.mutationOptions,
     entity: "recipe",
-    invalidateKeys: recipeMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("recipe", "list"),
   });
 
   // Inline name editing on the hook-prepended name column. Stable reference
@@ -494,7 +493,7 @@ export function RecipeList({
   const deletableConfig = useDeletableConfig({
     mutationFn: api.recipe.delete.mutationOptions,
     entityLabel: "Recipe",
-    invalidateKeys: recipeMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("recipe", "list"),
     entity: "recipe",
   });
 
@@ -510,18 +509,8 @@ export function RecipeList({
     [duplicateRecipe, isDuplicating],
   );
 
-  const { workbench, totalCount } = useEntityList({
-    entity: "recipe",
-    queryOptions: api.recipe.list.queryOptions,
-    // Constant scope when rendered on a cookbook page; merged over the
-    // table's own column filters so search-within-a-book still works.
-    scopeFilters: cookbookScope,
-    filterOptions,
-    columns,
-    nameClassName: "w-64",
-    hiddenFilterColumns,
-    extraActions,
-    bulkActions: {
+  const bulkActions = useMemo(
+    () => ({
       actions: [
         verbBulkAction<RecipeListItem>("compare", {
           minSelection: 2,
@@ -533,22 +522,29 @@ export function RecipeList({
         }),
       ],
       clearSelectionOnComplete: false, // Don't clear selection after navigating
-    },
-    deletable: deletableConfig,
-    nameEditable,
-  });
-  usePageCount(totalCount);
+    }),
+    [navigate],
+  );
 
   return (
-    <div>
-      <ListWorkbench
-        model={workbench}
-        ariaLabel="Recipes Table"
-        onRowClick={onRowClick}
-        onRowHover={onRowHover}
-        actions={actions}
-      />
-      <PreviewSheet />
-    </div>
+    <EntityListPage
+      entity="recipe"
+      // Constant scope when rendered on a cookbook page; merged over the
+      // table's own column filters so search-within-a-book still works.
+      scopeFilters={cookbookScope}
+      filterOptions={filterOptions}
+      columns={columns}
+      nameClassName="w-64"
+      hiddenFilterColumns={hiddenFilterColumns}
+      extraActions={extraActions}
+      bulkActions={bulkActions}
+      // Its own config, not the contract default: a recipe write from this
+      // table only moves `recipe.list`, not the meal rollups the contract's
+      // broader fan-out covers.
+      deletable={deletableConfig}
+      nameEditable={nameEditable}
+      ariaLabel="Recipes Table"
+      actions={actions}
+    />
   );
 }

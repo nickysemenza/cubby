@@ -34,10 +34,7 @@ import {
 import type { ViewSwitcherOption } from "~/components/ui/view-switcher";
 import { useTRPC } from "~/integrations/trpc/react";
 import { dataQualityOptions } from "~/lib/data-quality-options";
-import {
-  inventoryMutationInvalidateKeys,
-  productMutationInvalidateKeys,
-} from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 import { booleanCellOptions, presenceCellOptions } from "~/lib/select-options";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { formatCurrency } from "~/lib/utils";
@@ -62,7 +59,6 @@ import type { GroupConfig } from "../_components/data-table/useGroupedList";
 import { EntityInlineLink } from "../_components/EntityInlineLink";
 import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { useDeferredFilterOptions } from "../_components/hooks/useDeferredFilterOptions";
-import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
@@ -309,7 +305,7 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
   );
   const stockTrackingMutation = useActionMutation({
     mutationFn: api.product.bulkSetStockTracked.mutationOptions,
-    invalidateKeys: productMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("product"),
     success: (data: { items: unknown[] }) =>
       `Updated ${data.items.length} product${data.items.length !== 1 ? "s" : ""}`,
     onSuccess: () => setStockTrackingRows([]),
@@ -317,13 +313,11 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
   const updateProductMutation = useUpdateMutation({
     mutationFn: api.product.update.mutationOptions,
     entity: "product",
-    invalidateKeys: productMutationInvalidateKeys,
   });
 
   const updateInventoryMutation = useUpdateMutation({
     mutationFn: api.inventory.update.mutationOptions,
     entity: "inventory",
-    invalidateKeys: inventoryMutationInvalidateKeys,
   });
   const createInventoryMutation = useCreateInventoryMutation();
 
@@ -347,14 +341,6 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
   >(null);
 
   const tableStateOptions = useSeededFilter("category", initialCategory);
-
-  // Use stable deletable config hook to prevent infinite render loop
-  const deletableConfig = useDeletableConfig({
-    mutationFn: api.product.delete.mutationOptions,
-    entityLabel: "Product",
-    invalidateKeys: productMutationInvalidateKeys,
-    entity: "product",
-  });
 
   const getProductListMappings = useCallback(
     (product: ProductListItem) =>
@@ -938,8 +924,6 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
     [groupKeyFn, groupColorFn],
   );
 
-  const queryOptions = api.product.list.queryOptions;
-
   // Kits on the currently loaded pages. Fetched for the whole page rather than
   // per expanded row: on a typical page there are none (21 kits across 5,614
   // products), and fetching on expand would deliver children AFTER render,
@@ -1012,11 +996,11 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
     ProductListItem
   >({
     entity: "product",
-    queryOptions,
     getMappings: getProductListMappings,
     tableStateOptions,
     columns,
-    deletable: deletableConfig,
+    // The product contract's own delete and invalidation fan-out.
+    deletable: true,
     filterOptions,
     extraActions,
     nameEditable,

@@ -16,7 +16,7 @@ import {
 } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { useTRPC } from "~/integrations/trpc/react";
-import { problemsMutationInvalidateKeys, queryKeys } from "~/lib/query-keys";
+import { invalidatesFor, queryKeys } from "~/lib/query-keys";
 import { PROBLEMS_QUERY_STALE_TIME } from "../problem-query-freshness";
 import { searchDocumentMaintenanceRefetchInterval } from "../search-document-maintenance-query";
 import { BACKFILL } from "./backfill-registry";
@@ -27,11 +27,11 @@ import { BackfillButton } from "./problem-backfill-action";
 // query + useActionMutation both key off them).
 const CULL_INVALIDATE_KEYS = [
   queryKeys.image.list,
-  ...problemsMutationInvalidateKeys,
+  ...invalidatesFor("problems"),
 ] as const;
 const VALUATION_INVALIDATE_KEYS = [
   queryKeys.location.all,
-  ...problemsMutationInvalidateKeys,
+  ...invalidatesFor("problems"),
 ] as const;
 
 /** One labeled maintenance action: description left, dry-run count + run-button right. */

@@ -12,11 +12,19 @@ import { notDeleted } from "./database-helpers";
 /**
  * Shared building blocks for operation impact previews.
  *
- * A preview answers "what will this delete/merge actually do?" using the SAME
- * predicates the mutation uses, so the two cannot disagree. It is advisory
- * only: the mutation stays authoritative and rechecks everything inside its
- * transaction. A preview is not a lock, an authorization token, or a required
- * receipt — nothing may skip a check because a preview said it was fine.
+ * A preview answers "what will this merge (or attach/detach) actually do?"
+ * using the SAME predicates the mutation uses, so the two cannot disagree. It
+ * is advisory only: the mutation stays authoritative and rechecks everything
+ * inside its transaction. A preview is not a lock, an authorization token, or
+ * a required receipt — nothing may skip a check because a preview said it was
+ * fine.
+ *
+ * Delete has no preview: it duplicates the structured refusal the delete
+ * mutations already return, so "attempt the delete and read the refusal" is
+ * the contract there instead. These helpers still live here — the ones a
+ * delete mutation's OWN guard calls directly (not through a planner) — and
+ * `impact()`/`present()` remain generic enough that a future delete preview
+ * could reuse them if that decision is ever revisited.
  *
  * Deliberately NOT a generic cascade engine. Each repo writes its own planner
  * next to its own mutation, because the interesting part of an impact is

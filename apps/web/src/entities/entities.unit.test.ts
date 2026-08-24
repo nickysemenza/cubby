@@ -1,3 +1,4 @@
+import { browserRoutedEntities } from "@cubby/schemas/entity-manifest";
 import { financialAccountSortableFields } from "@cubby/schemas/financial-account";
 import { financialTransactionSortableFields } from "@cubby/schemas/financial-transaction";
 import { imageSortableFields } from "@cubby/schemas/image";
@@ -17,11 +18,19 @@ import { usdaFoodSortableFields } from "@cubby/schemas/usda";
 import { vendorSortableFields } from "@cubby/schemas/vendor";
 import { wishSortableFields } from "@cubby/schemas/wish";
 import { describe, expect, it } from "vitest";
-import { sortableFields } from "./sortable-fields";
+import { entities } from "./entities";
 
-describe("sortableFields", () => {
+describe("entity sortableFields", () => {
   it("stays in sync with the canonical server schema contracts", () => {
-    expect(sortableFields).toEqual({
+    // The registry hand-lists these so route loaders never import the entity
+    // schemas (validation graphs in the eager route tree); this is the pin.
+    const declared = Object.fromEntries(
+      browserRoutedEntities.map((entity) => [
+        entity,
+        entities[entity].sortableFields,
+      ]),
+    );
+    expect(declared).toEqual({
       ingredient: ingredientSortableFields,
       product: productSortableFields,
       recipe: recipeSortableFields,

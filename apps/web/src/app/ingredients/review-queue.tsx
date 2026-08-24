@@ -2,17 +2,14 @@ import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { IngredientMergeDialog } from "~/app/_components/ingredient/ingredient-merge-dialog";
+import { EntityMergeDialog } from "~/app/_components/merge/entity-merge-dialog";
 import { useQueuePass } from "~/app/_components/queue-pass/useQueuePass";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Empty, EmptyActions, EmptyDescription } from "~/components/ui/empty";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
-import {
-  ingredientMergeMutationInvalidateKeys,
-  ingredientProductMutationInvalidateKeys,
-} from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import type { EnrichmentEditorHandle } from "./enrichment-editor";
 import { type MergeOption, ReviewCard } from "./review-card";
@@ -102,14 +99,14 @@ export function ReviewQueue({
     intent: "full",
     mutationFn: api.product.update.mutationOptions,
     success: "Marked: no USDA entry.",
-    invalidateKeys: ingredientProductMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("ingredient", "product"),
     onSuccess: () => markProcessed(flaggedIdRef.current),
     error: (err) => `Failed: ${getErrorMessage(err)}`,
   });
   const mergeMutation = useActionMutation({
     mutationFn: api.ingredient.merge.mutationOptions,
     success: (d) => savedWithBackgroundWork(d.sideEffects, "Merged"),
-    invalidateKeys: ingredientMergeMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("ingredient", "merge"),
     onSuccess: () => markProcessed(mergeSourceRef.current),
     error: (err) => `Merge failed: ${getErrorMessage(err)}`,
   });
@@ -335,8 +332,9 @@ export function ReviewQueue({
         />
       )}
 
-      <IngredientMergeDialog
-        ingredients={mergeConfirm ?? []}
+      <EntityMergeDialog
+        entity="ingredient"
+        rows={mergeConfirm ?? []}
         open={mergeConfirm != null}
         onOpenChange={(o) => {
           if (!o) setMergeConfirm(null);

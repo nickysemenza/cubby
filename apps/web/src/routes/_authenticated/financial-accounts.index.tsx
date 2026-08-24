@@ -1,46 +1,29 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
-import { z } from "zod";
-import { tableSearchFields } from "~/app/_components/data-table/table-search";
-import {
-  CreateDialogAction,
-  createDialogSearchField,
-} from "~/app/_components/forms/create-dialog-action";
+import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
+import { listPage } from "~/app/_components/routing/entity-routes";
 import { FinancialAccountList } from "~/app/finance/financial-account-list";
-import { Page } from "~/components/page/Page";
 import { financialAccountCaptureRequest } from "~/entities/editing/editor-requests";
-import { entityFilterSearchFields } from "~/entities/filter-search-fields";
+import {
+  financeSearchDefaults,
+  financialAccountSearchSchema,
+} from "~/entities/list-search";
 import { pageTitle } from "~/lib/page-title";
-import { urlEnumListParam, urlStringParam } from "~/lib/search-params";
 
-export const financialAccountSearchSchema = z.object({
-  ...entityFilterSearchFields("financialAccount"),
-  q: urlStringParam,
-  identity: urlEnumListParam(financialAccountIdentityKind),
-  provisional: urlEnumListParam(z.enum(["true", "false"])),
-  ...tableSearchFields,
-  ...createDialogSearchField,
+// Bound to a const, not inlined into the options object: the router plugin's
+// splitter re-parses an inlined call expression with a JSX-less babel config,
+// so only the identifier path survives a page body that renders JSX.
+const AccountsPage = listPage({
+  title: "Accounts",
+  entity: "financialAccount",
+  list: FinancialAccountList,
+  actions: () => (
+    <CreateDialogAction request={financialAccountCaptureRequest()} />
+  ),
 });
-
-const searchDefaults = { q: undefined, create: undefined } as const;
 
 export const Route = createFileRoute("/_authenticated/financial-accounts/")({
   validateSearch: financialAccountSearchSchema,
-  search: { middlewares: [stripSearchParams(searchDefaults)] },
-  component: () => (
-    <Page
-      variant="list"
-      listChrome="workbench"
-      title="Accounts"
-      entity="financialAccount"
-      layout="full"
-      actions={
-        <CreateDialogAction request={financialAccountCaptureRequest()} />
-      }
-    >
-      <FinancialAccountList />
-    </Page>
-  ),
+  search: { middlewares: [stripSearchParams(financeSearchDefaults)] },
   head: () => ({ meta: [{ title: pageTitle("Accounts") }] }),
+  component: AccountsPage,
 });
-
-import { financialAccountIdentityKind } from "@cubby/schemas/financial-account";

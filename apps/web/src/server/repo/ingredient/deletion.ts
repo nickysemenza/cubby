@@ -5,10 +5,7 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
-import type {
-  ImpactItem,
-  OperationDisposition,
-} from "@cubby/schemas/entity-integrity";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { IngredientId } from "@cubby/schemas/identifiers";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -27,7 +24,6 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { impact, present } from "~/server/repo/impact";
 import { removeEntity } from "~/server/repo/removal";
 
 export const INGREDIENT_DELETE_EDGE_POLICY = {
@@ -53,9 +49,7 @@ export const INGREDIENT_DELETE_EDGE_POLICY = {
  * deletion — this matches `liveRecipeCountForIngredientSql`'s liveness
  * semantics, so the guard and the displayed recipe count never disagree.
  *
- * Shared by `deleteIngredients` (which refuses when any exist) and
- * `previewDeleteIngredients` (which counts them), so the two can't disagree
- * about what counts as a live usage.
+ * Used by `deleteIngredients`, which refuses when any exist.
  */
 const findLiveRecipeUsagesOfIngredients = (
   db: Database | DrizzleTransaction,
@@ -83,9 +77,8 @@ const findLiveRecipeUsagesOfIngredients = (
     );
 
 /**
- * Live products linked to the given ingredients. Shared by `deleteIngredients`
- * and `previewDeleteIngredients` for the same reason as
- * {@link findLiveRecipeUsagesOfIngredients}.
+ * Live products linked to the given ingredients. Used by `deleteIngredients`,
+ * which refuses when any exist.
  */
 const findLiveProductsLinkedToIngredients = (
   db: Database | DrizzleTransaction,
@@ -153,56 +146,4 @@ export const deleteIngredients = async (
     });
     return { deleted };
   });
-};
-
-/**
- * What `deleteIngredients` would do to the given ingredients, without doing
- * it.
- *
- * Reads the SAME `INGREDIENT_DELETE_EDGE_POLICY` and the same two predicates
- * ({@link findLiveRecipeUsagesOfIngredients},
- * {@link findLiveProductsLinkedToIngredients}) the mutation's guard uses, so
- * the preview cannot claim a delete will succeed that the guard then refuses.
- * Both edges are blockers — an ingredient delete has no cascade edges (hence
- * the childless `removeEntity` above), so `changes` is always empty.
- *
- * Advisory only. `deleteIngredients` still re-runs every check inside its own
- * transaction; nothing here is a lock or a permission.
- */
-export const previewDeleteIngredients = async (
-  db: Database | DrizzleTransaction,
-  ids: IngredientId[],
-): Promise<{ blockers: ImpactItem[]; changes: ImpactItem[] }> => {
-  if (ids.length === 0) return { blockers: [], changes: [] };
-
-  const byTargetId = (rows: Array<{ ingredientId: IngredientId | null }>) => {
-    const out: Record<string, number> = {};
-    for (const { ingredientId } of rows) {
-      if (ingredientId) out[ingredientId] = (out[ingredientId] ?? 0) + 1;
-    }
-    return out;
-  };
-
-  const [usedInRecipes, linkedProducts] = await Promise.all([
-    findLiveRecipeUsagesOfIngredients(db, ids),
-    findLiveProductsLinkedToIngredients(db, ids),
-  ]);
-
-  const blockers = present([
-    impact({
-      disposition:
-        INGREDIENT_DELETE_EDGE_POLICY["RecipeSectionIngredient.ingredientId"],
-      edgeKey: "RecipeSectionIngredient.ingredientId",
-      label: "recipe usages",
-      byTargetId: byTargetId(usedInRecipes),
-    }),
-    impact({
-      disposition: INGREDIENT_DELETE_EDGE_POLICY["Product.ingredientId"],
-      edgeKey: "Product.ingredientId",
-      label: "linked products",
-      byTargetId: byTargetId(linkedProducts),
-    }),
-  ]);
-
-  return { blockers, changes: [] };
 };

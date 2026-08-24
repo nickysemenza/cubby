@@ -1,23 +1,15 @@
 import { isPrincipalExpense } from "@cubby/schemas/expense-line-kind";
 import type { ExpenseOut } from "@cubby/schemas/project";
-import { ResponsivePie } from "@nivo/pie";
 import { sumBy } from "es-toolkit";
 import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
+import { CategoryDonut } from "~/app/_components/charts/kit";
 import { Stack } from "~/components/layout";
-import { nivoMotion } from "~/lib/nivo-theme";
 import { formatCurrency } from "~/lib/utils";
 import { sumByKey } from "~/misc/array-helpers";
 import { capitalize, getCostTypeColor } from "../shared";
-import { ChartTooltip, TooltipExpenseBreakdown } from "./ChartTooltip";
+import { TooltipExpenseBreakdown } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
-
-type DonutDatum = {
-  id: string;
-  label: string;
-  value: number;
-  color: string;
-};
 
 export function ExpenseDonut({
   expenses,
@@ -49,7 +41,7 @@ export function ExpenseDonut({
       (p) => p.cost,
     );
 
-    const data: DonutDatum[] = Array.from(byCostType.entries())
+    const data = Array.from(byCostType.entries())
       .filter(([, value]) => value > 0)
       .sort((a, b) => b[1] - a[1])
       .map(([costType, value]) => ({
@@ -68,11 +60,8 @@ export function ExpenseDonut({
       else expensesByType.set(key, [p]);
     }
 
-    // `total` = the positive-only sum the arcs actually render (used for the
-    // slice percentages, which must add to 100%). `netTotal` = the true net of
-    // ALL expenses incl. negatives — this is what the center number shows so it
-    // reconciles with the StatTile "Total cost".
-    const total = sumBy(data, (d) => d.value);
+    // `netTotal` = the true net of ALL expenses incl. negatives — this is what
+    // the center number shows so it reconciles with the StatTile "Total cost".
     const netTotal = sumBy(expenses, (p) => p.cost ?? 0);
     const adjustmentTotal = sumBy(
       expenses.filter((expense) => !isPrincipalExpense(expense)),
@@ -85,6 +74,7 @@ export function ExpenseDonut({
       Array.from(byCostType.values()).filter((v) => v <= 0),
       (v) => v,
     );
+    const total = sumBy(data, (d) => d.value);
     return {
       data,
       total,
@@ -113,9 +103,6 @@ export function ExpenseDonut({
     selectedCostType != null
       ? data.find((d) => d.id === selectedCostType)
       : undefined;
-  const centerValue = selected?.value ?? netTotal;
-  const centerText = selected ? selected.label : centerLabel;
-
   // Only meaningful when nothing is drilled in: the arcs are positive-only, so
   // a net-reducing bucket (refunds/credits) is absent from the ring but still
   // folded into the center's net total. Caption reconciles the two.
@@ -123,74 +110,19 @@ export function ExpenseDonut({
 
   return (
     <Stack gap="tight">
-      <div
-        style={{ height }}
-        className={onCostTypeClick ? "[&_path]:cursor-pointer" : undefined}
-      >
-        <ResponsivePie
-          {...nivoMotion}
-          data={data}
-          colors={(d) => d.data.color}
-          onClick={
-            onCostTypeClick ? (d) => onCostTypeClick(String(d.id)) : undefined
-          }
-          // Controlled while a slice is drilled in — the selected arc stays
-          // popped out (activeOuterRadiusOffset). Uncontrolled hover otherwise.
-          // (Don't fade unselected slices via color: Nivo's color interpolator
-          // can't parse color-mix() and silently keeps the full color.)
-          activeId={selected ? selected.id : undefined}
-          margin={{ top: 30, right: 100, bottom: 30, left: 100 }}
-          innerRadius={0.6}
-          padAngle={1}
-          cornerRadius={0}
-          activeOuterRadiusOffset={6}
-          arcLinkLabelsSkipAngle={10}
-          arcLinkLabelsTextColor="var(--foreground)"
-          arcLinkLabelsColor={{ from: "color" }}
-          arcLinkLabel={(d) => `${d.label} ${formatCurrency(d.value, 0)}`}
-          arcLabelsSkipAngle={20}
-          arcLabel={(d) => `${Math.round((d.value / total) * 100)}%`}
-          arcLabelsTextColor="var(--background)"
-          enableArcLabels
-          tooltip={({ datum }) => (
-            <ChartTooltip>
-              <span style={{ color: datum.color }}>{datum.label}</span>:{" "}
-              <strong>{formatCurrency(datum.value, 0)}</strong> (
-              {((datum.value / total) * 100).toFixed(1)}%)
-              <TooltipExpenseBreakdown
-                expenses={expensesByType.get(String(datum.id)) ?? []}
-              />
-            </ChartTooltip>
-          )}
-          layers={[
-            "arcs",
-            "arcLabels",
-            "arcLinkLabels",
-            "legends",
-            ({ centerX, centerY }) => (
-              <text
-                x={centerX}
-                y={centerY}
-                textAnchor="middle"
-                dominantBaseline="central"
-                style={{ fill: "var(--foreground)" }}
-              >
-                <tspan x={centerX} dy="-0.5em" className="font-bold text-xl">
-                  {formatCurrency(centerValue, 0)}
-                </tspan>
-                <tspan
-                  x={centerX}
-                  dy="1.4em"
-                  className="text-xs"
-                  style={{ fill: "var(--muted-foreground)" }}
-                >
-                  {centerText}
-                </tspan>
-              </text>
-            ),
-          ]}
-        />
-      </div>
+      <CategoryDonut
+        data={data}
+        height={height}
+        centerValue={netTotal}
+        centerLabel={centerLabel}
+        selectedId={selectedCostType}
+        onSelect={onCostTypeClick}
+        renderTooltipExtra={(id) => (
+          <TooltipExpenseBreakdown expenses={expensesByType.get(id) ?? []} />
+        )}
+        emptyIcon={ShoppingBag}
+        emptyTitle="No principal expense data."
+      />
       {showExcludedCaption && (
         <p className="text-center text-muted-foreground text-xs">
           Ring shows {formatCurrency(total, 0)} positive spend; center is the

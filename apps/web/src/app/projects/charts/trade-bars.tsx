@@ -2,6 +2,7 @@ import { isPrincipalExpense } from "@cubby/schemas/expense-line-kind";
 import type { ExpenseOut, Trade } from "@cubby/schemas/project";
 import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
+import { HorizontalBarChart } from "~/app/_components/charts/kit";
 import { Stack } from "~/components/layout";
 import { formatCurrency } from "~/lib/utils";
 import {
@@ -13,7 +14,6 @@ import {
 } from "../shared";
 import { ChartTooltip, TooltipExpenseBreakdown } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
-import { HorizontalBarChart } from "./horizontal-bar-chart";
 import { buildTradeCostPivot, PIVOT_COST_KEYS } from "./trade-cost-pivot";
 
 type BarDatum = {

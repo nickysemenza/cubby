@@ -1,7 +1,7 @@
+import { HorizontalBarChart } from "~/app/_components/charts/kit";
 import { formatCurrency } from "~/lib/utils";
 import { nivoBarChrome, nivoChartTheme, nivoCurrencyAxis } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
-import { HorizontalBarChart } from "./horizontal-bar-chart";
 
 export type PlannedActualDatum = {
   category: string;

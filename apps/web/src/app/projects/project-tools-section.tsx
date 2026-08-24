@@ -51,8 +51,8 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import {
   cancelTRPCQueries,
+  invalidatesFor,
   invalidateTRPCQueries,
-  projectResourceMutationInvalidateKeys,
 } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 
@@ -117,7 +117,7 @@ function ResourcesTable({
       toast.error(getErrorMessage(error));
     },
     onSettled: () =>
-      invalidateTRPCQueries(queryClient, projectResourceMutationInvalidateKeys),
+      invalidateTRPCQueries(queryClient, invalidatesFor("project", "resource")),
   });
   const [addToInventoryRow, setAddToInventoryRow] =
     useState<ResourceRow | null>(null);
@@ -522,7 +522,7 @@ function ResourcePickerDialog({
       toast.error(getErrorMessage(error));
     },
     onSettled: () =>
-      invalidateTRPCQueries(queryClient, projectResourceMutationInvalidateKeys),
+      invalidateTRPCQueries(queryClient, invalidatesFor("project", "resource")),
   });
 
   return (

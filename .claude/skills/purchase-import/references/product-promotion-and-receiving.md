@@ -11,7 +11,7 @@ present those candidates for a decision instead of silently skipping them.
   treatment, finish, and profile can identify commodity materials.
 - Put manufacturer models in `model`. Put retailer SKU, catalog, internet, or
   item numbers in typed `externalIds`.
-- Create a Product with all known fields in one rich `create_product` call; do
+- Create a Product with all known fields in one rich `create_products` call; do
   not create then patch just to set category/model/tags/identifiers.
 - Keep exact-SKU durable Expenses as product candidates even when currently
   unlinked. Conversely, do not force an aggregate Expense onto a Product when

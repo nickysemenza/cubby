@@ -342,20 +342,23 @@ export const mcpIngredientCreateInput = z.object({
   name: ingredientCreateShape.name,
   aliases: ingredientCreateShape.aliases,
 });
-const ingredientMcpProductRefFields = {
-  id: productShortcode,
-  name: z.string(),
-};
-
-/** Slim MCP projection of an ingredient list/detail row. */
+/**
+ * Slim MCP projection of an ingredient list/detail row.
+ *
+ * The scalar half is built from the same field map as `ingredientOut`, so it
+ * cannot drift from the plain shape. The two added keys are aggregates no
+ * plain ingredient output carries under these names: `products` is a
+ * `{id,name}` digest of `product[]`, and `recipeCount` counts
+ * `appearsInRecipes[]` (the list row's `ownRecipeCount` counts something else
+ * and the detail row has no count at all).
+ */
 export const ingredientMcpOut = z.object({
-  id: ingredientShortcode,
-  name: z.string(),
-  aliases: z.array(z.string()),
-  products: z.array(z.object(ingredientMcpProductRefFields)),
+  id: ingredientOutFields.id,
+  name: ingredientOutFields.name,
+  aliases: ingredientOutFields.aliases,
+  naKinds: ingredientOutFields.naKinds,
+  products: z.array(z.object({ id: productShortcode, name: z.string() })),
   recipeCount: z.number().int().nonnegative(),
-  // USDA FoodData Central id — declared exception, not a cubby shortcode.
-  usdaFdcId: z.number().nullable(),
 });
 export type IngredientMcpOut = z.infer<typeof ingredientMcpOut>;
 

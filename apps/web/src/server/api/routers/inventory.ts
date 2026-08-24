@@ -51,7 +51,6 @@ import {
   deleteInventoryEntries,
   getInventoryByLocationIds,
   getInventoryCountsByLocations,
-  getInventoryEntryByID,
   getInventoryEntryByShortcode,
   inventoryentryList,
   moveInventoryEntries,
@@ -136,17 +135,6 @@ const { getByID, getByShortcode, create, update } =
       idSchema: inventoryShortcode,
     },
     repository: {
-      getByID: async (services, shortcode: InventoryShortcode) => {
-        const id = await inventoryShortcodes.one(services.db, shortcode);
-        const res = await getInventoryEntryByID(services.db, id);
-        if (res === null) {
-          throw createAppError(
-            "INVENTORY_NOT_FOUND",
-            "Inventory entry not found",
-          );
-        }
-        return res;
-      },
       getByShortcode: (services, shortcode) =>
         getInventoryEntryByShortcode(services.db, shortcode),
       create: async (services, data) => {

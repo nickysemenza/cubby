@@ -20,7 +20,6 @@ import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { multiSelectFilterFn } from "~/entities/filters";
 import { useTRPC } from "~/integrations/trpc/react";
-import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
 import {
   createCurrencyColumn,
   createEditableAmountColumn,
@@ -105,7 +104,6 @@ export function InventoryItemList() {
   const updateMutation = useUpdateMutation({
     mutationFn: api.inventory.update.mutationOptions,
     entity: "inventory",
-    invalidateKeys: inventoryMutationInvalidateKeys,
   });
 
   const extraActions = useCallback(
@@ -130,11 +128,12 @@ export function InventoryItemList() {
     [],
   );
 
-  // Memoize deletable config to prevent infinite render loop
+  // Its own config rather than the contract default: the dialog says
+  // "Inventory Entry", which is what the row IS — the registry label
+  // ("Inventory Item") reads as the product on the shelf.
   const deletableConfig = useDeletableConfig({
     mutationFn: api.inventory.delete.mutationOptions,
     entityLabel: "Inventory Entry",
-    invalidateKeys: inventoryMutationInvalidateKeys,
     entity: "inventory",
   });
 
@@ -299,9 +298,11 @@ export function InventoryItemList() {
     [columnHelper],
   );
 
+  // Not `EntityListPage`: this page switches between a table and a shelf view
+  // off the same query, so it reads `data` and the workbench's own table,
+  // loading state, and delete dialog directly.
   const { workbench, data, totalCount } = useEntityList({
     entity: "inventory",
-    queryOptions: api.inventory.list.queryOptions,
     // Inventory has custom columns (product image, amount instead of name)
     columns,
     deletable: deletableConfig,

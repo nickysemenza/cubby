@@ -52,6 +52,7 @@ import {
 import { insertWithShortcode } from "./shortcode-utils";
 import { createTask, deleteTasks } from "./task";
 import { findOrCreateVendor } from "./vendor";
+import { createWish, deleteWishes } from "./wish";
 
 describe("product repository", () => {
   const ctx = withTestDb();
@@ -1838,26 +1839,11 @@ describe("product repository", () => {
         expect(has.data.map((p) => p.id)).not.toContain(neverBought.id);
       });
 
-      it("a soft-deleted expense doesn't count as having one", async () => {
-        const product = await createProduct(
-          ctx.db,
-          makeProductInput({ name: "Refunded Product", upc: "710000000003" }),
-          ctx.actor,
-        );
-        const { output: p } = await createExpense(
-          ctx.db,
-          {
-            ...makeExpenseInput(),
-            name: "Deleted",
-            productId: product.id,
-          },
-          ctx.actor,
-        );
-        await deleteExpenses(ctx.db, [p.id], ctx.actor);
-
-        const none = await listWith({ expensePresenceFilter: "none" });
-        expect(none.data.map((p) => p.id)).toContain(product.id);
-      });
+      // "a soft-deleted expense doesn't count as having one" moved to the
+      // generic soft-delete sweep in filter-application.integration.test.ts
+      // ("every relation-backed presence filter empties under a soft-delete
+      // sweep" > product): `product.expensePresenceFilter` is relation-backed
+      // AND non-vacuous there now, so the sweep genuinely proves it.
     });
 
     describe("purchase provenance", () => {
@@ -1994,42 +1980,9 @@ describe("product repository", () => {
       });
     });
 
-    describe("unitMappingPresenceFilter", () => {
-      it("partitions on having at least one conversion edge", async () => {
-        const mapped = await createProduct(
-          ctx.db,
-          makeProductInput({
-            name: "Mapped Product",
-            upc: "710000000004",
-            unitMappings: [
-              {
-                a: { value: 1, unit: "cup" },
-                b: { value: 120, unit: "g" },
-                source: null,
-              },
-            ],
-          }),
-          ctx.actor,
-        );
-        const unmapped = await createProduct(
-          ctx.db,
-          makeProductInput({
-            name: "Unmapped Product",
-            upc: "710000000005",
-            unitMappings: [],
-          }),
-          ctx.actor,
-        );
-
-        const has = await listWith({ unitMappingPresenceFilter: "has" });
-        expect(has.data.map((p) => p.id)).toContain(mapped.id);
-        expect(has.data.map((p) => p.id)).not.toContain(unmapped.id);
-
-        const none = await listWith({ unitMappingPresenceFilter: "none" });
-        expect(none.data.map((p) => p.id)).toContain(unmapped.id);
-        expect(none.data.map((p) => p.id)).not.toContain(mapped.id);
-      });
-    });
+    // unitMappingPresenceFilter's plain has/none partition moved to the
+    // generic battery in filter-application.integration.test.ts — non-vacuous
+    // there now (seedWorld gives product Alpha a unitMapping).
 
     describe("usdaPresenceFilter", () => {
       it("matches on either key — an fdc_id or a upc to auto-match", async () => {
@@ -2981,6 +2934,85 @@ describe("product repository", () => {
       });
     });
 
+    /**
+     * PRODUCT_HAS_INVENTORY: the first and most load-bearing acquisition
+     * edge — a product still sitting on a shelf can't be deleted out from
+     * under its own stock.
+     */
+    it("rejects a product with live inventory, succeeds once the inventory is removed", async () => {
+      const stocked = await createProduct(
+        ctx.db,
+        makeProductInput({
+          name: "Inventory-Blocked Product",
+          upc: "800000000901",
+        }),
+        ctx.actor,
+      );
+      const shelf = await createLocation(
+        ctx.db,
+        makeLocationInput({ name: "Inventory Block Shelf" }),
+        ctx.actor,
+      );
+      const entry = await createInventoryEntry(
+        ctx.db,
+        {
+          productId: stocked.id,
+          locationId: shelf.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+
+      await expect(
+        deleteProducts(ctx.db, [stocked.entityId], ctx.actor),
+      ).rejects.toMatchObject({
+        code: "PRECONDITION_FAILED",
+        cause: { reason: "PRODUCT_HAS_INVENTORY" },
+      });
+
+      await deleteInventoryEntries(ctx.db, [entry.entityId], ctx.actor);
+
+      await expect(
+        deleteProducts(ctx.db, [stocked.entityId], ctx.actor),
+      ).resolves.toMatchObject({ detachedImageKeys: [] });
+    });
+
+    /** PRODUCT_HAS_WISH_CANDIDATES: a live wishlist candidate blocks delete. */
+    it("rejects a product that is a live wish candidate, succeeds once the wish is deleted", async () => {
+      const candidate = await createProduct(
+        ctx.db,
+        makeProductInput({
+          name: "Wish-Blocked Product",
+          upc: "800000000902",
+          // Wishlist candidates must be live Tool products.
+          category: "tools",
+        }),
+        ctx.actor,
+      );
+      const { output: wish } = await createWish(
+        ctx.db,
+        {
+          name: "Wish blocking a product delete",
+          notes: null,
+          candidateProductIds: [candidate.id],
+        },
+        ctx.actor,
+      );
+
+      await expect(
+        deleteProducts(ctx.db, [candidate.entityId], ctx.actor),
+      ).rejects.toMatchObject({
+        code: "PRECONDITION_FAILED",
+        cause: { reason: "PRODUCT_HAS_WISH_CANDIDATES" },
+      });
+
+      await deleteWishes(ctx.db, [wish.id], ctx.actor);
+
+      await expect(
+        deleteProducts(ctx.db, [candidate.entityId], ctx.actor),
+      ).resolves.toMatchObject({ detachedImageKeys: [] });
+    });
+
     it("rejects a product used as a live task subject, then succeeds after the task is deleted", async () => {
       const furnace = await createProduct(
         ctx.db,
@@ -3032,8 +3064,7 @@ describe("product repository", () => {
    * this block as the complete roster:
    *   - `Expense.productId` — `deleteProducts`' own describe above, which also
    *     pins the error message and the post-delete NOT_FOUND.
-   *   - `InventoryEntry.productId` — `operation-preview-parity`, which asserts
-   *     the preview AND the mutation agree on the blocker.
+   *   - `InventoryEntry.productId` — `deleteProducts`' own describe above.
    *   - `Task.subjectProductId` — `deleteProducts`' own describe above.
    * That the roles map itself is EXHAUSTIVE over `INCOMING_EDGES.product` is a
    * type-free unit assertion, not a database one: it lives in

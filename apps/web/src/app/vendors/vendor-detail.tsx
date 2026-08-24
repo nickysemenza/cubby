@@ -1,23 +1,26 @@
 import type { VendorOut } from "@cubby/schemas/vendor";
-import { Info, Receipt } from "lucide-react";
-import type { FC } from "react";
+import { Info, Merge, Receipt } from "lucide-react";
+import { type FC, useState } from "react";
 import { EntityHero } from "~/app/_components/EntityHero";
 import { ExternalLinkText } from "~/app/_components/ExternalLink";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
+import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
-import { vendorMutationInvalidateKeys } from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import {
   type DetailSection,
   DetailSections,
 } from "../_components/data-table/detail-page";
 import { EditableCell } from "../_components/data-table/editable-cell";
+import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { useEntityDelete } from "../_components/hooks/useEntityDelete";
 import { useEntityDetail } from "../_components/hooks/useEntityDetail";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
+import { EntityMergeDialog } from "../_components/merge/entity-merge-dialog";
 import { RelationshipSummaryTable } from "../_components/relationships/relationship-summary-table";
 import { VendorPurchasesTable } from "./vendor-purchases-table";
 
@@ -37,11 +40,22 @@ interface VendorDetailProps {
  */
 export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
   const api = useTRPC();
+  const [mergeOpen, setMergeOpen] = useState(false);
 
   const updateMutation = useUpdateMutation({
     mutationFn: api.vendor.update.mutationOptions,
     entity: "vendor",
-    invalidateKeys: vendorMutationInvalidateKeys,
+  });
+
+  // Vendor merge re-parents purchases (and folds any sharing an order id with
+  // the keeper), so the expense/project rollups go stale too — same reason
+  // `DuplicateVendorMergeFix` (problems page) invalidates past the plain
+  // vendor key set.
+  const mergeMutation = useActionMutation({
+    mutationFn: api.vendor.merge.mutationOptions,
+    success: "Vendors merged",
+    invalidateKeys: invalidatesFor("purchase"),
+    onSuccess: () => setMergeOpen(false),
   });
 
   // Overview is edited through inline EditableCell fields, not a Form, so
@@ -61,7 +75,6 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
     entity: "vendor",
     mutationOptions: (callbacks) =>
       api.vendor.delete.mutationOptions(callbacks),
-    invalidateKeys: vendorMutationInvalidateKeys,
     redirectTo: "/vendors",
     description:
       "A vendor with purchases still pointing at it can't be deleted — move those purchases first. Otherwise this removes the vendor from the roster.",
@@ -260,9 +273,31 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
       }
       heroStats={heroStats}
       heroMedia={heroMedia}
-      heroActions={{ secondary: deleteButton }}
+      heroActions={{
+        primary: (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setMergeOpen(true)}
+          >
+            <Merge />
+            Merge vendors
+          </Button>
+        ),
+        secondary: deleteButton,
+      }}
     >
       <DetailSections sections={sections} rawData={vendor} />
+      <EntityMergeDialog
+        entity="vendor"
+        keeper={vendor}
+        open={mergeOpen}
+        onOpenChange={setMergeOpen}
+        onConfirm={(keepId, mergeIds) =>
+          mergeMutation.mutate({ keepId, mergeIds })
+        }
+        isPending={mergeMutation.isPending}
+      />
       {deleteDialog}
     </Page>
   );

@@ -30,9 +30,15 @@ export const buildSortParams = (
 export const buildSortsParams = (
   sorting: SortingState,
   initialSort?: string,
+  initialSortDesc = true,
 ): SortParams[] => {
   if (sorting.length === 0) {
-    return [{ orderBy: initialSort ?? "createdAt", direction: "desc" }];
+    return [
+      {
+        orderBy: initialSort ?? "createdAt",
+        direction: initialSortDesc ? "desc" : "asc",
+      },
+    ];
   }
   return sorting.slice(0, MAX_SORTS).map((s) => ({
     orderBy: s.id,
@@ -44,6 +50,12 @@ export const defaultPagination: PaginationParams = {
   pageIndex: 0,
   pageSize: Math.min(100, MAX_PAGE_SIZE),
 };
-export const defaultSortState = (initialSort?: string): SortingState => [
-  { id: initialSort ?? "createdAt", desc: true },
-];
+/**
+ * The table's opening sort. `initialSortDesc` defaults to true because that is
+ * right for the date/amount columns most lists open on; a roster whose default
+ * sort is a NAME passes false, or it opens Z-to-A.
+ */
+export const defaultSortState = (
+  initialSort?: string,
+  initialSortDesc = true,
+): SortingState => [{ id: initialSort ?? "createdAt", desc: initialSortDesc }];

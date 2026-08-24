@@ -24,10 +24,10 @@ import { formatCurrencyRange } from "~/lib/format-range";
 import { patchListItem } from "~/lib/optimistic-list";
 import {
   cancelTRPCQueries,
+  invalidatesFor,
   invalidateTRPCQueries,
   normalizeTRPCQueryKey,
   queryKeys,
-  wishMutationInvalidateKeys,
 } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import {
@@ -63,7 +63,6 @@ export function WishDetail({ wish }: { wish: WishOut }) {
   const updateMutation = useUpdateMutation({
     mutationFn: api.wish.update.mutationOptions,
     entity: "wish",
-    invalidateKeys: wishMutationInvalidateKeys,
   });
 
   // Overview is edited through inline EditableCell fields, not a Form, so
@@ -89,7 +88,6 @@ export function WishDetail({ wish }: { wish: WishOut }) {
         // one rather than `void` (mirrors vendor-detail).
         onSuccess: () => callbacks.onSuccess({}),
       }),
-    invalidateKeys: wishMutationInvalidateKeys,
     redirectTo: "/wishes",
   });
 
@@ -134,8 +132,7 @@ export function WishDetail({ wish }: { wish: WishOut }) {
       }
       toast.error(getErrorMessage(error));
     },
-    onSettled: () =>
-      invalidateTRPCQueries(queryClient, wishMutationInvalidateKeys),
+    onSettled: () => invalidateTRPCQueries(queryClient, invalidatesFor("wish")),
   });
 
   const toggleAcquired = () =>

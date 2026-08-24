@@ -1,20 +1,12 @@
 import type { ExpenseProjectAggregate } from "@cubby/schemas/project";
 import { Building2 } from "lucide-react";
 import { useMemo } from "react";
+import { NetBarBreakdown } from "~/app/_components/charts/kit";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
-import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
-import { ChartEmpty } from "~/app/projects/charts/chart-empty";
-import { HorizontalBarChart } from "~/app/projects/charts/horizontal-bar-chart";
 import {
   ProjectChartLabel,
   ProjectChartTick,
 } from "~/app/projects/project-mark";
-import {
-  nivoBarChrome,
-  nivoChartTheme,
-  nivoCurrencyAxis,
-} from "~/lib/nivo-theme";
-import { formatCurrency } from "~/lib/utils";
 
 /**
  * Net spend by project — sourced from `expense.analytics`'s `byProject`
@@ -29,84 +21,39 @@ export function ProjectBreakdown({
   byProject: ExpenseProjectAggregate[];
 }) {
   const { iconById } = useProjectOptions();
-  const data = useMemo(
-    () =>
-      [...byProject]
-        .sort((a, b) => Math.abs(b.net) - Math.abs(a.net))
-        .slice(0, 12)
-        .map((row) => ({
-          id: row.projectId,
-          name: row.projectName,
-          net: row.net,
-        }))
-        .reverse(),
-    [byProject],
-  );
   const identityById = useMemo(
     () =>
       new Map<string, { name: string; icon: string | null }>(
-        data.map(
-          (row) =>
-            [
-              String(row.id),
-              { name: row.name, icon: iconById.get(row.id) ?? null },
-            ] as const,
-        ),
+        byProject.map((row) => [
+          row.projectId,
+          { name: row.projectName, icon: iconById.get(row.projectId) ?? null },
+        ]),
       ),
-    [data, iconById],
+    [byProject, iconById],
   );
 
-  if (data.length === 0) {
-    return <ChartEmpty icon={Building2} title="No project-linked expenses." />;
-  }
-
   return (
-    <HorizontalBarChart
-      data={data}
-      minHeight={240}
-      keys={["net"]}
-      indexBy="id"
+    <NetBarBreakdown
+      data={byProject}
+      valueKey="net"
+      labelKey="projectName"
+      idKey="projectId"
       margin={{ top: 10, right: 40, bottom: 40, left: 180 }}
-      padding={0.25}
-      colors={({ data: d }) =>
-        Number(d.net) < 0 ? "var(--chart-negative)" : "var(--chart-1)"
-      }
-      {...nivoBarChrome}
-      axisBottom={nivoCurrencyAxis}
-      axisLeft={{
-        tickSize: 0,
-        tickPadding: 8,
-        renderTick: (tick) => (
-          <ProjectChartTick {...tick} identityById={identityById} />
-        ),
-      }}
-      enableLabel={false}
-      enableGridX
-      enableGridY={false}
-      tooltip={({ data: d }) => (
-        <ChartTooltip>
-          <strong>
-            <ProjectChartLabel
-              identity={
-                identityById.get(String(d.id)) ?? {
-                  name: String(d.name),
-                  icon: null,
-                }
-              }
-            />
-          </strong>{" "}
-          —{" "}
-          <span
-            style={{
-              color:
-                Number(d.net) < 0 ? "var(--chart-negative)" : "var(--chart-1)",
-            }}
-          >
-            {formatCurrency(Number(d.net), 0)}
-          </span>
-        </ChartTooltip>
+      renderTick={(tick) => (
+        <ProjectChartTick {...tick} identityById={identityById} />
       )}
-      theme={nivoChartTheme}
+      renderLabel={(row) => (
+        <ProjectChartLabel
+          identity={
+            identityById.get(row.projectId) ?? {
+              name: row.projectName,
+              icon: null,
+            }
+          }
+        />
+      )}
+      emptyIcon={Building2}
+      emptyTitle="No project-linked expenses."
     />
   );
 }

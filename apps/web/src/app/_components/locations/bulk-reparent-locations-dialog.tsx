@@ -16,8 +16,8 @@ import { Stack } from "~/components/layout";
 import { StatusText } from "~/components/ui/status-text";
 import { useTRPC } from "~/integrations/trpc/react";
 import {
+  invalidatesFor,
   invalidateTRPCQueries,
-  locationMutationInvalidateKeys,
   queryKeys,
 } from "~/lib/query-keys";
 
@@ -56,7 +56,7 @@ export function BulkReparentLocationsDialog({
     api.location.bulkUpdateParent.mutationOptions({
       onSuccess: ({ updated }) => {
         invalidateTRPCQueries(queryClient, [
-          ...locationMutationInvalidateKeys,
+          ...invalidatesFor("location"),
           queryKeys.location.all,
         ]);
         toast.success(

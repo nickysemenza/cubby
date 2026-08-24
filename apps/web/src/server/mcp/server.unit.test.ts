@@ -15,6 +15,7 @@ import {
 } from "@cubby/schemas/household-contribution";
 import { unsafeExpenseShortcode } from "@cubby/schemas/identifiers";
 import { problemsCountSchema } from "@cubby/schemas/mcp";
+import { mealMcpOut } from "@cubby/schemas/meal";
 import { mcpProductCreateInput } from "@cubby/schemas/product";
 import { productComponentOut } from "@cubby/schemas/product-components";
 import type { ExpenseMatchCandidate } from "@cubby/schemas/project";
@@ -109,6 +110,48 @@ async function callTool(
   } finally {
     await Promise.allSettled([client.close(), server.close()]);
   }
+}
+
+/**
+ * Call a plural batch create/update tool (`create_xs`/`update_xs`) with
+ * exactly one item and hand back the same shape the retired singular tool
+ * used to return, for tests that assert on the tool's response directly. A
+ * failure thrown inside the per-item `run` (e.g. `resolveUpdateData`
+ * rejecting a bad combination) surfaces from the batch loop as a "failed"
+ * result entry rather than a top-level protocol error — this re-maps that
+ * back to `isError: true` with the rendered message in `content`, matching
+ * what the singular tool used to produce directly.
+ */
+async function callBatchSingular(
+  server: McpServer,
+  toolName: string,
+  args: Record<string, unknown>,
+  // biome-ignore lint/suspicious/noExplicitAny: stub tRPC caller for tool tests
+  caller: any,
+): Promise<CallToolResult> {
+  const result = (await callTool(
+    server,
+    toolName,
+    { items: [args], resultDetail: "full" },
+    caller,
+  )) as CallToolResult;
+  if (result.isError) return result;
+  const { results } = result.structuredContent as {
+    results: Array<Record<string, unknown>>;
+  };
+  const [only] = results;
+  if (only?.status === "failed") {
+    return {
+      ...result,
+      isError: true,
+      structuredContent: only,
+      content: [{ type: "text" as const, text: String(only.error ?? "") }],
+    };
+  }
+  return {
+    ...result,
+    structuredContent: only?.item as Record<string, unknown> | undefined,
+  };
 }
 
 type Operation = "list" | "get" | "create" | "update" | "delete";
@@ -287,6 +330,11 @@ describe("registerEntityCrudToolset", () => {
       entity: "vendor",
       names: { list: "search_widgets" },
       operations: { delete: false },
+      // Batch is on by default and would otherwise absorb create_vendor/
+      // update_vendor entirely (see the toolset's dedicated batch describe
+      // block below) — turn it off here so this test can still pin the
+      // singular tools' own name/outputSchema wiring.
+      batch: { create: false, update: false },
       paging: { defaultPageSize: 7, maxPageSize: 9 },
       createInput: { name: z.string() },
       updateShape: { name: z.string().optional() },
@@ -686,48 +734,55 @@ describe("slimProduct enrichment context", () => {
 });
 
 describe("slimMeal", () => {
-  it("keeps meal essentials and summarizes each planned recipe", () => {
-    const slim = slimMeal({
-      id: "m-1",
-      date: "2026-06-20",
-      name: "Dinner",
-      sortOrder: 0,
-      totals: { costTotal: 12, caloriesTotal: 800, pending: false },
-      recipes: [
-        {
-          // mealRecipe row id — declared exception, no shortcode; stays uuid.
-          id: "mr-1",
-          recipeId: "RCP-2222",
-          recipe: {
-            id: "RCP-2222",
-            name: "Chili",
-            sections: [{ huge: true }],
-          },
-          scale: 2,
-          sortOrder: 0,
-          scaledTotals: { costTotal: 12, caloriesTotal: 800 },
-        },
-      ],
-    });
-    expect(slim.recipes).toEqual([
+  // `mealMcpOut` is now `mealOut` minus the audit timestamps, so `slimMeal` is
+  // a pass-through and the projection is the parse `respond` runs. A planned
+  // entry keeps the mealRecipe row id `update_meal_recipe` takes, and the
+  // recipe's own name is nested under `recipe` rather than flattened onto it.
+  const MEAL_RECIPE_ID = "11111111-1111-4111-8111-111111111111";
+  const AUDIT = new Date("2026-06-01T00:00:00Z");
+  const MEAL_ROW = {
+    id: "MEL-2222",
+    date: "2026-06-20",
+    name: "Dinner",
+    sortOrder: 0,
+    mealType: "dinner",
+    mealKind: "cooked",
+    totals: { costTotal: 12, caloriesTotal: 800, pending: false },
+    recipes: [
       {
-        id: "mr-1",
+        // mealRecipe row id — declared exception, no shortcode; stays uuid.
+        id: MEAL_RECIPE_ID,
+        mealId: "MEL-2222",
         recipeId: "RCP-2222",
-        name: "Chili",
+        recipe: { id: "RCP-2222", name: "Chili", sections: [{ huge: true }] },
         scale: 2,
+        sortOrder: 0,
         scaledTotals: { costTotal: 12, caloriesTotal: 800 },
+        createdAt: AUDIT,
+        updatedAt: AUDIT,
       },
-    ]);
-    expect(slim.date).toBe("2026-06-20");
+    ],
+    createdAt: AUDIT,
+    updatedAt: AUDIT,
+  };
+
+  it("keeps meal essentials and each planned recipe, without the meal's audit trail", () => {
+    const parsed = mealMcpOut.parse(slimMeal(MEAL_ROW));
+
+    expect(parsed.date).toBe("2026-06-20");
+    expect(parsed).not.toHaveProperty("createdAt");
+    expect(parsed).not.toHaveProperty("updatedAt");
+    expect(parsed.recipes).toHaveLength(1);
   });
 
-  it("tolerates a meal with no recipes", () => {
-    const slim = slimMeal({
-      id: "m-2",
-      date: "2026-06-21",
-      recipes: undefined,
-    });
-    expect(slim.recipes).toEqual([]);
+  it("summarizes the planned recipe without dragging in its section graph", () => {
+    const [entry] = mealMcpOut.parse(slimMeal(MEAL_ROW)).recipes;
+
+    expect(entry?.id).toBe(MEAL_RECIPE_ID);
+    expect(entry?.scale).toBe(2);
+    expect(entry?.scaledTotals).toEqual({ costTotal: 12, caloriesTotal: 800 });
+    // The name is here, not flattened onto the entry — and `sections` is gone.
+    expect(entry?.recipe).toEqual({ id: "RCP-2222", name: "Chili" });
   });
 });
 
@@ -898,17 +953,21 @@ describe("createMcpServer registration", () => {
     }
   });
 
-  it("stores outputSchema on create_recipe and update_recipe", () => {
+  it("stores outputSchema on create_recipes and update_recipes", () => {
+    // create_recipe/update_recipe have no singular tool anymore (batch is on
+    // by default); only the plural names are live on the real server.
     const server = createMcpServer();
     expect(
       getRegisteredTool(server, "list_recipes")?.outputSchema,
     ).toBeDefined();
     expect(
-      getRegisteredTool(server, "create_recipe")?.outputSchema,
+      getRegisteredTool(server, "create_recipes")?.outputSchema,
     ).toBeDefined();
     expect(
-      getRegisteredTool(server, "update_recipe")?.outputSchema,
+      getRegisteredTool(server, "update_recipes")?.outputSchema,
     ).toBeDefined();
+    expect(getRegisteredTool(server, "create_recipe")).toBeUndefined();
+    expect(getRegisteredTool(server, "update_recipe")).toBeUndefined();
   });
 
   it("SDK stores recipeMcpOut when registered in isolation", () => {
@@ -947,14 +1006,14 @@ describe("createMcpServer registration", () => {
     ).toBeDefined();
   });
 
-  it("recipe tools register create_recipe outputSchema in isolation", () => {
+  it("recipe tools register create_recipes outputSchema in isolation", () => {
     const server = new McpServer({ name: "t", version: "1.0.0" });
     registerRecipeTools(server);
     expect(
-      getRegisteredTool(server, "create_recipe")?.outputSchema,
+      getRegisteredTool(server, "create_recipes")?.outputSchema,
     ).toBeDefined();
     expect(
-      getRegisteredTool(server, "update_recipe")?.outputSchema,
+      getRegisteredTool(server, "update_recipes")?.outputSchema,
     ).toBeDefined();
     expect(
       getRegisteredTool(server, "list_recipes")?.outputSchema,
@@ -1019,23 +1078,42 @@ describe("listMcpToolCatalog", () => {
       expect(names.has(name), `${name} missing from catalog`).toBe(true);
     }
     for (const name of [
-      "get_meals_by_date_range",
-      "update_product_unit_mappings",
-      "bulk_set_task_status",
-      "bulk_move_tasks",
-      // The last `bulk_*` tool, retired for the same reason as the others: it
-      // named a narrower operation than the work. `move_inventory_entries` is a
-      // strict superset (per-item target, derivable source, optional quantity).
-      "bulk_move_inventory",
-      "bulk_set_task_due_date",
-      "bulk_move_expenses",
-      "bulk_set_expense_trade",
-      "bulk_set_expense_cost_type",
-      "get_ingredient_raw_lines",
-      "recompute_recipe_totals",
-      "reparse_stale_parses",
-      "find_duplicate_inventory",
-      "find_product_by_upc",
+      // The singular create/update tools below were retired once batching
+      // became the default: the plural tool takes a one-item array, which
+      // made the singular one strictly redundant. See `registerEntityCrudToolset`
+      // in tools/_shared.ts.
+      "create_vendor",
+      "update_vendor",
+      "create_location",
+      "update_location",
+      "create_meal",
+      "update_meal",
+      "create_product",
+      "update_product",
+      "create_ingredient",
+      "update_ingredient",
+      "create_wish",
+      "update_wish",
+      "create_project",
+      "update_project",
+      "create_task",
+      "update_task",
+      "create_expense",
+      "update_expense",
+      "create_purchase",
+      "update_purchase",
+      "create_financial_account",
+      "update_financial_account",
+      "create_financial_transaction",
+      "update_financial_transaction",
+      "create_ledger_party",
+      "update_ledger_party",
+      "create_ledger_transfer",
+      "update_ledger_transfer",
+      "create_inventory_entry",
+      "update_inventory_entry",
+      "create_recipe",
+      "update_recipe",
     ]) {
       expect(names.has(name), `${name} unexpectedly remains in catalog`).toBe(
         false,
@@ -1091,13 +1169,16 @@ describe("listMcpToolCatalog", () => {
       expectedImageCount: expect.any(Object),
     });
 
-    const updateProduct = byName.get("update_product");
+    // update_product has no singular tool anymore (batch is on by default) —
+    // its fields live one level down, inside the batch item schema.
+    const updateProducts = byName.get("update_products");
+    const updateProductsSchema = updateProducts!.inputSchema as {
+      properties?: {
+        items?: { items?: { properties?: Record<string, unknown> } };
+      };
+    };
     expect(
-      (
-        updateProduct!.inputSchema as {
-          properties?: Record<string, unknown>;
-        }
-      ).properties,
+      updateProductsSchema.properties?.items?.items?.properties,
     ).toMatchObject({
       removeImageIds: expect.any(Object),
       imageOrder: expect.any(Object),
@@ -1306,18 +1387,22 @@ describe("listMcpToolCatalog", () => {
     // shortcode/uuid split lives in entity-integrity.unit.test.ts.)
     const rejected: Array<[reason: string, input: unknown]> = [
       [
-        "wrong prefix for the entity",
-        { operation: "delete", entity: "product", ids: ["LOC-2CRC"] },
+        // Delete previews were removed: the mutations' own structured refusals
+        // are the contract now, so `operation: "delete"` is simply not a valid
+        // enum member any more — this is not a cross-field rule, but it is the
+        // one thing every ex-delete case in this list used to exercise.
+        "delete is no longer a supported operation",
+        { operation: "delete", entity: "product", ids: ["PRD-2CRC"] },
       ],
-      ["delete without ids", { operation: "delete", entity: "product" }],
       [
-        "delete carrying merge fields",
-        {
-          operation: "delete",
-          entity: "product",
-          ids: ["PRD-2CRC"],
-          keepId: "PRD-2CRD",
-        },
+        // `image` had only a delete preview — no merge, no attach/detach
+        // relation — so it's absent from the `entity` enum entirely now.
+        "image has no preview left to run",
+        { operation: "merge", entity: "image", mergeIds: ["IMG-2CRC"] },
+      ],
+      [
+        "wrong prefix for the entity",
+        { operation: "merge", entity: "vendor", mergeIds: ["ING-2CRC"] },
       ],
       [
         // `product` used to be the example here; it gained a merge in the same
@@ -1328,12 +1413,12 @@ describe("listMcpToolCatalog", () => {
       ],
       ["merge without mergeIds", { operation: "merge", entity: "ingredient" }],
       [
-        "merge carrying delete fields",
+        "merge carrying attach/detach fields",
         {
           operation: "merge",
           entity: "ingredient",
           mergeIds: ["ING-2CRC"],
-          ids: ["ING-2CRD"],
+          parentId: "PRJ-2CRD",
         },
       ],
       [
@@ -1356,19 +1441,9 @@ describe("listMcpToolCatalog", () => {
       [
         "more than 200 targets",
         {
-          operation: "delete",
-          entity: "product",
-          ids: Array.from({ length: 201 }, () => "PRD-2CRC"),
-        },
-      ],
-      [
-        // The other half of the image cut-over: the uuid arm is gone, not
-        // merely unused. Leaving it accepted would keep the hole open.
-        "an image by raw uuid",
-        {
-          operation: "delete",
-          entity: "image",
-          ids: ["3f2504e0-4f89-41d3-9a0c-0305e82c3302"],
+          operation: "merge",
+          entity: "vendor",
+          mergeIds: Array.from({ length: 201 }, () => "VEN-2CRC"),
         },
       ],
     ];
@@ -1380,22 +1455,6 @@ describe("listMcpToolCatalog", () => {
     }
 
     const accepted: Array<[reason: string, input: unknown]> = [
-      [
-        "delete by shortcode",
-        { operation: "delete", entity: "product", ids: ["PRD-2CRC"] },
-      ],
-      [
-        // Images carry `IMG-` codes like every other entity now. This case used
-        // to pass a raw uuid, which was the last place a uuid could enter the
-        // MCP boundary — an `IMG-` code read off any response could not be fed
-        // back into its own delete preview.
-        "hard-delete an image by shortcode",
-        {
-          operation: "delete",
-          entity: "image",
-          ids: ["IMG-2CRC"],
-        },
-      ],
       [
         "merge candidates with no keeper yet",
         {
@@ -1413,6 +1472,15 @@ describe("listMcpToolCatalog", () => {
           keepId: "VEN-2CRD",
         },
       ],
+      [
+        "attach by parent and product ids",
+        {
+          operation: "attach",
+          entity: "project",
+          parentId: "PRJ-2CRC",
+          productIds: ["PRD-2CRD"],
+        },
+      ],
     ];
     for (const [reason, input] of accepted) {
       expect({
@@ -1428,9 +1496,9 @@ describe("listMcpToolCatalog", () => {
     // call against an EMPTY object and the handler received `{}`. The tool
     // advertised no arguments and could not be called at all.
     const args = {
-      operation: "delete",
-      entity: "product",
-      ids: ["PRD-2222"],
+      operation: "merge",
+      entity: "vendor",
+      mergeIds: ["VEN-2222"],
     };
     let received: unknown;
     const result = await callTool(
@@ -1442,9 +1510,8 @@ describe("listMcpToolCatalog", () => {
           previewOperation: async (input: unknown) => {
             received = input;
             return {
-              operation: "delete",
-              entity: "product",
-              mode: "soft",
+              operation: "merge",
+              entity: "vendor",
               targetCount: 1,
               canProceed: true,
               blockers: [],
@@ -1525,7 +1592,7 @@ describe("listMcpToolCatalog", () => {
     }
   });
 
-  it("carries every field create_product advertises through to product.create", async () => {
+  it("carries every field create_products advertises through to product.create", async () => {
     // Regression: the MCP create handler copied `mcpProductCreateInput` across
     // field by field, so `stockTracked` — added to the shape later — never
     // reached the router. Twenty-one products created with an explicit
@@ -1565,18 +1632,26 @@ describe("listMcpToolCatalog", () => {
     let captured: Record<string, unknown> | undefined;
     // The stub's return value is irrelevant here — output validation runs after
     // the capture, so a failed response still proves what the router received.
-    await callTool(createMcpServer(), "create_product", args, {
-      product: {
-        create: async (argument: Record<string, unknown>) => {
-          captured = argument;
-          return {};
+    // create_product has no singular tool anymore (batch is on by default);
+    // create_products with one item runs the exact same `create` config
+    // function (registerEntityCrudToolset shares it between both paths).
+    await callTool(
+      createMcpServer(),
+      "create_products",
+      { items: [args] },
+      {
+        product: {
+          create: async (argument: Record<string, unknown>) => {
+            captured = argument;
+            return {};
+          },
         },
       },
-    });
+    );
 
     expect(
       captured,
-      "create_product never reached product.create",
+      "create_products never reached product.create",
     ).toBeDefined();
     const dropped = Object.keys(mcpProductCreateInput.shape).filter(
       (field) => !(captured && field in captured),
@@ -1708,13 +1783,7 @@ describe("listMcpToolCatalog", () => {
       "providerId",
     ]);
     const DECLARED_UUID_EXCEPTIONS = new Set([
-      "create_recipe.sections[].id",
-      "create_recipe.sections[].ingredients[].id",
-      "create_recipe.sections[].instructions[].id",
       "update_meal_recipe.id",
-      "update_recipe.sections[].id",
-      "update_recipe.sections[].ingredients[].id",
-      "update_recipe.sections[].instructions[].id",
       "remove_meal_recipe.id",
       // A statement row is addressed by its content hash (`v1:<sha256>`), which
       // is the provider row's identity — there is no shortcode to carry a
@@ -1722,9 +1791,10 @@ describe("listMcpToolCatalog", () => {
       "update_statement_rows.selector.externalIds",
       "update_statement_rows.data.supersededByExternalId",
       "delete_statement_rows.selector.externalIds",
-      // The plural mirrors of the singular exceptions above. A batch tool wraps
-      // its singular's own input schema in `{items: [...]}`, so it inherits
-      // every declared uuid field verbatim — same fields, same reasons.
+      // create_recipe/update_recipe have no singular tool anymore (batch is on
+      // by default) — only the plural batch input schema (which wraps its old
+      // singular's own input schema in `{items: [...]}`) still carries these
+      // declared uuid fields, so only the plural entries remain here.
       "create_recipes.items[].sections[].id",
       "create_recipes.items[].sections[].ingredients[].id",
       "create_recipes.items[].sections[].instructions[].id",
@@ -2798,20 +2868,39 @@ describe("purchase restructuring tools (split/link/merge)", () => {
   });
 });
 
-describe("update_inventory_entry value/unit pairing guard", () => {
+describe("update_inventory_entries value/unit pairing guard", () => {
   // A valid INV- code is required even though the pairing guard fires before
   // the router call: zod validates `id` against the
   // shortcode pattern BEFORE the handler runs at all, so a raw uuid here would
   // fail at parse time and the test would prove nothing about the pairing
   // guard specifically (see the id-format failure this test used to produce).
+  // update_inventory_entry has no singular tool anymore (batch is on by
+  // default); `callBatchSingular` drives update_inventory_entries with one
+  // item and unwraps the result back to the old singular shape.
   const ENTRY_CODE = "INV-2222";
+  // `inventoryMcpOut` is picked from `inventoryListItemOut`, where a row's
+  // product and location are REQUIRED — a live entry always resolves both
+  // through its FK join.
+  const INVENTORY_ROW_PRODUCT = {
+    id: "PRD-2222",
+    name: "widget",
+    manufacturer: "generic",
+    primaryGtin: null,
+    fdc_id: null,
+    category: null,
+    expectedQuantity: null,
+    model: null,
+    price: null,
+    usdaUnavailable: null,
+  };
+  const INVENTORY_ROW_LOCATION = { id: "LOC-2222", name: "shelf", type: null };
 
   it("throws before reaching the router when only value is supplied", async () => {
     const caller = { inventory: { update: vi.fn() } };
 
-    const result = await callTool(
+    const result = await callBatchSingular(
       createMcpServer(),
-      "update_inventory_entry",
+      "update_inventory_entries",
       { id: ENTRY_CODE, value: 3 },
       caller,
     );
@@ -2827,9 +2916,9 @@ describe("update_inventory_entry value/unit pairing guard", () => {
   it("throws before reaching the router when only unit is supplied", async () => {
     const caller = { inventory: { update: vi.fn() } };
 
-    const result = await callTool(
+    const result = await callBatchSingular(
       createMcpServer(),
-      "update_inventory_entry",
+      "update_inventory_entries",
       { id: ENTRY_CODE, unit: "each" },
       caller,
     );
@@ -2844,16 +2933,16 @@ describe("update_inventory_entry value/unit pairing guard", () => {
       amount: { value: 3, unit: "each" },
       valuation: null,
       placement: "stock" as const,
-      product: null,
-      location: null,
+      product: INVENTORY_ROW_PRODUCT,
+      location: INVENTORY_ROW_LOCATION,
     };
     const caller = {
       inventory: { update: vi.fn().mockResolvedValue(updated) },
     };
 
-    const result = await callTool(
+    const result = await callBatchSingular(
       createMcpServer(),
-      "update_inventory_entry",
+      "update_inventory_entries",
       { id: ENTRY_CODE, value: 3, unit: "each" },
       caller,
     );
@@ -2875,16 +2964,16 @@ describe("update_inventory_entry value/unit pairing guard", () => {
       amount: { value: 1, unit: "each" },
       valuation: null,
       placement: "stock" as const,
-      product: null,
-      location: null,
+      product: INVENTORY_ROW_PRODUCT,
+      location: INVENTORY_ROW_LOCATION,
     };
     const caller = {
       inventory: { update: vi.fn().mockResolvedValue(updated) },
     };
 
-    const result = await callTool(
+    const result = await callBatchSingular(
       createMcpServer(),
-      "update_inventory_entry",
+      "update_inventory_entries",
       { id: ENTRY_CODE, locationId: "LOC-2222" },
       caller,
     );

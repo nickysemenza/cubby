@@ -1,6 +1,5 @@
 import type {
   ImpactItem,
-  PreviewDeleteEntity,
   PreviewMergeEntity,
   PreviewOperation,
 } from "@cubby/schemas/entity-integrity";
@@ -48,23 +47,17 @@ import { useTRPC } from "~/integrations/trpc/react";
  */
 
 /** Fetch a preview for `input`, only while `enabled` (i.e. the dialog is open). */
-export type PreviewOperationDraft =
-  | {
-      operation: "delete";
-      entity: PreviewDeleteEntity;
-      ids: string[];
-    }
-  | {
-      operation: "merge";
-      entity: PreviewMergeEntity;
-      keepId?: string;
-      mergeIds: string[];
-    };
+export type PreviewOperationDraft = {
+  operation: "merge";
+  entity: PreviewMergeEntity;
+  keepId?: string;
+  mergeIds: string[];
+};
 
 const DISABLED_PREVIEW_INPUT = previewOperationInputSchema.parse({
-  operation: "delete",
+  operation: "merge",
   entity: "product",
-  ids: ["PRD-2222"],
+  mergeIds: ["PRD-2222"],
 });
 
 export function useOperationPreview(

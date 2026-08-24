@@ -678,6 +678,24 @@ const trio = <Prefix extends string, IdSchema extends z.ZodType>(
   } as RelatedTrio<Prefix, typeof ids>;
 };
 
+/**
+ * These per-source blocks are hand-listed on purpose, not for want of a
+ * derivation. `relatedFilterFieldsFor(entity)` — a mapped type over
+ * `Extract<RegisteredRelatedView, { source: E }>` — was prototyped and does not
+ * typecheck: `relatedViewRegistry` resolves each row's `target` at runtime
+ * through `localRelationshipByKey`, whose return type is `LocalPathRelationship`
+ * with `target: Entity`, and the registry is `.map()`ed (which erases tuple
+ * position) then cast to `readonly (RelatedViewPresentation & { target: Entity
+ * })[]`. So only `source`/`filterPrefix` survive as literals; a view with no
+ * `filterPrefix` override contributes the whole 18-member `Entity` union as its
+ * prefix. Measured: `{ [K in `${PrefixOf<Src<"wish">>}Id`]: … }` produces
+ * `cookbookId | expenseId | …` (18 keys) instead of `productId`, i.e. exactly
+ * the `Record<string, …>` regression that would un-type `filters.vendorId`
+ * across every caller. Recovering the literal would mean an `as const`
+ * entityManifest plus a generic `localRelationshipByKey`, or a second
+ * hand-maintained key→target table that duplicates the manifest — more drift
+ * surface than the 13 blocks below cost.
+ */
 export const productRelatedFilterFields = {
   ...trio("vendor", vendorShortcode),
   ...trio("project", projectShortcode),

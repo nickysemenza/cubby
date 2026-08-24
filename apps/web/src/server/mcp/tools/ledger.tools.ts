@@ -64,11 +64,7 @@ export function registerLedgerTools(server: McpServer) {
   registerEntityCrudToolset(server, {
     entity: "ledgerParty",
     entityPlural: "ledger_parties",
-    names: {
-      get: "get_ledger_party",
-      create: "create_ledger_party",
-      update: "update_ledger_party",
-    },
+    names: { get: "get_ledger_party" },
     createInput: ledgerPartyCreateInput.shape,
     updateShape: ledgerPartyUpdateData.shape,
     filterFields: ledgerPartyFiltersSchema.shape,
@@ -91,11 +87,7 @@ export function registerLedgerTools(server: McpServer) {
   registerEntityCrudToolset(server, {
     entity: "ledgerTransfer",
     entityPlural: "ledger_transfers",
-    names: {
-      get: "get_ledger_transfer",
-      create: "create_ledger_transfer",
-      update: "update_ledger_transfer",
-    },
+    names: { get: "get_ledger_transfer" },
     createInput: ledgerTransferCreateInput.shape,
     updateShape: ledgerTransferUpdateData.shape,
     filterFields: ledgerTransferFiltersSchema.shape,

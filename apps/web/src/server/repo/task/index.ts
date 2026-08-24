@@ -23,7 +23,6 @@ export { getTaskBoard } from "./board";
 export {
   createTask,
   deleteTasks,
-  getTaskByID,
   getTaskByShortcode,
   getTasksByIDs,
   moveTasks,

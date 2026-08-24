@@ -38,7 +38,6 @@ import {
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { useTRPC } from "~/integrations/trpc/react";
-import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
 
 const formSchema = z.object({
   location: optionalLocationField,
@@ -76,7 +75,6 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
   const updateInventory = useUpdateMutation({
     mutationFn: api.inventory.update.mutationOptions,
     entity: "inventory",
-    invalidateKeys: inventoryMutationInvalidateKeys,
   });
 
   const initialProduct = useMemo(

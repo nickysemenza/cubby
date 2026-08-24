@@ -6,6 +6,7 @@ import { locationRelatedFilterFields } from "./related-view";
 import {
   auditDateFilterFields,
   deriveUpdateData,
+  numericRangeFields,
   timestampedFields,
 } from "./base-entity";
 import { amount } from "./codec";
@@ -103,10 +104,8 @@ export const locationFilterFields = {
     .describe(
       "Locations last recounted more than this many days ago, or never recounted.",
     ),
-  directItemCountMin: z.coerce.number().int().nonnegative().optional(),
-  directItemCountMax: z.coerce.number().int().nonnegative().optional(),
-  valuationMin: z.coerce.number().optional(),
-  valuationMax: z.coerce.number().optional(),
+  ...numericRangeFields("directItemCount", { int: true, nonnegative: true }),
+  ...numericRangeFields("valuation"),
 };
 
 export const locationFiltersSchema = z.object(locationFilterFields);
@@ -425,12 +424,14 @@ const locationInventoryWithProductOut = z.object({
   product: locationInventoryProductOut,
 });
 
-export const locationListItemOut = z.object({
+const locationListItemFields = {
   ...locationOutFields,
   children: z.array(locationListRefOut),
   parent: locationListRefOut.nullable(),
   inventoryEntries: z.array(locationInventoryWithProductOut),
-});
+};
+
+export const locationListItemOut = z.object(locationListItemFields);
 export type LocationListItemOut = z.infer<typeof locationListItemOut>;
 
 export const locationWithParentNameOut = z.object({
@@ -589,15 +590,18 @@ export const mcpLocationCreateInput = z.object({
   ),
 });
 
-/** Slim MCP projection of a location row (list or detail). */
+/**
+ * Slim MCP projection of a location row (list or detail) — built from the
+ * same field map as `locationListItemOut`, so it cannot drift from the plain
+ * shape. `parent` is the nested `{id,name,type}` ref the plain shape carries,
+ * not the flattened `parentId`/`parentName` pair this used to declare by hand.
+ */
 export const locationMcpOut = z.object({
-  id: locationShortcode,
-  name: z.string(),
-  /** Null when the location IS a product; see `productId`. */
-  type: locationType.nullable(),
-  parentName: z.string().nullable(),
-  parentId: locationShortcode.nullable(),
-  children: z.array(z.object({ id: locationShortcode, name: z.string() })),
+  id: locationListItemFields.id,
+  name: locationListItemFields.name,
+  type: locationListItemFields.type,
+  parent: locationListItemFields.parent,
+  children: locationListItemFields.children,
 });
 export type LocationMcpOut = z.infer<typeof locationMcpOut>;
 

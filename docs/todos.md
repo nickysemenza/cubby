@@ -115,6 +115,42 @@ history is the archive. Permanent product constraints live in the
 
 ## Triggered
 
+- **Single `filterable` declaration per field** — Promote when the next filter
+  drift appears (or the next entity ships): derive the server filter Zod
+  schema, the client search fragment, and the MCP list input from one
+  declaration, replacing the three hand-kept mirrors
+  (`entities/filter-manifest.tsx`, `entities/filter-search-fields.ts`, the
+  schemas package) and deleting the drift test that pins them — the guarantee
+  becomes by-construction, like `xMcpOut = xOut.pick()`. Fields with real
+  semantics (resolvers, deferred option sources) stay declared beside the
+  derivation per the fixed-point rule in [entities.md](entities.md).
+- **Presence-battery seed enrichment** — Promote to retire the remaining
+  `VACUOUS_PROBES` entries in `filter-application.integration.test.ts` (each
+  entry is a presence field the generic partition/soft-delete battery cannot
+  yet exercise because the seed world lacks a linked row). Every retirement
+  makes one more per-entity presence block in the entity integration tests
+  safely deletable — the kept blocks carry comments naming their vacuous field.
+- **`usdafoodlist.tsx` onto `useEntityList`** — Promote when the USDA list next
+  needs a workbench feature; it never adopted the shared list stack (bespoke
+  `useTableState` + `usda.listSummaries` + a second enrichment query +
+  relevance-sort override), so conversion is a rewrite, not a cleanup.
+- **Recipe and meal detail pages onto `DetailSections`** — Promote when either
+  page next changes shape; both compose bespoke `Stack`/`Card` layouts, which
+  is why the generic Activity section needed the extracted `EntityActivityCard`
+  workaround for them. Migration finishes detail-page unification and deletes
+  the workaround.
+- **Route-splitting conventions check** — Promote if the eager-bundle budget
+  regresses again. The router plugin only code-splits literal
+  `createFileRoute` option objects, and an inlined JSX-bearing call kills the
+  splitter silently (constraint documented in
+  `app/_components/routing/entity-routes.tsx`); a `check-conventions.ts` rule
+  asserting route files bind components to local consts would make the
+  constraint unbreakable instead of comment-guarded.
+- **Contract completeness: image delete + finance dialog nouns** — Promote when
+  touching either surface: the image contract has no `mutation.delete` (so
+  `imagelist` hand-wires `useDeletableConfig`), and the finance lists carry
+  non-registry dialog nouns ("Account", "Transaction"); a label-override slot
+  in the registry would let both drop their carve-outs.
 - **Persisted Collections and operational dashboard** — Promote when Collection
   tags need metadata, rename-safe empty identity, Smart Collection rules (for
   example, manufacturer plus minimum effective price), Trade links, or combined
@@ -196,14 +232,6 @@ history is the archive. Permanent product constraints live in the
   of the whole `StatementRow` table, a detail route, and entries in roughly ten
   exhaustive `Record<Entity, …>` tables. Follow `scripts/backfill-image-shortcodes.ts`;
   `generateUniqueShortcode` does a SELECT per candidate and is wrong for bulk.
-- **Split `computeBlockers` from `computeChanges`** — Promote if preview cost or
-  duplicated cascade counting becomes a real drag. Preview planners still compute
-  narration the mutation does not need; `previewDeleteProducts` runs fourteen
-  sequential queries where nine produce blockers and the rest are cascade counts
-  `removeEntity` re-counts anyway. Splitting is the prerequisite for computing
-  blockers inside the mutation's transaction without doubling its query count. Any
-  planner moved inside a transaction must serialize its `Promise.all` sites — pg
-  rejects a second query on a client already executing one.
 - **Explicit idempotency key for `add_recipe_to_meal`** — Promote if a re-sent agent
   call actually duplicates a meal line in practice. A natural-key unique index is NOT
   the answer: a meal repeating a recipe at different scales is intended behavior, and

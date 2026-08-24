@@ -1,6 +1,5 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
-import type { ImpactItem } from "@cubby/schemas/entity-integrity";
 import type {
   InventoryId,
   LocationId,
@@ -34,12 +33,7 @@ import {
   computeInventoryValuations,
 } from "~/lib/price-mapping-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import {
-  entityEmbedding,
-  inventoryEntry,
-  location,
-  product,
-} from "~/server/db/schema";
+import { inventoryEntry, location, product } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import {
@@ -61,12 +55,6 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
-import {
-  countByTarget,
-  impact,
-  present,
-  sideEffect,
-} from "~/server/repo/impact";
 import { isGlobalUnknownLocation } from "~/server/repo/location";
 import {
   effectiveProductPriceSql,
@@ -233,9 +221,6 @@ const inventoryReader = createEntityReader({
     );
   },
 });
-
-export const getInventoryEntryByID = (db: Database, id: InventoryId) =>
-  inventoryReader.getByIDOrNull(db, id);
 
 export const getInventoryEntryByShortcode = (db: Database, shortcode: string) =>
   inventoryReader.getByShortcode(db, shortcode);
@@ -735,74 +720,4 @@ export const deleteInventoryEntries = async (
     });
     return { deleted };
   });
-};
-
-/**
- * What `deleteInventoryEntries` would do to the given entries, without doing
- * it.
- *
- * `inventory` has zero incoming edges (`INCOMING_EDGES.inventory` is `{}` —
- * see `entity-incoming-edges.ts`), so there is nothing to block or cascade:
- * `blockers` and `changes` are always empty. Two real consequences instead,
- * both read straight off the actual delete paths rather than invented:
- *
- *  1. **Search index removal.** `deleteInventoryEntries` above soft-deletes
- *     the entry's `EntityEmbedding` row in the same transaction (via
- *     `removeEntity`'s cascade). Counted here
- *     with the SAME predicate that call uses (entityType match + `inArray` +
- *     `notDeleted`), via `countByTarget`, so the two can't disagree.
- *  2. **Location valuation recompute.** `needsValuationRecompute` in
- *     `services/mutation-side-effects.ts` returns `true` unconditionally for
- *     entityType `"inventory"` — create, update, AND delete alike — so the
- *     router's delete procedure (`inventory.ts`'s `deleteItem`, via
- *     `runMutationSideEffectsForEntities`) dispatches a background whole-tree
- *     location-valuation recompute for every entry deleted. Unlike the
- *     embedding cleanup this is a background job dispatch, not a per-row DB
- *     write, so it has no natural row count — reported via `sideEffect()`
- *     rather than `impact()`.
- *
- * Advisory only. `deleteInventoryEntries` still re-runs its own transaction;
- * nothing here is a lock or a permission.
- */
-export const previewDeleteInventoryEntries = async (
-  db: Database | DrizzleTransaction,
-  ids: InventoryId[],
-): Promise<{
-  blockers: ImpactItem[];
-  changes: ImpactItem[];
-  sideEffects: ImpactItem[];
-}> => {
-  if (ids.length === 0) return { blockers: [], changes: [], sideEffects: [] };
-
-  const dbClient = unwrapDb(db);
-
-  const sideEffects = present([
-    impact({
-      disposition: {
-        code: "soft-delete-search-index",
-        effect: "soft-delete",
-        description:
-          "The inventory entry's search-index entry is soft-deleted in the same transaction as the delete.",
-      },
-      label: "search index entries",
-      byTargetId: await countByTarget(
-        dbClient,
-        entityEmbedding,
-        entityEmbedding.entityId,
-        ids,
-        { extraWhere: eq(entityEmbedding.entityType, "inventory") },
-      ),
-    }),
-    sideEffect({
-      code: "location-valuation-recompute",
-      effect: "preserve",
-      label: "location valuation recompute",
-      description:
-        "Deleting an inventory entry always triggers a background whole-tree location-valuation recompute.",
-      total: ids.length,
-      byTargetId: Object.fromEntries(ids.map((id) => [id, 1])),
-    }),
-  ]);
-
-  return { blockers: [], changes: [], sideEffects };
 };

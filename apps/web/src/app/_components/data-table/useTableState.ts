@@ -30,6 +30,13 @@ import {
 
 interface TableStateOptions {
   initialSort?: string;
+  /**
+   * Direction of the opening sort. Defaults to descending - right for the
+   * date/amount columns most lists open on, wrong for a name roster, which
+   * would otherwise open Z-to-A. Entity lists get this from the registry's
+   * `list.defaultSortDirection`.
+   */
+  initialSortDesc?: boolean;
   initialFilter?: ColumnFiltersState;
   initialPagination?: PaginationState;
   /**
@@ -87,6 +94,7 @@ function serializeUrlState(
   pagination: PaginationState,
   columnSpecs: readonly FilterSpecCore[],
   initialSort: string,
+  initialSortDesc: boolean,
   syncPaginationToUrl: boolean,
 ): string {
   const sort = sortToParam(sorting);
@@ -99,7 +107,10 @@ function serializeUrlState(
           | string[]
           | undefined,
     ),
-    [SORT_KEY]: sort === `-${initialSort}` ? undefined : sort,
+    // The default sort stays implicit in the URL - only a departure from it is
+    // written, so a freshly opened list keeps a clean query string.
+    [SORT_KEY]:
+      sort === `${initialSortDesc ? "-" : ""}${initialSort}` ? undefined : sort,
     [PAGE_KEY]:
       syncPaginationToUrl && pagination.pageIndex > 0
         ? pagination.pageIndex + 1
@@ -151,6 +162,7 @@ export function useTableState(
 ): TableStateReturn {
   const {
     initialSort = "createdAt",
+    initialSortDesc = true,
     initialFilter = NO_INITIAL_FILTER,
     initialPagination = defaultPagination,
     filterSpecs = NO_SPECS,
@@ -182,7 +194,7 @@ export function useTableState(
   // opt out so they cannot consume the page owner's params.
   const [sorting, setSortingRaw] = useState<SortingState>(() => {
     const fromUrl = paramToSort(urlStateSource[SORT_KEY]);
-    return fromUrl ?? defaultSortState(initialSort);
+    return fromUrl ?? defaultSortState(initialSort, initialSortDesc);
   });
   // Lazy initializer: URL filters win over the caller's seed, so a shared link
   // restores the same rows before first paint.
@@ -266,7 +278,8 @@ export function useTableState(
       : Number.NaN;
     return {
       sorting:
-        paramToSort(urlStateSource[SORT_KEY]) ?? defaultSortState(initialSort),
+        paramToSort(urlStateSource[SORT_KEY]) ??
+        defaultSortState(initialSort, initialSortDesc),
       columnFilters: urlFilters.length ? urlFilters : initialFilter,
       pagination: {
         pageIndex:
@@ -281,6 +294,7 @@ export function useTableState(
     managedSearchKey,
     columnSpecs,
     initialSort,
+    initialSortDesc,
     initialFilter,
     initialPagination,
     syncPaginationToUrl,
@@ -294,6 +308,7 @@ export function useTableState(
         pagination,
         columnSpecs,
         initialSort,
+        initialSortDesc,
         syncPaginationToUrl,
       ),
     [
@@ -302,6 +317,7 @@ export function useTableState(
       pagination,
       columnSpecs,
       initialSort,
+      initialSortDesc,
       syncPaginationToUrl,
     ],
   );
@@ -313,9 +329,10 @@ export function useTableState(
         urlState.pagination,
         columnSpecs,
         initialSort,
+        initialSortDesc,
         syncPaginationToUrl,
       ),
-    [urlState, columnSpecs, initialSort, syncPaginationToUrl],
+    [urlState, columnSpecs, initialSort, initialSortDesc, syncPaginationToUrl],
   );
   // Unlike `serializedSearchState`, retain explicit default and disabled-page
   // params so write-through can clean up keys this table owns.
@@ -450,8 +467,8 @@ export function useTableState(
   }, [sorting, initialSort]);
 
   const getSorts = useCallback(() => {
-    return buildSortsParams(sorting, initialSort);
-  }, [sorting, initialSort]);
+    return buildSortsParams(sorting, initialSort, initialSortDesc);
+  }, [sorting, initialSort, initialSortDesc]);
 
   // Live URL state is authoritative after mount, but only ON AN ACTUAL URL
   // CHANGE — the mount value is the lazy initializers' own, and a run with no

@@ -4,11 +4,7 @@ import {
   makeBatchStatusFetcher,
   watchBatchesAndInvalidate,
 } from "~/lib/background-batch-polling";
-import {
-  invalidateTRPCQueries,
-  inventoryMutationInvalidateKeys,
-  productLookupMutationInvalidateKeys,
-} from "~/lib/query-keys";
+import { invalidatesFor, invalidateTRPCQueries } from "~/lib/query-keys";
 
 /**
  * Returns a callback that invalidates inventory queries and — given the mutation
@@ -22,11 +18,11 @@ export function useInventoryInvalidation() {
   const api = useTRPC();
 
   return (result?: unknown) => {
-    invalidateTRPCQueries(queryClient, inventoryMutationInvalidateKeys);
+    invalidateTRPCQueries(queryClient, invalidatesFor("inventory"));
     void watchBatchesAndInvalidate({
       queryClient,
       result,
-      invalidateKeys: inventoryMutationInvalidateKeys,
+      invalidateKeys: invalidatesFor("inventory"),
       fetchBatchStatus: makeBatchStatusFetcher(queryClient, api),
     });
   };
@@ -57,6 +53,6 @@ export function useProductLookupInvalidation() {
   const queryClient = useQueryClient();
 
   return () => {
-    invalidateTRPCQueries(queryClient, productLookupMutationInvalidateKeys);
+    invalidateTRPCQueries(queryClient, invalidatesFor("product", "lookup"));
   };
 }

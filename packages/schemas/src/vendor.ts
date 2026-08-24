@@ -7,6 +7,7 @@ import {
   auditDateFilterFields,
   dateRangeFields,
   deriveUpdateData,
+  numericRangeFields,
   timestampedFields,
 } from "./base-entity";
 import { vendorShortcode } from "./identifiers";
@@ -64,10 +65,8 @@ export const vendorFilterFields = {
   ...auditDateFilterFields,
   ...vendorRelatedFilterFields,
   search: z.string().optional(),
-  purchaseCountMin: z.coerce.number().int().nonnegative().optional(),
-  purchaseCountMax: z.coerce.number().int().nonnegative().optional(),
-  spendMin: z.coerce.number().optional(),
-  spendMax: z.coerce.number().optional(),
+  ...numericRangeFields("purchaseCount", { int: true, nonnegative: true }),
+  ...numericRangeFields("spend"),
   latestPurchaseDatePresenceFilter: presenceFilter,
   ...dateRangeFields("latestPurchaseDate"),
   logoPresenceFilter: presenceFilter,

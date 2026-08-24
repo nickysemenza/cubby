@@ -309,11 +309,7 @@ describe("wish repository — audit log survives a Date-valued (non-FK) diff", (
     );
     expect(created.acquiredAt).toBeNull();
 
-    await updateWish(
-      ctx.db,
-      { id: created.id, data: { acquired: true } },
-      ctx.actor,
-    );
+    await updateWish(ctx.db, created.id, { acquired: true }, ctx.actor);
 
     const audit = await getAuditLog(ctx.db, {
       entityType: "wish",

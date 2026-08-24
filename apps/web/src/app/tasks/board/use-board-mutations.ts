@@ -15,8 +15,8 @@ import { type RouterInputs, useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
   cancelTRPCQueries,
+  invalidatesFor,
   invalidateTRPCQueries,
-  taskMutationInvalidateKeys,
 } from "~/lib/query-keys";
 import type { TaskBoardPatch } from "./board-types";
 
@@ -159,8 +159,7 @@ export function useBoardMutations(target: BoardCacheTarget) {
       if (ctx?.prev) queryClient.setQueryData(queryKey, ctx.prev);
       toast.error(getErrorMessage(err));
     },
-    onSettled: () =>
-      invalidateTRPCQueries(queryClient, taskMutationInvalidateKeys),
+    onSettled: () => invalidateTRPCQueries(queryClient, invalidatesFor("task")),
   });
 
   // The board's "materialize" reorder — a run of sortOrder writes plus an
@@ -199,8 +198,7 @@ export function useBoardMutations(target: BoardCacheTarget) {
       if (ctx?.prev) queryClient.setQueryData(queryKey, ctx.prev);
       toast.error(getErrorMessage(err));
     },
-    onSettled: () =>
-      invalidateTRPCQueries(queryClient, taskMutationInvalidateKeys),
+    onSettled: () => invalidateTRPCQueries(queryClient, invalidatesFor("task")),
   });
 
   // Delete, patched into the same cache for the same reason as the two above.
@@ -242,8 +240,7 @@ export function useBoardMutations(target: BoardCacheTarget) {
       if (ctx?.prev) queryClient.setQueryData(queryKey, ctx.prev);
       toast.error(getErrorMessage(err));
     },
-    onSettled: () =>
-      invalidateTRPCQueries(queryClient, taskMutationInvalidateKeys),
+    onSettled: () => invalidateTRPCQueries(queryClient, invalidatesFor("task")),
   });
 
   return {

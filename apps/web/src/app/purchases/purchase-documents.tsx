@@ -17,7 +17,7 @@ import {
   EmptyTitle,
 } from "~/components/ui/empty";
 import { useTRPC } from "~/integrations/trpc/react";
-import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 import { useActionMutation } from "../_components/hooks/useActionMutation";
 
 /**
@@ -56,7 +56,7 @@ export const PurchaseDocuments: FC<{ purchase: PurchaseOut }> = ({
   const saveDocuments = useActionMutation({
     mutationFn: api.purchase.update.mutationOptions,
     success: "Documents updated",
-    invalidateKeys: purchaseMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("purchase"),
     onSuccess: () => setSaveGeneration((n) => n + 1),
   });
 

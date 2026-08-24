@@ -194,7 +194,7 @@ export const mealTotals = z.object({
 });
 export type MealTotals = z.infer<typeof mealTotals>;
 
-export const mealOut = z.object({
+const mealOutFields = {
   id: mealShortcode,
   date: mealDate,
   name: z.string().nullable(),
@@ -204,28 +204,27 @@ export const mealOut = z.object({
   recipes: z.array(mealRecipeOut),
   totals: mealTotals,
   ...timestampedFields,
-});
-export type MealOut = z.infer<typeof mealOut>;
-
-const mealMcpRecipeFields = {
-  // mealRecipe row id — declared exception, no shortcode; stays uuid.
-  id: mealRecipeId,
-  recipeId: recipeShortcode,
-  name: z.string().nullable(),
-  scale: mealScale,
-  scaledTotals: scaledTotals.nullable(),
 };
 
-/** Slim MCP projection of a meal row. */
+export const mealOut = z.object(mealOutFields);
+export type MealOut = z.infer<typeof mealOut>;
+
+/**
+ * Slim MCP projection of a meal row: built from the same field map as
+ * `mealOut` minus its audit timestamps, so it cannot drift from the plain
+ * shape. Each entry in `recipes` is a full `mealRecipeOut` — its `id` is the
+ * mealRecipe row id (the one `update_meal_recipe`/`remove_meal_recipe` take)
+ * and the recipe's own name lives at `recipes[].recipe.name`.
+ */
 export const mealMcpOut = z.object({
-  id: mealShortcode,
-  date: mealDate,
-  name: z.string().nullable(),
-  sortOrder: z.number().int().nullable(),
-  mealType: mealTypeSchema.nullable(),
-  mealKind: mealKindSchema,
-  totals: mealTotals,
-  recipes: z.array(z.object(mealMcpRecipeFields)),
+  id: mealOutFields.id,
+  date: mealOutFields.date,
+  name: mealOutFields.name,
+  sortOrder: mealOutFields.sortOrder,
+  mealType: mealOutFields.mealType,
+  mealKind: mealOutFields.mealKind,
+  recipes: mealOutFields.recipes,
+  totals: mealOutFields.totals,
 });
 export type MealMcpOut = z.infer<typeof mealMcpOut>;
 

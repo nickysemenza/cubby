@@ -8,10 +8,7 @@
  */
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
-import type {
-  ImpactItem,
-  OperationDisposition,
-} from "@cubby/schemas/entity-integrity";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
   ProductId,
   ProductShortcode,
@@ -53,12 +50,10 @@ import {
   notDeleted,
   relations,
   replaceDependencyEdges,
-  unwrapDb,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
-import { countByTarget, impact, present } from "~/server/repo/impact";
 import { removeEntity } from "~/server/repo/removal";
 import {
   type EntityRef,
@@ -278,7 +273,7 @@ const taskReader = createEntityReader({
   },
 });
 
-export const getTaskByID = (db: Database, id: TaskId): Promise<TaskOut> =>
+const getTaskByID = (db: Database, id: TaskId): Promise<TaskOut> =>
   taskReader.getByID(db, id);
 
 export const getTaskByShortcode = (db: Database, shortcode: string) =>
@@ -800,9 +795,8 @@ export const reorderTasks = async (
 type TaskQueryClient = DrizzleClient | DrizzleTransaction;
 
 /**
- * Live subtasks of `ids`, carrying both `id` (for `deleteTasks`' one-level
- * cascade expansion) and `parentTaskId` (for `previewDeleteTasks`' per-parent
- * count). Shared so the two can't disagree on which rows cascade.
+ * Live subtasks of `ids`, carrying both `id` and `parentTaskId` for
+ * `deleteTasks`' one-level cascade expansion.
  */
 const fetchLiveSubtasks = (dbc: TaskQueryClient, ids: TaskId[]) =>
   dbc.query.task.findMany({
@@ -856,74 +850,4 @@ export const deleteTasks = async (
     });
     return { deleted };
   });
-};
-
-/**
- * What `deleteTasks` would do to the given tasks, without doing it.
- *
- * Reads the SAME `TASK_DELETE_EDGE_POLICY` and the same `fetchLiveSubtasks`
- * predicate the mutation's one-level cascade uses, so the preview's cascade
- * expansion can't drift from the mutation's. `TaskDependency`'s two edges are
- * counted over `allIds` (the requested ids plus their live subtasks) with
- * `includeDeleted: true` — it's one of the two hard-delete-only source tables
- * in the schema (no `deletedAt` column), so the default `notDeleted` filter
- * would throw. There are no blockers: `TASK_DELETE_EDGE_POLICY` has none, and
- * a task delete is never refused, only performed.
- *
- * Advisory only. `deleteTasks` still re-runs the same cascade inside its own
- * transaction; nothing here is a lock or a permission.
- */
-export const previewDeleteTasks = async (
-  db: Database | DrizzleTransaction,
-  ids: TaskId[],
-): Promise<{ blockers: ImpactItem[]; changes: ImpactItem[] }> => {
-  if (ids.length === 0) return { blockers: [], changes: [] };
-
-  const dbClient = unwrapDb(db);
-
-  const liveSubtasks = await fetchLiveSubtasks(dbClient, ids);
-  const allIds = [...ids, ...liveSubtasks.map((t) => t.id)];
-
-  const subtasksByTarget: Record<string, number> = {};
-  for (const { parentTaskId } of liveSubtasks) {
-    if (parentTaskId) {
-      subtasksByTarget[parentTaskId] =
-        (subtasksByTarget[parentTaskId] ?? 0) + 1;
-    }
-  }
-
-  const changes = present([
-    impact({
-      disposition: TASK_DELETE_EDGE_POLICY["Task.parentTaskId"],
-      edgeKey: "Task.parentTaskId",
-      label: "subtasks",
-      byTargetId: subtasksByTarget,
-    }),
-    impact({
-      disposition: TASK_DELETE_EDGE_POLICY["TaskDependency.taskId"],
-      edgeKey: "TaskDependency.taskId",
-      label: "dependency edges (blocking others)",
-      byTargetId: await countByTarget(
-        dbClient,
-        taskDependency,
-        taskDependency.taskId,
-        allIds,
-        { includeDeleted: true },
-      ),
-    }),
-    impact({
-      disposition: TASK_DELETE_EDGE_POLICY["TaskDependency.blockedByTaskId"],
-      edgeKey: "TaskDependency.blockedByTaskId",
-      label: "dependency edges (blocked by others)",
-      byTargetId: await countByTarget(
-        dbClient,
-        taskDependency,
-        taskDependency.blockedByTaskId,
-        allIds,
-        { includeDeleted: true },
-      ),
-    }),
-  ]);
-
-  return { blockers: [], changes };
 };

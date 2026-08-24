@@ -16,11 +16,7 @@ import {
 } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/integrations/trpc/react";
-import {
-  ingredientMutationInvalidateKeys,
-  productMutationInvalidateKeys,
-  unusedIngredientCleanupInvalidateKeys,
-} from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 
 /**
  * Per-card and bulk cleanup actions for the three ingredient problem sections.
@@ -52,8 +48,8 @@ export function UnusedIngredientDeleteFix({
         ? `${noun} deleted`
         : `Could not delete: ${data.failed[0]?.reason ?? "unknown error"}`,
     invalidateKeys: [
-      ...ingredientMutationInvalidateKeys,
-      ...(alsoDeleteProducts ? productMutationInvalidateKeys : []),
+      ...invalidatesFor("ingredient", "list"),
+      ...(alsoDeleteProducts ? invalidatesFor("product") : []),
     ],
     onSuccess: (data) => {
       if (data.deleted > 0) close();
@@ -160,8 +156,8 @@ export function DeleteAllUnusedButton({
         ? `Deleted ${data.deleted}, ${data.failed.length} failed (e.g. ${data.failed[0]?.reason ?? "unknown"})`
         : `Deleted ${pluralize("ingredient", data.deleted, true)}`,
     invalidateKeys: [
-      ...unusedIngredientCleanupInvalidateKeys,
-      ...(alsoDeleteProducts ? productMutationInvalidateKeys : []),
+      ...invalidatesFor("ingredient", "cleanup"),
+      ...(alsoDeleteProducts ? invalidatesFor("product") : []),
     ],
   });
 

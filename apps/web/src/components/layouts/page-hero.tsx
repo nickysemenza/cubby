@@ -21,7 +21,6 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover";
 import { entities, isBrowserRoutedEntity } from "~/entities/entities";
-import { ENTITY_ACCENTS } from "~/entities/entity-accents";
 import { copyShortcodes } from "~/lib/clipboard";
 import { cn, formatCount } from "~/lib/utils";
 
@@ -334,7 +333,9 @@ function PageHero({
     `${formatCount(count)}${typeof title === "string" ? ` ${title}` : ""}`;
   // Entity-inked accent rule (falls back to ultramarine via the CSS defaults).
   const accent =
-    entity && isBrowserRoutedEntity(entity) ? ENTITY_ACCENTS[entity] : null;
+    entity && isBrowserRoutedEntity(entity)
+      ? entities[entity].color.accent
+      : null;
   const accentStyle = accent
     ? ({ "--page-accent": accent } as CSSProperties)
     : undefined;

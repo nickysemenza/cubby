@@ -18,10 +18,7 @@ import {
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { useTRPC } from "~/integrations/trpc/react";
-import {
-  imageMutationInvalidateKeys,
-  invalidateTRPCQueries,
-} from "~/lib/query-keys";
+import { invalidatesFor, invalidateTRPCQueries } from "~/lib/query-keys";
 import { useImageUpload } from "./use-image-upload";
 
 /**
@@ -43,14 +40,14 @@ export function UploadImageDialog() {
   const importFromUrl = useActionMutation({
     mutationFn: api.image.importFromUrl.mutationOptions,
     success: "Image imported.",
-    invalidateKeys: imageMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("image"),
     onSuccess: () => setUrl(""),
   });
 
   const handleFilesSelected = async (files: File[]) => {
     const uploaded = await uploadFiles(files);
     if (uploaded.length > 0) {
-      invalidateTRPCQueries(queryClient, imageMutationInvalidateKeys);
+      invalidateTRPCQueries(queryClient, invalidatesFor("image"));
       toast.success(
         `${uploaded.length} image${uploaded.length === 1 ? "" : "s"} uploaded.`,
       );

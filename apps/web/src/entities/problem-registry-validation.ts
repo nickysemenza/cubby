@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { getSortableFields } from "./entities";
 import { withProblemActionCapabilities } from "./problem-actions";
 import { compileProblemFilters } from "./problem-filter-semantics";
 import type { DiagnosticKey, ProblemQuery } from "./problem-query";
@@ -7,7 +8,6 @@ import {
   expectedProblemKeys,
   problemQueryDeclarations,
 } from "./problem-registry";
-import { getSortableFields } from "./sortable-fields";
 
 type RuntimeCapabilities = {
   listEntities?: ReadonlySet<Entity>;

@@ -25,13 +25,14 @@ import {
   type IngredientOut,
   ingredientMcpOut,
 } from "@cubby/schemas/ingredient";
+import { inventoryMcpOut } from "@cubby/schemas/inventory";
 import {
-  type InventoryMcpOut,
-  inventoryMcpOut,
-} from "@cubby/schemas/inventory";
-import { type LocationOut, locationMcpOut } from "@cubby/schemas/location";
+  type LocationListRefOut,
+  type LocationOut,
+  locationMcpOut,
+} from "@cubby/schemas/location";
 import { mcpUsdaFoodListItemOut, mcpUsdaFoodOut } from "@cubby/schemas/mcp";
-import { type MealOut, mealMcpOut } from "@cubby/schemas/meal";
+import { mealMcpOut } from "@cubby/schemas/meal";
 import { mcpListInputShape } from "@cubby/schemas/pagination";
 import {
   type ProductMcpDetailOut,
@@ -41,18 +42,11 @@ import {
   productMcpOut,
   productMergeSummaryOut,
 } from "@cubby/schemas/product";
-import {
-  type ExpenseOut,
-  expenseOut,
-  type ProjectOut,
-  projectOut,
-  type TaskOut,
-  taskOut,
-} from "@cubby/schemas/project";
-import { type PurchaseOut, purchaseOut } from "@cubby/schemas/purchase";
-import { type RecipeTopLevel, recipeMcpOut } from "@cubby/schemas/recipe";
+import { expenseOut, projectOut, taskOut } from "@cubby/schemas/project";
+import { purchaseOut } from "@cubby/schemas/purchase";
+import { recipeMcpOut } from "@cubby/schemas/recipe";
 import type { mcpUnitMappingInput } from "@cubby/schemas/unitmapping";
-import { type VendorOut, vendorOut } from "@cubby/schemas/vendor";
+import { vendorOut } from "@cubby/schemas/vendor";
 import { parseShortcode } from "@cubby/shared";
 import type { foodSummary } from "@cubby/usda-schemas";
 import type {
@@ -622,64 +616,33 @@ export function defineSlim<T>(schema: z.ZodType<T>, slim: (row: Row) => T) {
   return slim;
 }
 
+/**
+ * A row that ALREADY matches its MCP schema: the projection is the parse
+ * `respond`/`respondList` runs against the registered schema, which drops
+ * every key the schema does not declare. Nothing to remap by hand.
+ */
+function slimAs<T>(schema: z.ZodType<T>) {
+  return defineSlim(schema, (row: Row) => row as unknown as T);
+}
+
 type LocationRow = LocationOut & {
-  parent?: Pick<LocationOut, "id" | "name"> | null;
-  children?: Array<Pick<LocationOut, "id" | "name">>;
+  parent?: LocationListRefOut | null;
+  children?: LocationListRefOut[];
 };
+/**
+ * Not a bare cast: the list row carries `parent: null` / `children: []`, but a
+ * detail/create/update row (`infLocation`) leaves both keys absent, and the
+ * picked schema requires them. Everything else is stripped by the parse in
+ * `respond`.
+ */
 export const slimLocation = defineSlim(locationMcpOut, (locRow: Row) => {
   const loc = locRow as LocationRow;
-  return {
-    id: loc.id,
-    name: loc.name,
-    type: loc.type,
-    parentName: loc.parent?.name ?? null,
-    parentId: loc.parent?.id ?? null,
-    children: (loc.children ?? []).map((c) => ({
-      id: c.id,
-      name: c.name,
-    })),
-  };
+  return { ...loc, parent: loc.parent ?? null, children: loc.children ?? [] };
 });
 
-type InventoryRow = Pick<
-  InventoryMcpOut,
-  "amount" | "valuation" | "placement"
-> & {
-  id: InventoryMcpOut["id"];
-  product?: {
-    id: ProductMcpOut["id"];
-    name: string;
-    manufacturer: string;
-    category: ProductMcpOut["category"];
-    model: string | null;
-  } | null;
-  // Widened (was `{ id: string; name: string }`) so the location ref can carry
-  // its own shortcode — every list/detail row already selects it (see
-  // dbInventoryEntryToListAPI/dbInventoryEntryToAPI), this type just hadn't
-  // caught up.
-  location?: { id: LocationOut["id"]; name: string } | null;
-};
-export const slimInventory = defineSlim(inventoryMcpOut, (entryRow: Row) => {
-  const entry = entryRow as InventoryRow;
-  return {
-    id: entry.id,
-    amount: entry.amount,
-    valuation: entry.valuation,
-    placement: entry.placement,
-    product: entry.product
-      ? {
-          id: entry.product.id,
-          name: entry.product.name,
-          manufacturer: entry.product.manufacturer,
-          category: entry.product.category,
-          model: entry.product.model,
-        }
-      : null,
-    location: entry.location
-      ? { id: entry.location.id, name: entry.location.name }
-      : null,
-  };
-});
+// Both inventory row flavors (`inventoryListItemOut` and
+// `inventoryWithLocationAndProductOut`) are supersets of the picked shape.
+export const slimInventory = slimAs(inventoryMcpOut);
 
 type ProductRow = ProductTopLevelOut & {
   food?: { fdc_id?: number | null } | null;
@@ -706,8 +669,11 @@ export const slimProduct = defineSlim(productMcpOut, (pRow: Row) => {
     primaryGtin: p.primaryGtin,
     category: p.category,
     tags: p.tags ?? [],
-    price: pricing.effectivePrice,
-    priceOverride: p.price,
+    // `price` is the raw manual override and `effectivePrice` the resolved
+    // costing price — the same split (and the same key names) as
+    // `productTopLevelOut.price` / `productPricingOut.effectivePrice`.
+    price: p.price,
+    effectivePrice: pricing.effectivePrice,
     pricing,
     expectedQuantity: p.expectedQuantity,
     imageCount: displayImages.length,
@@ -753,79 +719,30 @@ export const slimProductDetail = defineSlim(
   },
 );
 
-export const slimRecipe = defineSlim(recipeMcpOut, (rRow: Row) => {
-  const r = rRow as RecipeTopLevel;
-  return {
-    id: r.id,
-    name: r.name,
-    yield: r.yield,
-    servings: r.servings,
-    tags: r.tags,
-  };
-});
+export const slimRecipe = slimAs(recipeMcpOut);
 
 type IngredientRow = IngredientOut & {
   product?: Array<{ id: ProductMcpOut["id"]; name: string }>;
   appearsInRecipes?: unknown[];
-  food?: { fdc_id?: number | null } | null;
 };
+// The scalars ride through untouched (the parse in `respond` strips the rest);
+// only the two aggregates the MCP shape adds are assembled here.
 export const slimIngredient = defineSlim(ingredientMcpOut, (iRow: Row) => {
   const i = iRow as IngredientRow;
   return {
-    id: i.id,
-    name: i.name,
-    aliases: i.aliases,
-    products: (i.product ?? []).map((p) => ({
-      id: p.id,
-      name: p.name,
-    })),
+    ...i,
+    products: i.product ?? [],
     recipeCount: (i.appearsInRecipes ?? []).length,
-    usdaFdcId: i.food?.fdc_id ?? null,
   };
 });
 
-// These domain rows already match their MCP schemas; keep only the lean-schema
-// validation layer, with no public/private id remapping.
-export const slimProject = defineSlim(
-  projectOut,
-  (row: Row) => row as ProjectOut,
-);
+export const slimMeal = slimAs(mealMcpOut);
 
-export const slimTask = defineSlim(taskOut, (row: Row) => {
-  return row as TaskOut;
-});
-
-export const slimVendor = defineSlim(vendorOut, (row: Row) => row as VendorOut);
-
-export const slimPurchase = defineSlim(
-  purchaseOut,
-  (row: Row) => row as PurchaseOut,
-);
-
-export const slimExpense = defineSlim(expenseOut, (row: Row) => {
-  return row as ExpenseOut;
-});
-
-export const slimMeal = defineSlim(mealMcpOut, (mRow: Row) => {
-  const m = mRow as MealOut;
-  return {
-    id: m.id,
-    date: m.date,
-    name: m.name,
-    sortOrder: m.sortOrder,
-    mealType: m.mealType,
-    mealKind: m.mealKind,
-    totals: m.totals,
-    recipes: (m.recipes ?? []).map((mr) => ({
-      // mealRecipe row id — declared exception, no shortcode; stays uuid.
-      id: mr.id,
-      recipeId: mr.recipe.id,
-      name: mr.recipe?.name ?? null,
-      scale: mr.scale,
-      scaledTotals: mr.scaledTotals,
-    })),
-  };
-});
+export const slimProject = slimAs(projectOut);
+export const slimTask = slimAs(taskOut);
+export const slimVendor = slimAs(vendorOut);
+export const slimPurchase = slimAs(purchaseOut);
+export const slimExpense = slimAs(expenseOut);
 
 type UsdaFoodRow = z.infer<typeof foodSummary> & {
   // The real row (usda.service.ts's `getLinkedProducts`) is full
@@ -1757,9 +1674,13 @@ type CrudOperation = "list" | "get" | "create" | "update" | "delete";
 type BatchOperation = "batchCreate" | "batchUpdate";
 
 type EntityCrudToolsetConfig<TCreateInput extends ZodSchemaLike> = {
-  /** Singular slug — router key, shortcode prefix, and get/create/update tool names (get_x, create_x, update_x). */
+  /**
+   * Singular slug — router key, shortcode prefix, and get tool name (get_x).
+   * Also names create_x/update_x, but those register only when batching for
+   * that operation is turned off; see {@link EntityCrudToolsetConfig.batch}.
+   */
   entity: ShortcodeEntity;
-  /** Plural slug — list/delete tool names (list_xs, delete_xs). */
+  /** Plural slug — list/delete/batch-create/batch-update tool names (list_xs, delete_xs, create_xs, update_xs). */
   entityPlural?: string;
   createInput: TCreateInput;
   updateShape: Record<string, z.ZodType>;
@@ -1809,6 +1730,9 @@ type EntityCrudToolsetConfig<TCreateInput extends ZodSchemaLike> = {
    * the gap because it comes from a different mechanism entirely
    * ({@link registerEntityDeleteTool}, one router call over an `ids[]`).
    *
+   * Since the plural tool accepts a one-item array, a batch tool that's on
+   * makes its singular twin strictly redundant — so the singular create/update
+   * tool is registered ONLY when its batch flag is explicitly `false` here.
    * Set a flag to `false` only where a plural form is genuinely wrong for the
    * entity, and say why at the call site.
    */
@@ -1816,12 +1740,18 @@ type EntityCrudToolsetConfig<TCreateInput extends ZodSchemaLike> = {
 };
 
 /**
- * Register the standard 5-tool CRUD surface (list/get/create/update/delete)
- * for one entity in a single call. Bakes in the annotation conventions shared
- * by every entity toolset (READ_ONLY_CLOSED for reads, WRITE_CLOSED for
- * create/update, WRITE_DESTRUCTIVE_CLOSED for delete) and the name
- * derivation (`list_${plural}`, `get_${entity}`, `create_${entity}`,
- * `update_${entity}`, `delete_${plural}`).
+ * Register the standard CRUD surface (list/get/create/update/delete, plus
+ * best-effort create/update batches) for one entity in a single call. Bakes
+ * in the annotation conventions shared by every entity toolset
+ * (READ_ONLY_CLOSED for reads, WRITE_CLOSED for create/update,
+ * WRITE_DESTRUCTIVE_CLOSED for delete) and the name derivation
+ * (`list_${plural}`, `get_${entity}`, `create_${plural}`, `update_${plural}`,
+ * `delete_${plural}`).
+ *
+ * The singular `create_${entity}`/`update_${entity}` tools are registered
+ * only when `batch.create`/`batch.update` is explicitly turned off — batching
+ * is on by default, and the plural tool (which takes a one-item array) makes
+ * the singular one redundant. See {@link EntityCrudToolsetConfig.batch}.
  */
 export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
   server: McpServer,
@@ -1885,7 +1815,14 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
       telemetryEntity: entityName,
     });
 
-  if (enabled("create"))
+  // A singular create/update tool is only registered when there is no plural
+  // batch twin to cover it. The plural tools accept a one-item array, so a
+  // toolset with batching on (the default) would otherwise advertise two
+  // tools that do the same thing — the singular one strictly redundant, and
+  // paid for in every agent session's tool context. It survives only where a
+  // toolset deliberately opts out of batching for that operation
+  // (`batch: { create: false }` / `{ update: false }`).
+  if (enabled("create") && !batchEnabled("create"))
     registerEntityCreateTool(server, {
       name: name("create", `create_${config.entity}`),
       description: config.descriptions.create,
@@ -1897,7 +1834,7 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
       create,
     });
 
-  if (enabled("update"))
+  if (enabled("update") && !batchEnabled("update"))
     registerEntityUpdateTool(server, {
       name: name("update", `update_${config.entity}`),
       description: config.descriptions.update,
@@ -1915,8 +1852,8 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
     registerBatchTool(server, {
       name: name("batchCreate", `create_${entityPlural}`),
       description:
-        `Create up to ${DEFAULT_BATCH_MAX_ITEMS} ${entityPlural} in request order. Each item uses the same ` +
-        `validation and side effects as ${name("create", `create_${config.entity}`)}; a failed item does not ` +
+        `Create up to ${DEFAULT_BATCH_MAX_ITEMS} ${entityPlural} in request order. Each item runs the same ` +
+        `validation and side effects as creating one ${config.entity}; a failed item does not ` +
         "roll back successful items.",
       itemInput: schemaFromShape(config.createInput),
       itemOutput: mutationOut,
@@ -1934,8 +1871,8 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
     registerBatchTool(server, {
       name: name("batchUpdate", `update_${entityPlural}`),
       description:
-        `Update up to ${DEFAULT_BATCH_MAX_ITEMS} ${entityPlural} in request order. Each item uses the same ` +
-        `validation and side effects as ${name("update", `update_${config.entity}`)}; a failed item does not ` +
+        `Update up to ${DEFAULT_BATCH_MAX_ITEMS} ${entityPlural} in request order. Each item runs the same ` +
+        `validation and side effects as updating one ${config.entity}; a failed item does not ` +
         "roll back successful items.",
       itemInput: schemaFromShape(updateInput),
       itemOutput: mutationOut,
@@ -2768,7 +2705,7 @@ function registerDeleteEntityTool(server: McpServer) {
       "Delete one or more rows of a single entity type by shortcode. The `ids` must all belong to `entity` — a code with the wrong prefix is rejected before anything is deleted. " +
       "Returns the number of rows ACTUALLY removed, which can exceed `ids.length` where a delete cascades (deleting a task also deletes its live subtasks). " +
       "A REFUSAL is not an error: the call succeeds with `deleted: 0` and a `refusal` object naming what blocked it — a typed `reason` plus, where the guard could attribute it, `blockers` saying which ids blocked and how many dependents each had. " +
-      "Call preview_entity_operation first to see blockers without committing.",
+      "There is no delete preview — attempt the call and read `refusal` if it's blocked; the guidance below names what blocks each entity.",
     inputSchema: {
       entity: z
         .enum(entities as [ShortcodeEntity, ...ShortcodeEntity[]])

@@ -1,5 +1,3 @@
-import { plainDate } from "@cubby/schemas/project";
-import { productCategoryValues } from "@cubby/shared";
 import {
   createFileRoute,
   Link,
@@ -7,8 +5,6 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
-import { z } from "zod";
-import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import {
   PRODUCT_VIEW_OPTIONS,
   ProductList,
@@ -17,48 +13,15 @@ import {
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { ViewSwitcher } from "~/components/ui/view-switcher";
-import { entityFilterSearchFields } from "~/entities/filter-search-fields";
-import { pageTitle } from "~/lib/page-title";
 import {
-  urlEnumListParam,
-  urlShortcodeListParam,
-  urlStringParam,
-} from "~/lib/search-params";
-
-const productListView = z.enum(["table", "shelf", "events", "lifecycles"]);
-
-export const productSearchSchema = z.object({
-  view: productListView.optional().catch(undefined),
-  movementFrom: plainDate.optional().catch(undefined),
-  movementTo: plainDate.optional().catch(undefined),
-  movementOrder: z.enum(["asc", "desc"]).optional().catch(undefined),
-  ...tableSearchFields,
-  ...entityFilterSearchFields("product"),
-  category: urlEnumListParam(z.enum(productCategoryValues)),
-  // `entityFilterSearchFields` returns a `Record<string, …>`, so its keys are
-  // not statically known to `<Link search={…}>`. Re-declaring the keys we
-  // navigate to programmatically (the "Fits With" tag chips; the Problems
-  // page's manufacturer-spelling cards) with the identical shape makes those
-  // links type-safe without duplicating the manifest. `urlStringParam`, not a
-  // bare `z.string()` — these sit after the spread and override it, so a plain
-  // string schema would reinstate the silently-dropped-value hole.
-  tags: urlStringParam,
-  manufacturer: urlStringParam,
-  model: urlStringParam,
-  ingredient: urlShortcodeListParam("ingredient"),
-});
-
-const searchDefaults = {
-  category: undefined,
-  view: undefined,
-  movementFrom: undefined,
-  movementTo: undefined,
-  movementOrder: undefined,
-} as const;
+  productSearchDefaults,
+  productSearchSchema,
+} from "~/entities/list-search";
+import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/products/")({
   validateSearch: productSearchSchema,
-  search: { middlewares: [stripSearchParams(searchDefaults)] },
+  search: { middlewares: [stripSearchParams(productSearchDefaults)] },
   component: ProductsPage,
   head: () => ({ meta: [{ title: pageTitle("Products") }] }),
 });

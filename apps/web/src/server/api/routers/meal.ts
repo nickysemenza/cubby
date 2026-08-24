@@ -7,21 +7,15 @@
  * engine, AvailabilityService.getAggregatedNeeds). No inventory is ever mutated.
  */
 
-import {
-  type MealId,
-  type MealShortcode,
-  mealShortcode,
-} from "@cubby/schemas/identifiers";
+import type { MealId } from "@cubby/schemas/identifiers";
 import {
   mealAddRecipeInput,
-  mealCreateInput,
   mealDateRange,
   mealFiltersSchema,
   mealListOut,
   mealOut,
   mealRecipeIdInput,
   mealSortableFields,
-  mealUpdateData,
   mealUpdateRecipeInput,
   type ShoppingListContribution,
   shoppingListOut,
@@ -29,12 +23,11 @@ import {
 } from "@cubby/schemas/meal";
 import { contributesToShoppingList } from "@cubby/schemas/meal-classification";
 import { sumBy } from "es-toolkit";
-import { createAppError } from "~/server/errors/app-error";
+import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 import {
   addRecipeToMeal,
   createMealWithEntityId,
   deleteMeals,
-  getMealByID,
   getMealByShortcode,
   getMealsByDateRange,
   getUpcomingMealSummary,
@@ -58,29 +51,18 @@ const {
   delete: deleteItem,
 } = createSearchableEntityCrudProcedures({
   schemas: {
-    createInput: mealCreateInput,
-    updateInput: mealUpdateData,
-    output: mealOut,
+    ...ENTITY_BINDINGS.meal.crud,
     filters: mealFiltersSchema,
     sort: { sortableFields: mealSortableFields, defaultSort: "date" },
-    idSchema: mealShortcode,
   },
   repository: {
-    getByID: async (services, shortcode: MealShortcode) => {
-      const id = await mealShortcodes.one(services.db, shortcode);
-      const res = await getMealByID(services.db, id);
-      if (!res) {
-        throw createAppError("MEAL_NOT_FOUND", "Meal not found");
-      }
-      return res;
-    },
     getByShortcode: (services, shortcode) =>
       getMealByShortcode(services.db, shortcode),
     list: async (services, filters, sort, pagination) =>
       mealList(services.db, filters, sort, pagination),
     create: (services, data) =>
       createMealWithEntityId(services.db, data, services.actorContext),
-    update: async (services, shortcode: MealShortcode, data) => {
+    update: async (services, shortcode, data) => {
       const id = await mealShortcodes.one(services.db, shortcode);
       const output = await updateMeal(
         services.db,
@@ -90,14 +72,9 @@ const {
       );
       return { output, entityId: id };
     },
-    delete: async (services, shortcodes: MealShortcode[]) => {
+    delete: async (services, shortcodes) => {
       const ids = await mealShortcodes.all(services.db, shortcodes);
-      const { deleted } = await deleteMeals(
-        services.db,
-        ids,
-        services.actorContext,
-      );
-      return { deleted };
+      return deleteMeals(services.db, ids, services.actorContext);
     },
   },
   entityName: "meal",

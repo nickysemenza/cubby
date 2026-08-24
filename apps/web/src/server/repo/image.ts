@@ -15,7 +15,6 @@
  * - {@link cullPendingImages}                 — delete stale unassociated PENDING rows and return their keys
  * - {@link countCullablePendingImages}        — how many rows that cull would remove
  * - {@link deleteImages}                      — hard-delete image rows (+ their associations) and return their keys
- * - {@link previewDeleteImages}                — what {@link deleteImages} would do, without doing it
  * - {@link detachImagesFromEntity}            — remove one entity's associations, reaping images nothing else references
  * - {@link reapUnreferencedImages}           — delete whichever of these images nothing points at any more
  * - {@link imageJoinColumnFor}                — is this table an image join table? (drives removeEntity's cascade reap)
@@ -27,10 +26,7 @@
  * Storage/network orchestration lives in image-storage.service.ts.
  */
 
-import type {
-  ImpactItem,
-  OperationDisposition,
-} from "@cubby/schemas/entity-integrity";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { ImageId, ProjectId, RecipeId } from "@cubby/schemas/identifiers";
 import {
   unsafeImageId,
@@ -105,17 +101,10 @@ import {
   type ListReadIntent,
   nextImageSortOrder,
   notDeleted,
-  unwrapDb,
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
-import {
-  countByTarget,
-  impact,
-  present,
-  sideEffect,
-} from "~/server/repo/impact";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 import {
   generateUniqueShortcode,
@@ -782,9 +771,8 @@ export const IMAGE_HARD_DELETE = {
 /**
  * Resolve `imageIds` down to the subset that actually exists — bogus or
  * already-gone ids are silently skipped rather than causing a partial
- * cascade. Shared by {@link deleteImages} (which also needs the keys, for the
- * R2 cleanup) and {@link previewDeleteImages} (which only needs the ids), so
- * both start the cascade from the exact same set.
+ * cascade. Used by {@link deleteImages}, which also needs the keys for the R2
+ * cleanup.
  */
 const fetchExistingImages = (
   dbc: DrizzleClient | DrizzleTransaction,
@@ -1130,95 +1118,6 @@ export const countUnreferencedImages = async (
     .from(image)
     .where(unreferencedImageWhere(db, cutoffDate));
   return row?.count ?? 0;
-};
-
-/** Human-readable labels for each {@link IMAGE_HARD_DELETE} edge, for the preview. */
-const IMAGE_HARD_DELETE_LABELS: Record<IncomingEdgeKey<"image">, string> = {
-  "Cookbook.coverImageId": "cookbook cover references",
-  "Vendor.logoImageId": "vendor logo references",
-  "ProductImage.imageId": "product image associations",
-  "LocationImage.imageId": "location image associations",
-  "RecipeImage.imageId": "recipe image associations",
-  "ProjectImage.imageId": "project image associations",
-  "PurchaseImage.imageId": "purchase image associations",
-};
-
-/**
- * What `deleteImages` would do to the given images, without doing it.
- *
- * Walks the SAME `IMAGE_HARD_DELETE` map, keyed off the SAME
- * `INCOMING_EDGES.image` columns and starting from the SAME
- * `fetchExistingImages` set, in the same shape `deleteImages` iterates it in
- * — a new edge added there shows up here with no second change.
- *
- * Every count is taken WITHOUT a `notDeleted` filter on the referencing row,
- * matching `deleteImages` itself: a soft-deleted parent (e.g. a tombstoned
- * cookbook) can still hold a live FK to the image — see the "Deliberately NOT
- * filtered" comment on `findCullablePendingImages` above — and that row
- * really is cleared/removed by the hard delete, so filtering it out here
- * would under-report. There are no blockers: a hard image delete is never
- * refused, only performed.
- *
- * Advisory only. `deleteImages` re-runs the same walk inside its own
- * transaction; nothing here is a lock or a permission.
- */
-export const previewDeleteImages = async (
-  db: Database | DrizzleTransaction,
-  ids: string[],
-): Promise<{
-  blockers: ImpactItem[];
-  changes: ImpactItem[];
-  sideEffects?: ImpactItem[];
-}> => {
-  if (ids.length === 0) return { blockers: [], changes: [] };
-
-  const dbClient = unwrapDb(db);
-
-  const existingImages = await fetchExistingImages(dbClient, ids);
-  if (existingImages.length === 0) return { blockers: [], changes: [] };
-  const existingIds = existingImages.map((row) => row.id);
-
-  const changes: (ImpactItem | null)[] = [];
-  for (const [key, disposition] of Object.entries(IMAGE_HARD_DELETE)) {
-    const edgeKey = key as IncomingEdgeKey<"image">;
-    const { column } = INCOMING_EDGES.image[edgeKey];
-    changes.push(
-      impact({
-        disposition,
-        edgeKey,
-        label: IMAGE_HARD_DELETE_LABELS[edgeKey],
-        byTargetId: await countByTarget(
-          dbClient,
-          // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for countByTarget's table param
-          column.table as any,
-          // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for countByTarget's column param
-          column as any,
-          existingIds,
-          { includeDeleted: true },
-        ),
-      }),
-    );
-  }
-
-  const byExistingId: Record<string, number> = Object.fromEntries(
-    existingIds.map((id) => [id, 1]),
-  );
-
-  return {
-    blockers: [],
-    changes: present(changes),
-    sideEffects: [
-      sideEffect({
-        code: "r2-object-removed",
-        label: "R2 storage object",
-        description:
-          "The underlying file in R2 storage is removed along with the row — this is the one hard delete in the system and is not recoverable.",
-        effect: "hard-delete",
-        total: existingIds.length,
-        byTargetId: byExistingId,
-      }),
-    ],
-  };
 };
 
 /**

@@ -29,7 +29,7 @@ import {
 } from "~/components/ui/empty";
 import { useTRPC } from "~/integrations/trpc/react";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
-import { purchaseProductMutationInvalidateKeys } from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 
 const EMPTY_PRODUCTS: PurchaseProductOut[] = [];
 const EMPTY_KIT_ROWS: KitComponentRowOut[] = [];
@@ -124,7 +124,7 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
     // See the twin in `product-purchases.tsx`: detaching clears the explicit
     // link only, and an expense-backed row stays listed.
     success: "Link removed — any itemized expense still relates these",
-    invalidateKeys: purchaseProductMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("purchase", "product"),
   });
   const [addToInventoryRow, setAddToInventoryRow] =
     useState<PurchaseProductRow | null>(null);

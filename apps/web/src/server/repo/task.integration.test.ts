@@ -1187,21 +1187,16 @@ describe("task repository — subject product filters and search", () => {
   });
 });
 
-// The unresolvable-code and wrong-prefix halves of this guard now live in
-// `filter-application.integration.test.ts`, which runs both against every
-// declared id filter on every entity — `parentTaskId`/`subjectProductId`
-// included.
+// `task.subjectProductId` lowercase canonicalization moved to the generic
+// #591 battery in filter-application.integration.test.ts: seedWorld there
+// gives task Alpha a real, live subjectProductId, so `world.codes.product`
+// genuinely matches a row and the lowercase-vs-canonical comparison is no
+// longer vacuous — that per-entity case is deleted.
 //
-// The POSITIVE lowercase cases stay here, because that generic probe cannot
-// express them: its seeded world is deliberately unrelated, so the canonical
-// form of a real code already matches zero rows and its
-// `lower.count === upper.count` check holds vacuously. It therefore still
-// catches #591's widening (`eqAny([])` is "no constraint" BY DESIGN, so a
-// dropped predicate returns the whole table) but NOT what a
-// supplied-but-unresolved code produces today — `sql\`false\``, a silent zero
-// on both sides. A real parent/child link is what gives the assertion teeth,
-// and it is the only thing that can see the two-path `parentTaskId` bug
-// documented on that case below.
+// `parentTaskId` stays, for a reason the generic probe can't cover at all
+// (not just a vacuity gap): it's filtered TWICE and both paths had to be
+// canonicalized independently for a lowercase code to work end-to-end — see
+// the comment on the case below.
 describe("task repository — id filter shortcode canonicalization guards", () => {
   const ctx = withTestDb();
   const pagination = { pageIndex: 0, pageSize: 500 };
@@ -1240,40 +1235,6 @@ describe("task repository — id filter shortcode canonicalization guards", () =
       pagination,
     );
     expect(data.map((row) => row.id)).toEqual([child.id]);
-  });
-
-  it("a lowercase subjectProductId still resolves and filters correctly", async () => {
-    const product = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "widening guard subject product" }),
-      ctx.actor,
-    );
-    const { output: linked } = await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        trade: "other",
-        name: "widening guard linked task",
-        subjectProductId: product.id,
-      }),
-      ctx.actor,
-    );
-    await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        trade: "other",
-        name: "widening guard unrelated task",
-      }),
-      ctx.actor,
-    );
-
-    const lowercase = unsafeProductShortcode(product.id.toLowerCase());
-    const { data } = await taskList(
-      ctx.db,
-      { subjectProductId: lowercase },
-      [],
-      pagination,
-    );
-    expect(data.map((row) => row.id)).toEqual([linked.id]);
   });
 });
 

@@ -35,7 +35,7 @@ import type {
   VendorMergeSummaryOut,
   VendorOptionsOut,
   VendorOut,
-  VendorUpdateInput,
+  VendorUpdateData,
 } from "@cubby/schemas/vendor";
 import { vendorSortableFields } from "@cubby/schemas/vendor";
 import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
@@ -63,6 +63,7 @@ import {
   type ListReadIntent,
   lockAndValidateForDelete,
   notDeleted,
+  rangeConditions,
   unwrapDb,
   updateLiveAndReturn,
   withTransaction,
@@ -253,18 +254,8 @@ const buildVendorWhereClause = (filters: VendorFilters) =>
     [],
     [
       ...auditDateWhereConditions(vendor, filters),
-      filters.purchaseCountMin !== undefined
-        ? sql`${vendorPurchaseCount} >= ${filters.purchaseCountMin}`
-        : undefined,
-      filters.purchaseCountMax !== undefined
-        ? sql`${vendorPurchaseCount} <= ${filters.purchaseCountMax}`
-        : undefined,
-      filters.spendMin !== undefined
-        ? sql`${vendorSpend} >= ${filters.spendMin}`
-        : undefined,
-      filters.spendMax !== undefined
-        ? sql`${vendorSpend} <= ${filters.spendMax}`
-        : undefined,
+      ...rangeConditions(vendorPurchaseCount, filters, "purchaseCount"),
+      ...rangeConditions(vendorSpend, filters, "spend"),
       filters.latestPurchaseDatePresenceFilter === "has"
         ? sql`${vendorLatestPurchaseDate} IS NOT NULL`
         : filters.latestPurchaseDatePresenceFilter === "none"
@@ -508,11 +499,11 @@ const VENDOR_AUDIT_FIELDS = [
 
 export const updateVendor = async (
   db: Database,
-  input: VendorUpdateInput,
+  shortcode: VendorShortcode,
+  data: VendorUpdateData,
   actor: ActorContext,
 ): Promise<{ output: VendorOut; entityId: VendorId }> => {
-  const { data } = input;
-  const id = await resolveOrThrow(db, "vendor", input.id);
+  const id = await resolveOrThrow(db, "vendor", shortcode);
 
   await withTransaction(db, async (tx) => {
     const before = await tx.query.vendor.findFirst({
@@ -889,9 +880,9 @@ export const mergeVendors = async (
  * The re-point paths are `mergePurchases` (one vendor's charges) and
  * `mergeVendors` (two spellings of one vendor) — never a cascading delete.
  *
- * The blocking count is `countByTarget` over `Purchase.vendorId` — the same
- * call `previewDeleteVendors` makes — rather than a hand-rolled groupBy, so
- * the two can't disagree about which vendors have live charges.
+ * The blocking count is `countByTarget` over `Purchase.vendorId` rather than a
+ * hand-rolled groupBy, so a single query names both the total and which
+ * vendors have live charges.
  */
 export const deleteVendors = async (
   db: Database,
@@ -941,49 +932,6 @@ export const deleteVendors = async (
     const reaped = await reapUnreferencedImages(tx, logoIds);
     return { detachedImageKeys: reaped.deletedKeys, deleted };
   });
-};
-
-/**
- * What `deleteVendors` would do to the given vendors, without doing it.
- *
- * Reads the SAME `VENDOR_DELETE_EDGE_POLICY` and the same `countByTarget` call
- * the mutation's own blocking check makes, so the preview can't claim a delete
- * will succeed that the guard above then refuses.
- *
- * Advisory only. `deleteVendors` still re-runs the check inside its own
- * transaction; nothing here is a lock or a permission.
- */
-export const previewDeleteVendors = async (
-  db: Database | DrizzleTransaction,
-  ids: VendorId[],
-): Promise<{
-  blockers: ImpactItem[];
-  changes: ImpactItem[];
-  sideEffects: ImpactItem[];
-}> => {
-  if (ids.length === 0) return { blockers: [], changes: [], sideEffects: [] };
-
-  const dbClient = unwrapDb(db);
-  const byTargetId = await countByTarget(
-    dbClient,
-    purchase,
-    purchase.vendorId,
-    ids,
-  );
-
-  const blockers = present([
-    impact({
-      disposition: VENDOR_DELETE_EDGE_POLICY["Purchase.vendorId"],
-      edgeKey: "Purchase.vendorId",
-      label: "purchases still pointing at this vendor",
-      byTargetId,
-    }),
-  ]);
-
-  // No cascade (vendor delete is block-only) and no side effect: neither
-  // `Vendor` nor `Purchase` is in the embedding pipeline (see `deletePurchases`'
-  // own doc), and nothing else recomputes off a vendor delete.
-  return { blockers, changes: [], sideEffects: [] };
 };
 
 /**

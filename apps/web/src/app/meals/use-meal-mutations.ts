@@ -1,9 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import {
-  invalidateTRPCQueries,
-  mealMutationInvalidateKeys,
-} from "~/lib/query-keys";
+import { invalidatesFor, invalidateTRPCQueries } from "~/lib/query-keys";
 
 /**
  * Returns a callback that invalidates every meal query (calendar, detail,
@@ -13,6 +10,6 @@ import {
 export function useInvalidateMeals() {
   const queryClient = useQueryClient();
   return useCallback(() => {
-    invalidateTRPCQueries(queryClient, mealMutationInvalidateKeys);
+    invalidateTRPCQueries(queryClient, invalidatesFor("meal"));
   }, [queryClient]);
 }

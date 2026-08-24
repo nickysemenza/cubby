@@ -2,13 +2,11 @@ import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
 import { useNavigate } from "@tanstack/react-router";
 import { ListChecks } from "lucide-react";
 import { useMemo } from "react";
+import { NetBarBreakdown } from "~/app/_components/charts/kit";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import { entityDetailLink } from "~/entities/entities";
 import { ProjectChartLabel, ProjectChartTick } from "../project-mark";
-import { nivoBarChrome, nivoChartTheme } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
-import { ChartEmpty } from "./chart-empty";
-import { HorizontalBarChart } from "./horizontal-bar-chart";
 
 /**
  * The Analytics tab's "Open Tasks by Project" — `data` is
@@ -31,85 +29,58 @@ export function OpenTasksByProject({
   const navigate = useNavigate();
   const { iconById } = useProjectOptions();
 
-  const data = useMemo(
-    () =>
-      rows
-        .filter((r) => r.openTaskCount > 0)
-        .map((r) => ({
-          id: r.projectId,
-          name: r.projectName,
-          count: r.openTaskCount,
-        }))
-        .sort((a, b) => a.count - b.count)
-        .slice(-15),
+  const openRows = useMemo(
+    () => rows.filter((r) => r.openTaskCount > 0),
     [rows],
   );
   const identityById = useMemo(
     () =>
       new Map<string, { name: string; icon: string | null }>(
-        data.map(
-          (row) =>
-            [
-              String(row.id),
-              { name: row.name, icon: iconById.get(row.id) ?? null },
-            ] as const,
-        ),
+        openRows.map((row) => [
+          row.projectId,
+          { name: row.projectName, icon: iconById.get(row.projectId) ?? null },
+        ]),
       ),
-    [data, iconById],
+    [openRows, iconById],
   );
 
-  if (data.length === 0) {
-    return <ChartEmpty icon={ListChecks} title="No open tasks." />;
-  }
-
   return (
-    <HorizontalBarChart
-      data={data}
+    <NetBarBreakdown
+      data={openRows}
+      valueKey="openTaskCount"
+      labelKey="projectName"
+      idKey="projectId"
+      topN={15}
       minHeight={220}
-      keys={["count"]}
-      indexBy="id"
       margin={{ top: 10, right: 30, bottom: 30, left: 180 }}
-      padding={0.3}
-      colors={["var(--chart-2)"]}
-      {...nivoBarChrome}
-      axisBottom={{
-        tickSize: 0,
-        tickPadding: 8,
-        format: (v: number) => `${v}`,
-      }}
-      axisLeft={{
-        tickSize: 0,
-        tickPadding: 8,
-        renderTick: (tick) => (
-          <ProjectChartTick {...tick} identityById={identityById} />
-        ),
-      }}
-      label={(d) => `${d.value ?? 0}`}
+      color={() => "var(--chart-2)"}
+      showValueLabel
       labelSkipWidth={16}
-      labelTextColor="var(--background)"
-      enableGridX
-      enableGridY={false}
-      onClick={(bar) => {
-        const id = bar.data.id;
-        if (id) navigate(entityDetailLink("project", String(id)));
-      }}
-      tooltip={({ data: row, value }) => (
+      formatValue={(v) => `${v}`}
+      axisBottomFormat={(v) => `${v}`}
+      renderTick={(tick) => (
+        <ProjectChartTick {...tick} identityById={identityById} />
+      )}
+      tooltip={(row) => (
         <ChartTooltip>
           <strong>
             <ProjectChartLabel
               identity={
-                identityById.get(String(row.id)) ?? {
-                  name: String(row.name),
+                identityById.get(row.projectId) ?? {
+                  name: row.projectName,
                   icon: null,
                 }
               }
             />
           </strong>
-          : {value} open task
-          {value !== 1 ? "s" : ""}
+          : {row.openTaskCount} open task{row.openTaskCount !== 1 ? "s" : ""}
         </ChartTooltip>
       )}
-      theme={nivoChartTheme}
+      onClick={(row) =>
+        navigate(entityDetailLink("project", String(row.projectId)))
+      }
+      emptyIcon={ListChecks}
+      emptyTitle="No open tasks."
     />
   );
 }

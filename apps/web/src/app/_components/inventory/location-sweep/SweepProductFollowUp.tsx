@@ -28,7 +28,7 @@ import {
 } from "~/components/ui/sheet";
 import { Spinner } from "~/components/ui/spinner";
 import { useTRPC } from "~/integrations/trpc/react";
-import { productMutationInvalidateKeys } from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 
 /** A product the sweep just created that could use a moment of curation. */
 export interface SweepFollowUp {
@@ -66,7 +66,7 @@ export function SweepProductFollowUp({
     intent: "full",
     mutationFn: api.product.update.mutationOptions,
     success: "Product details saved",
-    invalidateKeys: productMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("product"),
     onSuccess: (result) => {
       onSaved(result);
       close();

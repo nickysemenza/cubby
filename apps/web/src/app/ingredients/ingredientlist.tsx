@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { verbBulkAction } from "~/app/_components/actions/action-verb-ui";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
-import { IngredientMergeDialog } from "~/app/_components/ingredient/ingredient-merge-dialog";
+import { EntityMergeDialog } from "~/app/_components/merge/entity-merge-dialog";
 import {
   ProductFoodSummariesProvider,
   useHydratedProductFood,
@@ -25,11 +25,7 @@ import {
 import { EntityIcon } from "~/entities/entities";
 import { useTRPC, useTRPCClient } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
-import {
-  ingredientMergeMutationInvalidateKeys,
-  ingredientMutationInvalidateKeys,
-  invalidateTRPCQueries,
-} from "~/lib/query-keys";
+import { invalidatesFor, invalidateTRPCQueries } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import {
@@ -147,12 +143,12 @@ export function IngredientList() {
   const updateIngredientMutation = useUpdateMutation({
     mutationFn: api.ingredient.update.mutationOptions,
     entity: "ingredient",
-    invalidateKeys: ingredientMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("ingredient", "list"),
   });
 
   // Rows awaiting merge confirmation — set by the bulk action's onExecute
   // (which itself does no work; it just opens the dialog), cleared once the
-  // shared IngredientMergeDialog's onConfirm/cancel resolves.
+  // shared EntityMergeDialog's onConfirm/cancel resolves.
   const [mergeRows, setMergeRows] = useState<
     Pick<IngredientListItem, "id" | "name">[] | null
   >(null);
@@ -171,7 +167,7 @@ export function IngredientList() {
   const deletableConfig = useDeletableConfig({
     mutationFn: api.ingredient.delete.mutationOptions,
     entityLabel: "Ingredient",
-    invalidateKeys: ingredientMutationInvalidateKeys,
+    invalidateKeys: invalidatesFor("ingredient", "list"),
     entity: "ingredient",
   });
 
@@ -252,7 +248,6 @@ export function IngredientList() {
 
   const { workbench, data, totalCount } = useEntityList({
     entity: "ingredient",
-    queryOptions: api.ingredient.list.queryOptions,
     getMappings: getIngredientListMappings,
     columns,
     bulkActions: {
@@ -260,7 +255,7 @@ export function IngredientList() {
         verbBulkAction<IngredientListItem>("merge", {
           minSelection: 2,
           // No built-in confirmation: `onExecute` only opens the shared
-          // IngredientMergeDialog (below) and returns `success: false` so the
+          // EntityMergeDialog (below) and returns `success: false` so the
           // framework leaves the row selection alone while it's open. The
           // dialog's own Confirm button does the actual merge via
           // `confirmMerge`.
@@ -289,7 +284,7 @@ export function IngredientList() {
       });
       // A merge's blast radius is wide: ingredients are deleted, products
       // repoint, recipe totals are recomputed, and meals read those totals.
-      invalidateTRPCQueries(queryClient, ingredientMergeMutationInvalidateKeys);
+      invalidateTRPCQueries(queryClient, invalidatesFor("ingredient", "merge"));
       toast.success(
         savedWithBackgroundWork(
           result.sideEffects,
@@ -363,8 +358,9 @@ export function IngredientList() {
         }
       />
       <PreviewSheet />
-      <IngredientMergeDialog
-        ingredients={mergeRows ?? []}
+      <EntityMergeDialog
+        entity="ingredient"
+        rows={mergeRows ?? []}
         open={mergeRows != null}
         onOpenChange={(open) => {
           if (!open) setMergeRows(null);

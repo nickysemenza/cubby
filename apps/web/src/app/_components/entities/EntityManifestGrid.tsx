@@ -23,10 +23,10 @@ import {
 import {
   browserEntityDefinition,
   entities,
+  getSortableFields,
   isBrowserRoutedEntity,
 } from "~/entities/entities";
 import { getEntityContract } from "~/entities/entity-contracts";
-import { getSortableFields } from "~/entities/sortable-fields";
 import { viewsForEntity } from "~/entities/view-manifest";
 import { useTRPC } from "~/integrations/trpc/react";
 import { authClient } from "~/lib/auth-client";

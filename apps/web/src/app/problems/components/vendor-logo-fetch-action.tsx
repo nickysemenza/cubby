@@ -3,7 +3,7 @@ import { ImageDown } from "lucide-react";
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
 import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/integrations/trpc/react";
-import { queryKeys, vendorMutationInvalidateKeys } from "~/lib/query-keys";
+import { invalidatesFor, queryKeys } from "~/lib/query-keys";
 
 type VendorLogoTarget = Pick<VendorOut, "id" | "name" | "website">;
 
@@ -17,7 +17,7 @@ export function VendorLogoFetchAction({
   const fetchLogo = useProblemCardMutation({
     mutationFn: api.vendor.fetchLogo.mutationOptions,
     success: `Added logo for ${vendor.name}`,
-    invalidateKeys: [...vendorMutationInvalidateKeys, queryKeys.search.all],
+    invalidateKeys: [...invalidatesFor("vendor"), queryKeys.search.all],
   });
 
   // A website is a reviewed identity claim. Never guess one from the name just

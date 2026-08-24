@@ -1,15 +1,6 @@
 import type { ExpenseVendorAggregate } from "@cubby/schemas/project";
 import { Store } from "lucide-react";
-import { useMemo } from "react";
-import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
-import { ChartEmpty } from "~/app/projects/charts/chart-empty";
-import { HorizontalBarChart } from "~/app/projects/charts/horizontal-bar-chart";
-import {
-  nivoBarChrome,
-  nivoChartTheme,
-  nivoCurrencyAxis,
-} from "~/lib/nivo-theme";
-import { formatCurrency } from "~/lib/utils";
+import { NetBarBreakdown } from "~/app/_components/charts/kit";
 
 /**
  * Net spend by vendor — sourced from `expense.analytics`'s `byVendor`
@@ -25,50 +16,13 @@ export function VendorBreakdown({
 }: {
   byVendor: ExpenseVendorAggregate[];
 }) {
-  const data = useMemo(
-    () =>
-      [...byVendor]
-        .sort((a, b) => Math.abs(b.net) - Math.abs(a.net))
-        .slice(0, 12)
-        .map((row) => ({ vendor: row.vendorName, net: row.net }))
-        .reverse(),
-    [byVendor],
-  );
-
-  if (data.length === 0) {
-    return <ChartEmpty icon={Store} title="No vendor-linked expenses." />;
-  }
-
   return (
-    <HorizontalBarChart
-      data={data}
-      minHeight={240}
-      keys={["net"]}
-      indexBy="vendor"
-      margin={{ top: 10, right: 40, bottom: 40, left: 160 }}
-      padding={0.25}
-      colors={({ data: d }) =>
-        d.net < 0 ? "var(--chart-negative)" : "var(--chart-1)"
-      }
-      {...nivoBarChrome}
-      axisBottom={nivoCurrencyAxis}
-      axisLeft={{ tickSize: 0, tickPadding: 8 }}
-      enableLabel={false}
-      enableGridX
-      enableGridY={false}
-      tooltip={({ data: d }) => (
-        <ChartTooltip>
-          <strong>{d.vendor}</strong> —{" "}
-          <span
-            style={{
-              color: d.net < 0 ? "var(--chart-negative)" : "var(--chart-1)",
-            }}
-          >
-            {formatCurrency(d.net, 0)}
-          </span>
-        </ChartTooltip>
-      )}
-      theme={nivoChartTheme}
+    <NetBarBreakdown
+      data={byVendor}
+      valueKey="net"
+      labelKey="vendorName"
+      emptyIcon={Store}
+      emptyTitle="No vendor-linked expenses."
     />
   );
 }

@@ -24,6 +24,7 @@ import {
   auditDateFilterFields,
   dateRangeFields,
   deriveUpdateData,
+  numericRangeFields,
   plainDate,
   timestampedFields,
 } from "./base-entity";
@@ -1070,14 +1071,12 @@ export const expenseFilterFields = {
    * ledger (refunds, and the family wedding contributions), so `costMax: 0` is
    * the credits-only worklist. Never assume a lower bound of zero.
    */
-  costMin: z.coerce
-    .number()
-    .optional()
-    .describe("Inclusive lower bound on expense cost, in dollars"),
-  costMax: z.coerce
-    .number()
-    .optional()
-    .describe("Inclusive upper bound on expense cost, in dollars"),
+  ...numericRangeFields("cost", {
+    describe: {
+      min: "Inclusive lower bound on expense cost, in dollars",
+      max: "Inclusive upper bound on expense cost, in dollars",
+    },
+  }),
   /**
    * `"none"` matches expenses with a null `cost`; `"has"` matches expenses
    * with a non-null `cost`. Combined with `trade: "other"`, `"none"` is the
@@ -1104,14 +1103,12 @@ export const expenseFilterFields = {
    * "everything written off" worklist.
    */
   productQuantityPresenceFilter: presenceFilter,
-  productQuantityMin: z.coerce
-    .number()
-    .optional()
-    .describe("Inclusive lower bound on recorded product quantity"),
-  productQuantityMax: z.coerce
-    .number()
-    .optional()
-    .describe("Inclusive upper bound on recorded product quantity"),
+  ...numericRangeFields("productQuantity", {
+    describe: {
+      min: "Inclusive lower bound on recorded product quantity",
+      max: "Inclusive upper bound on recorded product quantity",
+    },
+  }),
   /**
    * `"none"` matches expenses with a null `orderId`; `"has"` matches
    * expenses that carry one. Same shape as `costPresenceFilter` — there's no

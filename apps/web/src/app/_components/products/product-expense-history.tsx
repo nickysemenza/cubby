@@ -45,7 +45,6 @@ import {
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { FILTER_NONE } from "~/entities/filters";
 import { useTRPC } from "~/integrations/trpc/react";
-import { expenseMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { createCubbyColumnHelper } from "../data-table/table-features";
 
@@ -147,13 +146,11 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
   const update = useUpdateMutation({
     mutationFn: api.expense.update.mutationOptions,
     entity: "expense",
-    invalidateKeys: expenseMutationInvalidateKeys,
   });
   const nameEditable = useNameEditable<ExpenseOut>(update.mutateAsync);
   const deletable = useDeletableConfig({
     mutationFn: api.expense.delete.mutationOptions,
     entityLabel: "Expense",
-    invalidateKeys: expenseMutationInvalidateKeys,
     entity: "expense",
   });
   const bulkActions = useExpenseBulkActions();

@@ -1,8 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type {
-  ImpactItem,
-  OperationDisposition,
-} from "@cubby/schemas/entity-integrity";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type PublicImpactItem,
   toPublicImpact,
@@ -53,7 +50,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
-import { countByTarget, impact, present } from "~/server/repo/impact";
+import { countByTarget, impact } from "~/server/repo/impact";
 import { lockLedgerPartiesForReference } from "~/server/repo/ledger-party-reference";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
@@ -537,51 +534,4 @@ async function assertNoBlockingCounts(
     `Cannot delete a financial account while ${noun} reference it: ${detail}.`,
     blockers,
   );
-}
-
-/** Advisory delete impact using the same predicates as delete. */
-export async function previewDeleteFinancialAccounts(
-  db: Database,
-  ids: FinancialAccountId[],
-): Promise<{
-  blockers: ImpactItem[];
-  changes: ImpactItem[];
-  sideEffects: ImpactItem[];
-}> {
-  if (ids.length === 0) return { blockers: [], changes: [], sideEffects: [] };
-  const client = getDb(db);
-  const transactionsByTarget = await countByTarget(
-    client,
-    financialTransaction,
-    financialTransaction.accountId,
-    ids,
-  );
-  const statementRowsByTarget = await countByTarget(
-    client,
-    statementRow,
-    statementRow.accountId,
-    ids,
-  );
-  return {
-    blockers: present([
-      impact({
-        disposition:
-          FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY[
-            "FinancialTransaction.accountId"
-          ],
-        edgeKey: "FinancialTransaction.accountId",
-        label: "live transactions still pointing at this account",
-        byTargetId: transactionsByTarget,
-      }),
-      impact({
-        disposition:
-          FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY["StatementRow.accountId"],
-        edgeKey: "StatementRow.accountId",
-        label: "live statement rows assigned to this account",
-        byTargetId: statementRowsByTarget,
-      }),
-    ]),
-    changes: [],
-    sideEffects: [],
-  };
 }

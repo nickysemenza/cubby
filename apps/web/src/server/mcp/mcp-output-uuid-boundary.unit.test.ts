@@ -22,14 +22,12 @@ interface UuidFinding {
  * deliberately; field-name heuristics are intentionally not accepted. */
 const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "add_recipe_to_meal.recipes[].id",
-  "create_meal.recipes[].id",
   "find_recipes_using_ingredient.recipes[].usages[].lineId",
   "get_meal.recipes[].id",
   "get_recipe.sections[].id",
   "get_recipe.sections[].ingredients[].id",
   "list_meals.items[].recipes[].id",
   "remove_meal_recipe.recipes[].id",
-  "update_meal.recipes[].id",
   "update_meal_recipe.recipes[].id",
   // Plural mirrors of the singular exceptions above. A batch tool wraps its
   // singular's own output in `results[].item`, so it re-exposes exactly the

@@ -1,7 +1,6 @@
 import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
-import { Clock, Info } from "lucide-react";
+import { Info } from "lucide-react";
 import { useState } from "react";
-import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import { BasicInfo } from "~/components/common/basic-info";
 import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
@@ -11,7 +10,6 @@ import { financialTransactionEditRequest } from "~/entities/editing/editor-reque
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
-import { financialTransactionMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { DetailSections } from "../_components/data-table/detail-page";
 import { useEntityDelete } from "../_components/hooks/useEntityDelete";
@@ -29,7 +27,6 @@ export function FinancialTransactionDetail({
     entity: "financialTransaction",
     entityLabel: "Transaction",
     mutationOptions: api.financialTransaction.delete.mutationOptions,
-    invalidateKeys: financialTransactionMutationInvalidateKeys,
     redirectTo: "/financial-transactions",
   });
   return (
@@ -178,19 +175,8 @@ export function FinancialTransactionDetail({
               />
             ),
           },
-          {
-            id: "history",
-            title: "History",
-            icon: Clock,
-            placement: "supporting",
-            content: (
-              <AuditLogList
-                entityType="financialTransaction"
-                entityId={transaction.id}
-                showEntityLink={false}
-              />
-            ),
-          },
+          // History is appended automatically by `DetailSections` for every
+          // auditable entity — see `ACTIVITY_SECTION_ID` there.
         ]}
       />
       <EntityEditDialog

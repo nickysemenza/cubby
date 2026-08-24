@@ -1,10 +1,3 @@
-/**
- * Task Router — steps inside household projects (migrated from Notion).
- * Pure crud-factory shape; the blocked-by graph is edited via `update`'s
- * `blockedByIds` replacement set.
- */
-
-import { type TaskShortcode, taskShortcode } from "@cubby/schemas/identifiers";
 import {
   actionableTasksOut,
   taskBoardOut,
@@ -13,21 +6,18 @@ import {
   taskBulkReorderInput,
   taskBulkStatusInput,
   taskBulkTradeInput,
-  taskCreateInput,
   taskFiltersSchema,
   taskOut,
   taskSortableFields,
   taskSummaryOut,
   taskTimelineOut,
-  taskUpdateData,
 } from "@cubby/schemas/project";
 import { z } from "zod";
-import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 import {
   createTask,
   deleteTasks,
   getTaskBoard,
-  getTaskByID,
   getTaskByShortcode,
   getTaskSummary,
   getTaskTimeline,
@@ -55,38 +45,25 @@ const {
   delete: deleteItem,
 } = createSearchableEntityCrudProcedures({
   schemas: {
-    createInput: taskCreateInput,
-    updateInput: taskUpdateData,
-    output: taskOut,
+    ...ENTITY_BINDINGS.task.crud,
     filters: taskFiltersSchema,
     sort: {
       sortableFields: taskSortableFields,
       defaultSort: "createdAt",
       groupableFields: ["status"] as const,
     },
-    idSchema: taskShortcode,
   },
   repository: {
-    getByID: async (services, shortcode: TaskShortcode) => {
-      const id = await resolveOrThrow(services.db, "task", shortcode);
-      return getTaskByID(services.db, id);
-    },
     getByShortcode: (services, shortcode) =>
       getTaskByShortcode(services.db, shortcode),
     list: async (services, filters, sort, pagination) =>
       taskList(services.db, filters, sort, pagination),
     create: async (services, data) =>
       createTask(services.db, data, services.actorContext),
-    update: async (services, shortcode: TaskShortcode, data) =>
+    update: (services, shortcode, data) =>
       updateTask(services.db, shortcode, data, services.actorContext),
-    delete: async (services, ids: TaskShortcode[]) => {
-      const { deleted } = await deleteTasks(
-        services.db,
-        ids,
-        services.actorContext,
-      );
-      return { deleted };
-    },
+    delete: (services, ids) =>
+      deleteTasks(services.db, ids, services.actorContext),
   },
   entityName: "task",
 });

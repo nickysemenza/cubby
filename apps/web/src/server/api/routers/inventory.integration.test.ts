@@ -313,8 +313,11 @@ describe("inventory router", () => {
 
     const nonExistentId = unsafeInventoryShortcode("INV-ZZZZ");
 
+    // The factory's derived `getByID` raises the same reason AND the same
+    // prose as `createEntityReader`'s throwing variant — `${label} ${id} not
+    // found` — so a detail route and a repo read fail identically, id included.
     await expect(caller.getByID({ id: nonExistentId })).rejects.toThrow(
-      "Inventory entry not found",
+      `Inventory entry ${nonExistentId} not found`,
     );
   });
 

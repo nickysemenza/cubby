@@ -21,8 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { isBrowserRoutedEntity } from "~/entities/entities";
-import { ENTITY_ACCENTS } from "~/entities/entity-accents";
+import { entities, isBrowserRoutedEntity } from "~/entities/entities";
 import type { QueryTiming } from "~/lib/query-timing";
 import { cn } from "~/lib/utils";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
@@ -533,7 +532,7 @@ export default function RTable<TItem extends RowData>(
             style={
               {
                 ...(entity && isBrowserRoutedEntity(entity)
-                  ? { "--row-accent": ENTITY_ACCENTS[entity] }
+                  ? { "--row-accent": entities[entity].color.accent }
                   : {}),
                 // Embedded tables sit in a scrolling detail page, so they take a
                 // fixed ceiling instead of claiming the rest of the viewport.

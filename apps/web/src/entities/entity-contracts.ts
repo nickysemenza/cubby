@@ -1,26 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { QueryKey } from "@tanstack/react-query";
-import { entities } from "~/entities/entities";
-import { getSortableFields } from "~/entities/sortable-fields";
+import { entities, getSortableFields } from "~/entities/entities";
 import type { useTRPC } from "~/integrations/trpc/react";
-import {
-  expenseMutationInvalidateKeys,
-  financialAccountMutationInvalidateKeys,
-  financialTransactionMutationInvalidateKeys,
-  ingredientAllMutationInvalidateKeys,
-  inventoryMutationInvalidateKeys,
-  locationMutationInvalidateKeys,
-  mealMutationInvalidateKeys,
-  productMutationInvalidateKeys,
-  projectMutationInvalidateKeys,
-  purchaseMutationInvalidateKeys,
-  queryKeys,
-  recipeAllMutationInvalidateKeys,
-  taskMutationInvalidateKeys,
-  vendorMutationInvalidateKeys,
-  wishMutationInvalidateKeys,
-} from "~/lib/query-keys";
+import { invalidatesFor } from "~/lib/query-keys";
 
 type Api = ReturnType<typeof useTRPC>;
 
@@ -100,7 +83,6 @@ type StandardRouter = {
 
 function standardContract(
   entity: StandardEntity,
-  invalidationKeys: readonly QueryKey[],
   options?: {
     pickerSearch?: EntityQueryContract["pickerSearch"];
   },
@@ -108,6 +90,9 @@ function standardContract(
   const router = (api: Api): StandardRouter =>
     api[entity] as unknown as StandardRouter;
   const { pickerSearch } = options ?? {};
+  // The entity's own base fan-out, straight from the invalidation table — the
+  // contract never declares a second, drifting copy of it.
+  const invalidationKeys = invalidatesFor(entity);
   return {
     entity,
     route: entities[entity].routes,
@@ -130,31 +115,28 @@ function standardContract(
 }
 
 const entityContracts = {
-  product: standardContract("product", productMutationInvalidateKeys, {
+  product: standardContract("product", {
     pickerSearch: (api, params) =>
       api.product.search.queryOptions(listParams(params)),
   }),
-  ingredient: standardContract(
-    "ingredient",
-    ingredientAllMutationInvalidateKeys,
-  ),
-  inventory: standardContract("inventory", inventoryMutationInvalidateKeys),
-  location: standardContract("location", locationMutationInvalidateKeys),
-  recipe: standardContract("recipe", recipeAllMutationInvalidateKeys),
-  meal: standardContract("meal", mealMutationInvalidateKeys),
+  ingredient: standardContract("ingredient"),
+  inventory: standardContract("inventory"),
+  location: standardContract("location"),
+  recipe: standardContract("recipe"),
+  meal: standardContract("meal"),
   image: {
     entity: "image",
     route: entities.image.routes,
     defaultSort: entities.image.list?.defaultSort ?? "createdAt",
     sortableFields: getSortableFields("image"),
     canPreview: true,
-    invalidationKeys: [queryKeys.image.all, queryKeys.dashboard.counts],
+    invalidationKeys: invalidatesFor("image"),
     query: {
       list: (api, params) => api.image.list.queryOptions(listParams(params)),
       detail: (api, id) => api.image.getByID.queryOptions({ id }),
     },
     mutation: {
-      invalidationKeys: [queryKeys.image.all, queryKeys.dashboard.counts],
+      invalidationKeys: invalidatesFor("image"),
     },
   },
   "usda-food": {
@@ -163,14 +145,14 @@ const entityContracts = {
     defaultSort: entities["usda-food"].list?.defaultSort ?? "description",
     sortableFields: getSortableFields("usda-food"),
     canPreview: true,
-    invalidationKeys: [queryKeys.usda.all],
+    invalidationKeys: invalidatesFor("usda-food"),
     query: {
       list: (api, params) => api.usda.list.queryOptions(listParams(params)),
       detail: (api, id) =>
         api.usda.getByID.queryOptions({ id: fdcIdFromParam(id) }),
     },
     mutation: {
-      invalidationKeys: [queryKeys.usda.all],
+      invalidationKeys: invalidatesFor("usda-food"),
     },
   },
   cookbook: {
@@ -183,29 +165,23 @@ const entityContracts = {
     // carries every field the preview needs, so `detail` warms that same query
     // and the panel's cookbook arm reads it (like the meal arm).
     canPreview: true,
-    invalidationKeys: [queryKeys.cookbook.all, queryKeys.dashboard.counts],
+    invalidationKeys: invalidatesFor("cookbook"),
     query: {
       list: (api) => api.recipe.listCookbooks.queryOptions(),
       detail: (api) => api.recipe.listCookbooks.queryOptions(),
     },
     mutation: {
-      invalidationKeys: [queryKeys.cookbook.all, queryKeys.dashboard.counts],
+      invalidationKeys: invalidatesFor("cookbook"),
     },
   },
-  project: standardContract("project", projectMutationInvalidateKeys),
-  task: standardContract("task", taskMutationInvalidateKeys),
-  expense: standardContract("expense", expenseMutationInvalidateKeys),
-  vendor: standardContract("vendor", vendorMutationInvalidateKeys),
-  purchase: standardContract("purchase", purchaseMutationInvalidateKeys),
-  financialAccount: standardContract(
-    "financialAccount",
-    financialAccountMutationInvalidateKeys,
-  ),
-  financialTransaction: standardContract(
-    "financialTransaction",
-    financialTransactionMutationInvalidateKeys,
-  ),
-  wish: standardContract("wish", wishMutationInvalidateKeys),
+  project: standardContract("project"),
+  task: standardContract("task"),
+  expense: standardContract("expense"),
+  vendor: standardContract("vendor"),
+  purchase: standardContract("purchase"),
+  financialAccount: standardContract("financialAccount"),
+  financialTransaction: standardContract("financialTransaction"),
+  wish: standardContract("wish"),
 } satisfies Record<BrowserRoutedEntity, EntityContract>;
 
 export function getEntityContract(entity: Entity): EntityContract {

@@ -7,7 +7,6 @@ import { Badge } from "~/components/ui/badge";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { useTRPC } from "~/integrations/trpc/react";
-import { locationMutationInvalidateKeys } from "~/lib/query-keys";
 import { EntityInlineLink } from "../EntityInlineLink";
 import { useEntityDelete } from "../hooks/useEntityDelete";
 import { PrintLabelButton } from "../print-label-button";
@@ -32,7 +31,6 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
     entity: "location",
     mutationOptions: (callbacks) =>
       api.location.delete.mutationOptions(callbacks),
-    invalidateKeys: locationMutationInvalidateKeys,
     redirectTo: "/locations",
   });
 
