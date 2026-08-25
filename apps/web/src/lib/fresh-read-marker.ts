@@ -1,7 +1,7 @@
 /** Cookie shared by browser mutations and the server's read-consistency gate. */
 export const FRESH_READ_COOKIE_NAME = "cubby-fresh-reads";
 
-export const FRESH_READ_MAX_AGE_SECONDS = 20;
+const FRESH_READ_MAX_AGE_SECONDS = 20;
 
 /**
  * Return whether the request carries the short-lived post-mutation marker.
