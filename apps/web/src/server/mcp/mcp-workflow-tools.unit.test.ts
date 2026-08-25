@@ -127,4 +127,25 @@ describe("MCP workflow tools", () => {
     expect(rejected.isError).toBe(true);
     expect(similar).toHaveBeenCalledTimes(1);
   });
+
+  it("uses the bounded-stale caller only for MCP search tools", async () => {
+    const strongSimilar = vi.fn();
+    const readSimilar = vi.fn(async () => ({
+      source: { entityType: "product", entityId: "PRD-2222" },
+      status: "uncomputed" as const,
+      results: [],
+    }));
+
+    const result = await callMcpTool(
+      createMcpServer(),
+      "find_similar_entities",
+      { pair: "product_to_product", sourceId: "PRD-2222", limit: 3 },
+      { search: { similar: strongSimilar } },
+      { readCaller: { search: { similar: readSimilar } } },
+    );
+
+    expect(result.isError).not.toBe(true);
+    expect(readSimilar).toHaveBeenCalledOnce();
+    expect(strongSimilar).not.toHaveBeenCalled();
+  });
 });

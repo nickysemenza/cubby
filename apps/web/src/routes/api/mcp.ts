@@ -12,6 +12,7 @@ async function handler({ request }: { request: Request }) {
     const { createCallerFactory, createTRPCContext } = await import(
       "~/server/api/trpc"
     );
+    const { boundedStaleDb } = await import("~/server/db");
     const { emitTelemetry } = await import("~/server/telemetry");
     const createCaller = createCallerFactory(mcpWorkflowRouter);
 
@@ -27,6 +28,15 @@ async function handler({ request }: { request: Request }) {
     });
 
     const caller = createCaller(ctx);
+    const readContext: typeof ctx = {
+      ...ctx,
+      readDb: boundedStaleDb,
+      readConsistency: {
+        consistency: "bounded-stale",
+        reason: "cached-policy",
+      },
+    };
+    const readCaller = createCaller(readContext);
 
     return await handleMcpRequest(request, {
       token: "",
@@ -34,8 +44,10 @@ async function handler({ request }: { request: Request }) {
       scopes: [],
       extra: {
         caller,
+        readCaller,
         entityKernel: {
           db: ctx.db,
+          readDb: boundedStaleDb,
           actorContext: ctx.actorContext,
           usdaClient: ctx.usdaClient,
           upcLookupClient: ctx.upcLookupClient,

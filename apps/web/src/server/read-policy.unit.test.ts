@@ -124,4 +124,19 @@ describe("cached-read policy", () => {
       );
     }
   });
+
+  it("allows only MCP entity list/search and search tools onto bounded-stale reads", () => {
+    const route = read("../routes/api/mcp.ts");
+    const searchTools = read("./mcp/tools/search.tools.ts");
+    const sharedTools = read("./mcp/tools/_shared.ts");
+
+    expect(route).toContain("const caller = createCaller(ctx)");
+    expect(route).toContain("readDb: boundedStaleDb");
+    expect(route).toContain("readCaller,");
+    expect(route).toContain("entityKernel: {");
+    expect(route).toContain("db: ctx.db");
+    expect(searchTools).toContain("getReadCaller(extra)");
+    expect(searchTools).not.toContain("getCaller(extra)");
+    expect(sharedTools).toContain("getCaller(extra)");
+  });
 });

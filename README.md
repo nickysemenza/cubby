@@ -431,15 +431,13 @@ Key constraints:
   `HYPERDRIVE` and one for `HYPERDRIVE_CACHED` (six Worker-side connections in
   the largest request). The shared Neon origin budget is 55 Hyperdrive
   connections for the authoritative object plus 5 for the cached object.
-- **Cached reads are bounded-stale by design.** The cached Hyperdrive uses
-  `max_age=10s` with `swr=5s`.
-  Hyperdrive cache settings are account-level state, not a `wrangler.jsonc`
-  field; inspect them with `wrangler hyperdrive get <id>` when changing or
-  verifying rollout state. Successful browser mutations set the shared
-  `cubby-fresh-reads` marker for 20 seconds so subsequent list/search reads use
-  the authoritative binding. Do not rely on SQL cache busting or Hyperdrive
-  invalidation: rollback is disabling caching on `HYPERDRIVE_CACHED` while
-  leaving the binding in place.
+- **Cached reads are bounded-stale by design.** Desired timings live together in
+  `src/lib/hyperdrive-cache-policy.ts`. Hyperdrive cache settings are
+  account-level state, not a `wrangler.jsonc` field; apply and inspect them with
+  `wrangler hyperdrive update/get`. Successful browser mutations use the same
+  policy to stay on the authoritative binding beyond the maximum cached serve
+  window. Do not rely on SQL cache busting or Hyperdrive invalidation: rollback
+  is disabling caching on `HYPERDRIVE_CACHED` while leaving the binding in place.
 - **WASM uses `?init`** because `vite-plugin-wasm` doesn't apply to CF's SSR environment. `cfWasmPlugin()` redirects `@cubby/recipebridge` to `recipebridge-cf.ts`.
 - **`__CF_WORKERS__` define** eliminates module-level Pool creation from the CF build.
 - **OTel disabled in production** — only runs in dev via `instrument.server.mjs`.

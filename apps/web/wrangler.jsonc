@@ -68,9 +68,9 @@
   "ai": { "binding": "AI" },
   // Two Hyperdrive objects point at the same direct Neon origin. HYPERDRIVE is
   // authoritative (strong reads); HYPERDRIVE_CACHED is the bounded-stale read
-  // path. Keep the origin budget at 55 + 5 connections respectively. The
-  // cached object's account-level policy is max_age=10s and swr=5s.
-  // Query-cache settings are not expressible in wrangler.jsonc.
+  // path. Keep the origin budget at 55 + 5 connections respectively. Desired
+  // timings live in src/lib/hyperdrive-cache-policy.ts because query-cache
+  // settings are not expressible in wrangler.jsonc.
   // Creates via:
   //   wrangler hyperdrive create cubby-db --connection-string="postgres://..."
   //   wrangler hyperdrive create cubby-db-cached --connection-string="postgres://..."

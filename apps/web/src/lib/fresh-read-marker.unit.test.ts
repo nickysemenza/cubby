@@ -4,6 +4,7 @@ import {
   hasFreshReadMarker,
   markFreshReads,
 } from "./fresh-read-marker";
+import { HYPERDRIVE_CACHE_POLICY } from "./hyperdrive-cache-policy";
 
 describe("fresh-read marker", () => {
   let assignments: string[];
@@ -27,7 +28,7 @@ describe("fresh-read marker", () => {
     markFreshReads();
 
     expect(assignments).toEqual([
-      `${FRESH_READ_COOKIE_NAME}=1; Max-Age=20; Path=/; SameSite=Lax; Secure`,
+      `${FRESH_READ_COOKIE_NAME}=1; Max-Age=${HYPERDRIVE_CACHE_POLICY.freshReadSeconds}; Path=/; SameSite=Lax; Secure`,
     ]);
   });
 
@@ -37,7 +38,7 @@ describe("fresh-read marker", () => {
     markFreshReads();
 
     expect(assignments[0]).toBe(
-      `${FRESH_READ_COOKIE_NAME}=1; Max-Age=20; Path=/; SameSite=Lax`,
+      `${FRESH_READ_COOKIE_NAME}=1; Max-Age=${HYPERDRIVE_CACHE_POLICY.freshReadSeconds}; Path=/; SameSite=Lax`,
     );
   });
 

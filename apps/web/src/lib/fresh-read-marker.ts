@@ -1,7 +1,7 @@
+import { HYPERDRIVE_CACHE_POLICY } from "~/lib/hyperdrive-cache-policy";
+
 /** Cookie shared by browser mutations and the server's read-consistency gate. */
 export const FRESH_READ_COOKIE_NAME = "cubby-fresh-reads";
-
-const FRESH_READ_MAX_AGE_SECONDS = 20;
 
 /**
  * Return whether the request carries the short-lived post-mutation marker.
@@ -39,7 +39,7 @@ export function markFreshReads(): void {
   // biome-ignore lint/suspicious/noDocumentCookie: this is the browser transport seam for the short-lived consistency marker
   document.cookie = [
     `${FRESH_READ_COOKIE_NAME}=1`,
-    `Max-Age=${FRESH_READ_MAX_AGE_SECONDS}`,
+    `Max-Age=${HYPERDRIVE_CACHE_POLICY.freshReadSeconds}`,
     "Path=/",
     "SameSite=Lax",
     ...(secure ? ["Secure"] : []),
