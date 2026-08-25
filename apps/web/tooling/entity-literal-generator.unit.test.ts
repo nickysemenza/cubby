@@ -54,14 +54,14 @@ describe("literal entity generator", () => {
     expect(artifact("entity-manifest-data.gen.ts")).toContain("{alpha:{");
     expect(artifact("entity-bindings.gen.ts")).toContain('"alpha": {');
     expect(artifact("entity-bindings.gen.ts")).not.toContain("mcpOut");
-    expect(artifact("entity-bindings.gen.ts")).toContain(
+    expect(artifact("entity-details.gen.ts")).toContain(
       "ENTITY_DETAIL_OUTPUT_SCHEMAS",
     );
-    expect(artifact("entity-bindings.gen.ts")).toContain('"alpha": output');
+    expect(artifact("entity-details.gen.ts")).toContain('"alpha": output');
     expect(artifact("entity-details.gen.ts")).toContain(
       'detailEntities = ["alpha"]',
     );
-    expect(artifact("entity-bindings.gen.ts")).toContain(
+    expect(artifact("entity-details.gen.ts")).toContain(
       "shortcode:shortcodeSchema",
     );
     expect(artifact("entity-details.gen.ts")).toContain(
@@ -69,9 +69,11 @@ describe("literal entity generator", () => {
     );
     expect(artifact("entity-details.gen.ts")).toContain("shortcode: z.input");
     expect(artifact("entity-details.gen.ts")?.match(/^import .*$/gm)).toEqual(
-      expect.arrayContaining([expect.stringMatching(/^import type /)]),
+      expect.arrayContaining([
+        'import { output } from "@cubby/schemas/example";',
+      ]),
     );
-    expect(artifact("entity-details.gen.ts")).not.toMatch(/^import \{ /m);
+    expect(artifact("entity-details.gen.ts")).not.toContain("~/server/");
     expect(artifact("entity-routes.gen.ts")).toContain(
       'detail:"/alphas/$shortcode"',
     );
@@ -312,7 +314,7 @@ describe("literal entity generator", () => {
       artifacts.find(
         (artifact) =>
           artifact.relativePath ===
-          "apps/web/src/server/generated/entity-bindings.gen.ts",
+          "apps/web/src/entities/generated/entity-details.gen.ts",
       )?.source,
     ).toContain('"product": productWithFoodOut');
   });

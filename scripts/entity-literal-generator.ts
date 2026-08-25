@@ -941,16 +941,23 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
     .map(({ key }) => `${key}Shortcode`)
     .sort();
   const detailRuntimeImportSource = [
-    ...[...detailTypeImports.entries()]
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(
-        ([module, exports]) =>
-          `import { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
-      ),
-    `import { ${detailSchemaImports.join(", ")} } from "@cubby/shared";`,
-    'import { shortcodeSchema } from "@cubby/schemas/identifiers";',
-    'import { z } from "zod";',
-  ].join("\n");
+    ...[...detailTypeImports.entries()].map(([module, exports]) => ({
+      module,
+      source: `import { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
+    })),
+    {
+      module: "@cubby/schemas/identifiers",
+      source: 'import { shortcodeSchema } from "@cubby/schemas/identifiers";',
+    },
+    {
+      module: "@cubby/shared",
+      source: `import type { ${detailSchemaImports.join(", ")} } from "@cubby/shared";`,
+    },
+    { module: "zod", source: 'import { z } from "zod";' },
+  ]
+    .sort((left, right) => left.module.localeCompare(right.module))
+    .map(({ source }) => source)
+    .join("\n");
   const detailOutputTypes = detailEntities
     .map(
       ({ key, contract }) =>
@@ -1290,9 +1297,9 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         `${detailInputTypes}\n` +
         "};\n\n" +
         "// biome-ignore format: one generated detail schema per entity.\n" +
-        `export const ENTITY_DETAIL_OUTPUT_SCHEMAS = {\n${detailSchemas}\n} as const;\n\n` +
+        `const ENTITY_DETAIL_OUTPUT_SCHEMAS = {\n${detailSchemas}\n} as const;\n\n` +
         "// biome-ignore format: one generated detail input variant per entity.\n" +
-        `export const entityDetailInputSchema = z.discriminatedUnion(\"entity\", [\n  ${detailInputVariants}\n]);\n\n` +
+        `const entityDetailInputSchema = z.discriminatedUnion(\"entity\", [\n  ${detailInputVariants}\n]);\n\n` +
         "export function parseEntityDetailInput<E extends DetailEntity>(entity: E, value: unknown): EntityDetailInputByEntity[E];\n" +
         "export function parseEntityDetailInput(entity: DetailEntity, value: unknown): unknown {\n" +
         "  const parsed = entityDetailInputSchema.parse(value);\n" +
@@ -1320,7 +1327,7 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         'const entityListMetaSchema = z.object({ pageIndex: z.number().int().min(0), pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE), totalCount: z.number().int().min(0), sums: z.record(z.string(), z.number()).optional() });\n\n' +
         `${listFilterSchemas}\n\n` +
         `export const entityListInputSchema = z.discriminatedUnion("entity", [\n  ${listInputVariants}\n]);\n\n` +
-        'export const ENTITY_LIST_OUTPUT_SCHEMAS = {\n' +
+        'const ENTITY_LIST_OUTPUT_SCHEMAS = {\n' +
         `${listOutputSchemas}\n` +
         '} as const;\n\n' +
         "type EntityListFiltersByEntity = {\n" +
@@ -1330,12 +1337,6 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         "export type EntityListInputByEntity = {\n" +
         "  [E in ListEntity]: { entity: E; filters: EntityListFiltersByEntity[E]; sort?: EntityListSort | EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: string };\n" +
         "};\n\n" +
-        "export type EntityListMeta = {\n" +
-        "  pageIndex: number;\n" +
-        "  pageSize: number;\n" +
-        "  totalCount: number;\n" +
-        "  sums?: Record<string, number>;\n" +
-        "};\n" +
         "export type EntityListResultByEntity = {\n" +
         "  [E in ListEntity]: z.output<(typeof ENTITY_LIST_OUTPUT_SCHEMAS)[E]>;\n" +
         "};\n\n" +
@@ -1363,9 +1364,9 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
       relativePath: "apps/web/src/server/generated/entity-bindings.gen.ts",
       source:
         generatedHeader +
+        'import { mutationSideEffectsSchema } from "@cubby/schemas/background-jobs";\n' +
         'import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";\n' +
         `${schemaImports}\n` +
-        'import { mutationSideEffectsSchema } from "@cubby/schemas/background-jobs";\n' +
         'import { type ZodSchema, z } from "zod";\n\n' +
         "type CrudBinding = {\n" +
         "  idSchema: ZodSchema;\n" +

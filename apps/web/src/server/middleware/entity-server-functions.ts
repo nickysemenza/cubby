@@ -9,14 +9,14 @@ import { authenticatedEntityRuntimeContext } from "~/server/entity-runtime.serve
  */
 export const authenticatedEntityServerFunction = createMiddleware({
   type: "function",
-}).server(
-  async ({ next, signal }) =>
-    await next({
-      context: {
-        entityRuntime: await authenticatedEntityRuntimeContext({
-          headers: getRequest().headers,
-          signal,
-        }),
-      },
-    }),
-);
+}).server(async ({ next }) => {
+  const request = getRequest();
+  return await next({
+    context: {
+      entityRuntime: await authenticatedEntityRuntimeContext({
+        headers: request.headers,
+        signal: request.signal,
+      }),
+    },
+  });
+});

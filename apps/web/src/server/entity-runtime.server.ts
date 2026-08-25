@@ -43,7 +43,7 @@ import { createRequestContext, requireActor } from "~/server/request-context";
  * server adapters.
  */
 
-export type EntityRuntimeContext = ReturnType<typeof requireActor>;
+type EntityRuntimeContext = ReturnType<typeof requireActor>;
 
 export type EntityRuntimeRequest = {
   context: EntityRuntimeContext;

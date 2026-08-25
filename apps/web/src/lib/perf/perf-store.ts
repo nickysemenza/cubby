@@ -34,7 +34,7 @@ export type OperationTransport = "start" | "trpc" | "auth" | "client";
 export type OperationOutcome = "success" | "error" | "cancelled";
 export type QueryOperationKind = "fetch" | "reuse" | "hydrated";
 
-export interface QueryStat {
+interface QueryStat {
   operation: string;
   transport: OperationTransport;
   fetches: number;
@@ -250,17 +250,6 @@ export function recordMutation(record: Omit<MutationRecord, "at">): void {
   mutations.push({ ...record, at: performance.now() });
   if (mutations.length > INTERACTION_LOG_MAX) mutations.shift();
   recordSlow("mutation", record.operation, record.durationMs);
-}
-
-/** @deprecated Use recordQueryOperation so cache reuse and outcomes stay visible. */
-export function recordQuery(operation: string, durationMs: number): void {
-  recordQueryOperation({
-    operation,
-    transport: "client",
-    kind: "fetch",
-    durationMs,
-    outcome: "success",
-  });
 }
 
 /** Record router start → first animation frame after the destination rendered. */

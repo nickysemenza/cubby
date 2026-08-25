@@ -24,7 +24,7 @@ const executeEntityMutationTransport = createServerFn({ method: "POST" })
       }),
   );
 
-export async function executeEntityMutation(options: {
+async function executeEntityMutation(options: {
   data: EntityBrowserMutationCommand;
   signal?: AbortSignal;
 }): Promise<EntityBrowserMutationResult> {

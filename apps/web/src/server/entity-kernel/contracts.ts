@@ -153,7 +153,7 @@ export const entityBrowserMutationCommandSchema = z.union([
   detachCommandSchema,
 ]);
 
-export const entityMutationCommandSchema = z.union([
+const entityMutationCommandSchema = z.union([
   entityBrowserMutationCommandSchema,
   z.object({
     action: z.literal("merge"),
@@ -250,4 +250,3 @@ export const entityMutationResultSchema = z.union([
 export type EntityBrowserMutationResult = z.infer<
   typeof entityBrowserMutationResultSchema
 >;
-export type EntityMutationResult = z.infer<typeof entityMutationResultSchema>;

@@ -22,7 +22,7 @@ import {
   parseEntityListResult,
 } from "./generated/entity-lists.gen";
 
-export const entityListWireInputSchema = entityListInputSchema;
+const entityListWireInputSchema = entityListInputSchema;
 
 const getEntityListTransport = createServerFn({ method: "POST" })
   .middleware([authenticatedEntityServerFunction])
@@ -83,7 +83,7 @@ export function compileEntityListInput(
   };
 }
 
-export const entityListQueryKey = <E extends ListEntity>(
+const entityListQueryKey = <E extends ListEntity>(
   entity: E,
   input: EntityListParams<E>,
 ) => [[entity, "list"], { input }] as const;

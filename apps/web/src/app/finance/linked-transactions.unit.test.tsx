@@ -1,23 +1,13 @@
+import type * as ReactQuery from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 const useQueryMock = vi.hoisted(() => vi.fn());
 
-vi.mock("@tanstack/react-query", () => ({
+vi.mock("@tanstack/react-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof ReactQuery>()),
   useQuery: useQueryMock,
-}));
-
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPC: () => ({
-    financialTransaction: {
-      list: {
-        queryOptions: (input: unknown) => ({
-          queryKey: ["financial-transaction", "list", input],
-        }),
-      },
-    },
-  }),
 }));
 
 vi.mock("@tanstack/react-router", () => ({
