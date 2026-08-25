@@ -1,4 +1,5 @@
 import {
+  type FoodSummaryWithLinkedProducts,
   foodSummaryWithLinkedProducts,
   type usdaFoodIdInput,
   usdaFoodListOut,
@@ -7,10 +8,7 @@ import {
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import type { z } from "zod";
-import {
-  observedStartCall,
-  unwrapStartOperationResult,
-} from "~/integrations/tanstack-query/start-transport";
+import { startOperation } from "~/integrations/tanstack-query/start-transport";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
 import * as usdaBrowser from "~/server/usda-browser.server";
 
@@ -36,56 +34,40 @@ const getUsdaFoodDetailTransport = createServerFn({ method: "POST" })
       }),
   );
 
+const usdaListOperation = startOperation<
+  z.input<typeof usdaListInput>,
+  z.output<typeof usdaFoodListOut>
+>({
+  operation: "usda-food.list",
+  entity: "usda-food",
+  transport: (data, { signal, headers }) =>
+    listUsdaFoodsTransport({ data, signal, headers }),
+  parse: (result) => usdaFoodListOut.parse(result),
+});
+
+const usdaDetailOperation = startOperation<
+  z.input<typeof usdaFoodIdInput>,
+  FoodSummaryWithLinkedProducts | null
+>({
+  operation: "usda-food.detail",
+  entity: "usda-food",
+  transport: (data, { signal, headers }) =>
+    getUsdaFoodDetailTransport({ data, signal, headers }),
+  parse: (result) => foodSummaryWithLinkedProducts.nullable().parse(result),
+});
+
 export const usdaFoodListQueryOptions = (
   input: z.input<typeof usdaListInput>,
 ) =>
   queryOptions({
     queryKey: [["usda-food", "list"], { input }] as const,
-    queryFn: ({ signal }) =>
-      observedStartCall({
-        operation: "usda-food.list",
-        entity: "usda-food",
-        input,
-        call: async (headers) =>
-          usdaFoodListOut.parse(
-            unwrapStartOperationResult(
-              "usda-food.list",
-              await listUsdaFoodsTransport({ data: input, signal, headers }),
-            ),
-          ),
-      }),
-    meta: {
-      transport: "start",
-      operation: "usda-food.list",
-      entity: "usda-food",
-      observedByTransport: true,
-    },
+    meta: usdaListOperation.meta,
+    queryFn: ({ signal }) => usdaListOperation.call(input, { signal }),
   });
 
 export const usdaFoodDetailQueryOptions = (id: number) =>
   queryOptions({
     queryKey: [["usda-food", "detail"], { id }] as const,
-    queryFn: ({ signal }) =>
-      observedStartCall({
-        operation: "usda-food.detail",
-        entity: "usda-food",
-        input: { id },
-        call: async (headers) =>
-          foodSummaryWithLinkedProducts.nullable().parse(
-            unwrapStartOperationResult(
-              "usda-food.detail",
-              await getUsdaFoodDetailTransport({
-                data: { id },
-                signal,
-                headers,
-              }),
-            ),
-          ),
-      }),
-    meta: {
-      transport: "start",
-      operation: "usda-food.detail",
-      entity: "usda-food",
-      observedByTransport: true,
-    },
+    meta: usdaDetailOperation.meta,
+    queryFn: ({ signal }) => usdaDetailOperation.call({ id }, { signal }),
   });

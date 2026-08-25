@@ -11,10 +11,7 @@ import {
 import { mutationOptions, queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import type { z } from "zod";
-import {
-  observedStartCall,
-  unwrapStartOperationResult,
-} from "~/integrations/tanstack-query/start-transport";
+import { startOperation } from "~/integrations/tanstack-query/start-transport";
 import { markFreshReads } from "~/lib/fresh-read-marker";
 import * as imageBrowser from "~/server/image-browser.server";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
@@ -80,6 +77,60 @@ const getProjectImageSummariesTransport = createServerFn({ method: "POST" })
       }),
   );
 
+const imageListOperation = startOperation<
+  z.input<typeof imageBrowserListInput>,
+  z.output<typeof imageBrowserListOut>
+>({
+  operation: "image.list",
+  entity: "image",
+  transport: (data, { signal, headers }) =>
+    listImagesTransport({ data, signal, headers }),
+  parse: (result) => imageBrowserListOut.parse(result),
+});
+
+const imageDetailOperation = startOperation<
+  { id: string },
+  z.output<typeof imageWithEntitySchema> | null
+>({
+  operation: "image.detail",
+  entity: "image",
+  transport: (data, { signal, headers }) =>
+    getImageDetailTransport({ data, signal, headers }),
+  parse: (result) => imageWithEntitySchema.nullable().parse(result),
+});
+
+const imageUpdateOperation = startOperation<
+  z.input<typeof imageBrowserUpdateInput>,
+  z.output<typeof imageWithEntitySchema>
+>({
+  operation: "image.update",
+  kind: "mutation",
+  entity: "image",
+  transport: (data, { headers }) => updateImageTransport({ data, headers }),
+  parse: (result) => imageWithEntitySchema.parse(result),
+});
+
+const imageDeleteOperation = startOperation<
+  z.input<typeof imageBrowserDeleteInput>,
+  z.output<typeof imageBrowserDeleteOut>
+>({
+  operation: "image.delete",
+  kind: "mutation",
+  entity: "image",
+  transport: (data, { headers }) => deleteImagesTransport({ data, headers }),
+  parse: (result) => imageBrowserDeleteOut.parse(result),
+});
+
+const projectImageSummariesOperation = startOperation<
+  z.input<typeof projectImageSummariesInput>,
+  z.output<typeof projectImageSummariesOut>
+>({
+  operation: "image.projectSummaries",
+  transport: (data, { signal, headers }) =>
+    getProjectImageSummariesTransport({ data, signal, headers }),
+  parse: (result) => projectImageSummariesOut.parse(result),
+});
+
 const imageListQueryKey = (input: z.input<typeof imageBrowserListInput>) =>
   [["image", "list"], { input }] as const;
 
@@ -88,109 +139,37 @@ export const imageListQueryOptions = (
 ) =>
   queryOptions({
     queryKey: imageListQueryKey(input),
-    queryFn: ({ signal }) =>
-      observedStartCall({
-        operation: "image.list",
-        entity: "image",
-        input,
-        call: async (headers) =>
-          imageBrowserListOut.parse(
-            unwrapStartOperationResult(
-              "image.list",
-              await listImagesTransport({ data: input, signal, headers }),
-            ),
-          ),
-      }),
-    meta: {
-      transport: "start",
-      operation: "image.list",
-      entity: "image",
-      observedByTransport: true,
-    },
+    meta: imageListOperation.meta,
+    queryFn: ({ signal }) => imageListOperation.call(input, { signal }),
   });
 
 export const imageDetailQueryOptions = (id: string) =>
   queryOptions({
     queryKey: [["image", "detail"], { shortcode: id }] as const,
-    queryFn: ({ signal }) =>
-      observedStartCall({
-        operation: "image.detail",
-        entity: "image",
-        input: { id },
-        call: async (headers) =>
-          imageWithEntitySchema.nullable().parse(
-            unwrapStartOperationResult(
-              "image.detail",
-              await getImageDetailTransport({
-                data: { id },
-                signal,
-                headers,
-              }),
-            ),
-          ),
-      }),
-    meta: {
-      transport: "start",
-      operation: "image.detail",
-      entity: "image",
-      observedByTransport: true,
-    },
+    meta: imageDetailOperation.meta,
+    queryFn: ({ signal }) => imageDetailOperation.call({ id }, { signal }),
   });
 
 export const imageUpdateMutationOptions = () =>
   mutationOptions({
     mutationKey: [["image", "update"]] as const,
-    mutationFn: async (input: z.input<typeof imageBrowserUpdateInput>) =>
-      await observedStartCall({
-        operation: "image.update",
-        kind: "mutation",
-        entity: "image",
-        input,
-        call: async (headers) => {
-          const result = imageWithEntitySchema.parse(
-            unwrapStartOperationResult(
-              "image.update",
-              await updateImageTransport({ data: input, headers }),
-            ),
-          );
-          markFreshReads();
-          return result;
-        },
-      }),
-    meta: {
-      transport: "start",
-      operation: "image.update",
-      entity: "image",
-      observedByTransport: true,
+    mutationFn: async (input: z.input<typeof imageBrowserUpdateInput>) => {
+      const result = await imageUpdateOperation.call(input);
+      markFreshReads();
+      return result;
     },
+    meta: imageUpdateOperation.meta,
   });
 
 export const imageDeleteMutationOptions = () =>
   mutationOptions({
     mutationKey: [["image", "delete"]] as const,
-    mutationFn: async (input: z.input<typeof imageBrowserDeleteInput>) =>
-      await observedStartCall({
-        operation: "image.delete",
-        kind: "mutation",
-        entity: "image",
-        input,
-        call: async (headers) => {
-          const result = imageBrowserDeleteOut.parse(
-            unwrapStartOperationResult(
-              "image.delete",
-              await deleteImagesTransport({ data: input, headers }),
-            ),
-          );
-          markFreshReads();
-          return result;
-        },
-      }),
-    meta: {
-      transport: "start",
-      operation: "image.delete",
-      entity: "image",
-      observedByTransport: true,
+    mutationFn: async (input: z.input<typeof imageBrowserDeleteInput>) => {
+      const result = await imageDeleteOperation.call(input);
+      markFreshReads();
+      return result;
     },
+    meta: imageDeleteOperation.meta,
   });
 
 export const projectImageSummariesQueryOptions = (
@@ -201,27 +180,9 @@ export const projectImageSummariesQueryOptions = (
       ["image", "projectSummaries"],
       { projectIds: input.projectIds },
     ] as const,
+    meta: projectImageSummariesOperation.meta,
     queryFn: ({ signal }) =>
-      observedStartCall({
-        operation: "image.projectSummaries",
-        input,
-        call: async (headers) =>
-          projectImageSummariesOut.parse(
-            unwrapStartOperationResult(
-              "image.projectSummaries",
-              await getProjectImageSummariesTransport({
-                data: input,
-                signal,
-                headers,
-              }),
-            ),
-          ),
-      }),
-    meta: {
-      transport: "start",
-      operation: "image.projectSummaries",
-      observedByTransport: true,
-    },
+      projectImageSummariesOperation.call(input, { signal }),
     staleTime: 5 * 60 * 1000,
   });
 

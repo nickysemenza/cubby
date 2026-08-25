@@ -5,10 +5,7 @@ import {
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import type { z } from "zod";
-import {
-  observedStartCall,
-  unwrapStartOperationResult,
-} from "~/integrations/tanstack-query/start-transport";
+import { startOperation } from "~/integrations/tanstack-query/start-transport";
 import * as backgroundBatchBrowser from "~/server/background-batch-browser.server";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
 
@@ -25,6 +22,16 @@ const getBackgroundBatchSummaryTransport = createServerFn({ method: "POST" })
       }),
   );
 
+const backgroundBatchSummaryOperation = startOperation<
+  z.input<typeof backgroundBatchIdInputSchema>,
+  z.output<typeof backgroundBatchBrowserSummarySchema>
+>({
+  operation: "background-batch.summary",
+  transport: (data, { signal, headers }) =>
+    getBackgroundBatchSummaryTransport({ data, signal, headers }),
+  parse: (result) => backgroundBatchBrowserSummarySchema.parse(result),
+});
+
 export const backgroundBatchSummaryQueryOptions = (
   input: z.input<typeof backgroundBatchIdInputSchema>,
 ) =>
@@ -33,26 +40,8 @@ export const backgroundBatchSummaryQueryOptions = (
       ["background-batch", "summary"],
       { batchId: input.batchId },
     ] as const,
+    meta: backgroundBatchSummaryOperation.meta,
     queryFn: ({ signal }) =>
-      observedStartCall({
-        operation: "background-batch.summary",
-        input,
-        call: async (headers) =>
-          backgroundBatchBrowserSummarySchema.parse(
-            unwrapStartOperationResult(
-              "background-batch.summary",
-              await getBackgroundBatchSummaryTransport({
-                data: input,
-                signal,
-                headers,
-              }),
-            ),
-          ),
-      }),
-    meta: {
-      transport: "start",
-      operation: "background-batch.summary",
-      observedByTransport: true,
-    },
+      backgroundBatchSummaryOperation.call(input, { signal }),
     staleTime: 0,
   });

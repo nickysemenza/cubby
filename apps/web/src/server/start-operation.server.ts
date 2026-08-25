@@ -1,8 +1,4 @@
 import { z } from "zod";
-import type {
-  PublicStartOperationError,
-  StartOperationResult,
-} from "~/integrations/tanstack-query/start-transport";
 import {
   appErrorFromUnknown,
   toPublicErrorPayload,
@@ -10,6 +6,10 @@ import {
 import { translateDatabaseError } from "~/server/errors/db-errors";
 import { observeRequest } from "~/server/observed-request";
 import { createRequestContext, requireActor } from "~/server/request-context";
+import type {
+  PublicStartOperationError,
+  StartOperationResult,
+} from "~/server/start-operation.contract";
 import type { Workload } from "~/server/workload";
 
 export type StartOperationRequest = {

@@ -5,6 +5,7 @@ import {
 import type { AppErrorReason } from "@cubby/shared";
 import { getErrorMessage } from "@cubby/shared";
 import { z } from "zod";
+import type { PublicStartValidationIssue } from "~/server/start-operation.contract";
 
 // Re-export from shared for convenience (22+ consumers)
 export { getErrorMessage } from "@cubby/shared";
@@ -55,8 +56,19 @@ export function isDynamicImportError(error: unknown): boolean {
 
 type TransportError = {
   message: string;
-  data: { code?: unknown; reason?: unknown; blockers?: unknown };
+  data: {
+    code?: unknown;
+    reason?: unknown;
+    blockers?: unknown;
+    validationIssues?: unknown;
+  };
 };
+
+const validationIssueSchema = z.object({
+  code: z.string(),
+  path: z.array(z.union([z.string(), z.number()])),
+  message: z.string(),
+});
 
 function isTransportError(err: unknown): err is TransportError {
   if (typeof err !== "object" || err === null) return false;
@@ -75,6 +87,12 @@ type AppErrorDetails = {
    * from the real mutation refusal itself.
    */
   blockers?: PublicImpactItem[];
+  /**
+   * Per-field refusals from the operation's own input schema. Path segments are
+   * the schema path, so a form can attach each one beside the control it names
+   * instead of flattening them into one sentence.
+   */
+  validationIssues?: PublicStartValidationIssue[];
 };
 
 export function getAppErrorDetails(error: unknown): AppErrorDetails {
@@ -87,11 +105,15 @@ export function getAppErrorDetails(error: unknown): AppErrorDetails {
     const parsedBlockers = z
       .array(publicImpactItemSchema)
       .safeParse(d?.blockers);
+    const parsedIssues = z
+      .array(validationIssueSchema)
+      .safeParse(d?.validationIssues);
     return {
       message: error.message,
       code,
       reason: reason as AppErrorReason | undefined,
       ...(parsedBlockers.success ? { blockers: parsedBlockers.data } : {}),
+      ...(parsedIssues.success ? { validationIssues: parsedIssues.data } : {}),
     };
   }
   return {

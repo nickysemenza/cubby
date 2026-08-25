@@ -1,8 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import {
-  observedStartCall,
-  unwrapStartOperationResult,
-} from "~/integrations/tanstack-query/start-transport";
+import { startOperation } from "~/integrations/tanstack-query/start-transport";
 import { markFreshReads } from "~/lib/fresh-read-marker";
 import type {
   EntityBrowserMutationInput,
@@ -22,28 +19,28 @@ const executeEntityMutationTransport = createServerFn({ method: "POST" })
       }),
   );
 
+const entityMutationOperation = startOperation<
+  EntityBrowserMutationInput,
+  EntityBrowserMutationResult
+>({
+  operation: "entity.mutate",
+  kind: "mutation",
+  transport: (data, { signal, headers }) =>
+    executeEntityMutationTransport({ data, signal, headers }),
+  parse: (result) => result as EntityBrowserMutationResult,
+});
+
 export async function executeEntityMutation(options: {
   data: EntityBrowserMutationInput;
   signal?: AbortSignal;
 }): Promise<EntityBrowserMutationResult> {
-  return await observedStartCall({
-    operation: "entity.mutate",
-    kind: "mutation",
-    entity: options.data.entity,
-    input: options.data,
-    call: async (headers) => {
-      const result = unwrapStartOperationResult(
-        "entity.mutate",
-        await executeEntityMutationTransport({
-          data: options.data,
-          signal: options.signal,
-          headers,
-        }),
-      );
-      markFreshReads();
-      return result;
-    },
-  });
+  const result = await entityMutationOperation
+    .forEntity(options.data.entity)
+    .call(options.data, { signal: options.signal });
+  // Open the fresh-read window before any invalidation this mutation triggers
+  // can re-read a stale replica.
+  markFreshReads();
+  return result;
 }
 
 /** Restore the entity-shaped result existing form and editing callers consume. */

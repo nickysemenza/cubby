@@ -10,7 +10,7 @@ import type { EditableEntity } from "~/entities/editing/types";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import { entityDialogLabel } from "~/entities/entities";
 import type { GeneratedBrowserCrudEntity } from "~/entities/generated/entity-routes.gen";
-import { getErrorMessage } from "~/lib/error-utils";
+import { getAppErrorDetails, getErrorMessage } from "~/lib/error-utils";
 import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { type MutationOptionsFn, useActionMutation } from "./useActionMutation";
@@ -107,7 +107,10 @@ export function useEntityDelete({
       getErrorMessage(err) || `Failed to delete ${label.toLowerCase()}`,
   });
 
+  const [failures, setFailures] = useState<readonly string[]>([]);
+
   const openDeleteDialog = useCallback(() => {
+    setFailures([]);
     setShowDialog(true);
   }, []);
 
@@ -139,13 +142,28 @@ export function useEntityDelete({
           `This will permanently remove ${label.toLowerCase()} from your workspace. This action cannot be undone.`
         }
         renderItem={(item) => item.name}
+        error={
+          failures.length > 0 ? (
+            <ul className="space-y-1">
+              {failures.map((failure) => (
+                <li key={failure}>{failure}</li>
+              ))}
+            </ul>
+          ) : undefined
+        }
         onSubmit={async () => {
+          setFailures([]);
           if (registeredDelete) {
             const execution = await commands.remove([id]);
             if (!execution.ok) {
-              throw new Error(
-                execution.issues[0]?.message ?? `Failed to delete ${label}`,
+              // Every issue, not just the first: a lifecycle refusal names one
+              // blocker per edge and the user needs all of them to act.
+              setFailures(
+                execution.issues.length > 0
+                  ? execution.issues.map((issue) => issue.message)
+                  : [`Failed to delete ${label}`],
               );
+              return;
             }
             toast.success(
               savedWithBackgroundWork(
@@ -159,7 +177,15 @@ export function useEntityDelete({
             );
             void navigate({ to: redirectTo });
           } else {
-            await legacyDeleteMutation.mutateAsync({ ids: [id] });
+            try {
+              await legacyDeleteMutation.mutateAsync({ ids: [id] });
+            } catch (error) {
+              setFailures([
+                getAppErrorDetails(error).message ||
+                  `Failed to delete ${label}`,
+              ]);
+              return;
+            }
           }
           setShowDialog(false);
         }}
@@ -179,6 +205,7 @@ export function useEntityDelete({
       commands.isPending,
       legacyDeleteMutation.isPending,
       legacyDeleteMutation.mutateAsync,
+      failures,
       navigate,
       redirectTo,
     ],
