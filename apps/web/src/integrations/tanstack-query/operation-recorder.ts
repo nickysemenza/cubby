@@ -6,6 +6,7 @@ import {
   recordMutation,
   recordQueryOperation,
 } from "~/lib/perf/perf-store";
+import { startOperationHeaders } from "~/lib/start-operation-observability";
 import {
   type CubbyOperationMeta,
   type OperationDescriptor,
@@ -106,7 +107,10 @@ export function finishObservedOperation(
 }
 
 export function operationHeaders(observed: ObservedOperation): HeadersInit {
-  return { "x-cubby-operation-id": observed.id };
+  return {
+    "x-cubby-operation-id": observed.id,
+    ...startOperationHeaders(observed),
+  };
 }
 
 const queryStarts = new Map<

@@ -28,3 +28,14 @@ export const recordRequestId = (value: string | null | undefined): void => {
 };
 
 export const getLastRequestId = (): string | undefined => lastRequestId;
+
+/** Observe a response correlation header without changing fetch semantics. */
+export const fetchAndRecordRequestId = async (
+  fetchImpl: typeof globalThis.fetch,
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> => {
+  const response = await fetchImpl(input, init);
+  recordRequestId(response.headers.get(REQUEST_ID_HEADER));
+  return response;
+};

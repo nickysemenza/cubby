@@ -5,6 +5,25 @@ import {
 } from "./observed-request";
 
 describe("observed request input redaction", () => {
+  it("records only input size when value capture is disabled", () => {
+    const setAttribute = vi.fn();
+    recordObservedInput(
+      { setAttribute } as never,
+      { shortcode: "PRD-SECRET", query: "private search" },
+      false,
+    );
+
+    expect(setAttribute).toHaveBeenCalledWith("rpc.input.bytes", 51);
+    expect(setAttribute).not.toHaveBeenCalledWith(
+      "rpc.input.shortcode",
+      "PRD-SECRET",
+    );
+    expect(setAttribute).not.toHaveBeenCalledWith(
+      "rpc.input.query",
+      "private search",
+    );
+  });
+
   it("redacts URL/URI and credential values while retaining safe fields", () => {
     const setAttribute = vi.fn();
     recordObservedInput({ setAttribute } as never, {

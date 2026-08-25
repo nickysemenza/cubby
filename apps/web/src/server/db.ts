@@ -7,6 +7,7 @@ import pg from "pg";
 import { env } from "~/env";
 import type { Database } from "./db/database";
 import * as schema from "./db/schema";
+import { recordDatabaseAcquire, recordDatabaseQuery } from "./db-observability";
 import { TraceNames, withTrace } from "./tracing";
 
 // Re-export Database type for use throughout the application
@@ -57,15 +58,20 @@ const traceQuery =
           "cubby.db.consistency": role,
         });
       }
-      const res = (await run(...args)) as {
-        rowCount?: number | null;
-        rows?: unknown[];
-      };
-      span.setAttribute(
-        "db.response.returned_rows",
-        res?.rowCount ?? res?.rows?.length ?? 0,
-      );
-      return res;
+      const startedAt = performance.now();
+      try {
+        const res = (await run(...args)) as {
+          rowCount?: number | null;
+          rows?: unknown[];
+        };
+        span.setAttribute(
+          "db.response.returned_rows",
+          res?.rowCount ?? res?.rows?.length ?? 0,
+        );
+        return res;
+      } finally {
+        recordDatabaseQuery(performance.now() - startedAt);
+      }
     });
   };
 
@@ -89,24 +95,28 @@ const tracePool = (pool: pg.Pool, role: RequestDbRole): pg.Pool => {
     withTrace(TraceNames.db("acquire"), async (span) => {
       span.setAttribute("db.acquire.transaction", inTransaction);
       const t0 = performance.now();
-      const client = (await rawConnect()) as TracedClient;
-      const ms = Math.round(performance.now() - t0);
-      span.setAttribute("db.acquire.duration_ms", ms);
-      if (ms > 500) {
-        console.warn(
-          `[db-acquire] transaction=${inTransaction} duration_ms=${ms}`,
-        );
+      try {
+        const client = (await rawConnect()) as TracedClient;
+        const ms = Math.round(performance.now() - t0);
+        span.setAttribute("db.acquire.duration_ms", ms);
+        if (ms > 500) {
+          console.warn(
+            `[db-acquire] transaction=${inTransaction} duration_ms=${ms}`,
+          );
+        }
+        client[IN_TX] = inTransaction;
+        if (!client[TRACED]) {
+          client.query = traceQuery(
+            client.query.bind(client),
+            () => client[IN_TX] ?? false,
+            role,
+          ) as typeof client.query;
+          client[TRACED] = true;
+        }
+        return client;
+      } finally {
+        recordDatabaseAcquire(performance.now() - t0);
       }
-      client[IN_TX] = inTransaction;
-      if (!client[TRACED]) {
-        client.query = traceQuery(
-          client.query.bind(client),
-          () => client[IN_TX] ?? false,
-          role,
-        ) as typeof client.query;
-        client[TRACED] = true;
-      }
-      return client;
     });
 
   pool.query = ((...args: unknown[]) => {

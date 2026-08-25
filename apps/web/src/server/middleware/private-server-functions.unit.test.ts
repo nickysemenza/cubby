@@ -12,6 +12,16 @@ describe("privateServerFunctionResponse", () => {
     expect(response.headers.get("Vary")).toBe("Cookie, Authorization");
   });
 
+  it("stamps the request correlation id on a Start response", () => {
+    const response = privateServerFunctionResponse(
+      "serverFn",
+      new Response("ok"),
+      "ray-start-test",
+    );
+
+    expect(response.headers.get("x-trace-id")).toBe("ray-start-test");
+  });
+
   it("leaves routes and SSR responses unchanged", () => {
     const response = new Response("ok", {
       headers: { "Cache-Control": "public, max-age=60" },

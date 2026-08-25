@@ -8,6 +8,7 @@ import viteReact from "@vitejs/plugin-react";
 import { defineConfig, type Plugin, type PluginOption } from "vite";
 import wasm from "vite-plugin-wasm";
 import { isGitWorktree } from "./tooling/git-worktree";
+import { createServerFunctionIdGenerator } from "./tooling/server-function-id.ts";
 
 const isCloudflare = process.env.DEPLOY_TARGET === "cloudflare";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -213,6 +214,9 @@ export default defineConfig(async () => {
       tailwindcss(),
       // tanstackStart must come BEFORE viteReact per TanStack Router plugin
       tanstackStart({
+        serverFns: {
+          generateFunctionId: createServerFunctionIdGenerator(),
+        },
         router: {
           // Colocated unit tests (e.g. projects.index.unit.test.ts, which imports
           // the route's search schema) are not routes. Without this the generator

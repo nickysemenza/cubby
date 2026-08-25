@@ -13,9 +13,9 @@ import type { USDAService } from "~/server/services/usda.service";
 import type { EntityKernelEntity } from "./contracts";
 
 export interface EntityKernelContext {
-  /** Authoritative adapter for details, mutations, and side effects. */
+  /** Authoritative adapter for strong reads, mutations, and side effects. */
   db: Database;
-  /** Request-selected adapter for explicitly bounded-stale list/search reads. */
+  /** Request-selected adapter for eligible bounded-stale entity reads. */
   readDb: Database;
   actorContext: ActorContext;
   usdaClient: USDAClient;

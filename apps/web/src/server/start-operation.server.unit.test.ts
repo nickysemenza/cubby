@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   createRequestContext: vi.fn(),
   requireActor: vi.fn((context: unknown) => context),
   observeRequest: vi.fn(),
+  setAttribute: vi.fn(),
   setAttributes: vi.fn(),
 }));
 
@@ -40,7 +41,10 @@ describe("runStartOperation", () => {
     mocks.createRequestContext.mockResolvedValue(context);
     mocks.observeRequest.mockImplementation(
       async (options: {
-        run: (span: { setAttributes: typeof mocks.setAttributes }) => Promise<{
+        run: (span: {
+          setAttribute: typeof mocks.setAttribute;
+          setAttributes: typeof mocks.setAttributes;
+        }) => Promise<{
           result: unknown;
           observedError?: unknown;
         }>;
@@ -50,6 +54,7 @@ describe("runStartOperation", () => {
         }) => unknown;
       }) => {
         const result = await options.run({
+          setAttribute: mocks.setAttribute,
           setAttributes: mocks.setAttributes,
         });
         options.inspectResult?.(result);
@@ -83,8 +88,32 @@ describe("runStartOperation", () => {
         method: "example.read",
         operationId: "op-42",
         system: "start",
+        includeInputValues: false,
       }),
     );
+  });
+
+  it("uses the parsed input entity rather than an inbound header on the inner span", async () => {
+    const entityRequest = {
+      ...request(),
+      headers: new Headers({
+        "x-cubby-operation": "entity.detail",
+        "x-cubby-operation-kind": "query",
+        "x-cubby-operation-entity": "wish",
+      }),
+    };
+
+    await runStartOperation({
+      operation: "entity.detail",
+      type: "query",
+      input: { entity: "product" },
+      inputSchema: z.object({ entity: z.literal("product") }),
+      outputSchema: z.object({ ok: z.boolean() }),
+      request: entityRequest,
+      run: async () => ({ ok: true }),
+    });
+
+    expect(mocks.setAttribute).toHaveBeenCalledWith("cubby.entity", "product");
   });
 
   it("returns normalized validation issues without running the operation", async () => {

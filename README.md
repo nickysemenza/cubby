@@ -439,8 +439,11 @@ Key constraints:
   account-level state, not a `wrangler.jsonc` field; apply and inspect them with
   `wrangler hyperdrive update/get`. Successful browser mutations use the same
   policy to stay on the authoritative binding beyond the maximum cached serve
-  window. Do not rely on SQL cache busting or Hyperdrive invalidation: rollback
-  is disabling caching on `HYPERDRIVE_CACHED` while leaving the binding in place.
+  window. Ordinary browser generic entity detail/list/filter reads are the
+  allowlisted consumers; non-browser and fresh-after-write requests stay on
+  the authoritative binding. Do not rely on SQL cache busting or Hyperdrive
+  invalidation: rollback is disabling caching on `HYPERDRIVE_CACHED` while
+  leaving the binding in place.
 - **WASM uses `?init`** because `vite-plugin-wasm` doesn't apply to CF's SSR environment. `cfWasmPlugin()` redirects `@cubby/recipebridge` to `recipebridge-cf.ts`.
 - **`__CF_WORKERS__` define** eliminates module-level Pool creation from the CF build.
 - **OTel disabled in production** — only runs in dev via `instrument.server.mjs`.

@@ -12,6 +12,11 @@ import type * as ServerEntry from "@tanstack/react-start/server-entry";
 import { withHtmlNoCache } from "./lib/http-cache";
 import { SENTRY_DSN } from "./lib/sentry-dsn";
 import { scrubSentryEvent } from "./lib/sentry-scrub";
+import {
+  readStartOperationTraceContext,
+  startOperationTraceAttributes,
+  startOperationTraceName,
+} from "./lib/start-operation-observability";
 import type { BackgroundQueueBatch } from "./server/background-queue-types";
 import { setCfEnv } from "./server/cf-env";
 import { withRequestDb, withRequestDbClient } from "./server/db";
@@ -97,6 +102,9 @@ const handler = {
     // ready (the streamed body finishes after, outside the span).
     const url = new URL(request.url);
     const ray = request.headers.get("cf-ray") ?? undefined;
+    const startTraceContext = url.pathname.startsWith("/_serverFn/")
+      ? readStartOperationTraceContext(request.headers)
+      : undefined;
 
     // Tag the whole request, not just the three captureException sites in this
     // file: an exception thrown deep inside a Start operation is captured by
@@ -115,7 +123,9 @@ const handler = {
     try {
       return await interceptedErrorStore.run({ error: null }, () =>
         withTrace(
-          "cf.fetch",
+          startTraceContext
+            ? `cf.fetch.${startOperationTraceName(startTraceContext)}`
+            : "cf.fetch",
           (span) =>
             withRequestDb(
               {
@@ -168,6 +178,7 @@ const handler = {
             // findable in Tempo. Dropping it makes every reported id a dead
             // end. Undefined values are skipped by both span backends.
             "cloudflare.ray_id": ray,
+            ...startOperationTraceAttributes(startTraceContext),
           },
         ),
       );
