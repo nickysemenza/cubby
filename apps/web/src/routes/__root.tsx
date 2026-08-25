@@ -3,7 +3,6 @@
 // JetBrains Mono for all data/metrics, Inter for body/UI prose. Fraunces retired.
 import "../fonts.css";
 
-import { TanStackDevtools } from "@tanstack/react-devtools";
 import type { QueryClient } from "@tanstack/react-query";
 import {
   createRootRouteWithContext,
@@ -12,7 +11,6 @@ import {
   Scripts,
   useRouterState,
 } from "@tanstack/react-router";
-import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import type { TRPCOptionsProxy } from "@trpc/tanstack-react-query";
 import * as React from "react";
 import {
@@ -34,13 +32,18 @@ import { getClientAuthed, getGuardSession } from "~/lib/auth-guard";
 import { useFlag } from "~/lib/flags";
 import { scheduleIdlePreload } from "~/lib/lazy-preload";
 import { PerfProfiler } from "~/lib/perf/PerfProfiler";
-import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 import { Provider } from "../integrations/tanstack-query/root-provider";
 import appCss from "../styles.css?url";
 
 // Lazy: the command menu pulls in cmdk + react-markdown + the agent stream,
 // none of which is needed for first paint. Loaded on first ⌘K / search click.
 const GlobalCommandMenu = React.lazy(loadCommandMenu);
+
+// Keep production devtools out of the initial client path. The persisted flag
+// still controls whether this lazy chunk is requested and mounted.
+const TanStackDevtoolsMount = React.lazy(
+  () => import("~/integrations/tanstack-devtools"),
+);
 
 // Lazy + flag-gated: the perf overlay and its web-vitals collector only load when
 // the `perfOverlay` flag is on (flippable on /settings, any environment).
@@ -354,26 +357,10 @@ function DevtoolsWrapper() {
     return null;
   }
 
-  // Wrapped in a Fragment so the JSX is still valid after
-  // @tanstack/devtools-vite strips <TanStackDevtools/> from production builds
-  // (the stripped return collapses to `return (<></>);`, not `return ();`).
   return (
-    // biome-ignore lint/complexity/noUselessFragments: load-bearing — removing it breaks the production build (see comment above).
-    <>
-      <TanStackDevtools
-        config={{
-          position: "bottom-right",
-          openHotkey: [],
-        }}
-        plugins={[
-          {
-            name: "Tanstack Router",
-            render: <TanStackRouterDevtoolsPanel />,
-          },
-          TanStackQueryDevtools,
-        ]}
-      />
-    </>
+    <React.Suspense fallback={null}>
+      <TanStackDevtoolsMount />
+    </React.Suspense>
   );
 }
 

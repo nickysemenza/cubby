@@ -197,6 +197,9 @@ export default defineConfig(async () => {
         : []),
       wasm(),
       devtools({
+        // Keep the runtime devtools available to the production lazy chunk;
+        // visibility is controlled by the persisted developer flag.
+        removeDevtoolsOnBuild: false,
         injectSource: { enabled: false },
         // Disable the devtools server→browser console pipe (re-logs server output
         // in the browser console tagged [Server]). Vite 8's forwardConsole already

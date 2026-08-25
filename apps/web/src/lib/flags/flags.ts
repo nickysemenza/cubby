@@ -47,8 +47,6 @@ export const FLAGS = {
     description: "Show the Query / Router devtools panel.",
     default: false,
     group: "Developer",
-    // @tanstack/devtools-vite strips the panel from production builds.
-    devBuildOnly: true,
   },
   formDevtools: {
     storageKey: "formDevtools",
