@@ -12,7 +12,10 @@ import type { RecipeCostingService } from "~/server/services/recipe-costing.serv
 import type { EntityKernelEntity } from "./contracts";
 
 export interface EntityKernelContext {
+  /** Authoritative adapter for details, mutations, and side effects. */
   db: Database;
+  /** Request-selected adapter for explicitly bounded-stale list/search reads. */
+  readDb: Database;
   actorContext: ActorContext;
   usdaClient: USDAClient;
   upcLookupClient: UPCLookupClient;

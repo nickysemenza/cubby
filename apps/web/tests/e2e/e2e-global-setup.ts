@@ -110,6 +110,8 @@ async function globalSetup(_config: FullConfig): Promise<void> {
 
   process.env.WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE =
     databaseUrl;
+  process.env.WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE_CACHED =
+    databaseUrl;
   const harness = createTestHarness({
     root: webRoot,
     workers: [

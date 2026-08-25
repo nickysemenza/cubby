@@ -7,8 +7,13 @@ import { NotionClient } from "~/server/clients/notion";
 import { createUpcLookupClient } from "~/server/clients/upc-lookup";
 import { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
-import { db } from "~/server/db";
+import { boundedStaleDb, db } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
+import {
+  decideReadConsistency,
+  isBrowserUiRequest,
+  type ReadConsistencyDecision,
+} from "~/server/read-consistency";
 import {
   findProductsByFoodIdentifier,
   getFoodLookupsForLinkedProducts,
@@ -59,6 +64,22 @@ export type RequestActor = {
   source: AuditSource;
 };
 
+const selectReadDatabase = (opts: {
+  headers: Pick<Headers, "get">;
+  actor?: RequestActor;
+}): { readDb: Database; readConsistency: ReadConsistencyDecision } => {
+  const readConsistency = decideReadConsistency({
+    browserRequest: !opts.actor && isBrowserUiRequest(opts.headers),
+    boundedStaleAvailable: boundedStaleDb !== db,
+    headers: opts.headers,
+  });
+  return {
+    readDb:
+      readConsistency.consistency === "bounded-stale" ? boundedStaleDb : db,
+    readConsistency,
+  };
+};
+
 export const createRequestContext = async (opts: {
   headers: Headers;
   actor?: RequestActor;
@@ -70,12 +91,14 @@ export const createRequestContext = async (opts: {
 
   return await extractTraceContext(headersObj, async () => {
     const crudServices = buildCrudServices(db);
+    const readSelection = selectReadDatabase(opts);
 
     if (opts.actor) {
       const { userId, sessionId, source } = opts.actor;
       const requestOrigin: RequestOrigin = source === "mcp" ? "mcp" : "api";
       return {
         ...crudServices,
+        ...readSelection,
         auth: { userId, sessionId },
         actorContext: buildActorContext(userId, source),
         requestOrigin,
@@ -92,6 +115,7 @@ export const createRequestContext = async (opts: {
 
     return {
       ...crudServices,
+      ...readSelection,
       auth: {
         userId,
         sessionId: betterSession?.session?.id ?? null,

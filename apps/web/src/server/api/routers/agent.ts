@@ -15,6 +15,11 @@ export const agentRouter = createTRPCRouter({
       const caller = domainRouter.createCaller({
         ...ctx,
         requestOrigin: "agent" as const,
+        readDb: ctx.db,
+        readConsistency: {
+          consistency: "strong" as const,
+          reason: "non-browser-origin" as const,
+        },
       });
       return runAgent(caller, ctx.db, ctx.actorContext.userId, input.query);
     }),
@@ -32,6 +37,11 @@ export const agentRouter = createTRPCRouter({
       const caller = domainRouter.createCaller({
         ...ctx,
         requestOrigin: "agent" as const,
+        readDb: ctx.db,
+        readConsistency: {
+          consistency: "strong" as const,
+          reason: "non-browser-origin" as const,
+        },
       });
       yield* runAgentStream(
         caller,

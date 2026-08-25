@@ -8,6 +8,7 @@ import { createTRPCOptionsProxy } from "@trpc/tanstack-react-query";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 import superjson from "superjson";
+import { createMutationFreshReadLink } from "~/integrations/tanstack-query/trpc-fresh-read-link";
 import { createTransportLink } from "~/integrations/tanstack-query/trpc-transport-isomorphic";
 import { TRPCProvider } from "~/integrations/trpc/react";
 import type { TRPCRouter } from "~/integrations/trpc/router";
@@ -64,6 +65,7 @@ const trpcClient = createTRPCClient<TRPCRouter>({
         (getFlag("queryLogger") ||
           (op.direction === "down" && op.result instanceof Error)),
     }),
+    createMutationFreshReadLink(),
     // Browser: batched HTTP to /api/trpc. Server render: an in-process link,
     // never a self-fetch — see trpc-transport-isomorphic.
     createTransportLink(),

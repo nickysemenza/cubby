@@ -150,10 +150,12 @@ export async function executeEntity(
 
     case "list": {
       const binding = bindingFor(command.entity);
+      const readContext =
+        ctx.readDb === ctx.db ? ctx : { ...ctx, db: ctx.readDb };
       const filters = binding.schemas.filters.parse(command.filters);
       const pagination = command.pagination ?? DEFAULT_PAGINATION;
       const { data, count, sums } = await binding.repository.list(
-        ctx,
+        readContext,
         filters,
         parseSorts(binding, command.sort),
         pagination,
@@ -175,9 +177,9 @@ export async function executeEntity(
         limit: command.limit,
       };
       const [lexical, semantic] = await Promise.all([
-        findSearchHits(ctx.db, input),
+        findSearchHits(ctx.readDb, input),
         command.semantic
-          ? findRelatedSearchHits(ctx.db, input)
+          ? findRelatedSearchHits(ctx.readDb, input)
           : Promise.resolve({ status: "unavailable" as const, results: [] }),
       ]);
       return {

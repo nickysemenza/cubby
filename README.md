@@ -423,20 +423,23 @@ The dev server is plain Node via `vite dev`. Production = CF Workers.
 
 Key constraints:
 
-- **Hyperdrive** pools TCP connections at CF's edge. The connection string comes from `env.HYPERDRIVE.connectionString` (not a secret).
-- **Per-request `pg.Pool`** (`max: 5`) via `withRequestDb()` + `AsyncLocalStorage`. A single `pg.Client` would serialize a request's query fan-out on one connection; a small pool lets independent queries run in parallel. `max: 5` is the Workers per-invocation connection ceiling (~6 simultaneous outbound TCP), distinct from Hyperdrive's 60-connection origin pool shared across all invocations.
-- **Hyperdrive query caching is intentionally OFF.** Hyperdrive still pools TCP
-  connections at Cloudflare's edge, but every query reaches Postgres so
-  mutation → invalidation → refetch paths have predictable read-after-write
-  behavior. This is account-level state on the Hyperdrive object, not a
-  `wrangler.jsonc` field, so it is not enforced by code review or by CI —
-  inspect it with `wrangler hyperdrive get <id>` if you suspect drift. A deploy
-  gate that checked the live object on every deploy was removed: it put a
-  third-party API call on the deploy critical path and failed closed on being
-  unable to *read* the setting, which blocked seven commits' worth of
-  production deploys when the CI token turned out to lack Hyperdrive scope. Any
-  future cache experiment must use an isolated non-production Hyperdrive object
-  with explicit correctness tests.
+- **Hyperdrive** pools TCP connections at CF's edge. Two bindings point at the
+  same direct Neon origin: `env.HYPERDRIVE.connectionString` is the
+  authoritative/strong-read path, while `env.HYPERDRIVE_CACHED.connectionString`
+  is reserved for explicitly allowlisted ordinary browser reads.
+- **Per-request pools** remain lazy and bounded: up to five connections for
+  `HYPERDRIVE` and one for `HYPERDRIVE_CACHED` (six Worker-side connections in
+  the largest request). The shared Neon origin budget is 55 Hyperdrive
+  connections for the authoritative object plus 5 for the cached object.
+- **Cached reads are bounded-stale by design.** The cached Hyperdrive uses
+  `max_age=10s` with `swr=5s`.
+  Hyperdrive cache settings are account-level state, not a `wrangler.jsonc`
+  field; inspect them with `wrangler hyperdrive get <id>` when changing or
+  verifying rollout state. Successful browser mutations set the shared
+  `cubby-fresh-reads` marker for 20 seconds so subsequent list/search reads use
+  the authoritative binding. Do not rely on SQL cache busting or Hyperdrive
+  invalidation: rollback is disabling caching on `HYPERDRIVE_CACHED` while
+  leaving the binding in place.
 - **WASM uses `?init`** because `vite-plugin-wasm` doesn't apply to CF's SSR environment. `cfWasmPlugin()` redirects `@cubby/recipebridge` to `recipebridge-cf.ts`.
 - **`__CF_WORKERS__` define** eliminates module-level Pool creation from the CF build.
 - **OTel disabled in production** — only runs in dev via `instrument.server.mjs`.

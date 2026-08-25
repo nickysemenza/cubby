@@ -68,6 +68,14 @@ export async function runEntityReadTransport<T>(options: {
         span.setAttributes({
           "enduser.id": context.auth.userId,
           "cubby.request_origin": context.requestOrigin,
+          "cubby.read.consistency":
+            options.operation === "entity.detail"
+              ? "strong"
+              : context.readConsistency.consistency,
+          "cubby.read.reason":
+            options.operation === "entity.detail"
+              ? "authoritative-operation"
+              : context.readConsistency.reason,
         });
         return { ok: true, data: await options.execute(context) } as const;
       } catch (error) {
@@ -103,6 +111,8 @@ export async function runEntityMutationTransport<T>(options: {
         span.setAttributes({
           "enduser.id": context.auth.userId,
           "cubby.request_origin": context.requestOrigin,
+          "cubby.read.consistency": "strong",
+          "cubby.read.reason": "mutation",
         });
         return { ok: true, data: await options.execute(context) } as const;
       } catch (error) {

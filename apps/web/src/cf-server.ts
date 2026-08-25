@@ -102,36 +102,43 @@ const handler = {
         withTrace(
           "cf.fetch",
           (span) =>
-            withRequestDb(env.HYPERDRIVE.connectionString, async () => {
-              const { default: handler } = await withTrace(
-                "cf.importHandler",
-                () => getHandler(),
-              );
-              const response = await withTrace("cf.handler", async () =>
-                handler.fetch(request),
-              );
-              span.setAttribute("http.response.status_code", response.status);
-
-              // If Nitro returned a 500 and we intercepted a real error, log the
-              // details so they appear in `wrangler tail` (Nitro's response body
-              // is useless) and report it to Sentry — the handler swallows it into
-              // a 500 body, so withSentry's auto-capture (thrown-error only) never
-              // sees it.
-              const interceptedError = interceptedErrorStore.getStore()?.error;
-              if (response.status >= 500 && interceptedError) {
-                console.error(
-                  "[cf-server] Unhandled error:",
-                  JSON.stringify(interceptedError, null, 2),
+            withRequestDb(
+              {
+                strong: env.HYPERDRIVE.connectionString,
+                boundedStale: env.HYPERDRIVE_CACHED.connectionString,
+              },
+              async () => {
+                const { default: handler } = await withTrace(
+                  "cf.importHandler",
+                  () => getHandler(),
                 );
-                const reconstructed = new Error(interceptedError.message);
-                reconstructed.name = interceptedError.name;
-                reconstructed.stack = interceptedError.stack;
-                reconstructed.cause = interceptedError.cause;
-                Sentry.captureException(reconstructed);
-              }
+                const response = await withTrace("cf.handler", async () =>
+                  handler.fetch(request),
+                );
+                span.setAttribute("http.response.status_code", response.status);
 
-              return withHtmlNoCache(response);
-            }),
+                // If Nitro returned a 500 and we intercepted a real error, log the
+                // details so they appear in `wrangler tail` (Nitro's response body
+                // is useless) and report it to Sentry — the handler swallows it into
+                // a 500 body, so withSentry's auto-capture (thrown-error only) never
+                // sees it.
+                const interceptedError =
+                  interceptedErrorStore.getStore()?.error;
+                if (response.status >= 500 && interceptedError) {
+                  console.error(
+                    "[cf-server] Unhandled error:",
+                    JSON.stringify(interceptedError, null, 2),
+                  );
+                  const reconstructed = new Error(interceptedError.message);
+                  reconstructed.name = interceptedError.name;
+                  reconstructed.stack = interceptedError.stack;
+                  reconstructed.cause = interceptedError.cause;
+                  Sentry.captureException(reconstructed);
+                }
+
+                return withHtmlNoCache(response);
+              },
+            ),
           {
             "http.request.method": request.method,
             "url.path": url.pathname,

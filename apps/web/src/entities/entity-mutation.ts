@@ -2,6 +2,7 @@ import { mutationOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
+import { markFreshReads } from "~/lib/fresh-read-marker";
 import type {
   EntityMutationCommand,
   EntityMutationResult,
@@ -44,14 +45,16 @@ export async function executeEntityMutation(options: {
   data: EntityMutationCommand;
   signal?: AbortSignal;
 }): Promise<EntityMutationResult> {
-  return await observedEntityCall("entity.mutate", options.data, async () =>
-    unwrapEntityTransportResult(
+  return await observedEntityCall("entity.mutate", options.data, async () => {
+    const result = unwrapEntityTransportResult(
       "entity.mutate",
       (await executeEntityMutationTransport(
         options,
       )) as import("./entity-transport").EntityTransportResult<EntityMutationResult>,
-    ),
-  );
+    );
+    markFreshReads();
+    return result;
+  });
 }
 
 export function entityMutationOptions() {

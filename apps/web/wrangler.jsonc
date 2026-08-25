@@ -66,14 +66,22 @@
   // clients fall back to gateway-REST with AI_GATEWAY_API_KEY. See
   // src/server/clients/{anthropic,openai}.ts + src/server/cf-env.ts.
   "ai": { "binding": "AI" },
-  // Hyperdrive connection pooling only. Query-result caching is intentionally
-  // disabled on the live object; deploy:cf verifies that invariant before build.
+  // Two Hyperdrive objects point at the same direct Neon origin. HYPERDRIVE is
+  // authoritative (strong reads); HYPERDRIVE_CACHED is the bounded-stale read
+  // path. Keep the origin budget at 55 + 5 connections respectively. The
+  // cached object's account-level policy is max_age=10s and swr=5s.
+  // Query-cache settings are not expressible in wrangler.jsonc.
   // Creates via:
   //   wrangler hyperdrive create cubby-db --connection-string="postgres://..."
+  //   wrangler hyperdrive create cubby-db-cached --connection-string="postgres://..."
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
       "id": "adc9757dfffd45bc94d5c2a66b2ad410"
+    },
+    {
+      "binding": "HYPERDRIVE_CACHED",
+      "id": "427dd7a2876c4dccbe056d37fa7374ff"
     }
   ],
   // Generic persisted background jobs offloaded off the request path. Queue

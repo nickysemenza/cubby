@@ -32,7 +32,7 @@ export const searchRouter = createTRPCRouter({
   find: protectedProcedure
     .input(searchQueryInputSchema)
     .output(strictOutput(searchHitsOut))
-    .query(async ({ ctx, input }) => await findSearchHits(ctx.db, input)),
+    .query(async ({ ctx, input }) => await findSearchHits(ctx.readDb, input)),
 
   /** On-demand catalog integrity check; intentionally absent from hot paths. */
   documentHealth: protectedProcedure
@@ -49,7 +49,7 @@ export const searchRouter = createTRPCRouter({
     .input(searchQueryInputSchema)
     .output(strictOutput(relatedSearchOutSchema))
     .query(
-      async ({ ctx, input }) => await findRelatedSearchHits(ctx.db, input),
+      async ({ ctx, input }) => await findRelatedSearchHits(ctx.readDb, input),
     ),
 
   /** Entity-to-entity similarity over the stored embeddings (allowlisted pairs). */
@@ -57,7 +57,7 @@ export const searchRouter = createTRPCRouter({
     .input(similarEntitiesInputSchema)
     .output(strictOutput(similarEntitiesOut))
     .query(async ({ ctx, input }) => {
-      return await findSimilarEntitiesForPair(ctx.db, input);
+      return await findSimilarEntitiesForPair(ctx.readDb, input);
     }),
 
   /**
