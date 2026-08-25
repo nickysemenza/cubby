@@ -47,23 +47,18 @@ vi.mock("@tanstack/react-query", () => ({
   },
 }));
 
-vi.mock("~/entities/entity-mutation.functions", () => ({
-  entityMutationOptions: () => ({
-    mutationFn: async (command: {
-      action: "create" | "update" | "delete";
-      id?: string;
-      data?: unknown;
-    }) => {
-      if (command.action === "create") mocks.createMeal(command.data);
-      if (command.action === "update") {
-        mocks.updateMeal({ id: command.id, data: command.data });
-      }
-      return {
-        item: { id: unsafeMealShortcode("MEL-4K7M"), date: "2026-06-16" },
-        sideEffects: { backgroundBatches: [] },
-      };
-    },
-  }),
+vi.mock("~/entities/entity-contracts", () => ({
+  entityMutationOptionsFactory:
+    (_entity: string, action: "create" | "update" | "delete") => () => ({
+      mutationFn: async (variables: { id?: string; data?: unknown }) => {
+        if (action === "create") mocks.createMeal(variables);
+        if (action === "update") mocks.updateMeal(variables);
+        return {
+          item: { id: unsafeMealShortcode("MEL-4K7M"), date: "2026-06-16" },
+          sideEffects: { backgroundBatches: [] },
+        };
+      },
+    }),
 }));
 
 vi.mock("@tanstack/react-router", () => ({

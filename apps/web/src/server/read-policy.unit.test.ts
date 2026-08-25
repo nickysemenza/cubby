@@ -58,8 +58,8 @@ describe("cached-read policy", () => {
   it("routes generic Start filter options through readDb", () => {
     const source = read("./entity-runtime.server.ts");
 
-    expect(source).toContain("getFilterOptions(context.readDb, options.data)");
-    expect(source).not.toContain("getFilterOptions(context.db, options.data)");
+    expect(source).toContain("getFilterOptions(context.readDb, input)");
+    expect(source).not.toContain("getFilterOptions(context.db, input)");
   });
 
   it("keeps generic Start reads on the kernel action seam", () => {
