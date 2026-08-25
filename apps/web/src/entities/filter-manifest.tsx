@@ -1565,6 +1565,8 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       options: presenceFilterOptions("product"),
     },
     {
+      // "none" is the unused-ingredient worklist only while list queries
+      // exclude recipe-as-ingredient pointer rows.
       columnId: "ownRecipes",
       field: "ownRecipePresenceFilter",
       kind: "presence",
