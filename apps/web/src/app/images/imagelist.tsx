@@ -1,6 +1,6 @@
 import type { ImageWithEntity } from "@cubby/schemas/image";
 import prettyBytes from "pretty-bytes";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import {
   createImageColumn,
   createNameColumn,
@@ -9,13 +9,21 @@ import {
 import { EntityListPage } from "~/app/_components/data-table/EntityListPage";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
+import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { ImageAssociationLinks } from "~/app/_components/images/image-associations";
 import { imageStatusOptions } from "~/app/images/image-options";
-import { imageUpdateMutationOptions } from "~/entities/image.functions";
+import {
+  imageListQueryOptions,
+  imageUpdateMutationOptions,
+} from "~/entities/image.functions";
 import { UploadImageDialog } from "./upload-image-dialog";
 
 export default function ImageList() {
+  const queryOptions = useCallback<ListQueryOptionsFn<unknown>>(
+    (params) => imageListQueryOptions(params as never),
+    [],
+  );
   const columnHelper = useMemo(
     () => createCubbyColumnHelper<ImageWithEntity>(),
     [],
@@ -94,6 +102,7 @@ export default function ImageList() {
   return (
     <EntityListPage<ImageWithEntity>
       entity="image"
+      queryOptions={queryOptions}
       columns={columns}
       deletable
       ariaLabel="Images Table"

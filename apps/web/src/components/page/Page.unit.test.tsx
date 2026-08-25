@@ -37,7 +37,12 @@ describe("Page bare variant", () => {
     );
 
     const content = screen.getByText("Loading recipe export");
-    expect(content.parentElement).toHaveClass("mx-auto", "max-w-7xl");
+    expect(content.parentElement).toHaveClass(
+      "mx-auto",
+      "max-w-7xl",
+      "px-2",
+      "md:px-6",
+    );
     expect(screen.queryByRole("heading")).not.toBeInTheDocument();
   });
 
@@ -58,6 +63,19 @@ describe("Page bare variant", () => {
 });
 
 describe("Page workbench", () => {
+  it("gives non-ledger full-width renderers standard responsive gutters", () => {
+    render(
+      <Page variant="list" title="Products" layout="full" bodyGutter="standard">
+        <p>Product shelf</p>
+      </Page>,
+    );
+
+    expect(screen.getByText("Product shelf").parentElement).toHaveClass(
+      "px-2",
+      "md:px-6",
+    );
+  });
+
   it("keeps identity, modes, count, and creation action in the first tier", async () => {
     const { rerender } = render(
       <Page
@@ -77,6 +95,9 @@ describe("Page workbench", () => {
     expect(await screen.findByText("7")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Table" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "New" }).parentElement,
+    ).toHaveClass("min-w-0", "overflow-x-auto");
 
     rerender(
       <Page
@@ -122,7 +143,13 @@ describe("Page workbench", () => {
     ).toBeInTheDocument();
 
     fireEvent.click(menuTrigger);
-    expect(screen.getByText("Record actions")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Record actions" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("group", { name: "Record actions" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
   it("uses a viewport-aligned, overflow-safe wrapper for phone detail media", () => {
@@ -139,9 +166,11 @@ describe("Page workbench", () => {
 
     expect(screen.getByTestId("detail-media").parentElement).toHaveClass(
       "left-1/2",
+      "-mt-2",
       "w-screen",
       "-translate-x-1/2",
       "overflow-hidden",
+      "md:hidden",
     );
     expect(
       screen.getByTestId("detail-media").parentElement?.className,

@@ -216,7 +216,9 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
               const target = info.getValue();
               if (!target) {
                 return (
-                  <span className="font-medium text-warning">{nullLabel}</span>
+                  <span className="font-medium text-warning-ink">
+                    {nullLabel}
+                  </span>
                 );
               }
               return (
@@ -239,7 +241,7 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
               <span>
                 {info.getValue()}
                 {info.row.original.unknownAcquisitionQuantityCount > 0 && (
-                  <span className="text-warning">
+                  <span className="text-warning-ink">
                     {` +${info.row.original.unknownAcquisitionQuantityCount}?`}
                   </span>
                 )}

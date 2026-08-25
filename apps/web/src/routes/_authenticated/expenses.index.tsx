@@ -68,6 +68,7 @@ function ExpensesPage() {
       listChrome="workbench"
       title="Expenses"
       layout="full"
+      bodyGutter={view === "ledger" ? "none" : "standard"}
       actions={<CreateDialogAction request={expenseCaptureRequest()} />}
       workbenchControls={
         <ViewSwitcher

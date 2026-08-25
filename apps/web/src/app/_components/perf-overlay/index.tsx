@@ -294,7 +294,7 @@ function SlowTab({ snap }: { snap: PerfSnapshot }) {
             <td
               className={cn(
                 "whitespace-nowrap pl-1 text-right font-semibold",
-                e.ms > 100 ? "text-destructive" : "text-warning",
+                e.ms > 100 ? "text-destructive" : "text-warning-ink",
               )}
             >
               {ms(e.ms)}
@@ -389,7 +389,7 @@ function QueriesTab({
         </span>
         <span className="text-muted-foreground">{live.total} cached</span>
         {live.mutationsPending > 0 && (
-          <span className="text-warning">{live.mutationsPending} mut</span>
+          <span className="text-warning-ink">{live.mutationsPending} mut</span>
         )}
       </Row>
       {rows.length === 0 ? (

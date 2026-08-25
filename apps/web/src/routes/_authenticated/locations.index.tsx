@@ -69,6 +69,7 @@ function LocationsPage() {
       title="Locations"
       actions={<LocationActions />}
       layout="full"
+      bodyGutter={view === "table" ? "none" : "standard"}
       workbenchControls={
         <ViewSwitcher
           ariaLabel="Locations view"

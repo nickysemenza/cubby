@@ -118,7 +118,7 @@ export function LocationReviewPane({
 
   return (
     <Stack gap="sm" className="min-w-0">
-      <div className="sticky top-12 z-20 min-w-0 border-b bg-background/95 py-2 backdrop-blur md:static md:border-b-0 md:bg-transparent md:py-0">
+      <div className="sticky top-[var(--app-chrome-top)] z-20 min-w-0 border-b bg-background py-2 md:static md:border-b-0 md:bg-transparent md:py-0">
         <Row align="center" gap="sm" className="min-w-0">
           <h2 className="min-w-0 flex-1 truncate font-heading font-semibold text-xl">
             <Link
@@ -129,6 +129,11 @@ export function LocationReviewPane({
               {location.name}
             </Link>
           </h2>
+          <AuditedHint
+            at={location.lastBulkInventory}
+            label="counted"
+            className="shrink-0 text-2xs"
+          />
           {locationSkipped && (
             <Badge variant="slate" className="shrink-0">
               skipped
@@ -172,7 +177,7 @@ export function LocationReviewPane({
         {items.length === 0 ? (
           <Description>No tracked contents in this {locationNoun}.</Description>
         ) : (
-          <Stack gap="sm">
+          <div className="border-[var(--border)] border-y">
             {items.map((item) => (
               <ExpectedItemReviewRow
                 key={item.id}
@@ -190,11 +195,11 @@ export function LocationReviewPane({
                 isUnknownLocation={isUnknownLocation}
               />
             ))}
-          </Stack>
+          </div>
         )}
       </section>
 
-      <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-20 border border-[var(--border)] bg-card p-2 md:bottom-4">
+      <div className="sticky bottom-[var(--app-chrome-bottom)] z-20 border border-[var(--border)] bg-card p-2 md:bottom-4">
         <Row gap="sm" align="center">
           <Button
             type="button"
@@ -227,7 +232,10 @@ export function LocationReviewPane({
       </div>
 
       <Sheet open={addOpen} onOpenChange={setAddOpen}>
-        <SheetContent side="bottom" className="flex max-h-[90dvh] flex-col p-0">
+        <SheetContent
+          side="bottom"
+          className="flex max-h-[90dvh] flex-col p-0 data-[side=bottom]:overflow-hidden data-[side=bottom]:pb-0"
+        >
           <SheetHeader className="border-b p-4">
             <SheetTitle>Add something here</SheetTitle>
             <SheetDescription>
@@ -236,7 +244,7 @@ export function LocationReviewPane({
                 : "Add a new item or pull something out of Unknown."}
             </SheetDescription>
           </SheetHeader>
-          <div className="min-h-0 overflow-auto p-4">
+          <div className="min-h-0 overflow-auto p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
             <Stack gap="lg">
               <SessionCaptureActions location={location} />
               {!isUnknownLocation && (
@@ -405,7 +413,7 @@ function ExpectedItemReviewRow({
   return (
     <div
       className={cn(
-        "flex items-stretch border border-[var(--border)] bg-background transition-colors",
+        "flex items-stretch border-[var(--border)] border-b bg-background transition-colors last:border-b-0",
         present && "border-positive/40 bg-positive/5",
         staged === "adjust" && "border-primary/40 bg-primary/5",
         staged === "remove" && "border-destructive/40 bg-destructive/5",
@@ -430,27 +438,10 @@ function ExpectedItemReviewRow({
             <Description size="xs">{tryFormatAmount(amount)}</Description>
             <Description size="xs">{stateLabel}</Description>
             <QuantityVarianceHint summary={quantitySummary} />
-            {item.verifiedAt && (
-              <AuditedHint
-                at={item.verifiedAt}
-                label="verified"
-                className="text-2xs"
-              />
-            )}
             {isDuplicate && <Badge variant="outline">duplicate</Badge>}
           </Row>
         </div>
-        <span
-          className={cn(
-            "flex size-9 shrink-0 items-center justify-center border border-[var(--border)] text-muted-foreground",
-            present && "border-positive/40 bg-positive/10 text-positive",
-            staged === "remove" &&
-              "border-destructive/40 bg-destructive/10 text-destructive",
-          )}
-          aria-hidden="true"
-        >
-          {staged === "remove" ? <X /> : <Check />}
-        </span>
+        <ReviewStateMark present={present} staged={staged} />
       </div>
 
       <Button
@@ -466,117 +457,122 @@ function ExpectedItemReviewRow({
       </Button>
 
       <Sheet open={actionsOpen} onOpenChange={setActionsOpen}>
-        <SheetContent side="bottom" className="p-4">
-          <SheetHeader className="p-0 pb-4">
+        <SheetContent
+          side="bottom"
+          className="flex max-h-[calc(100dvh-var(--app-chrome-top))] flex-col p-0 data-[side=bottom]:overflow-hidden data-[side=bottom]:pb-0"
+        >
+          <SheetHeader className="shrink-0 p-4 pb-4">
             <SheetTitle>{item.product.name}</SheetTitle>
             <SheetDescription>
               Adjust the count, move it, or remove it.
             </SheetDescription>
           </SheetHeader>
-          <Stack gap="sm">
-            <div className="border border-[var(--border)] p-4">
-              <Row align="center" justify="between" gap="sm">
-                <Stack gap="tight" className="min-w-0">
-                  <Description>Quantity</Description>
-                  <Description size="2xs">{amount.unit}</Description>
-                </Stack>
-                <Row align="center" gap="xs" className="shrink-0">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-11 w-10 shrink-0"
-                    onClick={() => bump(-1)}
-                    aria-label="Decrease quantity"
-                  >
-                    <Minus className="size-4" />
-                  </Button>
-                  <Input
-                    inputMode="numeric"
-                    value={quantityDraft ?? String(amount.value)}
-                    onChange={(event) => setQuantityDraft(event.target.value)}
-                    onFocus={(event) => event.target.select()}
-                    onBlur={commitQuantityDraft}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        event.currentTarget.blur();
-                      }
-                    }}
-                    className="h-11 w-16 shrink-0 text-center font-mono tabular-nums"
-                    aria-label="Quantity"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-11 w-10 shrink-0"
-                    onClick={() => bump(1)}
-                    aria-label="Increase quantity"
-                  >
-                    <Plus className="size-4" />
-                  </Button>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+            <Stack gap="sm">
+              <div className="border border-[var(--border)] p-4">
+                <Row align="center" justify="between" gap="sm">
+                  <Stack gap="tight" className="min-w-0">
+                    <Description>Quantity</Description>
+                    <Description size="2xs">{amount.unit}</Description>
+                  </Stack>
+                  <Row align="center" gap="xs" className="shrink-0">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11 w-10 shrink-0"
+                      onClick={() => bump(-1)}
+                      aria-label="Decrease quantity"
+                    >
+                      <Minus className="size-4" />
+                    </Button>
+                    <Input
+                      inputMode="numeric"
+                      value={quantityDraft ?? String(amount.value)}
+                      onChange={(event) => setQuantityDraft(event.target.value)}
+                      onFocus={(event) => event.target.select()}
+                      onBlur={commitQuantityDraft}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          event.currentTarget.blur();
+                        }
+                      }}
+                      className="h-11 w-16 shrink-0 text-center font-mono tabular-nums"
+                      aria-label="Quantity"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11 w-10 shrink-0"
+                      onClick={() => bump(1)}
+                      aria-label="Increase quantity"
+                    >
+                      <Plus className="size-4" />
+                    </Button>
+                  </Row>
                 </Row>
-              </Row>
-            </div>
-            {resolution && (
+              </div>
+              {resolution && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-h-12 w-full justify-start px-4"
+                  onClick={() => {
+                    onClearStaged();
+                    setQuantityDraft(null);
+                    setActionsOpen(false);
+                  }}
+                >
+                  <Undo2 />
+                  {match(resolution)
+                    .with({ kind: "adjust" }, () => "Undo count change")
+                    .with({ kind: "remove" }, () => "Keep as present")
+                    .with({ kind: "relocate" }, () => "Keep here as present")
+                    .with({ kind: "verify" }, () => "Clear present mark")
+                    .exhaustive()}
+                </Button>
+              )}
+              {!isUnknownLocation && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-h-12 w-full justify-start px-4"
+                  disabled={!unknownReady}
+                  onClick={() => {
+                    onRelocate();
+                    setActionsOpen(false);
+                  }}
+                >
+                  <ArrowRightLeft />
+                  Move to Unknown
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="outline"
                 className="min-h-12 w-full justify-start px-4"
                 onClick={() => {
-                  onClearStaged();
-                  setQuantityDraft(null);
+                  onMoveTo();
                   setActionsOpen(false);
                 }}
               >
-                <Undo2 />
-                {match(resolution)
-                  .with({ kind: "adjust" }, () => "Undo count change")
-                  .with({ kind: "remove" }, () => "Keep as present")
-                  .with({ kind: "relocate" }, () => "Keep here as present")
-                  .with({ kind: "verify" }, () => "Clear present mark")
-                  .exhaustive()}
+                <FolderInput />
+                Move somewhere else
               </Button>
-            )}
-            {!isUnknownLocation && (
               <Button
                 type="button"
-                variant="outline"
+                variant="destructive"
                 className="min-h-12 w-full justify-start px-4"
-                disabled={!unknownReady}
                 onClick={() => {
-                  onRelocate();
+                  onRemove();
                   setActionsOpen(false);
                 }}
               >
-                <ArrowRightLeft />
-                Move to Unknown
+                <X />
+                Remove from inventory
               </Button>
-            )}
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-12 w-full justify-start px-4"
-              onClick={() => {
-                onMoveTo();
-                setActionsOpen(false);
-              }}
-            >
-              <FolderInput />
-              Move somewhere else
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              className="min-h-12 w-full justify-start px-4"
-              onClick={() => {
-                onRemove();
-                setActionsOpen(false);
-              }}
-            >
-              <X />
-              Remove from inventory
-            </Button>
-          </Stack>
+            </Stack>
+          </div>
         </SheetContent>
       </Sheet>
     </div>
@@ -598,8 +594,52 @@ export function QuantityVarianceHint({
   }
 
   return (
-    <Description size="xs" className="text-warning">
+    <Description size="xs" className="text-warning-ink">
       {`Ledger ${summary.quantityLedger.expectedQuantity} · shelves ${summary.onHandUnits}`}
     </Description>
+  );
+}
+
+/**
+ * The trailing tile is a state mark, not an action. An unresolved row must not
+ * look checked: the only affirmative mark is a staged/saved present state.
+ */
+export function ReviewStateMark({
+  present,
+  staged,
+}: {
+  present: boolean;
+  staged: ItemResolution["kind"] | undefined;
+}) {
+  const isRelocating = staged === "relocate";
+  const isRemoving = staged === "remove";
+  return (
+    <span
+      className={cn(
+        "flex size-9 shrink-0 items-center justify-center border border-[var(--border)] text-muted-foreground",
+        present && "border-positive/40 bg-positive/10 text-positive",
+        isRelocating && "border-primary/40 bg-primary/10 text-primary",
+        isRemoving &&
+          "border-destructive/40 bg-destructive/10 text-destructive",
+      )}
+      data-review-state={
+        isRemoving
+          ? "remove"
+          : isRelocating
+            ? "relocate"
+            : present
+              ? "present"
+              : "unresolved"
+      }
+      aria-hidden="true"
+    >
+      {isRemoving ? (
+        <X />
+      ) : isRelocating ? (
+        <ArrowRightLeft />
+      ) : present ? (
+        <Check />
+      ) : null}
+    </span>
   );
 }

@@ -128,6 +128,11 @@ interface PageListProps extends PageBaseProps {
   workbenchControls?: ReactNode;
   /** Today keeps its compact greeting visible; other phone route titles live in the contextual bar. */
   mobileTitleVisible?: boolean;
+  /**
+   * Standard reading/dashboard gutters inside a full-width page. Ledger and
+   * table renderers stay flush so their rules can reach the viewport edge.
+   */
+  bodyGutter?: "none" | "standard";
 }
 
 interface PageDetailProps extends PageBaseProps {
@@ -184,6 +189,7 @@ function PageWithHeader(props: PageListProps | PageDetailProps) {
   // effect fires (or on pages with no list, or non-list variants).
   const [count, setCount] = useState<number | undefined>(undefined);
   const listChrome = list?.listChrome ?? "hero";
+  const bodyGutter = list?.bodyGutter ?? "none";
   const loadingLabel =
     typeof title === "string"
       ? `Loading ${title.toLocaleLowerCase()}${variant === "detail" ? " details" : " records"}…`
@@ -237,9 +243,14 @@ function PageWithHeader(props: PageListProps | PageDetailProps) {
                   page, which is why this sits on the children and not on the
                   wrapper the header shares. */}
                 <div
-                  className={
-                    variant === "list" ? "space-y-4 md:space-y-8" : undefined
-                  }
+                  className={[
+                    variant === "list" ? "space-y-2 md:space-y-8" : undefined,
+                    variant === "list" && bodyGutter === "standard"
+                      ? "px-2 md:px-6"
+                      : undefined,
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
                 >
                   {children}
                 </div>

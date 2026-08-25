@@ -32,6 +32,6 @@ describe("StatusText tone defaulting", () => {
 
   it("still applies a tone when there is one", () => {
     render(<OptionalStatusText tone="warning">12</OptionalStatusText>);
-    expect(screen.getByText("12")).toHaveClass("text-warning");
+    expect(screen.getByText("12")).toHaveClass("text-warning-ink");
   });
 });

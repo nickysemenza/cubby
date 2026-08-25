@@ -14,6 +14,7 @@ import {
   SheetTitle,
 } from "~/components/ui/sheet";
 import { useIsMobile } from "~/hooks/useMobile";
+import { cn } from "~/lib/utils";
 
 type DialogContentSize = NonNullable<
   ComponentProps<typeof DialogContent>["size"]
@@ -38,6 +39,7 @@ export function ResponsiveDialog({
   title,
   description,
   size = "sm",
+  footer,
   children,
 }: {
   open: boolean;
@@ -48,18 +50,36 @@ export function ResponsiveDialog({
   size?: DialogContentSize;
   /** Form body — the scrollable area between the header and footer. */
   children: ReactNode;
+  /** Optional actions kept outside the mobile scroll region. */
+  footer?: ReactNode;
 }) {
   const isMobile = useIsMobile();
 
   if (isMobile) {
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="bottom" className="flex max-h-[90dvh] flex-col p-0">
-          <SheetHeader className="border-b p-4">
+        <SheetContent
+          side="bottom"
+          className="flex flex-col p-0 data-[side=bottom]:overflow-hidden data-[side=bottom]:pb-0"
+        >
+          <SheetHeader className="shrink-0 border-b p-4">
             <SheetTitle>{title}</SheetTitle>
             {description && <SheetDescription>{description}</SheetDescription>}
           </SheetHeader>
-          <div className="min-h-0 overflow-auto p-4">{children}</div>
+          <div
+            className={cn(
+              "min-h-0 flex-1 overflow-y-auto overscroll-contain p-4",
+              !footer &&
+                "pb-[calc(1rem+env(safe-area-inset-bottom))]",
+            )}
+          >
+            {children}
+          </div>
+          {footer && (
+            <div className="shrink-0 border-t bg-popover p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+              {footer}
+            </div>
+          )}
         </SheetContent>
       </Sheet>
     );
@@ -73,6 +93,7 @@ export function ResponsiveDialog({
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
         {children}
+        {footer}
       </DialogContent>
     </Dialog>
   );

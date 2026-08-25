@@ -48,6 +48,7 @@ function ProjectsPage() {
       listChrome="workbench"
       title="Projects"
       layout="full"
+      bodyGutter="standard"
       workbenchControls={
         <ViewSwitcher
           ariaLabel="Dashboard view"

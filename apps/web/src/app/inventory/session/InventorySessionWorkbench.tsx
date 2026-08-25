@@ -551,7 +551,7 @@ export function InventorySessionWorkbench({
   return (
     <Stack
       gap="md"
-      className="min-w-0 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0"
+      className="min-w-0 pb-[calc(var(--app-chrome-bottom)+1rem)] md:pb-0"
     >
       <MobileLocationSwitcher
         parent={parent}

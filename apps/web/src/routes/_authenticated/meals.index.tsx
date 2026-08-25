@@ -47,6 +47,7 @@ function MealsIndexRoute() {
       listChrome="workbench"
       title="Meals"
       layout="full"
+      bodyGutter={routeView === "table" ? "none" : "standard"}
       workbenchControls={
         <ViewSwitcher
           ariaLabel="Meals view"

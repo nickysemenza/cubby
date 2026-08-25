@@ -1,5 +1,4 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { useNavigate } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { Bug, ChevronRight } from "lucide-react";
@@ -14,7 +13,7 @@ import {
 import { MobileCard } from "~/components/entity/mobile-card";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
-import { isBrowserRoutedEntity } from "~/entities/entities";
+import { entities, isBrowserRoutedEntity } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
 import { cn } from "~/lib/utils";
 import { useInfiniteScrollSentinel } from "../hooks/useInfiniteScrollSentinel";
@@ -43,15 +42,18 @@ function VirtualRow({
   vi,
   virtualizer,
   children,
+  role,
 }: {
   vi: VirtualItem;
   virtualizer: WindowVirtualizer;
   children: ReactNode;
+  role?: "listitem" | "presentation";
 }) {
   return (
-    <div
+    <li
       ref={virtualizer.measureElement}
       data-index={vi.index}
+      role={role}
       style={{
         position: "absolute",
         top: 0,
@@ -61,7 +63,7 @@ function VirtualRow({
       }}
     >
       {children}
-    </div>
+    </li>
   );
 }
 
@@ -92,7 +94,6 @@ export function MobileCardView<TItem extends RowData>({
   emptyState,
 }: MobileCardViewProps<TItem>) {
   const { isDebugEnabled } = useDebug();
-  const navigate = useNavigate();
   const mobileRows = useMobileListModel({ table, entity, rowContentVersion });
 
   // Group the live mobile models themselves. `useTable` keeps its table
@@ -193,6 +194,7 @@ export function MobileCardView<TItem extends RowData>({
             key={`header-${gItem.title}`}
             vi={vi}
             virtualizer={virtualizer}
+            role="presentation"
           >
             <SectionHeader
               title={gItem.title}
@@ -266,6 +268,7 @@ export function MobileCardView<TItem extends RowData>({
         variant="row"
         className={row.depth > 0 ? "bg-muted/20 pl-4" : undefined}
         title={model.title}
+        detailsHref={selectionMode ? undefined : model.detailsHref}
         subtitle={model.subtitle}
         // No generic entity-icon fallback: a chef hat (or package, or receipt)
         // repeated down every row is decoration, not information, and it costs
@@ -298,11 +301,7 @@ export function MobileCardView<TItem extends RowData>({
           // hitting a 20px checkbox instead of the row you're looking at.
           selectionMode
             ? () => row.toggleSelected(!row.getIsSelected())
-            : model.detailsHref
-              ? () => {
-                  navigate({ to: model.detailsHref });
-                }
-              : undefined
+            : undefined
         }
       >
         {debugContent}
@@ -310,15 +309,25 @@ export function MobileCardView<TItem extends RowData>({
     );
 
     return (
-      <VirtualRow key={row.id} vi={vi} virtualizer={virtualizer}>
+      <VirtualRow
+        key={row.id}
+        vi={vi}
+        virtualizer={virtualizer}
+        role="listitem"
+      >
         {card}
       </VirtualRow>
     );
   };
 
   return (
-    <div
+    <ul
       className="block overflow-x-hidden lg:hidden"
+      aria-label={
+        entity && isBrowserRoutedEntity(entity)
+          ? `${entities[entity].pluralLabel} list`
+          : "Records list"
+      }
       aria-busy={isTransitioning}
       inert={isTransitioning ? true : undefined}
     >
@@ -355,6 +364,6 @@ export function MobileCardView<TItem extends RowData>({
       ) : (
         <FilteredEmptyState isFiltered={isNarrowed(table)} />
       )}
-    </div>
+    </ul>
   );
 }

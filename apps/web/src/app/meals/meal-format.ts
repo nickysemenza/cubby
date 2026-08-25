@@ -82,7 +82,7 @@ export const statusClass = (status: IngredientAvailabilityStatus): string => {
     case "ok":
       return "text-positive";
     case "short":
-      return "text-warning";
+      return "text-warning-ink";
     case "missing":
       return "text-destructive";
     default:

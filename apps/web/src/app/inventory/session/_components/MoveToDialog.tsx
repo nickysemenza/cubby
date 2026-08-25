@@ -82,6 +82,17 @@ export function MoveToDialog({
           ? "Pick where this belongs. The move will be committed with the rest of this recount."
           : "Pick where this belongs — it moves there now (undo from the toast)."
       }
+      footer={
+        <DialogFooter>
+          <Button variant="outline" type="button" onClick={() => close(false)}>
+            Cancel
+          </Button>
+          <Button type="button" onClick={submit} disabled={pending}>
+            {pending ? <Spinner /> : null}
+            {commit === "done" ? "Stage move" : "Move"}
+          </Button>
+        </DialogFooter>
+      }
     >
       <FormProvider {...form}>
         <DestinationLocationField
@@ -91,15 +102,6 @@ export function MoveToDialog({
           sourceLocationIds={sourceLocationId}
         />
       </FormProvider>
-      <DialogFooter>
-        <Button variant="outline" type="button" onClick={() => close(false)}>
-          Cancel
-        </Button>
-        <Button type="button" onClick={submit} disabled={pending}>
-          {pending ? <Spinner /> : null}
-          {commit === "done" ? "Stage move" : "Move"}
-        </Button>
-      </DialogFooter>
     </ResponsiveDialog>
   );
 }

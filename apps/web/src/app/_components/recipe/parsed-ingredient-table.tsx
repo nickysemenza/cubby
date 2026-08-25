@@ -66,7 +66,7 @@ export function ParsedIngredientTable({
                       {isNew && (
                         <AlertCircle className="size-3 shrink-0 text-warning" />
                       )}
-                      <span className={isNew ? "text-warning" : ""}>
+                      <span className={isNew ? "text-warning-ink" : ""}>
                         {name}
                       </span>
                       {isNew && onCreate ? (
@@ -83,7 +83,7 @@ export function ParsedIngredientTable({
                       ) : (
                         isNew && (
                           <span
-                            className="text-warning"
+                            className="text-warning-ink"
                             title="Will be created on import"
                           >
                             · new

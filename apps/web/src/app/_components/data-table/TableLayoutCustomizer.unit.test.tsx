@@ -145,7 +145,9 @@ describe("TableLayoutCustomizer", () => {
     fireEvent.click(screen.getByRole("button", { name: "Hide Name" }));
     expect(harness.visibility.name).toBe(false);
 
-    fireEvent.click(screen.getByRole("button", { name: "Reset layout" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Restore default layout" }),
+    );
     expect(harness.table.setColumnOrder).toHaveBeenLastCalledWith([
       "select",
       "image",

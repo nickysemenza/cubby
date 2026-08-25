@@ -88,7 +88,7 @@ export function BackfillButton<TResult>({
         />
       )}
       {running && foreground && (
-        <span className="text-2xs text-warning">
+        <span className="text-2xs text-warning-ink">
           Keep this page open — this runs here, not in the background.
         </span>
       )}

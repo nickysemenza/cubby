@@ -1,6 +1,6 @@
 import { useLocation } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDebug } from "~/hooks/useDebug";
 import { useHydrated } from "~/hooks/useHydrated";
 import { useIsMobile } from "~/hooks/useMobile";
@@ -131,6 +131,21 @@ export function useDataTableController<TItem extends RowData>({
     trailingSentinel: hasDesktopInfiniteSentinel,
   });
 
+  // The table owns its horizontal scroll pane, so it is the only honest
+  // source for surplus space. Keep the measurement transient: resizing a
+  // window must not rewrite a person's saved column widths.
+  const [tableContainerWidth, setTableContainerWidth] = useState(0);
+  useEffect(() => {
+    if (isMobile || typeof ResizeObserver === "undefined") return;
+    const pane = tableContainerRef.current;
+    if (!pane) return;
+    const measure = () => setTableContainerWidth(Math.round(pane.clientWidth));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(pane);
+    return () => observer.disconnect();
+  }, [isMobile, tableContainerRef]);
+
   // Spreadsheet-style cell selection (desktop only). Maps a flat row index into
   // the virtualizer's index space before scrolling — grouped tables interleave
   // section headers, so the flat index isn't the virtual index.
@@ -211,8 +226,9 @@ export function useDataTableController<TItem extends RowData>({
     .join(",");
   // biome-ignore lint/correctness/useExhaustiveDependencies: scalar signature stands in for TanStack's fresh column array
   const columnSizeVars = useMemo(
-    () => columnWidthVariables(table.getVisibleLeafColumns()),
-    [columnSizesKey],
+    () =>
+      columnWidthVariables(table.getVisibleLeafColumns(), tableContainerWidth),
+    [columnSizesKey, tableContainerWidth],
   );
 
   // Columns the table actually renders. Use VISIBLE leaves: getAllColumns()

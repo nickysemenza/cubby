@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-08-19T00:52:11Z",
+  "generatedAt": "2026-08-25T13:25:20Z",
   "title": "Design System: Cubby",
   "extensions": {
     "colorMeta": {
@@ -158,6 +158,21 @@
         "role": "tertiary",
         "displayName": "Warning",
         "canonical": "oklch(0.62 0.13 65)",
+        "tonalRamp": [
+          "oklch(0.15 0.13 65)",
+          "oklch(0.26 0.13 65)",
+          "oklch(0.38 0.13 65)",
+          "oklch(0.5 0.13 65)",
+          "oklch(0.62 0.13 65)",
+          "oklch(0.74 0.13 65)",
+          "oklch(0.86 0.13 65)",
+          "oklch(0.95 0.13 65)"
+        ]
+      },
+      "warning-ink": {
+        "role": "tertiary",
+        "displayName": "Warning Ink",
+        "canonical": "oklch(0.5 0.13 65)",
         "tonalRamp": [
           "oklch(0.15 0.13 65)",
           "oklch(0.26 0.13 65)",

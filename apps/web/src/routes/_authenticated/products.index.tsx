@@ -46,6 +46,7 @@ function ProductsPage() {
       listChrome="workbench"
       title="Products"
       layout="full"
+      bodyGutter={activeView === "table" ? "none" : "standard"}
       workbenchControls={
         <ViewSwitcher
           ariaLabel="Products view"

@@ -1,7 +1,7 @@
 import type { ProductQuantitySummaryOut } from "@cubby/schemas/product";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { QuantityVarianceHint } from "./LocationReviewPane";
+import { QuantityVarianceHint, ReviewStateMark } from "./LocationReviewPane";
 
 const summary = (
   onHandUnits: number | null,
@@ -24,7 +24,7 @@ describe("QuantityVarianceHint", () => {
     render(<QuantityVarianceHint summary={summary(2, -1)} />);
 
     expect(screen.getByText("Ledger 3 · shelves 2")).toBeDefined();
-    expect(document.querySelector(".text-warning")).not.toBeNull();
+    expect(document.querySelector(".text-warning-ink")).not.toBeNull();
   });
 
   it.each([
@@ -35,5 +35,26 @@ describe("QuantityVarianceHint", () => {
     render(<QuantityVarianceHint summary={value} />);
 
     expect(screen.queryByText(/^Ledger /)).toBeNull();
+  });
+});
+
+describe("ReviewStateMark", () => {
+  it("does not imply confirmation for an unresolved row", () => {
+    render(<ReviewStateMark present={false} staged={undefined} />);
+
+    expect(
+      document.querySelector('[data-review-state="unresolved"]'),
+    ).not.toBeNull();
+    expect(
+      document.querySelector('[data-review-state="unresolved"] svg'),
+    ).toBeNull();
+  });
+
+  it("uses a distinct mark while a row is relocating", () => {
+    render(<ReviewStateMark present={false} staged="relocate" />);
+
+    expect(
+      document.querySelector('[data-review-state="relocate"] svg'),
+    ).not.toBeNull();
   });
 });

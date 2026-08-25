@@ -294,7 +294,9 @@ function ListWorkbench({
         />
       </div>
       {actions && (
-        <div className="flex shrink-0 items-center gap-2">{actions}</div>
+        <div className="flex min-w-0 items-center gap-2 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {actions}
+        </div>
       )}
     </div>
   );
@@ -461,13 +463,13 @@ function DetailPlate({
     <>
       {/* Detail media — mobile only; desktop shows it in the section rail. */}
       {heroMedia !== undefined ? (
-        <div className="relative left-1/2 -mt-4 w-screen max-w-none -translate-x-1/2 overflow-hidden md:hidden">
+        <div className="relative left-1/2 -mt-2 w-screen max-w-none -translate-x-1/2 overflow-hidden md:hidden">
           {heroMedia}
         </div>
       ) : (
         heroImages &&
         heroImages.length > 0 && (
-          <div className="relative left-1/2 -mt-4 w-screen max-w-none -translate-x-1/2 overflow-hidden md:hidden">
+          <div className="relative left-1/2 -mt-2 w-screen max-w-none -translate-x-1/2 overflow-hidden md:hidden">
             <ImageGallery images={heroImages} />
           </div>
         )
@@ -552,13 +554,13 @@ function DetailPlateActions({ actions }: { actions?: DetailHeroActions }) {
                 <PopoverTitle className="font-mono text-2xs text-slate uppercase tracking-wider">
                   Record actions
                 </PopoverTitle>
-                <div
-                  role="menu"
+                <fieldset
                   className="flex flex-col gap-1 [&_[data-slot=button]]:w-full [&_[data-slot=button]]:justify-start"
                   onClickCapture={() => setMenuOpen(false)}
                 >
+                  <legend className="sr-only">Record actions</legend>
                   {actions.secondary}
-                </div>
+                </fieldset>
               </PopoverContent>
             </Popover>
           </div>

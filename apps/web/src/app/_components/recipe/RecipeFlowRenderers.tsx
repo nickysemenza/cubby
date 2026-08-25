@@ -41,7 +41,7 @@ function FlowSourceContent({
   if (source.kind === "unlisted") {
     return (
       <>
-        <span className="flex min-w-0 items-center gap-1 font-medium text-warning">
+        <span className="flex min-w-0 items-center gap-1 font-medium text-warning-ink">
           <AlertTriangle className="size-3.5 shrink-0" />
           <span className="truncate" title={source.label}>
             {source.label}

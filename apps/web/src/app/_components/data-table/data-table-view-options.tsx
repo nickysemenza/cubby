@@ -18,6 +18,7 @@ import type {
   CubbyColumn as Column,
   CubbyTable as Table,
 } from "./table-features";
+import { isTableLayoutCustomized } from "./table-layout";
 import { type TableDensity, useTableDensity } from "./useTableDensity";
 
 const densityOptions: {
@@ -56,6 +57,15 @@ export function DataTableViewOptions<TData extends RowData>({
   table,
 }: DataTableViewOptionsProps<TData>) {
   const { density, setDensity } = useTableDensity();
+  const isCustomized = isTableLayoutCustomized(
+    {
+      columnOrder: table.state.columnOrder,
+      columnPinning: table.state.columnPinning,
+      columnVisibility: table.state.columnVisibility,
+      columnSizing: table.state.columnSizing,
+    },
+    table.options.meta?.defaultLayout,
+  );
 
   return (
     <DropdownMenu>
@@ -70,6 +80,11 @@ export function DataTableViewOptions<TData extends RowData>({
       >
         <Settings2 className="size-3.5" />
         Display
+        {isCustomized && (
+          <span className="font-mono text-2xs text-muted-foreground normal-case tracking-normal">
+            Custom
+          </span>
+        )}
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
@@ -90,6 +105,11 @@ export function DataTableViewOptions<TData extends RowData>({
           </DropdownMenuRadioGroup>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
+        {isCustomized && (
+          <DropdownMenuLabel className="text-2xs text-muted-foreground">
+            Customized layout — restore defaults below
+          </DropdownMenuLabel>
+        )}
         <TableLayoutCustomizer table={table as unknown as Table<RowData>} />
       </DropdownMenuContent>
     </DropdownMenu>

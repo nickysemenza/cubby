@@ -192,9 +192,9 @@ export function createNameColumn<T extends BaseRow>(
      * table layout IGNORES `min-width` on cells (only `width` counts), so a
      * `min-w-*` floor does nothing — an explicit width is the only lever.
      * `w-64` holds a readable 16rem on dense tables (many columns) instead of
-     * collapsing to a few characters. On a table with room to spare it also
-     * grows: leftover width is distributed across the sized columns in
-     * proportion to their widths, so this reads as a *share* as much as a size.
+     * collapsing to a few characters. On a table with room to spare the
+     * shared layout contract gives this identity column the surplus, rather
+     * than proportionally inflating every measurement column.
      */
     className?: string;
     editable?: {
@@ -227,6 +227,7 @@ export function createNameColumn<T extends BaseRow>(
     enableSorting: true,
     meta: {
       className: options?.className ?? "w-64",
+      surplus: true,
       filterConfig: options?.filterConfig,
       mobile: options?.mobile ?? { slot: "title", priority: 0 },
       cellData,
@@ -519,7 +520,7 @@ export function createEntityInlineLinkColumn<
     (row) => row[accessor] as { id: string; name: string }[],
     {
       id: String(accessor),
-      header: options?.header,
+      header: options?.header ?? entityLabel(entity),
       enableSorting: options?.enableSorting ?? false,
       meta: {
         className: options?.className
@@ -1098,7 +1099,7 @@ export function createSingleEntityInlineLinkColumn<
       >["data"],
     {
       id: String(accessor),
-      header: options?.header,
+      header: options?.header ?? entityLabel(entity),
       enableSorting: options?.enableSorting ?? false,
       meta: {
         className: options?.className,

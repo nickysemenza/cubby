@@ -20,7 +20,7 @@ const badgeVariants = cva(
         positive:
           "border-positive/30 bg-positive/10 [a]:hover:bg-positive/20 text-positive",
         warning:
-          "border-warning/30 bg-warning/10 [a]:hover:bg-warning/20 text-warning",
+          "border-warning/30 bg-warning/10 [a]:hover:bg-warning/20 text-warning-ink",
         plum: "border-plum/30 bg-plum/10 [a]:hover:bg-plum/20 text-plum",
         slate:
           "border-slate/40 bg-slate/10 [a]:hover:bg-slate/20 text-slate",

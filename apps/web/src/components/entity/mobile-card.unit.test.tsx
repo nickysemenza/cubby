@@ -63,9 +63,14 @@ describe.each(["row", "card"] as const)(
       const onClick = vi.fn();
       render(<MobileCard variant={variant} title="Item" onClick={onClick} />);
 
-      fireEvent.keyDown(screen.getByRole("button", { name: "Item" }), { key });
+      const title = screen.getByRole("button", { name: "Item" });
+      fireEvent.keyDown(title, { key });
+      fireEvent.click(title);
 
       expect(onClick).toHaveBeenCalledOnce();
+      if (variant === "row") {
+        expect(screen.getByRole("group")).toHaveClass("min-h-11");
+      }
     });
 
     it("does not treat a nested control's keypress as card activation", () => {
@@ -79,11 +84,33 @@ describe.each(["row", "card"] as const)(
         />,
       );
 
-      fireEvent.keyDown(screen.getByRole("button", { name: "Edit" }), {
-        key: "Enter",
-      });
+      fireEvent.click(screen.getByRole("button", { name: "Edit" }));
 
       expect(onClick).not.toHaveBeenCalled();
     });
   },
 );
+
+describe("MobileCard interactive row semantics", () => {
+  it("keeps selection and row actions as valid siblings of the title control", () => {
+    render(
+      <MobileCard
+        variant="row"
+        title="Expense"
+        onClick={vi.fn()}
+        selectable={{ isSelected: false, onSelectionChange: vi.fn() }}
+        actions={<button type="button">More actions</button>}
+      />,
+    );
+
+    const group = screen.getByRole("group");
+    expect(group).toContainElement(screen.getByRole("checkbox"));
+    expect(group).toContainElement(
+      screen.getByRole("button", { name: "Expense" }),
+    );
+    expect(group).toContainElement(
+      screen.getByRole("button", { name: "More actions" }),
+    );
+    expect(screen.queryByRole("button", { name: "Expense" })).not.toBeNull();
+  });
+});

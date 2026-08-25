@@ -272,7 +272,7 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
                   className={
                     warning.tone === "destructive"
                       ? "rounded border-2 border-destructive bg-destructive/10 p-2 text-destructive text-xs"
-                      : "rounded border-2 border-warning bg-warning/10 p-2 text-warning text-xs"
+                      : "rounded border-2 border-warning bg-warning/10 p-2 text-warning-ink text-xs"
                   }
                 >
                   {warning.message}

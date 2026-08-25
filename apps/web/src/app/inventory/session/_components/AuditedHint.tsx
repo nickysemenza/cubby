@@ -65,7 +65,7 @@ export function AuditedHint({
     <span
       title={`Last ${label} ${format(at, "yyyy-MM-dd HH:mm")}`}
       className={cn(
-        stale ? "text-warning" : "text-muted-foreground",
+        stale ? "text-warning-ink" : "text-muted-foreground",
         className,
       )}
     >

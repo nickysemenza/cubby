@@ -702,7 +702,7 @@ export function CookbookImport({
         <Row
           align="center"
           gap="xs"
-          className="border border-warning/40 bg-warning/5 p-2 text-warning text-xs"
+          className="border border-warning/40 bg-warning/5 p-2 text-warning-ink text-xs"
         >
           <AlertTriangle className="size-4 shrink-0" />
           Keep this page open — extraction and import run here, not in the

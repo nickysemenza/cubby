@@ -38,6 +38,12 @@ export interface MobileColumnMeta {
 export interface CubbyColumnMeta {
   mobile?: MobileColumnMeta;
   className?: string;
+  /**
+   * Receives the unused desktop table width after the visible fixed columns
+   * have been measured. Name-like record identity belongs here, not in a
+   * trailing empty gutter or spread across every measurement column.
+   */
+  surplus?: boolean;
   numeric?: boolean;
   mono?: boolean;
   filterConfig?: FilterConfig;

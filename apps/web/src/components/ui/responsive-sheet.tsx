@@ -34,7 +34,7 @@ export function ResponsiveSheet({
       <SheetContent
         side={isMobile ? "bottom" : "right"}
         className={cn(
-          "flex max-h-[90dvh] flex-col p-0 md:max-h-none",
+          "flex max-h-[90dvh] flex-col p-0 data-[side=bottom]:overflow-hidden data-[side=bottom]:pb-0 md:max-h-none",
           className,
         )}
       >
@@ -42,7 +42,9 @@ export function ResponsiveSheet({
           <SheetTitle>{title}</SheetTitle>
           {description && <SheetDescription>{description}</SheetDescription>}
         </SheetHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+          {children}
+        </div>
       </SheetContent>
     </Sheet>
   );

@@ -103,7 +103,7 @@ function ScalingCell({
       <span
         className={cn(
           "text-right font-mono text-xs tabular-nums",
-          noWeight ? "text-warning/80" : "text-muted-foreground",
+          noWeight ? "text-warning-ink" : "text-muted-foreground",
         )}
       >
         —
@@ -307,7 +307,7 @@ function SpecNode({
           ) : null}
           {node.batchEstimated && (
             <span
-              className="text-warning"
+              className="text-warning-ink"
               title={
                 node.batchEstimatedReason
                   ? `Estimated: this sub-recipe ${blockReasonText(node.batchEstimatedReason)}`
@@ -436,7 +436,9 @@ export const RecipeSpecView = memo(function RecipeSpecView({
       {variant === "detail" && missingWeight.length > 0 && (
         <p className="mt-2 font-mono text-2xs text-muted-foreground">
           Scaling omits{" "}
-          <span className="text-warning">{uniq(missingWeight).join(", ")}</span>{" "}
+          <span className="text-warning-ink">
+            {uniq(missingWeight).join(", ")}
+          </span>{" "}
           — no weight.
         </p>
       )}

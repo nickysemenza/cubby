@@ -10,7 +10,7 @@ import type { ComboboxItem, PickerEntity } from "./combobox-types";
 const statusToneClass = {
   neutral: "text-muted-foreground",
   positive: "text-positive",
-  warning: "text-warning",
+  warning: "text-warning-ink",
   destructive: "text-destructive",
 } as const;
 

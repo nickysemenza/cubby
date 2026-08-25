@@ -4,7 +4,10 @@ import { createCubbyColumnHelper } from "./table-features";
 import {
   type CubbyTableLayoutV1,
   clearTableLayoutStoresForTests,
+  isTableLayoutCustomized,
   normalizeTableLayout,
+  resolvedTableColumnWidths,
+  tableSurplusColumnId,
   useCubbyTableLayout,
   useRevealTableColumnsOnce,
   withLockedEndLast,
@@ -138,6 +141,93 @@ describe("normalizeTableLayout", () => {
         columnSizing: {},
       }).columnPinning,
     ).toEqual({ start: [], end: [] });
+  });
+});
+
+describe("desktop surplus allocation", () => {
+  const widthColumns = [
+    {
+      id: "name",
+      getSize: () => 256,
+      getIsPinned: () => false as const,
+      columnDef: { header: "Name", meta: { surplus: true } },
+    },
+    {
+      id: "cost",
+      getSize: () => 128,
+      getIsPinned: () => false as const,
+      columnDef: { header: "Cost", meta: { numeric: true } },
+    },
+    {
+      id: "actions",
+      getSize: () => 40,
+      getIsPinned: () => "end" as const,
+      columnDef: { header: "" },
+    },
+  ];
+
+  it("gives spare desktop width to the nominated record-identity column", () => {
+    expect(tableSurplusColumnId(widthColumns)).toBe("name");
+    expect(resolvedTableColumnWidths(widthColumns, 900)).toEqual({
+      name: 732,
+      cost: 128,
+      actions: 40,
+    });
+  });
+
+  it("keeps configured widths and horizontal scrolling when the table is dense", () => {
+    expect(resolvedTableColumnWidths(widthColumns, 300)).toEqual({
+      name: 256,
+      cost: 128,
+      actions: 40,
+    });
+  });
+
+  it("falls back to a readable conventional column for hand-authored tables", () => {
+    expect(
+      tableSurplusColumnId([
+        {
+          id: "select",
+          getSize: () => 40,
+          getIsPinned: () => "start" as const,
+          columnDef: { header: "Select" },
+        },
+        {
+          id: "product",
+          getSize: () => 256,
+          getIsPinned: () => false as const,
+          columnDef: { header: "Product" },
+        },
+      ]),
+    ).toBe("product");
+  });
+
+  it("never gives viewport surplus to a pinned measurement column", () => {
+    expect(
+      tableSurplusColumnId([
+        {
+          id: "verifiedAt",
+          getSize: () => 128,
+          getIsPinned: () => "end" as const,
+          columnDef: { header: "Verified" },
+        },
+      ]),
+    ).toBeUndefined();
+  });
+});
+
+describe("isTableLayoutCustomized", () => {
+  it("distinguishes an intentional customization from the source default", () => {
+    expect(isTableLayoutCustomized(defaults, defaults)).toBe(false);
+    expect(
+      isTableLayoutCustomized(
+        {
+          ...defaults,
+          columnVisibility: { ...defaults.columnVisibility, cost: false },
+        },
+        defaults,
+      ),
+    ).toBe(true);
   });
 });
 

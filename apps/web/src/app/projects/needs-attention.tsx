@@ -116,7 +116,11 @@ export function NeedsAttention({ items }: { items: ProjectAttentionItem[] }) {
 
   return (
     <Stack className="border border-warning/40 bg-warning/10 p-4">
-      <Row align="center" gap="sm" className="font-medium text-sm text-warning">
+      <Row
+        align="center"
+        gap="sm"
+        className="font-medium text-sm text-warning-ink"
+      >
         <AlertTriangle className="size-4" />
         Needs Attention ({items.length})
       </Row>
@@ -175,7 +179,7 @@ function AttentionGroup({
 }) {
   return (
     <details className="group">
-      <summary className="flex cursor-pointer items-center gap-2 font-medium text-warning text-xs hover:text-warning/80">
+      <summary className="flex cursor-pointer items-center gap-2 font-medium text-warning-ink text-xs hover:text-warning-ink/80">
         {icon}
         {title}
       </summary>

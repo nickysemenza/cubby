@@ -228,7 +228,7 @@ function Component({
                 </span>
               )}
               {batches > 1 && (
-                <span className="text-warning"> · make {batches}×</span>
+                <span className="text-warning-ink"> · make {batches}×</span>
               )}
             </div>
           )}
@@ -237,7 +237,7 @@ function Component({
           )}
           {node.batchEstimated && (
             <div
-              className="text-warning"
+              className="text-warning-ink"
               title={
                 node.batchEstimatedReason
                   ? `Estimated: this sub-recipe ${blockReasonText(node.batchEstimatedReason)}`

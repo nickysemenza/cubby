@@ -162,7 +162,7 @@ function TotalsGapList({
                   <Badge
                     key={c.key}
                     variant="outline"
-                    className="border-warning/40 px-2 py-0 font-normal text-2xs text-warning"
+                    className="border-warning/40 px-2 py-0 font-normal text-2xs text-warning-ink"
                   >
                     {c.label}
                   </Badge>
@@ -213,7 +213,7 @@ export function RecipeTotalsCoverageButton({
     <Popover>
       <PopoverTrigger
         className={cn(
-          "inline-flex items-center gap-2 border border-warning/40 px-2 py-1 text-warning text-xs hover:bg-warning/10",
+          "inline-flex items-center gap-2 border border-warning/40 px-2 py-1 text-warning-ink text-xs hover:bg-warning/10",
         )}
       >
         <TriangleAlert className="size-3.5" />
@@ -226,7 +226,7 @@ export function RecipeTotalsCoverageButton({
             {counts.map((c) => (
               <span key={c.label} className="eyebrow">
                 {c.label}
-                <span className="ml-1 text-warning">{c.n}</span>
+                <span className="ml-1 text-warning-ink">{c.n}</span>
               </span>
             ))}
           </Row>
@@ -282,7 +282,7 @@ export function MissingMeasureCell({
     <Link
       {...gapFixLinkProps(gap, currentRecipeShortcode)}
       title={`${reason} — ${lead}`}
-      className="text-warning underline decoration-dotted underline-offset-2 hover:text-warning/80"
+      className="text-warning-ink underline decoration-dotted underline-offset-2 hover:text-warning-ink/80"
     >
       —
     </Link>

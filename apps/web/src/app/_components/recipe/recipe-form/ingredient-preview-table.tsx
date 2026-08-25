@@ -242,7 +242,7 @@ function IngredientRow({
           ) : (
             <>
               <AlertCircle className="size-4 text-warning" />
-              <span className="min-w-0 truncate text-warning">
+              <span className="min-w-0 truncate text-warning-ink">
                 {item.parsed.name}
               </span>
               <Button
@@ -270,7 +270,7 @@ function IngredientRow({
           <Tooltip>
             <TooltipTrigger
               render={
-                <span className="inline-flex cursor-help items-center gap-1 text-warning" />
+                <span className="inline-flex cursor-help items-center gap-1 text-warning-ink" />
               }
             >
               <AlertTriangle className="size-3.5" />

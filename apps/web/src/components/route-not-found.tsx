@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Row, Stack } from "~/components/layout";
+import { Button } from "~/components/ui/button";
 
 /**
  * Branded 404. Used as the root route's `notFoundComponent` and the router-wide
@@ -23,12 +24,9 @@ export function RouteNotFound() {
           The page you're looking for doesn't exist or has been moved.
         </p>
       </Stack>
-      <Link
-        to="/"
-        className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground text-sm shadow transition-colors hover:bg-primary/90"
-      >
+      <Button render={<Link to="/" />} nativeButton={false}>
         Return Home
-      </Link>
+      </Button>
     </div>
   );
 }

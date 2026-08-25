@@ -100,7 +100,7 @@ function SessionLocationList({
           </Button>
         )}
       </Stack>
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="min-h-0 flex-1 overflow-auto pb-[env(safe-area-inset-bottom)]">
         {visible.map((location) => {
           const items = inventoryByLocation.get(location.id) ?? [];
           const completedThisPass = completedLocationIds.has(location.id);
@@ -150,7 +150,7 @@ function SessionLocationList({
 /** Desktop-only sticky sidebar (the mobile equivalent is MobileLocationSwitcher). */
 export function LocationWorkbenchSidebar(props: SessionLocationListProps) {
   return (
-    <Card className="hidden overflow-hidden lg:sticky lg:top-20 lg:flex lg:h-[calc(100dvh-6rem)] lg:flex-col">
+    <Card className="hidden overflow-hidden lg:sticky lg:top-[var(--app-chrome-top)] lg:flex lg:h-[calc(100dvh-var(--app-chrome-top)-1rem)] lg:flex-col">
       <SessionLocationList {...props} />
     </Card>
   );
@@ -180,12 +180,12 @@ export function MobileLocationSwitcher({
   });
 
   return (
-    <div className="sticky top-0 z-20 bg-background pb-2 lg:hidden">
+    <div className="sticky top-[var(--app-chrome-top)] z-20 border-[var(--border)] border-b bg-background pb-2 lg:hidden">
       <Sheet open={open} onOpenChange={setOpen}>
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex w-full items-center justify-between gap-2 rounded border bg-card px-4 py-2 text-left"
+          className="flex w-full items-center justify-between gap-2 border bg-card px-4 py-2 text-left"
         >
           <span
             className="min-w-0 truncate font-medium text-sm"
@@ -198,7 +198,10 @@ export function MobileLocationSwitcher({
             {skipped > 0 ? ` · ${skipped} skipped` : ""}
           </span>
         </button>
-        <SheetContent side="bottom" className="flex max-h-[80dvh] flex-col p-0">
+        <SheetContent
+          side="bottom"
+          className="flex max-h-[80dvh] flex-col p-0 data-[side=bottom]:overflow-hidden data-[side=bottom]:pb-0"
+        >
           <SheetHeader className="sr-only">
             <SheetTitle>Session locations</SheetTitle>
             <SheetDescription>

@@ -226,7 +226,7 @@ export function AddToMeal({ recipeId }: { recipeId: RecipeShortcode }) {
               gap="snug"
               className="border border-warning/40 bg-warning/5 px-2 py-2 text-2xs"
             >
-              <Row gap="xs" align="center" className="text-warning">
+              <Row gap="xs" align="center" className="text-warning-ink">
                 <TriangleAlert className="size-3 shrink-0" />
                 <span className="font-medium">
                   This is a{" "}
