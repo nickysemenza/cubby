@@ -19,7 +19,10 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { useTRPC } from "~/integrations/trpc/react";
+import {
+  searchDebugQueryOptions,
+  searchEnqueueEmbeddingBackfillMutationOptions,
+} from "~/lib/search.functions";
 import { getSearchResultRoute } from "./search-utils";
 
 function SearchResultEntityLink({ item }: { item: SearchHit }) {
@@ -74,19 +77,16 @@ function ResultTable({ title, items }: { title: string; items: SearchHit[] }) {
 }
 
 export function SearchDebugPage() {
-  const api = useTRPC();
   const [query, setQuery] = useState("plastic tarp");
   const [submitted, setSubmitted] = useState(query);
   const [entityTypes, setEntityTypes] = useState<SearchableEntity[]>([
     ...searchableEntities,
   ]);
   const debugQuery = useQuery({
-    ...api.search.debug.queryOptions({ query: submitted, limit: 10 }),
+    ...searchDebugQueryOptions({ query: submitted, limit: 10 }),
     enabled: submitted.trim().length > 0,
   });
-  const backfill = useMutation(
-    api.search.enqueueEmbeddingBackfill.mutationOptions(),
-  );
+  const backfill = useMutation(searchEnqueueEmbeddingBackfillMutationOptions());
 
   return (
     <Stack gap="md">

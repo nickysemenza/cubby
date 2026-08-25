@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { DrilldownMetricStrip } from "~/components/ui/drilldown-metric-strip";
-import { useTRPC } from "~/integrations/trpc/react";
+import { taskSummaryQueryOptions } from "./task.functions";
 
 const route = getRouteApi("/_authenticated/tasks/");
 
@@ -12,9 +12,8 @@ const route = getRouteApi("/_authenticated/tasks/");
  * view that surfaces those tasks.
  */
 export function TasksStatsStrip() {
-  const api = useTRPC();
   const navigate = route.useNavigate();
-  const { data, isLoading } = useQuery(api.task.summary.queryOptions());
+  const { data, isLoading } = useQuery(taskSummaryQueryOptions());
 
   if (isLoading || !data) return <DrilldownMetricStrip loadingCount={7} />;
 

@@ -8,13 +8,14 @@ async function handler({ request }: { request: Request }) {
     const { unauthorizedResponse, verifyMcpToken } = await import(
       "~/server/mcp/auth"
     );
-    const { mcpWorkflowRouter } = await import("~/server/api/mcp-workflows");
-    const { createCallerFactory, createTRPCContext } = await import(
-      "~/server/api/trpc"
+    const { createMcpWorkflowCaller } = await import(
+      "~/server/mcp/workflow-caller"
+    );
+    const { createRequestContext, requireActor } = await import(
+      "~/server/request-context"
     );
     const { boundedStaleDb } = await import("~/server/db");
     const { emitTelemetry } = await import("~/server/telemetry");
-    const createCaller = createCallerFactory(mcpWorkflowRouter);
 
     // OAuth 2.1 only. Clients (claude.ai connectors, Claude Code) discover the
     // flow from the WWW-Authenticate header on this 401, register dynamically,
@@ -22,12 +23,14 @@ async function handler({ request }: { request: Request }) {
     const actor = await verifyMcpToken(request);
     if (!actor) return unauthorizedResponse();
 
-    const ctx = await createTRPCContext({
-      headers: request.headers,
-      actor: { ...actor, source: "mcp" },
-    });
+    const ctx = requireActor(
+      await createRequestContext({
+        headers: request.headers,
+        actor: { ...actor, source: "mcp" },
+      }),
+    );
 
-    const caller = createCaller(ctx);
+    const caller = createMcpWorkflowCaller(ctx);
     const readContext: typeof ctx = {
       ...ctx,
       readDb: boundedStaleDb,
@@ -36,7 +39,7 @@ async function handler({ request }: { request: Request }) {
         reason: "cached-policy",
       },
     };
-    const readCaller = createCaller(readContext);
+    const readCaller = createMcpWorkflowCaller(readContext);
 
     return await handleMcpRequest(request, {
       token: "",

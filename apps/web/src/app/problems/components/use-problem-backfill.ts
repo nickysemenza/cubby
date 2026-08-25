@@ -5,7 +5,7 @@ import type { UseMutationOptions } from "@tanstack/react-query";
 // generic helpers remain for the per-card wrapper (`useProblemCardMutation`),
 // which recovers a mutation's data type from its `*.mutationOptions` reference.
 
-/** A tRPC `*.mutationOptions` reference, e.g. `api.problems.reparseStale.mutationOptions`. */
+/** A typed mutation-options factory for the selected repair workflow. */
 export type MutationOptionsFn = (opts: never) => UseMutationOptions<
   // biome-ignore lint/suspicious/noExplicitAny: positions only used as inference anchors
   any,

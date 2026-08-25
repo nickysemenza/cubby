@@ -29,8 +29,8 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
+import { taskListActionableQueryOptions } from "./task.functions";
 import { TASK_STATUS_LABELS, taskStatusBadgeVariant } from "./task-options";
 
 /** A single chain node (task or project) as a linked breadcrumb chip. */
@@ -152,9 +152,8 @@ function TaskRows({ rows }: { rows: ActionableTaskOut[] }) {
 
 /** The `/tasks?view=next` surface: Next / Someday / Blocked, from `task.listActionable`. */
 export function NextTasks({ filters }: { filters: TaskFilters }) {
-  const api = useTRPC();
   const { data, isLoading, isError, error, refetch } = useQuery(
-    api.task.listActionable.queryOptions(filters),
+    taskListActionableQueryOptions(filters),
   );
 
   if (isError) {

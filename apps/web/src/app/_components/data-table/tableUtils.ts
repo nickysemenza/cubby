@@ -22,7 +22,7 @@ export const buildSortParams = (
 };
 
 /**
- * Full sort stack for the tRPC list input. Cleared sort falls back to the
+ * Full sort stack for the list operation input. Cleared sort falls back to the
  * table's default state — desc, matching `defaultSortState` (the old
  * single-sort fallback said asc, a latent mismatch that became reachable once
  * enableSortingRemoval lets a third click clear the sort).

@@ -135,14 +135,16 @@ An embedded table must also reach **its own** rows' entity, not just their relat
 
 - Every list and detail page renders through one shell: `Page` from `~/components/page/Page` (`HydrateClient` + `PageWrapper` + unified `PageHeader` + `Suspense`). Props are a discriminated union — `variant="detail"` requires `entity` at compile time. List = eyebrow/title/actions/accent header; detail = the spec-plate placard. Don't reintroduce `EntityLayout`/`DetailPage` (deleted) or call `PageHero`/`PageWrapper` directly in pages — use `Page`. Detail bodies use `DetailSections` (`~/app/_components/data-table/detail-page`) as `Page`'s children.
 
-## SSR and the tRPC transport
+## SSR and the Start transport
 
-**The server render never makes an HTTP request to itself.** `trpc-transport-isomorphic.ts` picks the transport per environment via `createIsomorphicFn()`: the browser gets the batched HTTP links, and the server render gets `unstable_localLink` over `domainRouter` (`trpc-transport-server.ts`), which keeps the whole tRPC pipeline — context, auth middleware, output validation, SuperJSON — while skipping the hop. `getRequest()` reads from AsyncLocalStorage, so the module-scoped link still resolves the current request's headers and SSR queries run *authenticated*.
+The server render executes authenticated Start functions locally and never makes
+an HTTP request to itself. Keep `~/server` imports behind the `.server()` branch
+of an isomorphic function so server-only dependencies stay out of browser
+bundles. `ssr: false` is a measured cost choice, not a correctness workaround.
 
-This is load-bearing, and the failure it prevents is nasty. The old shared client resolved `getUrl()` to `http://localhost:${PORT}/api/trpc` on the server: unauthenticated in dev, and on CF Workers never reaching the app at all — the edge answers with the plain-text body `error code: 1003`, so the response fails to parse and `Unexpected token 'e', "error code: 1003" is not valid JSON` lands in the route error boundary. It only fired on a **direct load** (client-side navigation skips SSR), which is how `/locations/arrange` shipped broken (#703).
-
-Consequences for route authors:
-
-- **`ssr: false` is now a cost decision, not a correctness one.** A route that suspends on a tRPC query renders fine on the server; the question is only whether you want to pay for it. Two routes opt out, each saying why in a comment: `/locations/arrange` dehydrates the whole location forest (844 KB of HTML against 84 KB client-only), and `/usda/$id` blocks on an upstream service binding whose work runs ~500ms-1s. Typical routes land at 80-150 KB and should stay server-rendered.
-- **The Start plugin's strip is what keeps the server router out of the browser.** Don't import `trpc-transport-server` (or anything under `~/server`) from shared client code except through the `.server()` branch of an isomorphic fn. `assertNoServerCodeInClient` in `scripts/analyze-client-bundle.ts` fails `build:cf` if a client asset contains any `SERVER_ONLY_MARKERS` entry; the string literals there (`"No procedure found on path"`, `drizzle-orm`, `HYPERDRIVE`) are the teeth, since a minifier can rename a binding like `unstable_localLink` but not a literal.
-- **A loader may now `await ensureQueryData(...)`** for a tRPC query. The old rule (`void prefetchQuery` only, never await) existed solely because the awaited self-fetch threw; it no longer applies. Awaiting blocks the render on that query, so it is still a latency choice.
+Route authors should prefer `ensureQueryData(...)` when the route needs data before
+rendering and accept the latency deliberately. Specialized long-running or
+upstream-bound routes may opt out with a comment explaining the measured cost.
+Workflow streams use typed JSONL server routes and an `AbortSignal`; they are
+explicitly opened by the owning screen rather than hidden behind a generic
+dispatcher.

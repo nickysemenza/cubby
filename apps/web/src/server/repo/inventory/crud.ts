@@ -256,49 +256,6 @@ interface InventoryFilters {
   locationRole?: "global_unknown";
 }
 
-/**
- * Get inventory counts for multiple locations in a single query.
- * Returns a map of locationId -> count.
- */
-export const getInventoryCountsByLocations = async (
-  db: Database,
-  locationIds: LocationId[],
-): Promise<Record<string, number>> => {
-  if (locationIds.length === 0) return {};
-
-  const dbClient = getDb(db);
-
-  const results = await dbClient
-    .select({
-      locationId: inventoryEntry.locationId,
-      count: sql<number>`count(*)::int`,
-    })
-    .from(inventoryEntry)
-    .where(
-      and(
-        notDeleted(inventoryEntry),
-        // The only caller is the per-location count badge, which answers "how
-        // many things are here to count" — a fixture is not one of them.
-        stockOnly(),
-        inArray(inventoryEntry.locationId, locationIds),
-      ),
-    )
-    .groupBy(inventoryEntry.locationId);
-
-  const countMap: Record<string, number> = {};
-  for (const row of results) {
-    countMap[row.locationId] = row.count;
-  }
-
-  for (const locationId of locationIds) {
-    if (!(locationId in countMap)) {
-      countMap[locationId] = 0;
-    }
-  }
-
-  return countMap;
-};
-
 // Joined-column sorts the generic table-column path can't produce. Clauses
 // only DEFINE the field's order — the createdAt tie-break moved to the single
 // trailing tieBreaker so it can't swallow a stacked secondary sort.
@@ -375,7 +332,7 @@ export const inventoryentryList = async (
         : undefined,
       // The browse contract: an omitted filter means movable stock, NOT
       // everything. Defaulted here rather than in zod so the UI, MCP
-      // `list_inventory`, and any direct tRPC caller cannot disagree about what
+      // `list_inventory`, and any direct workflow caller cannot disagree about what
       // an empty filter means — pass "all" to opt back in.
       placementCondition(filters.placementFilter ?? "stock"),
     ],

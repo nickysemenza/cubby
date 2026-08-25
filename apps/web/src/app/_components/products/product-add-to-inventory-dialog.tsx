@@ -20,11 +20,11 @@ import {
 } from "~/app/_components/form-fields";
 import { QuickInventoryAdd } from "~/app/_components/inventory/quick-inventory-add";
 import { LocationFieldWithAI } from "~/app/_components/locations/location-field-with-ai";
+import { productComponentsQueryOptions } from "~/app/products/product.functions";
 import { Stack } from "~/components/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Description } from "~/components/ui/description";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
-import { useTRPC } from "~/integrations/trpc/react";
 
 const formSchema = z.object({ location: optionalLocationField });
 
@@ -86,10 +86,9 @@ export const kitsAccountedByParts = (
 export const ProductAddToInventoryDialog: FC<
   ProductAddToInventoryDialogProps
 > = ({ open, onOpenChange, product, accounting }) => {
-  const api = useTRPC();
   // Same query the Kit Components section makes, so this costs nothing extra.
   const { data: components } = useQuery({
-    ...api.product.components.queryOptions({ parentProductId: product.id }),
+    ...productComponentsQueryOptions({ parentProductId: product.id }),
     enabled: open && (accounting?.componentCount ?? 0) > 0,
   });
   const overAccounted = useMemo(() => {

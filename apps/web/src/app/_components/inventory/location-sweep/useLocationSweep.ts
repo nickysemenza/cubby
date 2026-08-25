@@ -1,3 +1,7 @@
+import {
+  bulkUpdateParentMutationOptions,
+  ensureGlobalUnknownMutationOptions,
+} from "~/app/locations/location.functions";
 /**
  * The state behind a location sweep: a serialized scan queue and the strays it
  * turns up.
@@ -28,8 +32,11 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { ScanFeedbackEntry } from "~/app/_components/inventory/persistent-scanner";
+import {
+  resolveInventoryScanStraysMutationOptions,
+  scanInventoryAtLocationMutationOptions,
+} from "~/app/inventory/inventory.functions";
 import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
-import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
@@ -143,7 +150,6 @@ export function useLocationSweep({
   /** Fired after any write, so the caller can invalidate its own queries. */
   onSettled: (result?: unknown) => void;
 }) {
-  const api = useTRPC();
   const queryClient = useQueryClient();
   const [recentScans, setRecentScans] = useState<ScanFeedbackEntry[]>([]);
   const [strays, setStrays] = useState<QueuedStray[]>([]);
@@ -166,18 +172,12 @@ export function useLocationSweep({
     null,
   );
 
-  const scanMutation = useMutation(
-    api.inventory.scanAtLocation.mutationOptions(),
-  );
+  const scanMutation = useMutation(scanInventoryAtLocationMutationOptions());
   const commitMutation = useMutation(
-    api.inventory.resolveScanStrays.mutationOptions(),
+    resolveInventoryScanStraysMutationOptions(),
   );
-  const reparentMutation = useMutation(
-    api.location.bulkUpdateParent.mutationOptions(),
-  );
-  const unknownMutation = useMutation(
-    api.location.ensureGlobalUnknown.mutationOptions(),
-  );
+  const reparentMutation = useMutation(bulkUpdateParentMutationOptions());
+  const unknownMutation = useMutation(ensureGlobalUnknownMutationOptions());
 
   // The drain loop reads these through refs so a scan enqueued mid-flight is
   // picked up by the loop already running, rather than starting a second one.

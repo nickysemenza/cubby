@@ -1,14 +1,44 @@
 import {
+  backgroundBatchBrowserJobsOutSchema,
+  backgroundBatchBrowserListOutSchema,
   backgroundBatchBrowserSummarySchema,
   backgroundBatchIdInputSchema,
+  backgroundBatchJobsInputSchema,
+  backgroundBatchListInputSchema,
+  backgroundDrainInputSchema,
+  backgroundDrainOutSchema,
+  backgroundJobActionOutSchema,
+  backgroundJobIdInputSchema,
 } from "@cubby/schemas/background-jobs";
 import type { z } from "zod";
-import { createAppError } from "~/server/errors/app-error";
-import { getBackgroundBatchSummary } from "~/server/repo/background-jobs";
 import {
   runStartOperation,
   type StartOperationRequest,
 } from "~/server/start-operation.server";
+import {
+  cancelBackgroundBatchWorkflow,
+  drainBackgroundJobsWorkflow,
+  getBackgroundBatchSummaryWorkflow,
+  listBackgroundBatchesWorkflow,
+  listBackgroundBatchJobsWorkflow,
+  retryBackgroundBatchWorkflow,
+  retryBackgroundJobWorkflow,
+} from "~/server/workflows/background-jobs.server";
+
+export const listBackgroundBatchesForBrowser = async (options: {
+  data: z.input<typeof backgroundBatchListInputSchema>;
+  request: StartOperationRequest;
+}) =>
+  await runStartOperation({
+    operation: "background-batch.list",
+    type: "query",
+    input: options.data,
+    inputSchema: backgroundBatchListInputSchema,
+    outputSchema: backgroundBatchBrowserListOutSchema,
+    request: options.request,
+    readPolicy: "strong",
+    run: (context, input) => listBackgroundBatchesWorkflow(context.db, input),
+  });
 
 export const getBackgroundBatchSummaryForBrowser = async (options: {
   data: z.input<typeof backgroundBatchIdInputSchema>;
@@ -22,14 +52,77 @@ export const getBackgroundBatchSummaryForBrowser = async (options: {
     outputSchema: backgroundBatchBrowserSummarySchema,
     request: options.request,
     readPolicy: "strong",
-    run: async (context, input) => {
-      const batch = await getBackgroundBatchSummary(context.db, input.batchId);
-      if (!batch) {
-        throw createAppError(
-          "BACKGROUND_BATCH_NOT_FOUND",
-          "Background batch not found",
-        );
-      }
-      return batch;
-    },
+    run: (context, input) =>
+      getBackgroundBatchSummaryWorkflow(context.db, input),
+  });
+
+export const listBackgroundBatchJobsForBrowser = async (options: {
+  data: z.input<typeof backgroundBatchJobsInputSchema>;
+  request: StartOperationRequest;
+}) =>
+  await runStartOperation({
+    operation: "background-batch.jobs",
+    type: "query",
+    input: options.data,
+    inputSchema: backgroundBatchJobsInputSchema,
+    outputSchema: backgroundBatchBrowserJobsOutSchema,
+    request: options.request,
+    readPolicy: "strong",
+    run: (context, input) => listBackgroundBatchJobsWorkflow(context.db, input),
+  });
+
+export const retryBackgroundBatchForBrowser = async (options: {
+  data: z.input<typeof backgroundBatchIdInputSchema>;
+  request: StartOperationRequest;
+}) =>
+  await runStartOperation({
+    operation: "background-batch.retry",
+    type: "mutation",
+    input: options.data,
+    inputSchema: backgroundBatchIdInputSchema,
+    outputSchema: backgroundJobActionOutSchema,
+    request: options.request,
+    run: (context, input) => retryBackgroundBatchWorkflow(context.db, input),
+  });
+
+export const retryBackgroundJobForBrowser = async (options: {
+  data: z.input<typeof backgroundJobIdInputSchema>;
+  request: StartOperationRequest;
+}) =>
+  await runStartOperation({
+    operation: "background-job.retry",
+    type: "mutation",
+    input: options.data,
+    inputSchema: backgroundJobIdInputSchema,
+    outputSchema: backgroundJobActionOutSchema,
+    request: options.request,
+    run: (context, input) => retryBackgroundJobWorkflow(context.db, input),
+  });
+
+export const cancelBackgroundBatchForBrowser = async (options: {
+  data: z.input<typeof backgroundBatchIdInputSchema>;
+  request: StartOperationRequest;
+}) =>
+  await runStartOperation({
+    operation: "background-batch.cancel",
+    type: "mutation",
+    input: options.data,
+    inputSchema: backgroundBatchIdInputSchema,
+    outputSchema: backgroundJobActionOutSchema,
+    request: options.request,
+    run: (context, input) => cancelBackgroundBatchWorkflow(context.db, input),
+  });
+
+export const drainBackgroundJobsForBrowser = async (options: {
+  data: z.input<typeof backgroundDrainInputSchema>;
+  request: StartOperationRequest;
+}) =>
+  await runStartOperation({
+    operation: "background-job.drain",
+    type: "mutation",
+    input: options.data,
+    inputSchema: backgroundDrainInputSchema,
+    outputSchema: backgroundDrainOutSchema,
+    request: options.request,
+    run: (context, input) => drainBackgroundJobsWorkflow(context.db, input),
   });

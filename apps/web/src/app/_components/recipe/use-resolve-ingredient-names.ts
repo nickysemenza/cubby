@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { uniqBy } from "es-toolkit";
-import { useTRPC } from "~/integrations/trpc/react";
+import { ingredientResolveOrCreateMutationOptions } from "~/app/ingredients/ingredient.functions";
 import { invalidateQueryRoots, queryKeys } from "~/lib/query-keys";
 import type { IngredientMatch } from "./use-ingredient-matches";
 
@@ -26,10 +26,9 @@ export const ingredientNameKey = (name: string) => name.trim().toLowerCase();
  * case-insensitively and on aliases, which a per-name create cannot.
  */
 export function useResolveIngredientNames() {
-  const api = useTRPC();
   const queryClient = useQueryClient();
   const resolveMutation = useMutation(
-    api.ingredient.resolveOrCreate.mutationOptions(),
+    ingredientResolveOrCreateMutationOptions(),
   );
 
   /** Lowercased requested name → its resolved ingredient. */

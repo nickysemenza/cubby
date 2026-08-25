@@ -1,8 +1,8 @@
 import type { VendorOut } from "@cubby/schemas/vendor";
 import { ImageDown } from "lucide-react";
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
+import { fetchVendorLogoMutationOptions } from "~/app/vendors/vendor.functions";
 import { Button } from "~/components/ui/button";
-import { useTRPC } from "~/integrations/trpc/react";
 import { invalidatesFor, queryKeys } from "~/lib/query-keys";
 
 type VendorLogoTarget = Pick<VendorOut, "id" | "name" | "website">;
@@ -13,9 +13,8 @@ export function VendorLogoFetchAction({
 }: {
   vendor: VendorLogoTarget;
 }) {
-  const api = useTRPC();
   const fetchLogo = useProblemCardMutation({
-    mutationFn: api.vendor.fetchLogo.mutationOptions,
+    mutationFn: fetchVendorLogoMutationOptions,
     success: `Added logo for ${vendor.name}`,
     invalidateKeys: [...invalidatesFor("vendor"), queryKeys.search.all],
   });

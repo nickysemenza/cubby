@@ -4,8 +4,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { mock } from "~/lib/test/mock-schema";
-import { createTestTRPCContext } from "~/server/api/trpc";
 import type { EntityKernelContext } from "~/server/entity-kernel";
+import { createTestRequestContext } from "~/server/testing/request-context";
 import { callMcpTool } from "./mcp-test-utils";
 import { registerEntityTools } from "./tools/entity.tools";
 
@@ -13,7 +13,7 @@ describe("MCP entity kernel boundary", () => {
   const ctx = withTestDb("mcp");
 
   it("runs a real protocol-to-kernel shortcode round trip", async () => {
-    const entityKernel = createTestTRPCContext(ctx.db, {
+    const entityKernel = createTestRequestContext(ctx.db, {
       auth: { userId: unsafeUserId("test-user-id") },
     }) as EntityKernelContext;
     const callEntity = (command: Record<string, unknown>) => {

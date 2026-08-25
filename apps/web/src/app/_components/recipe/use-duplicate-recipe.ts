@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { useTRPC } from "~/integrations/trpc/react";
+import { recipeDuplicateMutationOptions } from "~/app/recipes/recipe.functions";
 import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
@@ -11,10 +11,9 @@ import { savedWithBackgroundWork } from "~/lib/recompute-summary";
  * identically everywhere it's offered.
  */
 export function useDuplicateRecipe() {
-  const api = useTRPC();
   const navigate = useNavigate();
   const mutation = useActionMutation({
-    mutationFn: api.recipe.duplicate.mutationOptions,
+    mutationFn: recipeDuplicateMutationOptions,
     success: (data) => savedWithBackgroundWork(data.sideEffects, "Duplicated"),
     invalidateKeys: invalidatesFor("recipe", "list"),
     onSuccess: (data) => {

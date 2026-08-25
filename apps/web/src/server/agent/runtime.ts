@@ -8,10 +8,10 @@ import type { UserId } from "@cubby/schemas/identifiers";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { chat, maxIterations } from "@tanstack/ai";
 import { DEFAULT_CHAT_MODEL } from "~/server/ai/models";
-import type { DomainCaller } from "~/server/api/domain";
 import { aiGatewayUsageMiddleware } from "~/server/clients/ai-gateway-usage";
 import { getAnthropicClient } from "~/server/clients/anthropic";
 import type { Database } from "~/server/db";
+import type { McpWorkflowCaller } from "~/server/mcp/workflow-caller";
 import { createAgentToolset, type ToolCallRecord } from "./mcp-bridge";
 
 const SYSTEM_PROMPT = `You are Cubby's inventory assistant. Cubby is a personal home-inventory app that tracks products, inventory items, locations, recipes, and ingredients.
@@ -125,7 +125,7 @@ export function extractSources(records: ToolCallRecord[]): AgentSource[] {
  * (a plain `stream: false` would concatenate every segment, narration included).
  */
 export async function* runAgentStream(
-  caller: DomainCaller,
+  caller: McpWorkflowCaller,
   db: Database,
   userId: UserId,
   query: string,
@@ -179,7 +179,7 @@ export async function* runAgentStream(
  * each tool call) so the answer is the post-final-tool text.
  */
 export async function runAgent(
-  caller: DomainCaller,
+  caller: McpWorkflowCaller,
   db: Database,
   userId: UserId,
   query: string,

@@ -26,6 +26,7 @@ import { type FC, useId, useMemo } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { discardProductMutationOptions } from "~/app/products/product.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -37,7 +38,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { useTRPC } from "~/integrations/trpc/react";
 import { invalidatesFor } from "~/lib/query-keys";
 import {
   NullableNumericField,
@@ -92,7 +92,6 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
   product,
   defaultInventoryEntryId,
 }) => {
-  const api = useTRPC();
   const adjustInventoryId = useId();
   const entries = product.inventoryEntry;
   const soleEntry = entries.length === 1 ? entries[0] : undefined;
@@ -120,7 +119,7 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
   };
 
   const discard = useActionMutation({
-    mutationFn: api.product.discard.mutationOptions,
+    mutationFn: discardProductMutationOptions,
     success: (result) =>
       // `inventory.removed` was dead payload until now: the server reports that
       // it soft-deleted the shelf row and the toast said nothing about it.

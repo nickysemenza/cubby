@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@tanstack/react-query", () => ({
+  queryOptions: <T>(options: T) => options,
   useQueries: (input: {
     queries: unknown[];
     combine: (rows: unknown[]) => unknown;
@@ -12,22 +13,6 @@ vi.mock("@tanstack/react-query", () => ({
     mocks.useQueries(input);
     return input.combine(Array.from({ length: 5 }, () => ({})));
   },
-}));
-
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPC: () => ({
-    problems: {
-      getFast: { queryOptions: () => ({ queryKey: ["problems", "fast"] }) },
-      getViews: { queryOptions: () => ({ queryKey: ["problems", "views"] }) },
-      getCoverage: {
-        queryOptions: () => ({ queryKey: ["problems", "coverage"] }),
-      },
-      getUpc: { queryOptions: () => ({ queryKey: ["problems", "upc"] }) },
-      getTracker: {
-        queryOptions: () => ({ queryKey: ["problems", "tracker"] }),
-      },
-    },
-  }),
 }));
 
 import { PROBLEMS_QUERY_STALE_TIME } from "./problem-query-freshness";

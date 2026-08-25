@@ -3,10 +3,11 @@ import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { parseShortcode } from "@cubby/shared";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { productRouter } from "~/server/api/routers/product";
-import { createTestCaller, createTestTRPCContext } from "~/server/api/trpc";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { requireActor } from "~/server/request-context";
 import { getProductWithFood } from "~/server/services/product.service";
+import { createTestRequestContext } from "~/server/testing/request-context";
+import { getProductSummariesWorkflow } from "~/server/workflows/product.server";
 import { createProductFixture, makeProductInput } from "../repo.fixtures";
 
 /**
@@ -24,7 +25,12 @@ import { createProductFixture, makeProductInput } from "../repo.fixtures";
 describe("unit-mapping provenance is the public shortcode", () => {
   const ctx = withTestDb();
 
-  const caller = () => createTestCaller(productRouter, ctx.db);
+  const workflowContext = () =>
+    requireActor(
+      createTestRequestContext(ctx.db, {
+        auth: { userId: ctx.actor.userId },
+      }),
+    );
 
   const seed = () =>
     createProductFixture(
@@ -58,7 +64,7 @@ describe("unit-mapping provenance is the public shortcode", () => {
     expect(uuid).not.toBeNull();
     const detail = await getProductWithFood(
       ctx.db,
-      createTestTRPCContext(ctx.db).usdaClient,
+      createTestRequestContext(ctx.db).usdaClient,
       unsafeProductId(uuid!),
     );
     const ids = provenanceIds(detail.unitMappings);
@@ -74,7 +80,7 @@ describe("unit-mapping provenance is the public shortcode", () => {
   it("stamps the shortcode on the summaries read, which is keyed on uuids underneath", async () => {
     const product = await seed();
 
-    const summaries = await caller().summaries({
+    const summaries = await getProductSummariesWorkflow(workflowContext(), {
       ids: [product.id],
       include: ["unitMappings"],
     });

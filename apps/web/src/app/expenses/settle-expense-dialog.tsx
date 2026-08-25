@@ -30,7 +30,7 @@ import { costTypeOptions } from "./expense-options";
 
 // projectId stays a plain string here (not the branded schema) — it's the raw
 // value out of the `SelectField` dropdown; the ProjectShortcode brand is
-// applied at the tRPC-call boundary in onSubmit via `unsafeProjectShortcode`,
+// applied at the server-call boundary in onSubmit via `unsafeProjectShortcode`,
 // same convention as the Expense capture intent. `cost` is nullable +
 // refined (not a plain `z.number()`) so a cleared input reads as `null` (not
 // `undefined`) for `NullableNumericField` while still being rejected as

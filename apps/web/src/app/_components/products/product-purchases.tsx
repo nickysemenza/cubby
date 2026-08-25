@@ -17,6 +17,11 @@ import {
 import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import {
+  kitMembershipQueryOptions,
+  productPurchasesQueryOptions,
+} from "~/app/products/product.functions";
+import { detachPurchaseProductsMutationOptions } from "~/app/purchases/purchase.functions";
 import { Badge } from "~/components/ui/badge";
 import {
   Empty,
@@ -24,7 +29,6 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "~/components/ui/empty";
-import { useTRPC } from "~/integrations/trpc/react";
 import { parsePlainDate } from "~/lib/plain-date";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { invalidatesFor } from "~/lib/query-keys";
@@ -34,17 +38,14 @@ const EMPTY_MEMBERSHIP: KitMembershipOut[] = [];
 type PurchaseRow = ProductPurchaseOut & { id: string; name: string };
 
 export function ProductPurchases({ productId }: { productId: string }) {
-  const api = useTRPC();
-  const query = useQuery(api.product.purchases.queryOptions({ productId }));
+  const query = useQuery(productPurchasesQueryOptions({ productId }));
   const items = query.data ?? EMPTY_PURCHASES;
   // Only consulted when `items` is empty (below) — a component of a kit is
   // never itself attached to a purchase, so the generic "attach this
   // product" advice is not just unhelpful there, it's wrong: attaching would
   // reintroduce the per-component modelling that was deliberately removed in
   // favor of the kit carrying one Expense.
-  const membershipQuery = useQuery(
-    api.product.kitMembership.queryOptions({ productId }),
-  );
+  const membershipQuery = useQuery(kitMembershipQueryOptions({ productId }));
   const membership = membershipQuery.data ?? EMPTY_MEMBERSHIP;
   const rows = useMemo<PurchaseRow[]>(
     () =>
@@ -56,7 +57,7 @@ export function ProductPurchases({ productId }: { productId: string }) {
     [items],
   );
   const detach = useActionMutation({
-    mutationFn: api.purchase.detachProducts.mutationOptions,
+    mutationFn: detachPurchaseProductsMutationOptions,
     // Not "removed from purchase": detaching clears only the explicit link, and
     // a row that also has an itemized Expense stays right where it is, now
     // reading `source: "expense"`. Claiming removal would be a lie on exactly

@@ -519,7 +519,7 @@ export function EntityInspector({
                         .join(" · ")
                     : "—",
             ],
-            ["tRPC", "explicit workflow extensions only"],
+            ["Start", "explicit workflow extensions only"],
             [
               "MCP",
               metadata.mcpOperations.length
@@ -614,7 +614,7 @@ export function EntityManifestGrid({
           <span aria-hidden>→</span>
           <span className="text-primary">executeEntity</span>
           <span aria-hidden>→</span>
-          <span>Start entities / tRPC workflows / MCP adapters</span>
+          <span>Start entities / workflow streams / MCP adapters</span>
           <span aria-hidden>→</span>
           <span>routes, pages, search, lifecycle</span>
         </div>

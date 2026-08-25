@@ -3,11 +3,14 @@ import type { AllProblems, MaintenanceCounts } from "@cubby/schemas/problems";
 import type { QueryKey } from "@tanstack/react-query";
 import { sumBy } from "es-toolkit";
 import pluralize from "pluralize";
-import type { useTRPCClient } from "~/integrations/trpc/react";
+import { recomputeLocationValuations } from "~/app/locations/location.functions";
+import { openRecipeRecomputeStaleStream } from "~/app/recipes/recipe.functions";
+import { backfillLocationDescriptionsStream } from "~/lib/ai.functions";
 import { collectBulkStream } from "~/lib/bulk-progress";
+import { cullPendingImages } from "~/lib/image.functions";
+import { cleanupOrphanedEmbeddings } from "~/lib/problems.functions";
 import { queryKeys } from "~/lib/query-keys";
-
-type TRPCClient = ReturnType<typeof useTRPCClient>;
+import { enqueueEmbeddingBackfill } from "~/lib/search.functions";
 
 /** What one task did, for the run's summary toast. */
 type AutoFixOutcome = {
@@ -53,7 +56,7 @@ export type AutoFixTask = {
   ) => number;
   /** Run alongside the others even at a zero/unknown count (idempotent tail steps). */
   alwaysRun?: boolean;
-  run: (client: TRPCClient) => Promise<AutoFixOutcome>;
+  run: () => Promise<AutoFixOutcome>;
   /** Entity lists to invalidate once the whole run finishes. */
   invalidateKeys?: readonly QueryKey[];
 };
@@ -93,8 +96,8 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
     listedCount: (problems) => problems.orphanedEntityEmbeddings.length,
     invalidateKeys: [queryKeys.search.all],
     // Omitting `ids` cleans every orphan — the server already supports it.
-    run: async (client) => {
-      const r = await client.problems.cleanupOrphanedEmbeddings.mutate({});
+    run: async () => {
+      const r = await cleanupOrphanedEmbeddings({});
       return {
         summary: r.deleted
           ? `cleaned ${pluralize("orphaned embedding", r.deleted, true)}`
@@ -110,8 +113,8 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
     // Problems section for them, so none of this work is in `totalProblems`.
     listedCount: () => 0,
     invalidateKeys: [queryKeys.image.list],
-    run: async (client) => {
-      const r = await client.image.cullPendingImages.mutate({
+    run: async () => {
+      const r = await cullPendingImages({
         olderThanHours: CULL_PENDING_IMAGES_DEFAULT_HOURS,
       });
       return {
@@ -129,9 +132,9 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
     // Its own section, uncapped.
     listedCount: (problems) => problems.locationsWithoutAiDescription.length,
     invalidateKeys: [queryKeys.location.list],
-    run: async (client) => {
+    run: async () => {
       const r = await collectBulkStream(
-        await client.ai.backfillLocationDescriptions.mutate(),
+        await backfillLocationDescriptionsStream(),
       );
       return {
         summary: r.enqueued
@@ -155,8 +158,8 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
     // Called unbounded on purpose: `limit` selects an arbitrary per-type window
     // rather than a needs-work one, so a bounded call can enqueue nothing useful
     // and never converge.
-    run: async (client) => {
-      const r = await client.search.enqueueEmbeddingBackfill.mutate({});
+    run: async () => {
+      const r = await enqueueEmbeddingBackfill({});
       return {
         summary: r.reused
           ? "embedding backfill is already running"
@@ -174,10 +177,8 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
     // total. (`staleParentRecipes` is a different, unrelated detector.)
     listedCount: () => 0,
     invalidateKeys: [queryKeys.recipe.list],
-    run: async (client) => {
-      const r = await collectBulkStream(
-        await client.recipe.recomputeStaleDurable.mutate(),
-      );
+    run: async () => {
+      const r = await collectBulkStream(await openRecipeRecomputeStaleStream());
       return {
         summary: r.enqueued
           ? `queued ${pluralize("recipe", r.enqueued, true)} for recompute`
@@ -196,8 +197,8 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
     listedCount: () => 0,
     alwaysRun: true,
     invalidateKeys: [queryKeys.location.all],
-    run: async (client) => {
-      const r = await client.location.recomputeValuations.mutate();
+    run: async () => {
+      const r = await recomputeLocationValuations();
       return {
         summary: r.updated
           ? `revalued ${pluralize("location", r.updated, true)}`

@@ -8,6 +8,8 @@ import { BookMarked, Link2, Link2Off } from "lucide-react";
 import { useState } from "react";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { productSearchQueryOptions } from "~/app/products/product.functions";
+import { recipeSetCookbookProductMutationOptions } from "~/app/recipes/recipe.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -22,7 +24,6 @@ import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Image } from "~/components/ui/image";
 import { Input } from "~/components/ui/input";
 import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
-import { useTRPC } from "~/integrations/trpc/react";
 import { invalidatesFor } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 
@@ -54,11 +55,10 @@ export function CookbookPhysicalCopy({
     coverUrl: string | null;
   } | null;
 }) {
-  const api = useTRPC();
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const setProduct = useActionMutation({
-    mutationFn: api.recipe.setCookbookProduct.mutationOptions,
+    mutationFn: recipeSetCookbookProductMutationOptions,
     success: (result) =>
       result.product
         ? `Linked to ${result.product.name}`
@@ -172,12 +172,11 @@ function ProductPickerDialog({
   isPending: boolean;
   onPick: (productId: ProductShortcode) => void;
 }) {
-  const api = useTRPC();
   const [searchInput, setSearchInput] = useState(cookbookName);
   const [search] = useDebouncedValue(searchInput, { wait: 300 });
 
   const searchQuery = useQuery({
-    ...api.product.search.queryOptions({
+    ...productSearchQueryOptions({
       filters: { nameFilter: search.trim() || undefined },
       pagination: { pageIndex: 0, pageSize: SEARCH_PAGE_SIZE },
       sort: [{ orderBy: "name", direction: "asc" }],

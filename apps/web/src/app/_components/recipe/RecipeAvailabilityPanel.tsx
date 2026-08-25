@@ -8,9 +8,9 @@ import {
   statusClass,
   statusLabel,
 } from "~/app/meals/meal-format";
+import { recipeAvailabilityQueryOptions } from "~/app/recipes/recipe.functions";
 import { Row, Stack } from "~/components/layout";
 import { Skeleton } from "~/components/ui/skeleton";
-import { useTRPC } from "~/integrations/trpc/react";
 import { cn } from "~/lib/utils";
 
 const SHELL = "border border-[var(--border)] px-4 py-2 print:hidden";
@@ -55,9 +55,8 @@ export function RecipeAvailabilityPanel({
 }: {
   recipeId: RecipeShortcode;
 }) {
-  const api = useTRPC();
   const { data, isLoading, isError } = useQuery(
-    api.suggestions.getRecipeAvailability.queryOptions({ recipeId }),
+    recipeAvailabilityQueryOptions({ recipeId }),
   );
 
   // Read-only nicety on someone else's page — a failed inventory cross-check

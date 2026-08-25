@@ -18,7 +18,7 @@ import {
  *  - Navigations: network-first; if the network is unreachable, serve the
  *    precached `/offline` page. Successful navigation responses are NEVER
  *    cached — they may be authenticated, server-rendered HTML.
- *  - `/api/*`, `/trpc/*`, and auth endpoints are bypassed entirely: the SW does
+ *  - `/api/*` and auth endpoints are bypassed entirely: the SW does
  *    not call respondWith for them, so nothing stale or auth-sensitive is served.
  *
  * Hand-rolled (no Workbox runtime deps) to keep the dependency surface small and

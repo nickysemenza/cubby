@@ -15,9 +15,6 @@ const request = (options?: {
 describe("read consistency", () => {
   it("recognizes only browser transport and navigation requests", () => {
     expect(
-      isBrowserUiRequest(new Headers({ "x-trpc-source": "tanstack-start" })),
-    ).toBe(true);
-    expect(
       isBrowserUiRequest(new Headers({ "sec-fetch-site": "same-origin" })),
     ).toBe(true);
     expect(

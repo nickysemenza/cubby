@@ -4,6 +4,7 @@ import { addMonths, endOfMonth, format, startOfMonth } from "date-fns";
 import { ChartNoAxesColumnIncreasing } from "lucide-react";
 import { useMemo } from "react";
 import { MonthlySpend } from "~/app/expenses/charts/monthly-spend";
+import { expenseMonthlySummaryQueryOptions } from "~/app/expenses/expense.functions";
 import { Row } from "~/components/layout";
 import {
   CardActionLink,
@@ -11,7 +12,6 @@ import {
 } from "~/components/layout/dashboard-card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useHydrated } from "~/hooks/useHydrated";
-import { useTRPC } from "~/integrations/trpc/react";
 import { authClient } from "~/lib/auth-client";
 import { formatCurrency } from "~/lib/utils";
 
@@ -60,7 +60,6 @@ export function getRecordedSpendWindow(now: Date) {
  * client-side total and never Purchase.statedTotal.
  */
 export function RecordedSpendCard() {
-  const api = useTRPC();
   const session = authClient.useSession();
   const hydrated = useHydrated();
   const isAuthenticated = hydrated && !!session.data?.user;
@@ -70,7 +69,7 @@ export function RecordedSpendCard() {
   }, [hydrated]);
   const { months, filters } = spendWindow;
   const query = useQuery({
-    ...api.expense.monthlySummary.queryOptions(filters),
+    ...expenseMonthlySummaryQueryOptions(filters),
     enabled: isAuthenticated,
     staleTime: 60 * 1000,
   });

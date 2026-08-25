@@ -32,7 +32,7 @@ pub struct WChunkRequest {
     pub tool_name: String,
     /// JSON Schema for the forced tool's input, as a JSON **string** — serde
     /// would otherwise marshal a `serde_json::Value` object across the wasm
-    /// boundary as a JS `Map` (breaks `JSON.stringify` + tRPC validation). The
+    /// boundary as a JS `Map` (breaks JSON serialization and validation). The
     /// orchestrator `JSON.parse`s it once before sending.
     pub tool_schema: String,
 }

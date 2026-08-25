@@ -3,6 +3,7 @@ import {
   foodSummaryWithLinkedProducts,
   type usdaFoodIdInput,
   usdaFoodListOut,
+  type usdaFoodLookupInput,
   type usdaListInput,
 } from "@cubby/schemas/usda";
 import { queryOptions } from "@tanstack/react-query";
@@ -34,6 +35,17 @@ const getUsdaFoodDetailTransport = createServerFn({ method: "POST" })
       }),
   );
 
+const getUsdaFoodByAlternateIdTransport = createServerFn({ method: "POST" })
+  .middleware([authenticatedStartServerFunction])
+  .validator((input: unknown) => input as z.input<typeof usdaFoodLookupInput>)
+  .handler(
+    async ({ data, context }) =>
+      await usdaBrowser.getUsdaFoodByAlternateId({
+        data,
+        request: context.startOperation,
+      }),
+  );
+
 const usdaListOperation = startOperation<
   z.input<typeof usdaListInput>,
   z.output<typeof usdaFoodListOut>
@@ -56,6 +68,17 @@ const usdaDetailOperation = startOperation<
   parse: (result) => foodSummaryWithLinkedProducts.nullable().parse(result),
 });
 
+const usdaAlternateIdOperation = startOperation<
+  z.input<typeof usdaFoodLookupInput>,
+  FoodSummaryWithLinkedProducts | null
+>({
+  operation: "usda-food.alternateId",
+  entity: "usda-food",
+  transport: (data, { signal, headers }) =>
+    getUsdaFoodByAlternateIdTransport({ data, signal, headers }),
+  parse: (result) => foodSummaryWithLinkedProducts.nullable().parse(result),
+});
+
 export const usdaFoodListQueryOptions = (
   input: z.input<typeof usdaListInput>,
 ) =>
@@ -70,4 +93,13 @@ export const usdaFoodDetailQueryOptions = (id: number) =>
     queryKey: [["usda-food", "detail"], { id }] as const,
     meta: usdaDetailOperation.meta,
     queryFn: ({ signal }) => usdaDetailOperation.call({ id }, { signal }),
+  });
+
+export const usdaFoodAlternateIdQueryOptions = (
+  input: z.input<typeof usdaFoodLookupInput>,
+) =>
+  queryOptions({
+    queryKey: [["usda-food", "alternateId"], { input }] as const,
+    meta: usdaAlternateIdOperation.meta,
+    queryFn: ({ signal }) => usdaAlternateIdOperation.call(input, { signal }),
   });

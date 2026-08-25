@@ -19,13 +19,6 @@ const mocks = vi.hoisted(() => ({
   mutateAsync: vi.fn().mockResolvedValue({}),
 }));
 
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPC: () => ({
-    product: {
-      create: { mutationOptions: () => ({ mutationFn: async () => ({}) }) },
-    },
-  }),
-}));
 vi.mock("./hooks", () => ({
   useCreateInventoryMutation: () => ({
     mutateAsync: mocks.mutateAsync,

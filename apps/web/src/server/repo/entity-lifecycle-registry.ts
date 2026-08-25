@@ -5,8 +5,8 @@
  * naming every one of that entity's incoming edges and what the operation
  * does to it.
  *
- * This is production data, not a dev-only index: `~/server/api/routers/
- * entity-integrity.ts` flattens it into the `/entities?tab=integrity` catalog
+ * This is production data, not a dev-only index: the entity-integrity service
+ * flattens it into the `/entities?tab=integrity` catalog
  * that backs the introspection UI and impact planners, so they can answer
  * "what happens to each incoming edge of this entity under this operation?"
  * without reaching into a dozen repo files by hand.

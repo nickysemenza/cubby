@@ -1,6 +1,6 @@
 import type { CategorySuggestion } from "@cubby/schemas/ai";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
-import { useTRPCClient } from "~/integrations/trpc/react";
+import { suggestCategoryForBrowser } from "~/lib/ai.functions";
 import { FieldWithAISuggest } from "../ai/ai-suggest";
 import { SelectField } from "../form-utils";
 import { productCategoryOptionsWithTheme } from "./product-category-icons";
@@ -26,7 +26,6 @@ export function CategoryFieldWithAI<
   disabled = false,
   description,
 }: CategoryFieldWithAIProps<TFieldValues>) {
-  const trpcClient = useTRPCClient();
   const enabled = !!(productName.trim() && manufacturer.trim());
 
   return (
@@ -54,7 +53,7 @@ export function CategoryFieldWithAI<
       currentValue={form.watch(name)}
       fieldDirty={form.getFieldState(name).isDirty}
       runSuggest={() =>
-        trpcClient.ai.suggestCategory.query({ productName, manufacturer })
+        suggestCategoryForBrowser({ productName, manufacturer })
       }
       onAccept={(r) =>
         form.setValue(name, r.category as TFieldValues[typeof name])

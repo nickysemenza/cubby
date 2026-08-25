@@ -14,7 +14,7 @@ export const MAX_SORTS = 3;
  * List `sort` input: a single `{orderBy, direction}` (the historical shape —
  * MCP tools and old clients keep sending it) or a shift-click stack of them.
  * Server code never consumes this union directly — `normalizeSorts` collapses
- * it once at the tRPC boundary.
+ * it once at the transport boundary.
  */
 const sortInput = z.union([
   sortParams,
@@ -104,7 +104,7 @@ export const oneOrMany = <T extends z.ZodTypeAny>(schema: T) =>
  *
  * The union's JSON metadata is DERIVED from the canonical schema. Publishing
  * its pattern at the field level keeps MCP clients on the public shortcode
- * contract: the internal value can round-trip through tRPC, but it is not
+ * contract: the internal value can round-trip through JSON transport, but is not
  * advertised as a valid external id. The return type likewise stays the
  * canonical branded type because application code must never mint the
  * internal value as an entity id; only the URL filter boundary produces it.

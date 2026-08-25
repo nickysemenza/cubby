@@ -13,7 +13,7 @@ import { VendorMark } from "~/components/entity/vendor-cell";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
-import { useTRPC, useTRPCClient } from "~/integrations/trpc/react";
+import { relatedDataSummaryInfiniteQueryOptions } from "~/lib/related-data.functions";
 import { formatCurrency } from "~/lib/utils";
 import { createCurrencyColumn } from "../data-table/columnHelpers";
 import RTable from "../data-table/Table";
@@ -139,8 +139,6 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
   nullLabel = "Unassigned",
   expenseHref,
 }) => {
-  const api = useTRPC();
-  const client = useTRPCClient();
   const targetEntity = TARGET_ENTITY_BY_RELATION[relationKey];
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState(defaultSort);
@@ -158,24 +156,9 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
     [relationKey, sourceId, includeSubProjects, search, sort],
   );
 
-  // Search/sort changes swap the key, so a new scope always starts at offset 0
-  // and the previous rows stay visible (keepPreviousData) while it loads.
-  const queryKey = useMemo(
-    () => [
-      ...api.relatedData.summary.queryOptions(pageInput(0)).queryKey,
-      "__infinite__",
-    ],
-    [api, pageInput],
-  );
-
   const query = useInfiniteQuery({
-    queryKey,
+    ...relatedDataSummaryInfiniteQueryOptions(pageInput(0)),
     placeholderData: keepPreviousData,
-    initialPageParam: 0,
-    queryFn: ({ pageParam }: { pageParam: number }) =>
-      client.relatedData.summary.query(pageInput(pageParam)),
-    getNextPageParam: (lastPage: RelatedSummaryOutput) =>
-      lastPage.nextOffset ?? undefined,
   });
 
   const rows = useMemo<SummaryTableRow[]>(

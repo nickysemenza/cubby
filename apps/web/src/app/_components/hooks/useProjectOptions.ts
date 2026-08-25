@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createElement, useMemo } from "react";
+import { projectOptionsQueryOptions } from "~/app/projects/project.functions";
 import { ProjectMark } from "~/app/projects/project-mark";
-import { useTRPC } from "~/integrations/trpc/react";
 
 const NO_PROJECT_OPTIONS: Array<{
   value: string;
@@ -26,8 +26,7 @@ const NO_PROJECT_ROWS: Array<{
  * `project.options` procedure (no rollups/dependency joins), not `list`.
  */
 export function useProjectOptions() {
-  const api = useTRPC();
-  const { data, isLoading } = useQuery(api.project.options.queryOptions());
+  const { data, isLoading } = useQuery(projectOptionsQueryOptions());
 
   const options = useMemo(
     () =>

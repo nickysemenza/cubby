@@ -5,6 +5,7 @@ import {
   type AllowedImageType,
 } from "@cubby/schemas/image";
 import {
+  cookbookImportEventSchema,
   type ImportRecipe,
   importRecipesSchema,
 } from "@cubby/schemas/import-recipe";
@@ -17,6 +18,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
+import {
+  recipeCookbookSourceQueryOptions,
+  recipeExtractCookbookChunkMutationOptions,
+  recipeUpsertCookbookMutationOptions,
+} from "~/app/recipes/recipe.functions";
 import { Row } from "~/components/layout/row";
 import { Stack } from "~/components/layout/stack";
 import {
@@ -30,9 +36,10 @@ import {
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 import { Description } from "~/components/ui/description";
-import { useTRPC, useTRPCClient } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
+import { uploadImageMutationOptions } from "~/lib/image.functions";
 import { wasm } from "~/lib/wasm";
+import { openWorkflowStream } from "~/lib/workflow-stream";
 import { BookGroupCard } from "./book-group-card";
 import { CookbookDropzone } from "./cookbook-dropzone";
 import { deriveBookName, withRetry } from "./import-helpers";
@@ -73,14 +80,8 @@ export function CookbookImport({
   /** When set, re-open this cookbook's stored extraction for selective re-import. */
   loadCookbookId?: string;
 }) {
-  const api = useTRPC();
-  const client = useTRPCClient();
-  const extractChunk = useMutation(
-    api.recipe.extractCookbookChunk.mutationOptions(),
-  );
-  const upsertCookbook = useMutation(
-    api.recipe.upsertCookbook.mutationOptions(),
-  );
+  const extractChunk = useMutation(recipeExtractCookbookChunkMutationOptions());
+  const upsertCookbook = useMutation(recipeUpsertCookbookMutationOptions());
   // Per-recipe outcome streamed back from `importCookbookStream`, keyed by the
   // recipe's index in `book.recipes` so each card maps to its result. `start` is
   // referentially stable, so destructure it for the importBook callback's deps.
@@ -89,7 +90,7 @@ export function CookbookImport({
     | { index: number; ok: false; error: string },
     { succeeded: number; failed: number }
   >();
-  const uploadImageMut = useMutation(api.image.uploadImage.mutationOptions());
+  const uploadImageMut = useMutation(uploadImageMutationOptions());
 
   const [books, setBooks] = useState<Book[]>([]);
   // Raw EPUB bytes by source, cached so a book can re-run extraction (retry after
@@ -152,12 +153,10 @@ export function CookbookImport({
   // "Add from source": re-open a cookbook's stored extraction as a ready Book so
   // the user can selectively re-import (no EPUB, no LLM). The cookbookId marks it
   // so importBook skips upsertCookbook; BookGroupCard flags already-imported titles.
-  const source = useQuery(
-    api.recipe.getCookbookSource.queryOptions(
-      { cookbookId: loadCookbookId ?? "" },
-      { enabled: !!loadCookbookId },
-    ),
-  );
+  const source = useQuery({
+    ...recipeCookbookSourceQueryOptions({ cookbookId: loadCookbookId ?? "" }),
+    enabled: !!loadCookbookId,
+  });
   const [seeded, setSeeded] = useState(false);
   useEffect(() => {
     if (!source.data || seeded) return;
@@ -625,10 +624,14 @@ export function CookbookImport({
       // so the server reads them by index, upserts in order, and does a single
       // batched recompute. Per-recipe results + overall progress stream back.
       await startCookbookImport(
-        () =>
-          client.recipe.importCookbookStream.mutate({
-            cookbookId,
-            indices: orderedIndices,
+        (signal) =>
+          openWorkflowStream({
+            operation: "recipe.importCookbookStream",
+            kind: "mutation",
+            url: "/api/recipe-stream/import-cookbook",
+            input: { cookbookId, indices: orderedIndices },
+            eventSchema: cookbookImportEventSchema,
+            signal,
           }),
         {
           onItem: (item) =>
@@ -649,14 +652,7 @@ export function CookbookImport({
         },
       );
     },
-    [
-      books,
-      client,
-      startCookbookImport,
-      upsertCookbook,
-      updateBook,
-      uploadImageBytes,
-    ],
+    [books, startCookbookImport, upsertCookbook, updateBook, uploadImageBytes],
   );
 
   // Stable ref so memoized RecipeCards don't re-render every streaming pass just

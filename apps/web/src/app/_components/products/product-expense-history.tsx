@@ -21,6 +21,8 @@ import {
   useExpenseBulkActions,
 } from "~/app/_components/tracker/expense-bulk-actions";
 import { useExpenseRowActions } from "~/app/_components/tracker/expense-row-actions";
+import { expenseChartDataQueryOptions } from "~/app/expenses/expense.functions";
+import { kitMembershipQueryOptions } from "~/app/products/product.functions";
 import {
   expenseCostColumn,
   expenseCostTypeColumn,
@@ -45,7 +47,6 @@ import {
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { FILTER_NONE } from "~/entities/filters";
-import { useTRPC } from "~/integrations/trpc/react";
 import { formatCurrency } from "~/lib/utils";
 import { createCubbyColumnHelper } from "../data-table/table-features";
 
@@ -128,20 +129,19 @@ function buildProjectRollup(expenses: ExpenseOut[]): ProjectRollupEntry[] {
 export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
   product,
 }) => {
-  const api = useTRPC();
   const helper = useMemo(() => createCubbyColumnHelper<ExpenseOut>(), []);
   const [quantityEditorExpenseId, setQuantityEditorExpenseId] = useState<
     string | null
   >(null);
   const { data, isPending } = useQuery(
-    api.expense.chartData.queryOptions({ productId: product.id }),
+    expenseChartDataQueryOptions({ productId: product.id }),
   );
   const expenses = data ?? EMPTY_EXPENSES;
   // Only consulted when `expenses` is empty (below) — a component of a kit
   // legitimately has zero Expenses of its own, and the generic "link one"
   // empty state is actively misleading there.
   const membershipQuery = useQuery(
-    api.product.kitMembership.queryOptions({ productId: product.id }),
+    kitMembershipQueryOptions({ productId: product.id }),
   );
   const membership = membershipQuery.data ?? EMPTY_MEMBERSHIP;
   const update = useUpdateMutation({

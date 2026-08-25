@@ -1,5 +1,5 @@
 /**
- * Portable error utilities (no tRPC dependency).
+ * Portable error utilities with no transport dependency.
  */
 
 /** Safely extract error message from unknown error type. */
@@ -26,8 +26,8 @@ export function getErrorMessage(error: unknown): string {
 
 /**
  * App error definitions: key = reason, value = HTTP-style error code string.
- * The web app's `createAppError` casts these to tRPC codes, but the map
- * itself is framework-agnostic so it can be used in any environment.
+ * The web app's `createAppError` exposes these as transport-neutral codes, so
+ * the map can be used in any environment.
  */
 export const AppErrors = {
   // Auth

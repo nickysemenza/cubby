@@ -15,7 +15,7 @@ import {
 } from "~/components/ui/empty";
 import { Spinner } from "~/components/ui/spinner";
 import { useHydrated } from "~/hooks/useHydrated";
-import { useTRPC } from "~/integrations/trpc/react";
+import { auditLogListInfiniteQueryOptions } from "~/lib/audit-log.functions";
 import { authClient } from "~/lib/auth-client";
 import { AuditLogEntryComponent } from "./audit-log-entry";
 
@@ -38,7 +38,6 @@ export function AuditLogList({
   limit = 20,
   variant = "default",
 }: AuditLogListProps) {
-  const trpc = useTRPC();
   const session = authClient.useSession();
   // Hydration gate: the session store can resolve before React hydrates, so
   // branching on it alone makes the first client render diverge from SSR.
@@ -48,7 +47,7 @@ export function AuditLogList({
   const isAuthenticated = hydrated && !!session.data?.user;
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
     useInfiniteQuery({
-      ...trpc.auditLog.list.infiniteQueryOptions(
+      ...auditLogListInfiniteQueryOptions(
         {
           entityType,
           entityId,

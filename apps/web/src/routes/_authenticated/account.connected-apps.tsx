@@ -2,6 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import {
+  connectedAppsQueryOptions,
+  orphanedOAuthClientsQueryOptions,
+  pruneOrphanedOAuthClientsMutationOptions,
+  revokeConnectedAppMutationOptions,
+} from "~/app/account/connected-apps.functions";
 import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import {
@@ -24,7 +30,6 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { useTRPC } from "~/integrations/trpc/react";
 import { pageTitle } from "~/lib/page-title";
 import { queryKeys } from "~/lib/query-keys";
 
@@ -37,29 +42,26 @@ export const Route = createFileRoute("/_authenticated/account/connected-apps")({
 });
 
 function ConnectedAppsPage() {
-  const api = useTRPC();
   const [pendingRevoke, setPendingRevoke] = useState<{
     consentId: string;
     label: string;
   } | null>(null);
 
-  const { data: apps, isLoading } = useQuery(
-    api.oauth.listConnectedApps.queryOptions(),
-  );
+  const { data: apps, isLoading } = useQuery(connectedAppsQueryOptions());
 
   const { data: orphanCount = 0 } = useQuery(
-    api.oauth.countOrphanedClients.queryOptions(),
+    orphanedOAuthClientsQueryOptions(),
   );
 
   const revoke = useActionMutation({
-    mutationFn: api.oauth.revokeConnectedApp.mutationOptions,
+    mutationFn: revokeConnectedAppMutationOptions,
     success: "Access revoked",
     invalidateKeys: [queryKeys.oauth.connectedApps],
     onSuccess: () => setPendingRevoke(null),
   });
 
   const prune = useActionMutation({
-    mutationFn: api.oauth.pruneOrphanedClients.mutationOptions,
+    mutationFn: pruneOrphanedOAuthClientsMutationOptions,
     success: (data) =>
       `Removed ${data.deleted.length} abandoned registration(s)`,
     invalidateKeys: [queryKeys.oauth.connectedApps, queryKeys.oauth.orphaned],

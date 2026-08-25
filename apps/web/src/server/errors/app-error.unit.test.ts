@@ -1,5 +1,4 @@
 import { toPublicImpact } from "@cubby/schemas/entity-integrity";
-import { TRPCError } from "@trpc/server";
 import { describe, expect, it } from "vitest";
 import {
   createAppError,
@@ -9,6 +8,15 @@ import {
 } from "./app-error";
 
 const BLOCKED_PRODUCT = "PRD-4K7M";
+
+const codedError = (options: {
+  code: string;
+  message: string;
+  cause?: unknown;
+}) =>
+  Object.assign(new Error(options.message, { cause: options.cause }), {
+    code: options.code,
+  });
 
 const inventoryBlocker = toPublicImpact(
   {
@@ -56,7 +64,7 @@ describe("toPublicErrorPayload", () => {
     // narrow it away, which dropped the most common caller-fixable fault.
     expect(
       toPublicErrorPayload(
-        new TRPCError({
+        codedError({
           code: "BAD_REQUEST",
           message: "Not location shortcodes: PRD-4K7M",
           cause: { reason: "INVALID_INPUT" },
@@ -68,7 +76,7 @@ describe("toPublicErrorPayload", () => {
   it("drops a malformed blockers payload rather than passing it through", () => {
     expect(
       toPublicErrorPayload(
-        new TRPCError({
+        codedError({
           code: "PRECONDITION_FAILED",
           message: "blocked",
           cause: { reason: "PRODUCT_HAS_INVENTORY", blockers: [{ nope: 1 }] },
@@ -105,7 +113,7 @@ describe("isBlockedRefusal", () => {
     );
     expect(
       isBlockedRefusal(
-        new TRPCError({
+        codedError({
           code: "BAD_REQUEST",
           message: "bad shortcode",
           cause: { reason: "INVALID_INPUT" },

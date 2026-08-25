@@ -46,7 +46,7 @@ export const stockOnly = (): SQL => eq(inventoryEntry.placement, "stock");
  * following the repo rule that an absent constraint never narrows.
  *
  * Callers own the DEFAULT — `inventoryentryList` substitutes `"stock"` for an
- * omitted filter server-side, so the UI, MCP `list_inventory`, and direct tRPC
+ * omitted filter server-side, so the UI, MCP `list_inventory`, and direct workflow
  * callers cannot disagree about what an empty filter means.
  */
 export const placementCondition = (

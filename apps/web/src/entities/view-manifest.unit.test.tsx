@@ -462,7 +462,7 @@ describe("problem-backed views", () => {
   );
 
   it("never pins a filter the repo layer would receive unresolved", () => {
-    // The tRPC routers resolve public shortcodes into uuids in their `list`
+    // Server workflows resolve public shortcodes into uuids in their list
     // callback BEFORE the repo sees them (`resolveLocationId` in
     // routers/inventory.ts is the canonical example). The Problems service
     // calls the repo list functions directly, on one pinned connection, so it

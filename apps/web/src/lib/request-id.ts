@@ -18,9 +18,8 @@ export const REQUEST_ID_HEADER = "x-trace-id";
  * Id from the most recent server response that carried one.
  *
  * Deliberately last-write-wins rather than a per-query map: the error UI only
- * ever asks "what was the id of the request that just failed", and the tRPC
- * client batches up to 50 procedures into one HTTP response anyway, so an id is
- * per-batch — not per-procedure — however it is stored.
+ * ever asks "what was the id of the request that just failed". An id belongs to
+ * the response that carried it, however many operations that response contains.
  */
 let lastRequestId: string | undefined;
 

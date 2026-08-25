@@ -5,11 +5,11 @@ import type {
 } from "@cubby/schemas/recipe-shared";
 import { useQuery } from "@tanstack/react-query";
 import { match } from "ts-pattern";
+import { recipeExplainCostingQueryOptions } from "~/app/recipes/recipe.functions";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { StatusText } from "~/components/ui/status-text";
-import { useTRPC } from "~/integrations/trpc/react";
 import { formatCurrency } from "~/lib/utils";
 import { CopyJsonButton } from "./copy-debug-button";
 
@@ -78,9 +78,8 @@ const MeasureCell: React.FC<{
 export const RecipeCostingDebugCard: React.FC<{
   recipeId: RecipeShortcode;
 }> = ({ recipeId }) => {
-  const api = useTRPC();
   const { data, error } = useQuery(
-    api.recipe.explainCosting.queryOptions({ id: recipeId }),
+    recipeExplainCostingQueryOptions({ id: recipeId }),
   );
 
   if (error) {

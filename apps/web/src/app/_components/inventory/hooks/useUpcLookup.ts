@@ -8,7 +8,7 @@ import { upc as upcSchema } from "@cubby/usda-schemas";
 import { useMutation } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "sonner";
-import { useTRPC } from "~/integrations/trpc/react";
+import { findOrCreateProductByUpcMutationOptions } from "~/app/products/product.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { useProductLookupInvalidation } from "./useInventoryMutation";
 
@@ -36,11 +36,10 @@ interface UseUpcLookupOptions {
  * ```
  */
 export function useUpcLookup(options: UseUpcLookupOptions = {}) {
-  const api = useTRPC();
   const invalidateProductLookup = useProductLookupInvalidation();
 
   const findOrCreateByUPCMutation = useMutation(
-    api.product.findOrCreateByUPC.mutationOptions({
+    findOrCreateProductByUpcMutationOptions({
       onSuccess: invalidateProductLookup,
     }),
   );

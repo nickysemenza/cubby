@@ -60,8 +60,8 @@ export const FLAGS = {
   },
   queryLogger: {
     storageKey: "queryLogger",
-    label: "tRPC query logger",
-    description: "Log every tRPC query/mutation to the console.",
+    label: "Query operation logger",
+    description: "Log every query/mutation operation to the console.",
     default: import.meta.env?.DEV ?? false,
     group: "Developer",
   },

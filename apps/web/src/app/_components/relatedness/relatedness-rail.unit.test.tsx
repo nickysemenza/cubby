@@ -14,7 +14,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@tanstack/react-query", () => ({
   useQuery: (options: { queryKey: readonly unknown[] }) => ({
     data:
-      options.queryKey[0] === "relatedness"
+      Array.isArray(options.queryKey[0]) &&
+      options.queryKey[0][0] === "relatedness"
         ? mocks.relatedness
         : { status: "succeeded" },
   }),
@@ -26,22 +27,21 @@ vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries }),
 }));
 
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPC: () => ({
-    relatedness: {
-      product: {
-        queryOptions: (id: string) => ({ queryKey: ["relatedness", id] }),
-        queryKey: (id: string) => ["relatedness", id],
-      },
-    },
-    search: { requestEmbeddingRefresh: { mutationOptions: () => ({}) } },
-    backgroundJobs: {
-      getBatchSummary: {
-        queryOptions: (input: { batchId: string }) => ({
-          queryKey: ["batch", input.batchId],
-        }),
-      },
-    },
+vi.mock("~/lib/recommendations.functions", () => ({
+  relatednessProductRootKey: () =>
+    [["relatedness", "product"], { type: "query" }] as const,
+  relatednessProductQueryOptions: (input: string) => ({
+    queryKey: [["relatedness", "product"], { type: "query" }, { input }],
+  }),
+}));
+
+vi.mock("~/lib/search.functions", () => ({
+  searchRequestEmbeddingRefreshMutationOptions: () => ({}),
+}));
+
+vi.mock("~/lib/background-batch.functions", () => ({
+  backgroundBatchSummaryQueryOptions: (input: { batchId: string }) => ({
+    queryKey: [["background-batch", "summary"], { batchId: input.batchId }],
   }),
 }));
 
@@ -94,7 +94,7 @@ describe("RelatednessRail", () => {
 
     await waitFor(() => {
       expect(mocks.invalidateQueries).toHaveBeenCalledWith({
-        queryKey: [["relatedness", productId]],
+        queryKey: [["relatedness", "product"], { type: "query" }],
       });
     });
 

@@ -11,7 +11,6 @@ import {
   Scripts,
   useRouterState,
 } from "@tanstack/react-router";
-import type { TRPCOptionsProxy } from "@trpc/tanstack-react-query";
 import * as React from "react";
 import {
   loadCommandMenu,
@@ -27,7 +26,6 @@ import { RouteNotFound } from "~/components/lazy-route-not-found";
 import { Toaster } from "~/components/ui/sonner";
 import { useDebug } from "~/hooks/useDebug";
 import { useNavAuthed } from "~/hooks/useNavAuthed";
-import type { TRPCRouter } from "~/integrations/trpc/router";
 import { getClientAuthed, getGuardSession } from "~/lib/auth-guard";
 import { useFlag } from "~/lib/flags";
 import { scheduleIdlePreload } from "~/lib/lazy-preload";
@@ -65,7 +63,6 @@ function PerfOverlayMount() {
 
 interface MyRouterContext {
   queryClient: QueryClient;
-  trpc: TRPCOptionsProxy<TRPCRouter>;
 }
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({

@@ -8,14 +8,6 @@ const mocks = vi.hoisted(() => ({
   discardDialog: vi.fn(),
 }));
 
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPC: () => ({
-    inventory: {
-      list: { queryOptions: vi.fn() },
-      update: { mutationOptions: vi.fn() },
-    },
-  }),
-}));
 vi.mock("../data-table/Table", () => ({
   default: (props: unknown) => {
     mocks.rTable(props);

@@ -1,6 +1,7 @@
 import type { RecipeAvailability } from "@cubby/schemas/availability";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { makeableRecipesQueryOptions } from "~/app/recipes/recipe.functions";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Grid, Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -8,7 +9,6 @@ import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { StatusText } from "~/components/ui/status-text";
 import { entityDetailLink } from "~/entities/entities";
-import { useTRPC } from "~/integrations/trpc/react";
 import { AddToMeal } from "./add-to-meal";
 import {
   type MealSuggestionFilter,
@@ -24,14 +24,13 @@ export function MealSuggestionsPage({
   filter,
   onFilterChange,
 }: MealSuggestionsPageProps) {
-  const api = useTRPC();
   const activeFilter =
     mealSuggestionFilters.find((f) => f.value === filter) ??
     mealSuggestionFilters[0];
   const minCoverage = activeFilter.minCoverage;
 
   const { data, isLoading, error } = useQuery(
-    api.suggestions.getMakeable.queryOptions({ minCoverage }),
+    makeableRecipesQueryOptions({ minCoverage }),
   );
 
   return (

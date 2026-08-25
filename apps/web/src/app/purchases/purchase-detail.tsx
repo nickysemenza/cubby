@@ -22,7 +22,6 @@ import { Description } from "~/components/ui/description";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { NoneValue } from "~/components/ui/none-value";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { invalidatesFor } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
@@ -41,6 +40,10 @@ import { RelationshipSummaryTable } from "../_components/relationships/relations
 import { FinancialSettlement } from "./financial-settlement";
 import { LinkExpensesDialog } from "./link-expenses-dialog";
 import { LinkProductsDialog } from "./link-products-dialog";
+import {
+  mergePurchaseMutationOptions,
+  purchaseProductsQueryOptions,
+} from "./purchase.functions";
 import { PurchaseDocuments } from "./purchase-documents";
 import { PurchaseExpensesTable } from "./purchase-expenses-table";
 import { PurchaseProductsTable } from "./purchase-products-table";
@@ -59,13 +62,12 @@ const EMPTY_PURCHASE_PRODUCTS: PurchaseProductOut[] = [];
  * lines.
  */
 export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
-  const api = useTRPC();
   const [mergeOpen, setMergeOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkProductsOpen, setLinkProductsOpen] = useState(false);
 
   const productsQuery = useQuery(
-    api.purchase.products.queryOptions({ purchaseId: purchase.id }),
+    purchaseProductsQueryOptions({ purchaseId: purchase.id }),
   );
   const linkedProducts = productsQuery.data ?? EMPTY_PURCHASE_PRODUCTS;
   // Explicitly-linked products only. This list feeds the link dialog's picker,
@@ -85,7 +87,7 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
   });
 
   const mergeMutation = useActionMutation({
-    mutationFn: api.purchase.merge.mutationOptions,
+    mutationFn: mergePurchaseMutationOptions,
     success: "Purchases merged",
     invalidateKeys: invalidatesFor("purchase"),
     onSuccess: () => setMergeOpen(false),

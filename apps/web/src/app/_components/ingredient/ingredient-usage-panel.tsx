@@ -2,6 +2,7 @@ import type { CookbookShortcode } from "@cubby/schemas/identifiers";
 import type { IngredientUsageRow } from "@cubby/schemas/ingredient-usage";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { recipeIngredientUsageQueryOptions } from "~/app/recipes/recipe.functions";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import {
@@ -12,7 +13,6 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { useTRPC } from "~/integrations/trpc/react";
 import { VisualizationPlaceholder } from "../visualizations/visualization-placeholder";
 import { IngredientUsageChart } from "./ingredient-usage-chart";
 
@@ -32,9 +32,8 @@ export function IngredientUsagePanel({
   /** Compact mode: cap the chart to `limit` bars, skip the table. */
   limit?: number;
 }) {
-  const api = useTRPC();
   const { data, isLoading } = useQuery(
-    api.recipe.getIngredientUsage.queryOptions({ cookbookId }),
+    recipeIngredientUsageQueryOptions({ cookbookId }),
   );
 
   if (isLoading) {

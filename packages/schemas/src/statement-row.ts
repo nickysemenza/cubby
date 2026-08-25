@@ -348,7 +348,7 @@ export const statementRowWriteOut = z.object({
   affected: z.number().int(),
 });
 
-/** Shared by the tRPC list procedure and the MCP tool, so they cannot drift. */
+/** Shared by the browser workflow and MCP tool, so they cannot drift. */
 export const listStatementRowsInput = z.object({
   filters: statementRowFilters.optional(),
   ...createSortPaginationFields({

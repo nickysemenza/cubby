@@ -11,10 +11,10 @@ import RTable from "~/app/_components/data-table/Table";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { taskDueColumn, taskStatusColumn } from "~/app/projects/shared";
+import { taskChartDataQueryOptions } from "~/app/tasks/task.functions";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { useTRPC } from "~/integrations/trpc/react";
 import { ShelfEmpty } from "../data-table/shelf";
 import {
   createCubbyColumnHelper,
@@ -49,10 +49,9 @@ export function orderProductTasks(tasks: TaskOut[]): TaskOut[] {
 export const ProductTaskHistory: FC<{ product: ProductWithFoodOut }> = ({
   product,
 }) => {
-  const api = useTRPC();
   const helper = useMemo(() => createCubbyColumnHelper<TaskOut>(), []);
   const { data, isPending } = useQuery(
-    api.task.chartData.queryOptions({ subjectProductId: product.id }),
+    taskChartDataQueryOptions({ subjectProductId: product.id }),
   );
   const tasks = data ?? EMPTY_TASKS;
   const update = useUpdateMutation({

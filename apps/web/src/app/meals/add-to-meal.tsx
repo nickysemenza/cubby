@@ -21,7 +21,10 @@ import { Label } from "~/components/ui/label";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { useTRPC } from "~/integrations/trpc/react";
+import {
+  mealAddRecipeMutationOptions,
+  mealDateRangeQueryOptions,
+} from "./meal.functions";
 import { mealListLabel } from "./meal-format";
 import { mealKindOptions, mealTypeOptions } from "./meal-options";
 import { useInvalidateMeals } from "./use-meal-mutations";
@@ -55,7 +58,6 @@ const slotForNow = (): MealType => {
  * existing meals or by creating a new one. Lives on recipe detail pages.
  */
 export function AddToMeal({ recipeId }: { recipeId: RecipeShortcode }) {
-  const api = useTRPC();
   const navigate = useNavigate();
   const invalidate = useInvalidateMeals();
   const [open, setOpen] = useState(false);
@@ -68,7 +70,7 @@ export function AddToMeal({ recipeId }: { recipeId: RecipeShortcode }) {
   const switchId = useId();
 
   const existingMeals = useQuery({
-    ...api.meal.getByDateRange.queryOptions({ from: date, to: date }),
+    ...mealDateRangeQueryOptions({ from: date, to: date }),
     enabled: open,
   });
 
@@ -120,9 +122,7 @@ export function AddToMeal({ recipeId }: { recipeId: RecipeShortcode }) {
   const createMeal = useMutation(
     entityMutationOptionsFactory("meal", "create")({ onSuccess }),
   );
-  const addRecipe = useMutation(
-    api.meal.addRecipe.mutationOptions({ onSuccess }),
-  );
+  const addRecipe = useMutation(mealAddRecipeMutationOptions({ onSuccess }));
   const updateMeal = useMutation(
     entityMutationOptionsFactory("meal", "update")(),
   );

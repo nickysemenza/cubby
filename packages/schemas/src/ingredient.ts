@@ -5,7 +5,11 @@ import {
   timestampedFields,
 } from "./base-entity";
 import { requiredName } from "./common";
-import { ingredientShortcode, productShortcode } from "./identifiers";
+import {
+  ingredientShortcode,
+  productShortcode,
+  recipeShortcode,
+} from "./identifiers";
 import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 import {
   productWithMappingsAndFoodOut,
@@ -227,6 +231,13 @@ export const enrichmentRowOut = z.object({
 export type EnrichmentRow = z.infer<typeof enrichmentRowOut>;
 
 export const enrichmentRowsOut = z.array(enrichmentRowOut);
+
+export const enrichmentWorkbenchInput = z
+  .object({
+    recipeId: recipeShortcode.optional(),
+    focusId: ingredientShortcode.optional(),
+  })
+  .optional();
 
 export const ingredientWithFoodLeanListOut = z.array(ingredientWithFoodLeanOut);
 

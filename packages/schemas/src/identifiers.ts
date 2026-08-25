@@ -305,7 +305,7 @@ export const unsafeIdForEntity: {
  * expansion (`financialAccount` → `FINANCIALACCOUNT_NOT_FOUND`, which is not a
  * key of `AppErrors` at all). Deriving would also lose the type: a template
  * string is a `string`, so it could only reach `createAppError` through a cast,
- * and `AppErrors[reason]` would then hand `TRPCError` an `undefined` code.
+ * and `AppErrors[reason]` would then hand the error mapper an `undefined` code.
  *
  * `satisfies` does the checking: a missing entity, or a reason that isn't a real
  * `AppErrorReason`, fails to compile.

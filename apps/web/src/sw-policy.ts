@@ -1,10 +1,5 @@
 export function isBypassedPath(pathname: string): boolean {
-  return (
-    pathname.startsWith("/api/") ||
-    pathname === "/api" ||
-    pathname.startsWith("/trpc/") ||
-    pathname === "/trpc"
-  );
+  return pathname.startsWith("/api/") || pathname === "/api";
 }
 
 /**

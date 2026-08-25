@@ -316,7 +316,7 @@ describe("wish repository — audit log survives a Date-valued (non-FK) diff", (
     });
 
     // The real runtime check `strictOutput`'s type-level pass-through can't
-    // give us: this is the same `.parse()` the tRPC/MCP boundary runs.
+    // give us: this is the same `.parse()` the browser/MCP boundary runs.
     expect(() => auditLogListOut.parse(audit)).not.toThrow();
 
     const updateEntry = audit.entries.find(

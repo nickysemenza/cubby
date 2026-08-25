@@ -21,7 +21,7 @@ export type AuthenticatedStartOperationContext = ReturnType<
   typeof requireActor
 >;
 
-type OperationStage = "context" | "input" | "run" | "output";
+export type OperationStage = "context" | "input" | "run" | "output";
 
 const abortError = (signal: AbortSignal): Error =>
   signal.reason instanceof Error
@@ -41,7 +41,7 @@ const validationMessage = (error: z.ZodError): string =>
     )
     .join(", ");
 
-function normalizeStartOperationError(
+export function normalizeStartOperationError(
   error: unknown,
   stage: OperationStage,
 ): { publicError: PublicStartOperationError; observedError: unknown } {

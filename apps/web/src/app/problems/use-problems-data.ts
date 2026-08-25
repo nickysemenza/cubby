@@ -6,15 +6,20 @@ import {
 } from "@cubby/schemas/problems";
 import { useQueries } from "@tanstack/react-query";
 import type { ProblemExecutionLane } from "~/entities/problem-query";
-import { useTRPC } from "~/integrations/trpc/react";
-import type { ProblemsHotPathProcedure } from "~/lib/problems-query-groups";
+import {
+  problemsCoverageQueryOptions,
+  problemsFastQueryOptions,
+  problemsTrackerQueryOptions,
+  problemsUpcQueryOptions,
+  problemsViewsQueryOptions,
+} from "~/lib/problems.functions";
 import type { ProblemLaneState } from "./problem-lane-state";
 import { PROBLEMS_QUERY_STALE_TIME } from "./problem-query-freshness";
 
 /**
- * Loads the Problems page data as five cost-grouped tRPC queries instead of one
- * `getAllProblems` scan. Each group is routed through the unbatched link (see
- * root-provider.tsx), so it runs in its own Worker invocation / CPU budget —
+ * Loads the Problems page data as five cost-grouped Start operations instead of
+ * one `getAllProblems` scan. Each operation runs in its own Worker invocation /
+ * CPU budget —
  * the combined scan re-parsed every recipe line through WASM and intermittently
  * blew the 30s CPU limit. (The two WASM parse-sweeps it used to include now live
  * as manual Settings → Maintenance actions, off this hot path.)
@@ -32,7 +37,6 @@ export function useProblemsData(opts?: {
   staleTime?: number;
   enabled?: boolean;
 }) {
-  const api = useTRPC();
   // `staleTime` lets embedded Problems consumers choose their own freshness;
   // the page revalidates on entry. `enabled` lets the homepage card gate the
   // fetch (SSR-idle, then enable on the client) to avoid a hydration mismatch,
@@ -40,20 +44,12 @@ export function useProblemsData(opts?: {
   const staleTime = opts?.staleTime ?? PROBLEMS_QUERY_STALE_TIME;
   const enabled = opts?.enabled;
   const problemGroupQueries = {
-    getFast: { ...api.problems.getFast.queryOptions(), staleTime, enabled },
-    getViews: { ...api.problems.getViews.queryOptions(), staleTime, enabled },
-    getCoverage: {
-      ...api.problems.getCoverage.queryOptions(),
-      staleTime,
-      enabled,
-    },
-    getUpc: { ...api.problems.getUpc.queryOptions(), staleTime, enabled },
-    getTracker: {
-      ...api.problems.getTracker.queryOptions(),
-      staleTime,
-      enabled,
-    },
-  } satisfies Record<ProblemsHotPathProcedure, unknown>;
+    getFast: problemsFastQueryOptions({ staleTime, enabled }),
+    getViews: problemsViewsQueryOptions({ staleTime, enabled }),
+    getCoverage: problemsCoverageQueryOptions({ staleTime, enabled }),
+    getUpc: problemsUpcQueryOptions({ staleTime, enabled }),
+    getTracker: problemsTrackerQueryOptions({ staleTime, enabled }),
+  };
   return useQueries({
     queries: [
       problemGroupQueries.getFast,

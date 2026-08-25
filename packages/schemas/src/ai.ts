@@ -240,7 +240,7 @@ export const enrichmentProposalPrecomputeInput = z.object({
   items: z
     .array(
       z.object({
-        // The public id, like every other tRPC boundary — the router resolves
+        // The public id, like every other browser boundary — the workflow resolves
         // it to a uuid. This took `ingredientId` (a uuid brand) while the only
         // caller reads `enrichmentRowOut.id`, a shortcode, so every precompute
         // request failed input validation with "Invalid UUID".
@@ -253,6 +253,56 @@ export const enrichmentProposalPrecomputeInput = z.object({
     .min(1)
     .max(50),
 });
+
+const aiStreamProgressFields = {
+  done: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
+};
+
+export const aiBackfillLocationDescriptionsEventSchema = z.discriminatedUnion(
+  "type",
+  [
+    z.object({ type: z.literal("progress"), ...aiStreamProgressFields }),
+    z.object({
+      type: z.literal("done"),
+      result: z.object({
+        enqueued: z.number().int().nonnegative(),
+        total: z.number().int().nonnegative(),
+        batchId: z.string(),
+      }),
+    }),
+  ],
+);
+
+export const aiEnrichmentProposalEventSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("progress"),
+    ...aiStreamProgressFields,
+    item: z
+      .object({
+        id: z.string(),
+        usda: usdaFoodSuggestionOut,
+        merge: z
+          .object({
+            target: z
+              .object({
+                id: z.string(),
+                shortcode: z.string(),
+                name: z.string(),
+              })
+              .nullable(),
+            confidence,
+            reasoning: z.string(),
+          })
+          .nullable(),
+      })
+      .optional(),
+  }),
+  z.object({
+    type: z.literal("done"),
+    result: z.object({ processed: z.number().int().nonnegative() }),
+  }),
+]);
 
 export const parseSearchInput = z.object({
   query: z.string().min(1),

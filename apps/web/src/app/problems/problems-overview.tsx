@@ -21,7 +21,10 @@ import {
 } from "~/components/ui/collapsible";
 import { Spinner } from "~/components/ui/spinner";
 import { useHydratedLoading } from "~/hooks/useHydrated";
-import { useTRPC } from "~/integrations/trpc/react";
+import {
+  problemsCoverageTotalsQueryOptions,
+  problemsRecipeUsageQueryOptions,
+} from "~/lib/problems.functions";
 import { AutoFixButton, useAutoFixPlan } from "./components/auto-fix-button";
 import { AUTO_FIX_SECTION_IDS } from "./components/auto-fix-registry";
 import { MaintenanceCard } from "./components/maintenance-card";
@@ -60,7 +63,6 @@ const AUTO_FIXABLE_SECTIONS = PROBLEM_SECTIONS.filter(
 );
 
 export function ProblemsOverview() {
-  const api = useTRPC();
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   // Sections the Fix button clears live in a collapsed group, so a chip pointing
   // at one has to open the group before it can scroll. Opening isn't enough to
@@ -110,7 +112,7 @@ export function ProblemsOverview() {
     [problems],
   );
   const { data: recipeUsage } = useQuery(
-    api.problems.recipeUsageByProduct.queryOptions({ productShortcodes }),
+    problemsRecipeUsageQueryOptions({ productShortcodes }),
   );
 
   // Denominators for the coverage meters. Its own cheap batched query — the
@@ -122,7 +124,7 @@ export function ProblemsOverview() {
   // section whose denominators haven't landed simply renders without its meter
   // (see `resolveCoverage`) instead of briefly showing "-178 / 0".
   const { data: coverageTotals } = useQuery(
-    api.problems.getCoverageTotals.queryOptions(),
+    problemsCoverageTotalsQueryOptions(),
   );
 
   if (isLoading) {

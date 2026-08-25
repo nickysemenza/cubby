@@ -523,7 +523,7 @@ const resolveLiveTaskProjectId = (
  * null` moves every listed task to the inbox. Unlike the single-row
  * `updateTask` there's no before/after row diff to lean on for validation, so
  * the target project's liveness is checked explicitly (`assertProjectLive`) —
- * the UI's project picker already filters to live projects, but the tRPC API
+ * the UI's project picker already filters to live projects, but the workflow API
  * is callable directly.
  */
 export const moveTasks = async (

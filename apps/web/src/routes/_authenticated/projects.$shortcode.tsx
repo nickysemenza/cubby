@@ -1,5 +1,7 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
+import { expenseChartDataQueryOptions } from "~/app/expenses/expense.functions";
+import { projectOptionsQueryOptions } from "~/app/projects/project.functions";
 import { ProjectDetailPage } from "~/app/projects/project-detail-page";
 // Loader-only imports MUST come from this dependency-free module, never from
 // `project-detail-page` — the loader stays in the eager route chunk, so pulling
@@ -10,6 +12,7 @@ import {
   projectSubtreeExpensesFilters,
   projectSubtreeTasksFilters,
 } from "~/app/projects/project-query-params";
+import { taskChartDataQueryOptions } from "~/app/tasks/task.functions";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
@@ -36,14 +39,10 @@ export const Route = createFileRoute("/_authenticated/projects/$shortcode")({
     // are internal query inputs, and the public id has already done its job by
     // getting us the row.
     void context.queryClient.prefetchQuery(
-      context.trpc.task.chartData.queryOptions(
-        projectSubtreeTasksFilters(data.id),
-      ),
+      taskChartDataQueryOptions(projectSubtreeTasksFilters(data.id)),
     );
     void context.queryClient.prefetchQuery(
-      context.trpc.expense.chartData.queryOptions(
-        projectSubtreeExpensesFilters(data.id),
-      ),
+      expenseChartDataQueryOptions(projectSubtreeExpensesFilters(data.id)),
     );
     void context.queryClient.prefetchQuery(
       entityListQueryOptions(
@@ -51,9 +50,7 @@ export const Route = createFileRoute("/_authenticated/projects/$shortcode")({
         projectGanttSubtreeQueryParams(data.id),
       ),
     );
-    void context.queryClient.prefetchQuery(
-      context.trpc.project.options.queryOptions(),
-    );
+    void context.queryClient.prefetchQuery(projectOptionsQueryOptions());
   },
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,

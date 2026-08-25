@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { addDays, format, isSameDay, parseISO } from "date-fns";
 import { UtensilsCrossed } from "lucide-react";
+import { mealUpcomingSummaryQueryOptions } from "~/app/meals/meal.functions";
 import { formatMealCost, mealListLabel } from "~/app/meals/meal-format";
 import { mealKindIcon, mealTypeIcon } from "~/app/meals/meal-options";
 import { Row, Stack } from "~/components/layout";
@@ -12,7 +13,6 @@ import {
 } from "~/components/layout/dashboard-card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useHydrated } from "~/hooks/useHydrated";
-import { useTRPC } from "~/integrations/trpc/react";
 import { authClient } from "~/lib/auth-client";
 
 /**
@@ -24,7 +24,6 @@ import { authClient } from "~/lib/auth-client";
  * local "today" resolves.
  */
 export function MealsCard() {
-  const api = useTRPC();
   const session = authClient.useSession();
   const hydrated = useHydrated();
   const isAuthenticated = hydrated && !!session.data?.user;
@@ -34,7 +33,7 @@ export function MealsCard() {
   const to = format(addDays(today, 6), "yyyy-MM-dd");
 
   const { data, isLoading } = useQuery({
-    ...api.meal.upcomingSummary.queryOptions({ from, to }),
+    ...mealUpcomingSummaryQueryOptions({ from, to }),
     enabled: isAuthenticated,
   });
 

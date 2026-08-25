@@ -1,8 +1,14 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
+import { calendarRangeQueryOptions } from "~/app/calendar/calendar.functions";
 import { entityDetailRootKey } from "~/entities/entity-detail.functions";
 import { configureQueryFreshness } from "./query-freshness";
-import { normalizeQueryRoot, queryKeys } from "./query-keys";
+import {
+  invalidateQueryRoots,
+  invalidatesFor,
+  normalizeQueryRoot,
+  queryKeys,
+} from "./query-keys";
 
 describe("configureQueryFreshness", () => {
   it("keeps stable detail and indexes warm but preserves the mutable default", () => {
@@ -20,5 +26,20 @@ describe("configureQueryFreshness", () => {
     expect(
       client.getQueryDefaults(normalizeQueryRoot(queryKeys.task.list)),
     ).toEqual({});
+  });
+});
+
+describe("invalidateQueryRoots", () => {
+  it("matches migrated Start queries through their nested entity root", () => {
+    const client = new QueryClient();
+    const key = calendarRangeQueryOptions({
+      startDate: "2026-07-01",
+      endDateExclusive: "2026-08-01",
+    }).queryKey;
+    client.setQueryData(key, { items: [], days: {} });
+
+    invalidateQueryRoots(client, invalidatesFor("task"));
+
+    expect(client.getQueryState(key)?.isInvalidated).toBe(true);
   });
 });

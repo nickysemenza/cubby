@@ -96,9 +96,21 @@ import { Route as AuthenticatedVendorsIndexRouteImport } from './routes/_authent
 import { Route as AuthenticatedVendorsShortcodeRouteImport } from './routes/_authenticated/vendors.$shortcode'
 import { Route as AuthenticatedWishesIndexRouteImport } from './routes/_authenticated/wishes.index'
 import { Route as AuthenticatedWishesShortcodeRouteImport } from './routes/_authenticated/wishes.$shortcode'
+import { Route as ApiAgentStreamAskRouteImport } from './routes/api/agent-stream/ask'
+import { Route as ApiAiStreamBackfillLocationDescriptionsRouteImport } from './routes/api/ai-stream/backfill-location-descriptions'
+import { Route as ApiAiStreamPrecomputeEnrichmentProposalsRouteImport } from './routes/api/ai-stream/precompute-enrichment-proposals'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiDebugTimingRouteImport } from './routes/api/debug/timing'
-import { Route as ApiTrpcSplatRouteImport } from './routes/api/trpc/$'
+import { Route as ApiProblemsStreamPruneUnusedAliasesRouteImport } from './routes/api/problems-stream/prune-unused-aliases'
+import { Route as ApiProblemsStreamReparseStaleRouteImport } from './routes/api/problems-stream/reparse-stale'
+import { Route as ApiProductStreamBackfillUpcImagesRouteImport } from './routes/api/product-stream/backfill-upc-images'
+import { Route as ApiProductStreamCreateManyRouteImport } from './routes/api/product-stream/create-many'
+import { Route as ApiProductStreamMarkUsdaUnavailableRouteImport } from './routes/api/product-stream/mark-usda-unavailable'
+import { Route as ApiRecipeStreamImportCookbookRouteImport } from './routes/api/recipe-stream/import-cookbook'
+import { Route as ApiRecipeStreamImportNotionRouteImport } from './routes/api/recipe-stream/import-notion'
+import { Route as ApiRecipeStreamRecomputeAllRouteImport } from './routes/api/recipe-stream/recompute-all'
+import { Route as ApiRecipeStreamRecomputeStaleRouteImport } from './routes/api/recipe-stream/recompute-stale'
+import { Route as ApiRecipeStreamReprocessCookbookRouteImport } from './routes/api/recipe-stream/reprocess-cookbook'
 import { Route as DotwellKnownOauthAuthorizationServerApiAuthRouteImport } from './routes/[.]well-known.oauth-authorization-server.api.auth'
 import { Route as DotwellKnownOauthProtectedResourceApiMcpRouteImport } from './routes/[.]well-known.oauth-protected-resource.api.mcp'
 import { Route as AuthenticatedRecipesShortcodeExportRouteImport } from './routes/_authenticated/recipes.$shortcode_.export'
@@ -601,6 +613,23 @@ const AuthenticatedWishesShortcodeRoute =
     path: '/wishes/$shortcode',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const ApiAgentStreamAskRoute = ApiAgentStreamAskRouteImport.update({
+  id: '/api/agent-stream/ask',
+  path: '/api/agent-stream/ask',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAiStreamBackfillLocationDescriptionsRoute =
+  ApiAiStreamBackfillLocationDescriptionsRouteImport.update({
+    id: '/api/ai-stream/backfill-location-descriptions',
+    path: '/api/ai-stream/backfill-location-descriptions',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiAiStreamPrecomputeEnrichmentProposalsRoute =
+  ApiAiStreamPrecomputeEnrichmentProposalsRouteImport.update({
+    id: '/api/ai-stream/precompute-enrichment-proposals',
+    path: '/api/ai-stream/precompute-enrichment-proposals',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -611,11 +640,66 @@ const ApiDebugTimingRoute = ApiDebugTimingRouteImport.update({
   path: '/api/debug/timing',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiTrpcSplatRoute = ApiTrpcSplatRouteImport.update({
-  id: '/api/trpc/$',
-  path: '/api/trpc/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
+const ApiProblemsStreamPruneUnusedAliasesRoute =
+  ApiProblemsStreamPruneUnusedAliasesRouteImport.update({
+    id: '/api/problems-stream/prune-unused-aliases',
+    path: '/api/problems-stream/prune-unused-aliases',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiProblemsStreamReparseStaleRoute =
+  ApiProblemsStreamReparseStaleRouteImport.update({
+    id: '/api/problems-stream/reparse-stale',
+    path: '/api/problems-stream/reparse-stale',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiProductStreamBackfillUpcImagesRoute =
+  ApiProductStreamBackfillUpcImagesRouteImport.update({
+    id: '/api/product-stream/backfill-upc-images',
+    path: '/api/product-stream/backfill-upc-images',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiProductStreamCreateManyRoute =
+  ApiProductStreamCreateManyRouteImport.update({
+    id: '/api/product-stream/create-many',
+    path: '/api/product-stream/create-many',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiProductStreamMarkUsdaUnavailableRoute =
+  ApiProductStreamMarkUsdaUnavailableRouteImport.update({
+    id: '/api/product-stream/mark-usda-unavailable',
+    path: '/api/product-stream/mark-usda-unavailable',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiRecipeStreamImportCookbookRoute =
+  ApiRecipeStreamImportCookbookRouteImport.update({
+    id: '/api/recipe-stream/import-cookbook',
+    path: '/api/recipe-stream/import-cookbook',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiRecipeStreamImportNotionRoute =
+  ApiRecipeStreamImportNotionRouteImport.update({
+    id: '/api/recipe-stream/import-notion',
+    path: '/api/recipe-stream/import-notion',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiRecipeStreamRecomputeAllRoute =
+  ApiRecipeStreamRecomputeAllRouteImport.update({
+    id: '/api/recipe-stream/recompute-all',
+    path: '/api/recipe-stream/recompute-all',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiRecipeStreamRecomputeStaleRoute =
+  ApiRecipeStreamRecomputeStaleRouteImport.update({
+    id: '/api/recipe-stream/recompute-stale',
+    path: '/api/recipe-stream/recompute-stale',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiRecipeStreamReprocessCookbookRoute =
+  ApiRecipeStreamReprocessCookbookRouteImport.update({
+    id: '/api/recipe-stream/reprocess-cookbook',
+    path: '/api/recipe-stream/reprocess-cookbook',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const DotwellKnownOauthAuthorizationServerApiAuthRoute =
   DotwellKnownOauthAuthorizationServerApiAuthRouteImport.update({
     id: '/api/auth',
@@ -719,9 +803,21 @@ export interface FileRoutesByFullPath {
   '/usda/$id': typeof AuthenticatedUsdaIdRoute
   '/vendors/$shortcode': typeof AuthenticatedVendorsShortcodeRoute
   '/wishes/$shortcode': typeof AuthenticatedWishesShortcodeRoute
+  '/api/agent-stream/ask': typeof ApiAgentStreamAskRoute
+  '/api/ai-stream/backfill-location-descriptions': typeof ApiAiStreamBackfillLocationDescriptionsRoute
+  '/api/ai-stream/precompute-enrichment-proposals': typeof ApiAiStreamPrecomputeEnrichmentProposalsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
-  '/api/trpc/$': typeof ApiTrpcSplatRoute
+  '/api/problems-stream/prune-unused-aliases': typeof ApiProblemsStreamPruneUnusedAliasesRoute
+  '/api/problems-stream/reparse-stale': typeof ApiProblemsStreamReparseStaleRoute
+  '/api/product-stream/backfill-upc-images': typeof ApiProductStreamBackfillUpcImagesRoute
+  '/api/product-stream/create-many': typeof ApiProductStreamCreateManyRoute
+  '/api/product-stream/mark-usda-unavailable': typeof ApiProductStreamMarkUsdaUnavailableRoute
+  '/api/recipe-stream/import-cookbook': typeof ApiRecipeStreamImportCookbookRoute
+  '/api/recipe-stream/import-notion': typeof ApiRecipeStreamImportNotionRoute
+  '/api/recipe-stream/recompute-all': typeof ApiRecipeStreamRecomputeAllRoute
+  '/api/recipe-stream/recompute-stale': typeof ApiRecipeStreamRecomputeStaleRoute
+  '/api/recipe-stream/reprocess-cookbook': typeof ApiRecipeStreamReprocessCookbookRoute
   '/collections/': typeof AuthenticatedCollectionsIndexRoute
   '/cookbooks/': typeof AuthenticatedCookbooksIndexRoute
   '/expenses/': typeof AuthenticatedExpensesIndexRoute
@@ -815,9 +911,21 @@ export interface FileRoutesByTo {
   '/usda/$id': typeof AuthenticatedUsdaIdRoute
   '/vendors/$shortcode': typeof AuthenticatedVendorsShortcodeRoute
   '/wishes/$shortcode': typeof AuthenticatedWishesShortcodeRoute
+  '/api/agent-stream/ask': typeof ApiAgentStreamAskRoute
+  '/api/ai-stream/backfill-location-descriptions': typeof ApiAiStreamBackfillLocationDescriptionsRoute
+  '/api/ai-stream/precompute-enrichment-proposals': typeof ApiAiStreamPrecomputeEnrichmentProposalsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
-  '/api/trpc/$': typeof ApiTrpcSplatRoute
+  '/api/problems-stream/prune-unused-aliases': typeof ApiProblemsStreamPruneUnusedAliasesRoute
+  '/api/problems-stream/reparse-stale': typeof ApiProblemsStreamReparseStaleRoute
+  '/api/product-stream/backfill-upc-images': typeof ApiProductStreamBackfillUpcImagesRoute
+  '/api/product-stream/create-many': typeof ApiProductStreamCreateManyRoute
+  '/api/product-stream/mark-usda-unavailable': typeof ApiProductStreamMarkUsdaUnavailableRoute
+  '/api/recipe-stream/import-cookbook': typeof ApiRecipeStreamImportCookbookRoute
+  '/api/recipe-stream/import-notion': typeof ApiRecipeStreamImportNotionRoute
+  '/api/recipe-stream/recompute-all': typeof ApiRecipeStreamRecomputeAllRoute
+  '/api/recipe-stream/recompute-stale': typeof ApiRecipeStreamRecomputeStaleRoute
+  '/api/recipe-stream/reprocess-cookbook': typeof ApiRecipeStreamReprocessCookbookRoute
   '/collections': typeof AuthenticatedCollectionsIndexRoute
   '/cookbooks': typeof AuthenticatedCookbooksIndexRoute
   '/expenses': typeof AuthenticatedExpensesIndexRoute
@@ -914,9 +1022,21 @@ export interface FileRoutesById {
   '/_authenticated/usda/$id': typeof AuthenticatedUsdaIdRoute
   '/_authenticated/vendors/$shortcode': typeof AuthenticatedVendorsShortcodeRoute
   '/_authenticated/wishes/$shortcode': typeof AuthenticatedWishesShortcodeRoute
+  '/api/agent-stream/ask': typeof ApiAgentStreamAskRoute
+  '/api/ai-stream/backfill-location-descriptions': typeof ApiAiStreamBackfillLocationDescriptionsRoute
+  '/api/ai-stream/precompute-enrichment-proposals': typeof ApiAiStreamPrecomputeEnrichmentProposalsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
-  '/api/trpc/$': typeof ApiTrpcSplatRoute
+  '/api/problems-stream/prune-unused-aliases': typeof ApiProblemsStreamPruneUnusedAliasesRoute
+  '/api/problems-stream/reparse-stale': typeof ApiProblemsStreamReparseStaleRoute
+  '/api/product-stream/backfill-upc-images': typeof ApiProductStreamBackfillUpcImagesRoute
+  '/api/product-stream/create-many': typeof ApiProductStreamCreateManyRoute
+  '/api/product-stream/mark-usda-unavailable': typeof ApiProductStreamMarkUsdaUnavailableRoute
+  '/api/recipe-stream/import-cookbook': typeof ApiRecipeStreamImportCookbookRoute
+  '/api/recipe-stream/import-notion': typeof ApiRecipeStreamImportNotionRoute
+  '/api/recipe-stream/recompute-all': typeof ApiRecipeStreamRecomputeAllRoute
+  '/api/recipe-stream/recompute-stale': typeof ApiRecipeStreamRecomputeStaleRoute
+  '/api/recipe-stream/reprocess-cookbook': typeof ApiRecipeStreamReprocessCookbookRoute
   '/_authenticated/collections/': typeof AuthenticatedCollectionsIndexRoute
   '/_authenticated/cookbooks/': typeof AuthenticatedCookbooksIndexRoute
   '/_authenticated/expenses/': typeof AuthenticatedExpensesIndexRoute
@@ -1013,9 +1133,21 @@ export interface FileRouteTypes {
     | '/usda/$id'
     | '/vendors/$shortcode'
     | '/wishes/$shortcode'
+    | '/api/agent-stream/ask'
+    | '/api/ai-stream/backfill-location-descriptions'
+    | '/api/ai-stream/precompute-enrichment-proposals'
     | '/api/auth/$'
     | '/api/debug/timing'
-    | '/api/trpc/$'
+    | '/api/problems-stream/prune-unused-aliases'
+    | '/api/problems-stream/reparse-stale'
+    | '/api/product-stream/backfill-upc-images'
+    | '/api/product-stream/create-many'
+    | '/api/product-stream/mark-usda-unavailable'
+    | '/api/recipe-stream/import-cookbook'
+    | '/api/recipe-stream/import-notion'
+    | '/api/recipe-stream/recompute-all'
+    | '/api/recipe-stream/recompute-stale'
+    | '/api/recipe-stream/reprocess-cookbook'
     | '/collections/'
     | '/cookbooks/'
     | '/expenses/'
@@ -1109,9 +1241,21 @@ export interface FileRouteTypes {
     | '/usda/$id'
     | '/vendors/$shortcode'
     | '/wishes/$shortcode'
+    | '/api/agent-stream/ask'
+    | '/api/ai-stream/backfill-location-descriptions'
+    | '/api/ai-stream/precompute-enrichment-proposals'
     | '/api/auth/$'
     | '/api/debug/timing'
-    | '/api/trpc/$'
+    | '/api/problems-stream/prune-unused-aliases'
+    | '/api/problems-stream/reparse-stale'
+    | '/api/product-stream/backfill-upc-images'
+    | '/api/product-stream/create-many'
+    | '/api/product-stream/mark-usda-unavailable'
+    | '/api/recipe-stream/import-cookbook'
+    | '/api/recipe-stream/import-notion'
+    | '/api/recipe-stream/recompute-all'
+    | '/api/recipe-stream/recompute-stale'
+    | '/api/recipe-stream/reprocess-cookbook'
     | '/collections'
     | '/cookbooks'
     | '/expenses'
@@ -1207,9 +1351,21 @@ export interface FileRouteTypes {
     | '/_authenticated/usda/$id'
     | '/_authenticated/vendors/$shortcode'
     | '/_authenticated/wishes/$shortcode'
+    | '/api/agent-stream/ask'
+    | '/api/ai-stream/backfill-location-descriptions'
+    | '/api/ai-stream/precompute-enrichment-proposals'
     | '/api/auth/$'
     | '/api/debug/timing'
-    | '/api/trpc/$'
+    | '/api/problems-stream/prune-unused-aliases'
+    | '/api/problems-stream/reparse-stale'
+    | '/api/product-stream/backfill-upc-images'
+    | '/api/product-stream/create-many'
+    | '/api/product-stream/mark-usda-unavailable'
+    | '/api/recipe-stream/import-cookbook'
+    | '/api/recipe-stream/import-notion'
+    | '/api/recipe-stream/recompute-all'
+    | '/api/recipe-stream/recompute-stale'
+    | '/api/recipe-stream/reprocess-cookbook'
     | '/_authenticated/collections/'
     | '/_authenticated/cookbooks/'
     | '/_authenticated/expenses/'
@@ -1248,9 +1404,21 @@ export interface RootRouteChildren {
   ApiMcpRoute: typeof ApiMcpRoute
   AuthAuthViewRoute: typeof AuthAuthViewRoute
   OauthConsentRoute: typeof OauthConsentRoute
+  ApiAgentStreamAskRoute: typeof ApiAgentStreamAskRoute
+  ApiAiStreamBackfillLocationDescriptionsRoute: typeof ApiAiStreamBackfillLocationDescriptionsRoute
+  ApiAiStreamPrecomputeEnrichmentProposalsRoute: typeof ApiAiStreamPrecomputeEnrichmentProposalsRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiDebugTimingRoute: typeof ApiDebugTimingRoute
-  ApiTrpcSplatRoute: typeof ApiTrpcSplatRoute
+  ApiProblemsStreamPruneUnusedAliasesRoute: typeof ApiProblemsStreamPruneUnusedAliasesRoute
+  ApiProblemsStreamReparseStaleRoute: typeof ApiProblemsStreamReparseStaleRoute
+  ApiProductStreamBackfillUpcImagesRoute: typeof ApiProductStreamBackfillUpcImagesRoute
+  ApiProductStreamCreateManyRoute: typeof ApiProductStreamCreateManyRoute
+  ApiProductStreamMarkUsdaUnavailableRoute: typeof ApiProductStreamMarkUsdaUnavailableRoute
+  ApiRecipeStreamImportCookbookRoute: typeof ApiRecipeStreamImportCookbookRoute
+  ApiRecipeStreamImportNotionRoute: typeof ApiRecipeStreamImportNotionRoute
+  ApiRecipeStreamRecomputeAllRoute: typeof ApiRecipeStreamRecomputeAllRoute
+  ApiRecipeStreamRecomputeStaleRoute: typeof ApiRecipeStreamRecomputeStaleRoute
+  ApiRecipeStreamReprocessCookbookRoute: typeof ApiRecipeStreamReprocessCookbookRoute
   ApiCalendarTokenFeedRoute: typeof ApiCalendarTokenFeedRoute
 }
 
@@ -1865,6 +2033,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedWishesShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/api/agent-stream/ask': {
+      id: '/api/agent-stream/ask'
+      path: '/api/agent-stream/ask'
+      fullPath: '/api/agent-stream/ask'
+      preLoaderRoute: typeof ApiAgentStreamAskRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/ai-stream/backfill-location-descriptions': {
+      id: '/api/ai-stream/backfill-location-descriptions'
+      path: '/api/ai-stream/backfill-location-descriptions'
+      fullPath: '/api/ai-stream/backfill-location-descriptions'
+      preLoaderRoute: typeof ApiAiStreamBackfillLocationDescriptionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/ai-stream/precompute-enrichment-proposals': {
+      id: '/api/ai-stream/precompute-enrichment-proposals'
+      path: '/api/ai-stream/precompute-enrichment-proposals'
+      fullPath: '/api/ai-stream/precompute-enrichment-proposals'
+      preLoaderRoute: typeof ApiAiStreamPrecomputeEnrichmentProposalsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -1879,11 +2068,74 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDebugTimingRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/trpc/$': {
-      id: '/api/trpc/$'
-      path: '/api/trpc/$'
-      fullPath: '/api/trpc/$'
-      preLoaderRoute: typeof ApiTrpcSplatRouteImport
+    '/api/problems-stream/prune-unused-aliases': {
+      id: '/api/problems-stream/prune-unused-aliases'
+      path: '/api/problems-stream/prune-unused-aliases'
+      fullPath: '/api/problems-stream/prune-unused-aliases'
+      preLoaderRoute: typeof ApiProblemsStreamPruneUnusedAliasesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/problems-stream/reparse-stale': {
+      id: '/api/problems-stream/reparse-stale'
+      path: '/api/problems-stream/reparse-stale'
+      fullPath: '/api/problems-stream/reparse-stale'
+      preLoaderRoute: typeof ApiProblemsStreamReparseStaleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/product-stream/backfill-upc-images': {
+      id: '/api/product-stream/backfill-upc-images'
+      path: '/api/product-stream/backfill-upc-images'
+      fullPath: '/api/product-stream/backfill-upc-images'
+      preLoaderRoute: typeof ApiProductStreamBackfillUpcImagesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/product-stream/create-many': {
+      id: '/api/product-stream/create-many'
+      path: '/api/product-stream/create-many'
+      fullPath: '/api/product-stream/create-many'
+      preLoaderRoute: typeof ApiProductStreamCreateManyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/product-stream/mark-usda-unavailable': {
+      id: '/api/product-stream/mark-usda-unavailable'
+      path: '/api/product-stream/mark-usda-unavailable'
+      fullPath: '/api/product-stream/mark-usda-unavailable'
+      preLoaderRoute: typeof ApiProductStreamMarkUsdaUnavailableRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/recipe-stream/import-cookbook': {
+      id: '/api/recipe-stream/import-cookbook'
+      path: '/api/recipe-stream/import-cookbook'
+      fullPath: '/api/recipe-stream/import-cookbook'
+      preLoaderRoute: typeof ApiRecipeStreamImportCookbookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/recipe-stream/import-notion': {
+      id: '/api/recipe-stream/import-notion'
+      path: '/api/recipe-stream/import-notion'
+      fullPath: '/api/recipe-stream/import-notion'
+      preLoaderRoute: typeof ApiRecipeStreamImportNotionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/recipe-stream/recompute-all': {
+      id: '/api/recipe-stream/recompute-all'
+      path: '/api/recipe-stream/recompute-all'
+      fullPath: '/api/recipe-stream/recompute-all'
+      preLoaderRoute: typeof ApiRecipeStreamRecomputeAllRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/recipe-stream/recompute-stale': {
+      id: '/api/recipe-stream/recompute-stale'
+      path: '/api/recipe-stream/recompute-stale'
+      fullPath: '/api/recipe-stream/recompute-stale'
+      preLoaderRoute: typeof ApiRecipeStreamRecomputeStaleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/recipe-stream/reprocess-cookbook': {
+      id: '/api/recipe-stream/reprocess-cookbook'
+      path: '/api/recipe-stream/reprocess-cookbook'
+      fullPath: '/api/recipe-stream/reprocess-cookbook'
+      preLoaderRoute: typeof ApiRecipeStreamReprocessCookbookRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/.well-known/oauth-authorization-server/api/auth': {
@@ -2166,9 +2418,26 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMcpRoute: ApiMcpRoute,
   AuthAuthViewRoute: AuthAuthViewRoute,
   OauthConsentRoute: OauthConsentRoute,
+  ApiAgentStreamAskRoute: ApiAgentStreamAskRoute,
+  ApiAiStreamBackfillLocationDescriptionsRoute:
+    ApiAiStreamBackfillLocationDescriptionsRoute,
+  ApiAiStreamPrecomputeEnrichmentProposalsRoute:
+    ApiAiStreamPrecomputeEnrichmentProposalsRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiDebugTimingRoute: ApiDebugTimingRoute,
-  ApiTrpcSplatRoute: ApiTrpcSplatRoute,
+  ApiProblemsStreamPruneUnusedAliasesRoute:
+    ApiProblemsStreamPruneUnusedAliasesRoute,
+  ApiProblemsStreamReparseStaleRoute: ApiProblemsStreamReparseStaleRoute,
+  ApiProductStreamBackfillUpcImagesRoute:
+    ApiProductStreamBackfillUpcImagesRoute,
+  ApiProductStreamCreateManyRoute: ApiProductStreamCreateManyRoute,
+  ApiProductStreamMarkUsdaUnavailableRoute:
+    ApiProductStreamMarkUsdaUnavailableRoute,
+  ApiRecipeStreamImportCookbookRoute: ApiRecipeStreamImportCookbookRoute,
+  ApiRecipeStreamImportNotionRoute: ApiRecipeStreamImportNotionRoute,
+  ApiRecipeStreamRecomputeAllRoute: ApiRecipeStreamRecomputeAllRoute,
+  ApiRecipeStreamRecomputeStaleRoute: ApiRecipeStreamRecomputeStaleRoute,
+  ApiRecipeStreamReprocessCookbookRoute: ApiRecipeStreamReprocessCookbookRoute,
   ApiCalendarTokenFeedRoute: ApiCalendarTokenFeedRoute,
 }
 export const routeTree = rootRouteImport

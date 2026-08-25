@@ -9,7 +9,7 @@ import { StatementRowList } from "~/app/_components/statement-rows/statement-row
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 
-// `"all"` is a client-only sentinel (never reaches the tRPC filter — see
+// `"all"` is a client-only sentinel (never reaches the server filter — see
 // buildFilters in statement-row-list.tsx): the worklist default is
 // `matchState: "unmatched"`, so there must be a distinct URL value meaning
 // "no matchState filter" rather than "absent, therefore unmatched".

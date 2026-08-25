@@ -1,6 +1,6 @@
 /**
  * Pure state layer for the /projects dashboard filter bar: URL search params
- * <-> `Filters` <-> tRPC scope input. No React, no `~` imports — this module
+ * <-> `Filters` <-> workflow scope input. No React, no `~` imports — this module
  * must be loadable by vitest's `unit` project, which cannot resolve the `~`
  * alias into a `.tsx`/`.ts` file. Only `@cubby/schemas/*` and `date-fns` are
  * allowed as imports here.
@@ -203,7 +203,7 @@ export type ScopeInput = {
 };
 
 /**
- * Map `Filters` to the tRPC scope input. Empty status state remains omitted
+ * Map `Filters` to the workflow scope input. Empty status state remains omitted
  * and therefore unrestricted. `dateRange` resolves to `dateFrom`/`dateTo` via
  * `dateRangeBounds`; `today` is injectable for the same testability reason
  * as `dateRangeBounds` itself.

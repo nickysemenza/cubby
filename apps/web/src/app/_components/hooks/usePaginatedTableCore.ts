@@ -20,7 +20,7 @@ export type ListQueryOptionsFn<TFilters> = (params: {
   pagination: { pageIndex: number; pageSize: number };
   filters: TFilters;
   groupBy?: string;
-  // biome-ignore lint/suspicious/noExplicitAny: intentional tRPC boundary
+  // biome-ignore lint/suspicious/noExplicitAny: intentional query-options boundary
 }) => any;
 
 interface UsePaginatedTableCoreOptions<TFilters> {

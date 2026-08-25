@@ -46,7 +46,6 @@ import {
   type ProjectImageSummaries,
   projectImageSummariesQueryOptions,
 } from "~/entities/image.functions";
-import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import type { ProjectRowsRenderer } from "~/lib/list-view-normalization";
 import { formatCurrency } from "~/lib/utils";
@@ -60,6 +59,10 @@ import {
 } from "./dashboard-filter-state";
 import { ActiveScopeSummary, DashboardFilters } from "./dashboard-filters";
 import { NeedsAttention } from "./needs-attention";
+import {
+  projectDashboardSummaryQueryOptions,
+  projectPortfolioAnalyticsQueryOptions,
+} from "./project.functions";
 import {
   ProjectDataExpenseList,
   ProjectDataTaskList,
@@ -154,7 +157,6 @@ function DashboardErrorState({
  * summary is never used as a browser-side membership oracle for them.
  */
 function MainDashboard({ view }: { view: DashboardView }) {
-  const api = useTRPC();
   const search = route.useSearch();
   const navigate = route.useNavigate();
 
@@ -231,7 +233,7 @@ function MainDashboard({ view }: { view: DashboardView }) {
     [scopeInput],
   );
   const dashboardQuery = useQuery({
-    ...api.project.dashboardSummary.queryOptions(scopeInput),
+    ...projectDashboardSummaryQueryOptions(scopeInput),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -240,7 +242,7 @@ function MainDashboard({ view }: { view: DashboardView }) {
   // bounds now live in `scopeInput` itself (via `filtersToScopeInput`), so
   // there's no separate dateFrom/dateTo spread here anymore.
   const analyticsQuery = useQuery({
-    ...api.project.portfolioAnalytics.queryOptions(scopeInput),
+    ...projectPortfolioAnalyticsQueryOptions(scopeInput),
     staleTime: 5 * 60 * 1000,
     enabled: view === "analytics",
   });

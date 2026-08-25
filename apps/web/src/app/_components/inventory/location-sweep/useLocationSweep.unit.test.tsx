@@ -32,38 +32,27 @@ vi.mock("~/lib/query-keys", () => ({
   invalidatesFor: () => [["location"]],
 }));
 
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPC: () => ({
-    location: {
-      bulkUpdateParent: {
-        mutationOptions: () => ({
-          mutationFn: (input: unknown) => {
-            mocks.calls.push("bulkUpdateParent");
-            return mocks.reparent(input);
-          },
-        }),
-      },
-      ensureGlobalUnknown: {
-        mutationOptions: () => ({
-          mutationFn: async () => ({ id: "LOC-UNK2" }),
-        }),
-      },
+vi.mock("~/app/inventory/inventory.functions", () => ({
+  scanInventoryAtLocationMutationOptions: () => ({
+    mutationFn: async (input: unknown) => mocks.scan(input),
+  }),
+  resolveInventoryScanStraysMutationOptions: () => ({
+    mutationFn: async (input: unknown) => {
+      mocks.calls.push("resolveScanStrays");
+      return mocks.resolveStrays(input);
     },
-    inventory: {
-      scanAtLocation: {
-        mutationOptions: () => ({
-          mutationFn: (input: unknown) => mocks.scan(input),
-        }),
-      },
-      resolveScanStrays: {
-        mutationOptions: () => ({
-          mutationFn: (input: unknown) => {
-            mocks.calls.push("resolveScanStrays");
-            return mocks.resolveStrays(input);
-          },
-        }),
-      },
+  }),
+}));
+
+vi.mock("~/app/locations/location.functions", () => ({
+  bulkUpdateParentMutationOptions: () => ({
+    mutationFn: async (input: unknown) => {
+      mocks.calls.push("bulkUpdateParent");
+      return mocks.reparent(input);
     },
+  }),
+  ensureGlobalUnknownMutationOptions: () => ({
+    mutationFn: vi.fn(),
   }),
 }));
 

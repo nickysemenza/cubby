@@ -2,8 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { locationTreeQueryOptions } from "~/app/locations/location.functions";
 import { entities, entityDetailParams } from "~/entities/entities";
-import { useTRPC } from "~/integrations/trpc/react";
 import { useAllInventoryItems } from "../_components/inventory/use-all-inventory-items";
 import {
   type Camera,
@@ -44,9 +44,7 @@ export function useIsometricPantry() {
   const cameraRef = useRef<Camera | null>(null);
   const roomsRef = useRef<RoomData[]>([]);
 
-  const api = useTRPC();
-
-  const treeQuery = useQuery(api.location.makeTree.queryOptions());
+  const treeQuery = useQuery(locationTreeQueryOptions());
 
   const inventoryQuery = useAllInventoryItems();
 

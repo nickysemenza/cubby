@@ -1,11 +1,9 @@
 /**
  * Shared event shape for server-side streaming bulk operations.
  *
- * A bulk procedure is a tRPC async generator (`.query(async function* …)`) that
- * does all the work server-side in ONE request and `yield`s these events over
- * `httpBatchStreamLink` — no SSE/subscription infra, works on CF Workers. The
- * client drains them with `useBulkStream` (`for await`) to drive a progress bar.
- * Mirrors the `agent.askStream` pattern.
+ * A bulk workflow does all the work server-side in one request and yields these
+ * events over a typed JSONL route. The client drains them with `useBulkStream`
+ * (`for await`) to drive a progress bar.
  *
  * `Item` is an optional per-unit payload (e.g. which card succeeded/failed), so a
  * single stream can drive both an overall bar and per-row status. `Result` is the
@@ -17,7 +15,7 @@ export type BulkProgressEvent<Item = unknown, Result = unknown> =
 
 /**
  * Drive a `{done,total}`-yielding generator (a repo/service that streams its own
- * progress) as a `BulkProgressEvent` stream from a tRPC `.mutation(async function*)`.
+ * progress) as a `BulkProgressEvent` stream from a workflow async generator.
  * Re-yields each tick as a `progress` event, then runs `finalize` on the generator's
  * return value (e.g. a post-loop recompute + shaping the summary) and yields `done`.
  */
@@ -54,8 +52,8 @@ export async function collectBulkStream<Result>(
 }
 
 /**
- * Drive a per-item loop as a `BulkProgressEvent` stream from a tRPC
- * `.mutation(async function*)`. Owns the boilerplate every streamed bulk loop
+ * Drive a per-item loop as a `BulkProgressEvent` stream from a workflow. Owns the
+ * boilerplate every streamed bulk loop
  * shares: an initial `{done:0,total}` tick, a per-item `progress` event, the
  * `succeeded`/`failed` tally, optional per-item error isolation, and the final
  * `done` event. Sibling to {@link streamProgress} (which drains a sub-generator;

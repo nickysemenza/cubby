@@ -27,8 +27,8 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { useTRPC } from "~/integrations/trpc/react";
 import { formatCurrency } from "~/lib/utils";
+import { householdContributionLedgerQueryOptions } from "./household-contribution.functions";
 
 function CheckMark({ ok }: { ok: boolean }) {
   return ok ? (
@@ -257,13 +257,10 @@ function MoneyCell({
 
 /** Query boundary for the household-wide report and its as-of control. */
 export function HouseholdContributionLedger() {
-  const api = useTRPC();
   const asOfId = useId();
   const [asOf, setAsOf] = useState<string | null>(null);
   const input = useMemo(() => (asOf ? { asOf } : {}), [asOf]);
-  const ledgerQuery = useQuery(
-    api.householdContribution.ledger.queryOptions(input),
-  );
+  const ledgerQuery = useQuery(householdContributionLedgerQueryOptions(input));
   const data = ledgerQuery.data;
 
   return (

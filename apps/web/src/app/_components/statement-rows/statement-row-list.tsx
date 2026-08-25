@@ -25,7 +25,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import { useTRPC } from "~/integrations/trpc/react";
+import {
+  statementRowsImportsQueryOptions,
+  statementRowsListQueryOptions,
+  statementRowsSummaryQueryOptions,
+} from "~/lib/statement-row.functions";
 import { formatCurrency } from "~/lib/utils";
 import {
   createCurrencyColumn,
@@ -151,13 +155,12 @@ function StatementRowSummary({
   matchState: MatchStateSearchValue;
   onSelectMatchState: (value: MatchStateSearchValue) => void;
 }) {
-  const api = useTRPC();
   const summaryFilters = useMemo<StatementRowFilters>(
     () => ({ ...filters, matchState: undefined }),
     [filters],
   );
   const { data, isLoading, error } = useQuery(
-    api.statementRow.summary.queryOptions({ filters: summaryFilters }),
+    statementRowsSummaryQueryOptions({ filters: summaryFilters }),
   );
 
   // A settled query with no data means it errored — `isLoading` alone would
@@ -215,8 +218,7 @@ function StatementRowFilterBar({
     }>,
   ) => void;
 }) {
-  const api = useTRPC();
-  const importsQuery = useQuery(api.statementRow.imports.queryOptions({}));
+  const importsQuery = useQuery(statementRowsImportsQueryOptions({}));
   const sourceOptions = useMemo(
     () =>
       importsQuery.data
@@ -305,7 +307,6 @@ const SORTABLE: ReadonlySet<StatementRowSortField> = new Set(
 );
 
 export function StatementRowList() {
-  const api = useTRPC();
   const search = route.useSearch();
   const navigate = route.useNavigate();
 
@@ -355,7 +356,7 @@ export function StatementRowList() {
       : { orderBy: "statementDate", direction: sortParams.direction };
 
   const listQuery = useQuery(
-    api.statementRow.list.queryOptions({
+    statementRowsListQueryOptions({
       filters,
       sort,
       pagination: tableState.pagination,
@@ -368,7 +369,7 @@ export function StatementRowList() {
   // cheap aggregate query over the same (matchState-inclusive) filters gives
   // it the true full-filtered-set total instead.
   const footerTotalsQuery = useQuery(
-    api.statementRow.summary.queryOptions({ filters }),
+    statementRowsSummaryQueryOptions({ filters }),
   );
 
   const columns = useMemo(

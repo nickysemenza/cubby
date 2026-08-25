@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { EntityIcon } from "~/entities/entities";
-import { useTRPC } from "~/integrations/trpc/react";
 import { cn } from "~/lib/utils";
+import { projectOptionsQueryOptions } from "./project.functions";
 
 const markClasses = {
   12: "size-3 text-xs",
@@ -65,9 +65,8 @@ export function ProjectMarkById({
   size?: ProjectMarkSize;
   className?: string;
 }) {
-  const api = useTRPC();
   const { data } = useQuery({
-    ...api.project.options.queryOptions(),
+    ...projectOptionsQueryOptions(),
     enabled: icon === undefined,
   });
   const resolvedIcon = useMemo(

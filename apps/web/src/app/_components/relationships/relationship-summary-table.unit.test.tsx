@@ -1,3 +1,7 @@
+import type {
+  RelatedSummaryInput,
+  RelatedSummaryOutput,
+} from "@cubby/schemas/related-view";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { flexRender } from "@tanstack/react-table";
 import { act, render, screen, waitFor } from "@testing-library/react";
@@ -5,11 +9,24 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CubbyTable } from "../data-table/table-features";
 
-const mocks = vi.hoisted(() => ({
-  queryOptions: vi.fn((input) => ({ queryKey: ["related-summary", input] })),
-  summaryQuery: vi.fn(),
-  lastTable: { current: null as CubbyTable<Record<string, unknown>> | null },
-}));
+const mocks = vi.hoisted(() => {
+  const summaryQuery = vi.fn();
+  return {
+    queryOptions: vi.fn((input: RelatedSummaryInput) => {
+      const { offset, ...scope } = input;
+      return {
+        queryKey: ["related-summary", scope],
+        initialPageParam: offset ?? 0,
+        queryFn: ({ pageParam }: { pageParam: number }) =>
+          summaryQuery({ ...input, offset: pageParam }),
+        getNextPageParam: (result: RelatedSummaryOutput) =>
+          result.nextOffset ?? undefined,
+      };
+    }),
+    summaryQuery,
+    lastTable: { current: null as CubbyTable<Record<string, unknown>> | null },
+  };
+});
 
 const page = (relationKey: string) => ({
   data: [
@@ -44,13 +61,8 @@ const page = (relationKey: string) => ({
   nextOffset: null,
 });
 
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPC: () => ({
-    relatedData: { summary: { queryOptions: mocks.queryOptions } },
-  }),
-  useTRPCClient: () => ({
-    relatedData: { summary: { query: mocks.summaryQuery } },
-  }),
+vi.mock("~/lib/related-data.functions", () => ({
+  relatedDataSummaryInfiniteQueryOptions: mocks.queryOptions,
 }));
 vi.mock("../data-table/Table", () => ({
   default: ({
@@ -130,6 +142,7 @@ const renderTable = (ui: ReactNode) => {
 afterEach(() => {
   for (const client of clients.splice(0)) client.clear();
   mocks.lastTable.current = null;
+  mocks.queryOptions.mockClear();
   mocks.summaryQuery.mockReset();
 });
 
@@ -148,6 +161,13 @@ describe("RelationshipSummaryTable", () => {
     );
 
     await waitFor(() => expect(screen.getByText("Brush")).toBeInTheDocument());
+    expect(mocks.queryOptions).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        relationKey: "vendor.products",
+        sourceId: "VEN-TEST",
+        sort: { field: "latestActivity", direction: "desc" },
+      }),
+    );
     expect(screen.getByTestId("summary-thumbnail")).toHaveAttribute(
       "data-entity",
       "product",

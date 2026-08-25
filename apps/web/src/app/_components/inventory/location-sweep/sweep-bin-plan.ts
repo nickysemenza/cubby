@@ -1,7 +1,7 @@
 /**
  * What a scanned bin label means from the location being swept.
  *
- * Pure: two locations in, a verdict out. No DB, no tRPC, no clock — the hook
+ * Pure: two locations in, a verdict out. No DB, no transport, no clock — the hook
  * gathers the facts and acts on the verdict.
  *
  * Membership is DIRECT-only, matching the product half: `planScan` compares

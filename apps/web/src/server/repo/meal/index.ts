@@ -21,7 +21,6 @@ export {
   createMealWithEntityId,
   deleteMeals,
   getMealByID,
-  getMealByShortcode,
   getMealsByDateRange,
   getUpcomingMealSummary,
   mealList,

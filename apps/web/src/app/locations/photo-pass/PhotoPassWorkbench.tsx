@@ -1,3 +1,7 @@
+import {
+  locationSubtreeQueryOptions,
+  locationTreeQueryOptions,
+} from "~/app/locations/location.functions";
 /**
  * Walk a queue of locations taking one photo each.
  *
@@ -49,7 +53,6 @@ import { Description } from "~/components/ui/description";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Spinner } from "~/components/ui/spinner";
 import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
-import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { PhotoPassStop } from "./PhotoPassStop";
 import { flattenPhotoStops, type PhotoStop } from "./photo-pass-utils";
@@ -257,19 +260,18 @@ function ScanPass() {
 /* -------------------------------------------------------------------------- */
 
 function QueuePass({ parent, all, type }: PhotoPassSearch) {
-  const api = useTRPC();
   const navigate = useNavigate();
   const includePhotographed = all === true;
   const { capture, discardCapture, isCapturing } = useLocationPhotoCapture();
 
   const subtreeQuery = useQuery(
-    api.location.subtree.queryOptions(
+    locationSubtreeQueryOptions(
       { shortcode: parent ?? "LOC-2222" },
       { enabled: parent != null },
     ),
   );
   const treeQuery = useQuery({
-    ...api.location.makeTree.queryOptions(),
+    ...locationTreeQueryOptions(),
     enabled: parent == null,
   });
   const roots = (parent ? subtreeQuery.data : treeQuery.data) ?? EMPTY_ROOTS;

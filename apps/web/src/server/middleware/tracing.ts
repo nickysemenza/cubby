@@ -1,6 +1,6 @@
 /**
  * TanStack Start tracing middleware
- * Traces all server-side requests including auth routes that bypass tRPC
+ * Traces all server-side requests including auth and explicit API routes
  */
 
 import { createMiddleware } from "@tanstack/react-start";

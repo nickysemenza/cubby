@@ -1,18 +1,17 @@
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { useChunkedRecordQuery } from "~/app/_components/hooks/useChunkedRecordQuery";
-import { useTRPC } from "~/integrations/trpc/react";
+import { productSummariesQueryOptions } from "~/app/products/product.functions";
 
 type ProductUnitMappingMap = Record<string, UnitMapping[]>;
 
 const EMPTY_PRODUCT_UNIT_MAPPING_MAP: ProductUnitMappingMap = {};
 
 export function useProductUnitMappingSummaries(productIds: readonly string[]) {
-  const api = useTRPC();
   return useChunkedRecordQuery({
     ids: productIds,
     empty: EMPTY_PRODUCT_UNIT_MAPPING_MAP,
     queryOptions: (chunkIds) =>
-      api.product.summaries.queryOptions(
+      productSummariesQueryOptions(
         { ids: chunkIds, include: ["unitMappings"] },
         {
           enabled: chunkIds.length > 0,

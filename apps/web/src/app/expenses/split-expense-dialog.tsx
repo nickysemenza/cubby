@@ -9,6 +9,7 @@ import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { StaticPicker } from "~/app/_components/combobox/static-picker";
 import { WithProjectSearch } from "~/app/_components/combobox/with-search-hook";
 import { tradeOptions } from "~/app/projects/trade-options";
+import { splitPurchaseMutationOptions } from "~/app/purchases/purchase.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -26,7 +27,6 @@ import { Input } from "~/components/ui/input";
 import { NoneValue } from "~/components/ui/none-value";
 import { StatusText } from "~/components/ui/status-text";
 import { entityDetailLink } from "~/entities/entities";
-import { useTRPC } from "~/integrations/trpc/react";
 import { invalidatesFor } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { useActionMutation } from "../_components/hooks/useActionMutation";
@@ -89,7 +89,6 @@ export function SplitExpenseDialog({
    */
   purchaseShortcode: PurchaseShortcode;
 }) {
-  const api = useTRPC();
   const navigate = useNavigate();
   const keyCounter = useRef(0);
 
@@ -157,7 +156,7 @@ export function SplitExpenseDialog({
     );
 
   const splitMutation = useActionMutation({
-    mutationFn: api.purchase.split.mutationOptions,
+    mutationFn: splitPurchaseMutationOptions,
     success: (items) => `Split into ${items.length} expenses`,
     invalidateKeys: invalidatesFor("expense"),
     onSuccess: () => {

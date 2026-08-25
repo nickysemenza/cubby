@@ -23,6 +23,7 @@ import {
   resolveDestination,
 } from "~/app/_components/inventory/destination-location-picker";
 import { useInventoryInvalidation } from "~/app/_components/inventory/hooks";
+import { bulkMoveInventoryMutationOptions } from "~/app/inventory/inventory.functions";
 import { Row, Stack } from "~/components/layout";
 import { MutedBox } from "~/components/layout/muted-box";
 import { Button } from "~/components/ui/button";
@@ -32,7 +33,6 @@ import { Input } from "~/components/ui/input";
 import { EntityIcon } from "~/entities/entities";
 import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { entityListQueryOptions } from "~/entities/entity-list.functions";
-import { useTRPC } from "~/integrations/trpc/react";
 
 type InventoryListItem = z.infer<typeof inventoryListItemOut>;
 
@@ -59,7 +59,6 @@ interface BulkMoveFormProps {
 export default function BulkMoveForm({
   initialSourceLocationId,
 }: BulkMoveFormProps) {
-  const api = useTRPC();
   const invalidateInventory = useInventoryInvalidation();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -193,7 +192,7 @@ export default function BulkMoveForm({
   const selectedItems = moveItems.filter((item) => item.selected);
 
   const bulkMoveMutation = useMutation(
-    api.inventory.bulkMove.mutationOptions({
+    bulkMoveInventoryMutationOptions({
       onSuccess: (data) => {
         // Force the next fetch to reseed — moved items are gone from the
         // source location and remainders have reduced quantities.

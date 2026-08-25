@@ -8,7 +8,7 @@ import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 // _serverFn path) assumes the Node OpenTelemetry runtime that workerd lacks.
 // So apply it only in dev (Node via `vite dev`), where the node SDK is actually
 // initialized by instrument.server.mjs. In prod, errors still reach Sentry via
-// withSentry + the explicit captures in cf-server.ts / trpc.ts.
+// withSentry + the explicit captures in cf-server.ts / observed-request.ts.
 //
 // Two independent guards, and both matter. At RUNTIME `isCfBuild` is true in
 // prod, so wrapFetchWithSentry is never *called*. At BUILD time `cfSentryShim`

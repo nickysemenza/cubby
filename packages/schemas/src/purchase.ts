@@ -30,10 +30,13 @@ import {
 import { money, moneyNullable, wholeCentAmount } from "./money";
 import {
   costTypeSchema,
+  expenseOut,
   plainDate,
   PRODUCT_QUANTITY_DESCRIPTION,
   tradeSchema,
 } from "./project";
+
+export const splitExpenseOut = z.array(expenseOut);
 
 const purchaseFields = {
   vendorId: vendorShortcode,

@@ -1,6 +1,6 @@
 import type { LocationTypeSuggestion } from "@cubby/schemas/ai";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
-import { useTRPCClient } from "~/integrations/trpc/react";
+import { suggestLocationTypeForBrowser } from "~/lib/ai.functions";
 import { FieldWithAISuggest } from "../ai/ai-suggest";
 import { SelectField } from "../form-utils";
 import { locationTypeOptionsWithTheme } from "./location-icons";
@@ -22,7 +22,6 @@ export function TypeFieldWithAI<
   disabled = false,
   description,
 }: TypeFieldWithAIProps<TFieldValues>) {
-  const trpcClient = useTRPCClient();
   const enabled = !!locationName.trim();
 
   return (
@@ -44,9 +43,7 @@ export function TypeFieldWithAI<
       basisKey={locationName}
       currentValue={form.watch(name)}
       fieldDirty={form.getFieldState(name).isDirty}
-      runSuggest={() =>
-        trpcClient.ai.suggestLocationType.query({ locationName })
-      }
+      runSuggest={() => suggestLocationTypeForBrowser({ locationName })}
       onAccept={(r) => form.setValue(name, r.type as TFieldValues[typeof name])}
     />
   );

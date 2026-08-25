@@ -81,9 +81,9 @@ export type RelationMutationOut = z.infer<typeof relationMutationOut>;
  * Why an operation REFUSED, as a domain answer rather than a transport error.
  *
  * A blocked delete or merge is not a fault: the guard did its job and the
- * caller needs to know exactly what stood in the way. Over tRPC that structure
- * rides on the error (`errorFormatter` lifts `reason` and `blockers` onto
- * `shape.data`), but over MCP an `isError: true` envelope carries text and
+ * caller needs to know exactly what stood in the way. The Start transport keeps
+ * that structure in its typed error envelope, but over MCP an `isError: true`
+ * envelope carries text and
  * nothing a client may rely on — the reference SDK client rejects
  * `structuredContent` on an errored result, so the refusal has to live INSIDE
  * the declared output schema to survive the trip. Hence this shape: it is part
@@ -102,7 +102,7 @@ export type RelationMutationOut = z.infer<typeof relationMutationOut>;
  */
 export const operationRefusalOut = z.object({
   error: z.string().min(1),
-  /** tRPC code. Absent when the refusal wasn't thrown as a TRPCError. */
+  /** Stable application error code, when one was available. */
   code: z.string().optional(),
   /** The `AppErrorReason` behind the refusal, when there was one. */
   reason: z.string().optional(),

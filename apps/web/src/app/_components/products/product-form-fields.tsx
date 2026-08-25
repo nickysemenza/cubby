@@ -21,7 +21,7 @@ import { Image } from "~/components/ui/image";
 import { sectionRuleClass } from "~/components/ui/section-rule";
 import { Spinner } from "~/components/ui/spinner";
 import type { useImageState } from "~/hooks/useImageState";
-import { useTRPCClient } from "~/integrations/trpc/react";
+import { lookupUpc } from "~/lib/upc.functions";
 import { cn } from "~/lib/utils";
 import { UsdaFoodSearchField } from "../combobox/with-usda-food-search";
 import {
@@ -126,7 +126,6 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
 }: ProductFormFieldsProps<TFieldValues>) {
   const [lookupImageUrl, setLookupImageUrl] = useState<string | null>(null);
   const [isLookingUp, setIsLookingUp] = useState(false);
-  const trpcClient = useTRPCClient();
 
   // Watch fields for conditional rendering
   const nameValue = form.watch("name" as Path<TFieldValues>) as string;
@@ -165,7 +164,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
 
     setIsLookingUp(true);
     try {
-      const result = await trpcClient.upc.lookup.query({ upc: upcValue });
+      const result = await lookupUpc(upcValue);
       if (result) {
         if (result.name) {
           form.setValue(

@@ -112,6 +112,21 @@ const toolAnnotationsSchema = z.strictObject({
 });
 
 const jsonObjectSchema = z.record(z.string(), z.unknown());
+const jsonValueObjectSchema = z.record(z.string(), z.json());
+
+const mcpCatalogToolSchema = z.strictObject({
+  name: z.string(),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  inputSchema: jsonValueObjectSchema,
+  outputSchema: jsonValueObjectSchema.optional(),
+  annotations: toolAnnotationsSchema.optional(),
+});
+
+export const mcpToolCatalogOut = z.strictObject({
+  tools: z.array(mcpCatalogToolSchema),
+  instructions: z.string(),
+});
 
 const mcpToolUsageRowSchema = z.strictObject({
   toolName: z.string(),
@@ -132,6 +147,11 @@ const mcpToolUsageRowSchema = z.strictObject({
   daily: z.array(dailyUsageSchema),
   users: z.array(usageUserSchema),
   clients: z.array(usageClientSchema),
+});
+
+const mcpToolUsageBrowserRowSchema = mcpToolUsageRowSchema.extend({
+  inputSchema: jsonValueObjectSchema.nullable(),
+  outputSchema: jsonValueObjectSchema.nullable(),
 });
 
 const usageBreakdownSchema = z.strictObject({
@@ -166,6 +186,10 @@ export const mcpUsageDashboardOut = z.strictObject({
   // derived for (find_*, patch_*, verify_*, statement/usda/problems, and
   // any row minted before this field existed).
   entities: z.array(usageBreakdownSchema),
+});
+
+export const mcpUsageDashboardBrowserOut = mcpUsageDashboardOut.extend({
+  tools: z.array(mcpToolUsageBrowserRowSchema),
 });
 
 export const mcpUsageActivityInput = z.strictObject({

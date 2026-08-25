@@ -8,6 +8,7 @@ import {
   contributionGapLabels,
   ledgerPartyLabel,
 } from "~/app/_components/household-contribution-format";
+import { projectContributionQueryOptions } from "~/app/finance/household-contribution.functions";
 import { Row, Stack } from "~/components/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
@@ -21,7 +22,6 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { useTRPC } from "~/integrations/trpc/react";
 import { formatCurrency } from "~/lib/utils";
 
 export function ProjectContributionReport({
@@ -197,9 +197,8 @@ export function ProjectContributionSection({
 }: {
   projectId: string;
 }) {
-  const api = useTRPC();
   const query = useQuery(
-    api.householdContribution.project.queryOptions({
+    projectContributionQueryOptions({
       projectId,
       includeSubprojects: true,
     }),

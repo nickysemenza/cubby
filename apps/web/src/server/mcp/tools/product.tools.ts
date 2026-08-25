@@ -31,7 +31,7 @@ import {
 /**
  * `lookup_upc` over the slim product projection.
  *
- * The tRPC output carries `productTopLevelOut`, whose nested `images[].id` and
+ * The workflow output carries `productTopLevelOut`, whose nested `images[].id` and
  * `externalIds[].id` are raw uuids — fine inside the app, but a uuid must never
  * reach an MCP payload. `slimProduct` is the same projection every other product
  * tool publishes, so the local match reads identically here and in the entity

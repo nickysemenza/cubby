@@ -24,8 +24,8 @@ import {
 } from "~/app/_components/inventory/destination-location-picker";
 import type { InventoryDialogItem } from "~/app/_components/inventory/dialog-item";
 import { useInventoryInvalidation } from "~/app/_components/inventory/hooks";
+import { moveInventoryEntriesMutationOptions } from "~/app/inventory/inventory.functions";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
-import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 
 type InventoryItem = InventoryDialogItem;
@@ -46,7 +46,6 @@ export function MoveInventoryDialog({
   sourceLocationId: sourceLocationIdProp,
   onSuccess,
 }: MoveInventoryDialogProps) {
-  const api = useTRPC();
   const invalidateInventory = useInventoryInvalidation();
   const { form, error, setError, reset } = useDestinationLocationForm();
   const sourceLocationIds = uniq(
@@ -54,7 +53,7 @@ export function MoveInventoryDialog({
   ).filter((id): id is LocationShortcode => Boolean(id));
 
   const moveMutation = useMutation(
-    api.inventory.moveEntries.mutationOptions({
+    moveInventoryEntriesMutationOptions({
       onError: (err) => {
         setError(err.message || "Failed to move items");
       },

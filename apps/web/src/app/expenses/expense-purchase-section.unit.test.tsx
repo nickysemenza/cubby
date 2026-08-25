@@ -11,17 +11,8 @@ import { describe, expect, it, vi } from "vitest";
 const useQueryMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@tanstack/react-query", () => ({
+  queryOptions: (options: unknown) => options,
   useQuery: useQueryMock,
-}));
-
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPC: () => ({
-    expense: {
-      chargeContext: {
-        queryOptions: (id: string) => ({ queryKey: ["purchase-context", id] }),
-      },
-    },
-  }),
 }));
 
 vi.mock("@tanstack/react-router", () => ({

@@ -26,23 +26,44 @@ describe("cached-read policy", () => {
     expect(mutations).not.toMatch(/readDb/u);
   });
 
-  it("uses the cached read handle only for user-facing search procedures", () => {
-    const source = read("./api/routers/search.ts");
-    const find = between(source, "find:", "documentHealth:");
-    const documentHealth = between(
-      source,
-      "documentHealth:",
-      "repairDocuments:",
+  it("uses the cached read handle only for user-facing search operations", () => {
+    const browser = read("./search-browser.server.ts");
+    const mcpCaller = read("./mcp/workflow-caller.ts");
+    const find = between(
+      browser,
+      "export const findSearchHitsForBrowser",
+      "export const inspectSearchDocumentHealthForBrowser",
     );
-    const repairDocuments = between(source, "repairDocuments:", "related:");
-    const related = between(source, "related:", "similar:");
-    const similar = between(source, "similar:", "debug:");
-    const debug = between(source, "debug:", "enqueueEmbeddingBackfill:");
-    const mutations = source.slice(source.indexOf("enqueueEmbeddingBackfill:"));
+    const documentHealth = between(
+      browser,
+      "export const inspectSearchDocumentHealthForBrowser",
+      "export const repairSearchDocumentsForBrowser",
+    );
+    const repairDocuments = between(
+      browser,
+      "export const repairSearchDocumentsForBrowser",
+      "export const findRelatedSearchHitsForBrowser",
+    );
+    const related = between(
+      browser,
+      "export const findRelatedSearchHitsForBrowser",
+      "export const inspectSearchDebugForBrowser",
+    );
+    const debug = between(
+      browser,
+      "export const inspectSearchDebugForBrowser",
+      "export const enqueueEmbeddingBackfillForBrowser",
+    );
+    const mutations = browser.slice(
+      browser.indexOf("export const enqueueEmbeddingBackfillForBrowser"),
+    );
+    const mcpSearch = between(mcpCaller, "search: {", "statementRow: {");
 
-    expect(find).toContain("findSearchHits(ctx.readDb");
-    expect(related).toContain("findRelatedSearchHits(ctx.readDb");
-    expect(similar).toContain("findSimilarEntitiesForPair(ctx.readDb");
+    expect(find).toContain("findSearchHitsWorkflow(context.readDb");
+    expect(related).toContain("findRelatedSearchHitsWorkflow(context.readDb");
+    expect(mcpSearch).toContain("findSearchHitsWorkflow(context.readDb");
+    expect(mcpSearch).toContain("findRelatedSearchHitsWorkflow(context.readDb");
+    expect(mcpSearch).toContain("findSimilarEntitiesWorkflow(context.readDb");
 
     for (const authoritative of [
       documentHealth,
@@ -50,8 +71,8 @@ describe("cached-read policy", () => {
       debug,
       mutations,
     ]) {
-      expect(authoritative).toContain("ctx.db");
-      expect(authoritative).not.toMatch(/ctx\.readDb/u);
+      expect(authoritative).toMatch(/context\.db/u);
+      expect(authoritative).not.toMatch(/context\.readDb/u);
     }
   });
 
@@ -71,24 +92,47 @@ describe("cached-read policy", () => {
   });
 
   it("keeps correctness-sensitive and non-browser API surfaces authoritative", () => {
-    const authoritativeFiles = [
-      "./api/routers/problems.ts",
-      "./api/routers/location.ts",
-      "./api/routers/inventory.ts",
-      "./api/routers/background-jobs.ts",
-      "./api/routers/task.ts",
-      "./api/routers/oauth.ts",
-      "./api/routers/data-quality.ts",
-      "./api/routers/entity-integrity.ts",
-      "./api/routers/agent.ts",
-      "./api/routers/mcp.ts",
-      "./api/routers/recipe.ts",
-      "./api/routers/recipe/analysis.ts",
+    const authoritativeSurfaces = [
+      ["./problems-browser.server.ts", "./workflows/problems.server.ts"],
+      ["./location-browser.server.ts", "./workflows/location.server.ts"],
+      ["./inventory-browser.server.ts", "./workflows/inventory.server.ts"],
+      [
+        "./background-batch-browser.server.ts",
+        "./workflows/background-jobs.server.ts",
+      ],
+      ["./task-browser.server.ts", "./workflows/task.server.ts"],
+      ["./oauth-browser.server.ts"],
+      ["./agent-browser.server.ts", "./workflows/agent.server.ts"],
+      ["./mcp-browser.server.ts", "./workflows/mcp-browser.server.ts"],
+      [
+        "./recipe-browser.server.ts",
+        "./workflows/recipe.server.ts",
+        "./workflows/recipe-import.server.ts",
+      ],
     ];
 
-    for (const path of authoritativeFiles) {
-      expect(read(path), path).not.toMatch(/ctx\.readDb/u);
+    for (const paths of authoritativeSurfaces) {
+      const source = paths.map(read).join("\n");
+      expect(source, paths.join(", ")).toMatch(
+        /(?:context|ctx|c)\.db|readPolicy: "strong"/u,
+      );
+      expect(source, paths.join(", ")).not.toMatch(
+        /(?:context|ctx|c)\.readDb/u,
+      );
     }
+
+    const agentWorkflow = read("./workflows/agent.server.ts");
+    expect(agentWorkflow).toContain("readDb: context.db");
+    expect(agentWorkflow).not.toContain("readDb: context.readDb");
+
+    const dataQualityTools = read("./mcp/tools/data-quality.tools.ts");
+    const entityIntegrityTools = read("./mcp/tools/entity-integrity.tools.ts");
+    const sharedTools = read("./mcp/tools/_shared.ts");
+
+    expect(dataQualityTools).toContain("getCaller(extra)");
+    expect(dataQualityTools).not.toContain("getReadCaller(extra)");
+    expect(entityIntegrityTools).toContain("registerRouterTool(server");
+    expect(sharedTools).toContain("config.call(\n        getCaller(extra)");
   });
 
   it("allows only MCP entity list/search and search tools onto bounded-stale reads", () => {
@@ -96,7 +140,7 @@ describe("cached-read policy", () => {
     const searchTools = read("./mcp/tools/search.tools.ts");
     const sharedTools = read("./mcp/tools/_shared.ts");
 
-    expect(route).toContain("const caller = createCaller(ctx)");
+    expect(route).toContain("const caller = createMcpWorkflowCaller(ctx)");
     expect(route).toContain("readDb: boundedStaleDb");
     expect(route).toContain("readCaller,");
     expect(route).toContain("entityKernel: {");

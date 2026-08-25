@@ -20,8 +20,8 @@ import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
 import { wishCreateRequest } from "~/entities/editing/editor-requests";
 import { entities, entityDetailParams } from "~/entities/entities";
-import { useTRPC } from "~/integrations/trpc/react";
 import { formatCurrencyRange, rangeMidpoint } from "~/lib/format-range";
+import { relatedDataOptionsQueryOptions } from "~/lib/related-data.functions";
 import { formatCurrency } from "~/lib/utils";
 import { wishPriceRange } from "./wish-price-range";
 import { buildWishRows, type WishRow, wishSubRows } from "./wish-rows";
@@ -68,7 +68,6 @@ const WISH_TREE_CONFIG = {
 } as const;
 
 export function WishList() {
-  const api = useTRPC();
   const columnHelper = useMemo(() => createCubbyColumnHelper<WishRow>(), []);
 
   const columns = useMemo(
@@ -236,7 +235,7 @@ export function WishList() {
   // catalog: only a Product that is somebody's candidate can narrow this list,
   // and the hint is the number of wishes naming it.
   const candidateOptionsQuery = useQuery(
-    api.relatedData.options.queryOptions({
+    relatedDataOptionsQueryOptions({
       relationKey: "wish.candidates",
       limit: 100,
     }),

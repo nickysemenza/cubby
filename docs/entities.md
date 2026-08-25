@@ -155,19 +155,19 @@ filter-option, and write operations use authenticated Start functions and
 generated entity-to-input/output maps. Image, USDA Food, and Cookbook retain
 explicit browser projections because their shapes are specialized, but those
 projections use the same Start operation module for authentication, validation,
-errors, cancellation checkpoints, tracing, and console observability. No entity
-browser operation uses tRPC.
+errors, cancellation checkpoints, tracing, and console observability. Every
+entity browser operation uses this Start transport.
 
-Workflow-shaped tRPC procedures remain temporary adapters with no entity
-business logic. Removing an entity compatibility procedure has no deployment
-shim: a tab loaded before that deployment must reload before calling the removed
-path.
+Workflow operations are explicit Start functions with no entity business logic in
+the transport adapter. Removing an operation has no deployment shim: a tab loaded
+before that deployment must reload before calling the removed function.
 
 MCP invokes `executeEntity` directly through the `entity` tool and publishes its
 machine-readable contract at `entities://catalog`. Workflow-shaped MCP tools
 remain separate. MCP, jobs, repositories, entity modules, and kernel tests must
-not import tRPC routers. Only explicit workflow adapters, the `/api/trpc`
-entrypoint, and remaining workflow browser callers may do so.
+not import browser transport modules. Explicit workflow adapters and typed JSONL
+stream routes are the only transport seams; business behavior remains in
+workflow modules.
 
 ## Filters and search
 

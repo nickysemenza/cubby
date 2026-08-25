@@ -25,17 +25,21 @@ vi.mock("@tanstack/react-query", () => ({
   useMutation: () => ({ mutate: vi.fn(), isPending: false }),
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 }));
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPC: () => ({
-    product: {
-      components: { queryOptions: () => ({ queryKey: ["components"] }) },
-      kitMembership: { queryOptions: () => ({ queryKey: ["kitMembership"] }) },
-      search: { queryOptions: () => ({ queryKey: ["search"] }) },
-      attachComponents: { mutationOptions: vi.fn() },
-      detachComponents: { mutationOptions: vi.fn() },
-    },
+
+vi.mock("~/app/products/product.functions", () => ({
+  productComponentsQueryOptions: (input: unknown) => ({
+    queryKey: ["components", input],
   }),
+  kitMembershipQueryOptions: (input: unknown) => ({
+    queryKey: ["kitMembership", input],
+  }),
+  productSearchQueryOptions: (input: unknown) => ({
+    queryKey: ["search", input],
+  }),
+  attachProductComponentsMutationOptions: () => ({}),
+  detachProductComponentsMutationOptions: () => ({}),
 }));
+
 // Keep the table shell lightweight while exercising the real column
 // definitions and TanStack row model used by the embedded roster.
 vi.mock("~/app/_components/data-table/Table", () => ({

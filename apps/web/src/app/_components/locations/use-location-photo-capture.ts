@@ -54,11 +54,11 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { useTRPC } from "~/integrations/trpc/react";
 import {
   makeBatchStatusFetcher,
   watchBatchesAndInvalidate,
 } from "~/lib/background-batch-polling";
+import { uploadImageMutationOptions } from "~/lib/image.functions";
 import { invalidateQueryRoots, queryKeys } from "~/lib/query-keys";
 
 /**
@@ -73,9 +73,8 @@ const PHOTO_INVALIDATE_KEYS = [
 ] as const;
 
 export function useLocationPhotoCapture() {
-  const api = useTRPC();
   const queryClient = useQueryClient();
-  const uploadImage = useMutation(api.image.uploadImage.mutationOptions());
+  const uploadImage = useMutation(uploadImageMutationOptions());
   const updateLocation = useMutation(
     entityMutationOptionsFactory("location", "update")(),
   );

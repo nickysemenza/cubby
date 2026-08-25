@@ -21,6 +21,9 @@ const mocks = vi.hoisted(() => ({
     (_options: CapturedTableOptions) => ({}) as Table<TestRow>,
   ),
   clearSelection: vi.fn(),
+  relatedDataPreviewsQueryOptions: vi.fn((input: unknown) => ({
+    queryKey: ["related-previews", input],
+  })),
 }));
 
 vi.mock("@cubby/schemas/related-view", async (importOriginal) => ({
@@ -72,10 +75,8 @@ vi.mock("~/entities/filters", async (importOriginal) => ({
   filterGetterFromColumnFilters: () => () => undefined,
   summarizeListState: () => undefined,
 }));
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPC: () => ({
-    relatedData: { previews: { queryOptions: () => ({}) } },
-  }),
+vi.mock("~/lib/related-data.functions", () => ({
+  relatedDataPreviewsQueryOptions: mocks.relatedDataPreviewsQueryOptions,
 }));
 vi.mock("../data-table/useTableConfig", () => ({
   useTableConfig: mocks.useTableConfig,

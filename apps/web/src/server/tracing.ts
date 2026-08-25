@@ -68,9 +68,6 @@ export const TraceNames = {
   // HTTP routes
   route: (method: string, path: string) => `${method} ${path}`,
 
-  // tRPC procedures
-  trpc: (type: string, path: string) => `trpc.${type}.${path}`,
-
   // MCP tool dispatch
   mcp: (tool: string) => `mcp.tool.${tool}`,
 
@@ -98,7 +95,7 @@ type Attr = string | number | boolean | undefined;
  * Minimal span surface our call sites use. Backed by an OTel span in dev and a
  * `cloudflare:workers` span in prod. Status is set automatically by
  * {@link withTrace} (OK on success, errored on throw); callers only need
- * `setError` for non-throwing failures (e.g. a tRPC `result.ok === false`).
+ * `setError` for non-throwing failures (for example, a rejected Start result).
  */
 export interface AppSpan {
   /**

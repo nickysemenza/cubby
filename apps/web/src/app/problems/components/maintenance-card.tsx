@@ -5,6 +5,11 @@ import { Link } from "@tanstack/react-router";
 import pluralize from "pluralize";
 import type { ReactNode } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { recomputeValuationsMutationOptions } from "~/app/locations/location.functions";
+import {
+  openRecipeRecomputeAllStream,
+  recipeDryRunQueryOptions,
+} from "~/app/recipes/recipe.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
@@ -16,8 +21,22 @@ import {
 } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { entityListRootKey } from "~/entities/entity-list.functions";
-import { useTRPC } from "~/integrations/trpc/react";
+import {
+  cleanupUnreferencedImagesMutationOptions,
+  cullPendingImagesMutationOptions,
+} from "~/lib/image.functions";
+import {
+  openProblemsPruneAliasesStream,
+  openProblemsReparseStream,
+  problemsDryRunPruneAliasesQueryOptions,
+  problemsDryRunReparseQueryOptions,
+  problemsMaintenanceCountsQueryOptions,
+} from "~/lib/problems.functions";
 import { invalidatesFor, queryKeys } from "~/lib/query-keys";
+import {
+  searchDocumentHealthQueryOptions,
+  searchRepairDocumentsMutationOptions,
+} from "~/lib/search.functions";
 import { PROBLEMS_QUERY_STALE_TIME } from "../problem-query-freshness";
 import { searchDocumentMaintenanceRefetchInterval } from "../search-document-maintenance-query";
 import { BACKFILL } from "./backfill-registry";
@@ -82,8 +101,8 @@ function MaintenanceRow({
 // Shared layout for a Maintenance action whose "N affected" figure is too
 // expensive for an always-on count, so it's fetched on demand: an optional
 // summary, a "Dry run" button that triggers it, and the streaming "fix all"
-// button. Each action component owns its own (typed) tRPC dry-run query + backfill
-// and feeds the resolved pieces in — keeping trpc's inference natural per site.
+// button. Each action component owns its own typed dry-run query and backfill,
+// then feeds the resolved pieces into the shared row.
 function MaintenanceDryRunRow({
   summary,
   onDryRun,
@@ -125,16 +144,15 @@ function MaintenanceDryRunRow({
 // background / Worker CPU limit), it enqueues bounded jobs onto the background-jobs
 // queue and links the toast there (mirrors "Analyze descriptions").
 function RecomputeAction() {
-  const trpc = useTRPC();
   const dryRun = useQuery({
-    ...trpc.recipe.dryRunRecomputeTotals.queryOptions(),
+    ...recipeDryRunQueryOptions(),
     enabled: false,
   });
   // Cheap always-on count of recipes whose totals are stale (pending recompute) —
   // shares the card's cached query, so no extra round-trip. The queue normally
   // clears these in seconds; a lingering count flags a stuck/lost wave.
   const { data: counts } = useQuery(
-    trpc.problems.getMaintenanceCounts.queryOptions(undefined, {
+    problemsMaintenanceCountsQueryOptions({
       staleTime: PROBLEMS_QUERY_STALE_TIME,
     }),
   );
@@ -155,8 +173,8 @@ function RecomputeAction() {
           total: number;
           batchId: string | null;
         }>
-          run={(client) => client.recipe.recomputeAllDurable.mutate()}
-          invalidateKeys={(_api) => [entityListRootKey("recipe")]}
+          run={(signal) => openRecipeRecomputeAllStream(signal)}
+          invalidateKeys={[entityListRootKey("recipe")]}
           idleLabel="Recompute all"
           pendingLabel="Enqueuing…"
           toastResult={(r) => ({
@@ -190,9 +208,8 @@ function RecomputeAction() {
 // used to run on every Problems-page load). Dry run counts the drifted lines;
 // "Re-parse all" applies + recomputes affected totals.
 function ReparseAction() {
-  const trpc = useTRPC();
   const dryRun = useQuery({
-    ...trpc.problems.dryRunReparse.queryOptions(),
+    ...problemsDryRunReparseQueryOptions(),
     enabled: false,
   });
   return (
@@ -206,8 +223,8 @@ function ReparseAction() {
       dryRunPending={dryRun.isFetching}
       backfill={
         <BackfillButton<{ updated: number; recipesAffected: number }>
-          run={(client) => client.problems.reparseStale.mutate()}
-          invalidateKeys={(_api) => [entityListRootKey("recipe")]}
+          run={openProblemsReparseStream}
+          invalidateKeys={[entityListRootKey("recipe")]}
           foreground
           idleLabel="Re-parse all"
           pendingLabel="Re-parsing…"
@@ -228,9 +245,8 @@ function ReparseAction() {
 // every ingredient at once — the other WASM sweep, also re-homed here. Dry run
 // counts what would be pruned; "Prune all" applies it.
 function PruneAliasesAction() {
-  const trpc = useTRPC();
   const dryRun = useQuery({
-    ...trpc.problems.dryRunPruneAliases.queryOptions(),
+    ...problemsDryRunPruneAliasesQueryOptions(),
     enabled: false,
   });
   return (
@@ -244,8 +260,8 @@ function PruneAliasesAction() {
       dryRunPending={dryRun.isFetching}
       backfill={
         <BackfillButton<{ pruned: number }>
-          run={(client) => client.problems.pruneAllUnusedAliasesStream.mutate()}
-          invalidateKeys={(_api) => [entityListRootKey("ingredient")]}
+          run={openProblemsPruneAliasesStream}
+          invalidateKeys={[entityListRootKey("ingredient")]}
           foreground
           idleLabel="Prune all"
           pendingLabel="Pruning…"
@@ -265,15 +281,14 @@ function PruneAliasesAction() {
 // This reads the latest persisted repair batch only; it never starts a
 // full-catalog diagnostic from the Problems page.
 function SearchDocumentsAction() {
-  const trpc = useTRPC();
   const health = useQuery({
-    ...trpc.search.documentHealth.queryOptions(),
+    ...searchDocumentHealthQueryOptions(),
     staleTime: 30_000,
     refetchInterval: (query) =>
       searchDocumentMaintenanceRefetchInterval(query.state.data),
   });
   const repair = useActionMutation({
-    mutationFn: trpc.search.repairDocuments.mutationOptions,
+    mutationFn: searchRepairDocumentsMutationOptions,
     invalidateKeys: [queryKeys.search.all],
     success: (result) => (
       <span>
@@ -336,9 +351,8 @@ function SearchDocumentsAction() {
 // are older than the cull threshold, plus their R2 objects. Plain (non-streamed)
 // mutation, so it uses useActionMutation rather than the BackfillButton stream.
 function CullPendingImagesAction() {
-  const api = useTRPC();
   const cull = useActionMutation({
-    mutationFn: api.image.cullPendingImages.mutationOptions,
+    mutationFn: cullPendingImagesMutationOptions,
     success: (data) =>
       data.count > 0
         ? `Deleted ${pluralize("pending image", data.count, true)}.`
@@ -362,9 +376,8 @@ function CullPendingImagesAction() {
 // the "Unreferenced files" Problems section — mostly residue from entity deletes,
 // whose cascade soft-deletes the join row and leaves the file behind.
 function CleanupUnreferencedImagesAction() {
-  const api = useTRPC();
   const cleanup = useActionMutation({
-    mutationFn: api.image.cleanupUnreferencedImages.mutationOptions,
+    mutationFn: cleanupUnreferencedImagesMutationOptions,
     success: (data) =>
       data.count > 0
         ? `Deleted ${pluralize("unreferenced file", data.count, true)}.`
@@ -385,9 +398,8 @@ function CleanupUnreferencedImagesAction() {
 // Rebuild every location's persisted valuation rollup. Idempotent; the safety
 // net for writes that bypass the router (raw SQL / postgres MCP).
 function RecomputeValuationsAction() {
-  const api = useTRPC();
   const recompute = useActionMutation({
-    mutationFn: api.location.recomputeValuations.mutationOptions,
+    mutationFn: recomputeValuationsMutationOptions,
     success: (data) =>
       `Recomputed ${pluralize("location", data.updated, true)}.`,
     invalidateKeys: VALUATION_INVALIDATE_KEYS,
@@ -491,10 +503,9 @@ const MAINTENANCE_TOOLS: {
  * the page is clean).
  */
 export function MaintenanceCard() {
-  const trpc = useTRPC();
   // Dry-run "N affected" figures — one cheap DB/WASM query (no USDA/UPC network).
   const { data: counts } = useQuery(
-    trpc.problems.getMaintenanceCounts.queryOptions(undefined, {
+    problemsMaintenanceCountsQueryOptions({
       staleTime: PROBLEMS_QUERY_STALE_TIME,
     }),
   );

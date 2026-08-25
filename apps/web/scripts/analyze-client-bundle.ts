@@ -28,17 +28,11 @@ export function analyzeClientBundle(assetsDir: string): ClientBundleReport {
 /**
  * Markers that must never appear in a client asset.
  *
- * The server render uses an in-process tRPC link over the domain router. The
- * Start plugin strips the `.server()` branch at build time, but an ordinary
- * top-level import of server code from shared client code would otherwise ship
- * the whole server to every visitor. This is the enforcement boundary.
+ * The Start compiler extracts server-function handlers, but an ordinary
+ * top-level import of server code from shared client code could still ship the
+ * whole server to every visitor. This is the enforcement boundary.
  */
-const SERVER_ONLY_MARKERS = [
-  "No procedure found on path",
-  "drizzle-orm",
-  "HYPERDRIVE",
-  "unstable_localLink",
-];
+const SERVER_ONLY_MARKERS = ["drizzle-orm", "HYPERDRIVE"];
 
 export function assertNoServerCodeInClient(assetsDir: string): void {
   const leaks: Array<string> = [];

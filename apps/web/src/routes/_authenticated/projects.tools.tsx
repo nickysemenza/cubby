@@ -28,7 +28,7 @@ const completionYearParam = urlStringParam
 
 /**
  * Everything here except a future `focus`/`collapsed` is a server input and
- * therefore part of the tRPC query key. Keep it that way: pure presentation
+ * therefore part of the query key. Keep it that way: pure presentation
  * state in this object would refetch the whole grid on a column pin.
  *
  * `kinds` is absent by default (all five). A default subset would be an

@@ -1,18 +1,16 @@
-import type { SearchableEntity } from "@cubby/schemas/search";
+import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
-import { useTRPC } from "~/integrations/trpc/react";
 import { recordCommandSearch } from "~/lib/perf/perf-store";
+import { searchFindQueryOptions } from "~/lib/search.functions";
 import { type QuickAction, quickActions } from "./quick-actions";
 
 const COMMAND_SEARCH_RESULT_LIMIT = 8;
 const LEXICAL_DEBOUNCE_MS = 100;
 
 interface UseGlobalSearchResult {
-  results:
-    | ReturnType<typeof useTRPC>["search"]["find"]["~types"]["output"]
-    | undefined;
+  results: SearchHit[] | undefined;
   filteredActions: QuickAction[];
   isLoading: boolean;
   isFetching: boolean;
@@ -24,7 +22,6 @@ export function useGlobalSearch(
   searchQuery: string,
   entityType?: SearchableEntity,
 ): UseGlobalSearchResult {
-  const api = useTRPC();
   const measurement = useRef({
     query: searchQuery,
     startedAt: performance.now(),
@@ -43,7 +40,7 @@ export function useGlobalSearch(
   });
   const shouldSearch = query.trim().length > 0;
   const lexical = useQuery({
-    ...api.search.find.queryOptions({
+    ...searchFindQueryOptions({
       query,
       entityTypes: entityType ? [entityType] : undefined,
       limit: COMMAND_SEARCH_RESULT_LIMIT,

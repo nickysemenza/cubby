@@ -124,9 +124,9 @@ export function listChromePage({
 /**
  * Structural view of an entity detail `queryOptions()` result.
  *
- * The concrete `TRPCQueryOptionsOut` is not assignable to react-query's
+ * The concrete transport query options are not assignable to react-query's
  * `UseSuspenseQueryOptions`, so the read below takes a cast — the same boundary
- * technique as `entity-contracts.ts`'s `StandardRouter`. The record's own type
+ * technique as `entity-contracts.ts`'s standard contract. The record's own type
  * is still recovered exactly, by resolving `queryFn` on the concrete return
  * type rather than inferring through it: React Query hides that signature behind an
  * `Exclude<…>` conditional, which is a non-inferrable position.

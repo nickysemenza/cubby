@@ -14,7 +14,10 @@ import { Input } from "~/components/ui/input";
 import { EntityIcon, entities } from "~/entities/entities";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useIsMobile } from "~/hooks/useMobile";
-import { useTRPC } from "~/integrations/trpc/react";
+import {
+  searchFindQueryOptions,
+  searchRelatedQueryOptions,
+} from "~/lib/search.functions";
 import { cn } from "~/lib/utils";
 import { getRecents, pushRecent } from "../command-menu/recents";
 import { useEntityPreview } from "../hooks/useEntityPreview";
@@ -41,7 +44,6 @@ const filterOptions: Array<{ value: SearchType; label: string }> = [
 ];
 
 export function SearchPage({ query = "", type }: SearchPageProps) {
-  const api = useTRPC();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { onRowClick, onRowHover, onRowHoverEnd, PreviewSheet } =
@@ -66,7 +68,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
   }, [debouncedDraft, navigate, query, type]);
 
   const primary = useQuery({
-    ...api.search.find.queryOptions({
+    ...searchFindQueryOptions({
       query: debouncedDraft,
       entityTypes,
       limit: 50,
@@ -75,7 +77,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
     placeholderData: keepPreviousData,
   });
   const related = useQuery({
-    ...api.search.related.queryOptions({
+    ...searchRelatedQueryOptions({
       query: relatedDraft,
       entityTypes,
       limit: 12,

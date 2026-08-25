@@ -6,7 +6,7 @@ import type {
   PathValue,
   UseFormReturn,
 } from "react-hook-form";
-import { useTRPCClient } from "~/integrations/trpc/react";
+import { suggestLocationForBrowser } from "~/lib/ai.functions";
 import { FieldWithAISuggest } from "../ai/ai-suggest";
 import { buildLocationComboboxItem } from "../combobox/combobox-builders";
 import { ComboboxFieldWithSearch } from "../form-utils/combobox-field-with-search";
@@ -39,8 +39,6 @@ export function LocationFieldWithAI<
   productId,
   label = "Location",
 }: LocationFieldWithAIProps<TFieldValues>) {
-  const trpcClient = useTRPCClient();
-
   return (
     <FieldWithAISuggest<LocationSuggestion>
       field={
@@ -57,7 +55,7 @@ export function LocationFieldWithAI<
       basisKey={productId}
       currentValue={form.watch(name)}
       fieldDirty={form.getFieldState(name).isDirty}
-      runSuggest={() => trpcClient.ai.suggestLocation.query({ productId })}
+      runSuggest={() => suggestLocationForBrowser({ productId })}
       onAccept={(r) =>
         form.setValue(
           name,

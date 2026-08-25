@@ -9,7 +9,6 @@ import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { useTRPC } from "~/integrations/trpc/react";
 import { invalidatesFor } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import {
@@ -23,6 +22,7 @@ import { useEntityDetail } from "../_components/hooks/useEntityDetail";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { EntityMergeDialog } from "../_components/merge/entity-merge-dialog";
 import { RelationshipSummaryTable } from "../_components/relationships/relationship-summary-table";
+import { mergeVendorsMutationOptions } from "./vendor.functions";
 import { VendorPurchasesTable } from "./vendor-purchases-table";
 
 interface VendorDetailProps {
@@ -40,7 +40,6 @@ interface VendorDetailProps {
  * the natural follow-ons; nothing here anticipates them.
  */
 export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
-  const api = useTRPC();
   const [mergeOpen, setMergeOpen] = useState(false);
 
   const updateMutation = useUpdateMutation({
@@ -53,7 +52,7 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
   // `DuplicateVendorMergeFix` (problems page) invalidates past the plain
   // vendor key set.
   const mergeMutation = useActionMutation({
-    mutationFn: api.vendor.merge.mutationOptions,
+    mutationFn: mergeVendorsMutationOptions,
     success: "Vendors merged",
     invalidateKeys: invalidatesFor("purchase"),
     onSuccess: () => setMergeOpen(false),

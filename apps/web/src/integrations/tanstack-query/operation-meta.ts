@@ -37,15 +37,6 @@ const inferredOperation = (queryKey: QueryKey): string => {
 };
 
 const inferredTransport = (queryKey: QueryKey): OperationTransport => {
-  const options = queryKey[1];
-  if (
-    options &&
-    typeof options === "object" &&
-    "type" in options &&
-    (options.type === "query" || options.type === "infinite")
-  ) {
-    return "trpc";
-  }
   return inferredOperation(queryKey) === "session" ? "auth" : "client";
 };
 

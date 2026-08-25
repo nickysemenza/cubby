@@ -6,7 +6,11 @@ import {
 import type { InfLocation } from "@cubby/schemas/location";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { useTRPC } from "~/integrations/trpc/react";
+import { bulkMoveInventoryMutationOptions } from "~/app/inventory/inventory.functions";
+import {
+  bulkUpdateParentMutationOptions,
+  locationTreeQueryOptions,
+} from "~/app/locations/location.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
   cancelQueryRoots,
@@ -26,17 +30,16 @@ type OptimisticContext = { prev: InfLocation[] | undefined };
  * `moveLocation` / `moveItem` — the cache they mutate is the same, so a move in
  * one view is reflected after toggling to the other.
  *
- * We pull `mutationFn`/`mutationKey` off the tRPC options rather than spreading
+ * We pull `mutationFn`/`mutationKey` off the query options rather than spreading
  * the whole object so react-query infers the optimistic context type cleanly.
- * tRPC input types are plain strings (branded schemas widen on input), so we
+ * operation input types are plain strings (branded schemas widen on input), so we
  * re-brand at this string→domain boundary with the `unsafe*Id` converters.
  */
 export function useArrangeMutations() {
-  const api = useTRPC();
   const queryClient = useQueryClient();
-  const treeKey = api.location.makeTree.queryKey();
+  const treeKey = locationTreeQueryOptions().queryKey;
 
-  const reparentBase = api.location.bulkUpdateParent.mutationOptions();
+  const reparentBase = bulkUpdateParentMutationOptions();
   const reparent = useMutation({
     mutationKey: reparentBase.mutationKey,
     mutationFn: reparentBase.mutationFn,
@@ -66,7 +69,7 @@ export function useArrangeMutations() {
       invalidateQueryRoots(queryClient, invalidatesFor("inventory")),
   });
 
-  const moveBase = api.inventory.bulkMove.mutationOptions();
+  const moveBase = bulkMoveInventoryMutationOptions();
   const move = useMutation({
     mutationKey: moveBase.mutationKey,
     mutationFn: moveBase.mutationFn,

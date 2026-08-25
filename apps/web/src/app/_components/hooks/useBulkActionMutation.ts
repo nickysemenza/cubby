@@ -2,13 +2,10 @@ import type { QueryKey } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "sonner";
-import { useTRPCClient } from "~/integrations/trpc/react";
 import type { BulkProgressEvent } from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidateQueryRoots } from "~/lib/query-keys";
 import { useBulkStream } from "./useBulkStream";
-
-type TRPCClient = ReturnType<typeof useTRPCClient>;
 
 /**
  * Stable empty default — `invalidateKeys` is a dependency of the `mutate`
@@ -19,13 +16,12 @@ const NO_INVALIDATE_KEYS: readonly QueryKey[] = [];
 
 /**
  * Streaming sibling of {@link useActionMutation} for bulk actions whose server
- * procedure is a `.mutation(async function*)` yielding {@link BulkProgressEvent}s.
+ * workflow yields {@link BulkProgressEvent}s.
  * Same on-success contract (toast → invalidate → side effect; error toast), but
  * the work streams in one request so it also exposes `{done,total}` progress for
  * a `<Progress>` bar. The result type is inferred from `run`'s streamed mutation.
  *
- * `run` opens the stream from the vanilla client, e.g.
- * `(client, vars) => client.product.createMany.mutate(vars)`.
+ * `run` opens the stream for the supplied variables.
  */
 export function useBulkActionMutation<Vars, Result>({
   run,
@@ -35,25 +31,25 @@ export function useBulkActionMutation<Vars, Result>({
   error,
 }: {
   run: (
-    client: TRPCClient,
     vars: Vars,
-  ) => Promise<AsyncIterable<BulkProgressEvent<unknown, Result>>>;
+  ) =>
+    | AsyncIterable<BulkProgressEvent<unknown, Result>>
+    | Promise<AsyncIterable<BulkProgressEvent<unknown, Result>>>;
   /** Success toast — a fixed string or one derived from the result. */
   success: string | ((data: Result) => string);
-  /** Entity lists to invalidate. Each is wrapped to match tRPC's nested key structure. */
+  /** Query roots to invalidate after the workflow finishes. */
   invalidateKeys?: readonly QueryKey[];
   /** Side effect after the toast + invalidations. */
   onSuccess?: (data: Result) => void;
   /** Error toast — defaults to `getErrorMessage(err)`. */
   error?: string | ((err: unknown) => string);
 }) {
-  const client = useTRPCClient();
   const queryClient = useQueryClient();
   const { start, running, progress } = useBulkStream<unknown, Result>();
 
   const mutate = useCallback(
     (vars: Vars) =>
-      void start(() => run(client, vars), {
+      void start(() => Promise.resolve(run(vars)), {
         onDone: (data) => {
           toast.success(
             typeof success === "function" ? success(data) : success,
@@ -68,16 +64,7 @@ export function useBulkActionMutation<Vars, Result>({
               ? error(err)
               : error,
       }),
-    [
-      start,
-      run,
-      client,
-      queryClient,
-      success,
-      invalidateKeys,
-      onSuccess,
-      error,
-    ],
+    [start, run, queryClient, success, invalidateKeys, onSuccess, error],
   );
 
   return { mutate, isPending: running, progress };

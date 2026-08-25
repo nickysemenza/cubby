@@ -10,7 +10,7 @@
  * every position after it mid-pass. This module fixes the semantics in one
  * place so a flow cannot pick the wrong one.
  *
- * Deliberately dependency-free (no React, no tRPC, no `~/` imports) so vitest's
+ * Deliberately dependency-free (no React, no transport, no `~/` imports) so vitest's
  * `unit` project can exercise the invariants on plain fixtures, matching the
  * discipline of `entities/view-manifest.ts`.
  */

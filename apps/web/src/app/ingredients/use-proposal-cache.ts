@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { useTRPCClient } from "~/integrations/trpc/react";
+import { precomputeEnrichmentProposalsStream } from "~/lib/ai.functions";
 import type { EnrichmentProposal } from "~/server/services/ai-enrichment/proposals";
 
 /** One ingredient to pre-compute proposals for. */
@@ -26,7 +26,6 @@ const PAGE_SIZE = 5;
  * cheap and read-only). Nothing here writes/links/merges.
  */
 export function useProposalCache() {
-  const client = useTRPCClient();
   const [cache, setCache] = useState<Map<string, EnrichmentProposal>>(
     () => new Map(),
   );
@@ -46,7 +45,7 @@ export function useProposalCache() {
     runningRef.current = true;
     setRunning(true);
     try {
-      const iterable = await client.ai.precomputeEnrichmentProposals.mutate({
+      const iterable = await precomputeEnrichmentProposalsStream({
         items: page,
       });
       for await (const ev of iterable) {
@@ -54,7 +53,11 @@ export function useProposalCache() {
           const item = ev.item;
           setCache((prev) => {
             const next = new Map(prev);
-            next.set(item.id, item);
+            // The JSONL schema carries plain strings while the workflow's
+            // in-process model brands public ids. The stream validates this
+            // payload before it reaches the cache, so this only restores that
+            // erased TypeScript brand at the browser boundary.
+            next.set(item.id, item as EnrichmentProposal);
             return next;
           });
         }
@@ -69,7 +72,7 @@ export function useProposalCache() {
       setRunning(false);
     }
     void pump();
-  }, [client]);
+  }, []);
 
   /** Enqueue any not-yet-requested ingredients, in the order given (priority first). */
   const ensure = useCallback(

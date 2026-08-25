@@ -95,6 +95,7 @@ import {
   createExpenseProductImageColumn,
   ExpenseProductImages,
 } from "~/app/expenses/expense-product-image-column";
+import { productInventoryEntriesByIdsQueryOptions } from "~/app/products/product.functions";
 import { ProjectMark } from "~/app/projects/project-mark";
 import { taskStatusOptions } from "~/app/tasks/task-options";
 import { VendorCell, VendorMark } from "~/components/entity/vendor-cell";
@@ -117,12 +118,12 @@ import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { multiSelectFilterFnBy } from "~/entities/filters";
 import { projectImageSummariesQueryOptions } from "~/entities/image.functions";
-import { useTRPC } from "~/integrations/trpc/react";
 import type { ProjectRowsRenderer } from "~/lib/list-view-normalization";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn, formatCurrency } from "~/lib/utils";
 import { persistedVendorId } from "~/lib/vendor-logo";
+import { projectTreeQueryOptions } from "./project.functions";
 import { PROJECT_STATUS_OPTIONS, projectKindOptions } from "./project-options";
 import { buildProjectTree, type ProjectTreeRow } from "./project-tree";
 import { tradeOptions } from "./trade-options";
@@ -265,7 +266,6 @@ export function TaskList({
   showProjectColumn?: boolean;
   defaultColumnFilters?: ColumnFiltersState;
 }) {
-  const api = useTRPC();
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(
     () => defaultColumnFilters,
   );
@@ -306,7 +306,7 @@ export function TaskList({
     [tasks],
   );
   const { data: inventoryByProduct } = useQuery({
-    ...api.product.inventoryEntriesByIds.queryOptions({
+    ...productInventoryEntriesByIdsQueryOptions({
       ids: subjectProductIds,
     }),
     enabled: subjectProductIds.length > 0,
@@ -1206,7 +1206,6 @@ export function ProjectTable({
   mode: ProjectRowsRenderer;
   onModeChange: (mode: ProjectRowsRenderer) => void;
 }) {
-  const api = useTRPC();
   const isTree = mode === "tree";
   // ProjectTreeRow satisfies both invariant ColumnDef modes.
   const columnHelper = useMemo(
@@ -1387,7 +1386,7 @@ export function ProjectTable({
   const tableStateOptions = useMemo(() => ({ initialSort: "startDate" }), []);
   const { workbench, data, totalCount } = useEntityList({
     entity: "project",
-    queryOptions: isTree ? api.project.tree.queryOptions : undefined,
+    queryOptions: isTree ? projectTreeQueryOptions : undefined,
     columns,
     filterOptions,
     deletable: deletableConfig,

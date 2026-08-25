@@ -79,13 +79,11 @@ export async function dragByKeyboard(
 }
 
 /** Synchronize on the gesture's successful mutation; assertions stay UI-only. */
-export function waitForDndMutation(page: Page, operation: string) {
+export function waitForDndMutation(page: Page, _operation: string) {
   return page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
-      (response.url().includes(`/api/trpc/${operation}`) ||
-        (operation === "task.update" &&
-          response.url().includes("/_serverFn/"))) &&
+      response.url().includes("/_serverFn/") &&
       response.ok(),
   );
 }

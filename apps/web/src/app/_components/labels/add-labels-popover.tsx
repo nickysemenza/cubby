@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { LocationPickerThumb } from "~/app/_components/locations/location-picker-thumb";
 import { typeSupportsQrCode } from "~/app/_components/locations/location-type-theme";
+import { locationSearchQueryOptions } from "~/app/locations/location.functions";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import {
@@ -16,7 +17,6 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover";
 import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
-import { useTRPC } from "~/integrations/trpc/react";
 
 export function AddLabelsPopover({
   codes,
@@ -25,7 +25,6 @@ export function AddLabelsPopover({
   codes: string | undefined;
   onCodesChange: (newCodes: string) => void;
 }) {
-  const api = useTRPC();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -44,7 +43,7 @@ export function AddLabelsPopover({
   // `location.search`, not `.list`: this roster only renders name + breadcrumb
   // + cover, so it has no use for `.list`'s inventory/product/pricing payload.
   const { data: searchResults, isLoading } = useQuery({
-    ...api.location.search.queryOptions({
+    ...locationSearchQueryOptions({
       filters: { nameFilter: debouncedSearch || undefined },
       pagination: { pageIndex: 0, pageSize: 10 },
       sort: { orderBy: "name", direction: "asc" },

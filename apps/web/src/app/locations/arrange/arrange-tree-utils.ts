@@ -10,7 +10,7 @@ import type {
 /**
  * Pure, view-agnostic helpers shared by the Board (Miller columns) and Tree
  * renderers of the /locations/arrange surface. All operate on the `InfLocation[]`
- * roots returned by `location.makeTree`. Kept free of React/tRPC so they can be
+ * roots returned by `location.makeTree`. Kept free of React/transport so they can be
  * unit-tested and reused for optimistic cache surgery.
  *
  * Note on counts: `applyLocationMove`/`applyItemMove` relocate nodes/items but do

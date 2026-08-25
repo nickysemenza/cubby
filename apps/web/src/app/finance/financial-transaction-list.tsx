@@ -7,10 +7,13 @@ import type {
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
+import {
+  financialAccountOptionsQueryOptions,
+  financialTransactionSourceOptionsQueryOptions,
+} from "~/app/finance/finance.functions";
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { useTRPC } from "~/integrations/trpc/react";
 import { presenceCellOptions } from "~/lib/select-options";
 import { formatCurrency } from "~/lib/utils";
 import {
@@ -44,7 +47,6 @@ const INITIAL_COLUMN_VISIBILITY = {
 };
 
 export function FinancialTransactionList() {
-  const api = useTRPC();
   const helper = useMemo(
     () => createCubbyColumnHelper<FinancialTransactionOut>(),
     [],
@@ -53,10 +55,10 @@ export function FinancialTransactionList() {
   // transaction FORM uses a search-as-you-type account combobox instead — a
   // header control needs the whole list up front, a form does not.
   const { data: accounts = NO_OPTIONS } = useQuery(
-    api.financialAccount.options.queryOptions(),
+    financialAccountOptionsQueryOptions(),
   );
   const { data: sources = NO_SOURCES } = useQuery(
-    api.financialTransaction.sourceOptions.queryOptions(),
+    financialTransactionSourceOptionsQueryOptions(),
   );
   const filterOptions = useFilterOptions({
     account: accounts.map((a) => ({

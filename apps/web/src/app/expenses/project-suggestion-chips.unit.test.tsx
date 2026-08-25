@@ -16,18 +16,12 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@tanstack/react-query", () => ({
-  useQuery: (options: { queryKey?: readonly unknown[] }) => ({
+  queryOptions: (options: unknown) => options,
+  useQuery: (options: { meta?: { operation?: string } }) => ({
     data:
-      options.queryKey?.[0] === "projects" ? mocks.projects : mocks.affinity,
-  }),
-}));
-
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPC: () => ({
-    project: { options: { queryOptions: () => ({ queryKey: ["projects"] }) } },
-    expense: {
-      tradeAffinity: { queryOptions: () => ({ queryKey: ["affinity"] }) },
-    },
+      options.meta?.operation === "project.options"
+        ? mocks.projects
+        : mocks.affinity,
   }),
 }));
 

@@ -60,12 +60,15 @@ import {
 import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
 import { Skeleton } from "~/components/ui/skeleton";
-import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidateQueryRoots, queryKeys } from "~/lib/query-keys";
 import { toolTimelineConflict } from "~/lib/tool-timeline";
 import { cn, formatCurrency } from "~/lib/utils";
 import type { ToolMatrixSearch } from "~/routes/_authenticated/projects.tools";
+import {
+  projectSetToolUsageMutationOptions,
+  projectToolMatrixQueryOptions,
+} from "./project.functions";
 import { PROJECT_STATUS_LABELS } from "./project-formatting";
 
 /**
@@ -315,7 +318,6 @@ export function ToolMatrixPage({
   search: ToolMatrixSearch;
   onSearchChange: (next: Partial<ToolMatrixSearch>) => void;
 }) {
-  const api = useTRPC();
   const queryClient = useQueryClient();
   const [projectDraft, setProjectDraft] = useState(search.project ?? "");
   const [toolDraft, setToolDraft] = useState(search.tool ?? "");
@@ -352,9 +354,7 @@ export function ToolMatrixPage({
     ],
   );
 
-  const { data, isLoading } = useQuery(
-    api.project.toolMatrix.queryOptions(input),
-  );
+  const { data, isLoading } = useQuery(projectToolMatrixQueryOptions(input));
 
   // A hand-edited or stale URL can point past the last page after filtering.
   // The server clamps authoritatively; mirror that answer back into the URL.
@@ -377,7 +377,7 @@ export function ToolMatrixPage({
     };
   }, []);
 
-  const setUsage = useMutation(api.project.setToolUsage.mutationOptions());
+  const setUsage = useMutation(projectSetToolUsageMutationOptions());
 
   const toggleCell = useCallback(
     (projectId: string, productId: string, nextUsed: boolean) => {

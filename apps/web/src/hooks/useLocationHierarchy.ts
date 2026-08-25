@@ -8,8 +8,8 @@ import {
   mergePricingStatus,
   type PricingStatus,
 } from "~/app/_components/locations/calculate-inventory-valuation";
+import { locationTreeQueryOptions } from "~/app/locations/location.functions";
 import { useHydratedLoading } from "~/hooks/useHydrated";
-import { useTRPC } from "~/integrations/trpc/react";
 
 // Persisted location.valuation stores pricing as bare counts; the viz nodes use
 // the richer PricingStatus shape (with item-name lists for tooltips). The names
@@ -73,8 +73,7 @@ export function useLocationHierarchy(
 ): UseLocationHierarchyResult {
   const { valuationMode = "itemCount" } = options;
 
-  const api = useTRPC();
-  const locations = useQuery(api.location.makeTree.queryOptions());
+  const locations = useQuery(locationTreeQueryOptions());
   const isLoading = useHydratedLoading(locations.isLoading);
 
   const hierarchyData = useMemo(() => {

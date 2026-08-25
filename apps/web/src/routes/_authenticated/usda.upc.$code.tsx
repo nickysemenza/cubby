@@ -5,7 +5,7 @@ import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Skeleton } from "~/components/ui/skeleton";
-import { useTRPC } from "~/integrations/trpc/react";
+import { usdaFoodAlternateIdQueryOptions } from "~/entities/usda.functions";
 import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/usda/upc/$code")({
@@ -18,14 +18,13 @@ export const Route = createFileRoute("/_authenticated/usda/upc/$code")({
 function USDAUPCLookupPage() {
   const { code } = Route.useParams();
   const navigate = useNavigate();
-  const api = useTRPC();
 
   const {
     data: food,
     isLoading,
     error,
   } = useQuery(
-    api.usda.getByAlternateID.queryOptions({ kind: "upc", gtin_upc: code }),
+    usdaFoodAlternateIdQueryOptions({ kind: "upc", gtin_upc: code }),
   );
 
   useEffect(() => {

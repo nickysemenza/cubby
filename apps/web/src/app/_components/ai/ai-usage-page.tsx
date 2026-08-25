@@ -15,7 +15,10 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { useHydrated } from "~/hooks/useHydrated";
-import { useTRPC } from "~/integrations/trpc/react";
+import {
+  aiUsageRecentQueryOptions,
+  aiUsageSummaryQueryOptions,
+} from "~/lib/ai.functions";
 import { formatCount } from "~/lib/utils";
 
 const supportedEntityTypes = [
@@ -150,12 +153,11 @@ function CostCell({ value }: { value: number | null }) {
 }
 
 export function AiUsagePage() {
-  const api = useTRPC();
   const [days, setDays] = useState(7);
   const [recentLimit, setRecentLimit] = useState(50);
-  const summaryQuery = useQuery(api.ai.usageSummary.queryOptions({ days }));
+  const summaryQuery = useQuery(aiUsageSummaryQueryOptions({ days }));
   const recentQuery = useQuery(
-    api.ai.usageRecent.queryOptions({ limit: recentLimit }),
+    aiUsageRecentQueryOptions({ limit: recentLimit }),
   );
   // Hydration-stable. Whether a query's data has landed differs between the SSR
   // render and the first client render — TanStack Start's query stream races

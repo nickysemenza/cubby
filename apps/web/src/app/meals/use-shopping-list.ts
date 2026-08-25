@@ -2,7 +2,7 @@ import type { ShoppingListOut, UnexpandedSubRecipe } from "@cubby/schemas/meal";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
-import { useTRPC } from "~/integrations/trpc/react";
+import { mealShoppingListQueryOptions } from "./meal.functions";
 import { getDefaultShoppingRange } from "./meal-search";
 import {
   buildShoppingColumns,
@@ -31,8 +31,6 @@ export function useShoppingList(
   excluded?: readonly string[],
   onExcludedChange?: (next: ReadonlySet<string>) => void,
 ) {
-  const api = useTRPC();
-
   const defaultRange = useMemo(() => getDefaultShoppingRange(), []);
   const fromStr = from ?? defaultRange.from;
   const toStr = to ?? defaultRange.to;
@@ -66,7 +64,7 @@ export function useShoppingList(
 
   const query = useQuery(
     // Date-only "YYYY-MM-DD" bounds — no timezone conversion.
-    api.meal.getShoppingList.queryOptions({ from: fromStr, to: toStr }),
+    mealShoppingListQueryOptions({ from: fromStr, to: toStr }),
   );
   const { data } = query;
 

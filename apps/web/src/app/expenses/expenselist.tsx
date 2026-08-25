@@ -22,7 +22,6 @@ import { usePageCount } from "~/components/page/Page";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
-import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseLabel } from "~/lib/purchase-label";
 import {
   createProductLinkColumn,
@@ -41,6 +40,10 @@ import {
   useExpenseBulkActions,
 } from "../_components/tracker/expense-bulk-actions";
 import { useExpenseRowActions } from "../_components/tracker/expense-row-actions";
+import {
+  expenseAnalyticsQueryOptions,
+  expenseFacetCountsQueryOptions,
+} from "./expense.functions";
 import {
   createExpenseProductImageColumn,
   ExpenseProductImages,
@@ -75,7 +78,6 @@ const FACET_COLUMN_IDS = {
 } as const;
 
 export function ExpenseList() {
-  const api = useTRPC();
   const columnHelper = useMemo(() => createCubbyColumnHelper<ExpenseOut>(), []);
   const projectOptions = useDeferredFilterOptions("project");
   // Runtime picklist for the manifest's `vendor` spec (optionsKey: "vendor"),
@@ -389,7 +391,7 @@ export function ExpenseList() {
     useEntityPreview("expense");
 
   // `TFilters` is given explicitly: it can't be inferred from `queryOptions`,
-  // whose input is a union with tRPC's `skipToken` symbol, so it would land on
+  // whose input is a union with a query skip sentinel, so it would land on
   // `unknown` — and `currentFilters` goes straight to `expense.analytics`,
   // which wants the real shape.
   const { workbench, currentFilters, totalCount, data } = useEntityList<
@@ -416,14 +418,14 @@ export function ExpenseList() {
   // column filters. Reusing it (rather than rebuilding from table state) is
   // what keeps this compact totals row reporting on exactly the rows below it.
   const analyticsQuery = useQuery({
-    ...api.expense.analytics.queryOptions(currentFilters),
+    ...expenseAnalyticsQueryOptions(currentFilters),
     placeholderData: keepPreviousData,
   });
   // Facet counts are calculated over the complete server population, never
   // the currently appended infinite pages. Each count omits only its own
   // predicate in `expense.facetCounts`, so alternatives remain meaningful.
   const facetCountsQuery = useQuery({
-    ...api.expense.facetCounts.queryOptions({
+    ...expenseFacetCountsQueryOptions({
       filters: currentFilters,
       facetIds: [...EXPENSE_FACET_IDS],
     }),

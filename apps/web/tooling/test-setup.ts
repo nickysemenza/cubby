@@ -575,12 +575,12 @@ export async function seedEntity<E extends ShortcodeEntity>(
 ): Promise<unknown> {
   const [
     { mock },
-    { createTestTRPCContext },
+    { createTestRequestContext },
     { ENTITY_BINDINGS },
     { ENTITY_KERNEL_BINDINGS },
   ] = await Promise.all([
     import("../src/lib/test/mock-schema"),
-    import("../src/server/api/trpc"),
+    import("../src/server/testing/request-context"),
     import("../src/server/entity-bindings"),
     import("../src/server/generated/entity-kernel-bindings.gen"),
   ]);
@@ -591,7 +591,7 @@ export async function seedEntity<E extends ShortcodeEntity>(
   }
 
   const input = mock(binding.createInput, { overrides });
-  const baseContext = createTestTRPCContext(db, {
+  const baseContext = createTestRequestContext(db, {
     auth: { userId: unsafeUserId("test-user-id") },
   });
   if (!baseContext.actorContext) {

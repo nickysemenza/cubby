@@ -13,8 +13,11 @@ import { Button } from "~/components/ui/button";
 import { Image } from "~/components/ui/image";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
+import {
+  importImageFromUrlMutationOptions,
+  uploadImageMutationOptions,
+} from "~/lib/image.functions";
 import { cn } from "~/lib/utils";
 
 export interface PendingImage {
@@ -65,7 +68,6 @@ export function PendingImageUpload({
   const [importing, setImporting] = useState(false);
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
-  const api = useTRPC();
 
   // Sync state from prop during render (React recommended pattern). A new
   // prop reference means the parent refetched — drop stale local removals too.
@@ -77,7 +79,7 @@ export function PendingImageUpload({
   }
 
   const uploadImageMutation = useMutation(
-    api.image.uploadImage.mutationOptions({
+    uploadImageMutationOptions({
       onError: (error) => {
         toast.error(`Upload initialization failed: ${getErrorMessage(error)}`);
       },
@@ -85,7 +87,7 @@ export function PendingImageUpload({
   );
 
   const importFromUrlMutation = useMutation(
-    api.image.importFromUrl.mutationOptions({
+    importImageFromUrlMutationOptions({
       onError: (error) => {
         toast.error(`Import failed: ${getErrorMessage(error)}`);
       },

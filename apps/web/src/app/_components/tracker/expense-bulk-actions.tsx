@@ -1,8 +1,12 @@
 import type { CostType, ExpenseOut, Trade } from "@cubby/schemas/project";
 import { useMemo, useState } from "react";
+import {
+  expenseBulkMoveMutationOptions,
+  expenseBulkSetCostTypeMutationOptions,
+  expenseBulkSetTradeMutationOptions,
+} from "~/app/expenses/expense.functions";
 import { costTypeOptions } from "~/app/expenses/expense-options";
 import { tradeOptions } from "~/app/projects/trade-options";
-import { useTRPC } from "~/integrations/trpc/react";
 import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { verbBulkAction } from "../actions/action-verb-ui";
@@ -79,7 +83,6 @@ export function ExpenseBulkActionDialogs({
   controller: ExpenseBulkActionsController;
   onComplete: () => void;
 }) {
-  const api = useTRPC();
   const {
     moveItems,
     setMoveItems,
@@ -100,7 +103,7 @@ export function ExpenseBulkActionDialogs({
       );
 
   const moveMutation = useActionMutation({
-    mutationFn: api.expense.bulkMove.mutationOptions,
+    mutationFn: expenseBulkMoveMutationOptions,
     invalidateKeys: invalidatesFor("expense"),
     success: resultMessage("Moved"),
     onSuccess: () => {
@@ -109,7 +112,7 @@ export function ExpenseBulkActionDialogs({
     },
   });
   const tradeMutation = useActionMutation({
-    mutationFn: api.expense.bulkSetTrade.mutationOptions,
+    mutationFn: expenseBulkSetTradeMutationOptions,
     invalidateKeys: invalidatesFor("expense"),
     success: resultMessage("Updated"),
     onSuccess: () => {
@@ -118,7 +121,7 @@ export function ExpenseBulkActionDialogs({
     },
   });
   const costTypeMutation = useActionMutation({
-    mutationFn: api.expense.bulkSetCostType.mutationOptions,
+    mutationFn: expenseBulkSetCostTypeMutationOptions,
     invalidateKeys: invalidatesFor("expense"),
     success: resultMessage("Updated"),
     onSuccess: () => {

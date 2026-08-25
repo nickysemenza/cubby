@@ -7,12 +7,24 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { useState } from "react";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import { moveInventoryEntriesMutationOptions } from "~/app/inventory/inventory.functions";
 import { DuplicateProductMergeFix } from "~/app/problems/components/tier2-fixes";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { useTRPC } from "~/integrations/trpc/react";
+import { problemsRootKey } from "~/lib/problems.functions";
 import { invalidateQueryRoots } from "~/lib/query-keys";
+import {
+  dismissDuplicateProductRecommendationMutationOptions,
+  dismissProductRecommendationMutationOptions,
+  dismissTagPropagationMutationOptions,
+  duplicateProductRecommendationQueryOptions,
+  placementRecommendationQueryOptions,
+  productRecommendationQueryOptions,
+  recommendationRootKey,
+  relatednessProductRootKey,
+  tagPropagationRecommendationQueryOptions,
+} from "~/lib/recommendations.functions";
 
 /** A focused review surface: candidates are always re-resolved, never URL data. */
 export function RecommendationWorkbench({
@@ -44,17 +56,16 @@ function PlacementRecommendation({
 }: {
   inventoryId: InventoryShortcode;
 }) {
-  const api = useTRPC();
   const queryClient = useQueryClient();
   const recommendation = useQuery(
-    api.recommendations.placement.queryOptions({ inventoryId }),
+    placementRecommendationQueryOptions({ inventoryId }),
   );
   const accept = useMutation(
-    api.inventory.moveEntries.mutationOptions({
+    moveInventoryEntriesMutationOptions({
       onSuccess: () => {
         invalidateQueryRoots(queryClient, [
-          api.recommendations.placement.queryKey({ inventoryId }),
-          api.problems.getFast.queryKey(),
+          recommendationRootKey("placement"),
+          problemsRootKey("getFast"),
         ]);
       },
     }),
@@ -103,10 +114,9 @@ function TagPropagationRecommendation({
 }: {
   sourceId: ProductShortcode;
 }) {
-  const api = useTRPC();
   const queryClient = useQueryClient();
   const recommendation = useQuery(
-    api.recommendations.tagPropagation.queryOptions({ sourceId }),
+    tagPropagationRecommendationQueryOptions({ sourceId }),
   );
   const accept = useMutation(
     entityMutationOptionsFactory(
@@ -115,17 +125,17 @@ function TagPropagationRecommendation({
     )({
       onSuccess: () => {
         invalidateQueryRoots(queryClient, [
-          api.recommendations.tagPropagation.queryKey({ sourceId }),
-          api.relatedness.product.queryKey(sourceId),
+          recommendationRootKey("tagPropagation"),
+          relatednessProductRootKey(),
         ]);
       },
     }),
   );
   const dismiss = useMutation(
-    api.recommendations.dismissTagPropagation.mutationOptions({
+    dismissTagPropagationMutationOptions({
       onSuccess: () => {
         invalidateQueryRoots(queryClient, [
-          api.recommendations.tagPropagation.queryKey({ sourceId }),
+          recommendationRootKey("tagPropagation"),
         ]);
       },
     }),
@@ -213,17 +223,12 @@ function ProductRelatednessRecommendation({
 }: {
   sourceId: ProductShortcode;
 }) {
-  const api = useTRPC();
   const queryClient = useQueryClient();
-  const relatedness = useQuery(
-    api.recommendations.product.queryOptions({ sourceId }),
-  );
+  const relatedness = useQuery(productRecommendationQueryOptions({ sourceId }));
   const dismiss = useMutation(
-    api.recommendations.dismissProduct.mutationOptions({
+    dismissProductRecommendationMutationOptions({
       onSuccess: () => {
-        invalidateQueryRoots(queryClient, [
-          api.recommendations.product.queryKey({ sourceId }),
-        ]);
+        invalidateQueryRoots(queryClient, [recommendationRootKey("product")]);
       },
     }),
   );
@@ -305,17 +310,16 @@ function DuplicateProductRecommendation({
 }: {
   sourceId: ProductShortcode;
 }) {
-  const api = useTRPC();
   const queryClient = useQueryClient();
   const [merged, setMerged] = useState(false);
   const recommendation = useQuery(
-    api.recommendations.duplicateProduct.queryOptions({ sourceId }),
+    duplicateProductRecommendationQueryOptions({ sourceId }),
   );
   const dismiss = useMutation(
-    api.recommendations.dismissDuplicateProduct.mutationOptions({
+    dismissDuplicateProductRecommendationMutationOptions({
       onSuccess: () => {
         invalidateQueryRoots(queryClient, [
-          api.recommendations.duplicateProduct.queryKey({ sourceId }),
+          recommendationRootKey("duplicateProduct"),
         ]);
       },
     }),

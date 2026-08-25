@@ -6,6 +6,8 @@ import { describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ move: vi.fn() }));
 
 vi.mock("@tanstack/react-query", () => ({
+  mutationOptions: (options: unknown) => options,
+  queryOptions: (options: unknown) => options,
   useQuery: () => ({
     data: {
       inventoryId: "INV-PARKED",
@@ -18,15 +20,6 @@ vi.mock("@tanstack/react-query", () => ({
   }),
   useMutation: () => ({ isPending: false, mutate: mocks.move }),
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
-}));
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPC: () => ({
-    recommendations: {
-      placement: { queryOptions: () => ({}), queryKey: () => ["placement"] },
-    },
-    inventory: { moveEntries: { mutationOptions: () => ({}) } },
-    problems: { getFast: { queryKey: () => ["problems"] } },
-  }),
 }));
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children }: { children: ReactNode }) => <span>{children}</span>,

@@ -21,7 +21,7 @@ const updateProduct = entityMutationOptionsFactory("product", "update");
 
 // CoverageChips moved to the units folder (lean deps — Badge/Row/BASE_KINDS only)
 // so list/detail bundles that show coverage don't pull in this file's mutation
-// hooks + tRPC. Re-exported here for existing problems-page callers.
+// hooks + transport. Re-exported here for existing problems-page callers.
 export { CoverageChips } from "~/app/_components/units/CoverageChips";
 // Re-export the pure core (defined in unit-coverage-items.ts so it stays
 // unit-testable) so the registry can import everything from one place.

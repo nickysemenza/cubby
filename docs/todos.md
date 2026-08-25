@@ -109,14 +109,7 @@ history is the archive. Permanent product constraints live in the
     `parse_scraped_recipe` so imports do not cross the WASM boundary a second time
     for the same lines.
 
-23. **Finish deleting tRPC.** Core entity detail, list, filter, mutation,
-    preview, and specialized Image/USDA/Cookbook browser projections now use
-    TanStack Start. The remaining transport is workflow infrastructure rather
-    than an entity interface. Delete it in the ordered slices under **TanStack
-    Start and transport** below; keep SuperJSON for Query persistence unless
-    that independent use also disappears.
-
-24. **Reconsider the remaining USDA MCP App.** The Shopping List App is gone;
+23. **Reconsider the remaining USDA MCP App.** The Shopping List App is gone;
     `get_shopping_list` is a plain structured/text tool. The remaining USDA
     Picker template is 352,004 bytes raw / 83,655 gzip and builds in 132 ms on
     the local M3 development machine. Keep it only while refinement and explicit
@@ -126,24 +119,15 @@ history is the archive. Permanent product constraints live in the
 
 ## TanStack Start and transport
 
-- Migrate additional route-owned reads when they do not benefit from batching;
-  keep public/external endpoints as server routes rather than Start functions.
-- Accept independent Start requests for Inventory, Project, Task, Expense,
-  Purchase, and Financial Account lists. Do not recreate tRPC batching behind a
-  generic Start endpoint; introduce a route-owned snapshot only for a measured
-  screen-specific problem.
-- Measure browser request count and route-ready time before moving Home or
-  dashboard reads. Do not trade one batch for a visible request fan-out.
-- Measure the Start generic-write migration's invalidation, optimistic rollback,
-  error serialization, cancellation, and deployment-overlap behavior before
-  moving workflow writes. Old tabs from the pre-migration deployment must reload
-  before issuing a generic write; no compatibility procedure remains.
-- Delete remaining tRPC in order: ordinary workflow reads/writes; remaining SSR
-  and clustered screens; typed streams with cancellation and progress parity;
-  direct MCP/agent workflow modules; then `/api/trpc`, the provider, router
-  types/mocks, packages, and lockfile entries.
-- Preserve direct storage PUTs for presigned uploads. Start owns presign and
-  finalize operations; binary bodies do not need an RPC abstraction.
+The migration is complete. TanStack Start functions are the authenticated browser
+transport for entity and workflow operations. Explicit workflow modules own
+business behavior, while typed JSONL server routes expose cancellable progress
+streams. MCP and jobs call the same workflow modules directly; no generic RPC
+dispatcher or compatibility transport remains.
+
+Presigned uploads still use direct storage PUTs. Start owns only the presign and
+finalize operations, and binary bodies do not need an RPC abstraction.
+
 - Track upstream automatic observability support and remove Cubby's Start wrapper
   when the framework supplies equivalent named request/result/error events and
   trace hooks: <https://tanstack.com/start/latest/docs/framework/react/guide/observability>.

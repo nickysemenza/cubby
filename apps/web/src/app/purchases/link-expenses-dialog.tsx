@@ -41,10 +41,10 @@ import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
 import { NoneValue } from "~/components/ui/none-value";
 import { entityListQueryOptions } from "~/entities/entity-list.functions";
-import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { invalidatesFor } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
+import { linkPurchaseMutationOptions } from "./purchase.functions";
 
 const NO_CANDIDATES: ExpenseOut[] = [];
 const CANDIDATE_PAGE_SIZE = 100;
@@ -64,7 +64,6 @@ export function LinkExpensesDialog({
   onOpenChange: (open: boolean) => void;
   purchase: PurchaseOut;
 }) {
-  const api = useTRPC();
   const [selectedRows, setSelectedRows] = useState<
     Map<ExpenseShortcode, ExpenseOut>
   >(new Map());
@@ -116,7 +115,7 @@ export function LinkExpensesDialog({
     onOpenChange(next);
   };
   const linkMutation = useActionMutation({
-    mutationFn: api.purchase.link.mutationOptions,
+    mutationFn: linkPurchaseMutationOptions,
     success: "Expenses attached to this purchase",
     invalidateKeys: invalidatesFor("purchase"),
     onSuccess: () => resetAndClose(false),

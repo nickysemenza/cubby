@@ -16,7 +16,7 @@ import { notFound } from "@tanstack/react-router";
  */
 export async function ensureDetailRecord(
   queryClient: QueryClient,
-  // The structural minimum a tRPC `queryOptions()` result satisfies; see the
+  // The structural minimum a transport `queryOptions()` result satisfies; see the
   // cast note in `./entity-routes`.
   options: { queryKey: readonly unknown[] },
 ): Promise<void> {

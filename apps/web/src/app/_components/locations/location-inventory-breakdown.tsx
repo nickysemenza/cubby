@@ -4,9 +4,9 @@ import {
   HierarchyDrilldown,
   type HierarchyDrilldownNode,
 } from "~/app/_components/visualizations/hierarchy-drilldown";
+import { locationInventoryBreakdownQueryOptions } from "~/app/locations/location.functions";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
-import { useTRPC } from "~/integrations/trpc/react";
 
 const formatItems = (count: number) =>
   `${count} ${count === 1 ? "item" : "items"}`;
@@ -83,9 +83,8 @@ export function LocationInventoryBreakdown({
   shortcode: LocationInventoryBreakdownOut["id"];
   hasChildren: boolean;
 }) {
-  const api = useTRPC();
   const breakdown = useQuery(
-    api.location.inventoryBreakdown.queryOptions(
+    locationInventoryBreakdownQueryOptions(
       { shortcode },
       { enabled: hasChildren },
     ),

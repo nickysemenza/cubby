@@ -6,7 +6,6 @@ import { type TaskStatus, taskCreateInput } from "@cubby/schemas/project";
 import type { Page } from "@playwright/test";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { createTestTRPCContext } from "~/server/api/trpc";
 import type { Database } from "~/server/db";
 import * as schema from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
@@ -15,6 +14,7 @@ import {
   entityBrowserMutationCommandSchema,
 } from "~/server/entity-kernel/contracts";
 import { requireActor } from "~/server/request-context";
+import { createTestRequestContext } from "~/server/testing/request-context";
 
 type CreatedEntity = { id: string };
 
@@ -54,7 +54,7 @@ async function createFixture(
 ): Promise<CreatedEntity> {
   const db = getFixtureDb();
   const context = requireActor(
-    createTestTRPCContext(db, {
+    createTestRequestContext(db, {
       auth: { userId: await fixtureUserId(page) },
     }),
   );

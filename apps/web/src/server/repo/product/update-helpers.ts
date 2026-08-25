@@ -183,7 +183,7 @@ export function externalIdSlotUnchanged(
 /**
  * Canonicalize a barcode on the way into the database.
  *
- * The Zod `gtin` schema already transforms at the tRPC/MCP boundary, but the
+ * The Zod `gtin` schema already transforms at the browser/MCP boundary, but the
  * repository is called directly too — test fixtures, the UPC orchestration
  * service, importers — and none of those see it. Normalizing again here is what
  * makes the canonical form an invariant of the TABLE rather than of one entry

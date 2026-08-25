@@ -115,7 +115,7 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 ## 🧱 Tech Stack
 
 - **App:** TanStack Start (Router + Server) · React · TailwindCSS · shadcn/ui
-- **API:** Entity Kernel + TanStack Start entity transport + explicit tRPC/MCP workflows
+- **API:** Entity Kernel + TanStack Start entity transport + explicit workflow/MCP adapters
 - **Data:** Drizzle ORM · PostgreSQL · Hyperdrive (edge pool)
 - **Auth:** Better-Auth (`@daveyplate/better-auth-ui` for routed UI)
 - **Edge:** Cloudflare Workers + Wrangler
@@ -156,12 +156,13 @@ Generic entity flow:
 
 ```
 TanStack Start  →  Entity Kernel  →  Repo  →  Database
-MCP / jobs      ────────────────↗
-tRPC            →  explicit workflow modules
+Start workflows ───────────────↗
+MCP / jobs      ───────────────↗
+JSONL routes    →  cancellable workflow streams
 ```
 
 - Restricted literal specs in `scripts/entity-literals/entities/*.entity.ts` compile the exhaustive manifest, schema bindings, browser roster, filter URL catalog, kernel action capabilities, and contract cases. `pnpm entity:check` rejects stale or invalid artifacts; typecheck verifies referenced exports.
-- `executeEntity` is the baseline CRUD/filter/search/relation interface. TanStack Start is the browser entity adapter; MCP and jobs invoke the kernel directly. The remaining tRPC procedures adapt explicit workflows rather than entity CRUD.
+- `executeEntity` is the baseline CRUD/filter/search/relation interface. TanStack Start is the browser entity adapter; MCP and jobs invoke the kernel directly. Explicit Start functions adapt workflows, while typed JSONL routes carry cancellable progress streams.
 - Services own workflows and external enrichment such as USDA data. Repositories retain transaction ownership, invariants, and entity-specific SQL.
 - The `Database` type is **opaque** — only repos can call `getDb(db)` to unwrap it. This enforces the layered architecture at the type level.
 - Adding a baseline entity starts with one compiler spec, followed by the repository adapter and any thin workflow or route extensions; see [docs/entities.md](docs/entities.md).
@@ -187,7 +188,7 @@ Financial settlement is a separate evidence layer: `FinancialAccount ──< Fin
 ### Public identifiers — shortcodes
 
 Every entity has two ids. The uuid primary key is **private**: repos, services, and
-internal tRPC use it and nothing else does. The **shortcode** (`PRD-4K7M`) is the
+internal workflow code uses it and nothing else does. The **shortcode** (`PRD-4K7M`) is the
 public id — what appears in URLs, on printed QR labels, and as the `id` field over
 MCP. Codes are non-null, immutable, never reused (uniqueness spans soft-deleted
 rows, so a retired code is a permanent tombstone), and case-insensitive on input.
@@ -509,7 +510,7 @@ manual items and checks belong to the ranked shopping-list project.
 
 Sources live in [apps/mcp-apps/](apps/mcp-apps/) — its own workspace package,
 because it's a separate build target with a different runtime (sandboxed iframe,
-no React, no tRPC, no Tailwind). It doesn't deploy on its own: it builds to
+no React, no Tailwind). It doesn't deploy on its own: it builds to
 self-contained HTML that [server/mcp/apps/](apps/web/src/server/mcp/apps/)
 inlines and serves as `ui://` resources, driven off the manifest in
 [src/metadata.ts](apps/mcp-apps/src/metadata.ts) — the one place an app is
@@ -543,7 +544,7 @@ between the web app and the iframes.
 - **Contract:** `@cubby/usda-contract` defines endpoints with Zod schemas (ts-rest).
 - **Schemas:** `@cubby/usda-schemas` for shared entity types.
 - **Client:** [apps/web/src/server/clients/usda.ts](apps/web/src/server/clients/usda.ts) wraps the ts-rest client.
-- **Router:** [apps/web/src/server/api/routers/usda.ts](apps/web/src/server/api/routers/usda.ts).
+- **Browser adapter:** [apps/web/src/entities/usda.functions.ts](apps/web/src/entities/usda.functions.ts).
 - Service layer processes USDA portion data through WASM for conversions.
 
 ```ts

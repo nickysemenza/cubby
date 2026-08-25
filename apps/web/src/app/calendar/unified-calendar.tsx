@@ -36,11 +36,11 @@ import { createPopoverHandle, PopoverTrigger } from "~/components/ui/popover";
 import { ResponsiveSheet } from "~/components/ui/responsive-sheet";
 import { ChoiceSwitcher } from "~/components/ui/view-switcher";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
-import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { HOUSEHOLD_TIMEZONE, householdLocalDate } from "~/lib/household-date";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import { formatCurrency } from "~/lib/utils";
+import { calendarRangeQueryOptions } from "./calendar.functions";
 import { CalendarAgenda } from "./calendar-agenda";
 import type { CalendarFilters } from "./calendar-filters";
 import { KIND_ICONS } from "./calendar-icons";
@@ -197,7 +197,6 @@ export function UnifiedCalendar({
   onDateChange,
   onDayChange,
 }: UnifiedCalendarProps) {
-  const api = useTRPC();
   const today = householdLocalDate();
   const anchorDate = date ?? today;
   const anchor = useMemo(() => householdCalendarDate(anchorDate), [anchorDate]);
@@ -239,7 +238,7 @@ export function UnifiedCalendar({
     [filters, lockedKinds, visibleRange],
   );
   const { data, isLoading, isError } = useQuery({
-    ...api.calendar.range.queryOptions(range),
+    ...calendarRangeQueryOptions(range),
     // Without this every chip toggle blanks the month grid mid-flight.
     placeholderData: keepPreviousData,
   });

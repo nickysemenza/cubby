@@ -18,7 +18,7 @@ export type AgentSource = z.infer<typeof agentSourceSchema>;
 
 export const agentToolCallSchema = z.object({
   tool: z.string(),
-  args: z.record(z.string(), z.unknown()),
+  args: z.record(z.string(), z.json()),
   durationMs: z.number(),
   ok: z.boolean(),
 });
@@ -36,7 +36,13 @@ export const agentAskInputSchema = z.object({
 });
 export type AgentAskInput = z.infer<typeof agentAskInputSchema>;
 
-export type AgentStreamEvent =
-  | { type: "tool"; tool: string }
-  | { type: "delta"; text: string }
-  | { type: "done"; sources: AgentSource[]; toolCalls: AgentToolCall[] };
+export const agentStreamEventSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("tool"), tool: z.string() }),
+  z.object({ type: z.literal("delta"), text: z.string() }),
+  z.object({
+    type: z.literal("done"),
+    sources: z.array(agentSourceSchema),
+    toolCalls: z.array(agentToolCallSchema),
+  }),
+]);
+export type AgentStreamEvent = z.infer<typeof agentStreamEventSchema>;

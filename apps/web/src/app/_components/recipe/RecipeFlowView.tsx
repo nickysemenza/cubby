@@ -10,6 +10,10 @@ import {
 } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import {
+  recipeFlowQueryOptions,
+  recipeGenerateFlowMutationOptions,
+} from "~/app/recipes/recipe.functions";
 import { MarkdownText } from "~/components/markdown";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
@@ -29,7 +33,6 @@ import {
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
 import { useIsMobile } from "~/hooks/useMobile";
-import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidateQueryRoots, queryKeys } from "~/lib/query-keys";
 import { CopyJsonButton } from "./copy-debug-button";
@@ -94,7 +97,6 @@ export function RecipeFlowView({
   onLayoutChange?: (layout: RecipeFlowLayoutMode) => void;
   onReadyChange?: (ready: boolean) => void;
 }) {
-  const api = useTRPC();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const [internalLayout, setInternalLayout] =
@@ -109,9 +111,7 @@ export function RecipeFlowView({
   const [generationError, setGenerationError] = useState<string | null>(null);
   const autoStartedFingerprint = useRef<string | null>(null);
 
-  const flowQuery = useQuery(
-    api.recipe.getFlow.queryOptions({ id: recipe.id }),
-  );
+  const flowQuery = useQuery(recipeFlowQueryOptions({ id: recipe.id }));
   const flowState = flowQuery.data;
   const artifact =
     flowState?.status === "current" || flowState?.status === "stale"
@@ -121,7 +121,7 @@ export function RecipeFlowView({
   // Raw useMutation is intentional: automatic generation failures are rendered
   // inline in this view instead of being reduced to the shared toast-only path.
   const generation = useMutation(
-    api.recipe.generateFlow.mutationOptions({
+    recipeGenerateFlowMutationOptions({
       onSuccess: (_data, variables) => {
         setGenerationError(null);
         setGuidanceOpen(false);

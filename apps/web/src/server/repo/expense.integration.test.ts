@@ -1,3 +1,4 @@
+import type { ActorContext } from "@cubby/schemas/context";
 import type {
   ExpenseId,
   PurchaseId,
@@ -28,8 +29,6 @@ import {
   householdDaysFromNow,
   householdLocalDate,
 } from "~/lib/household-date";
-import { expenseRouter } from "~/server/api/routers/expense";
-import { createTestCaller } from "~/server/api/trpc";
 import type { Database } from "~/server/db";
 import { expense as expenseTable, product, project } from "~/server/db/schema";
 import { getAuditLog } from "~/server/repo/audit-log";
@@ -69,9 +68,28 @@ import {
   resolveShortcode,
 } from "~/server/repo/shortcode-resolver";
 import { vendorOptions } from "~/server/repo/vendor";
+import {
+  expenseAnalyticsWorkflow,
+  expenseBulkMoveWorkflow,
+  expenseChargeContextWorkflow,
+  expenseChartDataWorkflow,
+  expenseTradeAffinityWorkflow,
+} from "~/server/workflows/expense.server";
 
 const unwrap = async <T>(p: Promise<{ output: T }>): Promise<T> =>
   (await p).output;
+
+const createExpenseWorkflowCaller = (db: Database, actor: ActorContext) => ({
+  chartData: (input: Parameters<typeof expenseChartDataWorkflow>[1]) =>
+    expenseChartDataWorkflow(db, input),
+  analytics: (input: Parameters<typeof expenseAnalyticsWorkflow>[1]) =>
+    expenseAnalyticsWorkflow(db, input),
+  chargeContext: (input: Parameters<typeof expenseChargeContextWorkflow>[1]) =>
+    expenseChargeContextWorkflow(db, input),
+  tradeAffinity: () => expenseTradeAffinityWorkflow(db),
+  bulkMove: (input: Parameters<typeof expenseBulkMoveWorkflow>[1]) =>
+    expenseBulkMoveWorkflow(db, input, actor),
+});
 
 const vendorIdOf = (expense: ExpenseOut): VendorShortcode => {
   if (!expense.vendorId) {
@@ -1297,11 +1315,11 @@ describe("expense repository — sorting/pagination", () => {
   });
 });
 
-describe("expense router", () => {
+describe("expense workflow", () => {
   const ctx = withTestDb();
 
   it("chartData returns the filtered set", async () => {
-    const caller = createTestCaller(expenseRouter, ctx.db);
+    const caller = createExpenseWorkflowCaller(ctx.db, ctx.actor);
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
@@ -1362,7 +1380,7 @@ describe("expense router", () => {
     };
 
     it("'none' returns only unassigned expenses", async () => {
-      const caller = createTestCaller(expenseRouter, ctx.db);
+      const caller = createExpenseWorkflowCaller(ctx.db, ctx.actor);
       await seedProjectMix();
 
       const rows = await caller.chartData({ projectPresenceFilter: "none" });
@@ -1373,7 +1391,7 @@ describe("expense router", () => {
     });
 
     it("'has' returns only assigned expenses", async () => {
-      const caller = createTestCaller(expenseRouter, ctx.db);
+      const caller = createExpenseWorkflowCaller(ctx.db, ctx.actor);
       await seedProjectMix();
 
       const names = (
@@ -1386,7 +1404,7 @@ describe("expense router", () => {
     });
 
     it("combines with projectId as OR — that project plus the unassigned", async () => {
-      const caller = createTestCaller(expenseRouter, ctx.db);
+      const caller = createExpenseWorkflowCaller(ctx.db, ctx.actor);
       const { projA } = await seedProjectMix();
 
       const names = (
@@ -1404,7 +1422,7 @@ describe("expense router", () => {
     // buildExpenseWhereClause backs BOTH the ledger list and the analytics
     // aggregates; this pins that they still agree through the new OR branch.
     it("keeps ledger totals and analytics totals in agreement", async () => {
-      const caller = createTestCaller(expenseRouter, ctx.db);
+      const caller = createExpenseWorkflowCaller(ctx.db, ctx.actor);
       const { projA } = await seedProjectMix();
       const filters = {
         projectId: [projA.id],
@@ -1426,7 +1444,7 @@ describe("expense router", () => {
 
   describe("chargeContext", () => {
     it("returns canonical charge identity and the other lines, excluding the expense itself", async () => {
-      const caller = createTestCaller(expenseRouter, ctx.db);
+      const caller = createExpenseWorkflowCaller(ctx.db, ctx.actor);
       const orderId = "111-siblings-0000001";
       const [{ output: self }, { output: sibling }] = await Promise.all([
         createExpense(
@@ -1477,7 +1495,7 @@ describe("expense router", () => {
     });
 
     it("returns null for an expense with no charge — without early-returning on a missing order id", async () => {
-      const caller = createTestCaller(expenseRouter, ctx.db);
+      const caller = createExpenseWorkflowCaller(ctx.db, ctx.actor);
       const { output: chargeless } = await createExpense(
         ctx.db,
         makeExpenseInput({ name: "cash, no vendor" }),
@@ -1508,7 +1526,7 @@ describe("expense router", () => {
   });
 
   it("tradeAffinity counts assigned expenses per project and trade", async () => {
-    const caller = createTestCaller(expenseRouter, ctx.db);
+    const caller = createExpenseWorkflowCaller(ctx.db, ctx.actor);
     const { output: proj } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "affinity project" }),
@@ -1557,7 +1575,7 @@ describe("expense router", () => {
   });
 
   it("bulkMove moves expenses to another project and to the inbox (null), returning items + sideEffects", async () => {
-    const caller = createTestCaller(expenseRouter, ctx.db);
+    const caller = createExpenseWorkflowCaller(ctx.db, ctx.actor);
     const { output: projectA } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "bulk move a" }),

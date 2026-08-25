@@ -8,8 +8,7 @@ import { tracingMiddleware } from "~/server/middleware/tracing";
 
 // Restores the framework-default CSRF protection that defining a custom start
 // instance otherwise replaces (TanStack only auto-applies it when no start
-// instance exists). Scoped to server functions; tRPC (handlerType "router") and
-// SSR are unaffected.
+// instance exists). Scoped to server functions; SSR is unaffected.
 const csrfMiddleware = createCsrfMiddleware({
   filter: (ctx) => ctx.handlerType === "serverFn",
 });

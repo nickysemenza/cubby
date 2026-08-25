@@ -26,7 +26,7 @@ import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
 // Repo-level coverage for the product-attribute filters added to
 // `inventoryentryList` (manufacturerFilter / categoryFilter). The router-level
-// test in `server/api/routers/inventory.integration.test.ts` only covers
+// higher-level workflow tests only cover
 // productNameFilter/locationNameFilter/locationIdFilter — this fills the gap,
 // and in particular pins that the count/valuation aggregate (a second query
 // sharing the same where clause) agrees with the filtered row set.

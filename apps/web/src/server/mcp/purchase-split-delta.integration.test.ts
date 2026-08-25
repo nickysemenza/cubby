@@ -7,8 +7,7 @@
  * Expense's cost has to be captured via `expense.getByID` BEFORE
  * `purchase.split` runs, because the split soft-deletes the original in the
  * same transaction — reading it after would 404. Driven through the real MCP
- * server (`client.callTool`) with a real tRPC caller
- * (`createTestCaller(domainRouter, ...)`), mirroring
+ * server (`client.callTool`) with a real workflow caller, mirroring
  * `mcp-shortcode-boundary.integration.test.ts`.
  */
 
@@ -19,18 +18,21 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import type { DomainCaller } from "~/server/api/domain";
-import { domainRouter } from "~/server/api/domain";
-import { createTestCaller, createTestTRPCContext } from "~/server/api/trpc";
 import type { EntityKernelContext } from "~/server/entity-kernel";
 import { createExpense } from "~/server/repo/expense";
 import { makeExpenseInput } from "~/server/repo/repo.fixtures";
+import { requireActor } from "~/server/request-context";
+import { createTestRequestContext } from "~/server/testing/request-context";
 import { createMcpServer } from "./server";
+import {
+  createMcpWorkflowCaller,
+  type McpWorkflowCaller,
+} from "./workflow-caller";
 
 async function callTool(
   name: string,
   args: Record<string, unknown>,
-  caller: DomainCaller,
+  caller: McpWorkflowCaller,
   entityKernel: EntityKernelContext,
 ): Promise<CallToolResult> {
   const server = createMcpServer();
@@ -70,20 +72,19 @@ function errorText(result: CallToolResult): string {
   return JSON.stringify(result.content);
 }
 
-function kernelContext(
-  db: Parameters<typeof createTestTRPCContext>[0],
+function workflowContext(
+  db: Parameters<typeof createTestRequestContext>[0],
   userId: UserId,
-): EntityKernelContext {
-  const context = createTestTRPCContext(db, { auth: { userId } });
-  if (!context.actorContext) throw new Error("Test actor context is missing");
-  return { ...context, actorContext: context.actorContext };
+) {
+  return requireActor(createTestRequestContext(db, { auth: { userId } }));
 }
 
 describe("split_expense MCP tool — originalCost/partsSum/delta", () => {
   const ctx = withTestDb();
+  const caller = () =>
+    createMcpWorkflowCaller(workflowContext(ctx.db, ctx.actor.userId));
 
   it("reports a zero delta when the parts sum exactly to the original", async () => {
-    const caller = createTestCaller(domainRouter, ctx.db);
     const { output: original } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
@@ -106,8 +107,8 @@ describe("split_expense MCP tool — originalCost/partsSum/delta", () => {
           { name: "part b", cost: 30, costType: "materials", trade: "other" },
         ],
       },
-      caller,
-      kernelContext(ctx.db, ctx.actor.userId),
+      caller(),
+      workflowContext(ctx.db, ctx.actor.userId),
     );
 
     expect(result.isError, errorText(result)).not.toBe(true);
@@ -118,7 +119,6 @@ describe("split_expense MCP tool — originalCost/partsSum/delta", () => {
   });
 
   it("reports a non-zero delta as a cue, without rejecting the split", async () => {
-    const caller = createTestCaller(domainRouter, ctx.db);
     const { output: original } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
@@ -143,8 +143,8 @@ describe("split_expense MCP tool — originalCost/partsSum/delta", () => {
           { name: "part b", cost: 15, costType: "materials", trade: "other" },
         ],
       },
-      caller,
-      kernelContext(ctx.db, ctx.actor.userId),
+      caller(),
+      workflowContext(ctx.db, ctx.actor.userId),
     );
 
     expect(result.isError, errorText(result)).not.toBe(true);
@@ -157,7 +157,6 @@ describe("split_expense MCP tool — originalCost/partsSum/delta", () => {
   });
 
   it("returns null originalCost/delta when the original has no recorded cost", async () => {
-    const caller = createTestCaller(domainRouter, ctx.db);
     const { output: original } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
@@ -180,8 +179,8 @@ describe("split_expense MCP tool — originalCost/partsSum/delta", () => {
           { name: "part b", cost: 5, costType: "materials", trade: "other" },
         ],
       },
-      caller,
-      kernelContext(ctx.db, ctx.actor.userId),
+      caller(),
+      workflowContext(ctx.db, ctx.actor.userId),
     );
 
     expect(result.isError, errorText(result)).not.toBe(true);

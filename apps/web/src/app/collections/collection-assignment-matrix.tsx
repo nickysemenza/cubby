@@ -31,10 +31,18 @@ import { Label } from "~/components/ui/label";
 import { NativeSelect } from "~/components/ui/native-select";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { EntityIcon, entityDetailLink } from "~/entities/entities";
-import { type RouterOutputs, useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidateQueryRoots } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
+import {
+  type CollectionMatrixRow,
+  collectionCreateMutationOptions,
+  collectionDetailRootKey,
+  collectionListRootKey,
+  collectionMatrixQueryOptions,
+  collectionMatrixRootKey,
+  collectionSetMutationOptions,
+} from "./collection.functions";
 import {
   CopyableShortcode,
   ProductContextLine,
@@ -42,7 +50,7 @@ import {
 
 const SETTLE_MS = 400;
 const PAGE_SIZE_OPTIONS = [100, 250, 500] as const;
-type MatrixRow = RouterOutputs["collection"]["matrix"]["rows"][number];
+type MatrixRow = CollectionMatrixRow;
 
 const directlyAssigned = (state: CollectionCellState): boolean =>
   state === "direct" || state === "both";
@@ -92,7 +100,6 @@ function NewCollectionDialog({
   subject: "product" | "location";
   rows: MatrixRow[];
 }) {
-  const api = useTRPC();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -101,22 +108,21 @@ function NewCollectionDialog({
   const memberSelectId = useId();
   const slug = normalizeCollectionSlug(name);
 
-  const create = useMutation(
-    api.collection.create.mutationOptions({
-      onSuccess: (result) => {
-        invalidateQueryRoots(queryClient, [
-          api.collection.matrix.queryKey(),
-          api.collection.list.queryKey(),
-          api.collection.detail.queryKey(),
-        ]);
-        toast.success(`${formatCollectionLabel(result.slug)} created`);
-        setOpen(false);
-        setName("");
-        setMemberId("");
-      },
-      onError: (error) => toast.error(getErrorMessage(error)),
-    }),
-  );
+  const create = useMutation({
+    ...collectionCreateMutationOptions(),
+    onSuccess: (result) => {
+      invalidateQueryRoots(queryClient, [
+        collectionMatrixRootKey(),
+        collectionListRootKey(),
+        collectionDetailRootKey(),
+      ]);
+      toast.success(`${formatCollectionLabel(result.slug)} created`);
+      setOpen(false);
+      setName("");
+      setMemberId("");
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+  });
 
   const handleOpenChange = (nextOpen: boolean) => {
     setOpen(nextOpen);
@@ -145,7 +151,7 @@ function NewCollectionDialog({
               collection: slug,
               subject,
               id: memberId,
-            } as never);
+            });
           }}
         >
           <Stack gap="md">
@@ -226,7 +232,6 @@ export function CollectionAssignmentMatrix({
     membership?: CollectionMatrixMembership;
   }) => void;
 }) {
-  const api = useTRPC();
   const queryClient = useQueryClient();
   const input = useMemo(
     () => ({
@@ -239,37 +244,36 @@ export function CollectionAssignmentMatrix({
     }),
     [collection, membership, page, pageSize, search, sort, subject],
   );
-  const matrix = useQuery(api.collection.matrix.queryOptions(input));
+  const matrix = useQuery(collectionMatrixQueryOptions(input));
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
-  const mutation = useMutation(
-    api.collection.set.mutationOptions({
-      retry: 2,
-      onSuccess: (_result, variables) => {
-        const key = `${variables.subject}:${variables.id}:${variables.collection}`;
-        setOverrides((current) => {
-          const next = { ...current };
-          delete next[key];
-          return next;
-        });
-        invalidateQueryRoots(queryClient, [
-          api.collection.matrix.queryKey(),
-          api.collection.list.queryKey(),
-          api.collection.detail.queryKey(),
-        ]);
-      },
-      onError: (error, variables) => {
-        const key = `${variables.subject}:${variables.id}:${variables.collection}`;
-        setOverrides((current) => {
-          const next = { ...current };
-          delete next[key];
-          return next;
-        });
-        toast.error(`Assignment was restored: ${getErrorMessage(error)}`);
-      },
-    }),
-  );
+  const mutation = useMutation({
+    ...collectionSetMutationOptions(),
+    retry: 2,
+    onSuccess: (_result, variables) => {
+      const key = `${variables.subject}:${variables.id}:${variables.collection}`;
+      setOverrides((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+      invalidateQueryRoots(queryClient, [
+        collectionMatrixRootKey(),
+        collectionListRootKey(),
+        collectionDetailRootKey(),
+      ]);
+    },
+    onError: (error, variables) => {
+      const key = `${variables.subject}:${variables.id}:${variables.collection}`;
+      setOverrides((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+      toast.error(`Assignment was restored: ${getErrorMessage(error)}`);
+    },
+  });
 
   useEffect(
     () => () => {
@@ -307,7 +311,7 @@ export function CollectionAssignmentMatrix({
           id: row.id,
           collection,
           assigned: nextValue,
-        } as never);
+        });
       }, SETTLE_MS),
     );
   };

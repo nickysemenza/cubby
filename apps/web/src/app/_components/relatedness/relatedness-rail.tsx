@@ -7,8 +7,13 @@ import { useEffect, useMemo } from "react";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { useTRPC } from "~/integrations/trpc/react";
+import { backgroundBatchSummaryQueryOptions } from "~/lib/background-batch.functions";
 import { invalidateQueryRoots } from "~/lib/query-keys";
+import {
+  relatednessProductQueryOptions,
+  relatednessProductRootKey,
+} from "~/lib/recommendations.functions";
+import { searchRequestEmbeddingRefreshMutationOptions } from "~/lib/search.functions";
 import {
   ProductImageSummariesProvider,
   useHydratedProductImages,
@@ -26,16 +31,11 @@ export function RelatednessRail({
 }: {
   product: { id: ProductShortcode; tags: string[] };
 }) {
-  const api = useTRPC();
   const queryClient = useQueryClient();
-  const relatedness = useQuery(
-    api.relatedness.product.queryOptions(product.id),
-  );
-  const refresh = useMutation(
-    api.search.requestEmbeddingRefresh.mutationOptions(),
-  );
+  const relatedness = useQuery(relatednessProductQueryOptions(product.id));
+  const refresh = useMutation(searchRequestEmbeddingRefreshMutationOptions());
   const batch = useQuery({
-    ...api.backgroundJobs.getBatchSummary.queryOptions({
+    ...backgroundBatchSummaryQueryOptions({
       batchId: refresh.data?.batchId ?? "00000000-0000-4000-8000-000000000000",
     }),
     enabled: refresh.data?.batchId != null,
@@ -59,17 +59,8 @@ export function RelatednessRail({
     if (!refresh.data?.batchId || indexing || !batch.data) return;
     // The worker has reached a terminal state. Re-read the product's status
     // rather than leaving the rail on the request-time readiness snapshot.
-    invalidateQueryRoots(queryClient, [
-      api.relatedness.product.queryKey(product.id),
-    ]);
-  }, [
-    api.relatedness.product,
-    batch.data,
-    indexing,
-    product.id,
-    queryClient,
-    refresh.data?.batchId,
-  ]);
+    invalidateQueryRoots(queryClient, [relatednessProductRootKey()]);
+  }, [batch.data, indexing, queryClient, refresh.data?.batchId]);
 
   return (
     <Stack gap="sm">

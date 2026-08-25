@@ -5,13 +5,9 @@ import { toast } from "sonner";
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
 import { Stack } from "~/components/layout";
 import { Progress } from "~/components/ui/progress";
-import { useTRPC, useTRPCClient } from "~/integrations/trpc/react";
 import type { BulkProgressEvent } from "~/lib/bulk-progress";
 import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
 import { ProblemActionButton } from "./problem-action-button";
-
-type TRPCApi = ReturnType<typeof useTRPC>;
-type TRPCClient = ReturnType<typeof useTRPCClient>;
 
 /**
  * Result-driven toast: which sonner variant to fire and with what message. The
@@ -21,12 +17,12 @@ type TRPCClient = ReturnType<typeof useTRPCClient>;
 type BackfillToast = { tone: "success" | "info"; message: ReactNode };
 
 export type BackfillButtonProps<TResult> = {
-  /** Opens the streaming backfill mutation, e.g. `(client) => client.problems.reparseStale.mutate()`. */
+  /** Opens the streaming workflow and forwards cancellation from the UI. */
   run: (
-    client: TRPCClient,
+    signal: AbortSignal,
   ) => Promise<AsyncIterable<BulkProgressEvent<unknown, TResult>>>;
   /** Entity lists to invalidate alongside the problems list. */
-  invalidateKeys?: (api: TRPCApi) => QueryKey[];
+  invalidateKeys?: readonly QueryKey[];
   toastResult: (data: TResult) => BackfillToast;
   idleLabel: string;
   pendingLabel: string;
@@ -55,19 +51,17 @@ export function BackfillButton<TResult>({
   pendingLabel,
   foreground,
 }: BackfillButtonProps<TResult>): ReactNode {
-  const api = useTRPC();
-  const client = useTRPCClient();
   const queryClient = useQueryClient();
   const { start, running, progress } = useBulkStream<unknown, TResult>();
 
   const onClick = () =>
-    void start(() => run(client), {
+    void start(run, {
       onDone: (data) => {
         const { tone, message } = toastResult(data);
         toast[tone](message);
         invalidateQueryRoots(queryClient, [
           ...invalidatesFor("problems"),
-          ...(invalidateKeys?.(api) ?? []),
+          ...(invalidateKeys ?? []),
         ]);
       },
     });

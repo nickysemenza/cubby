@@ -1,5 +1,6 @@
 /**
- * The core entity browser runtime is tRPC-free (docs/entities.md, "Transports").
+ * The core entity browser runtime uses named Start operations
+ * (docs/entities.md, "Transports").
  *
  * One representative entity carries the contract for all of them, because the
  * list, detail, and mutation paths are generic: every compiled entity goes
@@ -24,28 +25,12 @@ type StartRequest = { payload: string; operationId?: string };
 const payloadOf = (url: string, body: string): string =>
   `${decodeURIComponent(url)}${body}`.replace(/[\\\s]/gu, "");
 
-/** Procedures a core-entity read or write would land on if it regressed to tRPC. */
-const CORE_ENTITY_PROCEDURES = [
-  "product.list",
-  "product.all",
-  "product.byShortcode",
-  "product.byId",
-  "product.create",
-  "product.update",
-  "product.delete",
-];
-
 test("core entity list, detail, and mutation ride named Start operations", async ({
   page,
 }) => {
   const starts: StartRequest[] = [];
-  const trpcUrls: string[] = [];
   page.on("request", (request) => {
     const url = request.url();
-    if (url.includes("/api/trpc")) {
-      trpcUrls.push(url);
-      return;
-    }
     if (!url.includes("/_serverFn/")) return;
     starts.push({
       payload: payloadOf(url, request.postData() ?? ""),
@@ -100,9 +85,4 @@ test("core entity list, detail, and mutation ride named Start operations", async
   expect(ids.length).toBeGreaterThanOrEqual(3);
   for (const id of ids) expect(id).toMatch(/^op-\d+$/u);
   expect(new Set(ids).size).toBe(ids.length);
-
-  const trpc = trpcUrls.join("\n");
-  for (const procedure of CORE_ENTITY_PROCEDURES) {
-    expect(trpc, `${procedure} must not be called`).not.toContain(procedure);
-  }
 });

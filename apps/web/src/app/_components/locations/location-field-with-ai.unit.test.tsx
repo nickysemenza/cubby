@@ -8,13 +8,11 @@ const mocks = vi.hoisted(() => ({
   suggestLocation: vi.fn(),
 }));
 
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPCClient: () => ({
-    ai: { suggestLocation: { query: mocks.suggestLocation } },
-  }),
+vi.mock("~/lib/ai.functions", () => ({
+  suggestLocationForBrowser: mocks.suggestLocation,
 }));
 
-// The real combobox pulls the whole location roster over tRPC; this stands in
+// The real combobox pulls the whole location roster over a Start function; this stands in
 // for it as a readout of the form value, which is what the suggestion writes.
 vi.mock("~/app/_components/form-utils/combobox-field-with-search", () => ({
   ComboboxFieldWithSearch: ({

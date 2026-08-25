@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
+import { locationTreeQueryOptions } from "~/app/locations/location.functions";
 import { useHydrated } from "~/hooks/useHydrated";
-import { useTRPC } from "~/integrations/trpc/react";
 
 /**
  * Shared fetch for the raw location tree (`location.makeTree`).
@@ -10,9 +10,8 @@ import { useTRPC } from "~/integrations/trpc/react";
  * use `useLocationHierarchy` instead — it adds per-location valuation.
  */
 export function useLocationTree() {
-  const api = useTRPC();
   const hydrated = useHydrated();
-  const query = useQuery(api.location.makeTree.queryOptions());
+  const query = useQuery(locationTreeQueryOptions());
   return {
     ...query,
     data: hydrated ? query.data : undefined,

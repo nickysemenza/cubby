@@ -10,6 +10,7 @@ import { ArrowDown, ArrowUp, CalendarClock } from "lucide-react";
 import { useId, useMemo } from "react";
 import { DatePickerInput } from "~/app/_components/date-picker-input";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import { productMovementTimelineQueryOptions } from "~/app/products/product.functions";
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
 import { Grid, Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -22,7 +23,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import { useTRPC } from "~/integrations/trpc/react";
 import { parsePlainDate } from "~/lib/plain-date";
 import { clipOwnershipIntervals } from "~/lib/product-movement";
 import { cn, formatCurrency } from "~/lib/utils";
@@ -504,11 +504,10 @@ export function ProductMovementViews({
   filters: ProductFilters;
   view: TimelineView;
 }) {
-  const api = useTRPC();
   const search = route.useSearch();
   const order = search.movementOrder ?? "desc";
   const { data, isError, isLoading } = useQuery({
-    ...api.product.movementTimeline.queryOptions({
+    ...productMovementTimelineQueryOptions({
       filters,
       movementFrom: search.movementFrom,
       movementTo: search.movementTo,

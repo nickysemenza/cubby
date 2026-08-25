@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { useMemo } from "react";
+import { recipeHarvestEquivalencesQueryOptions } from "~/app/recipes/recipe.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -21,7 +22,6 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { useHydrated } from "~/hooks/useHydrated";
-import { useTRPC } from "~/integrations/trpc/react";
 import { cn } from "~/lib/utils";
 import { EntityInlineLink } from "../_components/EntityInlineLink";
 import { equivalenceWorkbenchSearch } from "./equivalence-workbench-link";
@@ -53,14 +53,13 @@ const spreadLabel = (c: CandidateEquivalence): string => {
  * UnitMapping will store it and explicitly saves the write.
  */
 export function EquivalencesReport() {
-  const api = useTRPC();
   const {
     data: harvest,
     isFetching: harvestFetching,
     error,
     refetch,
   } = useQuery({
-    ...api.recipe.harvestEquivalences.queryOptions(),
+    ...recipeHarvestEquivalencesQueryOptions(),
     staleTime: 5 * 60 * 1000,
   });
   // Hydration-stable: the server renders mid-scan with no candidates, while the

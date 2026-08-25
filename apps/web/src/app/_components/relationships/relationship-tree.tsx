@@ -56,7 +56,7 @@ export interface RelationshipTreeProps {
   /** Presets come from the graph API; the first is the recommended default. */
   presets: readonly RelationshipPreset[];
   /**
-   * Optional lazy loader. It deliberately has no tRPC dependency so callers
+   * Optional lazy loader. It deliberately has no transport dependency so callers
    * can adopt the component before the graph endpoints are available.
    */
   loadChildren?: (input: {

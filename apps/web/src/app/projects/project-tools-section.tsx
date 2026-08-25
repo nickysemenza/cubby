@@ -26,6 +26,13 @@ import {
 } from "~/app/_components/data-table/table-features";
 import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { ProductAddToInventoryDialog } from "~/app/_components/products/product-add-to-inventory-dialog";
+import { productSearchQueryOptions } from "~/app/products/product.functions";
+import {
+  projectAttachResourcesMutationOptions,
+  projectDetachResourcesMutationOptions,
+  projectResourcesQueryOptions,
+  projectToolSuggestionsQueryOptions,
+} from "~/app/projects/project.functions";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -46,7 +53,6 @@ import {
 } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import {
@@ -93,9 +99,8 @@ function ResourcesTable({
   resourcesKey: QueryKey;
   isLoading: boolean;
 }) {
-  const api = useTRPC();
   const queryClient = useQueryClient();
-  const detachBase = api.project.detachResources.mutationOptions();
+  const detachBase = projectDetachResourcesMutationOptions();
   const detach = useMutation({
     mutationKey: detachBase.mutationKey,
     mutationFn: detachBase.mutationFn,
@@ -385,15 +390,14 @@ function ResourcePickerDialog({
   attachedIds: Set<string>;
   resourcesKey: QueryKey;
 }) {
-  const api = useTRPC();
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const suggestionsQuery = useQuery(
-    api.project.toolSuggestions.queryOptions({ projectId }, { enabled: open }),
+    projectToolSuggestionsQueryOptions({ projectId }, { enabled: open }),
   );
   const toolSearchQuery = useQuery({
-    ...api.product.search.queryOptions({
+    ...productSearchQueryOptions({
       filters: { nameFilter: search || undefined, categoryFilter: "tools" },
       pagination: { pageIndex: 0, pageSize: 50 },
       sort: [{ orderBy: "name", direction: "asc" }],
@@ -401,7 +405,7 @@ function ResourcePickerDialog({
     enabled: open,
   });
   const softwareSearchQuery = useQuery({
-    ...api.product.search.queryOptions({
+    ...productSearchQueryOptions({
       filters: { nameFilter: search || undefined, categoryFilter: "software" },
       pagination: { pageIndex: 0, pageSize: 50 },
       sort: [{ orderBy: "name", direction: "asc" }],
@@ -468,7 +472,7 @@ function ResourcePickerDialog({
     }
     onOpenChange(next);
   };
-  const attachBase = api.project.attachResources.mutationOptions();
+  const attachBase = projectAttachResourcesMutationOptions();
   const attach = useMutation({
     mutationKey: attachBase.mutationKey,
     mutationFn: attachBase.mutationFn,
@@ -617,14 +621,11 @@ function ResourcePickerDialog({
 }
 
 export function ProjectResourcesSection({ projectId }: { projectId: string }) {
-  const api = useTRPC();
   const [pickerOpen, setPickerOpen] = useState(false);
-  const resourcesKey = api.project.resources.queryKey({ projectId });
-  const resourcesQuery = useQuery(
-    api.project.resources.queryOptions({ projectId }),
-  );
+  const resourcesKey = projectResourcesQueryOptions({ projectId }).queryKey;
+  const resourcesQuery = useQuery(projectResourcesQueryOptions({ projectId }));
   const suggestionsQuery = useQuery(
-    api.project.toolSuggestions.queryOptions({ projectId }),
+    projectToolSuggestionsQueryOptions({ projectId }),
   );
   const resources = resourcesQuery.data ?? EMPTY_RESOURCES;
   const resourceRows = useMemo<ResourceRow[]>(

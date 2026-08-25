@@ -117,7 +117,7 @@ export function createBlockedError(
  * `cause` never crosses either boundary: it is `unknown`, it can hold an
  * arbitrary original exception, and both transports have to lift what they
  * expose out of it explicitly. That lifting used to be written twice — once in
- * tRPC's `errorFormatter` and once in the MCP layer's `describeToolError` — and
+ * the browser adapter and once in the MCP layer's `describeToolError` — and
  * the two promptly disagreed: the MCP copy read `code` and `reason` and never
  * `blockers`, so `delete_entity`'s own description promised blocker ids that
  * the transport silently discarded. Two whitelists that can drift IS the bug,
@@ -126,7 +126,7 @@ export function createBlockedError(
  * `reason` is deliberately NOT narrowed to `AppErrorReason`. The MCP copy used
  * to narrow, which dropped `INVALID_INPUT` — minted at the MCP boundary itself
  * for a wrong-prefix shortcode, absent from `AppErrors`, and the single most
- * common fault a caller can actually fix. The tRPC copy never narrowed. Passing
+ * common fault a caller can actually fix. The browser copy never narrowed. Passing
  * the string through is what both sides already needed.
  *
  * `blockers` is parsed rather than passed through: a malformed payload must not

@@ -35,6 +35,7 @@ import {
 import { LocationSweep } from "~/app/_components/inventory/location-sweep/LocationSweepSheet";
 import { useLocationPhotoCapture } from "~/app/_components/locations/use-location-photo-capture";
 import { useUpcAwareCreate } from "~/app/_components/products/use-upc-aware-create";
+import { quickCreateProductMutationOptions } from "~/app/products/product.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -48,8 +49,12 @@ import {
 } from "~/components/ui/sheet";
 import { Spinner } from "~/components/ui/spinner";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { useTRPC } from "~/integrations/trpc/react";
+import {
+  approveDetectedInventoryItemMutationOptions,
+  detectInventoryItemsMutationOptions,
+} from "~/lib/ai.functions";
 import { getErrorMessage } from "~/lib/error-utils";
+import { uploadImageMutationOptions } from "~/lib/image.functions";
 import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import type { SessionLocation } from "../session-utils";
@@ -74,7 +79,6 @@ export function SessionCaptureActions({
 }: {
   location: SessionLocation;
 }) {
-  const api = useTRPC();
   const { invalidate } = useSessionMutations();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [scanner, setScanner] = useState<"barcode" | null>(null);
@@ -106,7 +110,7 @@ export function SessionCaptureActions({
   const invalidateCapture = (result?: unknown) =>
     invalidate({ includeProductLookup: true, result, watch: true });
 
-  const uploadImage = useMutation(api.image.uploadImage.mutationOptions());
+  const uploadImage = useMutation(uploadImageMutationOptions());
   // Location photos go through the shared capture hook rather than a local
   // upload→attach pair: it also invalidates `location.makeTree`, which this
   // workbench reads for every stop's `imageCount`. The old local path only
@@ -114,7 +118,7 @@ export function SessionCaptureActions({
   // photo count stale until the pass was remounted.
   const { capture: captureLocationPhoto } = useLocationPhotoCapture();
   const detectItems = useMutation(
-    api.ai.detectInventoryItems.mutationOptions({
+    detectInventoryItemsMutationOptions({
       onSuccess: (data) => {
         setSuggestions(data.items);
         setDetectionCacheStatus(data.cache.status);
@@ -136,7 +140,7 @@ export function SessionCaptureActions({
     }),
   );
   const approveDetectedItem = useMutation(
-    api.ai.approveDetectedInventoryItem.mutationOptions({
+    approveDetectedInventoryItemMutationOptions({
       onSuccess: (data) => {
         invalidateCapture(data);
         toast.success(
@@ -157,9 +161,7 @@ export function SessionCaptureActions({
       onError: (error) => toast.error(getErrorMessage(error)),
     }),
   );
-  const quickCreateProduct = useMutation(
-    api.product.quickCreate.mutationOptions(),
-  );
+  const quickCreateProduct = useMutation(quickCreateProductMutationOptions());
   const updateProduct = useMutation(
     entityMutationOptionsFactory("product", "update")(),
   );
@@ -524,7 +526,6 @@ function SuggestionProductCombobox({
 }
 
 function ManualAdd({ locationId }: { locationId: LocationShortcode }) {
-  const api = useTRPC();
   const queryClient = useQueryClient();
   const form = useForm<ManualAddValues>({
     resolver: zodResolver(manualAddSchema),
@@ -550,7 +551,7 @@ function ManualAdd({ locationId }: { locationId: LocationShortcode }) {
   // (manufacturer required) and use the quickCreate endpoint, which defaults the
   // manufacturer. The created product is selected straight into the picker.
   const quickCreateProduct = useMutation(
-    api.product.quickCreate.mutationOptions({
+    quickCreateProductMutationOptions({
       onError: (error) => toast.error(getErrorMessage(error)),
     }),
   );

@@ -27,16 +27,17 @@ vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 }));
 
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPC: () => ({
-    product: {
-      purchases: { queryOptions: () => ({ queryKey: ["purchases"] }) },
-      kitMembership: { queryOptions: () => ({ queryKey: ["kitMembership"] }) },
-    },
-    purchase: {
-      detachProducts: { mutationOptions: vi.fn() },
-    },
+vi.mock("~/app/products/product.functions", () => ({
+  productPurchasesQueryOptions: (input: unknown) => ({
+    queryKey: ["purchases", input],
   }),
+  kitMembershipQueryOptions: (input: unknown) => ({
+    queryKey: ["kitMembership", input],
+  }),
+}));
+
+vi.mock("~/app/purchases/purchase.functions", () => ({
+  detachPurchaseProductsMutationOptions: () => ({}),
 }));
 
 vi.mock("~/app/_components/EntityInlineLink", () => ({

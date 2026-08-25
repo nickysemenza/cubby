@@ -1,6 +1,6 @@
 import type { AgentResult } from "@cubby/schemas/agent";
-import { useCallback, useRef, useState } from "react";
-import { useTRPCClient } from "~/integrations/trpc/react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { askAgentStream } from "~/lib/agent.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 
 interface AgentStreamState {
@@ -23,66 +23,72 @@ const EMPTY: AgentStreamState = {
 };
 
 /**
- * Streams `agent.askStream` for a progressive "typing" reveal. Accumulates
+ * Streams the agent workflow for a progressive "typing" reveal. Accumulates
  * answer deltas and resets on each `tool` event (text before a tool call was
- * narration), mirroring the server's segment logic. Uses the vanilla tRPC
- * client (httpBatchStreamLink) since React Query hooks don't expose the
- * incremental generator.
+ * narration), mirroring the server's segment logic.
  */
 export function useAgentStream() {
-  const client = useTRPCClient();
   const [state, setState] = useState<AgentStreamState>(EMPTY);
   // Monotonic id so a reset / new ask supersedes any in-flight stream.
   const runIdRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   const reset = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
     runIdRef.current++;
     setState(EMPTY);
   }, []);
 
-  const ask = useCallback(
-    async (query: string) => {
-      const trimmed = query.trim();
-      if (trimmed.length === 0) return;
+  const ask = useCallback(async (query: string) => {
+    const trimmed = query.trim();
+    if (trimmed.length === 0) return;
 
-      const runId = ++runIdRef.current;
-      setState({ ...EMPTY, isStreaming: true });
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const runId = ++runIdRef.current;
+    setState({ ...EMPTY, isStreaming: true });
 
-      let acc = "";
-      try {
-        const iterable = await client.agent.askStream.query({ query: trimmed });
-        for await (const event of iterable) {
-          if (runIdRef.current !== runId) return; // superseded
+    let acc = "";
+    try {
+      const iterable = await askAgentStream(
+        { query: trimmed },
+        controller.signal,
+      );
+      for await (const event of iterable) {
+        if (runIdRef.current !== runId) return; // superseded
 
-          if (event.type === "delta") {
-            acc += event.text;
-            setState((s) => ({ ...s, answer: acc }));
-          } else if (event.type === "tool") {
-            acc = "";
-            setState((s) => ({ ...s, answer: "", toolStatus: event.tool }));
-          } else {
-            setState((s) => ({
-              ...s,
-              answer: acc.trim(),
-              toolStatus: null,
-              isStreaming: false,
-              result: { sources: event.sources, toolCalls: event.toolCalls },
-            }));
-          }
-        }
-      } catch (error) {
-        if (runIdRef.current === runId) {
+        if (event.type === "delta") {
+          acc += event.text;
+          setState((s) => ({ ...s, answer: acc }));
+        } else if (event.type === "tool") {
+          acc = "";
+          setState((s) => ({ ...s, answer: "", toolStatus: event.tool }));
+        } else {
           setState((s) => ({
             ...s,
-            isStreaming: false,
+            answer: acc.trim(),
             toolStatus: null,
-            error: getErrorMessage(error),
+            isStreaming: false,
+            result: { sources: event.sources, toolCalls: event.toolCalls },
           }));
         }
       }
-    },
-    [client],
-  );
+    } catch (error) {
+      if (runIdRef.current === runId && !controller.signal.aborted) {
+        setState((s) => ({
+          ...s,
+          isStreaming: false,
+          toolStatus: null,
+          error: getErrorMessage(error),
+        }));
+      }
+    } finally {
+      if (abortRef.current === controller) abortRef.current = null;
+    }
+  }, []);
 
   return { ...state, ask, reset };
 }
