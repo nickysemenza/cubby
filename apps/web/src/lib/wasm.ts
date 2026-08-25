@@ -5,6 +5,7 @@
  * Vite handles the top-level await natively.
  */
 
+import type * as RecipeBridge from "@cubby/recipebridge";
 import { flatten } from "flat";
 import { LRUCache } from "lru-cache";
 import type { ReadonlyDeep } from "type-fest";
@@ -12,7 +13,7 @@ import { getFlag } from "~/lib/flags";
 import { recordWasmCache, recordWasmExec } from "~/lib/perf/perf-store";
 import { getTracer, TraceNames } from "~/server/tracing";
 
-type WasmType = typeof import("@cubby/recipebridge");
+type WasmType = typeof RecipeBridge;
 
 /**
  * The `wasm` proxy caches results for pure methods, so every object it returns

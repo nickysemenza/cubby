@@ -4,20 +4,10 @@ import * as React from "react";
 import { Row } from "~/components/layout";
 import { useNavAuthed } from "~/hooks/useNavAuthed";
 import { useVirtualKeyboard } from "~/hooks/useVirtualKeyboard";
-import { createCachedLoader, scheduleIdlePreload } from "~/lib/lazy-preload";
 import { cn } from "~/lib/utils";
 import { resolveMobileRoute } from "./mobile-route-descriptor";
 import { bottomNavItems, publicNavItems, useActiveTo } from "./nav-items";
-
-const importWorkspaceNavigator = createCachedLoader(() =>
-  import("./workspace-navigator").then((m) => ({
-    default: m.WorkspaceNavigator,
-  })),
-);
-
-const loadWorkspaceNavigator = () => importWorkspaceNavigator();
-
-const WorkspaceNavigator = React.lazy(loadWorkspaceNavigator);
+import { WorkspaceNavigator } from "./workspace-navigator";
 
 type BottomNavItemProps = {
   icon?: React.ComponentType<{ className?: string }>;
@@ -79,14 +69,6 @@ export function BottomNav() {
   // on the first paint instead of flashing the authed tabs and collapsing.
   const authed = useNavAuthed();
 
-  React.useEffect(() => {
-    if (!authed || !window.matchMedia("(max-width: 767px)").matches) return;
-    return scheduleIdlePreload(window, () => void loadWorkspaceNavigator(), {
-      timeoutMs: 1_500,
-      fallbackMs: 400,
-    });
-  }, [authed]);
-
   const isMoreActive = activeTab === "more";
 
   return (
@@ -129,22 +111,18 @@ export function BottomNav() {
               label="More"
               active={isMoreActive}
               aria-label="More options"
-              onPointerEnter={() => void loadWorkspaceNavigator()}
-              onTouchStart={() => void loadWorkspaceNavigator()}
               onClick={() => {
                 setMoreMounted(true);
                 setIsOpen(true);
               }}
             />
             {moreMounted && (
-              <React.Suspense fallback={null}>
-                <WorkspaceNavigator
-                  activeTo={activeTo}
-                  open={isOpen}
-                  onOpenChange={setIsOpen}
-                  initialView="household"
-                />
-              </React.Suspense>
+              <WorkspaceNavigator
+                activeTo={activeTo}
+                open={isOpen}
+                onOpenChange={setIsOpen}
+                initialView="household"
+              />
             )}
           </>
         ) : (

@@ -1,3 +1,4 @@
+import type * as TanStackRouter from "@tanstack/react-router";
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RecentActivityFeed } from "./RecentActivityFeed";
@@ -10,7 +11,7 @@ vi.mock("../audit-log/audit-log-list", () => ({
   },
 }));
 vi.mock("@tanstack/react-router", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@tanstack/react-router")>()),
+  ...(await importOriginal<typeof TanStackRouter>()),
   Link: ({ children }: { children: React.ReactNode }) => (
     <a href="/activity">{children}</a>
   ),

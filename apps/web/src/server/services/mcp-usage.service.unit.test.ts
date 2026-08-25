@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type * as McpUsage from "~/server/repo/mcp-usage";
 
 const getMcpUsageAggregateData = vi.fn();
 const listMcpToolCatalog = vi.fn();
 vi.mock("~/server/repo/mcp-usage", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("~/server/repo/mcp-usage")>()),
+  ...(await importOriginal<typeof McpUsage>()),
   getMcpUsageAggregateData,
 }));
 vi.mock("~/server/mcp/server", () => ({ listMcpToolCatalog }));

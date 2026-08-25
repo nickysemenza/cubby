@@ -8,6 +8,7 @@
 
 import { entityRefKey } from "@cubby/schemas/entity";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
+import type * as Shared from "@cubby/shared";
 import {
   PUBLIC_SHORTCODE_PREFIXES,
   parseShortcode,
@@ -43,7 +44,7 @@ import {
 
 let nextCode: string | null = null;
 vi.mock("@cubby/shared", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@cubby/shared")>();
+  const actual = await importOriginal<typeof Shared>();
   return {
     ...actual,
     generateShortcode: (

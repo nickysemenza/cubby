@@ -1,8 +1,3 @@
-import { lazy } from "react";
-
-/** Failure-only route UI; keep the branded 404 out of the eager closure. */
-export const RouteNotFound = lazy(() =>
-  import("./route-not-found").then((module) => ({
-    default: module.RouteNotFound,
-  })),
-);
+// The not-found UI is part of the router contract and must be available for a
+// failure before any optional route chunk can be fetched.
+export { RouteNotFound } from "./route-not-found";

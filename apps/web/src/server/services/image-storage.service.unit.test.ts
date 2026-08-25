@@ -1,3 +1,4 @@
+import type * as ExternalFetch from "@cubby/shared/external-fetch";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -52,7 +53,7 @@ vi.mock("~/server/utils/s3", () => ({
 }));
 
 vi.mock("@cubby/shared/external-fetch", async (importActual) => ({
-  ...(await importActual<typeof import("@cubby/shared/external-fetch")>()),
+  ...(await importActual<typeof ExternalFetch>()),
   fetchExternalResponse: mocks.fetchExternalResponse,
 }));
 

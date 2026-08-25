@@ -12,8 +12,8 @@ import { pageTitle } from "~/lib/page-title";
 /**
  * Lazy on purpose. TanStack's generated route tree statically imports every
  * route module, so anything a route pulls in lands in the client's EAGER
- * closure — which `analyze-client-bundle` holds to a budget. This route drags
- * in the QR scanner and the location picker for a surface almost nobody opens
+ * closure. This route drags in the QR scanner and the location picker for a
+ * surface almost nobody opens
  * on a cold load, so it pays for itself only when actually visited.
  */
 const PhotoPassWorkbench = lazy(() =>

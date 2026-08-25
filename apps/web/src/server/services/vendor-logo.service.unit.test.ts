@@ -2,7 +2,9 @@ import {
   unsafeVendorId,
   unsafeVendorShortcode,
 } from "@cubby/schemas/identifiers";
+import type * as ExternalFetch from "@cubby/shared/external-fetch";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type * as ImageIntegrity from "~/server/services/image-integrity";
 
 const mocks = vi.hoisted(() => ({
   deleteS3Object: vi.fn(),
@@ -15,7 +17,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@cubby/shared/external-fetch", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@cubby/shared/external-fetch")>()),
+  ...(await importOriginal<typeof ExternalFetch>()),
   fetchExternalResponse: mocks.fetchExternalResponse,
 }));
 
@@ -25,9 +27,7 @@ vi.mock("~/server/repo/vendor", () => ({
 }));
 
 vi.mock("~/server/services/image-integrity", async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import("~/server/services/image-integrity")
-  >()),
+  ...(await importOriginal<typeof ImageIntegrity>()),
   inspectImageFile: mocks.inspectImageFile,
 }));
 

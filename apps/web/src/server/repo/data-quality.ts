@@ -16,6 +16,7 @@ import {
   purchaseDataCheck,
   type SetDataExceptionInput,
 } from "@cubby/schemas/data-quality";
+import type { ExternalIdKind } from "@cubby/schemas/external-id";
 import type {
   ProductId,
   ProductShortcode,
@@ -1286,8 +1287,7 @@ export const findProductExternalIdCollisions = async (
       ? [
           {
             source: matches[0]!.source.trim().toLowerCase(),
-            kind: matches[0]!
-              .kind as import("@cubby/schemas/external-id").ExternalIdKind,
+            kind: matches[0]!.kind as ExternalIdKind,
             externalId: matches[0]!.externalId,
             products: matches.map((row) => ({
               id: unsafeProductShortcode(row.productShortcode),

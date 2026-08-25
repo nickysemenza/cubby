@@ -1,16 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { Search } from "lucide-react";
-import * as React from "react";
+import type * as React from "react";
 import { preloadCommandMenu } from "~/app/_components/command-menu-loader";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { useNavAuthed } from "~/hooks/useNavAuthed";
-
-const MainNavEnhancements = React.lazy(() =>
-  import("./navbar/main-nav-enhancements").then((m) => ({
-    default: m.MainNavEnhancements,
-  })),
-);
+import { MainNavEnhancements } from "./navbar/main-nav-enhancements";
 
 interface MainNavProps extends React.HTMLAttributes<HTMLElement> {
   onSearchClick?: () => void;
@@ -39,21 +34,7 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
       </Link>
 
       {authed ? (
-        <React.Suspense
-          fallback={
-            <nav
-              className="hidden h-8 min-w-80 items-center justify-end gap-4 md:flex"
-              aria-hidden="true"
-            >
-              <span className="h-3.5 w-14 rounded-sm bg-muted" />
-              <span className="h-3.5 w-16 rounded-sm bg-muted" />
-              <span className="h-3.5 w-12 rounded-sm bg-muted" />
-              <span className="size-7 rounded-full bg-muted" />
-            </nav>
-          }
-        >
-          <MainNavEnhancements className={className} {...props} />
-        </React.Suspense>
+        <MainNavEnhancements className={className} {...props} />
       ) : !authed ? (
         <nav
           className="ml-6 hidden items-center space-x-4 md:flex lg:space-x-6"

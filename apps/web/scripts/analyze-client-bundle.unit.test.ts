@@ -1,19 +1,17 @@
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { staticImportSpecifiers } from "./analyze-client-bundle";
+import { assertNoServerCodeInClient } from "./analyze-client-bundle";
+
+const fixturePath = (name: string) =>
+  fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
 
 describe("client bundle analyzer", () => {
-  it("collects static imports and excludes dynamic imports", () => {
-    const code = `
-      import{a}from"./a.js";
-      export{b}from'./b.js';
-      import"./side-effect.js";
-      const lazy = import("./lazy.js");
-    `;
-
-    expect(staticImportSpecifiers(code)).toEqual([
-      "./a.js",
-      "./b.js",
-      "./side-effect.js",
-    ]);
+  it("rejects server-only markers in every client asset", () => {
+    expect(() =>
+      assertNoServerCodeInClient(fixturePath("clean-assets")),
+    ).not.toThrow();
+    expect(() =>
+      assertNoServerCodeInClient(fixturePath("leaky-assets")),
+    ).toThrow(/drizzle-orm/);
   });
 });

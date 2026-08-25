@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
   LedgerPartyId,
   LedgerPartyShortcode,
@@ -17,6 +18,7 @@ import { buildTakeSkip } from "@cubby/schemas/pagination";
 import { and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   expenseAttribution,
   financialAccount,
@@ -67,10 +69,7 @@ export const LEDGER_PARTY_DELETE_EDGE_POLICY = {
     effect: "block",
     description: "Live transfers retain their target party.",
   },
-} as const satisfies import("~/server/db/entity-incoming-edges").IncomingEdgePolicy<
-  "ledgerParty",
-  import("@cubby/schemas/entity-integrity").OperationDisposition
->;
+} as const satisfies IncomingEdgePolicy<"ledgerParty", OperationDisposition>;
 
 export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
   "ExpenseAttribution.ledgerPartyId": {
@@ -93,10 +92,7 @@ export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
     effect: "repoint",
     description: "Transfer target endpoints move to the survivor.",
   },
-} as const satisfies import("~/server/db/entity-incoming-edges").IncomingEdgePolicy<
-  "ledgerParty",
-  import("@cubby/schemas/entity-integrity").OperationDisposition
->;
+} as const satisfies IncomingEdgePolicy<"ledgerParty", OperationDisposition>;
 
 const columns = {
   id: ledgerParty.id,

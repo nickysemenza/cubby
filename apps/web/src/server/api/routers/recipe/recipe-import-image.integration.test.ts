@@ -1,12 +1,13 @@
 import type { RecipeShortcode } from "@cubby/schemas/identifiers";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type * as S3 from "~/server/utils/s3";
 
 // Only the network/R2 hop is faked — the DB writes (Image row + recipeImage
 // join + status flip) are the thing under test.
 const fetchAndStoreImage = vi.hoisted(() => vi.fn());
 vi.mock("~/server/utils/s3", async (importActual) => ({
-  ...(await importActual<typeof import("~/server/utils/s3")>()),
+  ...(await importActual<typeof S3>()),
   fetchAndStoreImage,
 }));
 
