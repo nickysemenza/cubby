@@ -180,6 +180,13 @@ interface CubbyTableLayoutAtoms {
 
 export interface CubbyTableLayoutController<TData extends RowData = RowData> {
   atoms: CubbyTableLayoutAtoms;
+  /**
+   * The table's stable identity — the same key that names its persisted
+   * layout. Doubles as the scroll-restoration id so the pane's saved offset
+   * survives a navigate-away/back without a second identity scheme. Undefined
+   * for in-memory tables that opt out of persistence.
+   */
+  key: string | undefined;
   defaultLayout: CubbyTableLayoutV1;
   /** Definitions normalized to v9 numeric sizing at the platform boundary. */
   columns: CubbyColumnDef<TData>[];
@@ -602,6 +609,7 @@ export function useCubbyTableLayout<TData extends RowData>({
   return useMemo(
     () => ({
       atoms: store.atoms,
+      key,
       defaultLayout: defaults,
       columns: normalizedColumns,
       reset: () => replaceLayout(store, defaults),
@@ -627,7 +635,7 @@ export function useCubbyTableLayout<TData extends RowData>({
           ),
         ),
     }),
-    [store, defaults, normalizedColumns, sizeBounds],
+    [store, key, defaults, normalizedColumns, sizeBounds],
   );
 }
 

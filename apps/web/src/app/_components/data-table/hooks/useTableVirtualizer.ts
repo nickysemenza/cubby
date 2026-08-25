@@ -98,6 +98,12 @@ interface UseTableVirtualizerArgs {
   isMobile: boolean;
   /** Add one virtual trailing row for infinite-scroll loading/status. */
   trailingSentinel?: boolean;
+  /**
+   * Scroll offset to start the pane at, from the router's scroll-restoration
+   * cache. Read by the caller (which owns the router coupling) so this hook
+   * stays testable without a router; see useDataTableController.
+   */
+  initialOffset?: number;
 }
 
 interface UseTableVirtualizerResult {
@@ -140,6 +146,7 @@ export function useTableVirtualizer({
   rowHeight,
   isMobile,
   trailingSentinel = false,
+  initialOffset = 0,
 }: UseTableVirtualizerArgs): UseTableVirtualizerResult {
   // Ref for virtualization scroll container
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -188,6 +195,11 @@ export function useTableVirtualizer({
   );
   const rowVirtualizer = useVirtualizer({
     getScrollElement: () => tableContainerRef.current,
+    // The router restores a tracked element's scrollTop on `onRendered`, which
+    // lands before the virtualizer has measured — on a virtualized pane that
+    // clamps to 0 because totalSize is still tiny. Seeding the offset here
+    // renders the right window of rows on the first pass instead.
+    initialOffset: isMobile ? 0 : initialOffset,
     count: virtualizerCount,
     getItemKey,
     estimateSize: (index) => {
