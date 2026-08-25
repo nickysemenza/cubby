@@ -189,7 +189,7 @@ export const taskListActionableQueryOptions = (
   input: z.input<typeof schemas.taskFiltersSchema> | undefined,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.task.all, "listActionable", input] as const,
+    queryKey: [[...queryKeys.task.all, "listActionable"], input] as const,
     queryFn: ({ signal }) => actionableOperation.call(input, { signal }),
     meta: actionableOperation.meta,
   });
@@ -197,13 +197,13 @@ export const taskChartDataQueryOptions = (
   input: z.input<typeof schemas.taskFiltersSchema>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.task.all, "chartData", input] as const,
+    queryKey: [[...queryKeys.task.all, "chartData"], input] as const,
     queryFn: ({ signal }) => chartOperation.call(input, { signal }),
     meta: chartOperation.meta,
   });
 export const taskSummaryQueryOptions = () =>
   queryOptions({
-    queryKey: [...queryKeys.task.all, "summary"] as const,
+    queryKey: [[...queryKeys.task.all, "summary"]] as const,
     queryFn: ({ signal }) => summaryOperation.call(undefined, { signal }),
     meta: summaryOperation.meta,
   });
@@ -211,7 +211,7 @@ export const taskBoardQueryOptions = (
   input: z.input<typeof schemas.taskFiltersSchema>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.task.all, "board", input] as const,
+    queryKey: [[...queryKeys.task.all, "board"], input] as const,
     queryFn: ({ signal }) => boardOperation.call(input, { signal }),
     meta: boardOperation.meta,
   });
@@ -219,7 +219,7 @@ export const taskTimelineQueryOptions = (
   input: z.input<typeof schemas.taskFiltersSchema>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.task.all, "timeline", input] as const,
+    queryKey: [[...queryKeys.task.all, "timeline"], input] as const,
     queryFn: ({ signal }) => timelineOperation.call(input, { signal }),
     meta: timelineOperation.meta,
   });

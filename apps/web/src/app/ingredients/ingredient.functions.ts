@@ -141,7 +141,7 @@ export const ingredientGetByNameQueryOptions = (
   input: z.input<typeof schemas.ingredientNameFilterInput>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.ingredient.getByName, input] as const,
+    queryKey: [[...queryKeys.ingredient.getByName], input] as const,
     queryFn: ({ signal }) => byNameOperation.call(input, { signal }),
     meta: byNameOperation.meta,
   });
@@ -149,7 +149,7 @@ export const ingredientMatchNamesQueryOptions = (
   input: z.input<typeof schemas.ingredientNamesInput>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.ingredient.all, "matchNames", input] as const,
+    queryKey: [[...queryKeys.ingredient.all, "matchNames"], input] as const,
     queryFn: ({ signal }) => matchesOperation.call(input, { signal }),
     meta: matchesOperation.meta,
   });
@@ -157,7 +157,7 @@ export const ingredientGetManyByIDsQueryOptions = (
   input: z.input<typeof schemas.ingredientIdsInput>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.ingredient.all, "getManyByIDs", input] as const,
+    queryKey: [[...queryKeys.ingredient.all, "getManyByIDs"], input] as const,
     queryFn: ({ signal }) => manyOperation.call(input, { signal }),
     meta: manyOperation.meta,
   });
@@ -165,7 +165,7 @@ export const ingredientRecipeUsagesQueryOptions = (
   input: z.input<typeof schemas.ingredientIdInput>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.ingredient.all, "recipeUsages", input] as const,
+    queryKey: [[...queryKeys.ingredient.all, "recipeUsages"], input] as const,
     queryFn: ({ signal }) => usagesOperation.call(input, { signal }),
     meta: usagesOperation.meta,
   });

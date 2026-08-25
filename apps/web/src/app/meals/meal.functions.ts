@@ -129,7 +129,7 @@ export const mealDateRangeQueryOptions = (
   input: z.input<typeof schemas.mealDateRange>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.meal.byDateRange, input] as const,
+    queryKey: [[...queryKeys.meal.byDateRange], input] as const,
     queryFn: ({ signal }) => rangeOperation.call(input, { signal }),
     meta: rangeOperation.meta,
   });
@@ -137,7 +137,7 @@ export const mealUpcomingSummaryQueryOptions = (
   input: z.input<typeof schemas.mealDateRange>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.meal.all, "upcomingSummary", input] as const,
+    queryKey: [[...queryKeys.meal.all, "upcomingSummary"], input] as const,
     queryFn: ({ signal }) => upcomingOperation.call(input, { signal }),
     meta: upcomingOperation.meta,
   });
@@ -145,7 +145,7 @@ export const mealShoppingListQueryOptions = (
   input: z.input<typeof schemas.mealDateRange>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.meal.shoppingList, input] as const,
+    queryKey: [[...queryKeys.meal.shoppingList], input] as const,
     queryFn: ({ signal }) => shoppingOperation.call(input, { signal }),
     meta: shoppingOperation.meta,
   });

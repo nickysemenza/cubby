@@ -131,7 +131,7 @@ export const purchaseProductsQueryOptions = (
   input: z.input<typeof purchaseProductsInput>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.purchase.all, "products", { input }] as const,
+    queryKey: [[...queryKeys.purchase.all, "products"], { input }] as const,
     meta: productsOperation.meta,
     queryFn: ({ signal }) => productsOperation.call(input, { signal }),
   });

@@ -98,14 +98,14 @@ const pruneOrphanedOAuthClientsOperation = startOperation<
 
 export const connectedAppsQueryOptions = () =>
   queryOptions({
-    queryKey: queryKeys.oauth.connectedApps,
+    queryKey: [[...queryKeys.oauth.connectedApps]] as const,
     meta: listConnectedAppsOperation.meta,
     queryFn: ({ signal }) => listConnectedAppsOperation.call(null, { signal }),
   });
 
 export const orphanedOAuthClientsQueryOptions = () =>
   queryOptions({
-    queryKey: queryKeys.oauth.orphaned,
+    queryKey: [[...queryKeys.oauth.orphaned]] as const,
     meta: countOrphanedOAuthClientsOperation.meta,
     queryFn: ({ signal }) =>
       countOrphanedOAuthClientsOperation.call(null, { signal }),

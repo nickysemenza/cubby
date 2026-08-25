@@ -456,7 +456,7 @@ const query = <I, O>(
 ) =>
   queryOptions({
     ...options,
-    queryKey: [...queryKeys.product.all, name, { input }] as const,
+    queryKey: [[...queryKeys.product.all, name], { input }] as const,
     meta: operation.meta,
     queryFn: ({ signal }) => operation.call(input, { signal }),
   });

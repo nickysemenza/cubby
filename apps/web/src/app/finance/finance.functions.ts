@@ -43,13 +43,15 @@ const sourceOptionsOperation = startOperation<
 
 export const financialAccountOptionsQueryOptions = () =>
   queryOptions({
-    queryKey: [...queryKeys.financialAccount.all, "options"] as const,
+    queryKey: [[...queryKeys.financialAccount.all, "options"]] as const,
     meta: accountOptionsOperation.meta,
     queryFn: ({ signal }) => accountOptionsOperation.call(null, { signal }),
   });
 export const financialTransactionSourceOptionsQueryOptions = () =>
   queryOptions({
-    queryKey: [...queryKeys.financialTransaction.all, "sourceOptions"] as const,
+    queryKey: [
+      [...queryKeys.financialTransaction.all, "sourceOptions"],
+    ] as const,
     meta: sourceOptionsOperation.meta,
     queryFn: ({ signal }) => sourceOptionsOperation.call(null, { signal }),
   });

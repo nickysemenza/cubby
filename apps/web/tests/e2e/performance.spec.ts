@@ -1,4 +1,4 @@
-import { openCommandPalette } from "./e2e-helpers";
+import { openCommandPalette, waitForAppHydration } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 test("Home renders its compact critical cards", async ({ page }) => {
@@ -128,6 +128,7 @@ test("MCP catalog tab activates its deferred Start read", async ({ page }) => {
   });
 
   await page.goto("/mcp", { waitUntil: "domcontentloaded" });
+  await waitForAppHydration(page);
   await expect(page.getByRole("tab", { name: "Usage" })).toHaveAttribute(
     "aria-selected",
     "true",

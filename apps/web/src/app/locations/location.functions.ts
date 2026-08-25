@@ -30,7 +30,7 @@ const tree = startOperation<null, z.output<typeof infLocationListOut>>({
 });
 export const locationTreeQueryOptions = () =>
   queryOptions({
-    queryKey: [...queryKeys.location.all, "makeTree"] as const,
+    queryKey: [[...queryKeys.location.all, "makeTree"]] as const,
     meta: tree.meta,
     queryFn: ({ signal }) => tree.call(null, { signal }),
   });
@@ -49,7 +49,7 @@ const valuation = startOperation<
 });
 export const locationValuationSummaryQueryOptions = () =>
   queryOptions({
-    queryKey: [...queryKeys.location.all, "valuationSummary"] as const,
+    queryKey: [[...queryKeys.location.all, "valuationSummary"]] as const,
     meta: valuation.meta,
     queryFn: ({ signal }) => valuation.call(null, { signal }),
   });
@@ -122,7 +122,7 @@ export const locationShortcodesQueryOptions = (
   data: z.input<typeof locationShortcodesInput>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.location.all, "getByShortcodes", data] as const,
+    queryKey: [[...queryKeys.location.all, "getByShortcodes"], data] as const,
     meta: shortcodesOp.meta,
     queryFn: ({ signal }) => shortcodesOp.call(data, { signal }),
   });
@@ -177,7 +177,7 @@ const searchOp = startOperation<
 });
 export const locationSearchQueryOptions = (data: z.input<typeof rosterInput>) =>
   queryOptions({
-    queryKey: [...queryKeys.location.all, "search", data] as const,
+    queryKey: [[...queryKeys.location.all, "search"], data] as const,
     meta: searchOp.meta,
     queryFn: async ({ signal }) => {
       const result = await searchOp.call(data, { signal });
@@ -203,7 +203,7 @@ export const locationSubtreeQueryOptions = (
   options?: { enabled?: boolean },
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.location.all, "subtree", data] as const,
+    queryKey: [[...queryKeys.location.all, "subtree"], data] as const,
     ...options,
     meta: subtreeOp.meta,
     queryFn: ({ signal }) => subtreeOp.call(data, { signal }),
@@ -227,7 +227,10 @@ export const locationInventoryBreakdownQueryOptions = (
   options?: { enabled?: boolean },
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.location.all, "inventoryBreakdown", data] as const,
+    queryKey: [
+      [...queryKeys.location.all, "inventoryBreakdown"],
+      data,
+    ] as const,
     ...options,
     meta: breakdownOp.meta,
     queryFn: ({ signal }) => breakdownOp.call(data, { signal }),
@@ -247,7 +250,7 @@ const parentOp = startOperation<
 });
 export const locationParentOptionsQueryOptions = () =>
   queryOptions({
-    queryKey: [...queryKeys.location.all, "parentOptions"] as const,
+    queryKey: [[...queryKeys.location.all, "parentOptions"]] as const,
     meta: parentOp.meta,
     queryFn: ({ signal }) => parentOp.call(null, { signal }),
   });

@@ -223,7 +223,7 @@ export const projectDashboardSummaryQueryOptions = (
   input: z.input<typeof schemas.projectDashboardFiltersSchema>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.project.all, "dashboardSummary", input] as const,
+    queryKey: [[...queryKeys.project.all, "dashboardSummary"], input] as const,
     queryFn: ({ signal }) => summaryOperation.call(input, { signal }),
     meta: summaryOperation.meta,
   });
@@ -231,7 +231,7 @@ export const projectTreeQueryOptions = (
   input: z.input<typeof schemas.projectTreeInput>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.project.all, "tree", input] as const,
+    queryKey: [[...queryKeys.project.all, "tree"], input] as const,
     queryFn: ({ signal }) => treeOperation.call(input, { signal }),
     meta: treeOperation.meta,
   });
@@ -239,13 +239,16 @@ export const projectPortfolioAnalyticsQueryOptions = (
   input: z.input<typeof schemas.projectDashboardFiltersSchema>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.project.all, "portfolioAnalytics", input] as const,
+    queryKey: [
+      [...queryKeys.project.all, "portfolioAnalytics"],
+      input,
+    ] as const,
     queryFn: ({ signal }) => analyticsOperation.call(input, { signal }),
     meta: analyticsOperation.meta,
   });
 export const projectOptionsQueryOptions = () =>
   queryOptions({
-    queryKey: [...queryKeys.project.all, "options"] as const,
+    queryKey: [[...queryKeys.project.all, "options"]] as const,
     queryFn: ({ signal }) => optionsOperation.call(undefined, { signal }),
     meta: optionsOperation.meta,
   });
@@ -253,7 +256,7 @@ export const projectResourcesQueryOptions = (
   input: z.input<typeof schemas.projectResourceProjectInput>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.project.all, "resources", input] as const,
+    queryKey: [[...queryKeys.project.all, "resources"], input] as const,
     queryFn: ({ signal }) => resourcesOperation.call(input, { signal }),
     meta: resourcesOperation.meta,
   });
@@ -262,7 +265,7 @@ export const projectToolSuggestionsQueryOptions = (
   options?: { enabled?: boolean },
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.project.all, "toolSuggestions", input] as const,
+    queryKey: [[...queryKeys.project.all, "toolSuggestions"], input] as const,
     queryFn: ({ signal }) => suggestionsOperation.call(input, { signal }),
     meta: suggestionsOperation.meta,
     ...options,
@@ -271,7 +274,7 @@ export const projectToolMatrixQueryOptions = (
   input: z.input<typeof schemas.projectToolMatrixInput>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.project.all, "toolMatrix", input] as const,
+    queryKey: [[...queryKeys.project.all, "toolMatrix"], input] as const,
     queryFn: ({ signal }) => matrixOperation.call(input, { signal }),
     meta: matrixOperation.meta,
   });

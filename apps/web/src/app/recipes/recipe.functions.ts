@@ -397,13 +397,13 @@ export const recipeGetManyByIDsQueryOptions = (
   input: z.input<typeof recipeIdsInput>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.recipe.all, "getManyByIDs", input] as const,
+    queryKey: [[...queryKeys.recipe.all, "getManyByIDs"], input] as const,
     queryFn: ({ signal }) => getMany.call(input, { signal }),
     meta: getMany.meta,
   });
 export const recipeGetAllTagsQueryOptions = () =>
   queryOptions({
-    queryKey: [...queryKeys.recipe.all, "getAllTags"] as const,
+    queryKey: [[...queryKeys.recipe.all, "getAllTags"]] as const,
     queryFn: ({ signal }) => tags.call(undefined, { signal }),
     meta: tags.meta,
   });
@@ -418,7 +418,7 @@ export const recipeCooccurrenceQueryOptions = (
   input: z.input<typeof recipeCooccurrenceInput>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.recipe.all, "cooccurrence", input] as const,
+    queryKey: [[...queryKeys.recipe.all, "cooccurrence"], input] as const,
     queryFn: ({ signal }) => cooccurrence.call(input, { signal }),
     meta: cooccurrence.meta,
   });
@@ -426,7 +426,7 @@ export const recipeDependencyGraphQueryOptions = (
   input: z.input<typeof recipeCookbookScopeInput>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.recipe.all, "dependencyGraph", input] as const,
+    queryKey: [[...queryKeys.recipe.all, "dependencyGraph"], input] as const,
     queryFn: ({ signal }) => dependencyGraph.call(input, { signal }),
     meta: dependencyGraph.meta,
   });
@@ -434,7 +434,7 @@ export const recipeIngredientUsageQueryOptions = (
   input: z.input<typeof recipeCookbookScopeInput>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.recipe.all, "ingredientUsage", input] as const,
+    queryKey: [[...queryKeys.recipe.all, "ingredientUsage"], input] as const,
     queryFn: ({ signal }) => ingredientUsage.call(input, { signal }),
     meta: ingredientUsage.meta,
   });
@@ -447,7 +447,7 @@ export const recipeRecomputeOneMutationOptions = (
 ) => mutation([...queryKeys.recipe.all, "recomputeOne"], recomputeOne, options);
 export const recipeDryRunQueryOptions = () =>
   queryOptions({
-    queryKey: [...queryKeys.recipe.all, "dryRun"] as const,
+    queryKey: [[...queryKeys.recipe.all, "dryRun"]] as const,
     queryFn: ({ signal }) => dryRun.call(undefined, { signal }),
     meta: dryRun.meta,
   });
@@ -455,7 +455,7 @@ export const recipeExplainCostingQueryOptions = (
   input: z.input<typeof recipeIdInput>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.recipe.all, "explain", input] as const,
+    queryKey: [[...queryKeys.recipe.all, "explain"], input] as const,
     queryFn: ({ signal }) => explain.call(input, { signal }),
     meta: explain.meta,
   });
@@ -463,7 +463,7 @@ export const recipeFlowQueryOptions = (
   input: z.input<typeof recipeFlowGetInputSchema>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.recipe.flow, input] as const,
+    queryKey: [[...queryKeys.recipe.flow], input] as const,
     queryFn: ({ signal }) => flow.call(input, { signal }),
     meta: flow.meta,
   });
@@ -476,7 +476,7 @@ export const recipeGenerateFlowMutationOptions = (
 ) => mutation([...queryKeys.recipe.flow, "generate"], generateFlow, options);
 export const recipeHarvestEquivalencesQueryOptions = () =>
   queryOptions({
-    queryKey: [...queryKeys.recipe.all, "equivalences"] as const,
+    queryKey: [[...queryKeys.recipe.all, "equivalences"]] as const,
     queryFn: ({ signal }) => equivalences.call(undefined, { signal }),
     meta: equivalences.meta,
   });
@@ -484,7 +484,7 @@ export const recipeAvailabilityQueryOptions = (
   input: z.input<typeof recipeAvailabilityInput>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.recipe.all, "availability", input] as const,
+    queryKey: [[...queryKeys.recipe.all, "availability"], input] as const,
     queryFn: ({ signal }) => availability.call(input, { signal }),
     meta: availability.meta,
   });
@@ -492,7 +492,7 @@ export const makeableRecipesQueryOptions = (
   input: z.input<typeof makeableRecipesInput>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.recipe.all, "makeable", input] as const,
+    queryKey: [[...queryKeys.recipe.all, "makeable"], input] as const,
     queryFn: ({ signal }) => makeable.call(input, { signal }),
     meta: makeable.meta,
   });
@@ -521,7 +521,7 @@ export const recipeCookbookSourceQueryOptions = (
   input: z.input<typeof cookbookIdInput>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.cookbook.all, "source", input] as const,
+    queryKey: [[...queryKeys.cookbook.all, "source"], input] as const,
     queryFn: ({ signal }) => cookbookSource.call(input, { signal }),
     meta: cookbookSource.meta,
   });
@@ -529,13 +529,13 @@ export const recipeCookbookDiffQueryOptions = (
   input: z.input<typeof cookbookDiffInput>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.cookbook.all, "diff", input] as const,
+    queryKey: [[...queryKeys.cookbook.all, "diff"], input] as const,
     queryFn: ({ signal }) => cookbookDiff.call(input, { signal }),
     meta: cookbookDiff.meta,
   });
 export const recipePreviewNotionQueryOptions = () =>
   queryOptions({
-    queryKey: [...queryKeys.recipe.all, "previewNotion"] as const,
+    queryKey: [[...queryKeys.recipe.all, "previewNotion"]] as const,
     queryFn: ({ signal }) => previewNotion.call(undefined, { signal }),
     meta: previewNotion.meta,
   });

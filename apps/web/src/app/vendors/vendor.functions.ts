@@ -68,7 +68,7 @@ const fetchLogoOperation = startOperation<
 
 export const vendorOptionsQueryOptions = () =>
   queryOptions({
-    queryKey: [...queryKeys.vendor.all, "options"] as const,
+    queryKey: [[...queryKeys.vendor.all, "options"]] as const,
     meta: optionsOperation.meta,
     queryFn: ({ signal }) => optionsOperation.call(null, { signal }),
   });

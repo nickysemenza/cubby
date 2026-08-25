@@ -197,7 +197,7 @@ export const expenseChartDataQueryOptions = (
   input: z.input<typeof schemas.expenseFiltersSchema>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.expense.all, "chartData", input] as const,
+    queryKey: [[...queryKeys.expense.all, "chartData"], input] as const,
     queryFn: ({ signal }) => chartOperation.call(input, { signal }),
     meta: chartOperation.meta,
   });
@@ -205,7 +205,7 @@ export const expenseAnalyticsQueryOptions = (
   input: z.input<typeof schemas.expenseFiltersSchema>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.expense.all, "analytics", input] as const,
+    queryKey: [[...queryKeys.expense.all, "analytics"], input] as const,
     queryFn: ({ signal }) => analyticsOperation.call(input, { signal }),
     meta: analyticsOperation.meta,
   });
@@ -213,7 +213,7 @@ export const expenseMonthlySummaryQueryOptions = (
   input: z.input<typeof schemas.expenseFiltersSchema>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.expense.all, "monthlySummary", input] as const,
+    queryKey: [[...queryKeys.expense.all, "monthlySummary"], input] as const,
     queryFn: ({ signal }) => monthlyOperation.call(input, { signal }),
     meta: monthlyOperation.meta,
   });
@@ -221,7 +221,7 @@ export const expenseAnalyzeQueryOptions = (
   input: z.input<typeof schemas.expenseAnalyzeInput>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.expense.all, "analyze", input] as const,
+    queryKey: [[...queryKeys.expense.all, "analyze"], input] as const,
     queryFn: ({ signal }) => analyzeOperation.call(input, { signal }),
     meta: analyzeOperation.meta,
   });
@@ -229,13 +229,13 @@ export const expenseFacetCountsQueryOptions = (
   input: z.input<typeof schemas.expenseFacetCountsInput>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.expense.all, "facetCounts", input] as const,
+    queryKey: [[...queryKeys.expense.all, "facetCounts"], input] as const,
     queryFn: ({ signal }) => facetsOperation.call(input, { signal }),
     meta: facetsOperation.meta,
   });
 export const expenseTradeAffinityQueryOptions = () =>
   queryOptions({
-    queryKey: [...queryKeys.expense.all, "tradeAffinity"] as const,
+    queryKey: [[...queryKeys.expense.all, "tradeAffinity"]] as const,
     queryFn: ({ signal }) => affinityOperation.call(undefined, { signal }),
     meta: affinityOperation.meta,
   });
@@ -243,7 +243,7 @@ export const expenseChargeContextQueryOptions = (
   input: z.input<typeof expenseShortcode>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.expense.all, "chargeContext", input] as const,
+    queryKey: [[...queryKeys.expense.all, "chargeContext"], input] as const,
     queryFn: ({ signal }) => chargeOperation.call(input, { signal }),
     meta: chargeOperation.meta,
   });

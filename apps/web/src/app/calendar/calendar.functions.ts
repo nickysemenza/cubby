@@ -76,7 +76,7 @@ export const calendarRangeQueryOptions = (
   input: z.input<typeof calendarRangeInput>,
 ) =>
   queryOptions({
-    queryKey: [...queryKeys.calendar.all, "range", { input }] as const,
+    queryKey: [[...queryKeys.calendar.all, "range"], { input }] as const,
     meta: calendarRangeOperation.meta,
     queryFn: ({ signal }) => calendarRangeOperation.call(input, { signal }),
   });

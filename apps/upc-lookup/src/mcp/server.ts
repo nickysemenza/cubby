@@ -61,7 +61,7 @@ function productToJson(product: Product, baseUrl: string) {
 
 /**
  * Build the upc-lookup MCP server. `env` and `baseUrl` are captured per request
- * (the worker has no tRPC caller to inject — this closure is the equivalent).
+ * so every tool receives the current worker bindings and request origin.
  * Every tool delegates to the same repo/service code as the REST routes and the
  * admin UI, so the three stay in lockstep.
  */
