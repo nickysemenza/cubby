@@ -20,16 +20,11 @@ import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityDetailQueryKey } from "~/entities/entity-detail";
+import { entityListRootKey } from "~/entities/entity-list.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { formatCurrencyRange } from "~/lib/format-range";
 import { patchListItem } from "~/lib/optimistic-list";
-import {
-  cancelTRPCQueries,
-  invalidatesFor,
-  invalidateTRPCQueries,
-  normalizeTRPCQueryKey,
-  queryKeys,
-} from "~/lib/query-keys";
+import { invalidatesFor, invalidateTRPCQueries } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import {
   type DetailSection,
@@ -95,26 +90,29 @@ export function WishDetail({ wish }: { wish: WishOut }) {
   });
 
   const wishKey = entityDetailQueryKey("wish", wish.id);
+  const wishListKey = entityListRootKey("wish");
   const acquiredBase = entityMutationOptionsFactory("wish", "update")();
   const acquiredMutation = useMutation({
     mutationKey: acquiredBase.mutationKey,
     mutationFn: acquiredBase.mutationFn,
     onMutate: async (variables) => {
-      await cancelTRPCQueries(queryClient, [wishKey, queryKeys.wish.list]);
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: wishKey }),
+        queryClient.cancelQueries({ queryKey: wishListKey }),
+      ]);
       const previousDetail = queryClient.getQueryData<WishOut | null>(wishKey);
-      const listPrefix = normalizeTRPCQueryKey(queryKeys.wish.list);
       const previousLists = queryClient.getQueriesData<{ items: WishOut[] }>({
-        queryKey: listPrefix,
+        queryKey: wishListKey,
       });
       const acquiredAt = variables.data.acquired ? new Date() : null;
       const patchWish = (current: WishOut) => ({ ...current, acquiredAt });
       queryClient.setQueryData<WishOut | null>(wishKey, (current) =>
         current ? patchWish(current) : current,
       );
-      // Every visible wish list uses this procedure prefix. Patch its concrete
+      // Every visible wish list uses this operation prefix. Patch its concrete
       // page entries directly rather than recursively walking unrelated data.
       queryClient.setQueriesData<{ items: WishOut[] }>(
-        { queryKey: listPrefix },
+        { queryKey: wishListKey },
         (current) => patchListItem(current, String(variables.id), patchWish),
       );
       return { previousDetail, previousLists };
@@ -123,7 +121,7 @@ export function WishDetail({ wish }: { wish: WishOut }) {
       const { sideEffects: _sideEffects, ...wish } = updated;
       queryClient.setQueryData(wishKey, wish);
       queryClient.setQueriesData<{ items: WishOut[] }>(
-        { queryKey: normalizeTRPCQueryKey(queryKeys.wish.list) },
+        { queryKey: wishListKey },
         (current) => patchListItem(current, wish.id, () => wish),
       );
     },

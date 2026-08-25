@@ -25,11 +25,7 @@ import {
   stopCollectors,
 } from "~/lib/perf/perf-store";
 import { cn } from "~/lib/utils";
-import {
-  type LiveQueryStats,
-  readLiveQueryStats,
-  useQueryTimingRecorder,
-} from "./use-query-stats";
+import { type LiveQueryStats, readLiveQueryStats } from "./use-query-stats";
 
 type Corner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 const CORNERS: Corner[] = [
@@ -68,8 +64,6 @@ export function PerfOverlay() {
   const [live, setLive] = useState<LiveQueryStats>(() =>
     readLiveQueryStats(queryClient),
   );
-  useQueryTimingRecorder();
-
   useEffect(() => {
     startCollectors();
     return () => stopCollectors();
@@ -258,11 +252,13 @@ function Bar({ pct, tone = 1 }: { pct: number; tone?: number }) {
 
 const SLOW_TONE: Record<SlowEvent["kind"], number> = {
   query: 1,
+  mutation: 5,
   wasm: 2,
   render: 4,
 };
 const SLOW_TAG: Record<SlowEvent["kind"], string> = {
   query: "qry",
+  mutation: "mut",
   wasm: "wasm",
   render: "rndr",
 };
@@ -397,39 +393,97 @@ function QueriesTab({
         )}
       </Row>
       {rows.length === 0 ? (
-        <Empty label="No fetches recorded yet." />
+        <Empty label="No operations recorded yet." />
       ) : (
-        <table className="w-full">
-          <thead className="text-2xs text-muted-foreground">
-            <tr className="text-left">
-              <th className="font-normal">procedure</th>
-              <th className="text-right font-normal">n</th>
-              <th className="text-right font-normal">avg</th>
-              <th className="text-right font-normal">max</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(([proc, s]) => (
-              <tr key={proc} className="border-border/30 border-t">
-                <td className="truncate py-0.5" /* tight */>
-                  {proc}
-                  {s.fanout && (
-                    <span className="ml-1 rounded-sm bg-destructive/15 px-1 text-3xs text-destructive">
-                      N+1
-                    </span>
-                  )}
-                </td>
-                <td className="text-right">{s.fetches}</td>
-                <td className="text-right text-muted-foreground">
-                  {ms(s.fetches > 0 ? s.totalMs / s.fetches : 0)}
-                </td>
-                <td className="text-right text-muted-foreground">
-                  {ms(s.maxMs)}
-                </td>
+        <>
+          <table className="w-full">
+            <thead className="text-2xs text-muted-foreground">
+              <tr className="text-left">
+                <th className="font-normal">operation</th>
+                <th
+                  className="text-right font-normal"
+                  title="fetch/reuse/cancel/error"
+                >
+                  f/r/c/e
+                </th>
+                <th className="text-right font-normal">avg</th>
+                <th className="text-right font-normal">max</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map(([key, stat]) => (
+                <tr key={key} className="border-border/30 border-t">
+                  <td
+                    className="max-w-36 truncate py-0.5"
+                    title={stat.operation}
+                  >
+                    <span className="mr-1 text-3xs text-muted-foreground uppercase">
+                      {stat.transport}
+                    </span>
+                    {stat.operation}
+                    {stat.fanout && (
+                      <span className="ml-1 rounded-sm bg-destructive/15 px-1 text-3xs text-destructive">
+                        N+1
+                      </span>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap text-right text-2xs">
+                    {stat.fetches}/{stat.reuses}/{stat.cancelled}/{stat.errors}
+                  </td>
+                  <td className="text-right text-muted-foreground">
+                    {ms(stat.fetches > 0 ? stat.totalMs / stat.fetches : 0)}
+                  </td>
+                  <td className="text-right text-muted-foreground">
+                    {ms(stat.maxMs)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="px-1 pt-1 text-3xs text-muted-foreground">
+            Hydrated/cache baselines may predate this browser recorder. H ={" "}
+            {rows.reduce((total, [, stat]) => total + stat.hydrated, 0)}.
+          </div>
+        </>
+      )}
+      {snap.mutations.length > 0 && (
+        <div className="border-border/50 border-t pt-1">
+          <div className="px-1 font-semibold text-2xs text-muted-foreground">
+            recent mutations
+          </div>
+          <table className="w-full">
+            <tbody>
+              {snap.mutations.slice(0, 8).map((mutation) => (
+                <tr
+                  key={`${mutation.id}-${mutation.at}`}
+                  className="border-border/30 border-t"
+                >
+                  <td
+                    className="max-w-44 truncate py-0.5"
+                    title={mutation.operation}
+                  >
+                    <span className="mr-1 text-3xs text-muted-foreground uppercase">
+                      {mutation.transport}
+                    </span>
+                    {mutation.operation}
+                  </td>
+                  <td
+                    className={cn(
+                      "text-right text-2xs",
+                      mutation.outcome === "error" && "text-destructive",
+                      mutation.outcome === "cancelled" && "text-warning",
+                    )}
+                  >
+                    {mutation.outcome}
+                  </td>
+                  <td className="text-right text-muted-foreground">
+                    {ms(mutation.durationMs)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </Stack>
   );

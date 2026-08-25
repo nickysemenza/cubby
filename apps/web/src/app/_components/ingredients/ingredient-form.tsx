@@ -13,7 +13,7 @@ import { AliasesField, filterAliases } from "~/components/forms/aliases-field";
 import { Row, Stack } from "~/components/layout";
 import { Card, CardContent } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityListQueryOptions } from "~/entities/entity-list.functions";
 import { EntityInlineLink } from "../EntityInlineLink";
 import {
   buildUpdateObject,
@@ -47,14 +47,13 @@ function DuplicateNameHint({
 }: {
   control: Control<IngredientFormValues>;
 }) {
-  const api = useTRPC();
   const name = useWatch({ control, name: "name" });
   const [debouncedName] = useDebouncedValue(name, { wait: 300 });
   const trimmed = debouncedName?.trim() ?? "";
   const enabled = trimmed.length >= 2;
 
   const { data } = useQuery({
-    ...api.ingredient.list.queryOptions({
+    ...entityListQueryOptions("ingredient", {
       filters: { nameFilter: trimmed },
       pagination: { pageIndex: 0, pageSize: 5 },
     }),

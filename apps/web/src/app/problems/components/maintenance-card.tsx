@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
+import { entityListRootKey } from "~/entities/entity-list.functions";
 import { useTRPC } from "~/integrations/trpc/react";
 import { invalidatesFor, queryKeys } from "~/lib/query-keys";
 import { PROBLEMS_QUERY_STALE_TIME } from "../problem-query-freshness";
@@ -155,7 +156,7 @@ function RecomputeAction() {
           batchId: string | null;
         }>
           run={(client) => client.recipe.recomputeAllDurable.mutate()}
-          invalidateKeys={(api) => [api.recipe.list.queryKey()]}
+          invalidateKeys={(_api) => [entityListRootKey("recipe")]}
           idleLabel="Recompute all"
           pendingLabel="Enqueuing…"
           toastResult={(r) => ({
@@ -206,7 +207,7 @@ function ReparseAction() {
       backfill={
         <BackfillButton<{ updated: number; recipesAffected: number }>
           run={(client) => client.problems.reparseStale.mutate()}
-          invalidateKeys={(api) => [api.recipe.list.queryKey()]}
+          invalidateKeys={(_api) => [entityListRootKey("recipe")]}
           foreground
           idleLabel="Re-parse all"
           pendingLabel="Re-parsing…"
@@ -244,7 +245,7 @@ function PruneAliasesAction() {
       backfill={
         <BackfillButton<{ pruned: number }>
           run={(client) => client.problems.pruneAllUnusedAliasesStream.mutate()}
-          invalidateKeys={(api) => [api.ingredient.list.queryKey()]}
+          invalidateKeys={(_api) => [entityListRootKey("ingredient")]}
           foreground
           idleLabel="Prune all"
           pendingLabel="Pruning…"

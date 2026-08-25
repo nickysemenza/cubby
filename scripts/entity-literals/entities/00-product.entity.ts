@@ -11,6 +11,7 @@ export default literalEntity({
     create: { module: "@cubby/schemas/product", export: "productCreateInput" },
     update: { module: "@cubby/schemas/product", export: "productUpdateData" },
     output: { module: "@cubby/schemas/product", export: "productTopLevelOut" },
+    list: { module: "@cubby/schemas/product", export: "productListItemOut" },
     detail: { module: "@cubby/schemas/product", export: "productWithFoodOut" },
   },
   filters: {

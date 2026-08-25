@@ -3,17 +3,9 @@ import {
   financialStatementImportPreviewOut,
   financialTransactionSourceOptionsOut,
 } from "@cubby/schemas/financial-transaction";
-import { ENTITY_BINDINGS } from "~/server/entity-bindings";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { previewFinancialStatementImport } from "~/server/repo/financial-statement-preview";
 import { financialTransactionSourceOptions } from "~/server/repo/financial-transaction";
-import { createEntityListCompatibilityProcedure } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
-
-const list = createEntityListCompatibilityProcedure(
-  ENTITY_KERNEL_BINDINGS.financialTransaction,
-  ENTITY_BINDINGS.financialTransaction.crud,
-);
 
 /** Client-parsed Monarch rows only: this is a read-only reconciliation preview. */
 const previewStatementImport = protectedProcedure
@@ -27,7 +19,6 @@ const sourceOptions = protectedProcedure
   .query(({ ctx }) => financialTransactionSourceOptions(ctx.db));
 
 export const financialTransactionRouter = createTRPCRouter({
-  list,
   previewStatementImport,
   sourceOptions,
 });

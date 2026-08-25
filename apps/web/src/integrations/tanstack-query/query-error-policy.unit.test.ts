@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { shouldToastQueryError } from "./query-error-policy";
 
-const query = (speculativePreview: boolean, observers: number) => ({
-  meta: { speculativePreview },
+const query = (speculative: boolean, observers: number) => ({
+  meta: { speculative },
   getObserversCount: () => observers,
 });
 

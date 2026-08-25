@@ -17,6 +17,10 @@ export default literalEntity({
       export: "ingredientUpdateData",
     },
     output: { module: "@cubby/schemas/ingredient", export: "ingredientOut" },
+    list: {
+      module: "@cubby/schemas/ingredient",
+      export: "ingredientListItemOut",
+    },
     detail: {
       module: "@cubby/schemas/ingredient",
       export: "ingredientWithFoodOut",

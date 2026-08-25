@@ -2,6 +2,7 @@ import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { listPage } from "~/app/_components/routing/entity-routes";
 import { InventoryActions } from "~/app/inventory/inventory-actions";
 import { InventoryItemList } from "~/app/inventory/inventoryitemlist";
+import { ensureEntityListSsr } from "~/entities/entity-list-ssr";
 import { inventorySearchSchema } from "~/entities/list-search";
 import { pageTitle } from "~/lib/page-title";
 
@@ -21,6 +22,13 @@ const InventoryPage = listPage({
 export const Route = createFileRoute("/_authenticated/inventory/")({
   validateSearch: inventorySearchSchema,
   search: { middlewares: [stripSearchParams({})] },
+  loaderDeps: ({ search }) => search,
+  loader: ({ context, deps }) =>
+    ensureEntityListSsr({
+      queryClient: context.queryClient,
+      entity: "inventory",
+      search: deps,
+    }),
   head: () => ({ meta: [{ title: pageTitle("Inventory") }] }),
   component: InventoryPage,
 });

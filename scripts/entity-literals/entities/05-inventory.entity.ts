@@ -17,6 +17,10 @@ export default literalEntity({
       export: "inventoryUpdatePayloadData",
     },
     output: { module: "@cubby/schemas/inventory", export: "inventoryEntryOut" },
+    list: {
+      module: "@cubby/schemas/inventory",
+      export: "inventoryListItemOut",
+    },
     detail: {
       module: "@cubby/schemas/inventory",
       export: "inventoryWithLocationAndProductOut",

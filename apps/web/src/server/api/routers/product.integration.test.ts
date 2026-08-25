@@ -1,4 +1,8 @@
-import type { ProductCategory } from "@cubby/schemas/product";
+import { unsafeUserId } from "@cubby/schemas/identifiers";
+import {
+  type ProductCategory,
+  productListItemOut,
+} from "@cubby/schemas/product";
 import {
   type ExpenseCreateInput,
   expenseCreateInput,
@@ -19,6 +23,37 @@ import {
 import { requireActor } from "~/server/request-context";
 import { createTestCaller, createTestTRPCContext } from "../trpc";
 import { productRouter } from "./product";
+
+const listProducts = async (
+  db: Parameters<typeof createTestTRPCContext>[0],
+  filters: Record<string, unknown> = {},
+  sort:
+    | { orderBy: string; direction: "asc" | "desc" }
+    | { orderBy: string; direction: "asc" | "desc" }[] = {
+    orderBy: "name",
+    direction: "asc",
+  },
+) => {
+  const result = await executeEntity(
+    requireActor(
+      createTestTRPCContext(db, {
+        auth: { userId: unsafeUserId("test-user-id") },
+      }),
+    ),
+    {
+      action: "list",
+      entity: "product",
+      filters,
+      sort,
+      pagination: { pageIndex: 0, pageSize: 50 },
+    },
+  );
+  if (result.action !== "list") throw new Error("unreachable");
+  return {
+    ...result,
+    items: result.items.map((item) => productListItemOut.parse(item)),
+  };
+};
 
 describe("product.tagSiblings", () => {
   const ctx = withTestDb();
@@ -274,12 +309,7 @@ describe("product.list quantity ledger", () => {
   const list = (
     filters: Record<string, unknown> = {},
     sort?: { orderBy: string; direction: "asc" | "desc" },
-  ) =>
-    createTestCaller(productRouter, ctx.db).list({
-      filters,
-      sort: sort ?? { orderBy: "name", direction: "asc" },
-      pagination: { pageIndex: 0, pageSize: 50 },
-    });
+  ) => listProducts(ctx.db, filters, sort);
 
   it("returns the ledger, on-hand and variance, and sorts and filters on them", async () => {
     const shelf = await createLocationFixture(
@@ -603,11 +633,7 @@ describe("product.list unlocated cohort", () => {
     );
 
   const list = (filters: Record<string, unknown> = {}) =>
-    createTestCaller(productRouter, ctx.db).list({
-      filters,
-      sort: { orderBy: "name", direction: "asc" },
-      pagination: { pageIndex: 0, pageSize: 50 },
-    });
+    listProducts(ctx.db, filters);
 
   it("selects owned-on-paper, stocked-nowhere — and nothing else", async () => {
     const shelf = await createLocationFixture(
@@ -843,11 +869,7 @@ describe("product.list kits counted twice", () => {
   const ctx = withTestDb();
 
   const list = (filters: Record<string, unknown>) =>
-    createTestCaller(productRouter, ctx.db).list({
-      filters,
-      sort: { orderBy: "name", direction: "asc" },
-      pagination: { pageIndex: 0, pageSize: 50 },
-    });
+    listProducts(ctx.db, filters);
 
   const doubleCounted = () => list({ kitAccounting: "double_counted" });
 
@@ -1012,7 +1034,6 @@ describe("product detail quantity ledger", () => {
       ctx.actor,
     );
 
-    const caller = createTestCaller(productRouter, ctx.db);
     const detailResult = await executeEntity(
       requireActor(
         createTestTRPCContext(ctx.db, {
@@ -1044,11 +1065,7 @@ describe("product detail quantity ledger", () => {
 
     // The two surfaces must not be able to disagree — same derivation, so the
     // same numbers for the same product.
-    const list = await caller.list({
-      filters: {},
-      sort: { orderBy: "name", direction: "asc" },
-      pagination: { pageIndex: 0, pageSize: 50 },
-    });
+    const list = await listProducts(ctx.db);
     const row = list.items.find((item) => item.id === prod.id);
     expect(row?.quantityLedger).toEqual(detail.quantityLedger);
     expect(row?.onHandUnits).toBe(detail.onHandUnits);

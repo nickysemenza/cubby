@@ -18,8 +18,7 @@ import { useDetailTitle } from "~/hooks/useDocumentTitle";
  * `errorComponent`, and `notFoundComponent` properties out of the eager bundle
  * (`defaultCodeSplitGroupings`). Hand it a call expression — a factory that
  * returns the whole options object — and it silently splits nothing, so every
- * route body lands in the first-load closure. That regression measured
- * 1128.8 KiB / 350 eager chunks against a 538 KiB / 146 budget.
+ * route body lands in the first-load app shell.
  *
  * So a route file keeps its literal options object, and reaches for these only
  * in the values of splittable properties:
@@ -33,7 +32,7 @@ import { useDetailTitle } from "~/hooks/useDocumentTitle";
  * ```
  *
  * Because nothing here is referenced from an unsplittable property, this whole
- * module (and the page bodies it closes over) stays out of the eager closure.
+ * module (and the page bodies it closes over) stays out of the app shell.
  * Keep it that way: anything a route needs at `loader` / `head` / `search` time
  * belongs in `./detail-loader`, not here.
  */

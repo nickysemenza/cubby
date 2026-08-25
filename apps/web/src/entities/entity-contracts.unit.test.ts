@@ -1,9 +1,12 @@
 import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import { countableEntities } from "@cubby/schemas/entity-manifest";
+import { imageOut } from "@cubby/schemas/image";
 import type { ProductWithFoodOut } from "@cubby/schemas/product";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { DataOf } from "~/app/_components/hooks/useActionMutation";
 import { queryKeys } from "~/lib/query-keys";
+import { mock } from "~/lib/test/mock-schema";
+import { entityMutationResultSchema } from "~/server/entity-kernel/contracts";
 import {
   entityMutationOptionsFactory,
   getEntityContract,
@@ -75,5 +78,16 @@ describe("kernel browser transport", () => {
       entity: "product",
       data: { name: "Hammer" },
     });
+  });
+
+  it("keeps the explicit Image update result in the strict mutation union", () => {
+    expect(
+      entityMutationResultSchema.safeParse({
+        action: "update",
+        entity: "image",
+        item: mock(imageOut, { seed: 1 }),
+        sideEffects: { backgroundBatches: [] },
+      }).success,
+    ).toBe(true);
   });
 });

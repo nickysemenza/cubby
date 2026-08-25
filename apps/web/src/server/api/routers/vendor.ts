@@ -12,19 +12,11 @@ import {
   vendorOptionsOut,
   vendorOut,
 } from "@cubby/schemas/vendor";
-import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 import { executeEntity } from "~/server/entity-kernel";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { vendorOptions } from "~/server/repo/vendor";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 import { fetchAndAttachVendorLogo } from "~/server/services/vendor-logo.service";
-import { createEntityListCompatibilityProcedure } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
-
-const list = createEntityListCompatibilityProcedure(
-  ENTITY_KERNEL_BINDINGS.vendor,
-  ENTITY_BINDINGS.vendor.crud,
-);
 
 /**
  * The vendor picklist — feeds the ledger's Vendor filter and the purchase form's
@@ -76,7 +68,6 @@ const fetchLogo = protectedProcedure
   });
 
 export const vendorRouter = createTRPCRouter({
-  list,
   options,
   merge,
   fetchLogo,

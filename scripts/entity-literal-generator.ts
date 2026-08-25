@@ -61,6 +61,7 @@ export type EntityLiteral = Readonly<{
         create: SourceRef;
         update: SourceRef;
         output: SourceRef;
+        list: SourceRef;
         detail: SourceRef;
       }>
     | null;
@@ -568,7 +569,7 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
           const contractObject = objectValue(contractValue, `${context}.contract`);
           exactKeys(
             contractObject,
-            ["create", "update", "output", "detail"],
+            ["create", "update", "output", "list", "detail"],
             `${context}.contract`,
           );
           const output = sourceRef(
@@ -585,6 +586,10 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
               `${context}.contract.update`,
             ),
             output,
+            list:
+              contractObject.list === undefined
+                ? output
+                : sourceRef(contractObject.list, `${context}.contract.list`),
             detail:
               contractObject.detail === undefined
                 ? output
@@ -883,12 +888,7 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
   const imports = new Map<string, Set<string>>();
   for (const { contract } of entities) {
     if (contract === null) continue;
-    for (const ref of [
-      contract.create,
-      contract.update,
-      contract.output,
-      contract.detail,
-    ]) {
+    for (const ref of [contract.create, contract.update, contract.output]) {
       const exports = imports.get(ref.module) ?? new Set<string>();
       exports.add(ref.export);
       imports.set(ref.module, exports);
@@ -940,15 +940,16 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
   const detailSchemaImports = detailEntities
     .map(({ key }) => `${key}Shortcode`)
     .sort();
-  const detailTypeImportSource = [
+  const detailRuntimeImportSource = [
     ...[...detailTypeImports.entries()]
       .sort(([left], [right]) => left.localeCompare(right))
       .map(
         ([module, exports]) =>
-          `import type { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
+          `import { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
       ),
-    `import type { ${detailSchemaImports.join(", ")} } from "@cubby/shared";`,
-    'import type { z } from "zod";',
+    `import { ${detailSchemaImports.join(", ")} } from "@cubby/shared";`,
+    'import { shortcodeSchema } from "@cubby/schemas/identifiers";',
+    'import { z } from "zod";',
   ].join("\n");
   const detailOutputTypes = detailEntities
     .map(
@@ -978,23 +979,9 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
     } => entity.contract !== null,
   );
   const browserCrudEntities = browserCrudEntitySpecs.map(({ key }) => key);
-  const listTypeImports = new Map<string, Set<string>>();
-  for (const { contract } of browserCrudEntitySpecs) {
-    const exports = listTypeImports.get(contract.output.module) ?? new Set<string>();
-    exports.add(contract.output.export);
-    listTypeImports.set(contract.output.module, exports);
-  }
-  const listTypeImportSource = [
-    ...[...listTypeImports.entries()]
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(
-        ([module, exports]) =>
-          `import type { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
-      ),
-  ].join("\n");
   const listRuntimeOutputImports = browserCrudEntitySpecs
     .map(({ key, contract }) =>
-      `import { ${contract.output.export} as ${key}ListOutputSchema } from ${JSON.stringify(contract.output.module)};`,
+      `import { ${contract.list.export} as ${key}ListOutputSchema } from ${JSON.stringify(contract.list.module)};`,
     )
     .join("\n");
   const listFilterFieldImports = browserCrudEntitySpecs
@@ -1009,19 +996,22 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
   const listInputVariants = browserCrudEntitySpecs
     .map(
       ({ key, filterSchema }) =>
-        `z.object({entity:z.literal(${JSON.stringify(key)}),filters:${filterSchema === null ? 'z.record(z.string(),z.unknown())' : `z.object(${key}ListFilterFields)`},sort:entityListSortsSchema.optional(),pagination:entityListPaginationSchema.optional(),groupBy:z.string().min(1).optional()})`,
+        `z.object({entity:z.literal(${JSON.stringify(key)}),filters:${filterSchema === null ? 'z.record(z.string(),z.unknown())' : `${key}ListFiltersSchema`},sort:entityListSortsSchema.optional(),pagination:entityListPaginationSchema.optional(),groupBy:z.string().min(1).optional()})`,
     )
     .join(",\n  ");
+  const listFilterSchemas = browserCrudEntitySpecs
+    .map(({ key }) => `const ${key}ListFiltersSchema = z.object(${key}ListFilterFields);`)
+    .join("\n");
+  const listFilterTypes = browserCrudEntitySpecs
+    .map(
+      ({ key }) =>
+        `  ${JSON.stringify(key)}: z.input<typeof ${key}ListFiltersSchema>;`,
+    )
+    .join("\n");
   const listOutputSchemas = browserCrudEntitySpecs
     .map(
       ({ key }) =>
         `  ${JSON.stringify(key)}: z.object({items:z.array(${key}ListOutputSchema),meta:entityListMetaSchema}),`,
-    )
-    .join("\n");
-  const listResultTypes = browserCrudEntitySpecs
-    .map(
-      ({ key, contract }) =>
-        `  ${JSON.stringify(key)}: { items: z.output<typeof ${contract.output.export}>[]; meta: EntityListMeta };`,
     )
     .join("\n");
   const commandVariants = (
@@ -1038,6 +1028,15 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
             ? ",id:shortcodeSchema(" + JSON.stringify(entity.key) + ")"
             : "";
         return `z.object({action:z.literal(${JSON.stringify(action)}),entity:z.literal(${JSON.stringify(entity.key)})${id},data:${schemaRef.export}})`;
+      })
+      .join(",\n  ");
+  const mutationResultVariants = (action: "create" | "update") =>
+    entities
+      .filter((entity) => entity.contract !== null)
+      .map((entity) => {
+        const output = entity.contract?.output;
+        if (!output) throw new LiteralSpecError(`${entity.key}.output is missing.`);
+        return `z.object({action:z.literal(${JSON.stringify(action)}),entity:z.literal(${JSON.stringify(entity.key)}),item:${output.export},sideEffects:mutationSideEffectsSchema})`;
       })
       .join(",\n  ");
   const kernelEntities = entities
@@ -1255,7 +1254,7 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         "  filterDescriptors: readonly EntityFilterDescriptorMetadata[];\n" +
         '  mcpOperations: readonly ("get" | "list" | "create" | "update" | "delete")[];\n' +
         '  lifecycle: { softDelete: boolean; delete: { mode: "soft" | "hard"; bulk: boolean } | null; merge: boolean };\n' +
-        "  sourceRefs: { create: string; update: string; output: string; detail: string } | null;\n" +
+        "  sourceRefs: { create: string; update: string; output: string; list: string; detail: string } | null;\n" +
         "  ports: EntityPortSourceRoster;\n" +
         "  references: readonly Entity[];\n" +
         "};\n\n" +
@@ -1281,7 +1280,7 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
       relativePath: "apps/web/src/entities/generated/entity-details.gen.ts",
       source:
         generatedHeader +
-        `${detailTypeImportSource}\n\n` +
+        `${detailRuntimeImportSource}\n\n` +
         `export const detailEntities = ${compactLiteral(detailEntities.map(({ key }) => key))} as const;\n` +
         "export type DetailEntity = (typeof detailEntities)[number];\n\n" +
         "export type EntityDetailByEntity = {\n" +
@@ -1289,14 +1288,27 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         "};\n\n" +
         "export type EntityDetailInputByEntity = {\n" +
         `${detailInputTypes}\n` +
-        "};\n",
+        "};\n\n" +
+        "// biome-ignore format: one generated detail schema per entity.\n" +
+        `export const ENTITY_DETAIL_OUTPUT_SCHEMAS = {\n${detailSchemas}\n} as const;\n\n` +
+        "// biome-ignore format: one generated detail input variant per entity.\n" +
+        `export const entityDetailInputSchema = z.discriminatedUnion(\"entity\", [\n  ${detailInputVariants}\n]);\n\n` +
+        "export function parseEntityDetailInput<E extends DetailEntity>(entity: E, value: unknown): EntityDetailInputByEntity[E];\n" +
+        "export function parseEntityDetailInput(entity: DetailEntity, value: unknown): unknown {\n" +
+        "  const parsed = entityDetailInputSchema.parse(value);\n" +
+        "  if (parsed.entity !== entity) throw new Error(\"Entity detail input discriminator mismatch\");\n" +
+        "  return parsed;\n" +
+        "}\n\n" +
+        "export function parseEntityDetailResult<E extends DetailEntity>(entity: E, value: unknown): EntityDetailByEntity[E];\n" +
+        "export function parseEntityDetailResult(entity: DetailEntity, value: unknown): unknown {\n" +
+        "  return ENTITY_DETAIL_OUTPUT_SCHEMAS[entity].parse(value);\n" +
+        "}\n",
     },
     {
       relativePath: "apps/web/src/entities/generated/entity-lists.gen.ts",
       source:
         generatedHeader +
         "// biome-ignore assist/source/organizeImports: generated schema aliases are deterministic.\n" +
-        `${listTypeImportSource}\n\n` +
         `${listRuntimeOutputImports}\n${listFilterFieldImports}\n` +
         'import { MAX_PAGE_SIZE, MAX_SORTS } from "@cubby/schemas/pagination";\n' +
         'import { z } from "zod";\n\n' +
@@ -1306,19 +1318,17 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         'const entityListSortsSchema = z.union([entityListSortSchema, z.array(entityListSortSchema).min(1).max(MAX_SORTS)]);\n' +
         'const entityListPaginationSchema = z.object({ pageIndex: z.number().int().min(0), pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE) });\n' +
         'const entityListMetaSchema = z.object({ pageIndex: z.number().int().min(0), pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE), totalCount: z.number().int().min(0), sums: z.record(z.string(), z.number()).optional() });\n\n' +
+        `${listFilterSchemas}\n\n` +
         `export const entityListInputSchema = z.discriminatedUnion("entity", [\n  ${listInputVariants}\n]);\n\n` +
         'export const ENTITY_LIST_OUTPUT_SCHEMAS = {\n' +
         `${listOutputSchemas}\n` +
         '} as const;\n\n' +
-        'type EntityListSort = { orderBy: string; direction: "asc" | "desc" };\n' +
-        "type EntityListInput = {\n" +
-        "  filters: Record<string, unknown>;\n" +
-        "  sort?: EntityListSort | EntityListSort[];\n" +
-        "  pagination?: { pageIndex: number; pageSize: number };\n" +
-        "  groupBy?: string;\n" +
+        "type EntityListFiltersByEntity = {\n" +
+        `${listFilterTypes}\n` +
         "};\n" +
+        'type EntityListSort = z.input<typeof entityListSortSchema>;\n' +
         "export type EntityListInputByEntity = {\n" +
-        "  [E in ListEntity]: EntityListInput & { entity: E };\n" +
+        "  [E in ListEntity]: { entity: E; filters: EntityListFiltersByEntity[E]; sort?: EntityListSort | EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: string };\n" +
         "};\n\n" +
         "export type EntityListMeta = {\n" +
         "  pageIndex: number;\n" +
@@ -1327,8 +1337,18 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         "  sums?: Record<string, number>;\n" +
         "};\n" +
         "export type EntityListResultByEntity = {\n" +
-        `${listResultTypes}\n` +
-        "};\n",
+        "  [E in ListEntity]: z.output<(typeof ENTITY_LIST_OUTPUT_SCHEMAS)[E]>;\n" +
+        "};\n\n" +
+        "export function parseEntityListInput<E extends ListEntity>(entity: E, value: unknown): EntityListInputByEntity[E];\n" +
+        "export function parseEntityListInput(entity: ListEntity, value: unknown): unknown {\n" +
+        "  const parsed = entityListInputSchema.parse(value);\n" +
+        "  if (parsed.entity !== entity) throw new Error(\"Entity list input discriminator mismatch\");\n" +
+        "  return parsed;\n" +
+        "}\n\n" +
+        "export function parseEntityListResult<E extends ListEntity>(entity: E, value: unknown): EntityListResultByEntity[E];\n" +
+        "export function parseEntityListResult(entity: ListEntity, value: unknown): unknown {\n" +
+        "  return ENTITY_LIST_OUTPUT_SCHEMAS[entity].parse(value);\n" +
+        "}\n",
     },
     {
       relativePath: "apps/web/src/entities/generated/entity-filter-fields.gen.ts",
@@ -1345,8 +1365,8 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         generatedHeader +
         'import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";\n' +
         `${schemaImports}\n` +
-        'import { type ZodSchema, z } from "zod";\n' +
-        'import type { DetailEntity } from "~/entities/generated/entity-details.gen";\n\n' +
+        'import { mutationSideEffectsSchema } from "@cubby/schemas/background-jobs";\n' +
+        'import { type ZodSchema, z } from "zod";\n\n' +
         "type CrudBinding = {\n" +
         "  idSchema: ZodSchema;\n" +
         "  createInput: ZodSchema;\n" +
@@ -1360,16 +1380,13 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         ") => ({ idSchema: shortcodeSchema(entity), ...schemas });\n\n" +
         "// biome-ignore format: generated bindings stay one entity per line.\n" +
         `export const ENTITY_BINDINGS = {\n${bindings}\n} satisfies Record<ShortcodeEntity, EntityBinding>;\n\n` +
-        "/** @lintignore Dynamically imported by the client-safe Start detail transport. */\n" +
-        "// biome-ignore format: generated detail schemas stay one entity per line.\n" +
-        `export const ENTITY_DETAIL_OUTPUT_SCHEMAS = {\n${detailSchemas}\n} as const satisfies Record<DetailEntity, ZodSchema>;\n` +
-        "/** @lintignore Dynamically imported by the client-safe Start detail transport. */\n" +
-        "// biome-ignore format: one generated detail input variant per entity.\n" +
-        `export const entityDetailInputSchema = z.discriminatedUnion("entity", [\n  ${detailInputVariants}\n]);\n` +
         "// biome-ignore format: one generated variant per entity.\n" +
         `export const generatedEntityCreateCommandSchema = z.union([\n  ${commandVariants("create", "create")}\n]);\n\n` +
         "// biome-ignore format: one generated variant per entity.\n" +
-        `export const generatedEntityUpdateCommandSchema = z.union([\n  ${commandVariants("update", "update")}\n]);\n`,
+        `export const generatedEntityUpdateCommandSchema = z.union([\n  ${commandVariants("update", "update")}\n]);\n` +
+        "\n" +
+        `export const generatedEntityMutationCreateResultSchema = z.discriminatedUnion("entity", [\n  ${mutationResultVariants("create")}\n]);\n\n` +
+        `export const generatedEntityMutationUpdateResultSchema = z.discriminatedUnion("entity", [\n  ${mutationResultVariants("update")}\n]);\n`,
     },
     {
       relativePath: "apps/web/src/entities/generated/entity-routes.gen.ts",
@@ -1543,6 +1560,7 @@ export const renderFilterArtifacts = (entities: readonly EntityLiteral[]): Entit
         "  rangeExpanders: readonly string[];\n" +
         "};\n\n" +
         "// Generated contract cases keep mechanical filter invariants reviewable.\n" +
+        "// biome-ignore format: generated filter contract cases stay compact.\n" +
         `export const generatedEntityFilterContractCases = ${compactLiteral(filterContractCases)} as const satisfies Record<Entity, EntityFilterContractCase>;\n`,
     },
     {

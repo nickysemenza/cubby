@@ -21,8 +21,6 @@ import {
 } from "@cubby/schemas/meal";
 import { contributesToShoppingList } from "@cubby/schemas/meal-classification";
 import { sumBy } from "es-toolkit";
-import { ENTITY_BINDINGS } from "~/server/entity-bindings";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import {
   addRecipeToMeal,
   getMealsByDateRange,
@@ -33,13 +31,7 @@ import {
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import type { PlannedLine } from "~/server/services/availability.service";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
-import { createEntityListCompatibilityProcedure } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
-
-const list = createEntityListCompatibilityProcedure(
-  ENTITY_KERNEL_BINDINGS.meal,
-  ENTITY_BINDINGS.meal.crud,
-);
 
 const mealShortcodes = bindShortcodeResolver("meal");
 
@@ -236,7 +228,6 @@ const getShoppingList = protectedProcedure
   });
 
 export const mealRouter = createTRPCRouter({
-  list,
   getByDateRange,
   upcomingSummary,
   getShoppingList,

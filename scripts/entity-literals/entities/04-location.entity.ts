@@ -14,6 +14,7 @@ export default literalEntity({
     },
     update: { module: "@cubby/schemas/location", export: "locationUpdateData" },
     output: { module: "@cubby/schemas/location", export: "locationOut" },
+    list: { module: "@cubby/schemas/location", export: "locationListItemOut" },
     detail: { module: "@cubby/schemas/location", export: "infLocation" },
   },
   filters: {

@@ -16,11 +16,20 @@ import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { mealCaptureRequest } from "~/entities/editing/editor-requests";
+import { ensureEntityListSsr } from "~/entities/entity-list-ssr";
 import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/meals/")({
   validateSearch: mealCalendarSearchSchema,
   search: { middlewares: [stripSearchParams(mealCalendarSearchDefaults)] },
+  loaderDeps: ({ search }) => search,
+  loader: ({ context, deps }) =>
+    ensureEntityListSsr({
+      queryClient: context.queryClient,
+      entity: "meal",
+      search: deps,
+      active: deps.view === "table",
+    }),
   component: MealsIndexRoute,
   head: () => ({ meta: [{ title: pageTitle("Meals") }] }),
 });

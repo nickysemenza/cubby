@@ -16,6 +16,7 @@ import { authClient } from "~/lib/auth-client";
 import { getErrorMessage } from "~/lib/error-utils";
 import { getFlag } from "~/lib/flags";
 import { configureQueryFreshness } from "~/lib/query-freshness";
+import { installOperationRecorder } from "./operation-recorder";
 import { persister } from "./persister";
 import { shouldToastQueryError } from "./query-error-policy";
 
@@ -94,6 +95,7 @@ export function getContext() {
       },
     }),
   });
+  if (!import.meta.env.SSR) installOperationRecorder(queryClient);
   configureQueryFreshness(queryClient);
 
   const serverHelpers = createTRPCOptionsProxy({
@@ -147,7 +149,7 @@ export function Provider({
                   // tRPC keys are nested: [["product","list"], { input, type }].
                   const head = query.queryKey?.[0];
                   const root = Array.isArray(head) ? head[0] : head;
-                  const procedure = Array.isArray(head) ? head[1] : undefined;
+                  const operation = Array.isArray(head) ? head[1] : undefined;
                   // Persist lighter detail queries for offline warm starts, but
                   // NOT the big `.list` payloads. superjson-serializing a list
                   // (now up to 1000 rows) on every cache write was the dominant
@@ -157,7 +159,7 @@ export function Provider({
                   return (
                     typeof root === "string" &&
                     PERSISTED_ROOTS.has(root) &&
-                    procedure !== "list" &&
+                    operation !== "list" &&
                     query.state.status === "success"
                   );
                 },

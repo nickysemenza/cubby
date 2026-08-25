@@ -1,7 +1,9 @@
-import { unsafeImageShortcode } from "@cubby/schemas/identifiers";
+import { unsafeImageShortcode, unsafeUserId } from "@cubby/schemas/identifiers";
+import { locationListItemOut } from "@cubby/schemas/location";
 import { withEntityKernelMutations } from "tooling/entity-kernel-test-caller";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { executeEntity } from "~/server/entity-kernel";
 import { listBackgroundBatches } from "~/server/repo/background-jobs";
 import { createUploadedImageRecord } from "~/server/repo/image";
 import { getLocationByShortcode } from "~/server/repo/location";
@@ -11,7 +13,11 @@ import {
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
-import { createTestCaller as createTRPCTestCaller } from "../trpc";
+import { requireActor } from "~/server/request-context";
+import {
+  createTestTRPCContext,
+  createTestCaller as createTRPCTestCaller,
+} from "../trpc";
 import { locationRouter } from "./location";
 import { problemsRouter } from "./problems";
 
@@ -40,6 +46,31 @@ const createTestCaller = (
   _router: typeof locationRouter,
   db: Parameters<typeof listBackgroundBatches>[0],
 ) => createLocationCaller(db);
+
+const listLocations = async (
+  db: Parameters<typeof createTestTRPCContext>[0],
+  filters: Record<string, unknown> = {},
+) => {
+  const result = await executeEntity(
+    requireActor(
+      createTestTRPCContext(db, {
+        auth: { userId: unsafeUserId("test-user-id") },
+      }),
+    ),
+    {
+      action: "list",
+      entity: "location",
+      filters,
+      sort: [{ orderBy: "name", direction: "asc" }],
+      pagination: { pageIndex: 0, pageSize: 100 },
+    },
+  );
+  if (result.action !== "list") throw new Error("unreachable");
+  return {
+    ...result,
+    items: result.items.map((item) => locationListItemOut.parse(item)),
+  };
+};
 
 describe("location.create AI-description side-effect", () => {
   const ctx = withTestDb();
@@ -234,11 +265,7 @@ describe("reads tolerate a product-linked location's null type", () => {
     expect(detail?.type).toBeNull();
     expect(detail?.product?.name).toBe("Null Type Tote null-type bin");
 
-    const list = await caller.list({
-      filters: {},
-      sort: [{ orderBy: "name", direction: "asc" }],
-      pagination: { pageIndex: 0, pageSize: 50 },
-    });
+    const list = await listLocations(ctx.db);
     expect(list.items.some((l) => l.id === created.id)).toBe(true);
 
     const options = await caller.options({
@@ -335,11 +362,7 @@ describe("the product -> locations query", () => {
       makeLocationInput({ name: "serving decoy", type: "box" }),
     );
 
-    const result = await caller.list({
-      filters: { productId: product.id },
-      pagination: { pageIndex: 0, pageSize: 100 },
-      sort: [{ orderBy: "name", direction: "asc" }],
-    });
+    const result = await listLocations(ctx.db, { productId: product.id });
 
     expect(result.items).toHaveLength(3);
     expect(result.items.map((l) => l.name).sort()).toEqual([
@@ -360,11 +383,7 @@ describe("the product -> locations query", () => {
       makeLocationInput({ name: "unused decoy", type: "box" }),
     );
 
-    const result = await caller.list({
-      filters: { productId: product.id },
-      pagination: { pageIndex: 0, pageSize: 100 },
-      sort: [{ orderBy: "name", direction: "asc" }],
-    });
+    const result = await listLocations(ctx.db, { productId: product.id });
 
     // Empty, not "everything" — a requested-but-unmatched id must never widen
     // to an unfiltered query.

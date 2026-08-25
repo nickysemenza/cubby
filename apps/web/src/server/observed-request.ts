@@ -42,6 +42,14 @@ export function recordObservedInput(
 
 type ObservedResult = { error?: unknown; workload?: Workload };
 
+export function isObservedCancellation(error: unknown): boolean {
+  return (
+    (error instanceof DOMException && error.name === "AbortError") ||
+    (error instanceof Error &&
+      (error.name === "AbortError" || error.name === "CancelledError"))
+  );
+}
+
 export async function observeRequest<T>(options: {
   system: "start" | "trpc";
   method: string;
@@ -50,6 +58,7 @@ export async function observeRequest<T>(options: {
   actorId?: string | null;
   input: unknown;
   workload: Workload;
+  operationId?: string;
   includeInputValues?: boolean;
   run: (span: AppSpan) => Promise<T>;
   inspectResult?: (result: T) => ObservedResult;
@@ -63,6 +72,7 @@ export async function observeRequest<T>(options: {
       "enduser.id": options.actorId ?? "guest",
       "cubby.request_origin": options.origin,
       "cubby.workload": options.workload,
+      "cubby.operation_id": options.operationId,
     });
     recordObservedInput(
       span,
@@ -76,6 +86,10 @@ export async function observeRequest<T>(options: {
         span.setAttribute("cubby.workload", inspection.workload);
       }
       if (inspection?.error) {
+        if (isObservedCancellation(inspection.error)) {
+          span.setAttribute("cubby.cancelled", true);
+          return result;
+        }
         span.setError(getErrorMessage(inspection.error));
         if (!isExpectedAppError(inspection.error)) {
           Sentry.captureException(inspection.error, {
@@ -89,6 +103,10 @@ export async function observeRequest<T>(options: {
       }
       return result;
     } catch (error) {
+      if (isObservedCancellation(error)) {
+        span.setAttribute("cubby.cancelled", true);
+        throw error;
+      }
       if (!isExpectedAppError(error)) {
         Sentry.captureException(error, {
           extra: {

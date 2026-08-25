@@ -11,6 +11,7 @@ export default literalEntity({
     create: { module: "@cubby/schemas/recipe", export: "recipeCreateInput" },
     update: { module: "@cubby/schemas/recipe", export: "recipeUpdateData" },
     output: { module: "@cubby/schemas/recipe", export: "recipeOut" },
+    list: { module: "@cubby/schemas/recipe", export: "recipeListItemOut" },
   },
   filters: {
     audit: true,

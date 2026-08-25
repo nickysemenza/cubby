@@ -17,6 +17,7 @@ import {
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
 import { taskCaptureRequest } from "~/entities/editing/editor-requests";
+import { ensureEntityListSsr } from "~/entities/entity-list-ssr";
 import { getEntityFilters } from "~/entities/filter-manifest";
 import {
   buildFiltersFromManifest,
@@ -44,6 +45,14 @@ const VIEW_SWITCHER_OPTIONS: ViewSwitcherOption<TaskRenderer>[] = [
 export const Route = createFileRoute("/_authenticated/tasks/")({
   validateSearch: taskSearchSchema,
   search: { middlewares: [stripSearchParams(taskSearchDefaults)] },
+  loaderDeps: ({ search }) => search,
+  loader: ({ context, deps }) =>
+    ensureEntityListSsr({
+      queryClient: context.queryClient,
+      entity: "task",
+      search: deps,
+      active: deps.view === "list" || (!deps.view && Boolean(deps.q)),
+    }),
   component: TasksPage,
   head: () => ({ meta: [{ title: pageTitle("Tasks") }] }),
 });

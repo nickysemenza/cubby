@@ -44,7 +44,7 @@ import {
   type EntityMutationCommand,
   type EntityQueryCommand,
   entityCommandSchema,
-  type entityMutationResultSchema,
+  entityMutationResultSchema,
   type entityQueryResultSchema,
 } from "./contracts";
 
@@ -213,12 +213,12 @@ export async function executeEntity(
           `${binding.entity}.create`,
         )),
       ];
-      return {
+      return entityMutationResultSchema.parse({
         action: command.action,
         entity: command.entity,
         item: binding.schemas.output.parse(created.output),
         sideEffects: { backgroundBatches },
-      } as const;
+      });
     }
 
     case "update": {
@@ -245,12 +245,12 @@ export async function executeEntity(
           `${binding.entity}.update`,
         )),
       ];
-      return {
+      return entityMutationResultSchema.parse({
         action: command.action,
         entity: command.entity,
         item: binding.schemas.output.parse(updated.output),
         sideEffects: { backgroundBatches },
-      } as const;
+      });
     }
 
     case "delete": {

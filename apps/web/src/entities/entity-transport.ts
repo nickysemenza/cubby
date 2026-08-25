@@ -1,5 +1,9 @@
 import type { PublicImpactItem } from "@cubby/schemas/entity-integrity";
-import { getFlag } from "~/lib/flags";
+import {
+  beginObservedOperation,
+  finishObservedOperation,
+  operationHeaders,
+} from "~/integrations/tanstack-query/operation-recorder";
 
 export type PublicEntityError = {
   message: string;
@@ -12,7 +16,8 @@ export type EntityTransportOperation =
   | "entity.list"
   | "entity.detail"
   | "entity.filterOptions"
-  | "entity.mutate";
+  | "entity.mutate"
+  | "entity.inspectorHealth";
 
 export type EntityTransportResult<T> =
   | { ok: true; data: T }
@@ -32,8 +37,6 @@ export class EntityTransportError extends Error {
   }
 }
 
-let requestId = 0;
-
 export function unwrapEntityTransportResult<T>(
   operation: EntityTransportOperation,
   result: EntityTransportResult<T>,
@@ -51,29 +54,28 @@ export function unwrapEntityTransportResult<T>(
   return result.data;
 }
 
-export async function observedEntityCall<T>(
-  operation: EntityTransportOperation,
-  input: unknown,
-  call: () => Promise<T>,
-): Promise<T> {
-  const isBrowser = typeof window !== "undefined";
-  const shouldLog = isBrowser && getFlag("queryLogger");
-  const id = shouldLog ? ++requestId : 0;
-  const startedAt = performance.now();
-  if (shouldLog) console.log(`>> ${id} ${operation}`, { input });
+export async function observedEntityCall<T>(options: {
+  operation: EntityTransportOperation;
+  kind?: "query" | "mutation";
+  entity?: string;
+  speculative?: boolean;
+  input: unknown;
+  call: (headers: HeadersInit) => Promise<T>;
+}): Promise<T> {
+  const observed = beginObservedOperation({
+    kind: options.kind ?? "query",
+    transport: "start",
+    operation: options.operation,
+    entity: options.entity,
+    speculative: options.speculative,
+    input: options.input,
+  });
   try {
-    const result = await call();
-    if (shouldLog) {
-      console.log(`<< ${id} ${operation}`, {
-        result,
-        elapsedMs: Math.round(performance.now() - startedAt),
-      });
-    }
+    const result = await options.call(operationHeaders(observed));
+    finishObservedOperation(observed, { result });
     return result;
   } catch (error) {
-    if (isBrowser && (shouldLog || error instanceof Error)) {
-      console.error(`<< ${id || "error"} ${operation}`, error);
-    }
+    finishObservedOperation(observed, { error });
     throw error;
   }
 }

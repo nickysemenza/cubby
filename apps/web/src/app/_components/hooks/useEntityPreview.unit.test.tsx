@@ -1,3 +1,4 @@
+import type * as TanStackQuery from "@tanstack/react-query";
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -7,7 +8,7 @@ const queryClient = vi.hoisted(() => ({
 }));
 
 vi.mock("@tanstack/react-query", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@tanstack/react-query")>()),
+  ...(await importOriginal<typeof TanStackQuery>()),
   useQueryClient: () => queryClient,
 }));
 

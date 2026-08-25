@@ -15,7 +15,6 @@ import {
   enrichmentRowsOut,
   ingredientIdInput,
   ingredientIdsInput,
-  ingredientListItemOut,
   ingredientMatchesOut,
   ingredientMergeInput,
   ingredientMergeOut,
@@ -29,9 +28,7 @@ import {
   ingredientWithFoodOut,
 } from "@cubby/schemas/ingredient";
 import { z } from "zod";
-import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 import { executeEntity } from "~/server/entity-kernel";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import {
   getIngredientMatches,
   getRecipeUsagesForIngredient,
@@ -44,19 +41,10 @@ import {
   getIngredientsByIDs,
 } from "~/server/services/ingredient.service";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
-import { createEntityListCompatibilityProcedure } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const ingredientShortcodes = bindShortcodeResolver("ingredient");
 const recipeShortcodes = bindShortcodeResolver("recipe");
-
-const list = createEntityListCompatibilityProcedure(
-  ENTITY_KERNEL_BINDINGS.ingredient,
-  {
-    ...ENTITY_BINDINGS.ingredient.crud,
-    listOutput: ingredientListItemOut,
-  },
-);
 
 const merge = protectedProcedure
   .input(ingredientMergeInput)
@@ -191,6 +179,5 @@ export const ingredientRouter = createTRPCRouter({
   matchNames,
   resolveOrCreate,
   getManyByIDs,
-  list,
   merge,
 });
