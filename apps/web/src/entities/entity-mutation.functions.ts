@@ -1,6 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 import { startOperation } from "~/integrations/tanstack-query/start-transport";
-import { markFreshReads } from "~/lib/fresh-read-marker";
 import type {
   EntityBrowserMutationInput,
   EntityBrowserMutationResult,
@@ -39,7 +38,6 @@ export async function executeEntityMutation(options: {
     .call(options.data, { signal: options.signal });
   // Open the fresh-read window before any invalidation this mutation triggers
   // can re-read a stale replica.
-  markFreshReads();
   return result;
 }
 

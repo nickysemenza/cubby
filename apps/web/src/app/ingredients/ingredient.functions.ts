@@ -4,7 +4,6 @@ import { mutationOptions, queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { startOperation } from "~/integrations/tanstack-query/start-transport";
-import { markFreshReads } from "~/lib/fresh-read-marker";
 import { queryKeys } from "~/lib/query-keys";
 import * as browser from "~/server/ingredient-browser.server";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
@@ -176,7 +175,6 @@ export const ingredientResolveOrCreateMutationOptions = () =>
       input: z.input<typeof schemas.ingredientResolvableNamesInput>,
     ) => {
       const result = await resolveOperation.call(input);
-      markFreshReads();
       return result;
     },
     meta: resolveOperation.meta,
@@ -205,7 +203,6 @@ export const ingredientMergeMutationOptions = (
     mutationKey: [...queryKeys.ingredient.all, "merge"],
     mutationFn: async (input: z.input<typeof schemas.ingredientMergeInput>) => {
       const result = await mergeOperation.call(input);
-      markFreshReads();
       return result;
     },
     meta: mergeOperation.meta,

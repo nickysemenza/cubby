@@ -33,7 +33,7 @@ describe("workflow JSONL stream", () => {
     );
 
     const stream = await openWorkflowStream({
-      operation: "test.progress",
+      operation: "agent.askStream",
       kind: "mutation",
       url: "/api/workflows/test-progress",
       input: { id: "one" },
@@ -44,6 +44,11 @@ describe("workflow JSONL stream", () => {
     for await (const event of stream) events.push(event);
     expect(events).toEqual([{ type: "progress", done: 1, at }]);
     expect(documentStub.cookie).toContain("cubby-fresh-reads=1");
+    const requestInit = vi.mocked(fetch).mock.calls[0]?.[1];
+    const headers = new Headers(requestInit?.headers);
+    expect(headers.get("x-cubby-operation")).toBe("agent.askStream");
+    expect(headers.get("x-cubby-operation-kind")).toBe("subscription");
+    expect(headers.get("x-cubby-operation-id")).toBeNull();
   });
 
   it("raises the shared structured operation error", async () => {
@@ -62,7 +67,7 @@ describe("workflow JSONL stream", () => {
     );
 
     const stream = await openWorkflowStream({
-      operation: "test.failure",
+      operation: "agent.askStream",
       kind: "mutation",
       url: "/api/workflows/test-failure",
       input: null,

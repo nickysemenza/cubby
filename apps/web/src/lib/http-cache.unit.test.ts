@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { withHtmlNoCache, withRequestId } from "./http-cache";
+import {
+  withHtmlNoCache,
+  withRequestId,
+  withResponseDiagnostics,
+} from "./http-cache";
 
 describe("withHtmlNoCache", () => {
   it("decorates HTML while preserving the streamed response metadata", async () => {
@@ -39,7 +43,22 @@ describe("withHtmlNoCache", () => {
     const decorated = withRequestId(response, "ray-start-test");
 
     expect(decorated).not.toBe(response);
-    expect(decorated.headers.get("x-trace-id")).toBe("ray-start-test");
+    expect(decorated.headers.get("x-request-id")).toBe("ray-start-test");
+    expect(await decorated.json()).toEqual({ ok: true });
+  });
+
+  it("adds canary correlation and schema diagnostics without reading the body", async () => {
+    const response = Response.json({ ok: true });
+    const decorated = withResponseDiagnostics(response, {
+      requestId: "ray-canary-test",
+      workerVersion: "worker-version-test",
+    });
+
+    expect(decorated.headers.get("x-request-id")).toBe("ray-canary-test");
+    expect(decorated.headers.get("x-cubby-worker-version")).toBe(
+      "worker-version-test",
+    );
+    expect(decorated.headers.get("x-cubby-telemetry-schema")).toBe("1");
     expect(await decorated.json()).toEqual({ ok: true });
   });
 });

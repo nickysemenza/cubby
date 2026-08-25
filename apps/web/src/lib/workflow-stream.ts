@@ -7,7 +7,7 @@ import {
 } from "~/integrations/tanstack-query/operation-recorder";
 import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
 import { markFreshReads } from "~/lib/fresh-read-marker";
-import { REQUEST_ID_HEADER, recordRequestId } from "~/lib/request-id";
+import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
 import type { PublicStartOperationError } from "~/server/start-operation.contract";
 
 type EventFrame = {
@@ -75,7 +75,7 @@ async function* readFrames<Event>(options: {
 }
 
 export async function openWorkflowStream<Input, Event>(options: {
-  operation: string;
+  operation: StartOperationIdOfKind<"subscription">;
   kind: "query" | "mutation";
   url: string;
   input: Input;
@@ -99,7 +99,6 @@ export async function openWorkflowStream<Input, Event>(options: {
       body: superjson.stringify(options.input),
       signal: options.signal,
     });
-    recordRequestId(response.headers.get(REQUEST_ID_HEADER));
     if (!response.ok) {
       throw new Error(`Workflow stream failed with HTTP ${response.status}`);
     }

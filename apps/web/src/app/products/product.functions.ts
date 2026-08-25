@@ -20,8 +20,8 @@ import {
   type StartOperation,
   startOperation,
 } from "~/integrations/tanstack-query/start-transport";
-import { markFreshReads } from "~/lib/fresh-read-marker";
 import { queryKeys } from "~/lib/query-keys";
+import type { StartOperationId } from "~/lib/start-operation-observability";
 import { openWorkflowStream } from "~/lib/workflow-stream";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
 import * as browser from "~/server/product-browser.server";
@@ -298,7 +298,7 @@ const bulkSetStockTrackedTransport = createServerFn({ method: "POST" })
   );
 
 const defineOperation = <I extends z.ZodTypeAny, O extends z.ZodTypeAny>(
-  operation: string,
+  operation: StartOperationId,
   schemas: { input: I; output: O },
   transport: (
     data: z.input<I>,
@@ -473,7 +473,6 @@ const mutation =
       mutationKey: [operation.operation],
       mutationFn: async (input: I) => {
         const result = await operation.call(input);
-        markFreshReads();
         return result;
       },
       meta: operation.meta,

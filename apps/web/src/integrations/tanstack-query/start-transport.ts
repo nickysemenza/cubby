@@ -1,3 +1,9 @@
+import { markFreshReads } from "~/lib/fresh-read-marker";
+import {
+  isStartOperationEntity,
+  registeredStartOperationKind,
+  type StartOperationId,
+} from "~/lib/start-operation-observability";
 import type {
   PublicStartOperationError,
   StartOperationResult,
@@ -11,13 +17,16 @@ import {
 
 export class StartOperationError extends Error {
   readonly data: Omit<PublicStartOperationError, "message">;
+  readonly requestId: string | undefined;
 
   constructor(error: PublicStartOperationError) {
     super(error.message);
     this.name = "StartOperationError";
+    this.requestId = error.requestId;
     this.data = {
       code: error.code,
       ...(error.reason ? { reason: error.reason } : {}),
+      ...(error.requestId ? { requestId: error.requestId } : {}),
       ...(error.blockers ? { blockers: error.blockers } : {}),
       ...(error.validationIssues
         ? { validationIssues: error.validationIssues }
@@ -44,15 +53,26 @@ export function unwrapStartOperationResult<T>(
 }
 
 async function observedStartCall<T>(options: {
-  operation: string;
+  operation: StartOperationId;
   kind?: "query" | "mutation";
   entity?: string;
   speculative?: boolean;
   input: unknown;
   call: (headers: HeadersInit) => Promise<T>;
 }): Promise<T> {
+  const registeredKind = registeredStartOperationKind(options.operation);
+  if (registeredKind === "subscription") {
+    throw new Error(
+      `${options.operation} is a workflow stream, not a Start transport operation`,
+    );
+  }
+  if (options.kind && options.kind !== registeredKind) {
+    throw new Error(
+      `${options.operation} is registered as ${registeredKind}, not ${options.kind}`,
+    );
+  }
   const observed = beginObservedOperation({
-    kind: options.kind ?? "query",
+    kind: registeredKind,
     transport: "start",
     operation: options.operation,
     entity: options.entity,
@@ -62,6 +82,7 @@ async function observedStartCall<T>(options: {
   try {
     const result = await options.call(operationHeaders(observed));
     finishObservedOperation(observed, { result });
+    if (registeredKind === "mutation") markFreshReads();
     return result;
   } catch (error) {
     finishObservedOperation(observed, { error });
@@ -81,7 +102,7 @@ type StartTransportInvocation<Input> = (
 ) => Promise<StartOperationResult<unknown>>;
 
 export interface StartOperation<Input, Output> {
-  readonly operation: string;
+  readonly operation: StartOperationId;
   /**
    * Query/mutation metadata derived from the same declaration the call uses, so
    * `meta.operation`/`meta.entity` cannot drift from what the recorder observes.
@@ -104,13 +125,21 @@ export interface StartOperation<Input, Output> {
  * already-declared server function in; this module only wraps the call.
  */
 export function startOperation<Input, Output>(config: {
-  operation: string;
+  operation: StartOperationId;
   kind?: "query" | "mutation";
   entity?: string;
   transport: StartTransportInvocation<Input>;
   parse: (data: unknown, input: Input) => Output;
   createError?: (error: PublicStartOperationError) => Error;
 }): StartOperation<Input, Output> {
+  if (
+    config.entity &&
+    !isStartOperationEntity(config.operation, config.entity)
+  ) {
+    throw new Error(
+      `${config.entity} is not registered for ${config.operation}`,
+    );
+  }
   const build = (
     entity: string | undefined,
   ): StartOperation<Input, Output> => ({
@@ -141,7 +170,12 @@ export function startOperation<Input, Output>(config: {
             input,
           ),
       }),
-    forEntity: (next) => build(next),
+    forEntity: (next) => {
+      if (!isStartOperationEntity(config.operation, next)) {
+        throw new Error(`${next} is not registered for ${config.operation}`);
+      }
+      return build(next);
+    },
   });
   return build(config.entity);
 }

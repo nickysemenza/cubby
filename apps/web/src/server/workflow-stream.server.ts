@@ -1,7 +1,9 @@
 import superjson from "superjson";
 import type { z } from "zod";
+import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
 import { REQUEST_ID_HEADER } from "~/lib/request-id";
-import { observeRequest } from "~/server/observed-request";
+import { startOperationDefinition } from "~/lib/start-operation-observability";
+import { observeOperation } from "~/server/observed-request";
 import { createRequestContext, requireActor } from "~/server/request-context";
 import {
   type AuthenticatedStartOperationContext,
@@ -23,8 +25,12 @@ const encoder = new TextEncoder();
 const encodeFrame = (frame: StreamFrame) =>
   encoder.encode(`${JSON.stringify(frame)}\n`);
 
-const errorResponse = (error: unknown, stage: OperationStage) => {
-  const normalized = normalizeStartOperationError(error, stage);
+const errorResponse = (
+  error: unknown,
+  stage: OperationStage,
+  requestId?: string,
+) => {
+  const normalized = normalizeStartOperationError(error, stage, requestId);
   return new Response(
     encodeFrame({ kind: "error", error: normalized.publicError }),
     {
@@ -46,7 +52,7 @@ export async function workflowStreamResponse<
   Event,
 >(options: {
   request: Request;
-  operation: string;
+  operation: StartOperationIdOfKind<"subscription">;
   inputSchema: InputSchema;
   eventSchema: z.ZodType<Event>;
   workload?: Workload;
@@ -66,7 +72,7 @@ export async function workflowStreamResponse<
   try {
     rawInput = superjson.parse(await options.request.text());
   } catch (error) {
-    return errorResponse(error, "input");
+    return errorResponse(error, "input", getRequestId(options.request.headers));
   }
 
   let context: AuthenticatedStartOperationContext;
@@ -75,14 +81,18 @@ export async function workflowStreamResponse<
       await createRequestContext({ headers: options.request.headers }),
     );
   } catch (error) {
-    return errorResponse(error, "context");
+    return errorResponse(
+      error,
+      "context",
+      getRequestId(options.request.headers),
+    );
   }
 
   let input: z.output<InputSchema>;
   try {
     input = options.inputSchema.parse(rawInput);
   } catch (error) {
-    return errorResponse(error, "input");
+    return errorResponse(error, "input", getRequestId(options.request.headers));
   }
 
   const stream = new ReadableStream<Uint8Array>({
@@ -90,17 +100,14 @@ export async function workflowStreamResponse<
       void (async () => {
         let stage: OperationStage = "run";
         try {
-          await observeRequest({
-            system: "start",
-            method: options.operation,
-            type: "subscription",
-            origin: "ui",
-            actorId: context.auth.userId,
-            input,
-            workload: options.workload ?? "import-stream",
-            operationId:
-              options.request.headers.get("x-cubby-operation-id") ?? undefined,
-            run: async () => {
+          await observeOperation(
+            startOperationDefinition(options.operation),
+            {
+              origin: "ui",
+              workload: options.workload ?? "import-stream",
+            },
+            async (span) => {
+              span.setAttribute("cubby.authenticated", true);
               throwIfStartOperationAborted(options.request.signal);
               const events = await options.run(
                 context,
@@ -120,10 +127,14 @@ export async function workflowStreamResponse<
                 stage = "run";
               }
             },
-          });
+          );
         } catch (error) {
           if (!options.request.signal.aborted) {
-            const normalized = normalizeStartOperationError(error, stage);
+            const normalized = normalizeStartOperationError(
+              error,
+              stage,
+              getRequestId(options.request.headers),
+            );
             controller.enqueue(
               encodeFrame({ kind: "error", error: normalized.publicError }),
             );

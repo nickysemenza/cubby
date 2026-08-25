@@ -15,7 +15,6 @@ import { mutationOptions, queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { startOperation } from "~/integrations/tanstack-query/start-transport";
-import { markFreshReads } from "~/lib/fresh-read-marker";
 import { queryKeys } from "~/lib/query-keys";
 import * as browser from "~/server/location-browser.server";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
@@ -70,7 +69,6 @@ export const ensureGlobalUnknownMutationOptions = () =>
     mutationKey: [...queryKeys.location.all, "ensureGlobalUnknown"],
     mutationFn: async () => {
       const result = await ensureOp.call(null);
-      markFreshReads();
       return result;
     },
     meta: ensureOp.meta,
@@ -97,7 +95,6 @@ export const bulkUpdateParentMutationOptions = () =>
     mutationKey: [...queryKeys.location.all, "bulkUpdateParent"],
     mutationFn: async (data: z.input<typeof locationBulkUpdateParentInput>) => {
       const result = await bulkOp.call(data);
-      markFreshReads();
       return result;
     },
     meta: bulkOp.meta,
@@ -142,14 +139,12 @@ export const recomputeValuationsMutationOptions = () =>
     mutationKey: [...queryKeys.location.all, "recomputeValuations"],
     mutationFn: async () => {
       const result = await recomputeOp.call(null);
-      markFreshReads();
       return result;
     },
     meta: recomputeOp.meta,
   });
 export const recomputeLocationValuations = async () => {
   const result = await recomputeOp.call(null);
-  markFreshReads();
   return result;
 };
 

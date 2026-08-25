@@ -8,7 +8,6 @@ import { mutationOptions, queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import type { z } from "zod";
 import { startOperation } from "~/integrations/tanstack-query/start-transport";
-import { markFreshReads } from "~/lib/fresh-read-marker";
 import { queryKeys } from "~/lib/query-keys";
 import * as calendarBrowser from "~/server/calendar-browser.server";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
@@ -98,7 +97,6 @@ export const calendarRotateFeedMutationOptions = () =>
     mutationKey: [...queryKeys.calendar.all, "rotateFeed"] as const,
     mutationFn: async () => {
       const result = await calendarRotateFeedOperation.call(null);
-      markFreshReads();
       return result;
     },
     meta: calendarRotateFeedOperation.meta,

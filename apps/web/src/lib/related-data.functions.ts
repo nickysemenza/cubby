@@ -12,6 +12,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import type { z } from "zod";
 import { startOperation } from "~/integrations/tanstack-query/start-transport";
+import type { StartOperationId } from "~/lib/start-operation-observability";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
 import * as browser from "~/server/related-data-browser.server";
 
@@ -64,7 +65,7 @@ const operation = <I, O>(
   schema: z.ZodType<O>,
 ) =>
   startOperation<I, O>({
-    operation: `relatedData.${name}`,
+    operation: `relatedData.${name}` as StartOperationId,
     transport: (data, { signal, headers }) =>
       transport({ data, signal, headers }),
     parse: (value) => schema.parse(value),

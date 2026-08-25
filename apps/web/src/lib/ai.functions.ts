@@ -37,7 +37,7 @@ import {
 import { createServerFn } from "@tanstack/react-start";
 import type { z } from "zod";
 import { startOperation } from "~/integrations/tanstack-query/start-transport";
-import { markFreshReads } from "~/lib/fresh-read-marker";
+import type { StartOperationId } from "~/lib/start-operation-observability";
 import { openWorkflowStream } from "~/lib/workflow-stream";
 import * as browser from "~/server/ai-browser.server";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
@@ -193,7 +193,7 @@ const operation = <I, O>(
   parse: (value: unknown) => O,
 ) =>
   startOperation<I, O>({
-    operation: `ai.${name}`,
+    operation: `ai.${name}` as StartOperationId,
     ...(kind === "mutation" ? { kind } : {}),
     transport: (data, { signal, headers }) =>
       transport({ data, signal, headers }),
@@ -309,9 +309,7 @@ const mutation =
       mutationKey: [["ai", name]] as const,
       meta: op.meta as never,
       mutationFn: async (input: I) => {
-        const result = await op.call(input);
-        markFreshReads();
-        return result;
+        return op.call(input);
       },
       ...options,
     });

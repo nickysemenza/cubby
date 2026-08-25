@@ -6,7 +6,11 @@ import {
   recordMutation,
   recordQueryOperation,
 } from "~/lib/perf/perf-store";
-import { startOperationHeaders } from "~/lib/start-operation-observability";
+import type { StartOperationId } from "~/lib/start-operation-observability";
+import {
+  registeredStartOperationKind,
+  startOperationHeaders,
+} from "~/lib/start-operation-observability";
 import {
   type CubbyOperationMeta,
   type OperationDescriptor,
@@ -16,6 +20,7 @@ import {
 type ObservedKind = "query" | "mutation";
 
 export interface ObservedOperation extends OperationDescriptor {
+  operation: StartOperationId;
   id: string;
   kind: ObservedKind;
   startedAt: number;
@@ -39,7 +44,7 @@ const consoleEnabled = () =>
 export function beginObservedOperation(options: {
   kind: ObservedKind;
   transport: OperationTransport;
-  operation: string;
+  operation: StartOperationId;
   entity?: string;
   speculative?: boolean;
   input?: unknown;
@@ -107,10 +112,10 @@ export function finishObservedOperation(
 }
 
 export function operationHeaders(observed: ObservedOperation): HeadersInit {
-  return {
-    "x-cubby-operation-id": observed.id,
-    ...startOperationHeaders(observed),
-  };
+  return startOperationHeaders({
+    ...observed,
+    kind: registeredStartOperationKind(observed.operation),
+  });
 }
 
 const queryStarts = new Map<

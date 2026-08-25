@@ -26,7 +26,6 @@ import {
   SpanStatusCode,
   trace,
 } from "@opentelemetry/api";
-import { getErrorMessage } from "~/lib/error-utils";
 
 declare const __CF_WORKERS__: boolean | undefined;
 const IS_CF = typeof __CF_WORKERS__ !== "undefined" && __CF_WORKERS__ === true;
@@ -41,9 +40,11 @@ const tracer = trace.getTracer("cubby");
 interface CfSpan {
   setAttribute(key: string, value: string | number | boolean | undefined): void;
   readonly isTraced: boolean;
+  end(): void;
 }
 interface CfTracing {
   enterSpan<T>(name: string, cb: (span: CfSpan) => T): T;
+  startActiveSpan<T>(name: string, cb: (span: CfSpan) => T): T;
 }
 
 // Lazily import the runtime built-in only in the CF bundle. The specifier is
@@ -122,11 +123,11 @@ const wrapOtel = (span: ReturnType<typeof tracer.startSpan>): AppSpan => ({
     if (v !== undefined) span.setAttribute(k, v);
   },
   setAttributes: (attrs) => span.setAttributes(attrs),
-  setError: (message) =>
-    span.setStatus({ code: SpanStatusCode.ERROR, message }),
+  setError: () => span.setStatus({ code: SpanStatusCode.ERROR }),
   recordException: (error) =>
-    span.recordException(
-      error instanceof Error ? error : new Error(String(error)),
+    span.setAttribute(
+      "error.type",
+      error instanceof Error ? error.name || "Error" : typeof error,
     ),
 });
 
@@ -136,12 +137,14 @@ const wrapCf = (span: CfSpan): AppSpan => ({
   setAttributes: (attrs) => {
     for (const [k, v] of Object.entries(attrs)) span.setAttribute(k, v);
   },
-  setError: (message) => {
+  setError: () => {
     span.setAttribute("error", true);
-    span.setAttribute("error.message", message);
   },
   recordException: (error) =>
-    span.setAttribute("exception.message", getErrorMessage(error)),
+    span.setAttribute(
+      "error.type",
+      error instanceof Error ? error.name || "Error" : typeof error,
+    ),
 });
 
 /**
@@ -162,7 +165,7 @@ export const withTrace = async <T>(
         return await fn(span);
       } catch (error) {
         span.recordException(error);
-        span.setError(getErrorMessage(error));
+        span.setError();
         throw error;
       }
       // CF auto-ends the span when the returned promise settles.
@@ -178,10 +181,46 @@ export const withTrace = async <T>(
       return result;
     } catch (error) {
       span.recordException(error);
-      span.setError(getErrorMessage(error));
+      span.setError();
       throw error;
     } finally {
       otelSpan.end();
+    }
+  });
+};
+
+/** Run work under a span whose lifetime is explicitly ended by the caller. */
+export const withManualTrace = async <T>(
+  name: string,
+  fn: (span: AppSpan, end: () => void) => Promise<T>,
+  attributes?: Record<string, Attr>,
+): Promise<T> => {
+  if (IS_CF) {
+    const tracing = await getCfTracing();
+    return tracing.startActiveSpan(name, async (cfSpan) => {
+      const span = wrapCf(cfSpan);
+      if (attributes) span.setAttributes(attributes);
+      try {
+        return await fn(span, () => cfSpan.end());
+      } catch (error) {
+        span.recordException(error);
+        span.setError();
+        cfSpan.end();
+        throw error;
+      }
+    });
+  }
+
+  return tracer.startActiveSpan(name, async (otelSpan) => {
+    const span = wrapOtel(otelSpan);
+    if (attributes) span.setAttributes(attributes);
+    try {
+      return await fn(span, () => otelSpan.end());
+    } catch (error) {
+      span.recordException(error);
+      span.setError();
+      otelSpan.end();
+      throw error;
     }
   });
 };

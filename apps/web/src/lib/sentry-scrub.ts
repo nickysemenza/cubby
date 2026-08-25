@@ -1,18 +1,16 @@
 // Defensive Sentry PII scrubbing shared by the client (router.tsx) and Workers
 // server (cf-server.ts) inits.
 //
-// Both inits set `sendDefaultPii: true`, which makes the SDK attach the full
-// request URL — including any query string — to captured events. The MCP
-// endpoint used to accept an API key as a `?key=` query param; it is now
-// OAuth-bearer-only (routes/api/mcp.ts), and this scrubber is what keeps stale
-// URLs harmless — so that even if a `key`
-// query param reaches Sentry from any surface (a stale client URL, a Referer,
-// a manually-constructed request), the credential is redacted before the event
-// leaves the process.
+// Sentry defaults to no PII, but callers can still attach request data manually.
+// The MCP endpoint used to accept an API key as a `?key=` query param; it is now
+// OAuth-bearer-only (routes/api/mcp.ts), and this scrubber keeps stale URLs
+// harmless if one reaches Sentry from any surface.
 //
 // Kept param-agnostic to `event.request.url` and `event.request.query_string`,
 // the two places the SDK serializes the request URL. The calendar feed puts its
 // credential in the *path*, so paths are scrubbed too.
+
+import { httpRouteTemplate } from "./http-route-template";
 
 const REDACTED = "[REDACTED]";
 
@@ -20,14 +18,14 @@ const REDACTED = "[REDACTED]";
 // case-insensitively.
 const SENSITIVE_QUERY_PARAMS = new Set(["key", "apikey", "api_key", "token"]);
 
-// Paths that carry a credential as a *path segment* rather than a query param.
-// The published calendar feed is /api/calendar/<token>/<feed>.ics — Calendar.app
-// can send neither a cookie nor a bearer header, so the token has to live in the
-// URL, and the URL is what Sentry attaches to every event from that route.
-const SENSITIVE_PATH_SEGMENT = /(\/api\/calendar\/)[^/]+/g;
-
 function redactPath(path: string): string {
-  return path.replace(SENSITIVE_PATH_SEGMENT, `$1${REDACTED}`);
+  try {
+    const parsed = new URL(path, "https://sentry-scrub.invalid");
+    const template = httpRouteTemplate(parsed.pathname);
+    return path.startsWith("/") ? template : `${parsed.origin}${template}`;
+  } catch {
+    return "/:unmatched";
+  }
 }
 
 function redactUrl(url: string): string {

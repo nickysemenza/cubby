@@ -9,7 +9,6 @@ import { mutationOptions, queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import type { z } from "zod";
 import { startOperation } from "~/integrations/tanstack-query/start-transport";
-import { markFreshReads } from "~/lib/fresh-read-marker";
 import { queryKeys } from "~/lib/query-keys";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
 import * as vendorBrowser from "~/server/vendor-browser.server";
@@ -79,7 +78,6 @@ export const mergeVendorsMutationOptions = () =>
     meta: mergeOperation.meta,
     mutationFn: async (input: z.input<typeof mergeVendorsInput>) => {
       const result = await mergeOperation.call(input);
-      markFreshReads();
       return result;
     },
   });
@@ -90,7 +88,6 @@ export const fetchVendorLogoMutationOptions = () =>
     meta: fetchLogoOperation.meta,
     mutationFn: async (input: z.input<typeof fetchVendorLogoInput>) => {
       const result = await fetchLogoOperation.call(input);
-      markFreshReads();
       return result;
     },
   });

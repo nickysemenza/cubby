@@ -56,14 +56,14 @@ import {
   startOperation,
 } from "~/integrations/tanstack-query/start-transport";
 import type { BulkProgressEvent } from "~/lib/bulk-progress";
-import { markFreshReads } from "~/lib/fresh-read-marker";
 import { queryKeys } from "~/lib/query-keys";
+import type { StartOperationId } from "~/lib/start-operation-observability";
 import { openWorkflowStream } from "~/lib/workflow-stream";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
 import * as browser from "~/server/recipe-browser.server";
 
 const operation = <Input, Output>(
-  name: string,
+  name: StartOperationId,
   fn: Parameters<typeof startOperation<Input, Output>>[0]["transport"],
   parse: (value: unknown) => Output,
   kind?: "mutation",
@@ -387,7 +387,6 @@ const mutation = <I, O>(
     mutationKey: key,
     mutationFn: async (input: I) => {
       const result = await current.call(input);
-      markFreshReads();
       return result;
     },
     meta: current.meta,

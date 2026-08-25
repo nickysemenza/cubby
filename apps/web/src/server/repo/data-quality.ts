@@ -30,6 +30,11 @@ import {
   unsafePurchaseShortcode,
 } from "@cubby/schemas/identifiers";
 import {
+  type ImageRenderStatus,
+  type ImageStorageStatus,
+  isDisplayableImageFile,
+} from "@cubby/schemas/image";
+import {
   primaryPurchaseDocumentKinds,
   RECONCILIATION_TOLERANCE,
   reconcilePurchase,
@@ -553,6 +558,181 @@ const uniqueTargetExceptions = (
       `${exception.targetType}\u0000${exception.targetId}\u0000${exception.check}`,
   );
 
+type ProductQualityRow = Pick<
+  typeof product.$inferSelect,
+  | "id"
+  | "shortcode"
+  | "manufacturer"
+  | "category"
+  | "model"
+  | "dataExceptions"
+  | "updatedAt"
+>;
+
+const buildProductDataQuality = (
+  row: ProductQualityRow,
+  evidence: {
+    expenseLinked: boolean;
+    inventoryLinked: boolean;
+    imageLinked: boolean;
+    amazonLinked: boolean;
+    externalIds: Array<{
+      source: string;
+      kind: string;
+      externalId: string;
+    }>;
+    duplicateExternalId: boolean;
+  },
+): DataQuality => {
+  const gaps: FingerprintedGap[] = [];
+  const targetId = unsafeProductShortcode(row.shortcode);
+  const add = (check: ProductDataCheck, message: string) => {
+    gaps.push({
+      check,
+      facet: dataCheckFacet[check],
+      kind: isDefectDataCheck(check) ? "defect" : "missing",
+      targetType: "product",
+      targetId,
+      message,
+      fingerprint: evidenceFingerprint(check, row.updatedAt),
+    });
+  };
+  if (evidence.expenseLinked || evidence.inventoryLinked) {
+    if (
+      row.manufacturer.trim() === "" ||
+      row.manufacturer.trim().toLowerCase() ===
+        UNSPECIFIED_MANUFACTURER.toLowerCase()
+    ) {
+      add("product_manufacturer", "Manufacturer is not recorded.");
+    }
+    if (row.category === null) {
+      add("product_category", "Product category is not recorded.");
+    }
+    if (
+      row.category !== null &&
+      MODEL_REQUIRED_CATEGORIES.includes(
+        row.category as (typeof MODEL_REQUIRED_CATEGORIES)[number],
+      ) &&
+      (row.model === null || row.model.trim() === "")
+    ) {
+      add("product_model", "Manufacturer model is not recorded.");
+    }
+    if (evidence.inventoryLinked && !evidence.imageLinked) {
+      add("product_image", "No product image is attached.");
+    }
+    if (
+      evidence.amazonLinked &&
+      !evidence.externalIds.some(
+        (externalId) =>
+          externalId.source.toLowerCase() === AMAZON_SOURCE &&
+          externalId.kind === "asin",
+      )
+    ) {
+      add("amazon_asin", "Amazon-linked product has no Amazon ASIN.");
+    }
+    if (evidence.duplicateExternalId) {
+      add(
+        "duplicate_external_id",
+        "An exact external identifier is shared with another live product.",
+      );
+    }
+  }
+  return {
+    ...evaluateTargetQuality(
+      gaps,
+      row.dataExceptions,
+      "product",
+      targetId,
+      PRODUCT_FACETS,
+    ),
+    relatedGaps: [],
+    relatedExceptions: [],
+  };
+};
+
+/**
+ * Detail-only quality projection: reuse facts already present on the deep base
+ * row and fetch the remaining expense/Amazon/collision evidence together.
+ */
+export const loadProductDetailDataQuality = async (
+  db: Database,
+  row: ProductQualityRow & {
+    inventoryEntry: Array<{ deletedAt: Date | null }>;
+    externalIds: Array<{
+      source: string;
+      kind?: string;
+      externalId: string;
+      deletedAt: Date | null;
+    }>;
+    images: Array<{
+      deletedAt?: Date | null;
+      image: {
+        deletedAt: Date | null;
+        contentType: string;
+        renderStatus?: ImageRenderStatus | null;
+        storageStatus?: ImageStorageStatus | null;
+      };
+    }>;
+  },
+): Promise<DataQuality> => {
+  const query = sql`SELECT
+    EXISTS (
+      SELECT 1 FROM "Expense" e
+      WHERE e."productId" = ${row.id} AND e."deletedAt" IS NULL
+    ) AS "expenseLinked",
+    EXISTS (
+      SELECT 1 FROM "Expense" e
+      JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL
+      JOIN "Vendor" v ON v."id" = p."vendorId" AND v."deletedAt" IS NULL
+      WHERE e."productId" = ${row.id} AND e."deletedAt" IS NULL
+        AND lower(v."name") LIKE 'amazon%'
+    ) AS "amazonLinked",
+    EXISTS (
+      SELECT 1
+      FROM "ProductExternalId" own
+      JOIN "ProductExternalId" other
+        ON other."source" = own."source"
+       AND other."kind" = own."kind"
+       AND other."externalId" = own."externalId"
+       AND other."productId" <> own."productId"
+       AND other."deletedAt" IS NULL
+      JOIN "Product" other_product
+        ON other_product."id" = other."productId"
+       AND other_product."deletedAt" IS NULL
+      WHERE own."productId" = ${row.id} AND own."deletedAt" IS NULL
+    ) AS "duplicateExternalId"`;
+  const result = await unwrapDb(db).execute(query);
+  const evidence = result.rows[0] as
+    | {
+        expenseLinked: boolean;
+        amazonLinked: boolean;
+        duplicateExternalId: boolean;
+      }
+    | undefined;
+  if (!evidence) throw new Error("Product detail quality evidence was empty");
+
+  const externalIds = row.externalIds
+    .filter((externalId) => externalId.deletedAt === null)
+    .map((externalId) => ({
+      source: externalId.source,
+      kind: externalId.kind ?? "other",
+      externalId: externalId.externalId,
+    }));
+  return buildProductDataQuality(row, {
+    ...evidence,
+    inventoryLinked: row.inventoryEntry.some(
+      (entry) => entry.deletedAt === null,
+    ),
+    imageLinked: row.images.some(
+      (edge) =>
+        edge.deletedAt == null &&
+        edge.image.deletedAt === null &&
+        isDisplayableImageFile(edge.image),
+    ),
+    externalIds,
+  });
+};
+
 export const loadProductDataQualities = async (
   db: Database | DrizzleTransaction,
   ids: ProductId[],
@@ -709,82 +889,22 @@ export const loadProductDataQualities = async (
   const result = new Map<ProductId, DataQuality>();
 
   for (const row of products) {
-    const gaps: FingerprintedGap[] = [];
-    const targetId = unsafeProductShortcode(row.shortcode);
-    const add = (check: ProductDataCheck, message: string) => {
-      gaps.push({
-        check,
-        facet: dataCheckFacet[check],
-        kind: isDefectDataCheck(check) ? "defect" : "missing",
-        targetType: "product",
-        targetId,
-        message,
-        fingerprint: evidenceFingerprint(check, row.updatedAt),
-      });
-    };
-    if (expenseLinked.has(row.id) || inventoryLinked.has(row.id)) {
-      if (
-        row.manufacturer.trim() === "" ||
-        row.manufacturer.trim().toLowerCase() ===
-          UNSPECIFIED_MANUFACTURER.toLowerCase()
-      ) {
-        add("product_manufacturer", "Manufacturer is not recorded.");
-      }
-      if (row.category === null) {
-        add("product_category", "Product category is not recorded.");
-      }
-      if (
-        row.category !== null &&
-        MODEL_REQUIRED_CATEGORIES.includes(
-          row.category as (typeof MODEL_REQUIRED_CATEGORIES)[number],
-        ) &&
-        (row.model === null || row.model.trim() === "")
-      ) {
-        add("product_model", "Manufacturer model is not recorded.");
-      }
-      // STOCKED ONLY — deliberately narrower than the surrounding
-      // expense-or-inventory scope, and must stay in step with the
-      // `product_image` branch of `productDataGapCondition`. A photo earns its
-      // keep for something you can walk up to on a shelf and fail to
-      // recognise; for a sold-off product it is decoration.
-      if (inventoryLinked.has(row.id) && !imageLinked.has(row.id)) {
-        add("product_image", "No product image is attached.");
-      }
-      const externalIds = externalIdsByProduct[row.id] ?? [];
-      if (
-        amazonLinked.has(row.id) &&
-        !externalIds.some(
-          (externalId) =>
-            externalId.source.toLowerCase() === AMAZON_SOURCE &&
-            externalId.kind === "asin",
-        )
-      ) {
-        add("amazon_asin", "Amazon-linked product has no Amazon ASIN.");
-      }
-      if (
-        externalIds.some(
+    const externalIds = externalIdsByProduct[row.id] ?? [];
+    result.set(
+      row.id,
+      buildProductDataQuality(row, {
+        expenseLinked: expenseLinked.has(row.id),
+        inventoryLinked: inventoryLinked.has(row.id),
+        imageLinked: imageLinked.has(row.id),
+        amazonLinked: amazonLinked.has(row.id),
+        externalIds,
+        duplicateExternalId: externalIds.some(
           (externalId) =>
             (externalIdOwners[externalIdCollisionKey(externalId)]?.length ??
               0) > 1,
-        )
-      ) {
-        add(
-          "duplicate_external_id",
-          "An exact external identifier is shared with another live product.",
-        );
-      }
-    }
-    result.set(row.id, {
-      ...evaluateTargetQuality(
-        gaps,
-        row.dataExceptions,
-        "product",
-        targetId,
-        PRODUCT_FACETS,
-      ),
-      relatedGaps: [],
-      relatedExceptions: [],
-    });
+        ),
+      }),
+    );
   }
   return result;
 };

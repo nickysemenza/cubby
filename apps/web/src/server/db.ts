@@ -5,9 +5,10 @@ import {
 } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { env } from "~/env";
+import { databaseStatementForTrace } from "~/lib/db-query-telemetry";
 import type { Database } from "./db/database";
 import * as schema from "./db/schema";
-import { recordDatabaseAcquire, recordDatabaseQuery } from "./db-observability";
+import { beginDatabaseAcquire, beginDatabaseQuery } from "./db-observability";
 import { TraceNames, withTrace } from "./tracing";
 
 // Re-export Database type for use throughout the application
@@ -18,7 +19,6 @@ type DBClient = NodePgDatabase<typeof schema>;
 const TRACED = Symbol("worker-tracing:traced");
 const DB_SYSTEM = "postgresql";
 const DB_NAMESPACE = "cubby";
-const MAX_STATEMENT_LEN = 1000;
 
 const extractOperation = (sql: string): string | undefined =>
   /^\s*(\w+)/u.exec(sql)?.[1]?.toUpperCase();
@@ -34,13 +34,7 @@ const traceQuery =
   (...args: unknown[]): unknown => {
     if (args.length === 0 || typeof args[args.length - 1] === "function")
       return run(...args);
-    const head = args[0];
-    const sql =
-      typeof head === "string"
-        ? head
-        : head && typeof head === "object" && "text" in head
-          ? String((head as { text: unknown }).text)
-          : "unknown";
+    const sql = databaseStatementForTrace(args[0]);
     const operation = extractOperation(sql);
     return withTrace(TraceNames.db(operation ?? "query"), async (span) => {
       // Hottest span in the app — every query goes through here. Gate the
@@ -53,12 +47,12 @@ const traceQuery =
           "db.system.name": DB_SYSTEM,
           "db.namespace": DB_NAMESPACE,
           "db.operation.name": operation,
-          "db.query.text": sql.slice(0, MAX_STATEMENT_LEN),
+          "db.query.text": sql,
           "db.query.transaction": getTransaction(),
-          "cubby.db.consistency": role,
+          "cubby.db.binding_role": role,
         });
       }
-      const startedAt = performance.now();
+      const finishQuery = beginDatabaseQuery();
       try {
         const res = (await run(...args)) as {
           rowCount?: number | null;
@@ -70,7 +64,7 @@ const traceQuery =
         );
         return res;
       } finally {
-        recordDatabaseQuery(performance.now() - startedAt);
+        finishQuery();
       }
     });
   };
@@ -95,6 +89,7 @@ const tracePool = (pool: pg.Pool, role: RequestDbRole): pg.Pool => {
     withTrace(TraceNames.db("acquire"), async (span) => {
       span.setAttribute("db.acquire.transaction", inTransaction);
       const t0 = performance.now();
+      const finishAcquire = beginDatabaseAcquire(t0);
       try {
         const client = (await rawConnect()) as TracedClient;
         const ms = Math.round(performance.now() - t0);
@@ -115,7 +110,7 @@ const tracePool = (pool: pg.Pool, role: RequestDbRole): pg.Pool => {
         }
         return client;
       } finally {
-        recordDatabaseAcquire(performance.now() - t0);
+        finishAcquire();
       }
     });
 

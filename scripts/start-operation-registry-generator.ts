@@ -1,0 +1,217 @@
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join, relative } from "node:path";
+import { spawnSync } from "node:child_process";
+import { parseSync } from "oxc-parser";
+
+const ROOT = new URL("..", import.meta.url).pathname;
+const SOURCE_ROOT = join(ROOT, "apps/web/src");
+const OUTPUT = join(
+  SOURCE_ROOT,
+  "lib/generated/start-operation-registry.gen.ts",
+);
+
+type Kind = "query" | "mutation" | "subscription";
+type Definition = { kind: Kind; entities: Set<string> };
+type AstNode = { type: string; [key: string]: unknown };
+
+const sourceFiles = (directory: string): string[] =>
+  readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) return sourceFiles(path);
+    return /\.[jt]sx?$/u.test(entry.name) && !/\.(?:test|spec)\./u.test(entry.name)
+      ? [path]
+      : [];
+  });
+
+const propertyString = (
+  object: AstNode,
+  name: string,
+): string | undefined => {
+  const properties = Array.isArray(object.properties)
+    ? (object.properties as AstNode[])
+    : [];
+  const property = properties.find((candidate) => {
+    if (candidate.type !== "Property") return false;
+    const key = candidate.key as AstNode | undefined;
+    return key?.name === name || key?.value === name;
+  });
+  const value = property?.value as AstNode | undefined;
+  return value?.type === "Literal" && typeof value.value === "string"
+    ? value.value
+    : undefined;
+};
+
+const calledName = (expression: AstNode): string | undefined =>
+  expression.type === "Identifier"
+    ? (expression.name as string | undefined)
+    : expression.type === "MemberExpression"
+      ? ((expression.property as AstNode | undefined)?.name as
+          | string
+          | undefined)
+      : undefined;
+
+const OBJECT_CALLS = new Set([
+  "runStartOperation",
+  "startOperation",
+  "operation",
+  "workflowStreamResponse",
+  "openWorkflowStream",
+]);
+const QUERY_CALLS = new Set(["defineQuery", "noInputOperation"]);
+const MUTATION_CALLS = new Set(["defineMutation"]);
+
+export const collectStartOperations = (): Map<string, Definition> => {
+  const operations = new Map<string, Definition>();
+  const add = (
+    operation: string,
+    kind: Kind,
+    path: string,
+    entity?: string,
+  ) => {
+    const definition = operations.get(operation) ?? {
+      kind,
+      entities: new Set<string>(),
+    };
+    if (definition.kind !== kind) {
+      throw new Error(
+        `${operation} has conflicting Start kinds (${definition.kind} and ${kind}) in ${relative(ROOT, path)}`,
+      );
+    }
+    if (entity) definition.entities.add(entity);
+    operations.set(operation, definition);
+  };
+
+  for (const path of sourceFiles(SOURCE_ROOT)) {
+    const source = parseSync(
+      path,
+      readFileSync(path, "utf8"),
+      { lang: path.endsWith("x") ? "tsx" : "ts" },
+    ).program as unknown as AstNode;
+    const visit = (node: AstNode): void => {
+      if (node.type === "CallExpression") {
+        const name = calledName(node.callee as AstNode);
+        const args = node.arguments as AstNode[];
+        const first = args[0];
+        if (name && OBJECT_CALLS.has(name) && first?.type === "ObjectExpression") {
+          const operation = propertyString(first, "operation");
+          if (operation) {
+            const kind =
+              name === "workflowStreamResponse" || name === "openWorkflowStream"
+                ? "subscription"
+                : ((propertyString(first, "type") ??
+                    propertyString(first, "kind") ??
+                    "query") as Kind);
+            add(operation, kind, path, propertyString(first, "entity"));
+          }
+        } else if (
+          name &&
+          first?.type === "Literal" &&
+          typeof first.value === "string" &&
+          (QUERY_CALLS.has(name) ||
+            MUTATION_CALLS.has(name) ||
+            ((name === "defineOperation" || name === "operation") &&
+              first.value.includes(".")))
+        ) {
+          const declaredKind = args[3] as AstNode | undefined;
+          add(
+            first.value,
+            MUTATION_CALLS.has(name) || declaredKind?.value === "mutation"
+              ? "mutation"
+              : "query",
+            path,
+          );
+        }
+      }
+      for (const value of Object.values(node)) {
+        if (Array.isArray(value)) {
+          for (const child of value) {
+            if (child && typeof child === "object" && "type" in child) {
+              visit(child as AstNode);
+            }
+          }
+        } else if (value && typeof value === "object" && "type" in value) {
+          visit(value as AstNode);
+        }
+      }
+    };
+    visit(source);
+  }
+  return operations;
+};
+
+export const renderStartOperationRegistry = (): string => {
+  const operations = [...collectStartOperations()].sort(([a], [b]) =>
+    a.localeCompare(b),
+  );
+  return `/** Generated by scripts/start-operation-registry-generator.ts. */\n` +
+    `export const START_OPERATIONS = {\n${operations
+      .map(
+        ([operation, definition]) => {
+          const entities = operation.startsWith("entity.")
+            ? [
+                "ingredient",
+                "product",
+                "recipe",
+                "cookbook",
+                "location",
+                "inventory",
+                "ledgerParty",
+                "ledgerTransfer",
+                "meal",
+                "project",
+                "task",
+                "vendor",
+                "purchase",
+                "expense",
+                "financialAccount",
+                "financialTransaction",
+                "wish",
+                "usda-food",
+                "image",
+              ]
+            : [...definition.entities].sort();
+          const phases = operation === "entity.detail"
+            ? [
+                "resolve",
+                "base",
+                "pricing",
+                "quantity",
+                "breadcrumbs",
+                "quality",
+                "recipe_usages",
+                "food",
+              ]
+            : [];
+          return `  ${JSON.stringify(operation)}: { kind: ${JSON.stringify(definition.kind)}, entities: ${JSON.stringify(entities)}, productPhases: ${JSON.stringify(phases)} },`;
+        },
+      )
+      .join("\n")}\n} as const;\n\n` +
+    `export type StartOperationId = keyof typeof START_OPERATIONS;\n` +
+    `export type RegisteredStartOperationKind<Id extends StartOperationId> =\n` +
+    `  (typeof START_OPERATIONS)[Id]["kind"];\n` +
+    `export type StartOperationIdOfKind<Kind extends "query" | "mutation" | "subscription"> = {\n` +
+    `  [Id in StartOperationId]: RegisteredStartOperationKind<Id> extends Kind ? Id : never;\n` +
+    `}[StartOperationId];\n`;
+};
+
+const unformatted = renderStartOperationRegistry();
+const formatted = spawnSync(
+  "pnpm",
+  ["exec", "biome", "format", "--stdin-file-path", OUTPUT],
+  { input: unformatted, encoding: "utf8" },
+);
+if (formatted.status !== 0) {
+  throw new Error(formatted.stderr || "Unable to format Start operation registry");
+}
+const rendered = formatted.stdout;
+if (process.argv.includes("--check")) {
+  const current = readFileSync(OUTPUT, "utf8");
+  if (current !== rendered) {
+    console.error(
+      "Generated Start operation registry is stale. Run pnpm start-operations:generate.",
+    );
+    process.exitCode = 1;
+  }
+} else {
+  writeFileSync(OUTPUT, rendered);
+}

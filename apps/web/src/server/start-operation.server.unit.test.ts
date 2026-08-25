@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { createAppError } from "~/server/errors/app-error";
-import { runStartOperation } from "./start-operation.server";
+import {
+  normalizeStartOperationError,
+  runStartOperation,
+} from "./start-operation.server";
 
 const mocks = vi.hoisted(() => ({
   createRequestContext: vi.fn(),
   requireActor: vi.fn((context: unknown) => context),
-  observeRequest: vi.fn(),
+  observeOperation: vi.fn(),
   setAttribute: vi.fn(),
   setAttributes: vi.fn(),
 }));
@@ -17,7 +20,7 @@ vi.mock("~/server/request-context", () => ({
 }));
 
 vi.mock("~/server/observed-request", () => ({
-  observeRequest: mocks.observeRequest,
+  observeOperation: mocks.observeOperation,
 }));
 
 const database = {};
@@ -31,7 +34,7 @@ const context = {
 };
 
 const request = (signal = new AbortController().signal) => ({
-  headers: new Headers({ "x-cubby-operation-id": "op-42" }),
+  headers: new Headers(),
   signal,
 });
 
@@ -39,28 +42,44 @@ describe("runStartOperation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.createRequestContext.mockResolvedValue(context);
-    mocks.observeRequest.mockImplementation(
-      async (options: {
+    mocks.observeOperation.mockImplementation(
+      async (
+        _definition: unknown,
+        observation: {
+          inspectResult?: (result: {
+            result: unknown;
+            observedError?: unknown;
+          }) => unknown;
+        },
         run: (span: {
           setAttribute: typeof mocks.setAttribute;
           setAttributes: typeof mocks.setAttributes;
         }) => Promise<{
           result: unknown;
           observedError?: unknown;
-        }>;
-        inspectResult?: (result: {
-          result: unknown;
-          observedError?: unknown;
-        }) => unknown;
-      }) => {
-        const result = await options.run({
+        }>,
+      ) => {
+        const result = await run({
           setAttribute: mocks.setAttribute,
           setAttributes: mocks.setAttributes,
         });
-        options.inspectResult?.(result);
+        observation.inspectResult?.(result);
         return result;
       },
     );
+  });
+
+  it("propagates a request id only through the structured failure", () => {
+    expect(
+      normalizeStartOperationError(
+        new Error("broken"),
+        "run",
+        "ray-operation-test",
+      ).publicError,
+    ).toMatchObject({
+      code: "INTERNAL_SERVER_ERROR",
+      requestId: "ray-operation-test",
+    });
   });
 
   it("authenticates and parses both sides of the operation", async () => {
@@ -70,7 +89,7 @@ describe("runStartOperation", () => {
 
     await expect(
       runStartOperation({
-        operation: "example.read",
+        operation: "entity.detail",
         type: "query",
         input: { count: "3" },
         inputSchema: z.object({ count: z.coerce.number().int() }),
@@ -83,13 +102,10 @@ describe("runStartOperation", () => {
     expect(mocks.createRequestContext).toHaveBeenCalledOnce();
     expect(mocks.requireActor).toHaveBeenCalledWith(context);
     expect(run).toHaveBeenCalledWith(context, { count: 3 });
-    expect(mocks.observeRequest).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: "example.read",
-        operationId: "op-42",
-        system: "start",
-        includeInputValues: false,
-      }),
+    expect(mocks.observeOperation).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "entity.detail", kind: "query" }),
+      expect.objectContaining({ origin: "ui" }),
+      expect.any(Function),
     );
   });
 
@@ -119,7 +135,7 @@ describe("runStartOperation", () => {
   it("returns normalized validation issues without running the operation", async () => {
     const run = vi.fn();
     const result = await runStartOperation({
-      operation: "example.read",
+      operation: "entity.detail",
       type: "query",
       input: { count: "nope" },
       inputSchema: z.object({ count: z.number().int() }),
@@ -149,7 +165,7 @@ describe("runStartOperation", () => {
 
     await expect(
       runStartOperation({
-        operation: "example.read",
+        operation: "entity.detail",
         type: "query",
         input: null,
         inputSchema: z.object({ kind: z.literal("count") }),
@@ -165,7 +181,7 @@ describe("runStartOperation", () => {
 
     await expect(
       runStartOperation({
-        operation: "example.read",
+        operation: "entity.detail",
         type: "query",
         input: { kind: "count" },
         inputSchema: z.object({ kind: z.literal("count") }),
@@ -179,7 +195,7 @@ describe("runStartOperation", () => {
 
   it("normalizes application and database errors", async () => {
     const appResult = await runStartOperation({
-      operation: "example.write",
+      operation: "entity.mutate",
       type: "mutation",
       input: {},
       inputSchema: z.object({}),
@@ -199,7 +215,7 @@ describe("runStartOperation", () => {
     });
 
     const databaseResult = await runStartOperation({
-      operation: "example.write",
+      operation: "entity.mutate",
       type: "mutation",
       input: {},
       inputSchema: z.object({}),
@@ -231,7 +247,7 @@ describe("runStartOperation", () => {
       { code: "ECONNRESET" },
     );
     const unknown = await runStartOperation({
-      operation: "example.read",
+      operation: "entity.detail",
       type: "query",
       input: {},
       inputSchema: z.object({}),
@@ -251,7 +267,7 @@ describe("runStartOperation", () => {
     });
 
     const invalidOutput = await runStartOperation({
-      operation: "example.read",
+      operation: "entity.detail",
       type: "query",
       input: {},
       inputSchema: z.object({}),
@@ -274,7 +290,7 @@ describe("runStartOperation", () => {
     before.abort(new DOMException("cancelled", "AbortError"));
     await expect(
       runStartOperation({
-        operation: "example.read",
+        operation: "entity.detail",
         type: "query",
         input: {},
         inputSchema: z.object({}),
@@ -287,7 +303,7 @@ describe("runStartOperation", () => {
     const after = new AbortController();
     await expect(
       runStartOperation({
-        operation: "example.read",
+        operation: "entity.detail",
         type: "query",
         input: {},
         inputSchema: z.object({}),

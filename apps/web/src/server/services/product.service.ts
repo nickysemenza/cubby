@@ -14,8 +14,9 @@ import type {
 } from "@cubby/schemas/product";
 import type { FoodSummary } from "@cubby/usda-schemas";
 import { uniq } from "es-toolkit";
+import { startOperationDefinition } from "~/lib/start-operation-observability";
 import type { Database } from "~/server/db";
-import { withTrace } from "~/server/tracing";
+import { observeOperationPhase } from "~/server/observed-request";
 import type { USDAClient } from "../clients/usda";
 import { getRecipeUsagesForIngredient } from "../repo/ingredient";
 import {
@@ -62,12 +63,14 @@ export const getProductWithFood = async (
   const product = await getProductByIDRepo(db, id);
 
   const lookupParam = foodLookupParamFromProduct(product);
-  const food = await withTrace("product.detail.food", () =>
+  const operation = startOperationDefinition("entity.detail");
+  const food = await observeOperationPhase(operation, "food", () =>
     lookupParam ? usdaClient.findFood(lookupParam) : Promise.resolve(null),
   );
 
-  const { recipeUsages } = await withTrace(
-    "product.detail.recipe_usages",
+  const { recipeUsages } = await observeOperationPhase(
+    operation,
+    "recipe_usages",
     async () => {
       const ingredientEntityId = product.ingredient
         ? await resolveLiveShortcode(db, product.ingredient.id, "ingredient")

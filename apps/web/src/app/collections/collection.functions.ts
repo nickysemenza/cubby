@@ -12,7 +12,6 @@ import { mutationOptions, queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { startOperation } from "~/integrations/tanstack-query/start-transport";
-import { markFreshReads } from "~/lib/fresh-read-marker";
 import * as collectionBrowser from "~/server/collection-browser.server";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
 
@@ -159,7 +158,6 @@ export const collectionSetMutationOptions = () =>
     meta: collectionSetOperation.meta,
     mutationFn: async (input: z.input<typeof collectionTagSetInput>) => {
       const result = await collectionSetOperation.call(input);
-      markFreshReads();
       return result;
     },
   });
@@ -170,7 +168,6 @@ export const collectionCreateMutationOptions = () =>
     meta: collectionCreateOperation.meta,
     mutationFn: async (input: z.input<typeof collectionCreateInput>) => {
       const result = await collectionCreateOperation.call(input);
-      markFreshReads();
       return result;
     },
   });
