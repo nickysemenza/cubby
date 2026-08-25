@@ -115,7 +115,7 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 ## 🧱 Tech Stack
 
 - **App:** TanStack Start (Router + Server) · React · TailwindCSS · shadcn/ui
-- **API:** Entity Kernel + thin tRPC/MCP transports + TanStack Query
+- **API:** Entity Kernel + TanStack Start entity transport + explicit tRPC/MCP workflows
 - **Data:** Drizzle ORM · PostgreSQL · Hyperdrive (edge pool)
 - **Auth:** Better-Auth (`@daveyplate/better-auth-ui` for routed UI)
 - **Edge:** Cloudflare Workers + Wrangler
@@ -131,7 +131,7 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 
 | Path | Package | Role | Runtime | Deploys to |
 |---|---|---|---|---|
-| [apps/web](apps/web) | `@cubby/web` | Main app — TanStack Start + tRPC + Drizzle | Cloudflare Workers | Worker `cubby` · DB via **Hyperdrive** → Postgres |
+| [apps/web](apps/web) | `@cubby/web` | Main app — TanStack Start + Entity Kernel + Drizzle | Cloudflare Workers | Worker `cubby` · DB via **Hyperdrive** → Postgres |
 | [apps/upc-lookup](apps/upc-lookup) | `@cubby/upc-lookup` | UPC barcode lookup API — Hono + D1 | Cloudflare Workers | Worker `upc-lookup` · <https://upc-lookup.nicky.workers.dev> |
 | [apps/usda-api](apps/usda-api) | `@cubby/usda-api` | USDA FoodData Central API — Hono + D1/R2 bundles | Cloudflare Workers | Worker `usda-api` · <https://usda-api.nicky.workers.dev> · D1 search index + R2 NDJSON payload bundles |
 
@@ -155,11 +155,13 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 Generic entity flow:
 
 ```
-tRPC / MCP / jobs  →  Entity Kernel  →  Repo  →  Database
+TanStack Start  →  Entity Kernel  →  Repo  →  Database
+MCP / jobs      ────────────────↗
+tRPC            →  explicit workflow modules
 ```
 
 - Restricted literal specs in `scripts/entity-literals/entities/*.entity.ts` compile the exhaustive manifest, schema bindings, browser roster, filter URL catalog, kernel action capabilities, and contract cases. `pnpm entity:check` rejects stale or invalid artifacts; typecheck verifies referenced exports.
-- `executeEntity` is the baseline CRUD/filter/search/relation boundary. tRPC is a thin browser adapter; MCP invokes the kernel directly. Workflow-specific transports delegate to explicit services.
+- `executeEntity` is the baseline CRUD/filter/search/relation interface. TanStack Start is the browser entity adapter; MCP and jobs invoke the kernel directly. The remaining tRPC procedures adapt explicit workflows rather than entity CRUD.
 - Services own workflows and external enrichment such as USDA data. Repositories retain transaction ownership, invariants, and entity-specific SQL.
 - The `Database` type is **opaque** — only repos can call `getDb(db)` to unwrap it. This enforces the layered architecture at the type level.
 - Adding a baseline entity starts with one compiler spec, followed by the repository adapter and any thin workflow or route extensions; see [docs/entities.md](docs/entities.md).
