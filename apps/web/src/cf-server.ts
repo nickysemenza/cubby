@@ -15,7 +15,7 @@ import type { BackgroundQueueBatch } from "./server/background-queue-types";
 import { setCfEnv } from "./server/cf-env";
 import { withRequestDb, withRequestDbClient } from "./server/db";
 import type { TelemetryQueueBatch } from "./server/telemetry-queue-types";
-import { withTrace } from "./server/tracing";
+import { getRequestId, withTrace } from "./server/tracing";
 import { classifyHttpWorkload } from "./server/workload";
 
 // Cache the handler module promise so the dynamic import only runs once (on
@@ -97,6 +97,22 @@ const handler = {
     // server bundle; cf.handler is the TanStack handler up to the Response being
     // ready (the streamed body finishes after, outside the span).
     const url = new URL(request.url);
+    const ray = request.headers.get("cf-ray") ?? undefined;
+
+    // Tag the whole request, not just the three captureException sites in this
+    // file: an exception thrown deep inside a tRPC procedure is captured by
+    // Sentry's own instrumentation and never passes through here.
+    // `Sentry.setTag` writes to the *isolation* scope, so this depends on
+    // withSentry giving each request its own — it does in @sentry/cloudflare
+    // (withSentry installs an AsyncLocalStorage context strategy and wraps the
+    // handler in a per-invocation isolation scope), but that is an SDK
+    // internal, so it gets confirmed on the preview deploy. If it ever stops
+    // holding, the tag bleeds across concurrent requests in the same isolate,
+    // and the replacement is the explicit
+    // `captureException(err, { tags: { cf_ray } })` form at each call site —
+    // not both.
+    Sentry.setTag("cf_ray", ray);
+
     try {
       return await interceptedErrorStore.run({ error: null }, () =>
         withTrace(
@@ -136,7 +152,7 @@ const handler = {
                   Sentry.captureException(reconstructed);
                 }
 
-                return withHtmlNoCache(response);
+                return withHtmlNoCache(response, getRequestId(request.headers));
               },
             ),
           {
@@ -147,6 +163,12 @@ const handler = {
               url.pathname,
               request.headers,
             ),
+            // Load-bearing, not decoration: the ray is the id we hand back to
+            // the client in `x-trace-id` (getRequestId falls back to it under
+            // CF), and this attribute is the only thing that makes that id
+            // findable in Tempo. Dropping it makes every reported id a dead
+            // end. Undefined values are skipped by both span backends.
+            "cloudflare.ray_id": ray,
           },
         ),
       );
@@ -221,10 +243,13 @@ const handler = {
     );
   },
 
-  async scheduled(_controller: { scheduledTime: number }, env: Env) {
+  async scheduled(
+    controller: { scheduledTime: number; cron: string },
+    env: Env,
+  ) {
     setCfEnv(env);
     await withTrace(
-      "cf.scheduled.problem-counts",
+      "cf.scheduled",
       async () => {
         await withRequestDbClient(env.HYPERDRIVE.connectionString, async () => {
           const [{ db }, { dispatchProblemCountsRefresh }] = await Promise.all([
@@ -235,11 +260,19 @@ const handler = {
             db,
             "maintenance",
             "cron.problem-counts",
-            new Date(_controller.scheduledTime).toISOString(),
+            new Date(controller.scheduledTime).toISOString(),
           );
         });
       },
-      { "cubby.workload": "scheduled" },
+      {
+        "cubby.workload": "scheduled",
+        // The trigger's identity lives in attributes rather than the span name:
+        // a hardcoded `cf.scheduled.problem-counts` would silently mislabel the
+        // second cron the day one is added, since this handler receives every
+        // trigger on the worker.
+        "cloudflare.cron": controller.cron,
+        "cubby.scheduled.job": "problem-counts",
+      },
     );
   },
 };

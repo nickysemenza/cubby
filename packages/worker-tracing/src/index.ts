@@ -14,6 +14,14 @@
  * OTLP destination. Requires `observability.traces.enabled` in wrangler.jsonc and
  * a `compatibility_date >= 2026-06-16`.
  *
+ * `enterSpan` ends the span when the callback returns *or its returned promise
+ * settles*, which covers every call site here — including work handed to
+ * `waitUntil`, as long as it stays awaited inside the callback. If a span ever
+ * needs to outlive its callback (returning a `ReadableStream` to the client and
+ * measuring until it is consumed, rather than awaiting it), that is what
+ * `tracing.startActiveSpan` + `span.end()` are for (shipped 2026-07-28). Nothing
+ * needs it today.
+ *
  * The `cloudflare:workers` import is resolved LAZILY and tolerantly: on workerd
  * it's present; under Node (vitest / any non-worker context) the import throws
  * and we fall back to a no-op span so `fn` still runs. That keeps this safe to
