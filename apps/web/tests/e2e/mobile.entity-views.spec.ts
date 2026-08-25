@@ -66,6 +66,43 @@ test.describe("phone entity views", () => {
     );
   });
 
+  test("display settings stay operable inside the phone viewport", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 568 });
+    await gotoAuthenticatedPage(page, "/products");
+
+    await page.getByRole("button", { name: "Display" }).click();
+
+    const settings = page.getByRole("dialog", { name: "Display settings" });
+    await expect(settings).toBeVisible();
+    await expect(settings).toBeInViewport();
+    const priceRow = settings.locator('[data-column-id="price"]');
+    await priceRow.scrollIntoViewIfNeeded();
+    await expect(priceRow).toBeInViewport();
+    const horizontalBounds = await priceRow.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        clientWidth: element.clientWidth,
+        left: Math.round(rect.left),
+        right: Math.round(rect.right),
+        scrollWidth: element.scrollWidth,
+        viewportWidth: window.innerWidth,
+      };
+    });
+    expect(horizontalBounds.scrollWidth).toBeLessThanOrEqual(
+      horizontalBounds.clientWidth,
+    );
+    expect(horizontalBounds.left).toBeGreaterThanOrEqual(0);
+    expect(horizontalBounds.right).toBeLessThanOrEqual(320);
+    expect(horizontalBounds.viewportWidth).toBe(320);
+    await priceRow.getByRole("button", { name: "Actions for Price" }).click();
+    await expect(
+      page.getByRole("menuitem", { name: "Hide Price" }),
+    ).toBeInViewport();
+    await expectViewportBounded(page);
+  });
+
   for (const [path, renderer] of rendererRoutes) {
     test(`${path} mounts its selected phone renderer`, async ({ page }) => {
       const pageErrors: string[] = [];

@@ -1,5 +1,6 @@
 import type { RowData } from "@tanstack/react-table";
 import { AlignJustify, LayoutList, List, Settings2 } from "lucide-react";
+import { useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import {
@@ -12,7 +13,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import { ResponsiveSheet } from "~/components/ui/responsive-sheet";
+import { ChoiceSwitcher } from "~/components/ui/view-switcher";
 import { humanize } from "~/entities/filters";
+import { useIsMobile } from "~/hooks/useMobile";
 import TableLayoutCustomizer from "./TableLayoutCustomizer";
 import type {
   CubbyColumn as Column,
@@ -57,6 +61,8 @@ export function DataTableViewOptions<TData extends RowData>({
   table,
 }: DataTableViewOptionsProps<TData>) {
   const { density, setDensity } = useTableDensity();
+  const isMobile = useIsMobile();
+  const [mobileOpen, setMobileOpen] = useState(false);
   const isCustomized = isTableLayoutCustomized(
     {
       columnOrder: table.state.columnOrder,
@@ -66,6 +72,62 @@ export function DataTableViewOptions<TData extends RowData>({
     },
     table.options.meta?.defaultLayout,
   );
+
+  const triggerContent = (
+    <>
+      <Settings2 className="size-3.5" />
+      Display
+      {isCustomized && (
+        <span className="font-mono text-2xs text-muted-foreground normal-case tracking-normal">
+          Custom
+        </span>
+      )}
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <>
+        <Button
+          variant="ghost"
+          size="default"
+          className="text-muted-foreground hover:text-foreground"
+          aria-haspopup="dialog"
+          aria-expanded={mobileOpen}
+          onClick={() => setMobileOpen(true)}
+        >
+          {triggerContent}
+        </Button>
+        <ResponsiveSheet
+          open={mobileOpen}
+          onOpenChange={setMobileOpen}
+          title="Display settings"
+          description="Choose the table density, order, visibility, and pinned columns."
+        >
+          <div className="space-y-4">
+            <section className="space-y-2">
+              <h3 className="font-medium text-2xs text-muted-foreground uppercase tracking-wider">
+                Density
+              </h3>
+              <ChoiceSwitcher
+                ariaLabel="Table density"
+                options={densityOptions}
+                value={density}
+                onValueChange={setDensity}
+                className="w-full [&_[data-slot=toggle-group-item]]:flex-1"
+              />
+            </section>
+            {isCustomized && (
+              <p className="text-muted-foreground text-xs">
+                Customized layout — restore defaults below
+              </p>
+            )}
+            <TableLayoutCustomizer table={table as unknown as Table<RowData>} />
+          </div>
+        </ResponsiveSheet>
+      </>
+    );
+  }
 
   return (
     <DropdownMenu>
@@ -78,13 +140,7 @@ export function DataTableViewOptions<TData extends RowData>({
           />
         }
       >
-        <Settings2 className="size-3.5" />
-        Display
-        {isCustomized && (
-          <span className="font-mono text-2xs text-muted-foreground normal-case tracking-normal">
-            Custom
-          </span>
-        )}
+        {triggerContent}
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
