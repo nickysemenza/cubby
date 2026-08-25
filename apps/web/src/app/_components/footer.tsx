@@ -15,8 +15,16 @@ export function AppFooter() {
       >
         <Row align="center" gap="sm">
           <span>
-            {buildDate} · <span>{__GIT_BRANCH__}</span>@
-            <span title={__GIT_COMMIT_MSG__}>{__GIT_COMMIT__}</span>
+            {buildDate} · <span>{__SOURCE_BRANCH__}</span>@
+            <a
+              href={`https://github.com/nickysemenza/cubby/commit/${__SOURCE_COMMIT__}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`View ${__SOURCE_BRANCH__}@${__SOURCE_COMMIT__} on GitHub`}
+              className="underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
+            >
+              {__SOURCE_COMMIT__}
+            </a>
           </span>
         </Row>
         <Row align="center" gap="sm">

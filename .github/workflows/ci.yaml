@@ -472,6 +472,9 @@ jobs:
         with:
           wasm: "restore"
       - name: Build web Cloudflare bundle
+        env:
+          CUBBY_SOURCE_COMMIT: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || '' }}
+          CUBBY_SOURCE_BRANCH: ${{ github.event_name == 'pull_request' && format('PR#{0}', github.event.pull_request.number) || '' }}
         run: pnpm --filter @cubby/web run build:cf
       - name: Upload tested Cloudflare bundle
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -696,19 +699,13 @@ jobs:
       - name: Re-check whether this is still current main
         id: current_main
         uses: ./.github/actions/check-current-main
-      - name: Download proven Cloudflare bundle
+      - uses: ./.github/actions/setup-node-with-deps
         if: steps.current_main.outputs.current == 'true'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          name: cf-build
-          path: apps/web/dist
-          run-id: ${{ needs.scope.outputs.reuse == 'true' && needs.scope.outputs.source-run-id || github.run_id }}
-          github-token: ${{ github.token }}
-      - name: Install pinned Wrangler
+          wasm: "restore"
+      - name: Build production Cloudflare bundle from main
         if: steps.current_main.outputs.current == 'true'
-        run: |
-          version=$(node -p "require('./apps/web/package.json').devDependencies.wrangler.replace(/^[^0-9]*/, '')")
-          npm install -g "wrangler@${version}"
+        run: pnpm --filter @cubby/web run build:cf
       - name: Deploy web worker
         if: steps.current_main.outputs.current == 'true'
         uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4
