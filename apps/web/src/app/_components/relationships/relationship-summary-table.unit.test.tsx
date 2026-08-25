@@ -241,7 +241,7 @@ describe("RelationshipSummaryTable", () => {
     );
 
     expect(await screen.findByText("No purchase/vendor")).toHaveClass(
-      "text-warning",
+      "text-warning-ink",
     );
     expect(
       screen.getByRole("link", { name: /view no purchase\/vendor expenses/i }),
