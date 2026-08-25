@@ -6,11 +6,8 @@
  * app ships a `<meta name="cubby-origin">` placeholder and whoever serves the
  * resource rewrites it.
  *
- * A leaf module on purpose. Both the apps and `bundles.ts` need this, but
- * `bundles.ts` glob-imports every built bundle; if an app reached it through
- * there, each build would inline the *previous* build's output into itself.
- * (It did — the second bundle came out at double size.) Nothing here may import
- * anything else in this package.
+ * This is a leaf so both the picker and its resource module can use it without
+ * making the browser bundle depend on the built document.
  */
 
 /**

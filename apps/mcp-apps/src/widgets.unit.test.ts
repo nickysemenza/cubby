@@ -67,7 +67,7 @@ async function flush(): Promise<void> {
 
 async function loadWidget() {
   document.body.innerHTML = '<div id="root"></div>';
-  await import("./app");
+  await import("./usda-picker");
   await flush();
   const app = appState.instances.at(-1);
   if (!app) throw new Error("widget did not construct an App");

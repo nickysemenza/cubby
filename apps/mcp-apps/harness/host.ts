@@ -4,56 +4,21 @@
  * Drives the real SEP-1865 protocol (AppBridge + PostMessageTransport over a
  * sandboxed iframe), so what renders here is what Claude renders. `pnpm
  * --filter @cubby/mcp-apps dev` serves it.
- *
- * Two fixtures. `*-real.json` is a verbatim capture from a live MCP
- * call against the production database — the honest case, and the one that
- * caught the USDA ordering problem. The other is hand-built to exercise states
- * real data happens not to contain right now (every availability status, a
- * partially-stocked item, multi-meal contributions). Keep both: the synthetic
- * one is UI coverage, the real one is the reality check.
  */
 import {
   AppBridge,
   PostMessageTransport,
 } from "@modelcontextprotocol/ext-apps/app-bridge";
-import usdaPickerReal from "./fixtures/usda-picker-real.json";
 import usdaPicker from "./fixtures/usda-picker.json";
 
-/**
- * The apps this harness knows how to drive, keyed by bundle name. Each entry
- * carries its own URL rather than having callers interpolate one: building a
- * path out of `<select>.value` reads as a DOM-text-to-URL sink (CodeQL flags
- * it), and an unknown name should fail loudly here rather than 404 in the frame.
- */
-const APPS = {
-  "usda-picker (real)": {
-    url: "/app/usda-picker.html",
-    fixture: usdaPickerReal,
-    input: { query: "granola bar", pageIndex: 0, pageSize: 6 },
-  },
-  "usda-picker": {
-    url: "/app/usda-picker.html",
-    fixture: usdaPicker,
-    input: { query: "butter", pageIndex: 0, pageSize: 6 },
-  },
-} as const satisfies Record<
-  string,
-  {
-    url: string;
-    fixture: Record<string, unknown>;
-    input: Record<string, unknown>;
-  }
->;
-
-type AppName = keyof typeof APPS;
-
-function isAppName(value: string): value is AppName {
-  return Object.hasOwn(APPS, value);
-}
+const app = {
+  url: "/app/usda-picker.html",
+  fixture: usdaPicker,
+  input: { query: "butter", pageIndex: 0, pageSize: 6 },
+};
 
 const logEl = document.getElementById("log") as HTMLElement;
 const frame = document.getElementById("frame") as HTMLIFrameElement;
-const pick = document.getElementById("pick") as HTMLSelectElement;
 
 function log(label: string, detail?: unknown) {
   const line = document.createElement("div");
@@ -65,8 +30,7 @@ function log(label: string, detail?: unknown) {
 
 let active: AppBridge | null = null;
 
-async function load(name: AppName) {
-  const app = APPS[name];
+async function load() {
   logEl.replaceChildren();
   // Each bridge registers a window `message` listener; without closing the
   // previous one every event fires N times and the log stops being trustworthy.
@@ -129,11 +93,4 @@ async function load(name: AppName) {
   frame.src = app.url;
 }
 
-function loadSelected() {
-  const name = pick.value;
-  if (!isAppName(name)) throw new Error(`unknown app: ${name}`);
-  void load(name);
-}
-
-pick.addEventListener("change", loadSelected);
-loadSelected();
+void load();

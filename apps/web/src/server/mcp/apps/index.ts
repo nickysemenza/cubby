@@ -2,17 +2,12 @@
  * MCP Apps (SEP-1865) — serving the `ui://` resources cubby's tools render
  * through.
  *
- * Tool registration derives `_meta.ui.resourceUri` from the metadata-only
- * manifest. The host fetches the resource, renders the HTML in a sandboxed
- * iframe, and brokers `postMessage` JSON-RPC between it and this server. Hosts
- * without the extension ignore the pointer and show the structured output, so
- * every UI is strictly additive — no tool's data is reachable only through its
- * app.
- *
- * The apps themselves (and the manifest below) live in `@cubby/mcp-apps`; this
- * file is only the MCP wiring, which needs cubby's origin and the SDK.
+ * The host fetches the resource, renders the HTML in a sandboxed iframe, and
+ * brokers `postMessage` JSON-RPC between it and this server. Hosts without the
+ * extension ignore the pointer and show the structured output, so the picker is
+ * strictly additive.
  */
-import { MCP_APP_MANIFEST } from "@cubby/mcp-apps/metadata";
+import { USDA_PICKER } from "@cubby/mcp-apps/metadata";
 import {
   RESOURCE_MIME_TYPE,
   registerAppResource,
@@ -20,29 +15,25 @@ import {
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { APP_ORIGIN } from "~/lib/auth";
 
-type McpApp = (typeof MCP_APP_MANIFEST)[number];
-
-function register(server: McpServer, app: McpApp) {
+export function registerMcpApps(server: McpServer) {
   registerAppResource(
     server,
-    app.name,
-    app.uri,
-    { description: app.description },
+    USDA_PICKER.name,
+    USDA_PICKER.uri,
+    { description: USDA_PICKER.description },
     async () => {
-      const { MCP_APP_BUNDLES, withCubbyOrigin } = await import(
+      const { USDA_PICKER_HTML, withCubbyOrigin } = await import(
         "@cubby/mcp-apps"
       );
-      const bundle = MCP_APP_BUNDLES.find(({ id }) => id === app.id);
-      if (!bundle) throw new Error(`Missing MCP App bundle for ${app.id}`);
       return {
         contents: [
           {
-            uri: app.uri,
+            uri: USDA_PICKER.uri,
             mimeType: RESOURCE_MIME_TYPE,
             // The apps deep-link back into cubby, but a sandboxed iframe can't
             // know what origin its server is served from. Substituting at read
             // time keeps the origin out of tool payloads and out of the bundles.
-            text: withCubbyOrigin(bundle.html, APP_ORIGIN),
+            text: withCubbyOrigin(USDA_PICKER_HTML, APP_ORIGIN),
             _meta: {
               ui: {
                 // CSP and domain are intentionally omitted. These personal,
@@ -58,8 +49,4 @@ function register(server: McpServer, app: McpApp) {
       };
     },
   );
-}
-
-export function registerMcpApps(server: McpServer) {
-  for (const app of MCP_APP_MANIFEST) register(server, app);
 }

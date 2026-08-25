@@ -1,9 +1,9 @@
 /*
- * Styles for the MCP Apps.
+ * Styles for the USDA picker MCP App.
  *
  * Brand primitives come from @cubby/design-tokens — the same file apps/web
  * imports — so the palette and type stacks can't drift from the web app. Only
- * the component classes below are local, because these bundles ship as
+ * the component classes below are local, because this bundle ships as
  * standalone single-file HTML with no Tailwind and no access to the web app's
  * component library.
  *
@@ -58,21 +58,10 @@ h2 {
   color: var(--slate);
 }
 
-.eyebrow-ink {
-  color: var(--brand-foreground);
-}
-
 /* All data / metrics / numerals are mono. Non-negotiable in this system. */
 .mono {
   font-family: var(--brand-font-mono);
   font-variant-numeric: tabular-nums;
-}
-
-/* A secondary figure sitting beside a primary one. */
-.sub {
-  flex: none;
-  font-size: 11px;
-  color: var(--brand-shelf);
 }
 
 /* ── Surfaces ── */
@@ -163,105 +152,6 @@ h2 {
   margin: 3px 0 0;
   color: var(--brand-shelf);
   font-size: 11px;
-}
-
-/* Rows separate by hairline, never by whitespace or a stack of cards. */
-.row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--brand-hairline);
-}
-
-.row:last-child {
-  border-bottom: 0;
-}
-
-.row-tappable {
-  cursor: pointer;
-}
-
-.row-checked {
-  opacity: 0.45;
-}
-
-.summary-row {
-  background: var(--brand-cream);
-}
-
-.summary-value {
-  margin-left: auto;
-  font-family: var(--brand-font-mono);
-  font-variant-numeric: tabular-nums;
-}
-
-.notice {
-  margin: 8px 10px 0;
-  padding: 6px 8px;
-  border: 1px solid var(--warning);
-  background: var(--brand-paper-alt);
-  color: var(--brand-foreground);
-  font-size: 11px;
-}
-
-.item-cost {
-  flex: none;
-  color: var(--brand-shelf);
-  font-size: 11px;
-}
-
-/* A group heading inside a panel: status dot, label, note, count. */
-.row-group {
-  padding: 6px 10px;
-  gap: 6px;
-  background: var(--brand-paper-alt);
-}
-
-.dot {
-  flex: none;
-  width: 6px;
-  height: 6px;
-}
-
-.push {
-  margin-left: auto;
-}
-
-/* Name + inline disclosure, taking the free space in a row. */
-.row-label {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-
-.row-label-text {
-  min-width: 0;
-}
-
-/* After the bare `.row-label-text` rule, so the strike-through wins. */
-.row-checked .row-label-text {
-  text-decoration: line-through;
-}
-
-.figure {
-  flex: none;
-}
-
-/* Expanded detail beneath a row — inset, indented past the checkbox. */
-.detail {
-  padding: 5px 10px 7px 32px;
-  background: var(--brand-paper-alt);
-  border-bottom: 1px solid var(--brand-hairline);
-}
-
-.detail-line {
-  display: flex;
-  gap: 8px;
-  justify-content: space-between;
-  color: var(--brand-shelf);
 }
 
 /* ── Cards ── */
@@ -367,16 +257,7 @@ button {
   color: var(--brand-foreground);
 }
 
-/* A button that reads as a link — no chrome, just the accent. */
-.btn-link {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--brand-ultramarine);
-  font-size: 11px;
-}
-
-/* A button that reads as a mono micro-label (row disclosure, id links). */
+/* A button that reads as a mono micro-label for FDC record links. */
 .btn-eyebrow {
   flex: none;
   padding: 0;
@@ -387,16 +268,6 @@ button {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--slate);
-}
-
-.btn-eyebrow-open {
-  color: var(--brand-ultramarine);
-}
-
-input[type="checkbox"] {
-  flex: none;
-  margin: 0;
-  accent-color: var(--brand-ultramarine);
 }
 
 :focus-visible {
@@ -442,10 +313,6 @@ input[type="checkbox"] {
   .grid {
     grid-template-columns: 1fr;
     padding: 8px;
-  }
-
-  .row {
-    min-height: 44px;
   }
 
   .footer {

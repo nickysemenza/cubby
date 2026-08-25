@@ -12,6 +12,7 @@
  * `mcp-shortcode-boundary.integration.test.ts`.
  */
 
+import type { UserId } from "@cubby/schemas/identifiers";
 import { expenseCreateInput } from "@cubby/schemas/project";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -20,7 +21,8 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import type { DomainCaller } from "~/server/api/domain";
 import { domainRouter } from "~/server/api/domain";
-import { createTestCaller } from "~/server/api/trpc";
+import { createTestCaller, createTestTRPCContext } from "~/server/api/trpc";
+import type { EntityKernelContext } from "~/server/entity-kernel";
 import { createExpense } from "~/server/repo/expense";
 import { makeExpenseInput } from "~/server/repo/repo.fixtures";
 import { createMcpServer } from "./server";
@@ -29,6 +31,7 @@ async function callTool(
   name: string,
   args: Record<string, unknown>,
   caller: DomainCaller,
+  entityKernel: EntityKernelContext,
 ): Promise<CallToolResult> {
   const server = createMcpServer();
   const [clientTransport, serverTransport] =
@@ -39,7 +42,12 @@ async function callTool(
   clientTransport.send = (message, options) =>
     originalSend(message, {
       ...options,
-      authInfo: { token: "", clientId: "test", scopes: [], extra: { caller } },
+      authInfo: {
+        token: "",
+        clientId: "test",
+        scopes: [],
+        extra: { caller, entityKernel },
+      },
     });
 
   await Promise.all([
@@ -60,6 +68,15 @@ function structured(result: CallToolResult): Record<string, unknown> {
 
 function errorText(result: CallToolResult): string {
   return JSON.stringify(result.content);
+}
+
+function kernelContext(
+  db: Parameters<typeof createTestTRPCContext>[0],
+  userId: UserId,
+): EntityKernelContext {
+  const context = createTestTRPCContext(db, { auth: { userId } });
+  if (!context.actorContext) throw new Error("Test actor context is missing");
+  return { ...context, actorContext: context.actorContext };
 }
 
 describe("split_expense MCP tool — originalCost/partsSum/delta", () => {
@@ -90,6 +107,7 @@ describe("split_expense MCP tool — originalCost/partsSum/delta", () => {
         ],
       },
       caller,
+      kernelContext(ctx.db, ctx.actor.userId),
     );
 
     expect(result.isError, errorText(result)).not.toBe(true);
@@ -126,6 +144,7 @@ describe("split_expense MCP tool — originalCost/partsSum/delta", () => {
         ],
       },
       caller,
+      kernelContext(ctx.db, ctx.actor.userId),
     );
 
     expect(result.isError, errorText(result)).not.toBe(true);
@@ -162,6 +181,7 @@ describe("split_expense MCP tool — originalCost/partsSum/delta", () => {
         ],
       },
       caller,
+      kernelContext(ctx.db, ctx.actor.userId),
     );
 
     expect(result.isError, errorText(result)).not.toBe(true);

@@ -5,18 +5,9 @@
  * refine the originating query, compare evidence, select one record, and only
  * then hand that choice back to the agent. It never attaches the food itself.
  */
-import type { App } from "@modelcontextprotocol/ext-apps";
-import {
-  bootstrap,
-  cubbyLink,
-  el,
-  footer,
-  nestedButton,
-  num,
-  openCubby,
-  panel,
-  toolPayload,
-} from "./shared";
+import { App } from "@modelcontextprotocol/ext-apps";
+import "./app.css";
+import { readCubbyOrigin } from "./origin";
 
 /**
  * The subset of `usdaFoodMcpListOut` (packages/schemas/src/mcp.ts) this app
@@ -106,6 +97,81 @@ const MACROS: Array<[code: string, label: string, unit: string]> = [
 ];
 
 let selected: Food | null = null;
+
+function el<K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  className?: string,
+  text?: string,
+): HTMLElementTagNameMap[K] {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function openCubby(app: App, path: string): void {
+  const origin = readCubbyOrigin(document);
+  if (origin) void app.openLink({ url: `${origin}${path}` });
+}
+
+function button(
+  className: string,
+  label: string,
+  onClick: (event: MouseEvent) => void,
+): HTMLButtonElement {
+  const node = el("button", className, label);
+  node.addEventListener("click", onClick);
+  return node;
+}
+
+function nestedButton(
+  className: string,
+  label: string,
+  onClick: () => void,
+): HTMLButtonElement {
+  return button(className, label, (event) => {
+    event.stopPropagation();
+    onClick();
+  });
+}
+
+function cubbyLink(app: App, label: string, path: string): HTMLButtonElement {
+  return button("btn-quiet", label, () => openCubby(app, path));
+}
+
+function panel(title: string, meta: string): HTMLElement {
+  const root = el("div", "panel");
+  const head = el("div", "panel-head");
+  head.append(el("h2", undefined, title), el("span", "eyebrow", meta));
+  root.append(head);
+  return root;
+}
+
+function footer(...children: Node[]): HTMLElement {
+  const root = el("div", "footer");
+  root.append(...children);
+  return root;
+}
+
+function toolPayload<T>(result: {
+  structuredContent?: unknown;
+  content?: Array<{ type: string; text?: string }>;
+}): T | null {
+  if (result.structuredContent) return result.structuredContent as T;
+  const text = result.content?.find((content) => content.type === "text")?.text;
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
+
+function num(value: number): string {
+  if (!Number.isFinite(value)) return "—";
+  if (Number.isInteger(value)) return String(value);
+  return value < 10 ? value.toFixed(1) : String(Math.round(value));
+}
 
 function typeInfo(dataType: string | null) {
   if (!dataType) {
@@ -384,13 +450,44 @@ function render(
   return root;
 }
 
-export function bootstrapUsdaPicker(): Promise<void> {
-  return bootstrap<SearchResult, SearchInput>({
-    name: "Cubby USDA Picker",
-    invalid: "Could not read USDA results from the tool result.",
-    onResult: () => {
-      selected = null;
-    },
-    render,
-  });
+async function connectUsdaPicker(): Promise<void> {
+  const app = new App({ name: "Cubby USDA Picker", version: "1.0.0" });
+  let input: SearchInput | null = null;
+  let payload: SearchResult | null = null;
+  const mount = () => {
+    if (!payload) return;
+    document
+      .getElementById("root")
+      ?.replaceChildren(render(app, payload, input));
+  };
+
+  // The host may push input/result immediately after initialization. Register
+  // both handlers before connecting so a fast host cannot race past them.
+  app.ontoolinput = (notification) => {
+    input = notification.arguments as SearchInput;
+    mount();
+  };
+  app.ontoolresult = (result) => {
+    const next = toolPayload<SearchResult>(result);
+    const root = document.getElementById("root");
+    if (!root) return;
+    if (!next) {
+      root.replaceChildren(
+        el("p", "empty", "Could not read USDA results from the tool result."),
+      );
+      return;
+    }
+    selected = null;
+    payload = next;
+    mount();
+  };
+
+  await app.connect();
+  app.setupSizeChangedNotifications();
 }
+
+export function bootstrapUsdaPicker(): Promise<void> {
+  return connectUsdaPicker();
+}
+
+void bootstrapUsdaPicker();

@@ -124,6 +124,10 @@ export default defineConfig({
             name: "mcp-contract",
             include: mcpContractTests,
             pool: "threads",
+            // These files use no module mocks or mutable globals. One shared
+            // worker imports the MCP graph once instead of five times.
+            isolate: false,
+            fileParallelism: false,
           },
         },
         {

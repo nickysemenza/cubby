@@ -27,6 +27,7 @@ import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import type { TRPC_ERROR_CODE_KEY } from "@trpc/server/rpc";
 import { z } from "zod";
 import type { McpWorkflowCaller } from "~/server/api/mcp-workflows";
+import type { EntityKernelContext } from "~/server/entity-kernel";
 import { toPublicErrorPayload } from "~/server/errors/app-error";
 import { resolveProductPricing } from "~/server/repo/product/pricing";
 
@@ -1086,6 +1087,7 @@ export function registerRouterTool<
     call: (
       caller: Caller,
       params: InferSchemaLike<TInput>,
+      context: EntityKernelContext | undefined,
     ) => Promise<z.output<TOutput>>;
   },
 ) {
@@ -1099,6 +1101,11 @@ export function registerRouterTool<
     outputSchema: config.outputSchema,
     annotations: config.annotations,
     telemetryEntity: adaptEntityExtractor(config.telemetryEntity),
-    handler: async (params, extra) => config.call(getCaller(extra), params),
+    handler: async (params, extra) =>
+      config.call(
+        getCaller(extra),
+        params,
+        extra.authInfo?.extra?.entityKernel as EntityKernelContext | undefined,
+      ),
   });
 }
