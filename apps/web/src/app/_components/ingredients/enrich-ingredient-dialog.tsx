@@ -9,10 +9,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+
+const productCreateMutationOptions = entityMutationOptionsFactory(
+  "product",
+  "create",
+);
 
 interface EnrichIngredientDialogProps {
   /** The ingredient to enrich; the dialog is open while this is non-null. */
@@ -33,12 +38,11 @@ export function EnrichIngredientDialog({
   onOpenChange,
   onEnriched,
 }: EnrichIngredientDialogProps) {
-  const api = useTRPC();
   const router = useRouter();
 
   const createProduct = useActionMutation({
     entity: "product",
-    mutationFn: api.product.create.mutationOptions,
+    mutationFn: productCreateMutationOptions,
     success: (product) =>
       savedWithBackgroundWork(
         product.sideEffects,

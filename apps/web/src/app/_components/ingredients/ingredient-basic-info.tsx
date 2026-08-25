@@ -3,7 +3,7 @@ import type { FC } from "react";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { invalidatesFor } from "~/lib/query-keys";
 import { useEntityDelete } from "../hooks/useEntityDelete";
 
@@ -16,14 +16,12 @@ export const IngredientBasicInfo: FC<IngredientBasicInfoProps> = ({
   ingredient,
   onEdit,
 }) => {
-  const api = useTRPC();
   const { deleteButton, deleteDialog } = useEntityDelete({
     id: ingredient.id,
     name: ingredient.name,
     entityLabel: "Ingredient",
     entity: "ingredient",
-    mutationOptions: (callbacks) =>
-      api.ingredient.delete.mutationOptions(callbacks),
+    mutationOptions: entityMutationOptionsFactory("ingredient", "delete"),
     invalidateKeys: invalidatesFor("ingredient", "list"),
     redirectTo: "/ingredients",
   });

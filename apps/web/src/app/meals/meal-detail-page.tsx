@@ -31,6 +31,7 @@ import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { Input } from "~/components/ui/input";
 import { NoneValue } from "~/components/ui/none-value";
 import { entityDetailLink } from "~/entities/entities";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import {
   entityDetailQueryKey,
   entityDetailQueryOptions,
@@ -68,7 +69,7 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
   } = useQuery(entityDetailQueryOptions("meal", mealId));
 
   const updateMeal = useUpdateMutation({
-    mutationFn: api.meal.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("meal", "update"),
     entity: "meal",
   });
   const addRecipeBase = api.meal.addRecipe.mutationOptions();
@@ -106,7 +107,7 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
     name: mealName,
     entityLabel: "Meal",
     entity: "meal",
-    mutationOptions: api.meal.delete.mutationOptions,
+    mutationOptions: entityMutationOptionsFactory("meal", "delete"),
     redirectTo: "/meals",
   });
 

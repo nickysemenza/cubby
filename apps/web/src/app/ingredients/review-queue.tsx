@@ -7,6 +7,7 @@ import { useQueuePass } from "~/app/_components/queue-pass/useQueuePass";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Empty, EmptyActions, EmptyDescription } from "~/components/ui/empty";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidatesFor } from "~/lib/query-keys";
@@ -97,7 +98,7 @@ export function ReviewQueue({
     entity: "product",
     operation: "update",
     intent: "full",
-    mutationFn: api.product.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("product", "update"),
     success: "Marked: no USDA entry.",
     invalidateKeys: invalidatesFor("ingredient", "product"),
     onSuccess: () => markProcessed(flaggedIdRef.current),

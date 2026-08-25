@@ -20,6 +20,7 @@ type WorkbenchProps<TData extends BaseListRow> = Pick<
   | "getRowClassName"
   | "onRowClick"
   | "onRowHover"
+  | "onRowHoverEnd"
   | "showCellSelectionStats"
   | "verticalAlign"
 >;
@@ -77,6 +78,7 @@ export function EntityListPage<
   getRowClassName,
   onRowClick,
   onRowHover,
+  onRowHoverEnd,
   showCellSelectionStats,
   verticalAlign,
   preview,
@@ -87,6 +89,7 @@ export function EntityListPage<
   const {
     onRowClick: previewClick,
     onRowHover: previewHover,
+    onRowHoverEnd: previewHoverEnd,
     PreviewSheet,
   } = useEntityPreview(
     entity,
@@ -98,6 +101,8 @@ export function EntityListPage<
   type RowHandler = NonNullable<WorkbenchProps<TData>["onRowClick"]>;
   const rowClick = preview === false ? undefined : (previewClick as RowHandler);
   const rowHover = preview === false ? undefined : (previewHover as RowHandler);
+  const rowHoverEnd =
+    preview === false ? undefined : (previewHoverEnd as RowHandler);
 
   // `deletable` defaults ON here, unlike the hook: a top-level list page owns
   // its entity's rows, where an embedded relationship ledger does not.
@@ -120,6 +125,7 @@ export function EntityListPage<
         verticalAlign={verticalAlign}
         onRowClick={onRowClick ?? rowClick}
         onRowHover={onRowHover ?? rowHover}
+        onRowHoverEnd={onRowHoverEnd ?? rowHoverEnd}
       />
       {typeof children === "function" ? children(list) : children}
       {preview === false ? null : <PreviewSheet />}

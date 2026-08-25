@@ -1,7 +1,19 @@
+import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import { countableEntities } from "@cubby/schemas/entity-manifest";
-import { describe, expect, it, vi } from "vitest";
+import type { ProductWithFoodOut } from "@cubby/schemas/product";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
+import type { DataOf } from "~/app/_components/hooks/useActionMutation";
 import { queryKeys } from "~/lib/query-keys";
-import { getEntityContract } from "./entity-contracts";
+import {
+  entityMutationOptionsFactory,
+  getEntityContract,
+} from "./entity-contracts";
+
+const mutationTransport = vi.hoisted(() => vi.fn());
+
+vi.mock("./entity-mutation", () => ({
+  entityMutationOptions: () => ({ mutationFn: mutationTransport }),
+}));
 
 describe("entity-contracts drift guard", () => {
   it.each(countableEntities)(
@@ -15,6 +27,13 @@ describe("entity-contracts drift guard", () => {
 });
 
 describe("kernel browser transport", () => {
+  it("preserves entity-specific result types without tRPC inference", () => {
+    const factory = entityMutationOptionsFactory("product", "create");
+    expectTypeOf<DataOf<typeof factory>>().toEqualTypeOf<
+      ProductWithFoodOut & { sideEffects: MutationSideEffects }
+    >();
+  });
+
   it("maps generated list contracts onto Start-compatible list cache keys", () => {
     const params = {
       filters: {},
@@ -34,25 +53,24 @@ describe("kernel browser transport", () => {
     expect(options.queryFn).toEqual(expect.any(Function));
   });
 
-  it("maps generated mutation contracts onto entity.mutate and unwraps results", async () => {
-    const transport = vi.fn(async () => ({
+  it("maps generated mutation contracts onto the Start command and unwraps results", async () => {
+    mutationTransport.mockResolvedValueOnce({
       action: "create",
       entity: "product",
       item: { id: "PRD-1", name: "Hammer" },
       sideEffects: { backgroundBatches: [] },
-    }));
-    const mutationOptions = vi.fn(() => ({ mutationFn: transport }));
-    const api = { entity: { mutate: { mutationOptions } } };
+    });
     const options = getEntityContract("product").mutation.create?.(
-      api as never,
+      {} as never,
       {} as never,
     ) as { mutationFn: (variables: unknown) => Promise<unknown> };
 
     await expect(options.mutationFn({ name: "Hammer" })).resolves.toEqual({
       id: "PRD-1",
       name: "Hammer",
+      sideEffects: { backgroundBatches: [] },
     });
-    expect(transport).toHaveBeenCalledWith({
+    expect(mutationTransport).toHaveBeenCalledWith({
       action: "create",
       entity: "product",
       data: { name: "Hammer" },

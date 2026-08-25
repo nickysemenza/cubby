@@ -44,7 +44,8 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
   const api = useTRPC();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview();
+  const { onRowClick, onRowHover, onRowHoverEnd, PreviewSheet } =
+    useEntityPreview();
   const [draft, setDraft] = useState(query);
   const relatedHeadingId = useId();
   const [debouncedDraft] = useDebouncedValue(draft, { wait: 150 });
@@ -163,6 +164,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
               error={primary.error}
               onPreview={onRowClick}
               onPrefetch={onRowHover}
+              onPrefetchEnd={onRowHoverEnd}
             />
           )}
           {relatedResults.length > 0 && (
@@ -190,6 +192,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
                   error={null}
                   onPreview={onRowClick}
                   onPrefetch={onRowHover}
+                  onPrefetchEnd={onRowHoverEnd}
                 />
               )}
             </section>
@@ -247,12 +250,16 @@ function SearchResults({
   error,
   onPreview,
   onPrefetch,
+  onPrefetchEnd,
 }: {
   data: SearchHit[];
   isLoading: boolean;
   error: { message: string } | null;
   onPreview: <T extends Record<string, unknown>>(row: { original: T }) => void;
   onPrefetch: <T extends Record<string, unknown>>(row: { original: T }) => void;
+  onPrefetchEnd: <T extends Record<string, unknown>>(row: {
+    original: T;
+  }) => void;
 }) {
   if (isLoading)
     return (
@@ -280,6 +287,7 @@ function SearchResults({
           item={item}
           onPreview={onPreview}
           onPrefetch={onPrefetch}
+          onPrefetchEnd={onPrefetchEnd}
         />
       ))}
     </div>
@@ -290,27 +298,32 @@ function SearchRow({
   item,
   onPreview,
   onPrefetch,
+  onPrefetchEnd,
 }: {
   item: SearchHit;
   onPreview: <T extends Record<string, unknown>>(row: { original: T }) => void;
   onPrefetch: <T extends Record<string, unknown>>(row: { original: T }) => void;
+  onPrefetchEnd: <T extends Record<string, unknown>>(row: {
+    original: T;
+  }) => void;
 }) {
+  const previewRow = {
+    original: item as SearchHit & Record<string, unknown>,
+  };
   return (
     <div className="group flex items-center gap-4 border-border border-b px-2 py-2 last:border-b-0 hover:bg-muted/45">
       <SearchResultMedia item={item} variant="list" />
       <div className="min-w-0 flex-1">
         <Link
           {...getSearchResultRoute(item)}
-          onMouseEnter={() =>
-            onPrefetch({
-              original: item as SearchHit & Record<string, unknown>,
-            })
-          }
-          onFocus={() =>
-            onPrefetch({
-              original: item as SearchHit & Record<string, unknown>,
-            })
-          }
+          onPointerEnter={(event) => {
+            if (event.pointerType !== "touch") onPrefetch(previewRow);
+          }}
+          onPointerLeave={(event) => {
+            if (event.pointerType !== "touch") onPrefetchEnd(previewRow);
+          }}
+          onFocus={() => onPrefetch(previewRow)}
+          onBlur={() => onPrefetchEnd(previewRow)}
           onClick={() => rememberSearchResult(item)}
           className="block truncate font-medium text-sm hover:text-primary"
         >

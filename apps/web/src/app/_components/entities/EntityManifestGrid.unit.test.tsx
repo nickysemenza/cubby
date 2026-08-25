@@ -47,4 +47,20 @@ describe("EntityInspector shortcode contracts", () => {
     expect(screen.queryByText("R-XXXX")).not.toBeInTheDocument();
     expect(screen.getByText(/removed R- form/i)).toBeInTheDocument();
   });
+
+  it("reports compiled filters and current transport ownership", () => {
+    render(<EntityInspector entity="product" count={12} />);
+
+    expect(
+      screen.getByText(/literal descriptors · generated bindings/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("detail · list/filter · generic writes"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "workflow procedures · batching/streams · specialized projections",
+      ),
+    ).toBeInTheDocument();
+  });
 });

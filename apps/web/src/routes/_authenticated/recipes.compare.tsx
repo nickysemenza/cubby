@@ -25,7 +25,7 @@ import {
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityDetailQueryOptions } from "~/entities/entity-detail";
 import { pageTitle } from "~/lib/page-title";
 import { computeRecipeCosting } from "~/lib/recipe-costing";
 import { urlStringParam } from "~/lib/search-params";
@@ -46,7 +46,6 @@ export const Route = createFileRoute("/_authenticated/recipes/compare")({
 function RecipeComparePage() {
   const { ids } = Route.useSearch();
   const navigate = useNavigate();
-  const api = useTRPC();
 
   // Parse recipe IDs from URL
   const recipeIds = useMemo<string[]>(() => {
@@ -60,8 +59,8 @@ function RecipeComparePage() {
 
   // Fetch all recipes in parallel
   const recipeQueryOptions = useMemo(
-    () => recipeIds.map((id) => api.recipe.getByID.queryOptions({ id })),
-    [api, recipeIds],
+    () => recipeIds.map((id) => entityDetailQueryOptions("recipe", id)),
+    [recipeIds],
   );
 
   const { recipes, isLoading } = useQueries({

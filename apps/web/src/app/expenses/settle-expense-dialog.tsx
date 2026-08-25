@@ -15,7 +15,7 @@ import { WithProjectSearch } from "~/app/_components/combobox/with-search-hook";
 import { EntityValueField } from "~/app/_components/form-utils/entity-value-field";
 import { tradeOptions } from "~/app/projects/shared";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import {
   FormWrapper,
   NullableNumericField,
@@ -69,8 +69,6 @@ export function SettleExpenseDialog({
   onOpenChange,
   expense,
 }: SettleExpenseDialogProps) {
-  const api = useTRPC();
-
   const defaultValues = useMemo<SettleExpenseValues>(
     () => ({
       cost: expense.cost,
@@ -91,7 +89,7 @@ export function SettleExpenseDialog({
   });
 
   const updateMutation = useUpdateMutation({
-    mutationFn: api.expense.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("expense", "update"),
     entity: "expense",
   });
 

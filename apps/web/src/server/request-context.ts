@@ -105,7 +105,6 @@ export const createRequestContext = async (opts: {
 
 type RequestContext = Awaited<ReturnType<typeof createRequestContext>>;
 
-/** @lintignore Dynamically imported by client-safe Start server functions. */
 export function requireActor(context: RequestContext) {
   if (!context.auth.userId || !context.actorContext) {
     throw createAppError("UNAUTHORIZED", "Actor context required");

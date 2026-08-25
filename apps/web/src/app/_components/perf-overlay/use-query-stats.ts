@@ -9,7 +9,7 @@ export interface LiveQueryStats {
   mutationsPending: number;
 }
 
-/** tRPC query keys are `[["recipe","getByID"], input]` → "recipe.getByID". */
+/** Nested query keys such as `[["recipe","detail"], input]` become "recipe.detail". */
 function procedureName(queryKey: unknown): string {
   const first = Array.isArray(queryKey) ? queryKey[0] : queryKey;
   if (Array.isArray(first)) return first.join(".");

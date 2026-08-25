@@ -13,6 +13,7 @@ import {
   verbBulkAction,
 } from "~/app/_components/actions/action-verb-ui";
 import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useTRPC } from "~/integrations/trpc/react";
 import {
   createEditableAmountColumn,
@@ -94,7 +95,7 @@ export function LocationInventoryTable({
     unitMappingProductIds,
   );
   const updateMutation = useUpdateMutation({
-    mutationFn: api.inventory.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("inventory", "update"),
     entity: "inventory",
   });
 

@@ -11,7 +11,7 @@ import { Badge } from "~/components/ui/badge";
 import { NoneValue } from "~/components/ui/none-value";
 import { StatTile } from "~/components/ui/stat-tile";
 import { entities, entityDetailParams } from "~/entities/entities";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { dataQualityOptions } from "~/lib/data-quality-options";
 import { purchaseIdentityLabel } from "~/lib/purchase-label";
 import { formatCurrency } from "~/lib/utils";
@@ -43,7 +43,6 @@ import { ReconciliationBadge } from "./purchase-reconciliation";
  * `expenseTotal` is `SUM(expense.cost)` and IS the purchase's spend.
  */
 export function PurchaseList() {
-  const api = useTRPC();
   const columnHelper = useMemo(
     () => createCubbyColumnHelper<PurchaseOut>(),
     [],
@@ -64,7 +63,7 @@ export function PurchaseList() {
   });
 
   const update = useUpdateMutation({
-    mutationFn: api.purchase.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("purchase", "update"),
     entity: "purchase",
   });
 
@@ -273,7 +272,8 @@ export function PurchaseList() {
     [columnHelper],
   );
 
-  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("purchase");
+  const { onRowClick, onRowHover, onRowHoverEnd, PreviewSheet } =
+    useEntityPreview("purchase");
 
   const { workbench, data, totalCount } = useEntityList<
     PurchaseOut,
@@ -319,6 +319,7 @@ export function PurchaseList() {
         ariaLabel="Purchases Table"
         onRowClick={onRowClick}
         onRowHover={onRowHover}
+        onRowHoverEnd={onRowHoverEnd}
       />
       <PreviewSheet />
     </div>

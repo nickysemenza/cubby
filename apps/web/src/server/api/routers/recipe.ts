@@ -7,8 +7,7 @@
  *
  * The procedures themselves are split across focused sibling modules under
  * `./recipe/` (CRUD, import/export, analysis/costing). This file composes them
- * back into a single FLAT router so client procedure paths (`recipe.list`,
- * `recipe.getByID`, `recipe.import…`) are unchanged.
+ * back into a single flat workflow router.
  */
 
 import { createTRPCRouter } from "../trpc";
@@ -35,13 +34,9 @@ export const recipeRouter = createTRPCRouter({
   parseHtml: recipeImportProcedures.parseHtml,
 
   // CRUD + reads
-  getByID: recipeCrudProcedures.getByID,
   getManyByIDs: recipeCrudProcedures.getManyByIDs,
   list: recipeCrudProcedures.list,
-  create: recipeCrudProcedures.create,
-  update: recipeCrudProcedures.update,
   duplicate: recipeCrudProcedures.duplicate,
-  delete: recipeCrudProcedures.delete,
   getAllTags: recipeCrudProcedures.getAllTags,
   getFlow: recipeFlowProcedures.getFlow,
   generateFlow: recipeFlowProcedures.generateFlow,

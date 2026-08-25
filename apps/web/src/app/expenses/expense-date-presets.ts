@@ -1,5 +1,5 @@
 /** Shared URL vocabulary for bounded Expense date presets. */
-export const expenseDateRangeValues = ["30d", "90d", "ytd", "1y"] as const;
+const expenseDateRangeValues = ["30d", "90d", "ytd", "1y"] as const;
 export type ExpenseDateRangePreset = (typeof expenseDateRangeValues)[number];
 
 const expenseDateRangeSet = new Set<string>(expenseDateRangeValues);

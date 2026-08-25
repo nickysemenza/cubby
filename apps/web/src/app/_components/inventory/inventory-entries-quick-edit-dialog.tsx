@@ -11,7 +11,7 @@ import { EditableEntityCell } from "~/app/_components/data-table/editable-entity
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { Row, Stack } from "~/components/layout";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 
 interface QuickEditInventoryEntry {
   id: InventoryShortcode;
@@ -43,10 +43,8 @@ export function InventoryEntriesQuickEditDialog({
   productName,
   entries,
 }: InventoryEntriesQuickEditDialogProps) {
-  const api = useTRPC();
-
   const updateInventoryMutation = useUpdateMutation({
-    mutationFn: api.inventory.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("inventory", "update"),
     entity: "inventory",
   });
 

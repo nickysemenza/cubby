@@ -64,16 +64,10 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 import { createEntityListProcedure } from "../crud-factory";
-import { createEntityCompatibilityProcedures } from "../entity-compatibility";
+import { createEntityListCompatibilityProcedure } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
-const {
-  getByID,
-  list,
-  create,
-  update,
-  delete: deleteItem,
-} = createEntityCompatibilityProcedures(
+const list = createEntityListCompatibilityProcedure(
   ENTITY_KERNEL_BINDINGS.project,
   ENTITY_BINDINGS.project.crud,
 );
@@ -267,12 +261,8 @@ const setToolUsage = protectedProcedure
   });
 
 export const projectRouter = createTRPCRouter({
-  getByID,
   list,
   tree,
-  create,
-  update,
-  delete: deleteItem,
   dashboardSummary,
   portfolioAnalytics,
   options,

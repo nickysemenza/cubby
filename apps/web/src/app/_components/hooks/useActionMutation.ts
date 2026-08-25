@@ -16,7 +16,7 @@ import {
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidateTRPCQueries } from "~/lib/query-keys";
 
-/** A tRPC `*.mutationOptions` reference, e.g. `api.ingredient.create.mutationOptions`. */
+/** A mutation-options factory supplied by either Start or a specialized transport. */
 export type MutationOptionsFn = (opts: never) => UseMutationOptions<
   // biome-ignore lint/suspicious/noExplicitAny: positions only used as inference anchors
   any,
@@ -76,7 +76,7 @@ export function useActionMutation<TFn extends MutationOptionsFn>({
    * next to the paste-summary toast.
    */
   successToastId?: string;
-  /** Entity lists to invalidate. Each is wrapped to match tRPC's nested key structure. */
+  /** Entity lists to invalidate, using the shared nested query-key structure. */
   invalidateKeys?: readonly QueryKey[];
   /** Side effect after the toast + invalidations (close dialog, resolve, navigate). */
   onSuccess?: (data: DataOf<TFn>) => void;

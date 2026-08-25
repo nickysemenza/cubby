@@ -19,6 +19,8 @@ import {
 } from "~/app/projects/shared";
 import { Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { entityDetailQueryOptions } from "~/entities/entity-detail";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseLabel } from "~/lib/purchase-label";
@@ -89,7 +91,7 @@ export function ExpenseList() {
   const expenseBulkActions = useExpenseBulkActions();
 
   const updateExpenseMutation = useUpdateMutation({
-    mutationFn: api.expense.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("expense", "update"),
     entity: "expense",
   });
 
@@ -282,7 +284,7 @@ export function ExpenseList() {
   const scopedProductId = expensesSearch.productId;
   const hasInvalidProductScope = scopedProductId === UNRESOLVABLE_ENTITY_FILTER;
   const scopedProductQuery = useQuery({
-    ...api.product.getByID.queryOptions({ id: scopedProductId ?? "" }),
+    ...entityDetailQueryOptions("product", scopedProductId ?? ""),
     enabled: Boolean(scopedProductId) && !hasInvalidProductScope,
   });
   const clearProductScope = useCallback(() => {
@@ -328,7 +330,7 @@ export function ExpenseList() {
   const hasInvalidPurchaseScope =
     scopedPurchaseId === UNRESOLVABLE_ENTITY_FILTER;
   const scopedPurchaseQuery = useQuery({
-    ...api.purchase.getByID.queryOptions({ id: scopedPurchaseId ?? "" }),
+    ...entityDetailQueryOptions("purchase", scopedPurchaseId ?? ""),
     enabled: Boolean(scopedPurchaseId) && !hasInvalidPurchaseScope,
   });
   const clearPurchaseScope = useCallback(() => {
@@ -383,7 +385,8 @@ export function ExpenseList() {
       </Row>
     ) : undefined;
 
-  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("expense");
+  const { onRowClick, onRowHover, onRowHoverEnd, PreviewSheet } =
+    useEntityPreview("expense");
 
   // `TFilters` is given explicitly: it can't be inferred from `queryOptions`,
   // whose input is a union with tRPC's `skipToken` symbol, so it would land on
@@ -457,6 +460,7 @@ export function ExpenseList() {
           ariaLabel="Expenses Table"
           onRowClick={onRowClick}
           onRowHover={onRowHover}
+          onRowHoverEnd={onRowHoverEnd}
           showCellSelectionStats
           filterOptionHints={facetOptionHints}
           getRowClassName={(row) =>

@@ -31,6 +31,7 @@ import {
   expenseTradeColumn,
 } from "~/app/projects/shared";
 import { Stack } from "~/components/layout";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useTRPC } from "~/integrations/trpc/react";
 
 const EMBEDDED_TABLE_STATE = {
@@ -83,12 +84,12 @@ function PurchaseExpenseRows({
     [purchaseId, kind],
   );
   const update = useUpdateMutation({
-    mutationFn: api.expense.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("expense", "update"),
     entity: "expense",
   });
   const nameEditable = useNameEditable<ExpenseOut>(update.mutateAsync);
   const deletable = useDeletableConfig({
-    mutationFn: api.expense.delete.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("expense", "delete"),
     entityLabel: "Expense",
     entity: "expense",
   });

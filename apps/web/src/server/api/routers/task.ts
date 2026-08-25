@@ -27,16 +27,10 @@ import {
   taskList,
 } from "~/server/repo/task";
 import { createBulkUpdatedMutation } from "../crud-factory";
-import { createEntityCompatibilityProcedures } from "../entity-compatibility";
+import { createEntityListCompatibilityProcedure } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
-const {
-  getByID,
-  list,
-  create,
-  update,
-  delete: deleteItem,
-} = createEntityCompatibilityProcedures(
+const list = createEntityListCompatibilityProcedure(
   ENTITY_KERNEL_BINDINGS.task,
   ENTITY_BINDINGS.task.crud,
 );
@@ -155,11 +149,7 @@ const timeline = protectedProcedure
   .query(({ ctx, input }) => getTaskTimeline(ctx.db, input));
 
 export const taskRouter = createTRPCRouter({
-  getByID,
   list,
-  create,
-  update,
-  delete: deleteItem,
   listActionable,
   chartData,
   summary,

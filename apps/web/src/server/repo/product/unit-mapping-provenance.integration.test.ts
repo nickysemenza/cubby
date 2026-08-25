@@ -1,15 +1,18 @@
+import { unsafeProductId } from "@cubby/schemas/identifiers";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { parseShortcode } from "@cubby/shared";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { productRouter } from "~/server/api/routers/product";
-import { createTestCaller } from "~/server/api/trpc";
+import { createTestCaller, createTestTRPCContext } from "~/server/api/trpc";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { getProductWithFood } from "~/server/services/product.service";
 import { createProductFixture, makeProductInput } from "../repo.fixtures";
 
 /**
  * A unit mapping's `sourceMetadata.productId` is the id the CLIENT looks the
  * product up by — `LazyProductPillLink` in `units/unitmappingstable.tsx` feeds
- * it straight into `product.getByID`, which is keyed on the shortcode. A uuid
+ * it straight into the Product detail query, which is keyed on the shortcode. A uuid
  * there doesn't merely render oddly: every row on the page fires a request that
  * fails input validation, and the row degrades to a `product <uuid8>` stub.
  *
@@ -51,10 +54,14 @@ describe("unit-mapping provenance is the public shortcode", () => {
 
   it("stamps the shortcode on every stored mapping the detail read returns", async () => {
     const product = await seed();
-
-    const ids = provenanceIds(
-      (await caller().getByID({ id: product.id })).unitMappings,
+    const uuid = await resolveLiveShortcode(ctx.db, product.id, "product");
+    expect(uuid).not.toBeNull();
+    const detail = await getProductWithFood(
+      ctx.db,
+      createTestTRPCContext(ctx.db).usdaClient,
+      unsafeProductId(uuid!),
     );
+    const ids = provenanceIds(detail.unitMappings);
 
     expect(ids).toEqual([product.id, product.id]);
     // Not only "equals the fixture's id" — pin the shape too, so a future id

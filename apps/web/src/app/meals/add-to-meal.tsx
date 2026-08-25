@@ -20,6 +20,7 @@ import { DialogFooter } from "~/components/ui/dialog";
 import { Label } from "~/components/ui/label";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { entities, entityDetailParams } from "~/entities/entities";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useTRPC } from "~/integrations/trpc/react";
 import { mealListLabel } from "./meal-format";
 import { mealKindOptions, mealTypeOptions } from "./meal-options";
@@ -111,12 +112,14 @@ export function AddToMeal({ recipeId }: { recipeId: RecipeShortcode }) {
   };
 
   const createMeal = useMutation(
-    api.meal.create.mutationOptions({ onSuccess }),
+    entityMutationOptionsFactory("meal", "create")({ onSuccess }),
   );
   const addRecipe = useMutation(
     api.meal.addRecipe.mutationOptions({ onSuccess }),
   );
-  const updateMeal = useMutation(api.meal.update.mutationOptions());
+  const updateMeal = useMutation(
+    entityMutationOptionsFactory("meal", "update")(),
+  );
   const isPending =
     createMeal.isPending || addRecipe.isPending || updateMeal.isPending;
 

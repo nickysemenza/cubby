@@ -33,7 +33,8 @@ export function CookbookList() {
     api.recipe.listCookbooks.queryOptions(),
   );
   const { requestDelete, dialog } = useCookbookDelete();
-  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("cookbook");
+  const { onRowClick, onRowHover, onRowHoverEnd, PreviewSheet } =
+    useEntityPreview("cookbook");
 
   const columns = useMemo(
     () => [
@@ -111,6 +112,7 @@ export function CookbookList() {
         ariaLabel="Cookbooks Table"
         onRowClick={onRowClick}
         onRowHover={onRowHover}
+        onRowHoverEnd={onRowHoverEnd}
       />
       <PreviewSheet />
       {dialog}

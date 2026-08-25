@@ -11,7 +11,7 @@ import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { VendorMark } from "~/components/entity/vendor-cell";
 import { NoneValue } from "~/components/ui/none-value";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 
 /**
  * The brand mark leading each vendor's name. Module-level for the same reason as
@@ -24,11 +24,10 @@ const VENDOR_NAME_PREFIX = (row: VendorOut): ReactNode => (
 );
 
 export function VendorList() {
-  const api = useTRPC();
   const columnHelper = useMemo(() => createCubbyColumnHelper<VendorOut>(), []);
 
   const updateVendorMutation = useUpdateMutation({
-    mutationFn: api.vendor.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("vendor", "update"),
     entity: "vendor",
   });
 

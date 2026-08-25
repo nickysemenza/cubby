@@ -17,12 +17,6 @@ export function configureQueryFreshness(queryClient: QueryClient): void {
     entityDetailRootKey("recipe"),
     entityDetailRootKey("ingredient"),
   ];
-  const stableIdKeys = [
-    queryKeys.product.getByID,
-    queryKeys.location.getByID,
-    queryKeys.recipe.getByID,
-    queryKeys.ingredient.getByID,
-  ];
   const stableIndexKeys = [
     queryKeys.product.list,
     queryKeys.location.list,
@@ -37,12 +31,6 @@ export function configureQueryFreshness(queryClient: QueryClient): void {
   };
   for (const key of stableDetailKeys) {
     queryClient.setQueryDefaults(key, {
-      staleTime: 5 * MINUTE,
-      ...revalidateOnFocus,
-    });
-  }
-  for (const key of stableIdKeys) {
-    queryClient.setQueryDefaults(normalizeTRPCQueryKey(key), {
       staleTime: 5 * MINUTE,
       ...revalidateOnFocus,
     });

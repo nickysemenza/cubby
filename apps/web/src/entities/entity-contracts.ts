@@ -1,10 +1,15 @@
+import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import type { Entity } from "@cubby/schemas/entity";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
-import type { QueryKey } from "@tanstack/react-query";
+import type { QueryKey, UseMutationOptions } from "@tanstack/react-query";
+import type { z } from "zod";
 import type { useTRPC } from "~/integrations/trpc/react";
 import { invalidatesFor } from "~/lib/query-keys";
+import type { entityMutationCommandSchema } from "~/server/entity-kernel/contracts";
 import { entityDetailQueryOptions } from "./entity-detail";
 import { entityListQueryOptions } from "./entity-list";
+import { entityMutationOptions } from "./entity-mutation";
+import type { EntityDetailByEntity } from "./generated/entity-details.gen";
 import {
   type GeneratedBrowserCrudEntity,
   generatedBrowserCrudEntities,
@@ -51,13 +56,12 @@ type ExecutableMutationOptions = {
 };
 
 function kernelMutationOptions(
-  api: Api,
   entity: StandardEntity,
   action: "create" | "update" | "delete",
   callbacks: unknown,
 ) {
   const options =
-    api.entity.mutate.mutationOptions() as unknown as ExecutableMutationOptions;
+    entityMutationOptions() as unknown as ExecutableMutationOptions;
   const mutationFn = options.mutationFn;
   if (!mutationFn)
     throw new Error("Entity mutation has no executable transport");
@@ -79,13 +83,65 @@ function kernelMutationOptions(
       const result = (await mutationFn(command)) as Record<string, unknown>;
       return action === "delete"
         ? { deleted: result.deleted, sideEffects: result.sideEffects }
-        : result.item;
+        : {
+            ...(result.item as Record<string, unknown>),
+            sideEffects: result.sideEffects,
+          };
     },
   };
 }
 
 const standardEntities = generatedBrowserCrudEntities;
 type StandardEntity = GeneratedBrowserCrudEntity;
+
+type StandardAction = "create" | "update" | "delete";
+type CommandFor<
+  E extends StandardEntity,
+  A extends Exclude<StandardAction, "delete">,
+> = Extract<
+  z.input<typeof entityMutationCommandSchema>,
+  { entity: E; action: A }
+>;
+type VariablesFor<
+  E extends StandardEntity,
+  A extends StandardAction,
+> = A extends "create"
+  ? CommandFor<E, "create"> extends { data: infer Data }
+    ? Data
+    : never
+  : A extends "update"
+    ? CommandFor<E, "update"> extends { id: infer Id; data: infer Data }
+      ? { id: Id; data: Data }
+      : never
+    : { ids: string[] };
+type MutationDataFor<
+  E extends StandardEntity,
+  A extends StandardAction,
+> = A extends "delete"
+  ? { deleted: number; sideEffects: MutationSideEffects }
+  : EntityDetailByEntity[E] & { sideEffects: MutationSideEffects };
+
+/** Start-backed replacement for a named tRPC CRUD `mutationOptions` factory. */
+export function entityMutationOptionsFactory<
+  E extends StandardEntity,
+  A extends StandardAction,
+>(entity: E, action: A) {
+  return (
+    callbacks: Omit<
+      UseMutationOptions<MutationDataFor<E, A>, Error, VariablesFor<E, A>>,
+      "mutationFn" | "mutationKey"
+    > = {},
+  ) =>
+    kernelMutationOptions(
+      entity,
+      action,
+      callbacks,
+    ) as unknown as UseMutationOptions<
+      MutationDataFor<E, A>,
+      Error,
+      VariablesFor<E, A>
+    >;
+}
 
 function standardContract(entity: StandardEntity): EntityContract {
   const invalidationKeys = invalidatesFor(entity);
@@ -97,12 +153,12 @@ function standardContract(entity: StandardEntity): EntityContract {
       detail: (_api, id) => entityDetailQueryOptions(entity, id),
     },
     mutation: {
-      create: (api, callbacks) =>
-        kernelMutationOptions(api, entity, "create", callbacks),
-      update: (api, callbacks) =>
-        kernelMutationOptions(api, entity, "update", callbacks),
-      delete: (api, callbacks) =>
-        kernelMutationOptions(api, entity, "delete", callbacks),
+      create: (_api, callbacks) =>
+        kernelMutationOptions(entity, "create", callbacks),
+      update: (_api, callbacks) =>
+        kernelMutationOptions(entity, "update", callbacks),
+      delete: (_api, callbacks) =>
+        kernelMutationOptions(entity, "delete", callbacks),
     },
   };
 }

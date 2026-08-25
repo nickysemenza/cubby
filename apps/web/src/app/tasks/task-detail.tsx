@@ -33,6 +33,8 @@ import { Input } from "~/components/ui/input";
 import { NoneValue } from "~/components/ui/none-value";
 import { taskCaptureRequest } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { entityDetailQueryOptions } from "~/entities/entity-detail";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { patchListItem } from "~/lib/optimistic-list";
@@ -112,7 +114,7 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
 
   // Keep this deliberately narrow: this checkbox owns one exact checklist
   // query, so its update never blocks or patches the rest of the detail page.
-  const toggleBase = api.task.update.mutationOptions();
+  const toggleBase = entityMutationOptionsFactory("task", "update")();
   const toggleMutation = useMutation({
     mutationKey: toggleBase.mutationKey,
     mutationFn: toggleBase.mutationFn,
@@ -138,7 +140,7 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
     onSettled: () => invalidateTRPCQueries(queryClient, invalidatesFor("task")),
   });
 
-  const createBase = api.task.create.mutationOptions();
+  const createBase = entityMutationOptionsFactory("task", "create")();
   const createMutation = useMutation({
     mutationKey: createBase.mutationKey,
     mutationFn: createBase.mutationFn,
@@ -253,11 +255,10 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
 }
 
 export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
-  const api = useTRPC();
   const [followUpOpen, setFollowUpOpen] = useState(false);
 
   const updateMutation = useUpdateMutation({
-    mutationFn: api.task.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("task", "update"),
     entity: "task",
   });
 
@@ -276,7 +277,8 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
     name: task.name,
     entityLabel: "Task",
     entity: "task",
-    mutationOptions: (callbacks) => api.task.delete.mutationOptions(callbacks),
+    mutationOptions: (callbacks) =>
+      entityMutationOptionsFactory("task", "delete")(callbacks),
     redirectTo: "/tasks",
     description: `${
       task.subtaskCount > 0
@@ -293,8 +295,8 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
     [task.blockedByIds, task.blockingIds],
   );
   const depQueryOptions = useMemo(
-    () => depIds.map((id) => api.task.getByID.queryOptions({ id })),
-    [api, depIds],
+    () => depIds.map((id) => entityDetailQueryOptions("task", id)),
+    [depIds],
   );
   const { depsById } = useQueries({
     queries: depQueryOptions,

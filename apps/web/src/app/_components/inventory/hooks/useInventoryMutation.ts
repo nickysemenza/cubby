@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useTRPC } from "~/integrations/trpc/react";
 import {
   makeBatchStatusFetcher,
@@ -35,11 +36,13 @@ export function useCreateInventoryMutation({
   onSuccess?: () => void;
   onError?: (error: unknown) => void;
 } = {}) {
-  const api = useTRPC();
   const invalidateInventory = useInventoryInvalidation();
 
   return useMutation(
-    api.inventory.create.mutationOptions({
+    entityMutationOptionsFactory(
+      "inventory",
+      "create",
+    )({
       onSuccess: (data) => {
         invalidateInventory(data);
         onSuccess?.();

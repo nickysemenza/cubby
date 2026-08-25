@@ -58,20 +58,14 @@ import { vendorOptions as loadVendorOptions } from "~/server/repo/vendor";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
 import { TraceNames, withTrace } from "~/server/tracing";
 import { createBulkUpdatedMutation } from "../crud-factory";
-import { createEntityCompatibilityProcedures } from "../entity-compatibility";
+import { createEntityListCompatibilityProcedure } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 import {
   expenseAnalyzeTraceAttributes,
   expenseFacetTraceAttributes,
 } from "./expense-observability";
 
-const {
-  getByID,
-  list,
-  create,
-  update,
-  delete: deleteItem,
-} = createEntityCompatibilityProcedures(
+const list = createEntityListCompatibilityProcedure(
   ENTITY_KERNEL_BINDINGS.expense,
   ENTITY_BINDINGS.expense.crud,
 );
@@ -278,11 +272,7 @@ const bulkSetCostType = createBulkUpdatedMutation({
 });
 
 export const expenseRouter = createTRPCRouter({
-  getByID,
   list,
-  create,
-  update,
-  delete: deleteItem,
   deleteWithPurchaseEffects,
   chartData,
   analytics,

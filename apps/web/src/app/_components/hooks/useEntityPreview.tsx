@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Sheet, SheetContent } from "~/components/ui/sheet";
 import { isBrowserRoutedEntity } from "~/entities/entities";
 import { getEntityContract } from "~/entities/entity-contracts";
@@ -12,6 +12,15 @@ interface PreviewState {
   entityType: Entity;
   id: string;
 }
+
+interface PreviewIntent {
+  preview: PreviewState;
+  queryKey: readonly unknown[];
+  timer: ReturnType<typeof setTimeout> | null;
+  started: boolean;
+}
+
+const PREVIEW_INTENT_DELAY_MS = 200;
 
 interface UseEntityPreviewOptions {
   /** Field to use as ID (default: "id") */
@@ -40,10 +49,6 @@ function PreviewSheetView({
   );
 }
 
-/**
- * Hook for adding row-click preview panels to entity lists. Hovering a row
- * prefetches the preview's `getByID` query so the click opens warm.
- */
 export function useEntityPreview(
   fixedEntity?: Entity,
   options?: UseEntityPreviewOptions,
@@ -52,6 +57,30 @@ export function useEntityPreview(
   const idField = options?.idField ?? "id";
   const api = useTRPC();
   const queryClient = useQueryClient();
+  const intentRef = useRef<PreviewIntent | null>(null);
+
+  const stopIntent = useCallback(
+    (intent: PreviewIntent, cancelStarted: boolean) => {
+      if (intent.timer) clearTimeout(intent.timer);
+      if (cancelStarted && intent.started) {
+        void queryClient.cancelQueries({
+          queryKey: intent.queryKey,
+          exact: true,
+          type: "inactive",
+        });
+      }
+      if (intentRef.current === intent) intentRef.current = null;
+    },
+    [queryClient],
+  );
+
+  useEffect(
+    () => () => {
+      const intent = intentRef.current;
+      if (intent) stopIntent(intent, true);
+    },
+    [stopIntent],
+  );
 
   // Resolve { entityType, id } from a row the same way for click + hover.
   // Note: entityType is handled separately to avoid conflicts with data that
@@ -83,14 +112,18 @@ export function useEntityPreview(
         return;
       }
       if (!isBrowserRoutedEntity(resolved.entityType)) return;
+      const intent = intentRef.current;
+      if (
+        intent?.preview.entityType === resolved.entityType &&
+        intent.preview.id === resolved.id
+      ) {
+        stopIntent(intent, false);
+      }
       setPreview(resolved);
     },
-    [resolveRow],
+    [resolveRow, stopIntent],
   );
 
-  // Prefetch the preview query on hover so the sheet opens without a spinner.
-  // Same options the panel's useQuery uses → guaranteed cache hit. prefetchQuery
-  // no-ops when the data is fresh or already in flight.
   const onRowHover = useCallback(
     <T extends Record<string, unknown>>(row: { original: T }) => {
       const resolved = resolveRow(row);
@@ -101,12 +134,60 @@ export function useEntityPreview(
       ) {
         return;
       }
-      void queryClient.prefetchQuery(
-        // biome-ignore lint/suspicious/noExplicitAny: union of getByID queryOptions can't be narrowed for prefetchQuery (same cast the panel uses for useQuery)
-        entityQueryOptions(api, resolved.entityType, resolved.id) as any,
-      );
+
+      const previous = intentRef.current;
+      if (
+        previous?.preview.entityType === resolved.entityType &&
+        previous.preview.id === resolved.id
+      ) {
+        return;
+      }
+      if (previous) stopIntent(previous, true);
+
+      const queryOptions = entityQueryOptions(
+        api,
+        resolved.entityType,
+        resolved.id,
+      ) as {
+        queryKey: readonly unknown[];
+        meta?: Record<string, unknown>;
+        [key: string]: unknown;
+      };
+      const intent: PreviewIntent = {
+        preview: resolved,
+        queryKey: queryOptions.queryKey,
+        timer: null,
+        started: false,
+      };
+      intent.timer = setTimeout(() => {
+        intent.timer = null;
+        intent.started = true;
+        void queryClient.prefetchQuery({
+          // biome-ignore lint/suspicious/noExplicitAny: the generated entity union cannot be narrowed at this dispatch seam
+          ...(queryOptions as any),
+          meta: { ...queryOptions.meta, speculativePreview: true },
+        });
+      }, PREVIEW_INTENT_DELAY_MS);
+      intentRef.current = intent;
     },
-    [resolveRow, api, queryClient],
+    [resolveRow, api, queryClient, stopIntent],
+  );
+
+  const onRowHoverEnd = useCallback(
+    <T extends Record<string, unknown>>(row: { original: T }) => {
+      const resolved = resolveRow(row);
+      const intent = intentRef.current;
+      if (
+        !resolved ||
+        !intent ||
+        intent.preview.entityType !== resolved.entityType ||
+        intent.preview.id !== resolved.id
+      ) {
+        return;
+      }
+      stopIntent(intent, true);
+    },
+    [resolveRow, stopIntent],
   );
 
   const closePreview = useCallback(() => setPreview(null), []);
@@ -122,6 +203,7 @@ export function useEntityPreview(
   return {
     onRowClick,
     onRowHover,
+    onRowHoverEnd,
     PreviewSheet,
     preview,
     setPreview,

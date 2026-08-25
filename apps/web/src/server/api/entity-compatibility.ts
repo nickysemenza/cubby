@@ -1,4 +1,3 @@
-import { mutationSideEffectsSchema } from "@cubby/schemas/background-jobs";
 import {
   createPaginatedResponseSchemaWithContext,
   createSortPaginationFields,
@@ -8,28 +7,22 @@ import {
 import type { TRPCUnsetMarker } from "@trpc/server";
 import { type ZodSchema, z } from "zod";
 import { executeEntity } from "~/server/entity-kernel";
-import type {
-  EntityKernelEntity,
-  EntityMutationCommand,
-} from "~/server/entity-kernel/contracts";
+import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";
 import { protectedProcedure, strictOutput } from "./trpc";
 
 const asResolvedOutput = <T>(value: T): T extends TRPCUnsetMarker ? never : T =>
   value as T extends TRPCUnsetMarker ? never : T;
 
 /**
- * Temporary wire-compatibility for named entity routers.
+ * Temporary list compatibility for named entity routers.
  *
  * These procedures contain no domain behavior: each maps the old route shape
- * to the single kernel command and unwraps its normalized envelope. New writes
- * use `entity.mutate`; route-owned reads use Start functions while old browser
- * routes migrate without preserving a second CRUD implementation.
+ * to the kernel list command and unwraps its normalized envelope. Generic
+ * detail reads and writes use Start functions while specialized list
+ * projections and workflows remain on tRPC.
  */
-export function createEntityCompatibilityProcedures<
+export function createEntityListCompatibilityProcedure<
   const E extends Exclude<EntityKernelEntity, "image">,
-  SId extends ZodSchema,
-  SCreate extends ZodSchema,
-  SUpdate extends ZodSchema,
   SOutput extends ZodSchema,
   SFilters extends ZodSchema,
   SList extends ZodSchema = SOutput,
@@ -44,20 +37,10 @@ export function createEntityCompatibilityProcedures<
     };
   },
   schemas: {
-    idSchema: SId;
-    createInput: SCreate;
-    updateInput: SUpdate;
     output: SOutput;
     listOutput?: SList;
   },
 ) {
-  // Preserve the branded parsed id through Zod's generic input boundary.
-  // The binding was constructed from this exact schema; this only restores the
-  // output type that `ZodSchema`'s `unknown` input default otherwise erases.
-  const idSchema = schemas.idSchema as unknown as z.ZodType<
-    z.output<SId>,
-    unknown
-  >;
   const listInput = z.object({
     filters: binding.filters,
     ...createSortPaginationFields({
@@ -66,28 +49,8 @@ export function createEntityCompatibilityProcedures<
       groupableFields: binding.sort.groupable,
     }),
   });
-  const mutationOutput = z.intersection(
-    schemas.output,
-    z.object({ sideEffects: mutationSideEffectsSchema }),
-  );
   const listOutput = (schemas.listOutput ?? schemas.output) as SList;
-  const getByID = protectedProcedure
-    .input(z.object({ id: idSchema }))
-    .output(strictOutput(schemas.output))
-    .query(async ({ ctx, input }) => {
-      const { id } = input as { id: z.output<SId> };
-      const result = await executeEntity(ctx, {
-        action: "get",
-        entity: binding.entity,
-        id: id as string,
-        missing: "error",
-      });
-      if (result.action !== "get" || result.item === null)
-        throw new Error("Entity kernel returned the wrong action");
-      return asResolvedOutput(result.item as z.output<SOutput>);
-    });
-
-  const list = protectedProcedure
+  return protectedProcedure
     .input(listInput)
     .output(
       strictOutput(
@@ -116,66 +79,4 @@ export function createEntityCompatibilityProcedures<
         meta: result.meta,
       });
     });
-
-  const create = protectedProcedure
-    .input(schemas.createInput)
-    .output(strictOutput(mutationOutput))
-    .mutation(async ({ ctx, input }) => {
-      const result = await executeEntity(ctx, {
-        action: "create",
-        entity: binding.entity,
-        data: input,
-      } as unknown as EntityMutationCommand);
-      if (result.action !== "create")
-        throw new Error("Entity kernel returned the wrong action");
-      return asResolvedOutput({
-        ...(result.item as Record<string, unknown>),
-        sideEffects: result.sideEffects,
-      } as z.output<typeof mutationOutput>);
-    });
-
-  const update = protectedProcedure
-    .input(z.object({ id: idSchema, data: schemas.updateInput }))
-    .output(strictOutput(mutationOutput))
-    .mutation(async ({ ctx, input }) => {
-      const values = input as {
-        id: z.output<SId>;
-        data: z.output<SUpdate>;
-      };
-      const result = await executeEntity(ctx, {
-        action: "update",
-        entity: binding.entity,
-        id: values.id,
-        data: values.data,
-      } as unknown as EntityMutationCommand);
-      if (result.action !== "update")
-        throw new Error("Entity kernel returned the wrong action");
-      return asResolvedOutput({
-        ...(result.item as Record<string, unknown>),
-        sideEffects: result.sideEffects,
-      } as z.output<typeof mutationOutput>);
-    });
-
-  const remove = protectedProcedure
-    .input(z.object({ ids: z.array(idSchema).min(1).max(500) }))
-    .output(
-      strictOutput(
-        z.object({
-          deleted: z.number().int().nonnegative(),
-          sideEffects: mutationSideEffectsSchema,
-        }),
-      ),
-    )
-    .mutation(async ({ ctx, input }) => {
-      const result = await executeEntity(ctx, {
-        action: "delete",
-        entity: binding.entity,
-        ids: input.ids as string[],
-      });
-      if (result.action !== "delete")
-        throw new Error("Entity kernel returned the wrong action");
-      return { deleted: result.deleted, sideEffects: result.sideEffects };
-    });
-
-  return { getByID, list, create, update, delete: remove };
 }

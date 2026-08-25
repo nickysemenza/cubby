@@ -6,8 +6,11 @@ import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMu
 import { EntityMergeDialog } from "~/app/_components/merge/entity-merge-dialog";
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useTRPC } from "~/integrations/trpc/react";
 import { invalidatesFor } from "~/lib/query-keys";
+
+const deleteProduct = entityMutationOptionsFactory("product", "delete");
 
 /**
  * Small inline fixes for problems whose resolution is a single field or a
@@ -29,9 +32,8 @@ export function OrphanedDeleteFix({
   name: string;
   close: () => void;
 }) {
-  const api = useTRPC();
   const remove = useProblemCardMutation({
-    mutationFn: api.product.delete.mutationOptions,
+    mutationFn: deleteProduct,
     success: "Product deleted",
     invalidateKeys: invalidatesFor("product"),
     onSuccess: close,

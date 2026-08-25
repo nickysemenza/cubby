@@ -6,7 +6,7 @@ import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { EntityInlineLink } from "../EntityInlineLink";
 import { useEntityDelete } from "../hooks/useEntityDelete";
 import { PrintLabelButton } from "../print-label-button";
@@ -23,14 +23,12 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
   location,
   onEdit,
 }) => {
-  const api = useTRPC();
   const { deleteButton, deleteDialog } = useEntityDelete({
     id: location.id,
     name: location.name,
     entityLabel: "Location",
     entity: "location",
-    mutationOptions: (callbacks) =>
-      api.location.delete.mutationOptions(callbacks),
+    mutationOptions: entityMutationOptionsFactory("location", "delete"),
     redirectTo: "/locations",
   });
 

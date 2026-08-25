@@ -3,7 +3,7 @@ import { format, parseISO } from "date-fns";
 import { keyBy } from "es-toolkit";
 import { useState } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { invalidatesFor } from "~/lib/query-keys";
 import type { BoardColumnKey } from "./board/board-types";
 import { TaskCard } from "./board/TaskCard";
@@ -52,7 +52,6 @@ export function groupTasksByDueDate(
  * view.
  */
 export function TasksAgenda({ tasks }: { tasks: TaskOut[] }) {
-  const api = useTRPC();
   const [pendingDelete, setPendingDelete] = useState<TaskOut | null>(null);
   const groups = groupTasksByDueDate(tasks);
   // Best-effort blocker-name resolution — only from tasks THIS agenda has
@@ -64,14 +63,14 @@ export function TasksAgenda({ tasks }: { tasks: TaskOut[] }) {
     entity: "task",
     operation: "update",
     intent: "status",
-    mutationFn: api.task.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("task", "update"),
     invalidateKeys: invalidatesFor("task"),
   });
   const remove = useActionMutation({
     entity: "task",
     operation: "delete",
     intent: "delete",
-    mutationFn: api.task.delete.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("task", "delete"),
     invalidateKeys: invalidatesFor("task"),
     onSuccess: () => setPendingDelete(null),
   });

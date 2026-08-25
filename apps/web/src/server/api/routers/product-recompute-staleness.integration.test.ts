@@ -4,9 +4,13 @@ import {
   type RecipeId,
   unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
+import { withEntityKernelMutations } from "tooling/entity-kernel-test-caller";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
-import { createTestCaller, createTestTRPCContext } from "~/server/api/trpc";
+import {
+  createTestTRPCContext,
+  createTestCaller as createTRPCTestCaller,
+} from "~/server/api/trpc";
 import { setCfEnv } from "~/server/cf-env";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
 import { createProduct } from "~/server/repo/product";
@@ -19,6 +23,11 @@ import {
 } from "~/server/repo/repo.fixtures";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { productRouter } from "./product";
+
+const createTestCaller = (
+  router: typeof productRouter,
+  db: Parameters<typeof createTestTRPCContext>[0],
+) => withEntityKernelMutations(createTRPCTestCaller(router, db), "product", db);
 
 /**
  * A product feeds recipe cost through its linked ingredient (price + the

@@ -14,7 +14,7 @@ import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
@@ -41,6 +41,10 @@ interface ProductBasicInfoProps {
 }
 
 const NO_DOCUMENTS: ImageOut[] = [];
+const productUpdateMutationOptions = entityMutationOptionsFactory(
+  "product",
+  "update",
+);
 
 export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
   product,
@@ -48,7 +52,6 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
   documents = NO_DOCUMENTS,
   onManualLink,
 }) => {
-  const api = useTRPC();
   const primaryIsbn = product.primaryGtin
     ? isbnFromGtin(product.primaryGtin)
     : null;
@@ -58,7 +61,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
     entity: "product",
     operation: "update",
     intent: "full",
-    mutationFn: api.product.update.mutationOptions,
+    mutationFn: productUpdateMutationOptions,
     // Surface the eager recompute (dependent recipes / inventory valuations).
     success: (data) => savedWithBackgroundWork(data.sideEffects),
     invalidateKeys: invalidatesFor("product", "valuation"),
@@ -70,8 +73,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
     name: product.name,
     entityLabel: "Product",
     entity: "product",
-    mutationOptions: (callbacks) =>
-      api.product.delete.mutationOptions(callbacks),
+    mutationOptions: entityMutationOptionsFactory("product", "delete"),
     redirectTo: "/products",
   });
 

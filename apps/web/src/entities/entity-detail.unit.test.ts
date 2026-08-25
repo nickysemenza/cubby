@@ -14,6 +14,17 @@ describe("entity detail transport contract", () => {
     expect(entityDetailRootKey("product")).toEqual([["product", "detail"]]);
   });
 
+  it("stores physical-label aliases under canonical detail keys", () => {
+    expect(entityDetailQueryKey("product", "p-4k7m")).toEqual([
+      ["product", "detail"],
+      { shortcode: "PRD-4K7M" },
+    ]);
+    expect(entityDetailQueryKey("location", "L-4K7M")).toEqual([
+      ["location", "detail"],
+      { shortcode: "LOC-4K7M" },
+    ]);
+  });
+
   it("exposes neutral error details to existing browser error handling", () => {
     const error = new EntityDetailError({
       code: "NOT_FOUND",

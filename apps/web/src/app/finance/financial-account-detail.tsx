@@ -7,7 +7,7 @@ import { DetailEditAction } from "~/components/ui/detail-edit-action";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { financialAccountEditRequest } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { renderOptionCell } from "../_components/data-table/columnHelpers";
 import { DetailSections } from "../_components/data-table/detail-page";
 import { useEntityDelete } from "../_components/hooks/useEntityDelete";
@@ -21,13 +21,12 @@ export function FinancialAccountDetail({
 }: {
   account: FinancialAccountOut;
 }) {
-  const api = useTRPC();
   const [editOpen, setEditOpen] = useState(false);
   const { deleteButton, deleteDialog } = useEntityDelete({
     id: account.id,
     name: account.name,
     entity: "financialAccount",
-    mutationOptions: api.financialAccount.delete.mutationOptions,
+    mutationOptions: entityMutationOptionsFactory("financialAccount", "delete"),
     redirectTo: "/financial-accounts",
   });
   return (

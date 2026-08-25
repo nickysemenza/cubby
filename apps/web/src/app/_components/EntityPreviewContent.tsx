@@ -22,7 +22,12 @@ import { ProjectMark, ProjectMarkById } from "~/app/projects/project-mark";
 import { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
 import { Row } from "~/components/layout";
 import { EntityIcon } from "~/entities/entities";
+import { entityDetailQueryOptions } from "~/entities/entity-detail";
 import { fdcIdFromParam } from "~/entities/entity-query";
+import type {
+  DetailEntity,
+  EntityDetailByEntity,
+} from "~/entities/generated/entity-details.gen";
 import { type RouterOutputs, useTRPC } from "~/integrations/trpc/react";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { purchaseLabel } from "~/lib/purchase-label";
@@ -40,8 +45,6 @@ import {
 import type { HoverPreviewEntity } from "./preview/preview-entities";
 import { PreviewQuery } from "./preview/preview-query";
 import { coverageLabel, formatYield } from "./recipe/recipe-utils";
-
-type Api = ReturnType<typeof useTRPC>;
 
 // Cross-link to the USDA food behind an ingredient/product (built identically
 // for both). The food description is too long to use as the label, so the
@@ -87,17 +90,17 @@ const coverageCaption = (
   return complete ? undefined : fraction;
 };
 
-// Each toXCard maps a tRPC `getByID` payload straight into the declarative
+// Each toXCard maps an entity-detail payload straight into the declarative
 // ManifestCardProps the shared <ManifestCard> renders — no intermediate
 // view-model. <GenericPreviewContent> below pairs each one with its query in
 // PREVIEW_TABLE; usda-food and cookbook stay their own tiny components
 // because their fetch shape genuinely diverges (fdc_id coercion, list-backed
-// detail with no getByID).
+// detail without a dedicated endpoint).
 
 // ── Recipe ──────────────────────────────────────────────────────────────────
 
 export function toRecipeCard(
-  data: RouterOutputs["recipe"]["getByID"],
+  data: EntityDetailByEntity["recipe"],
 ): ManifestCardProps {
   // Whole-recipe macros from persisted totals. Older rows may not have them
   // yet, so buildNutrients drops missing values.
@@ -166,7 +169,7 @@ export function toRecipeCard(
 // ── Ingredient ──────────────────────────────────────────────────────────────
 
 export function toIngredientCard(
-  data: RouterOutputs["ingredient"]["getByID"],
+  data: EntityDetailByEntity["ingredient"],
 ): ManifestCardProps {
   const prices = data.product
     .map((prod) => prod.pricing.effectivePrice)
@@ -220,7 +223,7 @@ export function toIngredientCard(
 // ── Product ─────────────────────────────────────────────────────────────────
 
 export function toProductCard(
-  data: RouterOutputs["product"]["getByID"],
+  data: EntityDetailByEntity["product"],
 ): ManifestCardProps {
   const isMisc = isMiscProduct(data.name);
   const manufacturer =
@@ -356,7 +359,7 @@ export function UsdaFoodPreviewContent({ fdcId }: { fdcId: number }) {
 // ── Location ────────────────────────────────────────────────────────────────
 
 export function toLocationCard(
-  data: RouterOutputs["location"]["getByID"],
+  data: EntityDetailByEntity["location"],
 ): ManifestCardProps {
   const itemCount = data.totalItemCount ?? data.directItemCount ?? undefined;
   const subCount = data.childCount ?? data.children?.length ?? undefined;
@@ -401,7 +404,7 @@ export function toLocationCard(
 // ── Inventory ───────────────────────────────────────────────────────────────
 
 export function toInventoryCard(
-  data: RouterOutputs["inventory"]["getByID"],
+  data: EntityDetailByEntity["inventory"],
 ): ManifestCardProps {
   const productName = isMiscProduct(data.product.name)
     ? getMiscDisplayName(data.product.name)
@@ -511,7 +514,7 @@ export function CookbookPreviewContent({ cookbookId }: { cookbookId: string }) {
 // ── Meal ────────────────────────────────────────────────────────────────────
 
 export function toMealCard(
-  data: RouterOutputs["meal"]["getByID"],
+  data: EntityDetailByEntity["meal"],
 ): ManifestCardProps {
   return {
     entity: "meal",
@@ -555,7 +558,7 @@ export function toMealCard(
 // ── Project ─────────────────────────────────────────────────────────────────
 
 export function toProjectCard(
-  data: RouterOutputs["project"]["getByID"] & { thumbUrl?: string },
+  data: EntityDetailByEntity["project"] & { thumbUrl?: string },
 ): ManifestCardProps {
   const identity = [
     PROJECT_STATUS_LABELS[data.status],
@@ -612,7 +615,7 @@ export function toProjectCard(
 // ── Task ────────────────────────────────────────────────────────────────────
 
 export function toTaskCard(
-  data: RouterOutputs["task"]["getByID"],
+  data: EntityDetailByEntity["task"],
 ): ManifestCardProps {
   const identity = [
     TASK_STATUS_LABELS[data.status],
@@ -650,7 +653,7 @@ export function toTaskCard(
 // ── Expense ────────────────────────────────────────────────────────────────
 
 export function toExpenseCard(
-  data: RouterOutputs["expense"]["getByID"],
+  data: EntityDetailByEntity["expense"],
 ): ManifestCardProps {
   const identity =
     [
@@ -701,7 +704,7 @@ export function toExpenseCard(
 // ── Purchase ────────────────────────────────────────────────────────────────
 
 export function toPurchaseCard(
-  data: RouterOutputs["purchase"]["getByID"],
+  data: EntityDetailByEntity["purchase"],
 ): ManifestCardProps {
   return {
     entity: "purchase",
@@ -757,7 +760,7 @@ export function toPurchaseCard(
 // ── Vendor ──────────────────────────────────────────────────────────────────
 
 export function toVendorCard(
-  data: RouterOutputs["vendor"]["getByID"],
+  data: EntityDetailByEntity["vendor"],
 ): ManifestCardProps {
   return {
     entity: "vendor",
@@ -783,105 +786,60 @@ export function toVendorCard(
 
 interface PreviewSpec<D> {
   label: string;
-  useDetail: (
-    trpc: Api,
-    id: string,
-  ) => { data: D | undefined; isLoading: boolean };
   toCard: (data: D) => ManifestCardProps;
 }
 
 // Type-erasure boundary: each entry below is fully checked against its own
-// concrete `RouterOutputs["<entity>"]["getByID"]` type at the call site (D is
-// inferred from `toCard`/`useDetail`), then widened to `unknown` so the table
-// can hold every entity's spec side by side. Same escape hatch this codebase
-// already uses for the union of `getByID` queryOptions (see entity-query.ts).
+// concrete detail payload at the call site, then widened to `unknown` so the
+// table can hold every entity's spec side by side.
 function defineSpec<D>(spec: PreviewSpec<D>): PreviewSpec<unknown> {
   return spec as PreviewSpec<unknown>;
 }
 
 type StandardPreviewEntity = Exclude<
   HoverPreviewEntity,
-  "usda-food" | "cookbook"
+  "usda-food" | "cookbook" | "project"
 >;
 
 const PREVIEW_TABLE: Record<StandardPreviewEntity, PreviewSpec<unknown>> = {
   recipe: defineSpec({
     label: "Recipe",
-    useDetail: (trpc, id) => useQuery(trpc.recipe.getByID.queryOptions({ id })),
     toCard: toRecipeCard,
   }),
   ingredient: defineSpec({
     label: "Ingredient",
-    useDetail: (trpc, id) =>
-      useQuery(trpc.ingredient.getByID.queryOptions({ id })),
     toCard: toIngredientCard,
   }),
   product: defineSpec({
     label: "Product",
-    useDetail: (trpc, id) =>
-      useQuery(trpc.product.getByID.queryOptions({ id })),
     toCard: toProductCard,
   }),
   location: defineSpec({
     label: "Location",
-    useDetail: (trpc, id) =>
-      useQuery(trpc.location.getByID.queryOptions({ id })),
     toCard: toLocationCard,
   }),
   inventory: defineSpec({
     label: "Inventory item",
-    useDetail: (trpc, id) =>
-      useQuery(trpc.inventory.getByID.queryOptions({ id })),
     toCard: toInventoryCard,
   }),
   meal: defineSpec({
     label: "Meal",
-    useDetail: (trpc, id) => useQuery(trpc.meal.getByID.queryOptions({ id })),
     toCard: toMealCard,
-  }),
-  project: defineSpec({
-    label: "Project",
-    useDetail: (trpc, id) => {
-      const query = useQuery(trpc.project.getByID.queryOptions({ id }));
-      // Projects deliberately carry no `images` on `getByID` — `projectOut` is
-      // also `project.list`'s output, so widening it would buy a per-row image
-      // join on every list page (see repo/image.ts's getImagesByProjectIds).
-      // This endpoint is the established path, already displayable-filtered
-      // and cover-first, and the projects dashboard usually leaves it warm in
-      // the cache. The card never waits on it: the thumb just appears when it
-      // lands.
-      const coverQuery = useQuery(
-        trpc.image.imagesByProjectIds.queryOptions({ projectIds: [id] }),
-      );
-      return {
-        data: query.data
-          ? { ...query.data, thumbUrl: coverQuery.data?.[id]?.[0]?.url }
-          : undefined,
-        isLoading: query.isLoading,
-      };
-    },
-    toCard: toProjectCard,
   }),
   task: defineSpec({
     label: "Task",
-    useDetail: (trpc, id) => useQuery(trpc.task.getByID.queryOptions({ id })),
     toCard: toTaskCard,
   }),
   expense: defineSpec({
     label: "Expense",
-    useDetail: (trpc, id) =>
-      useQuery(trpc.expense.getByID.queryOptions({ id })),
     toCard: toExpenseCard,
   }),
   purchase: defineSpec({
     label: "Purchase",
-    useDetail: (trpc, id) =>
-      useQuery(trpc.purchase.getByID.queryOptions({ id })),
     toCard: toPurchaseCard,
   }),
   vendor: defineSpec({
     label: "Vendor",
-    useDetail: (trpc, id) => useQuery(trpc.vendor.getByID.queryOptions({ id })),
     toCard: toVendorCard,
   }),
 };
@@ -893,13 +851,31 @@ function GenericPreviewContent({
   entity: StandardPreviewEntity;
   id: string;
 }) {
-  const trpc = useTRPC();
   const spec = PREVIEW_TABLE[entity];
-  const query = spec.useDetail(trpc, id);
+  const query = useQuery(
+    entityDetailQueryOptions(entity as DetailEntity, id) as never,
+  );
 
   return (
     <PreviewQuery query={query} label={spec.label}>
       {(data) => <ManifestCard {...spec.toCard(data)} />}
+    </PreviewQuery>
+  );
+}
+
+function ProjectPreviewContent({ id }: { id: string }) {
+  const trpc = useTRPC();
+  const query = useQuery(entityDetailQueryOptions("project", id));
+  const coverQuery = useQuery(
+    trpc.image.imagesByProjectIds.queryOptions({ projectIds: [id] }),
+  );
+  const data = query.data
+    ? { ...query.data, thumbUrl: coverQuery.data?.[id]?.[0]?.url }
+    : undefined;
+
+  return (
+    <PreviewQuery query={{ data, isLoading: query.isLoading }} label="Project">
+      {(project) => <ManifestCard {...toProjectCard(project)} />}
     </PreviewQuery>
   );
 }
@@ -913,11 +889,12 @@ export function EntityPreviewContent({
 }) {
   // usda-food and cookbook fetch differently enough (fdc_id coercion,
   // list-backed detail with no getByID) to stay their own small components.
-  // Every other entity is a uniform `getByID` fetch, keyed here so switching
+  // Every other entity is a uniform detail fetch, keyed here so switching
   // entities remounts rather than changing the hooks a single instance calls
   // (project's extra cover-image query is one more hook than the rest).
   if (entity === "usda-food")
     return <UsdaFoodPreviewContent fdcId={fdcIdFromParam(id)} />;
   if (entity === "cookbook") return <CookbookPreviewContent cookbookId={id} />;
+  if (entity === "project") return <ProjectPreviewContent id={id} />;
   return <GenericPreviewContent key={entity} entity={entity} id={id} />;
 }

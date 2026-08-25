@@ -11,6 +11,7 @@ vi.mock("~/server/utils/s3", async (importActual) => ({
 }));
 
 import { setCfEnv } from "~/server/cf-env";
+import { getRecipeByShortcode } from "~/server/repo/recipe";
 import { makeImportRecipe } from "~/server/repo/repo.fixtures";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { createTestCaller } from "../../trpc";
@@ -51,8 +52,7 @@ describe("recipe.insertImport persists the scraped image", () => {
 
   // Read back through the router, the way the recipe page does.
   const attachedImages = async (recipeId: RecipeShortcode) =>
-    (await createTestCaller(recipeRouter, ctx.db).getByID({ id: recipeId }))
-      .images;
+    (await getRecipeByShortcode(ctx.db, recipeId))?.images ?? [];
 
   it("fetches the image into R2 and attaches it, once across re-imports", async () => {
     const caller = createTestCaller(recipeRouter, ctx.db);

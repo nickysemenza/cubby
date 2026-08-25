@@ -58,6 +58,7 @@ type CallerOwnedProps<TItem extends RowData> = Pick<
   | "getRowClassName"
   | "onRowClick"
   | "onRowHover"
+  | "onRowHoverEnd"
   | "showCellSelectionStats"
   | "showColumnMenu"
   | "verticalAlign"

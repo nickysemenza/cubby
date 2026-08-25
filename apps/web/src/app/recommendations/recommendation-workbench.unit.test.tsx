@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@tanstack/react-query", () => ({
+  mutationOptions: (options: unknown) => options,
   useQuery: () => ({
     data: {
       status: "ready",

@@ -24,7 +24,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { NoneValue } from "~/components/ui/none-value";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { formatCurrency } from "~/lib/utils";
 import { persistedVendorId } from "~/lib/vendor-logo";
 import {
@@ -59,12 +59,11 @@ interface ExpenseDetailProps {
 }
 
 export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
-  const api = useTRPC();
   const [receiveOpen, setReceiveOpen] = useState(false);
   const [splitOpen, setSplitOpen] = useState(false);
 
   const updateMutation = useUpdateMutation({
-    mutationFn: api.expense.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("expense", "update"),
     entity: "expense",
   });
 
@@ -83,7 +82,7 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
     entityLabel: "Expense",
     entity: "expense",
     mutationOptions: (callbacks) =>
-      api.expense.delete.mutationOptions(callbacks),
+      entityMutationOptionsFactory("expense", "delete")(callbacks),
     redirectTo: "/expenses",
   });
 

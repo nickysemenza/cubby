@@ -89,7 +89,7 @@ export function useEntityDelete({
   // `mutationOptions`'s narrower callback shape isn't literally the
   // `MutationOptionsFn` signature `useActionMutation` is generic over (its
   // callbacks carry the delete-specific `{ sideEffects }` result), but it's
-  // the same tRPC `*.delete.mutationOptions` factory shape every call site
+  // the same transport-neutral mutation-options factory shape every call site
   // passes — invalidation, background-batch re-invalidation, and the error
   // toast all now come from `useActionMutation` itself.
   const legacyDeleteMutation = useActionMutation({

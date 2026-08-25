@@ -1,3 +1,4 @@
+import { parseShortcode } from "@cubby/shared";
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
@@ -6,6 +7,7 @@ import {
   EntityTransportError,
   observedEntityCall,
   type PublicEntityError,
+  unwrapEntityTransportResult,
 } from "./entity-transport";
 import type {
   EntityDetailByEntity,
@@ -72,15 +74,22 @@ async function getEntityDetail<E extends DetailEntity>(options: {
 }): Promise<EntityDetailByEntity[E] | null> {
   return await observedEntityCall("entity.detail", options.data, async () => {
     const result = await getEntityDetailTransport(options);
-    if (!result.ok) throw new EntityDetailError(result.error);
-    return result.data as EntityDetailByEntity[E] | null;
+    return unwrapEntityTransportResult(
+      "entity.detail",
+      result,
+      (error) => new EntityDetailError(error),
+    ) as EntityDetailByEntity[E] | null;
   });
 }
 
 export const entityDetailQueryKey = <E extends DetailEntity>(
   entity: E,
   shortcode: string,
-) => [[entity, "detail"], { shortcode }] as const;
+) => {
+  const parsed = parseShortcode(shortcode);
+  const canonical = parsed?.type === entity ? parsed.shortcode : shortcode;
+  return [[entity, "detail"], { shortcode: canonical }] as const;
+};
 
 export const entityDetailRootKey = <E extends DetailEntity>(entity: E) =>
   [[entity, "detail"]] as const;
@@ -88,13 +97,18 @@ export const entityDetailRootKey = <E extends DetailEntity>(entity: E) =>
 export function entityDetailQueryOptions<E extends DetailEntity>(
   entity: E,
   shortcode: EntityDetailInputByEntity[E]["shortcode"],
-  options?: { enabled?: boolean },
+  options?: { enabled?: boolean; staleTime?: number },
 ) {
+  const queryKey = entityDetailQueryKey(entity, shortcode);
+  const canonicalShortcode = queryKey[1].shortcode;
   return queryOptions({
-    queryKey: entityDetailQueryKey(entity, shortcode),
+    queryKey,
     queryFn: ({ signal }) =>
       getEntityDetail({
-        data: { entity, shortcode } as EntityDetailInputByEntity[E],
+        data: {
+          entity,
+          shortcode: canonicalShortcode,
+        } as EntityDetailInputByEntity[E],
         signal,
       }),
     ...options,

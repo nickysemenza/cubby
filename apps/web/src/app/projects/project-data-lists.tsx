@@ -38,6 +38,7 @@ import {
   taskStatusColumn,
   taskTradeColumn,
 } from "~/app/projects/shared";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { useTRPC } from "~/integrations/trpc/react";
 
@@ -65,12 +66,12 @@ export function ProjectDataTaskList({
     parentTask: parentOptions,
   });
   const update = useUpdateMutation({
-    mutationFn: api.task.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("task", "update"),
     entity: "task",
   });
   const nameEditable = useNameEditable<TaskOut>(update.mutateAsync);
   const deletable = useDeletableConfig({
-    mutationFn: api.task.delete.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("task", "delete"),
     entityLabel: "Task",
     entity: "task",
   });
@@ -79,7 +80,8 @@ export function ProjectDataTaskList({
     () => ({ projectScope }),
     [projectScope],
   );
-  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("task");
+  const { onRowClick, onRowHover, onRowHoverEnd, PreviewSheet } =
+    useEntityPreview("task");
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrapper is functionally stable
   const columns = useMemo(
@@ -130,6 +132,7 @@ export function ProjectDataTaskList({
         ariaLabel="Project-scoped Tasks Table"
         onRowClick={onRowClick}
         onRowHover={onRowHover}
+        onRowHoverEnd={onRowHoverEnd}
       />
       <PreviewSheet />
       <TaskBulkActionDialogs
@@ -151,12 +154,12 @@ export function ProjectDataExpenseList({
   const projectOptions = useDeferredFilterOptions("project");
   const filterOptions = useFilterOptions({ project: projectOptions });
   const update = useUpdateMutation({
-    mutationFn: api.expense.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("expense", "update"),
     entity: "expense",
   });
   const nameEditable = useNameEditable<ExpenseOut>(update.mutateAsync);
   const deletable = useDeletableConfig({
-    mutationFn: api.expense.delete.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("expense", "delete"),
     entityLabel: "Expense",
     entity: "expense",
   });
@@ -165,7 +168,8 @@ export function ProjectDataExpenseList({
     () => ({ projectScope }),
     [projectScope],
   );
-  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("expense");
+  const { onRowClick, onRowHover, onRowHoverEnd, PreviewSheet } =
+    useEntityPreview("expense");
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrapper is functionally stable
   const columns = useMemo(
@@ -226,6 +230,7 @@ export function ProjectDataExpenseList({
         ariaLabel="Project-scoped Expenses Table"
         onRowClick={onRowClick}
         onRowHover={onRowHover}
+        onRowHoverEnd={onRowHoverEnd}
       />
       <PreviewSheet />
       {rowActions.dialogs}

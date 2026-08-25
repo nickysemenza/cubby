@@ -1,10 +1,11 @@
 import type { Amount } from "@cubby/schemas/codec";
 import { unsafeIngredientShortcode } from "@cubby/schemas/identifiers";
 import { manualUnitMapping } from "@cubby/schemas/unitmapping";
+import { withEntityKernelMutations } from "tooling/entity-kernel-test-caller";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
-import { getMealsByDateRange } from "~/server/repo/meal";
+import { getMealByShortcode, getMealsByDateRange } from "~/server/repo/meal";
 import {
   createProductFixture,
   makeProductInput,
@@ -17,8 +18,18 @@ import { recipeRouter } from "./recipe";
 describe("mealRouter", () => {
   const ctx = withTestDb();
 
-  const mealCaller = () => createTestCaller(mealRouter, ctx.db);
-  const recipeCaller = () => createTestCaller(recipeRouter, ctx.db);
+  const mealCaller = () =>
+    withEntityKernelMutations(
+      createTestCaller(mealRouter, ctx.db),
+      "meal",
+      ctx.db,
+    );
+  const recipeCaller = () =>
+    withEntityKernelMutations(
+      createTestCaller(recipeRouter, ctx.db),
+      "recipe",
+      ctx.db,
+    );
 
   const createRecipe = (name: string, ingredientId: string, need: Amount) =>
     recipeCaller().create({
@@ -92,7 +103,7 @@ describe("mealRouter", () => {
 
     const after = await getMealsByDateRange(ctx.db, "2026-06-14", "2026-06-16");
     expect(after).toHaveLength(0);
-    await expect(mealCaller().getByID({ id: meal.id })).rejects.toThrow();
+    await expect(getMealByShortcode(ctx.db, meal.id)).resolves.toBeNull();
   });
 
   it("prices the shortfall from the product's money edge", async () => {

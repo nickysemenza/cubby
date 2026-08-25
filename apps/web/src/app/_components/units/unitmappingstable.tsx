@@ -10,6 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { entityDetailQueryOptions } from "~/entities/entity-detail";
 import { useHydrated } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
 import {
@@ -91,15 +92,10 @@ const LazyFoodPillLink: React.FC<{ fdcId: number }> = ({ fdcId }) => {
 const LazyProductPillLink: React.FC<{ productId: string }> = ({
   productId,
 }) => {
-  const api = useTRPC();
   const { data: fetched, isLoading: productLoading } = useQuery(
-    api.product.getByID.queryOptions(
-      { id: productId },
-      {
-        // Cache for 5 minutes since product data doesn't change often
-        staleTime: 5 * 60 * 1000,
-      },
-    ),
+    entityDetailQueryOptions("product", productId, {
+      staleTime: 5 * 60 * 1000,
+    }),
   );
   // Hydration-stable. Whether this product has landed differs between the SSR
   // render and the first client render — TanStack Start's query stream races

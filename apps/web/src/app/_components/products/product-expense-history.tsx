@@ -42,6 +42,7 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "~/components/ui/empty";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { FILTER_NONE } from "~/entities/filters";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -144,12 +145,12 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
   );
   const membership = membershipQuery.data ?? EMPTY_MEMBERSHIP;
   const update = useUpdateMutation({
-    mutationFn: api.expense.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("expense", "update"),
     entity: "expense",
   });
   const nameEditable = useNameEditable<ExpenseOut>(update.mutateAsync);
   const deletable = useDeletableConfig({
-    mutationFn: api.expense.delete.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("expense", "delete"),
     entityLabel: "Expense",
     entity: "expense",
   });

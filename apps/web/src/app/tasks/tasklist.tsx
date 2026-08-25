@@ -13,8 +13,9 @@ import {
 } from "~/app/projects/shared";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { entityDetailQueryOptions } from "~/entities/entity-detail";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
-import { useTRPC } from "~/integrations/trpc/react";
 import {
   createParentLinkColumn,
   createProjectLinkColumn,
@@ -58,7 +59,6 @@ interface TaskListProps {
 }
 
 export function TaskList({ actions, initialSearch }: TaskListProps) {
-  const api = useTRPC();
   const columnHelper = useMemo(() => createCubbyColumnHelper<TaskOut>(), []);
   const projectOptions = useDeferredFilterOptions("project");
   const productOptions = useDeferredFilterOptions("product");
@@ -71,7 +71,7 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
   });
 
   const updateTaskMutation = useUpdateMutation({
-    mutationFn: api.task.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("task", "update"),
     entity: "task",
   });
 
@@ -171,7 +171,7 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
   const scopedProductId = tasksSearch.productId;
   const hasInvalidProductScope = scopedProductId === UNRESOLVABLE_ENTITY_FILTER;
   const scopedProductQuery = useQuery({
-    ...api.product.getByID.queryOptions({ id: scopedProductId ?? "" }),
+    ...entityDetailQueryOptions("product", scopedProductId ?? ""),
     enabled: Boolean(scopedProductId) && !hasInvalidProductScope,
   });
   const clearProductScope = useCallback(() => {

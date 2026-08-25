@@ -1,4 +1,5 @@
 import type { Amount } from "@cubby/schemas/codec";
+import { withEntityKernelMutations } from "tooling/entity-kernel-test-caller";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 import { seedIngredientWithStock as seedStock } from "~/server/repo/repo.fixtures";
@@ -6,17 +7,18 @@ import { createTestCaller } from "../trpc";
 import { recipeRouter } from "./recipe";
 import { suggestionsRouter } from "./suggestions";
 
+const createRecipeCaller = (db: Parameters<typeof createTestCaller>[1]) =>
+  withEntityKernelMutations(createTestCaller(recipeRouter, db), "recipe", db);
+
 describe("suggestions router", () => {
   const ctx = withTestDb();
-  let recipeCaller: ReturnType<
-    typeof createTestCaller<(typeof recipeRouter)["_def"]["record"]>
-  >;
+  let recipeCaller: ReturnType<typeof createRecipeCaller>;
   let suggestionsCaller: ReturnType<
     typeof createTestCaller<(typeof suggestionsRouter)["_def"]["record"]>
   >;
 
   beforeEach(() => {
-    recipeCaller = createTestCaller(recipeRouter, ctx.db);
+    recipeCaller = createRecipeCaller(ctx.db);
     suggestionsCaller = createTestCaller(suggestionsRouter, ctx.db);
   });
 

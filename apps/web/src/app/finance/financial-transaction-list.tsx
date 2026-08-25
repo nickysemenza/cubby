@@ -9,6 +9,7 @@ import { useMemo } from "react";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useTRPC } from "~/integrations/trpc/react";
 import { presenceCellOptions } from "~/lib/select-options";
 import { formatCurrency } from "~/lib/utils";
@@ -70,7 +71,7 @@ export function FinancialTransactionList() {
     })),
   });
   const deletable = useDeletableConfig({
-    mutationFn: api.financialTransaction.delete.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("financialTransaction", "delete"),
     entity: "financialTransaction",
   });
   const columns = useMemo(

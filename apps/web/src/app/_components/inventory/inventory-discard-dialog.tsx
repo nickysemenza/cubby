@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityDetailQueryOptions } from "~/entities/entity-detail";
 
 interface InventoryDiscardDialogProps {
   onOpenChange: (open: boolean) => void;
@@ -43,10 +43,7 @@ export const InventoryDiscardDialog: FC<InventoryDiscardDialogProps> = ({
   onOpenChange,
   target,
 }) => {
-  const api = useTRPC();
-  const query = useQuery(
-    api.product.getByID.queryOptions({ id: target.productId }),
-  );
+  const query = useQuery(entityDetailQueryOptions("product", target.productId));
 
   const failed = query.isError;
   useEffect(() => {

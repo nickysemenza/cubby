@@ -5,7 +5,7 @@ import type {
 import { useMemo } from "react";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { entities, entityDetailParams } from "~/entities/entities";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import {
   createBooleanColumn,
   renderOptionCell,
@@ -19,17 +19,16 @@ import {
   provisionalOptions,
 } from "./financial-account-options";
 export function FinancialAccountList() {
-  const api = useTRPC();
   const helper = useMemo(
     () => createCubbyColumnHelper<FinancialAccountOut>(),
     [],
   );
   const deletable = useDeletableConfig({
-    mutationFn: api.financialAccount.delete.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("financialAccount", "delete"),
     entity: "financialAccount",
   });
   const updateAccountMutation = useUpdateMutation({
-    mutationFn: api.financialAccount.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("financialAccount", "update"),
     entity: "financialAccount",
   });
   // biome-ignore lint/correctness/useExhaustiveDependencies: mutations change every render but are functionally stable

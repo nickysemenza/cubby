@@ -18,10 +18,10 @@ import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-binding
 import { vendorOptions } from "~/server/repo/vendor";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 import { fetchAndAttachVendorLogo } from "~/server/services/vendor-logo.service";
-import { createEntityCompatibilityProcedures } from "../entity-compatibility";
+import { createEntityListCompatibilityProcedure } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
-const procedures = createEntityCompatibilityProcedures(
+const list = createEntityListCompatibilityProcedure(
   ENTITY_KERNEL_BINDINGS.vendor,
   ENTITY_BINDINGS.vendor.crud,
 );
@@ -76,7 +76,7 @@ const fetchLogo = protectedProcedure
   });
 
 export const vendorRouter = createTRPCRouter({
-  ...procedures,
+  list,
   options,
   merge,
   fetchLogo,

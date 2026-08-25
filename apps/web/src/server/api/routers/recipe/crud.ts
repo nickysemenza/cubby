@@ -15,21 +15,18 @@ import {
 } from "~/server/repo/recipe";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
-import { createEntityCompatibilityProcedures } from "../../entity-compatibility";
+import { createEntityListCompatibilityProcedure } from "../../entity-compatibility";
 import { protectedProcedure, strictOutput } from "../../trpc";
 
 const recipeShortcodes = bindShortcodeResolver("recipe");
 
-const {
-  getByID,
-  list,
-  create,
-  update,
-  delete: deleteItem,
-} = createEntityCompatibilityProcedures(ENTITY_KERNEL_BINDINGS.recipe, {
-  ...ENTITY_BINDINGS.recipe.crud,
-  listOutput: recipeListItemOut,
-});
+const list = createEntityListCompatibilityProcedure(
+  ENTITY_KERNEL_BINDINGS.recipe,
+  {
+    ...ENTITY_BINDINGS.recipe.crud,
+    listOutput: recipeListItemOut,
+  },
+);
 
 // Batched fetch by id — mirrors ingredient.getManyByIDs. Used by client-side
 // cost rollup to resolve sub-recipes (recipe-as-ingredient) without an N+1
@@ -86,12 +83,8 @@ const duplicate = protectedProcedure
   });
 
 export const recipeCrudProcedures = {
-  getByID,
   getManyByIDs,
   list,
-  create,
-  update,
   duplicate,
-  delete: deleteItem,
   getAllTags: getAllTagsEndpoint,
 };

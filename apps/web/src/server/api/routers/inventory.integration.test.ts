@@ -3,8 +3,10 @@ import {
   unsafeLocationShortcode,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
+import { withEntityKernelMutations } from "tooling/entity-kernel-test-caller";
 import { seedFromCSV, TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { getInventoryEntryByShortcode } from "~/server/repo/inventory";
 import {
   createInventoryFixture as createInventoryEntry,
   createLocationFixture as createLocation,
@@ -13,14 +15,28 @@ import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
-import { createTestCaller } from "../trpc";
+import { createTestCaller as createTRPCTestCaller } from "../trpc";
 import { inventoryRouter } from "./inventory";
 
 describe("inventory router", () => {
   const ctx = withTestDb();
+  const createTestCaller = (
+    _router: typeof inventoryRouter = inventoryRouter,
+    db = ctx.db,
+  ) =>
+    withEntityKernelMutations(
+      createTRPCTestCaller(inventoryRouter, db),
+      "inventory",
+      db,
+    );
+  const getByID = async (id: string) => {
+    const item = await getInventoryEntryByShortcode(ctx.db, id);
+    if (!item) throw new Error(`Inventory entry ${id} not found`);
+    return item;
+  };
 
   it("should create and retrieve an inventory entry", async () => {
-    const caller = createTestCaller(inventoryRouter, ctx.db);
+    const caller = createTestCaller();
 
     const location = await createLocation(
       ctx.db,
@@ -53,7 +69,7 @@ describe("inventory router", () => {
     expect(createdEntry.id).toBeDefined();
     expect(createdEntry.amount.value).toEqual(5);
     expect(createdEntry.amount.unit).toEqual("lbs");
-    const retrievedEntry = await caller.getByID({ id: createdEntry.id });
+    const retrievedEntry = await getByID(createdEntry.id);
 
     expect(retrievedEntry.id).toEqual(createdEntry.id);
     expect(retrievedEntry.amount.value).toEqual(5);
@@ -170,7 +186,7 @@ describe("inventory router", () => {
     expect(updatedEntry.amount.value).toEqual(5);
     expect(updatedEntry.amount.unit).toEqual("kg");
 
-    const retrievedEntry = await caller.getByID({ id: createdEntry.id });
+    const retrievedEntry = await getByID(createdEntry.id);
     expect(retrievedEntry.amount.value).toEqual(5);
     expect(retrievedEntry.amount.unit).toEqual("kg");
   });
@@ -216,7 +232,7 @@ describe("inventory router", () => {
     expect(updatedEntry.id).toEqual(createdEntryShortcode);
     expect(updatedEntry.amount.value).toEqual(1);
     expect(updatedEntry.amount.unit).toEqual("piece");
-    const detailedUpdatedEntry = await caller.getByID({ id: updatedEntry.id });
+    const detailedUpdatedEntry = await getByID(updatedEntry.id);
     expect(detailedUpdatedEntry.product.id).toEqual(product2Shortcode);
     expect(detailedUpdatedEntry.location.id).toEqual(location1Shortcode);
 
@@ -227,9 +243,7 @@ describe("inventory router", () => {
       },
     });
 
-    const detailedUpdatedEntry2 = await caller.getByID({
-      id: updatedEntry2.id,
-    });
+    const detailedUpdatedEntry2 = await getByID(updatedEntry2.id);
     expect(detailedUpdatedEntry2.location.id).toEqual(location2Id);
     expect(detailedUpdatedEntry2.product.id).toEqual(product2Shortcode);
   });
@@ -312,14 +326,12 @@ describe("inventory router", () => {
   });
 
   it("should throw error when retrieving inventory entry with invalid ID", async () => {
-    const caller = createTestCaller(inventoryRouter, ctx.db);
-
     const nonExistentId = unsafeInventoryShortcode("INV-ZZZZ");
 
     // The factory's derived `getByID` raises the same reason AND the same
     // prose as `createEntityReader`'s throwing variant — `${label} ${id} not
     // found` — so a detail route and a repo read fail identically, id included.
-    await expect(caller.getByID({ id: nonExistentId })).rejects.toThrow(
+    await expect(getByID(nonExistentId)).rejects.toThrow(
       `Inventory entry ${nonExistentId} not found`,
     );
   });
@@ -408,7 +420,7 @@ describe("inventory router", () => {
       expect(result.items[0]!.amount.value).toEqual(3);
       expect(result.items[0]!.location.id).toEqual(targetLocation.id);
 
-      const sourceEntry = await caller.getByID({ id: entryId });
+      const sourceEntry = await getByID(entryId);
       expect(sourceEntry.amount.value).toEqual(7);
     });
 
@@ -621,8 +633,6 @@ describe("inventory router", () => {
     });
 
     it("should return null valuation when product has no price", async () => {
-      const caller = createTestCaller(inventoryRouter, ctx.db);
-
       const seed = await seedFromCSV(
         ctx.db,
         [
@@ -638,7 +648,7 @@ describe("inventory router", () => {
       );
 
       const entryId = seed.inventoryIds.get("Unpriced Product@Pantry")!;
-      const entry = await caller.getByID({ id: entryId });
+      const entry = await getByID(entryId);
 
       expect(entry.valuation).toBeNull();
     });

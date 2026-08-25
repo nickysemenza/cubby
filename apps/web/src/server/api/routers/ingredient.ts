@@ -40,39 +40,23 @@ import {
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import {
   enrichmentWorkbench as enrichmentWorkbenchService,
-  getIngredientByID,
   getIngredientByName,
   getIngredientsByIDs,
 } from "~/server/services/ingredient.service";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
-import { createEntityCompatibilityProcedures } from "../entity-compatibility";
+import { createEntityListCompatibilityProcedure } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const ingredientShortcodes = bindShortcodeResolver("ingredient");
 const recipeShortcodes = bindShortcodeResolver("recipe");
 
-const {
-  list,
-  create,
-  update,
-  delete: deleteItem,
-} = createEntityCompatibilityProcedures(ENTITY_KERNEL_BINDINGS.ingredient, {
-  ...ENTITY_BINDINGS.ingredient.crud,
-  listOutput: ingredientListItemOut,
-});
-
-// Recipe usage and food joins are a detail projection, not part of canonical
-// ingredient CRUD.
-const getByID = protectedProcedure
-  .input(z.object({ id: ingredientShortcode }))
-  .output(strictOutput(ingredientWithFoodOut))
-  .query(async ({ ctx, input }) =>
-    getIngredientByID(
-      ctx.db,
-      ctx.usdaClient,
-      await ingredientShortcodes.one(ctx.db, input.id),
-    ),
-  );
+const list = createEntityListCompatibilityProcedure(
+  ENTITY_KERNEL_BINDINGS.ingredient,
+  {
+    ...ENTITY_BINDINGS.ingredient.crud,
+    listOutput: ingredientListItemOut,
+  },
+);
 
 const merge = protectedProcedure
   .input(ingredientMergeInput)
@@ -206,11 +190,7 @@ export const ingredientRouter = createTRPCRouter({
   recipeUsages,
   matchNames,
   resolveOrCreate,
-  getByID,
   getManyByIDs,
   list,
   merge,
-  create,
-  update,
-  delete: deleteItem,
 });

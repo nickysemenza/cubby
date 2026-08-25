@@ -8,6 +8,7 @@ import {
 import { useMemo } from "react";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { Badge } from "~/components/ui/badge";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { useTRPC } from "~/integrations/trpc/react";
 import {
@@ -45,7 +46,7 @@ export function MealTable() {
   const columnHelper = useMemo(() => createCubbyColumnHelper<MealOut>(), []);
 
   const updateMealMutation = useUpdateMutation({
-    mutationFn: api.meal.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("meal", "update"),
     entity: "meal",
   });
 
@@ -65,7 +66,7 @@ export function MealTable() {
   );
 
   const deletableConfig = useDeletableConfig({
-    mutationFn: api.meal.delete.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("meal", "delete"),
     entityLabel: "Meal",
     entity: "meal",
   });

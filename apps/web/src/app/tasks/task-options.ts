@@ -3,7 +3,6 @@ import { taskStatusValues } from "@cubby/schemas/project";
 import { addDays, endOfWeek, format, startOfWeek } from "date-fns";
 import { match } from "ts-pattern";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
-import { buildSelectOptions } from "~/lib/select-options";
 import { getStatusChartColor } from "~/lib/status-colors";
 
 /**
@@ -45,22 +44,6 @@ export const taskStatusOptions: FilterableComboboxItem[] = taskStatusValues.map(
     label: TASK_STATUS_LABELS[value],
     color: getStatusChartColor(value),
   }),
-);
-
-/** Fixed preset values for the task due-date filter. */
-const dueRangeValues = ["overdue", "week", "30d"] as const;
-type DueRangePreset = (typeof dueRangeValues)[number];
-
-const dueRangeLabels: Record<DueRangePreset, string> = {
-  overdue: "Overdue",
-  week: "Due this week",
-  "30d": "Due in 30 days",
-};
-
-/** `{value,label}` options for the task due-date filter select. */
-export const dueRangeOptions = buildSelectOptions(
-  dueRangeValues,
-  dueRangeLabels,
 );
 
 /**

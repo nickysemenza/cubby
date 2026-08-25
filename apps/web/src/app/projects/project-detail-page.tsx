@@ -70,6 +70,7 @@ import {
   taskCaptureRequest,
 } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { formatCurrency } from "~/lib/utils";
@@ -547,7 +548,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   const ganttSubtreeProjects = ganttSubtreePage?.items ?? NO_CHILD_PROJECTS;
 
   const updateMutation = useUpdateMutation({
-    mutationFn: api.project.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("project", "update"),
     entity: "project",
   });
 
@@ -560,7 +561,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     entityLabel: "Project",
     entity: "project",
     mutationOptions: (callbacks) =>
-      api.project.delete.mutationOptions(callbacks),
+      entityMutationOptionsFactory("project", "delete")(callbacks),
     redirectTo: "/projects",
   });
 

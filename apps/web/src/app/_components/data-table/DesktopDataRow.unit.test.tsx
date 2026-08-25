@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { DesktopDataRow } from "./DesktopDataRow";
 import type { CubbyRow as Row } from "./table-features";
 
@@ -69,5 +69,53 @@ describe("DesktopDataRow", () => {
       </table>,
     );
     expect(screen.getByText("Moore Newton")).toBeInTheDocument();
+  });
+
+  it("uses pointer and keyboard intent but does not speculate on touch", () => {
+    const onRowClick = vi.fn();
+    const onRowHover = vi.fn();
+    const onRowHoverEnd = vi.fn();
+    const row = {
+      id: "row-1",
+      original: { id: "PRD-4K7M" },
+      getIsSelected: () => false,
+      getIsExpanded: () => false,
+      getStartVisibleCells: () => [],
+      getCenterVisibleCells: () => [],
+      getEndVisibleCells: () => [],
+    } as unknown as Row<TestRow>;
+    render(
+      <table>
+        <tbody>
+          <DesktopDataRow
+            row={row}
+            rowIndex={0}
+            isSelected={false}
+            isExpanded={false}
+            isFocused={false}
+            isDebugEnabled={false}
+            onRowClick={onRowClick}
+            onRowHover={onRowHover}
+            onRowHoverEnd={onRowHoverEnd}
+            rowClassName=""
+            cellClassName=""
+            columnsKey=""
+          />
+        </tbody>
+      </table>,
+    );
+
+    const renderedRow = screen.getByRole("row");
+    fireEvent.pointerEnter(renderedRow, { pointerType: "mouse" });
+    fireEvent.pointerLeave(renderedRow, { pointerType: "mouse" });
+    fireEvent.focus(renderedRow);
+    fireEvent.blur(renderedRow);
+    fireEvent.pointerEnter(renderedRow, { pointerType: "touch" });
+    fireEvent.pointerLeave(renderedRow, { pointerType: "touch" });
+    fireEvent.click(renderedRow);
+
+    expect(onRowHover).toHaveBeenCalledTimes(2);
+    expect(onRowHoverEnd).toHaveBeenCalledTimes(2);
+    expect(onRowClick).toHaveBeenCalledOnce();
   });
 });
