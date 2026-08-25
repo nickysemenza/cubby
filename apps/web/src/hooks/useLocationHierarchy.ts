@@ -8,6 +8,7 @@ import {
   mergePricingStatus,
   type PricingStatus,
 } from "~/app/_components/locations/calculate-inventory-valuation";
+import { useHydratedLoading } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
 
 // Persisted location.valuation stores pricing as bare counts; the viz nodes use
@@ -74,6 +75,7 @@ export function useLocationHierarchy(
 
   const api = useTRPC();
   const locations = useQuery(api.location.makeTree.queryOptions());
+  const isLoading = useHydratedLoading(locations.isLoading);
 
   const hierarchyData = useMemo(() => {
     const home = locations.data?.[0];
@@ -127,7 +129,7 @@ export function useLocationHierarchy(
   }, [locations.data, valuationMode]);
 
   return {
-    data: hierarchyData,
-    isLoading: locations.isLoading,
+    data: isLoading ? null : hierarchyData,
+    isLoading,
   };
 }

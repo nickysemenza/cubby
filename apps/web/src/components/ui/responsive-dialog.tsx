@@ -14,6 +14,7 @@ import {
   SheetTitle,
 } from "~/components/ui/sheet";
 import { useIsMobile } from "~/hooks/useMobile";
+import { cn } from "~/lib/utils";
 
 type DialogContentSize = NonNullable<
   ComponentProps<typeof DialogContent>["size"]
@@ -57,12 +58,21 @@ export function ResponsiveDialog({
   if (isMobile) {
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="bottom" className="flex flex-col p-0">
+        <SheetContent
+          side="bottom"
+          className="flex flex-col p-0 data-[side=bottom]:overflow-hidden data-[side=bottom]:pb-0"
+        >
           <SheetHeader className="shrink-0 border-b p-4">
             <SheetTitle>{title}</SheetTitle>
             {description && <SheetDescription>{description}</SheetDescription>}
           </SheetHeader>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
+          <div
+            className={cn(
+              "min-h-0 flex-1 overflow-y-auto overscroll-contain p-4",
+              !footer &&
+                "pb-[calc(1rem+env(safe-area-inset-bottom))]",
+            )}
+          >
             {children}
           </div>
           {footer && (

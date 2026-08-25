@@ -3,7 +3,7 @@ import { ChevronRight, type LucideIcon } from "lucide-react";
 import {
   Fragment,
   type HTMLAttributes,
-  type KeyboardEvent,
+  type MouseEvent,
   type ReactNode,
 } from "react";
 import type { MobileMetaValue } from "~/app/_components/data-table/useMobileListModel";
@@ -48,15 +48,65 @@ interface MobileCardProps {
   metaValues?: MobileMetaValue[];
 }
 
-function activateCardFromKeyboard(
-  event: KeyboardEvent<HTMLElement>,
-  onClick: () => void,
-) {
-  // Mobile cards can contain checkboxes and row actions. Only the card's own
-  // focus should activate the row; a nested control's keypress must stay local.
-  if (event.currentTarget !== event.target) return;
-  if (event.key !== "Enter" && event.key !== " ") return;
-  event.preventDefault();
+function PrimaryTitle({
+  title,
+  detailsHref,
+  onClick,
+  titleIcon: TitleIcon,
+  iconClassName = "size-3.5",
+}: {
+  title: string | undefined;
+  detailsHref?: string;
+  onClick?: () => void;
+  titleIcon?: LucideIcon;
+  iconClassName?: string;
+}) {
+  const content = (
+    <span className="flex min-w-0 items-baseline gap-2 text-left">
+      {TitleIcon && (
+        <TitleIcon
+          className={cn("mt-0.5 shrink-0 text-muted-foreground", iconClassName)}
+        />
+      )}
+      <span
+        className="block min-w-0 flex-1 truncate font-medium text-sm leading-snug"
+        title={title}
+      >
+        {title}
+      </span>
+    </span>
+  );
+
+  if (detailsHref) {
+    return (
+      <Link to={detailsHref} className="block w-full min-w-0 text-left">
+        {content}
+      </Link>
+    );
+  }
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        className="block w-full min-w-0 text-left"
+        onClick={onClick}
+      >
+        {content}
+      </button>
+    );
+  }
+  return content;
+}
+
+function handleBodyClick(event: MouseEvent<HTMLElement>, onClick?: () => void) {
+  if (!onClick) return;
+  const target = event.target;
+  if (
+    target instanceof Element &&
+    target.closest("a,button,input,select,textarea")
+  ) {
+    return;
+  }
   onClick();
 }
 
@@ -329,29 +379,22 @@ export function MobileCard({
           ) : null,
         ].filter(Boolean)}
         title={
-          <Row align="baseline" gap="sm" className="min-w-0">
-            {TitleIcon && (
-              <TitleIcon
-                className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" /* tight */
-              />
-            )}
-            <span
-              className="block min-w-0 flex-1 truncate font-medium text-sm leading-snug"
-              title={title}
-            >
-              {title}
-            </span>
-          </Row>
+          <PrimaryTitle
+            title={title}
+            detailsHref={detailsHref}
+            onClick={onClick}
+            titleIcon={TitleIcon}
+          />
         }
         content={content}
         actions={actions}
         footer={children}
-        onClick={(e) => {
+        onClick={(event) => {
           if (longPress.consumeClick()) {
-            e.preventDefault();
+            event.preventDefault();
             return;
           }
-          onClick?.();
+          handleBodyClick(event, onClick);
         }}
         onTouchStart={() => {
           onTouchStart?.();
@@ -360,13 +403,7 @@ export function MobileCard({
         onTouchEnd={longPress.cancel}
         onTouchMove={longPress.cancel}
         onContextMenu={onLongPress ? (e) => e.preventDefault() : undefined}
-        onKeyDown={
-          onClick
-            ? (event) => activateCardFromKeyboard(event, onClick)
-            : undefined
-        }
-        role={onClick ? "button" : undefined}
-        tabIndex={onClick ? 0 : undefined}
+        role={onClick || detailsHref ? "group" : undefined}
       />
     );
   }
@@ -383,15 +420,9 @@ export function MobileCard({
         onClick && "cursor-pointer active:bg-muted/40",
         className,
       )}
-      onClick={onClick}
+      onClick={(event) => handleBodyClick(event, onClick)}
       onTouchStart={onTouchStart}
-      onKeyDown={
-        onClick
-          ? (event) => activateCardFromKeyboard(event, onClick)
-          : undefined
-      }
-      role={onClick ? "button" : undefined}
-      tabIndex={onClick ? 0 : undefined}
+      role={onClick || detailsHref ? "group" : undefined}
     >
       {selectable && (
         <div
@@ -419,14 +450,13 @@ export function MobileCard({
                   gap="sm"
                   className="min-w-0 font-medium"
                 >
-                  {TitleIcon && (
-                    <TitleIcon
-                      className="mt-0.5 size-4 shrink-0 text-muted-foreground" /* tight */
-                    />
-                  )}
-                  <span className="line-clamp-2" title={title}>
-                    {title}
-                  </span>
+                  <PrimaryTitle
+                    title={title}
+                    detailsHref={detailsHref}
+                    onClick={onClick}
+                    titleIcon={TitleIcon}
+                    iconClassName="size-4"
+                  />
                 </Row>
                 {subtitle && (
                   <Description className="truncate">{subtitle}</Description>

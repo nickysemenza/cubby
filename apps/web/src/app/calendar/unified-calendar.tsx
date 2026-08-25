@@ -33,13 +33,7 @@ import type {
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { createPopoverHandle, PopoverTrigger } from "~/components/ui/popover";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "~/components/ui/sheet";
+import { ResponsiveSheet } from "~/components/ui/responsive-sheet";
 import { ChoiceSwitcher } from "~/components/ui/view-switcher";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -561,70 +555,69 @@ function CalendarDaySheet({
   renderItem: (item: CalendarItem) => ReactNode;
 }) {
   return (
-    <Sheet open={Boolean(day)} onOpenChange={onOpenChange}>
-      <SheetContent className="overflow-y-auto sm:max-w-md">
-        <SheetHeader>
-          <SheetTitle>
-            {day
-              ? format(householdCalendarDate(day), "EEEE, MMMM d")
-              : "Calendar day"}
-          </SheetTitle>
-          <SheetDescription>
-            {items.length === 0
-              ? "Nothing planned yet."
-              : `${items.length} calendar ${items.length === 1 ? "item" : "items"}`}
-          </SheetDescription>
-        </SheetHeader>
+    <ResponsiveSheet
+      open={Boolean(day)}
+      onOpenChange={onOpenChange}
+      title={
+        day
+          ? format(householdCalendarDate(day), "EEEE, MMMM d")
+          : "Calendar day"
+      }
+      description={
+        items.length === 0
+          ? "Nothing planned yet."
+          : `${items.length} calendar ${items.length === 1 ? "item" : "items"}`
+      }
+      className="sm:max-w-md"
+    >
+      <Stack gap="md">
+        <div className="grid grid-cols-2 gap-2 border-y py-2 text-xs">
+          <SummaryValue
+            label="Actual spend"
+            value={formatCurrency(summary.actualSpend)}
+          />
+          <SummaryValue
+            label="Planned spend"
+            value={formatCurrency(summary.plannedSpend)}
+          />
+          <SummaryValue label="Tasks" value={String(summary.taskCount)} />
+          <SummaryValue
+            label="Calories"
+            value={`${Math.round(summary.calories).toLocaleString()}${summary.nutritionPending ? "+" : ""}`}
+          />
+        </div>
 
-        <Stack className="px-6 pb-6" gap="md">
-          <div className="grid grid-cols-2 gap-2 border-y py-2 text-xs">
-            <SummaryValue
-              label="Actual spend"
-              value={formatCurrency(summary.actualSpend)}
-            />
-            <SummaryValue
-              label="Planned spend"
-              value={formatCurrency(summary.plannedSpend)}
-            />
-            <SummaryValue label="Tasks" value={String(summary.taskCount)} />
-            <SummaryValue
-              label="Calories"
-              value={`${Math.round(summary.calories).toLocaleString()}${summary.nutritionPending ? "+" : ""}`}
-            />
-          </div>
-
-          <Stack gap="xs">
-            <span className="font-mono text-slate text-xs uppercase tracking-wider">
-              Add
-            </span>
-            <Row wrap gap="xs">
-              {ALL_KINDS.map((kind) => {
-                const Icon = KIND_ICONS[kind];
-                return (
-                  <Button
-                    key={kind}
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => onCreate(kind)}
-                  >
-                    <Plus />
-                    <Icon />
-                    {kind === "expense" ? "Planned expense" : KIND_LABELS[kind]}
-                  </Button>
-                );
-              })}
-            </Row>
-          </Stack>
-
-          <Stack gap="xs">
-            {items.map((item) => (
-              <div key={`${item.kind}:${item.id}`}>{renderItem(item)}</div>
-            ))}
-          </Stack>
+        <Stack gap="xs">
+          <span className="font-mono text-slate text-xs uppercase tracking-wider">
+            Add
+          </span>
+          <Row wrap gap="xs">
+            {ALL_KINDS.map((kind) => {
+              const Icon = KIND_ICONS[kind];
+              return (
+                <Button
+                  key={kind}
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onCreate(kind)}
+                >
+                  <Plus />
+                  <Icon />
+                  {kind === "expense" ? "Planned expense" : KIND_LABELS[kind]}
+                </Button>
+              );
+            })}
+          </Row>
         </Stack>
-      </SheetContent>
-    </Sheet>
+
+        <Stack gap="xs">
+          {items.map((item) => (
+            <div key={`${item.kind}:${item.id}`}>{renderItem(item)}</div>
+          ))}
+        </Stack>
+      </Stack>
+    </ResponsiveSheet>
   );
 }
 

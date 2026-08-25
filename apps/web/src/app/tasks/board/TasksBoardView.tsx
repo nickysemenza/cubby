@@ -9,6 +9,7 @@ import { getRouteApi } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Row, Stack } from "~/components/layout";
 import { Skeleton } from "~/components/ui/skeleton";
+import { useHydratedLoading } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
 import { BoardControls } from "./BoardControls";
 import type { BoardColsMode, BoardLaneMode } from "./board-model";
@@ -84,9 +85,10 @@ export function TasksBoardView({ filters }: { filters: TaskFilters }) {
     () => ({ ...filters, search: debouncedSearch || undefined }),
     [filters, debouncedSearch],
   );
-  const { data: board = NO_BOARD, isLoading } = useQuery(
+  const { data: board = NO_BOARD, isLoading: queryLoading } = useQuery(
     api.task.board.queryOptions(boardInput),
   );
+  const isLoading = useHydratedLoading(queryLoading);
   const tasks = useMemo(() => [...board.active, ...board.recentDone], [board]);
   // The IDENTICAL `boardInput` this surface passed to `board.queryOptions`
   // above — `useBoardMutations` keys its optimistic patch off this so a drag

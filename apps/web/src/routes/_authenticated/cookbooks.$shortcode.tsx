@@ -1,20 +1,23 @@
 import type { CookbookShortcode } from "@cubby/schemas/identifiers";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import type { CookbookSummary } from "@cubby/schemas/recipe";
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { Plus, RefreshCw, Trash } from "lucide-react";
 import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
 import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-usage-panel";
+import { notFoundPage } from "~/app/_components/routing/entity-routes";
 import { CookbookPhysicalCopy } from "~/app/cookbooks/cookbook-physical-copy";
 import { useCookbookDelete } from "~/app/cookbooks/use-cookbook-delete";
 import { RecipeList } from "~/app/recipes/recipelist";
 import { Row } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
+import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
+import { DetailPagePending } from "~/components/route-pending";
 import { BulkProgressBar } from "~/components/ui/bulk-progress-bar";
 import { Button } from "~/components/ui/button";
-import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Image } from "~/components/ui/image";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { cookbookDetailQueryOptions } from "~/entities/cookbook.functions";
@@ -34,15 +37,40 @@ const searchSchema = z.object({
   ...entityFilterSearchFields("recipe"),
 });
 
+const CookbookNotFound = notFoundPage(
+  "cookbook",
+  "Cookbook not found",
+  "This cookbook is no longer available.",
+);
+
 export const Route = createFileRoute("/_authenticated/cookbooks/$shortcode")({
   validateSearch: searchSchema,
+  loader: async ({ params, context }) => {
+    const cookbook = await context.queryClient.ensureQueryData(
+      cookbookDetailQueryOptions(params.shortcode),
+    );
+    if (!cookbook) throw notFound();
+  },
+  pendingComponent: DetailPagePending,
+  errorComponent: RouteErrorComponent,
+  notFoundComponent: CookbookNotFound,
   head: shortcodeHead,
   component: CookbookDetailPage,
 });
 
 function CookbookDetailPage() {
-  // The URL carries the cookbook's public shortcode; the focused projection
-  // resolves it directly and everything below uses its canonical id.
+  const { shortcode } = Route.useParams();
+  const { data: cookbook } = useSuspenseQuery(
+    cookbookDetailQueryOptions(shortcode),
+  );
+  // The loader establishes this before the route body mounts. Keep the guard
+  // for a cache update that removes the current cookbook after navigation.
+  if (!cookbook) throw notFound();
+
+  return <CookbookDetailBody cookbook={cookbook} />;
+}
+
+function CookbookDetailBody({ cookbook }: { cookbook: CookbookSummary }) {
   const { shortcode } = Route.useParams();
   const { tab } = Route.useSearch();
   const navigate = useNavigate();
@@ -51,23 +79,18 @@ function CookbookDetailPage() {
     navigate({ to: ".", search: (prev) => ({ ...prev, tab: next }) }),
   );
 
-  const { data: cookbook, isLoading } = useQuery(
-    cookbookDetailQueryOptions(shortcode),
-  );
-  const cookbookId = cookbook?.id;
-  const name = cookbook?.book ?? "Cookbook";
-  const recipeCount = cookbook?.recipeCount;
-  const coverUrl = cookbook?.coverUrl ?? null;
+  const cookbookId = cookbook.id;
+  const name = cookbook.book;
+  const recipeCount = cookbook.recipeCount;
+  const coverUrl = cookbook.coverUrl;
   // How many recipes in the stored extraction aren't imported yet (gates the
   // "Add from source" entry into the selective re-importer).
-  const notImported = cookbook
-    ? Math.max(cookbook.sourceRecipeCount - cookbook.recipeCount, 0)
-    : 0;
+  const notImported = Math.max(
+    cookbook.sourceRecipeCount - cookbook.recipeCount,
+    0,
+  );
 
-  // `cookbook?.book`, not the `name` fallback below — while the query is in
-  // flight the route's own `shortcodeHead` title should stand rather than being
-  // overwritten with the placeholder "Cookbook".
-  useDetailTitle(shortcode, cookbook?.book);
+  useDetailTitle(shortcode, cookbook.book);
 
   // Reprocess streams progress server-side (one request) via useBulkStream. The
   // RefreshCw button drives it; a live bar shows beneath the hero while it runs.
@@ -103,7 +126,7 @@ function CookbookDetailPage() {
   // Author + recipe count read as the spec-plate ledger stats; the cover plate
   // rides above the tabs (the spec-plate hero has no cover slot of its own).
   const heroStats: DetailHeroStat[] = [
-    ...(cookbook && cookbook.author.length > 0
+    ...(cookbook.author.length > 0
       ? [{ label: "Author", value: cookbook.author.join(", ") }]
       : []),
     ...(recipeCount !== undefined
@@ -115,24 +138,6 @@ function CookbookDetailPage() {
         ]
       : []),
   ];
-
-  // The id only exists once the browse index has resolved this shortcode. It
-  // gates the body rather than the hooks above, so hook order stays stable
-  // across the loading → loaded transition.
-  if (!cookbookId) {
-    return (
-      <Page variant="list" title={name} entity="cookbook" compact>
-        {!isLoading ? (
-          <Empty>
-            <EmptyTitle>Cookbook not found</EmptyTitle>
-            <EmptyDescription>
-              No cookbook matches the code {shortcode}.
-            </EmptyDescription>
-          </Empty>
-        ) : null}
-      </Page>
-    );
-  }
 
   return (
     <Page
@@ -201,7 +206,7 @@ function CookbookDetailPage() {
       <CookbookPhysicalCopy
         cookbookId={cookbookId}
         cookbookName={name}
-        product={cookbook?.product ?? null}
+        product={cookbook.product ?? null}
       />
 
       {reprocess.running && (

@@ -1,5 +1,4 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { useNavigate } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { Bug, ChevronRight } from "lucide-react";
@@ -95,7 +94,6 @@ export function MobileCardView<TItem extends RowData>({
   emptyState,
 }: MobileCardViewProps<TItem>) {
   const { isDebugEnabled } = useDebug();
-  const navigate = useNavigate();
   const mobileRows = useMobileListModel({ table, entity, rowContentVersion });
 
   // Group the live mobile models themselves. `useTable` keeps its table
@@ -270,6 +268,7 @@ export function MobileCardView<TItem extends RowData>({
         variant="row"
         className={row.depth > 0 ? "bg-muted/20 pl-4" : undefined}
         title={model.title}
+        detailsHref={selectionMode ? undefined : model.detailsHref}
         subtitle={model.subtitle}
         // No generic entity-icon fallback: a chef hat (or package, or receipt)
         // repeated down every row is decoration, not information, and it costs
@@ -302,11 +301,7 @@ export function MobileCardView<TItem extends RowData>({
           // hitting a 20px checkbox instead of the row you're looking at.
           selectionMode
             ? () => row.toggleSelected(!row.getIsSelected())
-            : model.detailsHref
-              ? () => {
-                  navigate({ to: model.detailsHref });
-                }
-              : undefined
+            : undefined
         }
       >
         {debugContent}

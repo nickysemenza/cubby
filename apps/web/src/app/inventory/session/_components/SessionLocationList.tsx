@@ -100,7 +100,7 @@ function SessionLocationList({
           </Button>
         )}
       </Stack>
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="min-h-0 flex-1 overflow-auto pb-[env(safe-area-inset-bottom)]">
         {visible.map((location) => {
           const items = inventoryByLocation.get(location.id) ?? [];
           const completedThisPass = completedLocationIds.has(location.id);
@@ -198,7 +198,10 @@ export function MobileLocationSwitcher({
             {skipped > 0 ? ` · ${skipped} skipped` : ""}
           </span>
         </button>
-        <SheetContent side="bottom" className="flex max-h-[80dvh] flex-col p-0">
+        <SheetContent
+          side="bottom"
+          className="flex max-h-[80dvh] flex-col p-0 data-[side=bottom]:overflow-hidden data-[side=bottom]:pb-0"
+        >
           <SheetHeader className="sr-only">
             <SheetTitle>Session locations</SheetTitle>
             <SheetDescription>

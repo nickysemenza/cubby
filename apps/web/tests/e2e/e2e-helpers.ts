@@ -40,6 +40,22 @@ export async function gotoAuthenticatedPage(
   if (ready) await expect(ready).toBeVisible({ timeout: 15000 });
 }
 
+/** Fail with the route boundary's real technical message, not a later missing-heading timeout. */
+export async function failOnRouteError(page: Page) {
+  const errorHeading = page.getByRole("heading", {
+    level: 2,
+    name: "Something went wrong",
+  });
+  if (!(await errorHeading.isVisible().catch(() => false))) return;
+
+  await page.getByRole("button", { name: "Technical Details" }).click();
+  const message = await page
+    .getByText("Message:", { exact: true })
+    .locator("..")
+    .textContent();
+  throw new Error(`Route error at ${page.url()}: ${message ?? "unknown"}`);
+}
+
 /**
  * The app shell may contain deliberately scrollable workbenches, but a route
  * must never widen the document itself. Keep this assertion shared so every
@@ -47,11 +63,39 @@ export async function gotoAuthenticatedPage(
  */
 export async function expectViewportBounded(page: Page) {
   await expect(async () => {
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth <= window.innerWidth,
-      ),
-    ).toBe(true);
+    const measurement = await page.evaluate(() => {
+      const viewportWidth = window.innerWidth;
+      const documentWidth = document.documentElement.scrollWidth;
+      const offenders = Array.from(document.querySelectorAll<HTMLElement>("*"))
+        .map((element) => {
+          const rect = element.getBoundingClientRect();
+          return {
+            tag: element.tagName.toLocaleLowerCase(),
+            className: element.className.toString().slice(0, 160),
+            left: Math.round(rect.left),
+            right: Math.round(rect.right),
+            width: Math.round(rect.width),
+            scrollWidth: element.scrollWidth,
+          };
+        })
+        .filter(
+          ({ left, right, scrollWidth, width }) =>
+            right > viewportWidth + 1 ||
+            left < -1 ||
+            scrollWidth > Math.max(width, viewportWidth) + 1,
+        )
+        .sort((a, b) => b.right - viewportWidth - (a.right - viewportWidth))
+        .slice(0, 5);
+      return {
+        bounded: documentWidth <= viewportWidth,
+        documentWidth,
+        viewportWidth,
+        offenders,
+      };
+    });
+    expect(measurement, JSON.stringify(measurement, null, 2)).toMatchObject({
+      bounded: true,
+    });
   }).toPass({ timeout: 5000 });
 }
 

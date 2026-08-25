@@ -344,7 +344,12 @@ export function InventoryItemList() {
 
   return (
     <ProductImageSummariesProvider productIds={productIds}>
-      <FlexRow align="center" justify="between" gap="sm" className="mb-4">
+      <FlexRow
+        align="center"
+        justify="between"
+        gap="sm"
+        className="mb-4 px-2 md:px-6"
+      >
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           {scopeChips}
           {view === "shelf" && (
@@ -361,12 +366,14 @@ export function InventoryItemList() {
         />
       </FlexRow>
       {view === "shelf" ? (
-        <InventoryShelf
-          items={items}
-          isLoading={workbench.isLoading}
-          error={workbench.error}
-          infiniteScroll={workbench.infiniteScroll}
-        />
+        <div className="px-2 md:px-6">
+          <InventoryShelf
+            items={items}
+            isLoading={workbench.isLoading}
+            error={workbench.error}
+            infiniteScroll={workbench.infiniteScroll}
+          />
+        </div>
       ) : (
         <ListWorkbench
           model={workbench}

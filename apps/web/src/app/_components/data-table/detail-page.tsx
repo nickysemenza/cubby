@@ -13,7 +13,6 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { useDebug } from "~/hooks/useDebug";
-import { useIsMobile } from "~/hooks/useMobile";
 import { cn } from "~/lib/utils";
 import { AuditLogList } from "../audit-log/audit-log-list";
 import { EntityHero } from "../EntityHero";
@@ -50,13 +49,22 @@ export interface DetailSection {
   surface?: "card" | "plain";
 }
 
-function SectionCard({ section }: { section: DetailSection }) {
+function SectionCard({
+  section,
+  className,
+}: {
+  section: DetailSection;
+  className?: string;
+}) {
   if (section.surface === "plain") {
     return (
       <section
         id={section.id}
         tabIndex={-1}
-        className="scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none"
+        className={cn(
+          "scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none",
+          className,
+        )}
       >
         {section.content}
       </section>
@@ -67,7 +75,10 @@ function SectionCard({ section }: { section: DetailSection }) {
     <section
       id={section.id}
       tabIndex={-1}
-      className="scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none"
+      className={cn(
+        "scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none",
+        className,
+      )}
     >
       <Card
         size={section.placement === "supporting" ? "sm" : "default"}
@@ -192,7 +203,7 @@ export function DetailAnchorIndex({
   );
 }
 
-function renderDesktopLayout({
+function renderResponsiveLayout({
   sections,
   visual,
 }: {
@@ -213,26 +224,75 @@ function renderDesktopLayout({
     const supporting = current.filter(
       (section) => section.placement === "supporting",
     );
-    const supportingNodes: ReactNode[] = supporting.map((section) => (
-      <SectionCard key={section.id} section={section} />
-    ));
-    if (!visualPlaced && visual) {
-      supportingNodes.unshift(<div key="detail-visual">{visual}</div>);
-      visualPlaced = true;
-    }
+    const pendingVisual = !visualPlaced ? visual : undefined;
+    const hasSupportingRail = supporting.length > 0 || pendingVisual;
 
-    if (primary.length > 0 && supportingNodes.length > 0) {
+    const renderRunItems = (withDesktopColumns: boolean) => {
+      const items: ReactNode[] = [];
+      let visualInserted = false;
+
+      for (const section of current) {
+        if (
+          pendingVisual &&
+          !visualInserted &&
+          section.placement === "supporting"
+        ) {
+          items.push(
+            <div
+              key="detail-visual"
+              data-testid="detail-rail-media"
+              className={cn(
+                "hidden md:block",
+                withDesktopColumns && "lg:col-start-2",
+              )}
+            >
+              {pendingVisual}
+            </div>,
+          );
+          visualInserted = true;
+          visualPlaced = true;
+        }
+        items.push(
+          <SectionCard
+            key={section.id}
+            section={section}
+            className={
+              withDesktopColumns
+                ? section.placement === "primary"
+                  ? "lg:col-start-1"
+                  : "lg:col-start-2"
+                : undefined
+            }
+          />,
+        );
+      }
+
+      if (pendingVisual && !visualInserted) {
+        items.push(
+          <div
+            key="detail-visual"
+            data-testid="detail-rail-media"
+            className={cn(
+              "hidden md:block",
+              withDesktopColumns && "lg:col-start-2 lg:row-start-1",
+            )}
+          >
+            {pendingVisual}
+          </div>,
+        );
+        visualPlaced = true;
+      }
+
+      return items;
+    };
+
+    if (primary.length > 0 && hasSupportingRail) {
       blocks.push(
         <div
           key={`run-${blocks.length}`}
-          className="grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]"
+          className="max-md:contents md:grid md:items-start md:gap-4 lg:grid-flow-row-dense lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]"
         >
-          <div className={STACK_CLASS}>
-            {primary.map((section) => (
-              <SectionCard key={section.id} section={section} />
-            ))}
-          </div>
-          <div className={STACK_CLASS}>{supportingNodes}</div>
+          {renderRunItems(true)}
         </div>,
       );
       return;
@@ -240,22 +300,23 @@ function renderDesktopLayout({
 
     if (primary.length > 0) {
       blocks.push(
-        <div key={`run-${blocks.length}`} className={STACK_CLASS}>
-          {primary.map((section) => (
-            <SectionCard key={section.id} section={section} />
-          ))}
+        <div
+          key={`run-${blocks.length}`}
+          className={cn(STACK_CLASS, "max-md:contents")}
+        >
+          {renderRunItems(false)}
         </div>,
       );
       return;
     }
 
-    if (supportingNodes.length > 0) {
+    if (hasSupportingRail) {
       blocks.push(
         <div
           key={`run-${blocks.length}`}
-          className="grid items-start gap-4 md:grid-cols-2 lg:grid-cols-3"
+          className="max-md:contents md:grid md:grid-cols-2 md:items-start md:gap-4 lg:grid-cols-3"
         >
-          {supportingNodes}
+          {renderRunItems(false)}
         </div>,
       );
     }
@@ -270,33 +331,11 @@ function renderDesktopLayout({
     }
   }
   flushRun();
-  return <div className="space-y-4">{blocks}</div>;
-}
-
-function renderSectionLayout({
-  sections,
-  isMobile,
-  heroImages,
-  heroMedia,
-}: {
-  sections: DetailSection[];
-  isMobile: boolean;
-  heroImages?: Array<{ id: string; url: string; filename: string }>;
-  heroMedia?: ReactNode;
-}) {
-  if (isMobile) {
-    return (
-      <div className="divide-y divide-border border-border border-y">
-        {sections.map((section) => (
-          <SectionCard key={section.id} section={section} />
-        ))}
-      </div>
-    );
-  }
-  return renderDesktopLayout({
-    sections,
-    visual: heroVisual({ heroImages, heroMedia }),
-  });
+  return (
+    <div className="space-y-4 max-md:space-y-0 max-md:divide-y max-md:divide-border max-md:border-border max-md:border-y">
+      {blocks}
+    </div>
+  );
 }
 
 interface DetailSectionsProps {
@@ -313,7 +352,6 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   heroMedia,
 }) => {
   const { isDebugEnabled } = useDebug();
-  const isMobile = useIsMobile();
   const pageDetail = usePageDetailContext();
   const sourceId =
     pageDetail?.rawData &&
@@ -383,11 +421,12 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     <div className="space-y-2 sm:space-y-4">
       <DetailAnchorIndex sections={allSections} />
       <div className="fade-in-0 slide-in-from-bottom-1 animate-in duration-150 motion-reduce:animate-none">
-        {renderSectionLayout({
+        {renderResponsiveLayout({
           sections: allSections,
-          isMobile,
-          heroImages,
-          heroMedia: heroMedia ?? pageDetail?.heroMedia,
+          visual: heroVisual({
+            heroImages,
+            heroMedia: heroMedia ?? pageDetail?.heroMedia,
+          }),
         })}
       </div>
 

@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useHydrated } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
 
 /**
@@ -10,5 +11,11 @@ import { useTRPC } from "~/integrations/trpc/react";
  */
 export function useLocationTree() {
   const api = useTRPC();
-  return useQuery(api.location.makeTree.queryOptions());
+  const hydrated = useHydrated();
+  const query = useQuery(api.location.makeTree.queryOptions());
+  return {
+    ...query,
+    data: hydrated ? query.data : undefined,
+    isLoading: !hydrated || query.isLoading,
+  };
 }

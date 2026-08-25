@@ -232,7 +232,10 @@ export function LocationReviewPane({
       </div>
 
       <Sheet open={addOpen} onOpenChange={setAddOpen}>
-        <SheetContent side="bottom" className="flex max-h-[90dvh] flex-col p-0">
+        <SheetContent
+          side="bottom"
+          className="flex max-h-[90dvh] flex-col p-0 data-[side=bottom]:overflow-hidden data-[side=bottom]:pb-0"
+        >
           <SheetHeader className="border-b p-4">
             <SheetTitle>Add something here</SheetTitle>
             <SheetDescription>
@@ -241,7 +244,7 @@ export function LocationReviewPane({
                 : "Add a new item or pull something out of Unknown."}
             </SheetDescription>
           </SheetHeader>
-          <div className="min-h-0 overflow-auto p-4">
+          <div className="min-h-0 overflow-auto p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
             <Stack gap="lg">
               <SessionCaptureActions location={location} />
               {!isUnknownLocation && (
@@ -456,7 +459,7 @@ function ExpectedItemReviewRow({
       <Sheet open={actionsOpen} onOpenChange={setActionsOpen}>
         <SheetContent
           side="bottom"
-          className="flex max-h-[calc(100dvh-var(--app-chrome-top))] flex-col p-0"
+          className="flex max-h-[calc(100dvh-var(--app-chrome-top))] flex-col p-0 data-[side=bottom]:overflow-hidden data-[side=bottom]:pb-0"
         >
           <SheetHeader className="shrink-0 p-4 pb-4">
             <SheetTitle>{item.product.name}</SheetTitle>
@@ -464,7 +467,7 @@ function ExpectedItemReviewRow({
               Adjust the count, move it, or remove it.
             </SheetDescription>
           </SheetHeader>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
             <Stack gap="sm">
               <div className="border border-[var(--border)] p-4">
                 <Row align="center" justify="between" gap="sm">

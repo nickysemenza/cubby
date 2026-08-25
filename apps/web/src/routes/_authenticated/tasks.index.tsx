@@ -78,6 +78,7 @@ function TasksPage() {
       listChrome="workbench"
       title="Tasks"
       layout={view !== "board" ? "full" : "contained"}
+      bodyGutter={view === "list" || view === "board" ? "none" : "standard"}
       // Header-level "New task" so it's reachable from every view (Next/Board
       // have no list toolbar of their own to hang it off).
       actions={<CreateDialogAction request={taskCaptureRequest()} />}

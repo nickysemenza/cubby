@@ -1,6 +1,10 @@
 import { entities } from "~/entities/entities";
 import { generatedBrowserRoutes } from "~/entities/generated/entity-routes.gen";
-import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
+import {
+  expectViewportBounded,
+  failOnRouteError,
+  gotoAuthenticatedPage,
+} from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 const entityLists = Object.entries(generatedBrowserRoutes).map(
@@ -10,6 +14,28 @@ const entityLists = Object.entries(generatedBrowserRoutes).map(
   }),
 );
 
+const rendererRoutes = [
+  ["/products?view=table", "Table"],
+  ["/products?view=shelf", "Shelf"],
+  ["/products?view=events", "Events"],
+  ["/products?view=lifecycles", "Lifecycles"],
+  ["/locations?view=gallery", "Gallery"],
+  ["/locations?view=table", "Table"],
+  ["/locations?view=visualizations", "Visualizations"],
+  ["/meals?view=calendar", "Calendar"],
+  ["/meals?view=table", "Table"],
+  ["/projects?view=overview", "Overview"],
+  ["/projects?view=analytics", "Analytics"],
+  ["/projects?view=data", "Data"],
+  ["/projects?view=gallery", "Gallery"],
+  ["/tasks?view=next", "Next"],
+  ["/tasks?view=board", "Board"],
+  ["/tasks?view=timeline", "Timeline"],
+  ["/tasks?view=list", "List"],
+  ["/expenses?view=ledger", "Ledger"],
+  ["/expenses?view=analytics", "Analytics"],
+] as const;
+
 test.describe("phone entity views", () => {
   for (const { entity, path } of entityLists) {
     test(`${entity} list keeps the shared phone workbench contract`, async ({
@@ -17,6 +43,7 @@ test.describe("phone entity views", () => {
     }) => {
       await page.setViewportSize({ width: 320, height: 568 });
       await gotoAuthenticatedPage(page, path);
+      await failOnRouteError(page);
 
       await expect(
         page.getByRole("heading", {
@@ -38,4 +65,19 @@ test.describe("phone entity views", () => {
       { timeout: 15000 },
     );
   });
+
+  for (const [path, renderer] of rendererRoutes) {
+    test(`${path} mounts its selected phone renderer`, async ({ page }) => {
+      const pageErrors: string[] = [];
+      page.on("pageerror", (error) => pageErrors.push(error.message));
+      await page.setViewportSize({ width: 430, height: 932 });
+      await gotoAuthenticatedPage(page, path);
+
+      await expect(
+        page.getByRole("button", { name: `${renderer} view` }),
+      ).toHaveAttribute("aria-pressed", "true", { timeout: 15000 });
+      await expectViewportBounded(page);
+      expect(pageErrors).toEqual([]);
+    });
+  }
 });

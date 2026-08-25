@@ -3,11 +3,6 @@ import { Circle } from "lucide-react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { type DetailSection, DetailSections } from "./detail-page";
 
-const viewport = vi.hoisted(() => ({ isMobile: false }));
-
-vi.mock("~/hooks/useMobile", () => ({
-  useIsMobile: () => viewport.isMobile,
-}));
 vi.mock("~/hooks/useDebug", () => ({
   useDebug: () => ({ isDebugEnabled: false }),
 }));
@@ -41,11 +36,10 @@ const sections: DetailSection[] = [
 
 describe("DetailSections ledger", () => {
   beforeEach(() => {
-    viewport.isMobile = false;
     HTMLElement.prototype.scrollIntoView = vi.fn();
   });
 
-  it("renders explicit desktop tracks and a ruled section index", () => {
+  it("renders stable responsive tracks and a ruled section index", () => {
     const { container } = render(
       <DetailSections sections={sections} rawData={{ id: "example" }} />,
     );
@@ -55,16 +49,17 @@ describe("DetailSections ledger", () => {
       "href",
       "#story",
     );
-    expect(
-      container.querySelector("#story")?.parentElement?.parentElement,
-    ).toHaveClass("lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]");
+    expect(container.querySelector("#story")?.parentElement).toHaveClass(
+      "lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]",
+    );
+    expect(container.querySelector("#story")).toHaveClass("lg:col-start-1");
+    expect(container.querySelector("#summary")).toHaveClass("lg:col-start-2");
     expect(
       screen.getByRole("heading", { name: "Story", level: 2 }),
     ).toBeInTheDocument();
   });
 
-  it("keeps authored source order in the phone column", () => {
-    viewport.isMobile = true;
+  it("keeps authored source order in the CSS-responsive phone column", () => {
     const { container } = render(
       <DetailSections sections={sections} rawData={{ id: "example" }} />,
     );
@@ -80,6 +75,20 @@ describe("DetailSections ledger", () => {
       "aria-current",
       "location",
     );
+  });
+
+  it("CSS-gates detail media to the desktop rail without viewport branching", () => {
+    render(
+      <DetailSections
+        sections={sections}
+        rawData={{ id: "example" }}
+        heroMedia={<div data-testid="rail-photo">Photo</div>}
+      />,
+    );
+
+    const rail = screen.getByTestId("detail-rail-media");
+    expect(rail).toHaveClass("hidden", "md:block", "lg:col-start-2");
+    expect(screen.getAllByTestId("rail-photo")).toHaveLength(1);
   });
 
   it("moves keyboard focus to an indexed section", () => {
