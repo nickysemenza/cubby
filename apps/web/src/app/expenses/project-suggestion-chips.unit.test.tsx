@@ -17,8 +17,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@tanstack/react-query", () => ({
   queryOptions: (options: unknown) => options,
-  useQuery: (options: { queryKey?: readonly unknown[] }) => ({
-    data: options.queryKey?.[0] === "project" ? mocks.projects : mocks.affinity,
+  useQuery: (options: { meta?: { operation?: string } }) => ({
+    data:
+      options.meta?.operation === "project.options"
+        ? mocks.projects
+        : mocks.affinity,
   }),
 }));
 
