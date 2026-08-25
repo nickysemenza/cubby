@@ -706,11 +706,6 @@ jobs:
       - name: Build production Cloudflare bundle from main
         if: steps.current_main.outputs.current == 'true'
         run: pnpm --filter @cubby/web run build:cf
-      - name: Install pinned Wrangler
-        if: steps.current_main.outputs.current == 'true'
-        run: |
-          version=$(node -p "require('./apps/web/package.json').devDependencies.wrangler.replace(/^[^0-9]*/, '')")
-          npm install -g "wrangler@${version}"
       - name: Deploy web worker
         if: steps.current_main.outputs.current == 'true'
         uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4
