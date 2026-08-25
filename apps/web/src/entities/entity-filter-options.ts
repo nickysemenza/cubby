@@ -7,9 +7,9 @@ import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import {
-  EntityTransportError,
   observedEntityCall,
   type PublicEntityError,
+  unwrapEntityTransportResult,
 } from "./entity-transport";
 
 type FilterOptionsTransportResult =
@@ -41,8 +41,7 @@ async function getEntityFilterOptions(options: {
     options.data,
     async () => {
       const result = await getEntityFilterOptionsTransport(options);
-      if (!result.ok) throw new EntityTransportError(result.error);
-      return result.data;
+      return unwrapEntityTransportResult("entity.filterOptions", result);
     },
   );
 }

@@ -26,6 +26,7 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
+import { entityDetailQueryOptions } from "~/entities/entity-detail";
 import { useHydrated } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -118,7 +119,7 @@ export function EnrichmentWorkbench({
 
   // Recipe-scoped worklist: fetch the recipe name for the scope banner.
   const { data: scopeRecipe } = useQuery({
-    ...api.recipe.getByID.queryOptions({ id: recipeId ?? "" }),
+    ...entityDetailQueryOptions("recipe", recipeId ?? ""),
     enabled: !!recipeId,
   });
 

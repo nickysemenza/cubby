@@ -8,6 +8,16 @@ export type PublicEntityError = {
   blockers?: PublicImpactItem[];
 };
 
+export type EntityTransportOperation =
+  | "entity.list"
+  | "entity.detail"
+  | "entity.filterOptions"
+  | "entity.mutate";
+
+export type EntityTransportResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: PublicEntityError };
+
 export class EntityTransportError extends Error {
   readonly data: Omit<PublicEntityError, "message">;
 
@@ -24,8 +34,25 @@ export class EntityTransportError extends Error {
 
 let requestId = 0;
 
+export function unwrapEntityTransportResult<T>(
+  operation: EntityTransportOperation,
+  result: EntityTransportResult<T>,
+  createError: (error: PublicEntityError) => Error = (error) =>
+    new EntityTransportError(error),
+): T {
+  if (!result.ok) throw createError(result.error);
+  if (result.data === undefined) {
+    throw createError({
+      code: "INTERNAL_SERVER_ERROR",
+      reason: "INVALID_TRANSPORT_RESULT",
+      message: `${operation} returned an empty success envelope`,
+    });
+  }
+  return result.data;
+}
+
 export async function observedEntityCall<T>(
-  operation: "entity.list" | "entity.detail" | "entity.filterOptions",
+  operation: EntityTransportOperation,
   input: unknown,
   call: () => Promise<T>,
 ): Promise<T> {

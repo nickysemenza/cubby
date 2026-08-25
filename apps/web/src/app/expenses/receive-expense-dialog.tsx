@@ -37,7 +37,8 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { entityDetailQueryOptions } from "~/entities/entity-detail";
 
 const formSchema = z.object({
   location: optionalLocationField,
@@ -59,10 +60,8 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
   productId,
   expenseName,
 }) => {
-  const api = useTRPC();
-
   const { data: product, isLoading } = useQuery({
-    ...api.product.getByID.queryOptions({ id: productId }),
+    ...entityDetailQueryOptions("product", productId),
     enabled: open,
   });
 
@@ -73,7 +72,7 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
   const locationId = getOptionalLocationId(form.watch("location"));
 
   const updateInventory = useUpdateMutation({
-    mutationFn: api.inventory.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("inventory", "update"),
     entity: "inventory",
   });
 

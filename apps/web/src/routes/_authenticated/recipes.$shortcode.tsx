@@ -28,9 +28,9 @@ import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
 import { Button } from "~/components/ui/button";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityDetailQueryOptions } from "~/entities/entity-detail";
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
-import { useTRPC } from "~/integrations/trpc/react";
 import { shortcodeHead } from "~/lib/page-title";
 import { invalidatesFor } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
@@ -138,7 +138,6 @@ function RecipeDetailBody({ recipe }: { recipe: RecipeOut }) {
       search: (prev) => ({ ...prev, flowLayout: next }),
     });
   };
-  const api = useTRPC();
 
   const { deleteButton, deleteDialog } = useEntityDelete({
     id: recipe.id,
@@ -146,7 +145,7 @@ function RecipeDetailBody({ recipe }: { recipe: RecipeOut }) {
     entityLabel: "Recipe",
     entity: "recipe",
     mutationOptions: (callbacks) =>
-      api.recipe.delete.mutationOptions(callbacks),
+      entityMutationOptionsFactory("recipe", "delete")(callbacks),
     invalidateKeys: invalidatesFor("recipe", "list"),
     redirectTo: "/recipes",
   });

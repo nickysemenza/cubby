@@ -7,7 +7,7 @@ import { entityQueryOptions } from "~/entities/entity-query";
 import { useTRPC } from "~/integrations/trpc/react";
 import { EntityInlineLink } from "./EntityInlineLink";
 
-// Entity types this inline link resolves to a name via getByID. Inventory &
+// Entity types this inline link resolves to a name via the detail transport. Inventory &
 // cookbook are intentionally excluded — they render as plain links below.
 const INLINE_LINK_FETCHABLE = [
   "product",
@@ -34,7 +34,7 @@ export function EntityInlineLinkById({
 }: EntityInlineLinkByIdProps) {
   const trpc = useTRPC();
 
-  // Resolve the name via the shared entity→getByID mapping for the fetchable
+  // Resolve the name via the shared entity-detail mapping for the fetchable
   // inline-link types; everything else (inventory, cookbook, or an out-of-union runtime
   // entityType from a legacy audit row) gets a skipped query so useQuery never
   // receives a non-object arg — v5 throws "only the Object form is allowed".
@@ -50,7 +50,7 @@ export function EntityInlineLinkById({
   );
 
   // Single query hook instead of 4 disabled ones
-  // biome-ignore lint/suspicious/noExplicitAny: useQuery can't narrow the union of getByID queryOptions
+  // biome-ignore lint/suspicious/noExplicitAny: useQuery cannot narrow the mixed Start/tRPC query-options union
   const query = useQuery(queryOptions as any);
 
   // Inventory entries have no getByID that returns product info, so there is

@@ -18,7 +18,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Spinner } from "~/components/ui/spinner";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { wasm } from "~/lib/wasm";
 import { useUpdateMutation } from "../hooks/useUpdateMutation";
 import { NutrientsSummary } from "./NutrientsSummary";
@@ -50,14 +50,13 @@ export function ServingAliasField({
   storedMappings,
   previewMappings,
 }: ServingAliasFieldProps) {
-  const api = useTRPC();
   const [unit, setUnit] = useState("serving");
   const [gramsInput, setGramsInput] = useState("");
   const unitFieldId = useId();
   const gramsFieldId = useId();
 
   const updateProductMutation = useUpdateMutation({
-    mutationFn: api.product.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("product", "update"),
     entity: "product",
   });
 

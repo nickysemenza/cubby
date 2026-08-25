@@ -88,6 +88,16 @@ export function classifyPaths(paths: readonly (string | null | undefined)[]) {
   const changed = [...new Set(paths.filter((path) => Boolean(path)))] as string[];
   const active = changed.filter((path) => !isInert(path));
   const unknown = active.some((path) => !isKnownCodePath(path));
+  const dependencies =
+    unknown ||
+    active.some(
+      (path) =>
+        path === "pnpm-lock.yaml" ||
+        path === "pnpm-workspace.yaml" ||
+        path.endsWith("/package.json") ||
+        path === "package.json" ||
+        path.startsWith("patches/"),
+    );
   const sharedRoot = active.some(
     (path) =>
       sharedRootExact.has(path) ||
@@ -122,6 +132,7 @@ export function classifyPaths(paths: readonly (string | null | undefined)[]) {
       ...(usda ? ["usda-api"] : []),
       ...(upc ? ["upc-lookup"] : []),
     ],
+    dependencies,
     unknown,
   };
 }

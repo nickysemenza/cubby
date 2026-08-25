@@ -9,7 +9,7 @@ import type { z } from "zod";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDelete } from "../hooks/useEntityDelete";
@@ -27,7 +27,6 @@ interface InventoryDetailProps {
 export const InventoryDetail: FC<InventoryDetailProps> = ({
   inventoryitem,
 }) => {
-  const api = useTRPC();
   const [showMoveDialog, setShowMoveDialog] = useState(false);
 
   const { commonSections, editMode } = useEntityDetail<
@@ -43,8 +42,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
     name: inventoryitem.product.name,
     entityLabel: "Inventory Entry",
     entity: "inventory",
-    mutationOptions: (callbacks) =>
-      api.inventory.delete.mutationOptions(callbacks),
+    mutationOptions: entityMutationOptionsFactory("inventory", "delete"),
     redirectTo: "/inventory",
   });
 

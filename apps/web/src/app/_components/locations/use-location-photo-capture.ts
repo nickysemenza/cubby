@@ -53,6 +53,7 @@ import {
 } from "@cubby/schemas/image";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useTRPC } from "~/integrations/trpc/react";
 import {
   makeBatchStatusFetcher,
@@ -75,7 +76,9 @@ export function useLocationPhotoCapture() {
   const api = useTRPC();
   const queryClient = useQueryClient();
   const uploadImage = useMutation(api.image.uploadImage.mutationOptions());
-  const updateLocation = useMutation(api.location.update.mutationOptions());
+  const updateLocation = useMutation(
+    entityMutationOptionsFactory("location", "update")(),
+  );
 
   const invalidate = useCallback(
     (result?: unknown) => {

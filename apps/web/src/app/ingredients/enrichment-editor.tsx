@@ -20,7 +20,7 @@ import { Row, Stack } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { BASE_KINDS, type BaseKind } from "~/lib/conversion-coverage";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidatesFor } from "~/lib/query-keys";
@@ -37,6 +37,19 @@ import {
   defaultPriceUnit,
   UnitInput,
 } from "./workbench-editor-core";
+
+const productCreateMutationOptions = entityMutationOptionsFactory(
+  "product",
+  "create",
+);
+const productUpdateMutationOptions = entityMutationOptionsFactory(
+  "product",
+  "update",
+);
+const ingredientUpdateMutationOptions = entityMutationOptionsFactory(
+  "ingredient",
+  "update",
+);
 
 function PriceField({
   qty,
@@ -322,7 +335,6 @@ export function EnrichmentEditor({
   layout?: EnrichmentEditorLayout;
   ref?: Ref<EnrichmentEditorHandle>;
 }) {
-  const api = useTRPC();
   const gaps = useMemo(() => analyzeGaps(row), [row]);
   const product = row.product[0] ?? null;
   const [mappingProductId, setMappingProductId] = useState<string | null>(
@@ -373,7 +385,7 @@ export function EnrichmentEditor({
 
   const createProduct = useActionMutation({
     entity: "product",
-    mutationFn: api.product.create.mutationOptions,
+    mutationFn: productCreateMutationOptions,
     success: (d) =>
       savedWithBackgroundWork(d.sideEffects, `Enriched ${d.name}`),
     invalidateKeys: [
@@ -387,7 +399,7 @@ export function EnrichmentEditor({
     entity: "product",
     operation: "update",
     intent: "full",
-    mutationFn: api.product.update.mutationOptions,
+    mutationFn: productUpdateMutationOptions,
     success: (d) => savedWithBackgroundWork(d.sideEffects, `Updated ${d.name}`),
     invalidateKeys: [
       ...invalidatesFor("ingredient"),
@@ -400,7 +412,7 @@ export function EnrichmentEditor({
     entity: "ingredient",
     operation: "update",
     intent: "full",
-    mutationFn: api.ingredient.update.mutationOptions,
+    mutationFn: ingredientUpdateMutationOptions,
     success: `Updated ${row.name}.`,
     invalidateKeys: invalidatesFor("ingredient"),
     error: (err) => `Failed to update: ${getErrorMessage(err)}`,

@@ -1,7 +1,5 @@
 #!/usr/bin/env node
-// The one universal entry is inlined before a resource is served. The resource
-// registrar injects the manifest app id, so it can safely expose this same
-// document at the two stable `ui://` URIs without depending on host internals.
+// The USDA picker entry is inlined before its `ui://` resource is served.
 
 import { rmSync } from "node:fs";
 import { dirname, resolve } from "node:path";

@@ -33,7 +33,6 @@ import {
   buildLocationTree,
   bulkReparentLocations,
   ensureGlobalUnknownLocation,
-  getLocationByShortcode,
   getLocationInventoryBreakdown,
   getLocationsByShortcodes,
   getLocationValuationSummary,
@@ -47,35 +46,18 @@ import {
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
 import { createEntityListProcedure } from "../crud-factory";
-import { createEntityCompatibilityProcedures } from "../entity-compatibility";
+import { createEntityListCompatibilityProcedure } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const locationShortcodes = bindShortcodeResolver("location");
 
-const {
-  list,
-  create,
-  update,
-  delete: deleteItem,
-} = createEntityCompatibilityProcedures(ENTITY_KERNEL_BINDINGS.location, {
-  ...ENTITY_BINDINGS.location.crud,
-  listOutput: locationListItemOut,
-});
-
-// Location detail carries tree and image relations that do not belong in the
-// baseline entity record.
-const getByID = protectedProcedure
-  .input(z.object({ id: locationShortcode }))
-  .output(strictOutput(infLocation))
-  .query(async ({ ctx, input }) => {
-    const location = await getLocationByShortcode(ctx.db, input.id);
-    if (!location)
-      throw createAppError(
-        "LOCATION_NOT_FOUND",
-        `Location ${input.id} not found`,
-      );
-    return location;
-  });
+const list = createEntityListCompatibilityProcedure(
+  ENTITY_KERNEL_BINDINGS.location,
+  {
+    ...ENTITY_BINDINGS.location.crud,
+    listOutput: locationListItemOut,
+  },
+);
 
 /**
  * Explicit pick, not a spread: the roster reads ignore the date, valuation, and
@@ -254,7 +236,6 @@ export const locationRouter = createTRPCRouter({
   list,
   search,
   options,
-  getByID,
   getByShortcodes,
   makeTree,
   valuationSummary,
@@ -262,9 +243,6 @@ export const locationRouter = createTRPCRouter({
   inventoryBreakdown,
   parentOptions,
   ensureGlobalUnknown,
-  create,
-  update,
   recomputeValuations,
-  delete: deleteItem,
   bulkUpdateParent,
 });

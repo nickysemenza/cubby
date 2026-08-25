@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,6 +19,21 @@ interface LiteralObject {
 }
 
 type SourceRef = Readonly<{ module: string; export: string }>;
+type FilterDescriptor = Readonly<{
+  columnId: string;
+  field: string | null;
+  urlKey: string;
+  kind: "text" | "select" | "multiselect" | "presence" | "boolean" | "id" | "idMulti" | "range";
+  placeholder: string;
+  options: readonly LiteralObject[] | null;
+  optionsRef: SourceRef | null;
+  optionsKey: string | null;
+  label: string | null;
+  brandRef: SourceRef | null;
+  expandRef: SourceRef | null;
+  urlOnly: boolean;
+  nullable: Readonly<{ field: string; label: string }> | null;
+}>;
 type EntityPorts = Readonly<{
   repository: SourceRef | null;
   references: Readonly<{ label: SourceRef | null; resolver: SourceRef | null }>;
@@ -51,6 +67,7 @@ export type EntityLiteral = Readonly<{
   route: Readonly<{ basePath: string; detailParam?: string }> | null;
   filterUrlKeys: readonly string[];
   filterSchema: SourceRef | null;
+  filterDescriptors: readonly FilterDescriptor[];
   ports: EntityPorts;
 }>;
 
@@ -184,11 +201,121 @@ const entityPorts = (value: LiteralValue | undefined, context: string): EntityPo
 };
 
 const policies = ["restrict", "cascade", "setNull", "detach"] as const;
+const filterKinds = [
+  "text",
+  "select",
+  "multiselect",
+  "presence",
+  "boolean",
+  "id",
+  "idMulti",
+  "range",
+] as const;
+
+const optionalString = (
+  object: LiteralObject,
+  key: string,
+  context: string,
+): string | null =>
+  object[key] === undefined || object[key] === null
+    ? null
+    : stringValue(object[key], `${context}.${key}`);
+
+const filterDescriptor = (
+  value: LiteralValue,
+  context: string,
+): FilterDescriptor => {
+  const object = objectValue(value, context);
+  exactKeys(
+    object,
+    [
+      "columnId",
+      "field",
+      "urlKey",
+      "kind",
+      "placeholder",
+      "options",
+      "optionsRef",
+      "optionsKey",
+      "label",
+      "brandRef",
+      "expandRef",
+      "urlOnly",
+      "nullable",
+    ],
+    context,
+  );
+  const columnId = stringValue(required(object, "columnId", context), `${context}.columnId`);
+  const kind = stringValue(required(object, "kind", context), `${context}.kind`);
+  if (!(filterKinds as readonly string[]).includes(kind)) {
+    throw new LiteralSpecError(`${context}.kind is unsupported.`);
+  }
+  const rawOptions = object.options;
+  if (rawOptions !== undefined && rawOptions !== null && !Array.isArray(rawOptions)) {
+    throw new LiteralSpecError(`${context}.options must be an array.`);
+  }
+  const options =
+    rawOptions === undefined || rawOptions === null
+      ? null
+      : rawOptions.map((option, index) => {
+          const optionContext = `${context}.options[${index}]`;
+          const parsed = objectValue(option, optionContext);
+          exactKeys(parsed, ["value", "label", "meta", "color"], optionContext);
+          stringValue(required(parsed, "value", optionContext), `${optionContext}.value`);
+          stringValue(required(parsed, "label", optionContext), `${optionContext}.label`);
+          if (parsed.meta !== undefined) booleanValue(parsed.meta, `${optionContext}.meta`);
+          if (parsed.color !== undefined) stringValue(parsed.color, `${optionContext}.color`);
+          return parsed;
+        });
+  const optionsRef =
+    object.optionsRef === undefined || object.optionsRef === null
+      ? null
+      : sourceRef(object.optionsRef, `${context}.optionsRef`);
+  if (options !== null && optionsRef !== null) {
+    throw new LiteralSpecError(`${context} cannot declare both options and optionsRef.`);
+  }
+  const nullable =
+    object.nullable === undefined || object.nullable === null
+      ? null
+      : (() => {
+          const nullableContext = `${context}.nullable`;
+          const parsed = objectValue(object.nullable, nullableContext);
+          exactKeys(parsed, ["field", "label"], nullableContext);
+          return {
+            field: stringValue(required(parsed, "field", nullableContext), `${nullableContext}.field`),
+            label: stringValue(required(parsed, "label", nullableContext), `${nullableContext}.label`),
+          };
+        })();
+  return {
+    columnId,
+    field: optionalString(object, "field", context),
+    urlKey: optionalString(object, "urlKey", context) ?? columnId,
+    kind: kind as FilterDescriptor["kind"],
+    placeholder: stringValue(required(object, "placeholder", context), `${context}.placeholder`),
+    options,
+    optionsRef,
+    optionsKey: optionalString(object, "optionsKey", context),
+    label: optionalString(object, "label", context),
+    brandRef:
+      object.brandRef === undefined || object.brandRef === null
+        ? null
+        : sourceRef(object.brandRef, `${context}.brandRef`),
+    expandRef:
+      object.expandRef === undefined || object.expandRef === null
+        ? null
+        : sourceRef(object.expandRef, `${context}.expandRef`),
+    urlOnly:
+      object.urlOnly === undefined
+        ? false
+        : booleanValue(object.urlOnly, `${context}.urlOnly`),
+    nullable,
+  };
+};
 
 const legacyShape = (raw: LiteralObject, context: string): LiteralObject => {
   if (raw.descriptor !== undefined) {
     return {
-      filters: { urlKeys: [] },
+      filters: { urlKeys: [], descriptors: [] },
       inspector: {
         singular: required(raw, "key", context),
         plural: null,
@@ -317,7 +444,7 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
     ),
   };
   const filters = objectValue(required(object, "filters", context), `${context}.filters`);
-  exactKeys(filters, ["urlKeys", "schema"], `${context}.filters`);
+  exactKeys(filters, ["urlKeys", "schema", "descriptors"], `${context}.filters`);
   const rawFilterUrlKeys = required(filters, "urlKeys", `${context}.filters`);
   if (!Array.isArray(rawFilterUrlKeys)) {
     throw new LiteralSpecError(`${context}.filters.urlKeys must be an array.`);
@@ -332,6 +459,29 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
     filters.schema === undefined || filters.schema === null
       ? null
       : sourceRef(filters.schema, `${context}.filters.schema`);
+  const rawFilterDescriptors = required(filters, "descriptors", `${context}.filters`);
+  if (!Array.isArray(rawFilterDescriptors)) {
+    throw new LiteralSpecError(`${context}.filters.descriptors must be an array.`);
+  }
+  const filterDescriptors = rawFilterDescriptors.map((value, index) =>
+    filterDescriptor(value, `${context}.filters.descriptors[${index}]`),
+  );
+  const descriptorColumns = filterDescriptors.map(({ columnId }) => columnId);
+  if (new Set(descriptorColumns).size !== descriptorColumns.length) {
+    throw new LiteralSpecError(`${context}.filters.descriptors contains duplicate columnId values.`);
+  }
+  const descriptorUrlKeys = filterDescriptors.map(({ urlKey }) => urlKey);
+  if (new Set(descriptorUrlKeys).size !== descriptorUrlKeys.length) {
+    throw new LiteralSpecError(`${context}.filters.descriptors contains duplicate URL keys.`);
+  }
+  if (
+    descriptorUrlKeys.length !== filterUrlKeys.length ||
+    descriptorUrlKeys.some((urlKey, index) => urlKey !== filterUrlKeys[index])
+  ) {
+    throw new LiteralSpecError(
+      `${context}.filters.urlKeys must exactly match descriptors in declaration order.`,
+    );
+  }
   const routeValue = object.route;
   const route = routeValue === undefined || routeValue === null ? null : (() => {
     const value = objectValue(routeValue, `${context}.route`);
@@ -408,6 +558,7 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
     route,
     filterUrlKeys,
     filterSchema,
+    filterDescriptors,
     ports,
   };
 };
@@ -928,6 +1079,7 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         countable: entity.descriptor.countable === true,
         kernelActions,
         filterUrlKeys: entity.filterUrlKeys,
+        filterDescriptors: entity.filterDescriptors,
         mcpOperations,
         lifecycle: {
           softDelete: entity.descriptor.softDelete === true,
@@ -962,6 +1114,11 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
           ports.lifecycle.runtime,
           ports.relationMutation.attach,
           ports.relationMutation.detach,
+          ...entity.filterDescriptors.flatMap((descriptor) => [
+            descriptor.optionsRef,
+            descriptor.brandRef,
+            descriptor.expandRef,
+          ]),
         ].filter((ref): ref is SourceRef => ref !== null);
         return refs.map((ref) => [`${ref.module}#${ref.export}`, ref] as const);
       }),
@@ -1010,6 +1167,7 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         "  countable: boolean;\n" +
         '  kernelActions: readonly ("get" | "list" | "search" | "create" | "update" | "delete" | "merge")[];\n' +
         "  filterUrlKeys: readonly string[];\n" +
+        "  filterDescriptors: readonly EntityFilterDescriptorMetadata[];\n" +
         '  mcpOperations: readonly ("get" | "list" | "create" | "update" | "delete")[];\n' +
         '  lifecycle: { softDelete: boolean; delete: { mode: "soft" | "hard"; bulk: boolean } | null; merge: boolean };\n' +
         "  sourceRefs: { create: string; update: string; output: string; detail: string } | null;\n" +
@@ -1017,6 +1175,12 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         "  references: readonly Entity[];\n" +
         "};\n\n" +
         "type EntityPortSourceRef = { module: string; export: string };\n" +
+        "type EntityFilterDescriptorMetadata = {\n" +
+        "  columnId: string; field: string | null; urlKey: string; kind: string; placeholder: string;\n" +
+        "  options: readonly Record<string, unknown>[] | null; optionsRef: EntityPortSourceRef | null; optionsKey: string | null;\n" +
+        "  label: string | null; brandRef: EntityPortSourceRef | null; expandRef: EntityPortSourceRef | null;\n" +
+        "  urlOnly: boolean; nullable: { field: string; label: string } | null;\n" +
+        "};\n" +
         "type EntityPortSourceRoster = {\n" +
         "  repository: EntityPortSourceRef | null;\n" +
         "  references: { label: EntityPortSourceRef | null; resolver: EntityPortSourceRef | null };\n" +
@@ -1154,29 +1318,117 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
   ];
 };
 
-export const renderFilterArtifact = (entities: readonly EntityLiteral[]): EntityArtifacts => {
+export const renderFilterArtifacts = (entities: readonly EntityLiteral[]): EntityArtifacts[] => {
   const roster = Object.fromEntries(
     entities.map(({ key, filterUrlKeys }) => [key, filterUrlKeys]),
   );
-  return {
-    relativePath: "apps/web/src/entities/filter-search-fields.gen.ts",
-    source:
-      generatedHeader +
-      'import type { Entity } from "@cubby/schemas/entity";\n' +
-      'import { urlStringParam } from "~/lib/search-params";\n\n' +
-      "// biome-ignore format: generated data stays one entity per line.\n" +
-      `const entityFilterUrlKeyRoster: Partial<Record<Entity, readonly string[]>> = ${compactLiteral(roster)};\n\n` +
-      "/** The URL keys an entity accepts for its canonical filter assembly. */\n" +
-      "export const entityFilterUrlKeys = (entity: Entity): readonly string[] =>\n" +
-      "  entityFilterUrlKeyRoster[entity] ?? [];\n\n" +
-      "export function entityFilterSearchFields(\n" +
-      "  entity: Entity,\n" +
-      "): Record<string, typeof urlStringParam> {\n" +
-      "  const fields: Record<string, typeof urlStringParam> = {};\n" +
-      "  for (const key of entityFilterUrlKeys(entity)) fields[key] = urlStringParam;\n" +
-      "  return fields;\n" +
-      "}\n",
+  const filterRefs = [
+    ...new Map(
+      entities.flatMap(({ filterDescriptors }) =>
+        filterDescriptors.flatMap((descriptor) =>
+          [descriptor.optionsRef, descriptor.brandRef, descriptor.expandRef]
+            .filter((ref): ref is SourceRef => ref !== null)
+            .map((ref) => [`${ref.module}#${ref.export}`, ref] as const),
+        ),
+      ),
+    ).values(),
+  ].sort((left, right) =>
+    `${left.module}#${left.export}`.localeCompare(`${right.module}#${right.export}`),
+  );
+  const refAliases = new Map(
+    filterRefs.map((ref, index) => [`${ref.module}#${ref.export}`, `filterRef${index}`]),
+  );
+  const runtimeImportsByModule = new Map<
+    string,
+    Array<{ export: string; alias: string }>
+  >();
+  for (const [index, ref] of filterRefs.entries()) {
+    const imports = runtimeImportsByModule.get(ref.module) ?? [];
+    imports.push({ export: ref.export, alias: `filterRef${index}` });
+    runtimeImportsByModule.set(ref.module, imports);
+  }
+  const runtimeImports = [...runtimeImportsByModule.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(
+      ([module, imports]) =>
+        `import { ${imports.map(({ export: name, alias }) => `${name} as ${alias}`).join(", ")} } from ${JSON.stringify(module)};`,
+    )
+    .join("\n");
+  const runtimeDescriptor = (descriptor: FilterDescriptor): string => {
+    const properties = [
+      `columnId:${JSON.stringify(descriptor.columnId)}`,
+      ...(descriptor.field === null ? [] : [`field:${JSON.stringify(descriptor.field)}`]),
+      ...(descriptor.urlKey === descriptor.columnId
+        ? []
+        : [`urlKey:${JSON.stringify(descriptor.urlKey)}`]),
+      `kind:${JSON.stringify(descriptor.kind)}`,
+      `placeholder:${JSON.stringify(descriptor.placeholder)}`,
+      ...(descriptor.options === null
+        ? []
+        : [`options:${compactLiteral(descriptor.options)}`]),
+      ...(descriptor.optionsRef === null
+        ? []
+        : [
+            `options:${refAliases.get(`${descriptor.optionsRef.module}#${descriptor.optionsRef.export}`)}`,
+          ]),
+      ...(descriptor.optionsKey === null
+        ? []
+        : [`optionsKey:${JSON.stringify(descriptor.optionsKey)}`]),
+      ...(descriptor.label === null ? [] : [`label:${JSON.stringify(descriptor.label)}`]),
+      ...(descriptor.brandRef === null
+        ? []
+        : [
+            `brand:${refAliases.get(`${descriptor.brandRef.module}#${descriptor.brandRef.export}`)}`,
+          ]),
+      ...(descriptor.expandRef === null
+        ? []
+        : [
+            `expand:${refAliases.get(`${descriptor.expandRef.module}#${descriptor.expandRef.export}`)}`,
+          ]),
+      ...(descriptor.urlOnly ? ["urlOnly:true"] : []),
+      ...(descriptor.nullable === null
+        ? []
+        : [`nullable:${compactLiteral(descriptor.nullable)}`]),
+    ];
+    return `{${properties.join(",")}}`;
   };
+  const runtimeRoster = entities
+    .map(
+      ({ key, filterDescriptors }) =>
+        `${JSON.stringify(key)}:[${filterDescriptors.map(runtimeDescriptor).join(",")}],`,
+    )
+    .join("\n");
+  return [
+    {
+      relativePath: "apps/web/src/entities/filter-search-fields.gen.ts",
+      source:
+        generatedHeader +
+        'import type { Entity } from "@cubby/schemas/entity";\n' +
+        'import { urlStringParam } from "~/lib/search-params";\n\n' +
+        "// biome-ignore format: generated data stays one entity per line.\n" +
+        `const entityFilterUrlKeyRoster: Partial<Record<Entity, readonly string[]>> = ${compactLiteral(roster)};\n\n` +
+        "/** The URL keys an entity accepts for its canonical filter assembly. */\n" +
+        "export const entityFilterUrlKeys = (entity: Entity): readonly string[] =>\n" +
+        "  entityFilterUrlKeyRoster[entity] ?? [];\n\n" +
+        "export function entityFilterSearchFields(\n" +
+        "  entity: Entity,\n" +
+        "): Record<string, typeof urlStringParam> {\n" +
+        "  const fields: Record<string, typeof urlStringParam> = {};\n" +
+        "  for (const key of entityFilterUrlKeys(entity)) fields[key] = urlStringParam;\n" +
+        "  return fields;\n" +
+        "}\n",
+    },
+    {
+      relativePath: "apps/web/src/entities/generated/entity-filter-bindings.gen.ts",
+      source:
+        generatedHeader +
+        'import type { Entity } from "@cubby/schemas/entity";\n' +
+        `${runtimeImports}\n` +
+        'import type { FilterSpec } from "../filter-manifest";\n\n' +
+        "// biome-ignore format: generated runtime filter assembly stays one entity per line.\n" +
+        `export const generatedEntityFilters = {\n${runtimeRoster}\n} satisfies Record<Entity, readonly FilterSpec[]>;\n`,
+    },
+  ];
 };
 
 const formatSource = (root: string, artifact: EntityArtifacts): string => {
@@ -1194,7 +1446,20 @@ const formatSource = (root: string, artifact: EntityArtifacts): string => {
   return result;
 };
 
-const generatedName = /^(?:entity-literal-.+|entity-manifest-data|entity-inspector|entity-details|entity-lists|entity-filter-fields|entity-bindings|entity-routes|entity-kernel-bindings|entity-kernel-entities|entity-runtime-ports|filter-search-fields|shortcode-registry)\.gen\.ts$/;
+const ARTIFACT_HASH_PATTERN = /^\/\/ Entity artifact hashes: source=([a-f0-9]+) content=([a-f0-9]+)\n/m;
+const artifactHash = (source: string) =>
+  createHash("sha256").update(source).digest("hex").slice(0, 16);
+
+const sealArtifact = (root: string, artifact: EntityArtifacts): EntityArtifacts => {
+  const formatted = formatSource(root, artifact);
+  const hashLine = `// Entity artifact hashes: source=${artifactHash(artifact.source)} content=${artifactHash(formatted)}\n`;
+  return {
+    ...artifact,
+    source: formatted.replace(generatedHeader, generatedHeader + hashLine),
+  };
+};
+
+const generatedName = /^(?:entity-literal-.+|entity-manifest-data|entity-inspector|entity-details|entity-lists|entity-filter-catalog|entity-filter-bindings|entity-filter-fields|entity-bindings|entity-routes|entity-kernel-bindings|entity-kernel-entities|entity-runtime-ports|filter-search-fields|shortcode-registry)\.gen\.ts$/;
 
 const findExtraArtifacts = async (root: string, artifacts: readonly EntityArtifacts[]) => {
   const expected = new Set(artifacts.map(({ relativePath }) => relativePath));
@@ -1245,6 +1510,36 @@ export const checkEntityArtifacts = async (
   return problems;
 };
 
+const checkSealedEntityArtifacts = async (
+  root: string,
+  artifacts: readonly EntityArtifacts[],
+) => {
+  const problems: string[] = [];
+  for (const artifact of artifacts) {
+    try {
+      const current = await readFile(resolve(root, artifact.relativePath), "utf8");
+      const hashes = current.match(ARTIFACT_HASH_PATTERN);
+      const content = current.replace(ARTIFACT_HASH_PATTERN, "");
+      if (
+        hashes?.[1] !== artifactHash(artifact.source) ||
+        hashes?.[2] !== artifactHash(content)
+      ) {
+        problems.push(`stale: ${artifact.relativePath}`);
+      }
+    } catch (error) {
+      if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+        problems.push(`missing: ${artifact.relativePath}`);
+        continue;
+      }
+      throw error;
+    }
+  }
+  for (const extra of await findExtraArtifacts(root, artifacts)) {
+    problems.push(`extraneous: ${extra}`);
+  }
+  return problems;
+};
+
 const writeEntityArtifacts = async (root: string, artifacts: readonly EntityArtifacts[]) => {
   const problems = await checkEntityArtifacts(root, artifacts);
   const extras = problems.filter((problem) => problem.startsWith("extraneous:"));
@@ -1269,10 +1564,10 @@ const generateEntityArtifacts = async (
   source?: string,
 ) => {
   const entities = source === undefined ? await parseEntityLiteralFiles() : parseEntityLiterals(source, SPEC_PATH);
-  const artifacts = [...renderEntityArtifacts(entities), renderFilterArtifact(entities)].map((artifact) => ({
-    ...artifact,
-    source: formatSource(root, artifact),
-  }));
+  const artifacts = [
+    ...renderEntityArtifacts(entities),
+    ...renderFilterArtifacts(entities),
+  ].map((artifact) => sealArtifact(root, artifact));
   return { entities, artifacts };
 };
 
@@ -1282,14 +1577,19 @@ const main = async () => {
   if (unknownArguments.length > 0) {
     throw new LiteralSpecError(`Unknown arguments: ${unknownArguments.join(", ")}.`);
   }
-  const { artifacts } = await generateEntityArtifacts();
   if (check) {
-    const problems = await checkEntityArtifacts(ROOT, artifacts);
+    const entities = await parseEntityLiteralFiles();
+    const artifacts = [
+      ...renderEntityArtifacts(entities),
+      ...renderFilterArtifacts(entities),
+    ];
+    const problems = await checkSealedEntityArtifacts(ROOT, artifacts);
     if (problems.length > 0) {
       throw new LiteralSpecError(`Generated entity artifacts are out of date:\n${problems.join("\n")}`);
     }
     return;
   }
+  const { artifacts } = await generateEntityArtifacts();
   await writeEntityArtifacts(ROOT, artifacts);
 };
 

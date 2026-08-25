@@ -47,6 +47,7 @@ import {
   SheetTitle,
 } from "~/components/ui/sheet";
 import { Spinner } from "~/components/ui/spinner";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidatesFor, invalidateTRPCQueries } from "~/lib/query-keys";
@@ -63,6 +64,10 @@ const manualAddSchema = z.object({
 });
 
 type ManualAddValues = z.input<typeof manualAddSchema>;
+const inventoryCreateMutationOptions = entityMutationOptionsFactory(
+  "inventory",
+  "create",
+);
 
 export function SessionCaptureActions({
   location,
@@ -144,7 +149,10 @@ export function SessionCaptureActions({
     }),
   );
   const createInventory = useMutation(
-    api.inventory.create.mutationOptions({
+    entityMutationOptionsFactory(
+      "inventory",
+      "create",
+    )({
       onSuccess: invalidateCapture,
       onError: (error) => toast.error(getErrorMessage(error)),
     }),
@@ -152,7 +160,9 @@ export function SessionCaptureActions({
   const quickCreateProduct = useMutation(
     api.product.quickCreate.mutationOptions(),
   );
-  const updateProduct = useMutation(api.product.update.mutationOptions());
+  const updateProduct = useMutation(
+    entityMutationOptionsFactory("product", "update")(),
+  );
   const handleFile = async (file: File) => {
     try {
       await captureLocationPhoto(location.id, file);
@@ -525,7 +535,7 @@ function ManualAdd({ locationId }: { locationId: LocationShortcode }) {
   });
   const createInventory = useActionMutation({
     entity: "inventory",
-    mutationFn: api.inventory.create.mutationOptions,
+    mutationFn: inventoryCreateMutationOptions,
     success: (data) => savedWithBackgroundWork(data.sideEffects, "Added item"),
     invalidateKeys: invalidatesFor("inventory"),
     onSuccess: () => {

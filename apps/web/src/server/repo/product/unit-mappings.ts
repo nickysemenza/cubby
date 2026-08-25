@@ -27,7 +27,7 @@ import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
  * its one caller to overwrite the field with the shortcode it happened to know.
  * That left a uuid-shaped `sourceMetadata` alive in the type system, one
  * forgetful second caller away from reaching the client, where the unit-mapping
- * table feeds that exact field into a `product.getByID` lookup that is keyed on
+ * table feeds that exact field into a Product detail lookup that is keyed on
  * the shortcode. Whoever owns the shortcode stamps it (see
  * `getProductSummaries`); nobody else can.
  */

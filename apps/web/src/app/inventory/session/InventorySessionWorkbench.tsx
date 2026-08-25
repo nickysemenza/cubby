@@ -18,6 +18,7 @@ import { Button, buttonVariants } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { LocationReviewPane } from "./_components/LocationReviewPane";
@@ -199,7 +200,7 @@ export function InventorySessionWorkbench({
     invalidateKeys: sessionInvalidateKeys,
   });
   const updateLocation = useActionMutation({
-    mutationFn: api.location.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("location", "update"),
     invalidateKeys: sessionInvalidateKeys,
   });
   // "Done" commits the staged diff for the current bin. On success the committed

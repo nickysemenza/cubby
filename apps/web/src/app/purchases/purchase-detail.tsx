@@ -21,6 +21,7 @@ import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { NoneValue } from "~/components/ui/none-value";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { invalidatesFor } from "~/lib/query-keys";
@@ -79,7 +80,7 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
   );
 
   const updateMutation = useUpdateMutation({
-    mutationFn: api.purchase.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("purchase", "update"),
     entity: "purchase",
   });
 
@@ -99,7 +100,7 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
     entityLabel: "Purchase",
     entity: "purchase",
     mutationOptions: (callbacks) =>
-      api.purchase.delete.mutationOptions(callbacks),
+      entityMutationOptionsFactory("purchase", "delete")(callbacks),
     redirectTo: "/purchases",
     description:
       "The purchase and its documents go; its expenses stay in the ledger, unattached to any purchase.",

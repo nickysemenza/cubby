@@ -10,6 +10,7 @@ import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { DuplicateProductMergeFix } from "~/app/problems/components/tier2-fixes";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useTRPC } from "~/integrations/trpc/react";
 import { invalidateTRPCQueries } from "~/lib/query-keys";
 
@@ -108,7 +109,10 @@ function TagPropagationRecommendation({
     api.recommendations.tagPropagation.queryOptions({ sourceId }),
   );
   const accept = useMutation(
-    api.product.update.mutationOptions({
+    entityMutationOptionsFactory(
+      "product",
+      "update",
+    )({
       onSuccess: () => {
         invalidateTRPCQueries(queryClient, [
           api.recommendations.tagPropagation.queryKey({ sourceId }),

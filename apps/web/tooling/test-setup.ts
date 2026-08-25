@@ -568,19 +568,22 @@ export async function seedFromCSV(
   return { productIds, locationIds, inventoryIds };
 }
 
-/**
- * Seed one row of `entity` through the generic kernel mutation procedure.
- *
- * The generated binding supplies the authoritative create schema to `mock()`;
- * overrides provide only required links or values a schema cannot synthesize.
- */
 export async function seedEntity<E extends ShortcodeEntity>(
-  caller: object,
+  db: Database,
   entity: E,
   overrides?: Record<string, unknown>,
 ): Promise<unknown> {
-  const { ENTITY_BINDINGS } = await import("../src/server/entity-bindings");
-  const { mock } = await import("../src/lib/test/mock-schema");
+  const [
+    { mock },
+    { createTestTRPCContext },
+    { ENTITY_BINDINGS },
+    { ENTITY_KERNEL_BINDINGS },
+  ] = await Promise.all([
+    import("../src/lib/test/mock-schema"),
+    import("../src/server/api/trpc"),
+    import("../src/server/entity-bindings"),
+    import("../src/server/generated/entity-kernel-bindings.gen"),
+  ]);
 
   const binding = ENTITY_BINDINGS[entity].crud;
   if (!binding) {
@@ -588,16 +591,33 @@ export async function seedEntity<E extends ShortcodeEntity>(
   }
 
   const input = mock(binding.createInput, { overrides });
-  const mutate = (
-    caller as {
-      entity?: { mutate?: (input: unknown) => Promise<unknown> };
-    }
-  ).entity?.mutate;
-  if (!mutate) {
-    throw new Error(
-      "seedEntity: caller has no generic entity.mutate procedure",
-    );
+  const baseContext = createTestTRPCContext(db, {
+    auth: { userId: unsafeUserId("test-user-id") },
+  });
+  if (!baseContext.actorContext) {
+    throw new Error("seedEntity: test actor is required");
   }
-  const result = await mutate({ action: "create", entity, data: input });
-  return (result as { item?: unknown }).item;
+  const adapter = (
+    ENTITY_KERNEL_BINDINGS as unknown as Record<
+      string,
+      {
+        repository: {
+          create?: (
+            context: typeof baseContext & {
+              actorContext: NonNullable<typeof baseContext.actorContext>;
+            },
+            data: unknown,
+          ) => Promise<{ output: unknown }>;
+        };
+      }
+    >
+  )[entity];
+  if (!adapter?.repository.create) {
+    throw new Error(`seedEntity: "${entity}" has no create adapter`);
+  }
+  const created = await adapter.repository.create(
+    { ...baseContext, actorContext: baseContext.actorContext },
+    input,
+  );
+  return binding.output.parse(created.output);
 }

@@ -33,16 +33,10 @@ import {
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import type { PlannedLine } from "~/server/services/availability.service";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
-import { createEntityCompatibilityProcedures } from "../entity-compatibility";
+import { createEntityListCompatibilityProcedure } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
-const {
-  getByID,
-  list,
-  create,
-  update,
-  delete: deleteItem,
-} = createEntityCompatibilityProcedures(
+const list = createEntityListCompatibilityProcedure(
   ENTITY_KERNEL_BINDINGS.meal,
   ENTITY_BINDINGS.meal.crud,
 );
@@ -242,11 +236,7 @@ const getShoppingList = protectedProcedure
   });
 
 export const mealRouter = createTRPCRouter({
-  getByID,
   list,
-  create,
-  update,
-  delete: deleteItem,
   getByDateRange,
   upcomingSummary,
   getShoppingList,

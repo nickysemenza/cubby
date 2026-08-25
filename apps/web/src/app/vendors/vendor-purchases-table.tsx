@@ -16,6 +16,7 @@ import { TableLink } from "~/app/_components/table/TableLink";
 import { Row } from "~/components/layout";
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseIdentityLabel } from "~/lib/purchase-label";
 import { formatCurrency } from "~/lib/utils";
@@ -40,7 +41,7 @@ export function VendorPurchasesTable({ vendor }: { vendor: VendorOut }) {
     [vendor.id],
   );
   const update = useUpdateMutation({
-    mutationFn: api.purchase.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("purchase", "update"),
     entity: "purchase",
   });
   // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrapper is functionally stable

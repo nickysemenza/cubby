@@ -45,7 +45,6 @@ export {
   createProject,
   deleteProjects,
   getProjectByID,
-  getProjectByShortcode,
   updateProject,
 } from "./crud";
 export { projectDashboardSummary } from "./dashboard-summary";

@@ -42,6 +42,25 @@ export default literalEntity({
       export: "exampleFilterFields",
     },
     urlKeys: ["name", "createdAt"],
+    descriptors: [
+      {
+        columnId: "name",
+        kind: "text",
+        placeholder: "Filter by name...",
+      },
+      {
+        columnId: "createdAt",
+        kind: "range",
+        placeholder: "Filter by created date...",
+        options: [
+          { value: "last7days", label: "Last 7 days" },
+        ],
+        expandRef: {
+          module: "~/entities/filter-behavior",
+          export: "resolveCreatedDate",
+        },
+      },
+    ],
   },
   relations: [],
   search: { enabled: true },
@@ -60,7 +79,7 @@ export default literalEntity({
     mcpNames: null,
     ports: {
       repository: {
-        module: "~/server/entity-kernel/registry",
+        module: "~/server/repo/example/entity-adapter",
         export: "exampleEntityAdapter",
       },
       references: {
@@ -101,6 +120,13 @@ references as client-safe data; the server roster is a lookup catalog, not a
 dynamic importer. Repository closures still own transactions and service
 injection.
 
+Filter descriptors are restricted literal records. Static choices stay literal;
+icon-bearing option lists, identifier brands, and compound preset expansion use
+explicit `{ module, export }` references. The compiler rejects unsupported
+kinds/properties, duplicate columns or URL keys, and any URL-key roster that is
+missing or stale relative to its descriptors. SQL predicates remain explicit in
+repository filter builders.
+
 Generated artifacts provide the exhaustive entity keys and traits, public
 shortcode contracts (including inbound-only legacy aliases), schema bindings,
 client-safe inspector metadata, browser route roster, filter field/URL catalogs,
@@ -138,11 +164,14 @@ Extensions delegate to those services instead of branching inside the kernel.
 
 tRPC is a replaceable browser adapter. Generic detail, list, and deferred filter
 option reads use POST TanStack Start functions and generated entity-to-output
-maps. `entity.query` no longer exists. Generic writes remain on `entity.mutate`;
+maps. `entity.query` and `entity.mutate` no longer exist. Generic writes use the
+authenticated `executeEntityMutation` Start function;
 workflow-shaped tRPC procedures remain thin adapters with no entity business
 logic. Start and tRPC share observed-request tracing, input redaction, Sentry
 policy, actor context, and public error translation. Start entity calls preserve
-the browser's semantic request/result/error console ledger.
+the browser's semantic request/result/error console ledger. The mutation cutover
+has no compatibility route: a tab loaded before that deployment must reload
+before its next generic write.
 
 MCP invokes `executeEntity` directly through the `entity` tool and publishes its
 machine-readable contract at `entities://catalog`. Workflow-shaped MCP tools

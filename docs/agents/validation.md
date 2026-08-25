@@ -35,9 +35,11 @@ it. 24% of all test runs used to be a re-run of one that had just failed.
 
 Narrow the other gates too: `pnpm format:changed` (~1s) over `pnpm format:write`
 (~18s), and `pnpm typecheck:web` when only the web app is touched. `pnpm check`
-runs the fast core gates concurrently. `pnpm check:all` adds dependency,
-bindings, OpenAPI, security, and CI-scope validation; CI and pre-PR validation
-run that superset.
+runs changed-file Biome, TypeScript, entity freshness, script types, and the
+high-risk SQL/soft-delete guards concurrently. `pnpm check:all` adds full-tree
+Biome, Knip, bindings, OpenAPI, security, and CI-scope validation. Dependency
+deduplication runs separately when a package manifest, workspace file, patch, or
+lockfile changed; CI and pre-PR validation run the applicable superset.
 
 One agent owns a particular gate; other agents continue useful work and consume
 the owner's distilled result instead of repeating it. At handoff report commands,

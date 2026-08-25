@@ -32,6 +32,7 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import type { ViewSwitcherOption } from "~/components/ui/view-switcher";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useTRPC } from "~/integrations/trpc/react";
 import { dataQualityOptions } from "~/lib/data-quality-options";
 import { invalidatesFor } from "~/lib/query-keys";
@@ -221,7 +222,8 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
     () => createCubbyColumnHelper<ProductTreeRow>(),
     [],
   );
-  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("product");
+  const { onRowClick, onRowHover, onRowHoverEnd, PreviewSheet } =
+    useEntityPreview("product");
   // Runtime picklist for the manifest's `tags` spec (optionsKey: "tags").
   const { options: tagOptions } = useProductTagOptions();
   const projectOptions = useDeferredFilterOptions("project");
@@ -311,12 +313,12 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
     onSuccess: () => setStockTrackingRows([]),
   });
   const updateProductMutation = useUpdateMutation({
-    mutationFn: api.product.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("product", "update"),
     entity: "product",
   });
 
   const updateInventoryMutation = useUpdateMutation({
-    mutationFn: api.inventory.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("inventory", "update"),
     entity: "inventory",
   });
   const createInventoryMutation = useCreateInventoryMutation();
@@ -1092,6 +1094,7 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
             ariaLabel="Products Table"
             onRowClick={onRowClick}
             onRowHover={onRowHover}
+            onRowHoverEnd={onRowHoverEnd}
           />
         )}
         {view === "shelf" && (

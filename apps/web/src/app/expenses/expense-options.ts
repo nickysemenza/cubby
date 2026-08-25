@@ -12,10 +12,6 @@ import { type BadgeVariant, badgeVariantColor } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { booleanCellOptions, buildSelectOptions } from "~/lib/select-options";
 import { getCostTypeColor } from "~/lib/status-colors";
-import {
-  type ExpenseDateRangePreset,
-  expenseDateRangeValues,
-} from "./expense-date-presets";
 
 /** Human labels for the fixed cost-type enum. */
 export const costTypeLabels: Record<(typeof costTypeValues)[number], string> = {
@@ -126,20 +122,6 @@ export const futureFilterOptions: FilterableComboboxItem[] = [
   { value: "true", label: "Planned" },
   { value: "false", label: "Already made" },
 ];
-
-/** Human labels for the date-range preset enum. */
-const dateRangeLabels: Record<ExpenseDateRangePreset, string> = {
-  "30d": "Last 30 days",
-  "90d": "Last 90 days",
-  ytd: "Year to date",
-  "1y": "Last 12 months",
-};
-
-/** `{value,label}` options for the expense-date-range filter select. */
-export const dateRangeOptions = buildSelectOptions(
-  expenseDateRangeValues,
-  dateRangeLabels,
-);
 
 /**
  * Fixed preset values for the Cost column filter — the amount half. The two

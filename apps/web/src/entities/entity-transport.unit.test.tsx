@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { observedEntityCall } from "./entity-transport";
+import {
+  EntityTransportError,
+  observedEntityCall,
+  unwrapEntityTransportResult,
+} from "./entity-transport";
 
 vi.mock("~/lib/flags", () => ({ getFlag: () => true }));
 
@@ -28,5 +32,17 @@ describe("Start entity query logging", () => {
       }),
     ).rejects.toThrow("broken");
     expect(error.mock.calls[0]?.[0]).toMatch(/entity\.filterOptions/u);
+  });
+
+  it("rejects undefined before TanStack Query receives it", () => {
+    expect(() =>
+      unwrapEntityTransportResult("entity.detail", {
+        ok: true,
+        data: undefined,
+      }),
+    ).toThrowError(EntityTransportError);
+    expect(
+      unwrapEntityTransportResult("entity.detail", { ok: true, data: null }),
+    ).toBeNull();
   });
 });

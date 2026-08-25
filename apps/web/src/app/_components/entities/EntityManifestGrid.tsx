@@ -394,13 +394,28 @@ export function EntityInspector({
         <ContractRows
           rows={[
             [
+              "Descriptor ownership",
+              `${metadata.filterDescriptors.length} literal descriptors · generated bindings`,
+            ],
+            [
+              "Descriptor kinds",
+              <Chips
+                key="kinds"
+                items={[
+                  ...new Set(
+                    metadata.filterDescriptors.map((filter) => filter.kind),
+                  ),
+                ]}
+              />,
+            ],
+            [
               "URL codec keys",
               <Chips key="url" items={metadata.filterUrlKeys} />,
             ],
-            ["Validation", sourceRef(metadata.ports.repository)],
-            ["Controls", sourceRef(metadata.ports.filters)],
-            ["SQL predicates", sourceRef(metadata.ports.repository)],
-            ["Option loaders", sourceRef(metadata.ports.filters)],
+            ["Validation", "generated Zod field bindings"],
+            ["Controls and codecs", sourceRef(metadata.ports.filters)],
+            ["SQL predicates", "explicit repository predicates"],
+            ["Option loaders", "generated static/deferred bindings"],
             [
               "MCP fields",
               metadata.mcpOperations.length
@@ -485,15 +500,23 @@ export function EntityInspector({
           rows={[
             [
               "Start",
-              metadata.kernelActions.some((action) => action === "get")
-                ? "generic entity detail"
+              metadata.kernelActions.length
+                ? [
+                    metadata.kernelActions.includes("get") && "detail",
+                    metadata.kernelActions.includes("list") && "list/filter",
+                    metadata.kernelActions.some((action) =>
+                      ["create", "update", "delete", "merge"].includes(action),
+                    ) && "generic writes",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")
                 : "—",
             ],
             [
               "tRPC",
               metadata.kernelActions.length
-                ? "thin list/write adapter"
-                : "workflow procedures",
+                ? "workflow procedures · batching/streams · specialized projections"
+                : "workflow procedures and specialized projections",
             ],
             [
               "MCP",

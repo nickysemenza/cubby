@@ -7,11 +7,17 @@ import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMu
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { type RouterOutputs, useTRPC } from "~/integrations/trpc/react";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import {
+  entityDetailQueryKey,
+  entityDetailQueryOptions,
+} from "~/entities/entity-detail";
+import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
 import { invalidatesFor } from "~/lib/query-keys";
 import type { UnitCoverageItem } from "./unit-coverage-items";
 
-type ProductDetail = NonNullable<RouterOutputs["product"]["getByID"]>;
+type ProductDetail = NonNullable<EntityDetailByEntity["product"]>;
+const updateProduct = entityMutationOptionsFactory("product", "update");
 
 // CoverageChips moved to the units folder (lean deps — Badge/Row/BASE_KINDS only)
 // so list/detail bundles that show coverage don't pull in this file's mutation
@@ -110,15 +116,14 @@ function TitleSizeFix({
   token: string;
   close: () => void;
 }) {
-  const api = useTRPC();
   const [value, setValue] = useState(String(proposed.value));
-  const { data: product } = useQuery(api.product.getByID.queryOptions({ id }));
+  const { data: product } = useQuery(entityDetailQueryOptions("product", id));
   const update = useProblemCardMutation({
-    mutationFn: api.product.update.mutationOptions,
+    mutationFn: updateProduct,
     success: "Size saved",
     invalidateKeys: [
       ...invalidatesFor("product"),
-      api.product.getByID.queryKey({ id }),
+      entityDetailQueryKey("product", id),
     ],
     onSuccess: close,
   });
@@ -170,10 +175,9 @@ function TitleSizeFix({
 
 /** Non-food product: a price is the whole fix. */
 function PriceFix({ id, close }: { id: string; close: () => void }) {
-  const api = useTRPC();
   const [price, setPrice] = useState("");
   const update = useProblemCardMutation({
-    mutationFn: api.product.update.mutationOptions,
+    mutationFn: updateProduct,
     success: "Price saved",
     invalidateKeys: invalidatesFor("product"),
     onSuccess: close,
@@ -224,7 +228,6 @@ function DisconnectedFix({
   islands: { units: string[]; exampleUnit: string }[];
   close: () => void;
 }) {
-  const api = useTRPC();
   // One bridge per adjacent island pair connects all N into a single graph.
   const bridges = islands.slice(0, -1).map((isl, i) => ({
     from: isl.exampleUnit,
@@ -238,13 +241,13 @@ function DisconnectedFix({
     data: product,
     isLoading,
     isError,
-  } = useQuery(api.product.getByID.queryOptions({ id }));
+  } = useQuery(entityDetailQueryOptions("product", id));
   const update = useProblemCardMutation({
-    mutationFn: api.product.update.mutationOptions,
+    mutationFn: updateProduct,
     success: "Conversion saved",
     invalidateKeys: [
       ...invalidatesFor("product"),
-      api.product.getByID.queryKey({ id }),
+      entityDetailQueryKey("product", id),
     ],
     onSuccess: close,
   });

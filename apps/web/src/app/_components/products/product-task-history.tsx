@@ -13,6 +13,7 @@ import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { taskDueColumn, taskStatusColumn } from "~/app/projects/shared";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useTRPC } from "~/integrations/trpc/react";
 import { ShelfEmpty } from "../data-table/shelf";
 import {
@@ -55,7 +56,7 @@ export const ProductTaskHistory: FC<{ product: ProductWithFoodOut }> = ({
   );
   const tasks = data ?? EMPTY_TASKS;
   const update = useUpdateMutation({
-    mutationFn: api.task.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("task", "update"),
     entity: "task",
   });
   const nameEditable = useNameEditable<TaskOut>(update.mutateAsync);

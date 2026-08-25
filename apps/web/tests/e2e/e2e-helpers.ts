@@ -191,7 +191,7 @@ export function waitForEntityMutation(page: Page) {
   return page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
-      response.url().includes("/api/trpc/entity.mutate") &&
+      response.url().includes("/_serverFn/") &&
       response.ok(),
   );
 }

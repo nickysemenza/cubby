@@ -4,9 +4,9 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import {
-  EntityTransportError,
   observedEntityCall,
   type PublicEntityError,
+  unwrapEntityTransportResult,
 } from "./entity-transport";
 import {
   type EntityListInputByEntity,
@@ -77,8 +77,10 @@ async function getEntityList<E extends ListEntity>(options: {
 }): Promise<EntityListResultByEntity[E]> {
   return await observedEntityCall("entity.list", options.data, async () => {
     const result = await getEntityListTransport(options);
-    if (!result.ok) throw new EntityTransportError(result.error);
-    return result.data as EntityListResultByEntity[E];
+    return unwrapEntityTransportResult(
+      "entity.list",
+      result,
+    ) as EntityListResultByEntity[E];
   });
 }
 

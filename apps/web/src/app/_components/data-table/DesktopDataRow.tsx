@@ -1,7 +1,12 @@
 import type { RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import { Bug } from "lucide-react";
-import { type MouseEvent, memo } from "react";
+import {
+  type FocusEvent,
+  type MouseEvent,
+  memo,
+  type PointerEvent,
+} from "react";
 import { Button } from "~/components/ui/button";
 import { TableCell, TableRow } from "~/components/ui/table";
 import { cn } from "~/lib/utils";
@@ -34,6 +39,7 @@ export interface DesktopDataRowProps<TItem extends RowData> {
   isDebugEnabled: boolean;
   onRowClick?: (row: Row<TItem>) => void;
   onRowHover?: (row: Row<TItem>) => void;
+  onRowHoverEnd?: (row: Row<TItem>) => void;
   rowClassName: string;
   cellClassName: string;
   columnsKey: string;
@@ -58,6 +64,7 @@ function DesktopDataRowInner<TItem extends RowData>({
   isDebugEnabled,
   onRowClick,
   onRowHover,
+  onRowHoverEnd,
   rowClassName,
   cellClassName,
   height,
@@ -85,7 +92,30 @@ function DesktopDataRowInner<TItem extends RowData>({
         isFocused && "ring-2 ring-primary/30 ring-inset",
       )}
       onClick={handleRowClick}
-      onMouseEnter={onRowHover ? () => onRowHover(row) : undefined}
+      onPointerEnter={
+        onRowHover
+          ? (event: PointerEvent<HTMLTableRowElement>) => {
+              if (event.pointerType !== "touch") onRowHover(row);
+            }
+          : undefined
+      }
+      onPointerLeave={
+        onRowHoverEnd
+          ? (event: PointerEvent<HTMLTableRowElement>) => {
+              if (event.pointerType !== "touch") onRowHoverEnd(row);
+            }
+          : undefined
+      }
+      onFocus={onRowHover ? () => onRowHover(row) : undefined}
+      onBlur={
+        onRowHoverEnd
+          ? (event: FocusEvent<HTMLTableRowElement>) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) {
+                onRowHoverEnd(row);
+              }
+            }
+          : undefined
+      }
       style={height ? { height } : undefined}
     >
       {[
@@ -187,6 +217,7 @@ function rowPropsAreEqual<TItem extends RowData>(
     previous.isDebugEnabled === next.isDebugEnabled &&
     previous.onRowClick === next.onRowClick &&
     previous.onRowHover === next.onRowHover &&
+    previous.onRowHoverEnd === next.onRowHoverEnd &&
     previous.rowClassName === next.rowClassName &&
     previous.cellClassName === next.cellClassName &&
     previous.columnsKey === next.columnsKey &&

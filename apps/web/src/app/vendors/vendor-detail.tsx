@@ -8,6 +8,7 @@ import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useTRPC } from "~/integrations/trpc/react";
 import { invalidatesFor } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
@@ -43,7 +44,7 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
   const [mergeOpen, setMergeOpen] = useState(false);
 
   const updateMutation = useUpdateMutation({
-    mutationFn: api.vendor.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("vendor", "update"),
     entity: "vendor",
   });
 
@@ -74,7 +75,7 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
     entityLabel: "Vendor",
     entity: "vendor",
     mutationOptions: (callbacks) =>
-      api.vendor.delete.mutationOptions(callbacks),
+      entityMutationOptionsFactory("vendor", "delete")(callbacks),
     redirectTo: "/vendors",
     description:
       "A vendor with purchases still pointing at it can't be deleted — move those purchases first. Otherwise this removes the vendor from the roster.",

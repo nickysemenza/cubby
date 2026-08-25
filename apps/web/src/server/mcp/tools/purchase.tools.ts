@@ -32,6 +32,7 @@ import {
 } from "@cubby/schemas/purchase";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { executeEntity } from "~/server/entity-kernel";
 import { READ_ONLY_CLOSED, registerRouterTool, WRITE_CLOSED } from "./_shared";
 
 /**
@@ -91,13 +92,24 @@ export function registerPurchaseTools(server: McpServer) {
     inputSchema: splitExpenseInput.shape,
     outputSchema: splitExpenseMcpOut,
     annotations: WRITE_CLOSED,
-    call: async (caller, params) => {
+    call: async (caller, params, context) => {
+      if (!context) {
+        throw new Error("Authenticated entity-kernel context is missing");
+      }
       // Read before the split runs — the original row is soft-deleted by the
       // time `purchase.split` returns, so its cost has to be captured first.
-      const original = await caller.expense.getByID({ id: params.expenseId });
+      const original = await executeEntity(context, {
+        action: "get",
+        entity: "expense",
+        id: params.expenseId,
+        missing: "error",
+      });
+      if (original.action !== "get" || !original.item) {
+        throw new Error("Entity kernel returned the wrong expense detail");
+      }
       const items = await caller.purchase.split(params);
       const { originalCost, partsSum, delta } = splitExpenseDelta(
-        original.cost,
+        expenseOut.parse(original.item).cost,
         params.parts.map((part) => part.cost),
       );
       return { items, originalCost, partsSum, delta };

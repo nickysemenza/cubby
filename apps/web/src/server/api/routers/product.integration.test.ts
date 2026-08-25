@@ -5,6 +5,7 @@ import {
 } from "@cubby/schemas/project";
 import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { executeEntity } from "~/server/entity-kernel";
 import { createExpense } from "~/server/repo/expense";
 import { deleteInventoryEntries } from "~/server/repo/inventory";
 import {
@@ -15,7 +16,8 @@ import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
-import { createTestCaller } from "../trpc";
+import { requireActor } from "~/server/request-context";
+import { createTestCaller, createTestTRPCContext } from "../trpc";
 import { productRouter } from "./product";
 
 describe("product.tagSiblings", () => {
@@ -974,7 +976,7 @@ describe("product.list kits counted twice", () => {
  * typechecks: the page reads `product.quantityLedger`, and a detail path that
  * forgot to enrich would surface a zero ledger rather than an error.
  */
-describe("product.getByID quantity ledger", () => {
+describe("product detail quantity ledger", () => {
   const ctx = withTestDb();
 
   it("carries the ledger, on-hand and variance, agreeing with the list row", async () => {
@@ -1011,7 +1013,26 @@ describe("product.getByID quantity ledger", () => {
     );
 
     const caller = createTestCaller(productRouter, ctx.db);
-    const detail = await caller.getByID({ id: prod.id });
+    const detailResult = await executeEntity(
+      requireActor(
+        createTestTRPCContext(ctx.db, {
+          auth: { userId: ctx.actor.userId },
+        }),
+      ),
+      { action: "get", entity: "product", id: prod.id, missing: "error" },
+    );
+    if (detailResult.action !== "get" || !detailResult.item) {
+      throw new Error("Product detail lookup returned the wrong action");
+    }
+    const detail = detailResult.item as {
+      quantityLedger: {
+        acquiredUnits: number;
+        exitedUnits: number;
+        expectedQuantity: number;
+      };
+      onHandUnits: number;
+      quantityVariance: number;
+    };
 
     expect(detail.quantityLedger).toMatchObject({
       acquiredUnits: 3,

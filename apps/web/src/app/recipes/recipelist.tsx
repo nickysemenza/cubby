@@ -15,6 +15,7 @@ import { Button } from "~/components/ui/button";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
 import { Skeleton } from "~/components/ui/skeleton";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useTRPC } from "~/integrations/trpc/react";
 import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
 import { invalidatesFor } from "~/lib/query-keys";
@@ -187,7 +188,7 @@ export function RecipeList({
 
   // Mutation for inline editing (name, servings).
   const updateRecipeMutation = useUpdateMutation({
-    mutationFn: api.recipe.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("recipe", "update"),
     entity: "recipe",
     invalidateKeys: invalidatesFor("recipe", "list"),
   });
@@ -491,7 +492,7 @@ export function RecipeList({
   }, [columnHelper]);
 
   const deletableConfig = useDeletableConfig({
-    mutationFn: api.recipe.delete.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("recipe", "delete"),
     entityLabel: "Recipe",
     invalidateKeys: invalidatesFor("recipe", "list"),
     entity: "recipe",

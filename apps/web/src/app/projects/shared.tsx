@@ -113,6 +113,7 @@ import {
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
 import { entities, entityDetailParams } from "~/entities/entities";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { multiSelectFilterFnBy } from "~/entities/filters";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -253,26 +254,7 @@ const subtaskCountSuffix = (row: TaskOut): ReactNode =>
 
 const EMBEDDED_TASK_COLUMNS: ColumnVisibilityState = { createdAt: false };
 
-/**
- * The embedded task table: client-side filter/sort/pagination over a
- * caller-supplied array, deliberately — NOT an unconverted `useEntityList`.
- *
- * These are bounded sub-lists (one project's tasks, already server-scoped
- * and capped by the caller's query), so server pagination would buy nothing at
- * this data scale. More importantly, this component is also rendered by the
- * projects dashboard's Data view, which scopes rows to
- * `!row.projectId || dashboardProjectIds.has(row.projectId)`, over a project
- * set that only `project.dashboardSummary`'s kind/location chips understand.
- * (`{projectId, projectPresenceFilter: "none"}` now expresses that OR
- * server-side — but the chip-derived project set still doesn't survive the
- * trip.) Converting would mean two data paths in one component, which is how
- * these tables drifted from the index pages before.
- *
- * Columns come from the shared factories above — the same ones the /tasks
- * index page feeds through `useEntityList` — and their filter controls come
- * from the filter manifest via `manifestFilterConfig`, so the embedded and
- * index tables can't diverge even though their data paths differ.
- */
+/** Bounded caller-scoped rows stay client-side; columns and filters remain shared. */
 export function TaskList({
   tasks,
   showProjectColumn = true,
@@ -288,18 +270,14 @@ export function TaskList({
   );
 
   const updateTaskMutation = useUpdateMutation({
-    mutationFn: api.task.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("task", "update"),
     entity: "task",
   });
   const nameEditable = useNameEditable<TaskOut>(updateTaskMutation.mutateAsync);
 
-  // These tables are raw `useTable`, not `useEntityList`, so delete is
-  // hand-wired from the same primitive the list hooks use. (Migrating to
-  // `useClientEntityList` would url-sync `sort`/`page`/`size` — and this
-  // component renders twice on a project detail page — and would re-sort
-  // `sortedData` away.)
+  // Raw embedded tables intentionally avoid URL-synced list state.
   const deletableConfig = useDeletableConfig({
-    mutationFn: api.task.delete.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("task", "delete"),
     entityLabel: "Task",
     entity: "task",
   });
@@ -307,10 +285,7 @@ export function TaskList({
     useOptimisticDelete<TaskOut>({ deletable: deletableConfig });
 
   const taskBulkActions = useTaskBulkActions();
-  // Routed through `useListBulkActions`, not `useBulkActions` directly: that
-  // hook is what prepends "Copy codes" and appends Delete. Calling the
-  // primitive here is what silently cost this table copy-shortcodes while
-  // every other task surface had it.
+  // `useListBulkActions` supplies the shared Copy codes and Delete actions.
   const listBulkActions = useListBulkActions<TaskOut>({
     entity: "task",
     bulkActions: taskBulkActions.config,
@@ -318,10 +293,7 @@ export function TaskList({
   });
   const bulkActionsState = listBulkActions.state;
 
-  // "Where does the thing this task is about actually live" — a companion read
-  // rather than a field on `TaskOut`, which has six producers that would each
-  // have to emit stock they never loaded. Keyed on the page's distinct subject
-  // products, so it is one grouped query per render, not one per row.
+  // One grouped companion read avoids adding stock to every TaskOut producer.
   const subjectProductIds = useMemo(
     () => [
       ...new Set(
@@ -358,8 +330,6 @@ export function TaskList({
         editable: nameEditable,
         nameSuffix: subtaskCountSuffix,
       }),
-      // The inline move-to-sub-project affordance — omitted on leaf projects
-      // where every row shares the one project (see `showProjectColumn`).
       ...(showProjectColumn
         ? [
             createProjectLinkColumn(taskHelper, {
@@ -388,8 +358,6 @@ export function TaskList({
           },
         },
       }),
-      // Read-only, unlike the product list's twin: the row's entity is a task,
-      // so there is no inventory entry here to inline-edit or create.
       taskHelper.display({
         id: "productLocation",
         header: "Stored at",
@@ -450,8 +418,7 @@ export function TaskList({
     return [...active, ...done];
   }, [tasks]);
 
-  // Own storage scope: this table's column set isn't the /tasks ledger's, so
-  // sharing `table-columns:task` would let a toggle here move a column there.
+  // Embedded and ledger column layouts must not share storage.
   const layout = useCubbyTableLayout({
     key: "task:embedded",
     columns,
@@ -465,9 +432,7 @@ export function TaskList({
     columns: layout.columns,
     atoms: layout.atoms,
     meta: { defaultLayout: layout.defaultLayout },
-    // Feeds the header picklists' `(count)` hints. Client-side faceting is
-    // honest here (unlike on a server-paginated ledger): the table holds the
-    // whole set it's filtering.
+    // The table holds its full scoped set, so client-side facet counts are exact.
     getRowId: (row) => row.id,
     enableRowSelection: true,
     enableRowRangeSelection: true,
@@ -506,9 +471,6 @@ export function TaskList({
     <>
       <RTable
         table={table}
-        // Same scope as this table's column visibility: the embedded task
-        // table's column set differs from the main task list's, so their
-        // widths must not share a store either.
         embedded
         showColumnMenu
         bulkActionBar={bulkActionBar}
@@ -545,13 +507,7 @@ export function expenseLineKindColumn(
   });
 }
 
-/**
- * Itemization column — whether the row is a line item or a slice of an
- * un-itemized total. Hidden by default in `expenselist`: it reads `Line item`
- * on all but a handful of rows, so the filter chip is the surface worth having.
- * Registered anyway because a manifest spec whose `columnId` matches no
- * rendered column renders no control at all, silently.
- */
+/** Registered even while hidden so its manifest filter has a real column. */
 export function expenseLineBasisColumn(
   helper: ColumnHelper<ExpenseOut>,
   save: (lineBasis: ExpenseLineBasis, expense: ExpenseOut) => Promise<void>,
@@ -650,18 +606,7 @@ export function expenseCostColumn(
   });
 }
 
-/** Product units represented by an Expense — fractional allowed, since the unit
- * is the shelf's unit. Unknown stays null; a row without a linked Product is
- * deliberately read-only.
- *
- * Signed — this one `saveValid` gates every inline quantity edit in the app
- * (expense list, project detail, purchase table, product expense history), so a
- * `> 0` rule here would make a $0 discard uneditable everywhere, and a `!== 0`
- * rule would do the same to a refund-line price concession. The sign/zero rule
- * is cost-dependent and this editor cannot see cost, so it checks only what is
- * wrong at any cost and lets `assertQuantitySignMatchesCost` reject the rest
- * with a message naming the actual conflict.
- * See `Expense.productQuantity` in schema.ts for the ledger rule. */
+/** Fractional and signed; the cost-aware schema owns sign/zero validation. */
 export function expenseProductQuantityColumn(
   helper: ColumnHelper<ExpenseOut>,
   save: (quantity: number | null, expense: ExpenseOut) => Promise<void>,
@@ -747,11 +692,7 @@ export function expenseFutureColumn(
     className: opts?.className ?? "w-24",
     mobile: opts?.mobile,
     filterConfig: opts?.filterConfig ?? null,
-    // "Actual" rather than a dash: `future` is `NOT NULL DEFAULT false`, so a
-    // made expense is a recorded fact, not a missing one. This cell used to
-    // render `<NoneValue />` for false, which is how the great majority of the
-    // ledger came to display the unknown-marker for a value that was never in
-    // doubt.
+    // `future` is non-null, so false is "Actual", never unknown.
     trueFalseOptions: expenseFutureOptions,
     editable: {
       // `next` is only ever a boolean here: the column declares no `undecided`
@@ -761,18 +702,7 @@ export function expenseFutureColumn(
   });
 }
 
-/**
- * Client-side matching for the Vendor picklist, on the vendor ID.
- *
- * The cell shows the vendor's NAME, but the roster's option values are vendor
- * ids (that's what the manifest's `vendorId` filter matches server-side), so the
- * default `multiSelectFilterFn` — which reads the column's own cell value —
- * would compare an id against a name and quietly match nothing. This reads
- * `vendorId` off the row instead; sentinel handling (`(none)` / `Has vendor`)
- * stays in `multiSelectFilterFnBy`, so the client table's OR semantics still
- * mirror `eqAnyOrPresence`. Server-filtered tables (the /expenses ledger) never
- * run it.
- */
+/** Match id-valued Vendor options against `row.vendorId`, not the displayed name. */
 const matchesVendorId = multiSelectFilterFnBy((v) => v as string | null);
 const vendorIdFilterFn: FilterFn<ExpenseOut> = (row, columnId, filterValue) =>
   matchesVendorId(
@@ -782,43 +712,8 @@ const vendorIdFilterFn: FilterFn<ExpenseOut> = (row, columnId, filterValue) =>
   );
 
 /**
- * Vendor column — the charge's vendor, displayed by name and written by name
- * (`expenseUpdateData.vendor` still resolves a name to a real `Vendor` +
- * `Purchase` server-side). Hidden by default wherever it appears (see
- * `initialColumnVisibility` in expenselist.tsx, and the embedded table's own
- * visibility default) because a charge is attached to only ~30% of rows.
- *
- * Leads with the vendor's brand mark (`VendorCell`) so long runs of the same
- * vendor — 539 of the 737 vendor-bearing rows are Amazon/Home Depot/eBay/Lowe's
- * — are scannable by shape rather than by reading. `w-40` rather than `w-32`:
- * the mark costs ~24px and the narrower column already truncated "Direct Tools
- * Outlet".
- *
- * **The editor is a roster picker, not a text box.** `findOrCreateVendor` matches
- * names exactly (trimmed, case-sensitive, deliberately), so a free-text cell made
- * inline-typing `amazon` next to an existing `Amazon` silently mint a second
- * roster row — with no detector to catch it. `WithVendorSearch` offers the whole
- * `vendor.options` roster and saves the picked option's name **verbatim**, so a
- * pick can only ever resolve to the vendor that produced it. Typing a genuinely
- * new vendor still works (a first purchase at a new store shouldn't require a
- * detour to /vendors) but is no longer the accidental default: the combobox only
- * offers "Create new vendor: …" once the typed term matches nothing on the
- * roster, exactly like the product/location pickers.
- *
- * Hand-rolled rather than `createTextColumn(…, { editable })` for that reason —
- * the shared text factory's editor is an `<Input>`. Everything else is kept
- * byte-equivalent to it (same id, `w-40`, `textCellData` clipboard kind, so a
- * copied vendor name still pastes across text cells and into the ledger from a
- * spreadsheet).
- *
- * Its FILTER is a separate, id-based picklist, so a caller must supply the roster
- * of `{value: vendorId, label: name}` options. The ledger routes the global
- * `expense.vendorOptions` query in through `useEntityList`'s `filterOptions`
- * (which overrides this config wholesale); the embedded table passes
- * `vendorOptions` here, derived from the rows it was handed. The EDITOR
- * deliberately does not reuse those: a row-derived list can't offer a vendor
- * that isn't already on screen, so `WithVendorSearch` queries the full roster
- * itself and both call sites get it without threading anything.
+ * Vendor edits use the full roster to avoid case-variant duplicates; filtering
+ * uses id-valued options supplied by each list surface.
  */
 export function expenseVendorColumn(
   helper: ColumnHelper<ExpenseOut>,
@@ -845,9 +740,6 @@ export function expenseVendorColumn(
   return helper.accessor((row) => row.vendor, {
     id: "vendor",
     header: opts?.asPurchase ? "Purchase" : "Vendor",
-    // Overrides the name-based `multiSelectFilterFn` a multiselect text column
-    // would otherwise get — see `vendorIdFilterFn` for why the two can't be the
-    // same function here.
     filterFn: vendorIdFilterFn,
     meta: {
       className: opts?.asPurchase ? "w-56" : "w-40",
@@ -864,16 +756,10 @@ export function expenseVendorColumn(
       const vendor = info.getValue();
       return (
         <EditableEntityCell<VendorName>
-          // id === name: the server contract is name-based, so the picker's
-          // identity is the name. See `WithVendorSearch`'s doc.
           value={vendor ? { id: vendor, name: vendor } : null}
           label="vendor"
-          // A charge's vendor is optional — toggling the selected row off clears
-          // it, same as emptying the old text input did.
           clearable
-          // The value is a real vendor link whenever the persisted shortcode is
-          // available. Keep editing on its own control so the link is never
-          // nested inside the default button trigger.
+          // Keep editing outside the link trigger.
           trigger="pencil"
           onSave={(newVendor) => save(newVendor, expense)}
           clipboard={specFromCellData(cellData, expense)}
@@ -920,19 +806,7 @@ export function expenseVendorColumn(
   });
 }
 
-/**
- * Order # column — the charge's own order/receipt id, written through the
- * expense (`expenseUpdateData.orderId`). Rendered `font-mono` (house convention
- * for identifiers). Hidden by default on the /expenses ledger; see
- * `expenseVendorColumn`. Its filter is presence-only ("has order id" /
- * "(none)") — the "(none)" side is the unreconciled worklist.
- *
- * The trailing icon scopes the ledger to the rest of that order, by id alone: it
- * resolves through `purchaseId` against a partial-unique `(vendorId, orderId)`,
- * so it no longer has to carry the row's vendor to stay unambiguous. Rich
- * display mode keeps that link beside a dedicated pencil trigger, so navigation
- * never also opens the inline editor.
- */
+/** Presence-filtered order id; its link scopes through the unique Purchase id. */
 export function expenseOrderIdColumn(
   helper: ColumnHelper<ExpenseOut>,
   save: (orderId: string | null, expense: ExpenseOut) => Promise<void>,
@@ -988,26 +862,7 @@ const EMBEDDED_EXPENSE_COLUMNS: ColumnVisibilityState = {
   createdAt: false,
 };
 
-/**
- * The embedded expense table: client-side filter/sort/pagination over a
- * caller-supplied array, deliberately — NOT an unconverted `useEntityList`.
- *
- * These are bounded sub-lists (one project's expenses, already server-scoped
- * and capped by the caller's query), so server pagination would buy nothing at
- * this data scale. More importantly, this component is also rendered by the
- * projects dashboard's Data view, which scopes rows to
- * `!row.projectId || dashboardProjectIds.has(row.projectId)`, over a project
- * set that only `project.dashboardSummary`'s kind/location chips understand.
- * (`{projectId, projectPresenceFilter: "none"}` now expresses that OR
- * server-side — but the chip-derived project set still doesn't survive the
- * trip.) Converting would mean two data paths in one component, which is how
- * these tables drifted from the index pages before.
- *
- * Columns come from the shared factories above — the same ones the /expenses
- * index page feeds through `useEntityList` — and their filter controls come
- * from the filter manifest via `manifestFilterConfig`, so the embedded and
- * index tables can't diverge even though their data paths differ.
- */
+/** Bounded caller-scoped rows stay client-side; columns and filters remain shared. */
 export function ExpenseList({
   expenses,
   tradeFilter,
@@ -1028,29 +883,19 @@ export function ExpenseList({
   /** Seeds the table's column filters once on mount; the table owns the state after that. */
   defaultColumnFilters?: ColumnFiltersState;
 }) {
-  const api = useTRPC();
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(
     () => defaultColumnFilters,
   );
 
   const updateExpenseMutation = useUpdateMutation({
-    mutationFn: api.expense.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("expense", "update"),
     entity: "expense",
   });
   const nameEditable = useNameEditable<ExpenseOut>(
     updateExpenseMutation.mutateAsync,
   );
 
-  // The Vendor picklist's roster, from the rows this table was handed rather
-  // than the ledger-wide `expense.vendorOptions` query: on a project page the
-  // useful question is "which vendors did THIS project use", and offering the
-  // other 70 would mostly be options that match nothing.
-  //
-  // Same option SHAPE as the ledger's (`value` = vendor id, `label` = name), so
-  // both surfaces filter on the identity the server does — see
-  // `vendorIdFilterFn`. Counts are tallied off these rows rather than from
-  // TanStack faceting: faceting keys on the column's cell value, which is the
-  // NAME, so it can't hint an id-valued option.
+  // Scope id-valued Vendor options and counts to this project's rows.
   const rowVendorOptions = useMemo<FilterableComboboxItem[]>(() => {
     const byId = new Map<
       string,
@@ -1077,18 +922,13 @@ export function ExpenseList({
       }));
   }, [expenses]);
 
-  // Hand-wired for the same reason as `TaskList` above — raw `useTable`,
-  // and the pivot drives `trade`'s column filter imperatively, which
-  // `useClientEntityList` would funnel into url state and a page reset.
+  // Raw table state lets the pivot drive filters without URL/page resets.
   const deletableConfig = useDeletableConfig({
-    mutationFn: api.expense.delete.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("expense", "delete"),
     entityLabel: "Expense",
     entity: "expense",
   });
-  // On a leaf project every row already belongs to this project, so moving one
-  // off the page you are standing on is a footgun. On a parent, rows span the
-  // subtree and the move IS the move-to-sub-project affordance — the same
-  // reasoning that gates the Project column, so it reuses the same flag.
+  // Only parent views may move rows among sub-projects.
   const rowActions = useExpenseRowActions({
     moveDisabledReason: showProjectColumn
       ? undefined
@@ -1117,10 +957,7 @@ export function ExpenseList({
       createNameColumn(expenseHelper, "expense", "name", {
         header: "Expense",
         editable: nameEditable,
-        // The name itself goes to /expenses/$id; the vendor page keeps its own
-        // icon-only affordance beside it (same treatment as the index list's
-        // dedicated url column, minus the column). stopPropagation so it opens
-        // the vendor link instead of the cell's inline editor.
+        // The vendor link must not open the cell editor.
         nameSuffix: (expense) =>
           expense.url ? (
             <ExternalLinkIcon href={expense.url} label="Open vendor link" />
@@ -1154,9 +991,7 @@ export function ExpenseList({
         },
         { mobile: { slot: "meta", priority: 20 } },
       ),
-      // Negative rows are credits/contributions (money in) — `signedTone`
-      // greens them so they don't read as spend; `decimals: 0` keeps the
-      // embedded table's whole-dollar density.
+      // Negative rows are credits/contributions, not spend.
       expenseTradeColumn(
         expenseHelper,
         async (trade, expense) => {
@@ -1206,10 +1041,7 @@ export function ExpenseList({
         },
         { mobile: { slot: "meta", priority: 50 } },
       ),
-      // Vendor / Order # / Product are sparse (~30% / ~25% / rarer still), so
-      // they stay off by default — but they're reachable now, via the column
-      // menu `showColumnMenu` keeps on screen. (They used to be omitted
-      // outright: without that menu any column added here was permanent.)
+      // Sparse relationship columns remain available through the column menu.
       createProductLinkColumn(expenseHelper, {
         className: "w-40",
         filterConfig: manifestFilterConfig("expense", "product"),
@@ -1250,8 +1082,7 @@ export function ExpenseList({
     [showProjectColumn, nameEditable, combinedExtraActions, rowVendorOptions],
   );
 
-  // Own storage scope — this column set isn't the /expenses ledger's, so a
-  // toggle here must not move a column there.
+  // Embedded and ledger column layouts must not share storage.
   const layout = useCubbyTableLayout({
     key: "expense:embedded",
     columns,
@@ -1265,9 +1096,6 @@ export function ExpenseList({
     columns: layout.columns,
     atoms: layout.atoms,
     meta: { defaultLayout: layout.defaultLayout },
-    // Vendor counts still come from `rowVendorOptions`: table faceting keys on
-    // the cell value (the vendor NAME), so it cannot hint an option whose value
-    // is a vendor id.
     getRowId: (row) => row.id,
     enableRowSelection: true,
     enableRowRangeSelection: true,
@@ -1282,12 +1110,7 @@ export function ExpenseList({
     },
   });
 
-  // Mirror the pivot's active cell (Trade × Cost Type matrix click) onto the
-  // table's column filters. Guarded by a ref so it fires only on a real pivot
-  // transition — an unguarded effect writes `undefined` into both columns on
-  // mount, wiping any seeded default or user-set filter. Wrapped in a
-  // one-element array because both columns are multi-select (their filterFn
-  // expects a set; a bare scalar would match every row).
+  // Apply pivot transitions as multi-select filters without clearing mount state.
   const lastPivotRef = useRef<{
     trade: Trade | null;
     costType: CostType | null;
@@ -1358,16 +1181,7 @@ const projectIconPrefix = (row: ProjectOut): ReactNode => (
   <ProjectMark icon={row.icon} />
 );
 
-/**
- * The Projects Data-tab list, in one of two renderers.
- *
- * `flat` — fully server-filtered rows; hierarchy is an ordinary Parent column.
- * `tree` — the same rows drawn as an expandable WBS. Only the *renderer*
- * differs: `project.tree` applies identical filters and sorting, and merely
- * pages by root of the filtered forest instead of by row, so `buildProjectTree`
- * nests rows the server already chose and ordered. Nothing about membership
- * moves into the browser.
- */
+/** Flat and tree modes share server-selected membership and ordering. */
 const PROJECT_TREE_CONFIG = {
   nest: buildProjectTree,
   getSubRows: (row: ProjectTreeRow) => row.subRows,
@@ -1393,11 +1207,7 @@ export function ProjectTable({
 }) {
   const api = useTRPC();
   const isTree = mode === "tree";
-  // Helper'd over `ProjectTreeRow` in both modes: TanStack's `ColumnDef` is
-  // invariant in `TData`, so a `ProjectOut` helper wouldn't typecheck against
-  // the tree table. `ProjectTreeRow` is a structural supertype of `ProjectOut`
-  // and every accessor below reads only `ProjectOut` fields, so this is a pure
-  // type-parameter swap with no behavioural difference in flat mode.
+  // ProjectTreeRow satisfies both invariant ColumnDef modes.
   const columnHelper = useMemo(
     () => createCubbyColumnHelper<ProjectTreeRow>(),
     [],
@@ -1417,10 +1227,11 @@ export function ProjectTable({
       label: value,
     })),
   });
-  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("project");
+  const { onRowClick, onRowHover, onRowHoverEnd, PreviewSheet } =
+    useEntityPreview("project");
 
   const updateProjectMutation = useUpdateMutation({
-    mutationFn: api.project.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("project", "update"),
     entity: "project",
   });
 
@@ -1429,7 +1240,7 @@ export function ProjectTable({
   );
 
   const deletableConfig = useDeletableConfig({
-    mutationFn: api.project.delete.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("project", "delete"),
     entityLabel: "Project",
     entity: "project",
   });
@@ -1517,18 +1328,7 @@ export function ProjectTable({
         meta: { numeric: true, className: "w-24" },
         cell: ({ row }) => {
           const { subtree } = row.original.rollup;
-          // `actualSpent` = money already out (excludes planned/future +
-          // negative contributions), matching the detail hero's "Actual" so
-          // this column never means something the hero doesn't. subtree
-          // aggregates are over LIVE descendants — not the currently
-          // chip-filtered `projects` view (same caveat as
-          // spending-by-project.tsx): a filtered-out child's spend still
-          // rolls up into its visible parent's "Actual" here.
-          //
-          // Read unconditionally: a leaf's subtree IS its own rollup and its
-          // subtree estimate IS its own estimate (repo/project/subtree.ts,
-          // pinned by the "no-branch invariant" integration test), so there
-          // is no projectCount branch or `?? costEstimate` fallback to make.
+          // Actual spend rolls up all live descendants, independent of view filters.
           const actual = subtree.actualSpent;
           if (actual === 0) return <NoneValue />;
           const est = subtree.costEstimate;
@@ -1544,12 +1344,7 @@ export function ProjectTable({
           );
         },
       }),
-      // Display the EFFECTIVE window (rolled up from tasks/expenses/live
-      // sub-projects, or the override when set); the inline editor still
-      // opens on and saves to the raw startDate/endDate override columns —
-      // see `displayValue`'s doc comment on `createPlainDateColumn`. A
-      // "derived" value renders muted so a computed date reads as distinct
-      // from a typed-in one.
+      // Show effective dates while editing raw overrides; derived values stay muted.
       createPlainDateColumn(columnHelper, "startDate", {
         header: "Start",
         className: "w-28",
@@ -1605,8 +1400,7 @@ export function ProjectTable({
   });
   const { table } = workbench;
 
-  // Hydrate covers for the loaded page/tree only. The previous project-options
-  // roster pulled every project id before the table had rendered one row.
+  // Hydrate covers only for loaded rows.
   useEffect(() => {
     const next = data.map((project) => project.id).sort();
     setProjectIds((current) =>
@@ -1617,13 +1411,7 @@ export function ProjectTable({
     );
   }, [data]);
 
-  // Auto-expand the whole tree while a name search is active, so a match
-  // nested under an ALSO-matching ancestor is actually visible; collapse back
-  // once the search is cleared. (A match with no matching ancestor is already
-  // a root of its own — the server promotes it — so this only covers the
-  // parent-matches-too case.) Edge-triggered on `searching` alone (not every
-  // keystroke, and not on `table`, which is otherwise a stable ref) so it
-  // doesn't fight a user who manually expanded/collapsed rows mid-search.
+  // Expand once on search entry so nested matches are visible without fighting users.
   const searching = Boolean(table.getColumn("name")?.getFilterValue());
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally edge-triggered on `searching` only
   useEffect(() => {
@@ -1646,6 +1434,7 @@ export function ProjectTable({
         ariaLabel="Projects Table"
         onRowClick={onRowClick}
         onRowHover={onRowHover}
+        onRowHoverEnd={onRowHoverEnd}
       />
       {isTree && (
         <TreePaginationNote
@@ -1662,13 +1451,7 @@ export function ProjectTable({
   );
 }
 
-/**
- * Honesty footnote for the WBS renderer: it pages by top-level project, so the
- * record count means something different here than in the flat list. Same
- * dotted-underline "here's what you're not seeing" idiom as
- * `HiddenByDateNote` in projects-dashboard.tsx, with an escape hatch to the
- * complete flat List rather than a way to widen this one.
- */
+/** Tree pagination counts roots, so disclose the distinction and link to flat mode. */
 function TreePaginationNote({
   loadedRoots,
   totalRoots,

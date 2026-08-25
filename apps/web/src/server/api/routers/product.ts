@@ -146,35 +146,20 @@ import {
   createBulkUpdatedMutation,
   createEntityListProcedure,
 } from "../crud-factory";
-import { createEntityCompatibilityProcedures } from "../entity-compatibility";
+import { createEntityListCompatibilityProcedure } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const productShortcodes = bindShortcodeResolver("product");
 const projectShortcodes = bindShortcodeResolver("project");
 const inventoryShortcodes = bindShortcodeResolver("inventory");
 
-const {
-  list,
-  create,
-  update,
-  delete: deleteItem,
-} = createEntityCompatibilityProcedures(ENTITY_KERNEL_BINDINGS.product, {
-  ...ENTITY_BINDINGS.product.crud,
-  listOutput: productListItemOut,
-});
-
-// The product detail projection includes USDA and inventory-derived fields that
-// are intentionally outside the canonical kernel CRUD record.
-const getByID = protectedProcedure
-  .input(z.object({ id: productShortcode }))
-  .output(strictOutput(productWithFoodOut))
-  .query(async ({ ctx, input }) =>
-    getProductWithFood(
-      ctx.db,
-      ctx.usdaClient,
-      await productShortcodes.one(ctx.db, input.id),
-    ),
-  );
+const list = createEntityListCompatibilityProcedure(
+  ENTITY_KERNEL_BINDINGS.product,
+  {
+    ...ENTITY_BINDINGS.product.crud,
+    listOutput: productListItemOut,
+  },
+);
 
 // Lightweight typeahead for product-picker comboboxes. Same filters/pagination
 // shape as `list`, but the repo replaces the full relation graph and per-row
@@ -845,19 +830,15 @@ const discard = protectedProcedure
   });
 
 export const productRouter = createTRPCRouter({
-  getByID,
   getByShortcodes,
   list,
   summaries,
   inventoryEntriesByIds,
   quantitySummaries,
   search,
-  create,
   createMany,
   markUsdaUnavailableMany,
-  update,
   applyUpcData,
-  delete: deleteItem,
   discard,
   quickCreate,
   findOrCreateByCode,

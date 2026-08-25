@@ -3,6 +3,7 @@ import {
   unsafeRecipeId,
   unsafeRecipeShortcode,
 } from "@cubby/schemas/identifiers";
+import { withEntityKernelMutations } from "tooling/entity-kernel-test-caller";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 import { createTestCaller, createTestTRPCContext } from "~/server/api/trpc";
@@ -128,7 +129,11 @@ describe("recipe delete propagates cost staleness to parents", () => {
     // procedure). With the fake queue bound, the propagated recompute only marks
     // the parent stale — totalsComputedAt returns to null.
     installFakeQueue();
-    const caller = createTestCaller(recipeRouter, ctx.db);
+    const caller = withEntityKernelMutations(
+      createTestCaller(recipeRouter, ctx.db),
+      "recipe",
+      ctx.db,
+    );
     await caller.delete({ ids: [childCode] });
 
     expect(
@@ -200,7 +205,11 @@ describe("recipe delete propagates cost staleness to parents", () => {
     ).not.toBeNull();
 
     installFakeQueue();
-    const caller = createTestCaller(recipeRouter, ctx.db);
+    const caller = withEntityKernelMutations(
+      createTestCaller(recipeRouter, ctx.db),
+      "recipe",
+      ctx.db,
+    );
     await caller.deleteCookbook({ cookbookId: cookbook.id });
 
     expect(

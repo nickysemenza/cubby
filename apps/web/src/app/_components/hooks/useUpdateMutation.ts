@@ -23,7 +23,7 @@ const emptySideEffects: MutationSideEffects = { backgroundBatches: [] };
  * Update-mutation convenience wrapper over {@link useActionMutation}: fixes the
  * success toast to the `savedWithBackgroundWork(…, "{Entity} updated")` shape and
  * the error toast to a server-message-first "Failed to update {entity}". Pass a
- * tRPC `*.update.mutationOptions` reference; `TData`/`TVariables` are inferred.
+ * mutation-options factory; `TData`/`TVariables` are inferred.
  */
 export function useUpdateMutation<TFn extends MutationOptionsFn>({
   mutationFn,

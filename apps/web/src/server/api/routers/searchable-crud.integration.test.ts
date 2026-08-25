@@ -3,6 +3,7 @@ import { financialTransactionCreateInput } from "@cubby/schemas/financial-transa
 import { expenseCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
+import { withEntityKernelMutations } from "tooling/entity-kernel-test-caller";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { mock } from "~/lib/test/mock-schema";
@@ -27,10 +28,16 @@ describe("purchase deletion embedding fanout", () => {
    * must explicitly enqueue their reindexing.
    */
   it("purchase delete reindexes the expenses and transactions it detaches", async () => {
-    const vendor = await createTestCaller(vendorRouter, ctx.db).create(
-      mock(vendorCreateInput, { overrides: { name: "Detach Supply" } }),
+    const vendor = await withEntityKernelMutations(
+      createTestCaller(vendorRouter, ctx.db),
+      "vendor",
+      ctx.db,
+    ).create(mock(vendorCreateInput, { overrides: { name: "Detach Supply" } }));
+    const caller = withEntityKernelMutations(
+      createTestCaller(purchaseRouter, ctx.db),
+      "purchase",
+      ctx.db,
     );
-    const caller = createTestCaller(purchaseRouter, ctx.db);
     const purchase = await caller.create(
       mock(purchaseCreateInput, {
         overrides: {

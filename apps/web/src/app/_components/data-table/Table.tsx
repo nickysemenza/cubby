@@ -71,6 +71,8 @@ export interface RTableProps<TItem extends RowData> {
   onRowClick?: (row: Row<TItem>) => void;
   /** Callback when a row is hovered (desktop) — used to prefetch row data */
   onRowHover?: (row: Row<TItem>) => void;
+  /** Cancels an uncommitted row-preview intent. */
+  onRowHoverEnd?: (row: Row<TItem>) => void;
   /** Bulk action bar (rendered in toolbar when rows are selected) */
   bulkActionBar?: ReactNode;
   /** Infinite scroll controls — when provided, mobile hides pagination and auto-loads more */
@@ -154,6 +156,7 @@ export default function RTable<TItem extends RowData>(
     entity,
     onRowClick,
     onRowHover,
+    onRowHoverEnd,
     infiniteScroll,
     refreshControls,
     groupConfig,
@@ -448,6 +451,7 @@ export default function RTable<TItem extends RowData>(
                       isDebugEnabled={isDebugEnabled}
                       onRowClick={onRowClick}
                       onRowHover={onRowHover}
+                      onRowHoverEnd={onRowHoverEnd}
                       suppressCellRowClick={cellSelectionEnabled}
                       rowClassName={cn(
                         styles.row,

@@ -24,17 +24,11 @@ import type { CubbyRow as Row } from "../data-table/table-features";
  */
 
 const mocks = vi.hoisted(() => ({
-  commandMutation: vi.fn(),
+  commandRemove: vi.fn(),
 }));
 
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPC: () => ({
-    entity: {
-      mutate: {
-        mutationOptions: () => ({ mutationFn: mocks.commandMutation }),
-      },
-    },
-  }),
+vi.mock("~/entities/editing/use-entity-commands", () => ({
+  useEntityCommands: () => ({ remove: mocks.commandRemove }),
 }));
 
 import { useOptimisticDelete } from "./useOptimisticDelete";
@@ -91,7 +85,7 @@ function createWrapper() {
 
 afterEach(() => {
   for (const client of clients.splice(0)) client.clear();
-  mocks.commandMutation.mockReset();
+  mocks.commandRemove.mockReset();
 });
 
 // biome-ignore lint/suspicious/noExplicitAny: reading props off a memoized dialog element for assertions
@@ -156,7 +150,7 @@ describe("useOptimisticDelete", () => {
     // row selection once the delete actually happens — not when the dialog
     // merely opens.
     const mutationFn = vi.fn().mockResolvedValue({});
-    mocks.commandMutation.mockResolvedValue({});
+    mocks.commandRemove.mockResolvedValue({ ok: true, issues: [] });
     const { result } = renderHook(
       () =>
         useOptimisticDelete<TestRow>({
@@ -182,11 +176,7 @@ describe("useOptimisticDelete", () => {
       await dialog.props.onSubmit();
     });
 
-    expect(mocks.commandMutation).toHaveBeenCalledWith({
-      action: "delete",
-      entity: "product",
-      ids: ["PRD-2222", "PRD-3333"],
-    });
+    expect(mocks.commandRemove).toHaveBeenCalledWith(["PRD-2222", "PRD-3333"]);
     await waitFor(() => expect(bulkResult).toEqual({ success: true }));
   });
 

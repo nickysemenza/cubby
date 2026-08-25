@@ -107,23 +107,20 @@ history is the archive. Permanent product constraints live in the
     `parse_scraped_recipe` so imports do not cross the WASM boundary a second time
     for the same lines.
 
-23. **Consolidate duplicate entity detail reads.** Unify `getByID` and
-    `getByShortcode` cache/read behavior only after preview consumers handle the
-    differing missing-entity contracts explicitly.
-
-24. **Consider deleting tRPC after the Entity Kernel ships.** The 2026-08-24
-    detail/list/filter migration leaves 365 dedicated transport lines, 222
-    production `useTRPC` imports, 243 query-option call sites, and 83 mutation
-    call sites. Generic `entity.query` has no callers and has been deleted. tRPC
-    still provides streamed batches capped at 50, deliberately
-    unbatched Problems calls, SuperJSON, middleware/error formatting, SSR's
+23. **Consider deleting tRPC after the Entity Kernel ships.** The 2026-08-24
+    detail/list/filter/write migration leaves 257 dedicated transport lines,
+    192 production `useTRPC` imports, 218 query-option call sites, and 59
+    mutation-option call sites. Named generic CRUD writes, `entity.query`, and
+    `entity.mutate` have all been deleted; remaining mutations are workflows or
+    specialized operations. tRPC still provides streamed batches capped at 50,
+    SuperJSON, middleware/error formatting, SSR's
     in-process link, and shared cancellation/invalidation helpers. Follow the
     measured criteria in **TanStack Start and transport** below rather than
     deleting it for dependency count alone.
 
-25. **Reconsider the remaining USDA MCP App.** The Shopping List App is gone;
+24. **Reconsider the remaining USDA MCP App.** The Shopping List App is gone;
     `get_shopping_list` is a plain structured/text tool. The remaining USDA
-    Picker template is 353,500 bytes raw / 85,380 gzip and builds in 113 ms on
+    Picker template is 352,004 bytes raw / 83,655 gzip and builds in 132 ms on
     the local M3 development machine. Keep it only while refinement and explicit
     selection materially outperform a plain `search_usda_foods` result.
 
@@ -135,8 +132,10 @@ history is the archive. Permanent product constraints live in the
   keep public/external endpoints as server routes rather than Start functions.
 - Measure browser request count and route-ready time before moving Home or
   dashboard reads. Do not trade one batch for a visible request fan-out.
-- Evaluate generic writes after the list/filter migration has settled, including
-  invalidation, optimistic updates, error serialization, and deployment overlap.
+- Measure the Start generic-write migration's invalidation, optimistic rollback,
+  error serialization, cancellation, and deployment-overlap behavior before
+  moving workflow writes. Old tabs from the pre-migration deployment must reload
+  before issuing a generic write; no compatibility procedure remains.
 - Reconsider streamed workflows only after Start has equivalent semantic logging,
   cancellation, trace propagation, and incremental-result behavior.
 - Reconsider deleting tRPC only when its remaining middleware, batching,

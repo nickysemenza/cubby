@@ -15,6 +15,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
+import { entityDetailQueryOptions } from "~/entities/entity-detail";
 import { useTRPC } from "~/integrations/trpc/react";
 
 export function AddLabelsPopover({
@@ -87,10 +88,12 @@ export function AddLabelsPopover({
     name: string;
   }) {
     const full = await queryClient.fetchQuery(
-      api.location.getByID.queryOptions({
-        id: location.id,
-      }),
+      entityDetailQueryOptions("location", location.id),
     );
+    if (!full) {
+      toast.warning(`${location.name} no longer exists`);
+      return;
+    }
     const children = full.children ?? [];
     const eligible = children.filter((c) => typeSupportsQrCode(c.type));
 

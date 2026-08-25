@@ -30,6 +30,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { EntityIcon } from "~/entities/entities";
+import { entityDetailQueryOptions } from "~/entities/entity-detail";
 import { useTRPC } from "~/integrations/trpc/react";
 
 type InventoryListItem = z.infer<typeof inventoryListItemOut>;
@@ -80,7 +81,10 @@ export default function BulkMoveForm({
   // looking the id up in a first page of locations silently failed for
   // anything further down.
   const { data: initialSourceLocation } = useQuery({
-    ...api.location.getByID.queryOptions({ id: initialSourceLocationId! }),
+    ...entityDetailQueryOptions(
+      "location",
+      initialSourceLocationId ?? "LOC-0000",
+    ),
     enabled: !!initialSourceLocationId,
   });
 

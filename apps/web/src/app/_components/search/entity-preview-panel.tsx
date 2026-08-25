@@ -43,7 +43,7 @@ export function EntityPreviewPanel({
 }: EntityPreviewPanelProps) {
   const api = useTRPC();
 
-  // One shared entity→getByID mapping (entity-query), stable for useQuery.
+  // One shared entity-detail mapping, stable for useQuery.
   const queryOptions = useMemo(
     () =>
       isBrowserRoutedEntity(entityType)
@@ -57,7 +57,7 @@ export function EntityPreviewPanel({
   );
 
   // Single query hook instead of 7 disabled ones
-  // biome-ignore lint/suspicious/noExplicitAny: useQuery can't narrow the union of getByID queryOptions
+  // biome-ignore lint/suspicious/noExplicitAny: useQuery cannot narrow the mixed Start/tRPC query-options union
   const query = useQuery(queryOptions as any);
   const { isLoading, error, data } = query;
 
@@ -149,7 +149,7 @@ export function EntityPreviewPanel({
             data ? <ImageDetail image={data as never} /> : null,
           )
           // Meal fetches its own data internally (mealId), unlike the other
-          // arms which render off this panel's shared getByID `data`.
+          // arms which render from this panel's shared detail `data`.
           .with("meal", () => <MealDetailPage mealId={id as never} />)
           .with("task", () =>
             data ? <TaskDetail task={data as never} /> : null,
@@ -161,7 +161,7 @@ export function EntityPreviewPanel({
             data ? <ProjectDetailPage project={data as never} /> : null,
           )
           // Like meal, the cookbook card fetches its own data (there is no
-          // cookbook getByID — it reads the cached browse index).
+          // cookbook detail endpoint — it reads the cached browse index).
           .with("cookbook", () => <CookbookPreviewContent cookbookId={id} />)
           .with("vendor", () =>
             data ? <VendorDetail vendor={data as never} /> : null,

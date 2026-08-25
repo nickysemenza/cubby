@@ -44,6 +44,8 @@ function publicFailure(
 
 type AuthenticatedContext = ReturnType<typeof requireActor>;
 
+type EntityMutationTransportResult<T> = EntityReadTransportResult<T>;
+
 /** @lintignore Dynamically imported by the client-safe Start transports. */
 export async function runEntityReadTransport<T>(options: {
   operation: "entity.list" | "entity.detail" | "entity.filterOptions";
@@ -55,6 +57,41 @@ export async function runEntityReadTransport<T>(options: {
     system: "start",
     method: options.operation,
     type: "query",
+    origin: "ui",
+    input: options.input,
+    workload: "ui",
+    run: async (span) => {
+      try {
+        const context = requireActor(
+          await createRequestContext({ headers: options.headers }),
+        );
+        span.setAttributes({
+          "enduser.id": context.auth.userId,
+          "cubby.request_origin": context.requestOrigin,
+        });
+        return { ok: true, data: await options.execute(context) } as const;
+      } catch (error) {
+        const failure = publicFailure(error);
+        if (failure) return failure;
+        throw error;
+      }
+    },
+    inspectResult: (result) =>
+      result.ok ? {} : { error: result.error, workload: "ui" },
+  });
+}
+
+/** @lintignore Dynamically imported by the client-safe Start transport. */
+export async function runEntityMutationTransport<T>(options: {
+  operation: "entity.mutate";
+  input: unknown;
+  headers: Headers;
+  execute: (context: AuthenticatedContext) => Promise<T>;
+}): Promise<EntityMutationTransportResult<T>> {
+  return await observeRequest({
+    system: "start",
+    method: options.operation,
+    type: "mutation",
     origin: "ui",
     input: options.input,
     workload: "ui",

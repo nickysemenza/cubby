@@ -12,10 +12,11 @@ import { createTransportLink } from "~/integrations/tanstack-query/trpc-transpor
 import { TRPCProvider } from "~/integrations/trpc/react";
 import type { TRPCRouter } from "~/integrations/trpc/router";
 import { authClient } from "~/lib/auth-client";
-import { getAppErrorDetails, getErrorMessage } from "~/lib/error-utils";
+import { getErrorMessage } from "~/lib/error-utils";
 import { getFlag } from "~/lib/flags";
 import { configureQueryFreshness } from "~/lib/query-freshness";
 import { persister } from "./persister";
+import { shouldToastQueryError } from "./query-error-policy";
 
 // Root query-key prefixes whose data is safe + useful to persist for offline
 // warm starts. Auth/session, agent streams, and anything not listed are skipped
@@ -80,13 +81,8 @@ export function getContext() {
       hydrate: { deserializeData: superjson.deserialize },
     },
     queryCache: new QueryCache({
-      onError: (error) => {
-        const details = getAppErrorDetails(error);
-        const isExpectedError =
-          details.code === "NOT_FOUND" ||
-          details.code === "UNAUTHORIZED" ||
-          details.code === "BAD_REQUEST";
-        if (isExpectedError) return;
+      onError: (error, query) => {
+        if (!shouldToastQueryError(error, query)) return;
         deferToastError(error);
       },
     }),

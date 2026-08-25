@@ -15,18 +15,10 @@ const mocks = vi.hoisted(() => ({
   useQuery: vi.fn(),
 }));
 
-const mutationFor = (fn: unknown) =>
-  fn === mocks.createMeal
-    ? mocks.createMeal
-    : fn === mocks.updateMeal
-      ? mocks.updateMeal
-      : mocks.addRecipe;
-
 vi.mock("@tanstack/react-query", () => ({
-  useMutation: (options: { mutationFn: unknown }) => ({
-    mutate: mutationFor(options.mutationFn),
-    mutateAsync: async (input: unknown) =>
-      mutationFor(options.mutationFn)(input),
+  useMutation: (options: { mutationFn: (input: unknown) => unknown }) => ({
+    mutate: (input: unknown) => options.mutationFn(input),
+    mutateAsync: async (input: unknown) => options.mutationFn(input),
     isPending: false,
   }),
   useQuery: (options: { enabled?: boolean }) => {
@@ -53,6 +45,25 @@ vi.mock("@tanstack/react-query", () => ({
       isLoading: false,
     };
   },
+}));
+
+vi.mock("~/entities/entity-mutation", () => ({
+  entityMutationOptions: () => ({
+    mutationFn: async (command: {
+      action: "create" | "update" | "delete";
+      id?: string;
+      data?: unknown;
+    }) => {
+      if (command.action === "create") mocks.createMeal(command.data);
+      if (command.action === "update") {
+        mocks.updateMeal({ id: command.id, data: command.data });
+      }
+      return {
+        item: { id: unsafeMealShortcode("MEL-4K7M"), date: "2026-06-16" },
+        sideEffects: { backgroundBatches: [] },
+      };
+    },
+  }),
 }));
 
 vi.mock("@tanstack/react-router", () => ({

@@ -55,10 +55,10 @@ import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
-import { createEntityCompatibilityProcedures } from "../entity-compatibility";
+import { createEntityListCompatibilityProcedure } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
-const procedures = createEntityCompatibilityProcedures(
+const list = createEntityListCompatibilityProcedure(
   ENTITY_KERNEL_BINDINGS.purchase,
   ENTITY_BINDINGS.purchase.crud,
 );
@@ -240,7 +240,7 @@ const detachProducts = protectedProcedure
   });
 
 export const purchaseRouter = createTRPCRouter({
-  ...procedures,
+  list,
   link,
   split,
   merge,

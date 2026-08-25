@@ -1,4 +1,5 @@
 import type { Amount } from "@cubby/schemas/codec";
+import { withEntityKernelMutations } from "tooling/entity-kernel-test-caller";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
@@ -11,9 +12,15 @@ describe("AvailabilityService.getRecipeAvailability", () => {
 
   const ctx = () =>
     createTestTRPCContext(tdb.db, { auth: { userId: TEST_ACTOR.userId } });
+  const recipeCaller = () =>
+    withEntityKernelMutations(
+      createTestCaller(recipeRouter, tdb.db),
+      "recipe",
+      tdb.db,
+    );
 
   const createFlourRecipe = (ingredientId: string, need: Amount) =>
-    createTestCaller(recipeRouter, tdb.db).create({
+    recipeCaller().create({
       name: "Pancakes",
       meta: null,
       sections: [
@@ -110,7 +117,7 @@ describe("AvailabilityService.getRecipeAvailability", () => {
       recipeYield: { value: number; unit: string } | null,
       ingredients: { ingredientId: string; amounts: Amount[] }[],
     ) =>
-      createTestCaller(recipeRouter, tdb.db).create({
+      recipeCaller().create({
         name,
         meta: null,
         ...(recipeYield ? { yield: recipeYield } : {}),
@@ -132,7 +139,7 @@ describe("AvailabilityService.getRecipeAvailability", () => {
       amounts: Amount[],
       extras: { ingredientId: string; amounts: Amount[] }[] = [],
     ) =>
-      createTestCaller(recipeRouter, tdb.db).create({
+      recipeCaller().create({
         name: "Assembly",
         meta: null,
         sections: [
@@ -235,7 +242,7 @@ describe("AvailabilityService.getRecipeAvailability", () => {
 
     it("terminates on a sub-recipe cycle", async () => {
       const flour = await seedFlourWithStock({ value: 500, unit: "g" });
-      const caller = createTestCaller(recipeRouter, tdb.db);
+      const caller = recipeCaller();
       const a = await createSub("A", { value: 2, unit: "cup" }, [
         { ingredientId: flour.shortcode, amounts: [{ value: 1, unit: "cup" }] },
       ]);

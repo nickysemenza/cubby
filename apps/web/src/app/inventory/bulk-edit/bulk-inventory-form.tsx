@@ -28,6 +28,7 @@ import {
 } from "~/app/_components/inventory/hooks";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { entityDetailQueryOptions } from "~/entities/entity-detail";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 
@@ -72,7 +73,7 @@ export default function BulkInventoryForm({
   // search, so this fetch exists only to seed the field — looking the id up in
   // a first page of locations silently failed for anything further down.
   const { data: initialLocation } = useQuery({
-    ...api.location.getByID.queryOptions({ id: initialLocationId! }),
+    ...entityDetailQueryOptions("location", initialLocationId!),
     enabled: !!initialLocationId,
   });
 

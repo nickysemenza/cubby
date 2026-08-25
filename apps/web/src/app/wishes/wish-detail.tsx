@@ -18,8 +18,8 @@ import { NoneValue } from "~/components/ui/none-value";
 import { wishEditRequest } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entities, entityDetailParams } from "~/entities/entities";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityDetailQueryKey } from "~/entities/entity-detail";
-import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { formatCurrencyRange } from "~/lib/format-range";
 import { patchListItem } from "~/lib/optimistic-list";
@@ -57,12 +57,11 @@ import { wishPriceRange } from "./wish-price-range";
  * `entityManifest.wish` and `relatedViewRegistry`.
  */
 export function WishDetail({ wish }: { wish: WishOut }) {
-  const api = useTRPC();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
 
   const updateMutation = useUpdateMutation({
-    mutationFn: api.wish.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("wish", "update"),
     entity: "wish",
   });
 
@@ -80,7 +79,10 @@ export function WishDetail({ wish }: { wish: WishOut }) {
     entityLabel: "Wish",
     entity: "wish",
     mutationOptions: (callbacks) =>
-      api.wish.delete.mutationOptions({
+      entityMutationOptionsFactory(
+        "wish",
+        "delete",
+      )({
         ...callbacks,
         // `wish.delete` resolves to `void` — a wish is out of the embedding
         // pipeline and owns no rollups to recompute, so there are no
@@ -93,7 +95,7 @@ export function WishDetail({ wish }: { wish: WishOut }) {
   });
 
   const wishKey = entityDetailQueryKey("wish", wish.id);
-  const acquiredBase = api.wish.update.mutationOptions();
+  const acquiredBase = entityMutationOptionsFactory("wish", "update")();
   const acquiredMutation = useMutation({
     mutationKey: acquiredBase.mutationKey,
     mutationFn: acquiredBase.mutationFn,

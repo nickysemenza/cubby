@@ -27,7 +27,7 @@ import {
   SheetTitle,
 } from "~/components/ui/sheet";
 import { Spinner } from "~/components/ui/spinner";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { invalidatesFor } from "~/lib/query-keys";
 
 /** A product the sweep just created that could use a moment of curation. */
@@ -52,7 +52,6 @@ export function SweepProductFollowUp({
   onClose: (productId: string) => void;
   onSaved: (result?: unknown) => void;
 }) {
-  const api = useTRPC();
   // `null` means untouched, so the field can show the scanned name as a
   // starting point and still be cleared. Seeding state with the name directly
   // would make an emptied field snap back to it on the next render.
@@ -64,7 +63,7 @@ export function SweepProductFollowUp({
     entity: "product",
     operation: "update",
     intent: "full",
-    mutationFn: api.product.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("product", "update"),
     success: "Product details saved",
     invalidateKeys: invalidatesFor("product"),
     onSuccess: (result) => {

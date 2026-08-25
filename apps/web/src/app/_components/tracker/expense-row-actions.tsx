@@ -27,7 +27,7 @@
 import type { ExpenseOut } from "@cubby/schemas/project";
 import { useCallback, useState } from "react";
 import { SettleExpenseDialog } from "~/app/expenses/settle-expense-dialog";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { VerbMenuItem } from "../actions/action-verb-ui";
 import { useUpdateMutation } from "../hooks/useUpdateMutation";
 import { MoveToProjectDialog } from "./move-to-project-dialog";
@@ -50,14 +50,13 @@ export function useExpenseRowActions({
    */
   settleDisabledReason?: string;
 } = {}) {
-  const api = useTRPC();
   const [moveTarget, setMoveTarget] = useState<ExpenseOut | null>(null);
   const [settleTarget, setSettleTarget] = useState<ExpenseOut | null>(null);
 
   // Singular `update`, not the bulk `bulkMove` the selection bar uses: one row,
   // one mutation, and the optimistic path that comes with it.
   const moveMutation = useUpdateMutation({
-    mutationFn: api.expense.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("expense", "update"),
     entity: "expense",
   });
 

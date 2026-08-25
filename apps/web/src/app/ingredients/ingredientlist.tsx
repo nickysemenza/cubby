@@ -23,6 +23,7 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { EntityIcon } from "~/entities/entities";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useTRPC, useTRPCClient } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidatesFor, invalidateTRPCQueries } from "~/lib/query-keys";
@@ -132,7 +133,7 @@ export function IngredientList() {
     () => createCubbyColumnHelper<IngredientListItem>(),
     [],
   );
-  const { onRowClick, onRowHover, PreviewSheet } =
+  const { onRowClick, onRowHover, onRowHoverEnd, PreviewSheet } =
     useEntityPreview("ingredient");
   const [foodHydrationIds, setFoodHydrationIds] = useState<readonly string[]>(
     [],
@@ -141,7 +142,7 @@ export function IngredientList() {
 
   // Mutation for inline editing (name)
   const updateIngredientMutation = useUpdateMutation({
-    mutationFn: api.ingredient.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("ingredient", "update"),
     entity: "ingredient",
     invalidateKeys: invalidatesFor("ingredient", "list"),
   });
@@ -165,7 +166,7 @@ export function IngredientList() {
 
   // Memoize deletable config to prevent infinite render loop
   const deletableConfig = useDeletableConfig({
-    mutationFn: api.ingredient.delete.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("ingredient", "delete"),
     entityLabel: "Ingredient",
     invalidateKeys: invalidatesFor("ingredient", "list"),
     entity: "ingredient",
@@ -327,6 +328,7 @@ export function IngredientList() {
         ariaLabel="Ingredients Table"
         onRowClick={onRowClick}
         onRowHover={onRowHover}
+        onRowHoverEnd={onRowHoverEnd}
         actions={
           <Row align="center" gap="sm">
             <Button

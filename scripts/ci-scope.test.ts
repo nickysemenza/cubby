@@ -11,6 +11,7 @@ test("agent, documentation, and editor-only changes are inert", () => {
     usda: false,
     upc: false,
     workers: [],
+    dependencies: false,
     unknown: false,
   });
   assert.equal(classifyPaths(["docs/todos.md", ".vscode/settings.json"]).inert, true);
@@ -25,6 +26,7 @@ test("a web-only change runs web CI without auxiliary or Rust work", () => {
     usda: false,
     upc: false,
     workers: [],
+    dependencies: false,
     unknown: false,
   });
 });
@@ -66,7 +68,9 @@ test("dependency and CI configuration changes fail safe across JS workspaces", (
     assert.equal(scope.web, true, path);
     assert.equal(scope.aux, true, path);
     assert.deepEqual(scope.workers, ["usda-api", "upc-lookup"], path);
+    assert.equal(scope.dependencies, path === "pnpm-lock.yaml", path);
   }
+  assert.equal(classifyPaths(["apps/web/package.json"]).dependencies, true);
 });
 
 test("a novel path fails safe to every suite and worker", () => {
@@ -78,6 +82,7 @@ test("a novel path fails safe to every suite and worker", () => {
     usda: true,
     upc: true,
     workers: ["usda-api", "upc-lookup"],
+    dependencies: true,
     unknown: true,
   });
 });

@@ -12,7 +12,7 @@ import {
   verbBulkAction,
 } from "~/app/_components/actions/action-verb-ui";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import {
   createEntityInlineLinkColumn,
   createFilterableSelectColumn,
@@ -48,7 +48,6 @@ const LOCATION_INITIAL_COLUMN_VISIBILITY = {
 };
 
 export function LocationList() {
-  const api = useTRPC();
   const navigate = useNavigate();
   const columnHelper = useMemo(
     () => createCubbyColumnHelper<LocationListItemOut>(),
@@ -72,7 +71,7 @@ export function LocationList() {
   });
 
   const updateLocationMutation = useUpdateMutation({
-    mutationFn: api.location.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("location", "update"),
     entity: "location",
   });
 

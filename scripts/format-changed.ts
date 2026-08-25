@@ -15,6 +15,14 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+const checkOnly = process.argv.slice(2).includes("--check");
+const unknownArguments = process.argv
+  .slice(2)
+  .filter((argument) => argument !== "--check");
+if (unknownArguments.length > 0) {
+  console.error(`format-changed: unknown arguments: ${unknownArguments.join(", ")}`);
+  process.exit(1);
+}
 const git = (args: string[]) =>
   spawnSync("git", args, { cwd: repoRoot, encoding: "utf8" });
 
@@ -42,10 +50,17 @@ if (files.length === 0) {
   process.exit(0);
 }
 
-console.error(`format-changed: ${files.length} file(s)`);
+console.error(
+  `format-changed: ${checkOnly ? "checking" : "formatting"} ${files.length} file(s)`,
+);
 const result = spawnSync(
   "biome",
-  ["check", "--write", "--no-errors-on-unmatched", ...files],
+  [
+    "check",
+    ...(checkOnly ? ["--error-on-warnings"] : ["--write"]),
+    "--no-errors-on-unmatched",
+    ...files,
+  ],
   {
     cwd: repoRoot,
     stdio: "inherit",

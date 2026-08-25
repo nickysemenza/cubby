@@ -5,7 +5,7 @@ import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-binding
 import { generatedEntityKernelContractCases } from "~/server/generated/entity-kernel-entities.gen";
 import { ENTITY_KERNEL_ENTITIES, entityCommandSchema } from "./contracts";
 
-describe("entity kernel registry", () => {
+describe("entity kernel bindings", () => {
   it("has one complete binding for every advertised entity", () => {
     expect(Object.keys(ENTITY_KERNEL_BINDINGS).sort()).toEqual(
       [...ENTITY_KERNEL_ENTITIES].sort(),

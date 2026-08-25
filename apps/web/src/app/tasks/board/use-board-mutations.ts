@@ -11,6 +11,7 @@ import type {
 import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { type RouterInputs, useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
@@ -134,7 +135,7 @@ export function useBoardMutations(target: BoardCacheTarget) {
     };
   };
 
-  const base = api.task.update.mutationOptions();
+  const base = entityMutationOptionsFactory("task", "update")();
   const update = useMutation({
     mutationKey: base.mutationKey,
     mutationFn: base.mutationFn,
@@ -207,15 +208,12 @@ export function useBoardMutations(target: BoardCacheTarget) {
   // {active, recentDone, doneCount} falls through its no-op branch and the card
   // would linger until the refetch. `writeFlatList` already gets `doneCount`
   // right for both shapes.
-  const deleteBase = api.task.delete.mutationOptions();
+  const deleteBase = entityMutationOptionsFactory("task", "delete")();
   const remove = useMutation({
     mutationKey: deleteBase.mutationKey,
     mutationFn: deleteBase.mutationFn,
-    // `ids` widens to `unknown[]` across the tRPC mutation boundary (branded
-    // ids don't survive it), so the Set is keyed on `unknown` and compared by
-    // identity — which is all a string id needs.
     onMutate: async (vars: {
-      ids: unknown[];
+      ids: string[];
     }): Promise<OptimisticContext<TaskOut[] | TaskBoardOut>> => {
       await cancelTRPCQueries(queryClient, [queryKey]);
       const prev = queryClient.getQueryData<TaskOut[] | TaskBoardOut>(queryKey);
@@ -223,7 +221,7 @@ export function useBoardMutations(target: BoardCacheTarget) {
       if (prev && flat) {
         // The server cascades to live subtasks, so drop them here too — the
         // board itself is top-level-only, but the `chartData` embed isn't.
-        const deleted = new Set<unknown>(vars.ids);
+        const deleted = new Set(vars.ids);
         const nextList = flat.filter(
           (t) =>
             !deleted.has(t.id) &&

@@ -31,8 +31,8 @@ import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Collapsible, CollapsibleContent } from "~/components/ui/collapsible";
 import { Spinner } from "~/components/ui/spinner";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useImageState } from "~/hooks/useImageState";
-import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
@@ -91,7 +91,6 @@ export function QuickInventoryAdd({
   onSuccess,
   initialProduct,
 }: QuickInventoryAddProps) {
-  const api = useTRPC();
   const invalidateProductLookup = useProductLookupInvalidation();
   const [mode, setMode] = useState<"select" | "create">("select");
   const [fieldsExpanded, setFieldsExpanded] = useState(false);
@@ -147,7 +146,7 @@ export function QuickInventoryAdd({
 
   const productCreateMutation = useActionMutation({
     entity: "product",
-    mutationFn: api.product.create.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("product", "create"),
     invalidateKeys: invalidatesFor("product"),
     onSuccess: invalidateProductLookup,
   });

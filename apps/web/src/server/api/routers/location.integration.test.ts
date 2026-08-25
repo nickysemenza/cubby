@@ -1,4 +1,5 @@
 import { unsafeImageShortcode } from "@cubby/schemas/identifiers";
+import { withEntityKernelMutations } from "tooling/entity-kernel-test-caller";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { listBackgroundBatches } from "~/server/repo/background-jobs";
@@ -10,7 +11,7 @@ import {
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
-import { createTestCaller } from "../trpc";
+import { createTestCaller as createTRPCTestCaller } from "../trpc";
 import { locationRouter } from "./location";
 import { problemsRouter } from "./problems";
 
@@ -25,6 +26,20 @@ const kindsForLocation = async (
           ?.entityId === locationId,
     )
     .map((b) => b.kind);
+
+const createLocationCaller = (
+  db: Parameters<typeof listBackgroundBatches>[0],
+) =>
+  withEntityKernelMutations(
+    createTRPCTestCaller(locationRouter, db),
+    "location",
+    db,
+  );
+
+const createTestCaller = (
+  _router: typeof locationRouter,
+  db: Parameters<typeof listBackgroundBatches>[0],
+) => createLocationCaller(db);
 
 describe("location.create AI-description side-effect", () => {
   const ctx = withTestDb();
@@ -279,7 +294,7 @@ describe("problems tolerates a product-linked location's null type", () => {
       }),
     );
 
-    const problems = createTestCaller(problemsRouter, ctx.db);
+    const problems = createTRPCTestCaller(problemsRouter, ctx.db);
     const views = await problems.getViews();
     expect(
       views.emptyLocations.some((l) => l.name === "problems null-type bin"),

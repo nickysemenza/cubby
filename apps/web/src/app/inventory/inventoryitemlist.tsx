@@ -18,8 +18,8 @@ import { usePageCount } from "~/components/page/Page";
 import { NoneValue } from "~/components/ui/none-value";
 import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { entities, entityDetailParams } from "~/entities/entities";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { multiSelectFilterFn } from "~/entities/filters";
-import { useTRPC } from "~/integrations/trpc/react";
 import {
   createCurrencyColumn,
   createEditableAmountColumn,
@@ -68,14 +68,13 @@ function InventoryProductImageCell({ productId }: { productId: string }) {
 }
 
 export function InventoryItemList() {
-  const api = useTRPC();
   const inventorySearch = inventoryRoute.useSearch();
   const inventoryNavigate = inventoryRoute.useNavigate();
   const columnHelper = useMemo(
     () => createCubbyColumnHelper<InventoryListItem>(),
     [],
   );
-  const { onRowClick, onRowHover, PreviewSheet } =
+  const { onRowClick, onRowHover, onRowHoverEnd, PreviewSheet } =
     useEntityPreview("inventory");
   const [moveTarget, setMoveTarget] = useState<InventoryListItem | null>(null);
   // Discard is single-row only: it writes one ledger line against one product.
@@ -102,7 +101,7 @@ export function InventoryItemList() {
   }, [inventoryNavigate]);
 
   const updateMutation = useUpdateMutation({
-    mutationFn: api.inventory.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("inventory", "update"),
     entity: "inventory",
   });
 
@@ -132,7 +131,7 @@ export function InventoryItemList() {
   // "Inventory Entry", which is what the row IS — the registry label
   // ("Inventory Item") reads as the product on the shelf.
   const deletableConfig = useDeletableConfig({
-    mutationFn: api.inventory.delete.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("inventory", "delete"),
     entityLabel: "Inventory Entry",
     entity: "inventory",
   });
@@ -378,6 +377,7 @@ export function InventoryItemList() {
           ariaLabel="Inventory Items Table"
           onRowClick={onRowClick}
           onRowHover={onRowHover}
+          onRowHoverEnd={onRowHoverEnd}
         />
       )}
       <PreviewSheet />

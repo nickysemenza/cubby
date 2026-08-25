@@ -69,12 +69,10 @@ export const withUSDAListIdentity = <
 
 export function USDAFoodList() {
   const api = useTRPC();
-  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview(
-    "usda-food",
-    {
+  const { onRowClick, onRowHover, onRowHoverEnd, PreviewSheet } =
+    useEntityPreview("usda-food", {
       idField: "fdc_id",
-    },
-  );
+    });
   const queryOptions = useCallback<ListQueryOptionsFn<USDAListFilters>>(
     (params) => {
       const searching = Boolean(params.filters.nameFilter);
@@ -262,6 +260,7 @@ export function USDAFoodList() {
         ariaLabel="USDA Foods Table"
         onRowClick={onRowClick}
         onRowHover={onRowHover}
+        onRowHoverEnd={onRowHoverEnd}
       />
       <PreviewSheet />
     </>

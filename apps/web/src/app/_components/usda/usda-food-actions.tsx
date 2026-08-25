@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { EntityFormDialog } from "~/entities/editing/entity-form-dialog";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidatesFor, queryKeys } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
@@ -23,6 +23,11 @@ import { EntityPicker } from "../combobox/entity-picker";
 import { WithIngredientSearch } from "../combobox/with-search-hook";
 import { useActionMutation } from "../hooks/useActionMutation";
 import { ProductForm } from "../products/product-form";
+
+const productCreateMutationOptions = entityMutationOptionsFactory(
+  "product",
+  "create",
+);
 
 /**
  * USDA-food-derived prefill shared by both actions below: manufacturer/UPC/
@@ -85,7 +90,6 @@ function LinkFoodToIngredientButton({
 }: {
   food: FoodSummaryWithLinkedProducts;
 }) {
-  const api = useTRPC();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [ingredient, setIngredient] =
@@ -99,7 +103,7 @@ function LinkFoodToIngredientButton({
 
   const createProduct = useActionMutation({
     entity: "product",
-    mutationFn: api.product.create.mutationOptions,
+    mutationFn: productCreateMutationOptions,
     success: (product) =>
       savedWithBackgroundWork(
         product.sideEffects,

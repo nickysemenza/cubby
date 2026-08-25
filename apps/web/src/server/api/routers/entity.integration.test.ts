@@ -5,11 +5,11 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { mock } from "~/lib/test/mock-schema";
 import { executeEntity } from "~/server/entity-kernel";
+import type { EntityMutationCommand } from "~/server/entity-kernel/contracts";
 import { requireActor } from "~/server/request-context";
-import { createTestCaller, createTestTRPCContext } from "../trpc";
-import { entityRouter } from "./entity";
+import { createTestTRPCContext } from "../trpc";
 
-describe("entity kernel tRPC adapter", () => {
+describe("entity kernel mutation contract", () => {
   const ctx = withTestDb();
   const kernelContext = () =>
     requireActor(
@@ -17,11 +17,12 @@ describe("entity kernel tRPC adapter", () => {
         auth: { userId: unsafeUserId("test-user-id") },
       }),
     );
+  const mutate = (command: EntityMutationCommand) =>
+    executeEntity(kernelContext(), command);
 
-  it("runs public-shortcode CRUD through the thin write adapter", async () => {
-    const caller = createTestCaller(entityRouter, ctx.db);
+  it("runs public-shortcode CRUD through the command seam", async () => {
     const context = kernelContext();
-    const created = await caller.mutate({
+    const created = await mutate({
       action: "create",
       entity: "wish",
       data: mock(wishCreateInput, {
@@ -57,7 +58,7 @@ describe("entity kernel tRPC adapter", () => {
       createdWish.id,
     );
 
-    const updated = await caller.mutate({
+    const updated = await mutate({
       action: "update",
       entity: "wish",
       id: createdWish.id,
@@ -69,7 +70,7 @@ describe("entity kernel tRPC adapter", () => {
       "Kernel contract wish updated",
     );
 
-    const removed = await caller.mutate({
+    const removed = await mutate({
       action: "delete",
       entity: "wish",
       ids: [createdWish.id],
@@ -105,15 +106,14 @@ describe("entity kernel tRPC adapter", () => {
   });
 
   it("runs merge policy, transaction, cleanup, and side effects in order", async () => {
-    const caller = createTestCaller(entityRouter, ctx.db);
-    const keeper = await caller.mutate({
+    const keeper = await mutate({
       action: "create",
       entity: "vendor",
       data: mock(vendorCreateInput, {
         overrides: { name: "Kernel keeper vendor" },
       }),
     });
-    const loser = await caller.mutate({
+    const loser = await mutate({
       action: "create",
       entity: "vendor",
       data: mock(vendorCreateInput, {
@@ -126,7 +126,7 @@ describe("entity kernel tRPC adapter", () => {
     const keeperId = vendorOut.parse(keeper.item).id;
     const loserId = vendorOut.parse(loser.item).id;
 
-    const merged = await caller.mutate({
+    const merged = await mutate({
       action: "merge",
       entity: "vendor",
       data: { keepId: keeperId, mergeIds: [loserId] },
@@ -143,9 +143,8 @@ describe("entity kernel tRPC adapter", () => {
   });
 
   it("runs relation attach, idempotency, and detach through the kernel", async () => {
-    const caller = createTestCaller(entityRouter, ctx.db);
     const createProduct = async (name: string) => {
-      const created = await caller.mutate({
+      const created = await mutate({
         action: "create",
         entity: "product",
         data: mock(productCreateInput, { overrides: { name } }),
@@ -156,7 +155,7 @@ describe("entity kernel tRPC adapter", () => {
     const kitId = await createProduct("Kernel relation kit");
     const componentId = await createProduct("Kernel relation component");
 
-    const attached = await caller.mutate({
+    const attached = await mutate({
       action: "attach",
       entity: "product",
       relation: "components",
@@ -170,7 +169,7 @@ describe("entity kernel tRPC adapter", () => {
       result: { changed: 1, attached: 1, alreadySatisfied: 0 },
     });
 
-    const repeated = await caller.mutate({
+    const repeated = await mutate({
       action: "attach",
       entity: "product",
       relation: "components",
@@ -182,7 +181,7 @@ describe("entity kernel tRPC adapter", () => {
       result: { changed: 0, attached: 1, alreadySatisfied: 1 },
     });
 
-    const detached = await caller.mutate({
+    const detached = await mutate({
       action: "detach",
       entity: "product",
       relation: "components",

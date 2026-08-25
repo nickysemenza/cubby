@@ -29,6 +29,7 @@ import { HierarchyDrilldown } from "~/app/_components/visualizations/hierarchy-d
 import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
 import { Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useTRPC } from "~/integrations/trpc/react";
 import { ShelfEmpty } from "../data-table/shelf";
 import { EntityInlineLink } from "../EntityInlineLink";
@@ -127,11 +128,10 @@ const CLOSED: DialogState = { type: null };
 export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
   product,
 }) => {
-  const api = useTRPC();
   const helper = useMemo(() => createCubbyColumnHelper<StockedRow>(), []);
   const [dialog, setDialog] = useState<DialogState>(CLOSED);
   const update = useUpdateMutation({
-    mutationFn: api.inventory.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("inventory", "update"),
     entity: "inventory",
   });
 

@@ -16,7 +16,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "~/components/ui/empty";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { invalidatesFor } from "~/lib/query-keys";
 import { useActionMutation } from "../_components/hooks/useActionMutation";
 
@@ -37,7 +37,6 @@ import { useActionMutation } from "../_components/hooks/useActionMutation";
 export const PurchaseDocuments: FC<{ purchase: PurchaseOut }> = ({
   purchase,
 }) => {
-  const api = useTRPC();
   const { images, documents } = useMemo(
     () => partitionEntityFiles(purchase.images),
     [purchase.images],
@@ -54,7 +53,7 @@ export const PurchaseDocuments: FC<{ purchase: PurchaseOut }> = ({
   const [saveGeneration, setSaveGeneration] = useState(0);
 
   const saveDocuments = useActionMutation({
-    mutationFn: api.purchase.update.mutationOptions,
+    mutationFn: entityMutationOptionsFactory("purchase", "update"),
     success: "Documents updated",
     invalidateKeys: invalidatesFor("purchase"),
     onSuccess: () => setSaveGeneration((n) => n + 1),
