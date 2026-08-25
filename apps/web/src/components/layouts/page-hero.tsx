@@ -22,6 +22,7 @@ import {
 } from "~/components/ui/popover";
 import { entities, isBrowserRoutedEntity } from "~/entities/entities";
 import { copyShortcodes } from "~/lib/clipboard";
+import { HOUSEHOLD_TIMEZONE } from "~/lib/household-date";
 import { cn, formatCount } from "~/lib/utils";
 
 const heroVariants = cva(
@@ -138,7 +139,7 @@ function EyebrowPath({ segments }: { segments: EyebrowSegment[] }) {
 }
 
 /** Pull a created-at date out of the raw entity for the hero's ledger meta. */
-function getOnFileSince(rawData: unknown): string | null {
+export function getOnFileSince(rawData: unknown): string | null {
   if (typeof rawData !== "object" || rawData === null) return null;
   const createdAt = (rawData as { createdAt?: unknown }).createdAt;
   if (typeof createdAt !== "string" && !(createdAt instanceof Date)) {
@@ -149,6 +150,7 @@ function getOnFileSince(rawData: unknown): string | null {
   return date.toLocaleDateString("en-US", {
     day: "2-digit",
     month: "short",
+    timeZone: HOUSEHOLD_TIMEZONE,
     year: "numeric",
   });
 }

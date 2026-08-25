@@ -116,6 +116,7 @@ export default defineConfig({
             ],
             // Threads reduce worker startup while preserving per-file isolation.
             pool: "threads",
+            sequence: { groupOrder: 0 },
           },
         },
         {
@@ -128,6 +129,7 @@ export default defineConfig({
             // worker imports the MCP graph once instead of five times.
             isolate: false,
             fileParallelism: false,
+            sequence: { groupOrder: 1 },
           },
         },
         {
@@ -140,6 +142,7 @@ export default defineConfig({
             include: pureUnitTests,
             pool: "threads",
             isolate: false,
+            sequence: { groupOrder: 0 },
           },
         },
         {
@@ -153,6 +156,7 @@ export default defineConfig({
             setupFiles: ["./tooling/ui-test-setup.ts"],
             // Threads amortize jsdom construction without sharing test state.
             pool: "threads",
+            sequence: { groupOrder: 0 },
           },
         },
         {
@@ -174,6 +178,7 @@ export default defineConfig({
             // Integration stays on isolated forks: database clients and module
             // caches are file-scoped, while shared registries make vi.mock order
             // dependent. Larger IntegreSQL pools do not reduce CREATE latency.
+            sequence: { groupOrder: 2 },
           },
         },
         {
@@ -187,6 +192,7 @@ export default defineConfig({
             pool: "forks",
             fileParallelism: false,
             testTimeout: 30000,
+            sequence: { groupOrder: 1 },
           },
         },
       ] satisfies TestProjectConfiguration[]

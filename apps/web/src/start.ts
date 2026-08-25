@@ -15,8 +15,8 @@ const csrfMiddleware = createCsrfMiddleware({
 });
 
 export const startInstance = createStart(() => ({
-  // Server functions bypass the tRPC transport, so capture their response
-  // correlation header through Start's supported per-app fetch hook.
+  // Capture server-function response correlation headers through Start's
+  // supported per-app fetch hook.
   serverFns: {
     fetch: (input, init) =>
       fetchAndRecordRequestId(globalThis.fetch, input, init),

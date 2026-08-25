@@ -25,7 +25,7 @@
     "format:write": "pnpm -r format:write",
     "format:changed": "node scripts/format-changed.ts",
     "format:check:changed": "node scripts/format-changed.ts --check",
-    "test": "pnpm -r test",
+    "test": "pnpm -r --workspace-concurrency=2 test",
     "test:unit": "pnpm --filter @cubby/web test:unit",
     "test:unit-pure": "pnpm --filter @cubby/web test:unit-pure",
     "test:ui": "pnpm --filter @cubby/web test:ui",
