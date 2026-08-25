@@ -8,7 +8,6 @@ import { projectCreateInput, taskCreateInput } from "@cubby/schemas/project";
 import { and, eq, sql } from "drizzle-orm";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { createTestTRPCContext } from "~/server/api/trpc";
 import {
   image,
   inventoryEntry,
@@ -20,6 +19,7 @@ import {
 } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import { requireActor } from "~/server/request-context";
+import { createTestRequestContext } from "~/server/testing/request-context";
 import { getAuditLog } from "./audit-log";
 import { getDb, insertAndReturn, notDeleted } from "./database-helpers";
 import { createExpense, deleteExpenses } from "./expense";
@@ -74,7 +74,7 @@ describe("product repository", () => {
     // not an external enrichment call.
     const result = await executeEntity(
       requireActor(
-        createTestTRPCContext(ctx.db, {
+        createTestRequestContext(ctx.db, {
           auth: { userId: ctx.actor.userId },
         }),
       ),
