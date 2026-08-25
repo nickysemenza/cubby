@@ -3,8 +3,6 @@ import {
   shortcodeEntities,
 } from "@cubby/schemas/entity-manifest";
 import { describe, expect, it } from "vitest";
-import { appRouter } from "~/server/api/root";
-import { createTestCaller } from "~/server/api/trpc";
 import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
 import { seedEntity, withTestDb } from "./test-setup";
@@ -23,7 +21,6 @@ describe("seedEntity completeness", () => {
   const kernelEntities = new Set<string>(ENTITY_KERNEL_ENTITIES);
 
   it("seeds one row of every entity with a declared MCP create / kernel create binding", async () => {
-    const caller = createTestCaller(appRouter, ctx.db);
     const declaresCreate = (entity: (typeof shortcodeEntities)[number]) =>
       (entityManifest[entity].mcp as readonly string[]).includes("create");
     const hasKernelCreate = (entity: (typeof shortcodeEntities)[number]) =>
@@ -51,21 +48,21 @@ describe("seedEntity completeness", () => {
 
     // Independent prerequisites, seeded first so the few entities with a
     // required cross-entity foreign key have a real id to point at.
-    const vendor = (await seedEntity(caller, "vendor")) as { id: string };
+    const vendor = (await seedEntity(ctx.db, "vendor")) as { id: string };
     // `kind` is pinned to non-"household" values: createLedgerParty enforces a
     // singleton household party, so letting mock() roll the enum makes the
     // second create (or a template-seeded household) fail intermittently.
-    const partyA = (await seedEntity(caller, "ledgerParty", {
+    const partyA = (await seedEntity(ctx.db, "ledgerParty", {
       kind: "member",
     })) as { id: string };
-    const partyB = (await seedEntity(caller, "ledgerParty", {
+    const partyB = (await seedEntity(ctx.db, "ledgerParty", {
       kind: "guest",
     })) as { id: string };
-    const account = (await seedEntity(caller, "financialAccount")) as {
+    const account = (await seedEntity(ctx.db, "financialAccount")) as {
       id: string;
     };
-    const product = (await seedEntity(caller, "product")) as { id: string };
-    const location = (await seedEntity(caller, "location")) as { id: string };
+    const product = (await seedEntity(ctx.db, "product")) as { id: string };
+    const location = (await seedEntity(ctx.db, "location")) as { id: string };
 
     const prereqs = new Set([
       "vendor",
@@ -103,7 +100,7 @@ describe("seedEntity completeness", () => {
     for (const entity of candidates) {
       if (prereqs.has(entity)) continue;
       const result = await seedEntity(
-        caller,
+        ctx.db,
         entity,
         overridesByEntity[entity],
       );

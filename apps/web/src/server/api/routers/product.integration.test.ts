@@ -1014,7 +1014,11 @@ describe("product detail quantity ledger", () => {
 
     const caller = createTestCaller(productRouter, ctx.db);
     const detailResult = await executeEntity(
-      requireActor(createTestTRPCContext(ctx.db)),
+      requireActor(
+        createTestTRPCContext(ctx.db, {
+          auth: { userId: ctx.actor.userId },
+        }),
+      ),
       { action: "get", entity: "product", id: prod.id, missing: "error" },
     );
     if (detailResult.action !== "get" || !detailResult.item) {
