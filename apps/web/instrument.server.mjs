@@ -66,7 +66,7 @@ Sentry.init({
   // Keep in sync with SENTRY_DSN in src/lib/sentry-dsn.ts — this preload runs
   // via `node --import` before TS transpilation, so it can't import that module.
   dsn: "https://a50b2f76dd1586f95cdd29cd13a6c0dc@o83311.ingest.us.sentry.io/4508775559135232",
-  sendDefaultPii: true,
+  sendDefaultPii: false,
   // Unconditionally "development": this preload is wired into the `dev` script
   // only (`NODE_OPTIONS='--import ./instrument.server.mjs' vite dev`), so it
   // never runs in a deployed worker. Without it the SDK defaults to

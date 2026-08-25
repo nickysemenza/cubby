@@ -9,7 +9,11 @@ import type { AnyColumn } from "drizzle-orm";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { inventoryEntry, location } from "~/server/db/schema";
-import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+import {
+  notDeleted,
+  unwrapDb,
+  uuidArrayParam,
+} from "~/server/repo/database-helpers";
 import {
   kitAncestorCteSql,
   kitAncestorCteText,
@@ -231,6 +235,88 @@ export const loadProductQuantityLedgers = async (
     });
   }
   return byProduct;
+};
+
+type QuantityLedgerAggregateRow = {
+  productId: ProductId;
+  acquiredUnits: number;
+  exitedUnits: number;
+  unknownAcquisitionLines: number;
+  unknownExitLines: number;
+  ledgerLines: number;
+  locationCount: number;
+};
+
+const quantityLedgersFromAggregateRows = (
+  rows: readonly QuantityLedgerAggregateRow[],
+): Map<ProductId, QuantityLedger> => {
+  const byProduct = new Map<ProductId, QuantityLedger>();
+  for (const row of rows) {
+    const ledgerLines = Number(row.ledgerLines);
+    const locationCount = Number(row.locationCount);
+    // The seed emits one row even when there are no Expense lines. Preserve the
+    // existing empty-product behavior, while retaining a row for a product that
+    // is represented by a live Location rather than an Expense.
+    if (ledgerLines === 0 && locationCount === 0) continue;
+    const acquiredUnits = Number(row.acquiredUnits);
+    const exitedUnits = Number(row.exitedUnits);
+    byProduct.set(row.productId, {
+      acquiredUnits,
+      exitedUnits,
+      expectedQuantity: acquiredUnits - exitedUnits,
+      unknownAcquisitionLines: Number(row.unknownAcquisitionLines),
+      unknownExitLines: Number(row.unknownExitLines),
+      locationCount,
+    });
+  }
+  return byProduct;
+};
+
+/**
+ * Detail-only quantity read: keep the Expense projection and Location count as
+ * separate aggregates, then join their one-row-per-product results. The public
+ * batch loader above remains two statements because its callers may be inside a
+ * transaction; this read-only Database path can remove one network round trip
+ * without multiplying the Expense aggregate by the Location relation.
+ */
+export const loadProductDetailQuantityLedgers = async (
+  db: Database,
+  ids: readonly ProductId[],
+): Promise<Map<ProductId, QuantityLedger>> => {
+  if (ids.length === 0) return new Map();
+
+  const query = sql`${kitAncestorCteSql(kitSeedForProductIds(ids))},
+    quantity_ledger AS (
+      SELECT ka.target AS "productId",
+             COALESCE(${sql.raw(PROJECTED_ACQUIRED)}, 0)::double precision AS "acquiredUnits",
+             COALESCE(${sql.raw(PROJECTED_EXITED)}, 0)::double precision AS "exitedUnits",
+             COALESCE(${sql.raw(ownOnly(`"unknownAcquisitionLines"`))}, 0)::int AS "unknownAcquisitionLines",
+             COALESCE(${sql.raw(ownOnly(`"unknownExitLines"`))}, 0)::int AS "unknownExitLines",
+             COALESCE(sum(ko."ledgerLines"), 0)::int AS "ledgerLines"
+        ${sql.raw(QUANTITY_PROJECTION_FROM)}
+       GROUP BY ka.target
+    ),
+    location_counts AS (
+      SELECT l."productId", count(*)::int AS "locationCount"
+        FROM "Location" l
+       WHERE l."deletedAt" IS NULL
+         AND l."productId" = ANY(${uuidArrayParam(ids)})
+       GROUP BY l."productId"
+    )
+    SELECT q."productId",
+           q."acquiredUnits",
+           q."exitedUnits",
+           q."unknownAcquisitionLines",
+           q."unknownExitLines",
+           q."ledgerLines",
+           COALESCE(l."locationCount", 0)::int AS "locationCount"
+      FROM quantity_ledger q
+      LEFT JOIN location_counts l ON l."productId" = q."productId"`;
+
+  const rows = projectionRows<QuantityLedgerAggregateRow>(
+    await unwrapDb(db).execute(query),
+  );
+  return quantityLedgersFromAggregateRows(rows);
 };
 
 /**

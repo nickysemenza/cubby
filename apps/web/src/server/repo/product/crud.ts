@@ -47,6 +47,7 @@ import {
 } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
+import { startOperationDefinition } from "~/lib/start-operation-observability";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   cookbook,
@@ -67,6 +68,7 @@ import {
   wishCandidate,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
+import { observeOperationPhase } from "~/server/observed-request";
 import {
   type AuditEntryInput,
   computeChanges,
@@ -113,7 +115,6 @@ import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { withTrace } from "~/server/tracing";
 import {
   currentProductConversionCoverageCondition,
   markProductConversionCoverageInputStale,
@@ -302,25 +303,34 @@ const productListOrderBy = (sorts: SortParams[], groupBy?: string) =>
     tieBreaker: sql`${product.name} ASC, ${product.shortcode} ASC`,
   });
 
+const PRODUCT_DETAIL_OPERATION = startOperationDefinition("entity.detail");
+
 const fetchProductById = async (
   db: Database,
   id: ProductId,
 ): Promise<ProductDeepDB | undefined> => {
-  const row = await withTrace("product.detail.base", () =>
-    getDb(db).query.product.findFirst({
-      where: and(eq(product.id, id), notDeleted(product)),
-      ...relations.product.full,
-    }),
+  const row = await observeOperationPhase(
+    PRODUCT_DETAIL_OPERATION,
+    "base",
+    () =>
+      getDb(db).query.product.findFirst({
+        where: and(eq(product.id, id), notDeleted(product)),
+        ...relations.product.full,
+      }),
   );
   if (!row) return undefined;
-  const priced = await withTrace("product.detail.pricing", () =>
-    enrichProductRowsWithPricing(db, [row]),
+  const priced = await observeOperationPhase(
+    PRODUCT_DETAIL_OPERATION,
+    "pricing",
+    () => enrichProductRowsWithPricing(db, [row]),
   );
-  const ledgered = await withTrace("product.detail.quantity", () =>
-    enrichProductRowsWithQuantityLedger(db, priced),
+  const ledgered = await observeOperationPhase(
+    PRODUCT_DETAIL_OPERATION,
+    "quantity",
+    () => enrichProductRowsWithQuantityLedger(db, priced),
   );
   return (
-    await withTrace("product.detail.breadcrumbs", () =>
+    await observeOperationPhase(PRODUCT_DETAIL_OPERATION, "breadcrumbs", () =>
       hydrateProductLocationBreadcrumbs(db, ledgered),
     )
   )[0];
@@ -380,8 +390,10 @@ const productReader = createEntityReader({
   entity: "product",
   fetchById: fetchProductById,
   fromDB: async (db, row: ProductDeepDB) => {
-    const qualities = await withTrace("product.detail.quality", () =>
-      loadProductDataQualities(db, [row.id]),
+    const qualities = await observeOperationPhase(
+      PRODUCT_DETAIL_OPERATION,
+      "quality",
+      () => loadProductDataQualities(db, [row.id]),
     );
     return dbProductToAPI(row, qualities.get(row.id)!);
   },

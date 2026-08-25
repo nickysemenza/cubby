@@ -5,81 +5,85 @@
  * admitted to traces.  Keep request input (shortcodes, search strings, and
  * form values) out of this contract.
  */
+import {
+  type RegisteredStartOperationKind,
+  START_OPERATIONS,
+  type StartOperationId,
+} from "~/lib/generated/start-operation-registry.gen";
+
 const START_OPERATION_HEADER = "x-cubby-operation";
 const START_OPERATION_KIND_HEADER = "x-cubby-operation-kind";
 const START_OPERATION_ENTITY_HEADER = "x-cubby-operation-entity";
 
-const startOperations = {
-  "background-batch.summary": ["query"],
-  "cookbook.detail": ["query"],
-  "cookbook.list": ["query"],
-  "entity.detail": ["query"],
-  "entity.filterOptions": ["query"],
-  "entity.inspectorHealth": ["query"],
-  "entity.list": ["query"],
-  "entity.mutate": ["mutation"],
-  "entityIntegrity.catalog": ["query"],
-  "image.delete": ["mutation"],
-  "image.detail": ["query"],
-  "image.list": ["query"],
-  "image.projectSummaries": ["query"],
-  "image.update": ["mutation"],
-  "problems.getByType": ["query"],
-  "usda-food.detail": ["query"],
-  "usda-food.list": ["query"],
-} as const;
+export type StartOperationKind = "query" | "mutation" | "subscription";
+export type { StartOperationId };
 
-const startEntities = new Set([
-  "ingredient",
-  "product",
-  "recipe",
-  "cookbook",
-  "location",
-  "inventory",
-  "ledgerParty",
-  "ledgerTransfer",
-  "meal",
-  "project",
-  "task",
-  "vendor",
-  "purchase",
-  "expense",
-  "financialAccount",
-  "financialTransaction",
-  "wish",
-  "usda-food",
-  "image",
-]);
+const PRODUCT_DETAIL_PHASES = [
+  "resolve",
+  "base",
+  "pricing",
+  "quantity",
+  "breadcrumbs",
+  "quality",
+  "recipe_usages",
+  "food",
+] as const;
+export type ProductDetailPhase = (typeof PRODUCT_DETAIL_PHASES)[number];
 
-export type StartOperationKind = "query" | "mutation";
+export type StartOperationDefinition<
+  Id extends StartOperationId = StartOperationId,
+> = {
+  readonly id: Id;
+  readonly kind: RegisteredStartOperationKind<Id>;
+  readonly entities: readonly string[];
+  readonly productPhases: readonly ProductDetailPhase[];
+};
 
 export type StartOperationTraceContext = {
-  operation: keyof typeof startOperations;
+  operation: StartOperationId;
   kind: StartOperationKind;
   entity?: string;
 };
 
-const isStartOperation = (
-  value: string | null,
-): value is keyof typeof startOperations =>
-  value !== null && Object.hasOwn(startOperations, value);
+const isStartOperation = (value: string | null): value is StartOperationId =>
+  value !== null && Object.hasOwn(START_OPERATIONS, value);
+
+export const startOperationDefinitionFor = (
+  operation: string,
+): StartOperationDefinition | undefined =>
+  isStartOperation(operation) ? startOperationDefinition(operation) : undefined;
 
 const isStartOperationKind = (
-  operation: keyof typeof startOperations,
+  operation: StartOperationId,
   value: string | null,
 ): value is StartOperationKind =>
-  value !== null &&
-  (startOperations[operation] as readonly string[]).includes(value);
+  value !== null && START_OPERATIONS[operation].kind === value;
 
-export const isStartOperationEntity = (value: unknown): value is string =>
-  typeof value === "string" && startEntities.has(value);
+export const registeredStartOperationKind = <Id extends StartOperationId>(
+  operation: Id,
+): RegisteredStartOperationKind<Id> => START_OPERATIONS[operation].kind;
+
+export const isStartOperationEntity = (
+  operation: StartOperationId,
+  value: unknown,
+): value is string =>
+  typeof value === "string" &&
+  (START_OPERATIONS[operation].entities as readonly string[]).includes(value);
+
+export const startOperationDefinition = <Id extends StartOperationId>(
+  operation: Id,
+): StartOperationDefinition<Id> =>
+  ({
+    id: operation,
+    ...START_OPERATIONS[operation],
+  }) as StartOperationDefinition<Id>;
 
 /**
  * Build the only semantic dimensions a browser Start call may send to tracing.
  * Unknown operations deliberately retain only the local operation id.
  */
 export function startOperationHeaders(options: {
-  operation: string;
+  operation: StartOperationId;
   kind: StartOperationKind;
   entity?: string;
 }): Record<string, string> {
@@ -89,7 +93,7 @@ export function startOperationHeaders(options: {
     [START_OPERATION_HEADER]: options.operation,
     [START_OPERATION_KIND_HEADER]: options.kind,
   };
-  if (isStartOperationEntity(options.entity)) {
+  if (isStartOperationEntity(options.operation, options.entity)) {
     headers[START_OPERATION_ENTITY_HEADER] = options.entity;
   }
   return headers;
@@ -107,7 +111,7 @@ export function readStartOperationTraceContext(
   return {
     operation,
     kind,
-    ...(isStartOperationEntity(entity) ? { entity } : {}),
+    ...(isStartOperationEntity(operation, entity) ? { entity } : {}),
   };
 }
 

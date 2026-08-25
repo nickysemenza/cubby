@@ -29,7 +29,7 @@ import {
   type StartOperation,
   startOperation,
 } from "~/integrations/tanstack-query/start-transport";
-import { markFreshReads } from "~/lib/fresh-read-marker";
+import type { StartOperationId } from "~/lib/start-operation-observability";
 import { openWorkflowStream } from "~/lib/workflow-stream";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
 import * as browser from "~/server/problems-browser.server";
@@ -115,7 +115,7 @@ const cleanupOrphanedEmbeddingsTransport = createServerFn({ method: "POST" })
   );
 
 const noInputOperation = <O>(
-  operation: string,
+  operation: StartOperationId,
   transport: (options: {
     signal?: AbortSignal;
     headers: HeadersInit;
@@ -284,9 +284,7 @@ export const problemsDeleteUnusedMutationOptions = (
     mutationKey: [["problems", "deleteUnused"]] as const,
     meta: deleteUnusedOperation.meta,
     mutationFn: async (input) => {
-      const result = await deleteUnusedOperation.call(input);
-      markFreshReads();
-      return result;
+      return deleteUnusedOperation.call(input);
     },
     ...options,
   });
@@ -301,9 +299,7 @@ export const problemsCleanupOrphanedEmbeddingsMutationOptions = (
     mutationKey: [["problems", "cleanupOrphanedEmbeddings"]] as const,
     meta: cleanupOrphanedOperation.meta,
     mutationFn: async (input) => {
-      const result = await cleanupOrphanedOperation.call(input);
-      markFreshReads();
-      return result;
+      return cleanupOrphanedOperation.call(input);
     },
     ...options,
   });

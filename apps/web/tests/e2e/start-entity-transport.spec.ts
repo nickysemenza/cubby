@@ -16,8 +16,10 @@ import { expect, test } from "./e2e-test";
 
 type StartRequest = {
   body: string;
+  entity?: string;
+  kind?: string;
   method: string;
-  operationId?: string;
+  operation?: string;
   payload: string;
   url: string;
 };
@@ -34,17 +36,32 @@ test("core entity list, detail, and mutation ride named Start operations", async
   page,
 }) => {
   const starts: StartRequest[] = [];
+  const requestIds: string[] = [];
+  const requestIdReads: Promise<void>[] = [];
+  const canaryRequestId = `e2e-ray-${Date.now()}`;
+  await page.setExtraHTTPHeaders({ "cf-ray": canaryRequestId });
   page.on("request", (request) => {
     const url = request.url();
     if (!url.includes("/_serverFn/")) return;
     const body = request.postData() ?? "";
     starts.push({
       body,
+      entity: request.headers()["x-cubby-operation-entity"],
+      kind: request.headers()["x-cubby-operation-kind"],
       method: request.method(),
       payload: payloadOf(url, body),
-      operationId: request.headers()["x-cubby-operation-id"],
+      operation: request.headers()["x-cubby-operation"],
       url,
     });
+  });
+  page.on("response", (response) => {
+    if (!response.url().includes("/_serverFn/")) return;
+    requestIdReads.push(
+      response.allHeaders().then((headers) => {
+        const requestId = headers["x-request-id"];
+        if (requestId) requestIds.push(requestId);
+      }),
+    );
   });
 
   const name = `E2E Start Transport ${Date.now()}`;
@@ -97,12 +114,32 @@ test("core entity list, detail, and mutation ride named Start operations", async
     expect(payloadOf("", request.body)).toContain('["entity","shortcode"]');
   }
 
-  // Every operation is correlatable end to end: the browser stamps the id the
-  // server reads back off `x-cubby-operation-id`, and no two calls share one.
-  const ids = starts
-    .map((start) => start.operationId)
-    .filter((id): id is string => id !== undefined);
-  expect(ids.length).toBeGreaterThanOrEqual(3);
-  for (const id of ids) expect(id).toMatch(/^op-\d+$/u);
-  expect(new Set(ids).size).toBe(ids.length);
+  expect(starts).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        operation: "entity.mutate",
+        kind: "mutation",
+        entity: "product",
+      }),
+      expect.objectContaining({
+        operation: "entity.list",
+        kind: "query",
+        entity: "product",
+      }),
+      expect.objectContaining({
+        operation: "entity.detail",
+        kind: "query",
+        entity: "product",
+      }),
+    ]),
+  );
+  for (const start of starts) {
+    expect(start.operation).toBeDefined();
+  }
+
+  // Response-owned ids, rather than a shared module-global "last id", make
+  // each completed browser request independently searchable in traces.
+  await Promise.all(requestIdReads);
+  expect(requestIds.length).toBeGreaterThanOrEqual(3);
+  for (const requestId of requestIds) expect(requestId).toBe(canaryRequestId);
 });

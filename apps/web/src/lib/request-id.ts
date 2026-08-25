@@ -12,30 +12,50 @@
  */
 
 /** Response header carrying the server's request id back to the client. */
-export const REQUEST_ID_HEADER = "x-trace-id";
+import { START_OPERATIONS } from "~/lib/generated/start-operation-registry.gen";
 
-/**
- * Id from the most recent server response that carried one.
- *
- * Deliberately last-write-wins rather than a per-query map: the error UI only
- * ever asks "what was the id of the request that just failed". An id belongs to
- * the response that carried it, however many operations that response contains.
- */
-let lastRequestId: string | undefined;
+export const REQUEST_ID_HEADER = "x-request-id";
 
-export const recordRequestId = (value: string | null | undefined): void => {
-  if (value) lastRequestId = value;
+export type BrowserRequestDiagnostic = {
+  operation?: string;
+  requestId: string;
+  status: number;
+  at: number;
 };
 
-export const getLastRequestId = (): string | undefined => lastRequestId;
+const requestDiagnostics: BrowserRequestDiagnostic[] = [];
+const REQUEST_DIAGNOSTIC_LIMIT = 50;
 
-/** Observe a response correlation header without changing fetch semantics. */
-export const fetchAndRecordRequestId = async (
-  fetchImpl: typeof globalThis.fetch,
+export const getBrowserRequestDiagnostics = (): BrowserRequestDiagnostic[] => [
+  ...requestDiagnostics,
+];
+
+/** Capture each response's own correlation id; never use a shared "last id". */
+export async function fetchWithRequestDiagnostics(
+  fetchImpl: typeof fetch,
   input: RequestInfo | URL,
   init?: RequestInit,
-): Promise<Response> => {
+): Promise<Response> {
+  const requestHeaders = new Headers(
+    init?.headers ?? (input instanceof Request ? input.headers : undefined),
+  );
+  const rawOperation = requestHeaders.get("x-cubby-operation");
+  const operation =
+    rawOperation && Object.hasOwn(START_OPERATIONS, rawOperation)
+      ? rawOperation
+      : undefined;
   const response = await fetchImpl(input, init);
-  recordRequestId(response.headers.get(REQUEST_ID_HEADER));
+  const requestId = response.headers.get(REQUEST_ID_HEADER);
+  if (requestId && typeof window !== "undefined") {
+    requestDiagnostics.push({
+      ...(operation ? { operation } : {}),
+      requestId,
+      status: response.status,
+      at: performance.now(),
+    });
+    if (requestDiagnostics.length > REQUEST_DIAGNOSTIC_LIMIT) {
+      requestDiagnostics.shift();
+    }
+  }
   return response;
-};
+}

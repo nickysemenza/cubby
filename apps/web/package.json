@@ -32,6 +32,7 @@
     "db:pull": "drizzle-kit pull",
     "db:rebuild": "pnpm run db:push",
     "db:studio": "drizzle-kit studio",
+    "hyperdrive:verify-cache-policy": "tsx scripts/verify-hyperdrive-cache-policy.ts",
     "regenerate": "pnpm run db:rebuild",
     "knip": "knip",
     "knip:production": "knip --production",

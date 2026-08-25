@@ -22,7 +22,6 @@ import {
 import { createServerFn } from "@tanstack/react-start";
 import type { z } from "zod";
 import { startOperation } from "~/integrations/tanstack-query/start-transport";
-import { markFreshReads } from "~/lib/fresh-read-marker";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
 import * as browser from "~/server/recommendations-browser.server";
 
@@ -224,9 +223,7 @@ const mutate = <I, O>(
     mutationKey: [["recommendations", key]] as const,
     meta: operation.meta as never,
     mutationFn: async (input: I) => {
-      const result = await operation.call(input);
-      markFreshReads();
-      return result;
+      return operation.call(input);
     },
     ...options,
   });

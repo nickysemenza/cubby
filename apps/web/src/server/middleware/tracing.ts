@@ -4,6 +4,7 @@
  */
 
 import { createMiddleware } from "@tanstack/react-start";
+import { httpRouteTemplate } from "~/lib/http-route-template";
 import {
   readStartOperationTraceContext,
   serverFunctionTraceName,
@@ -18,19 +19,21 @@ export const tracingMiddleware = createMiddleware().server(
       handlerType === "serverFn"
         ? readStartOperationTraceContext(request.headers)
         : undefined;
+    const routeTemplate = httpRouteTemplate(url.pathname, {
+      serverFunction: handlerType === "serverFn",
+    });
     const traceName = startContext
       ? serverFunctionTraceName(startContext)
       : handlerType === "serverFn"
         ? "start.serverFn"
-        : TraceNames.route(request.method, url.pathname);
+        : TraceNames.route(request.method, routeTemplate);
 
     return withTrace(traceName, async (span) => {
       // Do not export a server-function id or GET payload. The validated
       // Start context carries the useful semantic grouping instead.
       span.setAttributes({
         "http.request.method": request.method,
-        "http.route":
-          handlerType === "serverFn" ? "/_serverFn/:functionId" : url.pathname,
+        "http.route": routeTemplate,
         ...startOperationTraceAttributes(startContext),
       });
 

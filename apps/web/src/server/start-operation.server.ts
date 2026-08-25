@@ -1,20 +1,20 @@
 import { z } from "zod";
 import {
   isStartOperationEntity,
-  readStartOperationTraceContext,
-  startOperationTraceAttributes,
+  startOperationDefinitionFor,
 } from "~/lib/start-operation-observability";
 import {
   appErrorFromUnknown,
   toPublicErrorPayload,
 } from "~/server/errors/app-error";
 import { translateDatabaseError } from "~/server/errors/db-errors";
-import { observeRequest } from "~/server/observed-request";
+import { observeOperation } from "~/server/observed-request";
 import { createRequestContext, requireActor } from "~/server/request-context";
 import type {
   PublicStartOperationError,
   StartOperationResult,
 } from "~/server/start-operation.contract";
+import { getRequestId } from "~/server/tracing";
 import type { Workload } from "~/server/workload";
 
 export type StartOperationRequest = {
@@ -27,6 +27,11 @@ export type AuthenticatedStartOperationContext = ReturnType<
 >;
 
 export type OperationStage = "context" | "input" | "run" | "output";
+
+type ObservedStartResult<Output> = {
+  result: StartOperationResult<Output>;
+  observedError?: unknown;
+};
 
 const abortError = (signal: AbortSignal): Error =>
   signal.reason instanceof Error
@@ -49,12 +54,14 @@ const validationMessage = (error: z.ZodError): string =>
 export function normalizeStartOperationError(
   error: unknown,
   stage: OperationStage,
+  requestId?: string,
 ): { publicError: PublicStartOperationError; observedError: unknown } {
   if (stage === "input" && error instanceof z.ZodError) {
     const publicError = {
       code: "BAD_REQUEST",
       reason: "INVALID_INPUT",
       message: validationMessage(error),
+      ...(requestId ? { requestId } : {}),
       validationIssues: error.issues.map((issue) => ({
         code: issue.code,
         path: issue.path.map((part) =>
@@ -81,6 +88,7 @@ export function normalizeStartOperationError(
             ? "PRECONDITION_FAILED"
             : "BAD_REQUEST"),
         message: knownError.message || "The operation could not be completed",
+        ...(requestId ? { requestId } : {}),
         ...details,
       },
       observedError: knownError,
@@ -92,6 +100,7 @@ export function normalizeStartOperationError(
       code: "INTERNAL_SERVER_ERROR",
       reason: stage === "output" ? "INVALID_OUTPUT" : "UNKNOWN_ERROR",
       message: "The operation could not be completed",
+      ...(requestId ? { requestId } : {}),
     },
     observedError: error,
   };
@@ -117,30 +126,24 @@ export async function runStartOperation<
   ) => Promise<unknown>;
 }): Promise<StartOperationResult<Output>> {
   const workload = options.workload ?? "ui";
-  const clientTraceContext = readStartOperationTraceContext(
-    options.request.headers,
-  );
-  // The operation/type are declared server-side. The request header is useful
-  // at the HTTP boundary, but never supplies the inner span's entity value.
-  const traceContext =
-    clientTraceContext?.operation === options.operation &&
-    clientTraceContext.kind === options.type
-      ? clientTraceContext
-      : undefined;
-  const observed = await observeRequest({
-    system: "start",
-    method: options.operation,
-    type: options.type,
-    origin: "ui",
-    input: options.input,
-    workload,
-    operationId:
-      options.request.headers.get("x-cubby-operation-id") ?? undefined,
-    includeInputValues: false,
-    attributes: startOperationTraceAttributes(
-      traceContext ? { ...traceContext, entity: undefined } : undefined,
-    ),
-    run: async (span) => {
+  const definition = startOperationDefinitionFor(options.operation);
+  if (!definition || definition.kind !== options.type) {
+    throw new Error(
+      `Unregistered Start operation: ${options.operation} (${options.type})`,
+    );
+  }
+  const observed = await observeOperation<ObservedStartResult<Output>>(
+    definition,
+    {
+      origin: "ui",
+      workload,
+      inspectResult: (result) => ({
+        ...(result.observedError ? { error: result.observedError } : {}),
+        workload,
+      }),
+    },
+    async (span) => {
+      span.setAttribute("cubby.authenticated", false);
       let stage: OperationStage = "context";
       try {
         throwIfStartOperationAborted(options.request.signal);
@@ -155,7 +158,7 @@ export async function runStartOperation<
             ? { ...authenticated, readDb: authenticated.db }
             : authenticated;
         span.setAttributes({
-          "enduser.id": context.auth.userId,
+          "cubby.authenticated": true,
           "cubby.request_origin": context.requestOrigin,
           "cubby.read.consistency":
             readPolicy === "strong"
@@ -175,7 +178,7 @@ export async function runStartOperation<
           input &&
           typeof input === "object" &&
           "entity" in input &&
-          isStartOperationEntity(input.entity)
+          isStartOperationEntity(definition.id, input.entity)
             ? input.entity
             : undefined;
         if (entity) span.setAttribute("cubby.entity", entity);
@@ -196,17 +199,17 @@ export async function runStartOperation<
       } catch (error) {
         if (options.request.signal.aborted)
           throw abortError(options.request.signal);
-        const normalized = normalizeStartOperationError(error, stage);
+        const normalized = normalizeStartOperationError(
+          error,
+          stage,
+          getRequestId(options.request.headers),
+        );
         return {
           result: { ok: false, error: normalized.publicError } as const,
           observedError: normalized.observedError,
         };
       }
     },
-    inspectResult: (result) => ({
-      ...(result.observedError ? { error: result.observedError } : {}),
-      workload,
-    }),
-  });
+  );
   return observed.result;
 }

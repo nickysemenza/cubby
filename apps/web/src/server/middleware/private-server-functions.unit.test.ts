@@ -19,7 +19,7 @@ describe("privateServerFunctionResponse", () => {
       "ray-start-test",
     );
 
-    expect(response.headers.get("x-trace-id")).toBe("ray-start-test");
+    expect(response.headers.get("x-request-id")).toBe("ray-start-test");
   });
 
   it("leaves routes and SSR responses unchanged", () => {

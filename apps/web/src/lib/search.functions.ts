@@ -21,7 +21,7 @@ import { createServerFn } from "@tanstack/react-start";
 import type { z } from "zod";
 import type { CubbyOperationMeta } from "~/integrations/tanstack-query/operation-meta";
 import { startOperation } from "~/integrations/tanstack-query/start-transport";
-import { markFreshReads } from "~/lib/fresh-read-marker";
+import type { StartOperationId } from "~/lib/start-operation-observability";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
 import * as browser from "~/server/search-browser.server";
 
@@ -87,7 +87,7 @@ const requestEmbeddingRefreshTransport = createServerFn({ method: "POST" })
   );
 
 const defineQuery = <I, O>(
-  operation: string,
+  operation: StartOperationId,
   transport: (
     input: I,
     options: { signal?: AbortSignal; headers: HeadersInit },
@@ -100,7 +100,7 @@ const defineQuery = <I, O>(
     parse: (result) => schema.parse(result),
   });
 const defineMutation = <I, O>(
-  operation: string,
+  operation: StartOperationId,
   transport: (input: I, options: { headers: HeadersInit }) => Promise<unknown>,
   schema: z.ZodType<O>,
 ) =>
@@ -193,9 +193,7 @@ const mutation = <I, O>(
     mutationKey: [["search", key]] as const,
     meta: operation.meta,
     mutationFn: async (input: I) => {
-      const result = await operation.call(input);
-      markFreshReads();
-      return result;
+      return operation.call(input);
     },
     ...options,
   });

@@ -66,7 +66,7 @@ export const getRouter = () => {
     const isProd = import.meta.env.PROD;
     Sentry.init({
       dsn: SENTRY_DSN,
-      sendDefaultPii: true,
+      sendDefaultPii: false,
       release: `cubby@${__GIT_COMMIT__}`,
       // Without this the SDK defaults to "production", so every error from
       // `vite dev` on localhost lands in the same bucket as a real user's.
@@ -78,9 +78,8 @@ export const getRouter = () => {
       // production bundle and should report as one — dev-server noise is the
       // thing being separated out here.
       environment: isProd ? "production" : "development",
-      // `sendDefaultPii` attaches the full request URL (incl. query string) to
-      // events. Defensively redact any credential-bearing query param (e.g. a
-      // stale MCP `?key=`) before the event leaves the browser.
+      // Keep the scrubber as defense in depth for manually attached request
+      // data, even though the SDK no longer sends default PII.
       beforeSend: (event, hint) => {
         // Historical Safari cancellation from the removed View Transitions
         // integration. Keep this exact; other AbortErrors stay actionable.

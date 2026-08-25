@@ -61,7 +61,7 @@ describe("operation recorder", () => {
     uninstall();
   });
 
-  it("shares a Start operation id with headers and mutation history", () => {
+  it("keeps a Start operation id in browser history without exporting it", () => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     const operation = beginObservedOperation({
       kind: "mutation",
@@ -70,10 +70,8 @@ describe("operation recorder", () => {
       entity: "product",
       input: { action: "update" },
     });
-    expect(
-      new Headers(operationHeaders(operation)).get("x-cubby-operation-id"),
-    ).toBe(operation.id);
     const headers = new Headers(operationHeaders(operation));
+    expect(headers.get("x-cubby-operation-id")).toBeNull();
     expect(headers.get("x-cubby-operation")).toBe("entity.mutate");
     expect(headers.get("x-cubby-operation-kind")).toBe("mutation");
     expect(headers.get("x-cubby-operation-entity")).toBe("product");
@@ -86,6 +84,18 @@ describe("operation recorder", () => {
       entity: "product",
       outcome: "success",
     });
+  });
+
+  it("uses the registered subscription kind for workflow-stream headers", () => {
+    const operation = beginObservedOperation({
+      kind: "mutation",
+      transport: "start",
+      operation: "agent.askStream",
+    });
+
+    const headers = new Headers(operationHeaders(operation));
+    expect(headers.get("x-cubby-operation-kind")).toBe("subscription");
+    expect(headers.get("x-cubby-operation-id")).toBeNull();
   });
 
   it("always logs Start failures and exposes their shared operation id", () => {

@@ -10,7 +10,6 @@ import {
   type StartOperation,
   startOperation,
 } from "~/integrations/tanstack-query/start-transport";
-import { markFreshReads } from "~/lib/fresh-read-marker";
 import { queryKeys } from "~/lib/query-keys";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
 import * as browser from "~/server/task-browser.server";
@@ -237,7 +236,6 @@ const mutation = <I, O>(
     mutationKey: [...queryKeys.task.all, key],
     mutationFn: async (input: I) => {
       const result = await operation.call(input);
-      markFreshReads();
       return result;
     },
     meta: operation.meta,

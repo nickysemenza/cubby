@@ -17,14 +17,12 @@ afterEach(() => {
 const ok = <T>(data: T): StartOperationResult<T> => ({ ok: true, data });
 
 describe("Start operation binding", () => {
-  it("logs semantic request and result events and carries the operation id", async () => {
+  it("keeps the operation id in browser observability without sending it", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     const operation = startOperation<{ entity: string }, { items: unknown[] }>({
       operation: "entity.list",
       transport: (_input, { headers }) => {
-        expect(headers).toMatchObject({
-          "x-cubby-operation-id": expect.stringMatching(/^op-/u),
-        });
+        expect(new Headers(headers).get("x-cubby-operation-id")).toBeNull();
         return Promise.resolve(ok({ items: [], meta: { totalCount: 0 } }));
       },
       parse: (result) => result as { items: unknown[] },
@@ -53,6 +51,21 @@ describe("Start operation binding", () => {
     expect(error.mock.calls[0]?.[0]).toMatch(/entity\.filterOptions/u);
   });
 
+  it("marks strong follow-up reads after every registered mutation", async () => {
+    const documentStub = { cookie: "" };
+    vi.stubGlobal("document", documentStub);
+    const operation = startOperation<null, null>({
+      operation: "image.delete",
+      kind: "mutation",
+      transport: () => Promise.resolve(ok(null)),
+      parse: () => null,
+    });
+
+    await operation.call(null);
+
+    expect(documentStub.cookie).toContain("cubby-fresh-reads=1");
+  });
+
   it("derives query metadata from the same declaration the call observes", () => {
     const operation = startOperation<null, null>({
       operation: "cookbook.list",
@@ -67,10 +80,9 @@ describe("Start operation binding", () => {
       entity: "cookbook",
       observedByTransport: true,
     });
-    expect(operation.forEntity("recipe").meta).toMatchObject({
-      operation: "cookbook.list",
-      entity: "recipe",
-    });
+    expect(() => operation.forEntity("recipe")).toThrow(
+      "recipe is not registered for cookbook.list",
+    );
   });
 
   it("raises the bound error type for a refused operation", async () => {
@@ -82,13 +94,57 @@ describe("Start operation binding", () => {
       transport: () =>
         Promise.resolve({
           ok: false,
-          error: { code: "NOT_FOUND", message: "Product not found" },
+          error: {
+            code: "NOT_FOUND",
+            message: "Product not found",
+            requestId: "ray-operation-test",
+          },
         }),
       parse: () => null,
       createError: (error) => new DetailError(error),
     });
 
-    await expect(operation.call(null)).rejects.toBeInstanceOf(DetailError);
+    await expect(operation.call(null)).rejects.toMatchObject({
+      name: "StartOperationError",
+      requestId: "ray-operation-test",
+    });
+  });
+
+  it("keeps request ids on their own out-of-order failures", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const operation = startOperation<{ id: string; delay: number }, null>({
+      operation: "entity.detail",
+      transport: ({ id, delay }) =>
+        new Promise((resolve) =>
+          setTimeout(
+            () =>
+              resolve({
+                ok: false,
+                error: {
+                  code: "NOT_FOUND",
+                  message: "Missing",
+                  requestId: id,
+                },
+              }),
+            delay,
+          ),
+        ),
+      parse: () => null,
+    });
+
+    const [slow, fast] = await Promise.allSettled([
+      operation.call({ id: "request-slow", delay: 10 }),
+      operation.call({ id: "request-fast", delay: 0 }),
+    ]);
+
+    expect(slow).toMatchObject({
+      status: "rejected",
+      reason: { requestId: "request-slow" },
+    });
+    expect(fast).toMatchObject({
+      status: "rejected",
+      reason: { requestId: "request-fast" },
+    });
   });
 
   it("rejects undefined before TanStack Query receives it", () => {

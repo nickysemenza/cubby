@@ -38,6 +38,7 @@ import {
   setProductsStockTracked,
   updateProduct,
 } from "./product";
+import { readLegacyProductDetail, readProductDetail } from "./product/detail";
 import { loadProductQuantityLedgers } from "./product/quantity-ledger";
 import { attachProductComponents } from "./product-components";
 import { createProject } from "./project";
@@ -67,6 +68,11 @@ describe("product repository", () => {
   // these as statement ceilings so an accidental N+1 fails deterministically.
   const PRODUCT_DETAIL_QUERY_BUDGET_LEAN = 11;
   const PRODUCT_DETAIL_QUERY_BUDGET_DATA_RICH = 16;
+  // Direct lookup + quantity consolidation remove two statements; the
+  // detail-only quality projection removes five more. Linked ingredients also
+  // avoid the legacy ingredient shortcode re-resolution.
+  const PRODUCT_DETAIL_OPTIMIZED_REDUCTION = 7;
+  const PRODUCT_DETAIL_LINKED_OPTIMIZED_REDUCTION = 8;
 
   const readProductDetailThroughKernel = async (shortcode: string) => {
     // The test context stubs USDA misses; these fixtures deliberately omit
@@ -103,6 +109,67 @@ describe("product repository", () => {
     expect(measured.result?.id).toBe(product.id);
     expect(measured.queryCount).toBeLessThanOrEqual(
       PRODUCT_DETAIL_QUERY_BUDGET_LEAN,
+    );
+  });
+
+  it("keeps the optimized detail output equal to the legacy reader", async () => {
+    const ingredient = await createIngredient(
+      ctx.db,
+      { name: "Differential Ingredient", aliases: ["diff"] },
+      ctx.actor,
+    );
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Differential Product",
+        ingredientId: ingredient.id,
+      }),
+      ctx.actor,
+    );
+    const request = createTestRequestContext(ctx.db, {
+      auth: { userId: ctx.actor.userId },
+    });
+
+    const legacy = await countTestDbQueries(() =>
+      readLegacyProductDetail(
+        { db: ctx.db, usdaClient: request.usdaClient },
+        product.id,
+      ),
+    );
+    const optimized = await countTestDbQueries(() =>
+      readProductDetail(
+        { db: ctx.db, usdaClient: request.usdaClient },
+        product.id,
+      ),
+    );
+
+    expect(optimized.result).toEqual(legacy.result);
+    expect(optimized.queryCount).toBe(
+      legacy.queryCount - PRODUCT_DETAIL_LINKED_OPTIMIZED_REDUCTION,
+    );
+  });
+
+  it("keeps the complete optimized reduction for an unlinked product", async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Unlinked Differential Product" }),
+      ctx.actor,
+    );
+    const request = createTestRequestContext(ctx.db, {
+      auth: { userId: ctx.actor.userId },
+    });
+    const context = { db: ctx.db, usdaClient: request.usdaClient };
+
+    const legacy = await countTestDbQueries(() =>
+      readLegacyProductDetail(context, product.id),
+    );
+    const optimized = await countTestDbQueries(() =>
+      readProductDetail(context, product.id),
+    );
+
+    expect(optimized.result).toEqual(legacy.result);
+    expect(optimized.queryCount).toBe(
+      legacy.queryCount - PRODUCT_DETAIL_OPTIMIZED_REDUCTION,
     );
   });
 
@@ -168,6 +235,13 @@ describe("product repository", () => {
     const singleRowMeasured = await countTestDbQueries(() =>
       readProductDetailThroughKernel(product.id),
     );
+    const request = createTestRequestContext(ctx.db, {
+      auth: { userId: ctx.actor.userId },
+    });
+    const detailContext = { db: ctx.db, usdaClient: request.usdaClient };
+    const optimizedSingleRow = await countTestDbQueries(() =>
+      readProductDetail(detailContext, product.id),
+    );
 
     const secondShelf = await createLocation(
       ctx.db,
@@ -191,10 +265,15 @@ describe("product repository", () => {
     const measured = await countTestDbQueries(() =>
       readProductDetailThroughKernel(product.id),
     );
+    const optimized = await countTestDbQueries(() =>
+      readProductDetail(detailContext, product.id),
+    );
 
     expect(measured.result?.id).toBe(product.id);
     expect(measured.result?.inventoryEntry).toHaveLength(2);
     expect(measured.result?.externalIds).toHaveLength(2);
+    expect(optimized.result).toEqual(measured.result);
+    expect(optimized.queryCount).toBe(optimizedSingleRow.queryCount);
     expect(measured.queryCount).toBeLessThanOrEqual(
       singleRowMeasured.queryCount,
     );

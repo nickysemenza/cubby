@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { START_OPERATIONS } from "./generated/start-operation-registry.gen";
 import {
   readStartOperationTraceContext,
   startOperationHeaders,
@@ -6,6 +7,22 @@ import {
 } from "./start-operation-observability";
 
 describe("Start operation trace context", () => {
+  it("round-trips every generated operation definition", () => {
+    for (const [operation, definition] of Object.entries(START_OPERATIONS)) {
+      const entity = definition.entities[0];
+      const headers = startOperationHeaders({
+        operation: operation as keyof typeof START_OPERATIONS,
+        kind: definition.kind,
+        ...(entity ? { entity } : {}),
+      });
+      expect(readStartOperationTraceContext(new Headers(headers))).toEqual({
+        operation,
+        kind: definition.kind,
+        ...(entity ? { entity } : {}),
+      });
+    }
+  });
+
   it("round-trips only the approved operation, kind, and entity dimensions", () => {
     const headers = new Headers(
       startOperationHeaders({
@@ -31,12 +48,14 @@ describe("Start operation trace context", () => {
 
   it("drops arbitrary, mismatched, and high-cardinality header values", () => {
     expect(
-      startOperationHeaders({
-        operation: "entity.detail.secret-shortcode",
-        kind: "query",
-        entity: "product",
-      }),
-    ).toEqual({});
+      readStartOperationTraceContext(
+        new Headers({
+          "x-cubby-operation": "entity.detail.secret-shortcode",
+          "x-cubby-operation-kind": "query",
+          "x-cubby-operation-entity": "product",
+        }),
+      ),
+    ).toBeUndefined();
     expect(
       readStartOperationTraceContext(
         new Headers({
@@ -46,5 +65,14 @@ describe("Start operation trace context", () => {
         }),
       ),
     ).toBeUndefined();
+    expect(
+      readStartOperationTraceContext(
+        new Headers({
+          "x-cubby-operation": "cookbook.list",
+          "x-cubby-operation-kind": "query",
+          "x-cubby-operation-entity": "product",
+        }),
+      ),
+    ).toEqual({ operation: "cookbook.list", kind: "query" });
   });
 });

@@ -7,7 +7,6 @@ import {
 import { createServerFn } from "@tanstack/react-start";
 import type { z } from "zod";
 import { startOperation } from "~/integrations/tanstack-query/start-transport";
-import { markFreshReads } from "~/lib/fresh-read-marker";
 import { queryKeys } from "~/lib/query-keys";
 import * as browser from "~/server/meal-browser.server";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
@@ -162,7 +161,6 @@ export const mealAddRecipeMutationOptions = (
     mutationKey: [...queryKeys.meal.all, "addRecipe"],
     mutationFn: async (input: z.input<typeof schemas.mealAddRecipeInput>) => {
       const result = await addOperation.call(input);
-      markFreshReads();
       return result;
     },
     meta: addOperation.meta,
@@ -177,7 +175,6 @@ export const mealUpdateRecipeMutationOptions = (
       input: z.input<typeof schemas.mealUpdateRecipeInput>,
     ) => {
       const result = await updateOperation.call(input);
-      markFreshReads();
       return result;
     },
     meta: updateOperation.meta,
@@ -190,7 +187,6 @@ export const mealRemoveRecipeMutationOptions = (
     mutationKey: [...queryKeys.meal.all, "removeRecipe"],
     mutationFn: async (input: z.input<typeof schemas.mealRecipeIdInput>) => {
       const result = await removeOperation.call(input);
-      markFreshReads();
       return result;
     },
     meta: removeOperation.meta,

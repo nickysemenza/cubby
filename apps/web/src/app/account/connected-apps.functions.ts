@@ -9,7 +9,6 @@ import { mutationOptions, queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import type { z } from "zod";
 import { startOperation } from "~/integrations/tanstack-query/start-transport";
-import { markFreshReads } from "~/lib/fresh-read-marker";
 import { queryKeys } from "~/lib/query-keys";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
 import * as oauthBrowser from "~/server/oauth-browser.server";
@@ -116,7 +115,6 @@ export const revokeConnectedAppMutationOptions = () =>
     mutationKey: [...queryKeys.oauth.connectedApps, "revoke"] as const,
     mutationFn: async (input: z.input<typeof revokeConnectedAppInput>) => {
       const result = await revokeConnectedAppOperation.call(input);
-      markFreshReads();
       return result;
     },
     meta: revokeConnectedAppOperation.meta,
@@ -127,7 +125,6 @@ export const pruneOrphanedOAuthClientsMutationOptions = () =>
     mutationKey: [...queryKeys.oauth.orphaned, "prune"] as const,
     mutationFn: async () => {
       const result = await pruneOrphanedOAuthClientsOperation.call(null);
-      markFreshReads();
       return result;
     },
     meta: pruneOrphanedOAuthClientsOperation.meta,

@@ -1,0 +1,212 @@
+import { entityRefKey } from "@cubby/schemas/entity";
+import {
+  type LocationId,
+  type ProductId,
+  unsafeProductId,
+} from "@cubby/schemas/identifiers";
+import type { ProductWithFoodOut } from "@cubby/schemas/product";
+import { parseShortcode } from "@cubby/shared";
+import { and, eq } from "drizzle-orm";
+import { uniq } from "es-toolkit";
+import { env } from "~/env";
+import { startOperationDefinition } from "~/lib/start-operation-observability";
+import type { USDAClient } from "~/server/clients/usda";
+import type { Database } from "~/server/db";
+import { product } from "~/server/db/schema";
+import { observeOperationPhase } from "~/server/observed-request";
+import { loadProductDetailDataQuality } from "~/server/repo/data-quality";
+import { getDb, notDeleted, relations } from "~/server/repo/database-helpers";
+import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
+import { getRecipeUsagesForIngredient } from "~/server/repo/ingredient";
+import { loadLocationAncestorsWithIds } from "~/server/repo/location/tree";
+import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
+import { dbProductToAPI, primaryGtinOf } from "~/server/repo/product/mappers";
+import {
+  enrichProductRowsWithPricing,
+  type ProductPricing,
+} from "~/server/repo/product/pricing";
+import {
+  EMPTY_QUANTITY_LEDGER,
+  loadProductDetailQuantityLedgers,
+} from "~/server/repo/product/quantity-ledger";
+import type { ProductDeepDB } from "~/server/repo/product/types";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { getProductWithFood } from "~/server/services/product.service";
+
+interface ProductDetailReadContext {
+  db: Database;
+  usdaClient: USDAClient;
+}
+
+export const PRODUCT_DETAIL_READER = env.PRODUCT_DETAIL_READER;
+const PRODUCT_DETAIL_OPERATION = startOperationDefinition("entity.detail");
+
+/** Resolve the relation data needed by Product location rows without N+1 walks. */
+const hydrateProductLocationBreadcrumbs = async (
+  db: Database,
+  rows: ProductDeepDB[],
+): Promise<ProductDeepDB[]> => {
+  const locationIds = uniq(
+    rows.flatMap((row) => [
+      ...row.inventoryEntry.map((entry) => entry.location.id),
+      ...(row.locations ?? []).map((loc) => loc.id),
+    ]),
+  );
+  const ancestorsById = await loadLocationAncestorsWithIds(db, locationIds);
+  const displayImages = await resolveEntityDisplayImages(
+    db,
+    uniq([
+      ...locationIds,
+      ...[...ancestorsById.values()].flatMap((chain) =>
+        chain.map((rung) => rung.locationId),
+      ),
+    ]).map((entityId) => ({ entityType: "location" as const, entityId })),
+  );
+  const displayImageOf = (id: LocationId) =>
+    displayImages.get(entityRefKey("location", id)) ?? null;
+  const breadcrumbOf = (id: LocationId) =>
+    (ancestorsById.get(id) ?? []).map(({ locationId, ...rung }) => ({
+      ...rung,
+      displayImage: displayImageOf(locationId),
+    }));
+
+  return rows.map((row) => ({
+    ...row,
+    inventoryEntry: row.inventoryEntry.map((entry) => ({
+      ...entry,
+      location: {
+        ...entry.location,
+        ancestors: breadcrumbOf(entry.location.id),
+        displayImage: displayImageOf(entry.location.id),
+      },
+    })),
+    locations: row.locations?.map((loc) => ({
+      ...loc,
+      ancestors: breadcrumbOf(loc.id),
+      displayImage: displayImageOf(loc.id),
+    })),
+  }));
+};
+
+const emptyRecipeUsages = {
+  recipeUsages: [],
+  appearsInRecipes: [],
+};
+
+export async function readLegacyProductDetail(
+  context: ProductDetailReadContext,
+  shortcode: string,
+): Promise<ProductWithFoodOut | null> {
+  const parsed = parseShortcode(shortcode);
+  if (parsed?.type !== "product") return null;
+  const entityId = await observeOperationPhase(
+    PRODUCT_DETAIL_OPERATION,
+    "resolve",
+    () => resolveLiveShortcode(context.db, shortcode, "product"),
+  );
+  return entityId
+    ? getProductWithFood(
+        context.db,
+        context.usdaClient,
+        unsafeProductId(entityId),
+      )
+    : null;
+}
+
+/**
+ * The Product detail read model. The shortcode lookup, local projections,
+ * quality evidence, breadcrumbs, USDA lookup, and recipe usages all live behind
+ * this small seam so callers cannot accidentally reorder or omit a detail phase.
+ */
+export async function readProductDetail(
+  context: ProductDetailReadContext,
+  shortcode: string,
+): Promise<ProductWithFoodOut | null> {
+  const parsed = parseShortcode(shortcode);
+  if (parsed?.type !== "product") return null;
+
+  const row = await observeOperationPhase(
+    PRODUCT_DETAIL_OPERATION,
+    "base",
+    () =>
+      getDb(context.db).query.product.findFirst({
+        where: and(
+          eq(product.shortcode, parsed.shortcode),
+          notDeleted(product),
+        ),
+        ...relations.product.full,
+      }),
+  );
+  if (!row) return null;
+
+  // These reads all depend only on the base row's ids/relations. Starting USDA
+  // before the local projections hides external latency behind the local DB
+  // work; the local phases retain their existing aggregate and breadcrumb rules.
+  const foodPromise = observeOperationPhase(
+    PRODUCT_DETAIL_OPERATION,
+    "food",
+    () => {
+      const lookupParam = foodLookupParamFromProduct({
+        primaryGtin: primaryGtinOf(row.externalIds),
+        fdc_id: row.fdc_id,
+      });
+      return lookupParam
+        ? context.usdaClient.findFood(lookupParam)
+        : Promise.resolve(null);
+    },
+  );
+  const pricing = await observeOperationPhase(
+    PRODUCT_DETAIL_OPERATION,
+    "pricing",
+    async () => {
+      const priced = await enrichProductRowsWithPricing(context.db, [row]);
+      return priced[0]!.pricing as ProductPricing;
+    },
+  );
+  const quantityLedger = await observeOperationPhase(
+    PRODUCT_DETAIL_OPERATION,
+    "quantity",
+    async () => {
+      const quantities = await loadProductDetailQuantityLedgers(context.db, [
+        row.id as ProductId,
+      ]);
+      return quantities.get(row.id as ProductId) ?? EMPTY_QUANTITY_LEDGER;
+    },
+  );
+  const breadcrumbed = await observeOperationPhase(
+    PRODUCT_DETAIL_OPERATION,
+    "breadcrumbs",
+    () =>
+      hydrateProductLocationBreadcrumbs(context.db, [
+        { ...row, quantityLedger } as ProductDeepDB,
+      ]).then((rows) => rows[0]!),
+  );
+  const dataQuality = await observeOperationPhase(
+    PRODUCT_DETAIL_OPERATION,
+    "quality",
+    () => loadProductDetailDataQuality(context.db, row),
+  );
+  const recipe = await observeOperationPhase(
+    PRODUCT_DETAIL_OPERATION,
+    "recipe_usages",
+    () =>
+      row.ingredient?.deletedAt === null
+        ? getRecipeUsagesForIngredient(context.db, row.ingredient.id)
+        : Promise.resolve(emptyRecipeUsages),
+  );
+  const food = await foodPromise;
+
+  const mapped = dbProductToAPI(
+    {
+      ...breadcrumbed,
+      pricing,
+      quantityLedger,
+    },
+    dataQuality,
+  );
+  return {
+    ...mapped,
+    food,
+    recipeUsages: recipe.recipeUsages,
+  };
+}

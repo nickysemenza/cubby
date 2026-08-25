@@ -19,7 +19,6 @@ import {
   type StartOperation,
   startOperation,
 } from "~/integrations/tanstack-query/start-transport";
-import { markFreshReads } from "~/lib/fresh-read-marker";
 import * as browser from "~/server/image-browser.server";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
 
@@ -134,9 +133,7 @@ const mutation = <I, O>(
     mutationKey: [["image", key]] as const,
     meta: operation.meta,
     mutationFn: async (input: I) => {
-      const result = await operation.call(input);
-      markFreshReads();
-      return result;
+      return operation.call(input);
     },
     ...options,
   });

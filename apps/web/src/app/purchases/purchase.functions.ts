@@ -15,7 +15,6 @@ import { createServerFn } from "@tanstack/react-start";
 import type { z } from "zod";
 import type { CubbyOperationMeta } from "~/integrations/tanstack-query/operation-meta";
 import { startOperation } from "~/integrations/tanstack-query/start-transport";
-import { markFreshReads } from "~/lib/fresh-read-marker";
 import { queryKeys } from "~/lib/query-keys";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
 import * as browser from "~/server/purchase-browser.server";
@@ -147,7 +146,6 @@ const mutation =
       meta: operation.meta,
       mutationFn: async (input: I) => {
         const result = await operation.call(input);
-        markFreshReads();
         return result;
       },
     });

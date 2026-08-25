@@ -1,7 +1,4 @@
-import {
-  unsafeIngredientId,
-  unsafeProductId,
-} from "@cubby/schemas/identifiers";
+import { unsafeIngredientId } from "@cubby/schemas/identifiers";
 import {
   mergeProductsInput,
   productFiltersSchema,
@@ -16,19 +13,14 @@ import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
 import {
   bindShortcodeResolver,
-  resolveLiveShortcode,
   resolveLiveShortcodes,
 } from "~/server/repo/shortcode-resolver";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
-import {
-  createProductWriteActions,
-  getProductWithFood,
-} from "~/server/services/product.service";
+import { createProductWriteActions } from "~/server/services/product.service";
 import {
   createProductWithSideEffects,
   updateProductWithSideEffects,
 } from "~/server/services/product-orchestration.service";
-import { withTrace } from "~/server/tracing";
 import {
   deleteProducts,
   getProductByID,
@@ -36,6 +28,11 @@ import {
   getProductsByShortcodes,
   productList,
 } from "./crud";
+import {
+  PRODUCT_DETAIL_READER,
+  readLegacyProductDetail,
+  readProductDetail,
+} from "./detail";
 import { PRODUCT_DELETE_EDGE_POLICY } from "./edge-roles";
 import { mergeProducts, PRODUCT_MERGE_EDGE_POLICY } from "./merge";
 
@@ -69,12 +66,16 @@ export const productEntityAdapter = defineEntityAdapter({
   },
   repository: {
     get: async (ctx, shortcode) => {
-      const id = await withTrace("product.detail.resolve", () =>
-        resolveLiveShortcode(ctx.db, shortcode, "product"),
+      if (PRODUCT_DETAIL_READER === "optimized") {
+        return readProductDetail(
+          { db: ctx.db, usdaClient: ctx.usdaClient },
+          shortcode,
+        );
+      }
+      return readLegacyProductDetail(
+        { db: ctx.db, usdaClient: ctx.usdaClient },
+        shortcode,
       );
-      return id
-        ? getProductWithFood(ctx.db, ctx.usdaClient, unsafeProductId(id))
-        : null;
     },
     list: (ctx, filters, sorts, pagination, groupBy) =>
       productList(ctx.db, filters, sorts, pagination, groupBy),

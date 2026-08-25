@@ -9,7 +9,13 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import * as Sentry from "@sentry/cloudflare";
 import type * as ServerEntry from "@tanstack/react-start/server-entry";
-import { withHtmlNoCache } from "./lib/http-cache";
+import {
+  TELEMETRY_SCHEMA_VERSION,
+  withHtmlNoCache,
+  withResponseDiagnostics,
+} from "./lib/http-cache";
+import { httpRouteTemplate } from "./lib/http-route-template";
+import { observeResponseBody } from "./lib/response-body-observer";
 import { SENTRY_DSN } from "./lib/sentry-dsn";
 import { scrubSentryEvent } from "./lib/sentry-scrub";
 import {
@@ -21,7 +27,7 @@ import type { BackgroundQueueBatch } from "./server/background-queue-types";
 import { setCfEnv } from "./server/cf-env";
 import { withRequestDb, withRequestDbClient } from "./server/db";
 import type { TelemetryQueueBatch } from "./server/telemetry-queue-types";
-import { getRequestId, withTrace } from "./server/tracing";
+import { getRequestId, withManualTrace, withTrace } from "./server/tracing";
 import { classifyHttpWorkload } from "./server/workload";
 
 // Cache the handler module promise so the dynamic import only runs once (on
@@ -85,6 +91,7 @@ const handler = {
     process.env.BETTER_AUTH_SECRET ??= env.BETTER_AUTH_SECRET;
     process.env.ALLOW_SIGNUP ??= env.ALLOW_SIGNUP;
     process.env.E2E_AUTH_TEST_MODE = env.E2E_AUTH_TEST_MODE;
+    process.env.PRODUCT_DETAIL_READER = env.PRODUCT_DETAIL_READER;
 
     // Expose service bindings to server code (clients pick binding fetch
     // over public URLs when present).
@@ -105,6 +112,9 @@ const handler = {
     const startTraceContext = url.pathname.startsWith("/_serverFn/")
       ? readStartOperationTraceContext(request.headers)
       : undefined;
+    const routeTemplate = httpRouteTemplate(url.pathname, {
+      serverFunction: startTraceContext !== undefined,
+    });
 
     // Tag the whole request, not just the three captureException sites in this
     // file: an exception thrown deep inside a Start operation is captured by
@@ -116,17 +126,17 @@ const handler = {
     // internal, so it gets confirmed on the preview deploy. If it ever stops
     // holding, the tag bleeds across concurrent requests in the same isolate,
     // and the replacement is the explicit
-    // `captureException(err, { tags: { cf_ray } })` form at each call site —
+    // `captureException(err, { tags: { request_id } })` form at each call site —
     // not both.
-    Sentry.setTag("cf_ray", ray);
+    Sentry.setTag("request_id", ray);
 
     try {
       return await interceptedErrorStore.run({ error: null }, () =>
-        withTrace(
+        withManualTrace(
           startTraceContext
             ? `cf.fetch.${startOperationTraceName(startTraceContext)}`
             : "cf.fetch",
-          (span) =>
+          (span, endSpan) =>
             withRequestDb(
               {
                 strong: env.HYPERDRIVE.connectionString,
@@ -161,19 +171,55 @@ const handler = {
                   Sentry.captureException(reconstructed);
                 }
 
-                return withHtmlNoCache(response, getRequestId(request.headers));
+                const correlatedResponse = withResponseDiagnostics(
+                  withHtmlNoCache(response),
+                  {
+                    requestId: getRequestId(request.headers),
+                    workerVersion: env.CF_VERSION_METADATA.id,
+                  },
+                );
+                if (request.method === "HEAD") {
+                  span.setAttributes({
+                    "cubby.response.body.outcome": "empty",
+                    "cubby.response.stream.duration_ms": 0,
+                  });
+                  endSpan();
+                  return correlatedResponse;
+                }
+                return observeResponseBody(
+                  correlatedResponse,
+                  (observation) => {
+                    span.setAttributes({
+                      "cubby.response.body.outcome": observation.outcome,
+                      "cubby.response.stream.duration_ms": Math.round(
+                        observation.durationMs,
+                      ),
+                      "cubby.response.cancelled":
+                        observation.outcome === "cancelled",
+                    });
+                    if (observation.outcome === "error") {
+                      span.setError("response_stream_error");
+                    }
+                    endSpan();
+                  },
+                );
               },
             ),
           {
             "http.request.method": request.method,
-            "url.path": url.pathname,
+            "http.route": routeTemplate,
             "server.address": url.hostname,
+            "service.version": env.CF_VERSION_METADATA.id,
+            "cloudflare.worker.version.tag": env.CF_VERSION_METADATA.tag,
+            "cloudflare.worker.version.timestamp":
+              env.CF_VERSION_METADATA.timestamp,
+            "cubby.telemetry.schema_version": TELEMETRY_SCHEMA_VERSION,
             "cubby.workload": classifyHttpWorkload(
               url.pathname,
               request.headers,
             ),
             // Load-bearing, not decoration: the ray is the id we hand back to
-            // the client in `x-trace-id` (getRequestId falls back to it under
+            // the client in `x-request-id` (getRequestId falls back to it under
             // CF), and this attribute is the only thing that makes that id
             // findable in Tempo. Dropping it makes every reported id a dead
             // end. Undefined values are skipped by both span backends.
@@ -290,7 +336,7 @@ const handler = {
 export default Sentry.withSentry(
   () => ({
     dsn: SENTRY_DSN,
-    sendDefaultPii: true,
+    sendDefaultPii: false,
     release: `cubby@${__GIT_COMMIT__}`,
     // Explicit rather than relying on the SDK default, which is also
     // "production" — stating it keeps the three init sites (here, router.tsx,
@@ -299,9 +345,8 @@ export default Sentry.withSentry(
     // (`versions upload`) also run this worker and so also report production;
     // they hit the prod database, so that is the honest label.
     environment: "production",
-    // `sendDefaultPii` attaches the full request URL (incl. query string) to
-    // events. Defensively redact any credential-bearing query param (e.g. a
-    // stale MCP `?key=`) before the event leaves the process.
+    // Keep the scrubber as defense in depth for manually attached request data,
+    // even though the SDK no longer sends default PII.
     beforeSend: scrubSentryEvent,
     // Mirror the client's prod 10% trace sampling (router.tsx). Head-based
     // sampling decisions propagate client→server via the `sentry-trace` header,

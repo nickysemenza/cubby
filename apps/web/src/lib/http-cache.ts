@@ -1,6 +1,29 @@
 import { REQUEST_ID_HEADER } from "./request-id";
 
 const HTML_CACHE_CONTROL = "private, no-cache, must-revalidate";
+const WORKER_VERSION_HEADER = "x-cubby-worker-version";
+const TELEMETRY_SCHEMA_HEADER = "x-cubby-telemetry-schema";
+export const TELEMETRY_SCHEMA_VERSION = "1";
+
+export function withResponseDiagnostics(
+  response: Response,
+  diagnostics: {
+    requestId?: string;
+    workerVersion: string;
+  },
+): Response {
+  const headers = new Headers(response.headers);
+  if (diagnostics.requestId) {
+    headers.set(REQUEST_ID_HEADER, diagnostics.requestId);
+  }
+  headers.set(WORKER_VERSION_HEADER, diagnostics.workerVersion);
+  headers.set(TELEMETRY_SCHEMA_HEADER, TELEMETRY_SCHEMA_VERSION);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
 
 /** Stamp a request id on a streamed response without consuming its body. */
 export function withRequestId(

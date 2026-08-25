@@ -19,13 +19,13 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "~/components/ui/collapsible";
+import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
 import {
   getAppErrorDetails,
   getErrorMessage,
   isDynamicImportError,
   isSupersededViewTransitionError,
 } from "~/lib/error-utils";
-import { getLastRequestId } from "~/lib/request-id";
 
 type ErrorCategory =
   | "auth"
@@ -110,10 +110,8 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
   const rawMessage = getErrorMessage(error);
   const category = categorizeError(code, reason, rawMessage, error);
   const friendlyMessage = FRIENDLY_MESSAGES[category];
-  // Module state, not React state: read on each render rather than caching in
-  // a useState initializer, so a later response's id isn't stuck showing the
-  // first one.
-  const requestId = getLastRequestId();
+  const requestId =
+    error instanceof StartOperationError ? error.requestId : undefined;
 
   useEffect(() => {
     if (
@@ -121,19 +119,12 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
       category === "network" ||
       category === "staleBuild"
     ) {
-      // `cf_ray` matches the tag name the server sets on its own Sentry
-      // events, so client and server events for the same request join on it.
-      // Read inside the effect, and keep it OUT of the dep array: it is module
-      // state, so depending on it would re-fire this effect — capturing the
-      // same error to Sentry a second time — whenever a later response changes
-      // the id. Reading it here also stamps the id as of capture time.
-      const capturedId = getLastRequestId();
       Sentry.captureException(
         error,
-        capturedId ? { tags: { cf_ray: capturedId } } : undefined,
+        requestId ? { tags: { request_id: requestId } } : undefined,
       );
     }
-  }, [error, category]);
+  }, [error, category, requestId]);
 
   const stack = error instanceof Error ? error.stack : undefined;
 

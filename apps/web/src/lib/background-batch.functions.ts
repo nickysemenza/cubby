@@ -15,7 +15,6 @@ import { createServerFn } from "@tanstack/react-start";
 import type { z } from "zod";
 import type { CubbyOperationMeta } from "~/integrations/tanstack-query/operation-meta";
 import { startOperation } from "~/integrations/tanstack-query/start-transport";
-import { markFreshReads } from "~/lib/fresh-read-marker";
 import * as backgroundBatchBrowser from "~/server/background-batch-browser.server";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
 
@@ -231,9 +230,7 @@ const mutationWithFreshRead = <Input, Output>(operation: {
 }) =>
   mutationOptions({
     mutationFn: async (input: Input) => {
-      const result = await operation.call(input);
-      markFreshReads();
-      return result;
+      return operation.call(input);
     },
     meta: operation.meta,
   });

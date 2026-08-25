@@ -12,7 +12,6 @@ import { mutationOptions, queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import type { z } from "zod";
 import { startOperation } from "~/integrations/tanstack-query/start-transport";
-import { markFreshReads } from "~/lib/fresh-read-marker";
 import * as imageBrowser from "~/server/image-browser.server";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
 
@@ -155,7 +154,6 @@ export const imageUpdateMutationOptions = () =>
     mutationKey: [["image", "update"]] as const,
     mutationFn: async (input: z.input<typeof imageBrowserUpdateInput>) => {
       const result = await imageUpdateOperation.call(input);
-      markFreshReads();
       return result;
     },
     meta: imageUpdateOperation.meta,
@@ -166,7 +164,6 @@ export const imageDeleteMutationOptions = () =>
     mutationKey: [["image", "delete"]] as const,
     mutationFn: async (input: z.input<typeof imageBrowserDeleteInput>) => {
       const result = await imageDeleteOperation.call(input);
-      markFreshReads();
       return result;
     },
     meta: imageDeleteOperation.meta,

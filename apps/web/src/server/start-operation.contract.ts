@@ -20,6 +20,8 @@ export type PublicStartOperationError = {
   message: string;
   code: string;
   reason?: string;
+  /** Correlates this failed request with server-side traces and Sentry. */
+  requestId?: string;
   blockers?: PublicImpactItem[];
   validationIssues?: PublicStartValidationIssue[];
 };
