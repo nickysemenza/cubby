@@ -20,7 +20,11 @@ import type {
   EntityEditRecord,
 } from "~/entities/editing/types";
 import { entities } from "~/entities/entities";
-import { mealKindBadgeVariant, mealTypeIcon } from "../meals/meal-options";
+import {
+  mealKindBadgeVariant,
+  mealTypeIcon,
+  mealTypeTimeLabel,
+} from "../meals/meal-options";
 import {
   capitalize,
   PROJECT_STATUS_LABELS,
@@ -86,8 +90,12 @@ const calendarKindRegistry: {
       item.coverImageUrl
         ? { entity: "recipe", fit: "cover", url: item.coverImageUrl }
         : undefined,
+    // Time first, the way an agenda reads. It is the slot's canonical hour, not
+    // a stored one — the same map the ICS feed places the event at, so a chip
+    // here and the event in a subscribed calendar always agree.
     metadata: (item) =>
       [
+        mealTypeTimeLabel(item.mealType),
         item.mealType ? MEAL_TYPE_LABELS[item.mealType] : "Unslotted meal",
         item.mealKind === "cooked" ? "Cooked" : null,
         ...item.recipeNames,

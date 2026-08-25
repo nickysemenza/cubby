@@ -119,11 +119,39 @@ describe("renderIcs wire format", () => {
 });
 
 describe("renderIcs events", () => {
-  it("emits an all-day VEVENT with the exclusive DTEND drizzle already gives us", () => {
+  it("places a slotted meal at its slot's time, as a UTC DATE-TIME", () => {
+    // Dinner is 7pm household-local; 2026-08-15 is PDT (UTC-7), so the instant
+    // lands on the following UTC day. Half-hour block.
     const lines = unfold(render([meal()]));
+    expect(lines).toContain("DTSTART:20260816T020000Z");
+    expect(lines).toContain("DTEND:20260816T023000Z");
+    expect(lines).toContain("DTSTAMP:20260814T123456Z");
+  });
+
+  it("resolves the same slot against standard time in winter", () => {
+    // Same 7pm dinner, but PST (UTC-8) — the guard that the offset is looked up
+    // per date rather than hardcoded to the summer one.
+    const lines = unfold(
+      render([
+        meal({ startDate: "2026-01-15", endDateExclusive: "2026-01-16" }),
+      ]),
+    );
+    expect(lines).toContain("DTSTART:20260116T030000Z");
+    expect(lines).toContain("DTEND:20260116T033000Z");
+  });
+
+  it("leaves an unslotted meal an all-day event", () => {
+    // No slot means no time of day was ever stated, so the feed must not invent
+    // one — this stays the exclusive-DTEND all-day form.
+    const lines = unfold(render([meal({ mealType: null })]));
     expect(lines).toContain("DTSTART;VALUE=DATE:20260815");
     expect(lines).toContain("DTEND;VALUE=DATE:20260816");
-    expect(lines).toContain("DTSTAMP:20260814T123456Z");
+  });
+
+  it("keeps tasks all-day: a task is due on a day, not at an hour", () => {
+    const lines = unfold(render([task()]));
+    expect(lines).toContain("DTSTART;VALUE=DATE:20260820");
+    expect(lines).toContain("DTEND;VALUE=DATE:20260821");
   });
 
   it("spans a multi-day task across its whole due range", () => {

@@ -1,14 +1,25 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
-import { MEAL_KIND_LABELS } from "@cubby/schemas/meal-classification";
+import {
+  MEAL_KIND_LABELS,
+  MEAL_SLOT_DURATION_MINUTES,
+  MEAL_TYPE_START_MINUTES,
+} from "@cubby/schemas/meal-classification";
+import { householdDateTime } from "~/lib/household-date";
 
 /**
  * RFC 5545 serializer for the published calendar feed.
  *
- * Hand-rolled rather than pulling a dependency: every {@link CalendarItem} is
- * already an all-day event, and `endDateExclusive` is already the exclusive end
- * date `DTEND;VALUE=DATE` wants, so the mapping is direct. The fiddly parts are
- * the wire format (CRLF, octet folding, TEXT escaping), which is what most of
- * this file is.
+ * Hand-rolled rather than pulling a dependency: most of a {@link CalendarItem}
+ * is an all-day event, and `endDateExclusive` is already the exclusive end date
+ * `DTEND;VALUE=DATE` wants, so the mapping is direct. The fiddly parts are the
+ * wire format (CRLF, octet folding, TEXT escaping), which is what most of this
+ * file is.
+ *
+ * The one exception is a meal with a slot: it is placed at that slot's time of
+ * day (see `CalendarKindSpec.timing`). Those events are emitted as UTC
+ * DATE-TIMEs rather than `TZID=` plus a VTIMEZONE component — the household
+ * timezone is a fixed constant, so resolving the wall time to an instant here
+ * is unambiguous and spares the document a hand-written DST ruleset.
  *
  * Pure: no DB, no ambient clock — `now` and `origin` are caller-supplied. The
  * origin comes from the request so a preview deploy links back to *itself*
@@ -105,9 +116,11 @@ function foldLine(line: string): string {
 /** `YYYY-MM-DD` → `YYYYMMDD`, the DATE value form. */
 const icsDate = (plain: string) => plain.replace(/-/g, "");
 
-/** UTC timestamp in the DATE-TIME form DTSTAMP requires. */
+/** UTC timestamp in the DATE-TIME form DTSTAMP and a timed DTSTART require. */
 const icsTimestamp = (at: Date) =>
   `${at.toISOString().replace(/[-:]/g, "").split(".")[0]}Z`;
+
+const MILLISECONDS_PER_MINUTE = 60_000;
 
 type ItemOfKind<K extends PublishableKind> = Extract<
   PublishableCalendarItem,
@@ -139,6 +152,14 @@ interface CalendarKindSpec<K extends PublishableKind> {
   includes: (item: ItemOfKind<K>) => boolean;
   summary: (item: ItemOfKind<K>) => string;
   description: (item: ItemOfKind<K>) => string | null;
+  /**
+   * Where in the day the item sits, or `null`/absent for a full-day event.
+   * Minutes are household-local wall clock; `toEvent` resolves them to an
+   * instant. Omit the property entirely for a kind that is never timed.
+   */
+  timing?: (
+    item: ItemOfKind<K>,
+  ) => { startMinutes: number; durationMinutes: number } | null;
 }
 
 const KIND_SPECS: {
@@ -148,6 +169,15 @@ const KIND_SPECS: {
     detailBase: "/meals",
     includes: () => true,
     summary: (item) => item.title,
+    // An unslotted meal has no time of day to claim, so it stays the full-day
+    // banner it has always been rather than being parked at an invented hour.
+    timing: (item) =>
+      item.mealType
+        ? {
+            startMinutes: MEAL_TYPE_START_MINUTES[item.mealType],
+            durationMinutes: MEAL_SLOT_DURATION_MINUTES,
+          }
+        : null,
     description: (item) => {
       const parts = [...item.recipeNames];
       // An eating-out meal carries no recipes and no cost, so without this it
@@ -168,6 +198,7 @@ const KIND_SPECS: {
     detailBase: "/tasks",
     // The feed is a plan, not a log.
     includes: (item) => item.status !== "done",
+    // No `timing`: a task is due on a day, not at an hour.
     summary: (item) =>
       item.projectName ? `${item.projectName}: ${item.title}` : item.title,
     description: (item) => {
@@ -201,6 +232,31 @@ function isPublishable(
   return specFor(publishable).includes(publishable);
 }
 
+/**
+ * DTSTART/DTEND for one item — DATE-valued for a full-day event, UTC DATE-TIME
+ * for a timed one.
+ *
+ * A timed event ignores `endDateExclusive` entirely: its end is its own
+ * duration past its start, not the day after it.
+ */
+function boundaryLines(
+  item: PublishableCalendarItem,
+  spec: CalendarKindSpec<PublishableKind>,
+): string[] {
+  const timing = spec.timing?.(item) ?? null;
+  if (!timing) {
+    return [
+      `DTSTART;VALUE=DATE:${icsDate(item.startDate)}`,
+      `DTEND;VALUE=DATE:${icsDate(item.endDateExclusive)}`,
+    ];
+  }
+  const start = householdDateTime(item.startDate, timing.startMinutes);
+  const end = new Date(
+    start.getTime() + timing.durationMinutes * MILLISECONDS_PER_MINUTE,
+  );
+  return [`DTSTART:${icsTimestamp(start)}`, `DTEND:${icsTimestamp(end)}`];
+}
+
 function toEvent(item: PublishableCalendarItem, opts: IcsOptions): string[] {
   const spec = specFor(item);
   // UID must be stable across polls so an edit updates the event in place
@@ -210,8 +266,7 @@ function toEvent(item: PublishableCalendarItem, opts: IcsOptions): string[] {
     "BEGIN:VEVENT",
     `UID:${item.id}@${UID_DOMAIN}`,
     `DTSTAMP:${icsTimestamp(opts.now)}`,
-    `DTSTART;VALUE=DATE:${icsDate(item.startDate)}`,
-    `DTEND;VALUE=DATE:${icsDate(item.endDateExclusive)}`,
+    ...boundaryLines(item, spec),
     `SUMMARY:${escapeText(spec.summary(item))}`,
     `URL:${opts.origin}${spec.detailBase}/${item.id}`,
     "TRANSP:TRANSPARENT",

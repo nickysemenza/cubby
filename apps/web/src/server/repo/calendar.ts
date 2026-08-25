@@ -62,7 +62,8 @@ const itemOrder: Record<CalendarItem["kind"], number> = {
 const mealTypeTitle = (mealType: MealType | null): string =>
   mealType ? MEAL_TYPE_LABELS[mealType] : "Meal";
 
-/** Slot ordering, applied only when both items are meals. */
+/** Slot ordering — `mealTypeValues` is clock order — applied only when both
+ *  items are meals. */
 const mealSlotDelta = (a: CalendarItem, b: CalendarItem): number =>
   a.kind === "meal" && b.kind === "meal"
     ? mealTypeRank(a.mealType) - mealTypeRank(b.mealType)

@@ -3,7 +3,7 @@ import {
   mealTypeValues,
 } from "@cubby/schemas/meal-classification";
 import { describe, expect, it } from "vitest";
-import { mealKindIcon, mealTypeIcon } from "./meal-options";
+import { mealKindIcon, mealTypeIcon, mealTypeTimeLabel } from "./meal-options";
 
 describe("meal glyphs", () => {
   it("gives every slot its own icon", () => {
@@ -28,5 +28,19 @@ describe("meal glyphs", () => {
     for (const kind of mealKindValues.filter((k) => k !== "cooked")) {
       expect(mealKindIcon(kind)).toBeTruthy();
     }
+  });
+});
+
+describe("meal slot time labels", () => {
+  it("labels each slot with its canonical hour", () => {
+    expect(mealTypeTimeLabel("breakfast")).toBe("9:00 AM");
+    expect(mealTypeTimeLabel("lunch")).toBe("12:00 PM");
+    expect(mealTypeTimeLabel("dinner")).toBe("7:00 PM");
+  });
+
+  it("has no time for an unslotted meal", () => {
+    // The time comes from the slot, so no slot means no time to show — the
+    // same rule the ICS feed applies when it leaves these events all-day.
+    expect(mealTypeTimeLabel(null)).toBeNull();
   });
 });
