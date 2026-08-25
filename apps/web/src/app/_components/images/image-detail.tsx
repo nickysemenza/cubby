@@ -10,7 +10,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { Image } from "~/components/ui/image";
-import { useTRPC } from "~/integrations/trpc/react";
+import {
+  imageDeleteMutationOptions,
+  imageUpdateMutationOptions,
+} from "~/entities/image.functions";
 import { EditableCell } from "../data-table/editable-cell";
 import { useEntityDelete } from "../hooks/useEntityDelete";
 import { useUpdateMutation } from "../hooks/useUpdateMutation";
@@ -20,10 +23,8 @@ interface ImageDetailProps {
 }
 
 export function ImageDetail({ image }: ImageDetailProps) {
-  const api = useTRPC();
-
   const updateMutation = useUpdateMutation({
-    mutationFn: api.image.update.mutationOptions,
+    mutationFn: () => imageUpdateMutationOptions(),
     entity: "image",
   });
 
@@ -37,7 +38,10 @@ export function ImageDetail({ image }: ImageDetailProps) {
     id: image.id,
     name: image.filename,
     entity: "image",
-    mutationOptions: (callbacks) => api.image.delete.mutationOptions(callbacks),
+    mutationOptions: (callbacks) => ({
+      ...imageDeleteMutationOptions(),
+      ...callbacks,
+    }),
     redirectTo: "/images",
   });
 

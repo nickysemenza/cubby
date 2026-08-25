@@ -1,38 +1,40 @@
 import { parseShortcode } from "@cubby/shared";
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
-import * as entityRuntime from "~/server/entity-runtime.server";
-import { authenticatedEntityServerFunction } from "~/server/middleware/entity-server-functions";
 import {
-  EntityTransportError,
-  observedEntityCall,
-  type PublicEntityError,
-  unwrapEntityTransportResult,
-} from "./entity-transport";
+  observedStartCall,
+  type PublicStartOperationError,
+  StartOperationError,
+  unwrapStartOperationResult,
+} from "~/integrations/tanstack-query/start-transport";
+import * as entityRuntime from "~/server/entity-runtime.server";
+import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
 import type {
   DetailEntity,
   EntityDetailByEntity,
   EntityDetailInputByEntity,
 } from "./generated/entity-details.gen";
 import {
-  entityDetailInputSchema,
   parseEntityDetailInput,
   parseEntityDetailResult,
 } from "./generated/entity-details.gen";
 
 const getEntityDetailTransport = createServerFn({ method: "GET" })
-  .middleware([authenticatedEntityServerFunction])
-  .validator(entityDetailInputSchema)
+  .middleware([authenticatedStartServerFunction])
+  .validator(
+    (input: unknown) =>
+      input as EntityDetailInputByEntity[keyof EntityDetailByEntity],
+  )
   .handler(
     async ({ data, context }) =>
       await entityRuntime.getEntityDetail({
         data,
-        request: context.entityRuntime,
+        request: context.startOperation,
       }),
   );
 
-export class EntityDetailError extends EntityTransportError {
-  constructor(error: PublicEntityError) {
+export class EntityDetailError extends StartOperationError {
+  constructor(error: PublicStartOperationError) {
     super(error);
     this.name = "EntityDetailError";
   }
@@ -56,13 +58,13 @@ async function getEntityDetail<E extends DetailEntity>(options: {
   signal?: AbortSignal;
   speculative?: boolean;
 }): Promise<EntityDetailByEntity[E] | null> {
-  return await observedEntityCall({
+  return await observedStartCall({
     operation: "entity.detail",
     entity: options.data.entity,
     speculative: options.speculative,
     input: options.data,
     call: async (headers) => {
-      const result = unwrapEntityTransportResult(
+      const result = unwrapStartOperationResult(
         "entity.detail",
         await getEntityDetailTransport({
           data: options.data,

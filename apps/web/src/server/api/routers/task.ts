@@ -12,8 +12,6 @@ import {
   taskTimelineOut,
 } from "@cubby/schemas/project";
 import { z } from "zod";
-import { ENTITY_BINDINGS } from "~/server/entity-bindings";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import {
   getTaskBoard,
   getTaskSummary,
@@ -27,13 +25,7 @@ import {
   taskList,
 } from "~/server/repo/task";
 import { createBulkUpdatedMutation } from "../crud-factory";
-import { createEntityListCompatibilityProcedure } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
-
-const list = createEntityListCompatibilityProcedure(
-  ENTITY_KERNEL_BINDINGS.task,
-  ENTITY_BINDINGS.task.crud,
-);
 
 /**
  * The computed "what can I actually do" read behind the /tasks Next view:
@@ -149,7 +141,6 @@ const timeline = protectedProcedure
   .query(({ ctx, input }) => getTaskTimeline(ctx.db, input));
 
 export const taskRouter = createTRPCRouter({
-  list,
   listActionable,
   chartData,
   summary,

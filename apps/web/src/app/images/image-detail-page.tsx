@@ -3,20 +3,18 @@ import { ImageDetail } from "~/app/_components/images/image-detail";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
-import { useTRPC } from "~/integrations/trpc/react";
+import { imageDetailQueryOptions } from "~/entities/image.functions";
 
 interface ImageDetailPageProps {
   shortcode: string;
 }
 
 export default function ImageDetailPage({ shortcode }: ImageDetailPageProps) {
-  const api = useTRPC();
-
   const {
     data: imageDetails,
     isLoading,
     error,
-  } = useQuery(api.image.getByID.queryOptions({ id: shortcode }));
+  } = useQuery(imageDetailQueryOptions(shortcode));
 
   if (isLoading) {
     return (

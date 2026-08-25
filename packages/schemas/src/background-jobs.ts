@@ -229,6 +229,11 @@ export const backgroundBatchSummarySchema = z.object(
   backgroundBatchSummaryFields,
 );
 
+export const backgroundBatchBrowserSummarySchema =
+  backgroundBatchSummarySchema.extend({
+    metadata: z.json().nullable(),
+  });
+
 export type BackgroundBatchSummary = z.infer<
   typeof backgroundBatchSummarySchema
 >;

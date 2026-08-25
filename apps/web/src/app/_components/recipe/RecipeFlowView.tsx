@@ -31,7 +31,7 @@ import {
 import { useIsMobile } from "~/hooks/useMobile";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidateTRPCQueries, queryKeys } from "~/lib/query-keys";
+import { invalidateQueryRoots, queryKeys } from "~/lib/query-keys";
 import { CopyJsonButton } from "./copy-debug-button";
 import { RecipeFlowMap, RecipeFlowTable } from "./RecipeFlowRenderers";
 
@@ -125,7 +125,7 @@ export function RecipeFlowView({
       onSuccess: (_data, variables) => {
         setGenerationError(null);
         setGuidanceOpen(false);
-        invalidateTRPCQueries(queryClient, [queryKeys.recipe.flow]);
+        invalidateQueryRoots(queryClient, [queryKeys.recipe.flow]);
         if (variables.force) toast.success("Recipe flow regenerated");
       },
       onError: (error) => {

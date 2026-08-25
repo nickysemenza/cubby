@@ -30,8 +30,6 @@ import {
 } from "@cubby/schemas/project";
 import { vendorOptionsOut } from "@cubby/schemas/vendor";
 import { z } from "zod";
-import { ENTITY_BINDINGS } from "~/server/entity-bindings";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import {
   deleteExpensesWithPurchaseEffects,
   expenseAnalytics,
@@ -58,17 +56,11 @@ import { vendorOptions as loadVendorOptions } from "~/server/repo/vendor";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
 import { TraceNames, withTrace } from "~/server/tracing";
 import { createBulkUpdatedMutation } from "../crud-factory";
-import { createEntityListCompatibilityProcedure } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 import {
   expenseAnalyzeTraceAttributes,
   expenseFacetTraceAttributes,
 } from "./expense-observability";
-
-const list = createEntityListCompatibilityProcedure(
-  ENTITY_KERNEL_BINDINGS.expense,
-  ENTITY_BINDINGS.expense.crud,
-);
 
 const deleteWithPurchaseEffects = protectedProcedure
   .input(deleteExpensesWithPurchaseEffectsInput)
@@ -272,7 +264,6 @@ const bulkSetCostType = createBulkUpdatedMutation({
 });
 
 export const expenseRouter = createTRPCRouter({
-  list,
   deleteWithPurchaseEffects,
   chartData,
   analytics,

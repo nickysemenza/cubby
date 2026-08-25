@@ -71,6 +71,8 @@ import {
 } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { entityListQueryOptions } from "~/entities/entity-list.functions";
+import { projectImageSummariesQueryOptions } from "~/entities/image.functions";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { formatCurrency } from "~/lib/utils";
@@ -503,13 +505,13 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   const showBudget = budgetEstimate != null || chartExpenses.length > 0;
 
   const { data: imageMap } = useQuery({
-    ...api.image.imagesByProjectIds.queryOptions({ projectIds: [project.id] }),
+    ...projectImageSummariesQueryOptions({ projectIds: [project.id] }),
     staleTime: 5 * 60 * 1000,
   });
   const images = imageMap?.[project.id] ?? NO_IMAGES;
 
   const { data: childProjectsPage } = useQuery(
-    api.project.list.queryOptions({
+    entityListQueryOptions("project", {
       filters: { parentProjectId: project.id },
       sort: { orderBy: "name", direction: "asc" },
       pagination: { pageIndex: 0, pageSize: 200 },
@@ -521,7 +523,10 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   const [isCreatingExpense, setIsCreatingExpense] = useState(false);
 
   const { data: ganttSubtreePage } = useQuery(
-    api.project.list.queryOptions(projectGanttSubtreeQueryParams(project.id)),
+    entityListQueryOptions(
+      "project",
+      projectGanttSubtreeQueryParams(project.id),
+    ),
   );
   const ganttSubtreeProjects = ganttSubtreePage?.items ?? NO_CHILD_PROJECTS;
 
@@ -1198,7 +1203,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   // duplicated `useEntityDetail`'s `history` commonSection, which this page
   // can't use wholesale: project also declares `images`, and that common
   // section reads `data.images` — which `ProjectOut` doesn't carry (images
-  // come from the separate `imagesByProjectIds` query and already ride the
+  // come from the separate project-image projection and already ride the
   // hero), so it would render an always-empty Images card).
 
   const sections: DetailSection[] = [

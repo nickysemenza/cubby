@@ -41,9 +41,7 @@ import {
   repointProjectUsesOut,
 } from "@cubby/schemas/project";
 import { z } from "zod";
-import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 import { createAppError } from "~/server/errors/app-error";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import {
   attachProjectResources,
   detachProjectResources,
@@ -64,13 +62,7 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 import { createEntityListProcedure } from "../crud-factory";
-import { createEntityListCompatibilityProcedure } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
-
-const list = createEntityListCompatibilityProcedure(
-  ENTITY_KERNEL_BINDINGS.project,
-  ENTITY_BINDINGS.project.crud,
-);
 
 /**
  * `/projects?view=data&rows=tree`'s WBS page — same input and `{meta, items}`
@@ -261,7 +253,6 @@ const setToolUsage = protectedProcedure
   });
 
 export const projectRouter = createTRPCRouter({
-  list,
   tree,
   dashboardSummary,
   portfolioAnalytics,

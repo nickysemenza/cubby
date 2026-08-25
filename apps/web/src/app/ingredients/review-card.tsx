@@ -12,7 +12,7 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Kbd, KbdGroup } from "~/components/ui/kbd";
 import { Spinner } from "~/components/ui/spinner";
-import { useTRPC } from "~/integrations/trpc/react";
+import { usdaFoodListQueryOptions } from "~/entities/usda.functions";
 import { dedupeUsdaFoodsByUpc } from "~/lib/usda-food-stats";
 import type { EnrichmentProposal } from "~/server/services/ai-enrichment/proposals";
 import {
@@ -58,7 +58,6 @@ function QueueUsdaPicker({
   proposalPending: boolean;
   rowName: string;
 }) {
-  const api = useTRPC();
   const usda = proposal?.usda ?? null;
   const noMatch = usda != null && usda.food == null;
   const [showSearch, setShowSearch] = useState(false);
@@ -76,7 +75,7 @@ function QueueUsdaPicker({
 
   // Other USDA options (generic reference foods, relevance-ranked, deduped).
   const { data: altData, isLoading: altLoading } = useQuery(
-    api.usda.list.queryOptions({
+    usdaFoodListQueryOptions({
       filters: {
         nameFilter: rowName,
         foodsOnly: true,

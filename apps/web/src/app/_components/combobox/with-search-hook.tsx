@@ -11,7 +11,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { lazy, Suspense } from "react";
 import { useUpcAwareCreate } from "~/app/_components/products/use-upc-aware-create";
-import { entityDetailQueryOptions } from "~/entities/entity-detail";
+import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { entityListQueryOptions } from "~/entities/entity-list.functions";
 import { useTRPC } from "~/integrations/trpc/react";
 import {
@@ -380,7 +380,7 @@ export function WithProjectSearch({
   const searchingByCode = parsedCode != null;
 
   const { data, isLoading } = useQuery({
-    ...api.project.list.queryOptions({
+    ...entityListQueryOptions("project", {
       filters: { search: searchQuery },
       pagination,
     }),
@@ -442,7 +442,7 @@ export function WithTaskSearch({
   const searchingByCode = parsedCode != null;
 
   const { data, isLoading } = useQuery({
-    ...api.task.list.queryOptions({
+    ...entityListQueryOptions("task", {
       filters: { search: searchQuery },
       pagination,
     }),

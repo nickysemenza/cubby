@@ -47,7 +47,7 @@ vi.mock("@tanstack/react-query", () => ({
   },
 }));
 
-vi.mock("~/entities/entity-mutation", () => ({
+vi.mock("~/entities/entity-mutation.functions", () => ({
   entityMutationOptions: () => ({
     mutationFn: async (command: {
       action: "create" | "update" | "delete";

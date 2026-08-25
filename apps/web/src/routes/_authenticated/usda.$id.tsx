@@ -5,13 +5,13 @@ import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
+import { usdaFoodDetailQueryOptions } from "~/entities/usda.functions";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
-import { useTRPC } from "~/integrations/trpc/react";
 import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/usda/$id")({
   // Client-only for latency: this is the one de-flagged route whose loader
-  // blocks on an upstream rather than our own DB. `usda.getByID` reaches
+  // blocks on an upstream rather than our own DB. The USDA detail projection reaches
   // usda-api over a service binding whose internal work runs ~500ms-1s (see
   // the abort ceiling in server/clients/usda.ts), and server-rendering it
   // holds the whole document for that long. A skeleton that fills in beats a
@@ -19,7 +19,7 @@ export const Route = createFileRoute("/_authenticated/usda/$id")({
   ssr: false,
   loader: async ({ params, context }) => {
     const data = await context.queryClient.ensureQueryData(
-      context.trpc.usda.getByID.queryOptions({ id: parseInt(params.id, 10) }),
+      usdaFoodDetailQueryOptions(parseInt(params.id, 10)),
     );
     if (!data) throw notFound();
   },
@@ -41,11 +41,10 @@ export const Route = createFileRoute("/_authenticated/usda/$id")({
 
 function USDAFoodDetailPage() {
   const { id } = Route.useParams();
-  const api = useTRPC();
   const numericId = parseInt(id, 10);
 
   const { data: food } = useSuspenseQuery(
-    api.usda.getByID.queryOptions({ id: numericId }),
+    usdaFoodDetailQueryOptions(numericId),
   );
 
   // Loader throws notFound() for null — guaranteed non-null at runtime

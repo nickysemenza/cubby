@@ -28,7 +28,8 @@ import {
 } from "~/app/_components/inventory/hooks";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { entityDetailQueryOptions } from "~/entities/entity-detail";
+import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityListQueryOptions } from "~/entities/entity-list.functions";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 
@@ -111,7 +112,7 @@ export default function BulkInventoryForm({
     isFetching: inventoryFetching,
     dataUpdatedAt,
   } = useQuery({
-    ...api.inventory.list.queryOptions({
+    ...entityListQueryOptions("inventory", {
       sort: { orderBy: "createdAt", direction: "desc" },
       pagination: { pageIndex: 0, pageSize: BULK_EDIT_PAGE_SIZE },
       filters: { locationIdFilter: selectedLocation?.id ?? "" },

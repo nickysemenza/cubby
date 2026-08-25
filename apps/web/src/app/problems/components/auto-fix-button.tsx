@@ -16,7 +16,7 @@ import {
 } from "~/components/ui/tooltip";
 import { useTRPC, useTRPCClient } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidatesFor, invalidateTRPCQueries } from "~/lib/query-keys";
+import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
 import { PROBLEMS_QUERY_STALE_TIME } from "../problem-query-freshness";
 import { type AutoFixTask, buildAutoFixPlan } from "./auto-fix-registry";
 
@@ -84,7 +84,7 @@ export function AutoFixButton({ problems }: { problems: AllProblems }) {
       setRunning({ done: index + 1, total: tasks.length });
     }
 
-    invalidateTRPCQueries(queryClient, [...invalidate]);
+    invalidateQueryRoots(queryClient, [...invalidate]);
     setRunning(null);
 
     if (failures.length) {

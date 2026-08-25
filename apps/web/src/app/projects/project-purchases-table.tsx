@@ -1,7 +1,7 @@
 import type { ProjectShortcode } from "@cubby/schemas/identifiers";
 import type { ExpenseOut } from "@cubby/schemas/project";
 import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/purchase";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import {
   createNameColumn,
   createPlainDateColumn,
@@ -10,11 +10,12 @@ import {
 import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
+import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityListQueryOptions } from "~/entities/entity-list.functions";
 import { formatCurrency } from "~/lib/utils";
 import {
   buildProjectPurchaseRows,
@@ -73,7 +74,10 @@ export function ProjectPurchasesTable({
   /** The project's ledger rows — the subtree set the page already holds. */
   expenses: readonly ExpenseOut[];
 }) {
-  const api = useTRPC();
+  const listQueryOptions: ListQueryOptionsFn<PurchaseFilters> = useCallback(
+    (params) => entityListQueryOptions("purchase", params),
+    [],
+  );
   const helper = useMemo(
     () => createCubbyColumnHelper<ProjectPurchaseRow>(),
     [],
@@ -156,7 +160,7 @@ export function ProjectPurchasesTable({
 
   const list = useEntityList<ProjectPurchaseRow, PurchaseFilters, PurchaseOut>({
     entity: "purchase",
-    queryOptions: api.purchase.list.queryOptions,
+    queryOptions: listQueryOptions,
     scopeFilters: scope,
     columns,
     tree,

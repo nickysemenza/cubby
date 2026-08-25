@@ -25,7 +25,6 @@ export const recipeRouter = createTRPCRouter({
   getCookbookDiff: recipeImportProcedures.getCookbookDiff,
   previewNotionSync: recipeImportProcedures.previewNotionSync,
   importNotionSyncStream: recipeImportProcedures.importNotionSyncStream,
-  listCookbooks: recipeImportProcedures.listCookbooks,
   setCookbookProduct: recipeImportProcedures.setCookbookProduct,
   deleteCookbook: recipeImportProcedures.deleteCookbook,
   reprocessCookbook: recipeImportProcedures.reprocessCookbook,

@@ -1,7 +1,12 @@
 /** Image data boundary: derive association and cascade behavior from INCOMING_EDGES.image. */
 
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
-import type { ImageId, ProjectId, RecipeId } from "@cubby/schemas/identifiers";
+import type {
+  ImageId,
+  ImageShortcode,
+  ProjectId,
+  RecipeId,
+} from "@cubby/schemas/identifiers";
 import {
   unsafeImageId,
   unsafeImageShortcode,
@@ -1716,14 +1721,14 @@ export const getImagesByProjectIds = async (
   db: Database,
   projectIds: ProjectId[],
 ): Promise<
-  Record<string, Array<{ id: string; url: string; filename: string }>>
+  Record<string, Array<{ id: ImageShortcode; url: string; filename: string }>>
 > => {
   if (projectIds.length === 0) return {};
 
   const rows = await getDb(db)
     .select({
       projectId: projectImage.projectId,
-      id: image.id,
+      shortcode: image.shortcode,
       url: image.url,
       filename: image.filename,
     })
@@ -1741,12 +1746,12 @@ export const getImagesByProjectIds = async (
 
   const result: Record<
     string,
-    Array<{ id: string; url: string; filename: string }>
+    Array<{ id: ImageShortcode; url: string; filename: string }>
   > = {};
   for (const row of rows) {
     const list = result[row.projectId] ?? [];
     list.push({
-      id: row.id,
+      id: unsafeImageShortcode(row.shortcode),
       url: row.url,
       filename: row.filename,
     });

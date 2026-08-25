@@ -1,12 +1,12 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { defaultPagination } from "~/app/_components/data-table/tableUtils";
-import * as entityRuntime from "~/server/entity-runtime.server";
-import { authenticatedEntityServerFunction } from "~/server/middleware/entity-server-functions";
 import {
-  observedEntityCall,
-  unwrapEntityTransportResult,
-} from "./entity-transport";
+  observedStartCall,
+  unwrapStartOperationResult,
+} from "~/integrations/tanstack-query/start-transport";
+import * as entityRuntime from "~/server/entity-runtime.server";
+import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
 import { getEntityFilters } from "./filter-manifest";
 import {
   buildFiltersFromManifest,
@@ -16,22 +16,22 @@ import {
 import {
   type EntityListInputByEntity,
   type EntityListResultByEntity,
-  entityListInputSchema,
   type ListEntity,
   parseEntityListInput,
   parseEntityListResult,
 } from "./generated/entity-lists.gen";
 
-const entityListWireInputSchema = entityListInputSchema;
+const entityListWireInputSchema = (input: unknown) =>
+  input as EntityListInputByEntity[ListEntity];
 
 const getEntityListTransport = createServerFn({ method: "POST" })
-  .middleware([authenticatedEntityServerFunction])
+  .middleware([authenticatedStartServerFunction])
   .validator(entityListWireInputSchema)
   .handler(
     async ({ data, context }) =>
       await entityRuntime.getEntityList({
         data,
-        request: context.entityRuntime,
+        request: context.startOperation,
       }),
   );
 
@@ -95,14 +95,14 @@ async function getEntityList<E extends ListEntity>(options: {
   data: EntityListInputByEntity[E];
   signal?: AbortSignal;
 }): Promise<EntityListResultByEntity[E]> {
-  return await observedEntityCall({
+  return await observedStartCall({
     operation: "entity.list",
     entity: options.data.entity,
     input: options.data,
     call: async (headers) =>
       parseEntityListResult(
         options.data.entity,
-        unwrapEntityTransportResult(
+        unwrapStartOperationResult(
           "entity.list",
           await getEntityListTransport({
             data: options.data,

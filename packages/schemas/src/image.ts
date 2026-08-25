@@ -1,11 +1,17 @@
 import { z } from "zod";
-import { oneOrMany, presenceFilter } from "./pagination";
+import { mutationSideEffectsSchema } from "./background-jobs";
+import {
+  createPaginatedResponseSchemaWithContext,
+  createSortPaginationFields,
+  oneOrMany,
+  presenceFilter,
+} from "./pagination";
 import { auditDateFilterFields } from "./base-entity";
 import { purchaseDocumentKind } from "./purchase";
 import type { ShortcodeEntity } from "./entity-manifest";
 import { anyShortcodeSchema } from "./identifiers";
 import { entityImage } from "./entity";
-import { id, imageShortcode } from "./identifiers";
+import { id, imageShortcode, projectShortcode } from "./identifiers";
 
 // Image status values - single source of truth for both Zod and Drizzle
 export const imageStatusValues = ["PENDING", "UPLOADED", "FAILED"] as const;
@@ -416,6 +422,44 @@ export const imageWithEntitySchema = z.object({
 });
 
 export type ImageWithEntity = z.infer<typeof imageWithEntitySchema>;
+
+export const imageBrowserListInput = z.object({
+  filters: imageListFiltersSchema,
+  ...createSortPaginationFields({
+    sortableFields: imageSortableFields,
+    defaultSort: "createdAt",
+  }),
+});
+export const imageBrowserListOut = createPaginatedResponseSchemaWithContext(
+  imageWithEntitySchema,
+  "image",
+);
+
+export const imageBrowserUpdateInput = z.object({
+  id: imageShortcode,
+  data: imageUpdateInput,
+});
+
+export const imageBrowserDeleteInput = z.object({
+  ids: z.array(imageShortcode).min(1).max(500),
+});
+export const imageBrowserDeleteOut = z.object({
+  deleted: z.number().int().nonnegative(),
+  sideEffects: mutationSideEffectsSchema,
+});
+
+export const projectImageSummarySchema = z.object({
+  id: imageShortcode,
+  url: z.url(),
+  filename: z.string(),
+});
+export const projectImageSummariesInput = z.object({
+  projectIds: z.array(projectShortcode).max(500),
+});
+export const projectImageSummariesOut = z.record(
+  projectShortcode,
+  z.array(projectImageSummarySchema),
+);
 
 export const importImageFromUrlResponseSchema = z.object({
   imageId: imageShortcode,

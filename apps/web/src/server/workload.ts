@@ -17,9 +17,8 @@ export function classifyHttpWorkload(
   if (pathname.startsWith("/api/trpc")) {
     return headers?.get("x-trpc-source") === "tanstack-start" ? "ui" : "other";
   }
-  if (pathname.startsWith("/api/") || pathname.startsWith("/_serverFn/")) {
-    return "other";
-  }
+  if (pathname.startsWith("/_serverFn/")) return "ui";
+  if (pathname.startsWith("/api/")) return "other";
   const accept = headers?.get("accept") ?? "";
   const fetchMode = headers?.get("sec-fetch-mode") ?? "";
   // Static assets and arbitrary non-browser fetches must not inflate browser

@@ -1,11 +1,10 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
-import { useTRPC } from "~/integrations/trpc/react";
 import {
   makeBatchStatusFetcher,
   watchBatchesAndInvalidate,
 } from "~/lib/background-batch-polling";
-import { invalidatesFor, invalidateTRPCQueries } from "~/lib/query-keys";
+import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
 
 interface SessionInvalidateOptions {
   // Also refresh the product-lookup caches (review/capture panes need this;
@@ -26,7 +25,6 @@ interface SessionInvalidateOptions {
  * that changes refetch scope for the review/capture panes.
  */
 export function useSessionMutations() {
-  const api = useTRPC();
   const queryClient = useQueryClient();
 
   const sessionInvalidateKeys = useMemo(
@@ -43,17 +41,17 @@ export function useSessionMutations() {
       const keys = includeProductLookup
         ? [...sessionInvalidateKeys, ...invalidatesFor("product", "lookup")]
         : sessionInvalidateKeys;
-      invalidateTRPCQueries(queryClient, keys);
+      invalidateQueryRoots(queryClient, keys);
       if (watch) {
         void watchBatchesAndInvalidate({
           queryClient,
           result,
           invalidateKeys: keys,
-          fetchBatchStatus: makeBatchStatusFetcher(queryClient, api),
+          fetchBatchStatus: makeBatchStatusFetcher(queryClient),
         });
       }
     },
-    [queryClient, api, sessionInvalidateKeys],
+    [queryClient, sessionInvalidateKeys],
   );
 
   return { sessionInvalidateKeys, invalidate };

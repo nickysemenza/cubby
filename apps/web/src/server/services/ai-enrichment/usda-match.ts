@@ -317,7 +317,7 @@ export async function retryUsdaMatch(
   db: Database,
   ingredientId: IngredientId,
 ): Promise<void> {
-  const { buildCrudServices } = await import("~/server/api/trpc");
+  const { buildCrudServices } = await import("~/server/request-context");
   const { usdaService } = buildCrudServices(db);
   const ingredient = await getIngredientByID(db, ingredientId);
   await suggestUsdaFood(usdaService, db, ingredient.name, { ingredientId });

@@ -467,7 +467,7 @@ export function createImageColumn<T extends BaseRow>(
     },
     // Reads `row.original` rather than `info.getValue()` — deliberately, and it
     // is load-bearing whenever `getImages` closes over separately-fetched data
-    // (projects hydrate theirs from `image.imagesByProjectIds`, not from the
+    // (projects hydrate theirs from the project-image Start projection, not from the
     // list row). TanStack memoizes each accessor result into `row._valuesCache`
     // and only rebuilds the core row model when `data` changes, NOT when
     // `columns` change — so a rebuilt column def carrying a fresh closure still

@@ -10,15 +10,15 @@ import { DropdownMenuSeparator } from "~/components/ui/dropdown-menu";
 import type { EditableEntity } from "~/entities/editing/types";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import {
-  cancelTRPCQueries,
-  invalidateTRPCQueries,
-  normalizeTRPCQueryKey,
+  cancelQueryRoots,
+  invalidateQueryRoots,
+  normalizeQueryRoot,
 } from "~/lib/query-keys";
 import { VerbMenuItem, verbBulkAction } from "../actions/action-verb-ui";
 import type { BulkAction } from "../data-table/bulk-actions.types";
 
 interface DeletableConfig {
-  /** tRPC delete mutation options factory */
+  /** Delete mutation options factory. */
   mutationOptions: (callbacks: {
     onSuccess: () => void;
     onError: (err: { message?: string }) => void;
@@ -173,7 +173,7 @@ export function useOptimisticDelete<
     const onSuccess = () => {
       toast.success(`${deletable.entityLabel} deleted`);
       if (!registeredDelete) {
-        invalidateTRPCQueries(queryClient, deletable.invalidateKeys);
+        invalidateQueryRoots(queryClient, deletable.invalidateKeys);
       }
     };
     const onError = (err: { message?: string }) => {
@@ -203,14 +203,14 @@ export function useOptimisticDelete<
     return {
       ...baseMutationOptions,
       onMutate: async (variables: { ids: string[] }) => {
-        await cancelTRPCQueries(queryClient, deletable.invalidateKeys);
+        await cancelQueryRoots(queryClient, deletable.invalidateKeys);
 
         // Snapshot the previous value for rollback
         const previousData: Array<[QueryKey, unknown]> = [];
         for (const key of deletable.invalidateKeys) {
           previousData.push(
             ...queryClient.getQueriesData({
-              queryKey: normalizeTRPCQueryKey(key),
+              queryKey: normalizeQueryRoot(key),
             }),
           );
         }
@@ -219,7 +219,7 @@ export function useOptimisticDelete<
         const deletedIds = new Set(variables.ids);
         for (const key of deletable.invalidateKeys) {
           queryClient.setQueriesData(
-            { queryKey: normalizeTRPCQueryKey(key) },
+            { queryKey: normalizeQueryRoot(key) },
             (old: unknown) => removeDeletedIdsFromCache(old, deletedIds),
           );
         }
@@ -237,7 +237,7 @@ export function useOptimisticDelete<
             queryClient.setQueryData(key, data);
           }
         }
-        // Call the base onError from tRPC (cast to avoid type mismatch)
+        // Call the mutation factory's base error callback.
         if (baseMutationOptions.onError) {
           (
             baseMutationOptions.onError as (

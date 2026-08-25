@@ -19,7 +19,7 @@ function findTypeScriptFiles(directory: string): string[] {
 describe("performance workload classification", () => {
   it.each([
     ["/api/auth/session", "other"],
-    ["/_serverFn/getGuardSession", "other"],
+    ["/_serverFn/getGuardSession", "ui"],
     ["/api/mcp", "mcp"],
     ["/api/debug/timing", "other"],
   ] as const)("classifies HTTP path %s as %s", (path, workload) => {

@@ -8,7 +8,7 @@ import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/integrations/trpc/react";
-import { invalidateTRPCQueries } from "~/lib/query-keys";
+import { invalidateQueryRoots } from "~/lib/query-keys";
 import {
   ProductImageSummariesProvider,
   useHydratedProductImages,
@@ -59,7 +59,7 @@ export function RelatednessRail({
     if (!refresh.data?.batchId || indexing || !batch.data) return;
     // The worker has reached a terminal state. Re-read the product's status
     // rather than leaving the rail on the request-time readiness snapshot.
-    invalidateTRPCQueries(queryClient, [
+    invalidateQueryRoots(queryClient, [
       api.relatedness.product.queryKey(product.id),
     ]);
   }, [

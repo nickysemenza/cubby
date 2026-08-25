@@ -34,14 +34,14 @@ import { NoneValue } from "~/components/ui/none-value";
 import { taskCaptureRequest } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityDetailQueryOptions } from "~/entities/entity-detail";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityListQueryOptions } from "~/entities/entity-list.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { patchListItem } from "~/lib/optimistic-list";
 import {
-  cancelTRPCQueries,
+  cancelQueryRoots,
+  invalidateQueryRoots,
   invalidatesFor,
-  invalidateTRPCQueries,
 } from "~/lib/query-keys";
 import { DependencyPicker } from "../_components/data-table/dependency-picker";
 import {
@@ -90,27 +90,21 @@ const SUBTASKS_SORT = { orderBy: "createdAt", direction: "asc" } as const;
  * subtask here never touches the parent's own status.
  */
 function SubtaskChecklist({ task }: { task: TaskOut }) {
-  const api = useTRPC();
   const queryClient = useQueryClient();
   const [newSubtaskName, setNewSubtaskName] = useState("");
   const [pendingSubtaskName, setPendingSubtaskName] = useState<string | null>(
     null,
   );
 
-  const { data: subtasksPage } = useQuery(
-    api.task.list.queryOptions({
-      filters: { parentTaskId: task.id },
-      sort: SUBTASKS_SORT,
-      pagination: SUBTASKS_PAGINATION,
-    }),
-  );
-  const subtasks = subtasksPage?.items ?? NO_SUBTASKS;
-
-  const subtasksKey = api.task.list.queryKey({
+  const subtasksOptions = entityListQueryOptions("task", {
     filters: { parentTaskId: task.id },
     sort: SUBTASKS_SORT,
     pagination: SUBTASKS_PAGINATION,
   });
+  const { data: subtasksPage } = useQuery(subtasksOptions);
+  const subtasks = subtasksPage?.items ?? NO_SUBTASKS;
+
+  const subtasksKey = subtasksOptions.queryKey;
 
   // Keep this deliberately narrow: this checkbox owns one exact checklist
   // query, so its update never blocks or patches the rest of the detail page.
@@ -119,7 +113,7 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
     mutationKey: toggleBase.mutationKey,
     mutationFn: toggleBase.mutationFn,
     onMutate: async (variables) => {
-      await cancelTRPCQueries(queryClient, [subtasksKey]);
+      await cancelQueryRoots(queryClient, [subtasksKey]);
       const previous =
         queryClient.getQueryData<typeof subtasksPage>(subtasksKey);
       queryClient.setQueryData<typeof subtasksPage>(subtasksKey, (current) =>
@@ -137,7 +131,7 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
       }
       toast.error(getErrorMessage(error));
     },
-    onSettled: () => invalidateTRPCQueries(queryClient, invalidatesFor("task")),
+    onSettled: () => invalidateQueryRoots(queryClient, invalidatesFor("task")),
   });
 
   const createBase = entityMutationOptionsFactory("task", "create")();
@@ -145,7 +139,7 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
     mutationKey: createBase.mutationKey,
     mutationFn: createBase.mutationFn,
     onMutate: async () => {
-      await cancelTRPCQueries(queryClient, [subtasksKey]);
+      await cancelQueryRoots(queryClient, [subtasksKey]);
       const previous =
         queryClient.getQueryData<typeof subtasksPage>(subtasksKey);
       const name = newSubtaskName.trim();
@@ -177,7 +171,7 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
     },
     onSettled: () => {
       setPendingSubtaskName(null);
-      invalidateTRPCQueries(queryClient, invalidatesFor("task"));
+      invalidateQueryRoots(queryClient, invalidatesFor("task"));
     },
   });
 

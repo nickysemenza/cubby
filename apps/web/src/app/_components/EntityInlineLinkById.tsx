@@ -3,8 +3,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { skipToken, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Spinner } from "~/components/ui/spinner";
-import { entityQueryOptions } from "~/entities/entity-query";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityPreviewQueryOptions } from "~/entities/entity-query";
 import { EntityInlineLink } from "./EntityInlineLink";
 
 // Entity types this inline link resolves to a name via the detail transport. Inventory &
@@ -32,8 +31,6 @@ export function EntityInlineLinkById({
   entityId,
   compact,
 }: EntityInlineLinkByIdProps) {
-  const trpc = useTRPC();
-
   // Resolve the name via the shared entity-detail mapping for the fetchable
   // inline-link types; everything else (inventory, cookbook, or an out-of-union runtime
   // entityType from a legacy audit row) gets a skipped query so useQuery never
@@ -44,13 +41,13 @@ export function EntityInlineLinkById({
   const queryOptions = useMemo(
     () =>
       isFetchable
-        ? entityQueryOptions(trpc, entityType as Entity, entityId)
+        ? entityPreviewQueryOptions(entityType as Entity, entityId)
         : { queryKey: ["invalid"] as const, queryFn: skipToken },
-    [isFetchable, entityType, entityId, trpc],
+    [isFetchable, entityType, entityId],
   );
 
   // Single query hook instead of 4 disabled ones
-  // biome-ignore lint/suspicious/noExplicitAny: useQuery cannot narrow the mixed Start/tRPC query-options union
+  // biome-ignore lint/suspicious/noExplicitAny: useQuery cannot narrow the mixed generated query-options union
   const query = useQuery(queryOptions as any);
 
   // Inventory entries have no getByID that returns product info, so there is

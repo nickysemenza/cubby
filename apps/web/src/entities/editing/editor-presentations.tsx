@@ -53,7 +53,7 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import type { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { Switch } from "~/components/ui/switch";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityListQueryOptions } from "~/entities/entity-list.functions";
 import { purchaseLabel } from "~/lib/purchase-label";
 import type {
   EntityEditContext,
@@ -462,7 +462,6 @@ type CandidateOption = {
 };
 
 function WishFields({ form, record }: EntityEditorFieldsProps) {
-  const api = useTRPC();
   const [productSearch, setProductSearch] = useState("");
   const [selectedProducts, setSelectedProducts] = useState<CandidateOption[]>(
     [],
@@ -494,7 +493,7 @@ function WishFields({ form, record }: EntityEditorFieldsProps) {
   }, [candidates]);
 
   const productsQuery = useQuery(
-    api.product.search.queryOptions({
+    entityListQueryOptions("product", {
       filters: {
         nameFilter: debouncedProductSearch.trim() || undefined,
         categoryFilter: "tools",

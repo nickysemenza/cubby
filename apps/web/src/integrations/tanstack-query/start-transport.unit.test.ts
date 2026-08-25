@@ -1,18 +1,22 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  EntityTransportError,
-  observedEntityCall,
-  unwrapEntityTransportResult,
-} from "./entity-transport";
+  observedStartCall,
+  StartOperationError,
+  unwrapStartOperationResult,
+} from "./start-transport";
 
 vi.mock("~/lib/flags", () => ({ getFlag: () => true }));
 
-afterEach(() => vi.restoreAllMocks());
+beforeEach(() => vi.stubGlobal("window", {}));
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
-describe("Start entity query logging", () => {
+describe("Start operation logging", () => {
   it("logs semantic request and result events", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
-    const result = await observedEntityCall({
+    const result = await observedStartCall({
       operation: "entity.list",
       entity: "product",
       input: { entity: "product", filters: {} },
@@ -33,7 +37,7 @@ describe("Start entity query logging", () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     await expect(
-      observedEntityCall({
+      observedStartCall({
         operation: "entity.filterOptions",
         input: {},
         call: async () => {
@@ -46,13 +50,13 @@ describe("Start entity query logging", () => {
 
   it("rejects undefined before TanStack Query receives it", () => {
     expect(() =>
-      unwrapEntityTransportResult("entity.detail", {
+      unwrapStartOperationResult("entity.detail", {
         ok: true,
         data: undefined,
       }),
-    ).toThrowError(EntityTransportError);
+    ).toThrowError(StartOperationError);
     expect(
-      unwrapEntityTransportResult("entity.detail", { ok: true, data: null }),
+      unwrapStartOperationResult("entity.detail", { ok: true, data: null }),
     ).toBeNull();
   });
 });

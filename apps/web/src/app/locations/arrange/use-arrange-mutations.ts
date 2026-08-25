@@ -9,9 +9,9 @@ import { toast } from "sonner";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
-  cancelTRPCQueries,
+  cancelQueryRoots,
+  invalidateQueryRoots,
   invalidatesFor,
-  invalidateTRPCQueries,
 } from "~/lib/query-keys";
 import { applyItemMove, applyLocationMove } from "./arrange-tree-utils";
 import type { ItemDragData } from "./arrange-types";
@@ -42,7 +42,7 @@ export function useArrangeMutations() {
     mutationFn: reparentBase.mutationFn,
     onMutate: async (vars): Promise<OptimisticContext> => {
       const dragId = vars.ids[0];
-      await cancelTRPCQueries(queryClient, [treeKey]);
+      await cancelQueryRoots(queryClient, [treeKey]);
       const prev = queryClient.getQueryData<InfLocation[]>(treeKey);
       if (prev && dragId) {
         queryClient.setQueryData(
@@ -63,7 +63,7 @@ export function useArrangeMutations() {
       toast.error(getErrorMessage(err));
     },
     onSettled: () =>
-      invalidateTRPCQueries(queryClient, invalidatesFor("inventory")),
+      invalidateQueryRoots(queryClient, invalidatesFor("inventory")),
   });
 
   const moveBase = api.inventory.bulkMove.mutationOptions();
@@ -72,7 +72,7 @@ export function useArrangeMutations() {
     mutationFn: moveBase.mutationFn,
     onMutate: async (vars): Promise<OptimisticContext> => {
       const first = vars.items[0];
-      await cancelTRPCQueries(queryClient, [treeKey]);
+      await cancelQueryRoots(queryClient, [treeKey]);
       const prev = queryClient.getQueryData<InfLocation[]>(treeKey);
       if (prev && first) {
         queryClient.setQueryData(
@@ -92,7 +92,7 @@ export function useArrangeMutations() {
       toast.error(getErrorMessage(err));
     },
     onSettled: () =>
-      invalidateTRPCQueries(queryClient, invalidatesFor("inventory")),
+      invalidateQueryRoots(queryClient, invalidatesFor("inventory")),
   });
 
   return {

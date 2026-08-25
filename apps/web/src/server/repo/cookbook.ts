@@ -175,8 +175,9 @@ const getCookbookById = async (db: Database, id: CookbookId) => {
  * Cookbooks with their non-deleted recipe counts, for the browse index. A left
  * join keeps cookbooks with zero current recipes visible.
  */
-export const listCookbooks = async (
+const readCookbookSummaries = async (
   db: Database,
+  shortcode?: CookbookShortcode,
 ): Promise<CookbookSummary[]> => {
   const rows = await getDb(db)
     .select({
@@ -202,7 +203,12 @@ export const listCookbooks = async (
       product,
       and(eq(product.id, cookbook.productId), notDeleted(product)),
     )
-    .where(notDeleted(cookbook))
+    .where(
+      and(
+        notDeleted(cookbook),
+        shortcode ? eq(cookbook.shortcode, shortcode) : undefined,
+      ),
+    )
     .groupBy(cookbook.id, image.url, product.id)
     .orderBy(cookbook.name);
 
@@ -228,6 +234,15 @@ export const listCookbooks = async (
         : null,
   }));
 };
+
+export const listCookbooks = async (db: Database): Promise<CookbookSummary[]> =>
+  await readCookbookSummaries(db);
+
+export const getCookbookSummary = async (
+  db: Database,
+  shortcode: CookbookShortcode,
+): Promise<CookbookSummary | null> =>
+  (await readCookbookSummaries(db, shortcode))[0] ?? null;
 
 /**
  * Point a cookbook at the physical copy on the shelf, or clear the link
@@ -269,11 +284,10 @@ export const setCookbookProduct = async (
     return unsafeCookbookShortcode(updated.shortcode);
   });
 
-  // Re-read through the list query — outside the transaction, since
-  // `listCookbooks` takes the branded `Database` — so the caller gets the same
-  // hydrated shape (cover url, recipe counts, product) the browse index and
-  // the detail page already render, not a second subtly different one.
-  const summary = (await listCookbooks(db)).find((cb) => cb.id === shortcode);
+  // Re-read through the shared projection outside the transaction so the
+  // caller gets the same hydrated shape as the browse index without loading
+  // every cookbook for a one-row mutation result.
+  const summary = await getCookbookSummary(db, shortcode);
   if (!summary) {
     throw createAppError("COOKBOOK_NOT_FOUND", `Cookbook ${id} not found`);
   }

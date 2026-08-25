@@ -4,10 +4,8 @@ import type {
 } from "@cubby/schemas/background-jobs";
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
-import type { useTRPC } from "~/integrations/trpc/react";
-import { invalidateTRPCQueries } from "~/lib/query-keys";
-
-type Api = ReturnType<typeof useTRPC>;
+import { backgroundBatchSummaryQueryOptions } from "~/lib/background-batch.functions";
+import { invalidateQueryRoots } from "~/lib/query-keys";
 
 /**
  * The standard `fetchBatchStatus` poller passed to {@link watchBatchesAndInvalidate}:
@@ -15,11 +13,11 @@ type Api = ReturnType<typeof useTRPC>;
  * never loads the batch's jobs: large mutation batches can contain thousands
  * of rows, while this watcher needs one status field.
  */
-export function makeBatchStatusFetcher(queryClient: QueryClient, api: Api) {
+export function makeBatchStatusFetcher(queryClient: QueryClient) {
   return (batchId: string): Promise<BackgroundBatchStatus> =>
     queryClient
       .fetchQuery({
-        ...api.backgroundJobs.getBatchSummary.queryOptions({ batchId }),
+        ...backgroundBatchSummaryQueryOptions({ batchId }),
         staleTime: 0,
       })
       .then((batch) => batch.status);
@@ -51,7 +49,7 @@ function extractSideEffects(result: unknown): MutationSideEffects | undefined {
 /**
  * Mutations enqueue background work (recipe totals, location valuation, location
  * AI) whose results land *after* the mutation resolves. The mutation's immediate
- * `invalidateTRPCQueries` therefore refetches pre-recompute data and never sees
+ * `invalidateQueryRoots` therefore refetches pre-recompute data and never sees
  * the fresh values. This polls the returned batches and invalidates again once
  * they drain, so the UI self-heals without a manual refresh.
  *
@@ -98,5 +96,5 @@ export async function watchBatchesAndInvalidate({
     pending = stillPending;
   }
 
-  invalidateTRPCQueries(queryClient, invalidateKeys);
+  invalidateQueryRoots(queryClient, invalidateKeys);
 }

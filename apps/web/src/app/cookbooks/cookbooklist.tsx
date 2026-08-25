@@ -12,26 +12,23 @@ import { createCubbyColumnHelper } from "~/app/_components/data-table/table-feat
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { usePageCount } from "~/components/page/Page";
-import { useTRPC } from "~/integrations/trpc/react";
+import { cookbookListQueryOptions } from "~/entities/cookbook.functions";
 import { useCookbookDelete } from "./use-cookbook-delete";
 
 /**
  * Browse-by-source index: every cookbook a recipe was imported from, with its
- * author and recipe count. Backed by the `Cookbook` table (`recipe.listCookbooks`).
+ * author and recipe count. Backed by the Cookbook Start projection.
  * Each row links to the cookbook detail page, which lists that book's recipes.
  *
  * Client-paged like the other unpaginated small rosters — `listCookbooks`
  * returns the whole browse index in one shot, no server pagination to drive.
  */
 export function CookbookList() {
-  const api = useTRPC();
   const columnHelper = useMemo(
     () => createCubbyColumnHelper<CookbookSummary>(),
     [],
   );
-  const { data: cookbooks } = useSuspenseQuery(
-    api.recipe.listCookbooks.queryOptions(),
-  );
+  const { data: cookbooks } = useSuspenseQuery(cookbookListQueryOptions());
   const { requestDelete, dialog } = useCookbookDelete();
   const { onRowClick, onRowHover, onRowHoverEnd, PreviewSheet } =
     useEntityPreview("cookbook");

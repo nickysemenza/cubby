@@ -8,13 +8,12 @@ import type {
 } from "~/entities/editing/intent-types";
 import type { EditableEntity } from "~/entities/editing/types";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
-import { useTRPC } from "~/integrations/trpc/react";
 import {
   makeBatchStatusFetcher,
   watchBatchesAndInvalidate,
 } from "~/lib/background-batch-polling";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidateTRPCQueries } from "~/lib/query-keys";
+import { invalidateQueryRoots } from "~/lib/query-keys";
 
 /** A mutation-options factory supplied by either Start or a specialized transport. */
 export type MutationOptionsFn = (opts: never) => UseMutationOptions<
@@ -88,7 +87,6 @@ export function useActionMutation<TFn extends MutationOptionsFn>({
   intent?: string;
 }) {
   const queryClient = useQueryClient();
-  const api = useTRPC();
   const commands = useEntityCommands(entity ?? "product");
 
   const mutationOptions = mutationFn({
@@ -100,13 +98,13 @@ export function useActionMutation<TFn extends MutationOptionsFn>({
         );
       }
       if (!entity) {
-        invalidateTRPCQueries(queryClient, invalidateKeys);
+        invalidateQueryRoots(queryClient, invalidateKeys);
         // Re-invalidate once any queued background work the action enqueued drains.
         void watchBatchesAndInvalidate({
           queryClient,
           result: data,
           invalidateKeys,
-          fetchBatchStatus: makeBatchStatusFetcher(queryClient, api),
+          fetchBatchStatus: makeBatchStatusFetcher(queryClient),
         });
       }
       onSuccess?.(data);

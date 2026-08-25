@@ -24,7 +24,7 @@ vi.mock("~/server/background-dispatch", () => ({
 vi.mock("~/server/repo/ingredient", () => ({
   getIngredientByID: mocks.getIngredientByID,
 }));
-vi.mock("~/server/api/trpc", () => ({
+vi.mock("~/server/request-context", () => ({
   buildCrudServices: mocks.buildCrudServices,
 }));
 vi.mock("~/server/clients/anthropic", () => ({

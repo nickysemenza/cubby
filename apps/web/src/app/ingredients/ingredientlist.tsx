@@ -27,7 +27,7 @@ import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListQueryOptions } from "~/entities/entity-list.functions";
 import { useTRPCClient } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidatesFor, invalidateTRPCQueries } from "~/lib/query-keys";
+import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import {
@@ -285,7 +285,7 @@ export function IngredientList() {
       });
       // A merge's blast radius is wide: ingredients are deleted, products
       // repoint, recipe totals are recomputed, and meals read those totals.
-      invalidateTRPCQueries(queryClient, invalidatesFor("ingredient", "merge"));
+      invalidateQueryRoots(queryClient, invalidatesFor("ingredient", "merge"));
       toast.success(
         savedWithBackgroundWork(
           result.sideEffects,

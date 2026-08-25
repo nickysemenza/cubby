@@ -10,7 +10,7 @@ import { cn } from "~/lib/utils";
  * The minimum a PDF viewer actually needs. Deliberately NOT the full `ImageOut`:
  * a purchase's `images` are a `{id,url,filename,contentType}` summary (a vendor event's
  * filed invoice), and demanding `key`/`size`/`status`/timestamps here forced that
- * caller into a per-document `image.getByID` round-trip just to satisfy the type.
+ * caller into a per-document detail round-trip just to satisfy the type.
  * `size` stays optional and the byte chip hides when it's absent.
  */
 export type ViewableDocument = Pick<ImageOut, "id" | "url" | "filename"> & {

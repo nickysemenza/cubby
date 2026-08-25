@@ -1308,7 +1308,11 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         "}\n\n" +
         "export function parseEntityDetailResult<E extends DetailEntity>(entity: E, value: unknown): EntityDetailByEntity[E];\n" +
         "export function parseEntityDetailResult(entity: DetailEntity, value: unknown): unknown {\n" +
-        "  return ENTITY_DETAIL_OUTPUT_SCHEMAS[entity].parse(value);\n" +
+        "  return getEntityDetailOutputSchema(entity).parse(value);\n" +
+        "}\n\n" +
+        "export function getEntityDetailOutputSchema<E extends DetailEntity>(entity: E): z.ZodType<EntityDetailByEntity[E]>;\n" +
+        "export function getEntityDetailOutputSchema(entity: DetailEntity): z.ZodType {\n" +
+        "  return ENTITY_DETAIL_OUTPUT_SCHEMAS[entity];\n" +
         "}\n",
     },
     {
@@ -1348,7 +1352,11 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         "}\n\n" +
         "export function parseEntityListResult<E extends ListEntity>(entity: E, value: unknown): EntityListResultByEntity[E];\n" +
         "export function parseEntityListResult(entity: ListEntity, value: unknown): unknown {\n" +
-        "  return ENTITY_LIST_OUTPUT_SCHEMAS[entity].parse(value);\n" +
+        "  return getEntityListOutputSchema(entity).parse(value);\n" +
+        "}\n\n" +
+        "export function getEntityListOutputSchema<E extends ListEntity>(entity: E): z.ZodType<EntityListResultByEntity[E]>;\n" +
+        "export function getEntityListOutputSchema(entity: ListEntity): z.ZodType {\n" +
+        "  return ENTITY_LIST_OUTPUT_SCHEMAS[entity];\n" +
         "}\n",
     },
     {

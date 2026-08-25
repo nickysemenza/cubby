@@ -15,7 +15,7 @@ import {
 } from "~/components/ui/view-switcher";
 import { useHydrated } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
-import { invalidateTRPCQueries } from "~/lib/query-keys";
+import { invalidateQueryRoots } from "~/lib/query-keys";
 import { ArrangeBoard } from "./ArrangeBoard";
 import { ArrangeTree } from "./ArrangeTree";
 import { findUnknownRoot } from "./arrange-tree-utils";
@@ -109,7 +109,7 @@ export function ArrangeSurface({
     ensuredRef.current = true;
     ensureUnknown.mutate(undefined, {
       onSuccess: () =>
-        invalidateTRPCQueries(queryClient, [api.location.makeTree.queryKey()]),
+        invalidateQueryRoots(queryClient, [api.location.makeTree.queryKey()]),
     });
   }, [unknownRoot, ensureUnknown, queryClient, api]);
 

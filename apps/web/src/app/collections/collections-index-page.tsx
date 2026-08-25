@@ -13,7 +13,7 @@ import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidateTRPCQueries } from "~/lib/query-keys";
+import { invalidateQueryRoots } from "~/lib/query-keys";
 
 export function CollectionsIndexPage() {
   const api = useTRPC();
@@ -30,7 +30,7 @@ export function CollectionsIndexPage() {
   const create = useMutation(
     api.collection.create.mutationOptions({
       onSuccess: async (result) => {
-        invalidateTRPCQueries(queryClient, [api.collection.list.queryKey()]);
+        invalidateQueryRoots(queryClient, [api.collection.list.queryKey()]);
         setShowCreate(false);
         setName("");
         setId("");

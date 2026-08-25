@@ -1,30 +1,34 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { useTRPC } from "~/integrations/trpc/react";
-import { isBrowserRoutedEntity } from "./entities";
+import { cookbookDetailQueryOptions } from "./cookbook.functions";
+import { entityDetailQueryOptions } from "./entity-detail.functions";
 import {
-  fdcIdFromParam,
-  getEntityContract,
-  usdaRouteId,
-} from "./entity-contracts";
+  type GeneratedBrowserCrudEntity,
+  generatedBrowserCrudEntities,
+} from "./generated/entity-routes.gen";
+import { imageDetailQueryOptions } from "./image.functions";
+import { usdaFoodDetailQueryOptions } from "./usda.functions";
 
-type Api = ReturnType<typeof useTRPC>;
+export const fdcIdFromParam = (id: string): number => Number.parseInt(id, 10);
+export const usdaRouteId = (fdcId: number): string => String(fdcId);
 
-export { fdcIdFromParam, usdaRouteId };
+const isGeneratedBrowserCrudEntity = (
+  entity: Entity,
+): entity is GeneratedBrowserCrudEntity =>
+  (generatedBrowserCrudEntities as readonly Entity[]).includes(entity);
 
 /**
  * Map an entity + route id to its detail query options — the single source for
  * "how do I fetch entity X by id", owning the Start entity-detail path, USDA
- * route-id coercion, the Image special case, and non-previewable skips. The result
- * is a union of queryOptions that useQuery can't narrow, so call sites pass it
- * through `useQuery(opts as ...)`.
+ * route-id coercion and the explicit Image/Cookbook projections.
  */
-export function entityQueryOptions(api: Api, entity: Entity, id: string) {
-  if (!isBrowserRoutedEntity(entity)) {
-    throw new Error(`Entity ${entity} has no browser route`);
+export function entityPreviewQueryOptions(entity: Entity, id: string) {
+  if (entity === "image") return imageDetailQueryOptions(id);
+  if (entity === "usda-food") {
+    return usdaFoodDetailQueryOptions(fdcIdFromParam(id));
   }
-  const detailQuery = getEntityContract(entity).query.detail;
-  if (!detailQuery) {
-    throw new Error(`Entity ${entity} has no detail query contract`);
+  if (entity === "cookbook") return cookbookDetailQueryOptions(id);
+  if (isGeneratedBrowserCrudEntity(entity)) {
+    return entityDetailQueryOptions(entity, id);
   }
-  return detailQuery(api, id);
+  throw new Error(`Entity ${entity} has no browser detail transport`);
 }

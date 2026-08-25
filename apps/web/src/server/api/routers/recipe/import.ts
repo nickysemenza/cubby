@@ -21,7 +21,6 @@ import {
   cookbookIdInput,
   cookbookIdOut,
   cookbookSourceOut,
-  cookbookSummariesOut,
   deleteCookbookOut,
   importCookbookStreamInput,
   importNotionSyncInput,
@@ -50,7 +49,6 @@ import {
   deleteCookbook,
   getCookbookByName,
   getCookbookSource,
-  listCookbooks,
   reprocessCookbookStream,
   setCookbookProduct,
   upsertCookbook,
@@ -449,13 +447,6 @@ const importNotionSyncStream = protectedProcedure
     );
   });
 
-// Distinct cookbooks with recipe counts, for the browse-by-source index.
-const listCookbooksEndpoint = protectedProcedure
-  .output(strictOutput(cookbookSummariesOut))
-  .query(async ({ ctx }) => {
-    return await listCookbooks(ctx.db);
-  });
-
 // Link a cookbook to the physical copy on the shelf, or clear the link. The
 // manual counterpart to the ISBN resolution in `upsertCookbookEndpoint`: books
 // whose EPUB declares no ISBN, and the cookbooks imported before that
@@ -562,7 +553,6 @@ export const recipeImportProcedures = {
   getCookbookDiff,
   previewNotionSync,
   importNotionSyncStream,
-  listCookbooks: listCookbooksEndpoint,
   setCookbookProduct: setCookbookProductEndpoint,
   deleteCookbook: deleteCookbookEndpoint,
   reprocessCookbook: reprocessCookbookStreamEndpoint,

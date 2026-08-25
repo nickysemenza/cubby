@@ -15,9 +15,9 @@ import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { type RouterInputs, useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
-  cancelTRPCQueries,
+  cancelQueryRoots,
+  invalidateQueryRoots,
   invalidatesFor,
-  invalidateTRPCQueries,
 } from "~/lib/query-keys";
 import type { TaskBoardPatch } from "./board-types";
 
@@ -142,7 +142,7 @@ export function useBoardMutations(target: BoardCacheTarget) {
     onMutate: async (
       vars,
     ): Promise<OptimisticContext<TaskOut[] | TaskBoardOut>> => {
-      await cancelTRPCQueries(queryClient, [queryKey]);
+      await cancelQueryRoots(queryClient, [queryKey]);
       const prev = queryClient.getQueryData<TaskOut[] | TaskBoardOut>(queryKey);
       const flat = readFlatList(prev, target.source);
       if (prev && flat) {
@@ -160,7 +160,7 @@ export function useBoardMutations(target: BoardCacheTarget) {
       if (ctx?.prev) queryClient.setQueryData(queryKey, ctx.prev);
       toast.error(getErrorMessage(err));
     },
-    onSettled: () => invalidateTRPCQueries(queryClient, invalidatesFor("task")),
+    onSettled: () => invalidateQueryRoots(queryClient, invalidatesFor("task")),
   });
 
   // The board's "materialize" reorder — a run of sortOrder writes plus an
@@ -174,7 +174,7 @@ export function useBoardMutations(target: BoardCacheTarget) {
     onMutate: async (
       vars,
     ): Promise<OptimisticContext<TaskOut[] | TaskBoardOut>> => {
-      await cancelTRPCQueries(queryClient, [queryKey]);
+      await cancelQueryRoots(queryClient, [queryKey]);
       const prev = queryClient.getQueryData<TaskOut[] | TaskBoardOut>(queryKey);
       const flat = readFlatList(prev, target.source);
       if (prev && flat) {
@@ -199,7 +199,7 @@ export function useBoardMutations(target: BoardCacheTarget) {
       if (ctx?.prev) queryClient.setQueryData(queryKey, ctx.prev);
       toast.error(getErrorMessage(err));
     },
-    onSettled: () => invalidateTRPCQueries(queryClient, invalidatesFor("task")),
+    onSettled: () => invalidateQueryRoots(queryClient, invalidatesFor("task")),
   });
 
   // Delete, patched into the same cache for the same reason as the two above.
@@ -215,7 +215,7 @@ export function useBoardMutations(target: BoardCacheTarget) {
     onMutate: async (vars: {
       ids: string[];
     }): Promise<OptimisticContext<TaskOut[] | TaskBoardOut>> => {
-      await cancelTRPCQueries(queryClient, [queryKey]);
+      await cancelQueryRoots(queryClient, [queryKey]);
       const prev = queryClient.getQueryData<TaskOut[] | TaskBoardOut>(queryKey);
       const flat = readFlatList(prev, target.source);
       if (prev && flat) {
@@ -238,7 +238,7 @@ export function useBoardMutations(target: BoardCacheTarget) {
       if (ctx?.prev) queryClient.setQueryData(queryKey, ctx.prev);
       toast.error(getErrorMessage(err));
     },
-    onSettled: () => invalidateTRPCQueries(queryClient, invalidatesFor("task")),
+    onSettled: () => invalidateQueryRoots(queryClient, invalidatesFor("task")),
   });
 
   return {

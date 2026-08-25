@@ -22,8 +22,7 @@ export const queryKeys = {
     getByID: procedureKey("image", "getByID"),
   },
   usda: {
-    all: entityKey("usda"),
-    list: procedureKey("usda", "list"),
+    all: entityKey("usda-food"),
   },
   product: {
     // Broad prefix — invalidate every product query (list / search / getByID …)
@@ -83,13 +82,10 @@ export const queryKeys = {
     list: procedureKey("recipe", "list"),
     getByID: procedureKey("recipe", "getByID"),
     flow: procedureKey("recipe", "getFlow"),
-    // The cookbook browse index lives on the recipe router (`recipe.listCookbooks`),
-    // so its key mirrors that tRPC path.
-    listCookbooks: procedureKey("recipe", "listCookbooks"),
     all: entityKey("recipe"),
   },
   cookbook: {
-    all: procedureKey("recipe", "listCookbooks"),
+    all: entityKey("cookbook"),
   },
   meal: {
     list: procedureKey("meal", "list"),
@@ -293,18 +289,18 @@ const invalidationFanout = {
     /** A recipe moving between cookbooks also moves the browse index. */
     cookbook: fanout(
       queryKeys.recipe.list,
-      queryKeys.recipe.listCookbooks,
+      queryKeys.cookbook.all,
       queryKeys.dashboard.counts,
     ),
   },
   cookbook: {
     base: fanout(queryKeys.cookbook.all, queryKeys.dashboard.counts),
     /** Linking or unlinking a cookbook's physical copy moves data on BOTH
-     * detail pages: the cookbook page reads the link off `listCookbooks`, and
+     * detail pages: the cookbook page reads the projected link, and
      * the product page reads the reverse embedded in its own detail payload.
      * Invalidating only the cookbook side leaves a stale "Cookbook" panel on
      * the product. */
-    productLink: fanout(queryKeys.recipe.listCookbooks, queryKeys.product.all),
+    productLink: fanout(queryKeys.cookbook.all, queryKeys.product.all),
   },
   meal: {
     base: fanout(
@@ -455,29 +451,29 @@ export function invalidatesFor<E extends InvalidationEntity>(
   return (op === undefined ? undefined : entry[op as string]) ?? entry.base;
 }
 
-export function normalizeTRPCQueryKey(key: QueryKey): QueryKey {
+export function normalizeQueryRoot(key: QueryKey): QueryKey {
   if (key.length === 0) return key;
   return Array.isArray(key[0]) ? key : [key];
 }
 
-export function invalidateTRPCQueries(
+export function invalidateQueryRoots(
   queryClient: QueryClient,
   keys: readonly QueryKey[],
 ) {
   for (const key of keys) {
     void queryClient.invalidateQueries({
-      queryKey: normalizeTRPCQueryKey(key),
+      queryKey: normalizeQueryRoot(key),
     });
   }
 }
 
-export async function cancelTRPCQueries(
+export async function cancelQueryRoots(
   queryClient: QueryClient,
   keys: readonly QueryKey[],
 ) {
   await Promise.all(
     keys.map((key) =>
-      queryClient.cancelQueries({ queryKey: normalizeTRPCQueryKey(key) }),
+      queryClient.cancelQueries({ queryKey: normalizeQueryRoot(key) }),
     ),
   );
 }

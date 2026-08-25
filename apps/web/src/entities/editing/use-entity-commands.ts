@@ -1,13 +1,15 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
-import { useTRPC } from "~/integrations/trpc/react";
+import {
+  executeEntityMutation,
+  flattenEntityMutationResult,
+} from "~/entities/entity-mutation.functions";
 import {
   makeBatchStatusFetcher,
   watchBatchesAndInvalidate,
 } from "~/lib/background-batch-polling";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidateTRPCQueries } from "~/lib/query-keys";
-import { getEntityContract } from "../entity-contracts";
+import { invalidateQueryRoots } from "~/lib/query-keys";
 import { entityEditRegistry } from "./definitions";
 import type {
   EntityEditDraft,
@@ -32,68 +34,62 @@ import type {
   EntityMutationPort,
 } from "./types";
 
-type MutationOptions = {
-  mutationFn?: (variables: unknown) => Promise<unknown>;
-};
-
 /**
- * Client adapter for the common command port. It is deliberately the only
- * dynamic tRPC dispatch point; semantic definitions never import hooks.
+ * Client adapter for the common command port. Semantic definitions stay
+ * transport-neutral while this adapter maps them to the Start command shape.
  */
 function useEntityMutationPort(): EntityMutationPort {
-  const api = useTRPC();
   const queryClient = useQueryClient();
 
   return useMemo(
     () => ({
       execute: async (command) => {
-        const contract = getEntityContract(command.entity);
-        const operation =
-          command.operation === "delete"
-            ? contract.mutation.delete
-            : contract.mutation[command.operation];
-        if (!operation) {
-          throw new Error(
-            `${command.entity} does not expose ${command.operation}.`,
-          );
-        }
-        const options = operation(api, {} as never) as MutationOptions;
-        if (!options.mutationFn) {
-          throw new Error(
-            `${command.entity} has no executable ${command.operation} mutation.`,
-          );
-        }
-        const variables =
+        const startCommand =
           command.operation === "create"
-            ? command.data
+            ? {
+                action: command.operation,
+                entity: command.entity,
+                data: command.data,
+              }
             : command.operation === "delete"
-              ? { ids: command.ids ?? (command.id ? [command.id] : []) }
-              : { id: command.id, data: command.data };
-        const result = await options.mutationFn(variables);
+              ? {
+                  action: command.operation,
+                  entity: command.entity,
+                  ids: [...(command.ids ?? (command.id ? [command.id] : []))],
+                }
+              : {
+                  action: command.operation,
+                  entity: command.entity,
+                  id: command.id,
+                  data: command.data,
+                };
+        const result = await executeEntityMutation({
+          data: startCommand as never,
+        });
         const resultId =
-          result && typeof result === "object" && "id" in result
-            ? String(result.id)
+          result && typeof result === "object" && "item" in result
+            ? String(result.item.id)
             : (command.id ?? command.ids?.[0]);
         if (!resultId) {
           throw new Error(
             `${command.entity} ${command.operation} did not return an id.`,
           );
         }
-        return { id: resultId, result };
+        return { id: resultId, result: flattenEntityMutationResult(result) };
       },
       invalidate: async (keys) => {
-        invalidateTRPCQueries(queryClient, keys);
+        invalidateQueryRoots(queryClient, keys);
       },
       watchBackgroundWork: ({ result, invalidateKeys }) => {
         void watchBatchesAndInvalidate({
           queryClient,
           result,
           invalidateKeys,
-          fetchBatchStatus: makeBatchStatusFetcher(queryClient, api),
+          fetchBatchStatus: makeBatchStatusFetcher(queryClient),
         });
       },
     }),
-    [api, queryClient],
+    [queryClient],
   );
 }
 

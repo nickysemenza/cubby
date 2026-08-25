@@ -11,7 +11,7 @@ import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import {
   entityDetailQueryKey,
   entityDetailQueryOptions,
-} from "~/entities/entity-detail";
+} from "~/entities/entity-detail.functions";
 import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
 import { invalidatesFor } from "~/lib/query-keys";
 import type { UnitCoverageItem } from "./unit-coverage-items";

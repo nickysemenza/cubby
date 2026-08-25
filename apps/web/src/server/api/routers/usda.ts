@@ -6,8 +6,6 @@ import {
   foodSummaryWithLinkedProducts,
   usdaFoodEnrichmentsInput,
   usdaFoodEnrichmentsOut,
-  usdaFoodIdInput,
-  usdaFoodListOut,
   usdaFoodLookupInput,
   usdaFoodSummaryListOut,
   usdaListInput,
@@ -23,41 +21,6 @@ const getByAlternateID = protectedProcedure
   .output(strictOutput(foodSummaryWithLinkedProducts.nullable()))
   .query(async ({ ctx, input }) => {
     return await ctx.usdaService.findFood(input);
-  });
-
-const getByID = protectedProcedure
-  .input(usdaFoodIdInput)
-  .output(strictOutput(foodSummaryWithLinkedProducts.nullable()))
-  .query(async ({ ctx, input }) => {
-    return await ctx.usdaService.getFoodSummaryByID(input.id);
-  });
-
-const list = protectedProcedure
-  .input(usdaListInput)
-  .output(strictOutput(usdaFoodListOut))
-  .query(async ({ ctx, input }) => {
-    try {
-      const { data, count } = await ctx.usdaService.listFoods(
-        input.filters.nameFilter,
-        input.filters.dataTypeFilter,
-        // The remote usda-api contract is single-sort; take the primary.
-        normalizeSorts(input.sort)[0]!,
-        input.pagination,
-        input.filters.foodsOnly,
-        input.filters.dataTypes,
-        input.filters.linkedProductsOnly,
-      );
-
-      return buildPaginatedResponse(input.pagination, data, count);
-    } catch (e) {
-      // Degrade gracefully — don't let a slow/down USDA API kill the entire batch
-      console.error(
-        "[usda.list] failed, returning empty:",
-        e,
-        e instanceof Error ? e.cause : undefined,
-      );
-      return buildPaginatedResponse(input.pagination, [], 0);
-    }
   });
 
 const listSummaries = protectedProcedure
@@ -96,8 +59,6 @@ const enrichmentsByID = protectedProcedure
 
 export const usdaRouter = createTRPCRouter({
   getByAlternateID,
-  getByID,
-  list,
   listSummaries,
   enrichmentsByID,
 });

@@ -18,7 +18,7 @@ import { QR_CODE_FORMATS } from "~/app/_components/inventory/persistent-scanner"
 import { ScanSheet } from "~/app/_components/inventory/scan-sheet";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { entityDetailQueryOptions } from "~/entities/entity-detail";
+import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { resolveLocationScan } from "~/lib/scan-code";
 

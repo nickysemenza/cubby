@@ -40,7 +40,7 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
-import { entityDetailQueryOptions } from "~/entities/entity-detail";
+import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { pageTitle } from "~/lib/page-title";
 import { recipeExportSearchSchema } from "./-recipe-export-search";

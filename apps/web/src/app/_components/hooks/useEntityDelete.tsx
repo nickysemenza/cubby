@@ -1,5 +1,4 @@
 import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
-import type { Entity } from "@cubby/schemas/entity";
 import type { QueryKey } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Trash } from "lucide-react";
@@ -10,8 +9,9 @@ import { Button } from "~/components/ui/button";
 import type { EditableEntity } from "~/entities/editing/types";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import { entityDialogLabel } from "~/entities/entities";
-import { getEntityContract } from "~/entities/entity-contracts";
+import type { GeneratedBrowserCrudEntity } from "~/entities/generated/entity-routes.gen";
 import { getErrorMessage } from "~/lib/error-utils";
+import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { type MutationOptionsFn, useActionMutation } from "./useActionMutation";
 
@@ -25,15 +25,15 @@ interface UseEntityDeleteOptions {
   /** Dialog noun override; defaults to the entity registry. */
   entityLabel?: string;
   /** Entity slug — picks the registered-command delete path vs the legacy mutation. */
-  entity: Entity;
-  /** tRPC delete mutation options factory */
+  entity: GeneratedBrowserCrudEntity | "image";
+  /** Delete mutation options factory. */
   mutationOptions: (callbacks: {
     onSuccess: (data: { sideEffects?: MutationSideEffects }) => void;
     onError: (err: { message?: string }) => void;
   }) => unknown;
   /**
    * Override the fan-out invalidated on success. Omit it — the default is the
-   * entity's own `invalidatesFor(entity)` set, resolved through its contract.
+   * entity's own `invalidatesFor(entity)` set.
    */
   invalidateKeys?: readonly QueryKey[];
   /** Route to navigate to after deletion */
@@ -78,9 +78,8 @@ export function useEntityDelete({
   const label = entityLabel ?? entityDialogLabel(entity);
   const navigate = useNavigate();
   const [showDialog, setShowDialog] = useState(false);
-  const registeredDelete = entity !== "image" && entity !== "cookbook";
-  // Image/cookbook have non-standard lifecycle contracts and keep their
-  // specialized path; every standard entity dispatches through the registry.
+  const registeredDelete = entity !== "image";
+  // Image has an upload/storage lifecycle and keeps its specialized path.
   const commandEntity = (
     registeredDelete ? entity : "product"
   ) as EditableEntity;
@@ -94,8 +93,7 @@ export function useEntityDelete({
   // toast all now come from `useActionMutation` itself.
   const legacyDeleteMutation = useActionMutation({
     mutationFn: mutationOptions as unknown as MutationOptionsFn,
-    invalidateKeys:
-      invalidateKeys ?? getEntityContract(entity).invalidationKeys,
+    invalidateKeys: invalidateKeys ?? invalidatesFor(entity),
     success: (data) =>
       savedWithBackgroundWork(
         (data as { sideEffects?: MutationSideEffects }).sideEffects ??

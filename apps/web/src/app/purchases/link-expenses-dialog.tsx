@@ -40,6 +40,7 @@ import {
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
 import { NoneValue } from "~/components/ui/none-value";
+import { entityListQueryOptions } from "~/entities/entity-list.functions";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { invalidatesFor } from "~/lib/query-keys";
@@ -87,7 +88,7 @@ export function LinkExpensesDialog({
       .exhaustive();
   }, [scope, purchase.vendorId, search]);
   const candidatesQuery = useQuery({
-    ...api.expense.list.queryOptions({
+    ...entityListQueryOptions("expense", {
       filters,
       pagination: { pageIndex: 0, pageSize: CANDIDATE_PAGE_SIZE },
     }),

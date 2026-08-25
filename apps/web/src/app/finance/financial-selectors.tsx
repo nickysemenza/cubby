@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityListQueryOptions } from "~/entities/entity-list.functions";
 import type { ComboboxItem } from "../_components/combobox/combobox-types";
 import {
   pagination,
@@ -31,18 +31,17 @@ function Search({
   children: WithEntitySearchProps<string>["children"];
   kind: "account" | "purchase";
 }) {
-  const api = useTRPC();
   const { searchQuery, onSearchChange } = useEntitySearch();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
   const account = useQuery({
-    ...api.financialAccount.list.queryOptions({
+    ...entityListQueryOptions("financialAccount", {
       filters: { search: searchQuery },
       pagination,
     }),
     enabled: enabled && kind === "account",
   });
   const purchase = useQuery({
-    ...api.purchase.list.queryOptions({
+    ...entityListQueryOptions("purchase", {
       filters: { search: searchQuery },
       pagination,
     }),

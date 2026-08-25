@@ -14,7 +14,8 @@ import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
-import { entityDetailQueryOptions } from "~/entities/entity-detail";
+import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityListQueryOptions } from "~/entities/entity-list.functions";
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { shortcodeHead } from "~/lib/page-title";
 
@@ -45,7 +46,8 @@ export const Route = createFileRoute("/_authenticated/projects/$shortcode")({
       ),
     );
     void context.queryClient.prefetchQuery(
-      context.trpc.project.list.queryOptions(
+      entityListQueryOptions(
+        "project",
         projectGanttSubtreeQueryParams(data.id),
       ),
     );

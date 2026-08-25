@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { uniqBy } from "es-toolkit";
 import { useTRPC } from "~/integrations/trpc/react";
-import { invalidateTRPCQueries, queryKeys } from "~/lib/query-keys";
+import { invalidateQueryRoots, queryKeys } from "~/lib/query-keys";
 import type { IngredientMatch } from "./use-ingredient-matches";
 
 /**
@@ -44,7 +44,7 @@ export function useResolveIngredientNames() {
 
     const results = await resolveMutation.mutateAsync({ names: unique });
     if (results.some((result) => result.created)) {
-      invalidateTRPCQueries(queryClient, [
+      invalidateQueryRoots(queryClient, [
         queryKeys.ingredient.all,
         queryKeys.dashboard.counts,
       ]);

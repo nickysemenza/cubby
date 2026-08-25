@@ -28,7 +28,7 @@ vi.mock("sonner", () => ({
 }));
 
 vi.mock("~/lib/query-keys", () => ({
-  invalidateTRPCQueries: vi.fn(),
+  invalidateQueryRoots: vi.fn(),
   invalidatesFor: () => [["location"]],
 }));
 
@@ -67,7 +67,7 @@ vi.mock("~/integrations/trpc/react", () => ({
   }),
 }));
 
-vi.mock("~/entities/entity-detail", () => ({
+vi.mock("~/entities/entity-detail.functions", () => ({
   entityDetailQueryOptions: (_entity: string, shortcode: string) => ({
     queryKey: [["location", "detail"], { shortcode }],
     queryFn: () => mocks.locations.get(shortcode) ?? null,

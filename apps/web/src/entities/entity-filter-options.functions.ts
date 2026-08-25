@@ -1,26 +1,25 @@
 import {
   type FilterOptionsInput,
   type FilterOptionsOut,
-  filterOptionsInput,
   filterOptionsOut,
 } from "@cubby/schemas/filter-options";
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
-import * as entityRuntime from "~/server/entity-runtime.server";
-import { authenticatedEntityServerFunction } from "~/server/middleware/entity-server-functions";
 import {
-  observedEntityCall,
-  unwrapEntityTransportResult,
-} from "./entity-transport";
+  observedStartCall,
+  unwrapStartOperationResult,
+} from "~/integrations/tanstack-query/start-transport";
+import * as entityRuntime from "~/server/entity-runtime.server";
+import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
 
 const getEntityFilterOptionsTransport = createServerFn({ method: "POST" })
-  .middleware([authenticatedEntityServerFunction])
-  .validator(filterOptionsInput)
+  .middleware([authenticatedStartServerFunction])
+  .validator((input: unknown) => input as FilterOptionsInput)
   .handler(
     async ({ data, context }) =>
       await entityRuntime.getEntityFilterOptions({
         data,
-        request: context.entityRuntime,
+        request: context.startOperation,
       }),
   );
 
@@ -28,12 +27,12 @@ async function getEntityFilterOptions(options: {
   data: FilterOptionsInput;
   signal?: AbortSignal;
 }): Promise<FilterOptionsOut> {
-  return await observedEntityCall({
+  return await observedStartCall({
     operation: "entity.filterOptions",
     input: options.data,
     call: async (headers) =>
       filterOptionsOut.parse(
-        unwrapEntityTransportResult(
+        unwrapStartOperationResult(
           "entity.filterOptions",
           await getEntityFilterOptionsTransport({
             data: options.data,

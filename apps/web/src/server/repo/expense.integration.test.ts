@@ -1412,13 +1412,13 @@ describe("expense router", () => {
       };
 
       const [listed, analytics] = await Promise.all([
-        caller.list({ filters }),
+        expenseList(ctx.db, filters, [], { pageIndex: 0, pageSize: 500 }),
         caller.analytics(filters),
       ]);
 
-      expect(analytics.summary.count).toBe(listed.items.length);
+      expect(analytics.summary.count).toBe(listed.data.length);
       expect(analytics.summary.net).toBeCloseTo(
-        listed.items.reduce((sum, p) => sum + (p.cost ?? 0), 0),
+        listed.data.reduce((sum, p) => sum + (p.cost ?? 0), 0),
         2,
       );
     });

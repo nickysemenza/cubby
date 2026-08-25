@@ -15,7 +15,7 @@ import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { useHydratedLoading } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
-import { invalidateTRPCQueries } from "~/lib/query-keys";
+import { invalidateQueryRoots } from "~/lib/query-keys";
 import {
   buildBackgroundJobRows,
   type SelectedJobsState,
@@ -111,7 +111,7 @@ export function BackgroundJobsPage({
 
   const invalidateAfterMutation = (batchId: string) => {
     setPageIndex(0);
-    invalidateTRPCQueries(queryClient, [
+    invalidateQueryRoots(queryClient, [
       api.backgroundJobs.listBatches.queryKey(),
       api.backgroundJobs.getBatchSummary.queryKey({ batchId }),
       api.backgroundJobs.listBatchJobs.queryKey(),
@@ -119,7 +119,7 @@ export function BackgroundJobsPage({
   };
   const invalidateList = () => {
     const keys: QueryKey[] = [api.backgroundJobs.listBatches.queryKey()];
-    invalidateTRPCQueries(queryClient, keys);
+    invalidateQueryRoots(queryClient, keys);
   };
   const drain = useMutation(
     api.backgroundJobs.drain.mutationOptions({ onSuccess: invalidateList }),

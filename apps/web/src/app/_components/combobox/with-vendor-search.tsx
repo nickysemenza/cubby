@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
-import { entityDetailQueryOptions } from "~/entities/entity-detail";
+import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { useTRPC } from "~/integrations/trpc/react";
 import {
   buildSearchHitComboboxItem,

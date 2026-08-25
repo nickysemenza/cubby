@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { entityDetailRootKey } from "~/entities/entity-detail";
-import { normalizeTRPCQueryKey, queryKeys } from "./query-keys";
+import { cookbookListQueryOptions } from "~/entities/cookbook.functions";
+import { entityDetailRootKey } from "~/entities/entity-detail.functions";
+import { normalizeQueryRoot, queryKeys } from "./query-keys";
 
 const MINUTE = 60 * 1000;
 
@@ -22,7 +23,7 @@ export function configureQueryFreshness(queryClient: QueryClient): void {
     queryKeys.location.list,
     queryKeys.location.makeTree,
     queryKeys.recipe.list,
-    queryKeys.recipe.listCookbooks,
+    cookbookListQueryOptions().queryKey,
     queryKeys.ingredient.list,
   ];
   const revalidateOnFocus = {
@@ -36,9 +37,14 @@ export function configureQueryFreshness(queryClient: QueryClient): void {
     });
   }
   for (const key of stableIndexKeys) {
-    queryClient.setQueryDefaults(normalizeTRPCQueryKey(key), {
-      staleTime: 2 * MINUTE,
-      ...revalidateOnFocus,
-    });
+    queryClient.setQueryDefaults(
+      Array.isArray(key) && Array.isArray(key[0])
+        ? key
+        : normalizeQueryRoot(key),
+      {
+        staleTime: 2 * MINUTE,
+        ...revalidateOnFocus,
+      },
+    );
   }
 }

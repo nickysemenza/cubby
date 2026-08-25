@@ -4,32 +4,46 @@ import { imageOut } from "@cubby/schemas/image";
 import type { ProductWithFoodOut } from "@cubby/schemas/product";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { DataOf } from "~/app/_components/hooks/useActionMutation";
-import { queryKeys } from "~/lib/query-keys";
+import { invalidatesFor, queryKeys } from "~/lib/query-keys";
 import { mock } from "~/lib/test/mock-schema";
 import { entityMutationResultSchema } from "~/server/entity-kernel/contracts";
-import {
-  entityMutationOptionsFactory,
-  getEntityContract,
-} from "./entity-contracts";
+import { entityMutationOptionsFactory } from "./entity-contracts";
+import { entityListQueryOptions } from "./entity-list.functions";
+import { flattenEntityMutationResult } from "./entity-mutation.functions";
 
 const mutationTransport = vi.hoisted(() => vi.fn());
 
-vi.mock("./entity-mutation", () => ({
-  entityMutationOptions: () => ({ mutationFn: mutationTransport }),
+vi.mock("./entity-mutation.functions", async (importOriginal) => ({
+  ...(await importOriginal()),
+  executeEntityMutation: ({ data }: { data: unknown }) =>
+    mutationTransport(data),
 }));
 
 describe("entity-contracts drift guard", () => {
   it.each(countableEntities)(
     "%s mutations invalidate the shared dashboard count",
     (entity) => {
-      expect(getEntityContract(entity).invalidationKeys).toContainEqual(
-        queryKeys.dashboard.counts,
-      );
+      expect(invalidatesFor(entity)).toContainEqual(queryKeys.dashboard.counts);
     },
   );
 });
 
 describe("kernel browser transport", () => {
+  it("flattens Start mutation envelopes for existing form callers", () => {
+    expect(
+      flattenEntityMutationResult({
+        action: "create",
+        entity: "product",
+        item: { id: "PRD-1", name: "Hammer" } as never,
+        sideEffects: { backgroundBatches: [] },
+      }),
+    ).toMatchObject({
+      id: "PRD-1",
+      name: "Hammer",
+      sideEffects: { backgroundBatches: [] },
+    });
+  });
+
   it("preserves entity-specific result types without tRPC inference", () => {
     const factory = entityMutationOptionsFactory("product", "create");
     expectTypeOf<DataOf<typeof factory>>().toEqualTypeOf<
@@ -44,13 +58,7 @@ describe("kernel browser transport", () => {
       pagination: { pageIndex: 0, pageSize: 10 },
     };
 
-    const options = getEntityContract("product").query.list?.(
-      {} as never,
-      params,
-    ) as {
-      queryKey: unknown;
-      queryFn: unknown;
-    };
+    const options = entityListQueryOptions("product", params);
 
     expect(options.queryKey).toEqual([["product", "list"], { input: params }]);
     expect(options.queryFn).toEqual(expect.any(Function));
@@ -63,12 +71,15 @@ describe("kernel browser transport", () => {
       item: { id: "PRD-1", name: "Hammer" },
       sideEffects: { backgroundBatches: [] },
     });
-    const options = getEntityContract("product").mutation.create?.(
-      {} as never,
-      {} as never,
-    ) as { mutationFn: (variables: unknown) => Promise<unknown> };
+    const options = entityMutationOptionsFactory("product", "create")();
+    const mutationFn = options.mutationFn;
+    if (!mutationFn) throw new Error("missing mutation function");
 
-    await expect(options.mutationFn({ name: "Hammer" })).resolves.toEqual({
+    await expect(
+      (mutationFn as (variables: { name: string }) => Promise<unknown>)({
+        name: "Hammer",
+      }),
+    ).resolves.toEqual({
       id: "PRD-1",
       name: "Hammer",
       sideEffects: { backgroundBatches: [] },

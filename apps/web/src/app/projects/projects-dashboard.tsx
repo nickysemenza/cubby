@@ -42,7 +42,11 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { StatGrid, StatTile } from "~/components/ui/stat-tile";
 import type { ViewSwitcherOption } from "~/components/ui/view-switcher";
 import { entities, entityDetailParams } from "~/entities/entities";
-import { type RouterOutputs, useTRPC } from "~/integrations/trpc/react";
+import {
+  type ProjectImageSummaries,
+  projectImageSummariesQueryOptions,
+} from "~/entities/image.functions";
+import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import type { ProjectRowsRenderer } from "~/lib/list-view-normalization";
 import { formatCurrency } from "~/lib/utils";
@@ -92,7 +96,7 @@ export const DASHBOARD_VIEW_OPTIONS: ViewSwitcherOption<DashboardView>[] = [
 ];
 
 /** Cover image (first attached image) per project id — keyed lookup for the gallery/overview cards. */
-type CoverImages = RouterOutputs["image"]["imagesByProjectIds"];
+type CoverImages = ProjectImageSummaries;
 
 const NO_PROJECT_IDS: string[] = [];
 const NO_PROJECTS: ProjectOut[] = [];
@@ -250,7 +254,7 @@ function MainDashboard({ view }: { view: DashboardView }) {
     ? projects.map((p) => p.id)
     : NO_PROJECT_IDS;
   const { data: coverImages } = useQuery({
-    ...api.image.imagesByProjectIds.queryOptions({
+    ...projectImageSummariesQueryOptions({
       projectIds: imageProjectIds,
     }),
     staleTime: 5 * 60 * 1000,
@@ -628,7 +632,6 @@ function ServerProjectGallery({
   locations: string[];
   completionYears: string[];
 }) {
-  const api = useTRPC();
   const helper = useMemo(() => createCubbyColumnHelper<ProjectOut>(), []);
   const projectOptions = useDeferredFilterOptions("project");
   const filterOptions = useFilterOptions({
@@ -661,7 +664,7 @@ function ServerProjectGallery({
     [list.data],
   );
   const { data: images } = useQuery({
-    ...api.image.imagesByProjectIds.queryOptions({ projectIds: ids }),
+    ...projectImageSummariesQueryOptions({ projectIds: ids }),
     enabled: ids.length > 0,
   });
 

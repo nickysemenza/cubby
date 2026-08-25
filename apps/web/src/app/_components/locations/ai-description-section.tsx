@@ -6,7 +6,7 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
-import { entityDetailQueryKey } from "~/entities/entity-detail";
+import { entityDetailQueryKey } from "~/entities/entity-detail.functions";
 import { useTRPC } from "~/integrations/trpc/react";
 
 interface AiDescriptionSectionProps {
