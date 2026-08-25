@@ -25,6 +25,7 @@ import {
   isDynamicImportError,
   isSupersededViewTransitionError,
 } from "~/lib/error-utils";
+import { getLastRequestId } from "~/lib/request-id";
 
 type ErrorCategory =
   | "auth"
@@ -109,6 +110,10 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
   const rawMessage = getErrorMessage(error);
   const category = categorizeError(code, reason, rawMessage, error);
   const friendlyMessage = FRIENDLY_MESSAGES[category];
+  // Module state, not React state: read on each render rather than caching in
+  // a useState initializer, so a later response's id isn't stuck showing the
+  // first one.
+  const requestId = getLastRequestId();
 
   useEffect(() => {
     if (
@@ -116,7 +121,17 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
       category === "network" ||
       category === "staleBuild"
     ) {
-      Sentry.captureException(error);
+      // `cf_ray` matches the tag name the server sets on its own Sentry
+      // events, so client and server events for the same request join on it.
+      // Read inside the effect, and keep it OUT of the dep array: it is module
+      // state, so depending on it would re-fire this effect — capturing the
+      // same error to Sentry a second time — whenever a later response changes
+      // the id. Reading it here also stamps the id as of capture time.
+      const capturedId = getLastRequestId();
+      Sentry.captureException(
+        error,
+        capturedId ? { tags: { cf_ray: capturedId } } : undefined,
+      );
     }
   }, [error, category]);
 
@@ -212,6 +227,15 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
               <span className="text-muted-foreground">Message: </span>
               <span className="text-foreground">{message || rawMessage}</span>
             </div>
+            {requestId && (
+              <div>
+                {/* "Request ID", not "Trace ID": this is an OTel trace id in
+                    dev but a Cloudflare ray id in prod — different systems,
+                    different formats, so a generic label is the honest one. */}
+                <span className="text-muted-foreground">Request ID: </span>
+                <span className="text-foreground">{requestId}</span>
+              </div>
+            )}
             {stack && (
               <details className="mt-2">
                 <summary className="cursor-pointer text-muted-foreground hover:text-foreground">

@@ -42,14 +42,21 @@ const traceQuery =
           : "unknown";
     const operation = extractOperation(sql);
     return withTrace(TraceNames.db(operation ?? "query"), async (span) => {
-      span.setAttributes({
-        "db.system.name": DB_SYSTEM,
-        "db.namespace": DB_NAMESPACE,
-        "db.operation.name": operation,
-        "db.query.text": sql.slice(0, MAX_STATEMENT_LEN),
-        "db.query.transaction": getTransaction(),
-        "cubby.db.consistency": role,
-      });
+      // Hottest span in the app — every query goes through here. Gate the
+      // attribute work on sampling so an unsampled request doesn't pay to slice
+      // a statement nobody will export. No-op while the Worker runs
+      // head_sampling_rate: 1; the point is that lowering it stays a wrangler
+      // edit rather than a code change.
+      if (span.isRecording) {
+        span.setAttributes({
+          "db.system.name": DB_SYSTEM,
+          "db.namespace": DB_NAMESPACE,
+          "db.operation.name": operation,
+          "db.query.text": sql.slice(0, MAX_STATEMENT_LEN),
+          "db.query.transaction": getTransaction(),
+          "cubby.db.consistency": role,
+        });
+      }
       const res = (await run(...args)) as {
         rowCount?: number | null;
         rows?: unknown[];

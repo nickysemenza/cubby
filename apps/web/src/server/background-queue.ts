@@ -8,6 +8,7 @@ import {
   unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
 import { match } from "ts-pattern";
+import { getErrorMessage } from "~/lib/error-utils";
 import {
   advanceWorkflowIfReady,
   isBackgroundWorkflowKind,
@@ -36,6 +37,7 @@ import {
 } from "~/server/semantic/embeddings";
 import { embeddingTextHash } from "~/server/semantic/hash";
 import { normalizeSearchText } from "~/server/semantic/text";
+import { TraceNames, withTrace } from "~/server/tracing";
 import {
   BACKGROUND_MESSAGE_VERSION,
   type BackgroundQueueDeliveredMessage,
@@ -93,52 +95,84 @@ export async function processBackgroundJob(
   jobId: string,
   batchKind?: BackgroundJobKind,
 ): Promise<"succeeded" | "skipped" | "retry" | "failed" | "leased"> {
+  // The job kind isn't known until this read returns, and a missing job is a
+  // non-event — both stay outside the span below.
   const current = await getBackgroundJob(db, jobId);
   if (!current) return "skipped";
-  if (
-    current.status === "running" &&
-    current.startedAt &&
-    current.startedAt.getTime() > Date.now() - BACKGROUND_JOB_LEASE_MS
-  ) {
-    // A duplicate delivery can race the live worker. Ask the queue to retry
-    // instead of acknowledging it; once the lease expires, markRunning below
-    // reclaims work that a crashed worker left behind.
-    return "leased";
-  }
-  if (
-    current.status === "succeeded" ||
-    current.status === "skipped" ||
-    current.status === "failed" ||
-    current.status === "cancelled"
-  ) {
-    return current.status === "failed" ? "failed" : "skipped";
-  }
 
-  const running = await markBackgroundJobRunning(db, jobId);
-  if (!running) return "skipped";
+  return withTrace(
+    TraceNames.job(current.kind),
+    async (span) => {
+      const withOutcome = (
+        status: "succeeded" | "skipped" | "retry" | "failed" | "leased",
+      ) => {
+        span.setAttribute("cubby.job.outcome", status);
+        return status;
+      };
 
-  try {
-    const parsed = backgroundJobPayloadSchema.parse({
-      kind: running.kind,
-      payload: running.payload,
-    });
-    const status = await runBackgroundJobPayload(db, running.batchId, parsed);
-    await finishBackgroundJob(db, jobId, status);
-    if (isBackgroundWorkflowKind(batchKind)) {
-      await advanceWorkflowIfReady(db, running.batchId);
-    }
-    return status;
-  } catch (error) {
-    console.error(
-      `[background-queue] job failed batch=${running.batchId} job=${jobId} kind=${running.kind}`,
-      error,
-    );
-    const outcome = await failOrRetryBackgroundJob(db, jobId, error);
-    if (outcome === "failed" && isBackgroundWorkflowKind(batchKind)) {
-      await advanceWorkflowIfReady(db, running.batchId);
-    }
-    return outcome;
-  }
+      if (
+        current.status === "running" &&
+        current.startedAt &&
+        current.startedAt.getTime() > Date.now() - BACKGROUND_JOB_LEASE_MS
+      ) {
+        // A duplicate delivery can race the live worker. Ask the queue to retry
+        // instead of acknowledging it; once the lease expires, markRunning below
+        // reclaims work that a crashed worker left behind.
+        return withOutcome("leased");
+      }
+      if (
+        current.status === "succeeded" ||
+        current.status === "skipped" ||
+        current.status === "failed" ||
+        current.status === "cancelled"
+      ) {
+        return withOutcome(current.status === "failed" ? "failed" : "skipped");
+      }
+
+      const running = await markBackgroundJobRunning(db, jobId);
+      if (!running) return withOutcome("skipped");
+
+      try {
+        const parsed = backgroundJobPayloadSchema.parse({
+          kind: running.kind,
+          payload: running.payload,
+        });
+        const status = await runBackgroundJobPayload(
+          db,
+          running.batchId,
+          parsed,
+        );
+        await finishBackgroundJob(db, jobId, status);
+        if (isBackgroundWorkflowKind(batchKind)) {
+          await advanceWorkflowIfReady(db, running.batchId);
+        }
+        return withOutcome(status);
+      } catch (error) {
+        console.error(
+          `[background-queue] job failed batch=${running.batchId} job=${jobId} kind=${running.kind}`,
+          error,
+        );
+        // failOrRetryBackgroundJob handles the failure and this path returns
+        // normally (no rethrow), so withTrace's auto-error-on-throw never
+        // fires here — mark the span explicitly or the failure is invisible
+        // in traces.
+        span.setError(getErrorMessage(error));
+        span.recordException(error);
+        const outcome = await failOrRetryBackgroundJob(db, jobId, error);
+        if (outcome === "failed" && isBackgroundWorkflowKind(batchKind)) {
+          await advanceWorkflowIfReady(db, running.batchId);
+        }
+        return withOutcome(outcome);
+      }
+    },
+    {
+      "cubby.job.id": jobId,
+      "cubby.job.batch_id": current.batchId,
+      "cubby.job.kind": current.kind,
+      "cubby.job.batch_kind": batchKind,
+      "cubby.job.attempt": current.attempts,
+    },
+  );
 }
 
 async function runBackgroundJobPayload(

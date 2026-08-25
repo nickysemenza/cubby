@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { REQUEST_ID_HEADER } from "~/lib/request-id";
 import { appRouter } from "~/server/api/root";
 import { createTRPCContext } from "~/server/api/trpc";
 import { handleTRPCFetchRequest } from "~/server/api/trpc-fetch-handler";
-import { getActiveTraceId } from "~/server/tracing";
+import { getRequestId } from "~/server/tracing";
 
 const handler = ({ request }: { request: Request }) => {
   return handleTRPCFetchRequest({
@@ -11,11 +12,12 @@ const handler = ({ request }: { request: Request }) => {
     router: appRouter,
     createContext: async () => createTRPCContext({ headers: request.headers }),
     responseMeta: () => {
-      // Undefined in the CF backend (no OTel active-span accessor); the header
-      // is simply omitted there.
-      const traceId = getActiveTraceId();
+      // An OTel trace id where a span is active, else the `cf-ray` header —
+      // `getActiveTraceId()` alone is always undefined in the CF backend,
+      // which made this header dead in prod. Omitted only when neither exists.
+      const requestId = getRequestId(request.headers);
       return {
-        headers: traceId ? { "x-trace-id": traceId } : {},
+        headers: requestId ? { [REQUEST_ID_HEADER]: requestId } : {},
       };
     },
   });

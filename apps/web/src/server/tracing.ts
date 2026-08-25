@@ -86,6 +86,10 @@ export const TraceNames = {
 
   // Database operations
   db: (operation: string) => `db.${operation}`,
+
+  // Background jobs (queue delivery, inline dispatch, and the dev drain all
+  // funnel through processBackgroundJob, so the kind is the grouping key).
+  job: (kind: string) => `job.${kind}`,
 } as const;
 
 type Attr = string | number | boolean | undefined;
@@ -97,6 +101,14 @@ type Attr = string | number | boolean | undefined;
  * `setError` for non-throwing failures (e.g. a tRPC `result.ok === false`).
  */
 export interface AppSpan {
+  /**
+   * False when this request was not sampled, so nothing set on the span will be
+   * exported. Gate *expensive* attribute work on it (string slicing, object
+   * building) — a plain literal attribute is cheaper to set than to guard.
+   * Always true while every Worker runs `head_sampling_rate: 1`; the point is
+   * that lowering the rate is then a wrangler edit, not a code change.
+   */
+  readonly isRecording: boolean;
   setAttribute(key: string, value: Attr): void;
   setAttributes(attrs: Record<string, Attr>): void;
   /** Mark the span as errored (degrades to attributes in the CF backend). */
@@ -108,6 +120,7 @@ export interface AppSpan {
 export const getTracer = () => tracer;
 
 const wrapOtel = (span: ReturnType<typeof tracer.startSpan>): AppSpan => ({
+  isRecording: span.isRecording(),
   setAttribute: (k, v) => {
     if (v !== undefined) span.setAttribute(k, v);
   },
@@ -121,6 +134,7 @@ const wrapOtel = (span: ReturnType<typeof tracer.startSpan>): AppSpan => ({
 });
 
 const wrapCf = (span: CfSpan): AppSpan => ({
+  isRecording: span.isTraced,
   setAttribute: (k, v) => span.setAttribute(k, v),
   setAttributes: (attrs) => {
     for (const [k, v] of Object.entries(attrs)) span.setAttribute(k, v);
@@ -239,11 +253,34 @@ export const traceAllBounded = async <
 };
 
 /**
- * Trace id of the active span, for surfacing to clients (e.g. an `x-trace-id`
- * header). Undefined in the CF backend — its `Span` exposes no trace id.
+ * Trace id of the active span. Undefined in the CF backend — its `Span` exposes
+ * no trace id. Module-local on purpose: it is always undefined in prod, so
+ * every caller wants {@link getRequestId}, which supplies the `cf-ray`
+ * fallback. Exporting it again would re-create the bug where a caller took this
+ * value alone and silently emitted nothing on Workers.
  */
-export const getActiveTraceId = (): string | undefined =>
+const getActiveTraceId = (): string | undefined =>
   IS_CF ? undefined : trace.getActiveSpan()?.spanContext().traceId;
+
+/**
+ * Correlation id for one request — the single join key between what the user
+ * saw, the Sentry event, and the trace.
+ *
+ * Dev/Node: the OTel trace id of the active span. Deployed CF Worker: there is
+ * no accessor for the active span (or any trace id) outside an `enterSpan`
+ * callback — still true as of the 2026-07-28 tracing release — so fall back to
+ * the request's `cf-ray`. That only resolves to a trace because `cf-server.ts`
+ * also records the ray on the `cf.fetch` span as `cloudflare.ray_id`; the two
+ * must stay in lockstep or this id becomes unsearchable.
+ *
+ * Callers pass the inbound request headers; the two ids come from different
+ * systems and look nothing alike, so present it neutrally ("Request ID"), never
+ * as a trace id.
+ */
+export const getRequestId = (
+  headers?: Pick<Headers, "get">,
+): string | undefined =>
+  getActiveTraceId() ?? headers?.get("cf-ray") ?? undefined;
 
 /**
  * Inject W3C trace context into outbound request headers for distributed
