@@ -253,10 +253,13 @@ export const traceAllBounded = async <
 };
 
 /**
- * Trace id of the active span, for surfacing to clients (e.g. an `x-trace-id`
- * header). Undefined in the CF backend — its `Span` exposes no trace id.
+ * Trace id of the active span. Undefined in the CF backend — its `Span` exposes
+ * no trace id. Module-local on purpose: it is always undefined in prod, so
+ * every caller wants {@link getRequestId}, which supplies the `cf-ray`
+ * fallback. Exporting it again would re-create the bug where a caller took this
+ * value alone and silently emitted nothing on Workers.
  */
-export const getActiveTraceId = (): string | undefined =>
+const getActiveTraceId = (): string | undefined =>
   IS_CF ? undefined : trace.getActiveSpan()?.spanContext().traceId;
 
 /**
