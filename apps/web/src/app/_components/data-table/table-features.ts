@@ -4,7 +4,6 @@ import {
   type Column,
   type ColumnDef,
   cellSelectionFeature,
-  columnFacetingFeature,
   columnFilteringFeature,
   columnOrderingFeature,
   columnPinningFeature,
@@ -12,8 +11,6 @@ import {
   columnSizingFeature,
   columnVisibilityFeature,
   createExpandedRowModel,
-  createFacetedRowModel,
-  createFacetedUniqueValues,
   createFilteredRowModel,
   createPaginatedRowModel,
   createSortedRowModel,
@@ -37,12 +34,15 @@ import type { CubbyColumnMeta, CubbyTableMeta } from "./table-meta";
  *
  * A single superset keeps table chrome and column factories interoperable while
  * still excluding features Cubby does not use (grouping, aggregation, global
- * filtering, row pinning, and native cell spanning).
+ * filtering, row pinning, faceting, and native cell spanning).
+ *
+ * Faceting is excluded because tables default to manualFiltering/manualPagination:
+ * a client facet would count only the loaded page and read as the full set.
+ * Real facet counts come from the server (see expense.facetCounts).
  */
 export const cubbyTableFeatures = tableFeatures({
   cellSelectionFeature,
   columnFilteringFeature,
-  columnFacetingFeature,
   columnOrderingFeature,
   columnPinningFeature,
   columnSizingFeature,
@@ -53,8 +53,6 @@ export const cubbyTableFeatures = tableFeatures({
   rowSelectionFeature,
   rowExpandingFeature,
   filteredRowModel: createFilteredRowModel(),
-  facetedRowModel: createFacetedRowModel(),
-  facetedUniqueValues: createFacetedUniqueValues(),
   sortedRowModel: createSortedRowModel(),
   paginatedRowModel: createPaginatedRowModel(),
   expandedRowModel: createExpandedRowModel(),

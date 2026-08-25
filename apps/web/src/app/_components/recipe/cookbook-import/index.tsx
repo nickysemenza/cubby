@@ -11,6 +11,7 @@ import {
 } from "@cubby/schemas/import-recipe";
 import { isbnFromEpubIdentifiers } from "@cubby/schemas/isbn";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useBlocker } from "@tanstack/react-router";
 import { sum } from "es-toolkit";
 import { AlertTriangle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -24,6 +25,16 @@ import {
 } from "~/app/recipes/recipe.functions";
 import { Row } from "~/components/layout/row";
 import { Stack } from "~/components/layout/stack";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "~/components/ui/alert-dialog";
 import { Description } from "~/components/ui/description";
 import { getErrorMessage } from "~/lib/error-utils";
 import { uploadImageMutationOptions } from "~/lib/image.functions";
@@ -98,17 +109,17 @@ export function CookbookImport({
       b.extract.status === "extracting" ||
       b.importProgress !== undefined,
   );
-  useEffect(() => {
-    if (!busy) return;
-    const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      // Legacy assignment: some browsers still gate the native prompt on a truthy
-      // returnValue rather than preventDefault alone.
-      e.returnValue = "";
-    };
-    window.addEventListener("beforeunload", onBeforeUnload);
-    return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [busy]);
+  // `beforeunload` alone only catches a tab close or reload — an in-app click on
+  // the nav rail is a router navigation, which never fires it, and used to drop
+  // the run silently. useBlocker covers both: it registers the beforeunload
+  // handler itself via `enableBeforeUnload`, and `withResolver` hands back
+  // proceed/reset so in-app navigation gets a real dialog instead of the
+  // browser's unstyled prompt.
+  const blocker = useBlocker({
+    shouldBlockFn: () => busy,
+    enableBeforeUnload: () => busy,
+    withResolver: true,
+  });
 
   // Upload raw image bytes through the presigned-R2 flow (mirrors PendingImageUpload):
   // initiate → PUT to the presigned URL → return the new (PENDING) image id.
@@ -719,6 +730,32 @@ export function CookbookImport({
           importing={book.importProgress !== undefined}
         />
       ))}
+
+      <AlertDialog
+        open={blocker.status === "blocked"}
+        onOpenChange={(open) => {
+          if (!open) blocker.reset?.();
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Leave and lose this run?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Extraction and import run on this page, not in the background.
+              Navigating away now discards the recipes extracted so far — there
+              is no server-side record to resume from.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => blocker.reset?.()}>
+              Stay on this page
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={() => blocker.proceed?.()}>
+              Leave and discard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Stack>
   );
 }

@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { addDays } from "date-fns";
 import { formatPlainDate } from "~/lib/plain-date";
 import { type IcsFeed, kindsForFeed, renderIcs } from "~/server/calendar/ics";
-import { db } from "~/server/db";
+import { boundedStaleDb } from "~/server/db";
 import { getCalendarRange } from "~/server/repo/calendar";
 import { findUserByCalendarFeedToken } from "~/server/repo/calendar-feed";
 
@@ -65,14 +65,14 @@ async function handler({ request }: { request: Request }) {
 
   // A miss is a 404, not a 401: a 401 would confirm to anyone probing that this
   // URL shape is real and that only the token is wrong.
-  const userId = await findUserByCalendarFeedToken(db, token);
+  const userId = await findUserByCalendarFeedToken(boundedStaleDb, token);
   if (!userId) return notFound();
 
   const now = new Date();
   const startDate = formatPlainDate(addDays(now, -PAST_DAYS));
   const endDateExclusive = formatPlainDate(addDays(now, FUTURE_DAYS));
 
-  const { items } = await getCalendarRange(db, {
+  const { items } = await getCalendarRange(boundedStaleDb, {
     startDate,
     endDateExclusive,
     kinds: [...kindsForFeed(feed)],
