@@ -1,7 +1,7 @@
 import { expenseLineKindValues } from "@cubby/schemas/expense-line-kind";
 import type { PurchaseShortcode } from "@cubby/schemas/identifiers";
 import type { ExpenseFilters, ExpenseOut } from "@cubby/schemas/project";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import {
   createProductLinkColumn,
   createProjectLinkColumn,
@@ -11,6 +11,7 @@ import { createCubbyColumnHelper } from "~/app/_components/data-table/table-feat
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
+import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import {
   ExpenseBulkActionDialogs,
@@ -32,7 +33,7 @@ import {
 } from "~/app/projects/shared";
 import { Stack } from "~/components/layout";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityListQueryOptions } from "~/entities/entity-list.functions";
 
 const EMBEDDED_TABLE_STATE = {
   initialSort: "date",
@@ -71,7 +72,10 @@ function PurchaseExpenseRows({
   purchaseId: PurchaseShortcode;
   kind: "principal" | "adjustment";
 }) {
-  const api = useTRPC();
+  const listQueryOptions: ListQueryOptionsFn<ExpenseFilters> = useCallback(
+    (params) => entityListQueryOptions("expense", params),
+    [],
+  );
   const helper = useMemo(() => createCubbyColumnHelper<ExpenseOut>(), []);
   const scope = useMemo<Partial<ExpenseFilters>>(
     () => ({
@@ -158,7 +162,7 @@ function PurchaseExpenseRows({
   });
   const list = useEntityList<ExpenseOut, ExpenseFilters>({
     entity: "expense",
-    queryOptions: api.expense.list.queryOptions,
+    queryOptions: listQueryOptions,
     scopeFilters: scope,
     extraActions: rowActions.extraActions,
     columns,

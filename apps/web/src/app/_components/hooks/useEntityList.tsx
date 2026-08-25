@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { browserEntityDefinition, entities } from "~/entities/entities";
-import { entityListQueryOptions } from "~/entities/entity-list";
+import { entityListQueryOptions } from "~/entities/entity-list.functions";
 import { getEntityFilters } from "~/entities/filter-manifest";
 import {
   buildFiltersFromManifest,

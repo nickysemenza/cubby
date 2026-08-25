@@ -14,7 +14,7 @@ import {
 } from "~/app/_components/actions/action-verb-ui";
 import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityListQueryOptions } from "~/entities/entity-list.functions";
 import {
   createEditableAmountColumn,
   createSingleEntityInlineLinkColumn,
@@ -83,7 +83,6 @@ export function LocationInventoryTable({
   view,
   placement = "stock",
 }: LocationInventoryTableProps) {
-  const api = useTRPC();
   const columnHelper = useMemo(
     () => createCubbyColumnHelper<InventoryItem>(),
     [],
@@ -226,12 +225,12 @@ export function LocationInventoryTable({
   const listQueryOptions: ListQueryOptionsFn<Record<string, never>> =
     useCallback(
       (params) =>
-        api.inventory.list.queryOptions({
+        entityListQueryOptions("inventory", {
           sort: params.sort,
           pagination: params.pagination,
           filters: { locationIdFilter: locationId, placementFilter: placement },
         }),
-      [api, locationId, placement],
+      [locationId, placement],
     );
 
   const { workbench, data } = useEntityList<

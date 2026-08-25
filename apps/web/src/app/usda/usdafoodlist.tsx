@@ -14,7 +14,7 @@ import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { NoneValue } from "~/components/ui/none-value";
-import { useTRPC } from "~/integrations/trpc/react";
+import { usdaFoodListQueryOptions } from "~/entities/usda.functions";
 import { USDA_KINDS } from "~/lib/conversion-coverage";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { nutrientCount } from "~/lib/usda-food-stats";
@@ -68,7 +68,6 @@ export const withUSDAListIdentity = <
 });
 
 export function USDAFoodList() {
-  const api = useTRPC();
   const { onRowClick, onRowHover, onRowHoverEnd, PreviewSheet } =
     useEntityPreview("usda-food", {
       idField: "fdc_id",
@@ -81,7 +80,7 @@ export function USDAFoodList() {
         pagination: params.pagination,
         sort: params.sort,
       };
-      const base = api.usda.list.queryOptions({
+      const base = usdaFoodListQueryOptions({
         ...listParams,
         sort: searching
           ? [{ orderBy: "relevance", direction: "asc" }]
@@ -107,7 +106,7 @@ export function USDAFoodList() {
         },
       };
     },
-    [api],
+    [],
   );
   const columnHelper = useMemo(
     () => createCubbyColumnHelper<USDAListRow>(),

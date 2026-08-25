@@ -3,45 +3,48 @@ import {
   beginObservedOperation,
   finishObservedOperation,
   operationHeaders,
-} from "~/integrations/tanstack-query/operation-recorder";
+} from "./operation-recorder";
 
-export type PublicEntityError = {
+export type PublicStartValidationIssue = {
+  code: string;
+  path: Array<string | number>;
   message: string;
-  code?: string;
-  reason?: string;
-  blockers?: PublicImpactItem[];
 };
 
-export type EntityTransportOperation =
-  | "entity.list"
-  | "entity.detail"
-  | "entity.filterOptions"
-  | "entity.mutate"
-  | "entity.inspectorHealth";
+export type PublicStartOperationError = {
+  message: string;
+  code: string;
+  reason?: string;
+  blockers?: PublicImpactItem[];
+  validationIssues?: PublicStartValidationIssue[];
+};
 
-export type EntityTransportResult<T> =
+export type StartOperationResult<T> =
   | { ok: true; data: T }
-  | { ok: false; error: PublicEntityError };
+  | { ok: false; error: PublicStartOperationError };
 
-export class EntityTransportError extends Error {
-  readonly data: Omit<PublicEntityError, "message">;
+export class StartOperationError extends Error {
+  readonly data: Omit<PublicStartOperationError, "message">;
 
-  constructor(error: PublicEntityError) {
+  constructor(error: PublicStartOperationError) {
     super(error.message);
-    this.name = "EntityTransportError";
+    this.name = "StartOperationError";
     this.data = {
-      ...(error.code ? { code: error.code } : {}),
+      code: error.code,
       ...(error.reason ? { reason: error.reason } : {}),
       ...(error.blockers ? { blockers: error.blockers } : {}),
+      ...(error.validationIssues
+        ? { validationIssues: error.validationIssues }
+        : {}),
     };
   }
 }
 
-export function unwrapEntityTransportResult<T>(
-  operation: EntityTransportOperation,
-  result: EntityTransportResult<T>,
-  createError: (error: PublicEntityError) => Error = (error) =>
-    new EntityTransportError(error),
+export function unwrapStartOperationResult<T>(
+  operation: string,
+  result: StartOperationResult<T>,
+  createError: (error: PublicStartOperationError) => Error = (error) =>
+    new StartOperationError(error),
 ): T {
   if (!result.ok) throw createError(result.error);
   if (result.data === undefined) {
@@ -54,8 +57,8 @@ export function unwrapEntityTransportResult<T>(
   return result.data;
 }
 
-export async function observedEntityCall<T>(options: {
-  operation: EntityTransportOperation;
+export async function observedStartCall<T>(options: {
+  operation: string;
   kind?: "query" | "mutation";
   entity?: string;
   speculative?: boolean;

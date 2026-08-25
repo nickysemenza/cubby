@@ -98,7 +98,7 @@ module and export; they are not executable imports in the spec. `fields.detail`
 is optional and falls back to `fields.output`; declare it when the current
 detail read carries enriched relations or computed fields.
 
-`extensions.ports` is the explicit boundary map for behavior the compiler must
+`extensions.ports` is the explicit seam map for behavior the compiler must
 not infer: the kernel repository binding, entity label and shortcode resolver,
 filter declaration, search-document projection/text/refresh hooks, lifecycle
 policy/runtime binding, and any attach/detach implementation. Each entry is a
@@ -131,7 +131,7 @@ data and type-only imports, never server bindings or executable schema modules.
 The declaration is authoritative only for declared mechanical behavior. A spec
 does not replace a repository's transactions, locking, SQL, or workflow rules.
 
-## Runtime boundary
+## Runtime interface
 
 All generic entity work enters through `executeEntity(context, command)` in
 `apps/web/src/server/entity-kernel`. It owns:
@@ -150,22 +150,24 @@ Extensions delegate to those services instead of branching inside the kernel.
 
 ## Transports
 
-tRPC is a replaceable browser adapter. Generic detail, list, and deferred filter
-option reads use POST TanStack Start functions and generated entity-to-output
-maps. `entity.query` and `entity.mutate` no longer exist. Generic writes use the
-authenticated `executeEntityMutation` Start function;
-workflow-shaped tRPC procedures remain thin adapters with no entity business
-logic. Start and tRPC share observed-request tracing, input redaction, Sentry
-policy, actor context, and public error translation. Start entity calls preserve
-the browser's semantic request/result/error console ledger. The mutation cutover
-has no compatibility route: a tab loaded before that deployment must reload
-before its next generic write.
+TanStack Start is the browser entity adapter. Generic detail, list, deferred
+filter-option, and write operations use authenticated Start functions and
+generated entity-to-input/output maps. Image, USDA Food, and Cookbook retain
+explicit browser projections because their shapes are specialized, but those
+projections use the same Start operation module for authentication, validation,
+errors, cancellation checkpoints, tracing, and console observability. No entity
+browser operation uses tRPC.
+
+Workflow-shaped tRPC procedures remain temporary adapters with no entity
+business logic. Removing an entity compatibility procedure has no deployment
+shim: a tab loaded before that deployment must reload before calling the removed
+path.
 
 MCP invokes `executeEntity` directly through the `entity` tool and publishes its
 machine-readable contract at `entities://catalog`. Workflow-shaped MCP tools
-remain separate. MCP, jobs, repositories, and kernel tests must not import the
-complete tRPC `appRouter`; only the `/api/trpc` entrypoint and browser client
-typing may do so.
+remain separate. MCP, jobs, repositories, entity modules, and kernel tests must
+not import tRPC routers. Only explicit workflow adapters, the `/api/trpc`
+entrypoint, and remaining workflow browser callers may do so.
 
 ## Filters and search
 

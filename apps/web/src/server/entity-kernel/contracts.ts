@@ -172,6 +172,9 @@ export type EntityMutationCommand = z.infer<typeof entityMutationCommandSchema>;
 export type EntityBrowserMutationCommand = z.infer<
   typeof entityBrowserMutationCommandSchema
 >;
+export type EntityBrowserMutationInput = z.input<
+  typeof entityBrowserMutationCommandSchema
+>;
 export type EntityCommand = z.infer<typeof entityCommandSchema>;
 
 export const entityQueryResultSchema = z.discriminatedUnion("action", [

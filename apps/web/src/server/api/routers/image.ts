@@ -1,9 +1,3 @@
-import { mutationSideEffectsSchema } from "@cubby/schemas/background-jobs";
-import {
-  imageShortcode,
-  type ProjectShortcode,
-  projectShortcode,
-} from "@cubby/schemas/identifiers";
 import {
   attachFileResponse,
   createFileUploadInput,
@@ -11,9 +5,6 @@ import {
   cullPendingImagesResponseSchema,
   cullPendingImagesSchema,
   getImageByIdSchema,
-  imageListFiltersSchema,
-  imageSortableFields,
-  imageUpdateInput,
   imageWithEntitySchema,
   importImageFromUrlResponseSchema,
   importImageFromUrlSchema,
@@ -23,24 +14,13 @@ import {
   mcpAttachFileInput,
 } from "@cubby/schemas/image";
 import {
-  createPaginatedResponseSchemaWithContext,
-  createSortPaginationFields,
-  type PaginationParams,
-  type SortInput,
-} from "@cubby/schemas/pagination";
-import { z } from "zod";
-import {
   createTRPCRouter,
   protectedProcedure,
   strictOutput,
 } from "~/server/api/trpc";
-import { executeEntity } from "~/server/entity-kernel";
 import { AppError, createAppError } from "~/server/errors/app-error";
-import { getImagesByProjectIds, markImageUploaded } from "~/server/repo/image";
-import {
-  resolveAllOrThrow,
-  resolveOrThrow,
-} from "~/server/repo/shortcode-resolver";
+import { markImageUploaded } from "~/server/repo/image";
+import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import {
   attachFileToEntity,
   cleanupUnreferencedImageStorage,
@@ -51,86 +31,7 @@ import {
   initiateImageUploadWithoutEntity,
 } from "~/server/services/image-storage.service";
 
-/** Minimal image shape for gallery/cover display — mirrors `MinimalImage` in
- * EntityImageList/EntityHero (id, url, filename only). */
-const projectImageSummary = z.object({
-  id: z.string(),
-  url: z.url(),
-  filename: z.string(),
-});
-
-const list = protectedProcedure
-  .input(
-    z.object({
-      filters: imageListFiltersSchema,
-      ...createSortPaginationFields({
-        sortableFields: imageSortableFields,
-        defaultSort: "createdAt",
-      }),
-    }),
-  )
-  .output(
-    strictOutput(
-      createPaginatedResponseSchemaWithContext(imageWithEntitySchema, "image"),
-    ),
-  )
-  .query(async ({ ctx, input }) => {
-    const result = await executeEntity(ctx, {
-      action: "list",
-      entity: "image",
-      filters: input.filters,
-      sort: input.sort as SortInput,
-      pagination: input.pagination as PaginationParams,
-      groupBy: input.groupBy,
-    });
-    if (result.action !== "list")
-      throw new Error("Entity kernel returned the wrong action");
-    return {
-      items: z.array(imageWithEntitySchema).parse(result.items),
-      meta: result.meta,
-    };
-  });
-
-const deleteItem = protectedProcedure
-  .input(z.object({ ids: z.array(imageShortcode).min(1).max(500) }))
-  .output(
-    strictOutput(
-      z.object({
-        deleted: z.number().int().nonnegative(),
-        sideEffects: mutationSideEffectsSchema,
-      }),
-    ),
-  )
-  .mutation(async ({ ctx, input }) => {
-    const result = await executeEntity(ctx, {
-      action: "delete",
-      entity: "image",
-      ids: input.ids,
-    });
-    if (result.action !== "delete")
-      throw new Error("Entity kernel returned the wrong action");
-    return { deleted: result.deleted, sideEffects: result.sideEffects };
-  });
-
 export const imageRouter = createTRPCRouter({
-  list,
-  delete: deleteItem,
-
-  update: protectedProcedure
-    .input(z.object({ id: imageShortcode, data: imageUpdateInput }))
-    .output(strictOutput(imageWithEntitySchema))
-    .mutation(async ({ ctx, input }) => {
-      const result = await executeEntity(ctx, {
-        action: "update",
-        entity: "image",
-        id: input.id,
-        data: input.data,
-      });
-      if (result.action !== "update")
-        throw new Error("Entity kernel returned the wrong action");
-      return imageWithEntitySchema.parse(result.item);
-    }),
-
   /**
    * Flip a PENDING image to UPLOADED once the browser's presigned PUT to R2
    * succeeds. Required for the standalone `/images` upload dialog: unlike
@@ -281,49 +182,6 @@ export const imageRouter = createTRPCRouter({
           error,
         );
       }
-    }),
-
-  getByID: protectedProcedure
-    .input(getImageByIdSchema)
-    .output(strictOutput(imageWithEntitySchema))
-    .query(async ({ ctx, input }) => {
-      const result = await executeEntity(ctx, {
-        action: "get",
-        entity: "image",
-        id: input.id,
-        missing: "error",
-      });
-      if (result.action !== "get" || result.item === null)
-        throw new Error("Entity kernel returned the wrong action");
-      return imageWithEntitySchema.parse(result.item);
-    }),
-
-  /**
-   * Images for a set of projects, grouped by project id and ordered
-   * cover-first — backs the projects dashboard's card covers and the project
-   * detail page's image gallery (projects have no `getByID` images field of
-   * their own; see repo/image.ts's `getImagesByProjectIds`).
-   */
-  imagesByProjectIds: protectedProcedure
-    .input(z.object({ projectIds: z.array(projectShortcode) }))
-    .output(strictOutput(z.record(z.string(), z.array(projectImageSummary))))
-    .query(async ({ ctx, input }) => {
-      const entityIds = await resolveAllOrThrow(
-        ctx.db,
-        "project",
-        input.projectIds,
-      );
-      const shortcodeByEntityId = new Map<string, ProjectShortcode>(
-        input.projectIds.map((shortcode, i) => [entityIds[i]!, shortcode]),
-      );
-      const imagesByEntityId = await getImagesByProjectIds(ctx.db, entityIds);
-
-      return Object.fromEntries(
-        Object.entries(imagesByEntityId).flatMap(([entityId, images]) => {
-          const shortcode = shortcodeByEntityId.get(entityId);
-          return shortcode ? [[shortcode, images]] : [];
-        }),
-      );
     }),
 
   /**

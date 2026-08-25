@@ -21,8 +21,10 @@ import {
   entityDetailParams,
   isBrowserRoutedEntity,
 } from "~/entities/entities";
-import { entityQueryOptions, fdcIdFromParam } from "~/entities/entity-query";
-import { useTRPC } from "~/integrations/trpc/react";
+import {
+  entityPreviewQueryOptions,
+  fdcIdFromParam,
+} from "~/entities/entity-query";
 import { CookbookPreviewContent } from "../EntityPreviewContent";
 import { ImageDetail } from "../images/image-detail";
 import { IngredientDetail } from "../ingredients/ingredient-detail";
@@ -41,23 +43,21 @@ export function EntityPreviewPanel({
   entityType,
   id,
 }: EntityPreviewPanelProps) {
-  const api = useTRPC();
-
   // One shared entity-detail mapping, stable for useQuery.
   const queryOptions = useMemo(
     () =>
       isBrowserRoutedEntity(entityType)
-        ? entityQueryOptions(api, entityType, id)
+        ? entityPreviewQueryOptions(entityType, id)
         : {
             queryKey: ["entity-preview", entityType, id],
             queryFn: async () => null,
             enabled: false,
           },
-    [entityType, id, api],
+    [entityType, id],
   );
 
   // Single query hook instead of 7 disabled ones
-  // biome-ignore lint/suspicious/noExplicitAny: useQuery cannot narrow the mixed Start/tRPC query-options union
+  // biome-ignore lint/suspicious/noExplicitAny: useQuery cannot narrow the mixed generated query-options union
   const query = useQuery(queryOptions as any);
   const { isLoading, error, data } = query;
 

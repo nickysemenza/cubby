@@ -59,7 +59,7 @@ import {
   makeBatchStatusFetcher,
   watchBatchesAndInvalidate,
 } from "~/lib/background-batch-polling";
-import { invalidateTRPCQueries, queryKeys } from "~/lib/query-keys";
+import { invalidateQueryRoots, queryKeys } from "~/lib/query-keys";
 
 /**
  * Broad prefixes on purpose. `invalidatesFor("location")` covers only
@@ -82,17 +82,17 @@ export function useLocationPhotoCapture() {
 
   const invalidate = useCallback(
     (result?: unknown) => {
-      invalidateTRPCQueries(queryClient, PHOTO_INVALIDATE_KEYS);
+      invalidateQueryRoots(queryClient, PHOTO_INVALIDATE_KEYS);
       // The AI description lands later, off the background queue — re-invalidate
       // when it drains so the description fills in without a reload.
       void watchBatchesAndInvalidate({
         queryClient,
         result,
         invalidateKeys: PHOTO_INVALIDATE_KEYS,
-        fetchBatchStatus: makeBatchStatusFetcher(queryClient, api),
+        fetchBatchStatus: makeBatchStatusFetcher(queryClient),
       });
     },
-    [queryClient, api],
+    [queryClient],
   );
 
   /**

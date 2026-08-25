@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import { ENTITY_LIFECYCLE_REGISTRY } from "~/server/repo/entity-lifecycle-registry";
-import { buildIntegrityCatalog } from "./entity-integrity";
+import { buildIntegrityCatalog } from "~/server/services/entity-integrity.service";
 
 /**
  * The catalog is a projection of compile-time constants, so most of its

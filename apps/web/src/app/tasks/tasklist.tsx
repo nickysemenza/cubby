@@ -14,7 +14,7 @@ import {
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityDetailQueryOptions } from "~/entities/entity-detail";
+import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import {
   createParentLinkColumn,

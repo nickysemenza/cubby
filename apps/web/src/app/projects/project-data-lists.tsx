@@ -5,7 +5,7 @@ import type {
   TaskFilters,
   TaskOut,
 } from "@cubby/schemas/project";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import {
   createParentLinkColumn,
   createProductLinkColumn,
@@ -19,6 +19,7 @@ import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
+import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import {
   ExpenseBulkActionDialogs,
@@ -39,8 +40,8 @@ import {
   taskTradeColumn,
 } from "~/app/projects/shared";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { entityListQueryOptions } from "~/entities/entity-list.functions";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
-import { useTRPC } from "~/integrations/trpc/react";
 
 const EMBEDDED_TABLE_STATE = {
   urlSync: false,
@@ -57,7 +58,10 @@ export function ProjectDataTaskList({
 }: {
   projectScope: EmbeddedProjectScope;
 }) {
-  const api = useTRPC();
+  const listQueryOptions: ListQueryOptionsFn<TaskFilters> = useCallback(
+    (params) => entityListQueryOptions("task", params),
+    [],
+  );
   const helper = useMemo(() => createCubbyColumnHelper<TaskOut>(), []);
   const projectOptions = useDeferredFilterOptions("project");
   const parentOptions = useDeferredFilterOptions("task");
@@ -113,7 +117,7 @@ export function ProjectDataTaskList({
 
   const list = useEntityList<TaskOut, TaskFilters>({
     entity: "task",
-    queryOptions: api.task.list.queryOptions,
+    queryOptions: listQueryOptions,
     scopeFilters,
     columns,
     filterOptions,
@@ -149,7 +153,10 @@ export function ProjectDataExpenseList({
 }: {
   projectScope: EmbeddedProjectScope;
 }) {
-  const api = useTRPC();
+  const listQueryOptions: ListQueryOptionsFn<ExpenseFilters> = useCallback(
+    (params) => entityListQueryOptions("expense", params),
+    [],
+  );
   const helper = useMemo(() => createCubbyColumnHelper<ExpenseOut>(), []);
   const projectOptions = useDeferredFilterOptions("project");
   const filterOptions = useFilterOptions({ project: projectOptions });
@@ -210,7 +217,7 @@ export function ProjectDataExpenseList({
   const rowActions = useExpenseRowActions();
   const list = useEntityList<ExpenseOut, ExpenseFilters>({
     entity: "expense",
-    queryOptions: api.expense.list.queryOptions,
+    queryOptions: listQueryOptions,
     scopeFilters,
     columns,
     filterOptions,

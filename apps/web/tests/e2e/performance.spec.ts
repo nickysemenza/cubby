@@ -114,10 +114,16 @@ test("intent-preloaded navigation does not flash the route skeleton", async ({
 test("Locations gallery does not paginate the complete inventory", async ({
   page,
 }) => {
-  const inventoryListRequests: string[] = [];
+  const inventoryListRequests: Array<{ url: string; body: string }> = [];
   page.on("request", (request) => {
-    if (request.url().includes("/api/trpc/inventory.list")) {
-      inventoryListRequests.push(request.url());
+    const body = request.postData() ?? "";
+    const normalizedBody = body.replace(/[\\\s]/gu, "");
+    if (
+      request.url().includes("/_serverFn/") &&
+      normalizedBody.includes('"entity":"inventory"') &&
+      normalizedBody.includes('"pagination"')
+    ) {
+      inventoryListRequests.push({ url: request.url(), body });
     }
   });
 

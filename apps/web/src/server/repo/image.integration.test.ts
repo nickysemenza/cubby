@@ -1,5 +1,8 @@
 import type { ProjectId } from "@cubby/schemas/identifiers";
-import { unsafeImageId } from "@cubby/schemas/identifiers";
+import {
+  unsafeImageId,
+  unsafeImageShortcode,
+} from "@cubby/schemas/identifiers";
 import { projectCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { eq } from "drizzle-orm";
@@ -199,7 +202,7 @@ describe("image repository", () => {
     ).resolves.toEqual({
       [project.entityId]: [
         {
-          id: cover.id,
+          id: unsafeImageShortcode(cover.shortcode),
           url: "https://example.com/cover.jpg",
           filename: "cover.jpg",
         },

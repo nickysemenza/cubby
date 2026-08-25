@@ -33,7 +33,7 @@ import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { EntityIcon, entityDetailLink } from "~/entities/entities";
 import { type RouterOutputs, useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidateTRPCQueries } from "~/lib/query-keys";
+import { invalidateQueryRoots } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
 import {
   CopyableShortcode,
@@ -104,7 +104,7 @@ function NewCollectionDialog({
   const create = useMutation(
     api.collection.create.mutationOptions({
       onSuccess: (result) => {
-        invalidateTRPCQueries(queryClient, [
+        invalidateQueryRoots(queryClient, [
           api.collection.matrix.queryKey(),
           api.collection.list.queryKey(),
           api.collection.detail.queryKey(),
@@ -253,7 +253,7 @@ export function CollectionAssignmentMatrix({
           delete next[key];
           return next;
         });
-        invalidateTRPCQueries(queryClient, [
+        invalidateQueryRoots(queryClient, [
           api.collection.matrix.queryKey(),
           api.collection.list.queryKey(),
           api.collection.detail.queryKey(),

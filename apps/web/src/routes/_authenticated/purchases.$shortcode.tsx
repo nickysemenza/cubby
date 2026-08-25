@@ -7,7 +7,7 @@ import {
 import { PurchaseDetail } from "~/app/purchases/purchase-detail";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { DetailPagePending } from "~/components/route-pending";
-import { entityDetailQueryOptions } from "~/entities/entity-detail";
+import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { shortcodeHead } from "~/lib/page-title";
 import { purchaseLabel } from "~/lib/purchase-label";
 

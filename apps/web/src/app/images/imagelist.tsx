@@ -12,18 +12,17 @@ import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { ImageAssociationLinks } from "~/app/_components/images/image-associations";
 import { imageStatusOptions } from "~/app/images/image-options";
-import { useTRPC } from "~/integrations/trpc/react";
+import { imageUpdateMutationOptions } from "~/entities/image.functions";
 import { UploadImageDialog } from "./upload-image-dialog";
 
 export default function ImageList() {
-  const api = useTRPC();
   const columnHelper = useMemo(
     () => createCubbyColumnHelper<ImageWithEntity>(),
     [],
   );
 
   const updateImageMutation = useUpdateMutation({
-    mutationFn: api.image.update.mutationOptions,
+    mutationFn: () => imageUpdateMutationOptions(),
     entity: "image",
   });
   // Images use `filename`, not `name` — see useNameEditable's `field` param.

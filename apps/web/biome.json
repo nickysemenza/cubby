@@ -78,7 +78,13 @@
               "options": {
                 "paths": {
                   "~/server/repo/database-helpers": "Services cannot access DB helpers directly. Use repo functions instead.",
-                  "~/server/db/schema": "Services cannot access DB schema directly. Use repo functions instead."
+                  "~/server/db/schema": "Services cannot access DB schema directly. Use repo functions instead.",
+                  "@trpc/client": "Background services call focused modules directly, not tRPC.",
+                  "@trpc/server": "Background services call focused modules directly, not tRPC.",
+                  "@trpc/tanstack-react-query": "Background services call focused modules directly, not tRPC.",
+                  "~/integrations/trpc/react": "Background services call focused modules directly, not tRPC.",
+                  "~/server/api/root": "Background services call focused modules directly, not tRPC.",
+                  "~/server/api/trpc": "Background services call focused modules directly, not tRPC."
                 }
               }
             }
@@ -96,6 +102,45 @@
               "options": {
                 "paths": {
                   "~/server/db/schema": "Routers cannot access DB schema directly. Use services/repos instead."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/entities/**/*.{ts,tsx}",
+        "src/server/entity-kernel/**/*.{ts,tsx}",
+        "src/server/repo/**/*.{ts,tsx}",
+        "!src/server/repo/**/*.test.{ts,tsx}",
+        "src/server/background-*.ts",
+        "src/server/queue-*.ts",
+        "src/server/queue-recompute.ts",
+        "src/app/_components/EntityInlineLinkById.tsx",
+        "src/app/_components/entities/**/*.{ts,tsx}",
+        "src/app/_components/EntityPreviewContent.tsx",
+        "src/app/_components/search/entity-preview-panel.tsx",
+        "src/app/_components/hooks/useEntityPreview.tsx",
+        "src/app/_components/hooks/useDeletableConfig.ts",
+        "src/app/_components/hooks/useEntityDelete.tsx",
+        "src/app/_components/hooks/useOptimisticDelete.tsx",
+        "src/app/_components/hooks/useUpdateMutation.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@trpc/client": "Core entity modules use TanStack Start, not tRPC.",
+                  "@trpc/server": "Core entity modules use TanStack Start, not tRPC.",
+                  "@trpc/tanstack-react-query": "Core entity modules use TanStack Start, not tRPC.",
+                  "~/integrations/trpc/react": "Core entity modules use TanStack Start, not tRPC.",
+                  "~/server/api/root": "Core entity modules call the kernel or focused runtime modules directly.",
+                  "~/server/api/trpc": "Core entity modules call the kernel or focused runtime modules directly."
                 }
               }
             }

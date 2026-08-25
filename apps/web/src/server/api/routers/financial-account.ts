@@ -1,14 +1,6 @@
 import { financialAccountOptionsOut } from "@cubby/schemas/financial-account";
-import { ENTITY_BINDINGS } from "~/server/entity-bindings";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { financialAccountOptions } from "~/server/repo/financial-account";
-import { createEntityListCompatibilityProcedure } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
-
-const list = createEntityListCompatibilityProcedure(
-  ENTITY_KERNEL_BINDINGS.financialAccount,
-  ENTITY_BINDINGS.financialAccount.crud,
-);
 
 /**
  * The account picklist — feeds the transactions table's Account filter. Cheap
@@ -21,6 +13,5 @@ const options = protectedProcedure
   .query(({ ctx }) => financialAccountOptions(ctx.db));
 
 export const financialAccountRouter = createTRPCRouter({
-  list,
   options,
 });

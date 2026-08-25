@@ -2,7 +2,12 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  queryOptions: vi.fn(() => ({ queryKey: ["problems", "getByType"] })),
+  catalogQueryOptions: vi.fn(() => ({
+    queryKey: [["entityIntegrity", "catalog"]],
+  })),
+  violationsQueryOptions: vi.fn(() => ({
+    queryKey: [["problems", "getByType"]],
+  })),
   useQuery: vi.fn(),
 }));
 
@@ -12,7 +17,10 @@ vi.mock("@tanstack/react-query", () => ({
     select?: (value: unknown) => unknown;
   }) => {
     mocks.useQuery(options);
-    if (options.queryKey[0] === "entityIntegrity") {
+    const queryRoot = Array.isArray(options.queryKey[0])
+      ? options.queryKey[0][0]
+      : options.queryKey[0];
+    if (queryRoot === "entityIntegrity") {
       return {
         data: {
           coverage: {
@@ -32,17 +40,9 @@ vi.mock("@tanstack/react-query", () => ({
   },
 }));
 
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPC: () => ({
-    entityIntegrity: {
-      catalog: {
-        queryOptions: () => ({ queryKey: ["entityIntegrity", "catalog"] }),
-      },
-    },
-    problems: {
-      getByType: { queryOptions: mocks.queryOptions },
-    },
-  }),
+vi.mock("~/entities/entity-integrity.functions", () => ({
+  entityIntegrityCatalogQueryOptions: mocks.catalogQueryOptions,
+  referentialLivenessQueryOptions: mocks.violationsQueryOptions,
 }));
 
 // If this broad dashboard hook returns, the integrity tab has regressed back to
@@ -64,16 +64,16 @@ describe("EntityIntegrityTab", () => {
     render(<EntityIntegrityTab />);
 
     expect(screen.getByTestId("reference-graph")).toBeInTheDocument();
-    expect(mocks.queryOptions).toHaveBeenCalledWith({
-      key: "referentialLivenessViolations",
-    });
+    expect(mocks.catalogQueryOptions).toHaveBeenCalledTimes(1);
+    expect(mocks.violationsQueryOptions).toHaveBeenCalledTimes(1);
     const problemQuery = mocks.useQuery.mock.calls
       .map(([options]) => options)
       .find(
         (options: { queryKey: readonly unknown[] }) =>
-          options.queryKey[0] === "problems",
+          (Array.isArray(options.queryKey[0])
+            ? options.queryKey[0][0]
+            : options.queryKey[0]) === "problems",
       ) as { staleTime?: number };
     expect(problemQuery).toMatchObject({ staleTime: 60_000 });
-    expect(mocks.queryOptions).toHaveBeenCalledTimes(1);
   });
 });

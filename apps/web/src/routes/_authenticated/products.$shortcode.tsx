@@ -7,7 +7,7 @@ import {
 } from "~/app/_components/routing/entity-routes";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { DetailPagePending } from "~/components/route-pending";
-import { entityDetailQueryOptions } from "~/entities/entity-detail";
+import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { shortcodeHead } from "~/lib/page-title";
 
 const PRODUCT_SSR_TIMING = "cubby-product-ssr";

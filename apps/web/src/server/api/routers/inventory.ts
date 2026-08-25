@@ -19,7 +19,6 @@ import {
   inventoryCountsByLocationOut,
   inventoryDuplicateUniqueProductsOut,
   inventoryFindDuplicatesInput,
-  inventoryListItemOut,
   inventoryLocationIdsInput,
   inventoryWithLocationAndProductListAndSideEffectsOut,
   inventoryWithLocationAndProductListOut,
@@ -35,9 +34,7 @@ import {
 } from "@cubby/schemas/scan";
 import { uniq } from "es-toolkit";
 import { match } from "ts-pattern";
-import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 import { createAppError } from "~/server/errors/app-error";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import {
   bulkMoveInventoryEntries,
   bulkProcessInventoryEntries,
@@ -57,7 +54,6 @@ import {
   scanAtLocation as scanAtLocationService,
 } from "~/server/services/scan-into-location.service";
 import { createBulkUpdatedMutation } from "../crud-factory";
-import { createEntityListCompatibilityProcedure } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const locationShortcodes = bindShortcodeResolver("location");
@@ -83,14 +79,6 @@ async function resolveEntityIds<T extends string>(
   }
   return resolved as Map<T, string>;
 }
-
-const list = createEntityListCompatibilityProcedure(
-  ENTITY_KERNEL_BINDINGS.inventory,
-  {
-    ...ENTITY_BINDINGS.inventory.crud,
-    listOutput: inventoryListItemOut,
-  },
-);
 
 // Bulk process inventory entries (creates and updates in one call)
 const bulkProcess = createBulkUpdatedMutation({
@@ -395,7 +383,6 @@ const resolveScanStrays = protectedProcedure
   );
 
 export const inventoryRouter = createTRPCRouter({
-  list,
   bulkProcess,
   bulkMove,
   moveEntries,

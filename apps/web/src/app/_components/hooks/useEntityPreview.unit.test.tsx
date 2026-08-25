@@ -17,7 +17,7 @@ vi.mock("~/integrations/trpc/react", () => ({
 }));
 
 vi.mock("~/entities/entity-query", () => ({
-  entityQueryOptions: (_api: unknown, entity: string, id: string) => ({
+  entityPreviewQueryOptions: (entity: string, id: string) => ({
     queryKey: [[entity, "detail"], { shortcode: id }],
     queryFn: async () => ({ id }),
   }),

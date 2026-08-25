@@ -10,9 +10,9 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { entityDetailQueryOptions } from "~/entities/entity-detail";
+import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { usdaFoodDetailQueryOptions } from "~/entities/usda.functions";
 import { useHydrated } from "~/hooks/useHydrated";
-import { useTRPC } from "~/integrations/trpc/react";
 import {
   BASE_KINDS,
   type BaseKind,
@@ -57,16 +57,11 @@ const KindAccent: React.FC<{
 
 // Component for lazy loading food data and rendering FoodPillLink
 const LazyFoodPillLink: React.FC<{ fdcId: number }> = ({ fdcId }) => {
-  const api = useTRPC();
-  const { data: usdaFood, isLoading: foodLoading } = useQuery(
-    api.usda.getByID.queryOptions(
-      { id: fdcId },
-      {
-        // Cache for 5 minutes since food data doesn't change often
-        staleTime: 5 * 60 * 1000,
-      },
-    ),
-  );
+  const { data: usdaFood, isLoading: foodLoading } = useQuery({
+    ...usdaFoodDetailQueryOptions(fdcId),
+    // Cache for 5 minutes since food data doesn't change often
+    staleTime: 5 * 60 * 1000,
+  });
   // Hydration-stable — see the note on LazyProductPillLink below.
   const hydrated = useHydrated();
   const food = hydrated ? usdaFood : undefined;

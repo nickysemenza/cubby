@@ -3,7 +3,7 @@ import { unsafeCookbookShortcode } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 import { Row } from "~/components/layout";
 import { NativeSelect } from "~/components/ui/native-select";
-import { useTRPC } from "~/integrations/trpc/react";
+import { cookbookListQueryOptions } from "~/entities/cookbook.functions";
 
 interface CookbookSelectProps {
   value: CookbookShortcode | undefined;
@@ -11,13 +11,12 @@ interface CookbookSelectProps {
 }
 
 /**
- * "Cookbook" scope filter: a labeled native select over recipe.listCookbooks
+ * "Cookbook" scope filter: a labeled native select over the Cookbook list
  * with an "All cookbooks" empty option. Owns the query and the string →
  * CookbookShortcode boundary cast so callers deal only in branded ids.
  */
 export function CookbookSelect({ value, onChange }: CookbookSelectProps) {
-  const api = useTRPC();
-  const { data: cookbooks } = useQuery(api.recipe.listCookbooks.queryOptions());
+  const { data: cookbooks } = useQuery(cookbookListQueryOptions());
 
   return (
     <Row as="label" align="center" gap="sm" className="w-fit text-sm">

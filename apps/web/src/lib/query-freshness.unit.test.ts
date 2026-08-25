@@ -1,8 +1,8 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
-import { entityDetailRootKey } from "~/entities/entity-detail";
+import { entityDetailRootKey } from "~/entities/entity-detail.functions";
 import { configureQueryFreshness } from "./query-freshness";
-import { normalizeTRPCQueryKey, queryKeys } from "./query-keys";
+import { normalizeQueryRoot, queryKeys } from "./query-keys";
 
 describe("configureQueryFreshness", () => {
   it("keeps stable detail and indexes warm but preserves the mutable default", () => {
@@ -15,12 +15,10 @@ describe("configureQueryFreshness", () => {
       client.getQueryDefaults(entityDetailRootKey("product")),
     ).toMatchObject({ staleTime: 300_000 });
     expect(
-      client.getQueryDefaults(
-        normalizeTRPCQueryKey(queryKeys.location.makeTree),
-      ),
+      client.getQueryDefaults(normalizeQueryRoot(queryKeys.location.makeTree)),
     ).toMatchObject({ staleTime: 120_000 });
     expect(
-      client.getQueryDefaults(normalizeTRPCQueryKey(queryKeys.task.list)),
+      client.getQueryDefaults(normalizeQueryRoot(queryKeys.task.list)),
     ).toEqual({});
   });
 });

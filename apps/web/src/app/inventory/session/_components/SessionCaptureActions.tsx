@@ -50,7 +50,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidatesFor, invalidateTRPCQueries } from "~/lib/query-keys";
+import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import type { SessionLocation } from "../session-utils";
 import { useSessionMutations } from "../useSessionMutations";
@@ -559,7 +559,7 @@ function ManualAdd({ locationId }: { locationId: LocationShortcode }) {
   const handleQuickCreate = useCallback(
     async (name: string): Promise<ComboboxItem<ProductShortcode>> => {
       const created = await quickCreateMutateRef.current({ name });
-      invalidateTRPCQueries(queryClient, invalidatesFor("product"));
+      invalidateQueryRoots(queryClient, invalidatesFor("product"));
       return {
         id: created.id,
         name: `${created.name} (${created.manufacturer})`,

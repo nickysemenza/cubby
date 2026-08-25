@@ -1,13 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { useTRPC } from "~/integrations/trpc/react";
+import { cookbookListQueryOptions } from "~/entities/cookbook.functions";
 
 const NO_COOKBOOK_OPTIONS: Array<{ value: string; label: string }> = [];
 
 /**
  * Full cookbook list as `{value,label}` options, name-sorted — feeds the
  * recipe list's Source filter (`optionsKey: "cookbook"`). Only a handful of
- * cookbooks exist (`recipe.listCookbooks` already orders by name), and that
+ * cookbooks exist (the Cookbook projection already orders by name), and that
  * query is already warm from the cookbook browse index and the cookbook
  * picker, so this reuses it rather than adding a dedicated options procedure
  * (contrast `useProjectOptions`/`useLocationParentOptions`, which back onto
@@ -17,8 +17,7 @@ const NO_COOKBOOK_OPTIONS: Array<{ value: string; label: string }> = [];
  * Note the field name: a cookbook's display name is `book`, not `name`.
  */
 export function useCookbookOptions() {
-  const api = useTRPC();
-  const { data, isLoading } = useQuery(api.recipe.listCookbooks.queryOptions());
+  const { data, isLoading } = useQuery(cookbookListQueryOptions());
 
   const options = useMemo(
     () =>

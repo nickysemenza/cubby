@@ -12,7 +12,7 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useTRPC } from "~/integrations/trpc/react";
-import { invalidateTRPCQueries } from "~/lib/query-keys";
+import { invalidateQueryRoots } from "~/lib/query-keys";
 
 /** A focused review surface: candidates are always re-resolved, never URL data. */
 export function RecommendationWorkbench({
@@ -52,7 +52,7 @@ function PlacementRecommendation({
   const accept = useMutation(
     api.inventory.moveEntries.mutationOptions({
       onSuccess: () => {
-        invalidateTRPCQueries(queryClient, [
+        invalidateQueryRoots(queryClient, [
           api.recommendations.placement.queryKey({ inventoryId }),
           api.problems.getFast.queryKey(),
         ]);
@@ -114,7 +114,7 @@ function TagPropagationRecommendation({
       "update",
     )({
       onSuccess: () => {
-        invalidateTRPCQueries(queryClient, [
+        invalidateQueryRoots(queryClient, [
           api.recommendations.tagPropagation.queryKey({ sourceId }),
           api.relatedness.product.queryKey(sourceId),
         ]);
@@ -124,7 +124,7 @@ function TagPropagationRecommendation({
   const dismiss = useMutation(
     api.recommendations.dismissTagPropagation.mutationOptions({
       onSuccess: () => {
-        invalidateTRPCQueries(queryClient, [
+        invalidateQueryRoots(queryClient, [
           api.recommendations.tagPropagation.queryKey({ sourceId }),
         ]);
       },
@@ -221,7 +221,7 @@ function ProductRelatednessRecommendation({
   const dismiss = useMutation(
     api.recommendations.dismissProduct.mutationOptions({
       onSuccess: () => {
-        invalidateTRPCQueries(queryClient, [
+        invalidateQueryRoots(queryClient, [
           api.recommendations.product.queryKey({ sourceId }),
         ]);
       },
@@ -314,7 +314,7 @@ function DuplicateProductRecommendation({
   const dismiss = useMutation(
     api.recommendations.dismissDuplicateProduct.mutationOptions({
       onSuccess: () => {
-        invalidateTRPCQueries(queryClient, [
+        invalidateQueryRoots(queryClient, [
           api.recommendations.duplicateProduct.queryKey({ sourceId }),
         ]);
       },

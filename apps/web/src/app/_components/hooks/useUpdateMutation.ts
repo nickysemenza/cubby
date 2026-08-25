@@ -1,5 +1,4 @@
 import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
-import type { Entity } from "@cubby/schemas/entity";
 import type { QueryKey } from "@tanstack/react-query";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -7,8 +6,9 @@ import type { EntityEditDraft } from "~/entities/editing/intent-types";
 import type { EditableEntity } from "~/entities/editing/types";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import { entityLabel } from "~/entities/entities";
-import { getEntityContract } from "~/entities/entity-contracts";
+import type { GeneratedBrowserCrudEntity } from "~/entities/generated/entity-routes.gen";
 import { getErrorMessage } from "~/lib/error-utils";
+import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import {
   type DataOf,
@@ -31,19 +31,18 @@ export function useUpdateMutation<TFn extends MutationOptionsFn>({
   invalidateKeys,
 }: {
   mutationFn: TFn;
-  entity: Entity;
+  entity: GeneratedBrowserCrudEntity | "image";
   /**
    * Override the fan-out. Omit it — the default is the entity's own
-   * `invalidatesFor(entity)` set, resolved through its contract, which is what
-   * an ordinary update wants. Pass one only for a write that moves MORE than
+   * `invalidatesFor(entity)` set, which is what an ordinary update wants. Pass
+   * one only for a write that moves MORE than
    * the entity's own rows (a valuation edit, a link that both ends read).
    */
   invalidateKeys?: readonly QueryKey[];
 }) {
   const label = entityLabel(entity);
-  const keys = invalidateKeys ?? getEntityContract(entity).invalidationKeys;
-  const registered =
-    entity !== "image" && entity !== "usda-food" && entity !== "cookbook";
+  const keys = invalidateKeys ?? invalidatesFor(entity);
+  const registered = entity !== "image";
   const commandEntity = (registered ? entity : "product") as EditableEntity;
   const commands = useEntityCommands(commandEntity);
 

@@ -42,8 +42,8 @@ import {
 } from "~/components/ui/popover";
 import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { EntityFormDialog } from "~/entities/editing/entity-form-dialog";
-import { useTRPC } from "~/integrations/trpc/react";
-import { invalidateTRPCQueries, queryKeys } from "~/lib/query-keys";
+import { entityListQueryOptions } from "~/entities/entity-list.functions";
+import { invalidateQueryRoots, queryKeys } from "~/lib/query-keys";
 import { cn, formatCurrency } from "~/lib/utils";
 import {
   SHELF_VIEW_OPTIONS,
@@ -172,10 +172,12 @@ export function LocationContentsValuation({
 
 /** By-manufacturer breakdown of DIRECT items (descendants excluded). */
 function ValuationBreakdown({ location }: { location: InfLocation }) {
-  const api = useTRPC();
   // Same query key as LocationInventoryTable's list — served from its cache.
   const { data } = useQuery(
-    api.inventory.list.queryOptions(locationInventoryListInput(location.id)),
+    entityListQueryOptions(
+      "inventory",
+      locationInventoryListInput(location.id),
+    ),
   );
   const breakdown = useMemo(
     () =>
@@ -226,7 +228,6 @@ const locationFixturesListInput = (locationId: InfLocation["id"]) => ({
 });
 
 export function LocationContents({ location }: { location: InfLocation }) {
-  const api = useTRPC();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -242,7 +243,10 @@ export function LocationContents({ location }: { location: InfLocation }) {
   // free; drives the group count/empty-state so they can't go stale against
   // the grid below.
   const { data: itemsData } = useQuery(
-    api.inventory.list.queryOptions(locationInventoryListInput(location.id)),
+    entityListQueryOptions(
+      "inventory",
+      locationInventoryListInput(location.id),
+    ),
   );
   const itemCount = itemsData?.meta.totalCount ?? location.directItemCount ?? 0;
   const visibility = locationContentsVisibility(children.length, itemCount);
@@ -251,7 +255,7 @@ export function LocationContents({ location }: { location: InfLocation }) {
   // rather than silently dropped — otherwise the shelf reads as complete when
   // it isn't. Zero fixtures renders nothing at all.
   const { data: fixturesData } = useQuery(
-    api.inventory.list.queryOptions(locationFixturesListInput(location.id)),
+    entityListQueryOptions("inventory", locationFixturesListInput(location.id)),
   );
   const fixtureCount = fixturesData?.meta.totalCount ?? 0;
 
@@ -283,7 +287,7 @@ export function LocationContents({ location }: { location: InfLocation }) {
   }, [children, navigate]);
 
   const handleChildCreated = useCallback(() => {
-    invalidateTRPCQueries(queryClient, [
+    invalidateQueryRoots(queryClient, [
       // Children change every derived location view, including the count-only
       // drill-down. Keep this broad instead of adding one-off query keys.
       queryKeys.location.all,

@@ -3,9 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Sheet, SheetContent } from "~/components/ui/sheet";
 import { isBrowserRoutedEntity } from "~/entities/entities";
-import { getEntityContract } from "~/entities/entity-contracts";
-import { entityQueryOptions } from "~/entities/entity-query";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityPreviewQueryOptions } from "~/entities/entity-query";
 import { EntityPreviewPanel } from "../search/entity-preview-panel";
 
 interface PreviewState {
@@ -55,7 +53,6 @@ export function useEntityPreview(
 ) {
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const idField = options?.idField ?? "id";
-  const api = useTRPC();
   const queryClient = useQueryClient();
   const intentRef = useRef<PreviewIntent | null>(null);
 
@@ -127,11 +124,7 @@ export function useEntityPreview(
   const onRowHover = useCallback(
     <T extends Record<string, unknown>>(row: { original: T }) => {
       const resolved = resolveRow(row);
-      if (
-        !resolved ||
-        !isBrowserRoutedEntity(resolved.entityType) ||
-        !getEntityContract(resolved.entityType).canPreview
-      ) {
+      if (!resolved || !isBrowserRoutedEntity(resolved.entityType)) {
         return;
       }
 
@@ -144,8 +137,7 @@ export function useEntityPreview(
       }
       if (previous) stopIntent(previous, true);
 
-      const queryOptions = entityQueryOptions(
-        api,
+      const queryOptions = entityPreviewQueryOptions(
         resolved.entityType,
         resolved.id,
       ) as {
@@ -170,7 +162,7 @@ export function useEntityPreview(
       }, PREVIEW_INTENT_DELAY_MS);
       intentRef.current = intent;
     },
-    [resolveRow, api, queryClient, stopIntent],
+    [resolveRow, queryClient, stopIntent],
   );
 
   const onRowHoverEnd = useCallback(

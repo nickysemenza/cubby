@@ -35,11 +35,11 @@ import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import {
   entityDetailQueryKey,
   entityDetailQueryOptions,
-} from "~/entities/entity-detail";
+} from "~/entities/entity-detail.functions";
 import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
-import { cancelTRPCQueries } from "~/lib/query-keys";
+import { cancelQueryRoots } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { EditableCell } from "../_components/data-table/editable-cell";
 import {
@@ -77,7 +77,7 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
     mutationKey: addRecipeBase.mutationKey,
     mutationFn: addRecipeBase.mutationFn,
     onMutate: async (variables) => {
-      await cancelTRPCQueries(queryClient, [mealKey]);
+      await cancelQueryRoots(queryClient, [mealKey]);
       const previous = queryClient.getQueryData<MealDetail | null>(mealKey);
       setPendingRecipeName(variables.recipeId);
       return { previous };
@@ -380,7 +380,7 @@ function RecipeRow({
     mutationKey: updateBase.mutationKey,
     mutationFn: updateBase.mutationFn,
     onMutate: async (variables) => {
-      await cancelTRPCQueries(queryClient, [mealKey]);
+      await cancelQueryRoots(queryClient, [mealKey]);
       const previous = queryClient.getQueryData<MealDetail | null>(mealKey);
       patchMeal((meal) => ({
         ...meal,
@@ -410,7 +410,7 @@ function RecipeRow({
     mutationKey: removeBase.mutationKey,
     mutationFn: removeBase.mutationFn,
     onMutate: async (variables) => {
-      await cancelTRPCQueries(queryClient, [mealKey]);
+      await cancelQueryRoots(queryClient, [mealKey]);
       const previous = queryClient.getQueryData<MealDetail | null>(mealKey);
       patchMeal((meal) => ({
         ...meal,

@@ -18,7 +18,6 @@ import {
 import type { RequestOrigin } from "~/server/workload";
 import { classifyTrpcWorkload } from "~/server/workload";
 
-export { buildCrudServices } from "~/server/request-context";
 export const createTRPCContext = createRequestContext;
 
 const t = initTRPC.context<typeof createTRPCContext>().create({

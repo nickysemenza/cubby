@@ -29,7 +29,7 @@ import { DetailPagePending } from "~/components/route-pending";
 import { Button } from "~/components/ui/button";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityDetailQueryOptions } from "~/entities/entity-detail";
+import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { shortcodeHead } from "~/lib/page-title";
 import { invalidatesFor } from "~/lib/query-keys";

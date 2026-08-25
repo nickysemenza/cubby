@@ -26,7 +26,7 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
-import { entityDetailQueryOptions } from "~/entities/entity-detail";
+import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { useHydrated } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";

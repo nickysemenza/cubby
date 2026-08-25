@@ -58,9 +58,17 @@ describe("EntityInspector shortcode contracts", () => {
       screen.getByText("detail · list/filter · generic writes"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "workflow procedures · batching/streams · specialized projections",
-      ),
+      screen.getByText("explicit workflow extensions only"),
     ).toBeInTheDocument();
+  });
+
+  it("shows dedicated Start ownership for specialized browser projections", () => {
+    const { rerender } = render(<EntityInspector entity="image" count={4} />);
+    expect(
+      screen.getByText("dedicated list · detail · writes"),
+    ).toBeInTheDocument();
+
+    rerender(<EntityInspector entity="usda-food" count={0} />);
+    expect(screen.getByText("specialized list · detail")).toBeInTheDocument();
   });
 });

@@ -62,7 +62,7 @@ import { NativeSelect } from "~/components/ui/native-select";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidateTRPCQueries, queryKeys } from "~/lib/query-keys";
+import { invalidateQueryRoots, queryKeys } from "~/lib/query-keys";
 import { toolTimelineConflict } from "~/lib/tool-timeline";
 import { cn, formatCurrency } from "~/lib/utils";
 import type { ToolMatrixSearch } from "~/routes/_authenticated/projects.tools";
@@ -408,9 +408,7 @@ export function ToolMatrixPage({
                 // lifetime use count, which re-ranks trade matches in every
                 // other column too. Only `project.*` — nothing on this page
                 // reads a product query.
-                void invalidateTRPCQueries(queryClient, [
-                  queryKeys.project.all,
-                ]);
+                void invalidateQueryRoots(queryClient, [queryKeys.project.all]);
               },
             },
           );

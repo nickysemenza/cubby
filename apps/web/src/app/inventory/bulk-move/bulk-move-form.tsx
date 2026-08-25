@@ -30,7 +30,8 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { EntityIcon } from "~/entities/entities";
-import { entityDetailQueryOptions } from "~/entities/entity-detail";
+import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityListQueryOptions } from "~/entities/entity-list.functions";
 import { useTRPC } from "~/integrations/trpc/react";
 
 type InventoryListItem = z.infer<typeof inventoryListItemOut>;
@@ -117,7 +118,7 @@ export default function BulkMoveForm({
   const BULK_MOVE_PAGE_SIZE = 100;
   const { data: inventoryItemsData, refetch: refetchInventoryItems } = useQuery(
     {
-      ...api.inventory.list.queryOptions({
+      ...entityListQueryOptions("inventory", {
         sort: { orderBy: "createdAt", direction: "desc" },
         pagination: { pageIndex: 0, pageSize: BULK_MOVE_PAGE_SIZE },
         filters: { locationIdFilter: sourceLocation?.id ?? "" },

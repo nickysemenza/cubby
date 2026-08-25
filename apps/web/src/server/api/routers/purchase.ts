@@ -28,8 +28,6 @@ import {
   splitExpenseInput,
 } from "@cubby/schemas/purchase";
 import { z } from "zod";
-import { ENTITY_BINDINGS } from "~/server/entity-bindings";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import {
   deleteEmptyPurchases,
   linkExpensesToPurchase,
@@ -55,13 +53,7 @@ import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
-import { createEntityListCompatibilityProcedure } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
-
-const list = createEntityListCompatibilityProcedure(
-  ENTITY_KERNEL_BINDINGS.purchase,
-  ENTITY_BINDINGS.purchase.crud,
-);
 
 /**
  * Attach existing expenses to a charge — one invoice spanning trades. The moved
@@ -240,7 +232,6 @@ const detachProducts = protectedProcedure
   });
 
 export const purchaseRouter = createTRPCRouter({
-  list,
   link,
   split,
   merge,

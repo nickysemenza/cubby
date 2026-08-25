@@ -28,11 +28,11 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { ScanFeedbackEntry } from "~/app/_components/inventory/persistent-scanner";
-import { entityDetailQueryOptions } from "~/entities/entity-detail";
+import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
-import { invalidatesFor, invalidateTRPCQueries } from "~/lib/query-keys";
+import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
 import { resolveLocationScan, resolveProductScan } from "~/lib/scan-code";
 import type { SweepFollowUp } from "./SweepProductFollowUp";
 import type { QueuedBin, SweepBinVerdict } from "./sweep-bin-plan";
@@ -484,7 +484,7 @@ export function useLocationSweep({
           // the number of ids REQUESTED, which is not evidence of a change.
           outcome.bins.moved = adoptedIds.length;
           setBins([]);
-          invalidateTRPCQueries(
+          invalidateQueryRoots(
             queryClient,
             invalidatesFor("location", "reparent"),
           );
@@ -599,7 +599,7 @@ export function useLocationSweep({
       try {
         await reparentMutation.mutateAsync({ ids: [binId], parentId });
         setMissing((prev) => prev?.filter((bin) => bin.id !== binId) ?? null);
-        invalidateTRPCQueries(
+        invalidateQueryRoots(
           queryClient,
           invalidatesFor("location", "reparent"),
         );

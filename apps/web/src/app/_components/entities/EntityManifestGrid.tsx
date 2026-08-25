@@ -500,24 +500,26 @@ export function EntityInspector({
           rows={[
             [
               "Start",
-              metadata.kernelActions.length
-                ? [
-                    metadata.kernelActions.includes("get") && "detail",
-                    metadata.kernelActions.includes("list") && "list/filter",
-                    metadata.kernelActions.some((action) =>
-                      ["create", "update", "delete", "merge"].includes(action),
-                    ) && "generic writes",
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")
-                : "—",
+              entity === "usda-food" || entity === "cookbook"
+                ? "specialized list · detail"
+                : entity === "image"
+                  ? "dedicated list · detail · writes"
+                  : metadata.kernelActions.length
+                    ? [
+                        metadata.kernelActions.includes("get") && "detail",
+                        metadata.kernelActions.includes("list") &&
+                          "list/filter",
+                        metadata.kernelActions.some((action) =>
+                          ["create", "update", "delete", "merge"].includes(
+                            action,
+                          ),
+                        ) && "generic writes",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")
+                    : "—",
             ],
-            [
-              "tRPC",
-              metadata.kernelActions.length
-                ? "workflow procedures · batching/streams · specialized projections"
-                : "workflow procedures and specialized projections",
-            ],
+            ["tRPC", "explicit workflow extensions only"],
             [
               "MCP",
               metadata.mcpOperations.length
@@ -612,7 +614,7 @@ export function EntityManifestGrid({
           <span aria-hidden>→</span>
           <span className="text-primary">executeEntity</span>
           <span aria-hidden>→</span>
-          <span>Start / tRPC / MCP adapters</span>
+          <span>Start entities / tRPC workflows / MCP adapters</span>
           <span aria-hidden>→</span>
           <span>routes, pages, search, lifecycle</span>
         </div>

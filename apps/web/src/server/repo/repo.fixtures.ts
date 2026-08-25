@@ -245,29 +245,6 @@ export const makeExpenseInput = (
   ...overrides,
 });
 
-/** Standard tRPC `list` input ({ filters, pagination, sort }). Defaults match the
- * dominant call shape (name/asc, page 0 × 10); override only what a test varies.
- * `filters` is generic so the entity's filter type is inferred at the call site. */
-export const listParams = <F = Record<string, never>>(
-  overrides: {
-    filters?: F;
-    pageSize?: number;
-    pageIndex?: number;
-    orderBy?: string;
-    direction?: "asc" | "desc";
-  } = {},
-) => ({
-  filters: (overrides.filters ?? {}) as F,
-  pagination: {
-    pageSize: overrides.pageSize ?? 10,
-    pageIndex: overrides.pageIndex ?? 0,
-  },
-  sort: {
-    orderBy: overrides.orderBy ?? "name",
-    direction: overrides.direction ?? ("asc" as const),
-  },
-});
-
 /** A location create input; `mock()` fills the scaffolding (parentId/images) so a
  * call site need only spell out the name (and type, when it matters). */
 export const makeLocationInput = (

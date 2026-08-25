@@ -7,7 +7,7 @@ import {
 import { VendorDetail } from "~/app/vendors/vendor-detail";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { DetailPagePending } from "~/components/route-pending";
-import { entityDetailQueryOptions } from "~/entities/entity-detail";
+import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { shortcodeHead } from "~/lib/page-title";
 
 // Bound to consts, not inlined into the options object: the router plugin's

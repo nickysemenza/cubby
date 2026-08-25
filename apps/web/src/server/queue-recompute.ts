@@ -42,7 +42,7 @@ export async function recomputeRecipeIds({
   batchId?: string;
 }): Promise<void> {
   if (recipeIds.length === 0) return;
-  const { buildCrudServices } = await import("./api/trpc");
+  const { buildCrudServices } = await import("./request-context");
   const { services } = buildCrudServices(database);
   await services.recipeCosting.recomputeQueued(recipeIds, batchId);
 }

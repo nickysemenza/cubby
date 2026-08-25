@@ -4,7 +4,7 @@ import {
   EntityDetailError,
   entityDetailQueryKey,
   entityDetailRootKey,
-} from "./entity-detail";
+} from "./entity-detail.functions";
 
 describe("entity detail transport contract", () => {
   it("keeps the former tRPC-compatible nested detail key", () => {

@@ -50,6 +50,7 @@ async function handler({ request }: { request: Request }) {
           readDb: boundedStaleDb,
           actorContext: ctx.actorContext,
           usdaClient: ctx.usdaClient,
+          usdaService: ctx.usdaService,
           upcLookupClient: ctx.upcLookupClient,
           services: {
             recipeCosting: ctx.services.recipeCosting,

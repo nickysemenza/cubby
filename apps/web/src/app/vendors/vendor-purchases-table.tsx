@@ -1,6 +1,6 @@
 import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/purchase";
 import type { VendorOut } from "@cubby/schemas/vendor";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import {
   createCurrencyColumn,
   createPlainDateColumn,
@@ -10,6 +10,7 @@ import { EditableCell } from "~/app/_components/data-table/editable-cell";
 import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
+import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { TableLink } from "~/app/_components/table/TableLink";
@@ -17,7 +18,7 @@ import { Row } from "~/components/layout";
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { useTRPC } from "~/integrations/trpc/react";
+import { entityListQueryOptions } from "~/entities/entity-list.functions";
 import { purchaseIdentityLabel } from "~/lib/purchase-label";
 import { formatCurrency } from "~/lib/utils";
 
@@ -34,7 +35,10 @@ const EMBEDDED_TABLE_STATE = {
  * so this table and the global Purchase list render and filter them identically.
  */
 export function VendorPurchasesTable({ vendor }: { vendor: VendorOut }) {
-  const api = useTRPC();
+  const listQueryOptions: ListQueryOptionsFn<PurchaseFilters> = useCallback(
+    (params) => entityListQueryOptions("purchase", params),
+    [],
+  );
   const helper = useMemo(() => createCubbyColumnHelper<PurchaseOut>(), []);
   const scope = useMemo<Partial<PurchaseFilters>>(
     () => ({ vendorId: vendor.id }),
@@ -143,7 +147,7 @@ export function VendorPurchasesTable({ vendor }: { vendor: VendorOut }) {
   );
   const list = useEntityList<PurchaseOut, PurchaseFilters>({
     entity: "purchase",
-    queryOptions: api.purchase.list.queryOptions,
+    queryOptions: listQueryOptions,
     scopeFilters: scope,
     columns,
     tableStateOptions: EMBEDDED_TABLE_STATE,

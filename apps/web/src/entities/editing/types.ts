@@ -187,7 +187,7 @@ export interface EntityEditDefinition<
 }
 
 /**
- * The runtime side-effect seam. Production adapts tRPC + React Query here;
+ * The runtime side-effect seam. Production adapts Start + React Query here;
  * tests inject the in-memory fake without rendering a hook.
  */
 export interface EntityMutationPort {

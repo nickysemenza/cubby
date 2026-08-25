@@ -3,6 +3,7 @@ import { mcpPaginationParams } from "@cubby/schemas/pagination";
 import { dataTypeEnum, fdcId, ndb, upc } from "@cubby/usda-schemas";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import {
   getCaller,
   READ_ONLY_OPEN,
@@ -34,30 +35,29 @@ export function registerUsdaTools(server: McpServer) {
     outputSchema: usdaFoodMcpListOut,
     annotations: READ_ONLY_OPEN,
     handler: async (params, extra) => {
-      const caller = getCaller(extra);
-      const result = await caller.usda.list({
-        filters: {
-          nameFilter: params.query,
-          dataTypeFilter: params.dataType,
-          // Exclude the five sampling/research data types — provenance records
-          // carrying ~0 nutrients, which USDA FDC itself hides from food search.
-          foodsOnly: true,
-        },
-        // `relevance` is the ranked path: exact/whole-word/prefix description
-        // fit, then full-text relevance and specificity. Data type is only a
-        // late tie-break; the app explains the sources instead of treating one
-        // as universally best. FDC id is a stable paging key, not a quality cue.
-        sort: { orderBy: "relevance", direction: "asc" },
-        pagination: {
+      const context = extra.authInfo?.extra?.entityKernel as
+        | EntityKernelContext
+        | undefined;
+      if (!context?.usdaService) {
+        throw new Error("MCP USDA service context is missing");
+      }
+      const result = await context.usdaService.listFoods(
+        params.query,
+        params.dataType,
+        { orderBy: "relevance", direction: "asc" },
+        {
           pageIndex: (params.pageIndex as number) ?? 0,
           pageSize: (params.pageSize as number) ?? 25,
         },
-      });
+        true,
+      );
       return {
-        meta: result.meta,
-        items: (result.items as Record<string, unknown>[]).map(
-          slimUsdaFoodListItem,
-        ),
+        meta: {
+          pageIndex: (params.pageIndex as number) ?? 0,
+          pageSize: (params.pageSize as number) ?? 25,
+          totalCount: result.count,
+        },
+        items: result.data.map(slimUsdaFoodListItem),
       };
     },
   });
@@ -70,8 +70,13 @@ export function registerUsdaTools(server: McpServer) {
     outputSchema: usdaFoodMcpOut,
     annotations: READ_ONLY_OPEN,
     handler: async (params, extra) => {
-      const caller = getCaller(extra);
-      const result = await caller.usda.getByID({ id: params.fdcId });
+      const context = extra.authInfo?.extra?.entityKernel as
+        | EntityKernelContext
+        | undefined;
+      if (!context?.usdaService) {
+        throw new Error("MCP USDA service context is missing");
+      }
+      const result = await context.usdaService.getFoodSummaryByID(params.fdcId);
       return result ? slimUsdaFood(result as Record<string, unknown>) : null;
     },
   });

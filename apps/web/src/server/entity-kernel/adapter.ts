@@ -9,6 +9,7 @@ import type { Database } from "~/server/db";
 import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 import type { LocationValuationService } from "~/server/services/location-valuation.service";
 import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
+import type { USDAService } from "~/server/services/usda.service";
 import type { EntityKernelEntity } from "./contracts";
 
 export interface EntityKernelContext {
@@ -18,6 +19,8 @@ export interface EntityKernelContext {
   readDb: Database;
   actorContext: ActorContext;
   usdaClient: USDAClient;
+  /** Optional service facade for specialized MCP reads outside the kernel. */
+  usdaService?: USDAService;
   upcLookupClient: UPCLookupClient;
   services: {
     recipeCosting: RecipeCostingService;

@@ -58,8 +58,8 @@ describe("cached-read policy", () => {
   it("routes generic Start filter options through readDb", () => {
     const source = read("./entity-runtime.server.ts");
 
-    expect(source).toContain("getFilterOptions(context.readDb, options.data)");
-    expect(source).not.toContain("getFilterOptions(context.db, options.data)");
+    expect(source).toContain("getFilterOptions(context.readDb, input)");
+    expect(source).not.toContain("getFilterOptions(context.db, input)");
   });
 
   it("keeps generic Start reads on the kernel action seam", () => {
@@ -88,28 +88,6 @@ describe("cached-read policy", () => {
 
     for (const path of authoritativeFiles) {
       expect(read(path), path).not.toMatch(/ctx\.readDb/u);
-    }
-  });
-
-  it("keeps compatibility list procedures on the entity kernel seam", () => {
-    const source = read("./api/entity-compatibility.ts");
-
-    expect(source).toContain('action: "list"');
-    expect(source).toContain("executeEntity(ctx");
-    expect(source).not.toContain("getFilterOptions");
-
-    const compatibilityRouters = [
-      "./api/routers/expense.ts",
-      "./api/routers/financial-account.ts",
-      "./api/routers/inventory.ts",
-      "./api/routers/project.ts",
-      "./api/routers/purchase.ts",
-      "./api/routers/task.ts",
-    ];
-    for (const path of compatibilityRouters) {
-      expect(read(path), path).toContain(
-        "createEntityListCompatibilityProcedure",
-      );
     }
   });
 

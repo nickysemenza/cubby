@@ -1,40 +1,38 @@
-import { mutationOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
-import { markFreshReads } from "~/lib/fresh-read-marker";
 import {
-  type EntityBrowserMutationCommand,
-  type EntityBrowserMutationResult,
-  entityBrowserMutationCommandSchema,
+  observedStartCall,
+  unwrapStartOperationResult,
+} from "~/integrations/tanstack-query/start-transport";
+import { markFreshReads } from "~/lib/fresh-read-marker";
+import type {
+  EntityBrowserMutationInput,
+  EntityBrowserMutationResult,
 } from "~/server/entity-kernel/contracts";
 import * as entityRuntime from "~/server/entity-runtime.server";
-import { authenticatedEntityServerFunction } from "~/server/middleware/entity-server-functions";
-import {
-  observedEntityCall,
-  unwrapEntityTransportResult,
-} from "./entity-transport";
+import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
 
 const executeEntityMutationTransport = createServerFn({ method: "POST" })
-  .middleware([authenticatedEntityServerFunction])
-  .validator(entityBrowserMutationCommandSchema)
+  .middleware([authenticatedStartServerFunction])
+  .validator((input: unknown) => input as EntityBrowserMutationInput)
   .handler(
     async ({ data, context }) =>
       await entityRuntime.executeEntityMutation({
         data,
-        request: context.entityRuntime,
+        request: context.startOperation,
       }),
   );
 
-async function executeEntityMutation(options: {
-  data: EntityBrowserMutationCommand;
+export async function executeEntityMutation(options: {
+  data: EntityBrowserMutationInput;
   signal?: AbortSignal;
 }): Promise<EntityBrowserMutationResult> {
-  return await observedEntityCall({
+  return await observedStartCall({
     operation: "entity.mutate",
     kind: "mutation",
     entity: options.data.entity,
     input: options.data,
     call: async (headers) => {
-      const result = unwrapEntityTransportResult(
+      const result = unwrapStartOperationResult(
         "entity.mutate",
         await executeEntityMutationTransport({
           data: options.data,
@@ -48,15 +46,13 @@ async function executeEntityMutation(options: {
   });
 }
 
-export function entityMutationOptions() {
-  return mutationOptions({
-    mutationKey: [["entity", "mutate"]] as const,
-    meta: {
-      transport: "start",
-      operation: "entity.mutate",
-      observedByTransport: true,
-    },
-    mutationFn: (command: EntityBrowserMutationCommand) =>
-      executeEntityMutation({ data: command }),
-  });
+/** Restore the entity-shaped result existing form and editing callers consume. */
+export function flattenEntityMutationResult(
+  result: EntityBrowserMutationResult,
+) {
+  if ("item" in result)
+    return { ...result.item, sideEffects: result.sideEffects };
+  if (result.action === "delete")
+    return { deleted: result.deleted, sideEffects: result.sideEffects };
+  return result.result;
 }

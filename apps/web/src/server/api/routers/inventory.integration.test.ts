@@ -1,20 +1,24 @@
 import {
   unsafeInventoryShortcode,
+  unsafeLocationId,
   unsafeLocationShortcode,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
 import { withEntityKernelMutations } from "tooling/entity-kernel-test-caller";
 import { seedFromCSV, TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { getInventoryEntryByShortcode } from "~/server/repo/inventory";
+import {
+  getInventoryByLocationIds,
+  getInventoryEntryByShortcode,
+} from "~/server/repo/inventory";
 import {
   createInventoryFixture as createInventoryEntry,
   createLocationFixture as createLocation,
   createProductFixture as createProduct,
-  listParams,
   makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { createTestCaller as createTRPCTestCaller } from "../trpc";
 import { inventoryRouter } from "./inventory";
 
@@ -78,77 +82,6 @@ describe("inventory router", () => {
     expect(retrievedEntry.location.id).toEqual(location.id);
     expect(retrievedEntry.product.name).toEqual("Test Flour");
     expect(retrievedEntry.location.name).toEqual("Test Kitchen");
-  });
-
-  it("should list inventory entries with filtering", async () => {
-    const caller = createTestCaller(inventoryRouter, ctx.db);
-
-    const seed = await seedFromCSV(
-      ctx.db,
-      [
-        {
-          product_name: "Flour",
-          manufacturer: "Brand A",
-          location_name: "Kitchen",
-          quantity: 2,
-          unit: "lbs",
-        },
-        {
-          product_name: "Sugar",
-          manufacturer: "Brand B",
-          location_name: "Kitchen",
-          quantity: 1,
-          unit: "kg",
-        },
-        {
-          product_name: "Rice",
-          manufacturer: "Brand C",
-          location_name: "Pantry",
-          quantity: 3,
-          unit: "lbs",
-        },
-      ],
-      TEST_ACTOR,
-    );
-
-    const pantryId = seed.locationIds.get("Pantry")!;
-
-    const allEntries = await caller.list(listParams({ orderBy: "createdAt" }));
-
-    expect(allEntries.items.length).toEqual(3);
-    expect(allEntries.meta.totalCount).toEqual(3);
-
-    const flourEntries = await caller.list(
-      listParams({ filters: { productNameFilter: "Flour" } }),
-    );
-
-    expect(flourEntries.items.length).toEqual(1);
-    expect(flourEntries.meta.totalCount).toEqual(1);
-    expect(flourEntries.items[0]!.product.name).toEqual("Flour");
-
-    const kitchenEntries = await caller.list(
-      listParams({ filters: { locationNameFilter: "Kitchen" } }),
-    );
-
-    expect(kitchenEntries.items.length).toEqual(2);
-    expect(kitchenEntries.meta.totalCount).toEqual(2);
-    expect(kitchenEntries.items[0]!.location.name).toEqual("Kitchen");
-    expect(kitchenEntries.items[1]!.location.name).toEqual("Kitchen");
-
-    const pantryEntries = await caller.list(
-      listParams({ filters: { locationIdFilter: pantryId } }),
-    );
-
-    expect(pantryEntries.items.length).toEqual(1);
-    expect(pantryEntries.meta.totalCount).toEqual(1);
-    expect(pantryEntries.items[0]!.location.id).toEqual(pantryId);
-
-    const noMatches = await caller.list(
-      listParams({ filters: { productNameFilter: "Nonexistent" } }),
-    );
-
-    expect(noMatches.items.length).toEqual(0);
-    expect(noMatches.meta.totalCount).toEqual(0);
   });
 
   it("should update an inventory entry", async () => {
@@ -377,10 +310,16 @@ describe("inventory router", () => {
       expect(result.items[0]!.location.id).toEqual(targetLocation.id);
       expect(result.items[0]!.amount.value).toEqual(10);
 
-      const sourceEntries = await caller.list(
-        listParams({ filters: { locationIdFilter: sourceLocationId } }),
+      const sourceLocationEntityId = await resolveLiveShortcode(
+        ctx.db,
+        sourceLocationId,
+        "location",
       );
-      expect(sourceEntries.items.length).toEqual(0);
+      expect(sourceLocationEntityId).not.toBeNull();
+      const sourceEntries = await getInventoryByLocationIds(ctx.db, [
+        unsafeLocationId(sourceLocationEntityId!),
+      ]);
+      expect(sourceEntries).toHaveLength(0);
     });
 
     it("should move partial quantity", async () => {

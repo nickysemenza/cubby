@@ -116,6 +116,7 @@ import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { multiSelectFilterFnBy } from "~/entities/filters";
+import { projectImageSummariesQueryOptions } from "~/entities/image.functions";
 import { useTRPC } from "~/integrations/trpc/react";
 import type { ProjectRowsRenderer } from "~/lib/list-view-normalization";
 import { purchaseLabel } from "~/lib/purchase-label";
@@ -1215,7 +1216,7 @@ export function ProjectTable({
   const projectOptions = useDeferredFilterOptions("project");
   const [projectIds, setProjectIds] = useState<string[]>([]);
   const { data: projectImages } = useQuery({
-    ...api.image.imagesByProjectIds.queryOptions({ projectIds }),
+    ...projectImageSummariesQueryOptions({ projectIds }),
     staleTime: 5 * 60 * 1000,
     enabled: projectIds.length > 0,
   });

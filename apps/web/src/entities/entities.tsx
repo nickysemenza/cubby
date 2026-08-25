@@ -440,8 +440,8 @@ const entityDefinitions = {
     // refusal surfaces as the dialog's error toast, not pre-validated here).
     mergeable: {
       keeperMode: "fixed",
-      candidateQuery: (api, keeper: PurchaseOut) =>
-        api.purchase.list.queryOptions({
+      candidateQuery: (_api, keeper: PurchaseOut) =>
+        entityListQueryOptions("purchase", {
           filters: { vendorId: keeper.vendorId },
           // Generous relative to any one vendor's purchase count, within MAX_PAGE_SIZE.
           pagination: { pageIndex: 0, pageSize: 200 },

@@ -22,7 +22,7 @@ function MetaChip({ children }: { children: React.ReactNode }) {
 
 /**
  * Rich dropdown row for a USDA food search result. Renders the full metadata the
- * `usda.list` query already returns — food type, brand, category, serving, UPC/NDB,
+ * USDA list projection already returns — food type, brand, category, serving, UPC/NDB,
  * a linked-product badge, and per-100g nutrition chips — instead of just the name.
  * Every field is omitted gracefully when absent (generic/foundation foods).
  *

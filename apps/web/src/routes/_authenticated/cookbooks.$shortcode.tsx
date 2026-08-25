@@ -17,12 +17,13 @@ import { Button } from "~/components/ui/button";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Image } from "~/components/ui/image";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import { cookbookDetailQueryOptions } from "~/entities/cookbook.functions";
 import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { useTabParam } from "~/hooks/useTabParam";
-import { useTRPC, useTRPCClient } from "~/integrations/trpc/react";
+import { useTRPCClient } from "~/integrations/trpc/react";
 import { shortcodeHead } from "~/lib/page-title";
-import { invalidatesFor, invalidateTRPCQueries } from "~/lib/query-keys";
+import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
 
 const searchSchema = z.object({
   // Active tab, deep-linkable. Default ("recipes") is omitted from the URL.
@@ -40,22 +41,19 @@ export const Route = createFileRoute("/_authenticated/cookbooks/$shortcode")({
 });
 
 function CookbookDetailPage() {
-  // The URL carries the cookbook's public shortcode; the browse-index query
-  // (already cached after navigating from /cookbooks) resolves it to the row,
-  // and everything below keys on the canonical shortcode id off that row.
+  // The URL carries the cookbook's public shortcode; the focused projection
+  // resolves it directly and everything below uses its canonical id.
   const { shortcode } = Route.useParams();
   const { tab } = Route.useSearch();
-  const api = useTRPC();
   const navigate = useNavigate();
 
   const tabs = useTabParam(tab, "recipes", (next) =>
     navigate({ to: ".", search: (prev) => ({ ...prev, tab: next }) }),
   );
 
-  // Name + recipe count for the hero. Reuses the browse-index query, which is
-  // already cached after navigating from /cookbooks; falls back gracefully.
-  const { data: cookbooks } = useQuery(api.recipe.listCookbooks.queryOptions());
-  const cookbook = cookbooks?.find((c) => c.id === shortcode);
+  const { data: cookbook, isLoading } = useQuery(
+    cookbookDetailQueryOptions(shortcode),
+  );
   const cookbookId = cookbook?.id;
   const name = cookbook?.book ?? "Cookbook";
   const recipeCount = cookbook?.recipeCount;
@@ -93,7 +91,7 @@ function CookbookDetailPage() {
           return `Reprocessed ${reprocessed} recipe${reprocessed === 1 ? "" : "s"} from ${name}${extra}`;
         },
         onDone: () => {
-          invalidateTRPCQueries(queryClient, invalidatesFor("recipe", "list"));
+          invalidateQueryRoots(queryClient, invalidatesFor("recipe", "list"));
         },
       },
     );
@@ -124,7 +122,7 @@ function CookbookDetailPage() {
   if (!cookbookId) {
     return (
       <Page variant="list" title={name} entity="cookbook" compact>
-        {cookbooks ? (
+        {!isLoading ? (
           <Empty>
             <EmptyTitle>Cookbook not found</EmptyTitle>
             <EmptyDescription>

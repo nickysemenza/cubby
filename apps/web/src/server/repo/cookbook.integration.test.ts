@@ -11,6 +11,7 @@ import {
   deleteCookbook,
   getCookbookByName,
   getCookbookSource,
+  getCookbookSummary,
   listCookbooks,
   reprocessCookbookStream,
   setCookbookProduct,
@@ -78,6 +79,8 @@ describe("cookbook repository", () => {
     expect(entry?.recipeCount).toBe(1);
     expect(entry?.sourceRecipeCount).toBe(2);
     expect(entry?.coverUrl).toBeNull();
+
+    await expect(getCookbookSummary(ctx.db, output.id)).resolves.toEqual(entry);
   });
 
   it("finds cookbooks with source recipes missing from the live import relation", async () => {

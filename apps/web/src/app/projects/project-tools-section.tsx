@@ -50,9 +50,9 @@ import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import {
-  cancelTRPCQueries,
+  cancelQueryRoots,
+  invalidateQueryRoots,
   invalidatesFor,
-  invalidateTRPCQueries,
 } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 
@@ -100,7 +100,7 @@ function ResourcesTable({
     mutationKey: detachBase.mutationKey,
     mutationFn: detachBase.mutationFn,
     onMutate: async (variables) => {
-      await cancelTRPCQueries(queryClient, [resourcesKey]);
+      await cancelQueryRoots(queryClient, [resourcesKey]);
       const previous =
         queryClient.getQueryData<ProjectResourceOut[]>(resourcesKey);
       queryClient.setQueryData<ProjectResourceOut[]>(resourcesKey, (current) =>
@@ -117,7 +117,7 @@ function ResourcesTable({
       toast.error(getErrorMessage(error));
     },
     onSettled: () =>
-      invalidateTRPCQueries(queryClient, invalidatesFor("project", "resource")),
+      invalidateQueryRoots(queryClient, invalidatesFor("project", "resource")),
   });
   const [addToInventoryRow, setAddToInventoryRow] =
     useState<ResourceRow | null>(null);
@@ -473,7 +473,7 @@ function ResourcePickerDialog({
     mutationKey: attachBase.mutationKey,
     mutationFn: attachBase.mutationFn,
     onMutate: async (variables) => {
-      await cancelTRPCQueries(queryClient, [resourcesKey]);
+      await cancelQueryRoots(queryClient, [resourcesKey]);
       const previous =
         queryClient.getQueryData<ProjectResourceOut[]>(resourcesKey);
       const candidates = [...suggestionRows, ...toolRows, ...softwareRows];
@@ -522,7 +522,7 @@ function ResourcePickerDialog({
       toast.error(getErrorMessage(error));
     },
     onSettled: () =>
-      invalidateTRPCQueries(queryClient, invalidatesFor("project", "resource")),
+      invalidateQueryRoots(queryClient, invalidatesFor("project", "resource")),
   });
 
   return (

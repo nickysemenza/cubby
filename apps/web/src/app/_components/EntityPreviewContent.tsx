@@ -1,7 +1,10 @@
 import { displayGtin } from "@cubby/schemas/external-id";
+import type { ProjectShortcode } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import { locationCoverImage } from "@cubby/schemas/location";
+import type { CookbookSummary } from "@cubby/schemas/recipe";
 import { RECIPE_MACRO_KEYS } from "@cubby/schemas/recipe-shared";
+import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 import type { NutrientKey } from "@cubby/usda-schemas";
 import { buildNutrients, dataTypeLabel } from "@cubby/usda-schemas";
@@ -21,14 +24,16 @@ import {
 import { ProjectMark, ProjectMarkById } from "~/app/projects/project-mark";
 import { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
 import { Row } from "~/components/layout";
+import { cookbookDetailQueryOptions } from "~/entities/cookbook.functions";
 import { EntityIcon } from "~/entities/entities";
-import { entityDetailQueryOptions } from "~/entities/entity-detail";
+import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { fdcIdFromParam } from "~/entities/entity-query";
 import type {
   DetailEntity,
   EntityDetailByEntity,
 } from "~/entities/generated/entity-details.gen";
-import { type RouterOutputs, useTRPC } from "~/integrations/trpc/react";
+import { projectImageSummariesQueryOptions } from "~/entities/image.functions";
+import { usdaFoodDetailQueryOptions } from "~/entities/usda.functions";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
@@ -299,7 +304,7 @@ export function toProductCard(
 
 export function toUsdaCard(
   fdcId: number,
-  data: NonNullable<RouterOutputs["usda"]["getByID"]>,
+  data: FoodSummaryWithLinkedProducts,
 ): ManifestCardProps {
   const dataType = data.foodInfo.data_type;
   const brand =
@@ -346,8 +351,7 @@ export function toUsdaCard(
 }
 
 export function UsdaFoodPreviewContent({ fdcId }: { fdcId: number }) {
-  const trpc = useTRPC();
-  const query = useQuery(trpc.usda.getByID.queryOptions({ id: fdcId }));
+  const query = useQuery(usdaFoodDetailQueryOptions(fdcId));
 
   return (
     <PreviewQuery query={query} label="Food">
@@ -457,9 +461,7 @@ export function toInventoryCard(
 
 // ── Cookbook ────────────────────────────────────────────────────────────────
 
-export function toCookbookCard(
-  data: RouterOutputs["recipe"]["listCookbooks"][number],
-): ManifestCardProps {
+export function toCookbookCard(data: CookbookSummary): ManifestCardProps {
   const body: BodyBlock[] = [];
   if (data.coverUrl) body.push({ kind: "thumb", url: data.coverUrl });
   body.push({
@@ -494,18 +496,10 @@ export function toCookbookCard(
 }
 
 export function CookbookPreviewContent({ cookbookId }: { cookbookId: string }) {
-  const trpc = useTRPC();
-  // Cookbooks have no getByID endpoint — the browse index carries every field
-  // the card needs and is already cached by /cookbooks (same source the detail
-  // page's hero reads).
-  const query = useQuery(trpc.recipe.listCookbooks.queryOptions());
-  const cookbook = query.data?.find((c) => c.id === cookbookId);
+  const query = useQuery(cookbookDetailQueryOptions(cookbookId));
 
   return (
-    <PreviewQuery
-      query={{ data: cookbook, isLoading: query.isLoading }}
-      label="Cookbook"
-    >
+    <PreviewQuery query={query} label="Cookbook">
       {(data) => <ManifestCard {...toCookbookCard(data)} />}
     </PreviewQuery>
   );
@@ -864,13 +858,17 @@ function GenericPreviewContent({
 }
 
 function ProjectPreviewContent({ id }: { id: string }) {
-  const trpc = useTRPC();
   const query = useQuery(entityDetailQueryOptions("project", id));
   const coverQuery = useQuery(
-    trpc.image.imagesByProjectIds.queryOptions({ projectIds: [id] }),
+    projectImageSummariesQueryOptions({
+      projectIds: [id as ProjectShortcode],
+    }),
   );
   const data = query.data
-    ? { ...query.data, thumbUrl: coverQuery.data?.[id]?.[0]?.url }
+    ? {
+        ...query.data,
+        thumbUrl: coverQuery.data?.[id as ProjectShortcode]?.[0]?.url,
+      }
     : undefined;
 
   return (
@@ -887,8 +885,8 @@ export function EntityPreviewContent({
   entity: HoverPreviewEntity;
   id: string;
 }) {
-  // usda-food and cookbook fetch differently enough (fdc_id coercion,
-  // list-backed detail with no getByID) to stay their own small components.
+  // usda-food and cookbook fetch differently enough (fdc_id coercion and
+  // specialized projections) to stay their own small components.
   // Every other entity is a uniform detail fetch, keyed here so switching
   // entities remounts rather than changing the hooks a single instance calls
   // (project's extra cover-image query is one more hook than the rest).

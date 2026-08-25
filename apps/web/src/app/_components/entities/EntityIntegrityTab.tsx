@@ -7,7 +7,6 @@ import type {
   ReferentialLivenessViolation,
   RelationshipProvenance,
 } from "@cubby/schemas/entity-integrity";
-import { referentialLivenessViolationSchema } from "@cubby/schemas/entity-integrity";
 import { useQuery } from "@tanstack/react-query";
 import { HeartPulse, Trash2, Waypoints } from "lucide-react";
 import type { ReactNode } from "react";
@@ -26,7 +25,10 @@ import { Eyebrow } from "~/components/ui/eyebrow";
 import { StatTile } from "~/components/ui/stat-tile";
 import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { entities, isBrowserRoutedEntity } from "~/entities/entities";
-import { useTRPC } from "~/integrations/trpc/react";
+import {
+  entityIntegrityCatalogQueryOptions,
+  referentialLivenessQueryOptions,
+} from "~/entities/entity-integrity.functions";
 import {
   type EntityGraphLens,
   EntityReferenceGraph,
@@ -45,9 +47,6 @@ const LENS_OPTIONS: {
   { value: "health", label: "Health", icon: HeartPulse },
 ];
 
-const REFERENTIAL_LIVENESS_INPUT = {
-  key: "referentialLivenessViolations",
-} as const;
 const EMPTY_REFERENTIAL_LIVENESS_VIOLATIONS: ReferentialLivenessViolation[] =
   [];
 const REFERENTIAL_LIVENESS_STALE_TIME = 60_000;
@@ -70,16 +69,14 @@ const EFFECT_VARIANT: Record<OperationEffect, BadgeVariant> = {
  * must not load the full five-lane Problems dashboard just to render one tab.
  */
 export function EntityIntegrityTab() {
-  const api = useTRPC();
   const { data: catalog, isLoading: catalogLoading } = useQuery(
-    api.entityIntegrity.catalog.queryOptions(),
+    entityIntegrityCatalogQueryOptions(),
   );
   const { data: violations = EMPTY_REFERENTIAL_LIVENESS_VIOLATIONS } = useQuery(
     {
-      ...api.problems.getByType.queryOptions(REFERENTIAL_LIVENESS_INPUT),
+      ...referentialLivenessQueryOptions(),
       staleTime: REFERENTIAL_LIVENESS_STALE_TIME,
-      select: (result) =>
-        referentialLivenessViolationSchema.array().parse(result.items),
+      select: (result) => result.items,
     },
   );
 

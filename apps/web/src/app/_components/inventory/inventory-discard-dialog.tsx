@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { entityDetailQueryOptions } from "~/entities/entity-detail";
+import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 
 interface InventoryDiscardDialogProps {
   onOpenChange: (open: boolean) => void;
