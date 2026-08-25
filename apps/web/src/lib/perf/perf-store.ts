@@ -1,9 +1,9 @@
 /**
  * In-memory performance metrics, accumulated by cheap `record*` calls and read
  * by the perf overlay on a poll interval (so recording never triggers React
- * work). Everything here is opt-in: the WASM/render/query recorders are only
- * invoked when the `perfOverlay` flag is on, and the runtime/vitals collectors
- * are started/stopped by the overlay. See lib/flags + lib/wasm + perf-overlay.
+ * work). Query and mutation lifecycle recording is always available so opening
+ * the overlay does not erase the history that explains the current cache. The
+ * heavier runtime/vitals collectors remain controlled by the overlay.
  *
  * `web-vitals` is imported dynamically (browser-only) inside `startCollectors`
  * so this module stays safe to import in the SSR/CF-worker bundle (via wasm.ts).
@@ -19,7 +19,7 @@ interface WasmStat {
   throws: number; // executions that threw (e.g. failed conversions — never cached)
 }
 export interface SlowEvent {
-  kind: "wasm" | "query" | "render";
+  kind: "wasm" | "query" | "mutation" | "render";
   label: string;
   ms: number;
   at: number; // performance.now() when recorded
@@ -30,11 +30,31 @@ interface RenderStat {
   maxMs: number;
   lastPhase: string;
 }
+export type OperationTransport = "start" | "trpc" | "auth" | "client";
+export type OperationOutcome = "success" | "error" | "cancelled";
+export type QueryOperationKind = "fetch" | "reuse" | "hydrated";
+
 interface QueryStat {
+  lastOperationId?: string;
+  operation: string;
+  transport: OperationTransport;
   fetches: number;
+  reuses: number;
+  hydrated: number;
+  cancelled: number;
+  errors: number;
   totalMs: number;
   maxMs: number;
   fanout: boolean;
+}
+export interface MutationRecord {
+  id: string;
+  operation: string;
+  transport: OperationTransport;
+  entity?: string;
+  outcome: OperationOutcome;
+  durationMs: number;
+  at: number;
 }
 interface RuntimeStat {
   fps: number;
@@ -51,6 +71,7 @@ export interface PerfSnapshot {
   cacheSize: number;
   renders: Record<string, RenderStat>;
   queries: Record<string, QueryStat>;
+  mutations: MutationRecord[];
   runtime: RuntimeStat;
   vitals: VitalsStat;
   navigation: NavigationStat;
@@ -98,6 +119,7 @@ const wasm = new Map<string, WasmStat>();
 const renders = new Map<string, RenderStat>();
 const queries = new Map<string, QueryStat>();
 const queryTimestamps = new Map<string, number[]>();
+const mutations: MutationRecord[] = [];
 const runtime: RuntimeStat = { fps: 0, longTasks: 0, heapUsedMB: null };
 const vitals: VitalsStat = { lcp: null, inp: null, cls: null };
 const navigation: NavigationStat = {
@@ -182,23 +204,57 @@ export function recordRender(
   recordSlow("render", `${id}:${phase}`, durationMs);
 }
 
-export function recordQuery(procedure: string, durationMs: number): void {
+const queryStatKey = (transport: OperationTransport, operation: string) =>
+  `${transport}:${operation}`;
+
+export function recordQueryOperation(options: {
+  id?: string;
+  operation: string;
+  transport: OperationTransport;
+  kind: QueryOperationKind;
+  durationMs?: number;
+  outcome?: OperationOutcome;
+}): void {
   if (paused) return;
-  const s = queries.get(procedure) ?? {
+  const key = queryStatKey(options.transport, options.operation);
+  const s = queries.get(key) ?? {
+    operation: options.operation,
+    transport: options.transport,
     fetches: 0,
+    reuses: 0,
+    hydrated: 0,
+    cancelled: 0,
+    errors: 0,
     totalMs: 0,
     maxMs: 0,
     fanout: false,
   };
-  s.fetches += 1;
-  s.totalMs += durationMs;
-  if (durationMs > s.maxMs) s.maxMs = durationMs;
-  queries.set(procedure, s);
-  const now = performance.now();
-  const ts = queryTimestamps.get(procedure) ?? [];
-  ts.push(now);
-  queryTimestamps.set(procedure, ts);
-  recordSlow("query", procedure, durationMs);
+  if (options.id) s.lastOperationId = options.id;
+  if (options.kind === "reuse") s.reuses += 1;
+  else if (options.kind === "hydrated") s.hydrated += 1;
+  else {
+    const durationMs = options.durationMs ?? 0;
+    s.fetches += 1;
+    s.totalMs += durationMs;
+    s.maxMs = Math.max(s.maxMs, durationMs);
+    if (options.outcome === "cancelled") s.cancelled += 1;
+    if (options.outcome === "error") s.errors += 1;
+    const now = performance.now();
+    const timestamps = (queryTimestamps.get(key) ?? []).filter(
+      (timestamp) => now - timestamp < FANOUT_WINDOW_MS,
+    );
+    timestamps.push(now);
+    queryTimestamps.set(key, timestamps);
+    recordSlow("query", options.operation, durationMs);
+  }
+  queries.set(key, s);
+}
+
+export function recordMutation(record: Omit<MutationRecord, "at">): void {
+  if (paused) return;
+  mutations.push({ ...record, at: performance.now() });
+  if (mutations.length > INTERACTION_LOG_MAX) mutations.shift();
+  recordSlow("mutation", record.operation, record.durationMs);
 }
 
 /** Record router start → first animation frame after the destination rendered. */
@@ -243,6 +299,7 @@ export function reset(): void {
   renders.clear();
   queries.clear();
   queryTimestamps.clear();
+  mutations.length = 0;
   slowLog.length = 0;
   runtime.longTasks = 0;
   cacheSize = 0;
@@ -262,12 +319,12 @@ export function setPaused(value: boolean): void {
 export function snapshot(): PerfSnapshot {
   const now = performance.now();
   const queriesOut: Record<string, QueryStat> = {};
-  for (const [proc, s] of queries) {
-    const ts = (queryTimestamps.get(proc) ?? []).filter(
+  for (const [key, s] of queries) {
+    const ts = (queryTimestamps.get(key) ?? []).filter(
       (t) => now - t < FANOUT_WINDOW_MS,
     );
-    queryTimestamps.set(proc, ts);
-    queriesOut[proc] = { ...s, fanout: ts.length >= FANOUT_THRESHOLD };
+    queryTimestamps.set(key, ts);
+    queriesOut[key] = { ...s, fanout: ts.length >= FANOUT_THRESHOLD };
   }
   const mem = (
     performance as Performance & { memory?: { usedJSHeapSize: number } }
@@ -277,6 +334,7 @@ export function snapshot(): PerfSnapshot {
     cacheSize,
     renders: Object.fromEntries(renders),
     queries: queriesOut,
+    mutations: [...mutations].reverse(),
     runtime: {
       ...runtime,
       heapUsedMB: mem ? Math.round(mem.usedJSHeapSize / 1024 / 1024) : null,

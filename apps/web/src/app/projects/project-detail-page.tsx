@@ -45,7 +45,7 @@ import { RelationshipSummaryTable } from "~/app/_components/relationships/relati
 import { ProjectMark } from "~/app/projects/project-mark";
 import { TaskBoard } from "~/app/tasks/board/TaskBoard";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
-import { Row, Section, Stack } from "~/components/layout";
+import { Row, Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
@@ -97,32 +97,10 @@ import {
 } from "./shared";
 import { splitExpenseSpend } from "./spend";
 
-// Charts are Nivo/d3-heavy (~590 KiB with @react-spring + d3) and every one of
-// them is gated on data existing, below the fold. Lazy-loading keeps that stack
-// out of this page's chunk — and out of the SSR graph, since this route is
-// `ssr: false` and never renders them on the server anyway.
-const CategoryBreakdown = lazy(() =>
-  import("./charts/category-breakdown").then((m) => ({
-    default: m.CategoryBreakdown,
+const ProjectDetailAnalytics = lazy(() =>
+  import("./project-detail-analytics-view").then((module) => ({
+    default: module.ProjectDetailAnalyticsView,
   })),
-);
-const ProjectGantt = lazy(() =>
-  import("./charts/gantt/ProjectGantt").then((m) => ({
-    default: m.ProjectGantt,
-  })),
-);
-const PlannedVsActual = lazy(() =>
-  import("./charts/planned-vs-actual").then((m) => ({
-    default: m.PlannedVsActual,
-  })),
-);
-const SpendingOverTime = lazy(() =>
-  import("./charts/spending-over-time").then((m) => ({
-    default: m.SpendingOverTime,
-  })),
-);
-const TaskHeatmap = lazy(() =>
-  import("./charts/task-heatmap").then((m) => ({ default: m.TaskHeatmap })),
 );
 
 const NO_IMAGES: Array<{ id: string; url: string; filename: string }> = [];
@@ -1366,73 +1344,19 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
       {(chartExpenses.length > 0 ||
         subtreeTasks.length > 0 ||
         ganttSubtreeProjects.length > 0) && (
-        <Stack className="pt-4">
-          {/* One boundary for the whole band — the charts load as a group, and
-              a single skeleton reads better than five staggered ones. */}
-          <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
-            {chartExpenses.length > 0 && (
-              <>
-                <Section
-                  title="Spending Over Time"
-                  description={
-                    hasSubtree
-                      ? "Cumulative spend against the estimate · includes sub-project expenses"
-                      : "Cumulative spend against the estimate"
-                  }
-                >
-                  <SpendingOverTime
-                    expenses={chartExpenses}
-                    costEstimate={project.rollup.subtree.costEstimate}
-                  />
-                </Section>
-
-                <CategoryBreakdown
-                  expenses={chartExpenses}
-                  donutHeight={350}
-                  onMatrixCellClick={handleMatrixCellClick}
-                  activeMatrixCell={activeMatrixCell}
-                />
-
-                {/* With zero future-flagged expenses this just restates the
-                  pivot's column totals — only worth its own section when
-                  something is actually planned. */}
-                {chartExpenses.some((p) => p.future) && (
-                  <Section
-                    title="Planned vs Actual"
-                    description="Committed spend vs future-flagged expenses"
-                  >
-                    <PlannedVsActual expenses={chartExpenses} />
-                  </Section>
-                )}
-              </>
-            )}
-
-            {/* Gated on dated content existing at all: a project with no tasks
-              and no sub-projects has nothing to plot. */}
-            {(subtreeTasks.length > 0 || ganttSubtreeProjects.length > 0) && (
-              <Section
-                title="Gantt"
-                description={
-                  ganttSubtreeProjects.length > 0
-                    ? "Tasks and sub-projects across the whole subtree"
-                    : undefined
-                }
-              >
-                <ProjectGantt
-                  projectId={project.id}
-                  tasks={subtreeTasks}
-                  subtreeProjects={ganttSubtreeProjects}
-                />
-              </Section>
-            )}
-
-            {topLevelTasks.length > 0 && (
-              <Section title="Task Timeline">
-                <TaskHeatmap tasks={topLevelTasks} />
-              </Section>
-            )}
-          </Suspense>
-        </Stack>
+        <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
+          <ProjectDetailAnalytics
+            projectId={project.id}
+            costEstimate={project.rollup.subtree.costEstimate}
+            hasSubtree={hasSubtree}
+            expenses={chartExpenses}
+            tasks={subtreeTasks}
+            topLevelTasks={topLevelTasks}
+            subtreeProjects={ganttSubtreeProjects}
+            activeMatrixCell={activeMatrixCell}
+            onMatrixCellClick={handleMatrixCellClick}
+          />
+        </Suspense>
       )}
     </Page>
   );

@@ -27,9 +27,10 @@ import {
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
+import type * as S3 from "~/server/utils/s3";
 
 vi.mock("~/server/utils/s3", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("~/server/utils/s3")>()),
+  ...(await importOriginal<typeof S3>()),
   uploadToS3: vi.fn(async () => undefined),
   deleteS3Object: vi.fn(async () => undefined),
 }));

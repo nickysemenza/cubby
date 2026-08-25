@@ -2,6 +2,8 @@ import { type TaskId, unsafeTaskId } from "@cubby/schemas/identifiers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import type { Database } from "~/server/db";
+import type * as ShortcodeResolver from "~/server/repo/shortcode-resolver";
+import type * as MutationSideEffects from "~/server/services/mutation-side-effects";
 
 const mocks = vi.hoisted(() => ({
   resolveAllPresent: vi.fn(),
@@ -9,16 +11,12 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("~/server/repo/shortcode-resolver", async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import("~/server/repo/shortcode-resolver")
-  >()),
+  ...(await importOriginal<typeof ShortcodeResolver>()),
   resolveAllPresent: mocks.resolveAllPresent,
 }));
 
 vi.mock("~/server/services/mutation-side-effects", async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import("~/server/services/mutation-side-effects")
-  >()),
+  ...(await importOriginal<typeof MutationSideEffects>()),
   runMutationSideEffectsForEntities: mocks.runMutationSideEffectsForEntities,
 }));
 

@@ -2,7 +2,7 @@ import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import type { ZodSchema } from "zod";
+import type { output as ZodOutput, ZodSchema } from "zod";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
@@ -129,11 +129,11 @@ export function defineEntityAdapter<
   repository: {
     get: (
       ctx: EntityKernelContext,
-      id: import("zod").output<CrudFor<E>["idSchema"]>,
-    ) => Promise<import("zod").output<CrudFor<E>["output"]> | null>;
+      id: ZodOutput<CrudFor<E>["idSchema"]>,
+    ) => Promise<ZodOutput<CrudFor<E>["output"]> | null>;
     list: (
       ctx: EntityKernelContext,
-      filters: import("zod").output<SFilters>,
+      filters: ZodOutput<SFilters>,
       sorts: SortParams[],
       pagination: PaginationParams,
       groupBy?: string,
@@ -144,26 +144,26 @@ export function defineEntityAdapter<
     }>;
     create: (
       ctx: EntityKernelContext,
-      data: import("zod").output<CrudFor<E>["createInput"]>,
+      data: ZodOutput<CrudFor<E>["createInput"]>,
     ) => Promise<{
-      output: import("zod").output<CrudFor<E>["output"]>;
+      output: ZodOutput<CrudFor<E>["output"]>;
       entityId: unknown;
       detachedImageKeys?: string[];
       backgroundBatches?: BackgroundBatchRef[];
     }>;
     update: (
       ctx: EntityKernelContext,
-      id: import("zod").output<CrudFor<E>["idSchema"]>,
-      data: import("zod").output<CrudFor<E>["updateInput"]>,
+      id: ZodOutput<CrudFor<E>["idSchema"]>,
+      data: ZodOutput<CrudFor<E>["updateInput"]>,
     ) => Promise<{
-      output: import("zod").output<CrudFor<E>["output"]>;
+      output: ZodOutput<CrudFor<E>["output"]>;
       entityId: unknown;
       detachedImageKeys?: string[];
       backgroundBatches?: BackgroundBatchRef[];
     }>;
     delete: (
       ctx: EntityKernelContext,
-      ids: import("zod").output<CrudFor<E>["idSchema"]>[],
+      ids: ZodOutput<CrudFor<E>["idSchema"]>[],
     ) => Promise<EntityKernelDeleteResult>;
   };
   merge?: EntityKernelBinding["merge"];

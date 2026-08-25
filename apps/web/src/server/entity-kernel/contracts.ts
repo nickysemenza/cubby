@@ -1,7 +1,7 @@
 import { mutationSideEffectsSchema } from "@cubby/schemas/background-jobs";
 import { relationMutationOut } from "@cubby/schemas/common";
 import { operationEffectSchema } from "@cubby/schemas/entity-integrity";
-import { imageUpdateInput } from "@cubby/schemas/image";
+import { imageOut, imageUpdateInput } from "@cubby/schemas/image";
 import { MAX_PAGE_SIZE, MAX_SORTS } from "@cubby/schemas/pagination";
 import {
   relatedSearchOutSchema,
@@ -11,6 +11,8 @@ import {
 import { z } from "zod";
 import {
   generatedEntityCreateCommandSchema,
+  generatedEntityMutationCreateResultSchema,
+  generatedEntityMutationUpdateResultSchema,
   generatedEntityUpdateCommandSchema,
 } from "~/server/generated/entity-bindings.gen";
 import {
@@ -129,28 +131,35 @@ const attachCommandSchema = z
 const detachCommandSchema = z
   .object({ action: z.literal("detach"), ...relationCommandFields })
   .superRefine(validateRelationCommand);
+const imageUpdateCommandSchema = z.object({
+  action: z.literal("update"),
+  entity: z.literal("image"),
+  id: z.string().min(1),
+  data: imageUpdateInput,
+});
+const deleteCommandSchema = z.object({
+  action: z.literal("delete"),
+  entity: entityKernelEntitySchema,
+  ids: uniqueEntityIdsSchema,
+});
 
-export const entityMutationCommandSchema = z.union([
+/** Strictly serializable commands exposed by the generic browser transport. */
+export const entityBrowserMutationCommandSchema = z.union([
   generatedEntityCreateCommandSchema,
   generatedEntityUpdateCommandSchema,
-  z.object({
-    action: z.literal("update"),
-    entity: z.literal("image"),
-    id: z.string().min(1),
-    data: imageUpdateInput,
-  }),
-  z.object({
-    action: z.literal("delete"),
-    entity: entityKernelEntitySchema,
-    ids: uniqueEntityIdsSchema,
-  }),
+  imageUpdateCommandSchema,
+  deleteCommandSchema,
+  attachCommandSchema,
+  detachCommandSchema,
+]);
+
+const entityMutationCommandSchema = z.union([
+  entityBrowserMutationCommandSchema,
   z.object({
     action: z.literal("merge"),
     entity: mergeableEntitySchema,
     data: z.record(z.string(), z.unknown()),
   }),
-  attachCommandSchema,
-  detachCommandSchema,
 ]);
 
 export const entityCommandSchema = z.union([
@@ -160,6 +169,9 @@ export const entityCommandSchema = z.union([
 
 export type EntityQueryCommand = z.infer<typeof entityQueryCommandSchema>;
 export type EntityMutationCommand = z.infer<typeof entityMutationCommandSchema>;
+export type EntityBrowserMutationCommand = z.infer<
+  typeof entityBrowserMutationCommandSchema
+>;
 export type EntityCommand = z.infer<typeof entityCommandSchema>;
 
 export const entityQueryResultSchema = z.discriminatedUnion("action", [
@@ -187,35 +199,46 @@ export const entityQueryResultSchema = z.discriminatedUnion("action", [
   }),
 ]);
 
-export const entityMutationResultSchema = z.discriminatedUnion("action", [
-  z.object({
-    action: z.literal("create"),
-    entity: entityKernelEntitySchema,
-    item: z.unknown(),
-    sideEffects: mutationSideEffectsSchema,
-  }),
-  z.object({
-    action: z.literal("update"),
-    entity: entityKernelEntitySchema,
-    item: z.unknown(),
-    sideEffects: mutationSideEffectsSchema,
-  }),
-  z.object({
-    action: z.literal("delete"),
-    entity: entityKernelEntitySchema,
-    deleted: z.number().int().nonnegative(),
-    deletedReferences: z.array(
-      z.object({ entity: entityKernelEntitySchema, id: z.string().min(1) }),
-    ),
-    affectedEdges: z.array(
-      z.object({
-        edge: z.string().min(1),
-        effect: operationEffectSchema,
-        changed: z.number().int().nonnegative().nullable(),
-      }),
-    ),
-    sideEffects: mutationSideEffectsSchema,
-  }),
+const imageUpdateResultSchema = z.object({
+  action: z.literal("update"),
+  entity: z.literal("image"),
+  item: imageOut,
+  sideEffects: mutationSideEffectsSchema,
+});
+const deleteResultSchema = z.object({
+  action: z.literal("delete"),
+  entity: entityKernelEntitySchema,
+  deleted: z.number().int().nonnegative(),
+  deletedReferences: z.array(
+    z.object({ entity: entityKernelEntitySchema, id: z.string().min(1) }),
+  ),
+  affectedEdges: z.array(
+    z.object({
+      edge: z.string().min(1),
+      effect: operationEffectSchema,
+      changed: z.number().int().nonnegative().nullable(),
+    }),
+  ),
+  sideEffects: mutationSideEffectsSchema,
+});
+const relationMutationResultSchema = z.object({
+  action: z.enum(["attach", "detach"]),
+  entity: z.enum(["product", "project", "purchase"]),
+  relation: z.enum(["components", "resources", "products"]),
+  result: relationMutationOut,
+});
+
+/** Strict wire result for browser mutations; merge remains a workflow API. */
+export const entityBrowserMutationResultSchema = z.union([
+  generatedEntityMutationCreateResultSchema,
+  generatedEntityMutationUpdateResultSchema,
+  imageUpdateResultSchema,
+  deleteResultSchema,
+  relationMutationResultSchema,
+]);
+
+export const entityMutationResultSchema = z.union([
+  entityBrowserMutationResultSchema,
   z.object({
     action: z.literal("merge"),
     entity: mergeableEntitySchema,
@@ -223,11 +246,7 @@ export const entityMutationResultSchema = z.discriminatedUnion("action", [
     mergeSummary: z.unknown(),
     sideEffects: mutationSideEffectsSchema,
   }),
-  z.object({
-    action: z.enum(["attach", "detach"]),
-    entity: z.enum(["product", "project", "purchase"]),
-    relation: z.enum(["components", "resources", "products"]),
-    result: relationMutationOut,
-  }),
 ]);
-export type EntityMutationResult = z.infer<typeof entityMutationResultSchema>;
+export type EntityBrowserMutationResult = z.infer<
+  typeof entityBrowserMutationResultSchema
+>;

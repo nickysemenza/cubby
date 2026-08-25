@@ -24,7 +24,8 @@ import {
 } from "~/components/ui/tooltip";
 import { EntityIcon } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { useTRPC, useTRPCClient } from "~/integrations/trpc/react";
+import { entityListQueryOptions } from "~/entities/entity-list.functions";
+import { useTRPCClient } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidatesFor, invalidateTRPCQueries } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
@@ -126,7 +127,6 @@ function RecipeUsageCell({ ingredient }: { ingredient: IngredientListItem }) {
 }
 
 export function IngredientList() {
-  const api = useTRPC();
   const trpcClient = useTRPCClient();
   const queryClient = useQueryClient();
   const columnHelper = useMemo(
@@ -157,7 +157,7 @@ export function IngredientList() {
 
   // Count of stub ingredients (no products) to surface the enrichment entry point.
   const { data: stubData } = useQuery(
-    api.ingredient.list.queryOptions({
+    entityListQueryOptions("ingredient", {
       filters: { productPresenceFilter: "none" },
       pagination: { pageIndex: 0, pageSize: 1 },
     }),

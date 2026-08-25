@@ -10,7 +10,6 @@ import { createCubbyColumnHelper } from "~/app/_components/data-table/table-feat
 import { Badge } from "~/components/ui/badge";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
-import { useTRPC } from "~/integrations/trpc/react";
 import {
   createFilterableSelectColumn,
   createNameColumn,
@@ -42,7 +41,6 @@ import {
  * purpose: see the column below.
  */
 export function MealTable() {
-  const api = useTRPC();
   const columnHelper = useMemo(() => createCubbyColumnHelper<MealOut>(), []);
 
   const updateMealMutation = useUpdateMutation({
@@ -191,7 +189,6 @@ export function MealTable() {
   // server `MealFilters` object, and the URL round-trip at once.
   const { workbench } = useEntityList<MealOut, MealFilters>({
     entity: "meal",
-    queryOptions: api.meal.list.queryOptions,
     columns,
     deletable: deletableConfig,
     // Same fallback the Name column uses, so the confirm dialog names an

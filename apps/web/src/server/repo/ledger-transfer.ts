@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
   FinancialTransactionId,
   LedgerPartyId,
@@ -22,6 +23,7 @@ import { buildTakeSkip } from "@cubby/schemas/pagination";
 import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   financialAccount,
   financialTransaction,
@@ -67,10 +69,7 @@ export const LEDGER_TRANSFER_DELETE_EDGE_POLICY = {
     effect: "soft-delete",
     description: "Transfer-owned normalized claims are retired.",
   },
-} as const satisfies import("~/server/db/entity-incoming-edges").IncomingEdgePolicy<
-  "ledgerTransfer",
-  import("@cubby/schemas/entity-integrity").OperationDisposition
->;
+} as const satisfies IncomingEdgePolicy<"ledgerTransfer", OperationDisposition>;
 
 const cents = (value: number) => Math.round(value * 100);
 

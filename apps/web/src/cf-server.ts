@@ -8,6 +8,7 @@
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import * as Sentry from "@sentry/cloudflare";
+import type * as ServerEntry from "@tanstack/react-start/server-entry";
 import { withHtmlNoCache } from "./lib/http-cache";
 import { SENTRY_DSN } from "./lib/sentry-dsn";
 import { scrubSentryEvent } from "./lib/sentry-scrub";
@@ -22,9 +23,7 @@ import { classifyHttpWorkload } from "./server/workload";
 // first request). We keep it lazy (not a top-level static import) so that
 // module-level errors are caught in the fetch() try/catch rather than becoming
 // silent 500s.
-let handlerPromise: Promise<
-  typeof import("@tanstack/react-start/server-entry")
->;
+let handlerPromise: Promise<typeof ServerEntry>;
 const getHandler = () => {
   handlerPromise ??= import("@tanstack/react-start/server-entry");
   return handlerPromise;

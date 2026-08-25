@@ -1,3 +1,120 @@
 import { literalEntity } from "../literal.js";
 
-export default literalEntity({key:"ledgerTransfer",names:{singular:"Ledger Transfer"},route:null,table:"LedgerTransfer",identifiers:{brand:"LedgerTransferId",shortcode:"LTR-",legacy:null},presentation:{titleField:"name"},fields:{create:{module:"@cubby/schemas/ledger-transfer",export:"ledgerTransferCreateInput"},update:{module:"@cubby/schemas/ledger-transfer",export:"ledgerTransferUpdateData"},output:{module:"@cubby/schemas/ledger-transfer",export:"ledgerTransferOut"}},filters:{urlKeys:[],descriptors:[]},relations:[{key:"from-party",label:"From party",target:"ledgerParty",provenance:{kind:"local-path",steps:[{edge:"LedgerTransfer.fromPartyId",direction:"outgoing"}]},deletionPolicy:"restrict",inverse:{steps:[{edge:"LedgerTransfer.fromPartyId",direction:"incoming"}]}},{key:"to-party",label:"To party",target:"ledgerParty",provenance:{kind:"local-path",steps:[{edge:"LedgerTransfer.toPartyId",direction:"outgoing"}]},deletionPolicy:"restrict",inverse:{steps:[{edge:"LedgerTransfer.toPartyId",direction:"incoming"}]}},{key:"evidence-transactions",label:"Evidence transactions",target:"financialTransaction",provenance:{kind:"local-path",steps:[{edge:"FinancialTransaction.ledgerTransferId",direction:"incoming"}]},deletionPolicy:"restrict",inverse:{steps:[{edge:"FinancialTransaction.ledgerTransferId",direction:"outgoing"}]}}],search:{enabled:false},capabilities:{auditable:true,images:false,countable:false,softDelete:true,delete:{mode:"soft",bulk:true},merge:false,mcp:["get","list","create","update","delete"]},extensions:{countFilter:null,relatednessSignals:null,mcpNames:null,ports:{repository:{module:"~/server/repo/ledger-transfer.entity-adapter",export:"ledgerTransferEntityAdapter"},references:{label:{module:"~/entities/entities",export:"entityLabel"},resolver:{module:"~/server/repo/shortcode-resolver",export:"resolveLiveShortcode"}},filters:{module:"~/entities/filter-manifest",export:"getEntityFilters"},search:{projection:null,semanticText:null,dependentRefresh:null},lifecycle:{policy:{module:"~/server/repo/ledger-transfer",export:"LEDGER_TRANSFER_DELETE_EDGE_POLICY"},runtime:{module:"~/server/repo/ledger-transfer.entity-adapter",export:"ledgerTransferEntityAdapter"}},relationMutation:{attach:null,detach:null}}}});
+export default literalEntity({
+  key: "ledgerTransfer",
+  names: { singular: "Ledger Transfer" },
+  route: null,
+  table: "LedgerTransfer",
+  identifiers: { brand: "LedgerTransferId", shortcode: "LTR-", legacy: null },
+  presentation: { titleField: "name" },
+  fields: {
+    create: {
+      module: "@cubby/schemas/ledger-transfer",
+      export: "ledgerTransferCreateInput",
+    },
+    update: {
+      module: "@cubby/schemas/ledger-transfer",
+      export: "ledgerTransferUpdateData",
+    },
+    output: {
+      module: "@cubby/schemas/ledger-transfer",
+      export: "ledgerTransferOut",
+    },
+  },
+  filters: { descriptors: [] },
+  relations: [
+    {
+      key: "from-party",
+      label: "From party",
+      target: "ledgerParty",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "LedgerTransfer.fromPartyId", direction: "outgoing" }],
+      },
+      deletionPolicy: "restrict",
+      inverse: {
+        steps: [{ edge: "LedgerTransfer.fromPartyId", direction: "incoming" }],
+      },
+    },
+    {
+      key: "to-party",
+      label: "To party",
+      target: "ledgerParty",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "LedgerTransfer.toPartyId", direction: "outgoing" }],
+      },
+      deletionPolicy: "restrict",
+      inverse: {
+        steps: [{ edge: "LedgerTransfer.toPartyId", direction: "incoming" }],
+      },
+    },
+    {
+      key: "evidence-transactions",
+      label: "Evidence transactions",
+      target: "financialTransaction",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          {
+            edge: "FinancialTransaction.ledgerTransferId",
+            direction: "incoming",
+          },
+        ],
+      },
+      deletionPolicy: "restrict",
+      inverse: {
+        steps: [
+          {
+            edge: "FinancialTransaction.ledgerTransferId",
+            direction: "outgoing",
+          },
+        ],
+      },
+    },
+  ],
+  search: { enabled: false },
+  capabilities: {
+    auditable: true,
+    images: false,
+    countable: false,
+    softDelete: true,
+    delete: { mode: "soft", bulk: true },
+    merge: false,
+    mcp: ["get", "list", "create", "update", "delete"],
+  },
+  extensions: {
+    countFilter: null,
+    relatednessSignals: null,
+    mcpNames: null,
+    ports: {
+      repository: {
+        module: "~/server/repo/ledger-transfer.entity-adapter",
+        export: "ledgerTransferEntityAdapter",
+      },
+      references: {
+        label: { module: "~/entities/entities", export: "entityLabel" },
+        resolver: {
+          module: "~/server/repo/shortcode-resolver",
+          export: "resolveLiveShortcode",
+        },
+      },
+      filters: {
+        module: "~/entities/filter-manifest",
+        export: "getEntityFilters",
+      },
+      search: { projection: null, semanticText: null, dependentRefresh: null },
+      lifecycle: {
+        policy: {
+          module: "~/server/repo/ledger-transfer",
+          export: "LEDGER_TRANSFER_DELETE_EDGE_POLICY",
+        },
+        runtime: {
+          module: "~/server/repo/ledger-transfer.entity-adapter",
+          export: "ledgerTransferEntityAdapter",
+        },
+      },
+      relationMutation: { attach: null, detach: null },
+    },
+  },
+});

@@ -56,22 +56,18 @@ describe("cached-read policy", () => {
   });
 
   it("routes generic Start filter options through readDb", () => {
-    const source = read("../entities/entity-filter-options.ts");
+    const source = read("./entity-runtime.server.ts");
 
-    expect(source).toContain("getFilterOptions(context.readDb, data)");
-    expect(source).not.toContain("getFilterOptions(context.db, data)");
+    expect(source).toContain("getFilterOptions(context.readDb, options.data)");
+    expect(source).not.toContain("getFilterOptions(context.db, options.data)");
   });
 
   it("keeps generic Start reads on the kernel action seam", () => {
-    const list = read("../entities/entity-list.ts");
-    const detail = read("../entities/entity-detail.ts");
-    const mutation = read("../entities/entity-mutation.ts");
+    const runtime = read("./entity-runtime.server.ts");
 
-    expect(list).toContain("executeEntity(context");
-    expect(list).toContain('action: "list"');
-    expect(detail).toContain("executeEntity(context");
-    expect(detail).toContain('action: "get"');
-    expect(mutation).toContain("executeEntity(context");
+    expect(runtime).toContain("executeEntity(context");
+    expect(runtime).toContain('action: "list"');
+    expect(runtime).toContain('action: "get"');
   });
 
   it("keeps correctness-sensitive and non-browser API surfaces authoritative", () => {
@@ -105,18 +101,10 @@ describe("cached-read policy", () => {
     const compatibilityRouters = [
       "./api/routers/expense.ts",
       "./api/routers/financial-account.ts",
-      "./api/routers/financial-transaction.ts",
-      "./api/routers/ingredient.ts",
       "./api/routers/inventory.ts",
-      "./api/routers/location.ts",
-      "./api/routers/meal.ts",
-      "./api/routers/product.ts",
       "./api/routers/project.ts",
       "./api/routers/purchase.ts",
-      "./api/routers/recipe/crud.ts",
       "./api/routers/task.ts",
-      "./api/routers/vendor.ts",
-      "./api/routers/wish.ts",
     ];
     for (const path of compatibilityRouters) {
       expect(read(path), path).toContain(

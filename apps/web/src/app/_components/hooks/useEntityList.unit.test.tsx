@@ -1,5 +1,7 @@
+import type * as RelatedView from "@cubby/schemas/related-view";
 import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type * as EntityFilters from "~/entities/filters";
 import type {
   CubbyColumnDef as ColumnDef,
   CubbyTable as Table,
@@ -22,7 +24,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@cubby/schemas/related-view", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@cubby/schemas/related-view")>()),
+  ...(await importOriginal<typeof RelatedView>()),
   relatedViewRegistry: [],
   relatedViewsFor: () => [],
 }));
@@ -69,7 +71,7 @@ vi.mock("~/entities/filter-manifest", () => ({
   getEntityFilters: () => [],
 }));
 vi.mock("~/entities/filters", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("~/entities/filters")>()),
+  ...(await importOriginal<typeof EntityFilters>()),
   buildFiltersFromManifest: () => ({}),
   filterGetterFromColumnFilters: () => () => undefined,
   summarizeListState: () => undefined,

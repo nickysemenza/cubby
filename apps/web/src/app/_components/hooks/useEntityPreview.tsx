@@ -165,7 +165,7 @@ export function useEntityPreview(
         void queryClient.prefetchQuery({
           // biome-ignore lint/suspicious/noExplicitAny: the generated entity union cannot be narrowed at this dispatch seam
           ...(queryOptions as any),
-          meta: { ...queryOptions.meta, speculativePreview: true },
+          meta: { ...queryOptions.meta, speculative: true },
         });
       }, PREVIEW_INTENT_DELAY_MS);
       intentRef.current = intent;

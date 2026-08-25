@@ -3,7 +3,6 @@ import type {
   ProjectDashboardSummaryOut,
   ProjectFilters,
   ProjectOut,
-  ProjectPortfolioAnalyticsOut,
   TaskOut,
 } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
@@ -18,6 +17,7 @@ import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import type { SummaryItem } from "~/app/_components/SummaryCard";
 import { ProjectMark } from "~/app/projects/project-mark";
+import type { ProjectPortfolioAnalyticsViewProps } from "~/app/projects/project-portfolio-analytics-view";
 import { DashboardSectionLoading } from "~/components/feedback/loading-skeletons";
 import { Grid, Row, Section, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -69,34 +69,11 @@ import {
   StatusIcon,
 } from "./shared";
 
-// Charts are Nivo/d3-heavy and each tab's panel is unmounted until selected, so
-// lazy-load them to keep their code out of the dashboard chunk until a tab opens.
-const CostVsEstimate = lazy(() =>
-  import("./charts/cost-vs-estimate").then((m) => ({
-    default: m.CostVsEstimate,
-  })),
-);
-const MonthlyTrend = lazy(() =>
-  import("./charts/monthly-trend").then((m) => ({ default: m.MonthlyTrend })),
-);
-const TradeActivity = lazy(() =>
-  import("./charts/trade-activity").then((m) => ({
-    default: m.TradeActivity,
-  })),
-);
-const PlannedVsActualByMonth = lazy(() =>
-  import("./charts/planned-vs-actual-by-month").then((m) => ({
-    default: m.PlannedVsActualByMonth,
-  })),
-);
-const SpendingByProject = lazy(() =>
-  import("./charts/spending-by-project").then((m) => ({
-    default: m.SpendingByProject,
-  })),
-);
-const OpenTasksByProject = lazy(() =>
-  import("./charts/open-tasks-by-project").then((m) => ({
-    default: m.OpenTasksByProject,
+// Portfolio analytics is one optional interaction: keep all of its Nivo/d3
+// charts in one lazy module so selecting Analytics has one predictable fetch.
+const ProjectAnalytics = lazy(() =>
+  import("./project-portfolio-analytics-view").then((m) => ({
+    default: m.ProjectPortfolioAnalyticsView,
   })),
 );
 const TaskStatusBoard = lazy(() =>
@@ -506,74 +483,16 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
   );
 }
 
-/**
- * Every chart here is sourced from `portfolioAnalytics`'s pre-aggregated
- * fields (see repo/project/portfolio-analytics.ts) — never raw
- * projects/tasks/expenses, which this endpoint deliberately doesn't return.
- * Charts whose old raw-data shape has no server aggregate equivalent
- * (Project Timeline/Gantt, Project Dependencies, Category Breakdown,
- * Spending Heatmap, Spend-by-Trade pivot matrix) were dropped rather than
- * inventing new server aggregates — see the task report.
- */
 function AnalyticsView({
   data,
   isLoading,
 }: {
-  data: ProjectPortfolioAnalyticsOut | undefined;
+  data: ProjectPortfolioAnalyticsViewProps["data"];
   isLoading: boolean;
 }) {
-  if (isLoading || !data) {
-    return <Skeleton className="h-[400px] w-full" />;
-  }
-
   return (
     <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
-      <Stack className="pt-4">
-        <Section
-          title="Cost vs Estimate"
-          description="% of budget spent — projects with an estimate only"
-        >
-          <CostVsEstimate data={data.costVsEstimate} />
-        </Section>
-
-        <Section
-          title="Top 10 Projects by Spending"
-          description="Raw dollar totals, regardless of whether a project has an estimate"
-        >
-          <SpendingByProject data={data.spendingByProject} />
-        </Section>
-
-        <Section
-          title="Monthly Spending Trend"
-          description="Actual vs committed spend, by month"
-        >
-          <MonthlyTrend data={data.monthlySpend} />
-        </Section>
-
-        <Section
-          title="Planned vs Actual"
-          description="Committed spend vs future-flagged expenses, by month"
-        >
-          <PlannedVsActualByMonth data={data.plannedVsActual} />
-        </Section>
-
-        <Section
-          title="Spend by Trade"
-          description="Actual + committed spend per trade"
-        >
-          <TradeActivity
-            data={data.tradeActivity}
-            adjustments={data.adjustments.net}
-          />
-        </Section>
-
-        <Section
-          title="Open Tasks by Project"
-          description="Where open work is concentrated"
-        >
-          <OpenTasksByProject data={data.taskHeatmap} />
-        </Section>
-      </Stack>
+      <ProjectAnalytics data={data} isLoading={isLoading} />
     </Suspense>
   );
 }
@@ -732,7 +651,6 @@ function ServerProjectGallery({
   );
   const list = useEntityList<ProjectOut, ProjectFilters>({
     entity: "project",
-    queryOptions: api.project.list.queryOptions,
     columns,
     filterOptions,
     layoutKey: "project:gallery",

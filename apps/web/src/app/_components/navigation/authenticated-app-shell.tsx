@@ -1,6 +1,6 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Search, Wrench } from "lucide-react";
-import { lazy, type ReactNode, Suspense, useState } from "react";
+import { type ReactNode, Suspense, useState } from "react";
 import { preloadCommandMenu } from "~/app/_components/command-menu-loader";
 import { AppFooter } from "~/app/_components/footer";
 import { MainNav } from "~/app/_components/MainNav";
@@ -9,6 +9,10 @@ import { useHydrated } from "~/hooks/useHydrated";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useVirtualKeyboard } from "~/hooks/useVirtualKeyboard";
 import { cn } from "~/lib/utils";
+import {
+  AuthenticatedShellAccount,
+  AuthenticatedShellControls,
+} from "./authenticated-shell-controls";
 import { resolveMobileRoute } from "./mobile-route-descriptor";
 import {
   homeNavItem,
@@ -20,34 +24,16 @@ import {
   todayNavItems,
   useActiveTo,
 } from "./nav-items";
+import {
+  SidebarRailGroup as RailGroupFlyout,
+  SidebarRailLeaf as RailLeaf,
+} from "./sidebar-rail-group";
+import { WorkspaceNavigator } from "./workspace-navigator";
 
 const LOGO_SRC = import.meta.env.DEV ? "/favicon-dev.svg" : "/favicon.svg";
 
-const ShellControls = lazy(() =>
-  import("./authenticated-shell-controls").then((module) => ({
-    default: module.AuthenticatedShellControls,
-  })),
-);
-const ShellAccount = lazy(() =>
-  import("./authenticated-shell-controls").then((module) => ({
-    default: module.AuthenticatedShellAccount,
-  })),
-);
-const RailGroupFlyout = lazy(() =>
-  import("./sidebar-rail-group").then((module) => ({
-    default: module.SidebarRailGroup,
-  })),
-);
-const RailLeaf = lazy(() =>
-  import("./sidebar-rail-group").then((module) => ({
-    default: module.SidebarRailLeaf,
-  })),
-);
-const WorkspaceNavigator = lazy(() =>
-  import("./workspace-navigator").then((module) => ({
-    default: module.WorkspaceNavigator,
-  })),
-);
+const ShellControls = AuthenticatedShellControls;
+const ShellAccount = AuthenticatedShellAccount;
 
 type AuthenticatedAppShellProps = {
   children: ReactNode;

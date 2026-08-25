@@ -294,5 +294,4 @@ export function WorkspaceNavigator({
   );
 }
 
-export const workspaceNavigatorSearchItemsForTest = searchableItems;
 export const workspaceNavigatorLeavesForTest = completeNavLeaves;

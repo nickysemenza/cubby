@@ -234,30 +234,6 @@ function RootComponent() {
   // requested. `mounted` latches true so it stays mounted after the first open.
   const [commandMenuMounted, setCommandMenuMounted] = React.useState(false);
 
-  React.useEffect(() => {
-    if (!navigator.webdriver) return;
-    const fixtureWindow = window as typeof window & {
-      __cubbyEntityMutation?: (
-        command: import("~/server/entity-kernel/contracts").EntityMutationCommand,
-      ) => Promise<
-        import("~/server/entity-kernel/contracts").EntityMutationResult
-      >;
-    };
-    let active = true;
-    void import("~/entities/entity-mutation").then(
-      ({ executeEntityMutation }) => {
-        if (active) {
-          fixtureWindow.__cubbyEntityMutation = (command) =>
-            executeEntityMutation({ data: command });
-        }
-      },
-    );
-    return () => {
-      active = false;
-      delete fixtureWindow.__cubbyEntityMutation;
-    };
-  }, []);
-
   const openCommandMenu = React.useCallback(() => {
     markCommandMenuOpen();
     preloadCommandMenu();

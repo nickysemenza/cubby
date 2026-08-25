@@ -14,6 +14,7 @@ import {
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
 import { expenseCaptureRequest } from "~/entities/editing/editor-requests";
+import { ensureEntityListSsr } from "~/entities/entity-list-ssr";
 import {
   type EXPENSE_LIST_VIEWS,
   expenseSearchDefaults,
@@ -43,6 +44,15 @@ const VIEW_SWITCHER_OPTIONS: ViewSwitcherOption<ViewOption>[] = [
 export const Route = createFileRoute("/_authenticated/expenses/")({
   validateSearch: expenseSearchSchema,
   search: { middlewares: [stripSearchParams(expenseSearchDefaults)] },
+  loaderDeps: ({ search }) => search,
+  loader: ({ context, deps, abortController }) =>
+    ensureEntityListSsr({
+      queryClient: context.queryClient,
+      entity: "expense",
+      search: deps,
+      active: (deps.view ?? "ledger") === "ledger",
+      signal: abortController.signal,
+    }),
   component: ExpensesPage,
   head: () => ({ meta: [{ title: pageTitle("Expenses") }] }),
 });

@@ -14,7 +14,6 @@ import {
   locationBulkUpdateParentOut,
   locationFiltersSchema,
   locationInventoryBreakdownOut,
-  locationListItemOut,
   locationOptionItemOut,
   locationParentOptionsOut,
   locationPickerItemOut,
@@ -26,9 +25,7 @@ import {
 } from "@cubby/schemas/location";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
-import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 import { createAppError } from "~/server/errors/app-error";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import {
   buildLocationTree,
   bulkReparentLocations,
@@ -46,18 +43,9 @@ import {
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
 import { createEntityListProcedure } from "../crud-factory";
-import { createEntityListCompatibilityProcedure } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const locationShortcodes = bindShortcodeResolver("location");
-
-const list = createEntityListCompatibilityProcedure(
-  ENTITY_KERNEL_BINDINGS.location,
-  {
-    ...ENTITY_BINDINGS.location.crud,
-    listOutput: locationListItemOut,
-  },
-);
 
 /**
  * Explicit pick, not a spread: the roster reads ignore the date, valuation, and
@@ -233,7 +221,6 @@ const recomputeValuations = protectedProcedure
   });
 
 export const locationRouter = createTRPCRouter({
-  list,
   search,
   options,
   getByShortcodes,

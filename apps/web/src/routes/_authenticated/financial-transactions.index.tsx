@@ -3,6 +3,7 @@ import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action
 import { listPage } from "~/app/_components/routing/entity-routes";
 import { FinancialTransactionList } from "~/app/finance/financial-transaction-list";
 import { financialTransactionCaptureRequest } from "~/entities/editing/editor-requests";
+import { ensureEntityListSsr } from "~/entities/entity-list-ssr";
 import {
   financeSearchDefaults,
   financialTransactionSearchSchema,
@@ -25,6 +26,14 @@ export const Route = createFileRoute("/_authenticated/financial-transactions/")(
   {
     validateSearch: financialTransactionSearchSchema,
     search: { middlewares: [stripSearchParams(financeSearchDefaults)] },
+    loaderDeps: ({ search }) => search,
+    loader: ({ context, deps, abortController }) =>
+      ensureEntityListSsr({
+        queryClient: context.queryClient,
+        entity: "financialTransaction",
+        search: deps,
+        signal: abortController.signal,
+      }),
     head: () => ({ meta: [{ title: pageTitle("Transactions") }] }),
     component: TransactionsPage,
   },

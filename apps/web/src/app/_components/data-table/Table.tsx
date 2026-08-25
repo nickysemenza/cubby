@@ -2,7 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import { LayoutList, List } from "lucide-react";
-import { lazy, type ReactNode, Suspense } from "react";
+import type { ReactNode } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Stack } from "~/components/layout";
@@ -36,12 +36,11 @@ import {
 import { MobileListScreen } from "./MobileListScreen";
 import { RowsPerPageSelect } from "./rows-per-page-select";
 import { SectionHeader } from "./SectionHeader";
+import TableHeaderLayout from "./TableHeaderLayout";
 import type { CubbyTable as ITable, CubbyRow as Row } from "./table-features";
 import { columnWidthValue } from "./table-layout";
 import { useDataTableController } from "./useDataTableController";
 import type { GroupConfig } from "./useGroupedList";
-
-const TableHeaderLayout = lazy(() => import("./TableHeaderLayout"));
 
 // Faint row guides every `rowHeight` px so the virtualized spacer (the gap the
 // renderer hasn't filled yet on a fast scroll) reads as empty table rows
@@ -584,13 +583,11 @@ export default function RTable<TItem extends RowData>(
                 {/* Sticks to the pane's own top, so there is no offset to keep
                   in sync with the nav and toolbar heights. */}
                 <TableHeader className="sticky top-0 z-30 bg-card shadow-[0_1px_0_var(--border)] [&_th]:bg-card [&_tr]:border-b-0">
-                  <Suspense fallback={null}>
-                    <TableHeaderLayout
-                      table={table as unknown as ITable<RowData>}
-                      styles={styles}
-                      isDebugEnabled={isDebugEnabled}
-                    />
-                  </Suspense>
+                  <TableHeaderLayout
+                    table={table as unknown as ITable<RowData>}
+                    styles={styles}
+                    isDebugEnabled={isDebugEnabled}
+                  />
                 </TableHeader>
                 <TableBody
                   inert={isTransitioning ? true : undefined}

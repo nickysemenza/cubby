@@ -1,51 +1,77 @@
+import { unsafeUserId } from "@cubby/schemas/identifiers";
 import { inventoryCreatePayloadData } from "@cubby/schemas/inventory";
 import { locationCreateInput } from "@cubby/schemas/location";
 import { productCreateInput } from "@cubby/schemas/product";
 import { type TaskStatus, taskCreateInput } from "@cubby/schemas/project";
 import type { Page } from "@playwright/test";
-import type {
-  EntityKernelEntity,
-  EntityMutationCommand,
-  EntityMutationResult,
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
+import { createTestTRPCContext } from "~/server/api/trpc";
+import type { Database } from "~/server/db";
+import * as schema from "~/server/db/schema";
+import { executeEntity } from "~/server/entity-kernel";
+import {
+  type EntityBrowserMutationCommand,
+  entityBrowserMutationCommandSchema,
 } from "~/server/entity-kernel/contracts";
+import { requireActor } from "~/server/request-context";
 
 type CreatedEntity = { id: string };
 
-async function createFixture<T extends CreatedEntity>(
-  page: Page,
-  entity: EntityKernelEntity,
-  input: unknown,
-): Promise<T> {
-  if (page.url() === "about:blank") {
-    try {
-      await page.goto("/settings", { waitUntil: "commit" });
-    } catch (error) {
-      if (!(error instanceof Error) || !error.message.includes("ERR_ABORTED")) {
-        throw error;
-      }
-    }
+let fixtureDb: Database | undefined;
+
+function getFixtureDb(): Database {
+  if (fixtureDb) return fixtureDb;
+  const connectionString =
+    process.env.E2E_DATABASE_URL ?? process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error(
+      "E2E_DATABASE_URL is required for server-side Playwright fixtures",
+    );
   }
-  await page.waitForFunction(
-    () =>
-      typeof (window as typeof window & { __cubbyEntityMutation?: unknown })
-        .__cubbyEntityMutation === "function",
+  const pool = new Pool({ connectionString, max: 2, allowExitOnIdle: true });
+  fixtureDb = drizzle(pool, { schema }) as unknown as Database;
+  return fixtureDb;
+}
+
+async function fixtureUserId(page: Page) {
+  const response = await page.request.get("/api/auth/get-session");
+  if (!response.ok()) {
+    throw new Error(`Fixture session lookup failed: ${response.status()}`);
+  }
+  const session = (await response.json()) as {
+    user?: { id?: string };
+  };
+  const userId = session.user?.id;
+  if (!userId) throw new Error("Fixture session has no authenticated user id");
+  return unsafeUserId(userId);
+}
+
+async function createFixture(
+  page: Page,
+  entity: Extract<EntityBrowserMutationCommand, { action: "create" }>["entity"],
+  input: unknown,
+): Promise<CreatedEntity> {
+  const db = getFixtureDb();
+  const context = requireActor(
+    createTestTRPCContext(db, {
+      auth: { userId: await fixtureUserId(page) },
+    }),
   );
-  const result = await page.evaluate(
-    async (command: EntityMutationCommand) =>
-      await (
-        window as typeof window & {
-          __cubbyEntityMutation: (
-            command: EntityMutationCommand,
-          ) => Promise<EntityMutationResult>;
-        }
-      ).__cubbyEntityMutation(command),
-    { action: "create", entity, data: input } as EntityMutationCommand,
-  );
-  const output = result.action === "create" ? result.item : null;
+  const command = entityBrowserMutationCommandSchema.parse({
+    action: "create",
+    entity,
+    data: input,
+  });
+  const result = await executeEntity(context, command);
+  if (result.action !== "create") {
+    throw new Error(`Fixture ${entity}.create returned the wrong action`);
+  }
+  const output = result.item;
   if (!output || typeof output !== "object" || !("id" in output)) {
     throw new Error(`Fixture ${entity}.create returned no entity id`);
   }
-  return output as T;
+  return output;
 }
 
 const productFixtureInput = (name: string, manufacturer: string) =>

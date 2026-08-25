@@ -145,6 +145,9 @@ export const recipeListSearchSchema = listSearchSchema("recipe", {
   sourceType: urlEnumListParam(z.enum(recipeSourceValues)),
 });
 
+/** Ingredients now use the same generated filter/search contract as every list route. */
+export const ingredientListSearchSchema = listSearchSchema("ingredient", {});
+
 export const wishSearchSchema = listSearchSchema("wish", {
   q: urlStringParam,
   ...createDialogSearchField,

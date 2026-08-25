@@ -45,6 +45,7 @@ describe("literal entity generator", () => {
     `);
 
     const artifacts = renderEntityArtifacts(entities);
+    const filterArtifacts = renderFilterArtifacts(entities);
 
     const artifact = (suffix: string) =>
       artifacts.find(({ relativePath }) => relativePath.endsWith(suffix))
@@ -53,14 +54,14 @@ describe("literal entity generator", () => {
     expect(artifact("entity-manifest-data.gen.ts")).toContain("{alpha:{");
     expect(artifact("entity-bindings.gen.ts")).toContain('"alpha": {');
     expect(artifact("entity-bindings.gen.ts")).not.toContain("mcpOut");
-    expect(artifact("entity-bindings.gen.ts")).toContain(
+    expect(artifact("entity-details.gen.ts")).toContain(
       "ENTITY_DETAIL_OUTPUT_SCHEMAS",
     );
-    expect(artifact("entity-bindings.gen.ts")).toContain('"alpha": output');
+    expect(artifact("entity-details.gen.ts")).toContain('"alpha": output');
     expect(artifact("entity-details.gen.ts")).toContain(
       'detailEntities = ["alpha"]',
     );
-    expect(artifact("entity-bindings.gen.ts")).toContain(
+    expect(artifact("entity-details.gen.ts")).toContain(
       "shortcode:shortcodeSchema",
     );
     expect(artifact("entity-details.gen.ts")).toContain(
@@ -68,9 +69,11 @@ describe("literal entity generator", () => {
     );
     expect(artifact("entity-details.gen.ts")).toContain("shortcode: z.input");
     expect(artifact("entity-details.gen.ts")?.match(/^import .*$/gm)).toEqual(
-      expect.arrayContaining([expect.stringMatching(/^import type /)]),
+      expect.arrayContaining([
+        'import { output } from "@cubby/schemas/example";',
+      ]),
     );
-    expect(artifact("entity-details.gen.ts")).not.toMatch(/^import \{ /m);
+    expect(artifact("entity-details.gen.ts")).not.toContain("~/server/");
     expect(artifact("entity-routes.gen.ts")).toContain(
       'detail:"/alphas/$shortcode"',
     );
@@ -81,10 +84,22 @@ describe("literal entity generator", () => {
       'alpha:{actions:["get","list","create","update"]',
     );
     expect(artifact("entity-kernel-bindings.gen.ts")).toContain(
-      'typeof import("~/server/example")["exampleRepository"]',
+      'import type * as entityPortModule2 from "~/server/example"',
     );
     expect(artifact("entity-kernel-bindings.gen.ts")).toContain(
-      'typeof import("~/server/example")["attachExample"]',
+      'typeof entityPortModule2["exampleRepository"]',
+    );
+    expect(artifact("entity-kernel-bindings.gen.ts")).toContain(
+      'typeof entityPortModule2["attachExample"]',
+    );
+    expect(
+      filterArtifacts.find(({ relativePath }) =>
+        relativePath.endsWith("entity-filter-contracts.gen.ts"),
+      )?.source,
+    ).toContain("generatedEntityFilterContractCases");
+    expect(artifact("entity-lists.gen.ts")).toContain("entityListInputSchema");
+    expect(artifact("entity-lists.gen.ts")).toContain(
+      "ENTITY_LIST_OUTPUT_SCHEMAS",
     );
   });
 
@@ -158,7 +173,7 @@ describe("literal entity generator", () => {
       export const ENTITY_LITERALS = [{
         key: "alpha", names: { singular: "alpha" }, route: null, table: null,
         identifiers: { brand: null, shortcode: null, legacy: null }, presentation: { titleField: "name" }, fields: null,
-        filters: { urlKeys: [], descriptors: [] }, relations: [${relation}], search: { enabled: false },
+        filters: { descriptors: [] }, relations: [${relation}], search: { enabled: false },
         capabilities: { auditable: false, images: false, countable: false, softDelete: false, delete: null, merge: false, mcp: [] },
         extensions: { countFilter: null, relatednessSignals: null, mcpNames: null },
       }];
@@ -200,45 +215,53 @@ describe("literal entity generator", () => {
   });
 
   it("rejects unsupported, duplicate, missing, and stale filter descriptors", () => {
-    const parseFilters = (filters: string) =>
+    const parseFilters = (filters: string, auditable = false) =>
       parseEntityLiterals(`
         export const ENTITY_LITERALS = [{
-          key: "alpha", descriptor: { auditable: false, searchable: false }, contract: null,
+          key: "alpha", descriptor: { auditable: ${auditable}, searchable: false }, contract: null,
           filters: ${filters},
         }];
       `);
 
     expect(() =>
       parseFilters(
-        '{ urlKeys: ["name"], descriptors: [{ columnId: "name", kind: "fuzzy", placeholder: "Search..." }] }',
+        '{ descriptors: [{ columnId: "name", kind: "fuzzy", placeholder: "Search..." }] }',
       ),
     ).toThrow("kind is unsupported");
     expect(() =>
       parseFilters(
-        '{ urlKeys: ["name", "alias"], descriptors: [{ columnId: "name", kind: "text", placeholder: "Search..." }, { columnId: "name", urlKey: "alias", kind: "text", placeholder: "Search..." }] }',
+        '{ descriptors: [{ columnId: "name", kind: "text", placeholder: "Search..." }, { columnId: "name", urlKey: "alias", kind: "text", placeholder: "Search..." }] }',
       ),
     ).toThrow("duplicate columnId");
     expect(() =>
       parseFilters(
-        '{ urlKeys: ["same", "other"], descriptors: [{ columnId: "name", urlKey: "same", kind: "text", placeholder: "Search..." }, { columnId: "alias", urlKey: "same", kind: "text", placeholder: "Search..." }] }',
+        '{ descriptors: [{ columnId: "name", urlKey: "same", kind: "text", placeholder: "Search..." }, { columnId: "alias", urlKey: "same", kind: "text", placeholder: "Search..." }] }',
       ),
     ).toThrow("descriptors contains duplicate URL keys");
-    expect(() => parseFilters("{ urlKeys: [] }")).toThrow(
+    expect(() => parseFilters("{ descriptors: [] }")).not.toThrow();
+    expect(
+      parseFilters("{ audit: true, descriptors: [] }", true)[0]?.filterUrlKeys,
+    ).toEqual(["createdAt", "updatedAt"]);
+    expect(() => parseFilters('{ audit: "yes", descriptors: [] }')).toThrow(
+      "filters.audit must be a boolean",
+    );
+    expect(() => parseFilters("{ urlKeys: [], descriptors: [] }")).toThrow(
+      "filters.urlKeys is not allowed",
+    );
+    expect(() => parseFilters("{ audit: true, descriptors: [] }")).toThrow(
+      "filters.audit requires an auditable entity",
+    );
+    expect(() =>
+      parseFilters(
+        '{ descriptors: [{ columnId: "createdAt", kind: "range", placeholder: "Created" }], audit: true }',
+      ),
+    ).toThrow("duplicates an explicit");
+    expect(() => parseFilters("{ audit: false }")).toThrow(
       "filters.descriptors is required",
     );
     expect(() =>
       parseFilters(
-        '{ urlKeys: [], descriptors: [{ columnId: "name", kind: "text", placeholder: "Search..." }] }',
-      ),
-    ).toThrow("must exactly match descriptors");
-    expect(() =>
-      parseFilters(
-        '{ urlKeys: ["stale"], descriptors: [{ columnId: "name", kind: "text", placeholder: "Search..." }] }',
-      ),
-    ).toThrow("must exactly match descriptors");
-    expect(() =>
-      parseFilters(
-        '{ urlKeys: [], descriptors: [{ columnId: "name", kind: "text", placeholder: "Search...", options: [], optionsRef: { module: "x", export: "y" } }] }',
+        '{ descriptors: [{ columnId: "name", kind: "text", placeholder: "Search...", options: [], optionsRef: { module: "x", export: "y" } }] }',
       ),
     ).toThrow("cannot declare both options and optionsRef");
   });
@@ -291,7 +314,7 @@ describe("literal entity generator", () => {
       artifacts.find(
         (artifact) =>
           artifact.relativePath ===
-          "apps/web/src/server/generated/entity-bindings.gen.ts",
+          "apps/web/src/entities/generated/entity-details.gen.ts",
       )?.source,
     ).toContain('"product": productWithFoodOut');
   });

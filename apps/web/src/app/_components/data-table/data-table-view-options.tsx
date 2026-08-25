@@ -1,6 +1,5 @@
 import type { RowData } from "@tanstack/react-table";
 import { AlignJustify, LayoutList, List, Settings2 } from "lucide-react";
-import { lazy, Suspense } from "react";
 
 import { Button } from "~/components/ui/button";
 import {
@@ -14,13 +13,12 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { humanize } from "~/entities/filters";
+import TableLayoutCustomizer from "./TableLayoutCustomizer";
 import type {
   CubbyColumn as Column,
   CubbyTable as Table,
 } from "./table-features";
 import { type TableDensity, useTableDensity } from "./useTableDensity";
-
-const TableLayoutCustomizer = lazy(() => import("./TableLayoutCustomizer"));
 
 const densityOptions: {
   value: TableDensity;
@@ -92,15 +90,7 @@ export function DataTableViewOptions<TData extends RowData>({
           </DropdownMenuRadioGroup>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <Suspense
-          fallback={
-            <div className="p-4 text-center text-muted-foreground text-xs">
-              Loading layout controls…
-            </div>
-          }
-        >
-          <TableLayoutCustomizer table={table as unknown as Table<RowData>} />
-        </Suspense>
+        <TableLayoutCustomizer table={table as unknown as Table<RowData>} />
       </DropdownMenuContent>
     </DropdownMenu>
   );

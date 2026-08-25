@@ -20,6 +20,7 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
+import { ensureEntityListSsr } from "~/entities/entity-list-ssr";
 import { getEntityFilters } from "~/entities/filter-manifest";
 import {
   type LOCATION_LIST_VIEWS,
@@ -39,6 +40,15 @@ const VIEW_SWITCHER_OPTIONS: ViewSwitcherOption<ViewOption>[] = [
 export const Route = createFileRoute("/_authenticated/locations/")({
   validateSearch: locationSearchSchema,
   search: { middlewares: [stripSearchParams(locationSearchDefaults)] },
+  loaderDeps: ({ search }) => search,
+  loader: ({ context, deps, abortController }) =>
+    ensureEntityListSsr({
+      queryClient: context.queryClient,
+      entity: "location",
+      search: deps,
+      active: deps.view === "table",
+      signal: abortController.signal,
+    }),
   component: LocationsPage,
   head: () => ({ meta: [{ title: pageTitle("Locations") }] }),
 });

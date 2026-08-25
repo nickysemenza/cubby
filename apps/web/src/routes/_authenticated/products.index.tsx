@@ -13,6 +13,7 @@ import {
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { ViewSwitcher } from "~/components/ui/view-switcher";
+import { ensureEntityListSsr } from "~/entities/entity-list-ssr";
 import {
   productSearchDefaults,
   productSearchSchema,
@@ -22,6 +23,14 @@ import { pageTitle } from "~/lib/page-title";
 export const Route = createFileRoute("/_authenticated/products/")({
   validateSearch: productSearchSchema,
   search: { middlewares: [stripSearchParams(productSearchDefaults)] },
+  loaderDeps: ({ search }) => search,
+  loader: ({ context, deps, abortController }) =>
+    ensureEntityListSsr({
+      queryClient: context.queryClient,
+      entity: "product",
+      search: deps,
+      signal: abortController.signal,
+    }),
   component: ProductsPage,
   head: () => ({ meta: [{ title: pageTitle("Products") }] }),
 });

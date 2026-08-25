@@ -23,7 +23,9 @@ history is the archive. Permanent product constraints live in the
 1. **Ingredient detail editing and recipe-usage repair.** Make the ingredient
    detail page self-sufficient: edit `naKinds`, manage its product/USDA and
    price/unit-mapping relationships, and reparse an affected recipe line without
-   opening the recipe form or ingredient workbench.
+   opening the recipe form or ingredient workbench. Use this representative
+   workflow to deepen the shared editing module only after its concrete needs are
+   proven; do not add speculative editor ports first.
 
 2. **Recurring maintenance tasks.** Add simple every-N-weeks/months recurrence;
    completing an instance creates the next one, which naturally enters Needs
@@ -108,8 +110,8 @@ history is the archive. Permanent product constraints live in the
     for the same lines.
 
 23. **Consider deleting tRPC after the Entity Kernel ships.** The 2026-08-24
-    detail/list/filter/write migration leaves 257 dedicated transport lines,
-    192 production `useTRPC` imports, 218 query-option call sites, and 59
+    detail/list/filter/write migration leaves 263 dedicated transport lines,
+    189 production `useTRPC` imports, 212 query-option call sites, and 59
     mutation-option call sites. Named generic CRUD writes, `entity.query`, and
     `entity.mutate` have all been deleted; remaining mutations are workflows or
     specialized operations. tRPC still provides streamed batches capped at 50,
@@ -130,6 +132,10 @@ history is the archive. Permanent product constraints live in the
 
 - Migrate additional route-owned reads when they do not benefit from batching;
   keep public/external endpoints as server routes rather than Start functions.
+- Retain the Inventory, Project, Task, Expense, Purchase, and Financial Account
+  list adapters while their embedded views and selector clusters benefit from
+  tRPC batching. Reconsider them from ordinary operation traces, or when Start
+  supplies a native batching facility; do not build a parallel batch transport.
 - Measure browser request count and route-ready time before moving Home or
   dashboard reads. Do not trade one batch for a visible request fan-out.
 - Measure the Start generic-write migration's invalidation, optimistic rollback,
@@ -148,6 +154,17 @@ history is the archive. Permanent product constraints live in the
 
 ## Triggered
 
+- **Entity relation runtime dispatch** — Promote when attach/detach genericization
+  resumes. Generate dispatch only for declared runtime ports and make unsupported
+  semantic edges fail explicitly; catalog relationships must not imply executable
+  mutation behavior.
+- **Entity-runtime production proof** — Promote after a transport or preview
+  deployment changes these contracts: verify Product-list traversal causes no
+  speculative detail fan-out, `P-`/`L-` scans still canonicalize end to end, and
+  Start mutations succeed from a freshly loaded production tab.
+- **Natural CI evidence** — Revisit sharding only when ordinary exact-head runs
+  show a repeatable tail imbalance or regression. Use native reporter output;
+  do not add duration databases, custom sequencers, or manufactured timing runs.
 - **Persisted Collections and operational dashboard** — Promote when Collection
   tags need metadata, rename-safe empty identity, Smart Collection rules (for
   example, manufacturer plus minimum effective price), Trade links, or combined

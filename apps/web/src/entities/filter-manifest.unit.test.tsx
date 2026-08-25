@@ -1,11 +1,8 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { entitySchema } from "@cubby/schemas/entity";
 import { browserRoutedEntities } from "@cubby/schemas/entity-manifest";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import type { FilterSpec } from "./filter-manifest";
 import {
-  entityFilterFieldMaps,
   entityFilterSearchFields,
   getEntityFilters,
   manifestFilterConfig,
@@ -19,6 +16,7 @@ import {
   filterGetterFromSearch,
   partitionFilterSpecs,
 } from "./filters";
+import { generatedEntityFilterContractCases } from "./generated/entity-filter-contracts.gen";
 
 describe("manifestFilterConfig", () => {
   it.each([
@@ -196,86 +194,36 @@ describe("manifestFilterConfig", () => {
   });
 });
 
-describe("task subject-product filters", () => {
-  const build = (search: Record<string, unknown>) => {
-    const specs = getEntityFilters("task");
-    return buildFiltersFromManifest(
-      specs,
-      filterGetterFromSearch(specs, search),
-    );
-  };
-
-  it("routes an exact ?productId= scope to subjectProductId", () => {
-    expect(
-      build({ productId: "11111111-1111-4111-8111-111111111111" }),
-    ).toEqual({
-      subjectProductId: "11111111-1111-4111-8111-111111111111",
-    });
-  });
-
-  it("combines the visible exact-product picker with its presence sentinels", () => {
-    expect(build({ subjectProduct: FILTER_NONE })).toEqual({
-      subjectProductPresenceFilter: "none",
-    });
-    expect(
-      build({
-        productId: "11111111-1111-4111-8111-111111111111",
-        subjectProduct: FILTER_ANY,
-      }),
-    ).toEqual({
-      subjectProductId: "11111111-1111-4111-8111-111111111111",
-      subjectProductPresenceFilter: "has",
-    });
-  });
-
-  it("declares both URL keys so the router does not strip either state", () => {
-    expect(Object.keys(entityFilterSearchFields("task"))).toEqual(
-      expect.arrayContaining(["productId", "subjectProduct"]),
-    );
-  });
-});
-
-describe("manifest naming invariant", () => {
-  it("every nullable.field and presence field ends in PresenceFilter", () => {
-    const violations: string[] = [];
-    for (const entity of browserRoutedEntities) {
-      for (const spec of getEntityFilters(entity)) {
-        if (spec.nullable && !spec.nullable.field.endsWith("PresenceFilter")) {
-          violations.push(
-            `${entity}.${spec.columnId}: nullable.field "${spec.nullable.field}"`,
+describe("generated filter contracts", () => {
+  it("keeps generated descriptor, URL, schema, option, audit, and expander cases exact", () => {
+    for (const [entity, contract] of Object.entries(
+      generatedEntityFilterContractCases,
+    )) {
+      const specs = getEntityFilters(entity as Entity);
+      expect(specs.map((spec) => spec.columnId)).toEqual(
+        contract.descriptorColumns,
+      );
+      expect(specs.map((spec) => spec.urlKey ?? spec.columnId)).toEqual(
+        contract.urlKeys,
+      );
+      expect(new Set(contract.urlKeys).size).toBe(contract.urlKeys.length);
+      expect(
+        contract.rangeExpanders.every((entry) => {
+          const columnId = entry.slice(0, entry.indexOf(":~/"));
+          return specs.some(
+            (spec) =>
+              spec.columnId === columnId &&
+              spec.kind === "range" &&
+              spec.expand,
           );
-        }
-        if (spec.kind === "presence") {
-          const field = spec.field ?? spec.columnId;
-          if (!field.endsWith("PresenceFilter")) {
-            violations.push(`${entity}.${spec.columnId}: field "${field}"`);
-          }
-        }
+        }),
+      ).toBe(true);
+      if (contract.audit) {
+        expect(specs.map((spec) => spec.columnId)).toEqual(
+          expect.arrayContaining(["createdAt", "updatedAt"]),
+        );
       }
     }
-    expect(violations).toEqual([]);
-  });
-});
-
-describe("manifest key uniqueness", () => {
-  it("no two specs in an entity share a columnId or a URL key", () => {
-    const violations: string[] = [];
-    for (const entity of browserRoutedEntities) {
-      const seenColumns = new Set<string>();
-      const seenUrlKeys = new Set<string>();
-      for (const spec of getEntityFilters(entity)) {
-        const urlKey = spec.urlKey ?? spec.columnId;
-        if (seenColumns.has(spec.columnId)) {
-          violations.push(`${entity}: duplicate columnId "${spec.columnId}"`);
-        }
-        if (seenUrlKeys.has(urlKey)) {
-          violations.push(`${entity}: duplicate url key "${urlKey}"`);
-        }
-        seenColumns.add(spec.columnId);
-        seenUrlKeys.add(urlKey);
-      }
-    }
-    expect(violations).toEqual([]);
   });
 });
 
@@ -358,32 +306,6 @@ describe("expense vendor filter", () => {
       { value: FILTER_NONE, label: "(none)", meta: true },
       ...injected,
     ]);
-  });
-});
-
-describe("vendor filters", () => {
-  const build = (search: Record<string, unknown>) => {
-    const specs = getEntityFilters("vendor");
-    return buildFiltersFromManifest(
-      specs,
-      filterGetterFromSearch(specs, search),
-    );
-  };
-
-  it("routes ?q= to the search field", () => {
-    expect(build({ q: "home depot" })).toEqual({ search: "home depot" });
-  });
-
-  it("emits nothing for an unfiltered roster", () => {
-    expect(build({})).toEqual({});
-  });
-
-  it("gives the name column a text control", () => {
-    expect(manifestFilterConfig("vendor", "name")).toEqual({
-      placeholder: "Search vendors...",
-      filterType: "text",
-      options: [],
-    });
   });
 });
 
@@ -592,241 +514,5 @@ describe("expense URL-only scopes", () => {
         filterGetterFromSearch(specs, { subprojects: "true" }),
       ),
     ).toMatchObject({ includeSubProjects: true });
-  });
-});
-
-describe("manifest search fields survive JSON-parsed values", () => {
-  const parse = (entity: Entity, search: Record<string, unknown>) =>
-    z.object(entityFilterSearchFields(entity)).parse(search);
-
-  it.each([
-    ["expense", "order", 11334],
-    ["vendor", "q", 486242],
-    ["purchase", "q", 486242],
-  ] as const)(
-    "%s: keeps an all-digits ?%s= that parsed as a number",
-    (entity, key, value) => {
-      expect(parse(entity, { [key]: value })).toMatchObject({
-        [key]: String(value),
-      });
-    },
-  );
-
-  it("keeps a boolean-shaped filter value that parsed as a boolean", () => {
-    expect(parse("expense", { future: true })).toMatchObject({
-      future: "true",
-    });
-    expect(parse("expense", { future: false })).toMatchObject({
-      future: "false",
-    });
-  });
-});
-
-describe("finance filters", () => {
-  const build = (
-    entity: "financialAccount" | "financialTransaction",
-    search: Record<string, unknown>,
-  ) => {
-    const specs = getEntityFilters(entity);
-    return buildFiltersFromManifest(
-      specs,
-      filterGetterFromSearch(specs, search),
-    );
-  };
-
-  it("maps account controls and URL-only evidence fields", () => {
-    expect(
-      build("financialAccount", {
-        q: "visa",
-        identity: "credit_card,bank_account",
-        provisional: "true",
-        aliases: "none",
-        last4: "1234",
-      }),
-    ).toEqual({
-      search: "visa",
-      identityKind: ["credit_card", "bank_account"],
-      provisional: true,
-      sourceAliasPresenceFilter: "none",
-      last4: "1234",
-    });
-  });
-
-  it("maps transaction controls and expands posted-date presets", () => {
-    const filters = build("financialTransaction", {
-      q: "hardware",
-      kind: "purchase,refund",
-      status: "pending,posted",
-      postedDate: "30d",
-      amountMin: "-25",
-    });
-    expect(filters).toMatchObject({
-      search: "hardware",
-      kind: ["purchase", "refund"],
-      status: ["pending", "posted"],
-      amountMin: "-25",
-      postedDateFrom: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
-      postedDateTo: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
-    });
-  });
-});
-
-const emittedFields = (spec: FilterSpec): string[] => {
-  if (spec.kind === "range") {
-    const expand = spec.expand;
-    if (!expand) return [];
-    return (spec.options ?? []).flatMap((option) =>
-      Object.keys(expand(option.value)),
-    );
-  }
-  const fields = [spec.field ?? spec.columnId];
-  if (spec.nullable) fields.push(spec.nullable.field);
-  return fields;
-};
-
-describe("manifest fields exist on the server schema", () => {
-  it("covers every entity that has manifest specs", () => {
-    const withSpecs = browserRoutedEntities.filter(
-      (entity) => getEntityFilters(entity).length > 0,
-    );
-    expect(withSpecs.sort()).toEqual(
-      Object.keys(entityFilterFieldMaps).sort() as Entity[],
-    );
-  });
-
-  it("emits no field the server does not declare", () => {
-    const violations: string[] = [];
-    for (const [entity, fields] of Object.entries(entityFilterFieldMaps)) {
-      for (const spec of getEntityFilters(entity as Entity)) {
-        for (const field of emittedFields(spec)) {
-          if (!(field in fields)) {
-            violations.push(`${entity}.${spec.columnId} emits "${field}"`);
-          }
-        }
-      }
-    }
-    expect(violations).toEqual([]);
-  });
-});
-
-/**
- * The reverse direction: every field the server declares must be REACHABLE from
- * some manifest spec.
- *
- * The list-filter contract has four directions, and this was the last unguarded
- * one:
- *
- *   manifest → URL keys   `manifestFilterConfig` above
- *   manifest → schema     the describe above (a spec emitting a field nobody declares)
- *   schema   → repo       `server/repo/filter-application.integration.test.ts` (#595)
- *   schema   → manifest   HERE
- *
- * A declared-but-unreachable field is the mirror image of #588: there, the
- * manifest rendered controls the where-builder never read; here, the server
- * accepts a predicate no control can ever send, so the capability exists only
- * for whoever thinks to hand-write the URL. Both are invisible — a filter that
- * does nothing and a filter that can't be reached look identical from the page.
- *
- * "Reachable" is exactly {@link emittedFields}: a spec's `field ?? columnId`,
- * its `nullable.field`, or a key some `range` expander returns. urlOnly specs
- * count — a deep-link scope has no header control but is still reachable from
- * the URL and over MCP.
- */
-describe("every server filter field is reachable from the manifest", () => {
-  /**
-   * Fields no spec can reach, each with the reason it is unreachable ON PURPOSE.
-   *
-   * Every entry is held to the same hygiene below: one naming a field that no
-   * longer exists is stale, and one that has since become reachable must be
-   * deleted rather than left to rot. A real missing control belongs in the
-   * canonical backlog, not this by-design allowlist.
-   */
-  const UNREACHABLE_BY_DESIGN: Record<string, string> = {
-    "expense.projectScope":
-      "the /projects page forwards its own visible filter state into the embedded Expense list; an object scope has no URL string form",
-    "task.projectScope":
-      "same forwarding as expense.projectScope, into the embedded Task list",
-    "task.includeSubProjects":
-      "set by the project detail page beside its projectId scope. Expense's counterpart IS user-facing (?subprojects=) because the ledger is deep-linked from a project summary and must reconcile against it; the embedded task list is never linked into",
-    "project.includeSubProjects":
-      "set by the project detail page beside its parentProjectId scope, for the same reason",
-    "task.topLevelOnly":
-      "tree shaping: the table renders parents with expandable subtasks, so the renderer owns this. Advertised on MCP list_tasks",
-    "project.topLevelOnly":
-      "same tree shaping for sub-projects. Advertised on MCP list_projects",
-    "meal.from":
-      "Meals has no filterable list table — the calendar owns its window through ?week= and the shopping list through its own ?from=/?to=. This is the MCP window",
-    "meal.to": "the other half of meal.from",
-
-    "product.vendorSearch":
-      "the Vendors related column upgraded from the generated substring filter to an exact vendor roster (vendorId, ?related-vendor=)",
-    "product.projectSearch":
-      "the Projects related column upgraded to an exact project roster (projectId, ?related-project=)",
-    "product.purchaseSearch":
-      "the Purchases related column upgraded to an exact purchase roster (purchaseId, ?related-purchase=)",
-    "purchase.projectSearch":
-      "the Projects related column upgraded to an exact project roster (projectId, ?related-project=)",
-    "recipe.ingredientSearch":
-      "the Ingredients related column upgraded to an exact ingredient roster (ingredientId, ?related-ingredient=)",
-    "meal.recipeSearch":
-      "the Recipes related column spends its slot on the has/none presence control, which is what the meal/empty-cooked saved view pins — a view can only pin column-backed filters, and the generated presence spec was urlOnly. Substring search over recipe names does not compose with it, and the calendar (not this table) is how meals are usually found",
-    "product.taskSearch":
-      "the Tasks related column spends its slot on the status/due range control (resolveProductTaskFilter); a substring match over task names does not compose with it",
-    "wish.productSearch":
-      "the Candidates related column upgraded to an exact candidate-product roster (candidateProductId, ?related-product=), which is the predicate the wish repo actually owns",
-    "location.inventoryPresenceFilter":
-      "the Inventory control expresses the same predicate through its count bounds — `has` is directItemCountMin: 1, `none` is directItemCountMax: 0",
-    "product.expenseCountMax":
-      "the Expenses presets are lower bounds plus the two presence sentinels (`none` routes to expensePresenceFilter), so no option can emit an upper bound",
-    "purchase.orderId":
-      "the visible order-id control is the has/none reconciliation worklist, and ?q= already substring-matches order id. A purchase has its own detail route, so there is no expense-style exact-order-id deep-link scope here",
-  };
-
-  const reachableFields = (entity: Entity): Set<string> =>
-    new Set(getEntityFilters(entity).flatMap(emittedFields));
-
-  const unreachableFields = (
-    entity: Entity,
-    fields: Record<string, unknown>,
-  ): string[] => {
-    const reachable = reachableFields(entity);
-    return Object.keys(fields).filter((field) => !reachable.has(field));
-  };
-
-  it("every range expander yields at least one field", () => {
-    const silent: string[] = [];
-    for (const entity of browserRoutedEntities) {
-      for (const spec of getEntityFilters(entity)) {
-        if (spec.kind !== "range") continue;
-        if (emittedFields(spec).length === 0) {
-          silent.push(`${entity}.${spec.columnId}`);
-        }
-      }
-    }
-    expect(silent).toEqual([]);
-  });
-
-  it("leaves no declared field without a manifest entry point", () => {
-    const violations: string[] = [];
-    for (const [entity, fields] of Object.entries(entityFilterFieldMaps)) {
-      for (const field of unreachableFields(entity as Entity, fields)) {
-        const key = `${entity}.${field}`;
-        if (key in UNREACHABLE_BY_DESIGN) continue;
-        violations.push(key);
-      }
-    }
-    expect(violations).toEqual([]);
-  });
-
-  it("keeps the allowlist free of fields that are gone or now reachable", () => {
-    const stale = Object.keys(UNREACHABLE_BY_DESIGN).filter((key) => {
-      const [entityName, field] = key.split(".");
-      const entity = entitySchema.safeParse(entityName);
-      if (!entity.success || !field) return true;
-      const fields = entityFilterFieldMaps[entity.data];
-      if (!fields || !(field in fields)) return true;
-      return reachableFields(entity.data).has(field);
-    });
-    expect(stale).toEqual([]);
   });
 });

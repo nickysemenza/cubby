@@ -17,7 +17,5 @@ export function shouldToastQueryError(
   ) {
     return false;
   }
-  return !(
-    query.meta?.speculativePreview === true && query.getObserversCount() === 0
-  );
+  return !(query.meta?.speculative === true && query.getObserversCount() === 0);
 }

@@ -5,7 +5,7 @@ import type { QueryKey, UseMutationOptions } from "@tanstack/react-query";
 import type { z } from "zod";
 import type { useTRPC } from "~/integrations/trpc/react";
 import { invalidatesFor } from "~/lib/query-keys";
-import type { entityMutationCommandSchema } from "~/server/entity-kernel/contracts";
+import type { entityBrowserMutationCommandSchema } from "~/server/entity-kernel/contracts";
 import { entityDetailQueryOptions } from "./entity-detail";
 import { entityListQueryOptions } from "./entity-list";
 import { entityMutationOptions } from "./entity-mutation";
@@ -99,7 +99,7 @@ type CommandFor<
   E extends StandardEntity,
   A extends Exclude<StandardAction, "delete">,
 > = Extract<
-  z.input<typeof entityMutationCommandSchema>,
+  z.input<typeof entityBrowserMutationCommandSchema>,
   { entity: E; action: A }
 >;
 type VariablesFor<

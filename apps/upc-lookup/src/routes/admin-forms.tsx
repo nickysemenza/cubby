@@ -1,4 +1,4 @@
-import type { FC } from "hono/jsx";
+import type { Child, FC } from "hono/jsx";
 import { Card } from "../admin/layout";
 import { getImageUrl } from "../storage/images";
 
@@ -128,7 +128,7 @@ export const ProductForm: FC<{
   </Card>
 );
 
-const Field: FC<{ label: string; children?: import("hono/jsx").Child }> = ({
+const Field: FC<{ label: string; children?: Child }> = ({
   label,
   children,
 }) => (

@@ -8,6 +8,7 @@ import {
 import { Page } from "~/components/page/Page";
 import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { projectCaptureRequest } from "~/entities/editing/editor-requests";
+import { ensureEntityListSsr } from "~/entities/entity-list-ssr";
 import {
   projectSearchDefaults,
   projectSearchSchema,
@@ -17,6 +18,21 @@ import { pageTitle } from "~/lib/page-title";
 export const Route = createFileRoute("/_authenticated/projects/")({
   validateSearch: projectSearchSchema,
   search: { middlewares: [stripSearchParams(projectSearchDefaults)] },
+  loaderDeps: ({ search }) => search,
+  loader: ({ context, deps, abortController }) =>
+    ensureEntityListSsr({
+      queryClient: context.queryClient,
+      entity: "project",
+      search: deps,
+      active:
+        deps.view === "gallery" ||
+        (deps.view === "data" && deps.rows === "flat"),
+      defaultSort:
+        deps.view === "data" && deps.rows === "flat"
+          ? { orderBy: "startDate", direction: "desc" }
+          : undefined,
+      signal: abortController.signal,
+    }),
   component: ProjectsPage,
   head: () => ({ meta: [{ title: pageTitle("Projects") }] }),
 });

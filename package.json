@@ -9,7 +9,7 @@
     "dev:log": "pnpm -r --reporter append-only dev",
     "build": "pnpm -r build",
     "check": "concurrently --kill-others-on-fail --max-processes 6 --names entity,types,biome,scripts,sql,soft-delete \"pnpm entity:check\" \"pnpm typecheck\" \"pnpm format:check:changed\" \"pnpm typecheck:scripts\" \"node scripts/check-sql-safety.ts\" \"node scripts/check-soft-delete-filters.ts\"",
-    "check:all": "concurrently --kill-others-on-fail --max-processes 4 --names core,biome,knip,bindings,openapi,ci-scope,security \"pnpm check\" \"biome check --error-on-warnings\" \"pnpm knip\" \"pnpm types:check\" \"pnpm openapi:check\" \"node --test scripts/ci-scope.test.ts\" \"pnpm audit:security\"",
+    "check:all": "concurrently --kill-others-on-fail --max-processes 7 --names core,biome,knip,bindings,openapi,ci-scope,security \"pnpm check\" \"biome check --error-on-warnings\" \"pnpm knip\" \"pnpm types:check\" \"pnpm openapi:check\" \"node --test scripts/ci-scope.test.ts\" \"pnpm audit:security\"",
     "typecheck:scripts": "tsc --noEmit -p tsconfig.json",
     "typecheck": "pnpm -r --parallel typecheck",
     "typecheck:web": "pnpm --filter @cubby/web typecheck",

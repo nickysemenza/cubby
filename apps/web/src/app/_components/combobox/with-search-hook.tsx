@@ -12,6 +12,7 @@ import type { ReactNode } from "react";
 import { lazy, Suspense } from "react";
 import { useUpcAwareCreate } from "~/app/_components/products/use-upc-aware-create";
 import { entityDetailQueryOptions } from "~/entities/entity-detail";
+import { entityListQueryOptions } from "~/entities/entity-list.functions";
 import { useTRPC } from "~/integrations/trpc/react";
 import {
   buildIngredientComboboxItem,
@@ -71,7 +72,7 @@ export function WithIngredientSearch({
   const searchingByCode = parsedCode != null;
 
   const { data, isLoading } = useQuery({
-    ...api.ingredient.list.queryOptions({
+    ...entityListQueryOptions("ingredient", {
       filters: { nameFilter: searchQuery },
       pagination,
     }),
@@ -317,7 +318,7 @@ export function WithRecipeSearch({
   const searchingByCode = parsedCode != null;
 
   const { data, isLoading } = useQuery({
-    ...api.recipe.list.queryOptions({
+    ...entityListQueryOptions("recipe", {
       filters: { nameFilter: searchQuery },
       pagination,
     }),

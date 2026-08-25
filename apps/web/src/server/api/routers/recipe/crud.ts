@@ -2,12 +2,9 @@ import {
   recipeGraphListOut,
   recipeIdInput,
   recipeIdsInput,
-  recipeListItemOut,
   recipeTagsOut,
   recipeWithSideEffectsOut,
 } from "@cubby/schemas/recipe";
-import { ENTITY_BINDINGS } from "~/server/entity-bindings";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import {
   duplicateRecipe,
   getAllTags,
@@ -15,18 +12,9 @@ import {
 } from "~/server/repo/recipe";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
-import { createEntityListCompatibilityProcedure } from "../../entity-compatibility";
 import { protectedProcedure, strictOutput } from "../../trpc";
 
 const recipeShortcodes = bindShortcodeResolver("recipe");
-
-const list = createEntityListCompatibilityProcedure(
-  ENTITY_KERNEL_BINDINGS.recipe,
-  {
-    ...ENTITY_BINDINGS.recipe.crud,
-    listOutput: recipeListItemOut,
-  },
-);
 
 // Batched fetch by id — mirrors ingredient.getManyByIDs. Used by client-side
 // cost rollup to resolve sub-recipes (recipe-as-ingredient) without an N+1
@@ -84,7 +72,6 @@ const duplicate = protectedProcedure
 
 export const recipeCrudProcedures = {
   getManyByIDs,
-  list,
   duplicate,
   getAllTags: getAllTagsEndpoint,
 };

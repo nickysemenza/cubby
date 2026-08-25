@@ -33,7 +33,6 @@ import { taskRouter } from "./routers/task";
 import { upcRouter } from "./routers/upc";
 import { usdaRouter } from "./routers/usda";
 import { vendorRouter } from "./routers/vendor";
-import { wishRouter } from "./routers/wish";
 
 /** Routers available to internal MCP/agent callers (the agent excludes itself). */
 export const domainRouterRecord = {
@@ -59,7 +58,6 @@ export const domainRouterRecord = {
   financialAccount: financialAccountRouter,
   financialTransaction: financialTransactionRouter,
   vendor: vendorRouter,
-  wish: wishRouter,
   purchase: purchaseRouter,
   mcp: mcpRouter,
   oauth: oauthRouter,

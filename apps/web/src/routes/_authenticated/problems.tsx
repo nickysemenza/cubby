@@ -15,7 +15,7 @@ import { urlStringParam } from "~/lib/search-params";
 
 // The overview pulls in all five independently loaded Problems lanes plus the
 // declarative assembly UI. It is only useful on this dedicated route, so keep
-// it out of the app shell's eager closure while preserving its own loading
+// it out of the app shell while preserving its own loading
 // semantics once the route is opened.
 const ProblemsOverview = lazy(async () => {
   const module = await import("~/app/problems/problems-overview");

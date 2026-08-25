@@ -18,6 +18,8 @@ import {
 } from "@cubby/schemas/identifiers";
 import {
   mergeProductsInput,
+  type ProductListInventoryEntryOut,
+  type ProductQuantitySummaryOut,
   patchProductExternalIdsInput,
   productApplyUpcInput,
   productBulkStockTrackedInput,
@@ -34,7 +36,6 @@ import {
   productFindOrCreateByUPCOut,
   productInventoryEntriesBatchInput,
   productInventoryEntriesByIdOut,
-  productListItemOut,
   productLookupUpcOut,
   productManufacturerOptionsOut,
   productMarkUsdaUnavailableManyInput,
@@ -82,9 +83,7 @@ import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { z } from "zod";
 import { streamItems, streamProgress } from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
-import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 import { executeEntity } from "~/server/entity-kernel";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { findProductExternalIdCollisions } from "~/server/repo/data-quality";
 import {
   discardProductUnits,
@@ -146,20 +145,11 @@ import {
   createBulkUpdatedMutation,
   createEntityListProcedure,
 } from "../crud-factory";
-import { createEntityListCompatibilityProcedure } from "../entity-compatibility";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const productShortcodes = bindShortcodeResolver("product");
 const projectShortcodes = bindShortcodeResolver("project");
 const inventoryShortcodes = bindShortcodeResolver("inventory");
-
-const list = createEntityListCompatibilityProcedure(
-  ENTITY_KERNEL_BINDINGS.product,
-  {
-    ...ENTITY_BINDINGS.product.crud,
-    listOutput: productListItemOut,
-  },
-);
 
 // Lightweight typeahead for product-picker comboboxes. Same filters/pagination
 // shape as `list`, but the repo replaces the full relation graph and per-row
@@ -292,10 +282,7 @@ const quantitySummaries = protectedProcedure
   .query(async ({ ctx, input }) => {
     const ids = await productShortcodes.all(ctx.db, input.ids);
     const summariesById = await loadProductQuantitySummaries(ctx.db, ids);
-    const summaries: Record<
-      string,
-      import("@cubby/schemas/product").ProductQuantitySummaryOut
-    > = {};
+    const summaries: Record<string, ProductQuantitySummaryOut> = {};
     for (const [index, shortcode] of input.ids.entries()) {
       // `loadProductQuantitySummaries` returns one entry per resolved input id.
       summaries[shortcode] = summariesById.get(ids[index]!)!;
@@ -318,10 +305,7 @@ const inventoryEntriesByIds = protectedProcedure
     if (input.ids.length === 0) return {};
     const ids = await productShortcodes.all(ctx.db, input.ids);
     const entriesById = await loadProductInventoryEntries(ctx.db, ids);
-    const entries: Record<
-      string,
-      import("@cubby/schemas/product").ProductListInventoryEntryOut[]
-    > = {};
+    const entries: Record<string, ProductListInventoryEntryOut[]> = {};
     for (const [index, shortcode] of input.ids.entries()) {
       // A product with no live stock has no map entry, not an error.
       entries[shortcode] = entriesById.get(ids[index]!) ?? [];
@@ -831,7 +815,6 @@ const discard = protectedProcedure
 
 export const productRouter = createTRPCRouter({
   getByShortcodes,
-  list,
   summaries,
   inventoryEntriesByIds,
   quantitySummaries,

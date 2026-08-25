@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { cn, formatCurrency } from "~/lib/utils";
+import { entityListQueryOptions } from "./entity-list.functions";
 import { generatedBrowserRoutes } from "./generated/entity-routes.gen";
 import type { EntityColor, EntityDefinition } from "./types";
 
@@ -386,8 +387,8 @@ const entityDefinitions = {
     // mergePurchases' vendor-match check — any two vendors can fold together).
     mergeable: {
       keeperMode: "fixed",
-      candidateQuery: (api, _keeper: VendorOut) =>
-        api.vendor.list.queryOptions({
+      candidateQuery: (_api, _keeper: VendorOut) =>
+        entityListQueryOptions("vendor", {
           filters: {},
           // Generous relative to the whole roster (~150 vendors), within
           // MAX_PAGE_SIZE — every other vendor is a merge candidate.

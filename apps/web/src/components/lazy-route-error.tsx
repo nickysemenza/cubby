@@ -1,8 +1,3 @@
-import { lazy } from "react";
-
-/** Failure-only route UI; keep diagnostics out of successful navigations. */
-export const RouteErrorComponent = lazy(() =>
-  import("./route-error").then((module) => ({
-    default: module.RouteErrorComponent,
-  })),
-);
+// Route error UI is part of the router contract and must be available for a
+// failure before any optional route chunk can be fetched.
+export { RouteErrorComponent } from "./route-error";

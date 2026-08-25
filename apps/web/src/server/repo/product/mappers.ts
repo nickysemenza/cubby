@@ -1,3 +1,4 @@
+import type { ExternalIdKind } from "@cubby/schemas/external-id";
 import {
   canonicalExternalIdUrl,
   GTIN_SOURCE,
@@ -87,8 +88,7 @@ export const mapProductExternalIds = (
   (externalIds ?? [])
     .filter((externalId) => externalId.deletedAt === null)
     .map((externalId) => {
-      const kind = (externalId.kind ??
-        "legacy_unspecified") as import("@cubby/schemas/external-id").ExternalIdKind;
+      const kind = (externalId.kind ?? "legacy_unspecified") as ExternalIdKind;
       return {
         id: externalId.id,
         source: externalId.source,

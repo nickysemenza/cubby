@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import pluralize from "pluralize";
+import { entityListRootKey } from "~/entities/entity-list.functions";
 import type { BackfillButtonProps } from "./problem-backfill-action";
 
 /**
@@ -28,7 +29,7 @@ export const BACKFILL = {
     skipped: number;
   }>({
     run: (client) => client.product.backfillUPCImages.mutate(),
-    invalidateKeys: (api) => [api.product.list.queryKey()],
+    invalidateKeys: (_api) => [entityListRootKey("product")],
     // Runs entirely inside the held-open stream (no durable queue), so warn while
     // it runs (see BackfillButton `foreground`).
     foreground: true,
@@ -45,7 +46,7 @@ export const BACKFILL = {
     batchId: string;
   }>({
     run: (client) => client.ai.backfillLocationDescriptions.mutate(),
-    invalidateKeys: (api) => [api.location.list.queryKey()],
+    invalidateKeys: (_api) => [entityListRootKey("location")],
     idleLabel: "Analyze all",
     pendingLabel: "Enqueuing…",
     // Durable: the work runs on the background-jobs queue, so link the toast there.

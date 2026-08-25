@@ -14,6 +14,7 @@ import {
 import type {
   AttachableImageEntity,
   ImageAssociation,
+  ImageListFilters,
   ImageUpdateInput,
   ImageWithEntity,
 } from "@cubby/schemas/image";
@@ -466,7 +467,7 @@ const cullablePendingImageWhere = (db: Database, cutoffDate: Date) =>
 
 export const imageList = async (
   db: Database,
-  filters: import("@cubby/schemas/image").ImageListFilters,
+  filters: ImageListFilters,
   sorts: Array<{ orderBy: string; direction: "asc" | "desc" }>,
   pagination: { pageIndex: number; pageSize: number },
   readIntent: ListReadIntent = "page",

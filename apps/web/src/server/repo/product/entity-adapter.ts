@@ -11,6 +11,7 @@ import {
   productWithFoodOut,
 } from "@cubby/schemas/product";
 import { z } from "zod";
+import type { Database } from "~/server/db";
 import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
 import {
@@ -40,10 +41,7 @@ import { mergeProducts, PRODUCT_MERGE_EDGE_POLICY } from "./merge";
 const productShortcodes = bindShortcodeResolver("product");
 const ingredientShortcodes = bindShortcodeResolver("ingredient");
 
-async function linkedProductIngredientIds(
-  db: import("~/server/db").Database,
-  shortcodes: string[],
-) {
+async function linkedProductIngredientIds(db: Database, shortcodes: string[]) {
   const products = await getProductsByShortcodes(db, shortcodes);
   const resolved = await resolveLiveShortcodes(
     db,
