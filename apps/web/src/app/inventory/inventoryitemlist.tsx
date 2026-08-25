@@ -200,9 +200,11 @@ export function InventoryItemList() {
         mobile: { slot: "trailing", priority: 30 },
       }),
       columnHelper.accessor("product", {
+        header: "Product",
         enableSorting: false,
         meta: {
           className: "min-w-0 w-64",
+          surplus: true,
           mobile: { slot: "meta", priority: 50 },
           filterConfig: { placeholder: "Filter product..." },
         },

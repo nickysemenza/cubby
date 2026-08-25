@@ -26,7 +26,7 @@ describe("purchase reconciliation badges", () => {
 
     const badge = screen.getByText("Refund-adjusted -$127.10");
     expect(badge.className).toContain("text-slate");
-    expect(badge.className).not.toContain("text-warning");
+    expect(badge.className).not.toContain("text-warning-ink");
   });
 
   it("reserves the warning tone and Needs review label for unexplained gaps", () => {
@@ -42,7 +42,7 @@ describe("purchase reconciliation badges", () => {
     );
 
     const badge = screen.getByText("Needs review -$127.10");
-    expect(badge.className).toContain("text-warning");
+    expect(badge.className).toContain("text-warning-ink");
   });
 
   it("keeps a matched financial settlement green", () => {

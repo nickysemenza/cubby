@@ -145,7 +145,7 @@ export function BookGroupCard({
       {book.expanded && (book.recipes.length > 0 || ready) && (
         <CardContent className="space-y-2">
           {ready && name.length === 0 && (
-            <p className="text-warning text-xs">
+            <p className="text-warning-ink text-xs">
               Set a book name before importing.
             </p>
           )}
@@ -319,7 +319,7 @@ function ExtractStatus({ book }: { book: Book }) {
     <Description as="span" size="xs">
       {book.recipes.length} recipe{book.recipes.length === 1 ? "" : "s"}
       {failed > 0 && (
-        <span className="text-warning">
+        <span className="text-warning-ink">
           {" · "}
           {failed} chunk{failed === 1 ? "" : "s"} failed
         </span>
@@ -345,7 +345,12 @@ function FailedChunksPanel({
   return (
     <div className="border border-warning/40 bg-warning/5 p-2">
       <Row align="center" justify="between" gap="sm">
-        <Row as="span" align="center" gap="xs" className="text-warning text-xs">
+        <Row
+          as="span"
+          align="center"
+          gap="xs"
+          className="text-warning-ink text-xs"
+        >
           <AlertCircle className="size-3" />
           {failed.length} chunk{failed.length === 1 ? "" : "s"} failed to
           extract — recipes in {failed.length === 1 ? "it" : "them"} were lost

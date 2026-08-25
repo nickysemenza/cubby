@@ -73,7 +73,7 @@ function DuplicateNameHint({
 
   return (
     <Stack gap="xs" className="px-4 pb-2">
-      <Description size="xs" className={exact ? "text-warning" : undefined}>
+      <Description size="xs" className={exact ? "text-warning-ink" : undefined}>
         {exact
           ? "An ingredient with this name already exists — did you mean to use it?"
           : "Similar ingredients already exist. Use one of these instead of creating a duplicate?"}

@@ -66,6 +66,11 @@ describe.each(["row", "card"] as const)(
       fireEvent.keyDown(screen.getByRole("button", { name: "Item" }), { key });
 
       expect(onClick).toHaveBeenCalledOnce();
+      if (variant === "row") {
+        expect(screen.getByRole("button", { name: "Item" })).toHaveClass(
+          "min-h-11",
+        );
+      }
     });
 
     it("does not treat a nested control's keypress as card activation", () => {

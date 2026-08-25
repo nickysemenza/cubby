@@ -45,7 +45,7 @@ export const BasePill = ({ className }: { className?: string }) => (
 export const NoWeightPill = ({ className }: { className?: string }) => (
   <span
     className={cn(
-      "ml-2 rounded-sm bg-warning/15 px-1 py-px align-middle font-mono text-2xs text-warning uppercase tracking-wide",
+      "ml-2 rounded-sm bg-warning/15 px-1 py-px align-middle font-mono text-2xs text-warning-ink uppercase tracking-wide",
       className,
     )}
   >
@@ -75,7 +75,7 @@ export const StubWarning = ({
 }) => (
   <span
     className={cn(
-      "font-mono text-2xs text-warning uppercase tracking-wide",
+      "font-mono text-2xs text-warning-ink uppercase tracking-wide",
       className,
     )}
   >

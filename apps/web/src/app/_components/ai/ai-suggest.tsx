@@ -13,11 +13,11 @@ import {
 } from "~/components/ui/tooltip";
 import { getErrorMessage } from "~/lib/error-utils";
 
-/** Confidence → text color. One map (semantic text-warning for medium, not a
+/** Confidence → text color. One map (semantic text-warning-ink for medium, not a
  * raw text-yellow-600) shared by every AI-suggestion surface. */
 export const confidenceColor: Record<Confidence, string> = {
   high: "text-positive",
-  medium: "text-warning",
+  medium: "text-warning-ink",
   low: "text-destructive",
 };
 

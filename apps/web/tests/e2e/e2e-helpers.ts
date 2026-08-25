@@ -40,6 +40,21 @@ export async function gotoAuthenticatedPage(
   if (ready) await expect(ready).toBeVisible({ timeout: 15000 });
 }
 
+/**
+ * The app shell may contain deliberately scrollable workbenches, but a route
+ * must never widen the document itself. Keep this assertion shared so every
+ * entity-list viewport test measures the same boundary.
+ */
+export async function expectViewportBounded(page: Page) {
+  await expect(async () => {
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+  }).toPass({ timeout: 5000 });
+}
+
 export async function reloadAuthenticatedPage(page: Page, ready?: Locator) {
   await page.reload({ waitUntil: "domcontentloaded" });
   await waitForAppHydration(page);

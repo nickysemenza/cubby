@@ -4,14 +4,14 @@ import { cn } from "~/lib/utils";
 
 /**
  * Semantic status-colored text — the canonical replacement for standalone
- * `text-positive | text-warning | text-destructive` text (tier labels, deltas,
+ * `text-positive | text-warning-ink | text-destructive` text (tier labels, deltas,
  * inline status). One axis (`tone`); maps to the design tokens.
  */
 const statusTextVariants = cva("", {
   variants: {
     tone: {
       positive: "text-positive",
-      warning: "text-warning",
+      warning: "text-warning-ink",
       destructive: "text-destructive",
       muted: "text-muted-foreground",
     },

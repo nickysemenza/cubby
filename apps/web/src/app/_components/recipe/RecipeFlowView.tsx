@@ -302,7 +302,7 @@ export function RecipeFlowView({
 
       {artifact.warnings.length > 0 && (
         <details className="border-b px-4 py-2">
-          <summary className="cursor-pointer font-mono text-2xs text-warning uppercase tracking-wider">
+          <summary className="cursor-pointer font-mono text-2xs text-warning-ink uppercase tracking-wider">
             {artifact.warnings.length} flow{" "}
             {artifact.warnings.length === 1 ? "warning" : "warnings"}
           </summary>

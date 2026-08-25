@@ -97,7 +97,7 @@ export function RecipeAvailabilityPanel({
               resolved, so say plainly when that isn't everything. */}
           {data.unexpandedSubRecipes > 0 && (
             <span
-              className="font-mono text-2xs text-warning tabular-nums"
+              className="font-mono text-2xs text-warning-ink tabular-nums"
               title="These sub-recipes couldn't be broken down, so their ingredients aren't counted"
             >
               +{data.unexpandedSubRecipes} not counted
@@ -106,7 +106,7 @@ export function RecipeAvailabilityPanel({
           <span
             className={cn(
               "font-mono text-xs tabular-nums",
-              ready ? "text-positive" : "text-warning",
+              ready ? "text-positive" : "text-warning-ink",
             )}
           >
             {data.availableIngredients} of {data.totalIngredients} on hand

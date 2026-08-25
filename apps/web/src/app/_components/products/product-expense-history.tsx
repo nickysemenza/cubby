@@ -452,7 +452,7 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
         {product.pricing.unknownExpenseCount > 0 && (
           <button
             type="button"
-            className="w-fit text-left text-sm text-warning hover:underline"
+            className="w-fit text-left text-sm text-warning-ink hover:underline"
             onClick={() =>
               firstMissingAcquisition &&
               openQuantityEditor(firstMissingAcquisition.id)

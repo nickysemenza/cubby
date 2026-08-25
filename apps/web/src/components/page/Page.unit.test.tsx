@@ -139,6 +139,7 @@ describe("Page workbench", () => {
 
     expect(screen.getByTestId("detail-media").parentElement).toHaveClass(
       "left-1/2",
+      "-mt-2",
       "w-screen",
       "-translate-x-1/2",
       "overflow-hidden",

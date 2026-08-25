@@ -130,7 +130,7 @@ export function MobileRowShell({
   return (
     <div
       className={cn(
-        "grid w-full max-w-full gap-x-2 overflow-hidden border-border/60 border-b px-2 py-2",
+        "grid min-h-11 w-full max-w-full gap-x-2 overflow-hidden border-border/60 border-b px-2 py-2",
         leading.length === 2
           ? "grid-cols-[auto_auto_1fr_auto]"
           : leading.length === 1

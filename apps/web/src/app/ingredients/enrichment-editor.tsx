@@ -484,7 +484,7 @@ export function EnrichmentEditor({
 
       {product != null && !gaps.isComplete && gaps.missingKinds.length > 0 && (
         <p className="text-xs">
-          <span className="font-medium text-warning">Still missing:</span>{" "}
+          <span className="font-medium text-warning-ink">Still missing:</span>{" "}
           {gaps.missingKinds.join(", ")}
         </p>
       )}
@@ -522,7 +522,7 @@ export function EnrichmentEditor({
       )}
 
       {gaps.priceIslanded && (
-        <p className="border bg-warning/10 px-2 py-2 text-warning text-xs">
+        <p className="border bg-warning/10 px-2 py-2 text-warning-ink text-xs">
           Already priced, but “{gaps.islandedUnit}” isn’t linked to a weight —
           so the price can’t be reached from a recipe measure. Connect it below
           (e.g. 1 {gaps.islandedUnit} = N&nbsp;g) instead of adding a new price.

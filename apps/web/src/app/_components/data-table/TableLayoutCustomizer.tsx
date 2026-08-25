@@ -334,7 +334,7 @@ export default function TableLayoutCustomizer<TData extends RowData>({
       </DndContext>
       <Button variant="ghost" size="sm" className="w-full" onClick={reset}>
         <RotateCcw className="size-3.5" />
-        Reset layout
+        Restore default layout
       </Button>
     </div>
   );

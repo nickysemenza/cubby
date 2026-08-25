@@ -95,7 +95,7 @@ function Figure({
         className={cn(
           "font-mono text-sm tabular-nums",
           tone === "positive" && "text-positive",
-          tone === "warning" && "text-warning",
+          tone === "warning" && "text-warning-ink",
           tone === "destructive" && "text-destructive",
           tone === "muted" && "text-muted-foreground",
         )}

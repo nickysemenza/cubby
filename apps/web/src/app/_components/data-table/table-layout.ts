@@ -73,13 +73,82 @@ export function columnWidthValue(id: string) {
   return `var(${columnWidthVariable(id)})`;
 }
 
+type TableWidthColumn = {
+  id: string;
+  getSize: () => number;
+  getIsPinned?: () => false | "start" | "end";
+  columnDef: {
+    header?: unknown;
+    meta?: { surplus?: boolean; numeric?: boolean };
+  };
+};
+
+/**
+ * Pick one readable, unpinned column to absorb desktop table surplus.
+ *
+ * Fixed table layout otherwise shares extra space across every sized column,
+ * which makes quantities and timestamps balloon while record names still
+ * truncate. Factories can nominate identity explicitly; the fallback makes
+ * hand-authored entity tables safe without another per-route width roster.
+ */
+export function tableSurplusColumnId(
+  columns: readonly TableWidthColumn[],
+): string | undefined {
+  const candidates = columns.filter(
+    (column) => !isLockedColumnId(column.id) && !column.getIsPinned?.(),
+  );
+  const explicit = candidates.find((column) => column.columnDef.meta?.surplus);
+  if (explicit) return explicit.id;
+
+  const conventional = candidates.find((column) =>
+    ["name", "title", "product", "filename"].includes(column.id),
+  );
+  if (conventional) return conventional.id;
+
+  return candidates.find(
+    (column) =>
+      !column.columnDef.meta?.numeric &&
+      typeof column.columnDef.header === "string" &&
+      column.columnDef.header.trim().length > 0,
+  )?.id;
+}
+
+/**
+ * Resolves the widths the browser should paint without mutating the persisted
+ * TanStack sizing state. The configured column sizes remain the user's
+ * deliberate layout; only available pane slack flows to the record-identity
+ * column for this viewport.
+ */
+export function resolvedTableColumnWidths(
+  columns: readonly TableWidthColumn[],
+  availableWidth: number,
+): Record<string, number> {
+  const widths = Object.fromEntries(
+    columns.map((column) => [column.id, column.getSize()]),
+  ) as Record<string, number>;
+  const surplusId = tableSurplusColumnId(columns);
+  if (!surplusId || availableWidth <= 0) return widths;
+
+  const configuredWidth = Object.values(widths).reduce(
+    (total, width) => total + width,
+    0,
+  );
+  if (availableWidth <= configuredWidth) return widths;
+
+  widths[surplusId] =
+    (widths[surplusId] ?? 0) + availableWidth - configuredWidth;
+  return widths;
+}
+
 export function columnWidthVariables(
-  columns: readonly { id: string; getSize: () => number }[],
+  columns: readonly TableWidthColumn[],
+  availableWidth = 0,
 ): CSSProperties {
+  const widths = resolvedTableColumnWidths(columns, availableWidth);
   return Object.fromEntries(
     columns.map((column) => [
       columnWidthVariable(column.id),
-      `${column.getSize()}px`,
+      `${widths[column.id] ?? column.getSize()}px`,
     ]),
   ) as CSSProperties;
 }
@@ -116,6 +185,19 @@ export interface CubbyTableLayoutController<TData extends RowData = RowData> {
   columns: CubbyColumnDef<TData>[];
   reset: () => void;
   applySavedLayout: (layout: CubbySavedTableLayout) => void;
+}
+
+/** Whether the current layout differs from the source-controlled default. */
+export function isTableLayoutCustomized(
+  current: Partial<CubbyTableLayoutV1>,
+  defaults: CubbyTableLayoutV1 | undefined,
+): boolean {
+  if (!defaults) return false;
+  const normalizedDefaults = normalizeTableLayout(undefined, defaults);
+  return (
+    JSON.stringify(normalizeTableLayout(current, normalizedDefaults)) !==
+    JSON.stringify(normalizedDefaults)
+  );
 }
 
 interface TableLayoutOptions<TData extends RowData> {

@@ -238,7 +238,7 @@ function PageWithHeader(props: PageListProps | PageDetailProps) {
                   wrapper the header shares. */}
                 <div
                   className={
-                    variant === "list" ? "space-y-4 md:space-y-8" : undefined
+                    variant === "list" ? "space-y-2 md:space-y-8" : undefined
                   }
                 >
                   {children}

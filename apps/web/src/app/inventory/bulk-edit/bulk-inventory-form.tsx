@@ -287,7 +287,7 @@ export default function BulkInventoryForm({
       </div>
 
       {selectedLocation && isTruncated && (
-        <div className="mb-4 rounded border-2 border-warning bg-warning/10 p-2 text-warning text-xs">
+        <div className="mb-4 rounded border-2 border-warning bg-warning/10 p-2 text-warning-ink text-xs">
           Showing {loadedCount} of {totalCount} entries. Bulk edit can't safely
           save a partial load (it would delete the {totalCount - loadedCount}{" "}
           not shown). Use the inventory session to audit this location.

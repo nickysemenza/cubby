@@ -148,7 +148,7 @@ const itemMetadata = (item: CalendarItem): string =>
 const calendarItemTriggerClassName = (item: CalendarItem) =>
   cn(
     "flex min-h-11 w-full items-center gap-2 border-b px-2 py-2 text-left text-sm outline-none last:border-b-0 hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset md:min-h-0",
-    item.kind === "expense" && item.future && "text-warning",
+    item.kind === "expense" && item.future && "text-warning-ink",
   );
 
 export { CalendarItemPresentation, calendarItemTriggerClassName, itemMetadata };

@@ -295,7 +295,7 @@ function MatrixCell({
             locked && "text-muted-foreground/60",
             // An attached edge that conflicts stays fully editable: it is the
             // only way to correct one. It just stops looking clean.
-            flagged && "bg-warning/20 text-warning ring-1 ring-warning",
+            flagged && "bg-warning/20 text-warning-ink ring-1 ring-warning",
           )}
         >
           {(state === "attached" || state === "purchased") && (

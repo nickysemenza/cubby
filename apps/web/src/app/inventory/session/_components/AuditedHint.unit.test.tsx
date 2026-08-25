@@ -45,7 +45,7 @@ describe("AuditedHint", () => {
     // current, which past the horizon is exactly what we don't know.
     expect(screen.getByText(/^unverified since /)).toBeDefined();
     expect(screen.queryByText(/audited/)).toBeNull();
-    expect(document.querySelector(".text-warning")).not.toBeNull();
+    expect(document.querySelector(".text-warning-ink")).not.toBeNull();
   });
 
   it("keeps the compact relative form while a count is fresh", () => {

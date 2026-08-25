@@ -225,7 +225,7 @@ export function ImportToolsPanel({
                 {ingredientImport.matchedCount}/{ingredientImport.totalCount}{" "}
                 ingredients matched
                 {ingredientImport.missingCount > 0 && (
-                  <span className="text-warning">
+                  <span className="text-warning-ink">
                     {" "}
                     ({ingredientImport.missingCount} will be created)
                   </span>

@@ -300,7 +300,7 @@ export default function BulkMoveForm({
       </Row>
 
       {sourceLocation && isTruncated && (
-        <div className="mb-4 rounded border-2 border-warning bg-warning/10 p-2 text-warning text-xs">
+        <div className="mb-4 rounded border-2 border-warning bg-warning/10 p-2 text-warning-ink text-xs">
           Showing {loadedCount} of {totalCount} entries. The{" "}
           {totalCount - loadedCount} not listed can't be selected or moved. Move
           these first, then reload to see the rest.

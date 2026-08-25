@@ -72,7 +72,7 @@ function SectionCard({ section }: { section: DetailSection }) {
       <Card
         size={section.placement === "supporting" ? "sm" : "default"}
         className={cn(
-          "max-md:border-0 max-md:bg-transparent max-md:py-2",
+          "max-md:gap-1 max-md:border-0 max-md:bg-transparent max-md:py-1",
           section.overflowVisible && "overflow-visible",
         )}
       >

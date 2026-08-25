@@ -13,6 +13,7 @@ import {
   createImageColumn,
   createNameColumn,
   createParentLinkColumn,
+  createSingleEntityInlineLinkColumn,
   describeProductPricingSource,
   productPriceClearLabel,
   renderProductPriceValue,
@@ -224,6 +225,26 @@ describe("createParentLinkColumn", () => {
     expect(column.id).toBe("wbsParent");
     expect(column.header).toBe("Rolls Up To");
     expect(column.meta?.className).toBe("w-64");
+  });
+});
+
+describe("createSingleEntityInlineLinkColumn", () => {
+  it("always supplies a semantic entity header unless the caller names one", () => {
+    const helper = createCubbyColumnHelper<{ location: never }>();
+    const location = createSingleEntityInlineLinkColumn(
+      helper,
+      "location",
+      "location",
+    );
+    const renamed = createSingleEntityInlineLinkColumn(
+      helper,
+      "location",
+      "location",
+      { header: "Stored at" },
+    );
+
+    expect(location.header).toBe("Location");
+    expect(renamed.header).toBe("Stored at");
   });
 });
 

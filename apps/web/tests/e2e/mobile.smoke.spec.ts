@@ -1,16 +1,5 @@
-import type { Page } from "@playwright/test";
-import { gotoAuthenticatedPage } from "./e2e-helpers";
+import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
-
-async function expectViewportBounded(page: Page) {
-  await expect(async () => {
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth <= window.innerWidth,
-      ),
-    ).toBe(true);
-  }).toPass({ timeout: 5000 });
-}
 
 test.describe("iPhone WebKit smoke", () => {
   test("prewarms and opens the More sheet on touch intent", async ({

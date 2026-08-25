@@ -14,7 +14,7 @@ import {
 import { MobileCard } from "~/components/entity/mobile-card";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
-import { isBrowserRoutedEntity } from "~/entities/entities";
+import { entities, isBrowserRoutedEntity } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
 import { cn } from "~/lib/utils";
 import { useInfiniteScrollSentinel } from "../hooks/useInfiniteScrollSentinel";
@@ -43,15 +43,18 @@ function VirtualRow({
   vi,
   virtualizer,
   children,
+  role,
 }: {
   vi: VirtualItem;
   virtualizer: WindowVirtualizer;
   children: ReactNode;
+  role?: "listitem" | "presentation";
 }) {
   return (
-    <div
+    <li
       ref={virtualizer.measureElement}
       data-index={vi.index}
+      role={role}
       style={{
         position: "absolute",
         top: 0,
@@ -61,7 +64,7 @@ function VirtualRow({
       }}
     >
       {children}
-    </div>
+    </li>
   );
 }
 
@@ -193,6 +196,7 @@ export function MobileCardView<TItem extends RowData>({
             key={`header-${gItem.title}`}
             vi={vi}
             virtualizer={virtualizer}
+            role="presentation"
           >
             <SectionHeader
               title={gItem.title}
@@ -310,15 +314,25 @@ export function MobileCardView<TItem extends RowData>({
     );
 
     return (
-      <VirtualRow key={row.id} vi={vi} virtualizer={virtualizer}>
+      <VirtualRow
+        key={row.id}
+        vi={vi}
+        virtualizer={virtualizer}
+        role="listitem"
+      >
         {card}
       </VirtualRow>
     );
   };
 
   return (
-    <div
+    <ul
       className="block overflow-x-hidden lg:hidden"
+      aria-label={
+        entity && isBrowserRoutedEntity(entity)
+          ? `${entities[entity].pluralLabel} list`
+          : "Records list"
+      }
       aria-busy={isTransitioning}
       inert={isTransitioning ? true : undefined}
     >
@@ -355,6 +369,6 @@ export function MobileCardView<TItem extends RowData>({
       ) : (
         <FilteredEmptyState isFiltered={isNarrowed(table)} />
       )}
-    </div>
+    </ul>
   );
 }

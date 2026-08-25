@@ -461,13 +461,13 @@ function DetailPlate({
     <>
       {/* Detail media — mobile only; desktop shows it in the section rail. */}
       {heroMedia !== undefined ? (
-        <div className="relative left-1/2 -mt-4 w-screen max-w-none -translate-x-1/2 overflow-hidden md:hidden">
+        <div className="relative left-1/2 -mt-2 w-screen max-w-none -translate-x-1/2 overflow-hidden md:hidden">
           {heroMedia}
         </div>
       ) : (
         heroImages &&
         heroImages.length > 0 && (
-          <div className="relative left-1/2 -mt-4 w-screen max-w-none -translate-x-1/2 overflow-hidden md:hidden">
+          <div className="relative left-1/2 -mt-2 w-screen max-w-none -translate-x-1/2 overflow-hidden md:hidden">
             <ImageGallery images={heroImages} />
           </div>
         )
