@@ -1,7 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
-import { financialAccountFilterFields } from "@cubby/schemas/financial-account";
-import { financialTransactionFilterFields } from "@cubby/schemas/financial-transaction";
 import {
   unsafeCookbookId,
   unsafeFinancialAccountShortcode,
@@ -13,25 +11,11 @@ import {
   unsafeTaskId,
   unsafeVendorId,
 } from "@cubby/schemas/identifiers";
-import { imageFilterFields } from "@cubby/schemas/image";
-import { ingredientFilterFields } from "@cubby/schemas/ingredient";
-import { inventoryFilterFields } from "@cubby/schemas/inventory";
-import { locationFilterFields } from "@cubby/schemas/location";
-import { mealFilterFields } from "@cubby/schemas/meal";
-import { productFilterFields } from "@cubby/schemas/product";
-import {
-  expenseFilterFields,
-  projectFilterFields,
-  taskFilterFields,
-} from "@cubby/schemas/project";
-import { purchaseFilterFields } from "@cubby/schemas/purchase";
-import { recipeFilterFields, recipeSourceValues } from "@cubby/schemas/recipe";
+import { recipeSourceValues } from "@cubby/schemas/recipe";
 import {
   relatedFilterPrefix,
   relatedViewRegistry,
 } from "@cubby/schemas/related-view";
-import { vendorFilterFields } from "@cubby/schemas/vendor";
-import { wishFilterFields } from "@cubby/schemas/wish";
 import { uniq } from "es-toolkit";
 import type { FilterConfig } from "~/app/_components/data-table/columnHelpers";
 import {
@@ -89,6 +73,7 @@ import {
   nullableSentinelOptions,
   presenceFilterOptions,
 } from "./filters";
+import { entityFilterFieldMaps } from "./generated/entity-filter-fields.gen";
 
 export interface FilterSpec extends FilterSpecCore {
   placeholder: string;
@@ -342,25 +327,7 @@ const resolveCalories = (value: string | undefined) =>
         ? { caloriesTotalMin: 1000 }
         : {};
 
-export const entityFilterFieldMaps: Partial<
-  Record<Entity, Record<string, unknown>>
-> = {
-  financialAccount: financialAccountFilterFields,
-  financialTransaction: financialTransactionFilterFields,
-  expense: expenseFilterFields,
-  vendor: vendorFilterFields,
-  purchase: purchaseFilterFields,
-  task: taskFilterFields,
-  product: productFilterFields,
-  recipe: recipeFilterFields,
-  ingredient: ingredientFilterFields,
-  inventory: inventoryFilterFields,
-  location: locationFilterFields,
-  image: imageFilterFields,
-  meal: mealFilterFields,
-  project: projectFilterFields,
-  wish: wishFilterFields,
-};
+export { entityFilterFieldMaps };
 
 const auditFilterEntities = new Set<Entity>(
   (Object.entries(entityFilterFieldMaps) as [Entity, Record<string, unknown>][])
@@ -875,10 +842,8 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       placeholder: "Filter by order id...",
     },
     {
-      // URL-only, like `productId`/`orderIdExact` above — seeded by a deep
-      // link from a purchase's own detail page, surfaced as a ScopeChip. Its
-      // `columnId` is distinct from both of those (and from `orderId`'s
-      // presence control): two specs may not share a slot.
+      // Deep-link scope with its own slot; sharing a columnId would make two
+      // specs read and write the same filter state.
       columnId: "purchaseId",
       urlOnly: true,
       kind: "id",
@@ -887,16 +852,8 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
     },
   ],
 
-  // The roster of places money goes. One spec, covering all of
-  // `vendorFiltersSchema` (packages/schemas/src/vendor.ts) — just `search`. The
-  // rollup columns (`purchaseCount`, `spend`) are correlated subqueries the repo
-  // computes for display and sorting; there is no server filter behind either,
-  // so neither gets a spec.
   vendor: [
     {
-      // `?q=`, like the ledger's name search and purchases' `q` — the money
-      // family's search key. `field: "search"` because the server matches it as
-      // a substring of the vendor NAME (`vendorFilterFields.search`).
       columnId: "name",
       field: "search",
       urlKey: "q",
@@ -936,10 +893,6 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
     },
   ],
 
-  // One row per vendor purchase. These specs cover `purchaseFiltersSchema`,
-  // including the exact line-total bounds kept URL-only for callers that need
-  // values outside the UI presets. A purchase has its own detail route, so there
-  // is no expense-style exact-order-id scope here.
   purchase: [
     {
       columnId: "financialReconciliation",
@@ -948,13 +901,6 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       placeholder: "Filter financial reconciliation...",
     },
     {
-      // `?q=`, the money family's search key — and it hangs on `purchase`, not
-      // `orderId`. `purchase` IS purchase's name column (`standardColumns` is
-      // `[]`, so there's no hook-prepended `name`): a bespoke identity accessor,
-      // which is why it's absent from `purchaseSortableFields` and stays
-      // unsortable. Server-side the term is a broad substring match over order
-      // id OR display label; the dedicated label column below can narrow that
-      // to human context alone.
       columnId: "purchase",
       field: "search",
       urlKey: "q",
@@ -969,18 +915,9 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       placeholder: "Search display label...",
     },
     {
-      // Id-based, like the ledger's vendor filter: the column RENDERS
-      // `vendorName`, but the roster and the filter trade in ids.
-      //
-      // No `nullable` sentinels — `Purchase.vendorId` is NOT NULL, so there is
-      // no "(none)" cohort to offer. (Expense's vendor filter does have them,
-      // because there "no vendor" means "no purchase attached".)
-      //
-      // `optionsKey: "vendor"` names the same key as expense's spec but is fed a
-      // DIFFERENT roster: this page injects `vendor.options` (purchase counts),
-      // the ledger injects `expense.vendorOptions` (ledger-row counts). Rosters
-      // stay page-fed per `filterOptions`; they must not be collapsed into one
-      // shared options hook.
+      // This id roster is purchase-specific and intentionally has no `(none)`:
+      // Purchase.vendorId is non-null. Expense uses a different vendor roster,
+      // despite sharing the `vendor` options key; do not merge their loaders.
       columnId: "vendor",
       field: "vendorId",
       kind: "idMulti",
@@ -989,8 +926,6 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       optionsKey: "vendor",
     },
     {
-      // "(none)" is the reconciliation worklist: the ~40% of purchases the vendor
-      // never issued an order id for.
       columnId: "orderId",
       field: "orderIdPresenceFilter",
       kind: "presence",
@@ -998,8 +933,6 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       options: presenceFilterOptions("order id"),
     },
     {
-      // Same presets and expander as the ledger's date filter — one `?date=30d`
-      // means the same window on both money tables.
       columnId: "date",
       kind: "range",
       placeholder: "Filter by date...",
@@ -1007,8 +940,6 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       expand: resolveDateRange,
     },
     {
-      // "(none)" is the purchases with no paperwork total recorded yet — the ones
-      // `ReconciliationBadge` has nothing to reconcile against.
       columnId: "statedTotal",
       field: "statedTotalPresenceFilter",
       kind: "presence",
@@ -1634,8 +1565,8 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       options: presenceFilterOptions("product"),
     },
     {
-      // "none" is the orphaned-ingredient worklist — the list already excludes
-      // recipe-as-ingredient pointer rows, so a hit really is unused.
+      // "none" is the unused-ingredient worklist only while list queries
+      // exclude recipe-as-ingredient pointer rows.
       columnId: "ownRecipes",
       field: "ownRecipePresenceFilter",
       kind: "presence",
@@ -1643,8 +1574,6 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
       options: presenceFilterOptions("own recipes"),
     },
     {
-      // "none" is the orphaned-ingredient worklist — the list already excludes
-      // recipe-as-ingredient pointer rows, so a hit really is unused.
       columnId: "appearsInRecipes",
       field: "recipePresenceFilter",
       kind: "presence",
@@ -1871,12 +1800,8 @@ const entityFilters: Record<FilteredEntity, readonly FilterSpec[]> = {
     },
     {
       columnId: "name",
-      // `columnId` is what the client-side filter matches (the Name column);
-      // `field` is what would reach the server if this table ever moves to
-      // `useEntityList`. They differ here — `projectFilterFields` calls it
-      // `search`, not `name` — so without this the filter would silently do
-      // nothing on that day, which is exactly the wrong-but-plausible failure
-      // the manifest-vs-schema test now pins.
+      // The rendered column is `name`, but the repository/schema field is
+      // `search`; the manifest/schema parity test guards this mismatch.
       field: "search",
       kind: "text",
       placeholder: "Filter by project name...",

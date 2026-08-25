@@ -1,7 +1,7 @@
 /**
  * `apps/web` consumes this to register `ui://` resources. The one built
- * universal document is inlined because a Cloudflare Worker has no filesystem
- * to read at request time; each resource injects its manifest app id on read.
+ * document is inlined because a Cloudflare Worker has no filesystem to read at
+ * request time.
  */
 import { MCP_APP_MANIFEST } from "./metadata";
 
@@ -41,4 +41,4 @@ export const MCP_APP_BUNDLES: McpAppBundle[] = [
   ...MCP_APP_MANIFEST.map((app) => ({ ...app, html: bundleFor("app") })),
 ];
 
-export { withCubbyAppConfig } from "./origin";
+export { withCubbyOrigin } from "./origin";

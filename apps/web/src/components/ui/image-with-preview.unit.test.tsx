@@ -34,12 +34,10 @@ describe("ImageWithPreview", () => {
     );
   });
 
-  it("serves the original when neither size nor displayWidth is given", () => {
-    // className-sized callers opt out deliberately; nothing to derive a width
-    // from, so the transform stays off rather than guessing.
+  it("uses the documented 40px default when no width is given", () => {
     render(<ImageWithPreview src={BUCKET_SRC} alt="p" />);
     const img = screen.getByRole("img", { name: "p" });
-    expect(img.getAttribute("src")).toBe(BUCKET_SRC);
-    expect(img.getAttribute("srcset")).toBeNull();
+    expect(img.getAttribute("src")).toContain("width=40");
+    expect(img.getAttribute("srcset")).toContain("width=80");
   });
 });

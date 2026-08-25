@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { defineConfig, type Plugin } from "vite";
 import { MCP_APP_MANIFEST } from "../src/metadata";
-import { withCubbyAppConfig } from "../src/origin";
+import { withCubbyOrigin } from "../src/origin";
 
 /**
  * Dev server for the local MCP App harness
@@ -38,12 +38,7 @@ function serveApps(): Plugin {
           res.setHeader("Content-Type", "text/html");
           // Same substitution the MCP server does, from the same helper — a
           // harness that rewrites differently would hide origin bugs.
-          res.end(
-            withCubbyAppConfig(html, {
-              origin: "https://example.invalid",
-              appId: app.id,
-            }),
-          );
+          res.end(withCubbyOrigin(html, "https://example.invalid"));
         } catch {
           res.statusCode = 404;
           res.end("run `pnpm --filter @cubby/mcp-apps build` first");

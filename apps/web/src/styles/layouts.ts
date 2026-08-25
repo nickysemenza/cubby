@@ -8,11 +8,8 @@ import { cva, type VariantProps } from "class-variance-authority";
  *   tight = 0.5   snug = 1.5   xs = 1   sm = 2   md = 4   lg = 6
  *
  * `tight` / `snug` are the two blessed sub-scale densities (icon+label rows,
- * dense list cells). Because this is a `.ts` file, the spacing guard in
- * scripts/check-conventions.ts (which only scans `.tsx`) never sees these
- * sub-scale classes — so dense UI lives here as a named variant instead of a
- * scattered `/* tight *​/` marker. Pages get density via `gap="tight"` and
- * stop emitting raw off-scale spacing classes entirely.
+ * dense list cells). Dense UI uses these named variants instead of scattering
+ * one-off sub-scale classes across pages.
  *
  * Consumed by the Row / Grid / Stack / Section primitives in
  * ~/components/layout. Pages should reach for those, not raw flex/grid/space-y.

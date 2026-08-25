@@ -36,7 +36,13 @@ export default literalEntity({
     output: { module: "@cubby/schemas/example", export: "exampleOut" },
     detail: { module: "@cubby/schemas/example", export: "exampleDetailOut" },
   },
-  filters: { urlKeys: ["name", "createdAt"] },
+  filters: {
+    schema: {
+      module: "@cubby/schemas/example",
+      export: "exampleFilterFields",
+    },
+    urlKeys: ["name", "createdAt"],
+  },
   relations: [],
   search: { enabled: true },
   capabilities: {
@@ -52,6 +58,30 @@ export default literalEntity({
     countFilter: null,
     relatednessSignals: null,
     mcpNames: null,
+    ports: {
+      repository: {
+        module: "~/server/entity-kernel/registry",
+        export: "exampleEntityAdapter",
+      },
+      references: {
+        label: { module: "~/entities/entities", export: "entityLabel" },
+        resolver: {
+          module: "~/server/repo/shortcode-resolver",
+          export: "resolveLiveShortcode",
+        },
+      },
+      filters: {
+        module: "~/entities/filter-manifest",
+        export: "getEntityFilters",
+      },
+      search: {
+        projection: null,
+        semanticText: null,
+        dependentRefresh: null,
+      },
+      lifecycle: { policy: null, runtime: null },
+      relationMutation: { attach: null, detach: null },
+    },
   },
 });
 ```
@@ -73,10 +103,11 @@ injection.
 
 Generated artifacts provide the exhaustive entity keys and traits, public
 shortcode contracts (including inbound-only legacy aliases), schema bindings,
-client-safe inspector metadata, browser route roster, filter URL catalog,
-kernel action capabilities, and contract cases. Shared browser helpers consume
-the roster, while TanStack route modules remain thin handwritten entrypoints.
-Specialized screens stay as extension slots in shared shells.
+client-safe inspector metadata, browser route roster, filter field/URL catalogs,
+kernel action capabilities, repository-adapter assembly, and contract cases.
+Shared browser helpers consume the roster, while TanStack route modules remain
+thin handwritten entrypoints. Specialized screens stay as extension slots in
+shared shells.
 
 Inspector metadata projects declared actions, filter keys, MCP operations,
 lifecycle/capability flags, reference targets, schema source-reference strings,
@@ -105,10 +136,13 @@ Extensions delegate to those services instead of branching inside the kernel.
 
 ## Transports
 
-tRPC is a replaceable browser adapter. Generic detail reads use one TanStack
-Start function and a generated entity-to-output map. Remaining generic lists and
-writes are exposed through `entity.query` and `entity.mutate`; workflow-shaped
-tRPC procedures remain thin adapters with no entity business logic.
+tRPC is a replaceable browser adapter. Generic detail, list, and deferred filter
+option reads use POST TanStack Start functions and generated entity-to-output
+maps. `entity.query` no longer exists. Generic writes remain on `entity.mutate`;
+workflow-shaped tRPC procedures remain thin adapters with no entity business
+logic. Start and tRPC share observed-request tracing, input redaction, Sentry
+policy, actor context, and public error translation. Start entity calls preserve
+the browser's semantic request/result/error console ledger.
 
 MCP invokes `executeEntity` directly through the `entity` tool and publishes its
 machine-readable contract at `entities://catalog`. Workflow-shaped MCP tools
@@ -118,10 +152,13 @@ typing may do so.
 
 ## Filters and search
 
-A filter declaration currently compiles the canonical URL keys used by shared
-route search-parameter assembly and generated contract cases. Controls, Zod
-input schemas, option loaders, and SQL predicates remain explicit extensions;
-the compiler does not infer database behavior from a URL key.
+A filter declaration compiles its Zod-field binding and canonical URL keys used
+by shared route search-parameter assembly, inspector metadata, and generated
+contract cases. Static and deferred controls still live in the explicit filter
+catalog; compound presets retain explicit codecs and option loaders. SQL
+predicates remain repository behavior and are checked through the real-query
+differential matrix—the compiler does not infer database behavior from a URL
+key.
 
 Searchable entities use persisted `SearchDocument` rows for lexical and
 embedding input. The spec generates search capability gates, while projection

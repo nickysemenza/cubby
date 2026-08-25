@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import shoppingFixture from "../harness/fixtures/shopping-list.json";
 import usdaFixture from "../harness/fixtures/usda-picker.json";
 
 type ToolInputNotification = { arguments: Record<string, unknown> };
@@ -66,8 +65,8 @@ async function flush(): Promise<void> {
   await Promise.resolve();
 }
 
-async function loadWidget(module: "shopping-list" | "usda-picker") {
-  document.body.innerHTML = `<meta name="cubby-app-id" content="${module}" /><div id="root"></div>`;
+async function loadWidget() {
+  document.body.innerHTML = '<div id="root"></div>';
   await import("./app");
   await flush();
   const app = appState.instances.at(-1);
@@ -82,7 +81,7 @@ beforeEach(() => {
 
 describe("USDA picker", () => {
   it("registers host handlers before connect and renders query evidence", async () => {
-    const app = await loadWidget("usda-picker");
+    const app = await loadWidget();
     expect(app.connectedWithHandlers).toBe(true);
 
     app.ontoolinput?.({
@@ -100,7 +99,7 @@ describe("USDA picker", () => {
   });
 
   it("selects with a radio, commits once, and refines in place", async () => {
-    const app = await loadWidget("usda-picker");
+    const app = await loadWidget();
     app.ontoolinput?.({ arguments: { query: "butter", pageSize: 6 } });
     app.ontoolresult?.(result(usdaFixture));
 
@@ -150,38 +149,5 @@ describe("USDA picker", () => {
       "Searching for “salted butter”",
     );
     expect(document.body.textContent).toContain("No USDA foods matched");
-  });
-});
-
-describe("shopping list", () => {
-  it("shows honest price coverage and disclosed omissions", async () => {
-    const app = await loadWidget("shopping-list");
-    app.ontoolinput?.({
-      arguments: { from: shoppingFixture.from, to: shoppingFixture.to },
-    });
-    app.ontoolresult?.(result(shoppingFixture));
-
-    expect(document.body.textContent).toContain("$48.00 · priced 6 of 8");
-    expect(document.body.textContent).toContain(
-      "1 sub-recipe could not be expanded",
-    );
-    expect(document.body.textContent).toContain("1 meal omitted");
-    expect(document.body.textContent).toContain("$28.50");
-  });
-
-  it("resets checks for a new result", async () => {
-    const app = await loadWidget("shopping-list");
-    app.ontoolresult?.(result(shoppingFixture));
-    const boxes = [
-      ...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
-    ];
-    boxes[0]?.click();
-    expect(boxes[0]?.checked).toBe(true);
-
-    app.ontoolresult?.(result(shoppingFixture));
-    expect(
-      document.querySelector<HTMLInputElement>('input[type="checkbox"]')
-        ?.checked,
-    ).toBe(false);
   });
 });

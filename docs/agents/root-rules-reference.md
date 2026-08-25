@@ -87,8 +87,8 @@ Rules that follow from that:
   `server/repo/filter-application.integration.test.ts` and
   `server/repo/inventory/embedding-cascade-invariant.integration.test.ts`. Never
   satisfy one with a mock.
-- **A guard that CI depends on is not deletable as duplication.** The convention
-  scripts (`check-conventions.mjs`, `check-soft-delete-filters.mjs`) and those
+- **A guard that CI depends on is not deletable as duplication.** Entity
+  freshness, soft-delete coverage, SQL-array safety, security, and the real-DB
   invariant suites back `pnpm check`; treat them as load-bearing even when a
   narrower test appears to cover the same ground.
 
@@ -244,7 +244,7 @@ Don't brand shortcode columns — those add insert-side friction for negligible 
 
 A uuid PK is an implementation detail of the repo layer. The **shortcode** (`PRD-4K7M`) is what URLs, QR labels, and MCP expose. See [README](../../README.md#public-identifiers--shortcodes) for the sixteen-prefix registry.
 
-- **A uuid must never reach a URL or an MCP payload.** Detail routes are `/products/$shortcode`; guard-enforced by `uuid-entity-href` in `scripts/check-conventions.ts`, which also catches server-built template hrefs the router's typed params can't see.
+- **A uuid must never reach a URL or an MCP payload.** Detail routes are `/products/$shortcode`; typed route params, shortcode schemas, and generated MCP contracts enforce the public-id boundary. Review server-built string links explicitly because typed router params cannot see them.
 - **Resolve in exactly one place** — `apps/web/src/server/repo/shortcode-resolver.ts`. Don't add a `findXByShortcode`; three of those existed and were deleted. `resolveShortcode` answers *"what does this code name"* (soft-deleted rows included, so a scan of a dead label can say so); `resolveLiveShortcode(db, code, entity)` answers *"can I still open it"* and pins the expected entity, so a `LOC-` code handed to a product lookup returns null instead of leaking a uuid.
 - **Reach for the throwing wrappers first.** `resolveOrThrow(db, entity, code)`
   is what most callers want — it derives the branded id, the `<ENTITY>_NOT_FOUND`

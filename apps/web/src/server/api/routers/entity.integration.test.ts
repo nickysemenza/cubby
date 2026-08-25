@@ -1,16 +1,26 @@
+import { unsafeUserId } from "@cubby/schemas/identifiers";
 import { vendorCreateInput, vendorOut } from "@cubby/schemas/vendor";
 import { wishCreateInput, wishOut } from "@cubby/schemas/wish";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { mock } from "~/lib/test/mock-schema";
-import { createTestCaller } from "../trpc";
+import { executeEntity } from "~/server/entity-kernel";
+import { requireActor } from "~/server/request-context";
+import { createTestCaller, createTestTRPCContext } from "../trpc";
 import { entityRouter } from "./entity";
 
 describe("entity kernel tRPC adapter", () => {
   const ctx = withTestDb();
+  const kernelContext = () =>
+    requireActor(
+      createTestTRPCContext(ctx.db, {
+        auth: { userId: unsafeUserId("test-user-id") },
+      }),
+    );
 
-  it("runs public-shortcode CRUD and list through two generic procedures", async () => {
+  it("runs public-shortcode CRUD through the thin write adapter", async () => {
     const caller = createTestCaller(entityRouter, ctx.db);
+    const context = kernelContext();
     const created = await caller.mutate({
       action: "create",
       entity: "wish",
@@ -24,16 +34,17 @@ describe("entity kernel tRPC adapter", () => {
     expect(createdWish.id).toMatch(/^WSH-/);
     expect(created.sideEffects.backgroundBatches).toEqual(expect.any(Array));
 
-    const fetched = await caller.query({
+    const fetched = await executeEntity(context, {
       action: "get",
       entity: "wish",
       id: createdWish.id,
+      missing: "error",
     });
     expect(fetched.action).toBe("get");
     if (fetched.action !== "get") throw new Error("unreachable");
     expect(wishOut.parse(fetched.item).name).toBe("Kernel contract wish");
 
-    const listed = await caller.query({
+    const listed = await executeEntity(context, {
       action: "list",
       entity: "wish",
       filters: { search: "Kernel contract wish" },
@@ -74,12 +85,17 @@ describe("entity kernel tRPC adapter", () => {
   });
 
   it("rejects the wrong public-id prefix and undeclared sort fields", async () => {
-    const caller = createTestCaller(entityRouter, ctx.db);
+    const context = kernelContext();
     await expect(
-      caller.query({ action: "get", entity: "wish", id: "VND-ABC123" }),
+      executeEntity(context, {
+        action: "get",
+        entity: "wish",
+        id: "VND-ABC123",
+        missing: "error",
+      }),
     ).rejects.toThrow();
     await expect(
-      caller.query({
+      executeEntity(context, {
         action: "list",
         entity: "wish",
         filters: {},

@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { recordInput } from "./trpc";
+import { recordObservedInput } from "./observed-request";
 
-describe("tRPC trace input redaction", () => {
+describe("observed request input redaction", () => {
   it("redacts URL/URI and credential values while retaining safe fields", () => {
     const setAttribute = vi.fn();
-    recordInput({ setAttribute } as never, {
+    recordObservedInput({ setAttribute } as never, {
       sourceUrl: "https://example.test/recipe?token=secret",
       callbackUri: "https://example.test/callback",
       apiKey: "secret",

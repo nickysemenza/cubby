@@ -29,7 +29,7 @@ function register(server: McpServer, app: McpApp) {
     app.uri,
     { description: app.description },
     async () => {
-      const { MCP_APP_BUNDLES, withCubbyAppConfig } = await import(
+      const { MCP_APP_BUNDLES, withCubbyOrigin } = await import(
         "@cubby/mcp-apps"
       );
       const bundle = MCP_APP_BUNDLES.find(({ id }) => id === app.id);
@@ -42,10 +42,7 @@ function register(server: McpServer, app: McpApp) {
             // The apps deep-link back into cubby, but a sandboxed iframe can't
             // know what origin its server is served from. Substituting at read
             // time keeps the origin out of tool payloads and out of the bundles.
-            text: withCubbyAppConfig(bundle.html, {
-              origin: APP_ORIGIN,
-              appId: app.id,
-            }),
+            text: withCubbyOrigin(bundle.html, APP_ORIGIN),
             _meta: {
               ui: {
                 // CSP and domain are intentionally omitted. These personal,

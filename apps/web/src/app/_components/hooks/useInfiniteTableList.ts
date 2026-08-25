@@ -7,13 +7,13 @@ import {
   type IdentifiedListRow,
 } from "./infinite-page-utils";
 import {
+  type ListQueryOptionsFn,
   type ListQueryResponse,
-  type TRPCQueryOptionsFn,
   usePaginatedTableCore,
 } from "./usePaginatedTableCore";
 
 interface UseInfiniteTableListOptions<TFilters> {
-  queryOptions: TRPCQueryOptionsFn<TFilters>;
+  queryOptions: ListQueryOptionsFn<TFilters>;
   buildFilters: (tableState: TableStateReturn) => TFilters;
   /** Shared table state, owned by the caller (one instance per page). */
   tableState: TableStateReturn;
@@ -55,7 +55,7 @@ interface UseInfiniteTableListReturn<TData extends IdentifiedListRow> {
 }
 
 /**
- * Hook for managing infinite-scrolling table list queries with tRPC.
+ * Hook for managing infinite-scrolling table list queries.
  *
  * Uses useInfiniteQuery to accumulate pages client-side.
  * This is the sole server-backed entity-list data path.
@@ -116,11 +116,17 @@ export function useInfiniteTableList<
     // count (useEntityList withholds totalCount while isLoading).
     placeholderData: keepPreviousData,
     queryKey: infiniteQueryKey,
-    queryFn: async ({ pageParam }: { pageParam: number }) => {
+    queryFn: async ({
+      pageParam,
+      signal,
+    }: {
+      pageParam: number;
+      signal: AbortSignal;
+    }) => {
       const options = pageOptions(pageParam);
-      // Call the queryFn from tRPC options
       return (await options.queryFn({
         queryKey: options.queryKey,
+        signal,
       })) as ListQueryResponse<TData>;
     },
     initialPageParam: 0,

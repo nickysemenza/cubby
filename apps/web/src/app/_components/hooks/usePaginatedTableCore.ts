@@ -12,9 +12,9 @@ export interface ListQueryResponse<TData> {
   };
 }
 
-// tRPC queryOptions carries internal generics that don't map cleanly to a simple
-// function type. The filter generic still keeps callers honest at the boundary.
-export type TRPCQueryOptionsFn<TFilters> = (params: {
+// Transport queryOptions carry internal generics that don't map cleanly to a
+// simple function type. The filter generic keeps callers honest at the seam.
+export type ListQueryOptionsFn<TFilters> = (params: {
   /** Sort stack (multi-sort); the schema also accepts the legacy single object. */
   sort: Array<{ orderBy: string; direction: "asc" | "desc" }>;
   pagination: { pageIndex: number; pageSize: number };
@@ -24,7 +24,7 @@ export type TRPCQueryOptionsFn<TFilters> = (params: {
 }) => any;
 
 interface UsePaginatedTableCoreOptions<TFilters> {
-  queryOptions: TRPCQueryOptionsFn<TFilters>;
+  queryOptions: ListQueryOptionsFn<TFilters>;
   buildFilters: (tableState: TableStateReturn) => TFilters;
   tableState: TableStateReturn;
   groupBy?: string;

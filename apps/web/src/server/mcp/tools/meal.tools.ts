@@ -21,7 +21,7 @@ export function registerMealTools(server: McpServer) {
   registerMcpTool(server, {
     name: "get_shopping_list",
     description:
-      "Use this when the user asks what to buy or what they are short on for planned meals in a date range. The interactive list compares aggregate recipe needs with on-hand inventory and supports temporary in-widget checking. Do not invoke it to add arbitrary manual household shopping items or imply that checked state is saved.",
+      "Use this when the user asks what to buy or what they are short on for planned meals in a date range. It compares aggregate recipe needs with on-hand inventory and returns the result as structured data and readable text. Do not invoke it to add arbitrary manual household shopping items.",
     inputSchema: {
       from: mealDate.describe("Start day (inclusive)"),
       to: mealDate.describe("End day (inclusive)"),

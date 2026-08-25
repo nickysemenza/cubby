@@ -21,9 +21,9 @@ const asResolvedOutput = <T>(value: T): T extends TRPCUnsetMarker ? never : T =>
  * Temporary wire-compatibility for named entity routers.
  *
  * These procedures contain no domain behavior: each maps the old route shape
- * to the single kernel command and unwraps its normalized envelope. New callers
- * use `entity.query` / `entity.mutate`; old browser routes can migrate without
- * preserving a second CRUD implementation.
+ * to the single kernel command and unwraps its normalized envelope. New writes
+ * use `entity.mutate`; route-owned reads use Start functions while old browser
+ * routes migrate without preserving a second CRUD implementation.
  */
 export function createEntityCompatibilityProcedures<
   const E extends Exclude<EntityKernelEntity, "image">,

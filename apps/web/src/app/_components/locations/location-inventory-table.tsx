@@ -12,7 +12,7 @@ import {
   VerbMenuItem,
   verbBulkAction,
 } from "~/app/_components/actions/action-verb-ui";
-import type { TRPCQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
+import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import { useTRPC } from "~/integrations/trpc/react";
 import {
   createEditableAmountColumn,
@@ -222,7 +222,7 @@ export function LocationInventoryTable({
   );
 
   // Fixed parent scope merged with the table's live sort/pagination.
-  const listQueryOptions: TRPCQueryOptionsFn<Record<string, never>> =
+  const listQueryOptions: ListQueryOptionsFn<Record<string, never>> =
     useCallback(
       (params) =>
         api.inventory.list.queryOptions({

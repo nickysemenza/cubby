@@ -48,7 +48,8 @@ const NO_TAGS: string[] = [];
 const { data: tags = NO_TAGS } = useQuery(api.recipe.getAllTags.queryOptions());
 ```
 
-Enforced by `scripts/check-conventions.ts` (`unstable-hook-default`, runs in `pnpm check`) for `= []`, `= {}`, and `= new X(...)` defaults on any `use*()` result destructure.
+Review hook defaults for `= []`, `= {}`, and `= new X(...)`; keep stable empty
+values at module scope or memoize them.
 
 ### `useQueries` must use `combine`
 
@@ -75,20 +76,20 @@ const { data, isLoading } = useQueries({
 
 ## Colors / Design Tokens
 
-- Never hardcode colors (hex/oklch) in components. Use the tokens in `apps/web/src/styles.css` — the chart ramp (`--chart-1..8`) and semantic tokens (`--plum`, `--positive`, `--warning`, …). Map green→`positive`, red→`destructive`, amber/yellow→`warning`. This is **enforced** by `scripts/check-conventions.ts` (run via `pnpm check`); the only exemptions are `IsometricPantry.tsx` (`<canvas>` paint) and `theme-color`/chart-lib fallbacks.
+- Avoid hardcoded colors (hex/oklch) in components. Use the tokens in `apps/web/src/styles.css` — the chart ramp (`--chart-1..8`) and semantic tokens (`--plum`, `--positive`, `--warning`, …). Map green→`positive`, red→`destructive`, amber/yellow→`warning`. Canvas paint, `theme-color`, and chart-library fallbacks are the usual exceptions; this is a design-review rule rather than a CI regex.
 - A new semantic color gets a `--token` in `:root` **and** a `--color-*` mirror in `@theme inline` (the `--plum` / `--color-plum` pattern), so both `var(--token)` and Tailwind utilities (`text-foo`) work. e.g. `--ingredient-amount/name/modifier`. **Composite shadow/text-shadow tokens** (`--shadow-chunky*`, `--shadow-inset-gloss`, `--shadow-scan-flash`, `--text-shadow-chart`) need **no** `@theme` mirror — use via `shadow-[var(--token)]` or `style={{ boxShadow: "var(--token)" }}`. Don't inline `rgba()` shadows in components; add a token.
 - **Icon sizes: `size-3.5` (14px) for inline/nav glyphs, `size-5` (20px) for card/tile/hero icons.** Use the `size-N` shorthand, never `h-N w-N` (guard-enforced, rule `hw-pair-shorthand`). Micro-indicators (sort arrows, dense badges) stay `size-3`; the interactive ui primitives (Button/DropdownMenu/Command/Tabs/Toggle) already default their icon slot to `size-3.5`, so an explicit size on a glyph inside them is an override — usually unwanted.
 - **Badge is the canonical categorical chip** — a mono-uppercase stamp (`font-mono uppercase tracking-wider`, the default). Free-form prose in a badge (product names, user text) opts out with `font-sans normal-case tracking-normal`. Don't hand-roll pill styling.
 
 ## Images
 
-- **Every `<Image>` declares its rendered width.** The Cloudflare Image Transformation in `~/lib/image-url` is opt-in per call site — omit `displayWidth` and `<Image>` serves the full-size R2 original into whatever box the className sets. That's how the locations gallery pulled **1.8 MB** location photos into **32px** tiles while the 240px hover preview above them was correctly transformed. Pass the rendered CSS width; the helper never upscales (`fit=scale-down`) and emits a 1x/2x `srcSet`, so retina is already covered. Guard-enforced by `scripts/check-conventions.ts` (`untransformed-image`, runs in `pnpm check`).
+- **Every `<Image>` declares its rendered width or explicitly opts out with `unoptimized`.** The `ImageProps` union enforces this at typecheck. The helper never upscales (`fit=scale-down`) and emits a 1x/2x `srcSet`, so retina is already covered.
 - Passing `displayWidth` for a non-bucket URL (external UPC-lookup images, data URLs) is a **harmless no-op** — `transformedImageUrl` returns the input unchanged. That's why the rule has no allowlist: there's never a reason not to declare the width.
 - Prefer the wrappers over a bare `<Image>`: `ImageWithPreview` (defaults `displayWidth` to its `size`), `CardThumbnail`, `ImageThumbnail`, `InteractiveImage`. Only reach for `<Image>` directly when none of those fit.
 
 ## Spacing
 
-- **Guard-enforced scale.** `gap`/`space-x|y`/`p*`/`m*` use the doublings `{0,1,2,4,6}` plus the legit large steps `{8,12,16,20}` (wide gutters, big touch targets, hero/clearance padding). The odd/half **rhythm drift** (`1.5, 2.5, 3, 5, 7, 9, 10, 11, 13, 14`) FAILS `scripts/check-conventions.ts` (runs in `pnpm check`) — that's the long tail we killed. Named keys `xs/sm/md/lg` on the layout cvas in `apps/web/src/styles/layouts.ts` map to `1/2/4/6`.
+- **Spacing scale.** `gap`/`space-x|y`/`p*`/`m*` normally use `{0,1,2,4,6}` plus `{8,12,16,20}` for wide gutters, touch targets, and large clearance. Named keys `xs/sm/md/lg` on the layout cvas in `apps/web/src/styles/layouts.ts` map to `1/2/4/6`. Treat deviations as a visual-review decision, not a CI regex violation.
 - **Exemptions:** `components/ui/**` (shadcn primitives — their `px-3` etc. is the design system's own component padding) and the rare genuinely-dense sub-scale spot (`gap-0.5` optical nudges, dense calendar cells) marked with an inline `/* tight */`. Use `/* tight */` sparingly — and prefer encapsulating density in a component over scattering the marker.
 - `gap-*` for flex/grid containers (siblings laid out by the parent); `space-y-*` only for plain block stacks with no flex/grid context.
 

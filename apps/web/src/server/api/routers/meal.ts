@@ -22,7 +22,7 @@ import {
 import { contributesToShoppingList } from "@cubby/schemas/meal-classification";
 import { sumBy } from "es-toolkit";
 import { ENTITY_BINDINGS } from "~/server/entity-bindings";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/entity-kernel/registry";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import {
   addRecipeToMeal,
   getMealsByDateRange,

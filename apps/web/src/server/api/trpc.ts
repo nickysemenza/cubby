@@ -1,24 +1,20 @@
 import { buildActorContext } from "@cubby/schemas/context";
 import { type UserId, unsafeUserId } from "@cubby/schemas/identifiers";
-import * as Sentry from "@sentry/tanstackstart-react";
 import { initTRPC, TRPCError, type TRPCRouterRecord } from "@trpc/server";
-import { flatten } from "flat";
 import superjson from "superjson";
 import { ZodError, type ZodType, type z } from "zod";
-import { getErrorMessage } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 import {
   appErrorFromUnknown,
   createAppError,
-  isExpectedAppError,
   toPublicErrorPayload,
 } from "~/server/errors/app-error";
 import { translateDatabaseError } from "~/server/errors/db-errors";
+import { observeRequest } from "~/server/observed-request";
 import {
   buildCrudServices,
   createRequestContext,
 } from "~/server/request-context";
-import { type AppSpan, TraceNames, withTrace } from "~/server/tracing";
 import type { RequestOrigin } from "~/server/workload";
 import { classifyTrpcWorkload } from "~/server/workload";
 
@@ -28,11 +24,9 @@ export const createTRPCContext = createRequestContext;
 const t = initTRPC.context<typeof createTRPCContext>().create({
   transformer: superjson,
   errorFormatter({ shape, error }) {
-    // If the error was caused by a Zod validation, add the full error details
     if (error.cause instanceof ZodError) {
       const zodError = error.cause;
 
-      // Log the detailed error for server-side debugging
       console.error("[TRPC ZodError]", {
         path: shape.data?.path,
         fullError: zodError.format(),
@@ -76,121 +70,35 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
   },
 });
 
-/**
- * Create a server-side caller.
- *
- * @see https://trpc.io/docs/server/server-side-calls
- */
 export const createCallerFactory = t.createCallerFactory;
 
-/**
- * 3. ROUTER & PROCEDURE (THE IMPORTANT BIT)
- *
- * These are the pieces you use to build your tRPC API. You should import these a lot in the
- * "/src/server/api/routers" directory.
- */
-
-/**
- * This is how you create new routers and sub-routers in your tRPC API.
- *
- * @see https://trpc.io/docs/router
- */
 export const createTRPCRouter = t.router;
 
-/** Keys whose values must never reach a trace. */
-const SENSITIVE_KEY =
-  /pass|token|secret|cookie|authorization|api.?key|url|uri/i;
-/** Above this serialized size we record the byte count but not the values. */
-const INPUT_BYTES_CAP = 4096;
-
-/**
- * Record a tRPC input on the span under `rpc.input.*`, guarded: always emits
- * `rpc.input.bytes`, skips the value dump past {@link INPUT_BYTES_CAP} (setting
- * `rpc.input.truncated`), and redacts secret-ish keys — so traces stay lean and
- * never leak credentials.
- */
-export const recordInput = (
-  span: AppSpan,
-  input: unknown,
-  includeValues = true,
-): void => {
-  if (input == null || typeof input !== "object") return;
-  let serialized: string;
-  try {
-    serialized = JSON.stringify(input);
-  } catch {
-    return; // non-serializable (e.g. a stream) — skip rather than throw
-  }
-  span.setAttribute("rpc.input.bytes", serialized.length);
-  if (!includeValues) return;
-  if (serialized.length > INPUT_BYTES_CAP) {
-    span.setAttribute("rpc.input.truncated", true);
-    return;
-  }
-  const flat = flatten({ "rpc.input": input }) as Record<string, unknown>;
-  for (const [key, value] of Object.entries(flat)) {
-    if (
-      typeof value !== "string" &&
-      typeof value !== "number" &&
-      typeof value !== "boolean"
-    ) {
-      continue; // skip null/undefined/nested — primitives only
-    }
-    span.setAttribute(key, SENSITIVE_KEY.test(key) ? "[redacted]" : value);
-  }
-};
-
-const tracingMiddleWare = t.middleware(async (opts) =>
-  withTrace(TraceNames.trpc(opts.type, opts.path), async (span) => {
-    span.setAttributes({
-      "rpc.system": "trpc",
-      "rpc.method": opts.path,
-      "rpc.type": opts.type,
-      "enduser.id": opts.ctx.auth?.userId ?? "guest",
-      "cubby.request_origin": opts.ctx.requestOrigin,
-      "cubby.workload": classifyTrpcWorkload(opts.ctx.requestOrigin, opts.path),
-    });
-    recordInput(
-      span,
-      await opts.getRawInput(),
+const tracingMiddleWare = t.middleware(async (opts) => {
+  const input = await opts.getRawInput();
+  return await observeRequest({
+    system: "trpc",
+    method: opts.path,
+    type: opts.type,
+    origin: opts.ctx.requestOrigin,
+    actorId: opts.ctx.auth?.userId,
+    input,
+    workload: classifyTrpcWorkload(opts.ctx.requestOrigin, opts.path),
+    includeInputValues:
       opts.ctx.requestOrigin !== "mcp" && opts.ctx.requestOrigin !== "agent",
-    );
-    try {
-      const result = await opts.next();
-
-      if (result.ok) {
-        span.setAttribute(
-          "cubby.workload",
-          classifyTrpcWorkload(opts.ctx.requestOrigin, opts.path, result.data),
-        );
-      }
-
-      // tRPC returns errors as results with ok: false, not thrown.
-      if (!result.ok) {
-        span.setError(getErrorMessage(result.error));
-        // Only capture *unexpected* errors to Sentry. Expected 4xx business
-        // errors (NOT_FOUND, UNAUTHORIZED, validation, …) are normal responses
-        // — they already skip console logging in createAppError, have zero user
-        // impact, and would otherwise flood Sentry with thousands of events
-        // (e.g. a stale cached getByID for a deleted entity).
-        if (!isExpectedAppError(result.error)) {
-          Sentry.captureException(result.error, {
-            extra: { trpcPath: opts.path, trpcType: opts.type },
-          });
-        }
-      }
-
-      return result;
-    } catch (error) {
-      // Unexpected errors that bypass tRPC error handling. withTrace marks the
-      // span errored + records the exception; we add the Sentry capture.
-      Sentry.captureException(error, {
-        extra: { trpcPath: opts.path, trpcType: opts.type },
-      });
-      throw error;
-    }
-  }),
-);
+    run: opts.next,
+    inspectResult: (result) =>
+      result.ok
+        ? {
+            workload: classifyTrpcWorkload(
+              opts.ctx.requestOrigin,
+              opts.path,
+              result.data,
+            ),
+          }
+        : { error: result.error },
+  });
+});
 
 /**
  * Translate raw Postgres constraint errors (unique, FK, not-null, check) into
@@ -223,8 +131,6 @@ const appErrorMiddleware = t.middleware(async (opts) => {
   return result;
 });
 
-// Check if the user is signed in and has actorContext
-// Otherwise, throw an UNAUTHORIZED code
 const isAuthed = t.middleware(({ next, ctx }) => {
   if (!ctx.auth?.userId) {
     throw createAppError("UNAUTHORIZED", "Unauthorized");
@@ -244,13 +150,6 @@ const isAuthed = t.middleware(({ next, ctx }) => {
   });
 });
 
-/**
- * Public (unauthenticated) procedure
- *
- * This is the base piece you use to build new queries and mutations on your tRPC API. It does not
- * guarantee that a user querying is authorized, but you can still access user session data if they
- * are logged in.
- */
 const publicProcedure = t.procedure
   .use(dbErrorMiddleware)
   .use(tracingMiddleWare)
@@ -274,17 +173,11 @@ export const protectedProcedure = publicProcedure.use(isAuthed);
 export const strictOutput = <TSchema extends ZodType>(schema: TSchema) =>
   schema as ZodType<z.output<TSchema>, z.output<TSchema>>;
 
-/**
- * Helper to create a minimal auth object for testing
- */
 const createTestAuth = (userId: UserId) => ({
   userId,
   sessionId: "test-session-id",
 });
 
-/**
- * Test helper to create a TRPC context for testing purposes
- */
 export const createTestTRPCContext = (
   db: Database,
   opts: {
@@ -292,15 +185,8 @@ export const createTestTRPCContext = (
     auth?: { userId: UserId };
   } = {},
 ) => {
-  // USDA is always-available in prod (CF Worker) and now throws on a real
-  // service error rather than degrading to null. Tests have no USDA backend, so
-  // stub the fetcher to mimic the worker's "food not found" contract — hermetic,
-  // no thrown network error, the same "no USDA data" the suite always assumed:
-  //   - the batch endpoint (/api/foods/search/batch) returns 200 with an empty
-  //     results array (per-item misses); findFoodsBatch maps every item to null.
-  //     It must NOT 404 — findFoodsBatch throws on a non-200 (a real service
-  //     error), and product/recipe enrichment runs through the batch path.
-  //   - every other lookup (getFood / search / list) 404s → `food: null`.
+  // Batch misses are 200s; single-food misses are 404s. A batch 404 represents
+  // a service failure and would make enrichment throw.
   const jsonResponse = (status: number, body: unknown) =>
     new Response(JSON.stringify(body), {
       status,
@@ -318,7 +204,6 @@ export const createTestTRPCContext = (
     ? createTestAuth(opts.auth.userId)
     : { userId: null, sessionId: null };
 
-  // Build actorContext if we have auth
   const actorContext = auth.userId
     ? buildActorContext(auth.userId, "ui")
     : null;

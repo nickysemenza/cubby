@@ -162,8 +162,3 @@ export function num(value: number): string {
   if (Number.isInteger(value)) return String(value);
   return value < 10 ? value.toFixed(1) : String(Math.round(value));
 }
-
-/** `3 meals` / `1 meal` — a count plus a correctly-inflected noun. */
-export function plural(count: number, noun: string): string {
-  return `${count} ${count === 1 ? noun : `${noun}s`}`;
-}

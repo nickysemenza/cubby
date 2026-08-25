@@ -274,7 +274,7 @@ jobs:
         with:
           wasm: "restore"
       - name: Run repository quality gates
-        run: pnpm run check
+        run: pnpm run check:all
       - name: Run auxiliary package tests
         if: needs.scope.outputs.aux == 'true'
         shell: bash

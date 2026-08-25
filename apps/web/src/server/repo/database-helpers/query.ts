@@ -413,9 +413,9 @@ export const correlated = <T>(fragment: string): SQL<T> =>
  * when the whole point is to avoid a parameter per id, and they cannot target
  * an aliased table inside a hand-written UNION.
  *
- * This is the ONLY sanctioned way to write `= ANY(...)` in raw SQL, and
- * `check-conventions`' `hand-rolled-any-array` rule allows exactly this call
- * and nothing else. The trap it guards is interpolating a **JS array**, which
+ * This is the only sanctioned way to write `= ANY(...)` in raw SQL; the small
+ * SQL-safety check rejects direct JS-array interpolation elsewhere. The trap is
+ * interpolating a **JS array**, which
  * drizzle renders as a row constructor (`ANY(($1, $2))` — "op ANY/ALL requires
  * array"). What this returns is a Postgres array *literal* bound as a single
  * text value and cast in SQL, so that shape is unreachable by construction.

@@ -21,7 +21,7 @@ import { nutrientCount } from "~/lib/usda-food-stats";
 import { createEntityInlineLinkColumn } from "../_components/data-table/columnHelpers";
 import type { TableStateReturn } from "../_components/data-table/useTableState";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
-import type { TRPCQueryOptionsFn } from "../_components/hooks/usePaginatedTableCore";
+import type { ListQueryOptionsFn } from "../_components/hooks/usePaginatedTableCore";
 import { TableLink } from "../_components/table/TableLink";
 import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
 import { CoreNutrientCoverage } from "../_components/usda/core-nutrient-coverage";
@@ -75,7 +75,7 @@ export function USDAFoodList() {
       idField: "fdc_id",
     },
   );
-  const queryOptions = useCallback<TRPCQueryOptionsFn<USDAListFilters>>(
+  const queryOptions = useCallback<ListQueryOptionsFn<USDAListFilters>>(
     (params) => {
       const searching = Boolean(params.filters.nameFilter);
       const listParams = {

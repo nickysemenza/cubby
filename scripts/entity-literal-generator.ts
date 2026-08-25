@@ -50,6 +50,7 @@ export type EntityLiteral = Readonly<{
     | null;
   route: Readonly<{ basePath: string; detailParam?: string }> | null;
   filterUrlKeys: readonly string[];
+  filterSchema: SourceRef | null;
   ports: EntityPorts;
 }>;
 
@@ -316,7 +317,7 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
     ),
   };
   const filters = objectValue(required(object, "filters", context), `${context}.filters`);
-  exactKeys(filters, ["urlKeys"], `${context}.filters`);
+  exactKeys(filters, ["urlKeys", "schema"], `${context}.filters`);
   const rawFilterUrlKeys = required(filters, "urlKeys", `${context}.filters`);
   if (!Array.isArray(rawFilterUrlKeys)) {
     throw new LiteralSpecError(`${context}.filters.urlKeys must be an array.`);
@@ -327,6 +328,10 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
   if (new Set(filterUrlKeys).size !== filterUrlKeys.length) {
     throw new LiteralSpecError(`${context}.filters.urlKeys contains duplicates.`);
   }
+  const filterSchema =
+    filters.schema === undefined || filters.schema === null
+      ? null
+      : sourceRef(filters.schema, `${context}.filters.schema`);
   const routeValue = object.route;
   const route = routeValue === undefined || routeValue === null ? null : (() => {
     const value = objectValue(routeValue, `${context}.route`);
@@ -402,6 +407,7 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
     descriptor,
     route,
     filterUrlKeys,
+    filterSchema,
     ports,
   };
 };
@@ -759,6 +765,37 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         `z.object({entity:z.literal(${JSON.stringify(key)}),shortcode:shortcodeSchema(${JSON.stringify(key)})})`,
     )
     .join(",\n  ");
+
+  const browserEntities = entities.filter(
+    ({ descriptor }) => descriptor.browserRoutes !== false,
+  );
+  const browserCrudEntitySpecs = browserEntities.filter(
+    (entity): entity is EntityLiteral & {
+      contract: NonNullable<EntityLiteral["contract"]>;
+    } => entity.contract !== null,
+  );
+  const browserCrudEntities = browserCrudEntitySpecs.map(({ key }) => key);
+  const listTypeImports = new Map<string, Set<string>>();
+  for (const { contract } of browserCrudEntitySpecs) {
+    const exports = listTypeImports.get(contract.output.module) ?? new Set<string>();
+    exports.add(contract.output.export);
+    listTypeImports.set(contract.output.module, exports);
+  }
+  const listTypeImportSource = [
+    ...[...listTypeImports.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(
+        ([module, exports]) =>
+          `import type { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
+      ),
+    'import type { z } from "zod";',
+  ].join("\n");
+  const listResultTypes = browserCrudEntitySpecs
+    .map(
+      ({ key, contract }) =>
+        `  ${JSON.stringify(key)}: { items: z.output<typeof ${contract.output.export}>[]; meta: EntityListMeta };`,
+    )
+    .join("\n");
   const commandVariants = (
     action: "create" | "update",
     schema: "create" | "update",
@@ -775,15 +812,52 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         return `z.object({action:z.literal(${JSON.stringify(action)}),entity:z.literal(${JSON.stringify(entity.key)})${id},data:${schemaRef.export}})`;
       })
       .join(",\n  ");
-  const browserEntities = entities.filter(
-    ({ descriptor }) => descriptor.browserRoutes !== false,
-  );
-  const browserCrudEntities = browserEntities
-    .filter(({ contract }) => contract !== null)
-    .map(({ key }) => key);
   const kernelEntities = entities
     .filter(({ contract, key }) => contract !== null || key === "image");
   const kernelEntityKeys = kernelEntities.map(({ key }) => key);
+  const runtimeAdapterImports = new Map<string, Set<string>>();
+  for (const entity of kernelEntities) {
+    const adapter = entity.ports.repository;
+    if (adapter === null) {
+      throw new LiteralSpecError(
+        `${entity.key}.ports.repository is required for a kernel entity.`,
+      );
+    }
+    const exports = runtimeAdapterImports.get(adapter.module) ?? new Set<string>();
+    exports.add(adapter.export);
+    runtimeAdapterImports.set(adapter.module, exports);
+  }
+  const runtimeAdapterImportSource = [...runtimeAdapterImports.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(
+      ([module, exports]) =>
+        `import { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
+    )
+    .join("\n");
+  const runtimeBindings = kernelEntities
+    .map(({ key, ports }) => `  ${JSON.stringify(key)}: ${ports.repository?.export},`)
+    .join("\n");
+  const filterFieldImports = new Map<string, Set<string>>();
+  for (const { filterSchema } of entities) {
+    if (filterSchema === null) continue;
+    const exports = filterFieldImports.get(filterSchema.module) ?? new Set<string>();
+    exports.add(filterSchema.export);
+    filterFieldImports.set(filterSchema.module, exports);
+  }
+  const filterFieldImportSource = [...filterFieldImports.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(
+      ([module, exports]) =>
+        `import { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
+    )
+    .join("\n");
+  const filterFieldBindings = entities
+    .flatMap(({ key, filterSchema }) =>
+      filterSchema === null
+        ? []
+        : [`  ${JSON.stringify(key)}: ${filterSchema.export},`],
+    )
+    .join("\n");
   const lifecycleFor = (entity: EntityLiteral) =>
     objectValue(
       required(entity.descriptor, "lifecycle", `${entity.key}.descriptor`),
@@ -871,9 +945,6 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         ],
       }];
     }),
-  );
-  const serverPortRosters = Object.fromEntries(
-    entities.map((entity) => [entity.key, entity.ports]),
   );
   const portExportChecks = [
     ...new Map(
@@ -972,6 +1043,42 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         "};\n",
     },
     {
+      relativePath: "apps/web/src/entities/generated/entity-lists.gen.ts",
+      source:
+        generatedHeader +
+        `${listTypeImportSource}\n\n` +
+        `export const listEntities = ${compactLiteral(browserCrudEntities)} as const;\n` +
+        "export type ListEntity = (typeof listEntities)[number];\n\n" +
+        'type EntityListSort = { orderBy: string; direction: "asc" | "desc" };\n' +
+        "type EntityListInput = {\n" +
+        "  filters: Record<string, unknown>;\n" +
+        "  sort?: EntityListSort | EntityListSort[];\n" +
+        "  pagination?: { pageIndex: number; pageSize: number };\n" +
+        "  groupBy?: string;\n" +
+        "};\n" +
+        "export type EntityListInputByEntity = {\n" +
+        "  [E in ListEntity]: EntityListInput & { entity: E };\n" +
+        "};\n\n" +
+        "type EntityListMeta = {\n" +
+        "  pageIndex: number;\n" +
+        "  pageSize: number;\n" +
+        "  totalCount: number;\n" +
+        "  sums?: Record<string, number>;\n" +
+        "};\n" +
+        "export type EntityListResultByEntity = {\n" +
+        `${listResultTypes}\n` +
+        "};\n",
+    },
+    {
+      relativePath: "apps/web/src/entities/generated/entity-filter-fields.gen.ts",
+      source:
+        generatedHeader +
+        'import type { Entity } from "@cubby/schemas/entity";\n' +
+        `${filterFieldImportSource}\n\n` +
+        "// biome-ignore format: generated filter field assembly stays one entity per line.\n" +
+        `export const entityFilterFieldMaps: Partial<Record<Entity, Record<string, unknown>>> = {\n${filterFieldBindings}\n};\n`,
+    },
+    {
       relativePath: "apps/web/src/server/generated/entity-bindings.gen.ts",
       source:
         generatedHeader +
@@ -1029,20 +1136,10 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         `export const generatedMergeEntityKernelEntities = ${compactLiteral(entitiesForAction("merge"))} as const;\n`,
     },
     {
-      relativePath: "apps/web/src/server/generated/entity-runtime-ports.gen.ts",
+      relativePath: "apps/web/src/server/generated/entity-kernel-bindings.gen.ts",
       source:
         generatedHeader +
-        'import type { Entity } from "@cubby/schemas/entity";\n\n' +
-        "type EntityPortSourceRef = { module: string; export: string };\n" +
-        "type EntityServerPortRoster = {\n" +
-        "  repository: EntityPortSourceRef | null;\n" +
-        "  references: { label: EntityPortSourceRef | null; resolver: EntityPortSourceRef | null };\n" +
-        "  filters: EntityPortSourceRef | null;\n" +
-        "  search: { projection: EntityPortSourceRef | null; semanticText: EntityPortSourceRef | null; dependentRefresh: EntityPortSourceRef | null };\n" +
-        "  lifecycle: { policy: EntityPortSourceRef | null; runtime: EntityPortSourceRef | null };\n" +
-        "  relationMutation: { attach: EntityPortSourceRef | null; detach: EntityPortSourceRef | null };\n" +
-        "  readonly __exportChecks?: EntityPortExportChecks;\n" +
-        "};\n\n" +
+        'import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";\n\n' +
         "/** Each literal module/export source reference is checked without a runtime import. */\n" +
         `type EntityPortExportChecks = readonly [${portExportChecks
           .map(
@@ -1050,8 +1147,9 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
               `typeof import(${JSON.stringify(ref.module)})[${JSON.stringify(ref.export)}]`,
           )
           .join(", ")}];\n\n` +
-        "// biome-ignore format: generated runtime port roster stays one entity per line.\n" +
-        `export const entityServerPortRosters = ${compactLiteral(serverPortRosters)} as const satisfies Record<Entity, EntityServerPortRoster>;\n`,
+        `${runtimeAdapterImportSource}\n\n` +
+        "// biome-ignore format: generated runtime assembly stays one entity per line.\n" +
+        `export const ENTITY_KERNEL_BINDINGS = {\n${runtimeBindings}\n} as const satisfies Record<EntityKernelEntity, unknown> & { readonly __portExportChecks?: EntityPortExportChecks };\n`,
     },
   ];
 };
@@ -1096,7 +1194,7 @@ const formatSource = (root: string, artifact: EntityArtifacts): string => {
   return result;
 };
 
-const generatedName = /^(?:entity-literal-.+|entity-manifest-data|entity-inspector|entity-details|entity-bindings|entity-routes|entity-kernel-entities|entity-runtime-ports|filter-search-fields|shortcode-registry)\.gen\.ts$/;
+const generatedName = /^(?:entity-literal-.+|entity-manifest-data|entity-inspector|entity-details|entity-lists|entity-filter-fields|entity-bindings|entity-routes|entity-kernel-bindings|entity-kernel-entities|entity-runtime-ports|filter-search-fields|shortcode-registry)\.gen\.ts$/;
 
 const findExtraArtifacts = async (root: string, artifacts: readonly EntityArtifacts[]) => {
   const expected = new Set(artifacts.map(({ relativePath }) => relativePath));

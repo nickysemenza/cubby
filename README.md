@@ -484,20 +484,23 @@ pinned to one origin per environment in [auth.ts](apps/web/src/lib/auth.ts).
 
 ### MCP Apps (interactive UIs in the conversation)
 
-Two tools render an interactive UI in hosts that support the
+One tool renders an interactive UI in hosts that support the
 [MCP Apps extension](https://modelcontextprotocol.io/docs/extensions/apps)
 (SEP-1865) — Claude web and desktop among them:
 
 | Tool | App |
 |---|---|
-| `get_shopping_list` | Checkable list grouped by availability, per-meal breakdown behind each item |
 | `search_usda_foods` | Pickable cards with data-type richness cues and macros; selection flows back to the agent |
 
-The UI is **strictly additive** — a host without the extension ignores
+The USDA UI is **strictly additive** — a host without the extension ignores
 `_meta.ui.resourceUri` and gets the same `structuredContent` as before. Scope is
 deliberately narrow: an app earns its place only where the chat is the right
 home for the interaction *and* text is a bad medium for it. Tables, boards, and
 charts stay in the web app, one `openLink` away.
+
+`get_shopping_list` remains a plain tool with structured content and readable
+text. The removed widget's temporary checkbox state was never durable; durable
+manual items and checks belong to the ranked shopping-list project.
 
 Sources live in [apps/mcp-apps/](apps/mcp-apps/) — its own workspace package,
 because it's a separate build target with a different runtime (sandboxed iframe,

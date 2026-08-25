@@ -31,9 +31,8 @@ export interface ImageWithPreviewProps {
   fallback?: ReactNode;
   /**
    * Overrides the thumbnail's CF-transform width, which otherwise follows
-   * `size` (the popup always transforms at `previewSize`). Only needed when the
-   * box is sized by `className` rather than `size` — leaving both unset serves
-   * the full-size original, which is never what a thumbnail wants.
+   * `size` or the 40px default. The popup always transforms at `previewSize`.
+   * Set this when `className` renders a different width.
    */
   displayWidth?: number;
   /**
@@ -74,6 +73,7 @@ export function ImageWithPreview({
   fit = "cover",
   previewPositionerClassName,
 }: ImageWithPreviewProps) {
+  const thumbnailDisplayWidth = displayWidth ?? size ?? 40;
   const thumbnailClasses = cn(
     "bg-background relative flex-shrink-0 overflow-hidden rounded-none border transition-transform hover:scale-105",
     className,
@@ -99,7 +99,7 @@ export function ImageWithPreview({
           src={src}
           alt={alt}
           fallback={fallback}
-          displayWidth={displayWidth}
+          displayWidth={thumbnailDisplayWidth}
           className={cn(
             "absolute inset-0 h-full w-full",
             fit === "contain" ? "bg-card object-contain" : "object-cover",

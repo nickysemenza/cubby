@@ -23,13 +23,13 @@
       "category": "direct",
       "prompt": "What do I need to buy for the meals planned this week?",
       "expectedTool": "get_shopping_list",
-      "expectedWidget": "ui://cubby/shopping-list.html"
+      "expectedWidget": null
     },
     {
       "category": "indirect",
       "prompt": "I'm heading to the store. What are we short on for the dinners on our calendar?",
       "expectedTool": "get_shopping_list",
-      "expectedWidget": "ui://cubby/shopping-list.html"
+      "expectedWidget": null
     },
     {
       "category": "negative",
