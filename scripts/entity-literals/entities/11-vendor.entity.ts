@@ -1,3 +1,361 @@
 import { literalEntity } from "../literal.js";
 
-export default literalEntity({key:"vendor",names:{singular:"Vendor"},route:{basePath:"vendors"},table:"Vendor",identifiers:{brand:"VendorId",shortcode:"VEN-",legacy:null},presentation:{titleField:"name"},fields:{create:{module:"@cubby/schemas/vendor",export:"vendorCreateInput"},update:{module:"@cubby/schemas/vendor",export:"vendorUpdateData"},output:{module:"@cubby/schemas/vendor",export:"vendorOut"}},filters:{schema:{module:"@cubby/schemas/vendor",export:"vendorFilterFields"},urlKeys:["q","purchaseCount","spend","latestPurchaseDate","logo","related-expense","expenseId","expensePresenceFilter","related-purchase","purchaseId","purchasePresenceFilter","related-product","productId","productPresenceFilter","related-project","projectId","projectPresenceFilter","related-financialTransaction","financialTransactionId","financialTransactionPresenceFilter","createdAt","updatedAt"],descriptors:[{"columnId":"name","field":"search","urlKey":"q","kind":"text","placeholder":"Search vendors..."},{"columnId":"purchaseCount","kind":"range","placeholder":"Filter purchase count...","options":[{"value":"has","label":"Has purchases","meta":true},{"value":"none","label":"(none)","meta":true},{"value":"1","label":"1+ purchases"},{"value":"2","label":"2+ purchases"},{"value":"5","label":"5+ purchases"}],"expandRef":{"module":"~/entities/filter-behavior","export":"resolveVendorPurchases"}},{"columnId":"spend","kind":"range","placeholder":"Filter spend...","options":[{"value":"positive","label":"Positive basis"},{"value":"zero","label":"Zero basis"},{"value":"negative","label":"Credit / negative"},{"value":"gte100","label":"$100 and up"},{"value":"gte500","label":"$500 and up"}],"expandRef":{"module":"~/entities/filter-behavior","export":"resolveVendorSpend"}},{"columnId":"latestPurchaseDate","kind":"range","placeholder":"Filter latest purchase...","options":[{"value":"has","label":"Has purchase","meta":true},{"value":"none","label":"(none)","meta":true},{"value":"30d","label":"Last 30 days"},{"value":"90d","label":"Last 90 days"},{"value":"ytd","label":"Year to date"},{"value":"1y","label":"Last 12 months"}],"expandRef":{"module":"~/entities/filter-behavior","export":"resolveLatestPurchaseDate"}},{"columnId":"logo","field":"logoPresenceFilter","kind":"presence","placeholder":"Filter logos...","options":[{"value":"has","label":"Has logo","meta":true},{"value":"none","label":"(none)","meta":true}]},{"columnId":"related:vendor.expenses","field":"expenseSearch","urlKey":"related-expense","kind":"text","placeholder":"Search related recent expenses..."},{"columnId":"expenseId","kind":"idMulti","placeholder":"Filter by related recent expenses id...","urlOnly":true},{"columnId":"expensePresenceFilter","kind":"presence","placeholder":"Filter related recent expenses presence...","urlOnly":true},{"columnId":"related:vendor.purchases","field":"purchaseSearch","urlKey":"related-purchase","kind":"text","placeholder":"Search related purchases..."},{"columnId":"purchaseId","kind":"idMulti","placeholder":"Filter by related purchases id...","urlOnly":true},{"columnId":"purchasePresenceFilter","kind":"presence","placeholder":"Filter related purchases presence...","urlOnly":true},{"columnId":"related:vendor.products","field":"productSearch","urlKey":"related-product","kind":"text","placeholder":"Search related products..."},{"columnId":"productId","kind":"idMulti","placeholder":"Filter by related products id...","urlOnly":true},{"columnId":"productPresenceFilter","kind":"presence","placeholder":"Filter related products presence...","urlOnly":true},{"columnId":"related:vendor.projects","field":"projectSearch","urlKey":"related-project","kind":"text","placeholder":"Search related projects..."},{"columnId":"projectId","kind":"idMulti","placeholder":"Filter by related projects id...","urlOnly":true},{"columnId":"projectPresenceFilter","kind":"presence","placeholder":"Filter related projects presence...","urlOnly":true},{"columnId":"related:vendor.transactions","field":"financialTransactionSearch","urlKey":"related-financialTransaction","kind":"text","placeholder":"Search related financial transactions..."},{"columnId":"financialTransactionId","kind":"idMulti","placeholder":"Filter by related financial transactions id...","urlOnly":true},{"columnId":"financialTransactionPresenceFilter","kind":"presence","placeholder":"Filter related financial transactions presence...","urlOnly":true},{"columnId":"createdAt","kind":"range","placeholder":"Filter by created date...","options":[{"value":"30d","label":"Last 30 days"},{"value":"90d","label":"Last 90 days"},{"value":"ytd","label":"Year to date"},{"value":"1y","label":"Last 12 months"}],"expandRef":{"module":"~/entities/filter-behavior","export":"resolveCreatedDate"}},{"columnId":"updatedAt","kind":"range","placeholder":"Filter by updated date...","options":[{"value":"30d","label":"Last 30 days"},{"value":"90d","label":"Last 90 days"},{"value":"ytd","label":"Year to date"},{"value":"1y","label":"Last 12 months"}],"expandRef":{"module":"~/entities/filter-behavior","export":"resolveUpdatedDate"}}]},relations:[{key:"logo",label:"Logo image",target:"image",provenance:{kind:"local-path",steps:[{edge:"Vendor.logoImageId",direction:"outgoing"}]},deletionPolicy:"restrict",inverse:{steps:[{edge:"Vendor.logoImageId",direction:"incoming"}]}},{key:"expenses",label:"Recent expenses",target:"expense",provenance:{kind:"local-path",steps:[{edge:"Purchase.vendorId",direction:"incoming"},{edge:"Expense.purchaseId",direction:"incoming"}]},deletionPolicy:"restrict",inverse:{steps:[{edge:"Expense.purchaseId",direction:"outgoing"},{edge:"Purchase.vendorId",direction:"outgoing"}]}},{key:"purchases",label:"Purchases",target:"purchase",provenance:{kind:"local-path",steps:[{edge:"Purchase.vendorId",direction:"incoming"}]},deletionPolicy:"restrict",inverse:{steps:[{edge:"Purchase.vendorId",direction:"outgoing"}]}},{key:"products",label:"Products",target:"product",provenance:{kind:"local-path",steps:[{edge:"Purchase.vendorId",direction:"incoming"},{edge:"Expense.purchaseId",direction:"incoming"},{edge:"Expense.productId",direction:"outgoing"}]},deletionPolicy:"restrict",inverse:{steps:[{edge:"Expense.productId",direction:"incoming"},{edge:"Expense.purchaseId",direction:"outgoing"},{edge:"Purchase.vendorId",direction:"outgoing"}]}},{key:"projects",label:"Projects",target:"project",provenance:{kind:"local-path",steps:[{edge:"Purchase.vendorId",direction:"incoming"},{edge:"Expense.purchaseId",direction:"incoming"},{edge:"Expense.projectId",direction:"outgoing"}]},deletionPolicy:"restrict",inverse:{steps:[{edge:"Expense.projectId",direction:"incoming"},{edge:"Expense.purchaseId",direction:"outgoing"},{edge:"Purchase.vendorId",direction:"outgoing"}]}},{key:"transactions",label:"Financial transactions",target:"financialTransaction",provenance:{kind:"local-path",steps:[{edge:"Purchase.vendorId",direction:"incoming"},{edge:"FinancialTransactionAllocation.purchaseId",direction:"incoming"},{edge:"FinancialTransactionAllocation.transactionId",direction:"outgoing"}]},deletionPolicy:"restrict",inverse:{steps:[{edge:"FinancialTransactionAllocation.transactionId",direction:"incoming"},{edge:"FinancialTransactionAllocation.purchaseId",direction:"outgoing"},{edge:"Purchase.vendorId",direction:"outgoing"}]}}],search:{enabled:true},capabilities:{auditable:true,images:false,countable:true,softDelete:true,delete:{mode:"soft",bulk:true},merge:true,mcp:["get","list","create","update","delete"]},extensions:{countFilter:null,relatednessSignals:null,mcpNames:null,ports:{repository:{module:"~/server/repo/vendor.entity-adapter",export:"vendorEntityAdapter"},references:{label:{module:"~/entities/entities",export:"entityLabel"},resolver:{module:"~/server/repo/shortcode-resolver",export:"resolveLiveShortcode"}},filters:{module:"~/entities/filter-manifest",export:"getEntityFilters"},search:{projection:{module:"~/server/repo/search-document",export:"refreshSearchDocument"},semanticText:{module:"~/server/repo/search-document",export:"getSearchDocumentEmbeddingText"},dependentRefresh:{module:"~/server/services/mutation-side-effects",export:"runMutationSideEffects"}},lifecycle:{policy:{module:"~/server/repo/vendor",export:"VENDOR_DELETE_EDGE_POLICY"},runtime:{module:"~/server/repo/vendor.entity-adapter",export:"vendorEntityAdapter"}},relationMutation:{attach:null,detach:null}}}});
+export default literalEntity({
+  key: "vendor",
+  names: { singular: "Vendor" },
+  route: { basePath: "vendors" },
+  table: "Vendor",
+  identifiers: { brand: "VendorId", shortcode: "VEN-", legacy: null },
+  presentation: { titleField: "name" },
+  fields: {
+    create: { module: "@cubby/schemas/vendor", export: "vendorCreateInput" },
+    update: { module: "@cubby/schemas/vendor", export: "vendorUpdateData" },
+    output: { module: "@cubby/schemas/vendor", export: "vendorOut" },
+  },
+  filters: {
+    audit: true,
+    schema: { module: "@cubby/schemas/vendor", export: "vendorFilterFields" },
+    descriptors: [
+      {
+        columnId: "name",
+        field: "search",
+        urlKey: "q",
+        kind: "text",
+        placeholder: "Search vendors...",
+      },
+      {
+        columnId: "purchaseCount",
+        kind: "range",
+        placeholder: "Filter purchase count...",
+        options: [
+          { value: "has", label: "Has purchases", meta: true },
+          { value: "none", label: "(none)", meta: true },
+          { value: "1", label: "1+ purchases" },
+          { value: "2", label: "2+ purchases" },
+          { value: "5", label: "5+ purchases" },
+        ],
+        expandRef: {
+          module: "~/entities/filter-behavior",
+          export: "resolveVendorPurchases",
+        },
+      },
+      {
+        columnId: "spend",
+        kind: "range",
+        placeholder: "Filter spend...",
+        options: [
+          { value: "positive", label: "Positive basis" },
+          { value: "zero", label: "Zero basis" },
+          { value: "negative", label: "Credit / negative" },
+          { value: "gte100", label: "$100 and up" },
+          { value: "gte500", label: "$500 and up" },
+        ],
+        expandRef: {
+          module: "~/entities/filter-behavior",
+          export: "resolveVendorSpend",
+        },
+      },
+      {
+        columnId: "latestPurchaseDate",
+        kind: "range",
+        placeholder: "Filter latest purchase...",
+        options: [
+          { value: "has", label: "Has purchase", meta: true },
+          { value: "none", label: "(none)", meta: true },
+          { value: "30d", label: "Last 30 days" },
+          { value: "90d", label: "Last 90 days" },
+          { value: "ytd", label: "Year to date" },
+          { value: "1y", label: "Last 12 months" },
+        ],
+        expandRef: {
+          module: "~/entities/filter-behavior",
+          export: "resolveLatestPurchaseDate",
+        },
+      },
+      {
+        columnId: "logo",
+        field: "logoPresenceFilter",
+        kind: "presence",
+        placeholder: "Filter logos...",
+        options: [
+          { value: "has", label: "Has logo", meta: true },
+          { value: "none", label: "(none)", meta: true },
+        ],
+      },
+      {
+        columnId: "related:vendor.expenses",
+        field: "expenseSearch",
+        urlKey: "related-expense",
+        kind: "text",
+        placeholder: "Search related recent expenses...",
+      },
+      {
+        columnId: "expenseId",
+        kind: "idMulti",
+        placeholder: "Filter by related recent expenses id...",
+        urlOnly: true,
+      },
+      {
+        columnId: "expensePresenceFilter",
+        kind: "presence",
+        placeholder: "Filter related recent expenses presence...",
+        urlOnly: true,
+      },
+      {
+        columnId: "related:vendor.purchases",
+        field: "purchaseSearch",
+        urlKey: "related-purchase",
+        kind: "text",
+        placeholder: "Search related purchases...",
+      },
+      {
+        columnId: "purchaseId",
+        kind: "idMulti",
+        placeholder: "Filter by related purchases id...",
+        urlOnly: true,
+      },
+      {
+        columnId: "purchasePresenceFilter",
+        kind: "presence",
+        placeholder: "Filter related purchases presence...",
+        urlOnly: true,
+      },
+      {
+        columnId: "related:vendor.products",
+        field: "productSearch",
+        urlKey: "related-product",
+        kind: "text",
+        placeholder: "Search related products...",
+      },
+      {
+        columnId: "productId",
+        kind: "idMulti",
+        placeholder: "Filter by related products id...",
+        urlOnly: true,
+      },
+      {
+        columnId: "productPresenceFilter",
+        kind: "presence",
+        placeholder: "Filter related products presence...",
+        urlOnly: true,
+      },
+      {
+        columnId: "related:vendor.projects",
+        field: "projectSearch",
+        urlKey: "related-project",
+        kind: "text",
+        placeholder: "Search related projects...",
+      },
+      {
+        columnId: "projectId",
+        kind: "idMulti",
+        placeholder: "Filter by related projects id...",
+        urlOnly: true,
+      },
+      {
+        columnId: "projectPresenceFilter",
+        kind: "presence",
+        placeholder: "Filter related projects presence...",
+        urlOnly: true,
+      },
+      {
+        columnId: "related:vendor.transactions",
+        field: "financialTransactionSearch",
+        urlKey: "related-financialTransaction",
+        kind: "text",
+        placeholder: "Search related financial transactions...",
+      },
+      {
+        columnId: "financialTransactionId",
+        kind: "idMulti",
+        placeholder: "Filter by related financial transactions id...",
+        urlOnly: true,
+      },
+      {
+        columnId: "financialTransactionPresenceFilter",
+        kind: "presence",
+        placeholder: "Filter related financial transactions presence...",
+        urlOnly: true,
+      },
+    ],
+  },
+  relations: [
+    {
+      key: "logo",
+      label: "Logo image",
+      target: "image",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Vendor.logoImageId", direction: "outgoing" }],
+      },
+      deletionPolicy: "restrict",
+      inverse: {
+        steps: [{ edge: "Vendor.logoImageId", direction: "incoming" }],
+      },
+    },
+    {
+      key: "expenses",
+      label: "Recent expenses",
+      target: "expense",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "Purchase.vendorId", direction: "incoming" },
+          { edge: "Expense.purchaseId", direction: "incoming" },
+        ],
+      },
+      deletionPolicy: "restrict",
+      inverse: {
+        steps: [
+          { edge: "Expense.purchaseId", direction: "outgoing" },
+          { edge: "Purchase.vendorId", direction: "outgoing" },
+        ],
+      },
+    },
+    {
+      key: "purchases",
+      label: "Purchases",
+      target: "purchase",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Purchase.vendorId", direction: "incoming" }],
+      },
+      deletionPolicy: "restrict",
+      inverse: {
+        steps: [{ edge: "Purchase.vendorId", direction: "outgoing" }],
+      },
+    },
+    {
+      key: "products",
+      label: "Products",
+      target: "product",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "Purchase.vendorId", direction: "incoming" },
+          { edge: "Expense.purchaseId", direction: "incoming" },
+          { edge: "Expense.productId", direction: "outgoing" },
+        ],
+      },
+      deletionPolicy: "restrict",
+      inverse: {
+        steps: [
+          { edge: "Expense.productId", direction: "incoming" },
+          { edge: "Expense.purchaseId", direction: "outgoing" },
+          { edge: "Purchase.vendorId", direction: "outgoing" },
+        ],
+      },
+    },
+    {
+      key: "projects",
+      label: "Projects",
+      target: "project",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "Purchase.vendorId", direction: "incoming" },
+          { edge: "Expense.purchaseId", direction: "incoming" },
+          { edge: "Expense.projectId", direction: "outgoing" },
+        ],
+      },
+      deletionPolicy: "restrict",
+      inverse: {
+        steps: [
+          { edge: "Expense.projectId", direction: "incoming" },
+          { edge: "Expense.purchaseId", direction: "outgoing" },
+          { edge: "Purchase.vendorId", direction: "outgoing" },
+        ],
+      },
+    },
+    {
+      key: "transactions",
+      label: "Financial transactions",
+      target: "financialTransaction",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "Purchase.vendorId", direction: "incoming" },
+          {
+            edge: "FinancialTransactionAllocation.purchaseId",
+            direction: "incoming",
+          },
+          {
+            edge: "FinancialTransactionAllocation.transactionId",
+            direction: "outgoing",
+          },
+        ],
+      },
+      deletionPolicy: "restrict",
+      inverse: {
+        steps: [
+          {
+            edge: "FinancialTransactionAllocation.transactionId",
+            direction: "incoming",
+          },
+          {
+            edge: "FinancialTransactionAllocation.purchaseId",
+            direction: "outgoing",
+          },
+          { edge: "Purchase.vendorId", direction: "outgoing" },
+        ],
+      },
+    },
+  ],
+  search: { enabled: true },
+  capabilities: {
+    auditable: true,
+    images: false,
+    countable: true,
+    softDelete: true,
+    delete: { mode: "soft", bulk: true },
+    merge: true,
+    mcp: ["get", "list", "create", "update", "delete"],
+  },
+  extensions: {
+    countFilter: null,
+    relatednessSignals: null,
+    mcpNames: null,
+    ports: {
+      repository: {
+        module: "~/server/repo/vendor.entity-adapter",
+        export: "vendorEntityAdapter",
+      },
+      references: {
+        label: { module: "~/entities/entities", export: "entityLabel" },
+        resolver: {
+          module: "~/server/repo/shortcode-resolver",
+          export: "resolveLiveShortcode",
+        },
+      },
+      filters: {
+        module: "~/entities/filter-manifest",
+        export: "getEntityFilters",
+      },
+      search: {
+        projection: {
+          module: "~/server/repo/search-document",
+          export: "refreshSearchDocument",
+        },
+        semanticText: {
+          module: "~/server/repo/search-document",
+          export: "getSearchDocumentEmbeddingText",
+        },
+        dependentRefresh: {
+          module: "~/server/services/mutation-side-effects",
+          export: "runMutationSideEffects",
+        },
+      },
+      lifecycle: {
+        policy: {
+          module: "~/server/repo/vendor",
+          export: "VENDOR_DELETE_EDGE_POLICY",
+        },
+        runtime: {
+          module: "~/server/repo/vendor.entity-adapter",
+          export: "vendorEntityAdapter",
+        },
+      },
+      relationMutation: { attach: null, detach: null },
+    },
+  },
+});

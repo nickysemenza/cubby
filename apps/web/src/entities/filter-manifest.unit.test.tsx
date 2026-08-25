@@ -19,6 +19,7 @@ import {
   filterGetterFromSearch,
   partitionFilterSpecs,
 } from "./filters";
+import { generatedEntityFilterContractCases } from "./generated/entity-filter-contracts.gen";
 
 describe("manifestFilterConfig", () => {
   it.each([
@@ -193,6 +194,39 @@ describe("manifestFilterConfig", () => {
       }
     }
     expect(violations).toEqual([]);
+  });
+});
+
+describe("generated filter contracts", () => {
+  it("keeps generated descriptor, URL, schema, option, audit, and expander cases exact", () => {
+    for (const [entity, contract] of Object.entries(
+      generatedEntityFilterContractCases,
+    )) {
+      const specs = getEntityFilters(entity as Entity);
+      expect(specs.map((spec) => spec.columnId)).toEqual(
+        contract.descriptorColumns,
+      );
+      expect(specs.map((spec) => spec.urlKey ?? spec.columnId)).toEqual(
+        contract.urlKeys,
+      );
+      expect(new Set(contract.urlKeys).size).toBe(contract.urlKeys.length);
+      expect(
+        contract.rangeExpanders.every((entry) => {
+          const columnId = entry.slice(0, entry.indexOf(":~/"));
+          return specs.some(
+            (spec) =>
+              spec.columnId === columnId &&
+              spec.kind === "range" &&
+              spec.expand,
+          );
+        }),
+      ).toBe(true);
+      if (contract.audit) {
+        expect(specs.map((spec) => spec.columnId)).toEqual(
+          expect.arrayContaining(["createdAt", "updatedAt"]),
+        );
+      }
+    }
   });
 });
 

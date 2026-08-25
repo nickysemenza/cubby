@@ -65,6 +65,7 @@ export type EntityLiteral = Readonly<{
       }>
     | null;
   route: Readonly<{ basePath: string; detailParam?: string }> | null;
+  filterAudit: boolean;
   filterUrlKeys: readonly string[];
   filterSchema: SourceRef | null;
   filterDescriptors: readonly FilterDescriptor[];
@@ -315,7 +316,7 @@ const filterDescriptor = (
 const legacyShape = (raw: LiteralObject, context: string): LiteralObject => {
   if (raw.descriptor !== undefined) {
     return {
-      filters: { urlKeys: [], descriptors: [] },
+      filters: { audit: false, descriptors: [] },
       inspector: {
         singular: required(raw, "key", context),
         plural: null,
@@ -444,17 +445,11 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
     ),
   };
   const filters = objectValue(required(object, "filters", context), `${context}.filters`);
-  exactKeys(filters, ["urlKeys", "schema", "descriptors"], `${context}.filters`);
-  const rawFilterUrlKeys = required(filters, "urlKeys", `${context}.filters`);
-  if (!Array.isArray(rawFilterUrlKeys)) {
-    throw new LiteralSpecError(`${context}.filters.urlKeys must be an array.`);
-  }
-  const filterUrlKeys = rawFilterUrlKeys.map((value, index) =>
-    stringValue(value, `${context}.filters.urlKeys[${index}]`),
-  );
-  if (new Set(filterUrlKeys).size !== filterUrlKeys.length) {
-    throw new LiteralSpecError(`${context}.filters.urlKeys contains duplicates.`);
-  }
+  exactKeys(filters, ["audit", "schema", "descriptors"], `${context}.filters`);
+  const filterAudit =
+    filters.audit === undefined
+      ? false
+      : booleanValue(filters.audit, `${context}.filters.audit`);
   const filterSchema =
     filters.schema === undefined || filters.schema === null
       ? null
@@ -470,17 +465,73 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
   if (new Set(descriptorColumns).size !== descriptorColumns.length) {
     throw new LiteralSpecError(`${context}.filters.descriptors contains duplicate columnId values.`);
   }
-  const descriptorUrlKeys = filterDescriptors.map(({ urlKey }) => urlKey);
+  if (filterAudit && descriptorColumns.some((columnId) =>
+    columnId === "createdAt" || columnId === "updatedAt"
+  )) {
+    throw new LiteralSpecError(
+      `${context}.filters.audit duplicates an explicit createdAt or updatedAt descriptor.`,
+    );
+  }
+  if (filterAudit && descriptor.auditable !== true) {
+    throw new LiteralSpecError(
+      `${context}.filters.audit requires an auditable entity.`,
+    );
+  }
+  const auditDescriptors: FilterDescriptor[] = filterAudit
+    ? [
+        {
+          columnId: "createdAt",
+          field: null,
+          urlKey: "createdAt",
+          kind: "range",
+          placeholder: "Filter by created date...",
+          options: [
+            { value: "30d", label: "Last 30 days" },
+            { value: "90d", label: "Last 90 days" },
+            { value: "ytd", label: "Year to date" },
+            { value: "1y", label: "Last 12 months" },
+          ],
+          optionsRef: null,
+          optionsKey: null,
+          label: null,
+          brandRef: null,
+          expandRef: {
+            module: "~/entities/filter-behavior",
+            export: "resolveCreatedDate",
+          },
+          urlOnly: false,
+          nullable: null,
+        },
+        {
+          columnId: "updatedAt",
+          field: null,
+          urlKey: "updatedAt",
+          kind: "range",
+          placeholder: "Filter by updated date...",
+          options: [
+            { value: "30d", label: "Last 30 days" },
+            { value: "90d", label: "Last 90 days" },
+            { value: "ytd", label: "Year to date" },
+            { value: "1y", label: "Last 12 months" },
+          ],
+          optionsRef: null,
+          optionsKey: null,
+          label: null,
+          brandRef: null,
+          expandRef: {
+            module: "~/entities/filter-behavior",
+            export: "resolveUpdatedDate",
+          },
+          urlOnly: false,
+          nullable: null,
+        },
+      ]
+    : [];
+  const filterDescriptorsWithAudit = [...filterDescriptors, ...auditDescriptors];
+  const descriptorUrlKeys = filterDescriptorsWithAudit.map(({ urlKey }) => urlKey);
+  const filterUrlKeys = descriptorUrlKeys;
   if (new Set(descriptorUrlKeys).size !== descriptorUrlKeys.length) {
     throw new LiteralSpecError(`${context}.filters.descriptors contains duplicate URL keys.`);
-  }
-  if (
-    descriptorUrlKeys.length !== filterUrlKeys.length ||
-    descriptorUrlKeys.some((urlKey, index) => urlKey !== filterUrlKeys[index])
-  ) {
-    throw new LiteralSpecError(
-      `${context}.filters.urlKeys must exactly match descriptors in declaration order.`,
-    );
   }
   const routeValue = object.route;
   const route = routeValue === undefined || routeValue === null ? null : (() => {
@@ -558,7 +609,8 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
     route,
     filterUrlKeys,
     filterSchema,
-    filterDescriptors,
+    filterAudit,
+    filterDescriptors: filterDescriptorsWithAudit,
     ports,
   };
 };
@@ -939,8 +991,33 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         ([module, exports]) =>
           `import type { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
       ),
-    'import type { z } from "zod";',
   ].join("\n");
+  const listRuntimeOutputImports = browserCrudEntitySpecs
+    .map(({ key, contract }) =>
+      `import { ${contract.output.export} as ${key}ListOutputSchema } from ${JSON.stringify(contract.output.module)};`,
+    )
+    .join("\n");
+  const listFilterFieldImports = browserCrudEntitySpecs
+    .flatMap(({ key, filterSchema }) =>
+      filterSchema === null
+        ? []
+        : [
+            `import { ${filterSchema.export} as ${key}ListFilterFields } from ${JSON.stringify(filterSchema.module)};`,
+          ],
+    )
+    .join("\n");
+  const listInputVariants = browserCrudEntitySpecs
+    .map(
+      ({ key, filterSchema }) =>
+        `z.object({entity:z.literal(${JSON.stringify(key)}),filters:${filterSchema === null ? 'z.record(z.string(),z.unknown())' : `z.object(${key}ListFilterFields)`},sort:entityListSortsSchema.optional(),pagination:entityListPaginationSchema.optional(),groupBy:z.string().min(1).optional()})`,
+    )
+    .join(",\n  ");
+  const listOutputSchemas = browserCrudEntitySpecs
+    .map(
+      ({ key }) =>
+        `  ${JSON.stringify(key)}: z.object({items:z.array(${key}ListOutputSchema),meta:entityListMetaSchema}),`,
+    )
+    .join("\n");
   const listResultTypes = browserCrudEntitySpecs
     .map(
       ({ key, contract }) =>
@@ -1126,6 +1203,14 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
   ].sort((left, right) =>
     `${left.module}#${left.export}`.localeCompare(`${right.module}#${right.export}`),
   );
+  const portTypeModuleAliases = new Map(
+    [...new Set(portExportChecks.map((ref) => ref.module))]
+      .sort((left, right) => left.localeCompare(right))
+      .map((module, index) => [module, `entityPortModule${index}`]),
+  );
+  const portTypeImports = [...portTypeModuleAliases.entries()]
+    .map(([module, alias]) => `import type * as ${alias} from ${JSON.stringify(module)};`)
+    .join("\n");
   return [
     {
       relativePath: "packages/shared/src/generated/shortcode-registry.gen.ts",
@@ -1210,9 +1295,21 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
       relativePath: "apps/web/src/entities/generated/entity-lists.gen.ts",
       source:
         generatedHeader +
+        "// biome-ignore assist/source/organizeImports: generated schema aliases are deterministic.\n" +
         `${listTypeImportSource}\n\n` +
+        `${listRuntimeOutputImports}\n${listFilterFieldImports}\n` +
+        'import { MAX_PAGE_SIZE, MAX_SORTS } from "@cubby/schemas/pagination";\n' +
+        'import { z } from "zod";\n\n' +
         `export const listEntities = ${compactLiteral(browserCrudEntities)} as const;\n` +
         "export type ListEntity = (typeof listEntities)[number];\n\n" +
+        'const entityListSortSchema = z.object({ orderBy: z.string().min(1), direction: z.enum(["asc", "desc"]) });\n' +
+        'const entityListSortsSchema = z.union([entityListSortSchema, z.array(entityListSortSchema).min(1).max(MAX_SORTS)]);\n' +
+        'const entityListPaginationSchema = z.object({ pageIndex: z.number().int().min(0), pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE) });\n' +
+        'const entityListMetaSchema = z.object({ pageIndex: z.number().int().min(0), pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE), totalCount: z.number().int().min(0), sums: z.record(z.string(), z.number()).optional() });\n\n' +
+        `export const entityListInputSchema = z.discriminatedUnion("entity", [\n  ${listInputVariants}\n]);\n\n` +
+        'export const ENTITY_LIST_OUTPUT_SCHEMAS = {\n' +
+        `${listOutputSchemas}\n` +
+        '} as const;\n\n' +
         'type EntityListSort = { orderBy: string; direction: "asc" | "desc" };\n' +
         "type EntityListInput = {\n" +
         "  filters: Record<string, unknown>;\n" +
@@ -1223,7 +1320,7 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         "export type EntityListInputByEntity = {\n" +
         "  [E in ListEntity]: EntityListInput & { entity: E };\n" +
         "};\n\n" +
-        "type EntityListMeta = {\n" +
+        "export type EntityListMeta = {\n" +
         "  pageIndex: number;\n" +
         "  pageSize: number;\n" +
         "  totalCount: number;\n" +
@@ -1303,12 +1400,14 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
       relativePath: "apps/web/src/server/generated/entity-kernel-bindings.gen.ts",
       source:
         generatedHeader +
+        "// biome-ignore assist/source/organizeImports: generated port aliases are deterministic.\n" +
         'import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";\n\n' +
+        `${portTypeImports}\n\n` +
         "/** Each literal module/export source reference is checked without a runtime import. */\n" +
         `type EntityPortExportChecks = readonly [${portExportChecks
           .map(
             (ref) =>
-              `typeof import(${JSON.stringify(ref.module)})[${JSON.stringify(ref.export)}]`,
+              `typeof ${portTypeModuleAliases.get(ref.module)}[${JSON.stringify(ref.export)}]`,
           )
           .join(", ")}];\n\n` +
         `${runtimeAdapterImportSource}\n\n` +
@@ -1398,7 +1497,54 @@ export const renderFilterArtifacts = (entities: readonly EntityLiteral[]): Entit
         `${JSON.stringify(key)}:[${filterDescriptors.map(runtimeDescriptor).join(",")}],`,
     )
     .join("\n");
+  const filterContractCases = Object.fromEntries(
+    entities.map(({ key, filterAudit, filterSchema, filterDescriptors }) => [
+      key,
+      {
+        descriptorColumns: filterDescriptors.map(({ columnId }) => columnId),
+        urlKeys: filterDescriptors.map(({ urlKey }) => urlKey),
+        schema:
+          filterSchema === null
+            ? null
+            : `${filterSchema.module}#${filterSchema.export}`,
+        optionSources: [
+          ...new Set(
+            filterDescriptors.flatMap((descriptor) => [
+              ...(descriptor.optionsKey === null ? [] : [descriptor.optionsKey]),
+              ...(descriptor.optionsRef === null
+                ? []
+                : [`${descriptor.optionsRef.module}#${descriptor.optionsRef.export}`]),
+            ]),
+          ),
+        ],
+        audit: filterAudit,
+        rangeExpanders: filterDescriptors.flatMap((descriptor) =>
+          descriptor.kind === "range" && descriptor.expandRef !== null
+            ? [
+                `${descriptor.columnId}:${descriptor.expandRef.module}#${descriptor.expandRef.export}`,
+              ]
+            : [],
+        ),
+      },
+    ]),
+  );
   return [
+    {
+      relativePath: "apps/web/src/entities/generated/entity-filter-contracts.gen.ts",
+      source:
+        generatedHeader +
+        'import type { Entity } from "@cubby/schemas/entity";\n\n' +
+        "export type EntityFilterContractCase = {\n" +
+        "  descriptorColumns: readonly string[];\n" +
+        "  urlKeys: readonly string[];\n" +
+        "  schema: string | null;\n" +
+        "  optionSources: readonly string[];\n" +
+        "  audit: boolean;\n" +
+        "  rangeExpanders: readonly string[];\n" +
+        "};\n\n" +
+        "// Generated contract cases keep mechanical filter invariants reviewable.\n" +
+        `export const generatedEntityFilterContractCases = ${compactLiteral(filterContractCases)} as const satisfies Record<Entity, EntityFilterContractCase>;\n`,
+    },
     {
       relativePath: "apps/web/src/entities/filter-search-fields.gen.ts",
       source:

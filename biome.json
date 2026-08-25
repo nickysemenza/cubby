@@ -11,6 +11,7 @@
     "includes": [
       "apps/**",
       "packages/**",
+      "scripts/entity-literals/**/*.ts",
       "!!**/worker-configuration.d.ts",
       "!!apps/usda-api/src/generated/openapi.json"
     ]
