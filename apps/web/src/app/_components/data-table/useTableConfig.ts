@@ -153,6 +153,7 @@ export function useTableConfig<TData extends RowData>({
         ...(urlScopeCount > 0 ? { urlScopeCount } : {}),
         ...(rowContentVersion !== undefined ? { rowContentVersion } : {}),
         defaultLayout: layout?.defaultLayout,
+        scrollRestorationId: layout?.key,
       },
       ...(getRowId ? { getRowId } : {}),
       ...(enableRowSelection !== undefined ? { enableRowSelection } : {}),

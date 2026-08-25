@@ -190,6 +190,7 @@ export default function RTable<TItem extends RowData>(
     rowContentVersion,
     setDesktopInfiniteSentinel,
     styles,
+    scrollRestorationId,
     tableContainerRef,
     totalSize,
     virtualRows,
@@ -565,6 +566,10 @@ export default function RTable<TItem extends RowData>(
               data-[cell-dragging] suppresses native text selection mid-drag. */}
             <div
               ref={tableContainerRef}
+              // Names the pane for the router's scroll restoration, which
+              // otherwise addresses it by a positional nth-child path that
+              // changes as chrome above it renders. See useTableVirtualizer.
+              data-scroll-restoration-id={scrollRestorationId}
               className="min-h-0 flex-1 overflow-auto outline-none data-[cell-dragging]:select-none"
               // biome-ignore lint/a11y/noNoninteractiveTabindex: keyboard cell navigation requires focusable container
               tabIndex={0}

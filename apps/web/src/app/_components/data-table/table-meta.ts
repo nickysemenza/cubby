@@ -64,4 +64,10 @@ export interface CubbyTableMeta {
   rowContentVersion?: unknown;
   /** Code-defined layout used to normalize persisted and saved layouts. */
   defaultLayout?: CubbyTableLayoutV1;
+  /**
+   * Stable id for the desktop scroll pane, mirrored from the layout key.
+   * Routed through meta rather than an RTable prop so every existing call site
+   * gets pane scroll restoration without threading a new argument.
+   */
+  scrollRestorationId?: string;
 }

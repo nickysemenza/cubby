@@ -1,4 +1,4 @@
-import { useLocation } from "@tanstack/react-router";
+import { useElementScrollRestoration } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDebug } from "~/hooks/useDebug";
@@ -13,8 +13,6 @@ import { useCellSelection } from "./useCellSelection";
 import { useDesktopGroupedRows } from "./useDesktopGroupedRows";
 import type { GroupConfig } from "./useGroupedList";
 import { densityConfig, useTableDensity } from "./useTableDensity";
-
-const scrollPositionCache = new Map<string, number>();
 
 export function useDataTableController<TItem extends RowData>({
   table,
@@ -40,7 +38,6 @@ export function useDataTableController<TItem extends RowData>({
   // empty/data state and mismatch SSR (CUBBY-3J / CUBBY-3). Keep showing the
   // loading row until hydrated so the first client render matches SSR.
   const hydrated = useHydrated();
-  const pathname = useLocation({ select: (l) => l.pathname });
   const { density } = useTableDensity();
   const dConfig = densityConfig[density];
 
@@ -111,6 +108,18 @@ export function useDataTableController<TItem extends RowData>({
   // Desktop group detection (server trusts ordering)
   const groupedItems = useDesktopGroupedRows(rows, groupConfig, grouped);
 
+  // Pane scroll restoration. The pane carries `data-scroll-restoration-id`
+  // (see Table.tsx) so the router snapshots its offset against a stable
+  // selector rather than a positional nth-child path that shifts as the chrome
+  // above it renders. Read here rather than inside useTableVirtualizer so that
+  // hook stays router-free and unit-testable.
+  const scrollRestorationId = table.options.meta?.scrollRestorationId;
+  const restorationEntry = useElementScrollRestoration({
+    // An unkeyed (in-memory) table has no stable id; "" makes the lookup miss
+    // and fall through to a 0 offset rather than restoring the wrong pane.
+    id: scrollRestorationId ?? "",
+  });
+
   // Pane virtualization: pane/toolbar refs + measurement, the virtualizer
   // instance, and the grouped-vs-flat index math.
   const {
@@ -129,6 +138,7 @@ export function useDataTableController<TItem extends RowData>({
     rowHeight: dConfig.rowHeight,
     isMobile,
     trailingSentinel: hasDesktopInfiniteSentinel,
+    initialOffset: restorationEntry?.scrollY,
   });
 
   // The table owns its horizontal scroll pane, so it is the only honest
@@ -164,41 +174,6 @@ export function useDataTableController<TItem extends RowData>({
     scrollToFlatRow,
     onOpenRow: onRowClick,
   });
-
-  // Save scroll position on unmount for navigate-back restoration. The page is
-  // the scroller now, so we track window.scrollY rather than a container.
-  const saveScrollPosition = useCallback(() => {
-    if (typeof window !== "undefined" && window.scrollY > 0) {
-      scrollPositionCache.set(pathname, window.scrollY);
-    } else {
-      scrollPositionCache.delete(pathname);
-    }
-  }, [pathname]);
-
-  useEffect(() => {
-    return () => saveScrollPosition();
-  }, [saveScrollPosition]);
-
-  // Restore scroll position when data loads (rows become available)
-  const hasRestoredRef = useRef(false);
-  // Reset the guard when the route changes so restore works again on the next
-  // list (the RTable instance can be reused across list routes). Declared before
-  // the restore effect so the flag is cleared before that effect re-evaluates.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: pathname is the intended trigger; the body only writes a ref so the linter sees it as unused
-  useEffect(() => {
-    hasRestoredRef.current = false;
-  }, [pathname]);
-  useEffect(() => {
-    if (hasRestoredRef.current || isMobile) return;
-    const savedPosition = scrollPositionCache.get(pathname);
-    if (savedPosition && rows.length > 0) {
-      // Use rAF to ensure the virtualizer has measured
-      requestAnimationFrame(() => {
-        window.scrollTo(0, savedPosition);
-      });
-      hasRestoredRef.current = true;
-    }
-  }, [pathname, rows.length, isMobile]);
 
   const styles = {
     table:
@@ -257,6 +232,7 @@ export function useDataTableController<TItem extends RowData>({
     rows,
     rowContentVersion,
     setDesktopInfiniteSentinel,
+    scrollRestorationId,
     styles,
     tableContainerRef,
     paneWrapperRef,
