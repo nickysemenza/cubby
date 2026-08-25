@@ -17,6 +17,7 @@ import {
   ArrowUp,
   EyeOff,
   GripVertical,
+  MoreHorizontal,
   PanelLeft,
   PanelRight,
   PinOff,
@@ -28,6 +29,12 @@ import {
 } from "~/components/dnd/accessibility";
 import { useCubbyDndSensors } from "~/components/dnd/sensors";
 import { Button } from "~/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import { cn } from "~/lib/utils";
 import { columnLabel } from "./data-table-view-options";
 import type {
@@ -123,7 +130,7 @@ function SortableColumn<TData extends RowData>({
         )}
       </span>
       {!locked && (
-        <div className="flex items-center">
+        <div className="hidden items-center md:flex">
           <Button
             variant="ghost"
             size="icon-sm"
@@ -183,6 +190,59 @@ function SortableColumn<TData extends RowData>({
             </Button>
           )}
         </div>
+      )}
+      {!locked && (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="md:hidden"
+                aria-label={`Actions for ${columnLabel(column)}`}
+              />
+            }
+          >
+            <MoreHorizontal className="size-3.5" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuItem disabled={index === 0} onClick={() => move(-1)}>
+              <ArrowUp className="size-3.5" />
+              Move earlier
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={index === regionColumns.length - 1}
+              onClick={() => move(1)}
+            >
+              <ArrowDown className="size-3.5" />
+              Move later
+            </DropdownMenuItem>
+            {region !== "start" && (
+              <DropdownMenuItem onClick={() => column.pin("start")}>
+                <PanelLeft className="size-3.5" />
+                Pin to start
+              </DropdownMenuItem>
+            )}
+            {region !== "end" && (
+              <DropdownMenuItem onClick={() => column.pin("end")}>
+                <PanelRight className="size-3.5" />
+                Pin to end
+              </DropdownMenuItem>
+            )}
+            {region !== "center" && (
+              <DropdownMenuItem onClick={() => column.pin(false)}>
+                <PinOff className="size-3.5" />
+                Unpin
+              </DropdownMenuItem>
+            )}
+            {column.getCanHide() && (
+              <DropdownMenuItem onClick={() => column.toggleVisibility()}>
+                <EyeOff className="size-3.5" />
+                {column.getIsVisible() ? "Hide" : "Show"} {columnLabel(column)}
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
     </div>
   );
