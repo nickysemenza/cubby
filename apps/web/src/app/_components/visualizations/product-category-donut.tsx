@@ -7,8 +7,8 @@ import {
   formatCategoryLabel,
   getCategoryColor,
 } from "~/app/_components/products/category-theme";
+import { productCategoryDistributionQueryOptions } from "~/app/products/product.functions";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
-import { useTRPC } from "~/integrations/trpc/react";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizTooltip } from "./viz-overlay";
 
@@ -19,9 +19,8 @@ type CategoryData = {
 };
 
 export default function ProductCategoryDonut() {
-  const trpc = useTRPC();
   const { data, isLoading } = useQuery(
-    trpc.product.categoryDistribution.queryOptions(),
+    productCategoryDistributionQueryOptions(),
   );
 
   if (isLoading) {

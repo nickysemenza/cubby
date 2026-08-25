@@ -13,7 +13,7 @@ import {
 import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { useTRPC } from "~/integrations/trpc/react";
+import { mcpCatalogQueryOptions } from "~/lib/mcp.functions";
 import { McpUsageDashboard } from "./mcp-usage-dashboard";
 
 type ToolAnnotations = {
@@ -101,8 +101,7 @@ function SchemaPanel({
 }
 
 function CatalogInspector() {
-  const api = useTRPC();
-  const { data, isLoading, error } = useQuery(api.mcp.listTools.queryOptions());
+  const { data, isLoading, error } = useQuery(mcpCatalogQueryOptions());
   const [query, setQuery] = useState("");
   const [selectedName, setSelectedName] = useState<string | null>(null);
 

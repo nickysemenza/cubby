@@ -42,8 +42,10 @@ import { ChipsInput } from "~/app/_components/forms/chips-input";
 import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { RelationshipSummaryTable } from "~/app/_components/relationships/relationship-summary-table";
+import { expenseChartDataQueryOptions } from "~/app/expenses/expense.functions";
 import { ProjectMark } from "~/app/projects/project-mark";
 import { TaskBoard } from "~/app/tasks/board/TaskBoard";
+import { taskChartDataQueryOptions } from "~/app/tasks/task.functions";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row, Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
@@ -73,12 +75,12 @@ import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListQueryOptions } from "~/entities/entity-list.functions";
 import { projectImageSummariesQueryOptions } from "~/entities/image.functions";
-import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { formatCurrency } from "~/lib/utils";
 import { BudgetStrip } from "./BudgetStrip";
 import type { TradeCostCell } from "./charts/trade-cost-matrix";
 import type { PivotCostKey } from "./charts/trade-cost-pivot";
+import { projectOptionsQueryOptions } from "./project.functions";
 import { ProjectContributionSection } from "./project-contribution-section";
 import { projectDateDelta } from "./project-formatting";
 import { ProjectNotes } from "./project-notes";
@@ -442,14 +444,12 @@ function SubProjectsList({
 }
 
 export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
-  const api = useTRPC();
-
   // One subtree fetch (project + every live descendant) feeds the Gantt, the
   // Task Timeline, and the Board view — all of which need the whole (incl.
   // done) picture. The default List view uses the separate scoped
   // `openTasks`/`doneTasks` queries below instead (see their comment).
   const { data: subtreeTasks = NO_TASKS } = useQuery(
-    api.task.chartData.queryOptions(projectSubtreeTasksFilters(project.id)),
+    taskChartDataQueryOptions(projectSubtreeTasksFilters(project.id)),
   );
   // Task Timeline shows top-level tasks only — checklist subtasks roll up to
   // their parent everywhere (N/M chip); surfacing them here would
@@ -467,9 +467,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   // section table, so there's a single subtree fetch instead of a separate
   // scoped `expense.list` round-trip just to bound what that table renders.
   const { data: chartExpenses = NO_EXPENSES } = useQuery(
-    api.expense.chartData.queryOptions(
-      projectSubtreeExpensesFilters(project.id),
-    ),
+    expenseChartDataQueryOptions(projectSubtreeExpensesFilters(project.id)),
   );
 
   // The embedded ExpenseList holds no sorting state, and `chartData` returns
@@ -548,7 +546,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     redirectTo: "/projects",
   });
 
-  const { data: projectOptions } = useQuery(api.project.options.queryOptions());
+  const { data: projectOptions } = useQuery(projectOptionsQueryOptions());
   const projectNamesById = useMemo(() => {
     const map = new Map<string, { name: string; icon: string | null }>();
     for (const p of projectOptions ?? [])

@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@tanstack/react-query", () => ({
+  mutationOptions: (options: unknown) => options,
+  queryOptions: (options: unknown) => options,
   useMutation: (options: { mutationFn: (input: unknown) => unknown }) => ({
     mutate: (input: unknown) => options.mutationFn(input),
     mutateAsync: async (input: unknown) => options.mutationFn(input),
@@ -47,6 +49,17 @@ vi.mock("@tanstack/react-query", () => ({
   },
 }));
 
+vi.mock("./meal.functions", () => ({
+  mealDateRangeQueryOptions: (input: unknown) => {
+    mocks.getByDateRange(input);
+    return { queryKey: ["meal-range"] };
+  },
+  mealAddRecipeMutationOptions: (options: Record<string, unknown>) => ({
+    ...options,
+    mutationFn: mocks.addRecipe,
+  }),
+}));
+
 vi.mock("~/entities/entity-contracts", () => ({
   entityMutationOptionsFactory:
     (_entity: string, action: "create" | "update" | "delete") => () => ({
@@ -63,28 +76,6 @@ vi.mock("~/entities/entity-contracts", () => ({
 
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => mocks.navigate,
-}));
-
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPC: () => ({
-    meal: {
-      getByDateRange: {
-        queryOptions: (input: unknown) => {
-          mocks.getByDateRange(input);
-          return { queryKey: ["meal-range"] };
-        },
-      },
-      create: {
-        mutationOptions: () => ({ mutationFn: mocks.createMeal }),
-      },
-      addRecipe: {
-        mutationOptions: () => ({ mutationFn: mocks.addRecipe }),
-      },
-      update: {
-        mutationOptions: () => ({ mutationFn: mocks.updateMeal }),
-      },
-    },
-  }),
 }));
 
 vi.mock("./use-meal-mutations", () => ({

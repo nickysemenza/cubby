@@ -4,7 +4,7 @@
  * Drizzle surfaces driver failures as "Failed query: … params: …" and hides the
  * real Postgres error (code, constraint, detail) in a nested `cause`. This module
  * digs that out and turns common constraint violations into clear, user-facing
- * messages. Wired as a global tRPC middleware (see trpc.ts) so every mutation
+ * messages. Applied at the Start operation boundary so every mutation
  * benefits — no per-router error handling needed.
  *
  * Entity-specific handlers (e.g. product NDB/UPC, which name the conflicting

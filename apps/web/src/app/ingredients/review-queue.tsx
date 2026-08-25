@@ -8,11 +8,11 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Empty, EmptyActions, EmptyDescription } from "~/components/ui/empty";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import type { EnrichmentEditorHandle } from "./enrichment-editor";
+import { ingredientMergeMutationOptions } from "./ingredient.functions";
 import { type MergeOption, ReviewCard } from "./review-card";
 import { useProposalCache } from "./use-proposal-cache";
 import { hasUsdaLink } from "./workbench-editor-core";
@@ -44,7 +44,6 @@ export function ReviewQueue({
   rows: EnrichmentRow[];
   onExit: () => void;
 }) {
-  const api = useTRPC();
   const cache = useProposalCache();
 
   // Membership is frozen for the life of this review session and the cursor is
@@ -105,7 +104,7 @@ export function ReviewQueue({
     error: (err) => `Failed: ${getErrorMessage(err)}`,
   });
   const mergeMutation = useActionMutation({
-    mutationFn: api.ingredient.merge.mutationOptions,
+    mutationFn: ingredientMergeMutationOptions,
     success: (d) => savedWithBackgroundWork(d.sideEffects, "Merged"),
     invalidateKeys: invalidatesFor("ingredient", "merge"),
     onSuccess: () => markProcessed(mergeSourceRef.current),

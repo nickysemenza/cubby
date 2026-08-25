@@ -41,12 +41,14 @@ import {
 } from "./identifiers";
 import {
   createItemsResponseSchema,
+  createPaginatedResponseSchemaWithContext,
   createPaginatedResponseSchema,
   entityFilter,
   entityFilterList,
   oneOrMany,
   presenceFilter,
   relativeDateFilter,
+  sortPaginationFields,
 } from "./pagination";
 
 export { plainDate } from "./base-entity";
@@ -412,6 +414,15 @@ export const projectOut = z.object({
 });
 export type ProjectOut = z.infer<typeof projectOut>;
 
+export const projectTreeInput = z.object({
+  filters: projectFiltersSchema,
+  ...sortPaginationFields,
+});
+export const projectTreeOut = createPaginatedResponseSchemaWithContext(
+  projectOut,
+  "project",
+);
+
 const taskFields = {
   name: z.string().min(1),
   status: taskStatusSchema,
@@ -572,6 +583,11 @@ export const taskListAndSideEffectsOut = z.object({
 export type TaskListAndSideEffectsOut = z.infer<
   typeof taskListAndSideEffectsOut
 >;
+
+export const taskBulkMutationOut = z.object({
+  items: z.array(taskOut),
+  sideEffects: mutationSideEffectsSchema,
+});
 
 export const createProjectFromTasksInput = z.object({
   taskIds: z.array(taskShortcode).min(1),
@@ -941,6 +957,25 @@ export const expenseOut = z.object({
   ...timestampedFields,
 });
 export type ExpenseOut = z.infer<typeof expenseOut>;
+
+export const expenseChargeContextOut = z
+  .object({
+    purchase: z.object({
+      id: purchaseShortcode,
+      orderId: z.string().nullable(),
+      displayLabel: z.string().nullable(),
+      date: plainDate.nullable(),
+      vendorId: vendorShortcode,
+      vendorName: z.string().nullable(),
+    }),
+    siblings: z.array(expenseOut),
+  })
+  .nullable();
+
+export const expenseBulkMutationOut = z.object({
+  items: z.array(expenseOut),
+  sideEffects: mutationSideEffectsSchema,
+});
 
 export const deleteExpensesWithPurchaseEffectsOut = z.object({
   deleted: z.number().int().nonnegative(),

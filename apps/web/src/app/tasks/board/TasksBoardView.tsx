@@ -10,7 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Row, Stack } from "~/components/layout";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useHydratedLoading } from "~/hooks/useHydrated";
-import { useTRPC } from "~/integrations/trpc/react";
+import { taskBoardQueryOptions } from "../task.functions";
 import { BoardControls } from "./BoardControls";
 import type { BoardColsMode, BoardLaneMode } from "./board-model";
 import { TaskBoard } from "./TaskBoard";
@@ -52,7 +52,6 @@ function BoardSkeleton() {
 
 /** The `/tasks?view=board` surface: URL-driven column/lane controls + the board. */
 export function TasksBoardView({ filters }: { filters: TaskFilters }) {
-  const api = useTRPC();
   const search = route.useSearch();
   const navigate = route.useNavigate();
 
@@ -86,7 +85,7 @@ export function TasksBoardView({ filters }: { filters: TaskFilters }) {
     [filters, debouncedSearch],
   );
   const { data: board = NO_BOARD, isLoading: queryLoading } = useQuery(
-    api.task.board.queryOptions(boardInput),
+    taskBoardQueryOptions(boardInput),
   );
   const isLoading = useHydratedLoading(queryLoading);
   const tasks = useMemo(() => [...board.active, ...board.recentDone], [board]);

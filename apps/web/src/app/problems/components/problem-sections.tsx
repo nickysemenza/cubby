@@ -45,6 +45,7 @@ import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMu
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
 import { mealDateLabel } from "~/app/meals/meal-format";
+import { applyProductUpcDataMutationOptions } from "~/app/products/product.functions";
 import { attentionEvidence } from "~/app/projects/attention-presentation";
 import { formatDateWithYear } from "~/app/projects/project-formatting";
 import {
@@ -65,8 +66,9 @@ import {
 import { humanize } from "~/entities/filters";
 import type { ProblemQuery } from "~/entities/problem-query";
 import { problemQuery } from "~/entities/problem-registry";
-import { useTRPC } from "~/integrations/trpc/react";
+import { problemsCleanupOrphanedEmbeddingsMutationOptions } from "~/lib/problems.functions";
 import { invalidatesFor } from "~/lib/query-keys";
+import { searchEnqueueEmbeddingBackfillMutationOptions } from "~/lib/search.functions";
 import { formatCurrency } from "~/lib/utils";
 import type { ProductWithBetterUpcData } from "~/server/repo/problems";
 import { BACKFILL } from "./backfill-registry";
@@ -329,9 +331,8 @@ function problemAssembly(
  * out of the list once the problems queries invalidate.
  */
 function UpcApplyAction({ product }: { product: ProductWithBetterUpcData }) {
-  const api = useTRPC();
   const apply = useProblemCardMutation({
-    mutationFn: api.product.applyUpcData.mutationOptions,
+    mutationFn: applyProductUpcDataMutationOptions,
     success: `Updated ${product.name} from UPC`,
     // The whole problems.* path is always invalidated by the hook (which also
     // feeds the navbar badge count); add the product/recipe lists (price feeds
@@ -357,9 +358,8 @@ function OrphanedEmbeddingCleanupFix({
   id: string;
   close: () => void;
 }) {
-  const api = useTRPC();
   const cleanup = useProblemCardMutation({
-    mutationFn: api.problems.cleanupOrphanedEmbeddings.mutationOptions,
+    mutationFn: problemsCleanupOrphanedEmbeddingsMutationOptions,
     success: "Cleaned up orphaned embedding",
     onSuccess: close,
   });
@@ -376,9 +376,8 @@ function OrphanedEmbeddingCleanupFix({
 }
 
 function MissingEmbeddingsBackfillAction() {
-  const api = useTRPC();
   const backfill = useProblemCardMutation({
-    mutationFn: api.search.enqueueEmbeddingBackfill.mutationOptions,
+    mutationFn: searchEnqueueEmbeddingBackfillMutationOptions,
     success: (data) =>
       data.reused
         ? "Embedding backfill is already running."

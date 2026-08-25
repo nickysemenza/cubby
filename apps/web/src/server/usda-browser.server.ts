@@ -6,6 +6,7 @@ import {
   foodSummaryWithLinkedProducts,
   usdaFoodIdInput,
   usdaFoodListOut,
+  usdaFoodLookupInput,
   usdaListInput,
 } from "@cubby/schemas/usda";
 import type { z } from "zod";
@@ -13,6 +14,7 @@ import {
   runStartOperation,
   type StartOperationRequest,
 } from "~/server/start-operation.server";
+import { findUsdaFoodWorkflow } from "~/server/workflows/usda.server";
 
 export const listUsdaFoods = async (options: {
   data: z.input<typeof usdaListInput>;
@@ -63,4 +65,19 @@ export const getUsdaFoodDetail = async (options: {
     readPolicy: "strong",
     run: async (context, input) =>
       await context.usdaService.getFoodSummaryByID(input.id),
+  });
+
+export const getUsdaFoodByAlternateId = async (options: {
+  data: z.input<typeof usdaFoodLookupInput>;
+  request: StartOperationRequest;
+}) =>
+  await runStartOperation({
+    operation: "usda-food.alternateId",
+    type: "query",
+    input: options.data,
+    inputSchema: usdaFoodLookupInput,
+    outputSchema: foodSummaryWithLinkedProducts.nullable(),
+    request: options.request,
+    readPolicy: "strong",
+    run: (context, input) => findUsdaFoodWorkflow(context.usdaService, input),
   });

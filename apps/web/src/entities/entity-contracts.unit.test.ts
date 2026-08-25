@@ -44,7 +44,7 @@ describe("kernel browser transport", () => {
     });
   });
 
-  it("preserves entity-specific result types without tRPC inference", () => {
+  it("preserves entity-specific result types without transport inference", () => {
     const factory = entityMutationOptionsFactory("product", "create");
     expectTypeOf<DataOf<typeof factory>>().toEqualTypeOf<
       ProductWithFoodOut & { sideEffects: MutationSideEffects }

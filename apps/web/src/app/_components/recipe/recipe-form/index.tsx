@@ -12,6 +12,10 @@ import {
 import { type FC, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
+import {
+  recipeParseHtmlMutationOptions,
+  recipeScrapeMutationOptions,
+} from "~/app/recipes/recipe.functions";
 import { Row, Stack } from "~/components/layout";
 import {
   AlertDialog,
@@ -27,7 +31,6 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Textarea } from "~/components/ui/textarea";
 import { useImageState } from "~/hooks/useImageState";
-import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { wasm } from "~/lib/wasm";
 import {
@@ -62,7 +65,6 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
   const { mode, isPending, error, onCancel } = props;
   const tagsId = useId();
   const notesId = useId();
-  const api = useTRPC();
   const {
     handlePendingImagesChange,
     handleRemovedImagesChange,
@@ -133,8 +135,8 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
   );
 
   // Scrape mutation + parse-only fallback for pasted HTML
-  const scrapeMutation = useMutation(api.recipe.scrape.mutationOptions());
-  const parseHtmlMutation = useMutation(api.recipe.parseHtml.mutationOptions());
+  const scrapeMutation = useMutation(recipeScrapeMutationOptions());
+  const parseHtmlMutation = useMutation(recipeParseHtmlMutationOptions());
 
   // Get the recipe entity in edit mode
   const recipe = mode === "edit" ? props.entity : undefined;

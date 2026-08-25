@@ -9,6 +9,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useMemo, useRef } from "react";
+import { recipeCookbookDiffQueryOptions } from "~/app/recipes/recipe.functions";
 import { Row } from "~/components/layout/row";
 import { BulkProgressBar } from "~/components/ui/bulk-progress-bar";
 import { Button } from "~/components/ui/button";
@@ -17,7 +18,6 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
-import { useTRPC } from "~/integrations/trpc/react";
 import { importRecipeSignature } from "~/lib/recipe-signature";
 import {
   RecipeImportCard,
@@ -39,7 +39,6 @@ export function BookGroupCard({
   handlers: BookHandlers;
   importing: boolean;
 }) {
-  const api = useTRPC();
   const name = book.name.trim();
   const ready = book.extract.status === "ready";
 
@@ -47,12 +46,10 @@ export function BookGroupCard({
   // The id links to the existing Cubby recipe; the content signature lets each
   // card show "no changes" vs "will update". Also lets a cross-recipe reference
   // link to a recipe that already exists.
-  const { data: existingRecipes } = useQuery(
-    api.recipe.getCookbookDiff.queryOptions(
-      { book: name },
-      { enabled: ready && name.length > 0 },
-    ),
-  );
+  const { data: existingRecipes } = useQuery({
+    ...recipeCookbookDiffQueryOptions({ book: name }),
+    enabled: ready && name.length > 0,
+  });
   const existingByTitle = useMemo(
     () =>
       new Map(

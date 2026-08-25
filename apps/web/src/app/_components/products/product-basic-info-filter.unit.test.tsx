@@ -48,15 +48,6 @@ vi.mock("~/app/_components/hooks/useEntityDelete", () => ({
   useEntityDelete: () => ({ deleteButton: null, deleteDialog: null }),
 }));
 
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPC: () => ({
-    product: {
-      update: { mutationOptions: vi.fn() },
-      delete: { mutationOptions: vi.fn() },
-    },
-  }),
-}));
-
 vi.mock("../data-table/editable-cell", () => ({
   EditableCell: ({
     value,

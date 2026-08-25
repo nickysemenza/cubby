@@ -12,9 +12,9 @@ import {
   UnifiedTextField,
 } from "~/app/_components/form-utils";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { projectCreateFromTasksMutationOptions } from "~/app/projects/project.functions";
 import { projectKindOptions } from "~/app/projects/project-options";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
-import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidatesFor } from "~/lib/query-keys";
 
@@ -50,14 +50,13 @@ export function CreateProjectFromTasksDialog({
   onOpenChange,
   taskIds,
 }: CreateProjectFromTasksDialogProps) {
-  const api = useTRPC();
   const count = taskIds.length;
   const form = useForm<QuickAddValues>({
     resolver: zodResolver(quickAddSchema),
     defaultValues,
   });
   const mutation = useActionMutation({
-    mutationFn: api.project.createFromTasks.mutationOptions,
+    mutationFn: projectCreateFromTasksMutationOptions,
     invalidateKeys: [...invalidatesFor("task"), ...invalidatesFor("project")],
     success: (data) => `Created "${data.project.name}"`,
     onSuccess: () => onOpenChange(false),

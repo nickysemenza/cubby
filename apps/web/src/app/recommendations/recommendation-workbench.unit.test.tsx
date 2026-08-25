@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@tanstack/react-query", () => ({
   mutationOptions: (options: unknown) => options,
+  queryOptions: (options: unknown) => options,
   useQuery: () => ({
     data: {
       status: "ready",
@@ -24,20 +25,6 @@ vi.mock("@tanstack/react-query", () => ({
     .mockReturnValueOnce({ isPending: false, mutate: mocks.accept })
     .mockReturnValueOnce({ isPending: false, mutate: mocks.dismiss }),
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
-}));
-
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPC: () => ({
-    recommendations: {
-      tagPropagation: {
-        queryOptions: () => ({}),
-        queryKey: () => ["tag-propagation"],
-      },
-      dismissTagPropagation: { mutationOptions: () => ({}) },
-    },
-    product: { update: { mutationOptions: () => ({}) } },
-    relatedness: { product: { queryKey: () => ["relatedness"] } },
-  }),
 }));
 
 vi.mock("@tanstack/react-router", () => ({

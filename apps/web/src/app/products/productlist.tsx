@@ -20,6 +20,12 @@ import {
   useProductFoodSummaries,
 } from "~/app/_components/products/product-food-summaries";
 import { UnitPriceLine } from "~/app/_components/units/unit-price-line";
+import {
+  bulkSetProductStockTrackedMutationOptions,
+  kitComponentRowsQueryOptions,
+  productExternalIdSourceOptionsQueryOptions,
+  productManufacturerOptionsQueryOptions,
+} from "~/app/products/product.functions";
 import { Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
@@ -33,9 +39,9 @@ import {
 } from "~/components/ui/tooltip";
 import type { ViewSwitcherOption } from "~/components/ui/view-switcher";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { useTRPC } from "~/integrations/trpc/react";
 import { dataQualityOptions } from "~/lib/data-quality-options";
 import { invalidatesFor } from "~/lib/query-keys";
+import { relatedDataOptionsQueryOptions } from "~/lib/related-data.functions";
 import { booleanCellOptions, presenceCellOptions } from "~/lib/select-options";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { formatCurrency } from "~/lib/utils";
@@ -216,7 +222,6 @@ function ProductFoodCell({ product }: { product: ProductListItem }) {
 }
 
 export function ProductList({ initialCategory, view }: ProductListProps) {
-  const api = useTRPC();
   const navigate = useNavigate();
   const columnHelper = useMemo(
     () => createCubbyColumnHelper<ProductTreeRow>(),
@@ -230,10 +235,10 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
   const locationOptions = useDeferredFilterOptions("locationWithInventory");
   const ingredientOptions = useDeferredFilterOptions("ingredientWithProduct");
   const manufacturerOptionsQuery = useQuery(
-    api.product.manufacturerOptions.queryOptions(),
+    productManufacturerOptionsQueryOptions(),
   );
   const externalIdSourceOptionsQuery = useQuery(
-    api.product.externalIdSourceOptions.queryOptions(),
+    productExternalIdSourceOptionsQueryOptions(),
   );
   const manufacturerOptions = useMemo<FilterableComboboxItem[]>(
     () =>
@@ -258,13 +263,13 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
   // `product.vendors` also ensures only Vendors that can match a Product are
   // offered here.
   const vendorOptionsQuery = useQuery(
-    api.relatedData.options.queryOptions({
+    relatedDataOptionsQueryOptions({
       relationKey: "product.vendors",
       limit: 100,
     }),
   );
   const purchaseOptionsQuery = useQuery(
-    api.relatedData.options.queryOptions({
+    relatedDataOptionsQueryOptions({
       relationKey: "product.purchases",
       limit: 100,
     }),
@@ -306,7 +311,7 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
     [],
   );
   const stockTrackingMutation = useActionMutation({
-    mutationFn: api.product.bulkSetStockTracked.mutationOptions,
+    mutationFn: bulkSetProductStockTrackedMutationOptions,
     invalidateKeys: invalidatesFor("product"),
     success: (data: { items: unknown[] }) =>
       `Updated ${data.items.length} product${data.items.length !== 1 ? "s" : ""}`,
@@ -934,7 +939,7 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
   // sidesteps that class of bug rather than managing it.
   const [kitIds, setKitIds] = useState<string[]>([]);
   const kitComponentsQuery = useQuery({
-    ...api.product.kitComponentRows.queryOptions({ parentProductIds: kitIds }),
+    ...kitComponentRowsQueryOptions({ parentProductIds: kitIds }),
     enabled: kitIds.length > 0,
   });
   const componentsByParent = useMemo(

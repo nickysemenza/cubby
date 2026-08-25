@@ -7,7 +7,7 @@ import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
 import { entityDetailQueryKey } from "~/entities/entity-detail.functions";
-import { useTRPC } from "~/integrations/trpc/react";
+import { describeLocationMutationOptions } from "~/lib/ai.functions";
 
 interface AiDescriptionSectionProps {
   locationId: LocationShortcode;
@@ -20,10 +20,8 @@ export const AiDescriptionSection: FC<AiDescriptionSectionProps> = ({
   currentDescription,
   hasImages,
 }) => {
-  const api = useTRPC();
-
   const describeMutation = useActionMutation({
-    mutationFn: api.ai.describeLocation.mutationOptions,
+    mutationFn: describeLocationMutationOptions,
     success: "Description saved.",
     invalidateKeys: [entityDetailQueryKey("location", locationId)],
   });

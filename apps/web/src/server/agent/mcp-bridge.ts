@@ -1,9 +1,9 @@
-import type { AgentToolCall } from "@cubby/schemas/agent";
+import { type AgentToolCall, agentToolCallSchema } from "@cubby/schemas/agent";
 import type { UserId } from "@cubby/schemas/identifiers";
 import { type Tool, toolDefinition } from "@tanstack/ai";
 import { getErrorMessage } from "~/lib/error-utils";
-import type { DomainCaller } from "~/server/api/domain";
 import type { Database } from "~/server/db";
+import type { McpWorkflowCaller } from "~/server/mcp/workflow-caller";
 import { emitTelemetry } from "~/server/telemetry";
 
 /**
@@ -41,16 +41,16 @@ interface AgentToolset {
 }
 
 /**
- * Build the read-only agent toolset bound to an authenticated tRPC caller.
+ * Build the read-only agent toolset bound to an authenticated workflow caller.
  * The caller is injected into every MCP message via authInfo, mirroring how
  * `api/mcp.ts` passes `extra: { caller }` over HTTP.
  */
 export async function createAgentToolset(
-  caller: DomainCaller,
+  caller: McpWorkflowCaller,
   db?: Database,
   userId?: UserId,
 ): Promise<AgentToolset> {
-  // Imported dynamically, not at module scope. This module hangs off the tRPC
+  // Imported dynamically, not at module scope. This module hangs off the agent
   // router graph (root.ts → routers/agent.ts → runtime.ts → here), so a static
   // import would put @modelcontextprotocol/sdk + ajv + zod-to-json-schema
   // (~466 KiB) into the worker's eager chunk for every request — and defeat the
@@ -161,7 +161,7 @@ export async function createAgentToolset(
 
         records.push({
           tool: mcpTool.name,
-          args,
+          args: agentToolCallSchema.shape.args.parse(args),
           durationMs: Date.now() - startedAt,
           ok,
           result: parsed,

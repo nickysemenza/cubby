@@ -11,15 +11,18 @@ import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
-import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidateQueryRoots } from "~/lib/query-keys";
+import {
+  collectionCreateMutationOptions,
+  collectionListQueryOptions,
+  collectionListRootKey,
+} from "./collection.functions";
 
 export function CollectionsIndexPage() {
-  const api = useTRPC();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const collections = useQuery(api.collection.list.queryOptions());
+  const collections = useQuery(collectionListQueryOptions());
   const [showCreate, setShowCreate] = useState(false);
   const nameId = useId();
   const subjectId = useId();
@@ -27,21 +30,20 @@ export function CollectionsIndexPage() {
   const [name, setName] = useState("");
   const [subject, setSubject] = useState<"product" | "location">("product");
   const [id, setId] = useState("");
-  const create = useMutation(
-    api.collection.create.mutationOptions({
-      onSuccess: async (result) => {
-        invalidateQueryRoots(queryClient, [api.collection.list.queryKey()]);
-        setShowCreate(false);
-        setName("");
-        setId("");
-        await navigate({
-          to: "/collections/$collection",
-          params: { collection: result.slug },
-        });
-      },
-      onError: (error) => toast.error(getErrorMessage(error)),
-    }),
-  );
+  const create = useMutation({
+    ...collectionCreateMutationOptions(),
+    onSuccess: async (result) => {
+      invalidateQueryRoots(queryClient, [collectionListRootKey()]);
+      setShowCreate(false);
+      setName("");
+      setId("");
+      await navigate({
+        to: "/collections/$collection",
+        params: { collection: result.slug },
+      });
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+  });
   const slug = normalizeCollectionSlug(name);
 
   return (
@@ -68,7 +70,7 @@ export function CollectionsIndexPage() {
               collection: slug,
               subject,
               id: id.trim(),
-            } as never);
+            });
           }}
         >
           <label className="space-y-1" htmlFor={nameId}>

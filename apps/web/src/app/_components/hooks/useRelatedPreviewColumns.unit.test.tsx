@@ -4,15 +4,16 @@ import { createCubbyColumnHelper } from "../data-table/table-features";
 
 const queryState = vi.hoisted(() => ({
   current: { data: undefined as unknown, isLoading: true },
+  queryOptions: vi.fn((input: unknown) => ({
+    queryKey: ["related-previews", input],
+  })),
 }));
 
 vi.mock("@tanstack/react-query", () => ({
   useQuery: () => queryState.current,
 }));
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPC: () => ({
-    relatedData: { previews: { queryOptions: () => ({}) } },
-  }),
+vi.mock("~/lib/related-data.functions", () => ({
+  relatedDataPreviewsQueryOptions: queryState.queryOptions,
 }));
 vi.mock("~/entities/entities", () => ({
   getSortableFields: () => [],
@@ -68,6 +69,11 @@ describe("useRelatedPreviewColumns", () => {
     };
     rerender();
 
+    expect(queryState.queryOptions).toHaveBeenLastCalledWith({
+      source: "product",
+      sourceIds: ["PRD-TEST"],
+      relationKeys: ["product.vendors"],
+    });
     expect(result.current.relatedColumns).toBe(loadingColumns);
     expect(result.current.rowContentVersion).not.toBe(loadingVersion);
     const cell = result.current.relatedColumns[0]?.cell;

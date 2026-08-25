@@ -6,8 +6,11 @@ import {
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
-import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
+import {
+  markImageUploadedMutationOptions,
+  uploadImageMutationOptions,
+} from "~/lib/image.functions";
 
 export interface UploadedImage {
   id: string;
@@ -37,15 +40,10 @@ export interface UploadedImage {
  * single mutation's `onSuccess`/`onError`.
  */
 export function useImageUpload() {
-  const api = useTRPC();
   const [isUploading, setIsUploading] = useState(false);
 
-  const uploadImageMutation = useMutation(
-    api.image.uploadImage.mutationOptions(),
-  );
-  const markUploadedMutation = useMutation(
-    api.image.markUploaded.mutationOptions(),
-  );
+  const uploadImageMutation = useMutation(uploadImageMutationOptions());
+  const markUploadedMutation = useMutation(markImageUploadedMutationOptions());
 
   const uploadFile = useCallback(
     async (file: File): Promise<UploadedImage | null> => {

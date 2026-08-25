@@ -10,7 +10,6 @@ import {
 import { updateProduct } from "~/server/repo/product";
 import { getRecipesByIDs, updateRecipe } from "~/server/repo/recipe";
 import { getRecipeTotalsState } from "~/server/repo/recipe/totals";
-import { createTestTRPCContext } from "../api/trpc";
 import { findOrCreateIngredient } from "../repo/ingredient";
 import {
   createProductFixture as createProduct,
@@ -19,6 +18,7 @@ import {
   makeProductInput,
   makeRecipeInput,
 } from "../repo/repo.fixtures";
+import { createTestRequestContext } from "../testing/request-context";
 
 // Exercises RecipeCostingService end-to-end against a real DB (IntegresQL). The
 // costing WASM is pure; the test context stubs the USDA client to 404 every
@@ -35,7 +35,7 @@ describe("RecipeCostingService", () => {
   const ctx = withTestDb();
 
   const service = () =>
-    createTestTRPCContext(ctx.db, { auth: { userId: ctx.actor.userId } })
+    createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } })
       .services.recipeCosting;
 
   // A recipe whose single ingredient is linked to a priced product. Price-only

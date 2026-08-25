@@ -30,7 +30,7 @@ interface ManifestFilterBarProps {
  * lives — column filters there, search params here.
  *
  * `decodeFilters` is the ONLY reader of URL state, which is also what
- * `filterGetterFromSearch` uses to build the tRPC input: the bar and the query
+ * `filterGetterFromSearch` uses to build the operation input: the bar and the query
  * therefore cannot disagree about what the URL says.
  */
 export function ManifestFilterBar({

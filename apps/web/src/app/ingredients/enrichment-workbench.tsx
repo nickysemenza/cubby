@@ -1,3 +1,7 @@
+import type {
+  productCreateManyInput,
+  productMarkUsdaUnavailableManyInput,
+} from "@cubby/schemas/product";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -5,9 +9,14 @@ import { Sparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
+import type { z } from "zod";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useBulkActionMutation } from "~/app/_components/hooks/useBulkActionMutation";
 import { EntityMergeDialog } from "~/app/_components/merge/entity-merge-dialog";
+import {
+  createManyProductsStream,
+  markProductsUsdaUnavailableStream,
+} from "~/app/products/product.functions";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -28,7 +37,10 @@ import {
 } from "~/components/ui/view-switcher";
 import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { useHydrated } from "~/hooks/useHydrated";
-import { useTRPC } from "~/integrations/trpc/react";
+import {
+  suggestIngredientMergeBatchMutationOptions,
+  suggestUsdaFoodBatchMutationOptions,
+} from "~/lib/ai.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
@@ -36,6 +48,10 @@ import {
   type EquivalenceDraft,
   enrichmentWorkbenchQueryInput,
 } from "./equivalence-workbench-link";
+import {
+  ingredientEnrichmentWorkbenchQueryOptions,
+  ingredientMergeMutationOptions,
+} from "./ingredient.functions";
 import { ReviewQueue } from "./review-queue";
 import { SuggestionReviewTray } from "./suggestion-review-tray";
 import {
@@ -70,7 +86,6 @@ export function EnrichmentWorkbench({
   recipeId?: string;
   initialConversion?: EquivalenceDraft;
 }) {
-  const api = useTRPC();
   const [filter, setFilter] = useState<FilterKey>("all");
   const [view, setView] = useState<WorkbenchView>("browse");
   // Layered on top of the chips: drop ingredients used only in imported cookbook
@@ -105,7 +120,7 @@ export function EnrichmentWorkbench({
     error,
   } = useQuery(
     // Pass no input when unscoped so the query key matches the plain worklist.
-    api.ingredient.enrichmentWorkbench.queryOptions(
+    ingredientEnrichmentWorkbenchQueryOptions(
       enrichmentWorkbenchQueryInput({ focus, recipeId, initialConversion }),
     ),
   );
@@ -197,14 +212,10 @@ export function EnrichmentWorkbench({
 
   const clearSelection = () => setSelected(new Set());
 
-  const suggestUsda = useMutation(
-    api.ai.suggestUsdaFoodBatch.mutationOptions(),
-  );
+  const suggestUsda = useMutation(suggestUsdaFoodBatchMutationOptions());
   const createMany = useBulkActionMutation({
-    run: (
-      client,
-      vars: Parameters<typeof client.product.createMany.mutate>[0],
-    ) => client.product.createMany.mutate(vars),
+    run: (vars: z.input<typeof productCreateManyInput>) =>
+      createManyProductsStream(vars),
     success: (data) =>
       data.failed.length === 0
         ? `Created ${data.created} product${data.created === 1 ? "" : "s"}.`
@@ -238,20 +249,18 @@ export function EnrichmentWorkbench({
     error: (err) => `Create failed: ${getErrorMessage(err)}`,
   });
   const markNoUsda = useBulkActionMutation({
-    run: (
-      client,
-      vars: Parameters<typeof client.product.markUsdaUnavailableMany.mutate>[0],
-    ) => client.product.markUsdaUnavailableMany.mutate(vars),
+    run: (vars: z.input<typeof productMarkUsdaUnavailableManyInput>) =>
+      markProductsUsdaUnavailableStream(vars),
     success: "Marked: no USDA entry.",
     invalidateKeys: invalidatesFor("ingredient", "product"),
     onSuccess: clearSelection,
     error: (err) => `Failed: ${getErrorMessage(err)}`,
   });
   const suggestMerges = useMutation(
-    api.ai.suggestIngredientMergeBatch.mutationOptions(),
+    suggestIngredientMergeBatchMutationOptions(),
   );
   const mergeMutation = useActionMutation({
-    mutationFn: api.ingredient.merge.mutationOptions,
+    mutationFn: ingredientMergeMutationOptions,
     success: (data) => savedWithBackgroundWork(data.sideEffects, "Merged"),
     invalidateKeys: invalidatesFor("ingredient", "merge"),
     error: (err) => `Merge failed: ${getErrorMessage(err)}`,

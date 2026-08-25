@@ -198,6 +198,15 @@ export const recipeRecomputeAllOut = z.object({
   processed: z.number().int().nonnegative(),
 });
 
+export const recipeRecomputeDurableEventSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("progress"),
+    done: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+  }),
+  z.object({ type: z.literal("done"), result: z.unknown() }),
+]);
+
 export const recipeDryRunRecomputeTotalsOut = z.object({
   wouldChange: z.number().int().nonnegative(),
   total: z.number().int().nonnegative(),
@@ -364,7 +373,7 @@ export const recipeUpdateData = deriveUpdateData(recipeCreateShape, {
     // Public `IMG-` codes, as returned by `RecipeOut.images[].id` — resolved to
     // uuids in the repo before they reach the `RecipeImage` join table. MCP has
     // no recipe image surface (`mcpRecipeUpdateInput` below doesn't extend
-    // these in), so this pair is tRPC/web-only.
+    // these in), so this pair is browser-transport-only.
     removeImageIds: z
       .array(imageShortcode)
       .optional()

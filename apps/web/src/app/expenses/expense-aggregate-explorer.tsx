@@ -28,9 +28,9 @@ import { CrossTabTable } from "~/components/matrix/cross-tab-table";
 import { Button } from "~/components/ui/button";
 import { NativeSelect } from "~/components/ui/native-select";
 import { Switch } from "~/components/ui/switch";
-import { useTRPC } from "~/integrations/trpc/react";
 import { copyText } from "~/lib/clipboard";
 import { cn, formatCount, formatCurrency } from "~/lib/utils";
+import { expenseAnalyzeQueryOptions } from "./expense.functions";
 import {
   canSwapExpenseAnalyzeAxes,
   DEFAULT_EXPENSE_ANALYZE_CONFIG,
@@ -756,7 +756,6 @@ export function ExpenseAggregateExplorer({
   onConfigChange: (config: ExpenseAnalyzeConfig) => void;
   onOpenLedger: (filter: Record<string, string>) => void;
 }) {
-  const api = useTRPC();
   const { rowDimension, columnDimension, comparison, metric, projection } =
     config;
   const rowsId = useId();
@@ -770,7 +769,7 @@ export function ExpenseAggregateExplorer({
     columnDimension,
   );
   const query = useQuery({
-    ...api.expense.analyze.queryOptions({
+    ...expenseAnalyzeQueryOptions({
       filters,
       rowDimension,
       columnDimension,

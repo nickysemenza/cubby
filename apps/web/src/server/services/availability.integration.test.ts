@@ -1,42 +1,44 @@
 import type { Amount } from "@cubby/schemas/codec";
+import { unsafeIngredientShortcode } from "@cubby/schemas/identifiers";
 import { withEntityKernelMutations } from "tooling/entity-kernel-test-caller";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
+import { createRecipe } from "~/server/repo/recipe";
 import { seedIngredientWithStock } from "~/server/repo/repo.fixtures";
-import { recipeRouter } from "../api/routers/recipe";
-import { createTestCaller, createTestTRPCContext } from "../api/trpc";
+import { createTestRequestContext } from "~/server/testing/request-context";
 
 describe("AvailabilityService.getRecipeAvailability", () => {
   const tdb = withTestDb();
 
   const ctx = () =>
-    createTestTRPCContext(tdb.db, { auth: { userId: TEST_ACTOR.userId } });
-  const recipeCaller = () =>
-    withEntityKernelMutations(
-      createTestCaller(recipeRouter, tdb.db),
-      "recipe",
-      tdb.db,
-    );
+    createTestRequestContext(tdb.db, {
+      auth: { userId: TEST_ACTOR.userId },
+    });
+  const recipeCaller = () => withEntityKernelMutations({}, "recipe", tdb.db);
 
   const createFlourRecipe = (ingredientId: string, need: Amount) =>
-    recipeCaller().create({
-      name: "Pancakes",
-      meta: null,
-      sections: [
-        {
-          ingredients: [
-            {
-              type: "ingredient" as const,
-              ingredientId,
-              recipeId: null,
-              amounts: [need],
-            },
-          ],
-          instructions: [{ instruction: "Mix" }],
-        },
-      ],
-    });
+    createRecipe(
+      tdb.db,
+      {
+        name: "Pancakes",
+        meta: null,
+        sections: [
+          {
+            ingredients: [
+              {
+                type: "ingredient" as const,
+                ingredientId: unsafeIngredientShortcode(ingredientId),
+                recipeId: null,
+                amounts: [need],
+              },
+            ],
+            instructions: [{ instruction: "Mix" }],
+          },
+        ],
+      },
+      TEST_ACTOR,
+    );
 
   const seedFlourWithStock = (onHand: Amount) =>
     seedIngredientWithStock(tdb.db, { name: "flour", onHand }, TEST_ACTOR);

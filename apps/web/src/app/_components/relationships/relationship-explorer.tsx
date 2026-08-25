@@ -6,7 +6,10 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { useHydratedLoading } from "~/hooks/useHydrated";
-import { useTRPC } from "~/integrations/trpc/react";
+import {
+  relatedDataBranchQueryOptions,
+  relatedDataPreviewsQueryOptions,
+} from "~/lib/related-data.functions";
 import { type RelationshipPreset, RelationshipTree } from "./relationship-tree";
 
 const NO_PREVIEW_GROUPS: RelatedPreviewGroup[] = [];
@@ -32,7 +35,6 @@ export function RelationshipExplorer({
   entity: Entity;
   sourceId: string | undefined;
 }) {
-  const api = useTRPC();
   const queryClient = useQueryClient();
   const views = useMemo(() => relatedViewsFor(entity), [entity]);
   const relationKeys = useMemo(() => views.map((view) => view.key), [views]);
@@ -42,7 +44,7 @@ export function RelationshipExplorer({
   const primaryRelationKey =
     entity === "vendor" ? "vendor.purchases" : relationKeys[0];
   const query = useQuery({
-    ...api.relatedData.previews.queryOptions({
+    ...relatedDataPreviewsQueryOptions({
       source: entity,
       sourceIds: sourceId ? [sourceId] : [],
       relationKeys,
@@ -50,7 +52,7 @@ export function RelationshipExplorer({
     enabled: Boolean(sourceId) && relationKeys.length > 0,
   });
   const primaryBranchQuery = useQuery({
-    ...api.relatedData.branch.queryOptions({
+    ...relatedDataBranchQueryOptions({
       relationKey: primaryRelationKey as (typeof relationKeys)[number],
       sourceId: sourceId ?? "",
       limit: 25,
@@ -140,7 +142,7 @@ export function RelationshipExplorer({
       const branchSourceId = parent?.id ?? sourceId;
       if (!branchSourceId) return { items: [], hasMore: false };
       const page = await queryClient.fetchQuery(
-        api.relatedData.branch.queryOptions({
+        relatedDataBranchQueryOptions({
           relationKey: relationKey as (typeof relationKeys)[number],
           sourceId: branchSourceId,
           offset,
@@ -153,7 +155,7 @@ export function RelationshipExplorer({
         totalCount: page.totalCount,
       };
     },
-    [api.relatedData.branch, queryClient, sourceId],
+    [queryClient, sourceId],
   );
 
   if (views.length === 0) return null;

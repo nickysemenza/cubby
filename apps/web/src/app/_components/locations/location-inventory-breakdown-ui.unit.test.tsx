@@ -17,12 +17,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@tanstack/react-query", () => ({
   useQuery: () => mocks.query,
 }));
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPC: () => ({
-    location: {
-      inventoryBreakdown: { queryOptions: mocks.queryOptions },
-    },
-  }),
+vi.mock("~/app/locations/location.functions", () => ({
+  locationInventoryBreakdownQueryOptions: mocks.queryOptions,
 }));
 vi.mock("~/app/_components/visualizations/hierarchy-drilldown", () => ({
   HierarchyDrilldown: (props: unknown) => {

@@ -81,15 +81,6 @@ vi.mock("../_components/hooks/useUpdateMutation", () => ({
   }),
 }));
 
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPC: () => ({
-    expense: {
-      update: { mutationOptions: vi.fn(() => ({})) },
-      delete: { mutationOptions: vi.fn() },
-    },
-  }),
-}));
-
 vi.mock("./project-suggestion-chips", () => ({
   ProjectSuggestionChips: () => null,
 }));

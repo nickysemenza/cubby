@@ -5,16 +5,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   mutate: vi.fn(),
   useProblemCardMutation: vi.fn(),
-}));
-
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPC: () => ({
-    vendor: { fetchLogo: { mutationOptions: "vendor.fetchLogo" } },
-  }),
+  fetchVendorLogoMutationOptions: vi.fn(),
 }));
 
 vi.mock("~/app/_components/hooks/useProblemCardMutation", () => ({
   useProblemCardMutation: mocks.useProblemCardMutation,
+}));
+
+vi.mock("~/app/vendors/vendor.functions", () => ({
+  fetchVendorLogoMutationOptions: mocks.fetchVendorLogoMutationOptions,
 }));
 
 import { VendorLogoFetchAction } from "./vendor-logo-fetch-action";
@@ -41,7 +40,7 @@ describe("VendorLogoFetchAction", () => {
     expect(mocks.mutate).toHaveBeenCalledWith({ id: vendor.id });
     expect(mocks.useProblemCardMutation).toHaveBeenCalledWith(
       expect.objectContaining({
-        mutationFn: "vendor.fetchLogo",
+        mutationFn: mocks.fetchVendorLogoMutationOptions,
         success: "Added logo for Example Supply",
         invalidateKeys: expect.arrayContaining([["vendor"], ["search"]]),
       }),

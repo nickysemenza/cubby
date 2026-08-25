@@ -35,22 +35,15 @@ vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 }));
 
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPC: () => ({
-    expense: {
-      chartData: {
-        queryOptions: (input: unknown) => ({ queryKey: ["chartData", input] }),
-      },
-      update: { mutationOptions: vi.fn() },
-      delete: { mutationOptions: vi.fn() },
-    },
-    product: {
-      kitMembership: {
-        queryOptions: (input: unknown) => ({
-          queryKey: ["kitMembership", input],
-        }),
-      },
-    },
+vi.mock("~/app/expenses/expense.functions", () => ({
+  expenseChartDataQueryOptions: (input: unknown) => ({
+    queryKey: ["chartData", input],
+  }),
+}));
+
+vi.mock("~/app/products/product.functions", () => ({
+  kitMembershipQueryOptions: (input: unknown) => ({
+    queryKey: ["kitMembership", input],
   }),
 }));
 

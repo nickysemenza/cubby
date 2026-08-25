@@ -11,7 +11,6 @@ export type ReadConsistencyDecision = {
 
 /** Only requests identifiable as Cubby's browser adapter may opt into caching. */
 export function isBrowserUiRequest(headers: Pick<Headers, "get">): boolean {
-  if (headers.get("x-trpc-source") === "tanstack-start") return true;
   if (headers.get("sec-fetch-site") === "same-origin") return true;
   const accept = headers.get("accept") ?? "";
   return (

@@ -47,7 +47,7 @@ test.describe("product detail SSR", () => {
     }
 
     // Use a fresh browser context so IndexedDB cannot satisfy the product
-    // query. The SSR-dehydrated cache must prevent a duplicate browser tRPC
+    // query. The SSR-dehydrated cache must prevent a duplicate browser Start
     // request while React hydrates the initial document.
     const hydratedContext = await browser.newContext({ storageState });
     try {

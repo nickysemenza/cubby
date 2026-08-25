@@ -138,6 +138,21 @@ export const cookbookIdInput = z.object({
   cookbookId: cookbookShortcode,
 });
 
+export const cookbookReprocessEventSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("progress"),
+    done: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+  }),
+  z.object({
+    type: z.literal("done"),
+    result: z.object({
+      reprocessed: z.number().int().nonnegative(),
+      importableExtras: z.number().int().nonnegative(),
+    }),
+  }),
+]);
+
 // Link (or, with a null productId, unlink) a cookbook's physical copy. Always
 // operator-driven: see the `Cookbook.productId` column comment for why nothing
 // resolves a title to a product without a human confirming it.
@@ -156,6 +171,35 @@ export const importCookbookStreamInput = z.object({
   cookbookId: cookbookShortcode,
   indices: z.array(z.number().int().nonnegative()).min(1),
 });
+
+export const cookbookImportEventSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("progress"),
+    done: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+    item: z
+      .union([
+        z.object({
+          index: z.number().int().nonnegative(),
+          ok: z.literal(true),
+          id: z.string(),
+        }),
+        z.object({
+          index: z.number().int().nonnegative(),
+          ok: z.literal(false),
+          error: z.string(),
+        }),
+      ])
+      .optional(),
+  }),
+  z.object({
+    type: z.literal("done"),
+    result: z.object({
+      succeeded: z.number().int().nonnegative(),
+      failed: z.number().int().nonnegative(),
+    }),
+  }),
+]);
 
 export const cookbookDiffInput = z.object({
   book: z.string().min(1),
@@ -184,6 +228,36 @@ export const notionPreviewOut = z.array(notionPreviewItem);
 export const importNotionSyncInput = z.object({
   pageIds: z.array(z.string()).min(1),
 });
+
+export const notionImportEventSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("progress"),
+    done: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+    item: z
+      .union([
+        z.object({
+          pageId: z.string(),
+          ok: z.literal(true),
+          id: z.string(),
+          status: z.enum(["created", "updated"]),
+        }),
+        z.object({
+          pageId: z.string(),
+          ok: z.literal(false),
+          error: z.string(),
+        }),
+      ])
+      .optional(),
+  }),
+  z.object({
+    type: z.literal("done"),
+    result: z.object({
+      succeeded: z.number().int().nonnegative(),
+      failed: z.number().int().nonnegative(),
+    }),
+  }),
+]);
 
 export const cookbookSummariesOut = z.array(cookbookSummary);
 

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { useTRPC } from "~/integrations/trpc/react";
+import { recipeGetAllTagsQueryOptions } from "~/app/recipes/recipe.functions";
 
 const NO_TAG_OPTIONS: Array<{ value: string; label: string }> = [];
 
@@ -12,8 +12,7 @@ const NO_TAG_OPTIONS: Array<{ value: string; label: string }> = [];
  * the one picklist still built ad hoc inline.
  */
 export function useRecipeTagOptions() {
-  const api = useTRPC();
-  const { data, isLoading } = useQuery(api.recipe.getAllTags.queryOptions());
+  const { data, isLoading } = useQuery(recipeGetAllTagsQueryOptions());
 
   const options = useMemo(
     () => data?.map((tag) => ({ value: tag, label: tag })) ?? NO_TAG_OPTIONS,

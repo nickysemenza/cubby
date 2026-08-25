@@ -13,13 +13,23 @@ import { match } from "ts-pattern";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { LocationScanButton } from "~/app/_components/locations/location-scan-button";
 import { QueuePassResumePrompt } from "~/app/_components/queue-pass/QueuePassProgress";
+import {
+  bulkMoveInventoryMutationOptions,
+  inventoryByLocationIdsQueryOptions,
+  inventoryDuplicatesQueryOptions,
+  reconcileInventorySessionMutationOptions,
+} from "~/app/inventory/inventory.functions";
+import {
+  ensureGlobalUnknownMutationOptions,
+  locationTreeQueryOptions,
+} from "~/app/locations/location.functions";
+import { productQuantitySummariesQueryOptions } from "~/app/products/product.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button, buttonVariants } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { LocationReviewPane } from "./_components/LocationReviewPane";
 import { MoveToDialog } from "./_components/MoveToDialog";
@@ -50,16 +60,13 @@ interface InventorySessionWorkbenchProps {
 export function InventorySessionWorkbench({
   initialParentShortcode,
 }: InventorySessionWorkbenchProps) {
-  const api = useTRPC();
   const navigate = useNavigate();
   const ensureUnknownStarted = useRef(false);
 
   const { data: tree, isLoading: treeLoading } = useQuery(
-    api.location.makeTree.queryOptions(),
+    locationTreeQueryOptions(),
   );
-  const ensureUnknown = useMutation(
-    api.location.ensureGlobalUnknown.mutationOptions(),
-  );
+  const ensureUnknown = useMutation(ensureGlobalUnknownMutationOptions());
 
   useEffect(() => {
     if (ensureUnknownStarted.current) return;
@@ -123,7 +130,7 @@ export function InventorySessionWorkbench({
   // `reconcileLocationSession`, or the stale guard compares two different
   // populations and every commit throws INVENTORY_STALE.
   const inventoryQuery = useQuery({
-    ...api.inventory.getByLocationIds.queryOptions({
+    ...inventoryByLocationIdsQueryOptions({
       locationIds,
       placement: "stock",
     }),
@@ -132,9 +139,7 @@ export function InventorySessionWorkbench({
 
   // Products flagged as duplicate-unique (expected once, but present in >1
   // location) — badged inline so a recount can catch the stray copy.
-  const duplicateQuery = useQuery(
-    api.inventory.findDuplicates.queryOptions({}),
-  );
+  const duplicateQuery = useQuery(inventoryDuplicatesQueryOptions({}));
   const duplicateProductIds = useMemo(
     () => new Set((duplicateQuery.data ?? []).map((p) => p.id)),
     [duplicateQuery.data],
@@ -167,7 +172,7 @@ export function InventorySessionWorkbench({
     [inventoryQuery.data, sessionLocationIds],
   );
   const quantitySummariesQuery = useQuery({
-    ...api.product.quantitySummaries.queryOptions({ ids: sessionProductIds }),
+    ...productQuantitySummariesQueryOptions({ ids: sessionProductIds }),
     enabled: sessionProductIds.length > 0,
     // A pass is a point-in-time review. Keep its ledger comparison stable while
     // the pass itself writes recount adjustments.
@@ -196,7 +201,7 @@ export function InventorySessionWorkbench({
   );
 
   const bulkMove = useActionMutation({
-    mutationFn: api.inventory.bulkMove.mutationOptions,
+    mutationFn: bulkMoveInventoryMutationOptions,
     invalidateKeys: sessionInvalidateKeys,
   });
   const updateLocation = useActionMutation({
@@ -207,7 +212,7 @@ export function InventorySessionWorkbench({
   // resolutions leave the staged map (read from `variables`, so it's never the
   // stale closure) and we advance to the next bin.
   const reconcile = useMutation(
-    api.inventory.reconcileSession.mutationOptions({
+    reconcileInventorySessionMutationOptions({
       onSuccess: (data, variables) => {
         invalidateSession(data);
         setItemResolutions((prev) => {

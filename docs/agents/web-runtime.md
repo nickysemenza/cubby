@@ -8,10 +8,10 @@ query-key, clipboard, form-field, database, merge, and shortcode helpers over
 hand-rolled equivalents; raw mutation is reserved for the documented dynamic
 invalidation/inline-error/multi-mutation cases.
 
-The server render uses the local tRPC link, never an HTTP request to itself.
-Keep `~/server` imports behind the `.server()` branch of an isomorphic function.
-`ssr: false` is a measured cost choice, not a correctness workaround; a loader
-may await `ensureQueryData` when that latency is warranted.
+The server render uses TanStack Start's local function execution, never an HTTP
+request to itself. Keep `~/server` imports behind the `.server()` branch of an
+isomorphic function. `ssr: false` is a measured cost choice, not a correctness
+workaround; a loader may await `ensureQueryData` when that latency is warranted.
 
 Lists, filtering, sorting, totals, and pagination belong on the server. A saved
 view is visible manifest-backed URL state; `scopeFilters` is only a visible

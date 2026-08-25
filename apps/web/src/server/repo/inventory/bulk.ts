@@ -127,7 +127,7 @@ export const bulkProcessInventoryEntries = async (
     async (tx: DrizzleTransaction) => {
       // Guard: never create/re-point entries at a soft-deleted target. Validate
       // the shelf location once, then batch-validate every submitted product id
-      // (the UI filters deleted options, but the tRPC API is callable directly).
+      // (the UI filters deleted options, but the workflow is callable directly).
       await assertLiveTargets(tx, { locationId });
 
       // Staleness guard: max(updatedAt) over ALL rows at the location (including

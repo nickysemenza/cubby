@@ -14,7 +14,7 @@
  * `cf-server.ts`.
  *
  * This must export every binding the SSR graph reaches:
- *   - `captureException` — server/api/trpc.ts, components/route-error.tsx.
+ *   - `captureException` — server workflow handlers, components/route-error.tsx.
  *     Genuinely used on the server; forwards to the Cloudflare SDK, which
  *     shares `@sentry/core`'s scope with the `withSentry` init.
  *   - `init`, `tanstackRouterBrowserTracingIntegration` — router.tsx. Both sit

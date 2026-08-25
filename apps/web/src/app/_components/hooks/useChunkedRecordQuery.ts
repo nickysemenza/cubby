@@ -13,9 +13,9 @@ export function useChunkedRecordQuery<TRecord extends Record<string, unknown>>({
 }: {
   ids: readonly string[];
   empty: TRecord;
-  // tRPC queryOptions carries specialized error/query-key generics that don't
+  // Transport queryOptions carry specialized error/query-key generics that don't
   // reduce cleanly to React Query's public UseQueryOptions type.
-  // biome-ignore lint/suspicious/noExplicitAny: intentional tRPC queryOptions boundary
+  // biome-ignore lint/suspicious/noExplicitAny: intentional queryOptions boundary
   queryOptions: (ids: string[]) => any;
 }): TRecord {
   const idsKey = useMemo(() => uniqueSortedIds(ids).join(","), [ids]);

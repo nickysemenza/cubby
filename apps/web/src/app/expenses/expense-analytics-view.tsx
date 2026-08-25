@@ -10,7 +10,6 @@ import {
   filterGetterFromSearch,
   soleValue,
 } from "~/entities/filters";
-import { useTRPC } from "~/integrations/trpc/react";
 import { formatCurrency } from "~/lib/utils";
 import { CostTypeDonut } from "./charts/cost-type-donut";
 import { CumulativeSpend } from "./charts/cumulative-spend";
@@ -22,6 +21,7 @@ import {
   TradeCostMatrixAggregate,
 } from "./charts/trade-cost-aggregate";
 import { VendorBreakdown } from "./charts/vendor-breakdown";
+import { expenseAnalyticsQueryOptions } from "./expense.functions";
 import {
   type ExpenseAnalyzeConfig,
   expenseAnalyzeConfigFromSearch,
@@ -56,7 +56,6 @@ const ExpenseAggregateExplorer = lazy(() =>
  * those same params (switching to Ledger afterwards shows the matching rows).
  */
 export function ExpenseAnalyticsView() {
-  const api = useTRPC();
   const search = route.useSearch();
   const navigate = route.useNavigate();
   const [selectedCostType, setSelectedCostType] = useState<string | null>(null);
@@ -74,7 +73,7 @@ export function ExpenseAnalyticsView() {
   }, [search]);
 
   const { data, isLoading } = useQuery({
-    ...api.expense.analytics.queryOptions(filters),
+    ...expenseAnalyticsQueryOptions(filters),
     staleTime: 60 * 1000,
   });
   const analyzeConfig = useMemo(

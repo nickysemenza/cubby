@@ -14,8 +14,8 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { useHydrated } from "~/hooks/useHydrated";
-import { useTRPC } from "~/integrations/trpc/react";
 import { authClient } from "~/lib/auth-client";
+import { problemsCountsQueryOptions } from "~/lib/problems.functions";
 import { cn } from "~/lib/utils";
 
 const pl = (n: number, sing: string, plur = `${sing}s`) =>
@@ -92,7 +92,6 @@ const PROBLEM_LABELS: Record<
 };
 
 export const ProblemsBadge = () => {
-  const api = useTRPC();
   const hydrated = useHydrated();
   const session = authClient.useSession();
   const enabled = hydrated && !!session.data?.user;
@@ -101,9 +100,7 @@ export const ProblemsBadge = () => {
   // boundary, so this joins the normal streamed batch without risking an
   // unauthenticated request or a second requestIdleCallback batch.
   const { data: count, isLoading } = useQuery({
-    ...api.problems.getCounts.queryOptions(),
-    staleTime: 5 * 60 * 1000,
-    enabled,
+    ...problemsCountsQueryOptions({ staleTime: 5 * 60 * 1000, enabled }),
   });
 
   // The query isn't prefetched during SSR, so the server always renders this

@@ -1,11 +1,11 @@
 import { unsafeUserId } from "@cubby/schemas/identifiers";
-import { createTestTRPCContext } from "~/server/api/trpc";
 import type { Database } from "~/server/db";
 import { executeEntity } from "~/server/entity-kernel";
 import type {
   EntityKernelEntity,
   EntityMutationCommand,
 } from "~/server/entity-kernel/contracts";
+import { createTestRequestContext } from "~/server/testing/request-context";
 
 // biome-ignore lint/suspicious/noExplicitAny: test callers deliberately expose each entity's schema-inferred wire shape
 type WireValue = any;
@@ -15,7 +15,7 @@ export function withEntityKernelMutations<T extends object>(
   entity: Exclude<EntityKernelEntity, "image">,
   db: Database,
 ) {
-  const baseContext = createTestTRPCContext(db, {
+  const baseContext = createTestRequestContext(db, {
     auth: { userId: unsafeUserId("test-user-id") },
   });
   if (!baseContext.actorContext) throw new Error("Test actor is required");

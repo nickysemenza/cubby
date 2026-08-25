@@ -11,9 +11,11 @@ import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { lazy, Suspense } from "react";
 import { useUpcAwareCreate } from "~/app/_components/products/use-upc-aware-create";
+import { locationSearchQueryOptions } from "~/app/locations/location.functions";
+import { productSearchQueryOptions } from "~/app/products/product.functions";
 import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { entityListQueryOptions } from "~/entities/entity-list.functions";
-import { useTRPC } from "~/integrations/trpc/react";
+import { searchFindQueryOptions } from "~/lib/search.functions";
 import {
   buildIngredientComboboxItem,
   buildLocationComboboxItem,
@@ -54,7 +56,6 @@ export interface WithEntitySearchProps<TId extends string = string> {
 export function WithIngredientSearch({
   children,
 }: WithEntitySearchProps<IngredientShortcode>) {
-  const api = useTRPC();
   const {
     searchQuery,
     onSearchChange,
@@ -79,7 +80,7 @@ export function WithIngredientSearch({
     enabled: enabled && !searchingByCode && searchQuery.trim() === "",
   });
   const { data: searchHits, isLoading: isSearchLoading } = useQuery({
-    ...api.search.find.queryOptions({
+    ...searchFindQueryOptions({
       query: searchQuery || "ingredient",
       entityTypes: ["ingredient"],
       limit: 20,
@@ -140,7 +141,6 @@ export function WithIngredientSearch({
 export function WithLocationSearch({
   children,
 }: WithEntitySearchProps<LocationShortcode>) {
-  const api = useTRPC();
   const {
     searchQuery,
     onSearchChange,
@@ -162,7 +162,7 @@ export function WithLocationSearch({
   const searchingByCode = parsedCode != null;
 
   const { data, isLoading } = useQuery({
-    ...api.location.search.queryOptions({
+    ...locationSearchQueryOptions({
       filters: { nameFilter: searchQuery },
       pagination,
       // Explicit: the list factory's default direction is `desc` (right for a
@@ -173,7 +173,7 @@ export function WithLocationSearch({
     enabled: enabled && !searchingByCode && searchQuery.trim() === "",
   });
   const { data: searchHits, isLoading: isSearchLoading } = useQuery({
-    ...api.search.find.queryOptions({
+    ...searchFindQueryOptions({
       query: searchQuery || "location",
       entityTypes: ["location"],
       limit: 20,
@@ -234,7 +234,6 @@ export function WithProductSearch({
   children,
   intent = "reference",
 }: WithEntitySearchProps<ProductShortcode> & { intent?: ProductPickerIntent }) {
-  const api = useTRPC();
   const {
     searchQuery,
     onSearchChange,
@@ -254,7 +253,7 @@ export function WithProductSearch({
   const searchingByCode = parsedCode != null;
 
   const { data, isLoading } = useQuery({
-    ...api.product.search.queryOptions({
+    ...productSearchQueryOptions({
       filters: { nameFilter: searchQuery },
       pagination,
     }),
@@ -309,7 +308,6 @@ export function WithProductSearch({
 export function WithRecipeSearch({
   children,
 }: WithEntitySearchProps<RecipeShortcode>) {
-  const api = useTRPC();
   const { searchQuery, onSearchChange } = useEntitySearch();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
 
@@ -325,7 +323,7 @@ export function WithRecipeSearch({
     enabled: enabled && !searchingByCode && searchQuery.trim() === "",
   });
   const { data: searchHits, isLoading: isSearchLoading } = useQuery({
-    ...api.search.find.queryOptions({
+    ...searchFindQueryOptions({
       query: searchQuery || "recipe",
       entityTypes: ["recipe"],
       limit: 20,
@@ -370,7 +368,6 @@ export function WithRecipeSearch({
 export function WithProjectSearch({
   children,
 }: WithEntitySearchProps<ProjectShortcode>) {
-  const api = useTRPC();
   const { searchQuery, onSearchChange } = useEntitySearch();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
 
@@ -387,7 +384,7 @@ export function WithProjectSearch({
     enabled: enabled && !searchingByCode && searchQuery.trim() === "",
   });
   const { data: searchHits, isLoading: isSearchLoading } = useQuery({
-    ...api.search.find.queryOptions({
+    ...searchFindQueryOptions({
       query: searchQuery || "project",
       entityTypes: ["project"],
       limit: 20,
@@ -433,7 +430,6 @@ export function WithProjectSearch({
 export function WithTaskSearch({
   children,
 }: WithEntitySearchProps<TaskShortcode>) {
-  const api = useTRPC();
   const { searchQuery, onSearchChange } = useEntitySearch();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
 
@@ -449,7 +445,7 @@ export function WithTaskSearch({
     enabled: enabled && !searchingByCode && searchQuery.trim() === "",
   });
   const { data: searchHits, isLoading: isSearchLoading } = useQuery({
-    ...api.search.find.queryOptions({
+    ...searchFindQueryOptions({
       query: searchQuery || "task",
       entityTypes: ["task"],
       limit: 20,

@@ -1,8 +1,14 @@
+import {
+  notionImportEventSchema,
+  type notionPreviewOut,
+} from "@cubby/schemas/import-recipe";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AlertCircle, Import, RotateCcw, Search } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
+import type { z } from "zod";
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
+import { recipePreviewNotionQueryOptions } from "~/app/recipes/recipe.functions";
 import { Row } from "~/components/layout/row";
 import { Stack } from "~/components/layout/stack";
 import { BulkProgressBar } from "~/components/ui/bulk-progress-bar";
@@ -13,13 +19,9 @@ import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
 import { Spinner } from "~/components/ui/spinner";
-import {
-  type RouterOutputs,
-  useTRPC,
-  useTRPCClient,
-} from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
+import { openWorkflowStream } from "~/lib/workflow-stream";
 import type { ImportResult } from "../cookbook-import/types";
 import { RecipeImportCard } from "../recipe-import-card";
 import {
@@ -30,7 +32,7 @@ import {
 
 // Sourced from the procedure's `.output(z.array(notionPreviewItem))` so this
 // can never drift from the server shape.
-type PreviewItem = RouterOutputs["recipe"]["previewNotionSync"][number];
+type PreviewItem = z.output<typeof notionPreviewOut>[number];
 
 /**
  * Import recipes from the Notion "Recipes" database. Mirrors the cookbook
@@ -41,8 +43,6 @@ type PreviewItem = RouterOutputs["recipe"]["previewNotionSync"][number];
  * Re-import is keyed on the Notion page id.
  */
 export function NotionImport() {
-  const api = useTRPC();
-  const client = useTRPCClient();
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [results, setResults] = useState<Map<string, ImportResult>>(new Map());
@@ -57,12 +57,11 @@ export function NotionImport() {
   // Notion previews are expensive (a complete database read and parse), so they
   // remain fresh for this session. Refresh is deliberate; successful imports
   // invalidate this cache so statuses reflect the committed recipes.
-  const preview = useQuery(
-    api.recipe.previewNotionSync.queryOptions(undefined, {
-      staleTime: Infinity,
-      gcTime: Infinity,
-    }),
-  );
+  const preview = useQuery({
+    ...recipePreviewNotionQueryOptions(),
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
   // Per-page outcome streamed back from importNotionSyncStream, keyed by page id.
   const { start: startNotionImport } = useBulkStream<
     | {
@@ -115,7 +114,15 @@ export function NotionImport() {
     // One streamed request: the server upserts each page (in its own tx) and does
     // a single batched recompute; per-page results + overall progress stream back.
     await startNotionImport(
-      () => client.recipe.importNotionSyncStream.mutate({ pageIds }),
+      (signal) =>
+        openWorkflowStream({
+          operation: "recipe.importNotionSyncStream",
+          kind: "mutation",
+          url: "/api/recipe-stream/import-notion",
+          input: { pageIds },
+          eventSchema: notionImportEventSchema,
+          signal,
+        }),
       {
         onItem: (item) =>
           setResults((m) =>
@@ -132,7 +139,7 @@ export function NotionImport() {
           if (r.succeeded > 0) {
             invalidateQueryRoots(queryClient, invalidatesFor("recipe"));
             invalidateQueryRoots(queryClient, [
-              api.recipe.previewNotionSync.queryKey(),
+              recipePreviewNotionQueryOptions().queryKey,
             ]);
           }
         },
@@ -144,7 +151,7 @@ export function NotionImport() {
     );
     setImporting(false);
     setProgress(null);
-  }, [selected, client, startNotionImport, queryClient, api]);
+  }, [selected, startNotionImport, queryClient]);
 
   const summaryCounts = useMemo(() => {
     const c = { new: 0, update: 0, unchanged: 0, needs: 0 };

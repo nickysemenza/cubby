@@ -25,6 +25,13 @@ import {
 } from "~/app/_components/data-table/table-features";
 import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import {
+  attachProductComponentsMutationOptions,
+  detachProductComponentsMutationOptions,
+  kitMembershipQueryOptions,
+  productComponentsQueryOptions,
+  productSearchQueryOptions,
+} from "~/app/products/product.functions";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -44,7 +51,6 @@ import {
   EmptyTitle,
 } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
-import { useTRPC } from "~/integrations/trpc/react";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { invalidatesFor } from "~/lib/query-keys";
 
@@ -207,7 +213,6 @@ function AddComponentsDialog({
   parentProductId: string;
   attachedIds: Set<string>;
 }) {
-  const api = useTRPC();
   const [selected, setSelected] = useState<Map<ProductShortcode, number>>(
     new Map(),
   );
@@ -215,7 +220,7 @@ function AddComponentsDialog({
   const [search] = useDebouncedValue(searchInput, { wait: 300 });
 
   const searchQuery = useQuery({
-    ...api.product.search.queryOptions({
+    ...productSearchQueryOptions({
       filters: { nameFilter: search.trim() || undefined },
       pagination: { pageIndex: 0, pageSize: SEARCH_PAGE_SIZE },
       sort: [{ orderBy: "name", direction: "asc" }],
@@ -243,7 +248,7 @@ function AddComponentsDialog({
     onOpenChange(next);
   };
   const attach = useActionMutation({
-    mutationFn: api.product.attachComponents.mutationOptions,
+    mutationFn: attachProductComponentsMutationOptions,
     success: (result) =>
       `Added ${result.changed} component${result.changed === 1 ? "" : "s"}`,
     invalidateKeys: invalidatesFor("product", "component"),
@@ -410,14 +415,11 @@ function AddComponentsDialog({
 }
 
 export function ProductKitComponents({ productId }: { productId: string }) {
-  const api = useTRPC();
   const [addOpen, setAddOpen] = useState(false);
   const componentsQuery = useQuery(
-    api.product.components.queryOptions({ parentProductId: productId }),
+    productComponentsQueryOptions({ parentProductId: productId }),
   );
-  const membershipQuery = useQuery(
-    api.product.kitMembership.queryOptions({ productId }),
-  );
+  const membershipQuery = useQuery(kitMembershipQueryOptions({ productId }));
   const components = componentsQuery.data ?? EMPTY_COMPONENTS;
   const membership = membershipQuery.data ?? EMPTY_MEMBERSHIP;
   const componentRows = useMemo<ProductRow[]>(
@@ -459,12 +461,12 @@ export function ProductKitComponents({ productId }: { productId: string }) {
   );
 
   const detachComponent = useActionMutation({
-    mutationFn: api.product.detachComponents.mutationOptions,
+    mutationFn: detachProductComponentsMutationOptions,
     success: "Component removed",
     invalidateKeys: invalidatesFor("product", "component"),
   });
   const detachMembership = useActionMutation({
-    mutationFn: api.product.detachComponents.mutationOptions,
+    mutationFn: detachProductComponentsMutationOptions,
     success: "Removed from kit",
     invalidateKeys: invalidatesFor("product", "component"),
   });

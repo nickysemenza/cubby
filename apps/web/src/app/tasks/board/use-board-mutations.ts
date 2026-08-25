@@ -7,12 +7,18 @@ import type {
   TaskBoardOut,
   TaskBulkReorderInput,
   TaskOut,
+  taskFiltersSchema,
 } from "@cubby/schemas/project";
 import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import type { z } from "zod";
+import {
+  taskBoardQueryOptions,
+  taskBulkReorderMutationOptions,
+  taskChartDataQueryOptions,
+} from "~/app/tasks/task.functions";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { type RouterInputs, useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
   cancelQueryRoots,
@@ -22,13 +28,13 @@ import {
 import type { TaskBoardPatch } from "./board-types";
 
 /**
- * The board's `chartData` filters — the tRPC *input* type (branded ids widen to
+ * The board's `chartData` filters — the workflow *input* type (branded ids widen to
  * `string`), so `projectSubtreeTasksFilters` and a bare `{ topLevelOnly: true }`
  * both fit. The same value keys the query and this optimistic patch. Not
  * exported — only `BoardCacheTarget` (below) is a public surface now that
  * `TaskBoard`'s callers pass a `BoardCacheTarget`, not a bare filters object.
  */
-type BoardTaskFilters = RouterInputs["task"]["chartData"];
+type BoardTaskFilters = z.input<typeof taskFiltersSchema>;
 
 /**
  * Which query cache `useBoardMutations` optimistically patches — the project
@@ -87,12 +93,11 @@ function writeFlatList(
  * `onSettled` invalidation.
  */
 export function useBoardMutations(target: BoardCacheTarget) {
-  const api = useTRPC();
   const queryClient = useQueryClient();
   const queryKey: QueryKey =
     target.source === "chartData"
-      ? api.task.chartData.queryKey(target.filters)
-      : api.task.board.queryKey(target.input);
+      ? taskChartDataQueryOptions(target.filters).queryKey
+      : taskBoardQueryOptions(target.input).queryKey;
 
   const patchTaskFields = (
     task: TaskOut,
@@ -167,7 +172,7 @@ export function useBoardMutations(target: BoardCacheTarget) {
   // optional axis move on the dragged card. Optimistically patches every
   // affected id in the same cache so the manual prefix re-orders instantly,
   // then reconciles via onSettled.
-  const reorderBase = api.task.bulkReorder.mutationOptions();
+  const reorderBase = taskBulkReorderMutationOptions();
   const reorder = useMutation({
     mutationKey: reorderBase.mutationKey,
     mutationFn: reorderBase.mutationFn,

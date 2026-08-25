@@ -13,13 +13,11 @@ import {
 } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
-import { useTRPC } from "~/integrations/trpc/react";
+import { auditCategoriesMutationOptions } from "~/lib/ai.functions";
 
 export function CategoryAudit() {
-  const api = useTRPC();
-
   const auditMutation = useActionMutation({
-    mutationFn: api.ai.auditCategories.mutationOptions,
+    mutationFn: auditCategoriesMutationOptions,
   });
 
   const result = auditMutation.data;
@@ -36,7 +34,7 @@ export function CategoryAudit() {
             </CardDescription>
           </Stack>
           <Button
-            onClick={() => auditMutation.mutate()}
+            onClick={() => auditMutation.mutate(undefined)}
             disabled={auditMutation.isPending}
           >
             {auditMutation.isPending ? (

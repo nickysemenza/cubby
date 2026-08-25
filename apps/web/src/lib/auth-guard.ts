@@ -41,7 +41,7 @@ export const getGuardSession = createServerFn({ method: "GET" }).handler(
 // pre-resolve (`isPending`) window on a cold client start never bounces the
 // (effectively always logged-in) owner to sign-in. This is a per-tab module var,
 // never shared across users; the real security boundary is unchanged — SSR gates
-// direct/refresh loads via `getGuardSession`, and every tRPC `protectedProcedure`
+// direct/refresh loads via `getGuardSession`, and every protected Start function
 // re-checks the session server-side.
 let lastResolvedAuthed = true;
 

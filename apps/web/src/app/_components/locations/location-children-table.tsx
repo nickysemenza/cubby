@@ -1,3 +1,4 @@
+import { locationSubtreeQueryOptions } from "~/app/locations/location.functions";
 /**
  * The Table-view rendering of a location's sub-locations: one row per
  * descendant, twirling down through every level in a single fetch.
@@ -14,7 +15,6 @@ import { ChevronsDownUp, ChevronsUpDown } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
-import { useTRPC } from "~/integrations/trpc/react";
 import { formatCurrency } from "~/lib/utils";
 import {
   createFilterableSelectColumn,
@@ -61,14 +61,13 @@ export function LocationChildrenTable({
 }: {
   locationId: LocationShortcode;
 }) {
-  const api = useTRPC();
   const helper = useMemo(() => createCubbyColumnHelper<LocationTreeRow>(), []);
 
   const {
     data = NO_LOCATIONS,
     isLoading,
     error,
-  } = useQuery(api.location.subtree.queryOptions({ shortcode: locationId }));
+  } = useQuery(locationSubtreeQueryOptions({ shortcode: locationId }));
 
   const rows = useMemo(() => toRows(data), [data]);
 

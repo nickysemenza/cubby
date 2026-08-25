@@ -16,7 +16,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Skeleton } from "~/components/ui/skeleton";
-import { useTRPC } from "~/integrations/trpc/react";
+import { collectionDetailQueryOptions } from "./collection.functions";
 import {
   CopyableShortcode,
   ProductPlacementsPopover,
@@ -55,11 +55,10 @@ export function CollectionDetailPage({
   page: number;
   onSearchChange: (next: { q?: string; page?: number }) => void;
 }) {
-  const api = useTRPC();
   const rootsHeadingId = useId();
   const productsHeadingId = useId();
   const result = useQuery(
-    api.collection.detail.queryOptions({
+    collectionDetailQueryOptions({
       collection,
       search,
       pagination: { pageIndex: page - 1, pageSize: PAGE_SIZE },

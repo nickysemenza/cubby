@@ -88,7 +88,7 @@ const handler = {
     // Entry span at the very top of our handler body. The CF platform's auto
     // root span covers the whole invocation incl. queue/dispatch BEFORE our code
     // runs; this child measures only time inside fetch(). So when a trace shows
-    // a multi-second root with a sub-second tRPC child, the gap localizes here:
+    // a multi-second root with a sub-second Start child, the gap localizes here:
     //  - cf.fetch ≈ root  → the time is in our code; the children below say where
     //  - cf.fetch ≪ root  → it's platform queue/dispatch (cold isolate, request
     //                       waiting for a worker) or response-body flush — not us
@@ -99,7 +99,7 @@ const handler = {
     const ray = request.headers.get("cf-ray") ?? undefined;
 
     // Tag the whole request, not just the three captureException sites in this
-    // file: an exception thrown deep inside a tRPC procedure is captured by
+    // file: an exception thrown deep inside a Start operation is captured by
     // Sentry's own instrumentation and never passes through here.
     // `Sentry.setTag` writes to the *isolation* scope, so this depends on
     // withSentry giving each request its own — it does in @sentry/cloudflare

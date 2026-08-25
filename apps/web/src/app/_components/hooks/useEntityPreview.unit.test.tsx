@@ -12,10 +12,6 @@ vi.mock("@tanstack/react-query", async (importOriginal) => ({
   useQueryClient: () => queryClient,
 }));
 
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPC: () => ({}),
-}));
-
 vi.mock("~/entities/entity-query", () => ({
   entityPreviewQueryOptions: (entity: string, id: string) => ({
     queryKey: [[entity, "detail"], { shortcode: id }],

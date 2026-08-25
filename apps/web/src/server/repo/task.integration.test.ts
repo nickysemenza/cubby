@@ -6,10 +6,8 @@ import {
 } from "@cubby/schemas/identifiers";
 import { projectCreateInput, taskCreateInput } from "@cubby/schemas/project";
 import { withTestDb } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { householdDaysAgo, householdDaysFromNow } from "~/lib/household-date";
-import { taskRouter } from "~/server/api/routers/task";
-import { createTestCaller } from "~/server/api/trpc";
 import { getAuditLog } from "~/server/repo/audit-log";
 import { createProduct, deleteProducts } from "~/server/repo/product";
 import {
@@ -30,6 +28,11 @@ import {
   updateTask,
 } from "~/server/repo/task";
 import { listActionableTasks } from "~/server/repo/task/actionable";
+import {
+  taskBulkMoveWorkflow,
+  taskBulkSetStatusWorkflow,
+  taskListActionableWorkflow,
+} from "~/server/workflows/task.server";
 import { makeProductInput } from "./repo.fixtures";
 
 describe("task repository — listActionableTasks", () => {
@@ -623,15 +626,8 @@ describe("task repository — listActionableTasks", () => {
   });
 });
 
-describe("task router — listActionable", () => {
+describe("task workflow — listActionable", () => {
   const ctx = withTestDb();
-  let taskCaller: ReturnType<
-    typeof createTestCaller<(typeof taskRouter)["_def"]["record"]>
-  >;
-
-  beforeEach(() => {
-    taskCaller = createTestCaller(taskRouter, ctx.db);
-  });
 
   it("returns a newly created task as actionable", async () => {
     await createTask(
@@ -640,10 +636,10 @@ describe("task router — listActionable", () => {
       ctx.actor,
     );
 
-    const result = await taskCaller.listActionable();
+    const result = await taskListActionableWorkflow(ctx.db, undefined);
 
-    // The schema<->repo pin is the CALL, not a re-parse: the router declares
-    // `.output(strictOutput(actionableTasksOut))` and tRPC runs that parser, so
+    // The schema-to-repo pin is the workflow call, whose Start adapter parses
+    // `actionableTasksOut`, so
     // `result` has already been validated by the time we see it. This matters
     // because `actionableTaskOut` re-declares `taskOut`'s shape by hand (see
     // the note on it in packages/schemas/src/project.ts) — a field the repo
@@ -1588,15 +1584,8 @@ describe("task repository — setTasksStatus (bulk status write)", () => {
   });
 });
 
-describe("task router — bulkMove / bulkSetStatus", () => {
+describe("task workflow — bulkMove / bulkSetStatus", () => {
   const ctx = withTestDb();
-  let taskCaller: ReturnType<
-    typeof createTestCaller<(typeof taskRouter)["_def"]["record"]>
-  >;
-
-  beforeEach(() => {
-    taskCaller = createTestCaller(taskRouter, ctx.db);
-  });
 
   it("bulkMove returns items + sideEffects", async () => {
     const { output: projectA } = await createProject(
@@ -1619,10 +1608,11 @@ describe("task router — bulkMove / bulkSetStatus", () => {
       ctx.actor,
     );
 
-    const result = await taskCaller.bulkMove({
-      ids: [t.id],
-      projectId: projectB.id,
-    });
+    const result = await taskBulkMoveWorkflow(
+      ctx.db,
+      { ids: [t.id], projectId: projectB.id },
+      ctx.actor,
+    );
     expect(result.items.map((i) => i.projectId)).toEqual([projectB.id]);
     expect(result.sideEffects).toBeDefined();
   });
@@ -1634,10 +1624,11 @@ describe("task router — bulkMove / bulkSetStatus", () => {
       ctx.actor,
     );
 
-    const result = await taskCaller.bulkSetStatus({
-      ids: [t.id],
-      status: "done",
-    });
+    const result = await taskBulkSetStatusWorkflow(
+      ctx.db,
+      { ids: [t.id], status: "done" },
+      ctx.actor,
+    );
     expect(result.items.map((i) => i.status)).toEqual(["done"]);
     expect(result.sideEffects).toBeDefined();
   });

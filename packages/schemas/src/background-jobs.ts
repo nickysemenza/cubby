@@ -234,6 +234,10 @@ export const backgroundBatchBrowserSummarySchema =
     metadata: z.json().nullable(),
   });
 
+export const backgroundBatchBrowserListOutSchema = z.array(
+  backgroundBatchBrowserSummarySchema,
+);
+
 export type BackgroundBatchSummary = z.infer<
   typeof backgroundBatchSummarySchema
 >;
@@ -255,6 +259,11 @@ export const backgroundJobSummarySchema = z.object({
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });
+
+export const backgroundJobBrowserSummarySchema =
+  backgroundJobSummarySchema.extend({
+    payload: z.json(),
+  });
 
 export type BackgroundJobSummary = z.infer<typeof backgroundJobSummarySchema>;
 
@@ -295,6 +304,11 @@ export const backgroundBatchJobsOutSchema = z.object({
   pageSize: z.number().int().min(1).max(100),
 });
 
+export const backgroundBatchBrowserJobsOutSchema =
+  backgroundBatchJobsOutSchema.extend({
+    jobs: z.array(backgroundJobBrowserSummarySchema),
+  });
+
 export type BackgroundBatchJobsOut = z.infer<
   typeof backgroundBatchJobsOutSchema
 >;
@@ -309,4 +323,8 @@ export const backgroundDrainInputSchema = z.object({
 
 export const backgroundDrainOutSchema = z.object({
   processed: z.number().int().nonnegative(),
+});
+
+export const backgroundJobActionOutSchema = z.object({
+  ok: z.literal(true),
 });

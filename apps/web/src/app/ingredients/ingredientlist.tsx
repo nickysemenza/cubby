@@ -13,6 +13,7 @@ import {
   useHydratedProductFood,
   useProductFoodSummaries,
 } from "~/app/_components/products/product-food-summaries";
+import { mergeIngredients } from "~/app/ingredients/ingredient.functions";
 import { Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
@@ -25,7 +26,6 @@ import {
 import { EntityIcon } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListQueryOptions } from "~/entities/entity-list.functions";
-import { useTRPCClient } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
@@ -127,7 +127,6 @@ function RecipeUsageCell({ ingredient }: { ingredient: IngredientListItem }) {
 }
 
 export function IngredientList() {
-  const trpcClient = useTRPCClient();
   const queryClient = useQueryClient();
   const columnHelper = useMemo(
     () => createCubbyColumnHelper<IngredientListItem>(),
@@ -279,7 +278,7 @@ export function IngredientList() {
       mergeRows?.find((i) => i.id === keepId)?.name ?? "ingredient";
     setMergePending(true);
     try {
-      const result = await trpcClient.ingredient.merge.mutate({
+      const result = await mergeIngredients({
         keepId,
         mergeIds: aliasIds,
       });

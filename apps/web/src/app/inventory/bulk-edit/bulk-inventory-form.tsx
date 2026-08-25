@@ -26,11 +26,11 @@ import {
   useInventoryInvalidation,
   useUpcLookup,
 } from "~/app/_components/inventory/hooks";
+import { bulkProcessInventoryMutationOptions } from "~/app/inventory/inventory.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { entityListQueryOptions } from "~/entities/entity-list.functions";
-import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 
 const inventoryItemSchema = inventoryItemWithIdFields;
@@ -49,7 +49,6 @@ interface BulkInventoryFormProps {
 export default function BulkInventoryForm({
   initialLocationId,
 }: BulkInventoryFormProps) {
-  const api = useTRPC();
   const invalidateInventory = useInventoryInvalidation();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -170,7 +169,7 @@ export default function BulkInventoryForm({
   };
 
   const bulkProcessMutation = useMutation(
-    api.inventory.bulkProcess.mutationOptions({
+    bulkProcessInventoryMutationOptions({
       onSuccess: (data) => {
         // Force the next fetch to reseed the form so newly-created items pick
         // up their real ids (a same-session re-save otherwise re-creates them).

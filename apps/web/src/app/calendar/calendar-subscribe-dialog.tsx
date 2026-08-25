@@ -1,6 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import {
+  calendarFeedQueryKey,
+  calendarFeedQueryOptions,
+  calendarRotateFeedMutationOptions,
+} from "~/app/calendar/calendar.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button, buttonVariants } from "~/components/ui/button";
 import {
@@ -12,7 +17,6 @@ import {
   DialogTrigger,
 } from "~/components/ui/dialog";
 import { StatusText } from "~/components/ui/status-text";
-import { useTRPC } from "~/integrations/trpc/react";
 import { copyText } from "~/lib/clipboard";
 import { cn } from "~/lib/utils";
 
@@ -73,14 +77,13 @@ function FeedRow({
 }
 
 export function CalendarSubscribeDialog() {
-  const api = useTRPC();
   const [open, setOpen] = useState(false);
   // Deliberately NOT `session.user.calendarFeedToken`: that copy comes from the
   // signed cookie cache and lags by up to 5 minutes, so a just-created feed
   // still reads as null there — and the empty state's "Create feed" button
   // rotates, which would break a subscription the user had already added.
   const feed = useQuery({
-    ...api.calendar.getFeed.queryOptions(),
+    ...calendarFeedQueryOptions(),
     enabled: open,
   });
   const [rotated, setRotated] = useState<string | null>(null);
@@ -88,10 +91,10 @@ export function CalendarSubscribeDialog() {
   const hadFeed = (feed.data?.token ?? null) !== null;
 
   const rotate = useActionMutation({
-    mutationFn: api.calendar.rotateFeed.mutationOptions,
+    mutationFn: calendarRotateFeedMutationOptions,
     // Without this the cache still holds the previous token, so closing and
     // reopening the dialog would offer a URL that has already stopped working.
-    invalidateKeys: [api.calendar.getFeed.queryKey()],
+    invalidateKeys: [calendarFeedQueryKey],
     success: hadFeed
       ? "Calendar feed URLs regenerated"
       : "Calendar feed created",

@@ -1,7 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
-import { createTestTRPCContext } from "~/server/api/trpc";
 import {
   auditLog,
   ingredient,
@@ -11,6 +10,7 @@ import {
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
+import { createTestRequestContext } from "~/server/testing/request-context";
 import { upsertCookbook } from "./cookbook";
 import { getDb, insertAndReturn, notDeleted } from "./database-helpers";
 import { deleteMeals, getMealByID } from "./meal";
@@ -211,7 +211,7 @@ describe("recipe crud repo", () => {
       // Persist totals via the real costing engine (no fdc_id, so no USDA gap —
       // `complete: true`, costTotal exactly $4, caloriesTotal 0 for lack of
       // nutrition data).
-      await createTestTRPCContext(ctx.db, {
+      await createTestRequestContext(ctx.db, {
         auth: { userId: ctx.actor.userId },
       }).services.recipeCosting.recompute([recipe.entityId]);
 

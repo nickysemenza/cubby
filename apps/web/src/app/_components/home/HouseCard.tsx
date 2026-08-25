@@ -2,6 +2,7 @@ import type { TaskSummaryOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Hammer } from "lucide-react";
+import { taskSummaryQueryOptions } from "~/app/tasks/task.functions";
 import { Grid } from "~/components/layout";
 import {
   CardActionLink,
@@ -10,7 +11,6 @@ import {
 import { Skeleton } from "~/components/ui/skeleton";
 import { StatTile } from "~/components/ui/stat-tile";
 import { useHydrated } from "~/hooks/useHydrated";
-import { useTRPC } from "~/integrations/trpc/react";
 import { authClient } from "~/lib/auth-client";
 
 /** The Tasks page views each stat drills into — same mapping the /tasks stats
@@ -34,14 +34,13 @@ const STATS: HouseStat[] = [
 ];
 
 function useTaskSummary() {
-  const api = useTRPC();
   const session = authClient.useSession();
   // Hydration-gated auth (see useHydrated): keeps SSR and the first client
   // render identical, and stops the query firing Unauthorized while the
   // session resolves.
   const isAuthenticated = useHydrated() && !!session.data?.user;
   return useQuery({
-    ...api.task.summary.queryOptions(),
+    ...taskSummaryQueryOptions(),
     enabled: isAuthenticated,
   });
 }

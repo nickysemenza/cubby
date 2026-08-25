@@ -18,7 +18,7 @@ import {
   usdaFoodDetailQueryOptions,
   usdaFoodListQueryOptions,
 } from "~/entities/usda.functions";
-import { useTRPCClient } from "~/integrations/trpc/react";
+import { suggestUsdaFoodForBrowser } from "~/lib/ai.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { parseUsdaFoodRef } from "~/lib/parse-usda-food-ref";
 import { type DedupedFood, dedupeUsdaFoodsByUpc } from "~/lib/usda-food-stats";
@@ -65,7 +65,6 @@ export function UsdaFoodSearchField({
   label = "Search USDA food",
   onSelect,
 }: UsdaFoodSearchFieldProps) {
-  const trpcClient = useTRPCClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [scope, setScope] = useState<SearchScope>("all");
   const [value, setValue] = useState<ComboboxItem | null>(null);
@@ -148,7 +147,7 @@ export function UsdaFoodSearchField({
     if (!name) return;
     setIsSuggesting(true);
     try {
-      const result = await trpcClient.ai.suggestUsdaFood.mutate({
+      const result = await suggestUsdaFoodForBrowser({
         ingredientName: name,
       });
       if (result.food) {
@@ -168,7 +167,7 @@ export function UsdaFoodSearchField({
     } finally {
       setIsSuggesting(false);
     }
-  }, [initialQuery, trpcClient, applyFood]);
+  }, [initialQuery, applyFood]);
 
   const canSuggest = !!initialQuery?.trim();
 

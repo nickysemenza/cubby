@@ -101,7 +101,7 @@ export const productComponentsOut = z.array(productComponentOut);
  *
  * A tool whose declared output root is a bare array is unusable over MCP: the
  * SDK re-validates `structuredContent` against an object, so the array root
- * that serves the tRPC callers fine failed EVERY `list_product_components`
+ * that serves browser callers fine failed EVERY `list_product_components`
  * call. The router keeps returning the array — only the MCP boundary wraps.
  */
 export const productComponentsMcpOut =

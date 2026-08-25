@@ -23,7 +23,7 @@ describe("operation recorder", () => {
     vi.unstubAllGlobals();
   });
 
-  it("records tRPC fetches and successful cache reuse", async () => {
+  it("records Start fetches and successful cache reuse", async () => {
     const client = createClient();
     const uninstall = installOperationRecorder(client);
     const options = {
@@ -35,7 +35,7 @@ describe("operation recorder", () => {
     const observer = new QueryObserver(client, options);
     const unsubscribe = observer.subscribe(() => undefined);
 
-    expect(snapshot().queries["trpc:project.list"]).toMatchObject({
+    expect(snapshot().queries["client:project.list"]).toMatchObject({
       fetches: 1,
       reuses: 1,
       errors: 0,

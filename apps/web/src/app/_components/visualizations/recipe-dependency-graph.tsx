@@ -14,8 +14,8 @@ import {
   useRef,
   useState,
 } from "react";
+import { recipeDependencyGraphQueryOptions } from "~/app/recipes/recipe.functions";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
-import { useTRPC } from "~/integrations/trpc/react";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizOverlay, VizTooltip } from "./viz-overlay";
 
@@ -46,9 +46,8 @@ export function RecipeDependencyGraph({
   cookbookId?: CookbookShortcode;
   hideUnconnected: boolean;
 }) {
-  const api = useTRPC();
   const { data, isLoading } = useQuery(
-    api.recipe.getDependencyGraph.queryOptions({ cookbookId }),
+    recipeDependencyGraphQueryOptions({ cookbookId }),
   );
 
   // Restrict to nodes that participate in an edge when asked — most recipes have

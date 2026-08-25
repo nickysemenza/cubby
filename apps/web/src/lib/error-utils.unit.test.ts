@@ -48,7 +48,7 @@ describe("getAppErrorDetails", () => {
     ).toBeUndefined();
   });
 
-  it("extracts tRPC metadata", () => {
+  it("extracts structured transport metadata", () => {
     expect(
       getAppErrorDetails({
         message: "Product no longer exists",

@@ -66,7 +66,7 @@ export type Book = {
 /**
  * Input to the `recipe.extractCookbookChunk` proxy (camelCased WASM request).
  * Sourced from the procedure's `chunkRequestInput` schema so it can't drift
- * from the tRPC boundary. `escalate` asks the server-owned proxy for the
+ * from the workflow boundary. `escalate` asks the server-owned proxy for the
  * stronger escalation model — set by the Rust driver only after the default
  * model returned unparseable output.
  */

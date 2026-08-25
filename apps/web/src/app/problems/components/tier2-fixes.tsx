@@ -4,10 +4,11 @@ import type {
 } from "@cubby/schemas/problems";
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
 import { EntityMergeDialog } from "~/app/_components/merge/entity-merge-dialog";
+import { mergeProductsMutationOptions } from "~/app/products/product.functions";
+import { mergeVendorsMutationOptions } from "~/app/vendors/vendor.functions";
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { useTRPC } from "~/integrations/trpc/react";
 import { invalidatesFor } from "~/lib/query-keys";
 
 const deleteProduct = entityMutationOptionsFactory("product", "delete");
@@ -85,9 +86,8 @@ export function DuplicateVendorMergeFix({
   variant: DuplicateVendor;
   close: () => void;
 }) {
-  const api = useTRPC();
   const merge = useProblemCardMutation({
-    mutationFn: api.vendor.merge.mutationOptions,
+    mutationFn: mergeVendorsMutationOptions,
     // Now that the merge reports what it moved, say so: "Merged into Amazon"
     // gave no way to tell a no-op merge from one that repointed 40 purchases.
     success: ({ vendor, mergeSummary }) => {
@@ -153,9 +153,8 @@ export function DuplicateProductMergeFix({
   variant: DuplicateProductIdentity;
   close: () => void;
 }) {
-  const api = useTRPC();
   const merge = useProblemCardMutation({
-    mutationFn: api.product.merge.mutationOptions,
+    mutationFn: mergeProductsMutationOptions,
     success: (result) => `Merged into ${result.product.name}`,
     invalidateKeys: invalidatesFor("product", "merge"),
     onSuccess: close,

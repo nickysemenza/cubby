@@ -21,6 +21,11 @@ import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
+import {
+  productProjectUsesQueryOptions,
+  setProductProjectUsesMutationOptions,
+} from "~/app/products/product.functions";
+import { projectSetToolUsageMutationOptions } from "~/app/projects/project.functions";
 import { ProjectMark } from "~/app/projects/project-mark";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -41,7 +46,6 @@ import {
   EmptyTitle,
 } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
-import { useTRPC } from "~/integrations/trpc/react";
 import { invalidatesFor } from "~/lib/query-keys";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { formatCurrency } from "~/lib/utils";
@@ -77,13 +81,12 @@ const HIDDEN_RELATED_COLUMNS = {
  * attaches, which could half-apply and would log N entries for one action.
  */
 export function ProductProjectUses({ productId }: { productId: string }) {
-  const api = useTRPC();
   const [editing, setEditing] = useState(false);
-  const query = useQuery(api.product.projectUses.queryOptions({ productId }));
+  const query = useQuery(productProjectUsesQueryOptions({ productId }));
   const data = query.data;
 
   const detach = useActionMutation({
-    mutationFn: api.project.setToolUsage.mutationOptions,
+    mutationFn: projectSetToolUsageMutationOptions,
     success: "Removed from project",
     invalidateKeys: invalidatesFor("project", "resource"),
   });
@@ -262,7 +265,6 @@ function ProjectUsesDialog({
   onOpenChange: (open: boolean) => void;
   selectedIds: string[];
 }) {
-  const api = useTRPC();
   const { rows, isLoading } = useProjectOptions();
   const [search, setSearch] = useState("");
   // Seeded from the server set each time the dialog opens, so a cancelled edit
@@ -284,7 +286,7 @@ function ProjectUsesDialog({
   };
 
   const save = useActionMutation({
-    mutationFn: api.product.setProjectUses.mutationOptions,
+    mutationFn: setProductProjectUsesMutationOptions,
     success: "Project uses updated",
     invalidateKeys: invalidatesFor("project", "resource"),
     onSuccess: () => resetAndClose(false),

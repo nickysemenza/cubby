@@ -21,7 +21,7 @@ interface MoveToProjectDialogProps {
   /** Include an explicit "No project" option. Defaults to true — both
    * task and expense `projectId` are nullable. */
   allowNoProject?: boolean;
-  /** Runs the actual mutation — kept caller-owned so this dialog has no tRPC
+  /** Runs the actual mutation — kept caller-owned so this dialog has no transport
    * shape coupling and works for both `task.bulkMove` and `expense.bulkMove`. */
   onConfirm: (projectId: ProjectShortcode | null) => Promise<void>;
   isPending: boolean;

@@ -1,4 +1,5 @@
 import type { CookbookShortcode } from "@cubby/schemas/identifiers";
+import { cookbookReprocessEventSchema } from "@cubby/schemas/import-recipe";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
@@ -24,9 +25,9 @@ import { cookbookDetailQueryOptions } from "~/entities/cookbook.functions";
 import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { useTabParam } from "~/hooks/useTabParam";
-import { useTRPCClient } from "~/integrations/trpc/react";
 import { shortcodeHead } from "~/lib/page-title";
 import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
+import { openWorkflowStream } from "~/lib/workflow-stream";
 
 const searchSchema = z.object({
   // Active tab, deep-linkable. Default ("recipes") is omitted from the URL.
@@ -94,22 +95,29 @@ function CookbookDetailBody({ cookbook }: { cookbook: CookbookSummary }) {
 
   // Reprocess streams progress server-side (one request) via useBulkStream. The
   // RefreshCw button drives it; a live bar shows beneath the hero while it runs.
-  const client = useTRPCClient();
   const queryClient = useQueryClient();
   const reprocess = useBulkStream<
     never,
-    { reprocessed: number; importableExtras: string[] }
+    { reprocessed: number; importableExtras: number }
   >();
   // Takes the id rather than closing over it: this is declared above the
   // "not resolved yet" guard below, where `cookbookId` is still optional.
   const runReprocess = (id: CookbookShortcode) =>
     reprocess.start(
-      () => client.recipe.reprocessCookbook.mutate({ cookbookId: id }),
+      (signal) =>
+        openWorkflowStream({
+          operation: "recipe.reprocessCookbook",
+          kind: "mutation",
+          url: "/api/recipe-stream/reprocess-cookbook",
+          input: { cookbookId: id },
+          eventSchema: cookbookReprocessEventSchema,
+          signal,
+        }),
       {
         successToast: ({ reprocessed, importableExtras }) => {
           const extra =
-            importableExtras.length > 0
-              ? ` (${importableExtras.length} more in the source not yet imported)`
+            importableExtras > 0
+              ? ` (${importableExtras} more in the source not yet imported)`
               : "";
           return `Reprocessed ${reprocessed} recipe${reprocessed === 1 ? "" : "s"} from ${name}${extra}`;
         },

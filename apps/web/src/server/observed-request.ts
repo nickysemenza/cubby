@@ -51,7 +51,7 @@ export function isObservedCancellation(error: unknown): boolean {
 }
 
 export async function observeRequest<T>(options: {
-  system: "start" | "trpc";
+  system: "start";
   method: string;
   type: "query" | "mutation" | "subscription";
   origin: RequestOrigin;

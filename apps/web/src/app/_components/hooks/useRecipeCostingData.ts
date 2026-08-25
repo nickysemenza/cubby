@@ -4,15 +4,14 @@ import type { RecipeGraphOut, RecipeOut } from "@cubby/schemas/recipe";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { chunk, keyBy } from "es-toolkit";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useTRPC } from "~/integrations/trpc/react";
+import { ingredientGetManyByIDsQueryOptions } from "~/app/ingredients/ingredient.functions";
+import { recipeGetManyByIDsQueryOptions } from "~/app/recipes/recipe.functions";
 import {
   collectIngredientIds,
   collectSubRecipeIds,
   recipeLinkSignature,
 } from "~/lib/recipe-graph";
 import { ID_CHUNK_SIZE } from "~/misc/array-helpers";
-
-type TRPC = ReturnType<typeof useTRPC>;
 
 type RecipeCostingData = {
   ingMap: Record<string, IngredientWithFoodLeanOut>;
@@ -31,7 +30,6 @@ type RecipeCostingData = {
  */
 async function loadRecipeCostingData(
   recipes: RecipeOut[],
-  api: TRPC,
   queryClient: QueryClient,
 ): Promise<RecipeCostingData> {
   // 1. Transitive closure of sub-recipes (recipe-as-ingredient). Each fetched
@@ -46,9 +44,7 @@ async function loadRecipeCostingData(
 
     const chunks = await Promise.all(
       chunk(toFetch.sort(), ID_CHUNK_SIZE).map((ids) =>
-        queryClient.ensureQueryData(
-          api.recipe.getManyByIDs.queryOptions({ ids }),
-        ),
+        queryClient.ensureQueryData(recipeGetManyByIDsQueryOptions({ ids })),
       ),
     );
 
@@ -68,9 +64,7 @@ async function loadRecipeCostingData(
   ]);
   const chunkResults = await Promise.all(
     chunk(ingredientIds.sort(), ID_CHUNK_SIZE).map((ids) =>
-      queryClient.ensureQueryData(
-        api.ingredient.getManyByIDs.queryOptions({ ids }),
-      ),
+      queryClient.ensureQueryData(ingredientGetManyByIDsQueryOptions({ ids })),
     ),
   );
   const ingMap = keyBy(chunkResults.flat(), (ing) => ing.id);
@@ -89,7 +83,6 @@ export function useRecipeCostingData(recipes: RecipeOut[]): {
   recipeMap: Record<string, RecipeGraphOut>;
   isLoading: boolean;
 } {
-  const api = useTRPC();
   const queryClient = useQueryClient();
 
   const [ingMap, setIngMap] = useState<Record<
@@ -120,7 +113,7 @@ export function useRecipeCostingData(recipes: RecipeOut[]): {
     }
 
     setIsLoading(true);
-    loadRecipeCostingData(current, api, queryClient)
+    loadRecipeCostingData(current, queryClient)
       .then(({ ingMap: nextIngMap, recipeMap: nextRecipeMap }) => {
         if (cancelled) return;
         setRecipeMap(nextRecipeMap);
@@ -139,7 +132,7 @@ export function useRecipeCostingData(recipes: RecipeOut[]): {
     return () => {
       cancelled = true;
     };
-  }, [api, queryClient, signature]);
+  }, [queryClient, signature]);
 
   return { ingMap, recipeMap, isLoading };
 }

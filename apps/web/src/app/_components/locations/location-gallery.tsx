@@ -13,6 +13,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { locationTreeQueryOptions } from "~/app/locations/location.functions";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -23,7 +24,6 @@ import {
 } from "~/hooks/useGalleryViewState";
 import { useHydratedLoading } from "~/hooks/useHydrated";
 import { useIsMobile } from "~/hooks/useMobile";
-import { useTRPC } from "~/integrations/trpc/react";
 import { ProductImageSummariesProvider } from "../products/product-image-summaries";
 import { GalleryHeader } from "./gallery-header";
 import { GallerySidebar } from "./gallery-sidebar";
@@ -237,7 +237,6 @@ function calculateStats(
  * Orchestrates sidebar, header, and gallery views.
  */
 export function LocationGallery() {
-  const api = useTRPC();
   const isMobile = useIsMobile();
 
   // Gallery state
@@ -336,7 +335,7 @@ export function LocationGallery() {
 
   // Fetch location tree
   const { data: locations, isLoading: locationsLoading } = useQuery(
-    api.location.makeTree.queryOptions(),
+    locationTreeQueryOptions(),
   );
 
   // `makeTree` already contains the gallery's minimal inventory projection and

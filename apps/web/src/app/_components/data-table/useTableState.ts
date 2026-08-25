@@ -398,7 +398,7 @@ export function useTableState(
         (filter) => filter.id === columnId,
       )?.value;
       // A multiselect column holds `string[]`. Returning it typed as `string`
-      // would send an array to a scalar zod field and blow up at the tRPC
+      // would send an array to a scalar zod field and blow up at the transport
       // boundary at runtime instead of here — fail loudly at the call site
       // that forgot to switch to getColumnFilterValues.
       if (Array.isArray(value)) {

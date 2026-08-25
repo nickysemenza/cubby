@@ -11,10 +11,10 @@ import {
   requiredLocationField,
 } from "~/app/_components/form-fields";
 import { ComboboxFieldWithSearch } from "~/app/_components/form-utils/combobox-field-with-search";
+import { bulkUpdateParentMutationOptions } from "~/app/locations/location.functions";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Stack } from "~/components/layout";
 import { StatusText } from "~/components/ui/status-text";
-import { useTRPC } from "~/integrations/trpc/react";
 import {
   invalidateQueryRoots,
   invalidatesFor,
@@ -40,7 +40,6 @@ export function BulkReparentLocationsDialog({
   locations,
   onSuccess,
 }: BulkReparentLocationsDialogProps) {
-  const api = useTRPC();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const selectedIds = new Set<LocationShortcode>(
@@ -52,23 +51,22 @@ export function BulkReparentLocationsDialog({
     defaultValues: { targetParent: null },
   });
 
-  const bulkUpdateParent = useMutation(
-    api.location.bulkUpdateParent.mutationOptions({
-      onSuccess: ({ updated }) => {
-        invalidateQueryRoots(queryClient, [
-          ...invalidatesFor("location"),
-          queryKeys.location.all,
-        ]);
-        toast.success(
-          `Moved ${updated} location${updated === 1 ? "" : "s"} to the new parent.`,
-        );
-        form.reset();
-        onSuccess();
-        onOpenChange(false);
-      },
-      onError: (err) => setError(err.message || "Failed to move locations"),
-    }),
-  );
+  const bulkUpdateParent = useMutation({
+    ...bulkUpdateParentMutationOptions(),
+    onSuccess: ({ updated }) => {
+      invalidateQueryRoots(queryClient, [
+        ...invalidatesFor("location"),
+        queryKeys.location.all,
+      ]);
+      toast.success(
+        `Moved ${updated} location${updated === 1 ? "" : "s"} to the new parent.`,
+      );
+      form.reset();
+      onSuccess();
+      onOpenChange(false);
+    },
+    onError: (err) => setError(err.message || "Failed to move locations"),
+  });
 
   const handleSubmit = async () => {
     const valid = await form.trigger();

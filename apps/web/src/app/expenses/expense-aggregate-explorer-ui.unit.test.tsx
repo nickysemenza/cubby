@@ -10,17 +10,9 @@ const mocks = vi.hoisted(() => ({
   toastError: vi.fn(),
 }));
 
-vi.mock("@tanstack/react-query", () => ({ useQuery: mocks.useQuery }));
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPC: () => ({
-    expense: {
-      analyze: {
-        queryOptions: (input: unknown) => ({
-          queryKey: ["expense", "analyze", input],
-        }),
-      },
-    },
-  }),
+vi.mock("@tanstack/react-query", () => ({
+  queryOptions: (options: unknown) => options,
+  useQuery: mocks.useQuery,
 }));
 vi.mock("~/lib/clipboard", () => ({ copyText: mocks.copyText }));
 vi.mock("sonner", () => ({

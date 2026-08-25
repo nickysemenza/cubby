@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { useTRPC } from "~/integrations/trpc/react";
+import { ingredientGetByNameQueryOptions } from "~/app/ingredients/ingredient.functions";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 import { wasm } from "~/lib/wasm";
 
@@ -27,8 +27,6 @@ interface ConversionAnswer {
  * exists — the menu just behaves like normal search.
  */
 export function useConversionAnswer(search: string): ConversionAnswer | null {
-  const trpc = useTRPC();
-
   const parsed = useMemo(() => {
     const match = CONVERSION_RE.exec(search.trim());
     if (!match) return null;
@@ -43,7 +41,7 @@ export function useConversionAnswer(search: string): ConversionAnswer | null {
   }, [search]);
 
   const { data: ingredient } = useQuery({
-    ...trpc.ingredient.getByName.queryOptions({
+    ...ingredientGetByNameQueryOptions({
       nameFilter: parsed?.name ?? "",
     }),
     enabled: parsed !== null,

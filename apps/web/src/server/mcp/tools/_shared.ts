@@ -24,22 +24,24 @@ import type {
   ToolAnnotations,
 } from "@modelcontextprotocol/sdk/types.js";
 import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import type { TRPC_ERROR_CODE_KEY } from "@trpc/server/rpc";
 import { z } from "zod";
-import type { McpWorkflowCaller } from "~/server/api/mcp-workflows";
 import type { EntityKernelContext } from "~/server/entity-kernel";
 import { toPublicErrorPayload } from "~/server/errors/app-error";
+import type { McpWorkflowCaller } from "~/server/mcp/workflow-caller";
 import { resolveProductPricing } from "~/server/repo/product/pricing";
 
 /**
  * Shared MCP tool-handler scaffolding.
  *
  * Houses the cross-family primitives the per-entity `*.tools.ts` files build on:
- * the tRPC caller accessor, registerMcpTool, error wrapper, structured response
+ * the workflow caller accessor, registerMcpTool, error wrapper, structured response
  * helpers, the slim output projections, and the CRUD handler factories.
  */
 
 export type Caller = McpWorkflowCaller;
+type ToolErrorCode = NonNullable<
+  ReturnType<typeof toPublicErrorPayload>["code"]
+>;
 
 type ToolExtra = { authInfo?: { extra?: Record<string, unknown> } };
 
@@ -273,7 +275,7 @@ function structuredSuccess(
 /**
  * A genuine FAULT: the call could not run at all.
  *
- * `_meta` carries the same `{code, reason}` a tRPC client reads off
+ * `_meta` carries the same `{code, reason}` a browser client reads from
  * `error.data`, so an agent can branch on WHY without substring-matching the
  * sentence. It rides in `_meta` and NOT in `structuredContent` on purpose: the
  * reference SDK client validates `structuredContent` against the tool's
@@ -506,7 +508,7 @@ function sdkOutputSchema(schema: z.ZodType): z.ZodType {
 
 export function getCaller(extra: ToolExtra): Caller {
   const caller = extra.authInfo?.extra?.caller;
-  if (!caller) throw new Error("Authenticated tRPC caller is missing");
+  if (!caller) throw new Error("Authenticated workflow caller is missing");
   return caller as Caller;
 }
 
@@ -526,8 +528,8 @@ export function getReadCaller(extra: ToolExtra): Caller {
  * present at the throw site and then flattened into it.
  */
 export interface ToolErrorDetail {
-  /** The tRPC code, when the failure came through one. */
-  code?: TRPC_ERROR_CODE_KEY;
+  /** The transport-neutral application error code, when available. */
+  code?: ToolErrorCode;
   /** The `AppErrorReason` `createAppError` stamped onto `cause`. */
   reason?: string;
   message: string;
@@ -535,15 +537,15 @@ export interface ToolErrorDetail {
 
 /**
  * `code`/`reason`/`blockers` come from `toPublicErrorPayload` — the same
- * whitelist tRPC's `errorFormatter` uses — so the two transports cannot drift
- * about what a client is allowed to learn. Only `message` is added here, since
- * it is the one part that belongs to the MCP envelope's text block.
+ * application error whitelist, so transports cannot drift about what a client
+ * is allowed to learn. Only `message` is added here, since it is the one part
+ * that belongs to the MCP envelope's text block.
  */
 function describeToolError(error: unknown): ToolErrorDetail {
   const { code, reason } = toPublicErrorPayload(error);
   const message = error instanceof Error ? error.message : String(error);
   return {
-    ...(code ? { code: code as TRPC_ERROR_CODE_KEY } : {}),
+    ...(code ? { code } : {}),
     ...(reason ? { reason } : {}),
     message,
   };
@@ -805,7 +807,7 @@ function isSchema(value: unknown): value is z.ZodType {
  *
  * This is the one chokepoint every `get_*`/`update_*`/`delete_*` self-id flows
  * through, so swapping it here makes ~30 tools prefix-correct at once. It is the
- * SAME schema the UI and tRPC use — there is no MCP-specific ref type — which is
+ * SAME schema the UI workflow uses — there is no MCP-specific ref type — which is
  * what makes the advertised JSON Schema carry a real `pattern` (`^PRD-[…]{4}$`)
  * instead of a bare string. An agent handed a wrong-entity code fails at zod
  * parse, before the handler runs and therefore before any mutation.
@@ -910,7 +912,7 @@ type BatchResult =
       index: number;
       status: "failed";
       error: string;
-      code?: TRPC_ERROR_CODE_KEY;
+      code?: ToolErrorCode;
       reason?: string;
     };
 

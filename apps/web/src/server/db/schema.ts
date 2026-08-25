@@ -232,7 +232,7 @@ const pkUuid = <T extends string = string>() =>
 
 /**
  * The entity's public id (`PRD-4K7M`) — what URLs, QR labels, and MCP expose.
- * The uuid PK above stays private to repos and internal tRPC.
+ * The uuid PK above stays private to repositories and in-process workflows.
  *
  * Deliberately NOT branded: branding shortcode columns buys little and costs
  * friction on every insert (see the root CLAUDE.md note); the `unsafe*Shortcode`

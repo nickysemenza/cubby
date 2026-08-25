@@ -9,9 +9,9 @@ import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Row, Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { NoneValue } from "~/components/ui/none-value";
-import { useTRPC } from "~/integrations/trpc/react";
 import { parsePlainDate } from "~/lib/plain-date";
 import { formatCurrency } from "~/lib/utils";
+import { expenseChargeContextQueryOptions } from "./expense.functions";
 
 // Module-level so the fallback keeps a stable reference across renders.
 const NO_OTHER_EXPENSES: ExpenseOut[] = [];
@@ -36,12 +36,11 @@ const NO_OTHER_EXPENSES: ExpenseOut[] = [];
 export const ExpensePurchaseSection: FC<{ expense: ExpenseOut }> = ({
   expense,
 }) => {
-  const api = useTRPC();
   // Called unconditionally, before the no-purchase return below: `purchaseId` can
   // change under the same component instance (clearing a vendor detaches the
   // Expense), and a conditional hook would break the hook order when it does.
   const { data, isPending } = useQuery(
-    api.expense.chargeContext.queryOptions(expense.id),
+    expenseChargeContextQueryOptions(expense.id),
   );
   const others = data?.siblings ?? NO_OTHER_EXPENSES;
 

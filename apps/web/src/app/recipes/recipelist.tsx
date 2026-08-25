@@ -16,9 +16,9 @@ import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
 import { Skeleton } from "~/components/ui/skeleton";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { useTRPC } from "~/integrations/trpc/react";
 import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
 import { invalidatesFor } from "~/lib/query-keys";
+import { relatedDataOptionsQueryOptions } from "~/lib/related-data.functions";
 import {
   numberCellData,
   specFromCellData,
@@ -29,7 +29,6 @@ import { EditableCell } from "../_components/data-table/editable-cell";
 import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { useCookbookOptions } from "../_components/hooks/useCookbookOptions";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
-
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { useRecipeTagOptions } from "../_components/hooks/useRecipeTagOptions";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
@@ -49,6 +48,7 @@ import {
 } from "../_components/recipe/recipe-utils";
 import { useDuplicateRecipe } from "../_components/recipe/use-duplicate-recipe";
 import { TruncatedList } from "../_components/TruncatedList";
+import { recipeRecomputeOneMutationOptions } from "./recipe.functions";
 import { totalsLookStuck } from "./recipe-totals-staleness";
 
 /**
@@ -94,9 +94,8 @@ function StuckTotalsCell({
   /** Render the recompute button (cost column only, so a row shows it once). */
   withAction: boolean;
 }) {
-  const api = useTRPC();
   const recompute = useActionMutation({
-    mutationFn: api.recipe.recomputeOne.mutationOptions,
+    mutationFn: recipeRecomputeOneMutationOptions,
     success: "Recomputed recipe totals.",
     invalidateKeys: invalidatesFor("recipe", "list"),
   });
@@ -149,7 +148,6 @@ export function RecipeList({
   cookbookIdFilter,
   hiddenFilterColumns,
 }: RecipeListProps) {
-  const api = useTRPC();
   const navigate = useNavigate();
   const columnHelper = useMemo(
     () => createCubbyColumnHelper<RecipeListItem>(),
@@ -166,7 +164,7 @@ export function RecipeList({
   const { options: tagOptions } = useRecipeTagOptions();
   const { options: cookbookOptions } = useCookbookOptions();
   const ingredientOptionsQuery = useQuery(
-    api.relatedData.options.queryOptions({
+    relatedDataOptionsQueryOptions({
       relationKey: "recipe.ingredients",
       limit: 100,
     }),

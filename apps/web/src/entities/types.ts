@@ -53,7 +53,7 @@ export interface MergeableConfig {
   rowStat?: (row: any) => ReactNode;
   /** Fixed mode only: query options for the other rows a keeper can absorb. */
   // biome-ignore lint/suspicious/noExplicitAny: heterogeneous row/query shape, see doc comment above.
-  candidateQuery?: (api: any, keeper: any) => any;
+  candidateQuery?: (keeper: any) => any;
   copy: {
     /** Fixed mode gets the keeper's rendered label; ranked mode's is static. */
     title: string | ((keeperLabel: ReactNode) => ReactNode);

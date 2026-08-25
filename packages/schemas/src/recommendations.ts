@@ -33,6 +33,8 @@ export const dismissProductRecommendationInput = z.object({
   targetId: productShortcode,
 });
 
+export const recommendationOkSchema = z.object({ ok: z.literal(true) });
+
 export const recommendationWorkbenchOut = relatednessOutSchema;
 
 export const duplicateProductRecommendationInput = z.object({

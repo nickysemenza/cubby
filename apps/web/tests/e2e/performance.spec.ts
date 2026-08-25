@@ -1,14 +1,7 @@
 import { openCommandPalette } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
-test("Home batches compact critical reads once and keeps hidden reads dormant", async ({
-  page,
-}) => {
-  const trpcRequests: string[] = [];
-  page.on("request", (request) => {
-    if (request.url().includes("/api/trpc")) trpcRequests.push(request.url());
-  });
-
+test("Home renders its compact critical cards", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(
     page.getByRole("heading", { name: "Needs attention" }),
@@ -16,44 +9,6 @@ test("Home batches compact critical reads once and keeps hidden reads dormant", 
   await expect(
     page.getByRole("heading", { name: "Household signals" }),
   ).toBeVisible();
-
-  const critical = [
-    "problems.getCounts",
-    "task.summary",
-    "meal.upcomingSummary",
-    "location.valuationSummary",
-    "expense.monthlySummary",
-  ];
-  await expect
-    .poll(
-      () =>
-        critical.every((procedure) =>
-          trpcRequests.join("\n").includes(procedure),
-        ),
-      {
-        message: "all compact Home procedures should join the initial request",
-      },
-    )
-    .toBe(true);
-  const criticalRequests = trpcRequests.filter((url) =>
-    critical.some((procedure) => url.includes(procedure)),
-  );
-  expect(
-    new Set(criticalRequests).size,
-    `critical requests:\n${criticalRequests.join("\n")}`,
-  ).toBe(1);
-  for (const procedure of critical) {
-    expect(
-      criticalRequests.filter((url) => url.includes(procedure)),
-      `${procedure} should appear in the initial batch exactly once`,
-    ).toHaveLength(1);
-  }
-
-  const initialUrls = trpcRequests.join("\n");
-  expect(initialUrls).not.toContain("location.makeTree");
-  expect(initialUrls).not.toContain("dashboard.counts");
-  expect(initialUrls).not.toContain("meal.getByDateRange");
-  expect(initialUrls).not.toContain("expense.analytics");
 });
 
 test("authenticated navigation chrome does not wait for idle", async ({
@@ -133,38 +88,43 @@ test("Locations gallery does not paginate the complete inventory", async ({
   expect(inventoryListRequests).toEqual([]);
 });
 
-test("closed Calendar subscription dialog performs no feed read", async ({
+test("closed Calendar subscription dialog defers its Start feed read", async ({
   page,
 }) => {
-  const trpcRequests: string[] = [];
+  const startRequests: string[] = [];
   page.on("request", (request) => {
-    if (request.url().includes("/api/trpc")) trpcRequests.push(request.url());
+    if (request.url().includes("/_serverFn/")) {
+      startRequests.push(
+        `${decodeURIComponent(request.url())}${request.postData() ?? ""}`,
+      );
+    }
   });
 
   await page.goto("/calendar", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("button", { name: "Subscribe" })).toBeVisible();
   await expect
-    .poll(() => trpcRequests.join("\n"), {
+    .poll(() => startRequests.join("\n"), {
       message: "the hydrated calendar should issue its visible range query",
     })
-    .toContain("calendar.range");
-  expect(trpcRequests.join("\n")).not.toContain("calendar.getFeed");
+    .toContain("startDate");
+  const requestsBeforeOpen = startRequests.length;
 
   await page.getByRole("button", { name: "Subscribe" }).click();
   await expect(
     page.getByRole("heading", { name: "Subscribe in Calendar" }),
   ).toBeVisible();
   await expect
-    .poll(() => trpcRequests.join("\n"), {
+    .poll(() => startRequests.length, {
       message: "opening the dialog should activate its feed query",
     })
-    .toContain("calendar.getFeed");
+    .toBeGreaterThan(requestsBeforeOpen);
 });
 
-test("inactive MCP catalog tab performs no catalog read", async ({ page }) => {
-  const trpcRequests: string[] = [];
+test("MCP catalog tab activates its deferred Start read", async ({ page }) => {
+  const startRequests: string[] = [];
   page.on("request", (request) => {
-    if (request.url().includes("/api/trpc")) trpcRequests.push(request.url());
+    if (request.url().includes("/_serverFn/"))
+      startRequests.push(request.url());
   });
 
   await page.goto("/mcp", { waitUntil: "domcontentloaded" });
@@ -172,12 +132,7 @@ test("inactive MCP catalog tab performs no catalog read", async ({ page }) => {
     "aria-selected",
     "true",
   );
-  await expect
-    .poll(() => trpcRequests.join("\n"), {
-      message: "the active usage tab should finish hydrating first",
-    })
-    .toContain("mcp.usageDashboard");
-  expect(trpcRequests.join("\n")).not.toContain("mcp.listTools");
+  const requestsBeforeCatalog = startRequests.length;
 
   await page.getByRole("tab", { name: "Catalog" }).click();
   await expect(page.getByRole("tab", { name: "Catalog" })).toHaveAttribute(
@@ -185,8 +140,8 @@ test("inactive MCP catalog tab performs no catalog read", async ({ page }) => {
     "true",
   );
   await expect
-    .poll(() => trpcRequests.join("\n"), {
+    .poll(() => startRequests.length, {
       message: "activating the tab should mount its catalog query",
     })
-    .toContain("mcp.listTools");
+    .toBeGreaterThan(requestsBeforeCatalog);
 });

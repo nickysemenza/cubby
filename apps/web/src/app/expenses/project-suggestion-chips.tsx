@@ -6,10 +6,11 @@ import type { ExpenseOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { Lightbulb } from "lucide-react";
 import { useMemo, useState } from "react";
+import { projectOptionsQueryOptions } from "~/app/projects/project.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { useTRPC } from "~/integrations/trpc/react";
 import { householdLocalDate } from "~/lib/household-date";
+import { expenseTradeAffinityQueryOptions } from "./expense.functions";
 import {
   type ProjectSuggestion,
   rankProjectSuggestions,
@@ -42,7 +43,6 @@ export function ProjectSuggestionChips({
   onAssign,
   isPending,
 }: ProjectSuggestionChipsProps) {
-  const api = useTRPC();
   const [proposal, setProposal] = useState<{
     suggestion: ProjectSuggestion;
     basisKey: string;
@@ -56,11 +56,11 @@ export function ProjectSuggestionChips({
   ].join("\u0000");
 
   const { data: projects = NO_PROJECTS } = useQuery({
-    ...api.project.options.queryOptions(),
+    ...projectOptionsQueryOptions(),
     enabled: unassigned,
   });
   const { data: affinity = NO_AFFINITY } = useQuery({
-    ...api.expense.tradeAffinity.queryOptions(),
+    ...expenseTradeAffinityQueryOptions(),
     enabled: unassigned,
   });
 

@@ -17,7 +17,7 @@ import {
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { useTRPC } from "~/integrations/trpc/react";
+import { importImageFromUrlMutationOptions } from "~/lib/image.functions";
 import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
 import { useImageUpload } from "./use-image-upload";
 
@@ -28,7 +28,6 @@ import { useImageUpload } from "./use-image-upload";
  * them — image-only surfaces never accept PDFs, see packages/schemas/src/image.ts).
  */
 export function UploadImageDialog() {
-  const api = useTRPC();
   const queryClient = useQueryClient();
   const urlInputId = useId();
   const [open, setOpen] = useState(false);
@@ -38,7 +37,7 @@ export function UploadImageDialog() {
   // Single-shot mutation (unlike the multi-step file upload) — useActionMutation
   // fits: one call, one toast, one invalidation.
   const importFromUrl = useActionMutation({
-    mutationFn: api.image.importFromUrl.mutationOptions,
+    mutationFn: importImageFromUrlMutationOptions,
     success: "Image imported.",
     invalidateKeys: invalidatesFor("image"),
     onSuccess: () => setUrl(""),

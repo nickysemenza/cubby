@@ -6,7 +6,7 @@ import {
 } from "./sw-policy";
 
 describe("service-worker cache policy", () => {
-  it.each(["/api", "/api/session", "/trpc", "/trpc/recipe.list"])(
+  it.each(["/api", "/api/session"])(
     "never intercepts authenticated endpoint %s",
     (path) => expect(isBypassedPath(path)).toBe(true),
   );

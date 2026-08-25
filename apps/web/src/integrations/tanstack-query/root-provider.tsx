@@ -3,18 +3,11 @@ import { AuthUIProviderTanstack } from "@daveyplate/better-auth-ui/tanstack";
 import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { Link as TanStackLink, useNavigate } from "@tanstack/react-router";
-import { createTRPCClient, loggerLink } from "@trpc/client";
-import { createTRPCOptionsProxy } from "@trpc/tanstack-react-query";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 import superjson from "superjson";
-import { createMutationFreshReadLink } from "~/integrations/tanstack-query/trpc-fresh-read-link";
-import { createTransportLink } from "~/integrations/tanstack-query/trpc-transport-isomorphic";
-import { TRPCProvider } from "~/integrations/trpc/react";
-import type { TRPCRouter } from "~/integrations/trpc/router";
 import { authClient } from "~/lib/auth-client";
 import { getErrorMessage } from "~/lib/error-utils";
-import { getFlag } from "~/lib/flags";
 import { configureQueryFreshness } from "~/lib/query-freshness";
 import { installOperationRecorder } from "./operation-recorder";
 import { persister } from "./persister";
@@ -56,23 +49,6 @@ function deferToastError(error: unknown) {
   setTimeout(() => toast.error(getErrorMessage(error)), 0);
 }
 
-const trpcClient = createTRPCClient<TRPCRouter>({
-  links: [
-    loggerLink({
-      // Verbose logging is flag-controlled (queryLogger, default on in dev);
-      // errors always log. Flippable on /settings, even in prod.
-      enabled: (op) =>
-        !import.meta.env.SSR &&
-        (getFlag("queryLogger") ||
-          (op.direction === "down" && op.result instanceof Error)),
-    }),
-    createMutationFreshReadLink(),
-    // Browser: batched HTTP to /api/trpc. Server render: an in-process link,
-    // never a self-fetch — see trpc-transport-isomorphic.
-    createTransportLink(),
-  ],
-});
-
 export function getContext() {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -98,14 +74,7 @@ export function getContext() {
   if (!import.meta.env.SSR) installOperationRecorder(queryClient);
   configureQueryFreshness(queryClient);
 
-  const serverHelpers = createTRPCOptionsProxy({
-    client: trpcClient,
-    queryClient: queryClient,
-  });
-  return {
-    queryClient,
-    trpc: serverHelpers,
-  };
+  return { queryClient };
 }
 
 export function Provider({
@@ -146,7 +115,7 @@ export function Provider({
               maxAge: 1000 * 60 * 60 * 24,
               dehydrateOptions: {
                 shouldDehydrateQuery: (query) => {
-                  // tRPC keys are nested: [["product","list"], { input, type }].
+                  // Operation keys are nested: [["product","list"], { input, type }].
                   const head = query.queryKey?.[0];
                   const root = Array.isArray(head) ? head[0] : head;
                   const operation = Array.isArray(head) ? head[1] : undefined;
@@ -166,14 +135,10 @@ export function Provider({
               },
             }}
           >
-            <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
-              {children}
-            </TRPCProvider>
+            {children}
           </PersistQueryClientProvider>
         ) : (
-          <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
-            {children}
-          </TRPCProvider>
+          children
         )}
       </AuthUIProviderTanstack>
     </AuthQueryProvider>

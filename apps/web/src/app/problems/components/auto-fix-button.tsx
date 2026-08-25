@@ -14,8 +14,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import { useTRPC, useTRPCClient } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
+import { problemsMaintenanceCountsQueryOptions } from "~/lib/problems.functions";
 import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
 import { PROBLEMS_QUERY_STALE_TIME } from "../problem-query-freshness";
 import { type AutoFixTask, buildAutoFixPlan } from "./auto-fix-registry";
@@ -32,9 +32,8 @@ import { type AutoFixTask, buildAutoFixPlan } from "./auto-fix-registry";
  *   the issue count above it.
  */
 export function useAutoFixPlan(problems: AllProblems) {
-  const api = useTRPC();
   const { data: counts } = useQuery(
-    api.problems.getMaintenanceCounts.queryOptions(undefined, {
+    problemsMaintenanceCountsQueryOptions({
       staleTime: PROBLEMS_QUERY_STALE_TIME,
     }),
   );
@@ -57,7 +56,6 @@ export function useAutoFixPlan(problems: AllProblems) {
  * than per task, so the four detector queries re-run once instead of six times.
  */
 export function AutoFixButton({ problems }: { problems: AllProblems }) {
-  const client = useTRPCClient();
   const queryClient = useQueryClient();
   const { items, tasks } = useAutoFixPlan(problems);
   const [running, setRunning] = useState<{
@@ -74,7 +72,7 @@ export function AutoFixButton({ problems }: { problems: AllProblems }) {
 
     for (const [index, task] of tasks.entries()) {
       try {
-        const outcome = await task.run(client);
+        const outcome = await task.run();
         if (outcome.summary) clauses.push(outcome.summary);
         if (outcome.batchId) batchIds.push(outcome.batchId);
         for (const key of task.invalidateKeys ?? []) invalidate.add(key);

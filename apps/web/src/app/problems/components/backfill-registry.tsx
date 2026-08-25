@@ -1,6 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import pluralize from "pluralize";
+import { backfillProductUpcImagesStream } from "~/app/products/product.functions";
 import { entityListRootKey } from "~/entities/entity-list.functions";
+import { backfillLocationDescriptionsStream } from "~/lib/ai.functions";
 import type { BackfillButtonProps } from "./problem-backfill-action";
 
 /**
@@ -28,8 +30,8 @@ export const BACKFILL = {
     failed: number;
     skipped: number;
   }>({
-    run: (client) => client.product.backfillUPCImages.mutate(),
-    invalidateKeys: (_api) => [entityListRootKey("product")],
+    run: backfillProductUpcImagesStream,
+    invalidateKeys: [entityListRootKey("product")],
     // Runs entirely inside the held-open stream (no durable queue), so warn while
     // it runs (see BackfillButton `foreground`).
     foreground: true,
@@ -45,8 +47,8 @@ export const BACKFILL = {
     total: number;
     batchId: string;
   }>({
-    run: (client) => client.ai.backfillLocationDescriptions.mutate(),
-    invalidateKeys: (_api) => [entityListRootKey("location")],
+    run: backfillLocationDescriptionsStream,
+    invalidateKeys: [entityListRootKey("location")],
     idleLabel: "Analyze all",
     pendingLabel: "Enqueuing…",
     // Durable: the work runs on the background-jobs queue, so link the toast there.

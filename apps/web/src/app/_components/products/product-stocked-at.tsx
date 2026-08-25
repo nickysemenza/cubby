@@ -27,10 +27,10 @@ import { DeleteInventoryDialog } from "~/app/_components/inventory/delete-invent
 import { MoveInventoryDialog } from "~/app/_components/inventory/move-inventory-dialog";
 import { HierarchyDrilldown } from "~/app/_components/visualizations/hierarchy-drilldown";
 import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
+import { productComponentsQueryOptions } from "~/app/products/product.functions";
 import { Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { useTRPC } from "~/integrations/trpc/react";
 import { ShelfEmpty } from "../data-table/shelf";
 import { EntityInlineLink } from "../EntityInlineLink";
 import { ProductDiscardDialog } from "./product-discard-dialog";
@@ -46,9 +46,8 @@ type InventoryEntry = ProductWithFoodOut["inventoryEntry"][number];
 const HeldAsComponents: FC<{ productId: ProductShortcode }> = ({
   productId,
 }) => {
-  const api = useTRPC();
   const { data } = useQuery(
-    api.product.components.queryOptions({ parentProductId: productId }),
+    productComponentsQueryOptions({ parentProductId: productId }),
   );
   if (!data || data.length === 0) return null;
   return (

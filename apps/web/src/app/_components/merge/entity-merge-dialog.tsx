@@ -17,7 +17,6 @@ import {
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { entities } from "~/entities/entities";
 import type { EntityDefinition, MergeableConfig } from "~/entities/types";
-import { useTRPC } from "~/integrations/trpc/react";
 
 /** Display text comes from `mergeable.rowLabel`/`rowStat`, not a hardcoded
  * `name` field — a row shape like `PurchaseOut` (no `name`) works here too. */
@@ -225,10 +224,9 @@ function FixedMergeDialog<T extends MergeRow>({
   onConfirm: (keepId: string, aliasIds: string[]) => void;
   isPending: boolean;
 }) {
-  const api = useTRPC();
   const [selected, setSelected] = useState<string[]>([]);
   const candidatesQuery = useQuery({
-    ...config.candidateQuery?.(api, keeper),
+    ...config.candidateQuery?.(keeper),
     enabled: open && !!config.candidateQuery,
   });
   const candidates = useMemo(

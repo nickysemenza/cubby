@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { useTRPC } from "~/integrations/trpc/react";
+import { productTagOptionsQueryOptions } from "~/app/products/product.functions";
 
 const NO_TAG_OPTIONS: Array<{ value: string; label: string }> = [];
 
@@ -12,8 +12,7 @@ const NO_TAG_OPTIONS: Array<{ value: string; label: string }> = [];
  * ("M18 (13)" next to a stray "m18 (1)") before it spreads.
  */
 export function useProductTagOptions() {
-  const api = useTRPC();
-  const { data, isLoading } = useQuery(api.product.tagOptions.queryOptions());
+  const { data, isLoading } = useQuery(productTagOptionsQueryOptions());
 
   const options = useMemo(
     () =>

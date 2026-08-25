@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Wallet } from "lucide-react";
+import { locationValuationSummaryQueryOptions } from "~/app/locations/location.functions";
 import { Row } from "~/components/layout";
 import {
   CardActionLink,
@@ -7,7 +8,6 @@ import {
 } from "~/components/layout/dashboard-card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useHydrated } from "~/hooks/useHydrated";
-import { useTRPC } from "~/integrations/trpc/react";
 import { authClient } from "~/lib/auth-client";
 import { formatCurrency } from "~/lib/utils";
 
@@ -29,14 +29,13 @@ const BAR_COLORS = [
  * structure, inventory relations, products, and images stay off this path.
  */
 export function PantryValueCard() {
-  const api = useTRPC();
   const session = authClient.useSession();
   // Hydration-gated auth (see useHydrated): keeps SSR and first client
   // render identical, and stops the query from firing Unauthorized on the
   // public home page.
   const isAuthenticated = useHydrated() && !!session.data?.user;
   const { data, isLoading, isError } = useQuery({
-    ...api.location.valuationSummary.queryOptions(),
+    ...locationValuationSummaryQueryOptions(),
     enabled: isAuthenticated,
   });
   const total = data?.total ?? 0;

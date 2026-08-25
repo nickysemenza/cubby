@@ -186,3 +186,6 @@ export const calendarRangeOut = z.object({
   days: z.record(plainDate, calendarDaySummary),
 });
 export type CalendarRangeOut = z.infer<typeof calendarRangeOut>;
+
+export const calendarFeedOut = z.object({ token: z.string().nullable() });
+export const calendarRotateFeedOut = z.object({ token: z.string() });

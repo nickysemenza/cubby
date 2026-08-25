@@ -1,5 +1,5 @@
 /**
- * Pure queue logic for the location photo pass. Kept free of React and tRPC so
+ * Pure queue logic for the location photo pass. Kept free of React and transport so
  * the walk order, the "needs a photo" rule, and the advance cursor are testable
  * on plain fixtures.
  */

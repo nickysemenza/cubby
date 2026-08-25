@@ -199,7 +199,7 @@ export const attachableImageEntityId = anyShortcodeSchema(
 
 // Field map (not a z.object) so the MCP tool can consume `.shape` directly; the
 // cross-field "exactly one of url/data/uploadId" rule — which JSON Schema can't
-// express — lives in `mcpAttachFileInput`'s refine (used by the tRPC procedure).
+// express — lives in `mcpAttachFileInput`'s refine at the workflow boundary.
 export const attachFileFields = {
   entityType: attachableImageEntity.describe(
     "Target entity type to attach the file to",

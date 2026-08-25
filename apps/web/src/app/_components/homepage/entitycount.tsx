@@ -8,8 +8,8 @@ import { Eyebrow } from "~/components/ui/eyebrow";
 import { Skeleton } from "~/components/ui/skeleton";
 import { entities } from "~/entities/entities";
 import { useHydrated } from "~/hooks/useHydrated";
-import { useTRPC } from "~/integrations/trpc/react";
 import { authClient } from "~/lib/auth-client";
+import { dashboardCountsQueryOptions } from "~/lib/dashboard.functions";
 
 const compactFormatter = new Intl.NumberFormat("en", { notation: "compact" });
 const formatCount = (count: number): string => compactFormatter.format(count);
@@ -32,7 +32,6 @@ const getCountLabel = (
  * ProblemsBanner, so this strip is purely the countable-entity totals.
  */
 export default function EntityCount() {
-  const api = useTRPC();
   const session = authClient.useSession();
   // Hydration gate: the session store can resolve before React hydrates, so
   // branching on it alone makes the first client render diverge from SSR.
@@ -43,7 +42,7 @@ export default function EntityCount() {
   // old per-entity `list({pageSize:1})` cards fired discarded USDA enrichment on
   // the product/ingredient/usda cards — the homepage's USDA-on-critical-path.
   const countsQuery = useQuery({
-    ...api.dashboard.counts.queryOptions(),
+    ...dashboardCountsQueryOptions(),
     enabled: isAuthenticated,
   });
   const counts = countsQuery.data;

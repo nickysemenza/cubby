@@ -13,7 +13,7 @@ import { cups, g, makeProduct } from "./recipe-costing.fixtures";
  * assembles groups, calls the engine, and reshapes the result.
  *
  * Those four verdicts had no unit coverage at all: the only tests exercising
- * them went through the full tRPC stack in
+ * them went through the full browser transport in
  * services/availability.integration.test.ts, seeding a product, a mapping, an
  * inventory entry and a recipe to reach a pure function. Those integration
  * tests stay — they cover the assembly and the `coverage`/`missing` rollup the

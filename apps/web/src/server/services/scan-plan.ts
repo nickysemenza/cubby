@@ -1,7 +1,7 @@
 /**
  * What should happen when a product code is scanned at a location.
  *
- * Pure: facts in, decision out. No DB, no tRPC, no clock. The scan service
+ * Pure: facts in, decision out. No DB, no transport, no clock. The scan service
  * gathers the facts and executes the plan; keeping the branching here is what
  * makes every outcome a unit test instead of an integration fixture.
  *

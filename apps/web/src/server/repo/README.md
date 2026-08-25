@@ -8,7 +8,7 @@ The repository layer follows a strict access control pattern using TypeScript's 
 
 ```
 ┌─────────────┐
-│   Router    │  (tRPC endpoints)
+│   Workflow  │  (Start functions / MCP adapters)
 └──────┬──────┘
        │ passes Database (opaque)
        ▼

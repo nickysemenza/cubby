@@ -3,9 +3,10 @@ import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
+import { vendorOptionsQueryOptions } from "~/app/vendors/vendor.functions";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
-import { useTRPC } from "~/integrations/trpc/react";
+import { searchFindQueryOptions } from "~/lib/search.functions";
 import {
   buildSearchHitComboboxItem,
   buildVendorNameComboboxItem,
@@ -33,7 +34,6 @@ export type VendorName = string;
 
 /** Shared vendor query orchestration for name- and shortcode-valued pickers. */
 function useVendorSearchRows() {
-  const api = useTRPC();
   const { searchQuery, onSearchChange } = useEntitySearch();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
   const parsedCode = parseShortcode(searchQuery);
@@ -41,11 +41,11 @@ function useVendorSearchRows() {
   const searchingByCode = parsedCode != null;
 
   const { data, isLoading } = useQuery({
-    ...api.vendor.options.queryOptions(),
+    ...vendorOptionsQueryOptions(),
     enabled: enabled && !searchingByCode && searchQuery.trim() === "",
   });
   const { data: searchHits, isLoading: isSearchLoading } = useQuery({
-    ...api.search.find.queryOptions({
+    ...searchFindQueryOptions({
       query: searchQuery || "vendor",
       entityTypes: ["vendor"],
       limit: 20,
@@ -64,7 +64,6 @@ function useVendorSearchRows() {
   );
 
   return {
-    api,
     rows,
     searchHits,
     isTypedSearch: searchQuery.trim() !== "" && !searchingByCode,

@@ -1,7 +1,7 @@
 import { type ImageOut, isDisplayableImageFile } from "@cubby/schemas/image";
 import { createContext, type ReactNode, useContext, useMemo } from "react";
 import { useChunkedRecordQuery } from "~/app/_components/hooks/useChunkedRecordQuery";
-import { useTRPC } from "~/integrations/trpc/react";
+import { productSummariesQueryOptions } from "~/app/products/product.functions";
 
 type ProductImageMap = Record<string, ImageOut[]>;
 
@@ -9,12 +9,11 @@ const ProductImageSummariesContext = createContext<ProductImageMap>({});
 const EMPTY_PRODUCT_IMAGE_MAP: ProductImageMap = {};
 
 function useProductImageSummaries(productIds: readonly string[]) {
-  const api = useTRPC();
   return useChunkedRecordQuery({
     ids: productIds,
     empty: EMPTY_PRODUCT_IMAGE_MAP,
     queryOptions: (chunkIds) =>
-      api.product.summaries.queryOptions(
+      productSummariesQueryOptions(
         { ids: chunkIds, include: ["images"] },
         {
           enabled: chunkIds.length > 0,

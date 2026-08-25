@@ -9,7 +9,7 @@ import {
   projectImageSummariesInput,
   projectImageSummariesOut,
 } from "@cubby/schemas/image";
-import type { z } from "zod";
+import { z } from "zod";
 import { executeEntity } from "~/server/entity-kernel";
 import { getImagesByProjectIds } from "~/server/repo/image";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
@@ -17,18 +17,50 @@ import {
   runStartOperation,
   type StartOperationRequest,
 } from "~/server/start-operation.server";
+import {
+  cleanupUnreferencedImagesWorkflow,
+  cullPendingImagesWorkflow,
+  imageWorkflowSchemas,
+  importImageFromUrlWorkflow,
+  initiateDocumentUploadWorkflow,
+  initiateImageUploadWorkflow,
+  markImageUploadedWorkflow,
+} from "~/server/workflows/image.server";
 
-export const listImages = async (options: {
+type SchemaPair = { input: z.ZodType; output: z.ZodType };
+const run = <S extends SchemaPair>(o: {
+  operation: string;
+  schemas: S;
+  data: z.input<S["input"]>;
+  request: StartOperationRequest;
+  workflow: (
+    db: Parameters<Parameters<typeof runStartOperation>[0]["run"]>[0]["db"],
+    input: z.output<S["input"]>,
+  ) => Promise<unknown>;
+}) =>
+  runStartOperation<S["input"], z.output<S["output"]>>({
+    operation: o.operation,
+    type: "mutation",
+    input: o.data,
+    inputSchema: o.schemas.input,
+    outputSchema: o.schemas.output as z.ZodType<z.output<S["output"]>>,
+    request: o.request,
+    run: (context, input) => o.workflow(context.db, input),
+  });
+const schemas = imageWorkflowSchemas;
+
+export const listImages = (o: {
   data: z.input<typeof imageBrowserListInput>;
   request: StartOperationRequest;
 }) =>
-  await runStartOperation({
+  runStartOperation({
     operation: "image.list",
     type: "query",
-    input: options.data,
+    input: o.data,
     inputSchema: imageBrowserListInput,
     outputSchema: imageBrowserListOut,
-    request: options.request,
+    request: o.request,
+    readPolicy: "strong",
     run: async (context, input) => {
       const result = await executeEntity(context, {
         action: "list",
@@ -39,23 +71,23 @@ export const listImages = async (options: {
         groupBy: input.groupBy,
       });
       if (result.action !== "list") {
-        throw new Error("Entity kernel returned the wrong action");
+        throw new Error("Image list returned the wrong entity action");
       }
       return { items: result.items, meta: result.meta };
     },
   });
 
-export const getImageDetail = async (options: {
+export const getImageDetail = (o: {
   data: { id: string };
   request: StartOperationRequest;
 }) =>
-  await runStartOperation({
+  runStartOperation({
     operation: "image.detail",
     type: "query",
-    input: options.data,
-    inputSchema: imageBrowserUpdateInput.pick({ id: true }),
+    input: o.data,
+    inputSchema: z.object({ id: z.string() }),
     outputSchema: imageWithEntitySchema.nullable(),
-    request: options.request,
+    request: o.request,
     readPolicy: "strong",
     run: async (context, input) => {
       const result = await executeEntity(context, {
@@ -65,23 +97,23 @@ export const getImageDetail = async (options: {
         missing: "null",
       });
       if (result.action !== "get") {
-        throw new Error("Entity kernel returned the wrong action");
+        throw new Error("Image detail returned the wrong entity action");
       }
       return result.item;
     },
   });
 
-export const updateImage = async (options: {
+export const updateImage = (o: {
   data: z.input<typeof imageBrowserUpdateInput>;
   request: StartOperationRequest;
 }) =>
-  await runStartOperation({
+  runStartOperation({
     operation: "image.update",
     type: "mutation",
-    input: options.data,
+    input: o.data,
     inputSchema: imageBrowserUpdateInput,
     outputSchema: imageWithEntitySchema,
-    request: options.request,
+    request: o.request,
     run: async (context, input) => {
       const updated = await executeEntity(context, {
         action: "update",
@@ -90,32 +122,32 @@ export const updateImage = async (options: {
         data: input.data,
       });
       if (updated.action !== "update") {
-        throw new Error("Entity kernel returned the wrong action");
+        throw new Error("Image update returned the wrong entity action");
       }
-      const detail = await executeEntity(context, {
+      const refreshed = await executeEntity(context, {
         action: "get",
         entity: "image",
         id: input.id,
         missing: "error",
       });
-      if (detail.action !== "get" || !detail.item) {
+      if (refreshed.action !== "get" || refreshed.item === null) {
         throw new Error("Updated image could not be reloaded");
       }
-      return detail.item;
+      return refreshed.item;
     },
   });
 
-export const deleteImages = async (options: {
+export const deleteImages = (o: {
   data: z.input<typeof imageBrowserDeleteInput>;
   request: StartOperationRequest;
 }) =>
-  await runStartOperation({
+  runStartOperation({
     operation: "image.delete",
     type: "mutation",
-    input: options.data,
+    input: o.data,
     inputSchema: imageBrowserDeleteInput,
     outputSchema: imageBrowserDeleteOut,
-    request: options.request,
+    request: o.request,
     run: async (context, input) => {
       const result = await executeEntity(context, {
         action: "delete",
@@ -123,23 +155,23 @@ export const deleteImages = async (options: {
         ids: input.ids,
       });
       if (result.action !== "delete") {
-        throw new Error("Entity kernel returned the wrong action");
+        throw new Error("Image delete returned the wrong entity action");
       }
       return { deleted: result.deleted, sideEffects: result.sideEffects };
     },
   });
 
-export const getProjectImageSummaries = async (options: {
+export const getProjectImageSummaries = (o: {
   data: z.input<typeof projectImageSummariesInput>;
   request: StartOperationRequest;
 }) =>
-  await runStartOperation({
+  runStartOperation({
     operation: "image.projectSummaries",
     type: "query",
-    input: options.data,
+    input: o.data,
     inputSchema: projectImageSummariesInput,
     outputSchema: projectImageSummariesOut,
-    request: options.request,
+    request: o.request,
     readPolicy: "strong",
     run: async (context, input) => {
       const entityIds = await resolveAllOrThrow(
@@ -164,4 +196,65 @@ export const getProjectImageSummaries = async (options: {
         }),
       );
     },
+  });
+
+export const markImageUploadedForBrowser = (o: {
+  data: z.input<typeof schemas.markUploaded.input>;
+  request: StartOperationRequest;
+}) =>
+  run({
+    ...o,
+    operation: "image.markUploaded",
+    schemas: schemas.markUploaded,
+    workflow: markImageUploadedWorkflow,
+  });
+export const initiateImageUploadForBrowser = (o: {
+  data: z.input<typeof schemas.uploadImage.input>;
+  request: StartOperationRequest;
+}) =>
+  run({
+    ...o,
+    operation: "image.uploadImage",
+    schemas: schemas.uploadImage,
+    workflow: initiateImageUploadWorkflow,
+  });
+export const initiateDocumentUploadForBrowser = (o: {
+  data: z.input<typeof schemas.uploadDocument.input>;
+  request: StartOperationRequest;
+}) =>
+  run({
+    ...o,
+    operation: "image.uploadDocument",
+    schemas: schemas.uploadDocument,
+    workflow: initiateDocumentUploadWorkflow,
+  });
+export const importImageFromUrlForBrowser = (o: {
+  data: z.input<typeof schemas.importFromUrl.input>;
+  request: StartOperationRequest;
+}) =>
+  run({
+    ...o,
+    operation: "image.importFromUrl",
+    schemas: schemas.importFromUrl,
+    workflow: importImageFromUrlWorkflow,
+  });
+export const cullPendingImagesForBrowser = (o: {
+  data: z.input<typeof schemas.cullPendingImages.input>;
+  request: StartOperationRequest;
+}) =>
+  run({
+    ...o,
+    operation: "image.cullPendingImages",
+    schemas: schemas.cullPendingImages,
+    workflow: cullPendingImagesWorkflow,
+  });
+export const cleanupUnreferencedImagesForBrowser = (o: {
+  request: StartOperationRequest;
+}) =>
+  run({
+    ...o,
+    data: undefined,
+    operation: "image.cleanupUnreferencedImages",
+    schemas: schemas.cleanupUnreferencedImages,
+    workflow: (db) => cleanupUnreferencedImagesWorkflow(db),
   });

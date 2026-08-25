@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
-import { useTRPCClient } from "~/integrations/trpc/react";
+import { identifyProductForBrowser } from "~/lib/ai.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { ConfidenceReasoningCard } from "../ai/ai-suggest";
 import type { PendingImage } from "../PendingImageUpload";
@@ -27,8 +27,6 @@ export function IdentifyProductButton<
   } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const trpcClient = useTRPCClient();
-
   const imageUrls = pendingImages.map((img) => img.url);
   const basisKey = imageUrls.join("\u0000");
   const canIdentify = imageUrls.length > 0 && !isLoading;
@@ -38,7 +36,7 @@ export function IdentifyProductButton<
 
     setIsLoading(true);
     try {
-      const identification = await trpcClient.ai.identifyProduct.mutate({
+      const identification = await identifyProductForBrowser({
         imageUrls,
       });
       setResult({ value: identification, basisKey });
@@ -47,7 +45,7 @@ export function IdentifyProductButton<
     } finally {
       setIsLoading(false);
     }
-  }, [basisKey, imageUrls, trpcClient]);
+  }, [basisKey, imageUrls]);
 
   const accept = useCallback(() => {
     if (!result) return;

@@ -30,7 +30,7 @@ interface RenderStat {
   maxMs: number;
   lastPhase: string;
 }
-export type OperationTransport = "start" | "trpc" | "auth" | "client";
+export type OperationTransport = "start" | "auth" | "client";
 export type OperationOutcome = "success" | "error" | "cancelled";
 export type QueryOperationKind = "fetch" | "reuse" | "hydrated";
 

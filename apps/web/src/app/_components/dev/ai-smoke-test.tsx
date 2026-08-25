@@ -13,12 +13,20 @@ import {
 import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
-import { useTRPCClient } from "~/integrations/trpc/react";
+import { askAgentForBrowser } from "~/lib/agent.functions";
+import {
+  auditCategoriesForBrowser,
+  detectInventoryItemsForBrowser,
+  identifyProductForBrowser,
+  parseSearchForBrowser,
+  suggestCategoryForBrowser,
+  suggestLocationForBrowser,
+  suggestLocationTypeForBrowser,
+  suggestUsdaFoodForBrowser,
+} from "~/lib/ai.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 
 const MODEL = "claude-haiku-4-5";
-
-type TrpcClient = ReturnType<typeof useTRPCClient>;
 
 interface EndpointSpec {
   key: string;
@@ -26,20 +34,19 @@ interface EndpointSpec {
   description: string;
   /** Prefilled JSON input, or undefined for input-less endpoints. */
   defaultInput: unknown;
-  run: (client: TrpcClient, input: unknown) => Promise<unknown>;
+  run: (input: unknown) => Promise<unknown>;
 }
 
-// Core sweep — one spec per distinct AI code path. The vanilla tRPC client is
-// called imperatively so queries, mutations (and streaming, below) share one
-// run model. Inputs are edited as JSON for uniformity across shapes.
+// Core sweep — one spec per distinct AI code path. Inputs are edited as JSON
+// for uniformity across shapes.
 const SPECS: EndpointSpec[] = [
   {
     key: "suggestCategory",
     label: "ai.suggestCategory",
     description: "Structured output — product → category",
     defaultInput: { productName: "cordless drill", manufacturer: "DeWalt" },
-    run: (c, i) =>
-      c.ai.suggestCategory.query(
+    run: (i) =>
+      suggestCategoryForBrowser(
         i as { productName: string; manufacturer: string },
       ),
   },
@@ -48,8 +55,7 @@ const SPECS: EndpointSpec[] = [
     label: "ai.suggestLocationType",
     description: "Structured output — location name → type",
     defaultInput: { locationName: "workbench drawer 3" },
-    run: (c, i) =>
-      c.ai.suggestLocationType.query(i as { locationName: string }),
+    run: (i) => suggestLocationTypeForBrowser(i as { locationName: string }),
   },
   {
     key: "suggestLocation",
@@ -57,28 +63,28 @@ const SPECS: EndpointSpec[] = [
     description:
       "Structured output over your real location roster — product → where to put it",
     defaultInput: { productId: "PRD-XXXX" },
-    run: (c, i) => c.ai.suggestLocation.query(i as { productId: string }),
+    run: (i) => suggestLocationForBrowser(i as { productId: string }),
   },
   {
     key: "parseSearch",
     label: "ai.parseSearch",
     description: "Structured output — free-text search → filters",
     defaultInput: { query: "where are my canned tomatoes in the pantry" },
-    run: (c, i) => c.ai.parseSearch.mutate(i as { query: string }),
+    run: (i) => parseSearchForBrowser(i as { query: string }),
   },
   {
     key: "suggestUsdaFood",
     label: "ai.suggestUsdaFood",
     description: "Agentic tool loop — search USDA → select best food",
     defaultInput: { ingredientName: "olive oil" },
-    run: (c, i) => c.ai.suggestUsdaFood.mutate(i as { ingredientName: string }),
+    run: (i) => suggestUsdaFoodForBrowser(i as { ingredientName: string }),
   },
   {
     key: "auditCategories",
     label: "ai.auditCategories",
     description: "Structured output over your real product catalog",
     defaultInput: undefined,
-    run: (c) => c.ai.auditCategories.mutate(),
+    run: () => auditCategoriesForBrowser(),
   },
   {
     key: "identifyProduct",
@@ -90,7 +96,7 @@ const SPECS: EndpointSpec[] = [
         "https://foobucket.nicky.fun/cubby/replace-with-a-real-key.jpg",
       ],
     },
-    run: (c, i) => c.ai.identifyProduct.mutate(i as { imageUrls: string[] }),
+    run: (i) => identifyProductForBrowser(i as { imageUrls: string[] }),
   },
   {
     key: "detectInventoryItems",
@@ -98,15 +104,14 @@ const SPECS: EndpointSpec[] = [
     description:
       "Vision — cached structured location inventory detection with product matching",
     defaultInput: { locationId: "replace-with-location-uuid" },
-    run: (c, i) =>
-      c.ai.detectInventoryItems.mutate(i as { locationId: string }),
+    run: (i) => detectInventoryItemsForBrowser(i as { locationId: string }),
   },
   {
     key: "agentAsk",
     label: "agent.ask",
     description: "Agentic MCP loop (non-streaming) over your data",
     defaultInput: { query: "how many products do I have?" },
-    run: (c, i) => c.agent.ask.mutate(i as { query: string }),
+    run: (i) => askAgentForBrowser(i as { query: string }),
   },
 ];
 
@@ -250,7 +255,6 @@ function AgentStreamCard() {
 }
 
 export function AiSmokeTest() {
-  const client = useTRPCClient();
   const [inputs, setInputs] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       SPECS.filter((s) => s.defaultInput !== undefined).map((s) => [
@@ -280,7 +284,7 @@ export function AiSmokeTest() {
     }
     const t0 = performance.now();
     try {
-      const result = await spec.run(client, parsed);
+      const result = await spec.run(parsed);
       setStates((m) => ({
         ...m,
         [spec.key]: {

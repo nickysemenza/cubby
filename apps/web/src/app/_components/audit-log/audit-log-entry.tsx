@@ -19,7 +19,7 @@ import {
 } from "~/components/ui/collapsible";
 import { Description } from "~/components/ui/description";
 import { EntityIcon, entityLabel } from "~/entities/entities";
-import type { RouterOutputs } from "~/integrations/trpc/react";
+import type { AuditLogEntry } from "~/lib/audit-log.functions";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn } from "~/lib/utils";
 import { HoverableTimestamp } from "../HoverableTimestamp";
@@ -213,8 +213,6 @@ function ChangesList({
     </Stack>
   );
 }
-
-type AuditLogEntry = RouterOutputs["auditLog"]["list"]["entries"][number];
 
 interface AuditLogEntryProps {
   entry: AuditLogEntry;

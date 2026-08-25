@@ -1,7 +1,7 @@
 import type { FoodSummary } from "@cubby/usda-schemas";
 import { createContext, type ReactNode, useContext } from "react";
 import { useChunkedRecordQuery } from "~/app/_components/hooks/useChunkedRecordQuery";
-import { useTRPC } from "~/integrations/trpc/react";
+import { productSummariesQueryOptions } from "~/app/products/product.functions";
 
 type ProductFoodMap = Record<string, FoodSummary | null>;
 
@@ -9,12 +9,11 @@ const ProductFoodSummariesContext = createContext<ProductFoodMap>({});
 const EMPTY_PRODUCT_FOOD_MAP: ProductFoodMap = {};
 
 export function useProductFoodSummaries(productIds: readonly string[]) {
-  const api = useTRPC();
   return useChunkedRecordQuery({
     ids: productIds,
     empty: EMPTY_PRODUCT_FOOD_MAP,
     queryOptions: (chunkIds) =>
-      api.product.summaries.queryOptions(
+      productSummariesQueryOptions(
         { ids: chunkIds, include: ["food"] },
         {
           enabled: chunkIds.length > 0,

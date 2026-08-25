@@ -15,7 +15,7 @@ import {
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
-import { useTRPC } from "~/integrations/trpc/react";
+import { problemsDeleteUnusedMutationOptions } from "~/lib/problems.functions";
 import { invalidatesFor } from "~/lib/query-keys";
 
 /**
@@ -37,10 +37,9 @@ export function UnusedIngredientDeleteFix({
   alsoDeleteProducts: boolean;
   close: () => void;
 }) {
-  const api = useTRPC();
   const noun = alsoDeleteProducts ? "Ingredient and product(s)" : "Ingredient";
   const remove = useProblemCardMutation({
-    mutationFn: api.problems.deleteUnused.mutationOptions,
+    mutationFn: problemsDeleteUnusedMutationOptions,
     // The endpoint reports per-ingredient failures (e.g. a product still has
     // inventory) instead of throwing, so the toast text reflects the outcome.
     success: (data) =>
@@ -148,9 +147,8 @@ export function DeleteAllUnusedButton({
     | "unusedIngredientsWithoutProduct";
   alsoDeleteProducts: boolean;
 }) {
-  const api = useTRPC();
   const remove = useActionMutation({
-    mutationFn: api.problems.deleteUnused.mutationOptions,
+    mutationFn: problemsDeleteUnusedMutationOptions,
     success: (data) =>
       data.failed.length > 0
         ? `Deleted ${data.deleted}, ${data.failed.length} failed (e.g. ${data.failed[0]?.reason ?? "unknown"})`

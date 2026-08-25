@@ -13,8 +13,8 @@ import { TaskHeatmap } from "~/app/projects/charts/task-heatmap";
 import { Section, Stack } from "~/components/layout";
 import { Skeleton } from "~/components/ui/skeleton";
 import { entities, entityDetailParams } from "~/entities/entities";
-import { useTRPC } from "~/integrations/trpc/react";
 import { TasksAgenda } from "./TasksAgenda";
+import { taskTimelineQueryOptions } from "./task.functions";
 
 /** Stable empty default — never a fresh `[]` per render (would churn memos). */
 const NO_TASKS: TaskOut[] = [];
@@ -137,8 +137,7 @@ function TimelineSkeleton() {
  * plus a flat Gantt for tasks that span a range (`dueDate` + `dueEndDate`).
  * Fetch-all, same convention as the board (`TasksBoardView`). */
 export function TasksTimelineView({ filters }: { filters: TaskFilters }) {
-  const api = useTRPC();
-  const { data, isLoading } = useQuery(api.task.timeline.queryOptions(filters));
+  const { data, isLoading } = useQuery(taskTimelineQueryOptions(filters));
   const datedTasks = data?.tasks ?? NO_TASKS;
 
   if (isLoading) {

@@ -20,6 +20,7 @@ import {
 } from "~/app/_components/data-table/table-features";
 import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { productSearchQueryOptions } from "~/app/products/product.functions";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -33,10 +34,10 @@ import {
 } from "~/components/ui/dialog";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
-import { useTRPC } from "~/integrations/trpc/react";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { invalidatesFor } from "~/lib/query-keys";
+import { attachPurchaseProductsMutationOptions } from "./purchase.functions";
 
 const SEARCH_PAGE_SIZE = 50;
 type PickerRow = ProductPickerItemOut & {
@@ -54,13 +55,12 @@ export function LinkProductsDialog({
   purchase: PurchaseOut;
   attachedIds: Set<string>;
 }) {
-  const api = useTRPC();
   const [selected, setSelected] = useState<Set<ProductShortcode>>(new Set());
   const [searchInput, setSearchInput] = useState("");
   const [search] = useDebouncedValue(searchInput, { wait: 300 });
 
   const searchQuery = useQuery({
-    ...api.product.search.queryOptions({
+    ...productSearchQueryOptions({
       filters: { nameFilter: search.trim() || undefined },
       pagination: { pageIndex: 0, pageSize: SEARCH_PAGE_SIZE },
       sort: [{ orderBy: "name", direction: "asc" }],
@@ -94,7 +94,7 @@ export function LinkProductsDialog({
     onOpenChange(next);
   };
   const attach = useActionMutation({
-    mutationFn: api.purchase.attachProducts.mutationOptions,
+    mutationFn: attachPurchaseProductsMutationOptions,
     success: (result) =>
       `Attached ${result.changed} product${result.changed === 1 ? "" : "s"}`,
     invalidateKeys: invalidatesFor("purchase", "product"),

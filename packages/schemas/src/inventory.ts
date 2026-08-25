@@ -54,7 +54,7 @@ export const inventoryPlacement = z.enum(inventoryPlacementValues);
  *
  * "Empty filter field means unrestricted" is the repo-wide rule, so an omitted
  * two-value filter would hand the UI the stock set while MCP `list_inventory`
- * and any direct tRPC caller got the unfiltered one — the two disagreeing
+ * and direct transport callers got the unfiltered one — the two disagreeing
  * silently is the exact class of bug this whole change exists to remove. The
  * default lives server-side in `inventoryentryList`.
  */

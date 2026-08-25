@@ -14,7 +14,18 @@ import { usePageCount } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { useHydratedLoading } from "~/hooks/useHydrated";
-import { useTRPC } from "~/integrations/trpc/react";
+import {
+  backgroundBatchCancelMutationOptions,
+  backgroundBatchJobsQueryOptions,
+  backgroundBatchJobsRootKey,
+  backgroundBatchListQueryOptions,
+  backgroundBatchListRootKey,
+  backgroundBatchRetryMutationOptions,
+  backgroundBatchSummaryQueryOptions,
+  backgroundBatchSummaryRootKey,
+  backgroundJobRetryMutationOptions,
+  backgroundJobsDrainMutationOptions,
+} from "~/lib/background-batch.functions";
 import { invalidateQueryRoots } from "~/lib/query-keys";
 import {
   buildBackgroundJobRows,
@@ -48,7 +59,6 @@ export function BackgroundJobsPage({
   selectedBatchId?: string;
   scopedBatchIds?: string[];
 }) {
-  const api = useTRPC();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [pageIndex, setPageIndex] = useState(0);
@@ -60,7 +70,7 @@ export function BackgroundJobsPage({
   );
 
   const listQuery = useQuery({
-    ...api.backgroundJobs.listBatches.queryOptions({ limit: 25 }),
+    ...backgroundBatchListQueryOptions({ limit: 25 }),
     refetchInterval: (query) => {
       const batches = query.state.data;
       if (!batches) return false;
@@ -75,7 +85,7 @@ export function BackgroundJobsPage({
 
   const selectedInput = { batchId: selectedBatchId ?? "" };
   const summaryQuery = useQuery({
-    ...api.backgroundJobs.getBatchSummary.queryOptions(selectedInput),
+    ...backgroundBatchSummaryQueryOptions(selectedInput),
     enabled: Boolean(selectedBatchId),
     refetchInterval: (query) =>
       query.state.data && isBatchLive(query.state.data.status)
@@ -83,7 +93,7 @@ export function BackgroundJobsPage({
         : false,
   });
   const jobsQuery = useQuery({
-    ...api.backgroundJobs.listBatchJobs.queryOptions({
+    ...backgroundBatchJobsQueryOptions({
       batchId: selectedBatchId ?? "",
       pageIndex,
       pageSize: JOB_PAGE_SIZE,
@@ -109,40 +119,36 @@ export function BackgroundJobsPage({
     previousStatusRef.current = undefined;
   }, [selectedBatchId]);
 
-  const invalidateAfterMutation = (batchId: string) => {
+  const invalidateAfterMutation = () => {
     setPageIndex(0);
     invalidateQueryRoots(queryClient, [
-      api.backgroundJobs.listBatches.queryKey(),
-      api.backgroundJobs.getBatchSummary.queryKey({ batchId }),
-      api.backgroundJobs.listBatchJobs.queryKey(),
+      backgroundBatchListRootKey(),
+      backgroundBatchSummaryRootKey(),
+      backgroundBatchJobsRootKey(),
     ]);
   };
   const invalidateList = () => {
-    const keys: QueryKey[] = [api.backgroundJobs.listBatches.queryKey()];
+    const keys: QueryKey[] = [backgroundBatchListRootKey()];
     invalidateQueryRoots(queryClient, keys);
   };
-  const drain = useMutation(
-    api.backgroundJobs.drain.mutationOptions({ onSuccess: invalidateList }),
-  );
-  const retry = useMutation(
-    api.backgroundJobs.retryBatch.mutationOptions({
-      onSuccess: (_data, variables) =>
-        invalidateAfterMutation(variables.batchId),
-    }),
-  );
-  const retryJob = useMutation(
-    api.backgroundJobs.retryJob.mutationOptions({
-      onSuccess: () => {
-        if (selectedBatchId) invalidateAfterMutation(selectedBatchId);
-      },
-    }),
-  );
-  const cancel = useMutation(
-    api.backgroundJobs.cancelBatch.mutationOptions({
-      onSuccess: (_data, variables) =>
-        invalidateAfterMutation(variables.batchId),
-    }),
-  );
+  const drain = useMutation({
+    ...backgroundJobsDrainMutationOptions(),
+    onSuccess: invalidateList,
+  });
+  const retry = useMutation({
+    ...backgroundBatchRetryMutationOptions(),
+    onSuccess: () => invalidateAfterMutation(),
+  });
+  const retryJob = useMutation({
+    ...backgroundJobRetryMutationOptions(),
+    onSuccess: () => {
+      if (selectedBatchId) invalidateAfterMutation();
+    },
+  });
+  const cancel = useMutation({
+    ...backgroundBatchCancelMutationOptions(),
+    onSuccess: () => invalidateAfterMutation(),
+  });
 
   const visibleBatches = scopedSet
     ? (listQuery.data ?? []).filter(({ id }) => scopedSet.has(id))

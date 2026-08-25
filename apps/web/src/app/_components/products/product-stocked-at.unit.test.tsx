@@ -22,9 +22,6 @@ const mocks = vi.hoisted(() => ({
   hierarchyDrilldown: vi.fn(),
 }));
 
-vi.mock("~/integrations/trpc/react", () => ({
-  useTRPC: () => ({ inventory: { update: { mutationOptions: vi.fn() } } }),
-}));
 vi.mock("~/app/_components/data-table/Table", () => ({
   default: (props: unknown) => {
     mocks.rTable(props);

@@ -37,11 +37,15 @@ import {
   entityDetailQueryOptions,
 } from "~/entities/entity-detail.functions";
 import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
-import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { cancelQueryRoots } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { EditableCell } from "../_components/data-table/editable-cell";
+import {
+  mealAddRecipeMutationOptions,
+  mealRemoveRecipeMutationOptions,
+  mealUpdateRecipeMutationOptions,
+} from "./meal.functions";
 import {
   mealKindBadgeVariant,
   mealKindOptions,
@@ -52,7 +56,6 @@ import { useInvalidateMeals } from "./use-meal-mutations";
 type MealDetail = EntityDetailByEntity["meal"];
 
 export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
-  const api = useTRPC();
   const queryClient = useQueryClient();
   const invalidate = useInvalidateMeals();
   const mealKey = entityDetailQueryKey("meal", mealId);
@@ -72,7 +75,7 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
     mutationFn: entityMutationOptionsFactory("meal", "update"),
     entity: "meal",
   });
-  const addRecipeBase = api.meal.addRecipe.mutationOptions();
+  const addRecipeBase = mealAddRecipeMutationOptions();
   const addRecipe = useMutation({
     mutationKey: addRecipeBase.mutationKey,
     mutationFn: addRecipeBase.mutationFn,
@@ -366,7 +369,6 @@ function RecipeRow({
   mealKey: QueryKey;
   onChanged: () => void;
 }) {
-  const api = useTRPC();
   const queryClient = useQueryClient();
   const [scale, setScale] = useState(String(mr.scale));
 
@@ -375,7 +377,7 @@ function RecipeRow({
       current ? patch(current) : current,
     );
   };
-  const updateBase = api.meal.updateRecipe.mutationOptions();
+  const updateBase = mealUpdateRecipeMutationOptions();
   const updateRecipe = useMutation({
     mutationKey: updateBase.mutationKey,
     mutationFn: updateBase.mutationFn,
@@ -405,7 +407,7 @@ function RecipeRow({
     },
     onSettled: onChanged,
   });
-  const removeBase = api.meal.removeRecipe.mutationOptions();
+  const removeBase = mealRemoveRecipeMutationOptions();
   const removeRecipe = useMutation({
     mutationKey: removeBase.mutationKey,
     mutationFn: removeBase.mutationFn,

@@ -7,7 +7,7 @@ import {
 } from "./entity-detail.functions";
 
 describe("entity detail transport contract", () => {
-  it("keeps the former tRPC-compatible nested detail key", () => {
+  it("keeps the nested detail query key", () => {
     expect(
       entityDetailQueryKey("product", unsafeProductShortcode("PRD-4K7M")),
     ).toEqual([["product", "detail"], { shortcode: "PRD-4K7M" }]);

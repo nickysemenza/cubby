@@ -697,7 +697,7 @@ export const invalidFinancialJsonSchema = z.discriminatedUnion("entity", [
 ]);
 
 // Grouped output shapes — the Problems page loads detectors in cost-grouped
-// chunks (one tRPC query each, routed through an UNBATCHED link so each runs in
+// chunks (one Start operation each, so every group runs in
 // its own Worker invocation/CPU budget; see root-provider.tsx). The groups split
 // by cost: `fast` is all DB-only detectors; the rest isolate the heavier ones
 // (USDA-coverage, UPC) so no single invocation sums all the CPU. The two WASM
@@ -1335,6 +1335,30 @@ export const dryRunPruneAliasesOut = z.object({
   wouldPrune: z.number().int(),
   ingredients: z.number().int(),
 });
+
+export const problemsReparseEventSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("progress"),
+    done: z.number(),
+    total: z.number(),
+  }),
+  z.object({
+    type: z.literal("done"),
+    result: z.object({ updated: z.number(), recipesAffected: z.number() }),
+  }),
+]);
+
+export const problemsPruneAliasesEventSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("progress"),
+    done: z.number(),
+    total: z.number(),
+  }),
+  z.object({
+    type: z.literal("done"),
+    result: z.object({ pruned: z.number() }),
+  }),
+]);
 
 export const cleanupOrphanedEntityEmbeddingsInput = z
   .object({

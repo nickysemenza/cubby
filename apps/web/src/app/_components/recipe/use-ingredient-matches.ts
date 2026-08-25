@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
 import { useMemo } from "react";
-import { useTRPC } from "~/integrations/trpc/react";
+import { ingredientMatchNamesQueryOptions } from "~/app/ingredients/ingredient.functions";
 
 /** A matched ingredient (DB row), or `null` when looked up but not found. */
 export type IngredientMatch = {
@@ -19,25 +19,23 @@ export type IngredientMatchMap = Map<string, IngredientMatch | null>;
  * for the whole `names` list (exact, case-insensitive, on name or alias) instead
  * of one `getByName` per name. Shared by the cookbook importer (per-recipe) and
  * the recipe form. Keep `names` scoped (e.g. one recipe's worth) so the request
- * stays under tRPC's dispatch size limit.
+ * stays within the server operation's bounded input size.
  */
 export function useIngredientMatches(
   names: string[],
   opts?: { enabled?: boolean },
 ): { matchMap: IngredientMatchMap; isLoading: boolean } {
-  const api = useTRPC();
   const uniqueNames = useMemo(
     () => uniq(names.filter((n) => n.length > 0)),
     [names],
   );
   const enabled = (opts?.enabled ?? true) && uniqueNames.length > 0;
 
-  const { data, isLoading } = useQuery(
-    api.ingredient.matchNames.queryOptions(
-      { names: uniqueNames },
-      { enabled, staleTime: 60_000 },
-    ),
-  );
+  const { data, isLoading } = useQuery({
+    ...ingredientMatchNamesQueryOptions({ names: uniqueNames }),
+    enabled,
+    staleTime: 60_000,
+  });
 
   const matchMap = useMemo<IngredientMatchMap>(() => {
     const m: IngredientMatchMap = new Map();

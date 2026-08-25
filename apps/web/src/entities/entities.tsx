@@ -387,7 +387,7 @@ const entityDefinitions = {
     // mergePurchases' vendor-match check — any two vendors can fold together).
     mergeable: {
       keeperMode: "fixed",
-      candidateQuery: (_api, _keeper: VendorOut) =>
+      candidateQuery: (_keeper: VendorOut) =>
         entityListQueryOptions("vendor", {
           filters: {},
           // Generous relative to the whole roster (~150 vendors), within
@@ -440,7 +440,7 @@ const entityDefinitions = {
     // refusal surfaces as the dialog's error toast, not pre-validated here).
     mergeable: {
       keeperMode: "fixed",
-      candidateQuery: (_api, keeper: PurchaseOut) =>
+      candidateQuery: (keeper: PurchaseOut) =>
         entityListQueryOptions("purchase", {
           filters: { vendorId: keeper.vendorId },
           // Generous relative to any one vendor's purchase count, within MAX_PAGE_SIZE.
