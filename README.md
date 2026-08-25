@@ -358,7 +358,9 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
 |---|---|
 | `pnpm run dev` | Start the web, UPC, and USDA local services |
 | `pnpm run build` | Build all three production Worker bundles |
-| `pnpm run check` | Biome (zero warnings), TypeScript, Worker/OpenAPI drift, Knip, dedupe, audit policy, and conventions |
+| `pnpm run check` | Fast changed-file Biome, TypeScript, entity freshness, and high-risk guards |
+| `pnpm run check:all` | Full-tree Biome/Knip plus Worker/OpenAPI, CI-scope, and security validation |
+| `pnpm run dedupe:check` | Dependency deduplication; CI runs it only for manifest/workspace/patch/lockfile changes |
 | `pnpm run typecheck` | Recursive package typecheck with `tsc` (TypeScript 7, native) |
 | `pnpm run lint` | Recursive package Biome lint |
 | `pnpm run format:check` | Recursive package Biome format/lint check |

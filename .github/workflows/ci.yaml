@@ -56,6 +56,7 @@ jobs:
       usda: ${{ steps.scope.outputs.usda }}
       upc: ${{ steps.scope.outputs.upc }}
       workers: ${{ steps.scope.outputs.workers }}
+      dependencies: ${{ steps.scope.outputs.dependencies }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -109,6 +110,7 @@ jobs:
                   usda: false,
                   upc: false,
                   workers: [],
+                  dependencies: true,
                   unknown: false,
                 }
               : classifyPaths(paths);
@@ -194,6 +196,7 @@ jobs:
               usda: classified.usda,
               upc: classified.upc,
               workers: JSON.stringify(classified.workers),
+              dependencies: classified.dependencies,
             };
             for (const [name, value] of Object.entries(outputs)) {
               core.setOutput(name, value);
@@ -275,6 +278,9 @@ jobs:
           wasm: "restore"
       - name: Run repository quality gates
         run: pnpm run check:all
+      - name: Check dependency deduplication
+        if: needs.scope.outputs.dependencies == 'true'
+        run: pnpm dedupe:check
       - name: Run auxiliary package tests
         if: needs.scope.outputs.aux == 'true'
         shell: bash
@@ -327,7 +333,7 @@ jobs:
         with:
           wasm: "restore"
       - uses: ./.github/actions/setup-web-env
-      - name: Build MCP App contract fixture
+      - name: Build USDA picker document
         if: matrix.tier == 'mcp-contract'
         run: node scripts/ensure-mcp-apps.ts
       - name: Run ${{ matrix.tier }} tests
