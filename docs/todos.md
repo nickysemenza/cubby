@@ -117,49 +117,17 @@ history is the archive. Permanent product constraints live in the
 
 ---
 
-## TanStack Start and transport
-
-The migration is complete. TanStack Start functions are the authenticated browser
-transport for entity and workflow operations. Explicit workflow modules own
-business behavior, while typed JSONL server routes expose cancellable progress
-streams. MCP and jobs call the same workflow modules directly; no generic RPC
-dispatcher or compatibility transport remains.
-
-Presigned uploads still use direct storage PUTs. Start owns only the presign and
-finalize operations, and binary bodies do not need an RPC abstraction.
-
-- Track upstream automatic observability support and remove Cubby's Start wrapper
-  when the framework supplies equivalent named request/result/error events and
-  trace hooks: <https://tanstack.com/start/latest/docs/framework/react/guide/observability>.
-- **Unmeasured: `directDomUpdates` on the desktop table virtualizer.** The
-  resolved `@tanstack/react-virtual` accepts `directDomUpdates`, which writes
-  item positions and container size straight to the DOM and re-renders React
-  only when the visible index range or `isScrolling` changes. Adopting it is a
-  structural change to `data-table/Table.tsx` and `DesktopDataRow.tsx`: rows
-  must be `position: absolute` (plus `top: 0`/`left: 0` in the default
-  `'transform'` mode) and must not set the main-axis position themselves, and
-  the inner size container must take `virtualizer.containerRef` and stop
-  setting `height` — the current body uses leading/trailing spacer divs
-  instead. Ship it only if it wins a measurement: scroll-time main-thread cost
-  on a ~1000-row table (products or expenses), before and after. The prior
-  profile behind `useTableVirtualizer`'s overscan comment found rows already
-  cheap to render, so the win is unproven. Not measured yet because frame
-  timing needs a visible, rendering tab and the agent browser pane does not
-  stay foregrounded (`requestAnimationFrame` never fires while hidden) — run it
-  in a real browser.
-
----
-
 ## Triggered
 
+- **TanStack Start observability** — Remove Cubby's observability wrapper when
+  TanStack Start supplies equivalent named request/result/error events and trace
+  hooks: <https://tanstack.com/start/latest/docs/framework/react/guide/observability>.
+- **Measured table-virtualizer investigation** — Revisit `directDomUpdates`
+  only during a measured desktop table-virtualizer investigation.
 - **Entity relation runtime dispatch** — Promote when attach/detach genericization
   resumes. Generate dispatch only for declared runtime ports and make unsupported
   semantic edges fail explicitly; catalog relationships must not imply executable
   mutation behavior.
-- **Entity-runtime production proof** — Promote after a transport or preview
-  deployment changes these contracts: verify Product-list traversal causes no
-  speculative detail fan-out, `P-`/`L-` scans still canonicalize end to end, and
-  Start mutations succeed from a freshly loaded production tab.
 - **Natural CI evidence** — Revisit sharding only when ordinary exact-head runs
   show a repeatable tail imbalance or regression. Use native reporter output;
   do not add duration databases, custom sequencers, or manufactured timing runs.
