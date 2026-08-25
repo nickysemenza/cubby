@@ -2,34 +2,48 @@ import { inventoryCreatePayloadData } from "@cubby/schemas/inventory";
 import { locationCreateInput } from "@cubby/schemas/location";
 import { productCreateInput } from "@cubby/schemas/product";
 import { type TaskStatus, taskCreateInput } from "@cubby/schemas/project";
-import { expect, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import type {
+  EntityKernelEntity,
+  EntityMutationCommand,
+  EntityMutationResult,
+} from "~/server/entity-kernel/contracts";
 
 type CreatedEntity = { id: string };
 
-/**
- * Seed prerequisites through the existing protected tRPC procedures, with the
- * same parsed inputs as the app. This deliberately creates no test endpoint:
- * browser tests still own the interaction and mutation they exercise, while
- * these helpers only create unrelated prerequisite records.
- */
 async function createFixture<T extends CreatedEntity>(
   page: Page,
-  procedure: string,
+  entity: EntityKernelEntity,
   input: unknown,
 ): Promise<T> {
-  const response = await page.request.post(`/api/trpc/${procedure}`, {
-    headers: { "x-trpc-source": "e2e-fixture" },
-    data: { json: input },
-  });
-  const responseBody = (await response.json()) as {
-    result?: { data?: T | { json?: T } };
-  };
-  expect(response, `fixture ${procedure} failed`).toBeOK();
-  const data = responseBody.result?.data;
-  const output =
-    data && typeof data === "object" && "json" in data ? data.json : data;
+  if (page.url() === "about:blank") {
+    try {
+      await page.goto("/settings", { waitUntil: "commit" });
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes("ERR_ABORTED")) {
+        throw error;
+      }
+    }
+  }
+  await page.waitForFunction(
+    () =>
+      typeof (window as typeof window & { __cubbyEntityMutation?: unknown })
+        .__cubbyEntityMutation === "function",
+  );
+  const result = await page.evaluate(
+    async (command: EntityMutationCommand) =>
+      await (
+        window as typeof window & {
+          __cubbyEntityMutation: (
+            command: EntityMutationCommand,
+          ) => Promise<EntityMutationResult>;
+        }
+      ).__cubbyEntityMutation(command),
+    { action: "create", entity, data: input } as EntityMutationCommand,
+  );
+  const output = result.action === "create" ? result.item : null;
   if (!output || typeof output !== "object" || !("id" in output)) {
-    throw new Error(`Fixture ${procedure} returned no entity id`);
+    throw new Error(`Fixture ${entity}.create returned no entity id`);
   }
   return output as T;
 }
@@ -53,7 +67,7 @@ export const seedTaskPrerequisite = (
 ) =>
   createFixture(
     page,
-    "task.create",
+    "task",
     taskCreateInput.parse({
       name: opts.name,
       trade: "other",
@@ -69,7 +83,7 @@ export const seedLocationPrerequisite = (
 ) =>
   createFixture(
     page,
-    "location.create",
+    "location",
     locationCreateInput.parse({
       name,
       aliases: [],
@@ -85,7 +99,7 @@ export const seedProductPrerequisite = (
 ) =>
   createFixture(
     page,
-    "product.create",
+    "product",
     productFixtureInput(opts.name, opts.manufacturer ?? "E2E fixture"),
   );
 
@@ -105,7 +119,7 @@ export const seedInventoryPrerequisites = (
       });
       await createFixture(
         page,
-        "inventory.create",
+        "inventory",
         inventoryCreatePayloadData.parse({
           productId: created.id,
           locationId: location.id,

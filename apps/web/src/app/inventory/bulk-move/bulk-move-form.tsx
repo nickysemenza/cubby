@@ -81,7 +81,10 @@ export default function BulkMoveForm({
   // looking the id up in a first page of locations silently failed for
   // anything further down.
   const { data: initialSourceLocation } = useQuery({
-    ...entityDetailQueryOptions("location", initialSourceLocationId!),
+    ...entityDetailQueryOptions(
+      "location",
+      initialSourceLocationId ?? "LOC-0000",
+    ),
     enabled: !!initialSourceLocationId,
   });
 

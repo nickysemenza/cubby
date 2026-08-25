@@ -40,7 +40,7 @@ const executeEntityMutationTransport = createServerFn({ method: "POST" })
     });
   });
 
-async function executeEntityMutation(options: {
+export async function executeEntityMutation(options: {
   data: EntityMutationCommand;
   signal?: AbortSignal;
 }): Promise<EntityMutationResult> {
