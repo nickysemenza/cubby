@@ -1,7 +1,6 @@
 import { parseShortcode } from "@cubby/shared";
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
-import { z } from "zod";
 import * as entityRuntime from "~/server/entity-runtime.server";
 import { authenticatedEntityServerFunction } from "~/server/middleware/entity-server-functions";
 import {
@@ -16,19 +15,14 @@ import type {
   EntityDetailInputByEntity,
 } from "./generated/entity-details.gen";
 import {
-  detailEntities,
+  entityDetailInputSchema,
   parseEntityDetailInput,
   parseEntityDetailResult,
 } from "./generated/entity-details.gen";
 
-const detailTransportInput = z.object({
-  entity: z.enum(detailEntities),
-  shortcode: z.string().min(1),
-});
-
 const getEntityDetailTransport = createServerFn({ method: "GET" })
   .middleware([authenticatedEntityServerFunction])
-  .validator(detailTransportInput)
+  .validator(entityDetailInputSchema)
   .handler(
     async ({ data, context }) =>
       await entityRuntime.getEntityDetail({

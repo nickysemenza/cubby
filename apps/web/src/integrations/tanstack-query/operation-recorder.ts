@@ -75,6 +75,7 @@ export function finishObservedOperation(
     : "success";
   if (observed.kind === "query") {
     recordQueryOperation({
+      id: observed.id,
       operation: observed.operation,
       transport: observed.transport,
       kind: "fetch",
@@ -91,7 +92,6 @@ export function finishObservedOperation(
       durationMs,
     });
   }
-  if (!consoleEnabled()) return;
   const payload = {
     transport: observed.transport,
     entity: observed.entity,
@@ -99,9 +99,10 @@ export function finishObservedOperation(
     outcome,
     ...(options.error ? { error: options.error } : { result: options.result }),
   };
-  if (outcome === "error")
+  if (outcome === "error" && typeof window !== "undefined")
     console.error(`<< ${observed.id} ${observed.operation}`, payload);
-  else console.log(`<< ${observed.id} ${observed.operation}`, payload);
+  else if (consoleEnabled())
+    console.log(`<< ${observed.id} ${observed.operation}`, payload);
 }
 
 export function operationHeaders(observed: ObservedOperation): HeadersInit {

@@ -64,7 +64,7 @@ export const FLAGS = {
     storageKey: "queryLogger",
     label: "tRPC query logger",
     description: "Log every tRPC query/mutation to the console.",
-    default: import.meta.env.DEV,
+    default: import.meta.env?.DEV ?? false,
     group: "Developer",
   },
   wasmSlowWarn: {
@@ -72,7 +72,7 @@ export const FLAGS = {
     label: "WASM slow-call warnings",
     description:
       "console.warn when a single WASM call exceeds one frame (16ms).",
-    default: import.meta.env.DEV,
+    default: import.meta.env?.DEV ?? false,
     group: "Developer",
   },
   renderHighlight: {

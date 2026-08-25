@@ -421,6 +421,14 @@ function QueriesTab({
                       {stat.transport}
                     </span>
                     {stat.operation}
+                    {stat.lastOperationId && (
+                      <span
+                        className="ml-1 text-3xs text-muted-foreground"
+                        title="Most recent operation ID"
+                      >
+                        {stat.lastOperationId}
+                      </span>
+                    )}
                     {stat.fanout && (
                       <span className="ml-1 rounded-sm bg-destructive/15 px-1 text-3xs text-destructive">
                         N+1

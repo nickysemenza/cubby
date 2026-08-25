@@ -41,24 +41,12 @@ export default literalEntity({
       module: "@cubby/schemas/example",
       export: "exampleFilterFields",
     },
-    urlKeys: ["name", "createdAt"],
+    audit: true,
     descriptors: [
       {
         columnId: "name",
         kind: "text",
         placeholder: "Filter by name...",
-      },
-      {
-        columnId: "createdAt",
-        kind: "range",
-        placeholder: "Filter by created date...",
-        options: [
-          { value: "last7days", label: "Last 7 days" },
-        ],
-        expandRef: {
-          module: "~/entities/filter-behavior",
-          export: "resolveCreatedDate",
-        },
       },
     ],
   },
@@ -123,9 +111,9 @@ injection.
 Filter descriptors are restricted literal records. Static choices stay literal;
 icon-bearing option lists, identifier brands, and compound preset expansion use
 explicit `{ module, export }` references. The compiler rejects unsupported
-kinds/properties, duplicate columns or URL keys, and any URL-key roster that is
-missing or stale relative to its descriptors. SQL predicates remain explicit in
-repository filter builders.
+kinds/properties and duplicate columns or derived URL keys. `audit: true`
+expands the standard created/updated date filters. SQL predicates remain explicit
+in repository filter builders.
 
 Generated artifacts provide the exhaustive entity keys and traits, public
 shortcode contracts (including inbound-only legacy aliases), schema bindings,

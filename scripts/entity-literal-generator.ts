@@ -1288,7 +1288,7 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
       source:
         generatedHeader +
         `${detailRuntimeImportSource}\n\n` +
-        `export const detailEntities = ${compactLiteral(detailEntities.map(({ key }) => key))} as const;\n` +
+        `const detailEntities = ${compactLiteral(detailEntities.map(({ key }) => key))} as const;\n` +
         "export type DetailEntity = (typeof detailEntities)[number];\n\n" +
         "export type EntityDetailByEntity = {\n" +
         `${detailOutputTypes}\n` +
@@ -1299,7 +1299,7 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         "// biome-ignore format: one generated detail schema per entity.\n" +
         `const ENTITY_DETAIL_OUTPUT_SCHEMAS = {\n${detailSchemas}\n} as const;\n\n` +
         "// biome-ignore format: one generated detail input variant per entity.\n" +
-        `const entityDetailInputSchema = z.discriminatedUnion(\"entity\", [\n  ${detailInputVariants}\n]);\n\n` +
+        `export const entityDetailInputSchema = z.discriminatedUnion(\"entity\", [\n  ${detailInputVariants}\n]);\n\n` +
         "export function parseEntityDetailInput<E extends DetailEntity>(entity: E, value: unknown): EntityDetailInputByEntity[E];\n" +
         "export function parseEntityDetailInput(entity: DetailEntity, value: unknown): unknown {\n" +
         "  const parsed = entityDetailInputSchema.parse(value);\n" +

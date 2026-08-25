@@ -17,11 +17,12 @@ export const Route = createFileRoute("/_authenticated/ingredients/")({
   validateSearch: ingredientListSearchSchema,
   search: { middlewares: [stripSearchParams({})] },
   loaderDeps: ({ search }) => search,
-  loader: ({ context, deps }) =>
+  loader: ({ context, deps, abortController }) =>
     ensureEntityListSsr({
       queryClient: context.queryClient,
       entity: "ingredient",
       search: deps,
+      signal: abortController.signal,
     }),
   head: () => ({ meta: [{ title: pageTitle("Ingredients") }] }),
   component: IngredientsPage,

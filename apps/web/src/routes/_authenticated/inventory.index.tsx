@@ -23,11 +23,12 @@ export const Route = createFileRoute("/_authenticated/inventory/")({
   validateSearch: inventorySearchSchema,
   search: { middlewares: [stripSearchParams({})] },
   loaderDeps: ({ search }) => search,
-  loader: ({ context, deps }) =>
+  loader: ({ context, deps, abortController }) =>
     ensureEntityListSsr({
       queryClient: context.queryClient,
       entity: "inventory",
       search: deps,
+      signal: abortController.signal,
     }),
   head: () => ({ meta: [{ title: pageTitle("Inventory") }] }),
   component: InventoryPage,

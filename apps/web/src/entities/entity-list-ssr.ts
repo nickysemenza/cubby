@@ -15,23 +15,50 @@ export async function ensureEntityListSsr<E extends ListEntity>(options: {
   entity: E;
   search: Record<string, unknown>;
   active?: boolean;
+  defaultSort?: { orderBy: string; direction: "asc" | "desc" };
+  signal?: AbortSignal;
 }) {
   if (options.active === false) return;
-  const defaultSort = entityListDefaultSort(options.entity);
+  const defaultSort =
+    options.defaultSort ?? entityListDefaultSort(options.entity);
   const query = entityInfiniteListQueryOptions(
     options.entity,
     compileEntityListInput(options.entity, options.search, {
       defaultSort,
     }),
   );
+  const cancelUnobserved = () => {
+    const cached = options.queryClient
+      .getQueryCache()
+      .find({ queryKey: query.queryKey, exact: true });
+    if ((cached?.getObserversCount() ?? 0) === 0) {
+      void options.queryClient.cancelQueries({
+        queryKey: query.queryKey,
+        exact: true,
+      });
+    }
+  };
+  if (options.signal?.aborted) return;
+  options.signal?.addEventListener("abort", cancelUnobserved, { once: true });
+  const removeAbortListener = () =>
+    options.signal?.removeEventListener("abort", cancelUnobserved);
+  const preload = options.queryClient.ensureInfiniteQueryData(query);
   // A direct request SSRs the page; client navigation starts the identical
   // query without holding the route transition. The mounted list consumes the
   // same cache key in either case.
   if (!import.meta.env.SSR) {
-    void options.queryClient.ensureInfiniteQueryData(query);
+    void preload
+      .catch(() => {
+        // TanStack Query retains the failure for the mounted list to render.
+      })
+      .finally(removeAbortListener);
     return;
   }
-  await options.queryClient.ensureInfiniteQueryData(query);
+  try {
+    await preload;
+  } finally {
+    removeAbortListener();
+  }
 }
 
 /** Mirrors `useEntityListPresentation`'s opening table-state sort. */

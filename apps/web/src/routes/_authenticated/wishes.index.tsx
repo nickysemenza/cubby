@@ -18,11 +18,12 @@ export const Route = createFileRoute("/_authenticated/wishes/")({
   validateSearch: wishSearchSchema,
   search: { middlewares: [stripSearchParams(wishSearchDefaults)] },
   loaderDeps: ({ search }) => search,
-  loader: ({ context, deps }) =>
+  loader: ({ context, deps, abortController }) =>
     ensureEntityListSsr({
       queryClient: context.queryClient,
       entity: "wish",
       search: deps,
+      signal: abortController.signal,
     }),
   head: () => ({ meta: [{ title: pageTitle("Wishlist") }] }),
   component: WishesPage,

@@ -2,6 +2,7 @@ import {
   type FilterOptionsInput,
   type FilterOptionsOut,
   filterOptionsInput,
+  filterOptionsOut,
 } from "@cubby/schemas/filter-options";
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
@@ -31,13 +32,15 @@ async function getEntityFilterOptions(options: {
     operation: "entity.filterOptions",
     input: options.data,
     call: async (headers) =>
-      unwrapEntityTransportResult(
-        "entity.filterOptions",
-        await getEntityFilterOptionsTransport({
-          data: options.data,
-          signal: options.signal,
-          headers,
-        }),
+      filterOptionsOut.parse(
+        unwrapEntityTransportResult(
+          "entity.filterOptions",
+          await getEntityFilterOptionsTransport({
+            data: options.data,
+            signal: options.signal,
+            headers,
+          }),
+        ),
       ),
   });
 }

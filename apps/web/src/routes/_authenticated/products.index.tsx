@@ -24,11 +24,12 @@ export const Route = createFileRoute("/_authenticated/products/")({
   validateSearch: productSearchSchema,
   search: { middlewares: [stripSearchParams(productSearchDefaults)] },
   loaderDeps: ({ search }) => search,
-  loader: ({ context, deps }) =>
+  loader: ({ context, deps, abortController }) =>
     ensureEntityListSsr({
       queryClient: context.queryClient,
       entity: "product",
       search: deps,
+      signal: abortController.signal,
     }),
   component: ProductsPage,
   head: () => ({ meta: [{ title: pageTitle("Products") }] }),

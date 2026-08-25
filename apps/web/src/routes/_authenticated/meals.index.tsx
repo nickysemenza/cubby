@@ -23,12 +23,13 @@ export const Route = createFileRoute("/_authenticated/meals/")({
   validateSearch: mealCalendarSearchSchema,
   search: { middlewares: [stripSearchParams(mealCalendarSearchDefaults)] },
   loaderDeps: ({ search }) => search,
-  loader: ({ context, deps }) =>
+  loader: ({ context, deps, abortController }) =>
     ensureEntityListSsr({
       queryClient: context.queryClient,
       entity: "meal",
       search: deps,
       active: deps.view === "table",
+      signal: abortController.signal,
     }),
   component: MealsIndexRoute,
   head: () => ({ meta: [{ title: pageTitle("Meals") }] }),

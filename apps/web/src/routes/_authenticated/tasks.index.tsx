@@ -46,12 +46,13 @@ export const Route = createFileRoute("/_authenticated/tasks/")({
   validateSearch: taskSearchSchema,
   search: { middlewares: [stripSearchParams(taskSearchDefaults)] },
   loaderDeps: ({ search }) => search,
-  loader: ({ context, deps }) =>
+  loader: ({ context, deps, abortController }) =>
     ensureEntityListSsr({
       queryClient: context.queryClient,
       entity: "task",
       search: deps,
       active: deps.view === "list" || (!deps.view && Boolean(deps.q)),
+      signal: abortController.signal,
     }),
   component: TasksPage,
   head: () => ({ meta: [{ title: pageTitle("Tasks") }] }),

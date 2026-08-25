@@ -35,6 +35,7 @@ export type OperationOutcome = "success" | "error" | "cancelled";
 export type QueryOperationKind = "fetch" | "reuse" | "hydrated";
 
 interface QueryStat {
+  lastOperationId?: string;
   operation: string;
   transport: OperationTransport;
   fetches: number;
@@ -207,6 +208,7 @@ const queryStatKey = (transport: OperationTransport, operation: string) =>
   `${transport}:${operation}`;
 
 export function recordQueryOperation(options: {
+  id?: string;
   operation: string;
   transport: OperationTransport;
   kind: QueryOperationKind;
@@ -227,6 +229,7 @@ export function recordQueryOperation(options: {
     maxMs: 0,
     fanout: false,
   };
+  if (options.id) s.lastOperationId = options.id;
   if (options.kind === "reuse") s.reuses += 1;
   else if (options.kind === "hydrated") s.hydrated += 1;
   else {
@@ -237,7 +240,9 @@ export function recordQueryOperation(options: {
     if (options.outcome === "cancelled") s.cancelled += 1;
     if (options.outcome === "error") s.errors += 1;
     const now = performance.now();
-    const timestamps = queryTimestamps.get(key) ?? [];
+    const timestamps = (queryTimestamps.get(key) ?? []).filter(
+      (timestamp) => now - timestamp < FANOUT_WINDOW_MS,
+    );
     timestamps.push(now);
     queryTimestamps.set(key, timestamps);
     recordSlow("query", options.operation, durationMs);

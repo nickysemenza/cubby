@@ -19,7 +19,7 @@ export const Route = createFileRoute("/_authenticated/projects/")({
   validateSearch: projectSearchSchema,
   search: { middlewares: [stripSearchParams(projectSearchDefaults)] },
   loaderDeps: ({ search }) => search,
-  loader: ({ context, deps }) =>
+  loader: ({ context, deps, abortController }) =>
     ensureEntityListSsr({
       queryClient: context.queryClient,
       entity: "project",
@@ -27,6 +27,11 @@ export const Route = createFileRoute("/_authenticated/projects/")({
       active:
         deps.view === "gallery" ||
         (deps.view === "data" && deps.rows === "flat"),
+      defaultSort:
+        deps.view === "data" && deps.rows === "flat"
+          ? { orderBy: "startDate", direction: "desc" }
+          : undefined,
+      signal: abortController.signal,
     }),
   component: ProjectsPage,
   head: () => ({ meta: [{ title: pageTitle("Projects") }] }),

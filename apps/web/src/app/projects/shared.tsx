@@ -1386,9 +1386,7 @@ export function ProjectTable({
   const tableStateOptions = useMemo(() => ({ initialSort: "startDate" }), []);
   const { workbench, data, totalCount } = useEntityList({
     entity: "project",
-    queryOptions: isTree
-      ? api.project.tree.queryOptions
-      : api.project.list.queryOptions,
+    queryOptions: isTree ? api.project.tree.queryOptions : undefined,
     columns,
     filterOptions,
     deletable: deletableConfig,

@@ -27,11 +27,12 @@ export const Route = createFileRoute("/_authenticated/vendors/")({
   validateSearch: vendorSearchSchema,
   search: { middlewares: [stripSearchParams(vendorSearchDefaults)] },
   loaderDeps: ({ search }) => search,
-  loader: ({ context, deps }) =>
+  loader: ({ context, deps, abortController }) =>
     ensureEntityListSsr({
       queryClient: context.queryClient,
       entity: "vendor",
       search: deps,
+      signal: abortController.signal,
     }),
   head: () => ({ meta: [{ title: pageTitle("Vendors") }] }),
   component: VendorsPage,

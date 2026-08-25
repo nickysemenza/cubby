@@ -651,7 +651,6 @@ function ServerProjectGallery({
   );
   const list = useEntityList<ProjectOut, ProjectFilters>({
     entity: "project",
-    queryOptions: api.project.list.queryOptions,
     columns,
     filterOptions,
     layoutKey: "project:gallery",

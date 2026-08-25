@@ -26,11 +26,12 @@ export const Route = createFileRoute("/_authenticated/financial-accounts/")({
   validateSearch: financialAccountSearchSchema,
   search: { middlewares: [stripSearchParams(financeSearchDefaults)] },
   loaderDeps: ({ search }) => search,
-  loader: ({ context, deps }) =>
+  loader: ({ context, deps, abortController }) =>
     ensureEntityListSsr({
       queryClient: context.queryClient,
       entity: "financialAccount",
       search: deps,
+      signal: abortController.signal,
     }),
   head: () => ({ meta: [{ title: pageTitle("Accounts") }] }),
   component: AccountsPage,

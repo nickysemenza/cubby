@@ -20,6 +20,7 @@ describe("operation recorder", () => {
   afterEach(() => {
     reset();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("records tRPC fetches and successful cache reuse", async () => {
@@ -81,5 +82,30 @@ describe("operation recorder", () => {
       entity: "product",
       outcome: "success",
     });
+  });
+
+  it("always logs Start failures and exposes their shared operation id", () => {
+    vi.stubGlobal("window", {
+      addEventListener: () => undefined,
+      localStorage: { getItem: () => "false" },
+    });
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const errorLog = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const operation = beginObservedOperation({
+      kind: "query",
+      transport: "start",
+      operation: "entity.list",
+      entity: "product",
+      input: {},
+    });
+
+    finishObservedOperation(operation, { error: new Error("failed") });
+
+    expect(errorLog).toHaveBeenCalledOnce();
+    expect(snapshot().queries["start:entity.list"]?.lastOperationId).toBe(
+      operation.id,
+    );
   });
 });

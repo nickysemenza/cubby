@@ -41,12 +41,13 @@ export const Route = createFileRoute("/_authenticated/locations/")({
   validateSearch: locationSearchSchema,
   search: { middlewares: [stripSearchParams(locationSearchDefaults)] },
   loaderDeps: ({ search }) => search,
-  loader: ({ context, deps }) =>
+  loader: ({ context, deps, abortController }) =>
     ensureEntityListSsr({
       queryClient: context.queryClient,
       entity: "location",
       search: deps,
       active: deps.view === "table",
+      signal: abortController.signal,
     }),
   component: LocationsPage,
   head: () => ({ meta: [{ title: pageTitle("Locations") }] }),

@@ -45,12 +45,13 @@ export const Route = createFileRoute("/_authenticated/expenses/")({
   validateSearch: expenseSearchSchema,
   search: { middlewares: [stripSearchParams(expenseSearchDefaults)] },
   loaderDeps: ({ search }) => search,
-  loader: ({ context, deps }) =>
+  loader: ({ context, deps, abortController }) =>
     ensureEntityListSsr({
       queryClient: context.queryClient,
       entity: "expense",
       search: deps,
       active: (deps.view ?? "ledger") === "ledger",
+      signal: abortController.signal,
     }),
   component: ExpensesPage,
   head: () => ({ meta: [{ title: pageTitle("Expenses") }] }),

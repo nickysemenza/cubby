@@ -1,10 +1,10 @@
-import type {
-  FilterOptionsInput,
-  FilterOptionsOut,
+import {
+  type FilterOptionsInput,
+  type FilterOptionsOut,
+  filterOptionsOut,
 } from "@cubby/schemas/filter-options";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import * as drizzle from "drizzle-orm";
-import { z } from "zod";
 import type { EntityInspectorHealth } from "~/entities/entity-inspector-health.functions";
 import type { PublicEntityError } from "~/entities/entity-transport";
 import type {
@@ -77,16 +77,6 @@ function throwIfAborted(signal: AbortSignal): void {
 }
 
 function publicFailure(error: unknown): EntityTransportResult<never> | null {
-  if (error instanceof z.ZodError) {
-    return {
-      ok: false,
-      error: {
-        code: "BAD_REQUEST",
-        reason: "INVALID_INPUT",
-        message: error.issues.map((issue) => issue.message).join(", "),
-      },
-    };
-  }
   const translated = translateDatabaseError(error) ?? error;
   const payload = toPublicErrorPayload(translated);
   if (!payload.code && !payload.reason && !payload.blockers) return null;
@@ -211,7 +201,9 @@ export async function getEntityFilterOptions(options: {
     input: options.data,
     request: options.request,
     execute: async (context) =>
-      await getFilterOptions(context.readDb, options.data),
+      filterOptionsOut.parse(
+        await getFilterOptions(context.readDb, options.data),
+      ),
   });
 }
 
