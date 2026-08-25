@@ -22,8 +22,14 @@ const MAX_STATEMENT_LEN = 1000;
 const extractOperation = (sql: string): string | undefined =>
   /^\s*(\w+)/u.exec(sql)?.[1]?.toUpperCase();
 
+type RequestDbRole = "strong" | "bounded-stale";
+
 const traceQuery =
-  (run: (...args: unknown[]) => unknown, getTransaction: () => boolean) =>
+  (
+    run: (...args: unknown[]) => unknown,
+    getTransaction: () => boolean,
+    role: RequestDbRole,
+  ) =>
   (...args: unknown[]): unknown => {
     if (args.length === 0 || typeof args[args.length - 1] === "function")
       return run(...args);
@@ -42,6 +48,7 @@ const traceQuery =
         "db.operation.name": operation,
         "db.query.text": sql.slice(0, MAX_STATEMENT_LEN),
         "db.query.transaction": getTransaction(),
+        "cubby.db.consistency": role,
       });
       const res = (await run(...args)) as {
         rowCount?: number | null;
@@ -67,7 +74,7 @@ type TracedPool = pg.Pool & {
   [ACQUIRE]?: (inTransaction: boolean) => Promise<pg.PoolClient>;
 };
 
-const tracePool = (pool: pg.Pool): pg.Pool => {
+const tracePool = (pool: pg.Pool, role: RequestDbRole): pg.Pool => {
   const rawQuery = pool.query.bind(pool) as (...args: unknown[]) => unknown;
   const rawConnect = pool.connect.bind(pool) as (...args: unknown[]) => unknown;
 
@@ -88,6 +95,7 @@ const tracePool = (pool: pg.Pool): pg.Pool => {
         client.query = traceQuery(
           client.query.bind(client),
           () => client[IN_TX] ?? false,
+          role,
         ) as typeof client.query;
         client[TRACED] = true;
       }
@@ -118,13 +126,17 @@ const tracePool = (pool: pg.Pool): pg.Pool => {
   return pool;
 };
 
-const traceStandaloneClient = (client: pg.Client): pg.Client => {
+const traceStandaloneClient = (
+  client: pg.Client,
+  role: RequestDbRole,
+): pg.Client => {
   const traced = client as TracedStandaloneClient;
   traced[IN_TX] = false;
   if (!traced[TRACED]) {
     traced.query = traceQuery(
       traced.query.bind(traced),
       () => traced[IN_TX] ?? false,
+      role,
     ) as typeof traced.query;
     traced[TRACED] = true;
   }
@@ -134,12 +146,17 @@ const traceStandaloneClient = (client: pg.Client): pg.Client => {
 const createPoolClient = (connectionString: string) => {
   const { Pool } = pg;
   const pool = new Pool({ connectionString, max: 25 });
-  return drizzleNodePostgres({ client: tracePool(pool), schema });
+  return drizzleNodePostgres({ client: tracePool(pool, "strong"), schema });
+};
+
+export type RequestDbConnections = {
+  strong: string;
+  boundedStale: string;
 };
 
 type LazyDbHolder = {
-  connectionString: string;
-  db?: DBClient;
+  connections: RequestDbConnections;
+  clients: Partial<Record<RequestDbRole, DBClient>>;
 };
 
 const requestDbStore = new AsyncLocalStorage<LazyDbHolder>();
@@ -152,10 +169,10 @@ const requestDbStore = new AsyncLocalStorage<LazyDbHolder>();
  * inside getDbInstance(), so requests that never query never wake Neon.
  */
 export const withRequestDb = async <T>(
-  connectionString: string,
+  connections: RequestDbConnections,
   fn: () => Promise<T>,
 ): Promise<T> => {
-  const holder: LazyDbHolder = { connectionString };
+  const holder: LazyDbHolder = { connections, clients: {} };
   return requestDbStore.run(holder, fn);
 };
 
@@ -170,7 +187,10 @@ export const withRequestDbClient = async <T>(
   connectionString: string,
   fn: () => Promise<T>,
 ): Promise<T> => {
-  const client = traceStandaloneClient(new pg.Client({ connectionString }));
+  const client = traceStandaloneClient(
+    new pg.Client({ connectionString }),
+    "strong",
+  );
   const t0 = performance.now();
   await withTrace(TraceNames.db("connect"), async (span) => {
     await client.connect();
@@ -181,8 +201,8 @@ export const withRequestDbClient = async <T>(
     });
   });
   const holder: LazyDbHolder = {
-    connectionString,
-    db: drizzleNodePostgres({ client, schema }),
+    connections: { strong: connectionString, boundedStale: connectionString },
+    clients: { strong: drizzleNodePostgres({ client, schema }) },
   };
   return requestDbStore.run(holder, fn);
 };
@@ -199,20 +219,31 @@ if (!isCFWorkers) {
   if (env.NODE_ENV !== "production") globalForDb.db = moduleDb;
 }
 
-const getDbInstance = (): DBClient => {
+const requestPoolLimit = (role: RequestDbRole): number =>
+  role === "strong" ? 5 : 1;
+
+const getDbInstance = (role: RequestDbRole): DBClient => {
   const holder = requestDbStore.getStore();
   if (holder) {
-    if (!holder.db) {
-      // Keep the per-request pool within the Worker connection ceiling.
-      // Hyperdrive owns lifecycle and timeouts; do not add session overrides.
-      const pool = new pg.Pool({
-        connectionString: holder.connectionString,
-        max: 5,
-      });
-      const db = drizzleNodePostgres({ client: tracePool(pool), schema });
-      holder.db = db;
-    }
-    return holder.db;
+    const existing = holder.clients[role];
+    if (existing) return existing;
+    // Keep the per-request pool within the Worker connection ceiling.
+    // Auth and authoritative work may use five strong sockets; bounded-stale
+    // reads get one more socket so both adapters together stay at six.
+    // Hyperdrive owns lifecycle and timeouts; do not add session overrides.
+    const pool = new pg.Pool({
+      connectionString:
+        role === "strong"
+          ? holder.connections.strong
+          : holder.connections.boundedStale,
+      max: requestPoolLimit(role),
+    });
+    const client = drizzleNodePostgres({
+      client: tracePool(pool, role),
+      schema,
+    });
+    holder.clients[role] = client;
+    return client;
   }
   if (moduleDb) return moduleDb;
   throw new Error(
@@ -220,17 +251,29 @@ const getDbInstance = (): DBClient => {
   );
 };
 
-const dbProxy = new Proxy({} as DBClient, {
-  get(_target, prop, receiver) {
-    return Reflect.get(getDbInstance(), prop, receiver);
-  },
-});
+const createDbProxy = (role: RequestDbRole): DBClient =>
+  new Proxy({} as DBClient, {
+    get(_target, prop, receiver) {
+      return Reflect.get(getDbInstance(role), prop, receiver);
+    },
+  });
+
+const dbProxy = createDbProxy("strong");
+const boundedStaleDbProxy = isCFWorkers
+  ? createDbProxy("bounded-stale")
+  : dbProxy;
 
 const toBrandedDatabase = (client: DBClient): Database => {
   return client as unknown as Database;
 };
 
 export const db = toBrandedDatabase(dbProxy);
+
+/**
+ * Request-scoped adapter for explicitly approved briefly stale reads.
+ * Non-Worker environments deliberately share the strong module database.
+ */
+export const boundedStaleDb = toBrandedDatabase(boundedStaleDbProxy);
 
 /** Raw client for integrations; application queries use the branded `db`. */
 export const drizzle = dbProxy;

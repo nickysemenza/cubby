@@ -183,6 +183,7 @@ export const createTestTRPCContext = (
   opts: {
     headers?: Headers;
     auth?: { userId: UserId };
+    readDb?: Database;
   } = {},
 ) => {
   // Batch misses are 200s; single-food misses are 404s. A batch 404 represents
@@ -210,6 +211,11 @@ export const createTestTRPCContext = (
 
   return {
     ...crudServices,
+    readDb: opts.readDb ?? db,
+    readConsistency: {
+      consistency: "strong" as const,
+      reason: "single-database" as const,
+    },
     auth,
     isSystemRequest: false, // Test contexts are not system requests by default
     actorContext,

@@ -28,7 +28,7 @@ const getEntityFilterOptionsTransport = createServerFn({ method: "POST" })
       input: data,
       headers: getRequest().headers,
       execute: async (context) =>
-        repositoryModule.getFilterOptions(context.db, data),
+        repositoryModule.getFilterOptions(context.readDb, data),
     });
   });
 
