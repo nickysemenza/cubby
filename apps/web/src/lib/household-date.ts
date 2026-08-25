@@ -1,7 +1,39 @@
+import { TZDate } from "@date-fns/tz";
+
 /**
  * Single-user household — hardcoded rather than configurable.
  */
 export const HOUSEHOLD_TIMEZONE = "America/Los_Angeles";
+
+/**
+ * The instant at which `minutes` past midnight on `plainDate` occurs in the
+ * household's timezone — e.g. `householdDateTime("2026-08-15", 19 * 60)` is
+ * 7pm PDT that day.
+ *
+ * Goes through `TZDate` rather than `Date.UTC` plus a fixed offset: the offset
+ * is -7 for half the year and -8 for the other half, and the two switch inside
+ * the range the calendar feed publishes. A hardcoded offset is wrong for months
+ * at a time.
+ */
+export function householdDateTime(plainDate: string, minutes = 0): Date {
+  const [year, month, day] = plainDate.split("-").map(Number);
+  if (year == null || month == null || day == null) {
+    throw new Error(`Not a plain date: "${plainDate}"`);
+  }
+  const zoned = new TZDate(
+    year,
+    month - 1,
+    day,
+    Math.floor(minutes / 60),
+    minutes % 60,
+    HOUSEHOLD_TIMEZONE,
+  );
+  // Re-wrapped as a plain Date on purpose: a TZDate serializes to its own
+  // offset form ("…T19:00:00.000-07:00"), and callers that want UTC — the ICS
+  // feed's `Z` timestamps — would silently get the local rendering instead.
+  // Same instant either way.
+  return new Date(zoned.getTime());
+}
 
 /**
  * Household-local calendar date, e.g. "2026-07-22". Never derive this via

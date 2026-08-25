@@ -34,6 +34,12 @@ const today = () => format(new Date(), "yyyy-MM-dd");
  * The slot a recipe added right now most likely belongs to. A suggestion in a
  * visible field, never a silent write — the picker still shows it and the user
  * can change it before submitting.
+ *
+ * Deliberately NOT derived from `MEAL_TYPE_START_MINUTES` by taking the latest
+ * slot already started. That map says when a slot is eaten; these bounds say
+ * what you are most likely *planning* at a given hour, and the two disagree
+ * where it matters — at 4pm you are almost always adding a recipe to tonight's
+ * dinner, not to a snack that nominally began at 3.
  */
 const slotForNow = (): MealType => {
   const hour = new Date().getHours();

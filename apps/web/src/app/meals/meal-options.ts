@@ -1,11 +1,13 @@
 import {
   MEAL_KIND_LABELS,
   MEAL_TYPE_LABELS,
+  MEAL_TYPE_START_MINUTES,
   type MealKind,
   type MealType,
   mealKindValues,
   mealTypeValues,
 } from "@cubby/schemas/meal-classification";
+import { format } from "date-fns";
 import {
   CircleDashed,
   Cookie,
@@ -62,6 +64,26 @@ export const mealKindOptions: FilterableComboboxItem[] = mealKindValues.map(
     color: badgeVariantColor[mealKindBadgeVariant[value]],
   }),
 );
+
+/**
+ * Clock label for a slot — "9:00 AM" — or null when the meal is unslotted.
+ *
+ * Reads off `MEAL_TYPE_START_MINUTES`, the same map the published ICS feed
+ * places events with, so the app and a subscribed calendar never disagree about
+ * when dinner is. `h:mm a` matches the calendar's own `eventTime` format.
+ *
+ * The epoch date is arbitrary scaffolding for the formatter: only the
+ * hour/minute fields are rendered, and constructing it locally keeps the label
+ * a pure function of the slot.
+ */
+export function mealTypeTimeLabel(type: MealType | null): string | null {
+  if (!type) return null;
+  const minutes = MEAL_TYPE_START_MINUTES[type];
+  return format(
+    new Date(2000, 0, 1, Math.floor(minutes / 60), minutes % 60),
+    "h:mm a",
+  );
+}
 
 /**
  * Slot glyphs for tight surfaces — the calendar chip, where the label is

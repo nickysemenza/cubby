@@ -154,7 +154,7 @@ export const mealList = async (
     );
   // `mealType` must sort by slot, not by slug: a plain text ordering puts
   // dessert before dinner, which reads as a broken table. `mealTypeValues`
-  // declaration order IS the slot order (the calendar sorts a day by it), so
+  // declaration order IS clock order (the calendar sorts a day by it), so
   // `array_position` over that tuple is the same ranking `mealTypeRank`
   // applies client-side. Unslotted meals sort last in both directions.
   const resolveMealSort = (s: SortParams): SQL[] | null => {
