@@ -2,6 +2,21 @@ import { REQUEST_ID_HEADER } from "./request-id";
 
 const HTML_CACHE_CONTROL = "private, no-cache, must-revalidate";
 
+/** Stamp a request id on a streamed response without consuming its body. */
+export function withRequestId(
+  response: Response,
+  requestId?: string,
+): Response {
+  if (!requestId) return response;
+  const headers = new Headers(response.headers);
+  headers.set(REQUEST_ID_HEADER, requestId);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 /**
  * Force every SSR HTML document to revalidate while preserving its stream, and
  * stamp the request id on it when one is known.

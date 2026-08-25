@@ -89,7 +89,10 @@ export async function getEntityDetail(options: {
     outputSchema: (input) =>
       getEntityDetailOutputSchema(input.entity).nullable(),
     request: options.request,
-    readPolicy: "strong",
+    // Browser UI detail reads may use the bounded-stale handle selected by
+    // request context. Non-browser and fresh-after-write requests remain
+    // strong because their context selects the authoritative database.
+    readPolicy: "context",
     run: async (context, input) => {
       const result = await executeEntity(context, {
         action: "get",

@@ -18,7 +18,7 @@ import {
   parseEntityDetailResult,
 } from "./generated/entity-details.gen";
 
-const getEntityDetailTransport = createServerFn({ method: "GET" })
+const getEntityDetailTransport = createServerFn({ method: "POST" })
   .middleware([authenticatedStartServerFunction])
   .validator(
     (input: unknown) =>

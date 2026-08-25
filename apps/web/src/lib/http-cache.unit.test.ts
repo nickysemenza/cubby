@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { withHtmlNoCache } from "./http-cache";
+import { withHtmlNoCache, withRequestId } from "./http-cache";
 
 describe("withHtmlNoCache", () => {
   it("decorates HTML while preserving the streamed response metadata", async () => {
@@ -32,5 +32,14 @@ describe("withHtmlNoCache", () => {
     const response = Response.json({ ok: true }, { status: 201 });
     expect(withHtmlNoCache(response)).toBe(response);
     expect(response.headers.get("cache-control")).toBeNull();
+  });
+
+  it("adds a correlation id to a non-HTML server-function response", async () => {
+    const response = Response.json({ ok: true }, { status: 201 });
+    const decorated = withRequestId(response, "ray-start-test");
+
+    expect(decorated).not.toBe(response);
+    expect(decorated.headers.get("x-trace-id")).toBe("ray-start-test");
+    expect(await decorated.json()).toEqual({ ok: true });
   });
 });

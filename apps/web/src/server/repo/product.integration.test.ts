@@ -1,10 +1,14 @@
 import { unsafeImageShortcode } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
-import type { ProductFilters } from "@cubby/schemas/product";
+import {
+  type ProductFilters,
+  productWithFoodOut,
+} from "@cubby/schemas/product";
 import { projectCreateInput, taskCreateInput } from "@cubby/schemas/project";
 import { and, eq, sql } from "drizzle-orm";
-import { withTestDb } from "tooling/test-setup";
+import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { createTestTRPCContext } from "~/server/api/trpc";
 import {
   image,
   inventoryEntry,
@@ -14,6 +18,8 @@ import {
   productImage,
   productUnitMappings,
 } from "~/server/db/schema";
+import { executeEntity } from "~/server/entity-kernel";
+import { requireActor } from "~/server/request-context";
 import { getAuditLog } from "./audit-log";
 import { getDb, insertAndReturn, notDeleted } from "./database-helpers";
 import { createExpense, deleteExpenses } from "./expense";
@@ -56,6 +62,146 @@ import { createWish, deleteWishes } from "./wish";
 
 describe("product repository", () => {
   const ctx = withTestDb();
+
+  // Measured with countTestDbQueries against the current detail reader; keep
+  // these as statement ceilings so an accidental N+1 fails deterministically.
+  const PRODUCT_DETAIL_QUERY_BUDGET_LEAN = 11;
+  const PRODUCT_DETAIL_QUERY_BUDGET_DATA_RICH = 16;
+
+  const readProductDetailThroughKernel = async (shortcode: string) => {
+    // The test context stubs USDA misses; these fixtures deliberately omit
+    // UPC/FDC identifiers so the budget measures the database detail path,
+    // not an external enrichment call.
+    const result = await executeEntity(
+      requireActor(
+        createTestTRPCContext(ctx.db, {
+          auth: { userId: ctx.actor.userId },
+        }),
+      ),
+      {
+        action: "get",
+        entity: "product",
+        id: shortcode,
+        missing: "null",
+      },
+    );
+    if (result.action !== "get") throw new Error("unreachable");
+    return result.item === null ? null : productWithFoodOut.parse(result.item);
+  };
+
+  it("keeps a lean product detail within its query budget", async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Query Budget Lean Product" }),
+      ctx.actor,
+    );
+
+    const measured = await countTestDbQueries(() =>
+      readProductDetailThroughKernel(product.id),
+    );
+
+    expect(measured.result?.id).toBe(product.id);
+    expect(measured.queryCount).toBeLessThanOrEqual(
+      PRODUCT_DETAIL_QUERY_BUDGET_LEAN,
+    );
+  });
+
+  it("keeps a data-rich product detail within its query budget", async () => {
+    const ingredient = await createIngredient(
+      ctx.db,
+      { name: "Query Budget Ingredient", aliases: ["qbi"] },
+      ctx.actor,
+    );
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Query Budget Data-Rich Product",
+        ingredientId: ingredient.id,
+        externalIds: [
+          {
+            source: "amazon",
+            kind: "asin",
+            externalId: "B0QUERYBUD01",
+            url: null,
+          },
+          {
+            source: "home-depot",
+            kind: "retailer_sku",
+            externalId: "B0QUERYBUD02",
+            url: null,
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    const cover = await createImageFixture(
+      ctx.db,
+      "query-budget-data-rich-cover",
+    );
+    await insertAndReturn(ctx.db, productImage, {
+      productId: product.entityId,
+      imageId: cover.id,
+    });
+    const room = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Query Budget Room", type: "room" }),
+      ctx.actor,
+    );
+    const shelf = await createLocation(
+      ctx.db,
+      makeLocationInput({
+        name: "Query Budget Shelf",
+        type: "shelf",
+        parentId: room.id,
+      }),
+      ctx.actor,
+    );
+    await createInventoryEntry(
+      ctx.db,
+      {
+        productId: product.id,
+        locationId: shelf.id,
+        amount: { value: 2, unit: "each" },
+      },
+      ctx.actor,
+    );
+    const singleRowMeasured = await countTestDbQueries(() =>
+      readProductDetailThroughKernel(product.id),
+    );
+
+    const secondShelf = await createLocation(
+      ctx.db,
+      makeLocationInput({
+        name: "Query Budget Second Shelf",
+        type: "shelf",
+        parentId: room.id,
+      }),
+      ctx.actor,
+    );
+    await createInventoryEntry(
+      ctx.db,
+      {
+        productId: product.id,
+        locationId: secondShelf.id,
+        amount: { value: 3, unit: "each" },
+      },
+      ctx.actor,
+    );
+
+    const measured = await countTestDbQueries(() =>
+      readProductDetailThroughKernel(product.id),
+    );
+
+    expect(measured.result?.id).toBe(product.id);
+    expect(measured.result?.inventoryEntry).toHaveLength(2);
+    expect(measured.result?.externalIds).toHaveLength(2);
+    expect(measured.queryCount).toBeLessThanOrEqual(
+      singleRowMeasured.queryCount,
+    );
+    expect(measured.queryCount).toBeLessThanOrEqual(
+      PRODUCT_DETAIL_QUERY_BUDGET_DATA_RICH,
+    );
+  });
 
   it("should create a product and retrieve it by ID", async () => {
     const productData = makeProductInput({ upc: "123456789012" });

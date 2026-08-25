@@ -15,6 +15,7 @@ import type {
 import type { FoodSummary } from "@cubby/usda-schemas";
 import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
+import { withTrace } from "~/server/tracing";
 import type { USDAClient } from "../clients/usda";
 import { getRecipeUsagesForIngredient } from "../repo/ingredient";
 import {
@@ -61,17 +62,24 @@ export const getProductWithFood = async (
   const product = await getProductByIDRepo(db, id);
 
   const lookupParam = foodLookupParamFromProduct(product);
-  const food = lookupParam ? await usdaClient.findFood(lookupParam) : null;
+  const food = await withTrace("product.detail.food", () =>
+    lookupParam ? usdaClient.findFood(lookupParam) : Promise.resolve(null),
+  );
 
-  const ingredientEntityId = product.ingredient
-    ? await resolveLiveShortcode(db, product.ingredient.id, "ingredient")
-    : null;
-  const { recipeUsages } = ingredientEntityId
-    ? await getRecipeUsagesForIngredient(
-        db,
-        unsafeIngredientId(ingredientEntityId),
-      )
-    : { recipeUsages: [] };
+  const { recipeUsages } = await withTrace(
+    "product.detail.recipe_usages",
+    async () => {
+      const ingredientEntityId = product.ingredient
+        ? await resolveLiveShortcode(db, product.ingredient.id, "ingredient")
+        : null;
+      return ingredientEntityId
+        ? await getRecipeUsagesForIngredient(
+            db,
+            unsafeIngredientId(ingredientEntityId),
+          )
+        : { recipeUsages: [], appearsInRecipes: [] };
+    },
+  );
 
   return {
     ...product,

@@ -73,6 +73,10 @@ describe("operation recorder", () => {
     expect(
       new Headers(operationHeaders(operation)).get("x-cubby-operation-id"),
     ).toBe(operation.id);
+    const headers = new Headers(operationHeaders(operation));
+    expect(headers.get("x-cubby-operation")).toBe("entity.mutate");
+    expect(headers.get("x-cubby-operation-kind")).toBe("mutation");
+    expect(headers.get("x-cubby-operation-entity")).toBe("product");
     finishObservedOperation(operation, { result: { ok: true } });
 
     expect(snapshot().mutations[0]).toMatchObject({

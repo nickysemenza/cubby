@@ -14,13 +14,18 @@
 import { createProduct } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
-type StartRequest = { payload: string; operationId?: string };
+type StartRequest = {
+  body: string;
+  method: string;
+  operationId?: string;
+  payload: string;
+  url: string;
+};
 
 /**
- * Start sends a query operation's input in the URL and a mutation's in the
- * body, both in its structured wire encoding — object keys land in a `k` array
- * and values as `{"t":…,"s":…}`, so the input is matched by that shape rather
- * than by plain `"entity":"product"` JSON.
+ * Start's structured wire encoding puts object keys in a `k` array and values
+ * in `{"t":…,"s":…}`, so inputs are matched by that shape rather than by plain
+ * `"entity":"product"` JSON.
  */
 const payloadOf = (url: string, body: string): string =>
   `${decodeURIComponent(url)}${body}`.replace(/[\\\s]/gu, "");
@@ -32,9 +37,13 @@ test("core entity list, detail, and mutation ride named Start operations", async
   page.on("request", (request) => {
     const url = request.url();
     if (!url.includes("/_serverFn/")) return;
+    const body = request.postData() ?? "";
     starts.push({
-      payload: payloadOf(url, request.postData() ?? ""),
+      body,
+      method: request.method(),
+      payload: payloadOf(url, body),
       operationId: request.headers()["x-cubby-operation-id"],
+      url,
     });
   });
 
@@ -72,10 +81,21 @@ test("core entity list, detail, and mutation ride named Start operations", async
     matching('"s":"product"', '"pageIndex"'),
     `entity.list should carry the product page:\n${report()}`,
   ).not.toHaveLength(0);
+  const detailRequests = matching('["entity","shortcode"]', '"s":"product"');
   expect(
-    matching('["entity","shortcode"]', '"s":"product"'),
+    detailRequests,
     `entity.detail should carry the product shortcode:\n${report()}`,
   ).not.toHaveLength(0);
+  for (const request of detailRequests) {
+    expect(request.method).toBe("POST");
+    const detailUrl = new URL(request.url);
+    expect(detailUrl.pathname).toBe(
+      "/_serverFn/entities-entity-detail-get-entity-detail",
+    );
+    expect(detailUrl.search).toBe("");
+    expect(payloadOf(request.url, "")).not.toContain('["entity","shortcode"]');
+    expect(payloadOf("", request.body)).toContain('["entity","shortcode"]');
+  }
 
   // Every operation is correlatable end to end: the browser stamps the id the
   // server reads back off `x-cubby-operation-id`, and no two calls share one.

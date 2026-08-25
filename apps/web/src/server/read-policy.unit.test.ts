@@ -12,7 +12,7 @@ const between = (source: string, start: string, end: string) => {
 };
 
 describe("cached-read policy", () => {
-  it("uses readDb for kernel lists and search, not details or mutations", () => {
+  it("uses the selected read database for kernel details, lists, and search", () => {
     const source = read("./entity-kernel/execute.ts");
 
     const get = between(source, 'case "get":', 'case "list":');
@@ -22,7 +22,10 @@ describe("cached-read policy", () => {
 
     expect(list).toMatch(/readDb/u);
     expect(search).toMatch(/readDb/u);
-    expect(get).not.toMatch(/readDb/u);
+    expect(get).toMatch(/readDb/u);
+    expect(get).toContain('ctx.actorContext.source === "ui"');
+    expect(get).toMatch(/ctx\.actorContext\.source === "ui"[\s\S]*: ctx;/u);
+    expect(get).toContain("repository.get(readContext, id)");
     expect(mutations).not.toMatch(/readDb/u);
   });
 
@@ -89,6 +92,13 @@ describe("cached-read policy", () => {
     expect(runtime).toContain("executeEntity(context");
     expect(runtime).toContain('action: "list"');
     expect(runtime).toContain('action: "get"');
+    expect(
+      between(
+        runtime,
+        'operation: "entity.detail"',
+        "export async function getEntityFilterOptions",
+      ),
+    ).toContain('readPolicy: "context"');
   });
 
   it("keeps correctness-sensitive and non-browser API surfaces authoritative", () => {

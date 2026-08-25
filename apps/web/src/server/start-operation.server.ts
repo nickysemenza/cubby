@@ -1,5 +1,10 @@
 import { z } from "zod";
 import {
+  isStartOperationEntity,
+  readStartOperationTraceContext,
+  startOperationTraceAttributes,
+} from "~/lib/start-operation-observability";
+import {
   appErrorFromUnknown,
   toPublicErrorPayload,
 } from "~/server/errors/app-error";
@@ -112,6 +117,16 @@ export async function runStartOperation<
   ) => Promise<unknown>;
 }): Promise<StartOperationResult<Output>> {
   const workload = options.workload ?? "ui";
+  const clientTraceContext = readStartOperationTraceContext(
+    options.request.headers,
+  );
+  // The operation/type are declared server-side. The request header is useful
+  // at the HTTP boundary, but never supplies the inner span's entity value.
+  const traceContext =
+    clientTraceContext?.operation === options.operation &&
+    clientTraceContext.kind === options.type
+      ? clientTraceContext
+      : undefined;
   const observed = await observeRequest({
     system: "start",
     method: options.operation,
@@ -121,6 +136,10 @@ export async function runStartOperation<
     workload,
     operationId:
       options.request.headers.get("x-cubby-operation-id") ?? undefined,
+    includeInputValues: false,
+    attributes: startOperationTraceAttributes(
+      traceContext ? { ...traceContext, entity: undefined } : undefined,
+    ),
     run: async (span) => {
       let stage: OperationStage = "context";
       try {
@@ -152,6 +171,14 @@ export async function runStartOperation<
 
         stage = "input";
         const input = options.inputSchema.parse(options.input);
+        const entity =
+          input &&
+          typeof input === "object" &&
+          "entity" in input &&
+          isStartOperationEntity(input.entity)
+            ? input.entity
+            : undefined;
+        if (entity) span.setAttribute("cubby.entity", entity);
         throwIfStartOperationAborted(options.request.signal);
 
         stage = "run";

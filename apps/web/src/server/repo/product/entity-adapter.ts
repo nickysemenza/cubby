@@ -28,6 +28,7 @@ import {
   createProductWithSideEffects,
   updateProductWithSideEffects,
 } from "~/server/services/product-orchestration.service";
+import { withTrace } from "~/server/tracing";
 import {
   deleteProducts,
   getProductByID,
@@ -68,7 +69,9 @@ export const productEntityAdapter = defineEntityAdapter({
   },
   repository: {
     get: async (ctx, shortcode) => {
-      const id = await resolveLiveShortcode(ctx.db, shortcode, "product");
+      const id = await withTrace("product.detail.resolve", () =>
+        resolveLiveShortcode(ctx.db, shortcode, "product"),
+      );
       return id
         ? getProductWithFood(ctx.db, ctx.usdaClient, unsafeProductId(id))
         : null;

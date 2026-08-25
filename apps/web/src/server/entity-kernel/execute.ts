@@ -127,7 +127,11 @@ export async function executeEntity(
     case "get": {
       const binding = bindingFor(command.entity);
       const id = binding.schemas.id.parse(command.id);
-      const item = await binding.repository.get(ctx, id);
+      const readContext =
+        ctx.actorContext.source === "ui" && ctx.readDb !== ctx.db
+          ? { ...ctx, db: ctx.readDb }
+          : ctx;
+      const item = await binding.repository.get(readContext, id);
       if (item === null) {
         if (command.missing === "null") {
           return {

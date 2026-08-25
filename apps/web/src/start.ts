@@ -3,6 +3,7 @@
  * Global middleware is registered here
  */
 import { createCsrfMiddleware, createStart } from "@tanstack/react-start";
+import { fetchAndRecordRequestId } from "~/lib/request-id";
 import { privateServerFunctionResponses } from "~/server/middleware/private-server-functions";
 import { tracingMiddleware } from "~/server/middleware/tracing";
 
@@ -14,6 +15,12 @@ const csrfMiddleware = createCsrfMiddleware({
 });
 
 export const startInstance = createStart(() => ({
+  // Server functions bypass the tRPC transport, so capture their response
+  // correlation header through Start's supported per-app fetch hook.
+  serverFns: {
+    fetch: (input, init) =>
+      fetchAndRecordRequestId(globalThis.fetch, input, init),
+  },
   // Request middleware runs on every server request (SSR, server routes, server functions)
   requestMiddleware: [
     tracingMiddleware,

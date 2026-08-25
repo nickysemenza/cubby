@@ -158,6 +158,11 @@ projections use the same Start operation module for authentication, validation,
 errors, cancellation checkpoints, tracing, and console observability. Every
 entity browser operation uses this Start transport.
 
+Generic detail, list, and filter reads use the request-selected read handle.
+Ordinary browser requests may therefore use Hyperdrive's bounded-stale cached
+binding; non-browser requests and requests carrying the fresh-after-write
+marker select the authoritative binding. Mutations remain authoritative.
+
 Workflow operations are explicit Start functions with no entity business logic in
 the transport adapter. Removing an operation has no deployment shim: a tab loaded
 before that deployment must reload before calling the removed function.

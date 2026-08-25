@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/tanstackstart-react";
 import { flatten } from "flat";
 import { getErrorMessage } from "~/lib/error-utils";
+import { withDatabaseOperationMetrics } from "~/server/db-observability";
 import { isExpectedAppError } from "~/server/errors/app-error";
 import { type AppSpan, withTrace } from "~/server/tracing";
 import type { RequestOrigin, Workload } from "~/server/workload";
@@ -60,39 +61,58 @@ export async function observeRequest<T>(options: {
   workload: Workload;
   operationId?: string;
   includeInputValues?: boolean;
+  attributes?: Record<string, string | number | boolean | undefined>;
   run: (span: AppSpan) => Promise<T>;
   inspectResult?: (result: T) => ObservedResult;
 }): Promise<T> {
   const traceName = `${options.system}.${options.type}.${options.method}`;
   return await withTrace(traceName, async (span) => {
-    span.setAttributes({
-      "rpc.system": options.system,
-      "rpc.method": options.method,
-      "rpc.type": options.type,
-      "enduser.id": options.actorId ?? "guest",
-      "cubby.request_origin": options.origin,
-      "cubby.workload": options.workload,
-      "cubby.operation_id": options.operationId,
-    });
-    recordObservedInput(
-      span,
-      options.input,
-      options.includeInputValues ?? true,
-    );
-    try {
-      const result = await options.run(span);
-      const inspection = options.inspectResult?.(result);
-      if (inspection?.workload) {
-        span.setAttribute("cubby.workload", inspection.workload);
-      }
-      if (inspection?.error) {
-        if (isObservedCancellation(inspection.error)) {
-          span.setAttribute("cubby.cancelled", true);
-          return result;
+    return await withDatabaseOperationMetrics(async (dbMetrics) => {
+      span.setAttributes({
+        "rpc.system": options.system,
+        "rpc.method": options.method,
+        "rpc.type": options.type,
+        "enduser.id": options.actorId ?? "guest",
+        "cubby.request_origin": options.origin,
+        "cubby.workload": options.workload,
+        "cubby.operation_id": options.operationId,
+        ...options.attributes,
+      });
+      recordObservedInput(
+        span,
+        options.input,
+        options.includeInputValues ?? true,
+      );
+      try {
+        const result = await options.run(span);
+        const inspection = options.inspectResult?.(result);
+        if (inspection?.workload) {
+          span.setAttribute("cubby.workload", inspection.workload);
         }
-        span.setError(getErrorMessage(inspection.error));
-        if (!isExpectedAppError(inspection.error)) {
-          Sentry.captureException(inspection.error, {
+        if (inspection?.error) {
+          if (isObservedCancellation(inspection.error)) {
+            span.setAttribute("cubby.cancelled", true);
+            return result;
+          }
+          span.setError(getErrorMessage(inspection.error));
+          if (!isExpectedAppError(inspection.error)) {
+            Sentry.captureException(inspection.error, {
+              extra: {
+                rpcMethod: options.method,
+                rpcSystem: options.system,
+                rpcType: options.type,
+              },
+            });
+          }
+        }
+        return result;
+      } catch (error) {
+        if (isObservedCancellation(error)) {
+          span.setAttribute("cubby.cancelled", true);
+          throw error;
+        }
+        if (!isExpectedAppError(error)) {
+          Sentry.captureException(error, {
             extra: {
               rpcMethod: options.method,
               rpcSystem: options.system,
@@ -100,23 +120,16 @@ export async function observeRequest<T>(options: {
             },
           });
         }
-      }
-      return result;
-    } catch (error) {
-      if (isObservedCancellation(error)) {
-        span.setAttribute("cubby.cancelled", true);
         throw error;
-      }
-      if (!isExpectedAppError(error)) {
-        Sentry.captureException(error, {
-          extra: {
-            rpcMethod: options.method,
-            rpcSystem: options.system,
-            rpcType: options.type,
-          },
+      } finally {
+        span.setAttributes({
+          "db.query.count": dbMetrics.queryCount,
+          "db.query.duration_ms": Math.round(dbMetrics.queryDurationMs),
+          "db.query.max_duration_ms": Math.round(dbMetrics.queryMaxDurationMs),
+          "db.acquire.count": dbMetrics.acquireCount,
+          "db.acquire.duration_ms": Math.round(dbMetrics.acquireDurationMs),
         });
       }
-      throw error;
-    }
+    });
   });
 }

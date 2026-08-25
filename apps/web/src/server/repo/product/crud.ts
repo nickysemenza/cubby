@@ -113,6 +113,7 @@ import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { withTrace } from "~/server/tracing";
 import {
   currentProductConversionCoverageCondition,
   markProductConversionCoverageInputStale,
@@ -305,16 +306,22 @@ const fetchProductById = async (
   db: Database,
   id: ProductId,
 ): Promise<ProductDeepDB | undefined> => {
-  const row = await getDb(db).query.product.findFirst({
-    where: and(eq(product.id, id), notDeleted(product)),
-    ...relations.product.full,
-  });
+  const row = await withTrace("product.detail.base", () =>
+    getDb(db).query.product.findFirst({
+      where: and(eq(product.id, id), notDeleted(product)),
+      ...relations.product.full,
+    }),
+  );
   if (!row) return undefined;
-  const priced = await enrichProductRowsWithPricing(db, [row]);
+  const priced = await withTrace("product.detail.pricing", () =>
+    enrichProductRowsWithPricing(db, [row]),
+  );
+  const ledgered = await withTrace("product.detail.quantity", () =>
+    enrichProductRowsWithQuantityLedger(db, priced),
+  );
   return (
-    await hydrateProductLocationBreadcrumbs(
-      db,
-      await enrichProductRowsWithQuantityLedger(db, priced),
+    await withTrace("product.detail.breadcrumbs", () =>
+      hydrateProductLocationBreadcrumbs(db, ledgered),
     )
   )[0];
 };
@@ -373,7 +380,9 @@ const productReader = createEntityReader({
   entity: "product",
   fetchById: fetchProductById,
   fromDB: async (db, row: ProductDeepDB) => {
-    const qualities = await loadProductDataQualities(db, [row.id]);
+    const qualities = await withTrace("product.detail.quality", () =>
+      loadProductDataQualities(db, [row.id]),
+    );
     return dbProductToAPI(row, qualities.get(row.id)!);
   },
 });
