@@ -25,7 +25,6 @@ export {
   reconcileLocationSession,
 } from "./bulk";
 export {
-  checkUniqueProductDuplicate,
   createInventoryEntry,
   deleteInventoryEntries,
   getInventoryByLocationIds,

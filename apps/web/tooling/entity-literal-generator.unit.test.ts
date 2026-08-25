@@ -7,7 +7,7 @@ import {
   parseEntityLiteralFiles,
   parseEntityLiterals,
   renderEntityArtifacts,
-  renderFilterArtifact,
+  renderFilterArtifacts,
 } from "../../../scripts/entity-literal-generator";
 
 const temporaryRoots: string[] = [];
@@ -158,7 +158,7 @@ describe("literal entity generator", () => {
       export const ENTITY_LITERALS = [{
         key: "alpha", names: { singular: "alpha" }, route: null, table: null,
         identifiers: { brand: null, shortcode: null, legacy: null }, presentation: { titleField: "name" }, fields: null,
-        filters: { urlKeys: [] }, relations: [${relation}], search: { enabled: false },
+        filters: { urlKeys: [], descriptors: [] }, relations: [${relation}], search: { enabled: false },
         capabilities: { auditable: false, images: false, countable: false, softDelete: false, delete: null, merge: false, mcp: [] },
         extensions: { countFilter: null, relatednessSignals: null, mcpNames: null },
       }];
@@ -199,11 +199,55 @@ describe("literal entity generator", () => {
     ]);
   });
 
+  it("rejects unsupported, duplicate, missing, and stale filter descriptors", () => {
+    const parseFilters = (filters: string) =>
+      parseEntityLiterals(`
+        export const ENTITY_LITERALS = [{
+          key: "alpha", descriptor: { auditable: false, searchable: false }, contract: null,
+          filters: ${filters},
+        }];
+      `);
+
+    expect(() =>
+      parseFilters(
+        '{ urlKeys: ["name"], descriptors: [{ columnId: "name", kind: "fuzzy", placeholder: "Search..." }] }',
+      ),
+    ).toThrow("kind is unsupported");
+    expect(() =>
+      parseFilters(
+        '{ urlKeys: ["name", "alias"], descriptors: [{ columnId: "name", kind: "text", placeholder: "Search..." }, { columnId: "name", urlKey: "alias", kind: "text", placeholder: "Search..." }] }',
+      ),
+    ).toThrow("duplicate columnId");
+    expect(() =>
+      parseFilters(
+        '{ urlKeys: ["same", "other"], descriptors: [{ columnId: "name", urlKey: "same", kind: "text", placeholder: "Search..." }, { columnId: "alias", urlKey: "same", kind: "text", placeholder: "Search..." }] }',
+      ),
+    ).toThrow("descriptors contains duplicate URL keys");
+    expect(() => parseFilters("{ urlKeys: [] }")).toThrow(
+      "filters.descriptors is required",
+    );
+    expect(() =>
+      parseFilters(
+        '{ urlKeys: [], descriptors: [{ columnId: "name", kind: "text", placeholder: "Search..." }] }',
+      ),
+    ).toThrow("must exactly match descriptors");
+    expect(() =>
+      parseFilters(
+        '{ urlKeys: ["stale"], descriptors: [{ columnId: "name", kind: "text", placeholder: "Search..." }] }',
+      ),
+    ).toThrow("must exactly match descriptors");
+    expect(() =>
+      parseFilters(
+        '{ urlKeys: [], descriptors: [{ columnId: "name", kind: "text", placeholder: "Search...", options: [], optionsRef: { module: "x", export: "y" } }] }',
+      ),
+    ).toThrow("cannot declare both options and optionsRef");
+  });
+
   it("projects filter URL keys from literal specs without executing app modules", async () => {
     const entities = await parseEntityLiteralFiles();
     const artifacts = [
       ...renderEntityArtifacts(entities),
-      renderFilterArtifact(entities),
+      ...renderFilterArtifacts(entities),
     ];
     const filterArtifact = artifacts.find(
       (artifact) =>
@@ -213,6 +257,13 @@ describe("literal entity generator", () => {
 
     expect(filterArtifact?.source).toContain('"related-vendor"');
     expect(filterArtifact?.source).toContain("entityFilterSearchFields");
+    expect(
+      artifacts.find(
+        (artifact) =>
+          artifact.relativePath ===
+          "apps/web/src/entities/generated/entity-filter-bindings.gen.ts",
+      )?.source,
+    ).toContain('columnId:"related:product.tasks"');
     expect(
       artifacts.find(
         (artifact) =>

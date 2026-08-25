@@ -37,6 +37,7 @@ import {
   findRelatedSearchHits,
   findSearchHits,
 } from "~/server/services/search.service";
+import type { EntityKernelBinding, EntityKernelContext } from "./adapter";
 import {
   type EntityCommand,
   type EntityKernelEntity,
@@ -46,7 +47,6 @@ import {
   type entityMutationResultSchema,
   type entityQueryResultSchema,
 } from "./contracts";
-import type { EntityKernelBinding, EntityKernelContext } from "./registry";
 
 const DEFAULT_PAGINATION: PaginationParams = { pageIndex: 0, pageSize: 10 };
 

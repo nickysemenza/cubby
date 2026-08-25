@@ -230,3 +230,4 @@ export const entityMutationResultSchema = z.discriminatedUnion("action", [
     result: relationMutationOut,
   }),
 ]);
+export type EntityMutationResult = z.infer<typeof entityMutationResultSchema>;
