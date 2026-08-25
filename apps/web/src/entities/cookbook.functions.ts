@@ -1,11 +1,8 @@
 import { cookbookSummariesOut } from "@cubby/schemas/import-recipe";
-import { cookbookSummary } from "@cubby/schemas/recipe";
+import { type CookbookSummary, cookbookSummary } from "@cubby/schemas/recipe";
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
-import {
-  observedStartCall,
-  unwrapStartOperationResult,
-} from "~/integrations/tanstack-query/start-transport";
+import { startOperation } from "~/integrations/tanstack-query/start-transport";
 import * as cookbookBrowser from "~/server/cookbook-browser.server";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
 
@@ -29,54 +26,36 @@ const getCookbookDetailTransport = createServerFn({ method: "POST" })
       }),
   );
 
+const cookbookListOperation = startOperation<null, CookbookSummary[]>({
+  operation: "cookbook.list",
+  entity: "cookbook",
+  transport: (_input, { signal, headers }) =>
+    listCookbooksTransport({ signal, headers }),
+  parse: (result) => cookbookSummariesOut.parse(result),
+});
+
+const cookbookDetailOperation = startOperation<
+  { shortcode: string },
+  CookbookSummary | null
+>({
+  operation: "cookbook.detail",
+  entity: "cookbook",
+  transport: (data, { signal, headers }) =>
+    getCookbookDetailTransport({ data, signal, headers }),
+  parse: (result) => cookbookSummary.nullable().parse(result),
+});
+
 export const cookbookListQueryOptions = () =>
   queryOptions({
     queryKey: [["cookbook", "list"]] as const,
-    queryFn: ({ signal }) =>
-      observedStartCall({
-        operation: "cookbook.list",
-        entity: "cookbook",
-        input: undefined,
-        call: async (headers) =>
-          cookbookSummariesOut.parse(
-            unwrapStartOperationResult(
-              "cookbook.list",
-              await listCookbooksTransport({ signal, headers }),
-            ),
-          ),
-      }),
-    meta: {
-      transport: "start",
-      operation: "cookbook.list",
-      entity: "cookbook",
-      observedByTransport: true,
-    },
+    meta: cookbookListOperation.meta,
+    queryFn: ({ signal }) => cookbookListOperation.call(null, { signal }),
   });
 
 export const cookbookDetailQueryOptions = (shortcode: string) =>
   queryOptions({
     queryKey: [["cookbook", "detail"], { shortcode }] as const,
+    meta: cookbookDetailOperation.meta,
     queryFn: ({ signal }) =>
-      observedStartCall({
-        operation: "cookbook.detail",
-        entity: "cookbook",
-        input: { shortcode },
-        call: async (headers) =>
-          cookbookSummary.nullable().parse(
-            unwrapStartOperationResult(
-              "cookbook.detail",
-              await getCookbookDetailTransport({
-                data: { shortcode },
-                signal,
-                headers,
-              }),
-            ),
-          ),
-      }),
-    meta: {
-      transport: "start",
-      operation: "cookbook.detail",
-      entity: "cookbook",
-      observedByTransport: true,
-    },
+      cookbookDetailOperation.call({ shortcode }, { signal }),
   });

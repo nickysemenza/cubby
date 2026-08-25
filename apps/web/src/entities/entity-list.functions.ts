@@ -1,10 +1,7 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { defaultPagination } from "~/app/_components/data-table/tableUtils";
-import {
-  observedStartCall,
-  unwrapStartOperationResult,
-} from "~/integrations/tanstack-query/start-transport";
+import { startOperation } from "~/integrations/tanstack-query/start-transport";
 import * as entityRuntime from "~/server/entity-runtime.server";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
 import { getEntityFilters } from "./filter-manifest";
@@ -34,6 +31,16 @@ const getEntityListTransport = createServerFn({ method: "POST" })
         request: context.startOperation,
       }),
   );
+
+const entityListOperation = startOperation<
+  EntityListInputByEntity[ListEntity],
+  EntityListResultByEntity[ListEntity]
+>({
+  operation: "entity.list",
+  transport: (data, { signal, headers }) =>
+    getEntityListTransport({ data, signal, headers }),
+  parse: (result, input) => parseEntityListResult(input.entity, result),
+});
 
 export type EntityListParams<E extends ListEntity> = Omit<
   EntityListInputByEntity[E],
@@ -91,46 +98,18 @@ const entityListQueryKey = <E extends ListEntity>(
 export const entityListRootKey = <E extends ListEntity>(entity: E) =>
   [[entity, "list"]] as const;
 
-async function getEntityList<E extends ListEntity>(options: {
-  data: EntityListInputByEntity[E];
-  signal?: AbortSignal;
-}): Promise<EntityListResultByEntity[E]> {
-  return await observedStartCall({
-    operation: "entity.list",
-    entity: options.data.entity,
-    input: options.data,
-    call: async (headers) =>
-      parseEntityListResult(
-        options.data.entity,
-        unwrapStartOperationResult(
-          "entity.list",
-          await getEntityListTransport({
-            data: options.data,
-            signal: options.signal,
-            headers,
-          }),
-        ),
-      ),
-  });
-}
-
 export function entityListQueryOptions<E extends ListEntity>(
   entity: E,
   input: EntityListParams<E>,
 ) {
+  const operation = entityListOperation.forEntity(entity);
   return queryOptions({
     queryKey: entityListQueryKey(entity, input),
-    meta: {
-      transport: "start",
-      operation: "entity.list",
-      entity,
-      observedByTransport: true,
-    },
+    meta: operation.meta,
     queryFn: ({ signal }) =>
-      getEntityList({
-        data: parseEntityListInput(entity, { entity, ...input }),
+      operation.call(parseEntityListInput(entity, { entity, ...input }), {
         signal,
-      }),
+      }) as Promise<EntityListResultByEntity[E]>,
   });
 }
 
@@ -144,17 +123,18 @@ export function entityInfiniteListQueryOptions<E extends ListEntity>(
     pagination: { ...input.pagination, pageIndex: 0 },
   };
   const base = entityListQueryOptions(entity, firstPage);
+  const operation = entityListOperation.forEntity(entity);
   return infiniteQueryOptions({
     queryKey: [...base.queryKey, "__infinite__"] as const,
     queryFn: ({ pageParam, signal }) =>
-      getEntityList({
-        data: parseEntityListInput(entity, {
+      operation.call(
+        parseEntityListInput(entity, {
           entity,
           ...firstPage,
           pagination: { ...firstPage.pagination, pageIndex: pageParam },
         }),
-        signal,
-      }),
+        { signal },
+      ) as Promise<EntityListResultByEntity[E]>,
     initialPageParam: 0,
     getNextPageParam: (lastPage) => {
       const { pageIndex, pageSize, totalCount } = lastPage.meta;

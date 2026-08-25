@@ -2,10 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
-import {
-  observedStartCall,
-  unwrapStartOperationResult,
-} from "~/integrations/tanstack-query/start-transport";
+import { startOperation } from "~/integrations/tanstack-query/start-transport";
 import * as entityRuntime from "~/server/entity-runtime.server";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
 
@@ -25,24 +22,18 @@ const getEntityInspectorHealth = createServerFn({ method: "GET" })
       }),
   );
 
+const inspectorHealthOperation = startOperation<null, EntityInspectorHealth>({
+  operation: "entity.inspectorHealth",
+  transport: (_input, { signal, headers }) =>
+    getEntityInspectorHealth({ signal, headers }),
+  parse: (result) => result as EntityInspectorHealth,
+});
+
 export const entityInspectorHealthQueryOptions = (enabled: boolean) =>
   queryOptions({
     queryKey: [["entity", "inspector-health"]],
-    queryFn: ({ signal }) =>
-      observedStartCall({
-        operation: "entity.inspectorHealth",
-        input: null,
-        call: async (headers) =>
-          unwrapStartOperationResult(
-            "entity.inspectorHealth",
-            await getEntityInspectorHealth({ signal, headers }),
-          ),
-      }),
-    meta: {
-      transport: "start",
-      operation: "entity.inspectorHealth",
-      observedByTransport: true,
-    },
+    meta: inspectorHealthOperation.meta,
+    queryFn: ({ signal }) => inspectorHealthOperation.call(null, { signal }),
     enabled,
     staleTime: 60_000,
   });

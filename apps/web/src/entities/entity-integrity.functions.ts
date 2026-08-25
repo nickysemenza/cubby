@@ -1,14 +1,12 @@
 import {
+  type IntegrityCatalog,
   integrityCatalogSchema,
   referentialLivenessViolationSchema,
 } from "@cubby/schemas/entity-integrity";
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import {
-  observedStartCall,
-  unwrapStartOperationResult,
-} from "~/integrations/tanstack-query/start-transport";
+import { startOperation } from "~/integrations/tanstack-query/start-transport";
 import * as entityRuntime from "~/server/entity-runtime.server";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
 import * as problemsBrowser from "~/server/problems-browser.server";
@@ -42,50 +40,34 @@ const getReferentialLivenessTransport = createServerFn({ method: "POST" })
       }),
   );
 
+const integrityCatalogOperation = startOperation<null, IntegrityCatalog>({
+  operation: "entityIntegrity.catalog",
+  transport: (_input, { signal, headers }) =>
+    getEntityIntegrityCatalogTransport({ signal, headers }),
+  parse: (result) => integrityCatalogSchema.parse(result),
+});
+
+const referentialLivenessOperation = startOperation<
+  typeof REFERENTIAL_LIVENESS_INPUT,
+  z.output<typeof referentialLivenessResultSchema>
+>({
+  operation: "problems.getByType",
+  transport: (data, { signal, headers }) =>
+    getReferentialLivenessTransport({ data, signal, headers }),
+  parse: (result) => referentialLivenessResultSchema.parse(result),
+});
+
 export const entityIntegrityCatalogQueryOptions = () =>
   queryOptions({
     queryKey: [["entityIntegrity", "catalog"]] as const,
-    queryFn: ({ signal }) =>
-      observedStartCall({
-        operation: "entityIntegrity.catalog",
-        input: null,
-        call: async (headers) =>
-          integrityCatalogSchema.parse(
-            unwrapStartOperationResult(
-              "entityIntegrity.catalog",
-              await getEntityIntegrityCatalogTransport({ signal, headers }),
-            ),
-          ),
-      }),
-    meta: {
-      transport: "start",
-      operation: "entityIntegrity.catalog",
-      observedByTransport: true,
-    },
+    meta: integrityCatalogOperation.meta,
+    queryFn: ({ signal }) => integrityCatalogOperation.call(null, { signal }),
   });
 
 export const referentialLivenessQueryOptions = () =>
   queryOptions({
     queryKey: [["problems", "getByType"], REFERENTIAL_LIVENESS_INPUT] as const,
+    meta: referentialLivenessOperation.meta,
     queryFn: ({ signal }) =>
-      observedStartCall({
-        operation: "problems.getByType",
-        input: REFERENTIAL_LIVENESS_INPUT,
-        call: async (headers) =>
-          referentialLivenessResultSchema.parse(
-            unwrapStartOperationResult(
-              "problems.getByType",
-              await getReferentialLivenessTransport({
-                data: REFERENTIAL_LIVENESS_INPUT,
-                signal,
-                headers,
-              }),
-            ),
-          ),
-      }),
-    meta: {
-      transport: "start",
-      operation: "problems.getByType",
-      observedByTransport: true,
-    },
+      referentialLivenessOperation.call(REFERENTIAL_LIVENESS_INPUT, { signal }),
   });

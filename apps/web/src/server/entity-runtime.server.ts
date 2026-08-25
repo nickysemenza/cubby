@@ -29,7 +29,6 @@ import {
   entityListInputSchema,
   getEntityListOutputSchema,
 } from "~/entities/generated/entity-lists.gen";
-import type { StartOperationResult } from "~/integrations/tanstack-query/start-transport";
 import { executeEntity } from "~/server/entity-kernel";
 import {
   type EntityBrowserMutationInput,
@@ -41,6 +40,7 @@ import { getEntityCounts } from "~/server/repo/dashboard";
 import { getFilterOptions } from "~/server/repo/filter-options";
 import { executeSearchDocumentSql } from "~/server/repo/search-document";
 import { buildIntegrityCatalog } from "~/server/services/entity-integrity.service";
+import type { StartOperationResult } from "~/server/start-operation.contract";
 import {
   runStartOperation,
   type StartOperationRequest,

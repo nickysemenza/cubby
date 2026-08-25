@@ -2,13 +2,12 @@ import { parseShortcode } from "@cubby/shared";
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import {
-  observedStartCall,
-  type PublicStartOperationError,
   StartOperationError,
-  unwrapStartOperationResult,
+  startOperation,
 } from "~/integrations/tanstack-query/start-transport";
 import * as entityRuntime from "~/server/entity-runtime.server";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
+import type { PublicStartOperationError } from "~/server/start-operation.contract";
 import type {
   DetailEntity,
   EntityDetailByEntity,
@@ -40,6 +39,18 @@ export class EntityDetailError extends StartOperationError {
   }
 }
 
+const entityDetailOperation = startOperation<
+  EntityDetailInputByEntity[DetailEntity],
+  EntityDetailByEntity[DetailEntity] | null
+>({
+  operation: "entity.detail",
+  transport: (data, { signal, headers }) =>
+    getEntityDetailTransport({ data, signal, headers }),
+  parse: (result, input) =>
+    result === null ? null : parseEntityDetailResult(input.entity, result),
+  createError: (error) => new EntityDetailError(error),
+});
+
 export const entityDetailQueryKey = <E extends DetailEntity>(
   entity: E,
   shortcode: string,
@@ -52,58 +63,24 @@ export const entityDetailQueryKey = <E extends DetailEntity>(
 export const entityDetailRootKey = <E extends DetailEntity>(entity: E) =>
   [[entity, "detail"]] as const;
 
-async function getEntityDetail<E extends DetailEntity>(options: {
-  entity: E;
-  data: EntityDetailInputByEntity[E];
-  signal?: AbortSignal;
-  speculative?: boolean;
-}): Promise<EntityDetailByEntity[E] | null> {
-  return await observedStartCall({
-    operation: "entity.detail",
-    entity: options.data.entity,
-    speculative: options.speculative,
-    input: options.data,
-    call: async (headers) => {
-      const result = unwrapStartOperationResult(
-        "entity.detail",
-        await getEntityDetailTransport({
-          data: options.data,
-          signal: options.signal,
-          headers,
-        }),
-        (error) => new EntityDetailError(error),
-      );
-      return result === null
-        ? null
-        : parseEntityDetailResult(options.entity, result);
-    },
-  });
-}
-
 export function entityDetailQueryOptions<E extends DetailEntity>(
   entity: E,
   shortcode: EntityDetailInputByEntity[E]["shortcode"],
   options?: { enabled?: boolean; staleTime?: number },
 ) {
   const queryKey = entityDetailQueryKey(entity, shortcode);
+  const operation = entityDetailOperation.forEntity(entity);
   return queryOptions({
     queryKey,
-    meta: {
-      transport: "start",
-      operation: "entity.detail",
-      entity,
-      observedByTransport: true,
-    },
+    meta: operation.meta,
     queryFn: ({ signal, meta }) =>
-      getEntityDetail({
-        entity,
-        data: parseEntityDetailInput(entity, {
+      operation.call(
+        parseEntityDetailInput(entity, {
           entity,
           shortcode: queryKey[1].shortcode,
         }),
-        signal,
-        speculative: meta?.speculative,
-      }),
+        { signal, speculative: meta?.speculative },
+      ) as Promise<EntityDetailByEntity[E] | null>,
     ...options,
   });
 }

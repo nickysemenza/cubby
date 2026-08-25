@@ -1,6 +1,6 @@
 import { referentialLivenessViolationSchema } from "@cubby/schemas/entity-integrity";
 import { z } from "zod";
-import type { StartOperationResult } from "~/integrations/tanstack-query/start-transport";
+import type { StartOperationResult } from "~/server/start-operation.contract";
 import {
   runStartOperation,
   type StartOperationRequest,
