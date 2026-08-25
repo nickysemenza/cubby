@@ -510,6 +510,12 @@ export function getCaller(extra: ToolExtra): Caller {
   return caller as Caller;
 }
 
+/** Cached caller reserved for explicitly bounded-stale MCP read tools. */
+export function getReadCaller(extra: ToolExtra): Caller {
+  const caller = extra.authInfo?.extra?.readCaller;
+  return caller ? (caller as Caller) : getCaller(extra);
+}
+
 /**
  * A tool failure, decomposed.
  *

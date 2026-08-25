@@ -4,6 +4,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 type ToolCallExtra = {
   entityKernel?: unknown;
+  readCaller?: unknown;
   telemetry?: unknown;
 };
 
