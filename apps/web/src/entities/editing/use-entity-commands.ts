@@ -8,7 +8,7 @@ import {
   makeBatchStatusFetcher,
   watchBatchesAndInvalidate,
 } from "~/lib/background-batch-polling";
-import { getErrorMessage } from "~/lib/error-utils";
+import { getAppErrorDetails } from "~/lib/error-utils";
 import { invalidateQueryRoots } from "~/lib/query-keys";
 import { entityEditRegistry } from "./definitions";
 import type {
@@ -33,6 +33,38 @@ import type {
   EntityEditResult,
   EntityMutationPort,
 } from "./types";
+
+/**
+ * A Start refusal already says which field failed and what lifecycle edge
+ * blocked it; collapsing that to `error.message` threw both away, so a form
+ * could only ever show one flattened sentence and never mark the control at
+ * fault. The headline stays first and field-less, because the dialog banner
+ * and the delete dialog both read the first field-less issue as the summary.
+ *
+ * The server path is the operation input's path (`data.name`), while form
+ * fields are named without that envelope.
+ */
+function issuesFromRefusal(error: unknown): EntityEditIssue[] {
+  const details = getAppErrorDetails(error);
+  const issues: EntityEditIssue[] = [
+    { message: details.message, source: "server" },
+  ];
+  for (const issue of details.validationIssues ?? []) {
+    const path = issue.path[0] === "data" ? issue.path.slice(1) : issue.path;
+    issues.push({
+      ...(path.length > 0 ? { field: path.join(".") } : {}),
+      message: issue.message,
+      source: "server",
+    });
+  }
+  for (const blocker of details.blockers ?? []) {
+    issues.push({
+      message: `${blocker.label}: ${blocker.description}`,
+      source: "server",
+    });
+  }
+  return issues;
+}
 
 /**
  * Client adapter for the common command port. Semantic definitions stay
@@ -173,9 +205,7 @@ export function useEntityCommands<E extends EditableEntity>(
           result: execution.result as EntityEditResultFor<E>,
         };
       } catch (error) {
-        const nextIssues = [
-          { message: getErrorMessage(error), source: "server" as const },
-        ];
+        const nextIssues = issuesFromRefusal(error);
         setIssues(nextIssues);
         return { ok: false, issues: nextIssues };
       }

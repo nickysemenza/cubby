@@ -18,6 +18,36 @@ describe("getAppErrorDetails", () => {
     expect(getAppErrorDetails(error)).toEqual({ message: expected });
   });
 
+  it("keeps the validation issues a Start refusal reported", () => {
+    expect(
+      getAppErrorDetails({
+        message: "name: Required",
+        data: {
+          code: "BAD_REQUEST",
+          reason: "INVALID_INPUT",
+          validationIssues: [
+            {
+              code: "invalid_type",
+              path: ["data", "name"],
+              message: "Required",
+            },
+          ],
+        },
+      }).validationIssues,
+    ).toEqual([
+      { code: "invalid_type", path: ["data", "name"], message: "Required" },
+    ]);
+  });
+
+  it("reads a malformed validation payload as no issues rather than crashing", () => {
+    expect(
+      getAppErrorDetails({
+        message: "broken",
+        data: { code: "BAD_REQUEST", validationIssues: [{ nope: true }] },
+      }).validationIssues,
+    ).toBeUndefined();
+  });
+
   it("extracts tRPC metadata", () => {
     expect(
       getAppErrorDetails({

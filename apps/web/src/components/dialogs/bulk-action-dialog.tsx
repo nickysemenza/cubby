@@ -35,6 +35,12 @@ interface BulkActionDialogProps<T extends { id: string }> {
    * would make a preview outage an outage of every destructive action.
    */
   blocked?: boolean;
+  /**
+   * Why the last attempt was refused. Rendered above the footer and left to the
+   * caller to clear, so a server refusal keeps the dialog open with its reasons
+   * on screen instead of closing over an error the user never saw.
+   */
+  error?: ReactNode;
 }
 
 export function BulkActionDialog<T extends { id: string }>({
@@ -52,6 +58,7 @@ export function BulkActionDialog<T extends { id: string }>({
   variant = "default",
   children,
   blocked = false,
+  error,
 }: BulkActionDialogProps<T>) {
   const count = items.length;
   const itemWord = pluralize(itemNoun, count);
@@ -75,6 +82,15 @@ export function BulkActionDialog<T extends { id: string }>({
         </div>
 
         {children}
+
+        {error ? (
+          <div
+            role="alert"
+            className="border border-destructive/40 bg-destructive/5 px-3 py-2 text-destructive text-sm"
+          >
+            {error}
+          </div>
+        ) : null}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

@@ -33,7 +33,12 @@ export function EntityEditDialogContent<E extends EditableEntity>({
   );
   const context = request.context ?? {};
   const record = request.record as EntityEditRecord | undefined;
-  const error = session.issues.find((issue) => !issue.field)?.message;
+  // Field-scoped issues render beside their control via the session's RHF
+  // errors; everything else — the headline plus one line per lifecycle blocker
+  // — belongs in the banner.
+  const error = session.issues
+    .filter((issue) => !issue.field)
+    .map((issue) => issue.message);
 
   useEffect(() => {
     if (open) session.reset();

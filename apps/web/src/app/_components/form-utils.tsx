@@ -48,7 +48,7 @@ const DevTool = FORM_DEVTOOLS_BUNDLED
 // Base props shared by all forms
 interface BaseFormProps {
   isPending: boolean;
-  error?: string;
+  error?: string | readonly string[];
   onCancel?: () => void;
 }
 
@@ -82,18 +82,30 @@ function getPendingButtonText(text: string): string {
 
 /**
  * Submission-level feedback banner for a form — distinct from per-field
- * `FieldError`. Surfaces a server/mutation error (the `error` string flows up
- * from the entity mutation hooks) in the same `destructive` Alert chrome used
- * across the app. Every `FormWrapper`-based form gets this automatically by
- * passing an `error` string; not exported standalone until a non-wrapper
- * consumer needs it (keeps the lint/knip unused-export gate clean).
+ * `FieldError`. Surfaces a server/mutation error (the `error` flows up from the
+ * entity mutation hooks) in the same `destructive` Alert chrome used across the
+ * app. A refusal can name several reasons at once — a lifecycle blocker per
+ * edge — so a list is rendered in full rather than reduced to its first line.
+ * Not exported standalone until a non-wrapper consumer needs it (keeps the
+ * lint/knip unused-export gate clean).
  */
-function FormStatusBanner({ error }: { error?: string }) {
-  if (!error) return null;
+function FormStatusBanner({ error }: { error?: string | readonly string[] }) {
+  const lines = typeof error === "string" ? [error] : (error ?? []);
+  if (lines.length === 0) return null;
   return (
     <Alert variant="destructive" data-slot="form-status-banner">
       <AlertTitle>Couldn’t save</AlertTitle>
-      <AlertDescription>{error}</AlertDescription>
+      <AlertDescription>
+        {lines.length === 1 ? (
+          lines[0]
+        ) : (
+          <ul className="space-y-1">
+            {lines.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        )}
+      </AlertDescription>
     </Alert>
   );
 }
@@ -106,16 +118,17 @@ function FormStatusBanner({ error }: { error?: string }) {
  */
 function useSubmitSuccessToast(
   isPending: boolean,
-  error: string | undefined,
+  error: string | readonly string[] | undefined,
   successMessage: string | undefined,
 ) {
   const wasPending = useRef(false);
+  const failed = typeof error === "string" ? error.length > 0 : !!error?.length;
   useEffect(() => {
-    if (wasPending.current && !isPending && !error && successMessage) {
+    if (wasPending.current && !isPending && !failed && successMessage) {
       toast.success(successMessage);
     }
     wasPending.current = isPending;
-  }, [isPending, error, successMessage]);
+  }, [isPending, failed, successMessage]);
 }
 
 // Form wrapper component with common layout and buttons
@@ -134,7 +147,7 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
 }: {
   form: UseFormReturn<TFieldValues>;
   onSubmit: (values: TFieldValues) => void;
-  error?: string;
+  error?: string | readonly string[];
   isPending: boolean;
   onCancel?: () => void;
   submitButtonText: string;

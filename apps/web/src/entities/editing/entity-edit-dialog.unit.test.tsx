@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   submit: vi.fn(),
   reset: vi.fn(),
   toast: vi.fn(),
+  issues: [] as { field?: string; message: string; source: string }[],
 }));
 
 vi.mock("sonner", () => ({ toast: { success: mocks.toast } }));
@@ -28,11 +29,13 @@ vi.mock("~/app/_components/form-utils", () => ({
     children: ReactNode;
     onSubmit: () => void;
     onCancel: () => void;
-    error?: string;
+    error?: string | readonly string[];
   }) => (
     <div>
       {children}
-      {error ? <p>{error}</p> : null}
+      {(typeof error === "string" ? [error] : (error ?? [])).map((line) => (
+        <p key={line}>{line}</p>
+      ))}
       <button type="button" onClick={onSubmit}>
         submit
       </button>
@@ -53,7 +56,7 @@ vi.mock("./editor-presentations", () => ({
 vi.mock("./use-entity-edit-session", () => ({
   useEntityEditSession: () => ({
     form: {},
-    issues: [],
+    issues: mocks.issues,
     isPending: false,
     reset: mocks.reset,
     submit: mocks.submit,
@@ -63,7 +66,36 @@ vi.mock("./use-entity-edit-session", () => ({
 import { EntityEditDialog } from "./entity-edit-dialog";
 
 describe("EntityEditDialog", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.issues.length = 0;
+  });
+
+  it("banners every field-less refusal, not just the first", async () => {
+    mocks.issues.push(
+      { message: "Meal cannot be saved", source: "server" },
+      { field: "name", message: "Required", source: "server" },
+      {
+        message: "Recipes: 2 recipes still reference this meal.",
+        source: "server",
+      },
+    );
+
+    render(
+      <EntityEditDialog
+        open
+        onOpenChange={vi.fn()}
+        request={{ entity: "meal", operation: "create", intent: "capture" }}
+      />,
+    );
+
+    expect(await screen.findByText("Meal cannot be saved")).toBeInTheDocument();
+    expect(
+      screen.getByText("Recipes: 2 recipes still reference this meal."),
+    ).toBeInTheDocument();
+    // Field-scoped issues belong beside their control, not in the banner.
+    expect(screen.queryByText("Required")).not.toBeInTheDocument();
+  });
 
   it("retains a failed draft and closes only after a successful write", async () => {
     const onOpenChange = vi.fn();
