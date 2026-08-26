@@ -7,8 +7,6 @@ import {
   DashboardCard,
 } from "~/components/layout/dashboard-card";
 import { Skeleton } from "~/components/ui/skeleton";
-import { useHydrated } from "~/hooks/useHydrated";
-import { authClient } from "~/lib/auth-client";
 import { formatCurrency } from "~/lib/utils";
 
 // Ink ladder, not the accent. Rank here is already carried by bar height and
@@ -29,14 +27,8 @@ const BAR_COLORS = [
  * structure, inventory relations, products, and images stay off this path.
  */
 export function PantryValueCard() {
-  const session = authClient.useSession();
-  // Hydration-gated auth (see useHydrated): keeps SSR and first client
-  // render identical, and stops the query from firing Unauthorized on the
-  // public home page.
-  const isAuthenticated = useHydrated() && !!session.data?.user;
   const { data, isLoading, isError } = useQuery({
     ...locationValuationSummaryQueryOptions(),
-    enabled: isAuthenticated,
   });
   const total = data?.total ?? 0;
   const bars = data?.locations ?? [];
@@ -45,7 +37,7 @@ export function PantryValueCard() {
     <CardActionLink to="/inventory">Inventory</CardActionLink>
   );
 
-  if (!isAuthenticated || isLoading) {
+  if (isLoading) {
     return (
       <DashboardCard
         icon={Wallet}

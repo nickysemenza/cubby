@@ -10,8 +10,6 @@ import {
 } from "~/components/layout/dashboard-card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { StatTile } from "~/components/ui/stat-tile";
-import { useHydrated } from "~/hooks/useHydrated";
-import { authClient } from "~/lib/auth-client";
 
 /** The Tasks page views each stat drills into — same mapping the /tasks stats
  * strip uses (Next surfaces overdue/due-soon/blocked work; Inbox is the
@@ -34,15 +32,7 @@ const STATS: HouseStat[] = [
 ];
 
 function useTaskSummary() {
-  const session = authClient.useSession();
-  // Hydration-gated auth (see useHydrated): keeps SSR and the first client
-  // render identical, and stops the query firing Unauthorized while the
-  // session resolves.
-  const isAuthenticated = useHydrated() && !!session.data?.user;
-  return useQuery({
-    ...taskSummaryQueryOptions(),
-    enabled: isAuthenticated,
-  });
+  return useQuery(taskSummaryQueryOptions());
 }
 
 /**
@@ -52,7 +42,7 @@ function useTaskSummary() {
  * links through to Projects.
  */
 export function HouseCard() {
-  const { data, isLoading } = useTaskSummary();
+  const { data, isError, isLoading } = useTaskSummary();
 
   return (
     <DashboardCard
@@ -61,41 +51,47 @@ export function HouseCard() {
       description="Open work across the house tracker"
       action={<CardActionLink to="/projects">Projects</CardActionLink>}
     >
-      <Grid cols="summary" gap="sm">
-        {STATS.map((stat) => (
-          <Link
-            key={stat.key}
-            to="/tasks"
-            search={
-              stat.view === "inbox"
-                ? {
-                    view: "list",
-                    status: "not_started,later,in_progress,blocked",
-                    project: "__none__",
-                    parentTask: "__none__",
-                  }
-                : { view: "next" }
-            }
-            className="min-h-11 transition-colors hover:bg-muted/50"
-          >
-            <StatTile label={stat.label}>
-              {isLoading || !data ? (
-                <Skeleton className="h-6 w-10" />
-              ) : (
-                <span
-                  className={
-                    stat.tone === "destructive" && data[stat.key] > 0
-                      ? "text-destructive"
-                      : undefined
-                  }
-                >
-                  {data[stat.key]}
-                </span>
-              )}
-            </StatTile>
-          </Link>
-        ))}
-      </Grid>
+      {isError ? (
+        <p className="min-h-24 text-muted-foreground text-sm">
+          House tasks are unavailable right now.
+        </p>
+      ) : (
+        <Grid cols="summary" gap="sm">
+          {STATS.map((stat) => (
+            <Link
+              key={stat.key}
+              to="/tasks"
+              search={
+                stat.view === "inbox"
+                  ? {
+                      view: "list",
+                      status: "not_started,later,in_progress,blocked",
+                      project: "__none__",
+                      parentTask: "__none__",
+                    }
+                  : { view: "next" }
+              }
+              className="min-h-11 transition-colors hover:bg-muted/50"
+            >
+              <StatTile label={stat.label}>
+                {isLoading || !data ? (
+                  <Skeleton className="h-6 w-10" />
+                ) : (
+                  <span
+                    className={
+                      stat.tone === "destructive" && data[stat.key] > 0
+                        ? "text-destructive"
+                        : undefined
+                    }
+                  >
+                    {data[stat.key]}
+                  </span>
+                )}
+              </StatTile>
+            </Link>
+          ))}
+        </Grid>
+      )}
     </DashboardCard>
   );
 }

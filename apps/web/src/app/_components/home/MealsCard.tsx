@@ -1,7 +1,7 @@
 import { MEAL_KIND_LABELS } from "@cubby/schemas/meal-classification";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { addDays, format, isSameDay, parseISO } from "date-fns";
+import { format, isSameDay, parseISO } from "date-fns";
 import { UtensilsCrossed } from "lucide-react";
 import { mealUpcomingSummaryQueryOptions } from "~/app/meals/meal.functions";
 import { formatMealCost, mealListLabel } from "~/app/meals/meal-format";
@@ -12,30 +12,20 @@ import {
   DashboardCard,
 } from "~/components/layout/dashboard-card";
 import { Skeleton } from "~/components/ui/skeleton";
-import { useHydrated } from "~/hooks/useHydrated";
-import { authClient } from "~/lib/auth-client";
+import type { HomeAsOfWindow } from "./home-as-of-window";
 
 /**
  * Home-page meals tile: what's planned between today and a week out, read from
  * a bounded projection over the calendar's canonical date ordering.
  *
- * The date window is client-local, so the query is hydration-gated alongside
- * auth (see useHydrated): SSR and the first client render agree, then the real
- * local "today" resolves.
+ * The date window is computed once in the household timezone by the route
+ * loader, so SSR and hydration use the same query key and the same "today".
  */
-export function MealsCard() {
-  const session = authClient.useSession();
-  const hydrated = useHydrated();
-  const isAuthenticated = hydrated && !!session.data?.user;
-
-  const today = hydrated ? new Date() : new Date(0);
-  const from = format(today, "yyyy-MM-dd");
-  const to = format(addDays(today, 6), "yyyy-MM-dd");
-
-  const { data, isLoading } = useQuery({
-    ...mealUpcomingSummaryQueryOptions({ from, to }),
-    enabled: isAuthenticated,
-  });
+export function MealsCard({ asOf }: { asOf: HomeAsOfWindow }) {
+  const today = parseISO(asOf.meals.from);
+  const { data, isError, isLoading } = useQuery(
+    mealUpcomingSummaryQueryOptions(asOf.meals),
+  );
 
   const meals = data ?? [];
 
@@ -47,11 +37,15 @@ export function MealsCard() {
       action={<CardActionLink to="/meals">Calendar</CardActionLink>}
     >
       <Stack gap="xs">
-        {isLoading || !data ? (
+        {isLoading ? (
           <>
             <Skeleton className="h-5 w-full" />
             <Skeleton className="h-5 w-3/4" />
           </>
+        ) : isError ? (
+          <p className="min-h-12 text-muted-foreground text-sm">
+            Meals are unavailable right now.
+          </p>
         ) : meals.length === 0 ? (
           // An empty week states the absence and offers the one thing the
           // footer links below can't: somewhere to start. "What can I make?"
@@ -69,7 +63,7 @@ export function MealsCard() {
         ) : (
           meals.map((meal) => {
             const date = parseISO(meal.date);
-            const isToday = hydrated && isSameDay(date, today);
+            const isToday = isSameDay(date, today);
             const mealLabel = mealListLabel(meal);
             const SlotIcon = mealTypeIcon(meal.mealType);
             const KindIcon = mealKindIcon(meal.mealKind);

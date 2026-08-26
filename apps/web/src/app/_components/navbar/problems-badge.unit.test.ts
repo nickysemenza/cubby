@@ -8,9 +8,9 @@ vi.mock("@tanstack/react-query", () => ({
   queryOptions: <T>(options: T) => options,
   useQuery: mocks.useQuery,
 }));
-vi.mock("~/hooks/useHydrated", () => ({ useHydrated: () => true }));
-vi.mock("~/lib/auth-client", () => ({
-  authClient: { useSession: () => ({ data: { user: { id: "test" } } }) },
+vi.mock("@tanstack/react-router", () => ({
+  Link: () => null,
+  useRouteContext: () => ({ isAuthed: true }),
 }));
 
 import { ProblemsBadge } from "./problems-badge";

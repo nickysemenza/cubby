@@ -23,10 +23,9 @@ test("workspace shell responds from phone navigation through desktop sidebar", a
   // 144, not 224: the rail's own content measured 139px, so the old width
   // spent 38% of itself on nothing.
   expect((await sidebar.boundingBox())?.width).toBe(144);
-  await expect(page.getByRole("link", { name: "Home" })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
+  await expect(
+    page.getByRole("link", { name: "Home", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
 
   const main = page.getByRole("main");
   const spend = main.getByText("Recorded spend", { exact: true }).first();

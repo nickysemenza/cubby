@@ -219,7 +219,11 @@ function WorkspaceSidebar({
       aria-label="Workspace navigation"
     >
       <div className="flex h-12 items-center border-border border-b px-2">
-        <Link to="/" className="flex min-w-0 items-center gap-2">
+        <Link
+          to="/"
+          aria-label="Cubby home"
+          className="flex min-w-0 items-center gap-2"
+        >
           <img src={LOGO_SRC} alt="" className="size-6 shrink-0" />
           {expanded && (
             <span className="hidden truncate font-heading font-semibold text-lg tracking-tight lg:block">

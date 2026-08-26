@@ -28,7 +28,6 @@ import { useDebug } from "~/hooks/useDebug";
 import { useNavAuthed } from "~/hooks/useNavAuthed";
 import { getClientAuthed, getGuardSession } from "~/lib/auth-guard";
 import { useFlag } from "~/lib/flags";
-import { scheduleIdlePreload } from "~/lib/lazy-preload";
 import { PerfProfiler } from "~/lib/perf/PerfProfiler";
 import { Provider } from "../integrations/tanstack-query/root-provider";
 import appCss from "../styles.css?url";
@@ -97,6 +96,11 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
       },
       {
         title: "Cubby",
+      },
+      {
+        name: "description",
+        content:
+          "A private household workspace for inventory, purchases, projects, recipes, and meal planning.",
       },
       {
         // Warm-Paper Ledger: the iOS status-bar tint matches the paper-surface
@@ -243,13 +247,6 @@ function RootComponent() {
 
   // Shell-owned ⌘K hotkey (toggles), so the shortcut works before the lazily
   // loaded menu has mounted. The menu no longer registers its own listener.
-  React.useEffect(() => {
-    return scheduleIdlePreload(window, preloadCommandMenu, {
-      timeoutMs: 2_000,
-      fallbackMs: 500,
-    });
-  }, []);
-
   React.useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {

@@ -4,7 +4,7 @@ import {
   type ProblemsCount,
 } from "@cubby/schemas/problems";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouteContext } from "@tanstack/react-router";
 import { AlertTriangle, Check } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
@@ -13,8 +13,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import { useHydrated } from "~/hooks/useHydrated";
-import { authClient } from "~/lib/auth-client";
 import { problemsCountsQueryOptions } from "~/lib/problems.functions";
 import { cn } from "~/lib/utils";
 
@@ -92,24 +90,22 @@ const PROBLEM_LABELS: Record<
 };
 
 export const ProblemsBadge = () => {
-  const hydrated = useHydrated();
-  const session = authClient.useSession();
-  const enabled = hydrated && !!session.data?.user;
+  const { isAuthed } = useRouteContext({ from: "__root__" });
 
-  // Counts are a cheap KV snapshot and share Home's authenticated hydration
-  // boundary, so this joins the normal streamed batch without risking an
-  // unauthenticated request or a second requestIdleCallback batch.
+  // Counts are a cheap KV snapshot and share Home's authenticated route
+  // context, so this can reuse the server-prefetched result without risking an
+  // unauthenticated request.
   const { data: count, isLoading } = useQuery({
-    ...problemsCountsQueryOptions({ staleTime: 5 * 60 * 1000, enabled }),
+    ...problemsCountsQueryOptions({
+      staleTime: 5 * 60 * 1000,
+      enabled: isAuthed,
+    }),
   });
 
-  // The query isn't prefetched during SSR, so the server always renders this
-  // loading button. Dehydrated data can resolve before hydration, so gate the
-  // loaded branch on `hydrated` too — otherwise the first client render would
-  // emit the <Link> while the server emitted this button (hydration mismatch).
   // A disabled query reports isLoading=false with empty data, so keep the
-  // spinner until authentication enables the read and a snapshot arrives.
-  if (!enabled || isLoading || !count) {
+  // spinner until the authenticated route enables the read and a snapshot
+  // arrives.
+  if (!isAuthed || isLoading || !count) {
     return (
       <Button variant="ghost" size="sm" disabled className="h-8 px-2">
         <Spinner />
@@ -136,6 +132,9 @@ export const ProblemsBadge = () => {
   const tooltipText = hasProblems
     ? `${tooltipParts.join(", ")} — Click to view`
     : "No problems detected";
+  const accessibleName = hasProblems
+    ? `${totalProblems} ${totalProblems === 1 ? "problem" : "problems"} — ${tooltipText}`
+    : tooltipText;
 
   return (
     <Tooltip>
@@ -151,7 +150,7 @@ export const ProblemsBadge = () => {
             )}
             render={<Link to="/problems" />}
             nativeButton={false}
-            aria-label={tooltipText}
+            aria-label={accessibleName}
           />
         }
       >
