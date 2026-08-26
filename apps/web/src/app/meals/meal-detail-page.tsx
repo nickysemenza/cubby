@@ -198,7 +198,7 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
                     <Input
                       value={nameValue}
                       placeholder="Meal name (optional)"
-                      className="h-9 w-64 font-medium"
+                      className="h-11 w-full font-medium md:h-9 md:w-64"
                       onChange={(e) => setName(e.target.value)}
                       onBlur={() => {
                         const next = nameValue.trim() || null;
