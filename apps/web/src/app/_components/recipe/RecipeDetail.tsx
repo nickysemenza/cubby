@@ -96,6 +96,8 @@ export function remapLegacyView(view: string | undefined): RecipeViewMode {
 
 const RecipeDetailInner: React.FC<{
   recipe: RecipeOut;
+  /** Route-only sections that belong in the same canonical anchor ledger. */
+  leadingSections?: DetailSection[];
   /** Controlled view mode (e.g. URL-driven on the detail route). */
   view?: RecipeViewMode;
   onViewChange?: (view: RecipeViewMode) => void;
@@ -106,6 +108,7 @@ const RecipeDetailInner: React.FC<{
   onFlowLayoutChange?: (layout: RecipeFlowLayoutMode) => void;
 }> = ({
   recipe,
+  leadingSections = [],
   view: controlledView,
   onViewChange,
   scale: controlledScale,
@@ -234,6 +237,7 @@ const RecipeDetailInner: React.FC<{
         : undefined;
 
   const sections: DetailSection[] = [
+    ...leadingSections,
     {
       id: "recipe-workflow",
       title: "Recipe",
