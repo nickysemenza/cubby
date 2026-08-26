@@ -102,17 +102,34 @@ export function entityListQueryOptions<E extends ListEntity>(
   input: EntityListParams<E>,
 ) {
   const operation = entityList.list.forEntity(entity);
-  const parsed = parseEntityListInput(entity, {
+  const wireInput = {
     entity,
     ...input,
-  }) as EntityListInputByEntity[E];
-  const policy = operation.policy(parsed);
+  } as EntityListInputByEntity[E];
+  let keyInput = wireInput;
+  try {
+    keyInput = parseEntityListInput(
+      entity,
+      wireInput,
+    ) as EntityListInputByEntity[E];
+  } catch {
+    // Conditional queries may carry incomplete filters while disabled. Their
+    // query function remains authoritative for validation if they execute.
+  }
+  const policy = operation.policy(keyInput);
   return queryOptions({
-    queryKey: operation.queryKey(parsed) as OperationQueryKey<
+    queryKey: operation.queryKey(keyInput) as OperationQueryKey<
       EntityListInputByEntity[E]
     >,
-    queryFn: async ({ signal }) =>
-      (await operation.call(parsed, { signal })) as EntityListResultByEntity[E],
+    queryFn: async ({ signal }) => {
+      const parsed = parseEntityListInput(
+        entity,
+        wireInput,
+      ) as EntityListInputByEntity[E];
+      return (await operation.call(parsed, {
+        signal,
+      })) as EntityListResultByEntity[E];
+    },
     meta: policy.meta,
     ...policy.freshness,
   });

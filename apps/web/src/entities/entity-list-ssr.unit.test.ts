@@ -69,6 +69,16 @@ describe("ensureEntityListSsr", () => {
     expect(ssr.queryKey).toEqual(infiniteOperationQueryKey(finite.queryKey));
   });
 
+  it("allows incomplete filters while a conditional finite query is disabled", () => {
+    expect(() =>
+      entityListQueryOptions("inventory", {
+        sort: { orderBy: "createdAt", direction: "desc" },
+        pagination: { pageIndex: 0, pageSize: 100 },
+        filters: { locationIdFilter: "" },
+      }),
+    ).not.toThrow();
+  });
+
   it("does not start a route preload that is already abandoned", async () => {
     const queryClient = new QueryClient();
     const ensure = vi.spyOn(queryClient, "ensureInfiniteQueryData");
