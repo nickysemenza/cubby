@@ -47,11 +47,23 @@ vi.mock("@tanstack/react-router", () => ({
     children,
     to,
     hash,
+    params,
+    ...props
   }: {
     children?: ReactNode;
     to: string;
     hash?: string;
-  }) => <a href={`${to}${hash ? `#${hash}` : ""}`}>{children}</a>,
+    params?: { shortcode?: string };
+    [key: string]: unknown;
+  }) => (
+    <a
+      {...props}
+      data-router-link="true"
+      href={`${params?.shortcode ? to.replace("$shortcode", params.shortcode) : to}${hash ? `#${hash}` : ""}`}
+    >
+      {children}
+    </a>
+  ),
 }));
 vi.mock("~/entities/entity-query", () => ({
   entityPreviewQueryOptions: (entity: string, id: string) => {
@@ -177,81 +189,85 @@ const product: ProductWithFoodOut = productWithFoodOut.parse({
 
 const relationshipRoute: ProductRelationshipRouteOut = {
   productId: product.id,
-  inventory: {
-    count: 1,
-    stockCount: 1,
-    installedCount: 0,
-    preview: [
-      {
-        id: testShortcode("inventory", "INV-INSPECT"),
-        amount: { value: 1, unit: "each" },
-        placement: "stock",
-        location: {
-          id: testShortcode("location", "LOC-INSPECT"),
-          name: "Tool cabinet",
+  direct: {
+    inventory: {
+      count: 1,
+      stockCount: 1,
+      installedCount: 0,
+      preview: [
+        {
+          id: testShortcode("inventory", "INV-INSPECT"),
+          amount: { value: 1, unit: "each" },
+          placement: "stock",
+          location: {
+            id: testShortcode("location", "LOC-INSPECT"),
+            name: "Tool cabinet",
+          },
         },
-      },
-    ],
+      ],
+    },
+    identityLocations: {
+      count: 1,
+      preview: [
+        {
+          id: testShortcode("location", "LOC-IDENTITY"),
+          name: "Drill case",
+        },
+      ],
+    },
+    expenses: {
+      count: 1,
+      netCost: 99,
+      preview: [
+        {
+          id: testShortcode("expense", "EXP-INSPECT"),
+          name: "Tool expense",
+          cost: 99,
+          date: "2026-01-01",
+          project: null,
+        },
+      ],
+    },
+    purchases: {
+      count: 1,
+      preview: [
+        {
+          id: testShortcode("purchase", "PUR-INSPECT"),
+          displayLabel: "Workshop order",
+          orderId: "A-12",
+          date: "2026-01-01",
+          vendor: {
+            id: testShortcode("vendor", "VEN-INSPECT"),
+            name: "Tool supply",
+          },
+          source: "both",
+          linkAttachedAt: new Date("2026-01-01"),
+        },
+      ],
+    },
+    usedOnProjects: {
+      count: 1,
+      preview: [
+        {
+          id: testShortcode("project", "PRJ-INSPECT"),
+          name: "Garage refresh",
+          status: "in_progress",
+        },
+      ],
+    },
+    tasks: { count: 0, openCount: 0, preview: [] },
   },
-  identityLocations: {
-    count: 1,
-    preview: [
-      {
-        id: testShortcode("location", "LOC-IDENTITY"),
-        name: "Drill case",
-      },
-    ],
-  },
-  expenses: {
-    count: 1,
-    netCost: 99,
-    preview: [
-      {
-        id: testShortcode("expense", "EXP-INSPECT"),
-        name: "Tool expense",
-        cost: 99,
-        date: "2026-01-01",
-        project: null,
-      },
-    ],
-  },
-  purchases: {
-    count: 1,
-    preview: [
-      {
-        id: testShortcode("purchase", "PUR-INSPECT"),
-        displayLabel: "Workshop order",
-        orderId: "A-12",
-        date: "2026-01-01",
-        vendor: {
+  derived: {
+    purchasedForProjects: { count: 0, preview: [] },
+    vendors: {
+      count: 1,
+      preview: [
+        {
           id: testShortcode("vendor", "VEN-INSPECT"),
           name: "Tool supply",
         },
-        source: "both",
-        linkAttachedAt: new Date("2026-01-01"),
-      },
-    ],
-  },
-  usedOnProjects: {
-    count: 1,
-    preview: [
-      {
-        id: testShortcode("project", "PRJ-INSPECT"),
-        name: "Garage refresh",
-        status: "in_progress",
-      },
-    ],
-  },
-  purchasedForProjects: { count: 0, preview: [] },
-  tasks: { count: 0, openCount: 0, preview: [] },
-  vendors: {
-    count: 1,
-    preview: [
-      {
-        id: testShortcode("vendor", "VEN-INSPECT"),
-        name: "Tool supply",
-      },
-    ],
+      ],
+    },
   },
 };
 
@@ -276,6 +292,14 @@ describe("ProductWorkbenchInspector", () => {
       "Relations",
       "Activity",
     ]);
+    expect(
+      screen.getByRole("navigation", {
+        name: `${product.name} direct relationships`,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Relationship route" }),
+    ).not.toBeInTheDocument();
     expect(mocks.nestedPage).not.toHaveBeenCalled();
     expect(screen.queryByTestId("nested-page")).not.toBeInTheDocument();
   });
@@ -292,26 +316,44 @@ describe("ProductWorkbenchInspector", () => {
     expect(screen.getByText("Expense + order link")).toBeInTheDocument();
     expect(screen.getByText("Derived from those records")).toBeInTheDocument();
     expect(screen.getByText("Vendors")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Vendors/ })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
     expect(
       screen.getByRole("link", { name: "Direct Stored at: Tool cabinet" }),
     ).toHaveAttribute(
       "href",
-      `/inventory/${relationshipRoute.inventory.preview[0]?.id}`,
+      `/inventory/${relationshipRoute.direct.inventory.preview[0]?.id}`,
     );
+    expect(
+      screen.getByRole("link", { name: "Direct Stored at: Tool cabinet" }),
+    ).toHaveAttribute("data-router-link", "true");
 
     mocks.route.current = {
       ...relationshipRoute,
-      inventory: { ...relationshipRoute.inventory, count: 0, preview: [] },
-      identityLocations: {
-        ...relationshipRoute.identityLocations,
-        count: 0,
-        preview: [],
+      direct: {
+        ...relationshipRoute.direct,
+        inventory: {
+          ...relationshipRoute.direct.inventory,
+          count: 0,
+          preview: [],
+        },
+        identityLocations: {
+          ...relationshipRoute.direct.identityLocations,
+          count: 0,
+          preview: [],
+        },
       },
     };
     rerender(<ProductRelationshipRoute product={product} />);
 
-    expect(screen.queryByText("Stored at")).not.toBeInTheDocument();
-    expect(screen.queryByText("Serves as location")).not.toBeInTheDocument();
+    expect(screen.getByText("Stored at")).toBeInTheDocument();
+    expect(screen.getByText("No stock records yet.")).toBeInTheDocument();
+    expect(screen.getByText("Serves as location")).toBeInTheDocument();
+    expect(
+      screen.getByText("This product does not identify a location."),
+    ).toBeInTheDocument();
   });
 
   it("keeps embedded stock and location evidence available when the route request fails", () => {

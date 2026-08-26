@@ -61,7 +61,10 @@ import { heroPresence } from "./product-hero-presence";
 import { ProductKitComponents } from "./product-kit-components";
 import { ProductProjectUses } from "./product-project-uses";
 import { ProductPurchases } from "./product-purchases";
-import { ProductRelationshipRoute } from "./product-relationship-route";
+import {
+  ProductRelationshipRouteContent,
+  useProductRelationshipRoute,
+} from "./product-relationship-route";
 import { ProductStockedAt } from "./product-stocked-at";
 import { ProductTaskHistory } from "./product-task-history";
 
@@ -70,6 +73,7 @@ interface ProductDetailProps {
 }
 
 export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
+  const relationshipRouteQuery = useProductRelationshipRoute(product.id);
   const { commonSections, editMode, mappings } = useEntityDetail<
     ProductWithFoodOut,
     { id: string; data: Partial<ProductCreateInput> }
@@ -121,7 +125,12 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       title: "Relationships",
       icon: Link2,
       placement: "primary" as const,
-      content: <ProductRelationshipRoute product={product} />,
+      content: (
+        <ProductRelationshipRouteContent
+          product={product}
+          query={relationshipRouteQuery}
+        />
+      ),
     },
     // Custom section: Stocked At — where the product lives, the primary
     // content of the page (the hero's On hand / Locations stats are the
@@ -502,7 +511,11 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       heroStats={heroStats}
     >
       <div className="border-border border-b bg-card px-2 py-2 md:px-4">
-        <ProductRelationshipRoute product={product} variant="strip" />
+        <ProductRelationshipRouteContent
+          product={product}
+          query={relationshipRouteQuery}
+          variant="strip"
+        />
       </div>
       <DetailSections
         sections={sections}

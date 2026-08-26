@@ -34,7 +34,7 @@ const Overview: FC<{ product: ProductWithFoodOut }> = ({ product }) => {
 
   return (
     <div className="space-y-3 px-3 py-3">
-      <ProductRelationshipRoute product={product} />
+      <ProductRelationshipRoute product={product} variant="strip" />
 
       <dl className="border-border border-y">
         <Field label="Category">

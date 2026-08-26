@@ -2,9 +2,11 @@ import type {
   ProductRelationshipRouteOut,
   ProductWithFoodOut,
 } from "@cubby/schemas/product";
+import { isNonFoodCategory } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { ChevronDown, ExternalLink, Package } from "lucide-react";
-import { type FC, useId, useMemo, useState } from "react";
+import { type FC, type ReactNode, useId, useMemo, useState } from "react";
 import { product as productOperations } from "~/app/products/product.functions";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
@@ -14,7 +16,7 @@ type RouteTone = "direct" | "derived";
 type RouteSample = {
   id: string;
   label: string;
-  href: string;
+  to: string;
   detail?: string | null;
   provenance?: string | null;
 };
@@ -25,7 +27,7 @@ type RouteBranch = {
   kind: RouteTone;
   count: number;
   samples: RouteSample[];
-  detailHref: string;
+  detailHash: string;
   emptyCopy: string;
 };
 
@@ -34,15 +36,66 @@ type BranchShape<T> = {
   preview: readonly T[];
 };
 
-const routeHref = (shortcode: string, hash?: string) =>
-  `/products/${encodeURIComponent(shortcode)}${hash ? `#${hash}` : ""}`;
+function ProductSectionLink({
+  productId,
+  hash,
+  className,
+  children,
+  ariaLabel,
+}: {
+  productId: string;
+  hash: string;
+  className: string;
+  children: ReactNode;
+  ariaLabel?: string;
+}) {
+  return (
+    <Link
+      to="/products/$shortcode"
+      params={{ shortcode: productId }}
+      hash={hash}
+      className={className}
+      aria-label={ariaLabel}
+    >
+      {children}
+    </Link>
+  );
+}
+
+function InternalRouteLink({
+  to,
+  className,
+  children,
+  title,
+  ariaLabel,
+}: {
+  to: string;
+  className: string;
+  children: ReactNode;
+  title?: string;
+  ariaLabel?: string;
+}) {
+  // The route summaries already expose canonical, public shortcodes. Keep
+  // navigation in the running application (and its workbench state) while
+  // retaining Link's native anchor semantics for keyboard and assistive tech.
+  return (
+    <Link
+      to={to as never}
+      className={className}
+      title={title}
+      aria-label={ariaLabel}
+    >
+      {children}
+    </Link>
+  );
+}
 
 function routeBranch<T>(
   id: string,
   label: string,
   kind: RouteTone,
   branch: BranchShape<T>,
-  detailHref: string,
+  detailHash: string,
   emptyCopy: string,
   sample: (record: T) => RouteSample,
 ): RouteBranch {
@@ -52,7 +105,7 @@ function routeBranch<T>(
     kind,
     count: branch.count,
     samples: branch.preview.map(sample),
-    detailHref,
+    detailHash,
     emptyCopy,
   };
 }
@@ -66,13 +119,13 @@ function toRouteModel(
       "stock",
       "Stored at",
       "direct",
-      summary.inventory,
-      routeHref(product.id, "stocked-at"),
+      summary.direct.inventory,
+      "stocked-at",
       "No stock records yet.",
       (record) => ({
         id: record.id,
         label: record.location.name,
-        href: `/inventory/${encodeURIComponent(record.id)}`,
+        to: `/inventory/${encodeURIComponent(record.id)}`,
         detail: record.placement === "installed" ? "Installed" : "Stock",
       }),
     ),
@@ -80,26 +133,26 @@ function toRouteModel(
       "identity-locations",
       "Serves as location",
       "direct",
-      summary.identityLocations,
-      routeHref(product.id, "stocked-at"),
+      summary.direct.identityLocations,
+      "stocked-at",
       "This product does not identify a location.",
       (record) => ({
         id: record.id,
         label: record.name,
-        href: `/locations/${encodeURIComponent(record.id)}`,
+        to: `/locations/${encodeURIComponent(record.id)}`,
       }),
     ),
     routeBranch(
       "expenses",
       "Expense history",
       "direct",
-      summary.expenses,
-      routeHref(product.id, "expense-history"),
+      summary.direct.expenses,
+      "expense-history",
       "No product expenses recorded.",
       (record) => ({
         id: record.id,
         label: record.name,
-        href: `/expenses/${encodeURIComponent(record.id)}`,
+        to: `/expenses/${encodeURIComponent(record.id)}`,
         detail: record.date,
       }),
     ),
@@ -107,13 +160,13 @@ function toRouteModel(
       "purchases",
       "Purchased through",
       "direct",
-      summary.purchases,
-      routeHref(product.id, "purchases"),
+      summary.direct.purchases,
+      "purchases",
       "No acquisition purchases recorded.",
       (record) => ({
         id: record.id,
         label: record.displayLabel ?? record.orderId ?? "Purchase",
-        href: `/purchases/${encodeURIComponent(record.id)}`,
+        to: `/purchases/${encodeURIComponent(record.id)}`,
         detail: record.vendor?.name,
         provenance:
           record.source === "link"
@@ -123,60 +176,68 @@ function toRouteModel(
               : "Via expense",
       }),
     ),
-    routeBranch(
-      "used-on-projects",
-      "Used on projects",
-      "direct",
-      summary.usedOnProjects,
-      routeHref(product.id, "project-uses"),
-      "Not used on a project yet.",
-      (record) => ({
-        id: record.id,
-        label: record.name,
-        href: `/projects/${encodeURIComponent(record.id)}`,
-      }),
-    ),
-    routeBranch(
-      "tasks",
-      "Tasks",
-      "direct",
-      summary.tasks,
-      routeHref(product.id, "tasks"),
-      "No tasks are attached to this product.",
-      (record) => ({
-        id: record.id,
-        label: record.name,
-        href: `/tasks/${encodeURIComponent(record.id)}`,
-        detail: record.dueDate ?? record.status,
-      }),
-    ),
-  ].filter((branch) => branch.count > 0);
+    ...(product.category === "tools" || product.category === "software"
+      ? [
+          routeBranch(
+            "used-on-projects",
+            "Used on projects",
+            "direct",
+            summary.direct.usedOnProjects,
+            "project-uses",
+            "Not used on a project yet.",
+            (record) => ({
+              id: record.id,
+              label: record.name,
+              to: `/projects/${encodeURIComponent(record.id)}`,
+            }),
+          ),
+        ]
+      : []),
+    ...(isNonFoodCategory(product.category)
+      ? [
+          routeBranch(
+            "tasks",
+            "Tasks",
+            "direct",
+            summary.direct.tasks,
+            "tasks",
+            "No tasks are attached to this product.",
+            (record) => ({
+              id: record.id,
+              label: record.name,
+              to: `/tasks/${encodeURIComponent(record.id)}`,
+              detail: record.dueDate ?? record.status,
+            }),
+          ),
+        ]
+      : []),
+  ];
 
   const derived: RouteBranch[] = [
     routeBranch(
       "purchased-for-projects",
       "Purchased for projects",
       "derived",
-      summary.purchasedForProjects,
-      routeHref(product.id, "expense-history"),
+      summary.derived.purchasedForProjects,
+      "expense-history",
       "No project purchases are attributed from product expenses.",
       (record) => ({
         id: record.id,
         label: record.name,
-        href: `/projects/${encodeURIComponent(record.id)}`,
+        to: `/projects/${encodeURIComponent(record.id)}`,
       }),
     ),
     routeBranch(
       "vendors",
       "Vendors",
       "derived",
-      summary.vendors,
-      routeHref(product.id, "vendors"),
+      summary.derived.vendors,
+      "vendors",
       "No vendor rollups from product spend yet.",
       (record) => ({
         id: record.id,
         label: record.name,
-        href: `/vendors/${encodeURIComponent(record.id)}`,
+        to: `/vendors/${encodeURIComponent(record.id)}`,
       }),
     ),
   ].filter((branch) => branch.count > 0);
@@ -195,12 +256,12 @@ function fallbackRouteModel(product: ProductWithFoodOut): {
       label: "Stored at",
       kind: "direct",
       count: product.inventoryEntry.length,
-      detailHref: routeHref(product.id, "stocked-at"),
+      detailHash: "stocked-at",
       emptyCopy: "No stock records yet.",
       samples: product.inventoryEntry.slice(0, 3).map((entry) => ({
         id: entry.id,
         label: entry.location.name,
-        href: `/inventory/${encodeURIComponent(entry.id)}`,
+        to: `/inventory/${encodeURIComponent(entry.id)}`,
         detail: entry.placement === "installed" ? "Installed" : "Stock",
       })),
     });
@@ -211,20 +272,26 @@ function fallbackRouteModel(product: ProductWithFoodOut): {
       label: "Serves as location",
       kind: "direct",
       count: product.servingAsLocations.length,
-      detailHref: routeHref(product.id, "stocked-at"),
+      detailHash: "stocked-at",
       emptyCopy: "This product does not identify a location.",
       samples: product.servingAsLocations.slice(0, 3).map((location) => ({
         id: location.id,
         label: location.name,
-        href: `/locations/${encodeURIComponent(location.id)}`,
+        to: `/locations/${encodeURIComponent(location.id)}`,
       })),
     });
   }
   return { direct, derived: [] };
 }
 
-function RouteBranchRows({ branch }: { branch: RouteBranch }) {
-  const [expanded, setExpanded] = useState(true);
+function RouteBranchRows({
+  branch,
+  productId,
+}: {
+  branch: RouteBranch;
+  productId: string;
+}) {
+  const [expanded, setExpanded] = useState(branch.kind === "direct");
   const panelId = useId();
   const samples = branch.samples.slice(0, 3);
 
@@ -252,13 +319,14 @@ function RouteBranchRows({ branch }: { branch: RouteBranch }) {
             {branch.count}
           </span>
         </button>
-        <a
-          href={branch.detailHref}
+        <ProductSectionLink
+          productId={productId}
+          hash={branch.detailHash}
           className="inline-flex min-h-11 shrink-0 items-center text-primary text-xs underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 md:min-h-8"
         >
           View all
           <ExternalLink aria-hidden className="ml-1 size-3" />
-        </a>
+        </ProductSectionLink>
       </div>
       {expanded ? (
         <ul
@@ -272,14 +340,14 @@ function RouteBranchRows({ branch }: { branch: RouteBranch }) {
                 key={sample.id}
                 className="flex min-h-11 items-center gap-2 py-1 md:min-h-8"
               >
-                <a
-                  href={sample.href}
+                <InternalRouteLink
+                  to={sample.to}
                   className="min-w-0 flex-1 truncate text-foreground underline-offset-2 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                   title={sample.label}
-                  aria-label={`${branch.kind === "direct" ? "Direct" : "Derived"} ${branch.label}: ${sample.label}`}
+                  ariaLabel={`${branch.kind === "direct" ? "Direct" : "Derived"} ${branch.label}: ${sample.label}`}
                 >
                   {sample.label}
-                </a>
+                </InternalRouteLink>
                 {sample.detail ? (
                   <span className="shrink-0 text-muted-foreground">
                     {sample.detail}
@@ -297,12 +365,13 @@ function RouteBranchRows({ branch }: { branch: RouteBranch }) {
           )}
           {branch.count > samples.length ? (
             <li className="pt-1">
-              <a
-                href={branch.detailHref}
+              <ProductSectionLink
+                productId={productId}
+                hash={branch.detailHash}
                 className="inline-flex min-h-11 items-center text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 md:min-h-8"
               >
                 View all {branch.count} {branch.label.toLowerCase()}
-              </a>
+              </ProductSectionLink>
             </li>
           ) : null}
         </ul>
@@ -326,6 +395,7 @@ export function ProductRelationshipRouteFrame({
   const derivedHeadingId = useId();
 
   if (variant === "strip") {
+    const populatedDirect = direct.filter((branch) => branch.count > 0);
     return (
       <nav
         aria-label={`${product.name} direct relationships`}
@@ -346,22 +416,23 @@ export function ProductRelationshipRouteFrame({
               </span>
             </span>
           </li>
-          {direct.map((branch) => (
+          {populatedDirect.map((branch) => (
             <li key={branch.id} className="flex items-center gap-2">
               <span aria-hidden className="h-px w-3 bg-border" />
-              <a
-                href={branch.detailHref}
+              <ProductSectionLink
+                productId={product.id}
+                hash={branch.detailHash}
                 className="inline-flex min-h-11 items-center gap-1.5 border border-border bg-card px-2 text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 md:min-h-8"
-                aria-label={`Direct ${branch.label}: ${branch.count} records`}
+                ariaLabel={`Direct ${branch.label}: ${branch.count} records`}
               >
                 <span>{branch.label}</span>
                 <span className="font-mono text-[0.625rem] text-muted-foreground tabular-nums">
                   {branch.count}
                 </span>
-              </a>
+              </ProductSectionLink>
             </li>
           ))}
-          {direct.length === 0 ? (
+          {populatedDirect.length === 0 ? (
             <li className="text-muted-foreground">No direct records yet.</li>
           ) : null}
         </ol>
@@ -405,7 +476,11 @@ export function ProductRelationshipRouteFrame({
           {direct.length > 0 ? (
             <ol className="border-border border-l pl-3">
               {direct.map((branch) => (
-                <RouteBranchRows key={branch.id} branch={branch} />
+                <RouteBranchRows
+                  key={branch.id}
+                  branch={branch}
+                  productId={product.id}
+                />
               ))}
             </ol>
           ) : (
@@ -425,7 +500,11 @@ export function ProductRelationshipRouteFrame({
           {derived.length > 0 ? (
             <ol className="mt-1">
               {derived.map((branch) => (
-                <RouteBranchRows key={branch.id} branch={branch} />
+                <RouteBranchRows
+                  key={branch.id}
+                  branch={branch}
+                  productId={product.id}
+                />
               ))}
             </ol>
           ) : (
@@ -439,13 +518,21 @@ export function ProductRelationshipRouteFrame({
   );
 }
 
-export const ProductRelationshipRoute: FC<{
-  product: ProductWithFoodOut;
-  variant?: "ledger" | "strip";
-}> = ({ product, variant }) => {
-  const query = useQuery(
-    productOperations.relationshipRoute.queryOptions({ productId: product.id }),
+export function useProductRelationshipRoute(productId: string) {
+  return useQuery(
+    productOperations.relationshipRoute.queryOptions({ productId }),
   );
+}
+
+type ProductRelationshipRouteQuery = ReturnType<
+  typeof useProductRelationshipRoute
+>;
+
+export const ProductRelationshipRouteContent: FC<{
+  product: ProductWithFoodOut;
+  query: ProductRelationshipRouteQuery;
+  variant?: "ledger" | "strip";
+}> = ({ product, query, variant }) => {
   const model = useMemo(
     () => (query.data ? toRouteModel(product, query.data) : null),
     [product, query.data],
@@ -500,4 +587,18 @@ export const ProductRelationshipRoute: FC<{
       {...model}
     />
   ) : null;
+};
+
+export const ProductRelationshipRoute: FC<{
+  product: ProductWithFoodOut;
+  variant?: "ledger" | "strip";
+}> = ({ product, variant }) => {
+  const query = useProductRelationshipRoute(product.id);
+  return (
+    <ProductRelationshipRouteContent
+      product={product}
+      query={query}
+      variant={variant}
+    />
+  );
 };
