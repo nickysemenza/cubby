@@ -240,8 +240,11 @@ export async function editListCell(
     const input = cellEditorInput(page);
     await expect(input).toBeVisible({ timeout: 2_000 });
     await expect(input).toBeEnabled({ timeout: 2_000 });
-    await input.fill(value);
-    await input.press("Enter");
+    // Bound actions too: if a table refresh detaches the editor after the
+    // assertions, Playwright's default action timeout would consume the whole
+    // outer retry budget and prevent the promised reopen attempt.
+    await input.fill(value, { timeout: 2_000 });
+    await input.press("Enter", { timeout: 2_000 });
     await expect(input).toHaveCount(0, { timeout: 10_000 });
   }).toPass({ timeout: 30_000 });
 }
