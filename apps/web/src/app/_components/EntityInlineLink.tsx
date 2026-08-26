@@ -31,6 +31,8 @@ type MinimalEntityData = { id: string; name: string };
 // Discriminated union for entity-specific data shapes
 type EntityInlineLinkProps = {
   openInNewTab?: boolean;
+  /** Optional sizing/layout classes applied to the actual anchor. */
+  className?: string;
   /** Compact mode: truncates long names with max-width */
   compact?: boolean;
   /** Truncate the name to the available flex width (no fixed cap). Parent must be min-w-0. */
@@ -191,12 +193,13 @@ function PreviewEntityLink({
 }
 
 export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
-  const { openInNewTab, compact, truncate, showIdentityMark } = props;
+  const { openInNewTab, className, compact, truncate, showIdentityMark } =
+    props;
   const displayImage =
     props.displayImage === undefined
       ? displayImageFromData(props.data)
       : props.displayImage;
-  const wrapperClass = cn(linkClass, truncate && "min-w-0");
+  const wrapperClass = cn(linkClass, truncate && "min-w-0", className);
 
   return match(props)
     .with({ entity: "ingredient" }, ({ data }) => (

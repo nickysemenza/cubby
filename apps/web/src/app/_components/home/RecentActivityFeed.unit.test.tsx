@@ -45,9 +45,10 @@ describe("RecentActivityFeed", () => {
     }
     vi.stubGlobal("IntersectionObserver", Observer);
 
-    render(<RecentActivityFeed />);
+    render(<RecentActivityFeed limit={6} />);
     expect(auditLogRender).not.toHaveBeenCalled();
     expect(screen.getByTestId("activity-placeholder")).toBeVisible();
+    expect(screen.getAllByTestId("activity-placeholder-row")).toHaveLength(6);
 
     act(() => reveal?.());
     expect(auditLogRender).toHaveBeenCalledTimes(1);

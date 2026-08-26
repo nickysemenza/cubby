@@ -711,7 +711,7 @@ function MatrixTable({
       style={{ width: tableWidth }}
     >
       <thead className="sticky top-[51px] z-30 bg-card">
-        <tr className="border-[var(--foreground)] border-b-[3px]">
+        <tr className="border-[var(--foreground)] border-b">
           <th
             className={cn(
               STICKY,
@@ -905,7 +905,7 @@ function MatrixTable({
         ])}
       </tbody>
       <tfoot>
-        <tr className="border-[var(--foreground)] border-t-[3px]">
+        <tr className="border-[var(--foreground)] border-t">
           <td className={cn(STICKY, "bg-card px-2 py-1")}>
             <div className="w-64">
               <span className="eyebrow">{data.rows.length} tools</span>

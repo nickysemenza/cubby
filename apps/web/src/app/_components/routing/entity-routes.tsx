@@ -1,11 +1,19 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { UseSuspenseQueryOptions } from "@tanstack/react-query";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { useParams } from "@tanstack/react-router";
+import { Link, notFound, useParams } from "@tanstack/react-router";
 import type { ComponentType, ReactNode } from "react";
 import type { PageLayout } from "~/components/layout/page-wrapper";
 import { Page } from "~/components/page/Page";
-import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
+import { Button } from "~/components/ui/button";
+import {
+  Empty,
+  EmptyActions,
+  EmptyDescription,
+  EmptyTitle,
+} from "~/components/ui/empty";
+import { entities } from "~/entities/entities";
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
 
 /**
@@ -179,9 +187,10 @@ export function detailPage<TQuery extends DetailQueryFactory>({
 
     useDetailTitle(shortcode, (data ? title(data) : undefined) ?? undefined);
 
-    // The loader already threw notFound for an unknown code; this guard only
-    // satisfies the nullable output type.
-    if (!data) return null;
+    // The loader covers the initial request. Focus/reconnect refetches can
+    // still observe a record deleted since navigation, which is a real
+    // not-found transition rather than a blank successful detail page.
+    if (!data) throw notFound();
 
     return render(data, shortcode);
   };
@@ -189,7 +198,7 @@ export function detailPage<TQuery extends DetailQueryFactory>({
 
 /** The `notFoundComponent` every entity detail route renders. */
 export function notFoundPage(
-  entity: Entity,
+  entity: BrowserRoutedEntity,
   title: string,
   description: string,
 ) {
@@ -199,6 +208,15 @@ export function notFoundPage(
         <Empty>
           <EmptyTitle>{title}</EmptyTitle>
           <EmptyDescription>{description}</EmptyDescription>
+          <EmptyActions>
+            <Button
+              variant="outline"
+              render={<Link to={entities[entity].routes.list} />}
+              nativeButton={false}
+            >
+              Browse {entities[entity].pluralLabel.toLocaleLowerCase()}
+            </Button>
+          </EmptyActions>
         </Empty>
       </Page>
     );

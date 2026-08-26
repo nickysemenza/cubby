@@ -12,7 +12,11 @@ import { columnWidthVariables } from "./table-layout";
 import { useCellSelection } from "./useCellSelection";
 import { useDesktopGroupedRows } from "./useDesktopGroupedRows";
 import type { GroupConfig } from "./useGroupedList";
-import { densityConfig, useTableDensity } from "./useTableDensity";
+import {
+  densityConfig,
+  type TableDensity,
+  useTableDensity,
+} from "./useTableDensity";
 
 export function useDataTableController<TItem extends RowData>({
   table,
@@ -21,6 +25,7 @@ export function useDataTableController<TItem extends RowData>({
   grouped,
   verticalAlign,
   onRowClick,
+  defaultDensity,
 }: {
   table: ITable<TItem>;
   infiniteScroll?: InfiniteScrollControls;
@@ -29,6 +34,8 @@ export function useDataTableController<TItem extends RowData>({
   verticalAlign: "top" | "middle";
   /** Row-open handler — used by cell selection's Cmd/Ctrl+Enter. */
   onRowClick?: (row: Row<TItem>) => void;
+  /** First-visit density only; a person's stored Display choice still wins. */
+  defaultDensity?: TableDensity;
 }) {
   const { isDebugEnabled } = useDebug();
   const isMobile = useIsMobile();
@@ -38,7 +45,7 @@ export function useDataTableController<TItem extends RowData>({
   // empty/data state and mismatch SSR (CUBBY-3J / CUBBY-3). Keep showing the
   // loading row until hydrated so the first client render matches SSR.
   const hydrated = useHydrated();
-  const { density } = useTableDensity();
+  const { density } = useTableDensity(defaultDensity);
   const dConfig = densityConfig[density];
 
   const desktopInfiniteObserverRef = useRef<IntersectionObserver | null>(null);
@@ -179,7 +186,7 @@ export function useDataTableController<TItem extends RowData>({
     table:
       "table-grid-lines border-separate border-spacing-0 text-sm leading-tight tabular-nums",
     header:
-      "h-8 bg-card px-2 py-1 text-2xs font-mono font-semibold uppercase tracking-wider text-slate border-b-[3px] border-b-foreground",
+      "h-8 border-border border-b bg-card px-2 py-1 font-medium text-2xs text-muted-foreground",
     cell: cn(
       dConfig.cellClass,
       "overflow-hidden",

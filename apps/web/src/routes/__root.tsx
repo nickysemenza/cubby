@@ -1,6 +1,6 @@
 // Fontsource variable fonts - loaded via bundler for better performance.
-// Warm-Paper Ledger type system: Space Grotesk (geometric sans) for headings,
-// JetBrains Mono for all data/metrics, Inter for body/UI prose. Fraunces retired.
+// Porcelain Transit type system: Inter carries headings and UI prose while
+// JetBrains Mono is reserved for aligned data, measures, dates, and codes.
 import "../fonts.css";
 
 import type { QueryClient } from "@tanstack/react-query";
@@ -103,10 +103,9 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
           "A private household workspace for inventory, purchases, projects, recipes, and meal planning.",
       },
       {
-        // Warm-Paper Ledger: the iOS status-bar tint matches the paper-surface
-        // sticky header (bg-card) instead of the old dark chrome.
+        // Keep browser and installed-PWA chrome on the Porcelain canvas.
         name: "theme-color",
-        content: "#fcfaf4",
+        content: "#f7f9fc",
       },
       {
         name: "apple-mobile-web-app-title",
@@ -286,7 +285,7 @@ function RootComponent() {
         </AuthenticatedAppShell>
       ) : (
         <div className="flex min-h-dvh flex-col">
-          <div className="safe-top sticky top-0 z-40 border-b-[3px] border-b-foreground bg-card print:hidden">
+          <div className="safe-top sticky top-0 z-40 border-b bg-card print:hidden">
             <div className="mx-auto flex h-12 w-full max-w-7xl items-center px-2 md:px-6">
               <MainNav className="mx-0" onSearchClick={openCommandMenu} />
             </div>

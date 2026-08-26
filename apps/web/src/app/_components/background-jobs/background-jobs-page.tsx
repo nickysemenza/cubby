@@ -151,6 +151,7 @@ export function BackgroundJobsPage({
       selectedJobs = {
         status: "error",
         message: getErrorMessage(jobsQuery.error),
+        retry: () => void jobsQuery.refetch(),
       };
     else if (!jobsQuery.data) selectedJobs = { status: "loading" };
     else
@@ -171,6 +172,7 @@ export function BackgroundJobsPage({
     selectedBatchError: summaryQuery.error
       ? getErrorMessage(summaryQuery.error)
       : undefined,
+    selectedBatchRetry: () => void summaryQuery.refetch(),
     selectedJobs,
   });
 
@@ -219,6 +221,7 @@ export function BackgroundJobsPage({
         showFailedOnly={showFailedOnly}
         isLoading={listLoading}
         error={listQuery.error}
+        onRetry={() => void listQuery.refetch()}
         actions={drainAction}
         onExpandedBatchChange={setExpandedBatch}
         onFailedOnlyChange={(batchId, failedOnly) => {

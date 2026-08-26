@@ -3,6 +3,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { oauth } from "~/app/account/connected-apps.functions";
+import { OrphanedClientMaintenance } from "~/app/account/orphaned-client-maintenance";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import {
@@ -42,13 +44,18 @@ function ConnectedAppsPage() {
     label: string;
   } | null>(null);
 
-  const { data: apps, isLoading } = useQuery(
-    oauth.listConnectedApps.queryOptions(null),
-  );
+  const {
+    data: apps,
+    isLoading,
+    error,
+    refetch,
+  } = useQuery(oauth.listConnectedApps.queryOptions(null));
 
-  const { data: orphanCount = 0 } = useQuery(
-    oauth.countOrphanedClients.queryOptions(null),
-  );
+  const {
+    data: orphanCount,
+    error: orphanError,
+    refetch: refetchOrphanCount,
+  } = useQuery(oauth.countOrphanedClients.queryOptions(null));
 
   const revoke = useActionMutation({
     mutationFn: oauth.revokeConnectedApp.mutationOptions,
@@ -74,6 +81,13 @@ function ConnectedAppsPage() {
 
       {isLoading ? (
         <p className="text-muted-foreground text-xs">Loading…</p>
+      ) : error ? (
+        <Stack gap="sm">
+          <ErrorDisplay error={error} />
+          <Button variant="outline" onClick={() => void refetch()}>
+            Retry connected apps
+          </Button>
+        </Stack>
       ) : !apps?.length ? (
         <p className="text-muted-foreground text-xs">
           Nothing connected. Add cubby as a connector in Claude (or any MCP
@@ -148,23 +162,13 @@ function ConnectedAppsPage() {
         </Table>
       )}
 
-      {orphanCount > 0 && (
-        <Row align="center" gap="sm">
-          <span className="text-muted-foreground text-xs">
-            {orphanCount} abandoned registration
-            {orphanCount === 1 ? "" : "s"} — connect attempts that never reached
-            the consent screen.
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={prune.isPending}
-            onClick={() => prune.mutate(null)}
-          >
-            {prune.isPending ? "Cleaning up…" : "Clean up"}
-          </Button>
-        </Row>
-      )}
+      <OrphanedClientMaintenance
+        count={orphanCount}
+        error={orphanError}
+        isCleaning={prune.isPending}
+        onCleanup={() => prune.mutate(null)}
+        onRetry={() => void refetchOrphanCount()}
+      />
 
       <AlertDialog
         open={pendingRevoke !== null}

@@ -13,6 +13,7 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
+import { domainWayfinding } from "./domain-wayfinding";
 import {
   getSidebarGroupItems,
   type NavGroup,
@@ -32,6 +33,7 @@ export function SidebarRailGroup({
   const children = getSidebarGroupItems(group);
   const active = children.some((item) => item.to === activeTo);
   const Icon = group.icon;
+  const domain = group.domain ? domainWayfinding(group.domain) : null;
 
   return (
     <DropdownMenu>
@@ -49,6 +51,11 @@ export function SidebarRailGroup({
                       : "w-10 justify-center",
                     active && "border-border bg-background text-foreground",
                   )}
+                  style={
+                    domain
+                      ? { borderLeftColor: `var(${domain.accentToken})` }
+                      : undefined
+                  }
                   aria-label={group.label}
                   aria-current={active ? "page" : undefined}
                 />

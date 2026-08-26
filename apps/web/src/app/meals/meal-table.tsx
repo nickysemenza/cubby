@@ -19,6 +19,7 @@ import { ListWorkbench } from "../_components/data-table/ListWorkbench";
 import { EntityInlineLinkList } from "../_components/EntityInlineLinkList";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
+import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { formatMealCost, mealDateLabel } from "./meal-format";
 import {
@@ -41,6 +42,14 @@ import {
  * purpose: see the column below.
  */
 export function MealTable() {
+  const {
+    onRowClick,
+    onRowHover,
+    onRowHoverEnd,
+    PreviewSheet,
+    dockedInspector,
+    preview,
+  } = useEntityPreview("meal", { responsiveInspector: true });
   const columnHelper = useMemo(() => createCubbyColumnHelper<MealOut>(), []);
 
   const updateMealMutation = useUpdateMutation({
@@ -197,8 +206,17 @@ export function MealTable() {
   });
 
   return (
-    <div>
-      <ListWorkbench model={workbench} ariaLabel="Meals Table" />
-    </div>
+    <>
+      <ListWorkbench
+        model={workbench}
+        ariaLabel="Meals Table"
+        onRowClick={onRowClick}
+        onRowHover={onRowHover}
+        onRowHoverEnd={onRowHoverEnd}
+        currentRowId={preview?.rowKey ?? preview?.id}
+        desktopInspector={dockedInspector}
+      />
+      <PreviewSheet />
+    </>
   );
 }

@@ -6,10 +6,10 @@ import {
   stripSearchParams,
   useNavigate,
 } from "@tanstack/react-router";
-import { Edit, X } from "lucide-react";
+import { Edit, PackageCheck, X } from "lucide-react";
 import { z } from "zod";
 import { VerbButton } from "~/app/_components/actions/action-verb-ui";
-import { DetailAnchorIndex } from "~/app/_components/data-table/detail-page";
+import type { DetailSection } from "~/app/_components/data-table/detail-page";
 import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
 import { CopyRecipeParseButton } from "~/app/_components/recipe/copy-corpus-button";
 import EditRecipeForm from "~/app/_components/recipe/edit-recipe";
@@ -21,7 +21,6 @@ import RecipeDetail, {
 import type { RecipeFlowLayoutMode } from "~/app/_components/recipe/RecipeFlowView";
 import { useDuplicateRecipe } from "~/app/_components/recipe/use-duplicate-recipe";
 import { AddToMeal } from "~/app/meals/add-to-meal";
-import { Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
@@ -183,8 +182,18 @@ function RecipeDetailBody({ recipe }: { recipe: RecipeOut }) {
   const stopEditing = () => {
     navigate({ to: ".", search: { edit: undefined } });
   };
-  const availabilitySectionId = `${recipe.id}-availability`;
-  const recipeLedgerSectionId = `${recipe.id}-recipe-ledger`;
+  const routeSections: DetailSection[] = [
+    {
+      id: "availability",
+      title: "Availability",
+      icon: PackageCheck,
+      placement: "full",
+      // Availability owns a separate inventory query. The canonical route adds
+      // it to RecipeDetail's one section ledger; embedded search previews omit
+      // it so opening a preview never starts that extra read.
+      content: <RecipeAvailabilityPanel recipeId={recipe.id} />,
+    },
+  ];
 
   return (
     <Page
@@ -227,40 +236,16 @@ function RecipeDetailBody({ recipe }: { recipe: RecipeOut }) {
       {isEditing ? (
         <EditRecipeForm recipe={recipe} onCancel={stopEditing} />
       ) : (
-        <Stack gap="lg">
-          <DetailAnchorIndex
-            sections={[
-              { id: availabilitySectionId, title: "Availability" },
-              { id: recipeLedgerSectionId, title: "Recipe" },
-            ]}
-          />
-          {/* Inventory cross-check — its own query/skeleton, so the recipe
-              never waits on the availability engine. Lives here rather than in
-              RecipeDetail so the search hover-preview (which embeds
-              RecipeDetail) doesn't fire it. */}
-          <section
-            id={availabilitySectionId}
-            tabIndex={-1}
-            className="scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none"
-          >
-            <RecipeAvailabilityPanel recipeId={recipe.id} />
-          </section>
-          <section
-            id={recipeLedgerSectionId}
-            tabIndex={-1}
-            className="scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none"
-          >
-            <RecipeDetail
-              recipe={recipe}
-              view={recipeView}
-              onViewChange={setRecipeView}
-              scale={scale}
-              onScaleChange={setScale}
-              flowLayout={flowLayout}
-              onFlowLayoutChange={setFlowLayout}
-            />
-          </section>
-        </Stack>
+        <RecipeDetail
+          recipe={recipe}
+          leadingSections={routeSections}
+          view={recipeView}
+          onViewChange={setRecipeView}
+          scale={scale}
+          onScaleChange={setScale}
+          flowLayout={flowLayout}
+          onFlowLayoutChange={setFlowLayout}
+        />
       )}
 
       {deleteDialog}

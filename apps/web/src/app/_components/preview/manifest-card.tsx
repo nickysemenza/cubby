@@ -65,6 +65,8 @@ export type ManifestCardProps = {
   identity?: ReactNode;
   crossLinks?: CrossLink[];
   body?: BodyBlock[];
+  /** Inspector headers already own the canonical detail action. */
+  showOpenAction?: boolean;
 };
 
 const actionLink =
@@ -81,6 +83,7 @@ export function ManifestCard({
   identity,
   crossLinks,
   body,
+  showOpenAction = true,
 }: ManifestCardProps) {
   return (
     <div className="flex flex-col gap-2">
@@ -96,7 +99,7 @@ export function ManifestCard({
               {name}
             </span>
             <Row align="center" gap="sm" className="mt-px shrink-0">
-              {entity === "usda-food" ? (
+              {showOpenAction && entity === "usda-food" ? (
                 <Link
                   to="/usda/$id"
                   params={{ id: routeParam }}
@@ -105,7 +108,7 @@ export function ManifestCard({
                 >
                   <ArrowUpRight className="size-3.5" />
                 </Link>
-              ) : isBrowserRoutedEntity(entity) ? (
+              ) : showOpenAction && isBrowserRoutedEntity(entity) ? (
                 <Link
                   to={entities[entity].routes.detail}
                   params={entityDetailParams(routeParam)}

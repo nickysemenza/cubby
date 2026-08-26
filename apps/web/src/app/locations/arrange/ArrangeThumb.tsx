@@ -88,7 +88,7 @@ export function ArrangeThumb({
     "aria-label": `Open ${alt}`,
     onClick: (event: React.MouseEvent) => event.stopPropagation(),
     className: cn(
-      "shrink-0 rounded-sm hover:ring-1 hover:ring-primary",
+      "shrink-0 rounded-sm hover:ring-1 hover:ring-primary max-md:min-h-11 max-md:min-w-11",
       // `self-stretch` alone, never `h-full`: a percentage height resolves
       // against the row's content box (i.e. inside its padding) and then gets
       // clamped by the min-height, so the tile would silently stop growing at

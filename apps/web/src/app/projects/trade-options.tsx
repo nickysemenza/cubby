@@ -40,8 +40,8 @@ import { TRADE_LABELS } from "./project-formatting";
  * Monochrome Lucide glyph per trade — a scannable leading mark for badges and
  * select rows. Icons live here (client) rather than in `@cubby/schemas` so the
  * schema package stays presentation-free. Full-color emoji were deliberately
- * dropped in the Notion migration; these `currentColor` glyphs sit on the
- * Warm-Paper Ledger without the glossy clash.
+ * dropped in the Notion migration; these `currentColor` glyphs sit cleanly on
+ * Porcelain surfaces without a glossy clash.
  */
 const TRADE_ICONS: Record<Trade, LucideIcon> = {
   planning: ClipboardList,

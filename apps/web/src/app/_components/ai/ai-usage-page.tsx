@@ -107,6 +107,45 @@ function UsageMetric({
   );
 }
 
+export function AiUsageTableStatus({
+  isLoading,
+  error,
+  isEmpty,
+  emptyLabel,
+  retryLabel,
+  onRetry,
+}: {
+  isLoading: boolean;
+  error: unknown;
+  isEmpty: boolean;
+  emptyLabel: string;
+  retryLabel: string;
+  onRetry: () => void;
+}) {
+  if (!isLoading && !error && !isEmpty) return null;
+
+  return (
+    <TableRow>
+      <TableCell colSpan={11}>
+        {isLoading ? (
+          <Spinner />
+        ) : error ? (
+          <Stack role="alert" gap="sm" className="items-start py-2">
+            <p className="text-destructive text-sm">
+              AI usage data could not load.
+            </p>
+            <Button type="button" variant="outline" onClick={onRetry}>
+              {retryLabel}
+            </Button>
+          </Stack>
+        ) : (
+          <span className="text-muted-foreground">{emptyLabel}</span>
+        )}
+      </TableCell>
+    </TableRow>
+  );
+}
+
 function UsageEntityLink({
   row,
 }: {
@@ -163,9 +202,11 @@ export function AiUsagePage() {
   // `hydrated` makes the two renders identical whatever either cache holds; the
   // real rows appear on the render right after hydration. See useHydratedLoading.
   const hydrated = useHydrated();
-  const summaryRows = hydrated ? summaryQuery.data : undefined;
+  const summaryError = hydrated ? summaryQuery.error : null;
+  const summaryRows = hydrated && !summaryError ? summaryQuery.data : undefined;
   const summaryLoading = !hydrated || summaryQuery.isLoading;
-  const recentRows = hydrated ? recentQuery.data : undefined;
+  const recentError = hydrated ? recentQuery.error : null;
+  const recentRows = hydrated && !recentError ? recentQuery.data : undefined;
   const recentLoading = !hydrated || recentQuery.isLoading;
 
   const totals = useMemo(() => usageTotals(summaryRows ?? []), [summaryRows]);
@@ -200,29 +241,31 @@ export function AiUsagePage() {
         </Row>
       </Row>
 
-      <Grid cols="summary">
-        <UsageMetric label="Calls" value={formatTokens(totals.calls)} />
-        <UsageMetric
-          label="Tokens"
-          value={formatTokens(totals.inputTokens + totals.outputTokens)}
-          detail={`${formatTokens(totals.inputTokens)} in / ${formatTokens(
-            totals.outputTokens,
-          )} out`}
-        />
-        <UsageMetric
-          label="USD cost"
-          value={formatUsd(totals.knownCost)}
-          detail={
-            totals.unpricedCalls > 0
-              ? `${formatTokens(totals.unpricedCalls)} calls unpriced`
-              : "all calls priced"
-          }
-        />
-        <UsageMetric
-          label="Provider time"
-          value={formatMs(totals.durationMs)}
-        />
-      </Grid>
+      {!summaryError ? (
+        <Grid cols="summary">
+          <UsageMetric label="Calls" value={formatTokens(totals.calls)} />
+          <UsageMetric
+            label="Tokens"
+            value={formatTokens(totals.inputTokens + totals.outputTokens)}
+            detail={`${formatTokens(totals.inputTokens)} in / ${formatTokens(
+              totals.outputTokens,
+            )} out`}
+          />
+          <UsageMetric
+            label="USD cost"
+            value={formatUsd(totals.knownCost)}
+            detail={
+              totals.unpricedCalls > 0
+                ? `${formatTokens(totals.unpricedCalls)} calls unpriced`
+                : "all calls priced"
+            }
+          />
+          <UsageMetric
+            label="Provider time"
+            value={formatMs(totals.durationMs)}
+          />
+        </Grid>
+      ) : null}
 
       <section className="border border-border bg-card p-4">
         <h2 className="mb-2 font-mono font-semibold text-muted-foreground text-xs uppercase tracking-wide">
@@ -268,20 +311,14 @@ export function AiUsagePage() {
                 <TableCell>{formatMs(row.durationMs)}</TableCell>
               </TableRow>
             ))}
-            {summaryLoading ? (
-              <TableRow>
-                <TableCell colSpan={11}>
-                  <Spinner />
-                </TableCell>
-              </TableRow>
-            ) : null}
-            {!summaryLoading && summaryRows?.length === 0 ? (
-              <TableRow>
-                <TableCell className="text-muted-foreground" colSpan={11}>
-                  No AI usage recorded
-                </TableCell>
-              </TableRow>
-            ) : null}
+            <AiUsageTableStatus
+              isLoading={summaryLoading}
+              error={summaryError}
+              isEmpty={summaryRows?.length === 0}
+              emptyLabel="No AI usage recorded"
+              retryLabel="Retry summary"
+              onRetry={() => void summaryQuery.refetch()}
+            />
           </TableBody>
         </Table>
       </section>
@@ -334,20 +371,14 @@ export function AiUsagePage() {
                 <TableCell>{formatMs(row.durationMs)}</TableCell>
               </TableRow>
             ))}
-            {recentLoading ? (
-              <TableRow>
-                <TableCell colSpan={11}>
-                  <Spinner />
-                </TableCell>
-              </TableRow>
-            ) : null}
-            {!recentLoading && recentRows?.length === 0 ? (
-              <TableRow>
-                <TableCell className="text-muted-foreground" colSpan={11}>
-                  No recent calls
-                </TableCell>
-              </TableRow>
-            ) : null}
+            <AiUsageTableStatus
+              isLoading={recentLoading}
+              error={recentError}
+              isEmpty={recentRows?.length === 0}
+              emptyLabel="No recent calls"
+              retryLabel="Retry recent calls"
+              onRetry={() => void recentQuery.refetch()}
+            />
           </TableBody>
         </Table>
       </section>

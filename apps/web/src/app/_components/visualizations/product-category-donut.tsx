@@ -2,12 +2,13 @@ import type { ProductCategory } from "@cubby/schemas/product";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { sumBy } from "es-toolkit";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useId, useMemo, useRef, useState } from "react";
 import {
   formatCategoryLabel,
   getCategoryColor,
 } from "~/app/_components/products/category-theme";
 import { product } from "~/app/products/product.functions";
+import { FILTER_NONE } from "~/entities/filters";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizTooltip } from "./viz-overlay";
@@ -19,7 +20,7 @@ type CategoryData = {
 };
 
 export default function ProductCategoryDonut() {
-  const { data, isLoading } = useQuery(
+  const { data, isError, isLoading, refetch } = useQuery(
     product.categoryDistribution.queryOptions(),
   );
 
@@ -28,6 +29,17 @@ export default function ProductCategoryDonut() {
       <VisualizationPlaceholder
         message="Loading category data..."
         height={400}
+      />
+    );
+  }
+
+  if (isError) {
+    return (
+      <VisualizationPlaceholder
+        message="Product categories are unavailable"
+        subMessage="Try again to reload the category distribution."
+        height={400}
+        onRetry={() => void refetch()}
       />
     );
   }
@@ -72,8 +84,13 @@ interface DonutChartProps {
   data: CategoryData[];
 }
 
+export function productCategoryDrilldown(category: ProductCategory | null) {
+  return { category: category ?? FILTER_NONE };
+}
+
 function DonutChart({ data }: DonutChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const summaryId = useId();
   const dimensions = useContainerDimensions(containerRef, {
     minHeight: 350,
     initialWidth: 400,
@@ -172,6 +189,7 @@ function DonutChart({ data }: DonutChartProps) {
       <svg
         role="img"
         aria-label={chartSummary}
+        aria-describedby={summaryId}
         width={dimensions.width}
         height={dimensions.height}
       >
@@ -189,7 +207,7 @@ function DonutChart({ data }: DonutChartProps) {
               <g key={slice.category ?? "uncategorized"}>
                 <Link
                   to="/products"
-                  search={{ category: slice.category ?? "" }}
+                  search={productCategoryDrilldown(slice.category)}
                   aria-label={`${categoryLabel}: ${slice.productCount.toLocaleString()} product${slice.productCount !== 1 ? "s" : ""}`}
                 >
                   {/* biome-ignore lint/a11y/noStaticElementInteractions: D3 donut chart hover interaction */}
@@ -245,6 +263,10 @@ function DonutChart({ data }: DonutChartProps) {
           </text>
         </g>
       </svg>
+
+      <p id={summaryId} className="sr-only">
+        {chartSummary}. Select a category to open its products.
+      </p>
 
       {hoveredSlice && <HoverTooltip slice={hoveredSlice} />}
     </div>

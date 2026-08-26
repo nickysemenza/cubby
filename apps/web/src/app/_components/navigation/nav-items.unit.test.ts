@@ -1,6 +1,7 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { describe, expect, it } from "vitest";
 import { entities } from "~/entities/entities";
+import { domainForRoute } from "./domain-wayfinding";
 import {
   bottomNavItems,
   completeNavLeaves,
@@ -40,6 +41,21 @@ describe("workspace navigation contract", () => {
       "More",
     ]);
     expect(developerNavGroups.map((group) => group.label)).toEqual(["Dev"]);
+    expect(primaryNavGroups.map((group) => group.domain)).toEqual([
+      "cook",
+      "pantry",
+      "plan",
+      "house",
+      "finance",
+    ]);
+  });
+
+  it("keeps every primary destination in its route-level domain", () => {
+    for (const group of primaryNavGroups) {
+      for (const item of group.children) {
+        expect(domainForRoute(String(item.to)), item.label).toBe(group.domain);
+      }
+    }
   });
 
   it("pins the task-first persistent and phone household choices", () => {
@@ -159,28 +175,13 @@ describe("getEntityNavGroup", () => {
   });
 });
 
-describe("railLabel", () => {
-  it("never replaces the label the command palette searches", () => {
-    // `command-menu` lists `leaf.label` and cmdk filters on that visible text,
-    // so a leaf whose only text was the rail's short form would lose its search
-    // terms — typing "background" would stop finding the jobs page. The rail
-    // reads `railLabel`; every other surface keeps `label`.
-    const shortened = desktopLeaves.filter((leaf) => leaf.railLabel);
-
-    expect(shortened.length).toBeGreaterThan(0);
-    for (const leaf of shortened) {
-      expect(leaf.label, leaf.to as string).not.toBe(leaf.railLabel);
-      expect(leaf.label.length, leaf.to as string).toBeGreaterThan(
-        (leaf.railLabel as string).length,
-      );
-    }
-  });
-
-  it("keeps the full wording for the shortened leaves", () => {
+describe("expanded rail labels", () => {
+  it("keeps full destination wording in the canonical manifest", () => {
     const byRoute = new Map(desktopLeaves.map((leaf) => [leaf.to, leaf.label]));
 
     expect(byRoute.get("/background-jobs")).toBe("Background jobs");
     expect(byRoute.get("/statement-rows")).toBe("Statement Rows");
+    expect(byRoute.get("/household-contribution")).toBe("Contribution ledger");
     expect(byRoute.get("/meals/suggestions")).toBe("What can I make?");
   });
 });

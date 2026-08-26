@@ -51,6 +51,20 @@ type ProjectUse = ProductProjectUsesOut["projects"][number];
 /** `id`/`name` are what the shared list hook keys and links rows by. */
 type ProjectUseRow = ProjectUse & { id: ProjectShortcode; name: string };
 
+/**
+ * Project-use history survives a Product recategorization. Current reusable
+ * resources can always open the section; others only do once the relationship
+ * route has confirmed historical rows.
+ */
+export function shouldShowProductProjectUses(
+  category: string | null,
+  historicalUseCount: number,
+) {
+  return (
+    category === "tools" || category === "software" || historicalUseCount > 0
+  );
+}
+
 /** Stable hook config (see apps/web/CLAUDE.md on inline objects). */
 const EMBEDDED_TABLE_STATE = {
   urlSync: false,
@@ -83,6 +97,7 @@ export function ProductProjectUses({ productId }: { productId: string }) {
     productOperations.projectUses.queryOptions({ productId }),
   );
   const data = query.data;
+  const canEdit = data?.canEdit ?? false;
 
   const detach = useActionMutation({
     mutationFn: project.setToolUsage.mutationOptions,
@@ -165,16 +180,18 @@ export function ProductProjectUses({ productId }: { productId: string }) {
     tableStateOptions: EMBEDDED_TABLE_STATE,
     layoutKey: "project:product-uses",
     initialColumnVisibility: HIDDEN_RELATED_COLUMNS,
-    extraActions: (row) => (
-      <VerbMenuItem
-        verb="removeFromProject"
-        disabled={detach.isPending}
-        onSelect={(event) => {
-          event.stopPropagation();
-          detach.mutate({ projectId: row.id, productId, used: false });
-        }}
-      />
-    ),
+    extraActions: canEdit
+      ? (row) => (
+          <VerbMenuItem
+            verb="removeFromProject"
+            disabled={detach.isPending}
+            onSelect={(event) => {
+              event.stopPropagation();
+              detach.mutate({ projectId: row.id, productId, used: false });
+            }}
+          />
+        )
+      : undefined,
   });
 
   if (query.isPending) {
@@ -182,11 +199,18 @@ export function ProductProjectUses({ productId }: { productId: string }) {
   }
   if (!data) return null;
 
-  const editButton = (
+  const editButton = canEdit ? (
     <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
       <Pencil aria-hidden />
       Edit projects
     </Button>
+  ) : null;
+
+  const historicalNotice = canEdit ? null : (
+    <Description size="xs">
+      Historical project use is read-only because this product is no longer a
+      reusable resource.
+    </Description>
   );
 
   if (data.projects.length === 0) {
@@ -201,13 +225,16 @@ export function ProductProjectUses({ productId }: { productId: string }) {
             </EmptyDescription>
           </EmptyHeader>
           {editButton}
+          {historicalNotice}
         </Empty>
-        <ProjectUsesDialog
-          productId={productId}
-          open={editing}
-          onOpenChange={setEditing}
-          selectedIds={[]}
-        />
+        {canEdit ? (
+          <ProjectUsesDialog
+            productId={productId}
+            open={editing}
+            onOpenChange={setEditing}
+            selectedIds={[]}
+          />
+        ) : null}
       </>
     );
   }
@@ -232,8 +259,10 @@ export function ProductProjectUses({ productId }: { productId: string }) {
               : `${formatCurrency(data.costPerProjectUse)} per use`}
           </Badge>
         )}
-        <div className="ml-auto">{editButton}</div>
+        {editButton ? <div className="ml-auto">{editButton}</div> : null}
       </Row>
+
+      {historicalNotice}
 
       <ListWorkbench
         model={workbench}
@@ -241,7 +270,7 @@ export function ProductProjectUses({ productId }: { productId: string }) {
         mode="embedded"
       />
 
-      {editing && (
+      {canEdit && editing && (
         <ProjectUsesDialog
           productId={productId}
           open

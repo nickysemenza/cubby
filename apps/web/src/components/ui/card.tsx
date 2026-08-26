@@ -1,7 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import * as React from "react";
 
-import { EYEBROW_CLASS } from "~/components/ui/eyebrow";
 import { cn } from "~/lib/utils";
 
 function Card({
@@ -15,11 +14,10 @@ function Card({
     <div
       data-slot="card"
       data-size={size}
-      // Warm-Paper Ledger: a card is a ruled region, not a floating surface —
-      // paper-surface fill + a hairline border, square corners, zero shadow.
-      // Separation by rule and tone, never elevation.
+      // Porcelain Transit panels use white surfaces, hairlines, and modest
+      // radii. Resting cards remain shadow-free.
       className={cn(
-        "bg-card text-card-foreground group/card flex flex-col gap-2.5 overflow-hidden rounded-none border border-[var(--border)] py-2 text-xs/relaxed has-[>img:first-child]:pt-0 sm:py-2.5 data-[size=sm]:gap-2 data-[size=sm]:py-2",
+        "bg-card text-card-foreground group/card flex flex-col gap-3 overflow-hidden rounded-md border border-[var(--border)] py-3 text-xs/relaxed has-[>img:first-child]:pt-0 data-[size=sm]:gap-2 data-[size=sm]:py-2.5",
         className,
       )}
       {...props}
@@ -32,7 +30,7 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card-header"
       className={cn(
-        "group/card-header @container/card-header grid auto-rows-min items-start gap-1 rounded-t-lg px-3 sm:px-3.5 group-data-[size=sm]/card:px-3 has-data-[slot=card-action]:grid-cols-[1fr_auto] has-data-[slot=card-description]:grid-rows-[auto_auto] [.border-b]:pb-3.5 group-data-[size=sm]/card:[.border-b]:pb-3",
+        "group/card-header @container/card-header grid auto-rows-min items-start gap-1 px-3.5 sm:px-4 group-data-[size=sm]/card:px-3 has-data-[slot=card-action]:grid-cols-[1fr_auto] has-data-[slot=card-description]:grid-rows-[auto_auto] [.border-b]:pb-3 group-data-[size=sm]/card:[.border-b]:pb-2.5",
         className,
       )}
       {...props}
@@ -60,13 +58,10 @@ function CardTitle({
   return (
     <Comp
       data-slot="card-title"
-      // Ledger-style section label — cards are "ledger blocks" and their titles
-      // read as mono eyebrows (INGREDIENTS, HISTORY, ...). Pass `icon` for the
-      // common eyebrow-with-leading-icon header. The one sanctioned className
-      // override is a size bump for "numeral-as-title" stat cards (text-2xl).
+      // Cards use compact sentence-case headings; callers may still opt into
+      // the shared eyebrow treatment for specialist data sections.
       className={cn(
-        "flex items-center gap-2 font-medium",
-        EYEBROW_CLASS,
+        "flex items-center gap-2 text-sm font-semibold tracking-tight",
         className,
       )}
       {...props}
@@ -109,7 +104,7 @@ function CardContent({ className, ...props }: React.ComponentProps<"div">) {
       // / `px-4 py-1` overrides — they fight the container and were the source of
       // the per-card padding drift. `space-y-*` for inner spacing is fine; use
       // `p-0` only to deliberately run content flush to the card edge (tables).
-      className={cn("px-3 sm:px-3.5 group-data-[size=sm]/card:px-3", className)}
+      className={cn("px-3.5 sm:px-4 group-data-[size=sm]/card:px-3", className)}
       {...props}
     />
   );

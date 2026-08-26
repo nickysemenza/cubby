@@ -10,6 +10,9 @@ describe("EntityIdentityMark", () => {
     const mark = container.firstElementChild;
     expect(mark).toHaveStyle({ width: "16px", height: "16px" });
     expect(screen.queryByRole("img")).toBeNull();
+    expect(container.querySelector("svg")).toHaveStyle({
+      color: "var(--domain-cook)",
+    });
   });
 
   it("uses contain for catalog-like identity assets", () => {

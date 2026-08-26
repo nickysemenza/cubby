@@ -132,8 +132,14 @@ export function IngredientList() {
     () => createCubbyColumnHelper<IngredientListItem>(),
     [],
   );
-  const { onRowClick, onRowHover, onRowHoverEnd, PreviewSheet } =
-    useEntityPreview("ingredient");
+  const {
+    onRowClick,
+    onRowHover,
+    onRowHoverEnd,
+    PreviewSheet,
+    preview,
+    dockedInspector,
+  } = useEntityPreview("ingredient", { responsiveInspector: true });
   const [foodHydrationIds, setFoodHydrationIds] = useState<readonly string[]>(
     [],
   );
@@ -328,6 +334,8 @@ export function IngredientList() {
         onRowClick={onRowClick}
         onRowHover={onRowHover}
         onRowHoverEnd={onRowHoverEnd}
+        currentRowId={preview?.id}
+        desktopInspector={dockedInspector}
         actions={
           <Row align="center" gap="sm">
             <Button

@@ -3,8 +3,8 @@
 @import "@daveyplate/better-auth-ui/css";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-/* The Warm-Paper Ledger primitives (paper ramp, ink, ultramarine, semantic
-   tones, type stacks) live in one framework-free file so apps/mcp-apps — which
+/* Porcelain Transit primitives (surface ramp, ink, cobalt, domain colors,
+   semantic tones, type stacks) live in one framework-free file so apps/mcp-apps — which
    has no Tailwind and ships as standalone iframe HTML — renders as cubby
    instead of drifting from a copy. Imported first; everything below only
    references these vars. */
@@ -14,7 +14,7 @@
 */
 
 @theme {
-  /* Warm-Paper Ledger type system — stacks defined in @cubby/design-tokens;
+  /* Porcelain Transit type system — stacks defined in @cubby/design-tokens;
      mirrored here so Tailwind generates font-heading/sans/mono utilities. */
   --font-heading: var(--brand-font-heading);
   --font-sans: var(--brand-font-sans);
@@ -57,9 +57,9 @@
   h4 {
     font-family: var(--font-heading);
   }
-  /* Warm-Paper Ledger: Space Grotesk headings, tight tracking, no shout. */
+  /* Porcelain Transit: Inter throughout, with weight and rhythm doing the work. */
   h1 {
-    @apply scroll-m-20 text-3xl font-semibold tracking-tight lg:text-4xl;
+    @apply scroll-m-20 text-2xl font-semibold tracking-tight lg:text-3xl;
   }
   h3,
   h4 {
@@ -75,18 +75,18 @@
     /* font-sans must be explicit: Tailwind v4 preflight doesn't wire --font-sans
        to the document, so without this the app silently runs on system fonts. */
     @apply bg-background font-sans text-foreground;
-    /* iOS PWA target: suppress the default gray tap-highlight box; we provide
-       our own warm active: states for press feedback. */
+    /* iOS PWA target: suppress the default gray tap-highlight box; shared
+       active states provide press feedback. */
     -webkit-tap-highlight-color: transparent;
   }
 
   input:focus,
   textarea:focus,
   [data-slot="combobox-trigger"]:focus {
-    /* Ledger focus - a flat two-ring in ultramarine, no glow */
+    /* Crisp cobalt focus without glow or layout shift. */
     box-shadow:
-      0 0 0 2px var(--background),
-      0 0 0 4px oklch(from var(--ring) l c h / 0.4);
+      0 0 0 1px var(--background),
+      0 0 0 3px oklch(from var(--ring) l c h / 0.45);
   }
 
   /* Respect users who prefer reduced motion - neutralize our animations.
@@ -147,10 +147,10 @@
 
 /*
   ---break---
-  Cubby Theme - Cool-neutral surfaces + warm accent palette
+  Cubby Theme - Porcelain Transit
 */
 :root {
-  /* The Warm-Paper Ledger palette itself lives in @cubby/design-tokens
+  /* The Porcelain Transit palette itself lives in @cubby/design-tokens
      (imported above) — shared with apps/mcp-apps. Only cubby-web-specific
      derivations stay here. */
   /* Retained terracotta refs (legacy consumers fade out as primitives reskin;
@@ -159,36 +159,28 @@
   --brand-terra-light: var(--brand-ultramarine);
   --brand-sage: oklch(0.94 0.025 145);
 
-  /* Ledger elevation: NONE. Separation comes from rules and tone, never from
-     shadow — the moment a surface casts a shadow it reads as glass. The
-     "chunky" shadow tokens are kept (so primitives don't break) but flattened
-     to `none`; panels are defined by --border hairlines or the 3px
-     --rule-ink top-rule instead. */
+  /* Ordinary surfaces use tone and hairlines. Elevation is reserved for
+     floating overlays, with legacy shadow names retained as compatibility
+     aliases for callers outside apps/web. */
+  --shadow-overlay: var(--brand-elevation-popover);
   --shadow-chunky-sm: none;
-  --shadow-chunky: none;
-  --shadow-chunky-lg: none;
-  --shadow-chunky-destructive: none;
-  --shadow-chunky-destructive-hover: none;
+  --shadow-chunky: var(--shadow-overlay);
+  --shadow-chunky-lg: var(--shadow-overlay);
+  --shadow-chunky-destructive: var(--shadow-overlay);
+  --shadow-chunky-destructive-hover: var(--shadow-overlay);
   --shadow-inset-gloss: none;
   /* Logical sticky-column boundary shadows shared by header, body, and footer. */
   --shadow-pin-start: 3px 0 4px -3px rgb(15 23 42 / 0.35);
   --shadow-pin-end: -3px 0 4px -3px rgb(15 23 42 / 0.35);
-  /* Barcode-scanner viewfinder: just the flat dark edge scrim, no success glow
-     (matte instrument panel — no glow anywhere). Both vars resolve to the scrim. */
+  /* Barcode-scanner viewfinder keeps a dark edge scrim without ambient glow. */
   --shadow-scan-scrim: 0 0 0 9999px oklch(0 0 0 / 0.55);
   --shadow-scan-flash: 0 0 0 9999px oklch(0 0 0 / 0.55);
   /* Chart labels sit on flat matte fills now, so no text shadow is needed. */
   --text-shadow-chart: none;
-  /* Entity-colored left "spine" on the detail spec-plate (centrally tunable
-     instead of an inline border-l-[6px]). */
-  --border-spine: 6px;
-  /* Card-scale spine, for a severity cue on a row in a dense grid. The 6px
-     plate spine is tuned for a full-width detail header and reads as a slab at
-     card width; this matches the system's 3px rule weight instead. */
-  --border-spine-card: 3px;
+  --border-spine: 1px;
+  --border-spine-card: 1px;
 
-  /* Core colors - paper ramp surfaces: paper-alt(muted) < paper(bg) < surface(card).
-     Separation is by tone, not elevation. */
+  /* Core colors: cool porcelain canvas, white working surfaces, quiet insets. */
   --background: var(--brand-paper);
   --foreground: var(--brand-foreground);
   --card: var(--brand-cream);
@@ -196,11 +188,11 @@
   --popover: var(--brand-cream);
   --popover-foreground: var(--brand-foreground);
 
-  /* Primary - Ultramarine: the lone accent. Actions, the active/live value. */
+  /* Primary cobalt: actions, selection, focus, and the current route. */
   --primary: var(--brand-ultramarine);
-  --primary-foreground: #ffffff;
+  --primary-foreground: var(--brand-on-accent);
 
-  /* Secondary - quiet paper-alt chip (ink text on a tinted-paper surface) */
+  /* Secondary and muted remain neutral so domain wayfinding stays legible. */
   --secondary: var(--brand-paper-alt);
   --secondary-foreground: var(--brand-foreground);
 
@@ -208,15 +200,13 @@
   --muted: var(--brand-paper-alt);
   --muted-foreground: var(--brand-shelf);
 
-  /* Accent - neutral hover/focus wash (paper-alt). The ultramarine "accent" of
-     the design language lives in --primary/--ring; this shadcn token stays a
-     quiet wash so hover states don't shout. --accent-foreground = ink. */
+  /* Accent is a neutral hover/focus wash; cobalt remains an explicit action. */
   --accent: var(--brand-paper-alt);
   --accent-foreground: var(--brand-foreground);
 
-  --destructive-foreground: #ffffff;
+  --destructive-foreground: var(--brand-on-accent);
 
-  /* Borders and inputs - paper hairlines */
+  /* Borders and inputs use a cool, low-contrast hairline. */
   --border: var(--brand-hairline);
   --input: var(--brand-paper-alt);
   /* Checkbox border - a visible ink-leaning hairline so unchecked boxes read as
@@ -224,7 +214,7 @@
   --checkbox-border: oklch(0.6 0.01 80);
   --ring: var(--brand-ultramarine);
 
-  /* Selected/active table-row tint - a faint ultramarine wash. Selection is the
+  /* Selected/active table-row tint - a faint cobalt wash. Selection is the
      one place the accent earns its keep in a list (paired with the accent row
      spine). color-mix keeps it a whisper of the accent over paper. */
   --row-selected: color-mix(
@@ -260,18 +250,19 @@
   --ingredient-name: var(--brand-foreground);
   --ingredient-modifier: var(--brand-shelf);
 
-  /* Ledger categorical chart ramp - a monochrome ink ladder (dark→light tints
-     of ink over paper) with ultramarine as the single highlight. Matte, no
-     warmth; encodes order/category by value, never by hue. chart-1 is the
-     accent so the "primary" series reads as the live one. */
+  /* Charts reuse the stable interaction and domain palette. */
   --chart-1: var(--brand-ultramarine); /* accent / primary series */
-  --chart-2: oklch(0.28 0.006 80); /* ink */
-  --chart-3: oklch(0.42 0.006 80); /* ink 70% */
-  --chart-4: oklch(0.55 0.006 80); /* ink 55% */
-  --chart-5: oklch(0.66 0.006 80); /* ink 40% */
-  --chart-6: oklch(0.76 0.006 80); /* ink 28% */
-  --chart-7: oklch(0.84 0.005 80); /* ink 18% */
-  --chart-8: oklch(0.9 0.004 80); /* ink 10% */
+  --chart-2: var(--brand-domain-pantry);
+  --chart-3: var(--brand-domain-house);
+  --chart-4: var(--brand-domain-plan);
+  --chart-5: var(--brand-domain-cook);
+  --chart-6: var(--brand-domain-finance);
+  --chart-7: var(--brand-graphite-secondary);
+  --chart-8: color-mix(
+    in oklab,
+    var(--brand-graphite-secondary) 58%,
+    var(--brand-surface)
+  );
 
   /* Sequential ramp for heatmaps: paper -> ultramarine */
   --chart-seq-1: color-mix(
@@ -301,10 +292,10 @@
   --chart-negative: var(--destructive);
   --chart-neutral: oklch(0.66 0.006 80);
 
-  /* Trade *phase* families — the one place the ledger allows categorical hue,
+  /* Trade *phase* families — a specialist categorical exception,
      scoped to the project Gantt where grouping 20 trades into six build phases
      needs a colour channel the monochrome ramp can't give. Deliberately muted
-     (chroma ≤ 0.085) and mid-lightness so they harmonise with the warm paper
+     (chroma ≤ 0.085) and mid-lightness so they harmonise with the cool planes
      rather than reading as a rainbow. Six distinct hues spread around the
      wheel: terracotta / teal / ochre / plum / sage / slate. */
   --phase-structure: oklch(0.58 0.085 45); /* demo · framing · drywall */
@@ -316,14 +307,45 @@
   --phase-site: oklch(0.57 0.065 150); /* landscaping · logistics · specialty */
   --phase-planning: oklch(0.55 0.04 260); /* planning · coordination */
 
-  /* Square corners — the ledger reads as a printed control sheet, not a card UI */
-  --radius: 0rem;
+  /* Modest geometry: controls 6–8px, panels 10–14px, pills remain full. */
+  --radius: 0.625rem;
+
+  --domain-cook: var(--brand-domain-cook);
+  --domain-cook-surface: color-mix(
+    in oklab,
+    var(--brand-domain-cook) 9%,
+    var(--brand-surface)
+  );
+  --domain-pantry: var(--brand-domain-pantry);
+  --domain-pantry-surface: color-mix(
+    in oklab,
+    var(--brand-domain-pantry) 9%,
+    var(--brand-surface)
+  );
+  --domain-plan: var(--brand-domain-plan);
+  --domain-plan-surface: color-mix(
+    in oklab,
+    var(--brand-domain-plan) 9%,
+    var(--brand-surface)
+  );
+  --domain-house: var(--brand-domain-house);
+  --domain-house-surface: color-mix(
+    in oklab,
+    var(--brand-domain-house) 9%,
+    var(--brand-surface)
+  );
+  --domain-finance: var(--brand-domain-finance);
+  --domain-finance-surface: color-mix(
+    in oklab,
+    var(--brand-domain-finance) 9%,
+    var(--brand-surface)
+  );
 
   /* Sidebar */
   --sidebar: var(--brand-cream);
   --sidebar-foreground: var(--brand-foreground);
   --sidebar-primary: var(--brand-ultramarine);
-  --sidebar-primary-foreground: #ffffff;
+  --sidebar-primary-foreground: var(--brand-on-accent);
   --sidebar-accent: var(--brand-paper-alt);
   --sidebar-accent-foreground: var(--brand-foreground);
   --sidebar-border: var(--brand-hairline);
@@ -365,9 +387,9 @@
   --color-phase-finish: var(--phase-finish);
   --color-phase-site: var(--phase-site);
   --color-phase-planning: var(--phase-planning);
-  /* Warm-Paper Ledger brand mirrors - so paper/ink/ultramarine/hairline are
-     reachable as Tailwind utilities (bg-paper-alt, text-ink, text-ultramarine,
-     border-hairline, bg-paper-surface). */
+  /* Compatibility mirrors keep existing utilities working during migration;
+     they remain reachable as Tailwind utilities such as bg-paper-alt,
+     text-ink, text-ultramarine, border-hairline, and bg-paper-surface. */
   --color-paper: var(--brand-paper);
   --color-paper-alt: var(--brand-paper-alt);
   --color-paper-surface: var(--brand-cream);
@@ -375,6 +397,11 @@
   --color-ultramarine: var(--brand-ultramarine);
   --color-ultramarine-dark: var(--brand-ultramarine-dark);
   --color-hairline: var(--brand-hairline);
+  --color-domain-cook: var(--brand-domain-cook);
+  --color-domain-pantry: var(--brand-domain-pantry);
+  --color-domain-plan: var(--brand-domain-plan);
+  --color-domain-house: var(--brand-domain-house);
+  --color-domain-finance: var(--brand-domain-finance);
   --color-ingredient-amount: var(--ingredient-amount);
   --color-ingredient-name: var(--ingredient-name);
   --color-ingredient-modifier: var(--ingredient-modifier);
@@ -394,13 +421,10 @@
   --color-chart-positive: var(--chart-positive);
   --color-chart-negative: var(--chart-negative);
   --color-chart-neutral: var(--chart-neutral);
-  /* Square corners everywhere (ledger). All steps resolve to --radius (0);
-     rounded-full stays circular for avatars/spinners (it's a fixed 9999px,
-     not derived from --radius). */
-  --radius-sm: var(--radius);
-  --radius-md: var(--radius);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
-  --radius-xl: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -409,9 +433,9 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
-  --radius-2xl: var(--radius);
-  --radius-3xl: var(--radius);
-  --radius-4xl: var(--radius);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
 }
 /*
   ---break---
@@ -432,14 +456,12 @@
     @apply focus:bg-accent focus:text-accent-foreground relative flex cursor-default items-center gap-2 rounded-sm py-1.5 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50;
   }
 
-  /* Command dialog cmdk child selectors — group headings read as ledger
-     eyebrows to match card/table section labels. */
+  /* Command dialog group headings stay compact and quiet. */
   .command-dialog-styles {
     @apply [&_[cmdk-group-heading]]:text-slate [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-mono [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-2xs [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group]]:px-2 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5;
   }
 
-  /* Sonner toasts wear the signature chrome like dialogs (they're transient
-     modals). Sonner injects its own border/shadow, hence the overrides. */
+  /* Sonner injects its own border/shadow, hence the overrides. */
   .cn-toast {
     /* biome-ignore lint/complexity/noImportantStyles: sonner sets inline border/shadow */
     border-color: var(--border) !important;
@@ -447,39 +469,23 @@
     box-shadow: var(--shadow-chunky-lg) !important;
   }
 
-  /* Skeleton shimmer loading effect */
+  /* Static skeletons avoid ambient animation in read-heavy views. */
   .skeleton-shimmer {
-    background: linear-gradient(
-      90deg,
-      var(--brand-paper-alt) 0%,
-      var(--brand-hairline) 50%,
-      var(--brand-paper-alt) 100%
-    );
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
-  }
-
-  @keyframes shimmer {
-    0% {
-      background-position: 200% 0;
-    }
-    100% {
-      background-position: -200% 0;
-    }
+    background: var(--brand-paper-alt);
   }
 
   /*
     ---break---
-    Ledger surfaces - flat matte paper, no atmosphere
+    Porcelain Transit surfaces
   */
 
-  /* Table row hover - flat paper-alt wash + ultramarine spot rule on the left */
+  /* Table row hover uses a quiet wash and a precise current-domain mark. */
   .table-row-hover {
     @apply transition-colors duration-100;
   }
   .table-row-hover:hover {
     background: var(--brand-paper-alt);
-    box-shadow: inset 3px 0 0 var(--row-accent, var(--brand-ultramarine));
+    box-shadow: inset 2px 0 0 var(--row-accent, var(--brand-ultramarine));
   }
 
   /* Ledger column grid - each cell paints its own right divider (table is
@@ -498,7 +504,7 @@
 
   /* Trailing gutter cell. It renders AFTER the actions column, so the content
      block ends with the actions column's own border-right as the terminating
-     ledger rule. The header copy is pinned to `w-0` (see Table.tsx) — left
+     grid rule. The header copy is pinned to `w-0` (see Table.tsx) — left
      unsized it's the only auto cell under table-fixed and swallows the table's
      entire surplus width, leaving dead space beside clipping columns. */
   .table-grid-lines th[data-spacer],
@@ -506,13 +512,13 @@
     border-right: 0;
   }
 
-  /* Nav link underline - a flat square ultramarine rule (no pill, no glow) */
+  /* Active nav gets a crisp cobalt route line. */
   .nav-link-animated {
     @apply relative;
   }
   .nav-link-animated::after {
     content: "";
-    @apply absolute -bottom-0.5 left-1 right-1 h-0.5;
+    @apply absolute -bottom-0.5 left-1 right-1 h-px;
     background: var(--brand-ultramarine);
     transform: scaleX(0);
     transition: transform 150ms ease-out;
@@ -534,15 +540,13 @@
     @apply ring-2 ring-primary/30;
   }
 
-  /* Page header accent bar */
+  /* Page headers inherit the current domain's route line. */
   .page-header-accent {
     @apply relative;
   }
   .page-header-accent::after {
     content: "";
-    @apply absolute -bottom-2 left-0 h-1 w-16;
-    /* Spot-ink rule: a flat, square-ended bar — no gradient, no pill. Pages
-       set --page-accent per entity; falls back to the ultramarine accent. */
+    @apply absolute -bottom-2 left-0 h-0.5 w-12 rounded-full;
     background: var(--page-accent, var(--brand-ultramarine));
   }
 
@@ -559,7 +563,7 @@
     }
   }
 
-  /* Auth page background - flat paper, no gradient (matte ledger) */
+  /* Auth page background: flat Porcelain canvas, no decorative gradient. */
   .auth-background {
     @apply bg-background;
   }

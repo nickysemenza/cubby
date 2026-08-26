@@ -384,8 +384,14 @@ export function ExpenseList() {
       </Row>
     ) : undefined;
 
-  const { onRowClick, onRowHover, onRowHoverEnd, PreviewSheet } =
-    useEntityPreview("expense");
+  const {
+    onRowClick,
+    onRowHover,
+    onRowHoverEnd,
+    PreviewSheet,
+    preview,
+    dockedInspector,
+  } = useEntityPreview("expense", { responsiveInspector: true });
 
   // `TFilters` is given explicitly: it can't be inferred from `queryOptions`,
   // whose input is a union with a query skip sentinel, so it would land on
@@ -460,6 +466,8 @@ export function ExpenseList() {
           onRowClick={onRowClick}
           onRowHover={onRowHover}
           onRowHoverEnd={onRowHoverEnd}
+          currentRowId={preview?.id}
+          desktopInspector={dockedInspector}
           showCellSelectionStats
           filterOptionHints={facetOptionHints}
           getRowClassName={(row) =>

@@ -13,7 +13,7 @@ import { DayPicker } from "react-day-picker";
 import { cn } from "~/lib/utils";
 
 /**
- * Warm-Paper Ledger themed wrapper over react-day-picker v10's `DayPicker`.
+ * Porcelain Transit wrapper over react-day-picker v10's `DayPicker`.
  *
  * v10 renders the month grid as a plain `<table>` (`MonthGrid`/`Weeks`/`Week`
  * are `<table>`/`<tbody>`/`<tr>`, `Day`/`Weekday` are `<td>`/`<th>` — see

@@ -1,11 +1,9 @@
 import { openCommandPalette, waitForAppHydration } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
-test("Home renders its compact critical cards", async ({ page }) => {
+test("Home renders its compact daily briefing", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await expect(
-    page.getByRole("heading", { name: "Needs attention" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Next up" })).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Household signals" }),
   ).toBeVisible();
@@ -23,12 +21,8 @@ test("authenticated navigation chrome does not wait for idle", async ({
 
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
-  await expect(
-    page.getByRole("button", { name: "Cook", exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Pantry", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("region", { name: "Cook" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Pantry" })).toBeVisible();
 });
 
 test("a prewarmed Command-K opens without a visible loading state", async ({
@@ -51,8 +45,7 @@ test("intent-preloaded navigation does not flash the route skeleton", async ({
   page,
 }) => {
   await page.goto("/", { waitUntil: "networkidle" });
-  await page.getByRole("button", { name: "Pantry", exact: true }).click();
-  const locations = page.getByRole("menuitem", {
+  const locations = page.getByRole("link", {
     name: "Locations",
     exact: true,
   });

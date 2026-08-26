@@ -28,6 +28,8 @@ export interface DesktopDataRowProps<TItem extends RowData> {
    */
   rowIndex: number;
   isSelected: boolean;
+  /** Current record shown by a desktop inspector; independent of bulk selection. */
+  isCurrent: boolean;
   /**
    * Snapshot of `row.getIsExpanded()` taken at parent render time (same
    * pattern as `isSelected`). Exists purely for the memo compare — calling
@@ -60,6 +62,7 @@ function DesktopDataRowInner<TItem extends RowData>({
   row,
   rowIndex,
   isSelected,
+  isCurrent,
   isFocused,
   isDebugEnabled,
   onRowClick,
@@ -86,10 +89,17 @@ function DesktopDataRowInner<TItem extends RowData>({
     <TableRow
       data-cell-row={rowIndex}
       data-state={isSelected && "selected"}
+      data-current={isCurrent ? "true" : undefined}
+      aria-current={isCurrent ? "true" : undefined}
       className={cn(
         rowClassName,
         onRowClick && "cursor-pointer",
         isFocused && "ring-2 ring-primary/30 ring-inset",
+        // Current record is presentation state for the inspector, not TanStack
+        // row selection. Keep the two attributes separate so bulk actions and
+        // row-selection semantics never change when inspection changes.
+        isCurrent &&
+          "bg-primary/[0.035] [&>td:first-child]:shadow-[inset_2px_0_0_var(--row-accent,var(--primary))]",
       )}
       onClick={handleRowClick}
       onPointerEnter={
@@ -213,6 +223,7 @@ function rowPropsAreEqual<TItem extends RowData>(
     // render-time snapshot prop — see the isExpanded doc comment.
     previous.isExpanded === next.isExpanded &&
     previous.isSelected === next.isSelected &&
+    previous.isCurrent === next.isCurrent &&
     previous.isFocused === next.isFocused &&
     previous.isDebugEnabled === next.isDebugEnabled &&
     previous.onRowClick === next.onRowClick &&

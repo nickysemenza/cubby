@@ -11,6 +11,7 @@ import { DataTableViewOptions } from "./data-table-view-options";
 import { LedgerFilters } from "./LedgerFilters";
 import { ProblemWorklistStatus } from "./problem-worklist";
 import type { CubbyTable as Table } from "./table-features";
+import type { TableDensity } from "./useTableDensity";
 
 interface DataTableToolbarProps<TData extends RowData> {
   table: Table<TData>;
@@ -37,6 +38,8 @@ interface DataTableToolbarProps<TData extends RowData> {
   portalWorkbenchUtilities?: boolean;
   /** CSS gate used while desktop and phone table branches coexist pre-hydration. */
   workbenchUtilityViewport?: "all" | "desktop" | "mobile";
+  /** Must match the table controller's first-visit density. */
+  defaultDensity?: TableDensity;
 }
 
 export function DataTableToolbar<TData extends RowData>({
@@ -51,11 +54,14 @@ export function DataTableToolbar<TData extends RowData>({
   filterOptionHints,
   portalWorkbenchUtilities = false,
   workbenchUtilityViewport = "all",
+  defaultDensity,
 }: DataTableToolbarProps<TData>) {
   const workbenchTarget = usePageWorkbenchTarget();
   const utilities = (
     <>
-      {showViewOptions && <DataTableViewOptions table={table} />}
+      {showViewOptions && (
+        <DataTableViewOptions table={table} defaultDensity={defaultDensity} />
+      )}
       <DataTableViews table={table} entity={entity} />
     </>
   );

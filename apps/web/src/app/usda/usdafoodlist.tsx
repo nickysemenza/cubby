@@ -68,10 +68,17 @@ export const withUSDAListIdentity = <
 });
 
 export function USDAFoodList() {
-  const { onRowClick, onRowHover, onRowHoverEnd, PreviewSheet } =
-    useEntityPreview("usda-food", {
-      idField: "fdc_id",
-    });
+  const {
+    onRowClick,
+    onRowHover,
+    onRowHoverEnd,
+    PreviewSheet,
+    dockedInspector,
+    preview,
+  } = useEntityPreview("usda-food", {
+    idField: "fdc_id",
+    responsiveInspector: true,
+  });
   const queryOptions = useCallback<ListQueryOptionsFn<USDAListFilters>>(
     (params) => {
       const searching = Boolean(params.filters.nameFilter);
@@ -117,7 +124,10 @@ export function USDAFoodList() {
     () => [
       columnHelper.accessor("fdc_id", {
         header: "FDC ID",
-        meta: { className: "w-32 max-w-32" },
+        meta: {
+          className: "w-32 max-w-32",
+          mobile: { slot: "trailing", priority: 20 },
+        },
         cell: (info) => (
           <TableLink to="/usda/$id" params={{ id: String(info.getValue()) }}>
             {info.getValue()}
@@ -127,6 +137,7 @@ export function USDAFoodList() {
       columnHelper.accessor("foodInfo.data_type", {
         meta: {
           className: "w-32 max-w-32",
+          mobile: { slot: "subtitle", priority: 10 },
           filterConfig: {
             placeholder: "Filter by type...",
             filterType: "select" as const,
@@ -162,7 +173,10 @@ export function USDAFoodList() {
       }),
       columnHelper.accessor("brandedFoodInfo", {
         header: "Brand Info",
-        meta: { className: "w-56" },
+        meta: {
+          className: "w-56",
+          mobile: { slot: "meta", priority: 20 },
+        },
         cell: (info) => {
           const brandedFood = info.getValue();
           if (!brandedFood) return <NoneValue />;
@@ -195,7 +209,10 @@ export function USDAFoodList() {
       }),
       columnHelper.accessor("nutritionInfo", {
         header: "Nutrition",
-        meta: { className: "w-56" },
+        meta: {
+          className: "w-56",
+          mobile: { slot: "meta", priority: 30 },
+        },
         cell: (info) => {
           const nutritionInfo = info.getValue();
           const total = nutrientCount(nutritionInfo.nutrientsPer100);
@@ -232,6 +249,7 @@ export function USDAFoodList() {
         header: "Linked Products",
         className: "w-48 max-w-48",
         enableSorting: true,
+        mobile: { slot: "meta", priority: 40, interactive: true },
         filterConfig: {
           placeholder: "Filter linked...",
           filterType: "select",
@@ -260,6 +278,9 @@ export function USDAFoodList() {
         onRowClick={onRowClick}
         onRowHover={onRowHover}
         onRowHoverEnd={onRowHoverEnd}
+        currentRowId={preview?.rowKey ?? preview?.id}
+        defaultDensity="dense"
+        desktopInspector={dockedInspector}
       />
       <PreviewSheet />
     </>

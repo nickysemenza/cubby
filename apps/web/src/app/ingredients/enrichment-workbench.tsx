@@ -63,6 +63,19 @@ const WORKBENCH_VIEW_OPTIONS: ViewSwitcherOption<WorkbenchView>[] = [
   { value: "review", label: "Review" },
 ];
 
+/** Keep query recovery and the successful empty state mutually exclusive. */
+export function shouldShowEnrichmentEmptyState({
+  isLoading,
+  hasError,
+  rowCount,
+}: {
+  isLoading: boolean;
+  hasError: boolean;
+  rowCount: number;
+}): boolean {
+  return !isLoading && !hasError && rowCount === 0;
+}
+
 /**
  * Dense bulk-enrichment table for ingredients with incomplete totals data —
  * the bare ones EPUB imports leave behind (no product) plus those with a product
@@ -112,6 +125,7 @@ export function EnrichmentWorkbench({
     data: worklist,
     isLoading: worklistLoading,
     error,
+    refetch,
   } = useQuery(
     // Pass no input when unscoped so the query key matches the plain worklist.
     ingredient.enrichmentWorkbench.queryOptions(
@@ -485,12 +499,32 @@ export function EnrichmentWorkbench({
           )}
 
           {error && (
-            <StatusText as="div" tone="destructive" className="text-sm">
-              {error.message}
-            </StatusText>
+            <Row
+              align="center"
+              wrap
+              gap="sm"
+              className="border border-destructive/40 bg-destructive/5 px-3 py-2"
+            >
+              <StatusText as="div" tone="destructive" className="text-sm">
+                {error.message}
+              </StatusText>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-h-11 sm:min-h-0"
+                onClick={() => void refetch()}
+              >
+                Try again
+              </Button>
+            </Row>
           )}
 
-          {!isLoading && rows.length === 0 && (
+          {shouldShowEnrichmentEmptyState({
+            isLoading,
+            hasError: !!error,
+            rowCount: rows.length,
+          }) && (
             <Empty>
               <EmptyDescription>
                 Every recipe ingredient is fully costable. Nothing to enrich.
@@ -500,8 +534,8 @@ export function EnrichmentWorkbench({
 
           {visible.length > 0 && (
             <Table
-              className="table-auto"
-              containerClassName="overflow-hidden border border-[var(--border)]"
+              className="min-w-[42rem] table-auto"
+              containerClassName="border border-[var(--border)]"
             >
               <TableHeader>
                 <TableRow>

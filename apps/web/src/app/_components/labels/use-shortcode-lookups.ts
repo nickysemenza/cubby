@@ -24,15 +24,24 @@ export function useShortcodeLookups(shortcodes: string[]) {
   }, [shortcodes]);
 
   // Batch fetch: one query per entity type instead of N individual queries
-  const { data: locationData = NO_ROWS, isLoading: locationsLoading } =
-    useQuery({
-      ...location.getByShortcodes.queryOptions({
-        shortcodes: locationCodes,
-      }),
-      enabled: locationCodes.length > 0,
-    });
+  const {
+    data: locationData = NO_ROWS,
+    isLoading: locationsLoading,
+    error: locationsError,
+    refetch: refetchLocations,
+  } = useQuery({
+    ...location.getByShortcodes.queryOptions({
+      shortcodes: locationCodes,
+    }),
+    enabled: locationCodes.length > 0,
+  });
 
-  const { data: productData = NO_ROWS, isLoading: productsLoading } = useQuery({
+  const {
+    data: productData = NO_ROWS,
+    isLoading: productsLoading,
+    error: productsError,
+    refetch: refetchProducts,
+  } = useQuery({
     ...product.getByShortcodes.queryOptions({ shortcodes: productCodes }),
     enabled: productCodes.length > 0,
   });
@@ -55,6 +64,10 @@ export function useShortcodeLookups(shortcodes: string[]) {
   }, [locationData, productData]);
 
   const isLoading = locationsLoading || productsLoading;
+  const error = locationsError ?? productsError;
+  const refetch = async () => {
+    await Promise.all([refetchLocations(), refetchProducts()]);
+  };
 
-  return { items, isLoading };
+  return { items, isLoading, error, refetch };
 }

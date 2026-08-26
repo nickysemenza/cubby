@@ -73,8 +73,14 @@ export function InventoryItemList() {
     () => createCubbyColumnHelper<InventoryListItem>(),
     [],
   );
-  const { onRowClick, onRowHover, onRowHoverEnd, PreviewSheet } =
-    useEntityPreview("inventory");
+  const {
+    onRowClick,
+    onRowHover,
+    onRowHoverEnd,
+    PreviewSheet,
+    preview,
+    dockedInspector,
+  } = useEntityPreview("inventory", { responsiveInspector: true });
   const [moveTarget, setMoveTarget] = useState<InventoryListItem | null>(null);
   // Discard is single-row only: it writes one ledger line against one product.
   // Held as {productId, entryId} rather than the row, because the dialog
@@ -380,6 +386,8 @@ export function InventoryItemList() {
           onRowClick={onRowClick}
           onRowHover={onRowHover}
           onRowHoverEnd={onRowHoverEnd}
+          currentRowId={preview?.id}
+          desktopInspector={dockedInspector}
         />
       )}
       <PreviewSheet />

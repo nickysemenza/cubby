@@ -1,6 +1,7 @@
 import type { ExpenseMonthlyAggregate } from "@cubby/schemas/project";
 import { describe, expect, it } from "vitest";
 import {
+  describeRecordedSpendChange,
   fillRecordedSpendMonths,
   getRecordedSpendWindow,
 } from "./RecordedSpendCard";
@@ -53,5 +54,17 @@ describe("recorded spend home signal", () => {
       { key: "2026-04", net: 0, count: 0 },
       { key: "2026-05", net: -45, count: 1 },
     ]);
+  });
+
+  it("describes the current month against the prior month without inventing a rate", () => {
+    expect(
+      describeRecordedSpendChange(month("2026-08", 300), month("2026-07", 240)),
+    ).toBe("$300.00 month-to-date; prior calendar month was $240.00.");
+    expect(
+      describeRecordedSpendChange(month("2026-08", 240), month("2026-07", 240)),
+    ).toBe("$240.00 month-to-date; prior calendar month was $240.00.");
+    expect(
+      describeRecordedSpendChange(month("2026-08", 180), month("2026-07", 240)),
+    ).toBe("$180.00 month-to-date; prior calendar month was $240.00.");
   });
 });

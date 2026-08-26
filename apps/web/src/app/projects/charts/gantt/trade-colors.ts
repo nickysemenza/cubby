@@ -1,12 +1,11 @@
 /**
- * Trade -> build-phase colour for the Gantt. The Warm-Paper Ledger palette is
- * deliberately monochrome (one ultramarine accent + a grey ramp), so 20 trades
- * can't each get a distinct hue without turning the chart into a rainbow that
- * fights the rest of the app. Instead the trades fold into **six build-phase
- * families**, each with one muted `--phase-*` token — enough colour to group a
- * plan into structure / MEP / surfaces / finish / site / planning, while the
+ * Trade -> build-phase colour for the Gantt. Porcelain Transit keeps ordinary
+ * data surfaces neutral, so 20 trades cannot each get a distinct hue without
+ * turning the chart into a rainbow that fights the five domain lines. The
+ * trades instead fold into **six muted build-phase families** — enough colour
+ * to group structure / MEP / surfaces / finish / site / planning, while the
  * exact trade is carried by its Lucide glyph (see `TRADE_ICONS` in shared.tsx)
- * and the row label.
+ * and row label.
  *
  * Alias-free (no `~/`) so it can sit under the vitest `unit` project alongside
  * the other gantt logic.

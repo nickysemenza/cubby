@@ -10,6 +10,10 @@ import { createPortal } from "react-dom";
 import { z } from "zod";
 import { AddLabelsPopover } from "~/app/_components/labels/add-labels-popover";
 import { FormatToggle } from "~/app/_components/labels/format-toggle";
+import {
+  canExportLabels,
+  shouldMountLabelPrintPortal,
+} from "~/app/_components/labels/label-export-state";
 import { LabelSheet } from "~/app/_components/labels/label-sheet";
 import { LabelSummary } from "~/app/_components/labels/label-summary";
 import { PrintStyles } from "~/app/_components/labels/print-styles";
@@ -20,10 +24,12 @@ import {
 } from "~/app/_components/labels/sheet-layouts";
 import { useQrUrls } from "~/app/_components/labels/use-qr-urls";
 import { useShortcodeLookups } from "~/app/_components/labels/use-shortcode-lookups";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
+import { StatusText } from "~/components/ui/status-text";
 import { generateLabelCsv } from "~/lib/label-generator";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
@@ -68,13 +74,19 @@ function LabelsPage() {
     return uniq(list);
   }, [codes]);
 
-  const { items, isLoading } = useShortcodeLookups(shortcodes);
+  const { items, isLoading, error, refetch } = useShortcodeLookups(shortcodes);
+  const unresolvedCount = useMemo(() => {
+    const resolved = new Set(items.map((item) => item.shortcode));
+    return shortcodes.filter((shortcode) => !resolved.has(shortcode)).length;
+  }, [items, shortcodes]);
 
-  const { qrUrls, allQrReady } = useQrUrls(items, format);
+  const exportItems = error ? [] : items;
+  const { qrUrls, allQrReady } = useQrUrls(exportItems, format);
 
   const labelItems = useMemo(
-    () => items.map((item) => ({ ...item, qrUrl: qrUrls[item.shortcode] })),
-    [items, qrUrls],
+    () =>
+      exportItems.map((item) => ({ ...item, qrUrl: qrUrls[item.shortcode] })),
+    [exportItems, qrUrls],
   );
 
   const visibleLabelItems = useMemo(() => {
@@ -94,6 +106,7 @@ function LabelsPage() {
   );
 
   const effectiveSkip = isSheetFormat(format) ? skip : 0;
+  const sheetLayout = isSheetFormat(format) ? SHEET_LAYOUTS[format] : null;
 
   function toggleHidden(shortcode: string) {
     setHidden((prev) => {
@@ -108,7 +121,7 @@ function LabelsPage() {
   }
 
   function handleDownloadCsv() {
-    const csv = generateLabelCsv(items);
+    const csv = generateLabelCsv(exportItems);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -140,7 +153,7 @@ function LabelsPage() {
         variant="list"
         title="Print labels"
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 max-md:w-full max-md:flex-wrap">
             <Button variant="outline" onClick={() => router.history.back()}>
               <ArrowLeft className="mr-2 size-4" />
               Back
@@ -170,7 +183,7 @@ function LabelsPage() {
                       },
                     })
                   }
-                  className="h-7 w-14 border border-border bg-input/20 px-2 text-center text-sm"
+                  className="h-11 w-14 border border-border bg-input/20 px-2 text-center text-sm md:h-7"
                 />
               </label>
             )}
@@ -191,16 +204,36 @@ function LabelsPage() {
                     },
                   })
                 }
-                className="h-8 w-14 border border-input bg-background px-2 text-center text-sm"
+                className="h-11 w-14 border border-input bg-background px-2 text-center text-sm md:h-8"
               />
             </label>
             {format !== "ptouch" ? (
-              <Button onClick={() => window.print()} disabled={!allQrReady}>
+              <Button
+                onClick={() => window.print()}
+                disabled={
+                  !canExportLabels({
+                    error,
+                    itemCount: exportItems.length,
+                    qrReady: allQrReady,
+                    sheetFormat: true,
+                  })
+                }
+              >
                 <Printer className="mr-2 size-4" />
                 Print
               </Button>
             ) : (
-              <Button onClick={handleDownloadCsv} disabled={items.length === 0}>
+              <Button
+                onClick={handleDownloadCsv}
+                disabled={
+                  !canExportLabels({
+                    error,
+                    itemCount: exportItems.length,
+                    qrReady: true,
+                    sheetFormat: false,
+                  })
+                }
+              >
                 <Download className="mr-2 size-4" />
                 Download CSV
               </Button>
@@ -214,8 +247,24 @@ function LabelsPage() {
               <p className="text-muted-foreground">Loading...</p>
             </CardContent>
           </Card>
+        ) : error ? (
+          <Card>
+            <CardContent className="space-y-3 py-6">
+              <ErrorDisplay error={error} />
+              <Button variant="outline" onClick={() => void refetch()}>
+                Retry label lookup
+              </Button>
+            </CardContent>
+          </Card>
         ) : isSheetFormat(format) ? (
           <>
+            {unresolvedCount > 0 && (
+              <StatusText tone="warning">
+                {unresolvedCount} selected code
+                {unresolvedCount === 1 ? " wasn't" : "s weren't"} found and
+                won't be printed.
+              </StatusText>
+            )}
             <LabelSummary
               labelCount={visibleLabelItems.length}
               skip={effectiveSkip}
@@ -233,31 +282,46 @@ function LabelsPage() {
                   Hidden:
                 </Description>
                 {hiddenItems.map((item) => (
-                  <button
+                  <Button
                     key={item.shortcode}
                     type="button"
-                    className="rounded bg-muted px-2 py-0.5 font-mono text-muted-foreground text-xs transition-colors hover:bg-muted/80" /* tight */
+                    variant="outline"
+                    size="sm"
+                    className="font-mono"
                     onClick={() => toggleHidden(item.shortcode)}
                   >
                     {item.shortcode}
-                  </button>
+                  </Button>
                 ))}
               </div>
             )}
           </>
         ) : (
-          <PtouchPreview items={items} />
+          <>
+            {unresolvedCount > 0 && (
+              <StatusText tone="warning">
+                {unresolvedCount} selected code
+                {unresolvedCount === 1 ? " wasn't" : "s weren't"} found and
+                won't be exported.
+              </StatusText>
+            )}
+            <PtouchPreview items={items} />
+          </>
         )}
       </Page>
       {/* Portal to body so print CSS can hide everything else */}
-      {isSheetFormat(format) &&
-        !isLoading &&
+      {sheetLayout &&
+        shouldMountLabelPrintPortal({
+          error,
+          isLoading,
+          sheetFormat: true,
+        }) &&
         createPortal(
           <>
-            <PrintStyles layout={SHEET_LAYOUTS[format]} />
+            <PrintStyles layout={sheetLayout} />
             <LabelSheet
               items={visibleLabelItems}
-              layout={SHEET_LAYOUTS[format]}
+              layout={sheetLayout}
               skip={effectiveSkip}
               printOnly
             />

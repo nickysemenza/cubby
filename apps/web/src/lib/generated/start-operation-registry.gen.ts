@@ -503,6 +503,11 @@ export const START_OPERATIONS = {
     productPhases: [],
   },
   "product.quickCreate": { kind: "mutation", entities: [], productPhases: [] },
+  "product.relationshipRoute": {
+    kind: "query",
+    entities: [],
+    productPhases: [],
+  },
   "product.search": { kind: "query", entities: [], productPhases: [] },
   "product.setProjectUses": {
     kind: "mutation",
@@ -720,6 +725,7 @@ export const START_OPERATIONS = {
   "task.listActionable": { kind: "query", entities: [], productPhases: [] },
   "task.summary": { kind: "query", entities: [], productPhases: [] },
   "task.timeline": { kind: "query", entities: [], productPhases: [] },
+  "task.todayBriefing": { kind: "query", entities: [], productPhases: [] },
   "upc.lookup": { kind: "query", entities: [], productPhases: [] },
   "usda-food.alternateId": { kind: "query", entities: [], productPhases: [] },
   "usda-food.detail": { kind: "query", entities: [], productPhases: [] },

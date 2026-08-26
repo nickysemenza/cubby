@@ -29,8 +29,8 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "theme_color": "#fcfaf4",
-  "background_color": "#f7f4ec",
+  "theme_color": "#f7f9fc",
+  "background_color": "#f7f9fc",
   "categories": ["food", "lifestyle", "utilities"],
   "share_target": {
     "action": "/recipes/new",

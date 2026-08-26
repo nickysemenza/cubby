@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { useMemo } from "react";
 import { entities } from "~/entities/entities";
+import type { WayfindingDomain } from "./domain-wayfinding";
 
 /** A navigable destination. `to` is typed against the generated route tree. */
 export type NavItem = {
@@ -42,14 +43,6 @@ export type NavItem = {
   /** Static search params — only the scanner shortcut needs these today. */
   search?: Record<string, unknown>;
   label: string;
-  /**
-   * Shorter text for the 144px sidebar rail only. The rail is a compact index
-   * and its width is set by the longest label, but `label` is also what the
-   * command palette lists AND what cmdk filters on — shortening it there would
-   * delete the search terms ("background" would stop finding the jobs page).
-   * So the rail reads this and everything else keeps `label`.
-   */
-  railLabel?: string;
   icon: React.ComponentType<{ className?: string }>;
 };
 
@@ -58,6 +51,8 @@ export type NavGroup = {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   children: NavItem[];
+  /** The stable Porcelain Transit line for the five household domains. */
+  domain?: WayfindingDomain;
   /** Presentation tier. The complete manifest stays semantic truth while each
    * shell chooses how much of it to expose at once. */
   tier: "primary" | "utility" | "developer";
@@ -132,6 +127,7 @@ export const desktopNav: NavNode[] = [
   {
     label: "Cook",
     icon: ChefHat,
+    domain: "cook",
     tier: "primary",
     children: [
       recipes,
@@ -149,17 +145,12 @@ export const desktopNav: NavNode[] = [
         label: "Equivalences",
         icon: ArrowLeftRight,
       },
-      {
-        to: "/meals/suggestions",
-        label: "What can I make?",
-        railLabel: "Cookable",
-        icon: Sparkles,
-      },
     ],
   },
   {
     label: "Pantry",
     icon: Boxes,
+    domain: "pantry",
     tier: "primary",
     children: [
       inventory,
@@ -171,10 +162,16 @@ export const desktopNav: NavNode[] = [
   {
     label: "Plan",
     icon: CalendarRange,
+    domain: "plan",
     tier: "primary",
     children: [
       { to: "/calendar", label: "Calendar", icon: CalendarRange },
       { to: "/meals", label: "Meals", icon: Utensils },
+      {
+        to: "/meals/suggestions",
+        label: "What can I make?",
+        icon: Sparkles,
+      },
       {
         to: "/meals/shopping-list",
         label: "Shopping list",
@@ -186,6 +183,7 @@ export const desktopNav: NavNode[] = [
   {
     label: "House",
     icon: House,
+    domain: "house",
     tier: "primary",
     children: [
       { to: "/projects", label: "Projects", icon: entities.project.lucideIcon },
@@ -196,6 +194,7 @@ export const desktopNav: NavNode[] = [
   {
     label: "Finance",
     icon: CreditCard,
+    domain: "finance",
     tier: "primary",
     children: [
       { to: "/expenses", label: "Expenses", icon: entities.expense.lucideIcon },
@@ -214,13 +213,11 @@ export const desktopNav: NavNode[] = [
       {
         to: "/household-contribution",
         label: "Contribution ledger",
-        railLabel: "Contributions",
         icon: ArrowLeftRight,
       },
       {
         to: "/statement-rows",
         label: "Statement Rows",
-        railLabel: "Statements",
         icon: Receipt,
       },
     ],
@@ -272,7 +269,6 @@ export const desktopNav: NavNode[] = [
       {
         to: "/background-jobs",
         label: "Background jobs",
-        railLabel: "Jobs",
         icon: Database,
       },
       { to: "/mcp", label: "MCP tools", icon: Plug },

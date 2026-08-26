@@ -18,5 +18,10 @@ describe("AppFooter", () => {
       "title",
       `View test@${__SOURCE_COMMIT__} on GitHub`,
     );
+    expect(commitLink).toHaveClass("min-h-11", "sm:min-h-0");
+    expect(screen.getByRole("link", { name: "GitHub repository" })).toHaveClass(
+      "min-h-11",
+      "sm:min-h-0",
+    );
   });
 });

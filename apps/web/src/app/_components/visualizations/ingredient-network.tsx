@@ -5,7 +5,14 @@ import type {
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import * as d3Force from "d3-force";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { recipe } from "~/app/recipes/recipe.functions";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
@@ -25,7 +32,7 @@ const resolvedNetworkNode = (
 ): NetworkNode | null => (typeof endpoint === "string" ? null : endpoint);
 
 export default function IngredientNetwork() {
-  const { data, isLoading } = useQuery(
+  const { data, isError, isLoading, refetch } = useQuery(
     recipe.getIngredientCooccurrence.queryOptions({ minEdgeWeight: 2 }),
   );
 
@@ -38,7 +45,18 @@ export default function IngredientNetwork() {
     );
   }
 
-  if (!data || data.nodes.length === 0) {
+  if (isError) {
+    return (
+      <VisualizationPlaceholder
+        message="Ingredient relationships are unavailable"
+        subMessage="Try again to reload recipe co-occurrences."
+        height={400}
+        onRetry={() => void refetch()}
+      />
+    );
+  }
+
+  if (!data || data.nodes.length === 0 || data.edges.length === 0) {
     return (
       <VisualizationPlaceholder
         message="No ingredient relationships to display"
@@ -59,6 +77,7 @@ interface NetworkGraphProps {
 function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const summaryId = useId();
   const dimensions = useContainerDimensions(containerRef, {
     minHeight: 400,
     initialWidth: 800,
@@ -211,6 +230,11 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
     return `Ingredient co-occurrence network: ${top}; ${nodes.length} ingredients, ${edges.length} connections`;
   }, [nodes, edges]);
 
+  const topIngredients = useMemo(
+    () => [...nodes].sort((a, b) => b.recipeCount - a.recipeCount).slice(0, 3),
+    [nodes],
+  );
+
   // Check if a node is connected to hovered node
   const isNodeConnected = useCallback(
     (node: NetworkNode) => {
@@ -241,6 +265,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
         ref={svgRef}
         role="img"
         aria-label={chartSummary}
+        aria-describedby={summaryId}
         width={dimensions.width}
         height={dimensions.height}
       >
@@ -350,6 +375,28 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
         </g>
       </svg>
 
+      <p id={summaryId} className="sr-only">
+        {chartSummary}. Use the ingredient links below to open an ingredient.
+      </p>
+
+      {topIngredients.length > 0 && (
+        <nav
+          aria-label="Top connected ingredients"
+          className="absolute inset-x-2 bottom-2 flex flex-wrap gap-1 border border-[var(--border)] bg-background/95 p-1 pr-32"
+        >
+          {topIngredients.map((ingredient) => (
+            <Link
+              key={ingredient.id}
+              to="/ingredients/$shortcode"
+              params={{ shortcode: ingredient.id }}
+              className="inline-flex min-h-11 items-center px-2 text-primary text-xs hover:underline sm:min-h-0"
+            >
+              {ingredient.name} ({ingredient.recipeCount})
+            </Link>
+          ))}
+        </nav>
+      )}
+
       {/* Tooltip for selected link */}
       {selectedLink && !hoveredNode && (
         <VizTooltip
@@ -423,7 +470,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
       )}
 
       {/* Legend */}
-      <VizOverlay>
+      <VizOverlay className="bottom-14">
         <div className="text-muted-foreground">
           Node size = recipe count • Line thickness = co-occurrence
         </div>

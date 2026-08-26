@@ -59,6 +59,22 @@ describe("buildWishRows", () => {
     expect(child?.kind === "candidate" && child.productId).toBe("PRD-BBBB");
   });
 
+  it("keeps tree row identity separate from the entity preview target", () => {
+    const [row] = buildWishRows([wish("WSH-0001", [candidate("PRD-BBBB", 5)])]);
+    const child = row?.kind === "wish" ? row.subRows[0] : undefined;
+
+    expect(row).toMatchObject({
+      id: wishId("WSH-0001"),
+      entityType: "wish",
+      previewId: wishId("WSH-0001"),
+    });
+    expect(child).toMatchObject({
+      id: `${wishId("WSH-0001")}:PRD-BBBB`,
+      entityType: "product",
+      previewId: "PRD-BBBB",
+    });
+  });
+
   it("gives a candidate-less wish no sub-rows, so it renders no chevron", () => {
     const rows = buildWishRows([wish("WSH-0003")]);
     // `getCanExpand()` is false for an empty array, which is what keeps a

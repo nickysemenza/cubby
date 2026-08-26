@@ -62,7 +62,7 @@ export function ArrangeItemChip({
         ref={setActivatorNodeRef}
         type="button"
         aria-label={`Drag ${item.productName}`}
-        className="touch-none rounded text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+        className="touch-none rounded text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary max-md:min-h-11 max-md:min-w-11"
         {...listeners}
         {...attributes}
       >

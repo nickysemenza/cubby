@@ -31,6 +31,7 @@ type BackgroundStatusRow = RowBase & {
   rowType: "status";
   rowKey: `status:${string}:${"loading" | "error" | "empty"}`;
   loadState: "loading" | "error" | "empty";
+  retry?: () => void;
 };
 type BackgroundPagerRow = RowBase & {
   rowType: "pager";
@@ -47,7 +48,7 @@ type BackgroundJobTableRow =
 
 type SelectedJobsState =
   | { status: "loading" }
-  | { status: "error"; message: string }
+  | { status: "error"; message: string; retry?: () => void }
   | {
       status: "ready";
       jobs: BackgroundJobSummary[];
@@ -62,6 +63,7 @@ interface BuildRowsInput {
   selectedBatchId?: string;
   selectedBatch?: BackgroundBatchSummary;
   selectedBatchError?: string;
+  selectedBatchRetry?: () => void;
   selectedJobs?: SelectedJobsState;
 }
 
@@ -90,7 +92,9 @@ function children(batchId: string, state?: SelectedJobsState) {
   if (!state || state.status === "loading")
     return [statusRow(batchId, "loading", "Loading jobs…")];
   if (state.status === "error")
-    return [statusRow(batchId, "error", state.message)];
+    return [
+      { ...statusRow(batchId, "error", state.message), retry: state.retry },
+    ];
 
   const rows: BackgroundJobTableRow[] = state.jobs.map((job) => ({
     rowType: "job",
@@ -132,6 +136,7 @@ function buildBackgroundJobRows({
   selectedBatchId,
   selectedBatch,
   selectedBatchError,
+  selectedBatchRetry,
   selectedJobs,
 }: BuildRowsInput): BackgroundJobTableRow[] {
   const recentIds = new Set(batches.map(({ id }) => id));
@@ -149,7 +154,18 @@ function buildBackgroundJobRows({
       id: batch.id,
       name: `Batch ${shortId(batch.id)}`,
       batch,
-      ...(selected ? { subRows: children(batch.id, selectedJobs) } : {}),
+      ...(selected
+        ? {
+            subRows: selectedBatchError
+              ? [
+                  {
+                    ...statusRow(batch.id, "error", selectedBatchError),
+                    retry: selectedBatchRetry,
+                  },
+                ]
+              : children(batch.id, selectedJobs),
+          }
+        : {}),
       work: batch.kind,
       route: `${batch.processor} ${batch.source}`,
       status: batch.status,
@@ -159,7 +175,10 @@ function buildBackgroundJobRows({
     };
   });
   if (selectedBatchId && selectedBatchError && !recentIds.has(selectedBatchId))
-    rows.unshift(statusRow(selectedBatchId, "error", selectedBatchError));
+    rows.unshift({
+      ...statusRow(selectedBatchId, "error", selectedBatchError),
+      retry: selectedBatchRetry,
+    });
   return rows;
 }
 

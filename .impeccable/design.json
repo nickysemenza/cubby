@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-26T18:16:03Z",
+  "title": "Design System: Cubby",
+  "extensions": {
+    "colorMeta": {
+      "porcelain-canvas": {
+        "role": "neutral",
+        "displayName": "Porcelain Canvas",
+        "canonical": "#f7f9fc",
+        "tonalRamp": ["#ffffff", "#f7f9fc", "#f1f4f8", "#d9dee7"]
+      },
+      "graphite": {
+        "role": "neutral",
+        "displayName": "Graphite",
+        "canonical": "#171a21",
+        "tonalRamp": ["#171a21", "#667085", "#d9dee7", "#f1f4f8"]
+      },
+      "cobalt": {
+        "role": "primary",
+        "displayName": "Transit Cobalt",
+        "canonical": "#2563eb",
+        "tonalRamp": ["#1d4ed8", "#2563eb", "#93b4fa", "#dbe7ff"]
+      },
+      "cook-saffron": {
+        "role": "secondary",
+        "displayName": "Cook Saffron",
+        "canonical": "#d97706",
+        "tonalRamp": ["#9a5404", "#d97706", "#f4c985", "#fff4df"]
+      },
+      "pantry-green": {
+        "role": "secondary",
+        "displayName": "Pantry Green",
+        "canonical": "#16845b",
+        "tonalRamp": ["#0f6041", "#16845b", "#8bc8af", "#e2f4ec"]
+      },
+      "plan-violet": {
+        "role": "secondary",
+        "displayName": "Plan Violet",
+        "canonical": "#6d5bd0",
+        "tonalRamp": ["#4f3caf", "#6d5bd0", "#b7ade9", "#eeeafb"]
+      },
+      "house-cyan": {
+        "role": "secondary",
+        "displayName": "House Cyan",
+        "canonical": "#147d92",
+        "tonalRamp": ["#0e5b6b", "#147d92", "#8fc6d0", "#e3f3f6"]
+      },
+      "finance-magenta": {
+        "role": "secondary",
+        "displayName": "Finance Magenta",
+        "canonical": "#b5477c",
+        "tonalRamp": ["#84305a", "#b5477c", "#dda7c1", "#f8e8f0"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Largest record identity only." },
+      "headline": { "displayName": "Headline", "purpose": "Page and major-region headings." },
+      "body": { "displayName": "Body", "purpose": "Ordinary UI prose and explanations." },
+      "body-control": { "displayName": "Dense control", "purpose": "Desktop controls and compact workbench chrome." },
+      "data": { "displayName": "Data", "purpose": "Quantities, money, dates, shortcodes, and aligned values." }
+    },
+    "shadows": [
+      { "name": "overlay", "value": "0 8px 24px rgb(23 26 33 / 0.12)", "purpose": "Popover, menu, dialog, and sheet planes only." }
+    ],
+    "motion": [
+      { "name": "fast", "value": "120ms cubic-bezier(0.2, 0, 0, 1)", "purpose": "Small overlay and toast state changes." },
+      { "name": "standard", "value": "180ms cubic-bezier(0.2, 0, 0, 1)", "purpose": "Inspector and sheet spatial transitions." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "inspector", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The leading action on a surface; grows to a 44px phone target.",
+      "html": "<button class=\"ds-btn-primary\">Save</button>",
+      "css": ".ds-btn-primary { min-height: 32px; padding: 0 10px; border: 1px solid transparent; border-radius: 6px; background: var(--brand-cobalt, #2563eb); color: var(--brand-on-accent, #fff); font: 500 12px/18px Inter, system-ui, sans-serif; transition: background 120ms cubic-bezier(.2,0,0,1); } .ds-btn-primary:hover { background: var(--brand-ultramarine-dark, #1d4ed8); } .ds-btn-primary:focus-visible { outline: 2px solid #fff; box-shadow: 0 0 0 4px var(--brand-cobalt, #2563eb); } @media (max-width: 767px) { .ds-btn-primary { min-width: 44px; min-height: 44px; } }"
+    },
+    {
+      "name": "Outline button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "A quiet secondary action on a white working plane.",
+      "html": "<button class=\"ds-btn-outline\">Open details</button>",
+      "css": ".ds-btn-outline { min-height: 32px; padding: 0 10px; border: 1px solid var(--brand-hairline, #d9dee7); border-radius: 6px; background: var(--brand-surface, #fff); color: var(--brand-graphite, #171a21); font: 500 12px/18px Inter, system-ui, sans-serif; transition: background 120ms cubic-bezier(.2,0,0,1); } .ds-btn-outline:hover { background: var(--brand-inset, #f1f4f8); } .ds-btn-outline:focus-visible { outline: 2px solid var(--brand-cobalt, #2563eb); outline-offset: 1px; }"
+    },
+    {
+      "name": "Text field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Neutral field with a crisp cobalt focus state.",
+      "html": "<input class=\"ds-input\" value=\"PRD-7F4K\" aria-label=\"Shortcode\">",
+      "css": ".ds-input { height: 36px; padding: 0 10px; border: 1px solid var(--brand-hairline, #d9dee7); border-radius: 6px; background: var(--brand-surface, #fff); color: var(--brand-graphite, #171a21); font: 400 14px/20px Inter, system-ui, sans-serif; } .ds-input:focus-visible { outline: 2px solid color-mix(in oklab, var(--brand-cobalt, #2563eb) 45%, transparent); border-color: var(--brand-cobalt, #2563eb); } @media (max-width: 639px) { .ds-input { height: 44px; font-size: 16px; } }"
+    },
+    {
+      "name": "Status chip",
+      "kind": "chip",
+      "refersTo": "status-chip",
+      "description": "Compact status wording with a redundant border and tint.",
+      "html": "<span class=\"ds-status-positive\">Available</span>",
+      "css": ".ds-status-positive { display: inline-flex; align-items: center; min-height: 20px; padding: 2px 6px; border: 1px solid color-mix(in oklab, var(--brand-positive, #16845b) 30%, transparent); border-radius: 999px; background: color-mix(in oklab, var(--brand-positive, #16845b) 10%, transparent); color: var(--brand-positive, #16845b); font: 500 10px/14px Inter, system-ui, sans-serif; }"
+    },
+    {
+      "name": "Bounded panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "A normal-density white working region with no resting shadow.",
+      "html": "<section class=\"ds-panel\"><h3>Relations</h3><p>Direct evidence appears before derived routes.</p></section>",
+      "css": ".ds-panel { padding: 12px 14px; border: 1px solid var(--brand-hairline, #d9dee7); border-radius: 8px; background: var(--brand-surface, #fff); color: var(--brand-graphite, #171a21); font: 400 14px/20px Inter, system-ui, sans-serif; } .ds-panel h3 { margin: 0 0 4px; font: 600 14px/20px Inter, system-ui, sans-serif; } .ds-panel p { margin: 0; color: var(--brand-graphite-secondary, #667085); }"
+    },
+    {
+      "name": "Domain navigation item",
+      "kind": "nav",
+      "description": "Stable domain wayfinding on a quiet rail.",
+      "html": "<a class=\"ds-domain-nav\" href=\"#\"><span class=\"ds-domain-mark\"></span>Inventory</a>",
+      "css": ".ds-domain-nav { display: flex; align-items: center; min-height: 32px; gap: 8px; padding: 0 8px; border-radius: 6px; color: var(--brand-graphite, #171a21); font: 500 13px/18px Inter, system-ui, sans-serif; text-decoration: none; } .ds-domain-nav:hover { background: var(--brand-inset, #f1f4f8); } .ds-domain-nav:focus-visible { outline: 2px solid var(--brand-cobalt, #2563eb); } .ds-domain-mark { width: 2px; height: 16px; border-radius: 1px; background: var(--brand-domain-pantry, #16845b); } @media (max-width: 767px) { .ds-domain-nav { min-height: 44px; } }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Porcelain Transit",
+    "overview": "Cubby is light-mode household operating software: records are stations, verified relationships are routes, and dense workbenches move a person from attention to evidence to action. Porcelain-white planes and cool rules keep data calm while cobalt interaction and five stable domain lines make the system navigable.",
+    "keyCharacteristics": [
+      "Light-only Porcelain planes and graphite type",
+      "Dense read-heavy grids with normal-density surrounding content",
+      "Cobalt interaction and five stable domain lines",
+      "Truthful direct relationships before derived evidence",
+      "Docked wide-desktop context and canonical phone routes"
+    ],
+    "rules": [
+      { "name": "The Three Channels Rule", "body": "Interaction, domain identity, and status each keep a separate color meaning.", "section": "colors" },
+      { "name": "The Calm Grid Rule", "body": "Large data surfaces remain neutral; meaningful state and selection carry color.", "section": "colors" },
+      { "name": "The Two Voices Rule", "body": "Inter speaks and JetBrains Mono measures.", "section": "typography" },
+      { "name": "The Resting Plane Rule", "body": "Resting surfaces separate with tone or a hairline; shadow is reserved for temporary overlays.", "section": "elevation" }
+    ],
+    "dos": [
+      "Keep tables dense and ordinary content at normal density.",
+      "Show direct relationships before derived evidence and label provenance.",
+      "Provide 44px phone targets and bounded internal scrolling.",
+      "Distinguish loading, empty, error, permission, disabled, and offline states."
+    ],
+    "donts": [
+      "Do not revive warm-paper colors, 3px ink rules, or square rubber-stamp geometry.",
+      "Do not use domain color as status or destructive red as decoration.",
+      "Do not cardify every record or squeeze desktop grids into phone viewports.",
+      "Do not invent relationships, inventory automation, or spend metrics."
+    ]
+  }
+}

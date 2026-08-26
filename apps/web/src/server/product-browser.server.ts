@@ -18,6 +18,7 @@ import {
   getProductManufacturerOptionsWorkflow,
   getProductMovementTimelineWorkflow,
   getProductQuantitySummariesWorkflow,
+  getProductRelationshipRouteWorkflow,
   getProductSummariesWorkflow,
   getProductsByShortcodesWorkflow,
   getProductTagOptionsWorkflow,
@@ -248,6 +249,17 @@ export const listProductPurchasesForBrowser = (o: {
     type: "query",
     schemas: productWorkflowSchemas.purchases,
     workflow: listProductPurchasesWorkflow,
+  });
+export const getProductRelationshipRouteForBrowser = (o: {
+  data: z.input<typeof productWorkflowSchemas.relationshipRoute.input>;
+  request: StartOperationRequest;
+}) =>
+  run({
+    ...o,
+    operation: "product.relationshipRoute",
+    type: "query",
+    schemas: productWorkflowSchemas.relationshipRoute,
+    workflow: getProductRelationshipRouteWorkflow,
   });
 export const listProductComponentsForBrowser = (o: {
   data: z.input<typeof productWorkflowSchemas.components.input>;

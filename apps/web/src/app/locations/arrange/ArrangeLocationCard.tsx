@@ -68,7 +68,7 @@ export function ArrangeLocationCard({
           ref={setActivatorNodeRef}
           type="button"
           aria-label={`Drag ${node.name}`}
-          className="touch-none rounded p-1 text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+          className="touch-none rounded p-1 text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary max-md:min-h-11 max-md:min-w-11"
           {...listeners}
           {...attributes}
         >
@@ -89,7 +89,7 @@ export function ArrangeLocationCard({
         <button
           type="button"
           onClick={onOpen}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          className="flex min-h-11 min-w-0 flex-1 items-center gap-2 text-left md:min-h-0"
         >
           <span
             className="min-w-0 flex-1 truncate font-medium text-sm"

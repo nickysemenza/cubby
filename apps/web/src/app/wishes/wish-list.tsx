@@ -8,6 +8,7 @@ import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
+import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import {
   ProductImageSummariesProvider,
@@ -67,8 +68,22 @@ const WISH_TREE_CONFIG = {
         },
 } as const;
 
+const wishMobileDetailsHref = (row: WishRow) =>
+  `/${entities[row.entityType].basePath}/${row.previewId}`;
+
 export function WishList() {
   const columnHelper = useMemo(() => createCubbyColumnHelper<WishRow>(), []);
+  const {
+    onRowClick,
+    onRowHover,
+    onRowHoverEnd,
+    PreviewSheet,
+    preview,
+    dockedInspector,
+  } = useEntityPreview(undefined, {
+    idField: "previewId",
+    responsiveInspector: true,
+  });
 
   const columns = useMemo(
     () => [
@@ -290,7 +305,15 @@ export function WishList() {
               New wish
             </CreateDialogAction>
           }
+          onRowClick={onRowClick}
+          onRowHover={onRowHover}
+          onRowHoverEnd={onRowHoverEnd}
+          currentRowId={preview?.rowKey ?? preview?.id}
+          defaultDensity="dense"
+          desktopInspector={dockedInspector}
+          getMobileDetailsHref={wishMobileDetailsHref}
         />
+        <PreviewSheet />
       </ProductImageSummariesProvider>
     </div>
   );

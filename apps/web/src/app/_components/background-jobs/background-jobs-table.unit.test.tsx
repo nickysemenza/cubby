@@ -89,10 +89,16 @@ const job: BackgroundJobSummary = {
 function renderWorkbench(
   selectedBatchId?: string,
   batches: BackgroundBatchSummary[] = [batch],
+  error: unknown = null,
+  onRetry = vi.fn(),
+  selectedBatchError?: string,
+  selectedBatchRetry = vi.fn(),
 ) {
   const rows = buildBackgroundJobRows({
     batches,
     selectedBatchId,
+    selectedBatchError,
+    selectedBatchRetry,
     selectedJobs: selectedBatchId
       ? {
           status: "ready",
@@ -112,7 +118,8 @@ function renderWorkbench(
       selectedBatchId={selectedBatchId}
       showFailedOnly={false}
       isLoading={false}
-      error={null}
+      error={error}
+      onRetry={onRetry}
       actions={<button type="button">Drain pending</button>}
       onExpandedBatchChange={onExpandedBatchChange}
       onFailedOnlyChange={onFailedOnlyChange}
@@ -195,5 +202,42 @@ describe("BackgroundJobsTable", () => {
     fireEvent.click(screen.getByText("Show failed jobs"));
 
     expect(onFailedOnlyChange).toHaveBeenCalledWith("batch-1", true);
+  });
+
+  it("keeps cached rows recoverable when the list query errors", () => {
+    const onRetry = vi.fn();
+    renderWorkbench(
+      undefined,
+      [batch],
+      new Error("Queue unavailable"),
+      onRetry,
+    );
+
+    expect(screen.getByRole("alert")).toBeVisible();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Retry background jobs" }),
+    );
+    expect(onRetry).toHaveBeenCalledOnce();
+  });
+
+  it("renders a retry action for a recent selected-summary error", () => {
+    const selectedBatchRetry = vi.fn();
+    const { table } = renderWorkbench(
+      batch.id,
+      [batch],
+      null,
+      vi.fn(),
+      "Summary unavailable",
+      selectedBatchRetry,
+    );
+    const statusRow = table.getRow("status:batch-1:error");
+    const cell = statusRow
+      .getAllCells()
+      .find(({ column }) => column.id === "record");
+    if (!cell) throw new Error("Missing status cell");
+    render(flexRender(cell.column.columnDef.cell, cell.getContext()));
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(selectedBatchRetry).toHaveBeenCalledOnce();
   });
 });

@@ -1,7 +1,7 @@
 import { AuthView } from "@daveyplate/better-auth-ui";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
-import { IconPattern } from "~/components/common/icon-pattern";
+import { AuthEntryFrame } from "~/app/auth/auth-entry-frame";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 
@@ -30,11 +30,8 @@ function AuthPage() {
   const { authView } = Route.useParams();
 
   return (
-    <div className="auth-background relative flex min-h-screen items-center justify-center overflow-hidden p-4">
-      <IconPattern />
-      <div className="relative z-10 w-full max-w-md">
-        <AuthView pathname={authView} />
-      </div>
-    </div>
+    <AuthEntryFrame>
+      <AuthView pathname={authView} />
+    </AuthEntryFrame>
   );
 }

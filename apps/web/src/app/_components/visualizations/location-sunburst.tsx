@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import * as d3Hierarchy from "d3-hierarchy";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import {
   type LocationHierarchyNode,
@@ -25,9 +25,13 @@ const DARK_RING_FILLS = new Set([
   "var(--chart-4)",
 ]);
 
+export const LOCATION_SUNBURST_METRIC = "itemCount" as const;
+export const LOCATION_SUNBURST_DESCRIPTION =
+  "How owned-item counts are distributed across your locations.";
+
 export default function LocationSunburst() {
-  const { data, isLoading } = useLocationHierarchy({
-    valuationMode: "itemCount",
+  const { data, isError, isLoading, refetch } = useLocationHierarchy({
+    valuationMode: LOCATION_SUNBURST_METRIC,
   });
 
   if (isLoading) {
@@ -39,7 +43,18 @@ export default function LocationSunburst() {
     );
   }
 
-  if (!data) {
+  if (isError) {
+    return (
+      <VisualizationPlaceholder
+        message="Inventory locations are unavailable"
+        subMessage="Try again to reload the location breakdown."
+        height={500}
+        onRetry={() => void refetch()}
+      />
+    );
+  }
+
+  if (!data || data.totalCount === 0) {
     return (
       <VisualizationPlaceholder
         message="No locations to display"
@@ -57,6 +72,7 @@ interface SunburstProps {
 
 function Sunburst({ data }: SunburstProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const summaryId = useId();
   const dimensions = useContainerDimensions(containerRef, {
     minHeight: 400,
     initialWidth: 500,
@@ -181,6 +197,15 @@ function Sunburst({ data }: SunburstProps) {
     return `Inventory by location: ${top}; ${data.totalCount} items total`;
   }, [nodes, data.totalCount]);
 
+  const topLocations = useMemo(() => {
+    const topLevel = nodes.filter((node) => node.depth === 1);
+    return (
+      topLevel.length > 0 ? topLevel : nodes.filter((node) => node.depth === 0)
+    )
+      .slice(0, 3)
+      .filter((node) => node.data.totalCount > 0);
+  }, [nodes]);
+
   return (
     <div
       ref={containerRef}
@@ -189,6 +214,7 @@ function Sunburst({ data }: SunburstProps) {
       <svg
         role="img"
         aria-label={chartSummary}
+        aria-describedby={summaryId}
         width={dimensions.width}
         height={dimensions.height}
       >
@@ -257,6 +283,28 @@ function Sunburst({ data }: SunburstProps) {
           )}
         </g>
       </svg>
+
+      <p id={summaryId} className="sr-only">
+        {chartSummary}. Use the location links below to open a location.
+      </p>
+
+      {topLocations.length > 0 && (
+        <nav
+          aria-label="Top inventory locations"
+          className="absolute inset-x-2 bottom-2 flex flex-wrap gap-1 border border-[var(--border)] bg-background/95 p-1"
+        >
+          {topLocations.map((node) => (
+            <Link
+              key={node.data.id}
+              to="/locations/$shortcode"
+              params={{ shortcode: node.data.shortcode }}
+              className="inline-flex min-h-11 items-center px-2 text-primary text-xs hover:underline sm:min-h-0"
+            >
+              {node.data.name} ({node.data.totalCount})
+            </Link>
+          ))}
+        </nav>
+      )}
 
       {hoveredNode && <HoverTooltip node={hoveredNode} />}
     </div>

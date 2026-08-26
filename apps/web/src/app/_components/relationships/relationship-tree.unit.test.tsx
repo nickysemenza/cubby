@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { type ReactNode, StrictMode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@tanstack/react-router", () => ({
@@ -19,6 +19,39 @@ vi.mock("@tanstack/react-router", () => ({
 import { RelationshipTree } from "./relationship-tree";
 
 describe("RelationshipTree display images", () => {
+  it("does not relabel first-level records as cycle references in Strict Mode", () => {
+    render(
+      <StrictMode>
+        <RelationshipTree
+          presets={[
+            {
+              key: "connections",
+              label: "Connections",
+              groups: [
+                {
+                  key: "vendor.purchases",
+                  label: "Purchases",
+                  totalCount: 1,
+                  items: [
+                    {
+                      entity: "purchase",
+                      id: "PUR-4K7M",
+                      label: "Illustrative purchase",
+                      displayImage: null,
+                    },
+                  ],
+                },
+              ],
+            },
+          ]}
+        />
+      </StrictMode>,
+    );
+
+    expect(screen.getByText("Illustrative purchase")).toBeInTheDocument();
+    expect(screen.queryByText("Reference")).not.toBeInTheDocument();
+  });
+
   it("renders a progressive cover and keeps an icon-only fallback aligned", () => {
     const { container } = render(
       <RelationshipTree

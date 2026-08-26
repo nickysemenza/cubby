@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { calendar } from "~/app/calendar/calendar.functions";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Button, buttonVariants } from "~/components/ui/button";
 import {
@@ -144,6 +145,15 @@ export function CalendarSubscribeDialog() {
           </Stack>
         ) : feed.isPending ? (
           <StatusText>Loading…</StatusText>
+        ) : feed.error ? (
+          <Stack gap="sm">
+            <ErrorDisplay error={feed.error} />
+            <Row justify="end">
+              <Button variant="outline" onClick={() => void feed.refetch()}>
+                Retry feed lookup
+              </Button>
+            </Row>
+          </Stack>
         ) : (
           <Stack gap="sm">
             <StatusText>No feed has been created yet.</StatusText>

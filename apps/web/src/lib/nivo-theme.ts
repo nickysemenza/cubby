@@ -1,5 +1,5 @@
-// Shared nivo chart styling — the warm-paper-ledger voice: mono ticks/labels
-// in the monochrome ink ladder, hairline grid. Kept dependency-free so
+// Shared Porcelain Transit chart styling: mono ticks/labels in the graphite
+// ladder with a cool hairline grid. Kept dependency-free so
 // lazy-loaded chart chunks (sunburst/treemap) don't pull in unrelated modules.
 //
 // NOTE: brand tokens are oklch/hex — never wrap them in hsl(var(...)); the

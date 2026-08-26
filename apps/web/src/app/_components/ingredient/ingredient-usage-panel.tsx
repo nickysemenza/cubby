@@ -32,7 +32,7 @@ export function IngredientUsagePanel({
   /** Compact mode: cap the chart to `limit` bars, skip the table. */
   limit?: number;
 }) {
-  const { data, isLoading } = useQuery(
+  const { data, isError, isLoading, refetch } = useQuery(
     recipe.getIngredientUsage.queryOptions({ cookbookId }),
   );
 
@@ -41,6 +41,17 @@ export function IngredientUsagePanel({
       <VisualizationPlaceholder
         message="Loading ingredient usage…"
         height={400}
+      />
+    );
+  }
+
+  if (isError) {
+    return (
+      <VisualizationPlaceholder
+        message="Ingredient usage is unavailable"
+        subMessage="Try again to reload recipe usage counts."
+        height={400}
+        onRetry={() => void refetch()}
       />
     );
   }
@@ -58,13 +69,32 @@ export function IngredientUsagePanel({
   const { rows, totalRecipes } = data;
 
   if (limit != null) {
+    const topIngredients = [...rows]
+      .sort((a, b) => b.recipeCount - a.recipeCount)
+      .slice(0, Math.min(limit, 3));
+
     return (
       <Stack gap="sm">
         <IngredientUsageChart rows={rows} maxBars={limit} />
+        <nav
+          aria-label="Top recipe ingredients"
+          className="flex flex-wrap gap-1 border border-[var(--border)] p-1"
+        >
+          {topIngredients.map((row) => (
+            <Link
+              key={row.ingredientId}
+              to="/ingredients/$shortcode"
+              params={{ shortcode: row.ingredientId }}
+              className="inline-flex min-h-11 items-center px-2 text-primary text-xs hover:underline sm:min-h-0"
+            >
+              {row.name} ({row.recipeCount})
+            </Link>
+          ))}
+        </nav>
         {rows.length > limit && (
           <Link
             to="/ingredients"
-            className="text-primary text-xs hover:underline"
+            className="inline-flex min-h-11 items-center text-primary text-xs hover:underline sm:min-h-0"
           >
             View all {rows.length} ingredients →
           </Link>
@@ -96,8 +126,8 @@ function UsageTable({
 }) {
   return (
     <Table
-      containerClassName="overflow-hidden border border-[var(--border)]"
-      className="table-auto"
+      containerClassName="border border-[var(--border)]"
+      className="min-w-[26rem] table-auto"
     >
       <TableHeader>
         <TableRow>

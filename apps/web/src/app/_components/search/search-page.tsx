@@ -10,6 +10,7 @@ import { MobileCard } from "~/components/entity/mobile-card";
 import { MobileCardSkeletonList } from "~/components/feedback/mobile-card-skeleton";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { EntityIcon, entities } from "~/entities/entities";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
@@ -155,12 +156,15 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
             <MobileSearchResults
               data={primary.data ?? []}
               isLoading={primary.isPending}
+              error={primary.error}
+              onRetry={() => void primary.refetch()}
             />
           ) : (
             <SearchResults
               data={primary.data ?? []}
               isLoading={primary.isPending}
               error={primary.error}
+              onRetry={() => void primary.refetch()}
               onPreview={onRowClick}
               onPrefetch={onRowHover}
               onPrefetchEnd={onRowHoverEnd}
@@ -183,12 +187,18 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
                 </span>
               </Row>
               {isMobile ? (
-                <MobileSearchResults data={relatedResults} isLoading={false} />
+                <MobileSearchResults
+                  data={relatedResults}
+                  isLoading={false}
+                  error={null}
+                  onRetry={() => undefined}
+                />
               ) : (
                 <SearchResults
                   data={relatedResults}
                   isLoading={false}
                   error={null}
+                  onRetry={() => undefined}
                   onPreview={onRowClick}
                   onPrefetch={onRowHover}
                   onPrefetchEnd={onRowHoverEnd}
@@ -231,7 +241,7 @@ function SearchFilter({
         <Badge
           key={option.value}
           variant={option.value === value ? "default" : "outline"}
-          className="min-h-11 shrink-0 cursor-pointer px-2 py-1 text-xs md:min-h-0"
+          className="min-h-11 min-w-11 shrink-0 cursor-pointer px-2 py-1 text-xs md:min-h-0 md:min-w-0"
           render={
             <button type="button" onClick={() => onChange(option.value)} />
           }
@@ -247,37 +257,28 @@ function SearchResults({
   data,
   isLoading,
   error,
+  onRetry,
   onPreview,
   onPrefetch,
   onPrefetchEnd,
 }: {
   data: SearchHit[];
   isLoading: boolean;
-  error: { message: string } | null;
+  error: unknown;
+  onRetry: () => void;
   onPreview: <T extends Record<string, unknown>>(row: { original: T }) => void;
   onPrefetch: <T extends Record<string, unknown>>(row: { original: T }) => void;
   onPrefetchEnd: <T extends Record<string, unknown>>(row: {
     original: T;
   }) => void;
 }) {
-  if (isLoading)
-    return (
-      <div className="py-8 text-center text-muted-foreground text-sm">
-        Searching…
-      </div>
-    );
-  if (error)
-    return (
-      <div role="status" className="py-8 text-center text-destructive text-sm">
-        Search could not load. Try again.
-      </div>
-    );
-  if (data.length === 0)
-    return (
-      <div className="py-8 text-center text-muted-foreground text-sm">
-        No direct matches.
-      </div>
-    );
+  const feedback = getSearchResultsFeedback({
+    isLoading,
+    error,
+    resultCount: data.length,
+  });
+  if (feedback)
+    return <SearchResultsFeedback state={feedback} onRetry={onRetry} />;
   return (
     <div className="border-border border-y">
       {data.map((item) => (
@@ -364,18 +365,23 @@ function SearchRow({
 function MobileSearchResults({
   data,
   isLoading,
+  error,
+  onRetry,
 }: {
   data: SearchHit[];
   isLoading: boolean;
+  error: unknown;
+  onRetry: () => void;
 }) {
   const navigate = useNavigate();
-  if (isLoading) return <MobileCardSkeletonList count={6} />;
-  if (data.length === 0)
-    return (
-      <div className="flex h-32 items-center justify-center text-muted-foreground text-sm">
-        No direct matches.
-      </div>
-    );
+  const feedback = getSearchResultsFeedback({
+    isLoading,
+    error,
+    resultCount: data.length,
+  });
+  if (feedback === "loading") return <MobileCardSkeletonList count={6} />;
+  if (feedback)
+    return <SearchResultsFeedback state={feedback} onRetry={onRetry} mobile />;
   return (
     <div className="border-border border-y">
       {data.map((item) => (
@@ -395,6 +401,67 @@ function MobileSearchResults({
           }}
         />
       ))}
+    </div>
+  );
+}
+
+export type SearchResultsFeedbackState = "loading" | "error" | "empty";
+
+export function getSearchResultsFeedback({
+  isLoading,
+  error,
+  resultCount,
+}: {
+  isLoading: boolean;
+  error: unknown;
+  resultCount: number;
+}): SearchResultsFeedbackState | null {
+  if (isLoading) return "loading";
+  if (error) return "error";
+  return resultCount === 0 ? "empty" : null;
+}
+
+export function SearchResultsFeedback({
+  state,
+  onRetry,
+  mobile = false,
+}: {
+  state: SearchResultsFeedbackState;
+  onRetry: () => void;
+  mobile?: boolean;
+}) {
+  if (state === "loading") {
+    return (
+      <div className="py-8 text-center text-muted-foreground text-sm">
+        Searching…
+      </div>
+    );
+  }
+  if (state === "error") {
+    return (
+      <Stack
+        role="alert"
+        gap="sm"
+        className={cn(
+          "items-center justify-center py-8 text-sm",
+          mobile && "min-h-32",
+        )}
+      >
+        <p className="text-destructive">Search could not load.</p>
+        <Button type="button" variant="outline" onClick={onRetry}>
+          Try again
+        </Button>
+      </Stack>
+    );
+  }
+  return (
+    <div
+      className={cn(
+        "py-8 text-center text-muted-foreground text-sm",
+        mobile && "flex min-h-32 items-center justify-center",
+      )}
+    >
+      No direct matches.
     </div>
   );
 }

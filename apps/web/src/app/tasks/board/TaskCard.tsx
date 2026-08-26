@@ -71,7 +71,7 @@ function formatDue(value: string): string {
  * A task as a board card: draggable whole-card (the browser suppresses the
  * click after a native drag, so no separate handle), clickable to open the
  * detail page, with an inline status quick-action that doubles as the
- * touch/mobile fallback. Warm-Paper: square, matte, tokens only.
+ * touch/mobile fallback. The surface stays neutral and uses shared tokens.
  */
 export function TaskCard({
   task,
@@ -180,7 +180,7 @@ export function TaskCard({
             </Button>
             <button
               type="button"
-              className="line-clamp-2 min-w-0 text-left font-medium text-sm underline-offset-2 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="line-clamp-2 min-h-11 min-w-0 text-left font-medium text-sm underline-offset-2 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-0"
               title={task.name}
               onClick={open}
             >

@@ -18,6 +18,10 @@ import { AuditLogList } from "../audit-log/audit-log-list";
 import { EntityHero } from "../EntityHero";
 import JsonRenderer from "../json-renderer";
 import { RelationshipExplorer } from "../relationships/relationship-explorer";
+import {
+  RelationshipRoutePreview,
+  relationshipRouteSourceFromRecord,
+} from "../relationships/relationship-route-preview";
 import { relationshipsSectionIcon } from "../relationships/relationship-tree";
 
 /** Stable id every auto-appended Activity section uses — also the opt-out key: a
@@ -119,7 +123,7 @@ function heroVisual({
   ) : undefined;
 }
 
-export function DetailAnchorIndex({
+function DetailAnchorIndex({
   sections,
 }: {
   sections: Array<Pick<DetailSection, "id" | "title" | "includeInIndex">>;
@@ -174,10 +178,10 @@ export function DetailAnchorIndex({
   return (
     <nav
       aria-label="Record sections"
-      className="sticky top-[var(--app-chrome-top)] z-30 flex min-h-11 items-stretch overflow-x-auto overscroll-x-contain border-foreground border-b-[3px] bg-card px-1 [scrollbar-width:none] md:min-h-9 md:items-center md:gap-1 md:px-2 [&::-webkit-scrollbar]:hidden"
+      className="sticky top-[var(--app-chrome-top)] z-30 flex min-h-11 items-stretch overflow-x-auto overscroll-x-contain border-border border-b bg-card px-1 [scrollbar-width:none] md:min-h-9 md:items-center md:gap-1 md:px-2 [&::-webkit-scrollbar]:hidden"
     >
-      <span className="hidden shrink-0 pr-2 font-mono text-2xs text-slate uppercase tracking-wider md:block">
-        Record index
+      <span className="hidden shrink-0 pr-2 font-medium text-muted-foreground text-xs md:block">
+        Sections
       </span>
       {indexed.map((section) => (
         <a
@@ -363,8 +367,30 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   const hasSourceViews = relatedViewRegistry.some(
     (view) => view.source === pageDetail?.entity,
   );
+  // A detail page may own a semantically richer relationship composition than
+  // the generic explorer. The explicit section wins just as an explicit
+  // History section does below; appending both would duplicate the anchor and
+  // let the generic graph contradict the page-owned relationship contract.
+  const hasOwnRelationshipSection = sections.some(
+    (section) => section.id === "relationships",
+  );
+  const relationshipSource = pageDetail
+    ? relationshipRouteSourceFromRecord(
+        pageDetail.entity,
+        pageDetail.rawData,
+        sourceId,
+      )
+    : null;
+  const relationshipPreview =
+    pageDetail && sourceId && hasSourceViews && !hasOwnRelationshipSection ? (
+      <RelationshipRoutePreview
+        entity={pageDetail.entity}
+        sourceId={sourceId}
+        source={relationshipSource}
+      />
+    ) : null;
   const relationshipSection: DetailSection | undefined =
-    pageDetail && sourceId && hasSourceViews
+    pageDetail && sourceId && hasSourceViews && !hasOwnRelationshipSection
       ? {
           id: "relationships",
           title: "Relationships",
@@ -420,6 +446,7 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   return (
     <div className="space-y-2 sm:space-y-4">
       <DetailAnchorIndex sections={allSections} />
+      {relationshipPreview}
       <div className="fade-in-0 slide-in-from-bottom-1 animate-in duration-150 motion-reduce:animate-none">
         {renderResponsiveLayout({
           sections: allSections,

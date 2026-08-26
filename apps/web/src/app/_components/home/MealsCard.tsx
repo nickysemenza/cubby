@@ -3,14 +3,12 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { format, isSameDay, parseISO } from "date-fns";
 import { UtensilsCrossed } from "lucide-react";
+import { useId } from "react";
 import { meal } from "~/app/meals/meal.functions";
 import { formatMealCost, mealListLabel } from "~/app/meals/meal-format";
 import { mealKindIcon, mealTypeIcon } from "~/app/meals/meal-options";
 import { Row, Stack } from "~/components/layout";
-import {
-  CardActionLink,
-  DashboardCard,
-} from "~/components/layout/dashboard-card";
+import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import type { HomeAsOfWindow } from "./home-as-of-window";
 
@@ -21,45 +19,65 @@ import type { HomeAsOfWindow } from "./home-as-of-window";
  * The date window is computed once in the household timezone by the route
  * loader, so SSR and hydration use the same query key and the same "today".
  */
-export function MealsCard({ asOf }: { asOf: HomeAsOfWindow }) {
+export function TodayMeals({ asOf }: { asOf: HomeAsOfWindow }) {
+  const titleId = useId();
   const today = parseISO(asOf.meals.from);
-  const { data, isError, isLoading } = useQuery(
-    meal.upcomingSummary.queryOptions(asOf.meals),
-  );
-
-  const meals = data ?? [];
+  const mealsQuery = useQuery(meal.upcomingSummary.queryOptions(asOf.meals));
+  const meals = mealsQuery.data ?? [];
 
   return (
-    <DashboardCard
-      icon={UtensilsCrossed}
-      title="Meals"
-      description="Planned for the next 7 days"
-      action={<CardActionLink to="/meals">Calendar</CardActionLink>}
-    >
-      <Stack gap="xs">
-        {isLoading ? (
+    <section aria-labelledby={titleId} className="min-w-0">
+      <div className="flex items-start justify-between gap-3 border-border border-b pb-2">
+        <div className="flex min-w-0 items-start gap-2">
+          <UtensilsCrossed
+            className="mt-0.5 size-4 shrink-0 text-slate"
+            aria-hidden
+          />
+          <div className="min-w-0">
+            <h2 id={titleId} className="font-heading font-semibold text-base">
+              Meals ahead
+            </h2>
+            <p className="text-muted-foreground text-xs">
+              The next seven days.
+            </p>
+          </div>
+        </div>
+        <Button
+          render={<Link to="/meals" />}
+          nativeButton={false}
+          variant="ghost"
+          size="sm"
+          className="h-11 shrink-0 text-xs sm:h-7"
+        >
+          Calendar
+        </Button>
+      </div>
+
+      <Stack gap="xs" className="mt-2">
+        {mealsQuery.isLoading ? (
           <>
             <Skeleton className="h-5 w-full" />
             <Skeleton className="h-5 w-3/4" />
           </>
-        ) : isError ? (
-          <p className="min-h-12 text-muted-foreground text-sm">
-            Meals are unavailable right now.
-          </p>
+        ) : mealsQuery.isError ? (
+          <div className="flex min-h-16 items-center justify-between gap-3">
+            <p className="text-muted-foreground text-sm">
+              Meals are unavailable right now.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="min-h-11 shrink-0 sm:min-h-0"
+              onClick={() => mealsQuery.refetch()}
+            >
+              Retry
+            </Button>
+          </div>
         ) : meals.length === 0 ? (
-          // An empty week states the absence and offers the one thing the
-          // footer links below can't: somewhere to start. "What can I make?"
-          // is deliberately not repeated here — it already sits directly
-          // beneath, and an empty card showing the same link twice reads as a
-          // rendering fault.
-          <Stack gap="sm" className="py-1">
-            <span className="text-muted-foreground text-xs">
-              Nothing planned this week.
-            </span>
-            <Row gap="md">
-              <CardActionLink to="/calendar">Plan a meal</CardActionLink>
-            </Row>
-          </Stack>
+          <p className="min-h-12 content-center text-muted-foreground text-sm">
+            Nothing planned this week.
+          </p>
         ) : (
           meals.map((meal) => {
             const date = parseISO(meal.date);
@@ -72,7 +90,7 @@ export function MealsCard({ asOf }: { asOf: HomeAsOfWindow }) {
                 key={meal.id}
                 to="/meals/$shortcode"
                 params={{ shortcode: meal.id }}
-                className="flex min-h-11 min-w-0 items-center justify-between gap-2 border-[var(--border)] border-b py-1 text-sm last:border-b-0 hover:bg-muted/50 md:min-h-0 md:py-0 md:pb-1"
+                className="flex min-h-11 min-w-0 items-center justify-between gap-2 border-border border-b py-1 text-sm last:border-b-0 hover:bg-muted/50 sm:min-h-0 sm:py-0 sm:pb-1"
               >
                 <Row align="center" gap="xs" className="min-w-0">
                   <span className="shrink-0 font-mono text-2xs text-slate uppercase tabular-nums">
@@ -102,15 +120,6 @@ export function MealsCard({ asOf }: { asOf: HomeAsOfWindow }) {
           })
         )}
       </Stack>
-
-      {/* Tighter on phones: the links there carry their own 44px touch height,
-          so a full 1rem on top of it reads as a hole in the card. */}
-      <Row gap="md" className="mt-1 sm:mt-4">
-        <CardActionLink to="/meals/suggestions">
-          What can I make?
-        </CardActionLink>
-        <CardActionLink to="/meals/shopping-list">Shopping list</CardActionLink>
-      </Row>
-    </DashboardCard>
+    </section>
   );
 }

@@ -6,6 +6,7 @@ import { useMobileListModel } from "./useMobileListModel";
 interface TestRow {
   id: string;
   name: string;
+  previewId?: string;
 }
 
 describe("useMobileListModel", () => {
@@ -56,5 +57,39 @@ describe("useMobileListModel", () => {
     rerender({ rowContentVersion: {} });
     rerenderCell(result.current[0]?.metaValues[0]?.value ?? null);
     expect(screen.getByText("<vendor name>")).toBeInTheDocument();
+  });
+
+  it("uses a per-row canonical detail route for heterogeneous lists", () => {
+    const column = {
+      id: "name",
+      columnDef: { header: "Name", cell: () => "Candidate" },
+      accessorFn: () => "Candidate",
+    };
+    const table = {
+      getVisibleLeafColumns: () => [column],
+      getRowModel: () => ({
+        rows: [
+          {
+            id: "WSH-ONE:PRD-TWO",
+            original: {
+              id: "WSH-ONE:PRD-TWO",
+              name: "Candidate",
+              previewId: "PRD-TWO",
+            },
+            getVisibleCells: () => [],
+          },
+        ],
+      }),
+    } as unknown as Table<TestRow>;
+
+    const { result } = renderHook(() =>
+      useMobileListModel({
+        table,
+        entity: "wish",
+        getDetailsHref: (row) => `/products/${row.previewId}`,
+      }),
+    );
+
+    expect(result.current[0]?.detailsHref).toBe("/products/PRD-TWO");
   });
 });

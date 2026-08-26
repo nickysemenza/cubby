@@ -8,6 +8,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { ResponsiveSheet } from "~/components/ui/responsive-sheet";
 import { cn } from "~/lib/utils";
+import { domainWayfinding } from "./domain-wayfinding";
 import {
   completeNavLeaves,
   desktopNav,
@@ -51,7 +52,7 @@ export function filterWorkspaceDestinations(query: string): SearchItem[] {
   const needle = query.trim().toLocaleLowerCase();
   if (!needle) return [];
   return searchableItems.filter(({ item, section, keywords }) =>
-    `${item.label} ${item.railLabel ?? ""} ${section} ${keywords.join(" ")}`
+    `${item.label} ${section} ${keywords.join(" ")}`
       .toLocaleLowerCase()
       .includes(needle),
   );
@@ -103,10 +104,21 @@ function GroupDisclosure({
   onNavigate: () => void;
 }) {
   const Icon = group.icon;
+  const domain = group.domain ? domainWayfinding(group.domain) : null;
   return (
-    <details className="border-border border-b">
+    <details
+      className="border-border border-b border-l"
+      style={
+        domain ? { borderLeftColor: `var(${domain.accentToken})` } : undefined
+      }
+    >
       <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-2 py-2 font-medium text-sm hover:bg-muted [&::-webkit-details-marker]:hidden">
-        <Icon className="size-3.5 text-muted-foreground" aria-hidden />
+        <span
+          style={domain ? { color: `var(${domain.accentToken})` } : undefined}
+          aria-hidden="true"
+        >
+          <Icon className="size-3.5" />
+        </span>
         {group.label}
       </summary>
       <div className="border-border border-t bg-background p-1">

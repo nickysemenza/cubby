@@ -1,22 +1,51 @@
 import type { ImageWithEntity } from "@cubby/schemas/image";
-import { ImageIcon } from "lucide-react";
+import { ImageIcon, Info, Link2 } from "lucide-react";
 import prettyBytes from "pretty-bytes";
 import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
+import {
+  type DetailSection,
+  DetailSections,
+} from "~/app/_components/data-table/detail-page";
 import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
 import { ImageAssociationLinks } from "~/app/_components/images/image-associations";
 import { imageStatusOptions } from "~/app/images/image-options";
-import { Row, Stack } from "~/components/layout";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Row } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { Image } from "~/components/ui/image";
 import { image as imageOperations } from "~/entities/image.functions";
 import { EditableCell } from "../data-table/editable-cell";
-import { useEntityDelete } from "../hooks/useEntityDelete";
 import { useUpdateMutation } from "../hooks/useUpdateMutation";
 
 interface ImageDetailProps {
   image: ImageWithEntity;
+}
+
+/** The record's media, shared by the phone hero and desktop detail rail. */
+export function ImageDetailMedia({ image }: ImageDetailProps) {
+  return (
+    <div className="relative aspect-square w-full overflow-hidden border-border border-y bg-card md:max-w-sm md:rounded-md md:border">
+      {image.status === "UPLOADED" ? (
+        <Image
+          src={image.url}
+          alt={image.filename}
+          displayWidth={640}
+          className="absolute inset-0 h-full w-full object-contain"
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-muted/30">
+          <div className="text-center">
+            <ImageIcon className="mx-auto size-12 text-muted-foreground/50" />
+            <Description className="mt-2">
+              {image.status === "PENDING"
+                ? "Upload pending..."
+                : "Upload failed"}
+            </Description>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function ImageDetail({ image }: ImageDetailProps) {
@@ -25,63 +54,28 @@ export function ImageDetail({ image }: ImageDetailProps) {
     entity: "image",
   });
 
-  // Images DO have a `deletedAt` column (like every other entity), but
-  // `deleteImages` intentionally hard-deletes anyway — see its doc comment in
-  // server/repo/image.ts. Restore was never implemented for any entity, and an
-  // orphaned image (no owning product/location/recipe/project) has no use
-  // once removed, so this really removes the row and its R2 object; any
-  // owning entity just loses the picture.
-  const { deleteButton, deleteDialog } = useEntityDelete({
-    id: image.id,
-    name: image.filename,
-    entity: "image",
-    mutationOptions: (callbacks) => ({
-      ...imageOperations.delete.mutationOptions(),
-      ...callbacks,
-    }),
-    redirectTo: "/images",
-  });
-
-  return (
-    <Stack>
-      {/* Preview */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle>Preview</CardTitle>
-        </CardHeader>
-        <CardContent className="flex justify-center">
-          <div className="relative aspect-square w-full max-w-xs overflow-hidden rounded-md border">
-            {image.status === "UPLOADED" ? (
-              <Image
-                src={image.url}
-                alt={image.filename}
-                displayWidth={640}
-                className="absolute inset-0 h-full w-full object-contain"
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center bg-muted/30">
-                <div className="text-center">
-                  <ImageIcon className="mx-auto size-12 text-muted-foreground/50" />
-                  <Description className="mt-2">
-                    {image.status === "PENDING"
-                      ? "Upload pending..."
-                      : "Upload failed"}
-                  </Description>
-                </div>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Info */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle>Information</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4 text-sm">
-          <div>
-            <span className="text-muted-foreground">Filename:</span>{" "}
+  const sections: DetailSection[] = [
+    {
+      id: "associations",
+      title: "Associations",
+      icon: Link2,
+      placement: "primary",
+      content:
+        image.associations.length > 0 ? (
+          <ImageAssociationLinks associations={image.associations} showRole />
+        ) : (
+          <Description>This image is not attached to a record.</Description>
+        ),
+    },
+    {
+      id: "metadata",
+      title: "Metadata",
+      icon: Info,
+      placement: "supporting",
+      content: (
+        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+          <dt className="text-muted-foreground">Filename</dt>
+          <dd className="min-w-0">
             <EditableCell
               value={image.filename}
               config={{ type: "text" }}
@@ -92,44 +86,46 @@ export function ImageDetail({ image }: ImageDetailProps) {
                   data: { filename },
                 });
               }}
-              renderValue={(v) => v}
+              renderValue={(value) => value}
             />
-          </div>
-          <div>
-            <span className="text-muted-foreground">Type:</span>{" "}
+          </dd>
+          <dt className="text-muted-foreground">Type</dt>
+          <dd className="min-w-0 break-all font-mono text-xs">
             {image.contentType}
-          </div>
-          <div>
-            <span className="text-muted-foreground">Size:</span>{" "}
-            {prettyBytes(image.size)}
-          </div>
-          <Row align="center" gap="sm">
-            <span className="text-muted-foreground">Status:</span>
-            {renderOptionCell(image.status, imageStatusOptions)}
-            <EntityFilterLink
-              to="/images"
-              search={{ status: image.status }}
-              label={`Show all ${image.status.toLowerCase()} images`}
-            />
-          </Row>
-          <div>
-            <span className="text-muted-foreground">Associated entities:</span>
-            <div className="mt-1">
-              <ImageAssociationLinks
-                associations={image.associations}
-                showRole
+          </dd>
+          <dt className="text-muted-foreground">Size</dt>
+          <dd>{prettyBytes(image.size)}</dd>
+          <dt className="text-muted-foreground">Dimensions</dt>
+          <dd>
+            {image.width && image.height
+              ? `${image.width} × ${image.height}`
+              : "—"}
+          </dd>
+          <dt className="text-muted-foreground">Status</dt>
+          <dd>
+            <Row align="center" gap="sm">
+              {renderOptionCell(image.status, imageStatusOptions)}
+              <EntityFilterLink
+                to="/images"
+                search={{ status: image.status }}
+                label={`Show all ${image.status.toLowerCase()} images`}
               />
-            </div>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Created:</span>{" "}
+            </Row>
+          </dd>
+          <dt className="text-muted-foreground">Created</dt>
+          <dd>
             <HoverableTimestamp timestamp={image.createdAt} />
-          </div>
-          <Row justify="end">{deleteButton}</Row>
-        </CardContent>
-      </Card>
+          </dd>
+        </dl>
+      ),
+    },
+  ];
 
-      {deleteDialog}
-    </Stack>
+  return (
+    <DetailSections
+      sections={sections}
+      rawData={image}
+      heroMedia={<ImageDetailMedia image={image} />}
+    />
   );
 }

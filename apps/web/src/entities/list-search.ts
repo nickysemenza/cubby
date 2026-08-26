@@ -27,6 +27,7 @@ import {
   expenseAnalyzeSearchPatch,
 } from "~/app/expenses/expense-analyze-config";
 import { entityFilterSearchFields } from "~/entities/filter-search-fields";
+import { FILTER_ANY, FILTER_NONE } from "~/entities/filters";
 import {
   isValidProjectDateFilter,
   isValidTaskStatusFilter,
@@ -90,7 +91,13 @@ export const productSearchSchema = listSearchSchema("product", {
   movementFrom: plainDate.optional().catch(undefined),
   movementTo: plainDate.optional().catch(undefined),
   movementOrder: z.enum(["asc", "desc"]).optional().catch(undefined),
-  category: urlEnumListParam(z.enum(productCategoryValues)),
+  category: urlEnumListParam(
+    z.union([
+      z.enum(productCategoryValues),
+      z.literal(FILTER_ANY),
+      z.literal(FILTER_NONE),
+    ]),
+  ),
   // Navigated to programmatically (the "Fits With" tag chips; the Problems
   // page's manufacturer-spelling cards), so these need literal key types.
   tags: urlStringParam,

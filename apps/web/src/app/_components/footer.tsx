@@ -11,7 +11,7 @@ export function AppFooter() {
         align="center"
         justify="between"
         gap="sm"
-        className="mx-auto w-full max-w-7xl px-4 py-2 font-mono text-2xs text-muted-foreground uppercase tracking-[0.12em] md:px-6"
+        className="mx-auto w-full max-w-7xl px-4 py-2 font-mono text-2xs text-muted-foreground md:px-6"
       >
         <Row align="center" gap="sm">
           <span>
@@ -21,7 +21,7 @@ export function AppFooter() {
               target="_blank"
               rel="noopener noreferrer"
               title={`View ${__SOURCE_BRANCH__}@${__SOURCE_COMMIT__} on GitHub`}
-              className="underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
+              className="inline-flex min-h-11 items-center px-1 underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 sm:min-h-0 sm:px-0"
             >
               {__SOURCE_COMMIT__}
             </a>

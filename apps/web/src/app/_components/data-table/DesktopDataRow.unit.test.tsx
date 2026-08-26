@@ -44,6 +44,7 @@ describe("DesktopDataRow", () => {
       row,
       rowIndex: 0,
       isSelected: false,
+      isCurrent: false,
       isExpanded: false,
       isFocused: false,
       isDebugEnabled: false,
@@ -91,6 +92,7 @@ describe("DesktopDataRow", () => {
             row={row}
             rowIndex={0}
             isSelected={false}
+            isCurrent={false}
             isExpanded={false}
             isFocused={false}
             isDebugEnabled={false}
@@ -117,5 +119,41 @@ describe("DesktopDataRow", () => {
     expect(onRowHover).toHaveBeenCalledTimes(2);
     expect(onRowHoverEnd).toHaveBeenCalledTimes(2);
     expect(onRowClick).toHaveBeenCalledOnce();
+  });
+
+  it("marks the inspector's current record without changing bulk selection", () => {
+    const row = {
+      id: "row-current",
+      original: { id: "PRD-CURRENT" },
+      getIsSelected: () => false,
+      getIsExpanded: () => false,
+      getStartVisibleCells: () => [],
+      getCenterVisibleCells: () => [],
+      getEndVisibleCells: () => [],
+    } as unknown as Row<TestRow>;
+
+    render(
+      <table>
+        <tbody>
+          <DesktopDataRow
+            row={row}
+            rowIndex={0}
+            isSelected={false}
+            isCurrent
+            isExpanded={false}
+            isFocused={false}
+            isDebugEnabled={false}
+            rowClassName=""
+            cellClassName=""
+            columnsKey=""
+          />
+        </tbody>
+      </table>,
+    );
+
+    const renderedRow = screen.getByRole("row");
+    expect(renderedRow).toHaveAttribute("data-current", "true");
+    expect(renderedRow).toHaveAttribute("aria-current", "true");
+    expect(renderedRow).not.toHaveAttribute("data-state", "selected");
   });
 });

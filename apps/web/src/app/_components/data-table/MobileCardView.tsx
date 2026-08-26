@@ -71,6 +71,7 @@ interface MobileCardViewProps<TItem extends RowData> {
   table: ITable<TItem>;
   /** Entity type for navigation - when provided, cards show a view button */
   entity?: Entity;
+  getDetailsHref?: (item: TItem) => string | undefined;
   /** Infinite scroll controls — when provided, auto-loads more at bottom */
   infiniteScroll?: InfiniteScrollControls;
   /** Group configuration for section headers */
@@ -86,6 +87,7 @@ interface MobileCardViewProps<TItem extends RowData> {
 export function MobileCardView<TItem extends RowData>({
   table,
   entity,
+  getDetailsHref,
   infiniteScroll,
   groupConfig,
   grouped = false,
@@ -94,7 +96,12 @@ export function MobileCardView<TItem extends RowData>({
   emptyState,
 }: MobileCardViewProps<TItem>) {
   const { isDebugEnabled } = useDebug();
-  const mobileRows = useMobileListModel({ table, entity, rowContentVersion });
+  const mobileRows = useMobileListModel({
+    table,
+    entity,
+    getDetailsHref,
+    rowContentVersion,
+  });
 
   // Group the live mobile models themselves. `useTable` keeps its table
   // instance stable while replacing the row model as infinite pages arrive,

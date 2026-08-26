@@ -3,6 +3,9 @@ import { groupBy } from "es-toolkit";
 import { Stack } from "~/components/layout";
 import { docSections } from "./docs-registry";
 
+export const DOCS_NAV_LINK_CLASS =
+  "block rounded-md px-2 py-1 text-sm transition-colors hover:bg-muted max-md:flex max-md:min-h-11 max-md:items-center";
+
 /**
  * Two-pane docs shell: a sidebar of sections (grouped Reference / Guides) over a
  * routed `<Outlet>`. Each link is a real `/docs/$section` route, so sections are
@@ -23,7 +26,7 @@ export function DocsLayout() {
                   key={section.slug}
                   to="/docs/$section"
                   params={{ section: section.slug }}
-                  className="block rounded-md px-2 py-1 text-sm transition-colors hover:bg-muted"
+                  className={DOCS_NAV_LINK_CLASS}
                   activeProps={{ className: "bg-muted font-medium" }}
                 >
                   {section.title}

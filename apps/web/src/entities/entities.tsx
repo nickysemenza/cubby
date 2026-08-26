@@ -25,6 +25,10 @@ import {
   ReceiptText,
   Store,
 } from "lucide-react";
+import {
+  domainForEntity,
+  domainWayfinding,
+} from "~/app/_components/navigation/domain-wayfinding";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { cn, formatCurrency } from "~/lib/utils";
 import { entityListQueryOptions } from "./entity-list.functions";
@@ -37,12 +41,11 @@ import type { EntityColor, EntityDefinition } from "./types";
  * page-hero accent bar, table row-hover/selected bars — while the tailwind
  * trio dresses icon tiles and badges.
  *
- * Warm-Paper Ledger: there is no per-entity warm hue ladder anymore — the live
- * accent is the lone ultramarine (`--primary`), and quieter surfaces fall to
- * the neutral ink-slate. Status semantics (`--positive`/`--warning`) are the
- * only colored exceptions, kept for the entities whose accent encodes state.
- * The two entities that dress against their accent (ingredient, image) spell
- * their color out rather than joining a hue.
+ * Porcelain Transit: page and row accents resolve through the five domain
+ * lines, while quieter entities use graphite. Status semantics
+ * (`--positive`/`--warning`) stay separate from domain identity. Entities that
+ * need a distinct state treatment spell it out rather than joining a generic
+ * hue ladder.
  */
 const INK = {
   primary: {
@@ -380,6 +383,7 @@ const entityDefinitions = {
       // vendor list overriding it page-side — descending name would have
       // landed the roster on Z→A.)
       defaultSort: "spend",
+      defaultDensity: "dense",
       standardColumns: ["name"],
     },
     // "fixed": the keeper is the vendor being viewed; candidates are every
@@ -530,6 +534,7 @@ const entityDefinitions = {
     ],
     list: {
       defaultSort: "transactionDate",
+      defaultDensity: "dense",
       standardColumns: [],
     },
   },
@@ -687,10 +692,15 @@ export const EntityIcon = ({
 }: { entity: Entity; colored?: boolean } & LucideProps) => {
   if (!isBrowserRoutedEntity(entity)) return null;
   const def = entities[entity];
+  const domain = colored ? domainForEntity(entity) : null;
+  const domainColor = domain
+    ? `var(${domainWayfinding(domain).accentToken})`
+    : undefined;
   return (
     <def.lucideIcon
-      className={cn(colored && def.color.text, className)}
       {...props}
+      className={cn(colored && !domainColor && def.color.text, className)}
+      style={{ ...(domainColor ? { color: domainColor } : {}), ...props.style }}
     />
   );
 };

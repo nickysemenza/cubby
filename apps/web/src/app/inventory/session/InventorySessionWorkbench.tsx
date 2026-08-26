@@ -20,6 +20,12 @@ import { Row, Stack } from "~/components/layout";
 import { Button, buttonVariants } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
+import {
+  Empty,
+  EmptyActions,
+  EmptyDescription,
+  EmptyTitle,
+} from "~/components/ui/empty";
 import { Spinner } from "~/components/ui/spinner";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -55,9 +61,8 @@ export function InventorySessionWorkbench({
   const navigate = useNavigate();
   const ensureUnknownStarted = useRef(false);
 
-  const { data: tree, isLoading: treeLoading } = useQuery(
-    location.makeTree.queryOptions(),
-  );
+  const treeQuery = useQuery(location.makeTree.queryOptions());
+  const { data: tree, isLoading: treeLoading } = treeQuery;
   const ensureUnknown = useMutation(
     location.ensureGlobalUnknown.mutationOptions(),
   );
@@ -475,6 +480,19 @@ export function InventorySessionWorkbench({
     );
   }
 
+  // The location tree names the frozen session scope. Do not turn a failed
+  // tree into an empty picker, because choosing or resuming then would present
+  // a recount against an unknown set of physical locations.
+  if (treeQuery.isError) {
+    return (
+      <InventorySessionLoadError
+        title="Couldn't load locations for a recount"
+        detail={getErrorMessage(treeQuery.error)}
+        onRetry={() => void treeQuery.refetch()}
+      />
+    );
+  }
+
   if (!parent) {
     return (
       <ParentPicker
@@ -498,6 +516,18 @@ export function InventorySessionWorkbench({
           </Description>
         </CardContent>
       </Card>
+    );
+  }
+
+  // Expected inventory is the recount snapshot. A missing response must not
+  // read as an empty bin: saving that state would falsely confirm a location.
+  if (inventoryQuery.isError) {
+    return (
+      <InventorySessionLoadError
+        title={`Couldn't load inventory for ${parent.name}`}
+        detail={getErrorMessage(inventoryQuery.error)}
+        onRetry={() => void inventoryQuery.refetch()}
+      />
     );
   }
 
@@ -638,6 +668,33 @@ export function InventorySessionWorkbench({
         />
       )}
     </Stack>
+  );
+}
+
+export function InventorySessionLoadError({
+  title,
+  detail,
+  onRetry,
+}: {
+  title: string;
+  detail: string;
+  onRetry: () => void;
+}) {
+  return (
+    <Empty role="alert" className="min-h-80">
+      <EmptyTitle>{title}</EmptyTitle>
+      <EmptyDescription>{detail}</EmptyDescription>
+      <EmptyActions>
+        <Button
+          type="button"
+          variant="outline"
+          className="min-h-12 md:min-h-10"
+          onClick={onRetry}
+        >
+          Retry
+        </Button>
+      </EmptyActions>
+    </Empty>
   );
 }
 

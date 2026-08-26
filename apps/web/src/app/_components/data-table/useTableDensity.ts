@@ -7,15 +7,13 @@ const DEFAULT_DENSITY: TableDensity = "compact";
 
 let currentDensity: TableDensity | null = null;
 
-function getStoredDensity(): TableDensity {
+function getStoredDensity(defaultDensity: TableDensity): TableDensity {
   if (currentDensity !== null) return currentDensity;
-  if (typeof window === "undefined") return DEFAULT_DENSITY;
+  if (typeof window === "undefined") return defaultDensity;
   const stored = localStorage.getItem(STORAGE_KEY);
-  currentDensity =
-    stored === "comfortable" || stored === "compact" || stored === "dense"
-      ? stored
-      : DEFAULT_DENSITY;
-  return currentDensity;
+  return stored === "comfortable" || stored === "compact" || stored === "dense"
+    ? stored
+    : defaultDensity;
 }
 
 const listeners = new Set<() => void>();
@@ -25,19 +23,11 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
-function getSnapshot(): TableDensity {
-  return getStoredDensity();
-}
-
-function getServerSnapshot(): TableDensity {
-  return DEFAULT_DENSITY;
-}
-
-export function useTableDensity() {
+export function useTableDensity(defaultDensity = DEFAULT_DENSITY) {
   const density = useSyncExternalStore(
     subscribe,
-    getSnapshot,
-    getServerSnapshot,
+    () => getStoredDensity(defaultDensity),
+    () => defaultDensity,
   );
 
   const setDensity = useCallback((next: TableDensity) => {

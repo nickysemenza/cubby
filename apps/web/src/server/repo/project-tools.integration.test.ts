@@ -40,6 +40,46 @@ import { createTask } from "./task";
 describe("project reusable resources", () => {
   const ctx = withTestDb();
 
+  it("keeps historical use readable but non-editable after recategorization", async () => {
+    const { entityId: projectId, output: projectOutput } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "Historical resource project" }),
+      ctx.actor,
+    );
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Recategorized drill", category: "tools" }),
+      ctx.actor,
+    );
+    await attachProjectResources(
+      ctx.db,
+      projectId,
+      [product.entityId],
+      ctx.actor,
+    );
+
+    await updateProduct(
+      ctx.db,
+      product.entityId,
+      { category: "hardware" },
+      ctx.actor,
+    );
+
+    await expect(
+      listProductProjectUses(ctx.db, product.entityId),
+    ).resolves.toMatchObject({
+      category: "hardware",
+      canEdit: false,
+      projects: [expect.objectContaining({ projectId: projectOutput.id })],
+    });
+    await expect(
+      setProductProjectUses(ctx.db, product.entityId, [], ctx.actor),
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      cause: { reason: "PRODUCT_CATEGORY_INELIGIBLE" },
+    });
+  });
+
   it("records exact-project reuse and calculates net lifetime cost per use", async () => {
     const { output: kitchen, entityId: kitchenId } = await createProject(
       ctx.db,

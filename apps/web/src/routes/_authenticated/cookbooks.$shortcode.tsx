@@ -3,8 +3,12 @@ import { cookbookReprocessEventSchema } from "@cubby/schemas/import-recipe";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
-import { Plus, RefreshCw, Trash } from "lucide-react";
+import { BookOpen, Link2, Plus, RefreshCw, Trash } from "lucide-react";
 import { z } from "zod";
+import {
+  type DetailSection,
+  DetailSections,
+} from "~/app/_components/data-table/detail-page";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
 import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-usage-panel";
@@ -147,13 +151,78 @@ function CookbookDetailBody({ cookbook }: { cookbook: CookbookSummary }) {
       : []),
   ];
 
+  const sections: DetailSection[] = [
+    {
+      id: "physical-copy",
+      title: "Physical copy",
+      icon: Link2,
+      placement: "supporting",
+      content: (
+        <CookbookPhysicalCopy
+          cookbookId={cookbookId}
+          cookbookName={name}
+          product={cookbook.product ?? null}
+        />
+      ),
+    },
+    {
+      id: "cookbook",
+      title: "Recipes & ingredients",
+      icon: BookOpen,
+      placement: "full",
+      surface: "plain",
+      content: (
+        <div className="space-y-2">
+          {reprocess.running && (
+            <BulkProgressBar
+              verb="Reprocessing"
+              progress={reprocess.progress}
+            />
+          )}
+          <Tabs value={tabs.value} onValueChange={tabs.onValueChange}>
+            <TabsList variant="line">
+              <TabsTrigger value="recipes">Recipes</TabsTrigger>
+              <TabsTrigger value="ingredients">Ingredients</TabsTrigger>
+            </TabsList>
+            <TabsContent value="recipes">
+              {/* cookbookIdFilter pins this table to one cookbook via
+                  extraFilters. Its Source control stays hidden because that
+                  scope deliberately outranks an in-table cookbook filter. */}
+              <RecipeList
+                cookbookIdFilter={cookbookId}
+                hiddenFilterColumns={["source"]}
+              />
+            </TabsContent>
+            <TabsContent value="ingredients">
+              <IngredientUsagePanel cookbookId={cookbookId} />
+            </TabsContent>
+          </Tabs>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <Page
       variant="detail"
       title={name}
       entity="cookbook"
+      rawData={cookbook}
+      heroNo={cookbook.id}
       heroStats={heroStats}
       layout="full"
+      heroMedia={
+        coverUrl ? (
+          <div className="flex justify-center border-border border-y bg-card p-3 md:rounded-md md:border">
+            <Image
+              src={coverUrl}
+              alt={name}
+              displayWidth={480}
+              className="max-h-72 w-auto object-contain"
+            />
+          </div>
+        ) : undefined
+      }
       heroActions={{
         primary:
           notImported > 0 ? (
@@ -200,55 +269,7 @@ function CookbookDetailBody({ cookbook }: { cookbook: CookbookSummary }) {
         ),
       }}
     >
-      {coverUrl && (
-        <figure className="my-0 mb-4 w-fit shrink-0 rounded-sm border border-[var(--border)] bg-card p-2">
-          <Image
-            src={coverUrl}
-            alt={name}
-            displayWidth={64}
-            className="h-24 w-16 object-cover"
-          />
-        </figure>
-      )}
-
-      <CookbookPhysicalCopy
-        cookbookId={cookbookId}
-        cookbookName={name}
-        product={cookbook.product ?? null}
-      />
-
-      {reprocess.running && (
-        <BulkProgressBar
-          verb="Reprocessing"
-          progress={reprocess.progress}
-          className="mt-4"
-        />
-      )}
-
-      <Tabs
-        value={tabs.value}
-        onValueChange={tabs.onValueChange}
-        className="mt-2"
-      >
-        <TabsList variant="line">
-          <TabsTrigger value="recipes">Recipes</TabsTrigger>
-          <TabsTrigger value="ingredients">Ingredients</TabsTrigger>
-        </TabsList>
-        <TabsContent value="recipes">
-          {/* cookbookIdFilter pins this table to one cookbook via extraFilters,
-              which wins over the manifest-derived filters — so the Source
-              column's control must be hidden here, or picking a cookbook there
-              would be interactive but inert (silently clobbered by the scope). */}
-          <RecipeList
-            cookbookIdFilter={cookbookId}
-            hiddenFilterColumns={["source"]}
-          />
-        </TabsContent>
-        <TabsContent value="ingredients">
-          <IngredientUsagePanel cookbookId={cookbookId} />
-        </TabsContent>
-      </Tabs>
-
+      <DetailSections sections={sections} rawData={cookbook} />
       {deleteDialog}
     </Page>
   );

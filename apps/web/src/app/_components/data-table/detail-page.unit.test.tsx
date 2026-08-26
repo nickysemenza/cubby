@@ -3,11 +3,39 @@ import { Circle } from "lucide-react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { type DetailSection, DetailSections } from "./detail-page";
 
+const mocks = vi.hoisted(() => ({
+  pageDetail: { current: undefined as unknown },
+  relationshipExplorer: vi.fn(),
+  relationshipRoute: vi.fn(),
+}));
+
 vi.mock("~/hooks/useDebug", () => ({
   useDebug: () => ({ isDebugEnabled: false }),
 }));
 vi.mock("~/components/page/Page", () => ({
-  usePageDetailContext: () => undefined,
+  usePageDetailContext: () => mocks.pageDetail.current,
+}));
+vi.mock("../relationships/relationship-explorer", () => ({
+  RelationshipExplorer: (props: unknown) => {
+    mocks.relationshipExplorer(props);
+    return <div data-testid="generic-relationships">Generic relationships</div>;
+  },
+}));
+vi.mock("../relationships/relationship-route-preview", () => ({
+  RelationshipRoutePreview: (props: unknown) => {
+    mocks.relationshipRoute(props);
+    return <div data-testid="relationship-route-preview" />;
+  },
+  relationshipRouteSourceFromRecord: (
+    entity: string,
+    rawData: { id?: string; name?: string },
+  ) =>
+    rawData.id && rawData.name
+      ? { entity, id: rawData.id, label: rawData.name }
+      : null,
+}));
+vi.mock("../audit-log/audit-log-list", () => ({
+  AuditLogList: () => <div data-testid="audit-log">Audit log</div>,
 }));
 
 const sections: DetailSection[] = [
@@ -37,6 +65,9 @@ const sections: DetailSection[] = [
 describe("DetailSections ledger", () => {
   beforeEach(() => {
     HTMLElement.prototype.scrollIntoView = vi.fn();
+    mocks.pageDetail.current = undefined;
+    mocks.relationshipExplorer.mockClear();
+    mocks.relationshipRoute.mockClear();
   });
 
   it("renders stable responsive tracks and a ruled section index", () => {
@@ -44,7 +75,7 @@ describe("DetailSections ledger", () => {
       <DetailSections sections={sections} rawData={{ id: "example" }} />,
     );
 
-    expect(screen.getByText("Record index")).toBeInTheDocument();
+    expect(screen.getByText("Sections")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Story" })).toHaveAttribute(
       "href",
       "#story",
@@ -110,6 +141,71 @@ describe("DetailSections ledger", () => {
     ).toThrow("Detail section ids must be unique within a record page");
   });
 
+  it("lets a page-owned relationships section replace the generic explorer", () => {
+    mocks.pageDetail.current = {
+      entity: "product",
+      rawData: { id: "PRD-EXAMPLE" },
+    };
+
+    render(
+      <DetailSections
+        sections={[
+          ...sections,
+          {
+            id: "relationships",
+            title: "Relationships",
+            icon: Circle,
+            placement: "full",
+            content: <p>Product route ledger</p>,
+          },
+        ]}
+        rawData={{ id: "PRD-EXAMPLE" }}
+      />,
+    );
+
+    expect(screen.getByText("Product route ledger")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("generic-relationships"),
+    ).not.toBeInTheDocument();
+    expect(mocks.relationshipExplorer).not.toHaveBeenCalled();
+    expect(mocks.relationshipRoute).not.toHaveBeenCalled();
+  });
+
+  it("adds the bounded route preview before a generic relationship explorer", () => {
+    mocks.pageDetail.current = {
+      entity: "vendor",
+      rawData: { id: "VEN-EXAMPLE", name: "Fixture vendor" },
+    };
+
+    render(
+      <DetailSections sections={sections} rawData={{ id: "VEN-EXAMPLE" }} />,
+    );
+
+    expect(screen.getByTestId("relationship-route-preview")).toBeVisible();
+    expect(screen.getByTestId("generic-relationships")).toBeVisible();
+    expect(screen.getAllByTestId("relationship-route-preview")).toHaveLength(1);
+    expect(
+      screen
+        .getByTestId("relationship-route-preview")
+        .compareDocumentPosition(screen.getByTestId("generic-relationships")),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(mocks.relationshipRoute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entity: "vendor",
+        sourceId: "VEN-EXAMPLE",
+        source: {
+          entity: "vendor",
+          id: "VEN-EXAMPLE",
+          label: "Fixture vendor",
+        },
+      }),
+    );
+    expect(mocks.relationshipExplorer).toHaveBeenCalledWith({
+      entity: "vendor",
+      sourceId: "VEN-EXAMPLE",
+    });
+  });
+
   it("omits empty sections without leaving an index target", () => {
     render(
       <DetailSections
@@ -122,6 +218,6 @@ describe("DetailSections ledger", () => {
     );
 
     expect(screen.queryByText("Empty")).not.toBeInTheDocument();
-    expect(screen.queryByText("Record index")).not.toBeInTheDocument();
+    expect(screen.queryByText("Sections")).not.toBeInTheDocument();
   });
 });

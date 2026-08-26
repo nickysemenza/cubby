@@ -12,7 +12,7 @@ const markClasses = {
 
 export type ProjectMarkSize = keyof typeof markClasses;
 
-/** A configured project emoji, or the ordinary plum project glyph. */
+/** A configured project emoji, or the House-domain project glyph. */
 export function ProjectMark({
   icon,
   size = 14,

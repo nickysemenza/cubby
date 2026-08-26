@@ -26,10 +26,9 @@ const getCountLabel = (
 };
 
 /**
- * StatLedger — a single hairline-ruled strip of entity counts, the Warm-Paper
- * Ledger's native idiom (mono tabular numbers over eyebrow labels, no card
- * chrome or per-entity color). Problems are surfaced separately by
- * ProblemsBanner, so this strip is purely the countable-entity totals.
+ * A single hairline-ruled strip of entity counts: mono tabular numbers over
+ * quiet labels, without card chrome or per-entity color. Problems are surfaced
+ * separately by ProblemsBanner, so this strip is purely countable totals.
  */
 export default function EntityCount() {
   const session = authClient.useSession();

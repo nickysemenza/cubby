@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { usePageCount } from "~/components/page/Page";
-import { entities } from "~/entities/entities";
+import { browserEntityDefinition, entities } from "~/entities/entities";
 import {
   type BaseListRow,
   type UseEntityListOptions,
@@ -91,9 +91,13 @@ export function EntityListPage<
     onRowHover: previewHover,
     onRowHoverEnd: previewHoverEnd,
     PreviewSheet,
+    preview: currentPreview,
+    dockedInspector,
   } = useEntityPreview(
     entity,
-    preview === false ? undefined : { idField: preview?.idField },
+    preview === false
+      ? undefined
+      : { idField: preview?.idField, responsiveInspector: true },
   );
   // `useEntityPreview`'s handlers are generic over any `{ original }` row; at a
   // concrete call site TS resolves that against the row type, but `TData` is
@@ -123,6 +127,9 @@ export function EntityListPage<
         getRowClassName={getRowClassName}
         showCellSelectionStats={showCellSelectionStats}
         verticalAlign={verticalAlign}
+        defaultDensity={browserEntityDefinition(entity).list?.defaultDensity}
+        currentRowId={currentPreview?.rowKey}
+        desktopInspector={dockedInspector}
         onRowClick={onRowClick ?? rowClick}
         onRowHover={onRowHover ?? rowHover}
         onRowHoverEnd={onRowHoverEnd ?? rowHoverEnd}

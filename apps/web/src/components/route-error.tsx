@@ -134,7 +134,7 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
 
       <h2 className="font-semibold text-xl">
         {category === "notFound"
-          ? "Not Found"
+          ? "Not found"
           : category === "staleBuild"
             ? "App update required"
             : "Something went wrong"}
@@ -158,7 +158,7 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
       )}
 
       {category !== "auth" && (
-        <Row gap="sm">
+        <Row gap="sm" className="flex-wrap justify-center">
           <Button
             variant="outline"
             onClick={() => {
@@ -172,11 +172,11 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
           >
             <RefreshCw className="mr-2 size-4" />
             {category === "staleBuild" || category === "navigation"
-              ? "Reload App"
-              : "Try Again"}
+              ? "Reload app"
+              : "Try again"}
           </Button>
           <Button variant="ghost" render={<Link to="/" />} nativeButton={false}>
-            Go Home
+            Go home
           </Button>
         </Row>
       )}
@@ -192,7 +192,7 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
             />
           }
         >
-          Technical Details
+          Technical details
           <ChevronDown
             className={`ml-1 size-3 transition-transform ${detailsOpen ? "rotate-180" : ""}`}
           />
@@ -200,7 +200,7 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
         <CollapsibleContent>
           <Stack
             gap="sm"
-            className="mt-2 max-w-lg border border-[var(--border)] bg-muted/50 p-2 text-left font-mono text-xs"
+            className="mt-2 w-[min(32rem,calc(100vw-3rem))] break-words border border-[var(--border)] bg-muted/50 p-2 text-left font-mono text-xs"
           >
             {code && (
               <div>

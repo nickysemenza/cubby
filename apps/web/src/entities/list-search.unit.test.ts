@@ -71,4 +71,13 @@ describe("list-search defaults parity", () => {
       expect(stale).toEqual([]);
     },
   );
+
+  it("preserves nullable category sentinels for Product list filters", () => {
+    expect(productSearchSchema.parse({ category: "__none__" })).toMatchObject({
+      category: "__none__",
+    });
+    expect(productSearchSchema.parse({ category: "__any__" })).toMatchObject({
+      category: "__any__",
+    });
+  });
 });

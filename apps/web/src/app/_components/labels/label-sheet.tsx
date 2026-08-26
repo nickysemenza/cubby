@@ -160,12 +160,10 @@ export function LabelSheet({
     gridChildren.push(...cells);
   }
 
-  return (
+  const sheet = (
     <div
       className={
-        printOnly
-          ? `label-sheet hidden gap-0`
-          : "mx-auto grid gap-0 print:hidden"
+        printOnly ? "label-sheet hidden gap-0" : "grid gap-0 md:mx-auto"
       }
       style={{
         width: layout.sheetWidth,
@@ -176,5 +174,18 @@ export function LabelSheet({
     >
       {gridChildren}
     </div>
+  );
+
+  if (printOnly) return sheet;
+
+  return (
+    <section
+      aria-label="Label sheet preview"
+      // biome-ignore lint/a11y/noNoninteractiveTabindex: the fixed-width paper preview must receive focus so keyboard users can scroll it horizontally
+      tabIndex={0}
+      className="w-full min-w-0 max-w-full overflow-x-auto print:hidden"
+    >
+      {sheet}
+    </section>
   );
 }

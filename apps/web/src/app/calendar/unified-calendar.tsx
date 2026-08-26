@@ -237,7 +237,7 @@ export function UnifiedCalendar({
     }),
     [filters, lockedKinds, visibleRange],
   );
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     ...calendar.range.queryOptions(range),
     // Without this every chip toggle blanks the month grid mid-flight.
     placeholderData: keepPreviousData,
@@ -427,74 +427,75 @@ export function UnifiedCalendar({
           />
         </Row>
 
-        {isError && (
-          <Description>
-            The calendar could not be loaded. Try refreshing this page.
-          </Description>
-        )}
+        {isError && <CalendarRangeError onRetry={() => void refetch()} />}
 
         {/* Both trees render; the BREAKPOINT decides, not JS. `useIsMobile`
             reports false on the server, so a JS-only switch would paint the
             seven-column grid on a phone until hydration — the same trap
             `RTable` documents at length. */}
-        <div className="md:hidden">
-          <CalendarAgenda
-            items={items}
-            includesDay={itemIncludesDay}
-            range={activePeriod}
-            today={today}
-            showAllDays={period !== "month"}
-            onDayClick={setSelectedDay}
-            renderItem={renderAgendaItem}
-            emptyMessage={
-              <Description>
-                Nothing planned this {period}.{" "}
-                <button
-                  type="button"
-                  className="underline hover:text-primary"
-                  onClick={() =>
-                    setCreateKind(
-                      (lockedKinds ?? filters?.kinds ?? ALL_KINDS)[0] ?? "meal",
-                    )
-                  }
-                >
-                  Add something
-                </button>
-                .
-              </Description>
-            }
-          />
-        </div>
+        {!isError && (
+          <>
+            <div className="md:hidden">
+              <CalendarAgenda
+                items={items}
+                includesDay={itemIncludesDay}
+                range={activePeriod}
+                today={today}
+                showAllDays={period !== "month"}
+                onDayClick={setSelectedDay}
+                renderItem={renderAgendaItem}
+                emptyMessage={
+                  <Description>
+                    Nothing planned this {period}.{" "}
+                    <button
+                      type="button"
+                      className="inline-flex min-h-11 items-center underline hover:text-primary md:min-h-0"
+                      onClick={() =>
+                        setCreateKind(
+                          (lockedKinds ?? filters?.kinds ?? ALL_KINDS)[0] ??
+                            "meal",
+                        )
+                      }
+                    >
+                      Add something
+                    </button>
+                    .
+                  </Description>
+                }
+              />
+            </div>
 
-        {period === "month" ? (
-          <MonthEventCalendar<CalendarItem>
-            {...calendarInteractionProps}
-            renderEvent={CalendarMonthChip}
-            className="hidden min-h-[620px] overflow-hidden border md:block"
-            onMoreClick={openDay}
-          />
-        ) : period === "fortnight" ? (
-          <FortnightEventCalendar<CalendarItem>
-            {...calendarInteractionProps}
-            renderEvent={CalendarFortnightChip}
-            className="hidden overflow-hidden border md:block"
-            style={FORTNIGHT_DENSITY}
-            onMoreClick={openDay}
-          />
-        ) : (
-          <div className="hidden overflow-hidden border md:block">
-            <WeekSummaryGrid
-              days={periodDays}
-              summaries={data?.days ?? NO_DAY_SUMMARIES}
-              today={today}
-              onDayClick={setSelectedDay}
-            />
-            <WeekEventCalendar<CalendarItem>
-              {...calendarInteractionProps}
-              renderEvent={CalendarWeekCard}
-              className="border-0 border-t"
-            />
-          </div>
+            {period === "month" ? (
+              <MonthEventCalendar<CalendarItem>
+                {...calendarInteractionProps}
+                renderEvent={CalendarMonthChip}
+                className="hidden min-h-[620px] overflow-hidden border md:block"
+                onMoreClick={openDay}
+              />
+            ) : period === "fortnight" ? (
+              <FortnightEventCalendar<CalendarItem>
+                {...calendarInteractionProps}
+                renderEvent={CalendarFortnightChip}
+                className="hidden overflow-hidden border md:block"
+                style={FORTNIGHT_DENSITY}
+                onMoreClick={openDay}
+              />
+            ) : (
+              <div className="hidden overflow-hidden border md:block">
+                <WeekSummaryGrid
+                  days={periodDays}
+                  summaries={data?.days ?? NO_DAY_SUMMARIES}
+                  today={today}
+                  onDayClick={setSelectedDay}
+                />
+                <WeekEventCalendar<CalendarItem>
+                  {...calendarInteractionProps}
+                  renderEvent={CalendarWeekCard}
+                  className="border-0 border-t"
+                />
+              </div>
+            )}
+          </>
         )}
       </Stack>
 
@@ -614,6 +615,28 @@ function CalendarDaySheet({
         </Stack>
       </Stack>
     </ResponsiveSheet>
+  );
+}
+
+export function CalendarRangeError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div
+      role="alert"
+      className="flex flex-wrap items-center gap-x-3 gap-y-2 border border-destructive/40 bg-destructive/5 px-2 py-2 text-sm md:px-3 md:py-1.5"
+    >
+      <Description className="m-0 flex-1">
+        The calendar could not be loaded. Your entries are unavailable until it
+        reconnects.
+      </Description>
+      <Button
+        type="button"
+        variant="outline"
+        className="h-11 shrink-0 md:h-8"
+        onClick={onRetry}
+      >
+        Retry
+      </Button>
+    </div>
   );
 }
 

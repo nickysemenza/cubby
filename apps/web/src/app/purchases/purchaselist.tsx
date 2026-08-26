@@ -272,8 +272,14 @@ export function PurchaseList() {
     [columnHelper],
   );
 
-  const { onRowClick, onRowHover, onRowHoverEnd, PreviewSheet } =
-    useEntityPreview("purchase");
+  const {
+    onRowClick,
+    onRowHover,
+    onRowHoverEnd,
+    PreviewSheet,
+    preview,
+    dockedInspector,
+  } = useEntityPreview("purchase", { responsiveInspector: true });
 
   const { workbench, data, totalCount } = useEntityList<
     PurchaseOut,
@@ -320,6 +326,8 @@ export function PurchaseList() {
         onRowClick={onRowClick}
         onRowHover={onRowHover}
         onRowHoverEnd={onRowHoverEnd}
+        currentRowId={preview?.id}
+        desktopInspector={dockedInspector}
       />
       <PreviewSheet />
     </div>

@@ -1,7 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
-import { IconPattern } from "~/components/common/icon-pattern";
+import { AuthEntryFrame } from "~/app/auth/auth-entry-frame";
+import {
+  canAllowConsent,
+  type PublicClientLookupState,
+  verifyPublicClient,
+} from "~/app/auth/oauth-consent-client";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -41,45 +46,51 @@ const SCOPE_DESCRIPTIONS: Record<string, string> = {
   offline_access: "Stay signed in without re-authorizing",
 };
 
-interface PublicClient {
-  client_id: string;
-  client_name?: string;
-  client_uri?: string;
-  logo_uri?: string;
-  policy_uri?: string;
-  tos_uri?: string;
-}
-
 function ConsentPage() {
   const { client_id: clientId, scope } = Route.useSearch();
   const hydrated = useHydrated();
-  const [client, setClient] = useState<PublicClient | null>(null);
+  const [clientSnapshot, setClientSnapshot] = useState<{
+    clientId: string | undefined;
+    state: PublicClientLookupState;
+  }>({
+    clientId,
+    state: { kind: "loading" },
+  });
+  const clientLookupVersion = useRef(0);
   const [submitting, setSubmitting] = useState<"accept" | "deny" | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
 
   const scopes = scope?.split(" ").filter(Boolean) ?? [];
 
-  useEffect(() => {
-    if (!clientId) return;
-    let cancelled = false;
-    // $fetch rather than a generated method: this endpoint is only ever called
-    // from this one screen, and the explicit path avoids depending on how the
-    // client proxy camelCases `/oauth2/public-client`.
-    void authClient
-      .$fetch<PublicClient>("/oauth2/public-client", {
-        query: { client_id: clientId },
-      })
-      .then((res) => {
-        if (!cancelled && res.data) setClient(res.data);
-      });
-    return () => {
-      cancelled = true;
-    };
+  const loadClient = useCallback(async () => {
+    const requestVersion = ++clientLookupVersion.current;
+    setClientSnapshot({ clientId, state: { kind: "loading" } });
+    const nextState = await verifyPublicClient(clientId, (requestedClientId) =>
+      // $fetch rather than a generated method: this endpoint is only ever
+      // called from this one screen, and the explicit path avoids depending on
+      // how the client proxy camelCases `/oauth2/public-client`.
+      authClient.$fetch("/oauth2/public-client", {
+        query: { client_id: requestedClientId },
+      }),
+    );
+    if (requestVersion === clientLookupVersion.current) {
+      setClientSnapshot({ clientId, state: nextState });
+    }
   }, [clientId]);
+
+  useEffect(() => {
+    void loadClient();
+  }, [loadClient]);
+
+  useEffect(() => {
+    return () => {
+      clientLookupVersion.current += 1;
+    };
+  }, []);
 
   async function decide(accept: boolean) {
     setSubmitting(accept ? "accept" : "deny");
-    setError(null);
+    setDecisionError(null);
     try {
       const res = await authClient.oauth2.consent({ accept });
       if (res.error) throw new Error(res.error.message ?? "Consent failed");
@@ -89,78 +100,102 @@ function ConsentPage() {
       // client's callback, which is off-origin.
       window.location.href = url;
     } catch (err) {
-      setError(getErrorMessage(err));
+      setDecisionError(getErrorMessage(err));
       setSubmitting(null);
     }
   }
 
-  const appName = client?.client_name ?? "An application";
+  const clientState: PublicClientLookupState =
+    clientSnapshot.clientId === clientId
+      ? clientSnapshot.state
+      : { kind: "loading" };
+  const client = clientState.kind === "verified" ? clientState.client : null;
+  const appName = client?.client_name ?? "Requested application";
+  const allowEnabled = canAllowConsent(
+    hydrated,
+    clientId,
+    clientState,
+    submitting !== null,
+  );
 
   return (
-    <div className="auth-background relative flex min-h-screen items-center justify-center overflow-hidden p-4">
-      <IconPattern />
-      <div className="relative z-10 w-full max-w-md">
-        <Card>
-          <CardHeader>
-            <div className="font-mono text-2xs text-slate uppercase tracking-wider">
-              Authorize access
-            </div>
-            <CardTitle>{appName}</CardTitle>
-            <CardDescription>
-              {client?.client_uri
+    <AuthEntryFrame>
+      <Card>
+        <CardHeader>
+          <div className="text-slate text-xs">Authorize access</div>
+          <CardTitle>{appName}</CardTitle>
+          <CardDescription>
+            {clientState.kind === "loading"
+              ? "Verifying the requesting application…"
+              : client?.client_uri
                 ? `${client.client_uri} wants to access your Cubby account.`
                 : "This application wants to access your Cubby account."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Stack gap="md">
-              {clientId && (
-                <div className="font-mono text-2xs text-slate">{clientId}</div>
-              )}
-              {scopes.length > 0 && (
-                <Stack gap="sm">
-                  <div className="font-mono text-2xs text-slate uppercase tracking-wider">
-                    Permissions requested
-                  </div>
-                  <Stack gap="xs" as="ul">
-                    {scopes.map((s) => (
-                      <Row key={s} align="center" gap="sm" as="li">
-                        <Badge variant="secondary">{s}</Badge>
-                        <span className="text-muted-foreground text-xs">
-                          {SCOPE_DESCRIPTIONS[s] ?? "Additional access"}
-                        </span>
-                      </Row>
-                    ))}
-                  </Stack>
-                </Stack>
-              )}
-
-              <p className="text-muted-foreground text-xs">
-                Approving also lets this application read and modify your
-                inventory, recipes, and other Cubby data through the MCP API.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Stack gap="md">
+            {clientState.kind === "verified" && clientId && (
+              <div className="font-mono text-2xs text-slate">{clientId}</div>
+            )}
+            {clientState.kind === "invalid" && (
+              <p role="alert" className="text-destructive text-xs">
+                {clientState.message}
               </p>
+            )}
+            {clientState.kind === "error" && (
+              <Stack gap="sm">
+                <p role="alert" className="text-destructive text-xs">
+                  {clientState.message}
+                </p>
+                <div>
+                  <Button variant="outline" onClick={() => void loadClient()}>
+                    Retry verification
+                  </Button>
+                </div>
+              </Stack>
+            )}
+            {scopes.length > 0 && (
+              <Stack gap="sm">
+                <div className="text-slate text-xs">Permissions requested</div>
+                <Stack gap="xs" as="ul">
+                  {scopes.map((s) => (
+                    <Row key={s} align="center" gap="sm" as="li">
+                      <Badge variant="secondary">{s}</Badge>
+                      <span className="text-muted-foreground text-xs">
+                        {SCOPE_DESCRIPTIONS[s] ?? "Additional access"}
+                      </span>
+                    </Row>
+                  ))}
+                </Stack>
+              </Stack>
+            )}
 
-              {error && <p className="text-destructive text-xs">{error}</p>}
+            <p className="text-muted-foreground text-xs">
+              Approving also lets this application read and modify your
+              inventory, recipes, and other Cubby data through the MCP API.
+            </p>
 
-              <Row gap="sm" justify="end">
-                <Button
-                  variant="outline"
-                  onClick={() => decide(false)}
-                  disabled={!hydrated || submitting !== null}
-                >
-                  {submitting === "deny" ? "Denying…" : "Deny"}
-                </Button>
-                <Button
-                  onClick={() => decide(true)}
-                  disabled={!hydrated || submitting !== null}
-                >
-                  {submitting === "accept" ? "Authorizing…" : "Allow"}
-                </Button>
-              </Row>
-            </Stack>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+            {decisionError && (
+              <p role="alert" className="text-destructive text-xs">
+                {decisionError}
+              </p>
+            )}
+
+            <Row gap="sm" justify="end">
+              <Button
+                variant="outline"
+                onClick={() => decide(false)}
+                disabled={!hydrated || submitting !== null}
+              >
+                {submitting === "deny" ? "Denying…" : "Deny"}
+              </Button>
+              <Button onClick={() => decide(true)} disabled={!allowEnabled}>
+                {submitting === "accept" ? "Authorizing…" : "Allow"}
+              </Button>
+            </Row>
+          </Stack>
+        </CardContent>
+      </Card>
+    </AuthEntryFrame>
   );
 }

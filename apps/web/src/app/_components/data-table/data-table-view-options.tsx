@@ -37,6 +37,7 @@ const densityOptions: {
 
 interface DataTableViewOptionsProps<TData extends RowData> {
   table: Table<TData>;
+  defaultDensity?: TableDensity;
 }
 
 /**
@@ -59,8 +60,9 @@ export function columnLabel<TData extends RowData>(
 
 export function DataTableViewOptions<TData extends RowData>({
   table,
+  defaultDensity,
 }: DataTableViewOptionsProps<TData>) {
-  const { density, setDensity } = useTableDensity();
+  const { density, setDensity } = useTableDensity(defaultDensity);
   const isMobile = useIsMobile();
   const [mobileOpen, setMobileOpen] = useState(false);
   const isCustomized = isTableLayoutCustomized(

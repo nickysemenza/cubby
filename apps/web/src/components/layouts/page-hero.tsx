@@ -8,11 +8,15 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import { type CSSProperties, type ReactNode, useState } from "react";
+import {
+  domainForEntity,
+  domainWayfinding,
+} from "~/app/_components/navigation/domain-wayfinding";
 import { getEntityNavGroup } from "~/app/_components/navigation/nav-items";
 import { ImageGallery } from "~/components/media/image-gallery";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
-import { EYEBROW_CLASS, Eyebrow } from "~/components/ui/eyebrow";
+import { Eyebrow } from "~/components/ui/eyebrow";
 import { InkStamp } from "~/components/ui/ink-stamp";
 import {
   Popover,
@@ -138,7 +142,7 @@ function EyebrowPath({ segments }: { segments: EyebrowSegment[] }) {
   );
 }
 
-/** Pull a created-at date out of the raw entity for the hero's ledger meta. */
+/** Pull a created-at date out of the raw entity for the hero's record meta. */
 export function getOnFileSince(rawData: unknown): string | null {
   if (typeof rawData !== "object" || rawData === null) return null;
   const createdAt = (rawData as { createdAt?: unknown }).createdAt;
@@ -156,9 +160,8 @@ export function getOnFileSince(rawData: unknown): string | null {
 }
 
 /**
- * Ledger breadcrumb trail for a detail header, e.g. `Pantry / Products / No. SKU1`.
- * Mono/eyebrow styled with hairline separators. The entity's plural label is
- * always a real `<Link>` back to its list; an optional `No. X` reference code is
+ * Breadcrumb trail for a detail header, e.g. `Pantry / Products / SKU1`.
+ * The entity's plural label is always a real `<Link>` back to its list; an optional reference code is
  * appended as the (unlinked) current leaf. When there's no `heroNo`, the linked
  * plural label is itself the last segment (the big title below is the record).
  */
@@ -177,8 +180,7 @@ function DetailBreadcrumb({
     <nav
       aria-label="Breadcrumb"
       className={cn(
-        EYEBROW_CLASS,
-        "hidden flex-wrap items-center gap-x-2 gap-y-1 tracking-[0.14em] md:flex",
+        "hidden flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground text-xs md:flex",
       )}
     >
       {group && (
@@ -230,7 +232,7 @@ function CopyableHeroNo({ heroNo }: { heroNo: string }) {
         setTimeout(() => setCopied(false), 1500);
       }}
     >
-      No. {heroNo}
+      {heroNo}
       {copied ? (
         <Check className="size-3" />
       ) : (
@@ -335,9 +337,11 @@ function PageHero({
   const countLabel =
     hasCount &&
     `${formatCount(count)}${typeof title === "string" ? ` ${title}` : ""}`;
-  // Entity-inked accent rule (falls back to ultramarine via the CSS defaults).
-  const accent =
-    entity && isBrowserRoutedEntity(entity)
+  // Route-family wayfinding wins; utility entities keep their own accent.
+  const domain = entity ? domainForEntity(entity) : null;
+  const accent = domain
+    ? `var(${domainWayfinding(domain).accentToken})`
+    : entity && isBrowserRoutedEntity(entity)
       ? entities[entity].color.accent
       : null;
   const accentStyle = accent
@@ -418,13 +422,13 @@ interface DetailPlateProps {
   entity: Entity;
   /** The big plate title (entity name). */
   name: ReactNode;
-  /** Raw entity used for the "On file since" ledger line. */
+  /** Raw entity used for the added-date metadata. */
   rawData?: unknown;
-  /** Reference code shown in the eyebrow (e.g. the product shortcode). */
+  /** Reference code shown in the breadcrumb (e.g. the product shortcode). */
   heroNo?: string;
   /** Status stamp on the plate (e.g. IN STOCK). */
   heroStamp?: { label: string; tone?: "ink" | "red" | "green" };
-  /** Inline ledger stats strip (on hand, value, ...). */
+  /** Inline record stats strip (on hand, value, ...). */
   heroStats?: DetailHeroStat[];
   /** Deliberate page-level action hierarchy rendered on the plate. */
   heroActions?: DetailHeroActions;
@@ -439,14 +443,12 @@ interface DetailPlateProps {
 }
 
 /**
- * Detail spec-plate hero: a flat ledger placard with an ink left spine, a
- * "pluralLabel / No. X" eyebrow, the big name, an "On file since" line, a
- * status stamp, an inline ledger stat strip, and the page action cluster.
+ * Detail record hero: a flat identity surface with a domain left spine,
+ * breadcrumb, name, status, added date, compact stats, and page actions.
  *
- * Warm-Paper Ledger: the spine is a square ink rule (not an entity hue) —
- * separation is by rule and tone, and the lone ultramarine is reserved for the
- * live status stamp / value. The mobile image gallery rides above the plate
- * when heroImages are present.
+ * Porcelain Transit: the spine carries route-family wayfinding while status
+ * remains a separate semantic signal. The mobile image gallery rides above
+ * the plate when heroImages are present.
  */
 function DetailPlate({
   entity,
@@ -460,6 +462,10 @@ function DetailPlate({
   heroMedia,
 }: DetailPlateProps) {
   const onFileSince = getOnFileSince(rawData);
+  const domain = domainForEntity(entity);
+  const domainAccent = domain
+    ? `var(${domainWayfinding(domain).accentToken})`
+    : undefined;
 
   return (
     <>
@@ -478,7 +484,8 @@ function DetailPlate({
       )}
 
       <Card
-        className="border-x-0 border-l-[length:var(--border-spine)] border-l-foreground md:border-r"
+        className="border-x-0 border-l-[length:var(--border-spine-card)] md:border-r"
+        style={domainAccent ? { borderLeftColor: domainAccent } : undefined}
         data-testid="detail-spec-plate"
       >
         <CardContent className="px-2 py-1 sm:px-4">
@@ -492,7 +499,7 @@ function DetailPlate({
               </h1>
             </div>
             <DetailPlateActions actions={heroActions} />
-            <div className="col-span-2 flex flex-wrap items-center gap-2 font-mono text-2xs text-muted-foreground uppercase">
+            <div className="col-span-2 flex flex-wrap items-center gap-2 font-mono text-muted-foreground text-xs">
               {heroNo && (
                 <span className="md:hidden">
                   <CopyableHeroNo heroNo={heroNo} />
@@ -501,12 +508,12 @@ function DetailPlate({
               {heroStamp && (
                 <InkStamp tone={heroStamp.tone}>{heroStamp.label}</InkStamp>
               )}
-              {onFileSince && <span>On file since {onFileSince}</span>}
+              {onFileSince && <span>Added {onFileSince}</span>}
             </div>
           </div>
           {heroStats && heroStats.length > 0 && (
-            // Flat ledger stat strip — crisp hairline rules (no dashed warmth),
-            // square cells, mono tabular numerals.
+            // Compact record stats — hairline separators, plain-language
+            // labels, and tabular numerals.
             <div className="mt-4 flex border-border border-t pt-2">
               {heroStats.map((stat, i) => (
                 <div

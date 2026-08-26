@@ -59,8 +59,15 @@ import { ProductExpenseHistory } from "./product-expense-history";
 import { ProductForm } from "./product-form";
 import { heroPresence } from "./product-hero-presence";
 import { ProductKitComponents } from "./product-kit-components";
-import { ProductProjectUses } from "./product-project-uses";
+import {
+  ProductProjectUses,
+  shouldShowProductProjectUses,
+} from "./product-project-uses";
 import { ProductPurchases } from "./product-purchases";
+import {
+  ProductRelationshipRouteContent,
+  useProductRelationshipRoute,
+} from "./product-relationship-route";
 import { ProductStockedAt } from "./product-stocked-at";
 import { ProductTaskHistory } from "./product-task-history";
 
@@ -69,6 +76,7 @@ interface ProductDetailProps {
 }
 
 export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
+  const relationshipRouteQuery = useProductRelationshipRoute(product.id);
   const { commonSections, editMode, mappings } = useEntityDetail<
     ProductWithFoodOut,
     { id: string; data: Partial<ProductCreateInput> }
@@ -79,6 +87,10 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   });
 
   const isNonFood = isNonFoodCategory(product.category);
+  const shouldShowProjectUses = shouldShowProductProjectUses(
+    product.category,
+    relationshipRouteQuery.data?.direct.usedOnProjects.count ?? 0,
+  );
 
   // PDF manuals share the images relation — hero/gallery get only real
   // images; documents render in their own Manuals section.
@@ -115,6 +127,18 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
         />
       ),
     }),
+    {
+      id: "relationships",
+      title: "Relationships",
+      icon: Link2,
+      placement: "primary" as const,
+      content: (
+        <ProductRelationshipRouteContent
+          product={product}
+          query={relationshipRouteQuery}
+        />
+      ),
+    },
     // Custom section: Stocked At — where the product lives, the primary
     // content of the page (the hero's On hand / Locations stats are the
     // glanceable summary of this table).
@@ -218,7 +242,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
         />
       ),
     },
-    ...(product.category === "tools" || product.category === "software"
+    ...(shouldShowProjectUses
       ? [
           {
             id: "project-uses",
@@ -493,6 +517,13 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       heroStamp={presence.stamp}
       heroStats={heroStats}
     >
+      <div className="border-border border-b bg-card px-2 py-2 md:px-4">
+        <ProductRelationshipRouteContent
+          product={product}
+          query={relationshipRouteQuery}
+          variant="strip"
+        />
+      </div>
       <DetailSections
         sections={sections}
         rawData={product}

@@ -38,8 +38,8 @@ function BottomNavItem({
   return (
     <Comp
       className={cn(
-        // Flat ledger tab — the active tab is marked by a square ultramarine
-        // top-rule + ink label (no icon bounce, no rounded pill).
+        // A quiet Porcelain Transit tab: cobalt identifies the current route;
+        // color never substitutes for the visible label or aria-current state.
         "relative flex min-h-[48px] min-w-[48px] flex-1 flex-col items-center justify-center gap-1 transition-colors active:bg-muted/60",
         active
           ? "text-primary before:absolute before:inset-x-2 before:top-0 before:h-0.5 before:bg-primary"
@@ -73,11 +73,8 @@ export function BottomNav() {
 
   return (
     <nav
-      // Warm-Paper Ledger: a flat opaque paper-surface bar edged by the 3px ink
-      // top-rule — separation by rule and tone, no raised/blurred/translucent
-      // chrome.
       className={cn(
-        "safe-bottom fixed inset-x-0 bottom-0 z-50 border-t-[3px] border-t-foreground bg-card md:hidden print:hidden",
+        "safe-bottom fixed inset-x-0 bottom-0 z-50 border-border border-t bg-card md:hidden print:hidden",
         keyboardOpen && "hidden",
       )}
       aria-label="Main navigation"

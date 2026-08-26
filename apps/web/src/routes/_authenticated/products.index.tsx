@@ -52,6 +52,7 @@ function ProductsPage() {
           ariaLabel="Products view"
           options={PRODUCT_VIEW_OPTIONS}
           value={activeView}
+          compactOnMobile
           onValueChange={(nextView) =>
             navigate({
               search: (previous) => ({

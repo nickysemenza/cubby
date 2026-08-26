@@ -4,7 +4,9 @@ import { useState } from "react";
 import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-usage-panel";
 import { CookbookSelect } from "~/app/_components/recipe/cookbook-select";
 import IngredientNetwork from "~/app/_components/visualizations/ingredient-network";
-import LocationSunburst from "~/app/_components/visualizations/location-sunburst";
+import LocationSunburst, {
+  LOCATION_SUNBURST_DESCRIPTION,
+} from "~/app/_components/visualizations/location-sunburst";
 import ProductCategoryDonut from "~/app/_components/visualizations/product-category-donut";
 import { Grid, Stack } from "~/components/layout";
 import { DashboardCard } from "~/components/layout/dashboard-card";
@@ -15,28 +17,28 @@ export function HomeInsights() {
     <Grid cols="pair" gap="md">
       <DashboardCard
         icon={PieChart}
-        title="Products by category"
+        title="Which categories hold our products?"
         description="Distribution across categories — click a slice to view products."
       >
         <ProductCategoryDonut />
       </DashboardCard>
       <DashboardCard
         icon={MapPin}
-        title="Inventory by location"
-        description="Where inventory value sits across your locations."
+        title="Where is our inventory?"
+        description={LOCATION_SUNBURST_DESCRIPTION}
       >
         <LocationSunburst />
       </DashboardCard>
       <DashboardCard
         icon={Share2}
-        title="Ingredient relationships"
+        title="Which ingredients travel together?"
         description="Ingredients that co-occur across recipes; larger nodes are used more."
       >
         <IngredientNetwork />
       </DashboardCard>
       <DashboardCard
         icon={ListChecks}
-        title="Ingredient usage"
+        title="Which ingredients power our recipes?"
         description="How many recipes use each ingredient; scope by cookbook."
       >
         <IngredientUsageSection />

@@ -16,6 +16,43 @@ import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { invalidateQueryRoots } from "~/lib/query-keys";
 import { recommendations } from "~/lib/recommendations.functions";
 
+function RetryAction({
+  onRetry,
+  label = "Retry",
+}: {
+  onRetry?: () => void;
+  label?: string;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      className="h-11 md:h-7"
+      onClick={() => onRetry?.()}
+    >
+      {label}
+    </Button>
+  );
+}
+
+function ReadinessMessage({
+  kind,
+  onRetry,
+}: {
+  kind: "recommendations" | "tag proposals";
+  onRetry?: () => void;
+}) {
+  return (
+    <Stack gap="sm">
+      <p className="text-muted-foreground text-sm">
+        This product&apos;s similarity index is not ready yet, so current {kind}{" "}
+        cannot be reviewed.
+      </p>
+      <RetryAction onRetry={onRetry} label="Refresh index status" />
+    </Stack>
+  );
+}
+
 /** A focused review surface: candidates are always re-resolved, never URL data. */
 export function RecommendationWorkbench({
   sourceId,
@@ -65,11 +102,27 @@ function PlacementRecommendation({
       <p className="text-muted-foreground text-sm">Loading recommendation…</p>
     );
   }
-  if (recommendation.isError || !recommendation.data) {
+  if (recommendation.isError) {
     return (
-      <p className="text-muted-foreground text-sm">
-        This placement recommendation is no longer current.
-      </p>
+      <Stack gap="sm">
+        <p className="text-destructive text-sm">
+          Placement recommendations could not be loaded.
+        </p>
+        <RetryAction onRetry={() => void recommendation.refetch?.()} />
+      </Stack>
+    );
+  }
+  if (!recommendation.data) {
+    return (
+      <Stack gap="sm">
+        <p className="text-muted-foreground text-sm">
+          No current placement recommendation is available for this stock row.
+        </p>
+        <RetryAction
+          onRetry={() => void recommendation.refetch?.()}
+          label="Refresh recommendation"
+        />
+      </Stack>
     );
   }
   const data = recommendation.data;
@@ -136,16 +189,35 @@ function TagPropagationRecommendation({
       <p className="text-muted-foreground text-sm">Loading tag proposals…</p>
     );
   }
-  if (
-    !recommendation.data ||
-    recommendation.isError ||
-    recommendation.data.status !== "ready"
-  ) {
+  if (recommendation.isError) {
     return (
-      <p className="text-muted-foreground text-sm">
-        This product needs a current similarity index before tag proposals can
-        be reviewed.
-      </p>
+      <Stack gap="sm">
+        <p className="text-destructive text-sm">
+          Tag proposals could not be loaded.
+        </p>
+        <RetryAction onRetry={() => void recommendation.refetch?.()} />
+      </Stack>
+    );
+  }
+  if (!recommendation.data) {
+    return (
+      <Stack gap="sm">
+        <p className="text-muted-foreground text-sm">
+          No current tag proposal is available for this product.
+        </p>
+        <RetryAction
+          onRetry={() => void recommendation.refetch?.()}
+          label="Refresh proposals"
+        />
+      </Stack>
+    );
+  }
+  if (recommendation.data.status !== "ready") {
+    return (
+      <ReadinessMessage
+        kind="tag proposals"
+        onRetry={() => void recommendation.refetch?.()}
+      />
     );
   }
   const data = recommendation.data;
@@ -234,16 +306,19 @@ function ProductRelatednessRecommendation({
     );
   if (relatedness.isError)
     return (
-      <p className="text-destructive text-sm">
-        Recommendations could not be refreshed.
-      </p>
+      <Stack gap="sm">
+        <p className="text-destructive text-sm">
+          Recommendations could not be loaded.
+        </p>
+        <RetryAction onRetry={() => void relatedness.refetch?.()} />
+      </Stack>
     );
   if (relatedness.data?.status !== "ready") {
     return (
-      <p className="text-muted-foreground text-sm">
-        This product needs a current similarity index before recommendations can
-        be reviewed.
-      </p>
+      <ReadinessMessage
+        kind="recommendations"
+        onRetry={() => void relatedness.refetch?.()}
+      />
     );
   }
 
@@ -327,11 +402,27 @@ function DuplicateProductRecommendation({
       <p className="text-muted-foreground text-sm">Loading recommendation…</p>
     );
   }
-  if (recommendation.isError || !recommendation.data) {
+  if (recommendation.isError) {
     return (
-      <p className="text-muted-foreground text-sm">
-        This duplicate-product recommendation is no longer current.
-      </p>
+      <Stack gap="sm">
+        <p className="text-destructive text-sm">
+          Duplicate-product recommendations could not be loaded.
+        </p>
+        <RetryAction onRetry={() => void recommendation.refetch?.()} />
+      </Stack>
+    );
+  }
+  if (!recommendation.data) {
+    return (
+      <Stack gap="sm">
+        <p className="text-muted-foreground text-sm">
+          No current duplicate-product candidate is available for this product.
+        </p>
+        <RetryAction
+          onRetry={() => void recommendation.refetch?.()}
+          label="Refresh candidate"
+        />
+      </Stack>
     );
   }
 

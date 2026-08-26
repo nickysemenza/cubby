@@ -71,7 +71,7 @@ export function BulkActionBar<TData extends RowData>({
       align="center"
       gap="sm"
       wrap
-      className="bg-card max-md:fixed max-md:inset-x-0 max-md:bottom-[var(--app-chrome-bottom)] max-md:z-40 max-md:min-h-12 max-md:flex-nowrap max-md:overflow-x-auto max-md:overscroll-x-contain max-md:border-foreground max-md:border-t-[3px] max-md:px-2 max-md:py-1 md:px-1 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden"
+      className="bg-card max-md:fixed max-md:inset-x-0 max-md:bottom-[var(--app-chrome-bottom)] max-md:z-40 max-md:min-h-12 max-md:flex-nowrap max-md:overflow-x-auto max-md:overscroll-x-contain max-md:border-foreground max-md:border-t max-md:px-2 max-md:py-1 md:px-1 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden"
     >
       <span className="shrink-0 font-medium font-mono text-xs uppercase tabular-nums">
         {selectedCount} selected

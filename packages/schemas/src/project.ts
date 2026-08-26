@@ -651,6 +651,30 @@ export const actionableTasksOut = z.object({
 });
 export type ActionableTasksOut = z.infer<typeof actionableTasksOut>;
 
+/** The compact ready-work projection used by Today's daily briefing. */
+export const taskTodayBriefingItemOut = z.object({
+  id: taskShortcode,
+  name: z.string(),
+  status: z.enum(["not_started", "in_progress"]),
+  dueDate: z.string().nullable(),
+  dueEndDate: z.string().nullable(),
+  projectId: projectShortcode.nullable(),
+  projectName: z.string().nullable(),
+});
+export type TaskTodayBriefingItemOut = z.infer<typeof taskTodayBriefingItemOut>;
+
+export const taskTodayBriefingOut = z.object({
+  // At most four rows: enough to answer Today's immediate question without
+  // making the dashboard fetch the full actionable graph.
+  next: z.array(taskTodayBriefingItemOut).max(4),
+  nextCount: z.number().int(),
+  laterCount: z.number().int(),
+  blockedCount: z.number().int(),
+  overdueCount: z.number().int(),
+  dueThisWeekCount: z.number().int(),
+});
+export type TaskTodayBriefingOut = z.infer<typeof taskTodayBriefingOut>;
+
 export const taskSummaryOut = z.object({
   totalOpen: z.number().int(),
   next: z.number().int(),
@@ -1569,7 +1593,11 @@ export const productProjectUsesOut = z.object({
   productId: productShortcode,
   productName: z.string(),
   manufacturer: z.string(),
-  category: reusableResourceCategory,
+  // This is the Product's *current* category. A historical ProjectToolUsage
+  // remains readable after recategorization, but is no longer editable unless
+  // it is currently tools or software.
+  category: z.string().nullable(),
+  canEdit: z.boolean(),
   ...projectResourceEconomicsFields,
   projects: z.array(
     z.object({

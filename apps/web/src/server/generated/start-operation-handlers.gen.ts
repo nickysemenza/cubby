@@ -566,6 +566,10 @@ export const START_OPERATION_HANDLER_LOADERS = {
     const module = await import("~/server/product-browser.server");
     return module.quickCreateProductForBrowser as unknown as StartOperationHandler;
   },
+  "product.relationshipRoute": async () => {
+    const module = await import("~/server/product-browser.server");
+    return module.getProductRelationshipRouteForBrowser as unknown as StartOperationHandler;
+  },
   "product.search": async () => {
     const module = await import("~/server/product-browser.server");
     return module.searchProductsForBrowser as unknown as StartOperationHandler;
@@ -869,6 +873,10 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "task.timeline": async () => {
     const module = await import("~/server/task-browser.server");
     return module.getTaskTimelineForBrowser as unknown as StartOperationHandler;
+  },
+  "task.todayBriefing": async () => {
+    const module = await import("~/server/task-browser.server");
+    return module.getTaskTodayBriefingForBrowser as unknown as StartOperationHandler;
   },
   "upc.lookup": async () => {
     const module = await import("~/server/upc-browser.server");

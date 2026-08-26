@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Zap } from "lucide-react";
+import { useId } from "react";
 import { Grid } from "~/components/layout";
-import { DashboardCard } from "~/components/layout/dashboard-card";
 import { Button } from "~/components/ui/button";
 import { EntityIcon, entities } from "~/entities/entities";
 import { actionsForSurface } from "../actions/action-items";
@@ -12,14 +12,22 @@ const homeActions = actionsForSurface("home-quick");
  * Quick actions for the home page, drawn from the `home-quick` slice of the
  * canonical registry — exactly the four recurring household verbs.
  */
-export function QuickActionsCard() {
+export function DailyPasses() {
+  const titleId = useId();
   return (
-    <DashboardCard
-      icon={Zap}
-      title="Do now"
-      description="Four recurring household passes."
-    >
-      <Grid className="grid-cols-2" gap="sm">
+    <section aria-labelledby={titleId}>
+      <div className="flex items-start gap-2 border-border border-b pb-2">
+        <Zap className="mt-0.5 size-4 shrink-0 text-slate" aria-hidden />
+        <div>
+          <h2 id={titleId} className="font-heading font-semibold text-sm">
+            Daily passes
+          </h2>
+          <p className="text-muted-foreground text-xs">
+            Useful household runs.
+          </p>
+        </div>
+      </div>
+      <Grid className="mt-2 grid-cols-2" gap="sm">
         {homeActions.map((action) => (
           // `render` keeps this one element: a <button> inside an <a> is
           // invalid HTML and gave every action two tab stops with ambiguous
@@ -51,6 +59,6 @@ export function QuickActionsCard() {
           </Button>
         ))}
       </Grid>
-    </DashboardCard>
+    </section>
   );
 }

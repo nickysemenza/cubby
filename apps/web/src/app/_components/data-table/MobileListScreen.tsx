@@ -15,6 +15,7 @@ import { MobileSortSheet } from "./MobileSortSheet";
 import type { CubbyTable as ITable } from "./table-features";
 import type { GroupConfig } from "./useGroupedList";
 import { mobileListShape } from "./useMobileListModel";
+import type { TableDensity } from "./useTableDensity";
 
 interface MobileRefreshControls {
   onRefresh: () => Promise<void>;
@@ -24,6 +25,7 @@ interface MobileRefreshControls {
 interface MobileListScreenProps<TItem extends RowData> {
   table: ITable<TItem>;
   entity?: Entity;
+  getDetailsHref?: (item: TItem) => string | undefined;
   additionalToolbarContent?: ReactNode;
   actions?: ReactNode;
   bulkActionBar?: ReactNode;
@@ -42,11 +44,13 @@ interface MobileListScreenProps<TItem extends RowData> {
   rowContentVersion?: unknown;
   portalWorkbenchUtilities?: boolean;
   emptyState?: ReactNode;
+  defaultDensity?: TableDensity;
 }
 
 export function MobileListScreen<TItem extends RowData>({
   table,
   entity,
+  getDetailsHref,
   additionalToolbarContent,
   actions,
   bulkActionBar,
@@ -61,6 +65,7 @@ export function MobileListScreen<TItem extends RowData>({
   rowContentVersion,
   portalWorkbenchUtilities = false,
   emptyState,
+  defaultDensity,
 }: MobileListScreenProps<TItem>) {
   const listRef = useRef<HTMLDivElement>(null);
   // `useIsMobile` reports false until hydration (its server snapshot has to, to
@@ -109,6 +114,7 @@ export function MobileListScreen<TItem extends RowData>({
     >
       <DataTableToolbar
         table={table}
+        defaultDensity={defaultDensity}
         additionalContent={toolbarContent}
         actions={actions}
         bulkActionBar={bulkActionBar}
@@ -131,6 +137,7 @@ export function MobileListScreen<TItem extends RowData>({
             <MobileCardView
               table={table}
               entity={entity}
+              getDetailsHref={getDetailsHref}
               infiniteScroll={infiniteScroll}
               groupConfig={groupConfig}
               grouped={grouped}

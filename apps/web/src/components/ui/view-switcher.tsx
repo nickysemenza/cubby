@@ -14,6 +14,8 @@ interface ChoiceSwitcherProps<T extends string> {
   onValueChange: (value: T) => void;
   className?: string;
   ariaLabel: string;
+  /** Keep the complete labels accessible while using icon-only phone chrome. */
+  compactOnMobile?: boolean;
   optionAriaLabel?: (option: ChoiceSwitcherOption<T>) => string;
 }
 
@@ -27,6 +29,7 @@ export function ChoiceSwitcher<T extends string>({
   onValueChange,
   className,
   ariaLabel,
+  compactOnMobile = false,
   optionAriaLabel = (option) => option.label,
 }: ChoiceSwitcherProps<T>) {
   return (
@@ -51,10 +54,16 @@ export function ChoiceSwitcher<T extends string>({
             // Phone-only touch floor. DESIGN.md keeps desktop controls compact
             // (28px) but requires 40–48px on phones, and the `sm` toggle size
             // is 24px — well under half a finger.
-            className="min-h-11 md:min-h-0"
+            className="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
           >
-            {Icon && <Icon className="mr-2 size-4" />}
-            {opt.label}
+            {Icon && (
+              <Icon
+                className={cn("size-4", compactOnMobile ? "md:mr-2" : "mr-2")}
+              />
+            )}
+            <span className={cn(compactOnMobile && "max-md:sr-only")}>
+              {opt.label}
+            </span>
           </ToggleGroupItem>
         );
       })}

@@ -146,6 +146,39 @@ describe("background job table rows", () => {
     });
   });
 
+  it("keeps a selected summary error visible for a recent batch", () => {
+    const retry = () => {};
+    const [row] = buildBackgroundJobRows({
+      batches: [batch],
+      selectedBatchId: batch.id,
+      selectedBatchError: "Summary unavailable",
+      selectedBatchRetry: retry,
+      selectedJobs: { status: "loading" },
+    });
+
+    expect(backgroundJobSubRows(row!)).toEqual([
+      expect.objectContaining({
+        rowType: "status",
+        loadState: "error",
+        name: "Summary unavailable",
+        retry,
+      }),
+    ]);
+  });
+
+  it("carries a retry callback on child-job errors", () => {
+    const retry = () => {};
+    const [row] = buildBackgroundJobRows({
+      batches: [batch],
+      selectedBatchId: batch.id,
+      selectedJobs: { status: "error", message: "Jobs unavailable", retry },
+    });
+
+    expect(backgroundJobSubRows(row!)).toEqual([
+      expect.objectContaining({ rowType: "status", loadState: "error", retry }),
+    ]);
+  });
+
   it("keeps unselected batches as leaves in the materialized row data", () => {
     const [row] = buildBackgroundJobRows({ batches: [batch] });
 
