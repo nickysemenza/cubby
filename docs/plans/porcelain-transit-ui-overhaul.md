@@ -1,6 +1,6 @@
 # Porcelain Transit UI Overhaul
 
-Status: **In progress; T0–T2 complete, T3–T4 at the mandatory user checkpoint**
+Status: **In progress; T0–T4 complete, T5 canonical-route migration next**
 
 Delivery: **One big-bang branch and one ready-for-review PR**
 
@@ -207,8 +207,8 @@ means the named evidence exists; implementation without evidence remains
 | T0 | Governance and baselines | — | Complete | Rebased branch, approved references, relationship/calibration specs, and 18 source-state baselines are recorded in the evidence ledger |
 | T1 | Tokens, fonts, and core primitives | T0 | Complete | Contrast checks, production build, focused tests, and desktop/mobile primitive gallery are recorded in the evidence ledger |
 | T2 | Desktop/mobile shell and navigation | T1 | Complete | 224px/56px desktop rail, 48px command band, five truthful domain groups, preserved contextual mobile chrome/safe areas/keyboard behavior, focused tests, typecheck, and desktop/mobile screenshots are recorded in the evidence ledger |
-| T3 | Products reference workbench | T1–T2 | Checkpoint | 28px opt-in grid, filters/layouts/actions preserved, independent current-row state, 400px docked inspector, 1024px Sheet, phone cards, and truthful Product→Inventory/Location stations are implemented and captured; awaiting user direction approval |
-| T4 | Canonical detail system | T1–T3 | Checkpoint | Product detail reuses the route, domain-spined identity hero, plain-language metadata/stats, responsive section index, normal-density sections, and canonical phone navigation; awaiting user direction approval |
+| T3 | Products reference workbench | T1–T2 | Complete | Approved dense table, dock, Sheet, phone projection, one Product-owned relationship-route query, direct/derived provenance, and synthetic desktop/phone examples are recorded in the evidence ledger. |
+| T4 | Canonical detail system | T1–T3 | Complete | Product detail reuses the same route model near the hero and in the full Relations journey, replaces the generic explorer without duplicate anchors, and preserves recategorized project-use history as read-only evidence. |
 | T5 | All canonical lists and details | T3–T4 | Pending | Every listed entity migrated with mobile projection and honest actions |
 | T6 | Today and normal-density surfaces | T1–T2 | Pending | Attention-first dashboard, readable modules, no KPI-card theater |
 | T7 | Specialist workbenches | T1–T5 | Pending | Calendar, Gantt, spatial, reconciliation, scanner, and matrix contracts preserved |
@@ -245,6 +245,13 @@ means the named evidence exists; implementation without evidence remains
   states, mobile cards, and docked inspection.
 - Build the inspector as shared workbench composition around existing entity
   preview/detail contracts; do not replace `RTable` with a weaker grid.
+- Product relationships use one Product-owned, bounded route projection. The
+  renderer may be shared, but stock versus identity Location, purchase
+  provenance, used-on versus purchased-for Projects, and derived Vendors remain
+  structural domain facts rather than generic graph metadata.
+- The Product inspector and canonical detail each mount exactly one non-blocking
+  route query after Product identity is known. Loading and errors stay local to
+  the route region; they do not gate the surrounding Product surface.
 - Preserve virtualization, pinned columns, resize/reorder, spreadsheet cell
   selection, clipboard behavior, grouping, infinite loading, aggregate footers,
   row prefetch, and layout persistence.

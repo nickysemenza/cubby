@@ -18,9 +18,38 @@ counts or disclosure. Empty branches state what is absent without inventing a
 station.
 
 Product routes are part of the Pantry/Inventory domain for navigation and use
-that family's green wayfinding mark. Relationship route UI indexes the existing
-specialized sections and queries; it must not duplicate their data into a new
-client-side ledger.
+that family's green wayfinding mark. The UI receives one bounded Product-owned
+route projection and indexes the existing specialized sections. It must not
+assemble a second ledger through client-side query fan-out or infer Product
+semantics from a generic relationship compiler.
+
+## Approved route-contract boundary
+
+The user approved the richer relationship direction at the T3–T4 checkpoint.
+The public interface is one `product.relationshipRoute` query keyed by Product
+shortcode. Its output separates `direct` and `derived` branches structurally,
+uses canonical public shortcodes for every linked station, returns exact counts
+with at most three ordered previews, and exposes provenance rather than SQL or
+presentation concerns.
+
+The fixed Product projection owns these distinctions:
+
+- Stock is Product → InventoryEntry → holding Location; a Location whose
+  identity is the Product is a separate direct branch.
+- Purchase evidence retains `Direct link`, `Via expense`, or both. Exit and
+  future Expense rows do not become acquisitions.
+- `Used on projects` comes from explicit reusable-tool usage;
+  `Purchased for projects` is a derived acquisition-spend rollup. A Project may
+  truthfully appear in both. If a Product is later recategorized, existing
+  project-use history remains visible and linkable but becomes read-only;
+  category-gated mutations do not silently broaden.
+- Vendors are derived only through attributed Product Expense → Purchase →
+  Vendor evidence. An explicit PurchaseProduct link alone is not vendor spend.
+- Soft-deleted intermediates and targets never leak into the route.
+
+The contract is implemented against the local Postgres-substitutable repository
+boundary and requires no database migration. The generic renderer owns only
+layout, disclosure, links, loading/error geometry, and accessibility.
 
 ## Product relationship matrix
 
@@ -66,10 +95,9 @@ truth and must survive the new visual shorthand.
 - Canonical routes:
   `apps/web/src/entities/generated/entity-routes.gen.ts`.
 
-## Known gap that does not require a schema change
+## Schema boundary
 
-`ProductPurchaseOut` carries `vendorName` but not `vendorId`. A Purchase station
-therefore cannot jump directly to Vendor detail using that DTO. It must open the
-Purchase, while the dedicated Vendor summary owns Vendor links. The reference
-inspector can be built from existing queries and detail contracts without a
-backend or schema change.
+`ProductPurchaseOut` remains unchanged: it carries `vendorName` but not
+`vendorId`. Purchase stations open the Purchase, while the dedicated derived
+Vendor branch owns Vendor links from its own evidence. The new output schema is
+an API contract, not a database migration.

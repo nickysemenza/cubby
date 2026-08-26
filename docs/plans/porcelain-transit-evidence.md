@@ -30,8 +30,8 @@ fix only redesign-caused failures.
 | T0 Governance and baselines | Complete | Branch/base above; approved mocks, calibration, truth matrix, and 18 source-state screenshots are committed together |
 | T1 Tokens, fonts, and primitives | Complete | Shared raw tokens, Inter-led typography, domain palette, modest geometry, restrained overlays, rebuilt core primitives, and desktop/mobile state gallery |
 | T2 Desktop/mobile shell | Complete | 224px expanded and 56px collapsed rail, 48px command band, five domain groups, preserved contextual mobile chrome, focused tests/typecheck, independent review, and desktop/mobile visual checkpoint |
-| T3 Products reference workbench | Checkpoint | Products-only 28px first-visit density, current/bulk state separation, full-height 400px docked inspector, 1024px Sheet, 430px canonical cards, active-only tabs, canonical Inventory/Location stations, and direct/derived section ordering are implemented and captured below; awaiting user direction approval |
-| T4 Canonical detail system | Checkpoint | Product detail reuses the relationship route, domain-spined identity hero, plain-language metadata/stats, responsive Sections index, normal-density content, and canonical phone flow; awaiting user direction approval |
+| T3 Products reference workbench | Complete | Approved 28px Product density, docked inspector, Sheet, phone projection, one Product-owned relationship query, fixed direct/derived semantics, bounded previews, explicit provenance, and synthetic desktop/phone examples |
+| T4 Canonical detail system | Complete | Product detail reuses the same relationship query near the hero and in its full route ledger, suppresses the generic duplicate explorer, and preserves recategorized project-use history as read-only evidence |
 | T5 Canonical lists/details | Pending | — |
 | T6 Today/ordinary surfaces | Pending | — |
 | T7 Specialist workbenches | Pending | — |
@@ -102,6 +102,10 @@ height while retaining the named viewport width.
 | 2026-08-26 | T3–T4 | `pnpm typecheck:web`, `pnpm format:changed`, and `git diff --check` | Pass | Web/service-worker types, formatting, and patch whitespace are clean after midpoint corrections |
 | 2026-08-26 | T3–T4 | Adversarial midpoint review | Corrections applied; user checkpoint remains | Scoped dense default to Products, removed duplicate intermediate inspector mount and generic Vendors-first graph, added `aria-current`, canonical Inventory/Location station links, 44px phone stations, mobile density forwarding, and modernized shared detail language/index |
 | 2026-08-26 | T3–T4 | Desktop/tablet/mobile visual matrix | Pass for checkpoint | True PNGs captured at 1440×900, 1024×768, and 430×932; inspector, Sheet, Product detail, relationship ordering, and phone flow manually reviewed |
+| 2026-08-26 | T3–T4 | Product relationship contract integration tests | Pass | Covers exact counts, capped previews, source attribution, soft deletes, acquisition filtering, derived Project/Vendor evidence, and historical project-use reads after recategorization; mutation guards remain category-bound |
+| 2026-08-26 | T3–T4 | Relationship and shared-detail UI tests | Pass | Covers direct/derived labels and zero states, inspector reuse, page-owned relationship replacement, read-only historical project uses, and retained reusable-category edit affordances |
+| 2026-08-26 | T3–T4 | `pnpm typecheck:web` and `pnpm check` | Pass | Contract and historical-use commits pass web/workspace type checks and the full repository check |
+| 2026-08-26 | T3–T4 | Synthetic relationship-route visual review | Pass | Public-placeholder desktop and phone examples confirm compact strip, bounded branches, provenance, derived separation, horizontal phone scrolling, and 44px phone targets |
 
 ## T3–T4 mandatory checkpoint
 
@@ -115,12 +119,24 @@ All files live in `.impeccable/checkpoints/t3-products/`:
 | Canonical Product detail | `product-detail-1440x900.png` |
 | Phone Products projection | `products-mobile-430x932.png` |
 | Phone canonical Product detail | `product-detail-mobile-430x932.png` |
+| Synthetic relationship route at desktop | `product-route-synthetic-1440x900.png` |
+| Synthetic relationship route at phone | `product-route-synthetic-430x932.png` |
 
-Relationship drawing remains evidence-gated: the Overview/detail payload proves
-Product→InventoryEntry and Product→Location, so those stations link directly to
-their canonical records. Purchase, Expense, Vendor, Project, and Task journeys
-remain distinctly named and ordered in the Relations tab, but do not draw
-decorative count edges or trigger a multi-query fan-out merely to populate the
-Overview. The user checkpoint decides whether this truthful restrained route is
-the replication standard or whether T3 should add a dedicated aggregated
-relationship-summary contract before T5.
+Relationship drawing remains evidence-gated. One Product-owned public operation
+returns exact branch counts, at most three previews, canonical shortcodes, and
+explicit provenance. Stock and identity Locations, Expenses and Purchases, used
+on and purchased-for Projects, Tasks, and derived Vendors remain distinctly
+named rather than flattened into a decorative graph or inferred in the client.
+The operation currently executes fifteen bounded repository statements in
+parallel. That is acknowledged performance debt for later query consolidation,
+not permission to reintroduce client fan-out or weaken the fixed contract.
+
+### Checkpoint decision
+
+On 2026-08-26 the user approved and asked to deepen the Porcelain Transit
+direction. The resulting `product.relationshipRoute` contract and UI are now
+the T5 replication standard: one client query, direct evidence before derived
+rollups, no false chains, stable canonical links, explicit zero/error states,
+and read-only preservation of historical evidence when a Product category
+changes. The earlier payload-only route remains baseline evidence, not the
+current contract.

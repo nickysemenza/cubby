@@ -1,6 +1,11 @@
+import { productShortcode } from "@cubby/shared";
 import { createFileRoute } from "@tanstack/react-router";
 import { ClipboardList, Save } from "lucide-react";
 import { useId } from "react";
+import {
+  ProductRelationshipRouteFrame,
+  type RouteBranch,
+} from "~/app/_components/products/product-relationship-route";
 import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
@@ -41,6 +46,149 @@ const DOMAIN_SWATCHES = [
   ["House", "var(--domain-house)", "var(--domain-house-surface)"],
   ["Finance", "var(--domain-finance)", "var(--domain-finance-surface)"],
 ] as const;
+
+const ILLUSTRATIVE_PRODUCT = {
+  id: productShortcode.parse("PRD-4K7M"),
+  name: "Illustrative cordless drill",
+};
+
+const ILLUSTRATIVE_DIRECT_ROUTES: RouteBranch[] = [
+  {
+    id: "stock",
+    label: "Stock",
+    kind: "direct",
+    count: 2,
+    detailHash: "stocked-at",
+    emptyCopy: "No stock records yet.",
+    samples: [
+      {
+        id: "INV-DEMO-1",
+        label: "Workshop cabinet",
+        to: "/inventory/INV-DEMO-1",
+        detail: "Stock",
+      },
+      {
+        id: "INV-DEMO-2",
+        label: "Garage shelf",
+        to: "/inventory/INV-DEMO-2",
+        detail: "Stock",
+      },
+    ],
+  },
+  {
+    id: "identity-locations",
+    label: "Also a location",
+    kind: "direct",
+    count: 1,
+    detailHash: "stocked-at",
+    emptyCopy: "This product does not identify a location.",
+    samples: [
+      {
+        id: "LOC-DEMO",
+        label: "Drill case",
+        to: "/locations/LOC-DEMO",
+      },
+    ],
+  },
+  {
+    id: "expenses",
+    label: "Expenses",
+    kind: "direct",
+    count: 4,
+    detailHash: "expense-history",
+    emptyCopy: "No product expenses recorded.",
+    samples: [
+      {
+        id: "EXP-DEMO",
+        label: "Illustrative tool purchase",
+        to: "/expenses/EXP-DEMO",
+        detail: "Jan 15, 2026",
+      },
+    ],
+  },
+  {
+    id: "purchases",
+    label: "Purchases",
+    kind: "direct",
+    count: 3,
+    detailHash: "purchases",
+    emptyCopy: "No acquisition purchases recorded.",
+    samples: [
+      {
+        id: "PUR-DEMO",
+        label: "Illustrative workshop order",
+        to: "/purchases/PUR-DEMO",
+        detail: "Tool Supply",
+        provenance: "Expense + order link",
+      },
+    ],
+  },
+  {
+    id: "used-on-projects",
+    label: "Used on projects",
+    kind: "direct",
+    count: 2,
+    detailHash: "project-uses",
+    emptyCopy: "Not used on a project yet.",
+    samples: [
+      {
+        id: "PRJ-DEMO",
+        label: "Illustrative shelving project",
+        to: "/projects/PRJ-DEMO",
+      },
+    ],
+  },
+  {
+    id: "tasks",
+    label: "Tasks",
+    kind: "direct",
+    count: 1,
+    detailHash: "tasks",
+    emptyCopy: "No tasks are attached to this product.",
+    samples: [
+      {
+        id: "TSK-DEMO",
+        label: "Inspect battery",
+        to: "/tasks/TSK-DEMO",
+        detail: "Planned",
+      },
+    ],
+  },
+];
+
+const ILLUSTRATIVE_DERIVED_ROUTES: RouteBranch[] = [
+  {
+    id: "purchased-for-projects",
+    label: "Purchased for projects",
+    kind: "derived",
+    count: 1,
+    detailHash: "expense-history",
+    emptyCopy: "No project purchases are attributed from product expenses.",
+    evidence: "1 acquisition expense not assigned to a project.",
+    samples: [
+      {
+        id: "PRJ-DEMO",
+        label: "Illustrative shelving project",
+        to: "/projects/PRJ-DEMO",
+      },
+    ],
+  },
+  {
+    id: "vendors",
+    label: "Vendors",
+    kind: "derived",
+    count: 2,
+    detailHash: "vendors",
+    emptyCopy: "No vendor rollups from product spend yet.",
+    samples: [
+      {
+        id: "VND-DEMO",
+        label: "Illustrative Tool Supply",
+        to: "/vendors/VND-DEMO",
+      },
+    ],
+  },
+];
 
 function DesignSmokeTest() {
   const projectNameId = useId();
@@ -84,6 +232,32 @@ function DesignSmokeTest() {
                   <div className="px-2.5 py-2 font-medium text-xs">{label}</div>
                 </div>
               ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card data-testid="product-route-showcase">
+          <CardHeader>
+            <CardTitle>Product relationship route</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4 p-0 lg:grid-cols-[minmax(0,1fr)_26rem]">
+            <div className="min-w-0 px-3 pb-3 lg:py-3">
+              <p className="mb-2 text-muted-foreground text-xs">
+                The compact strip keeps direct context close to the workbench.
+              </p>
+              <ProductRelationshipRouteFrame
+                product={ILLUSTRATIVE_PRODUCT}
+                direct={ILLUSTRATIVE_DIRECT_ROUTES}
+                derived={ILLUSTRATIVE_DERIVED_ROUTES}
+                variant="strip"
+              />
+            </div>
+            <div className="border-border lg:border-l">
+              <ProductRelationshipRouteFrame
+                product={ILLUSTRATIVE_PRODUCT}
+                direct={ILLUSTRATIVE_DIRECT_ROUTES}
+                derived={ILLUSTRATIVE_DERIVED_ROUTES}
+              />
             </div>
           </CardContent>
         </Card>

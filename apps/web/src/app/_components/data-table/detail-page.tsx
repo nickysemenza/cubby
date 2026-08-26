@@ -363,8 +363,15 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   const hasSourceViews = relatedViewRegistry.some(
     (view) => view.source === pageDetail?.entity,
   );
+  // A detail page may own a semantically richer relationship composition than
+  // the generic explorer. The explicit section wins just as an explicit
+  // History section does below; appending both would duplicate the anchor and
+  // let the generic graph contradict the page-owned relationship contract.
+  const hasOwnRelationshipSection = sections.some(
+    (section) => section.id === "relationships",
+  );
   const relationshipSection: DetailSection | undefined =
-    pageDetail && sourceId && hasSourceViews
+    pageDetail && sourceId && hasSourceViews && !hasOwnRelationshipSection
       ? {
           id: "relationships",
           title: "Relationships",

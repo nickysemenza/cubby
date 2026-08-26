@@ -222,6 +222,7 @@ export function ProductWorkbenchInspector({
               variant="ghost"
               size="icon-xs"
               mobileSize="compact"
+              nativeButton={false}
               aria-label="Open full product details"
               render={
                 <Link

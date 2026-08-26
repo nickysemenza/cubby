@@ -3,11 +3,25 @@ import { Circle } from "lucide-react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { type DetailSection, DetailSections } from "./detail-page";
 
+const mocks = vi.hoisted(() => ({
+  pageDetail: { current: undefined as unknown },
+  relationshipExplorer: vi.fn(),
+}));
+
 vi.mock("~/hooks/useDebug", () => ({
   useDebug: () => ({ isDebugEnabled: false }),
 }));
 vi.mock("~/components/page/Page", () => ({
-  usePageDetailContext: () => undefined,
+  usePageDetailContext: () => mocks.pageDetail.current,
+}));
+vi.mock("../relationships/relationship-explorer", () => ({
+  RelationshipExplorer: (props: unknown) => {
+    mocks.relationshipExplorer(props);
+    return <div data-testid="generic-relationships">Generic relationships</div>;
+  },
+}));
+vi.mock("../audit-log/audit-log-list", () => ({
+  AuditLogList: () => <div data-testid="audit-log">Audit log</div>,
 }));
 
 const sections: DetailSection[] = [
@@ -37,6 +51,8 @@ const sections: DetailSection[] = [
 describe("DetailSections ledger", () => {
   beforeEach(() => {
     HTMLElement.prototype.scrollIntoView = vi.fn();
+    mocks.pageDetail.current = undefined;
+    mocks.relationshipExplorer.mockClear();
   });
 
   it("renders stable responsive tracks and a ruled section index", () => {
@@ -108,6 +124,35 @@ describe("DetailSections ledger", () => {
         />,
       ),
     ).toThrow("Detail section ids must be unique within a record page");
+  });
+
+  it("lets a page-owned relationships section replace the generic explorer", () => {
+    mocks.pageDetail.current = {
+      entity: "product",
+      rawData: { id: "PRD-EXAMPLE" },
+    };
+
+    render(
+      <DetailSections
+        sections={[
+          ...sections,
+          {
+            id: "relationships",
+            title: "Relationships",
+            icon: Circle,
+            placement: "full",
+            content: <p>Product route ledger</p>,
+          },
+        ]}
+        rawData={{ id: "PRD-EXAMPLE" }}
+      />,
+    );
+
+    expect(screen.getByText("Product route ledger")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("generic-relationships"),
+    ).not.toBeInTheDocument();
+    expect(mocks.relationshipExplorer).not.toHaveBeenCalled();
   });
 
   it("omits empty sections without leaving an index target", () => {
