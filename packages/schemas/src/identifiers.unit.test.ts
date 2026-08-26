@@ -2,14 +2,17 @@ import { AppErrors } from "@cubby/shared";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { type ShortcodeEntity, shortcodeEntities } from "./entity-manifest";
 import {
-  type BrandForEntity,
+  ENTITY_ID_SCHEMA,
   ENTITY_LABEL,
   ENTITY_NOT_FOUND_REASON,
+  type EntityId,
+  type EntityRef,
   type FinancialAccountId,
   type InventoryId,
   type ProductId,
-  unsafeIdForEntity,
-  unsafeProductId,
+  entityIdSchema,
+  parseEntityId,
+  parseEntityRef,
 } from "./identifiers";
 
 const sorted = (xs: readonly string[]) => [...xs].sort();
@@ -22,18 +25,18 @@ const UUID = "3f7c1a52-9d0b-4e21-8b6a-1c2d3e4f5a6b";
  * `resolveOrThrow(db, entity, code)` will be built on, so exercising it here
  * proves the maps are usable with an UNRESOLVED `E`, not just with literals.
  */
-const brandFor = <E extends ShortcodeEntity>(
+const parseFor = <E extends ShortcodeEntity>(
   entity: E,
-  id: string,
-): BrandForEntity<E> => unsafeIdForEntity[entity](id);
+  value: unknown,
+): EntityId<E> => parseEntityId(entity, value);
 
 describe("entity id lookups", () => {
-  it("covers every shortcode entity, in both lookups", () => {
+  it("covers every shortcode entity in every lookup", () => {
     // Drift guard. Adding an entity to the manifest without adding it here is
-    // already a compile error (`unsafeIdForEntity` is a mapped type over
+    // already a compile error (`ENTITY_ID_SCHEMA` is a mapped type over
     // `ShortcodeEntity`; `ENTITY_NOT_FOUND_REASON` `satisfies` a Record over
     // it), so this asserts the runtime maps too — no extra keys, none dropped.
-    expect(sorted(Object.keys(unsafeIdForEntity))).toEqual(
+    expect(sorted(Object.keys(ENTITY_ID_SCHEMA))).toEqual(
       sorted(shortcodeEntities),
     );
     expect(sorted(Object.keys(ENTITY_NOT_FOUND_REASON))).toEqual(
@@ -88,27 +91,32 @@ describe("entity id lookups", () => {
   });
 
   it("brands by entity, at the type level", () => {
-    expectTypeOf(brandFor("product", UUID)).toEqualTypeOf<ProductId>();
-    expectTypeOf(brandFor("inventory", UUID)).toEqualTypeOf<InventoryId>();
+    expectTypeOf(parseFor("product", UUID)).toEqualTypeOf<ProductId>();
+    expectTypeOf(parseFor("inventory", UUID)).toEqualTypeOf<InventoryId>();
     expectTypeOf(
-      brandFor("financialAccount", UUID),
+      parseFor("financialAccount", UUID),
     ).toEqualTypeOf<FinancialAccountId>();
-    expectTypeOf<BrandForEntity<"product">>().toEqualTypeOf<ProductId>();
-    expectTypeOf<BrandForEntity<"inventory">>().toEqualTypeOf<InventoryId>();
+    expectTypeOf<EntityId<"product">>().toEqualTypeOf<ProductId>();
+    expectTypeOf<EntityId<"inventory">>().toEqualTypeOf<InventoryId>();
 
-    // A brand is a compile-time-only tag: the value must survive untouched, or
-    // the id that reaches the DB would no longer be the one that was resolved.
+    // Parsing validates without changing a valid UUID's value.
     for (const entity of shortcodeEntities) {
-      expect(unsafeIdForEntity[entity](UUID)).toBe(UUID);
+      expect(parseEntityId(entity, UUID)).toBe(UUID);
     }
   });
 
-  it("still rejects an already-branded value", () => {
-    const branded = unsafeProductId(UUID);
-    // Going through the map must not widen the parameter to `string` — that
-    // would quietly re-admit the no-op casts the hand-written `unsafe*Id`
-    // guards reject. (`@ts-expect-error` fails the build if this ever compiles.)
-    // @ts-expect-error — `branded` is already a ProductId; brand upstream instead.
-    expect(unsafeIdForEntity.product(branded)).toBe(UUID);
+  it("rejects malformed ids through every entity schema", () => {
+    for (const entity of shortcodeEntities) {
+      expect(entityIdSchema(entity).safeParse("not-a-uuid").success).toBe(
+        false,
+      );
+    }
+  });
+
+  it("correlates an entity reference's discriminator with its id brand", () => {
+    const ref: EntityRef = parseEntityRef("product", UUID);
+    if (ref.entity === "product") {
+      expectTypeOf(ref.id).toEqualTypeOf<ProductId>();
+    }
   });
 });

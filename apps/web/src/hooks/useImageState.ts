@@ -1,4 +1,4 @@
-import { unsafeImageShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { UpdateInputImages } from "@cubby/schemas/image";
 import { useState } from "react";
 import type { PendingImage } from "~/app/_components/PendingImageUpload";
@@ -42,12 +42,14 @@ export function useImageState() {
     // `PendingImage.id` is plain `string` (the same gallery component also
     // handles existing images), but the value underneath is always the
     // `IMG-` shortcode `create_file_upload`/`image.uploadImage` hand back —
-    // same reasoning as the `unsafeImageShortcode` casts just below.
+    // parsed at this shared gallery boundary before the update input is built.
     const pendingIds = [...pendingImages, ...pendingDocuments].map(
       (img) => img.id,
     );
     if (pendingIds.length > 0) {
-      imageData.pendingImageIds = pendingIds.map(unsafeImageShortcode);
+      imageData.pendingImageIds = pendingIds.map((id) =>
+        parseShortcodeFor("image", id),
+      );
     }
 
     // `removedImageIds`/`imageOrder` name EXISTING images — ids that came
@@ -59,14 +61,18 @@ export function useImageState() {
     // images.
     const removedIds = [...removedImageIds, ...removedDocumentIds];
     if (!isCreate && removedIds.length > 0) {
-      imageData.removeImageIds = removedIds.map(unsafeImageShortcode);
+      imageData.removeImageIds = removedIds.map((id) =>
+        parseShortcodeFor("image", id),
+      );
     }
 
     // If the user reordered the existing images, persist the new order.
     // Removed ids may still appear here; the server applies order before the
     // removal, so they are harmless.
     if (!isCreate && imageOrder !== null) {
-      imageData.imageOrder = imageOrder.map(unsafeImageShortcode);
+      imageData.imageOrder = imageOrder.map((id) =>
+        parseShortcodeFor("image", id),
+      );
     }
 
     return imageData;

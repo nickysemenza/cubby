@@ -1,4 +1,5 @@
-import { unsafeIngredientId } from "@cubby/schemas/identifiers";
+import { testEntityId } from "@cubby/schemas/testing";
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "~/server/db";
 import type { USDAService } from "~/server/services/usda.service";
@@ -52,7 +53,8 @@ beforeEach(() => {
 
 describe("suggestUsdaFoodBatch", () => {
   it("dispatches exactly one usda-match.retry job for an item whose lookup rejects, and still returns a degraded entry", async () => {
-    const ingredientId = unsafeIngredientId(
+    const ingredientId = testEntityId(
+      "ingredient",
       "00000000-0000-4000-8000-000000000001",
     );
     const usdaService = fakeUsdaService(
@@ -90,7 +92,8 @@ describe("suggestUsdaFoodBatch", () => {
   // nothing must NOT be conflated with an infra failure, or every unmatched
   // ingredient would silently queue a retry job forever.
   it("dispatches nothing when the lookup succeeds and genuinely finds no match", async () => {
-    const ingredientId = unsafeIngredientId(
+    const ingredientId = testEntityId(
+      "ingredient",
       "00000000-0000-4000-8000-000000000002",
     );
     const usdaService = fakeUsdaService(
@@ -113,8 +116,14 @@ describe("suggestUsdaFoodBatch", () => {
   });
 
   it("dispatches only for the rejected item in a mixed batch", async () => {
-    const okId = unsafeIngredientId("00000000-0000-4000-8000-000000000003");
-    const failId = unsafeIngredientId("00000000-0000-4000-8000-000000000004");
+    const okId = testEntityId(
+      "ingredient",
+      "00000000-0000-4000-8000-000000000003",
+    );
+    const failId = testEntityId(
+      "ingredient",
+      "00000000-0000-4000-8000-000000000004",
+    );
     const listFoods = vi
       .fn()
       .mockImplementation((name: string) =>
@@ -145,7 +154,8 @@ describe("suggestUsdaFoodBatch", () => {
 
 describe("retryUsdaMatch", () => {
   it("re-fetches the ingredient's current name rather than trusting a stale payload", async () => {
-    const ingredientId = unsafeIngredientId(
+    const ingredientId = testEntityId(
+      "ingredient",
       "00000000-0000-4000-8000-000000000005",
     );
     mocks.getIngredientByID.mockResolvedValue({
@@ -169,7 +179,8 @@ describe("retryUsdaMatch", () => {
   });
 
   it("lets a real failure throw so processBackgroundJob's backoff takes over", async () => {
-    const ingredientId = unsafeIngredientId(
+    const ingredientId = testEntityId(
+      "ingredient",
       "00000000-0000-4000-8000-000000000006",
     );
     mocks.getIngredientByID.mockResolvedValue({

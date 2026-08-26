@@ -1,7 +1,4 @@
-import {
-  unsafeIngredientShortcode,
-  unsafeRecipeShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import type { HarvestRow } from "~/lib/harvest-equivalences";
 import type { Database } from "~/server/db";
@@ -60,10 +57,10 @@ export const getMultiMeasureRecipeIngredients = async (
     );
   return rows.map((r) => ({
     ingredientEntityId: r.ingredientId,
-    ingredientId: unsafeIngredientShortcode(r.ingredientShortcode),
+    ingredientId: parseShortcodeFor("ingredient", r.ingredientShortcode),
     ingredientName: r.ingredientName,
     recipeEntityId: r.recipeId,
-    recipeId: unsafeRecipeShortcode(r.recipeShortcode),
+    recipeId: parseShortcodeFor("recipe", r.recipeShortcode),
     recipeName: r.recipeName,
     rawLine: r.rawLine,
     amounts: r.amounts,

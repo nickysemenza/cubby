@@ -482,8 +482,7 @@ export async function syncProductImages(
     const idsToRemove = await resolveAllPresent(tx, "image", removeImageIds);
     ({ deletedKeys: detachedImageKeys } = await detachImagesFromEntity(
       tx,
-      "product",
-      productId,
+      { entity: "product", id: productId },
       idsToRemove,
     ));
   }

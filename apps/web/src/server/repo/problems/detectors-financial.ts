@@ -7,11 +7,7 @@ import {
   purchaseSettlementKindAllowedExpression,
   purchaseSettlementSignSatisfiedExpression,
 } from "@cubby/schemas/financial-transaction";
-import {
-  unsafeFinancialAccountShortcode,
-  unsafeFinancialTransactionShortcode,
-  unsafePurchaseShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   DuplicateFinancialAccountSourceAlias,
   DuplicateFinancialTransactionSourceRef,
@@ -48,7 +44,7 @@ export async function findInvalidFinancialJson(
       if (!parsed.success)
         problems.push({
           entity: "financialTransaction",
-          id: unsafeFinancialTransactionShortcode(row.id),
+          id: parseShortcodeFor("financialTransaction", row.id),
           field: "sourceRefs",
           message: parsed.error.issues[0]?.message ?? "Invalid JSON",
         });
@@ -65,7 +61,7 @@ export async function findInvalidFinancialJson(
       if (!parsed.success)
         problems.push({
           entity: "financialAccount",
-          id: unsafeFinancialAccountShortcode(row.id),
+          id: parseShortcodeFor("financialAccount", row.id),
           field,
           message: parsed.error.issues[0]?.message ?? "Invalid JSON",
         });
@@ -89,7 +85,9 @@ export async function findDuplicateFinancialTransactionSourceRefs(
   `);
   return result.rows.map((row) => ({
     ...row,
-    transactionIds: row.transactionIds.map(unsafeFinancialTransactionShortcode),
+    transactionIds: row.transactionIds.map((id) =>
+      parseShortcodeFor("financialTransaction", id),
+    ),
   }));
 }
 
@@ -125,14 +123,16 @@ type AllocationDefectRow = {
 const presentAllocationDefect = (
   row: AllocationDefectRow,
 ): FinancialTransactionAllocationDefect => ({
-  id: unsafeFinancialTransactionShortcode(row.id),
+  id: parseShortcodeFor("financialTransaction", row.id),
   name: row.merchant ?? row.rawDescription ?? null,
   postedDate: row.postedDate ?? null,
   kind: row.kind,
   amount: Number(row.amount),
   allocationCount: Number(row.allocationCount),
   allocatedTotal: Number(row.allocatedTotal),
-  purchaseIds: (row.purchaseIds ?? []).map(unsafePurchaseShortcode),
+  purchaseIds: (row.purchaseIds ?? []).map((id) =>
+    parseShortcodeFor("purchase", id),
+  ),
   reasons: [
     ...(row.sumMismatch ? (["sum-mismatch"] as const) : []),
     ...(row.nonSettlementKind ? (["non-settlement-kind"] as const) : []),
@@ -247,7 +247,9 @@ export async function findDuplicateFinancialAccountSourceAliases(
   `);
   return result.rows.map((row) => ({
     ...row,
-    accountIds: row.accountIds.map(unsafeFinancialAccountShortcode),
+    accountIds: row.accountIds.map((id) =>
+      parseShortcodeFor("financialAccount", id),
+    ),
   }));
 }
 

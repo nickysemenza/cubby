@@ -1,11 +1,9 @@
-import {
-  type InventoryId,
-  type LocationId,
-  type ProductId,
-  unsafeInventoryId,
-  unsafeLocationId,
-  unsafeProductId,
+import type {
+  InventoryId,
+  LocationId,
+  ProductId,
 } from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -52,7 +50,7 @@ describe("moveInventoryEntries", () => {
       makeLocationInput({ name }),
       TEST_ACTOR,
     );
-    return unsafeLocationId(await resolved(output.id, "location"));
+    return parseEntityId("location", await resolved(output.id, "location"));
   };
 
   const makeProduct = async (name: string): Promise<ProductId> => {
@@ -61,7 +59,7 @@ describe("moveInventoryEntries", () => {
       makeProductInput({ name }),
       TEST_ACTOR,
     );
-    return unsafeProductId(await resolved(output.id, "product"));
+    return parseEntityId("product", await resolved(output.id, "product"));
   };
 
   const makeEntry = async (
@@ -75,7 +73,7 @@ describe("moveInventoryEntries", () => {
       { productId, locationId, amount: { value, unit } },
       TEST_ACTOR,
     );
-    return unsafeInventoryId(await resolved(entry.id, "inventory"));
+    return parseEntityId("inventory", await resolved(entry.id, "inventory"));
   };
 
   const liveAt = async (locationId: LocationId) => {

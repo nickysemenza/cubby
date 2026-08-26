@@ -1,4 +1,5 @@
-import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -39,7 +40,7 @@ import { RecommendationWorkbench } from "./recommendation-workbench";
 
 describe("RecommendationWorkbench tag propagation", () => {
   it("does not mutate tags until the proposal is explicitly accepted", () => {
-    const sourceId = unsafeProductShortcode("PRD-TAGS");
+    const sourceId = testShortcode("product", "PRD-TAGS");
     render(
       <RecommendationWorkbench sourceId={sourceId} kind="tag-propagation" />,
     );

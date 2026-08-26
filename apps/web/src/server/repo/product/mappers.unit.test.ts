@@ -1,19 +1,9 @@
 import {
-  unsafeImageShortcode,
-  unsafeIngredientId,
-  unsafeIngredientShortcode,
-  unsafeInventoryId,
-  unsafeInventoryShortcode,
-  unsafeLocationId,
-  unsafeLocationShortcode,
-  unsafeProductId,
-  unsafeProductShortcode,
-} from "@cubby/schemas/identifiers";
-import {
   productListItemOut,
   productTopLevelOut,
   productWithIngredientAndInventoryAndMappingsOut,
 } from "@cubby/schemas/product";
+import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 import {
@@ -24,19 +14,30 @@ import {
 import { EMPTY_QUANTITY_LEDGER } from "./quantity-ledger";
 import type { ProductDeepDB, ProductListDB } from "./types";
 
-const PRODUCT_ID = unsafeProductId("123e4567-e89b-12d3-a456-426614174000");
-const INGREDIENT_ID = unsafeIngredientId(
+const PRODUCT_ID = testEntityId(
+  "product",
+  "123e4567-e89b-12d3-a456-426614174000",
+);
+const INGREDIENT_ID = testEntityId(
+  "ingredient",
   "223e4567-e89b-12d3-a456-426614174000",
 );
-const LOCATION_ID = unsafeLocationId("323e4567-e89b-12d3-a456-426614174000");
-const INVENTORY_ID = unsafeInventoryId("423e4567-e89b-12d3-a456-426614174000");
-const DELETED_LOCATION_INVENTORY_ID = unsafeInventoryId(
+const LOCATION_ID = testEntityId(
+  "location",
+  "323e4567-e89b-12d3-a456-426614174000",
+);
+const INVENTORY_ID = testEntityId(
+  "inventory",
+  "423e4567-e89b-12d3-a456-426614174000",
+);
+const DELETED_LOCATION_INVENTORY_ID = testEntityId(
+  "inventory",
   "023e4567-e89b-12d3-a456-426614174000",
 );
 const IMAGE_SHORTCODE = "IMG-2345";
-const IMAGE_ID = unsafeImageShortcode(IMAGE_SHORTCODE);
+const IMAGE_ID = testShortcode("image", IMAGE_SHORTCODE);
 const JOIN_IMAGE_SHORTCODE = "IMG-6789";
-const JOIN_IMAGE_ID = unsafeImageShortcode(JOIN_IMAGE_SHORTCODE);
+const JOIN_IMAGE_ID = testShortcode("image", JOIN_IMAGE_SHORTCODE);
 const DELETED_IMAGE_SHORTCODE = "IMG-ABCD";
 const EXTERNAL_ID = "823e4567-e89b-12d3-a456-426614174000";
 const DELETED_EXTERNAL_ID = "923e4567-e89b-12d3-a456-426614174000";
@@ -174,7 +175,7 @@ const activeLocation = {
 
 const deletedLocation = {
   ...activeLocation,
-  id: unsafeLocationId("c23e4567-e89b-12d3-a456-426614174000"),
+  id: testEntityId("location", "c23e4567-e89b-12d3-a456-426614174000"),
   shortcode: "LOC-9WK4",
   deletedAt: DELETED_AT,
 };
@@ -194,7 +195,7 @@ describe("product mappers", () => {
     });
 
     expect(result).toMatchObject({
-      id: unsafeProductShortcode("PRD-TEST"),
+      id: testShortcode("product", "PRD-TEST"),
       name: "Flour",
       manufacturer: "Generic",
       images: [
@@ -267,9 +268,9 @@ describe("product mappers", () => {
     const result = dbProductToListAPI(row);
 
     expect(result).toMatchObject({
-      id: unsafeProductShortcode("PRD-TEST"),
+      id: testShortcode("product", "PRD-TEST"),
       ingredient: {
-        id: unsafeIngredientShortcode("ING-TEST"),
+        id: testShortcode("ingredient", "ING-TEST"),
         name: "Wheat flour",
       },
       unitMappings: [
@@ -277,7 +278,7 @@ describe("product mappers", () => {
           id: UNIT_MAPPING_ID,
           sourceMetadata: {
             type: "product",
-            productId: unsafeProductShortcode("PRD-TEST"),
+            productId: testShortcode("product", "PRD-TEST"),
           },
         },
       ],
@@ -285,10 +286,10 @@ describe("product mappers", () => {
       images: [{ id: IMAGE_ID }],
       inventoryEntry: [
         {
-          id: unsafeInventoryShortcode("INV-2345"),
+          id: testShortcode("inventory", "INV-2345"),
           amount: { value: 2, unit: "each" },
           location: {
-            id: unsafeLocationShortcode("LOC-TEST"),
+            id: testShortcode("location", "LOC-TEST"),
             name: "Pantry",
             type: "room",
           },
@@ -391,7 +392,7 @@ describe("product mappers", () => {
           facet: "identity" as const,
           kind: "missing" as const,
           targetType: "product" as const,
-          targetId: unsafeProductShortcode("PRD-TEST"),
+          targetId: testShortcode("product", "PRD-TEST"),
           message: "Manufacturer model is not recorded.",
         },
       ],
@@ -405,7 +406,7 @@ describe("product mappers", () => {
               facet: "identity" as const,
               kind: "missing" as const,
               targetType: "product" as const,
-              targetId: unsafeProductShortcode("PRD-TEST"),
+              targetId: testShortcode("product", "PRD-TEST"),
               message: "Manufacturer model is not recorded.",
             },
           ],
@@ -420,9 +421,9 @@ describe("product mappers", () => {
     const result = dbProductToAPI(row, dataQuality);
 
     expect(result).toMatchObject({
-      id: unsafeProductShortcode("PRD-TEST"),
+      id: testShortcode("product", "PRD-TEST"),
       ingredient: {
-        id: unsafeIngredientShortcode("ING-TEST"),
+        id: testShortcode("ingredient", "ING-TEST"),
         name: "Wheat flour",
         aliases: ["flour"],
       },
@@ -431,7 +432,7 @@ describe("product mappers", () => {
           id: UNIT_MAPPING_ID,
           sourceMetadata: {
             type: "product",
-            productId: unsafeProductShortcode("PRD-TEST"),
+            productId: testShortcode("product", "PRD-TEST"),
           },
         },
       ],
@@ -440,10 +441,10 @@ describe("product mappers", () => {
       dataQuality,
       inventoryEntry: [
         {
-          id: unsafeInventoryShortcode("INV-2345"),
+          id: testShortcode("inventory", "INV-2345"),
           amount: { value: 2, unit: "each" },
           location: {
-            id: unsafeLocationShortcode("LOC-TEST"),
+            id: testShortcode("location", "LOC-TEST"),
             name: "Pantry",
           },
         },

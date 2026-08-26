@@ -1,32 +1,33 @@
 import {
-  unsafeImageShortcode,
-  unsafeIngredientId,
-  unsafeIngredientShortcode,
-  unsafeRecipeId,
-  unsafeRecipeShortcode,
-} from "@cubby/schemas/identifiers";
-import {
   recipeGraphOut,
   recipeListItemOut,
   recipeOut,
   recipeUsageOut,
 } from "@cubby/schemas/recipe";
+import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 import { computeRecipeUsages, dbRecipeToAPIShallow } from "./recipe";
 import { dbRecipeToAPI, dbRecipeToAPIGraph } from "./recipe/helpers";
 import type { RecipeDeepDB, RecipeGraphDB } from "./recipe/internal-types";
 
-const RECIPE_ID = unsafeRecipeId("123e4567-e89b-12d3-a456-426614174000");
-const SUB_RECIPE_ID = unsafeRecipeId("223e4567-e89b-12d3-a456-426614174000");
-const INGREDIENT_ID = unsafeIngredientId(
+const RECIPE_ID = testEntityId(
+  "recipe",
+  "123e4567-e89b-12d3-a456-426614174000",
+);
+const SUB_RECIPE_ID = testEntityId(
+  "recipe",
+  "223e4567-e89b-12d3-a456-426614174000",
+);
+const INGREDIENT_ID = testEntityId(
+  "ingredient",
   "323e4567-e89b-12d3-a456-426614174000",
 );
 const SECTION_ID = "423e4567-e89b-12d3-a456-426614174000";
 const INGREDIENT_ROW_ID = "523e4567-e89b-12d3-a456-426614174000";
 const RECIPE_ROW_ID = "623e4567-e89b-12d3-a456-426614174000";
 const IMAGE_SHORTCODE = "IMG-2345";
-const IMAGE_ID = unsafeImageShortcode(IMAGE_SHORTCODE);
+const IMAGE_ID = testShortcode("image", IMAGE_SHORTCODE);
 const DELETED_IMAGE_SHORTCODE = "IMG-6789";
 const CREATED_AT = new Date("2023-01-01T00:00:00.000Z");
 const UPDATED_AT = new Date("2023-01-02T00:00:00.000Z");
@@ -209,7 +210,7 @@ describe("recipe repository helpers", () => {
       });
 
       expect(result).toMatchObject({
-        id: unsafeRecipeShortcode("RCP-A3F2"),
+        id: testShortcode("recipe", "RCP-A3F2"),
         name: "Test Recipe",
         meta: { url: null },
         source: { type: "other" },
@@ -222,7 +223,7 @@ describe("recipe repository helpers", () => {
     const result = dbRecipeToAPI(fullRecipeRow);
 
     expect(result).toMatchObject({
-      id: unsafeRecipeShortcode("RCP-A3F2"),
+      id: testShortcode("recipe", "RCP-A3F2"),
       name: "Test Recipe",
       images: [{ id: IMAGE_ID, url: getR2PublicUrl(image.key) }],
       sections: [
@@ -236,7 +237,7 @@ describe("recipe repository helpers", () => {
               type: "ingredient",
               recipe: null,
               ingredient: {
-                id: unsafeIngredientShortcode("ING-TEST"),
+                id: testShortcode("ingredient", "ING-TEST"),
                 name: "Flour",
                 aliases: ["all-purpose flour"],
               },
@@ -246,7 +247,7 @@ describe("recipe repository helpers", () => {
               type: "recipe",
               ingredient: null,
               recipe: {
-                id: unsafeRecipeShortcode("RCP-SUB7"),
+                id: testShortcode("recipe", "RCP-SUB7"),
                 name: "Sub Recipe",
               },
             },

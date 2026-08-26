@@ -15,10 +15,7 @@ import type {
   LocationShortcode,
   ProductId,
 } from "@cubby/schemas/identifiers";
-import {
-  unsafeInventoryShortcode,
-  unsafeLocationShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { inventoryEntry } from "~/server/db/schema";
@@ -69,11 +66,11 @@ export const getProductStockRows = async (
     .filter((row) => row.location && !row.location.deletedAt)
     .map((row) => ({
       entityId: row.id,
-      id: unsafeInventoryShortcode(row.shortcode),
+      id: parseShortcodeFor("inventory", row.shortcode),
       amount: row.amount,
       location: {
         entityId: row.location.id,
-        id: unsafeLocationShortcode(row.location.shortcode),
+        id: parseShortcodeFor("location", row.location.shortcode),
         name: row.location.name,
       },
     }));
@@ -128,11 +125,11 @@ export const getLiveStockRowsByIds = async (
     .filter((row) => row.location && !row.location.deletedAt)
     .map((row) => ({
       entityId: row.id,
-      id: unsafeInventoryShortcode(row.shortcode),
+      id: parseShortcodeFor("inventory", row.shortcode),
       amount: row.amount,
       location: {
         entityId: row.location.id,
-        id: unsafeLocationShortcode(row.location.shortcode),
+        id: parseShortcodeFor("location", row.location.shortcode),
         name: row.location.name,
       },
     }));

@@ -97,7 +97,7 @@ type StockRow = InventoryEntry & {
 
 type IdentityRow = {
   kind: "identity";
-  id: InventoryShortcode;
+  id: string;
   location: ProductWithFoodOut["servingAsLocations"][number];
   amount: { value: number; unit: string };
   valuation: number | null;
@@ -146,9 +146,8 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
     const identity: StockedRow[] = product.servingAsLocations.map((loc) => ({
       kind: "identity" as const,
       // The table keys rows by `id` and an identity row has no InventoryEntry,
-      // so it borrows the location's shortcode. Prefixes cannot collide —
-      // `LOC-` is never an `INV-`.
-      id: loc.id as unknown as InventoryShortcode,
+      // so it uses the location shortcode as a display-only table key.
+      id: loc.id,
       location: loc,
       // A location is one unit of the product by definition.
       amount: { value: 1, unit: "each" },

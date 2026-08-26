@@ -1,5 +1,5 @@
 import { displayGtin } from "@cubby/schemas/external-id";
-import type { ProjectShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import { locationCoverImage } from "@cubby/schemas/location";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
@@ -860,16 +860,17 @@ function GenericPreviewContent({
 }
 
 function ProjectPreviewContent({ id }: { id: string }) {
+  const projectId = parseShortcodeFor("project", id);
   const query = useQuery(entityDetailQueryOptions("project", id));
   const coverQuery = useQuery(
     image.projectSummaries.queryOptions({
-      projectIds: [id as ProjectShortcode],
+      projectIds: [projectId],
     }),
   );
   const data = query.data
     ? {
         ...query.data,
-        thumbUrl: coverQuery.data?.[id as ProjectShortcode]?.[0]?.url,
+        thumbUrl: coverQuery.data?.[projectId]?.[0]?.url,
       }
     : undefined;
 

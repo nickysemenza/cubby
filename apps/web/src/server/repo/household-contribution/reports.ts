@@ -7,11 +7,7 @@ import {
   projectContributionOut,
 } from "@cubby/schemas/household-contribution";
 import type { LedgerPartyId, ProjectId } from "@cubby/schemas/identifiers";
-import {
-  unsafeExpenseShortcode,
-  unsafeLedgerPartyShortcode,
-  unsafeLedgerTransferShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, inArray, lte, sql } from "drizzle-orm";
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -63,7 +59,7 @@ async function loadPartyDirectory(
   const parties = new Map<LedgerPartyId, Party>();
   for (const row of rows) {
     parties.set(row.id, {
-      id: unsafeLedgerPartyShortcode(row.shortcode),
+      id: parseShortcodeFor("ledgerParty", row.shortcode),
       name: row.name,
       kind: row.kind,
     });
@@ -121,7 +117,7 @@ function attributionGaps(rows: ExpenseAllocationRow[]): Gap[] {
             ? "missing_beneficiaries"
             : "missing_funders",
         amount: money(nullCents),
-        targetIds: [unsafeExpenseShortcode(first.expenseShortcode)],
+        targetIds: [parseShortcodeFor("expense", first.expenseShortcode)],
       });
     } else if (nullRows.length > 0) {
       gaps.push({
@@ -130,7 +126,7 @@ function attributionGaps(rows: ExpenseAllocationRow[]): Gap[] {
             ? "partial_beneficiaries"
             : "partial_funders",
         amount: money(nullCents),
-        targetIds: [unsafeExpenseShortcode(first.expenseShortcode)],
+        targetIds: [parseShortcodeFor("expense", first.expenseShortcode)],
       });
     }
   }
@@ -224,7 +220,7 @@ export async function householdContributionLedger(
       transferGaps.push({
         code: "transfer_evidence_one_sided",
         amount: money(cents),
-        targetIds: [unsafeLedgerTransferShortcode(transfer.shortcode)],
+        targetIds: [parseShortcodeFor("ledgerTransfer", transfer.shortcode)],
       });
     }
   }
@@ -274,7 +270,7 @@ export async function householdContributionLedger(
     .filter((row) => row.costCents === null)
     .map((row) => ({
       code: "unpriced_expense",
-      targetIds: [unsafeExpenseShortcode(row.shortcode)],
+      targetIds: [parseShortcodeFor("expense", row.shortcode)],
     }));
   const allGaps = [
     ...attributionGaps(allocations),
@@ -374,7 +370,7 @@ export async function projectContribution(
       .filter((row) => row.costCents === null)
       .map((row) => ({
         code: "unpriced_expense" as const,
-        targetIds: [unsafeExpenseShortcode(row.shortcode)],
+        targetIds: [parseShortcodeFor("expense", row.shortcode)],
       })),
   ];
 

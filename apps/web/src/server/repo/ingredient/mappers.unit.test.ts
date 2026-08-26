@@ -1,17 +1,9 @@
 import {
-  unsafeImageShortcode,
-  unsafeIngredientId,
-  unsafeIngredientShortcode,
-  unsafeProductId,
-  unsafeProductShortcode,
-  unsafeRecipeId,
-  unsafeRecipeShortcode,
-} from "@cubby/schemas/identifiers";
-import {
   ingredientOut,
   ingredientWithRecipesAndProductOut,
 } from "@cubby/schemas/ingredient";
 import { productWithMappingsOut } from "@cubby/schemas/product";
+import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import {
   dbIngredientToAPI,
@@ -22,13 +14,20 @@ import {
   type Qualified,
 } from "./internal-types";
 
-const PRODUCT_ID = unsafeProductId("123e4567-e89b-12d3-a456-426614174000");
-const INGREDIENT_ID = unsafeIngredientId(
+const PRODUCT_ID = testEntityId(
+  "product",
+  "123e4567-e89b-12d3-a456-426614174000",
+);
+const INGREDIENT_ID = testEntityId(
+  "ingredient",
   "223e4567-e89b-12d3-a456-426614174000",
 );
-const RECIPE_ID = unsafeRecipeId("923e4567-e89b-12d3-a456-426614174000");
+const RECIPE_ID = testEntityId(
+  "recipe",
+  "923e4567-e89b-12d3-a456-426614174000",
+);
 const IMAGE_SHORTCODE = "IMG-2345";
-const IMAGE_ID = unsafeImageShortcode(IMAGE_SHORTCODE);
+const IMAGE_ID = testShortcode("image", IMAGE_SHORTCODE);
 const DELETED_IMAGE_SHORTCODE = "IMG-6789";
 const EXTERNAL_ID = "523e4567-e89b-12d3-a456-426614174000";
 const DELETED_EXTERNAL_ID = "623e4567-e89b-12d3-a456-426614174000";
@@ -137,7 +136,7 @@ describe("ingredient product mappers", () => {
     const result = dbIngredientToTopLevelShape(baseIngredient);
 
     expect(result).toEqual({
-      id: unsafeIngredientShortcode("ING-TEST"),
+      id: testShortcode("ingredient", "ING-TEST"),
       name: "Wheat flour",
       aliases: ["flour"],
       naKinds: [],
@@ -213,7 +212,7 @@ describe("ingredient product mappers", () => {
     const result = firstResult(mapIngredientProducts(rows));
 
     expect(result).toMatchObject({
-      id: unsafeProductShortcode("PRD-TEST"),
+      id: testShortcode("product", "PRD-TEST"),
       images: [{ id: IMAGE_ID }],
       externalIds: [{ id: EXTERNAL_ID }],
       unitMappings: [
@@ -221,7 +220,7 @@ describe("ingredient product mappers", () => {
           id: UNIT_MAPPING_ID,
           sourceMetadata: {
             type: "product",
-            productId: unsafeProductShortcode("PRD-TEST"),
+            productId: testShortcode("product", "PRD-TEST"),
           },
         },
       ],
@@ -255,7 +254,7 @@ describe("ingredient product mappers", () => {
     );
 
     expect(result).toMatchObject({
-      id: unsafeProductShortcode("PRD-TEST"),
+      id: testShortcode("product", "PRD-TEST"),
       images: [],
       externalIds: [],
       unitMappings: [{ id: UNIT_MAPPING_ID }],
@@ -314,7 +313,7 @@ describe("ingredient product mappers", () => {
     } satisfies IngredientDeepDB);
 
     expect(result.recipe).toMatchObject({
-      id: unsafeRecipeShortcode("RCP-TEST"),
+      id: testShortcode("recipe", "RCP-TEST"),
       name: "Pancakes",
     });
     expect(result.recipe).not.toHaveProperty("shortcode");

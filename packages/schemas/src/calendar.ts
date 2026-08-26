@@ -153,6 +153,9 @@ export const calendarFilterFields = {
   projectKindPresenceFilter: presenceFilter,
 };
 
+export const calendarFiltersInput = z.object(calendarFilterFields);
+export type CalendarFiltersInput = z.infer<typeof calendarFiltersInput>;
+
 export const calendarRangeInput = z
   .object({
     startDate: plainDate,

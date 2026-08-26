@@ -10,6 +10,7 @@
         "scripts/format-changed.ts!",
         "scripts/check-sql-safety.ts!",
         "scripts/check-soft-delete-filters.ts!",
+        "scripts/check-unsafe-identifiers.unit.test.ts!",
         "scripts/check-markdown-links.ts!",
         "scripts/check-security-audit.ts!",
         "scripts/ci-scope.ts!",

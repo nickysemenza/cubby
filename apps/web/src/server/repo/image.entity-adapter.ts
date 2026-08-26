@@ -17,7 +17,7 @@ import {
 
 const imageShortcodes = bindShortcodeResolver("image");
 
-export const imageEntityAdapter = {
+export const imageEntityAdapter: EntityKernelBinding = {
   entity: "image",
   sideEffects: false,
   schemas: {
@@ -34,7 +34,7 @@ export const imageEntityAdapter = {
     get: async (ctx, shortcode) =>
       getImageById(
         ctx.db,
-        await imageShortcodes.one(ctx.db, shortcode as string),
+        await imageShortcodes.one(ctx.db, imageShortcode.parse(shortcode)),
       ),
     list: (ctx, filters, sorts, pagination) =>
       imageList(
@@ -44,7 +44,10 @@ export const imageEntityAdapter = {
         pagination,
       ),
     update: async (ctx, shortcode, data) => {
-      const entityId = await imageShortcodes.one(ctx.db, shortcode as string);
+      const entityId = await imageShortcodes.one(
+        ctx.db,
+        imageShortcode.parse(shortcode),
+      );
       return {
         output: await updateImage(
           ctx.db,
@@ -55,9 +58,12 @@ export const imageEntityAdapter = {
       };
     },
     delete: async (ctx, shortcodes) => {
-      const ids = await imageShortcodes.all(ctx.db, shortcodes as string[]);
+      const ids = await imageShortcodes.all(
+        ctx.db,
+        imageShortcode.array().parse(shortcodes),
+      );
       const { deletedIds, deletedKeys } = await deleteImages(ctx.db, ids);
       return { deleted: deletedIds.length, detachedImageKeys: deletedKeys };
     },
   },
-} as EntityKernelBinding;
+};

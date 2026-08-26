@@ -1,4 +1,4 @@
-import { type UserId, unsafeUserId } from "@cubby/schemas/identifiers";
+import { type UserId, userId } from "@cubby/schemas/identifiers";
 import { getErrorMessage } from "@cubby/shared";
 import { verifyJwsAccessToken } from "better-auth/oauth2";
 import { auth, MCP_RESOURCE, OAUTH_ISSUER } from "~/lib/auth";
@@ -79,7 +79,7 @@ export async function verifyMcpToken(
       return null;
     }
     return {
-      userId: unsafeUserId(payload.sub),
+      userId: userId.parse(payload.sub),
       sessionId: typeof payload.sid === "string" ? payload.sid : null,
       clientId: typeof payload.azp === "string" ? payload.azp : null,
     };

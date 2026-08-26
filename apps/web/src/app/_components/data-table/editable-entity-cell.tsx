@@ -46,7 +46,7 @@ export interface EditableEntityCellProps<TId extends string> {
    */
   trigger?: "wrap" | "pencil";
   /** Enable cmd-C / cmd-V on the focused trigger. */
-  clipboard?: CellClipboardSpec;
+  clipboard?: CellClipboardSpec<ComboboxItem<TId> | null>;
 }
 
 /**
@@ -71,9 +71,7 @@ export function EditableEntityCell<TId extends string>({
     value,
     itemIdEquals,
   );
-  const edit = useCellEditState(clipboard, (saved) =>
-    setOptimisticValue(saved as ComboboxItem<TId> | null),
-  );
+  const edit = useCellEditState(clipboard, setOptimisticValue);
 
   const editor = edit.isEditing && (
     <CellEditorOverlay

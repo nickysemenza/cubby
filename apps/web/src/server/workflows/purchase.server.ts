@@ -1,5 +1,5 @@
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
-import { unsafeExpenseId, unsafePurchaseId } from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   linkExpensesToPurchaseInput,
   mergePurchasesInput,
@@ -92,7 +92,7 @@ export async function splitExpenseWorkflow(
             action: "deleted" as const,
             entity: {
               entityType: "expense" as const,
-              entityId: unsafeExpenseId(originalRef.id),
+              entityId: parseEntityId("expense", originalRef.id),
             },
             source: "purchase.split",
           },
@@ -128,7 +128,10 @@ export async function mergePurchasesWorkflow(
   if (entityId) {
     await runMutationSideEffects(ctx.db, {
       action: "updated",
-      entity: { entityType: "purchase", entityId: unsafePurchaseId(entityId) },
+      entity: {
+        entityType: "purchase",
+        entityId: parseEntityId("purchase", entityId),
+      },
       source: "purchase.merge",
     });
   }

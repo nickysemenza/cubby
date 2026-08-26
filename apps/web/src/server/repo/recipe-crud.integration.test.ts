@@ -1,3 +1,4 @@
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, desc, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -354,7 +355,7 @@ describe("recipe crud repo", () => {
         ctx.db,
         {
           ...makeRecipeInput({ name: "Illustrated" }),
-          pendingImageIds: [unsafeImageShortcode(cover.shortcode)],
+          pendingImageIds: [parseShortcodeFor("image", cover.shortcode)],
         },
         ctx.actor,
       );
@@ -368,7 +369,7 @@ describe("recipe crud repo", () => {
       // No new Image row was minted — the duplicate's cover is the SAME row.
       expect(duplicated.images).toHaveLength(1);
       expect(duplicated.images[0]!.id).toBe(
-        unsafeImageShortcode(cover.shortcode),
+        parseShortcodeFor("image", cover.shortcode),
       );
 
       // Both recipes now carry their own live RecipeImage join row for it.
@@ -592,13 +593,13 @@ describe("recipe crud repo", () => {
               ingredients: [
                 {
                   type: "recipe",
-                  recipeId: unsafeRecipeShortcode(book.shortcode),
+                  recipeId: parseShortcodeFor("recipe", book.shortcode),
                   ingredientId: null,
                   amounts: [{ value: 1, unit: "each" }],
                 },
                 {
                   type: "recipe",
-                  recipeId: unsafeRecipeShortcode(web.shortcode),
+                  recipeId: parseShortcodeFor("recipe", web.shortcode),
                   ingredientId: null,
                   amounts: [{ value: 1, unit: "each" }],
                 },
@@ -851,8 +852,4 @@ describe("recipe crud repo", () => {
   });
 });
 
-import {
-  type IngredientShortcode,
-  unsafeImageShortcode,
-  unsafeRecipeShortcode,
-} from "@cubby/schemas/identifiers";
+import type { IngredientShortcode } from "@cubby/schemas/identifiers";

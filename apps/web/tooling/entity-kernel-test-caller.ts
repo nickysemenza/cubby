@@ -1,4 +1,5 @@
-import { unsafeUserId } from "@cubby/schemas/identifiers";
+import { testUserId } from "@cubby/schemas/testing";
+
 import type { Database } from "~/server/db";
 import { executeEntity } from "~/server/entity-kernel";
 import type {
@@ -16,7 +17,7 @@ export function withEntityKernelMutations<T extends object>(
   db: Database,
 ) {
   const baseContext = createTestRequestContext(db, {
-    auth: { userId: unsafeUserId("test-user-id") },
+    auth: { userId: testUserId("test-user-id") },
   });
   if (!baseContext.actorContext) throw new Error("Test actor is required");
   const context = { ...baseContext, actorContext: baseContext.actorContext };

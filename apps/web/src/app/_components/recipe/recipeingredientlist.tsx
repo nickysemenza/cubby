@@ -231,7 +231,7 @@ export const RecipeIngredientList: React.FC<{
         // The shared column array erases heterogeneous TValue to keep every
         // column interoperable; this accessor's value is still ScalingRow's
         // concrete amounts field.
-        const amounts = info.getValue() as ScalingRow["amounts"];
+        const amounts: ScalingRow["amounts"] = info.getValue();
 
         // Unmeasured estimated rows have no amount; flag the estimate here so
         // the derived weight/calorie values read as guesses, not measurements.

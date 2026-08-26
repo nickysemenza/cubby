@@ -6,11 +6,7 @@ import type {
   LedgerTransferId,
   LedgerTransferShortcode,
 } from "@cubby/schemas/identifiers";
-import {
-  unsafeFinancialTransactionShortcode,
-  unsafeLedgerPartyShortcode,
-  unsafeLedgerTransferShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   LedgerTransferCreateInput,
   LedgerTransferFilters,
@@ -139,9 +135,9 @@ const classificationFor = (row: LedgerTransferRow) =>
 
 const toOut = (row: LedgerTransferRow): LedgerTransferOut =>
   ledgerTransferOut.parse({
-    id: unsafeLedgerTransferShortcode(row.shortcode),
-    fromPartyId: unsafeLedgerPartyShortcode(row.fromPartyShortcode),
-    toPartyId: unsafeLedgerPartyShortcode(row.toPartyShortcode),
+    id: parseShortcodeFor("ledgerTransfer", row.shortcode),
+    fromPartyId: parseShortcodeFor("ledgerParty", row.fromPartyShortcode),
+    toPartyId: parseShortcodeFor("ledgerParty", row.toPartyShortcode),
     amount: row.amount,
     date: row.date,
     notes: row.notes,
@@ -154,8 +150,8 @@ const toOut = (row: LedgerTransferRow): LedgerTransferOut =>
         updatedAt: new Date(String(value.updatedAt)),
       };
     }),
-    evidenceTransactionIds: row.evidenceTransactionIds.map(
-      unsafeFinancialTransactionShortcode,
+    evidenceTransactionIds: row.evidenceTransactionIds.map((id) =>
+      parseShortcodeFor("financialTransaction", id),
     ),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -176,7 +172,7 @@ const getById = async (
 const reader = createEntityReader<
   LedgerTransferRow,
   LedgerTransferOut,
-  LedgerTransferId,
+  "ledgerTransfer",
   Database | DrizzleTransaction
 >({
   entity: "ledgerTransfer",
@@ -394,10 +390,10 @@ export async function updateLedgerTransfer(
         : await resolvePartyIds(tx, {
             fromPartyId:
               data.fromPartyId ??
-              unsafeLedgerPartyShortcode(before.fromPartyShortcode),
+              parseShortcodeFor("ledgerParty", before.fromPartyShortcode),
             toPartyId:
               data.toPartyId ??
-              unsafeLedgerPartyShortcode(before.toPartyShortcode),
+              parseShortcodeFor("ledgerParty", before.toPartyShortcode),
           });
     const amount = data.amount ?? before.amount;
     const {

@@ -20,6 +20,10 @@ interface NetworkLink extends d3Force.SimulationLinkDatum<NetworkNode> {
   recipes: Array<{ id: string; name: string }>;
 }
 
+const resolvedNetworkNode = (
+  endpoint: string | NetworkNode,
+): NetworkNode | null => (typeof endpoint === "string" ? null : endpoint);
+
 export default function IngredientNetwork() {
   const { data, isLoading } = useQuery(
     recipe.getIngredientCooccurrence.queryOptions({ minEdgeWeight: 2 }),
@@ -243,9 +247,9 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
         {/* Links */}
         <g>
           {simulatedLinks.map((link, i) => {
-            const source = link.source as NetworkNode;
-            const target = link.target as NetworkNode;
-            if (!source.x || !target.x) return null;
+            const source = resolvedNetworkNode(link.source);
+            const target = resolvedNetworkNode(link.target);
+            if (!source?.x || !target?.x) return null;
 
             const linkKey = getLinkKey(link);
             const highlighted = isLinkHighlighted(link);
@@ -354,8 +358,8 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
         >
           <div className="flex items-start justify-between gap-2">
             <div className="font-medium">
-              {(selectedLink.source as NetworkNode).name} +{" "}
-              {(selectedLink.target as NetworkNode).name}
+              {resolvedNetworkNode(selectedLink.source)?.name} +{" "}
+              {resolvedNetworkNode(selectedLink.target)?.name}
             </div>
             <button
               type="button"

@@ -1,4 +1,7 @@
+import { amount } from "@cubby/schemas/codec";
+import { shortcodeSchema } from "@cubby/schemas/identifiers";
 import { useCallback, useMemo, useState } from "react";
+import { z } from "zod";
 import {
   clearStoredQueuePass,
   type QueuePassPersistence,
@@ -55,31 +58,55 @@ const emptySummary = (): SessionSummary => ({
   verified: 0,
 });
 
-/** The pre-`useQueuePass` on-disk shape. Inbound only; nothing writes it. */
-interface PersistedV3 {
-  version: 3;
-  startedAt: number;
-  updatedAt?: number;
-  totalCount?: number;
-  itemResolutions: [string, ItemResolution][];
-  completedLocationIds: string[];
-  skippedLocationIds?: string[];
-  currentIndex: number;
-  summary: SessionSummary;
-}
+const sessionSummarySchema = z.object({
+  adjusted: z.number(),
+  locations: z.number(),
+  relocated: z.number(),
+  removed: z.number(),
+  verified: z.number(),
+});
+
+const itemResolutionSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("verify") }),
+  z.object({ kind: z.literal("adjust"), amount }),
+  z.object({ kind: z.literal("remove") }),
+  z.object({
+    kind: z.literal("relocate"),
+    targetLocationId: shortcodeSchema("location"),
+    targetLocationName: z.string(),
+  }),
+]);
+
+const persistedV3Schema = z.object({
+  version: z.literal(3),
+  startedAt: z.number(),
+  updatedAt: z.number().optional(),
+  totalCount: z.number().optional(),
+  itemResolutions: z.array(z.tuple([z.string(), itemResolutionSchema])),
+  completedLocationIds: z.array(z.string()),
+  skippedLocationIds: z.array(z.string()).optional(),
+  currentIndex: z.number(),
+  summary: sessionSummarySchema,
+});
+
+const storedQueuePassSchema = z.object({
+  version: z.literal(SESSION_PROGRESS_VERSION),
+  startedAt: z.number(),
+  updatedAt: z.number(),
+  currentIndex: z.number(),
+  completed: z.array(z.string()),
+  skipped: z.array(z.string()),
+  totalCount: z.number(),
+  extra: z.object({
+    itemResolutions: z.array(z.tuple([z.string(), itemResolutionSchema])),
+    summary: sessionSummarySchema,
+  }),
+});
 
 function readLegacyV3(parsed: unknown): StoredQueuePass<SessionExtra> | null {
-  const v3 = parsed as Partial<PersistedV3>;
-  if (
-    v3.version !== 3 ||
-    typeof v3.startedAt !== "number" ||
-    typeof v3.currentIndex !== "number" ||
-    !Array.isArray(v3.itemResolutions) ||
-    !Array.isArray(v3.completedLocationIds) ||
-    !v3.summary
-  ) {
-    return null;
-  }
+  const result = persistedV3Schema.safeParse(parsed);
+  if (!result.success) return null;
+  const v3 = result.data;
   return {
     version: 3,
     startedAt: v3.startedAt,
@@ -122,20 +149,8 @@ export function listStoredSessionPasses(): StoredSessionPass[] {
         continue;
       }
 
-      const current = parsed as Partial<StoredQueuePass<SessionExtra>>;
-      const pass =
-        current.version === SESSION_PROGRESS_VERSION &&
-        typeof current.startedAt === "number" &&
-        Array.isArray(current.completed) &&
-        Array.isArray(current.skipped)
-          ? {
-              startedAt: current.startedAt,
-              updatedAt: current.updatedAt ?? current.startedAt,
-              completed: current.completed,
-              skipped: current.skipped,
-              totalCount: current.totalCount ?? 0,
-            }
-          : readLegacyV3(parsed);
+      const current = storedQueuePassSchema.safeParse(parsed);
+      const pass = current.success ? current.data : readLegacyV3(parsed);
       if (!pass) continue;
 
       passes.push({

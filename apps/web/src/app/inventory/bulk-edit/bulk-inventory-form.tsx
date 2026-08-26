@@ -1,4 +1,4 @@
-import { unsafeInventoryShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { InventoryBulkOperationItem } from "@cubby/schemas/inventory";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -237,7 +237,7 @@ export default function BulkInventoryForm({
         (item) => {
           const res: InventoryBulkOperationItem = {
             locationId,
-            ...(item.id && { id: unsafeInventoryShortcode(item.id) }),
+            ...(item.id && { id: parseShortcodeFor("inventory", item.id) }),
             productId: getProductShortcode(item.product),
             amount: item.amount,
           };

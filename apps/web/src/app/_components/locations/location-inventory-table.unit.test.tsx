@@ -1,4 +1,5 @@
-import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import { render } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -60,7 +61,7 @@ describe("LocationInventoryTable", () => {
     // would fire that query on every render of the table.
     render(
       <LocationInventoryTable
-        locationId={unsafeLocationShortcode("LOC-TEST")}
+        locationId={testShortcode("location", "LOC-TEST")}
         view="table"
       />,
     );

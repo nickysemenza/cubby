@@ -2,10 +2,6 @@ import type { QueryKey, UseMutationOptions } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
-import type {
-  EntityEditDraft,
-  EntityEditIntent,
-} from "~/entities/editing/intent-types";
 import type { EditableEntity } from "~/entities/editing/types";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import {
@@ -140,12 +136,10 @@ export function useActionMutation<TFn extends MutationOptionsFn>({
           }
           if (operation === "update") {
             if (!input.id) throw new Error("Update requires an id.");
-            const result = await commands.commitFields({
+            const result = await commands.commitRuntimeFields({
               record: { id: input.id },
-              values: (input.data ?? {}) as Partial<
-                EntityEditDraft<EditableEntity>
-              >,
-              intent: intent as EntityEditIntent<EditableEntity, "update">,
+              values: input.data ?? {},
+              intent,
               surface: "detail",
             });
             if (!result.ok) {

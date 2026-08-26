@@ -1,7 +1,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   type expenseShortcode,
-  unsafePurchaseId,
+  parseEntityId,
 } from "@cubby/schemas/identifiers";
 import {
   expenseAnalyticsOut,
@@ -173,7 +173,7 @@ export const expenseChargeContextWorkflow = async (
     "purchase",
   );
   if (!purchaseId) return null;
-  const purchaseUuid = unsafePurchaseId(purchaseId);
+  const purchaseUuid = parseEntityId("purchase", purchaseId);
   const [purchase, lines] = await Promise.all([
     getPurchaseLinkIdentityByID(db, purchaseUuid),
     getPurchaseExpenses(db, purchaseUuid),

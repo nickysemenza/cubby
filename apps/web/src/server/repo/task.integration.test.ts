@@ -1,10 +1,6 @@
-import {
-  unsafeProductId,
-  unsafeProductShortcode,
-  unsafeProjectShortcode,
-  unsafeTaskShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { projectCreateInput, taskCreateInput } from "@cubby/schemas/project";
+import { testShortcode } from "@cubby/schemas/testing";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { householdDaysAgo, householdDaysFromNow } from "~/lib/household-date";
@@ -794,7 +790,7 @@ describe("task repository — subtasks (parentTaskId)", () => {
   });
 
   it("rejects a nonexistent parent (create and update)", async () => {
-    const bogus = unsafeTaskShortcode("TSK-ZZZZ");
+    const bogus = testShortcode("task", "TSK-ZZZZ");
 
     await expect(
       createTask(
@@ -1086,7 +1082,7 @@ describe("task repository — subtasks (parentTaskId)", () => {
   });
 
   it("rejects nonexistent and soft-deleted subject products", async () => {
-    const bogus = unsafeProductShortcode("PRD-ZZZZ");
+    const bogus = testShortcode("product", "PRD-ZZZZ");
     await expect(
       createTask(
         ctx.db,
@@ -1107,7 +1103,8 @@ describe("task repository — subtasks (parentTaskId)", () => {
     await deleteProducts(
       ctx.db,
       [
-        unsafeProductId(
+        parseEntityId(
+          "product",
           (await resolveLiveShortcode(ctx.db, deleted.id, "product"))!,
         ),
       ],
@@ -1213,7 +1210,7 @@ describe("task repository — id filter shortcode canonicalization guards", () =
 
     const { data } = await taskList(
       ctx.db,
-      { parentTaskId: unsafeTaskShortcode(parent.id.toLowerCase()) },
+      { parentTaskId: parseShortcodeFor("task", parent.id.toLowerCase()) },
       [],
       pagination,
     );
@@ -1393,7 +1390,7 @@ describe("task repository — moveTasks (bulk move to project)", () => {
       }),
       ctx.actor,
     );
-    const bogusProjectId = unsafeProjectShortcode("PRJ-ZZZZ");
+    const bogusProjectId = testShortcode("project", "PRJ-ZZZZ");
 
     await expect(
       moveTasks(ctx.db, { ids: [t.id], projectId: bogusProjectId }, ctx.actor),

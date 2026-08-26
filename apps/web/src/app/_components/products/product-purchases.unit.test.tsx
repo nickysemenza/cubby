@@ -1,16 +1,16 @@
-import {
-  unsafeProductShortcode,
-  unsafePurchaseShortcode,
-} from "@cubby/schemas/identifiers";
 import type { KitMembershipOut } from "@cubby/schemas/product-components";
 import type { ProductPurchaseOut } from "@cubby/schemas/purchase";
+import { testShortcode } from "@cubby/schemas/testing";
 import { flexRender } from "@tanstack/react-table";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  purchases: { current: [] as ProductPurchaseOut[] },
-  membership: { current: [] as KitMembershipOut[] },
+const mocks: {
+  purchases: { current: ProductPurchaseOut[] };
+  membership: { current: KitMembershipOut[] };
+} = vi.hoisted(() => ({
+  purchases: { current: [] },
+  membership: { current: [] },
 }));
 
 vi.mock("@tanstack/react-query", () => ({
@@ -116,6 +116,8 @@ vi.mock("~/app/_components/table/TableLink", () => ({
 
 import { ProductPurchases } from "./product-purchases";
 
+const COMBO_ID = testShortcode("product", "PRD-COMB");
+
 const renderWith = (
   purchases: ProductPurchaseOut[],
   membership: KitMembershipOut[] = [],
@@ -126,7 +128,7 @@ const renderWith = (
 };
 
 const membershipEntry: KitMembershipOut = {
-  parentProductId: unsafeProductShortcode("PRD-COMB"),
+  parentProductId: COMBO_ID,
   parentProductName: "18V Combo Kit",
   manufacturer: "Milwaukee",
   quantity: 2,
@@ -135,7 +137,7 @@ const membershipEntry: KitMembershipOut = {
   price: 249,
   expenseCount: 1,
   purchase: {
-    purchaseId: unsafePurchaseShortcode("PUR-2345"),
+    purchaseId: testShortcode("purchase", "PUR-2345"),
     displayLabel: null,
     vendorName: "Home Depot",
     date: "2026-07-29",
@@ -161,7 +163,7 @@ describe("ProductPurchases empty states", () => {
     expect(screen.getByText("No purchases of its own")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "18V Combo Kit" })).toHaveAttribute(
       "href",
-      "/products/PRD-COMB",
+      `/products/${COMBO_ID}`,
     );
     // The now-wrong "attach this product" advice must be gone.
     expect(
@@ -185,7 +187,7 @@ describe("ProductPurchases empty states", () => {
   it("renders the purchase list instead of an empty state when purchases exist", () => {
     renderWith([
       {
-        purchaseId: unsafePurchaseShortcode("PUR-9999"),
+        purchaseId: testShortcode("purchase", "PUR-9999"),
         displayLabel: null,
         vendorName: "Amazon",
         date: "2026-08-01",
@@ -205,7 +207,7 @@ describe("ProductPurchases empty states", () => {
   it("badges only the explicitly-linked row, not the expense-derived one", () => {
     renderWith([
       {
-        purchaseId: unsafePurchaseShortcode("PUR-LINK"),
+        purchaseId: testShortcode("purchase", "PUR-LINK"),
         displayLabel: null,
         vendorName: "Ferguson",
         date: "2026-08-02",
@@ -214,7 +216,7 @@ describe("ProductPurchases empty states", () => {
         linkAttachedAt: new Date("2026-08-02"),
       },
       {
-        purchaseId: unsafePurchaseShortcode("PUR-EXPN"),
+        purchaseId: testShortcode("purchase", "PUR-EXPN"),
         displayLabel: null,
         vendorName: "Home Depot",
         date: "2026-08-01",

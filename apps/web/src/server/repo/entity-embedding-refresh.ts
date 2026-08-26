@@ -1,20 +1,4 @@
-import {
-  unsafeCookbookId,
-  unsafeExpenseId,
-  unsafeFinancialAccountId,
-  unsafeFinancialTransactionId,
-  unsafeIngredientId,
-  unsafeInventoryId,
-  unsafeLocationId,
-  unsafeMealId,
-  unsafeProductId,
-  unsafeProjectId,
-  unsafePurchaseId,
-  unsafeRecipeId,
-  unsafeTaskId,
-  unsafeVendorId,
-  unsafeWishId,
-} from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
@@ -146,7 +130,10 @@ async function getProductEmbeddingTexts(
     where: and(
       notDeleted(product),
       options.ids?.length
-        ? inArray(product.id, options.ids.map(unsafeProductId))
+        ? inArray(
+            product.id,
+            options.ids.map((id) => parseEntityId("product", id)),
+          )
         : undefined,
     ),
     columns: {
@@ -182,7 +169,10 @@ async function getWishEmbeddingTexts(
     where: and(
       notDeleted(wish),
       options.ids?.length
-        ? inArray(wish.id, options.ids.map(unsafeWishId))
+        ? inArray(
+            wish.id,
+            options.ids.map((id) => parseEntityId("wish", id)),
+          )
         : undefined,
     ),
     columns: { id: true, name: true, notes: true },
@@ -223,7 +213,10 @@ async function getLocationEmbeddingTexts(
     where: and(
       notDeleted(location),
       options.ids?.length
-        ? inArray(location.id, options.ids.map(unsafeLocationId))
+        ? inArray(
+            location.id,
+            options.ids.map((id) => parseEntityId("location", id)),
+          )
         : undefined,
     ),
     columns: {
@@ -251,7 +244,10 @@ async function getIngredientEmbeddingTexts(
       notDeleted(ingredient),
       isNull(ingredient.recipeId),
       options.ids?.length
-        ? inArray(ingredient.id, options.ids.map(unsafeIngredientId))
+        ? inArray(
+            ingredient.id,
+            options.ids.map((id) => parseEntityId("ingredient", id)),
+          )
         : undefined,
     ),
     columns: {
@@ -298,7 +294,10 @@ async function getRecipeEmbeddingTexts(
       and(
         notDeleted(recipe),
         options.ids?.length
-          ? inArray(recipe.id, options.ids.map(unsafeRecipeId))
+          ? inArray(
+              recipe.id,
+              options.ids.map((id) => parseEntityId("recipe", id)),
+            )
           : undefined,
       ),
     )
@@ -321,7 +320,10 @@ async function getCookbookEmbeddingTexts(
     where: and(
       notDeleted(cookbook),
       options.ids?.length
-        ? inArray(cookbook.id, options.ids.map(unsafeCookbookId))
+        ? inArray(
+            cookbook.id,
+            options.ids.map((id) => parseEntityId("cookbook", id)),
+          )
         : undefined,
     ),
     columns: {
@@ -373,7 +375,10 @@ async function getMealEmbeddingTexts(
       and(
         notDeleted(meal),
         options.ids?.length
-          ? inArray(meal.id, options.ids.map(unsafeMealId))
+          ? inArray(
+              meal.id,
+              options.ids.map((id) => parseEntityId("meal", id)),
+            )
           : undefined,
       ),
     )
@@ -414,7 +419,10 @@ async function getInventoryEmbeddingTexts(
         notDeleted(product),
         notDeleted(location),
         options.ids?.length
-          ? inArray(inventoryEntry.id, options.ids.map(unsafeInventoryId))
+          ? inArray(
+              inventoryEntry.id,
+              options.ids.map((id) => parseEntityId("inventory", id)),
+            )
           : undefined,
       ),
     );
@@ -452,7 +460,10 @@ async function getProjectEmbeddingTexts(
     where: and(
       notDeleted(project),
       options.ids?.length
-        ? inArray(project.id, options.ids.map(unsafeProjectId))
+        ? inArray(
+            project.id,
+            options.ids.map((id) => parseEntityId("project", id)),
+          )
         : undefined,
     ),
     columns: {
@@ -492,7 +503,10 @@ async function getTaskEmbeddingTexts(
       and(
         notDeleted(task),
         options.ids?.length
-          ? inArray(task.id, options.ids.map(unsafeTaskId))
+          ? inArray(
+              task.id,
+              options.ids.map((id) => parseEntityId("task", id)),
+            )
           : undefined,
       ),
     );
@@ -532,7 +546,10 @@ async function getExpenseEmbeddingTexts(
       and(
         notDeleted(expense),
         options.ids?.length
-          ? inArray(expense.id, options.ids.map(unsafeExpenseId))
+          ? inArray(
+              expense.id,
+              options.ids.map((id) => parseEntityId("expense", id)),
+            )
           : undefined,
       ),
     );
@@ -553,7 +570,10 @@ async function getVendorEmbeddingTexts(
     where: and(
       notDeleted(vendor),
       options.ids?.length
-        ? inArray(vendor.id, options.ids.map(unsafeVendorId))
+        ? inArray(
+            vendor.id,
+            options.ids.map((id) => parseEntityId("vendor", id)),
+          )
         : undefined,
     ),
     columns: { id: true, name: true, website: true, notes: true },
@@ -588,7 +608,10 @@ async function getPurchaseEmbeddingTexts(
       and(
         notDeleted(purchase),
         options.ids?.length
-          ? inArray(purchase.id, options.ids.map(unsafePurchaseId))
+          ? inArray(
+              purchase.id,
+              options.ids.map((id) => parseEntityId("purchase", id)),
+            )
           : undefined,
       ),
     );
@@ -616,7 +639,7 @@ async function getFinancialAccountEmbeddingTexts(
       options.ids?.length
         ? inArray(
             financialAccount.id,
-            options.ids.map(unsafeFinancialAccountId),
+            options.ids.map((id) => parseEntityId("financialAccount", id)),
           )
         : undefined,
     ),
@@ -690,7 +713,9 @@ async function getFinancialTransactionEmbeddingTexts(
         options.ids?.length
           ? inArray(
               financialTransaction.id,
-              options.ids.map(unsafeFinancialTransactionId),
+              options.ids.map((id) =>
+                parseEntityId("financialTransaction", id),
+              ),
             )
           : undefined,
       ),

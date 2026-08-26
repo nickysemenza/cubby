@@ -4,7 +4,7 @@ import type {
   LocationId,
   ProductId,
 } from "@cubby/schemas/identifiers";
-import { unsafeInventoryId } from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import type {
   InventoryBulkOperationItem,
   InventoryPlacement,
@@ -84,7 +84,7 @@ async function batchFetchResults(
   const fetched = await tx.query.inventoryEntry.findMany({
     where: inArray(
       inventoryEntry.id,
-      resultIds.map((id) => unsafeInventoryId(id)),
+      resultIds.map((id) => parseEntityId("inventory", id)),
     ),
     ...relations.inventory.full,
   });
@@ -93,7 +93,7 @@ async function batchFetchResults(
   );
   return resultIds
     .map((id) => fetchedById.get(id))
-    .filter((r) => r != null) as InventoryEntryDeepDB[];
+    .filter((r): r is InventoryEntryDeepDB => r != null);
 }
 
 const loadInventoryEntryPricing = async (

@@ -4,11 +4,7 @@
  */
 
 import { extractDbTimestampsFromDBRec } from "@cubby/schemas/common";
-import {
-  type ProductId,
-  unsafeInventoryShortcode,
-  unsafeLocationShortcode,
-} from "@cubby/schemas/identifiers";
+import { type ProductId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   InfLocation,
   LocationListItemOut,
@@ -53,7 +49,7 @@ export const dbLocationToAPI = (
   },
 ): LocationOut => {
   return {
-    id: unsafeLocationShortcode(locationData.shortcode),
+    id: parseShortcodeFor("location", locationData.shortcode),
     lastBulkInventory: locationData.lastBulkInventory,
     aiDescription: locationData.aiDescription ?? null,
     name: locationData.name,
@@ -73,7 +69,7 @@ export const dbLocationToAPI = (
 const dbLocationToListRefShape = (
   locationData: RowWithOptionalAliasesAndTags<typeof location.$inferSelect>,
 ): LocationListRefOut => ({
-  id: unsafeLocationShortcode(locationData.shortcode),
+  id: parseShortcodeFor("location", locationData.shortcode),
   name: locationData.name,
   type: parseLocationType(locationData.type, {
     id: locationData.id,
@@ -96,7 +92,7 @@ export const dbLocationToListAPI = (
       isNotDeleted(entry.product),
     ),
     (entry) => ({
-      id: unsafeInventoryShortcode(entry.shortcode),
+      id: parseShortcodeFor("inventory", entry.shortcode),
       amount: parseInventoryAmount(entry.amount, entry.id),
       valuation: entry.valuation,
       createdAt: entry.createdAt,
@@ -141,7 +137,7 @@ export const buildLocationWithChildren = (
     name: x.name,
     aliases: x.aliases ?? [],
     tags: x.tags ?? [],
-    id: unsafeLocationShortcode(x.shortcode),
+    id: parseShortcodeFor("location", x.shortcode),
     lastBulkInventory: x.lastBulkInventory,
     aiDescription: x.aiDescription ?? null,
     type: parseLocationType(x.type, { id: x.id, name: x.name }),

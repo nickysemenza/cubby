@@ -1,5 +1,6 @@
 import type { Amount } from "@cubby/schemas/codec";
-import { unsafeIngredientShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+
 import { withEntityKernelMutations } from "tooling/entity-kernel-test-caller";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -28,7 +29,7 @@ describe("AvailabilityService.getRecipeAvailability", () => {
             ingredients: [
               {
                 type: "ingredient" as const,
-                ingredientId: unsafeIngredientShortcode(ingredientId),
+                ingredientId: parseShortcodeFor("ingredient", ingredientId),
                 recipeId: null,
                 amounts: [need],
               },

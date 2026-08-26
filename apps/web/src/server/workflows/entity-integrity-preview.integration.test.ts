@@ -1,4 +1,4 @@
-import { productShortcode } from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { previewOperation } from "./entity-integrity-preview.server";
@@ -7,8 +7,8 @@ describe("entityIntegrity.previewOperation", () => {
   const ctx = withTestDb();
 
   it("reports unresolved attach targets instead of planning over nothing", async () => {
-    const parentId = productShortcode.parse("PRD-ZZZZ");
-    const productId = productShortcode.parse("PRD-ZZZY");
+    const parentId = testShortcode("product", "PRD-ZZZZ");
+    const productId = testShortcode("product", "PRD-ZZZY");
     const result = await previewOperation(
       ctx.db,
       {

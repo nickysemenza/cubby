@@ -9,11 +9,7 @@ import {
   previewOperationSchema,
   toPublicImpact,
 } from "@cubby/schemas/entity-integrity";
-import {
-  unsafeProductId,
-  unsafeProjectId,
-  unsafePurchaseId,
-} from "@cubby/schemas/identifiers";
+import { parseEntityId, parseEntityRef } from "@cubby/schemas/identifiers";
 import { match } from "ts-pattern";
 import type { Database } from "~/server/db";
 import {
@@ -67,31 +63,55 @@ const planRelation = async (
 
   const parentId = parentIds.get(input.parentId)!;
   const targets = input.productIds.map((code) =>
-    unsafeProductId(productIds.get(code)!),
+    parseEntityId("product", productIds.get(code)!),
   );
   const planned = await match(input)
     .with({ operation: "attach", entity: "product" }, () =>
-      previewAttachProductComponents(db, unsafeProductId(parentId), targets),
+      previewAttachProductComponents(
+        db,
+        parseEntityId("product", parentId),
+        targets,
+      ),
     )
     .with({ operation: "detach", entity: "product" }, () =>
-      previewDetachProductComponents(db, unsafeProductId(parentId), targets),
+      previewDetachProductComponents(
+        db,
+        parseEntityId("product", parentId),
+        targets,
+      ),
     )
     .with({ operation: "attach", entity: "project" }, () =>
-      previewAttachProjectResources(db, unsafeProjectId(parentId), targets),
+      previewAttachProjectResources(
+        db,
+        parseEntityId("project", parentId),
+        targets,
+      ),
     )
     .with({ operation: "detach", entity: "project" }, () =>
-      previewDetachProjectResources(db, unsafeProjectId(parentId), targets),
+      previewDetachProjectResources(
+        db,
+        parseEntityId("project", parentId),
+        targets,
+      ),
     )
     .with({ operation: "attach", entity: "purchase" }, () =>
-      previewAttachPurchaseProducts(db, unsafePurchaseId(parentId), targets),
+      previewAttachPurchaseProducts(
+        db,
+        parseEntityId("purchase", parentId),
+        targets,
+      ),
     )
     .with({ operation: "detach", entity: "purchase" }, () =>
-      previewDetachPurchaseProducts(db, unsafePurchaseId(parentId), targets),
+      previewDetachPurchaseProducts(
+        db,
+        parseEntityId("purchase", parentId),
+        targets,
+      ),
     )
     .exhaustive();
 
   const codes = await lookupShortcodes(db, [
-    { entity: input.entity, id: parentId },
+    parseEntityRef(input.entity, parentId),
     ...targets.map((id) => ({ entity: "product" as const, id })),
   ]);
   const publicIdByEntityId = new Map(

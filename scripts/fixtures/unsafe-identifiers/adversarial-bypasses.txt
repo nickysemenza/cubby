@@ -1,0 +1,7 @@
+const computed = ids["unsafeProductId"](raw);
+const { unsafeProductId: cast } = ids;
+const destructured = cast(raw);
+const moduleName = "@cubby/schemas/testing";
+const aliasedModuleName = moduleName;
+const required = require(aliasedModuleName);
+const dynamicallyLoaded = import(moduleName);

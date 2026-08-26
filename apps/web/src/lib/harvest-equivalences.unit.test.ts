@@ -1,10 +1,6 @@
 import type { Amount } from "@cubby/schemas/codec";
-import {
-  unsafeIngredientId,
-  unsafeIngredientShortcode,
-  unsafeRecipeId,
-  unsafeRecipeShortcode,
-} from "@cubby/schemas/identifiers";
+import { testEntityId, testShortcode } from "@cubby/schemas/testing";
+
 import { describe, expect, it } from "vitest";
 import {
   type HarvestRow,
@@ -50,11 +46,11 @@ const row = (
   amounts: Amount[],
   recipe = "r1",
 ): HarvestRow => ({
-  ingredientId: unsafeIngredientShortcode(`ING-${ingredient}`),
-  ingredientEntityId: unsafeIngredientId(`ing-${ingredient}`),
+  ingredientId: testShortcode("ingredient", `ING-${ingredient}`),
+  ingredientEntityId: testEntityId("ingredient", `ing-${ingredient}`),
   ingredientName: ingredient,
-  recipeId: unsafeRecipeShortcode(`RCP-${recipe}`),
-  recipeEntityId: unsafeRecipeId(`rec-${recipe}`),
+  recipeId: testShortcode("recipe", `RCP-${recipe}`),
+  recipeEntityId: testEntityId("recipe", `rec-${recipe}`),
   recipeName: recipe,
   rawLine: `${ingredient} line`,
   amounts,

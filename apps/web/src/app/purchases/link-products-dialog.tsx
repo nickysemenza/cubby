@@ -1,4 +1,7 @@
-import type { ProductShortcode } from "@cubby/schemas/identifiers";
+import {
+  type ProductShortcode,
+  parseShortcodeFor,
+} from "@cubby/schemas/identifiers";
 import type { ProductPickerItemOut } from "@cubby/schemas/product";
 import type { PurchaseOut } from "@cubby/schemas/purchase";
 import { useDebouncedValue } from "@tanstack/react-pacer";
@@ -112,7 +115,7 @@ export function LinkProductsDialog({
       new Set(
         Object.entries(next)
           .filter(([, value]) => value)
-          .map(([id]) => id as ProductShortcode),
+          .map(([id]) => parseShortcodeFor("product", id)),
       ),
     );
   };

@@ -1,13 +1,5 @@
-import {
-  unsafeIngredientShortcode,
-  unsafeLocationShortcode,
-  unsafeProductShortcode,
-  unsafeProjectShortcode,
-  unsafeRecipeShortcode,
-  unsafeTaskShortcode,
-  unsafeVendorShortcode,
-} from "@cubby/schemas/identifiers";
 import type { SearchHit } from "@cubby/schemas/search";
+import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import {
@@ -40,9 +32,9 @@ function locationSearchHit(overrides: Partial<SearchHit> = {}): SearchHit {
 
 describe("entity picker value adapters", () => {
   it("keeps ING, LOC, and RCP assignments shortcode-valued", () => {
-    const ingredientId = unsafeIngredientShortcode("ING-2ABC");
-    const locationId = unsafeLocationShortcode("LOC-3ABC");
-    const recipeId = unsafeRecipeShortcode("RCP-4ABC");
+    const ingredientId = testShortcode("ingredient", "ING-2ABC");
+    const locationId = testShortcode("location", "LOC-3ABC");
+    const recipeId = testShortcode("recipe", "RCP-4ABC");
 
     expect(
       buildIngredientComboboxItem({
@@ -71,10 +63,10 @@ describe("entity picker value adapters", () => {
   });
 
   it("keeps PRD, PRJ, TSK, and persisted VEN assignments shortcode-valued", () => {
-    const product = unsafeProductShortcode("PRD-5ABC");
-    const project = unsafeProjectShortcode("PRJ-6ABC");
-    const task = unsafeTaskShortcode("TSK-7ABC");
-    const vendor = unsafeVendorShortcode("VEN-8ABC");
+    const product = testShortcode("product", "PRD-5ABC");
+    const project = testShortcode("project", "PRJ-6ABC");
+    const task = testShortcode("task", "TSK-7ABC");
+    const vendor = testShortcode("vendor", "VEN-8ABC");
 
     expect(
       buildProductComboboxItem({
@@ -100,7 +92,7 @@ describe("entity picker value adapters", () => {
   });
 
   it("keeps the expense vendor adapter name-valued", () => {
-    const vendor = unsafeVendorShortcode("VEN-9ABC");
+    const vendor = testShortcode("vendor", "VEN-9ABC");
     expect(
       buildVendorNameComboboxItem({ id: vendor, name: "Acme" }),
     ).toMatchObject({ id: "Acme", shortcode: vendor, name: "Acme" });
@@ -108,7 +100,7 @@ describe("entity picker value adapters", () => {
 
   it("uses the project's custom mark in picker rows", () => {
     const item = buildProjectComboboxItem({
-      id: unsafeProjectShortcode("PRJ-6ABC"),
+      id: testShortcode("project", "PRJ-6ABC"),
       name: "Garage",
       icon: "🔧",
     });
@@ -156,7 +148,7 @@ describe("location search picker imagery", () => {
 });
 
 describe("product stock picker evidence", () => {
-  const product = unsafeProductShortcode("PRD-5ABC");
+  const product = testShortcode("product", "PRD-5ABC");
   const base = {
     id: product,
     name: "Back Brace",

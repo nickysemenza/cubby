@@ -1,0 +1,3 @@
+import * as unsafeIdForEntity from "@cubby/schemas/identifiers";
+const product = unsafeIdForEntity.product(input);
+const alsoProduct = helpers.unsafeProductId(input);

@@ -34,28 +34,33 @@ import {
   setProductProjectUsesWorkflow,
 } from "~/server/workflows/product.server";
 
-type SchemaPair = { input: z.ZodType; output: z.ZodType };
-const run = <S extends SchemaPair>(options: {
+const run = <
+  InputSchema extends z.ZodType,
+  OutputSchema extends z.ZodType,
+>(options: {
   operation: string;
   type: "query" | "mutation";
-  schemas: S;
-  data: z.input<S["input"]>;
+  schemas: { input: InputSchema; output: OutputSchema };
+  data: z.input<InputSchema>;
   request: StartOperationRequest;
   workflow: (
     context: ProductWorkflowContext,
-    input: z.output<S["input"]>,
+    input: z.output<InputSchema>,
   ) => Promise<unknown>;
-}): Promise<StartOperationResult<z.output<S["output"]>>> =>
-  runStartOperation({
+}): Promise<StartOperationResult<z.output<OutputSchema>>> =>
+  runStartOperation<InputSchema, unknown>({
     operation: options.operation,
     type: options.type,
     input: options.data,
     inputSchema: options.schemas.input,
     outputSchema: options.schemas.output,
     request: options.request,
-    run: (context, input) =>
-      options.workflow(context, input as z.output<S["input"]>),
-  }) as Promise<StartOperationResult<z.output<S["output"]>>>;
+    run: options.workflow,
+  }).then((result) =>
+    result.ok
+      ? { ...result, data: options.schemas.output.parse(result.data) }
+      : result,
+  );
 
 export const searchProductsForBrowser = (o: {
   data: z.input<typeof productWorkflowSchemas.search.input>;

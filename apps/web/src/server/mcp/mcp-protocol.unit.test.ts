@@ -46,12 +46,24 @@ describe("MCP protocol smoke", () => {
     });
     registerEntityTools(server, runEntity);
 
+    // The tool boundary validates the injected kernel capability before it
+    // dispatches. The executor is mocked here, so only that capability shape
+    // is exercised, not a database-backed operation.
+    const entityKernel = {
+      db: null,
+      readDb: null,
+      actorContext: null,
+      usdaClient: null,
+      upcLookupClient: null,
+      services: null,
+    };
+
     const result = await callMcpTool(
       server,
       "entity",
       { command: { action: "list", entity: "expense" } },
       {},
-      { entityKernel: {} },
+      { entityKernel },
     );
 
     expect(result.isError).not.toBe(true);

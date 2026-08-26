@@ -1,20 +1,22 @@
-import {
-  unsafeInventoryId,
-  unsafeInventoryShortcode,
-  unsafeLocationId,
-  unsafeLocationShortcode,
-  unsafeProductId,
-  unsafeProductShortcode,
-} from "@cubby/schemas/identifiers";
 import { inventoryWithLocationAndProductOut } from "@cubby/schemas/inventory";
+import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { resolveProductPricing } from "../product/pricing";
 import { dbInventoryEntryToAPI } from "./mappers";
 import type { InventoryEntryDeepDB } from "./types";
 
-const INVENTORY_ID = unsafeInventoryId("123e4567-e89b-12d3-a456-426614174000");
-const PRODUCT_ID = unsafeProductId("223e4567-e89b-12d3-a456-426614174000");
-const LOCATION_ID = unsafeLocationId("323e4567-e89b-12d3-a456-426614174000");
+const INVENTORY_ID = testEntityId(
+  "inventory",
+  "123e4567-e89b-12d3-a456-426614174000",
+);
+const PRODUCT_ID = testEntityId(
+  "product",
+  "223e4567-e89b-12d3-a456-426614174000",
+);
+const LOCATION_ID = testEntityId(
+  "location",
+  "323e4567-e89b-12d3-a456-426614174000",
+);
 const IMAGE_SHORTCODE = "IMG-2345";
 const EXTERNAL_ID = "523e4567-e89b-12d3-a456-426614174000";
 const UNIT_MAPPING_ID = "623e4567-e89b-12d3-a456-426614174000";
@@ -179,7 +181,7 @@ describe("inventory mappers", () => {
     const result = dbInventoryEntryToAPI(row, resolveProductPricing(4.5));
 
     expect(result).toEqual({
-      id: unsafeInventoryShortcode("INV-TEST"),
+      id: testShortcode("inventory", "INV-TEST"),
       amount: { value: 2, unit: "each" },
       valuation: 9,
       verifiedAt: null,
@@ -187,7 +189,7 @@ describe("inventory mappers", () => {
       createdAt: CREATED_AT,
       updatedAt: UPDATED_AT,
       location: {
-        id: unsafeLocationShortcode("LOC-TEST"),
+        id: testShortcode("location", "LOC-TEST"),
         aliases: [],
         lastBulkInventory: null,
         product: null,
@@ -200,7 +202,7 @@ describe("inventory mappers", () => {
         updatedAt: UPDATED_AT,
       },
       product: {
-        id: unsafeProductShortcode("PRD-TEST"),
+        id: testShortcode("product", "PRD-TEST"),
         images: [],
         externalIds: [
           {
@@ -238,7 +240,7 @@ describe("inventory mappers", () => {
             updatedAt: UPDATED_AT,
             sourceMetadata: {
               type: "product",
-              productId: unsafeProductShortcode("PRD-TEST"),
+              productId: testShortcode("product", "PRD-TEST"),
             },
           },
         ],

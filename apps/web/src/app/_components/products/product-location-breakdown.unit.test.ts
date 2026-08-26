@@ -1,4 +1,5 @@
-import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import { describe, expect, it } from "vitest";
 import {
   buildProductLocationBreakdown,
@@ -11,7 +12,7 @@ const loc = (
   ancestors: ProductLocationBreakdownInput["servingAsLocations"][number]["ancestors"] = [],
   displayImage: { url: string } | null = null,
 ) => ({
-  id: unsafeLocationShortcode(id),
+  id: testShortcode("location", id),
   name,
   type: "area" as const,
   displayImage,

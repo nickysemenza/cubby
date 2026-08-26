@@ -1,5 +1,5 @@
 import { type AuditSource, buildActorContext } from "@cubby/schemas/context";
-import { type UserId, unsafeUserId } from "@cubby/schemas/identifiers";
+import { type UserId, userId } from "@cubby/schemas/identifiers";
 import { env } from "~/env";
 import { auth as betterAuth } from "~/lib/auth";
 import { getBindingFetcher } from "~/server/cf-env";
@@ -109,18 +109,20 @@ export const createRequestContext = async (opts: {
     const betterSession = await betterAuth.api.getSession({
       headers: opts.headers,
     });
-    const userId = betterSession?.user?.id
-      ? unsafeUserId(betterSession.user.id)
+    const authenticatedUserId = betterSession?.user?.id
+      ? userId.parse(betterSession.user.id)
       : null;
 
     return {
       ...crudServices,
       ...readSelection,
       auth: {
-        userId,
+        userId: authenticatedUserId,
         sessionId: betterSession?.session?.id ?? null,
       },
-      actorContext: userId ? buildActorContext(userId, "ui") : null,
+      actorContext: authenticatedUserId
+        ? buildActorContext(authenticatedUserId, "ui")
+        : null,
       requestOrigin: "ui" as RequestOrigin,
       ...opts,
     };
@@ -133,12 +135,10 @@ export function requireActor(context: RequestContext) {
   if (!context.auth.userId || !context.actorContext) {
     throw createAppError("UNAUTHORIZED", "Actor context required");
   }
+  const { userId: actorUserId } = context.auth;
   return {
     ...context,
-    auth: context.auth as {
-      userId: UserId;
-      sessionId: string | null;
-    },
+    auth: { ...context.auth, userId: actorUserId },
     actorContext: context.actorContext,
   };
 }

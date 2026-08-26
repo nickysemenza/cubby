@@ -1,5 +1,5 @@
-import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import {
   canGoMissing,
@@ -12,7 +12,7 @@ const at = (
   name: string,
   parent?: SweepBinNode,
 ): SweepBinNode => ({
-  id: unsafeLocationShortcode(code),
+  id: testShortcode("location", code),
   name,
   parent,
 });
@@ -38,7 +38,7 @@ describe("planSweptBin", () => {
     expect(planSweptBin(shelf, inner)).toEqual({
       kind: "adopt",
       bin: {
-        id: "LOC-BIN2",
+        id: testShortcode("location", "LOC-BIN2"),
         name: "Bin 2",
         type: null,
         currentParentName: "Bin 1",
@@ -51,7 +51,7 @@ describe("planSweptBin", () => {
     expect(planSweptBin(shelf, stray)).toEqual({
       kind: "adopt",
       bin: {
-        id: "LOC-BIN9",
+        id: testShortcode("location", "LOC-BIN9"),
         name: "Bin 9",
         type: null,
         currentParentName: "Kitchen",

@@ -4,7 +4,7 @@ import type {
   LedgerPartyId,
   LedgerPartyShortcode,
 } from "@cubby/schemas/identifiers";
-import { unsafeLedgerPartyShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   LedgerPartyCreateInput,
   LedgerPartyFilters,
@@ -116,7 +116,7 @@ type LedgerPartyRow = {
 
 const toOut = (row: LedgerPartyRow): LedgerPartyOut =>
   ledgerPartyOut.parse({
-    id: unsafeLedgerPartyShortcode(row.shortcode),
+    id: parseShortcodeFor("ledgerParty", row.shortcode),
     name: row.name,
     kind: row.kind,
     notes: row.notes,
@@ -139,7 +139,7 @@ const getById = async (
 const reader = createEntityReader<
   LedgerPartyRow,
   LedgerPartyOut,
-  LedgerPartyId
+  "ledgerParty"
 >({
   entity: "ledgerParty",
   fetchById: getById,

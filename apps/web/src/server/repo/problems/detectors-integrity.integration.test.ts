@@ -1,22 +1,8 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { EdgeRole, EdgeSemantics } from "@cubby/schemas/entity-integrity";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
-import {
-  unsafeCookbookId,
-  unsafeFinancialAccountId,
-  unsafeFinancialTransactionId,
-  unsafeIngredientId,
-  unsafeLedgerPartyId,
-  unsafeLocationId,
-  unsafeMealId,
-  unsafeProductId,
-  unsafeProjectId,
-  unsafePurchaseId,
-  unsafeRecipeId,
-  unsafeTaskId,
-  unsafeVendorId,
-  unsafeWishId,
-} from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
+
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -292,7 +278,7 @@ const SOURCE_FACTORIES: Record<
     return insertAndReturn(db, expenseAttribution, {
       expenseId: expense.id,
       role: "funder",
-      ledgerPartyId: unsafeLedgerPartyId(targetId),
+      ledgerPartyId: parseEntityId("ledgerParty", targetId),
       weight: 1,
     });
   },
@@ -300,12 +286,12 @@ const SOURCE_FACTORIES: Record<
     insertWithShortcode(db, "financialAccount", {
       name: uniq("Financial account"),
       identity: { kind: "cash" },
-      ledgerPartyId: unsafeLedgerPartyId(targetId),
+      ledgerPartyId: parseEntityId("ledgerParty", targetId),
     }),
   "LedgerTransfer.fromPartyId": async (db, targetId) => {
     const to = await mkLedgerParty(db);
     return insertWithShortcode(db, "ledgerTransfer", {
-      fromPartyId: unsafeLedgerPartyId(targetId),
+      fromPartyId: parseEntityId("ledgerParty", targetId),
       toPartyId: to.id,
       amount: 1,
       date: "2024-01-15",
@@ -315,7 +301,7 @@ const SOURCE_FACTORIES: Record<
     const from = await mkLedgerParty(db);
     return insertWithShortcode(db, "ledgerTransfer", {
       fromPartyId: from.id,
-      toPartyId: unsafeLedgerPartyId(targetId),
+      toPartyId: parseEntityId("ledgerParty", targetId),
       amount: 1,
       date: "2024-01-15",
     });
@@ -323,7 +309,7 @@ const SOURCE_FACTORIES: Record<
   "WishCandidate.wishId": async (db, targetId) => {
     const p = await mkProduct(db);
     return insertAndReturn(db, wishCandidate, {
-      wishId: unsafeWishId(targetId),
+      wishId: parseEntityId("wish", targetId),
       productId: p.id,
     });
   },
@@ -332,14 +318,14 @@ const SOURCE_FACTORIES: Record<
     const w = await mkWish(db);
     return insertAndReturn(db, wishCandidate, {
       wishId: w.id,
-      productId: unsafeProductId(targetId),
+      productId: parseEntityId("product", targetId),
     });
   },
 
   "Recipe.cookbookId": (db, targetId) =>
     insertWithShortcode(db, "recipe", {
       name: uniq("Recipe"),
-      cookbookId: unsafeCookbookId(targetId),
+      cookbookId: parseEntityId("cookbook", targetId),
     }),
 
   "Cookbook.coverImageId": (db, targetId) =>
@@ -400,7 +386,7 @@ const SOURCE_FACTORIES: Record<
 
   "RecipeSection.recipeId": (db, targetId) =>
     insertAndReturn(db, recipeSection, {
-      recipeId: unsafeRecipeId(targetId),
+      recipeId: parseEntityId("recipe", targetId),
       instructions: [],
     }),
 
@@ -408,14 +394,14 @@ const SOURCE_FACTORIES: Record<
     const m = await mkMeal(db);
     return insertAndReturn(db, mealRecipe, {
       mealId: m.id,
-      recipeId: unsafeRecipeId(targetId),
+      recipeId: parseEntityId("recipe", targetId),
     });
   },
 
   "RecipeImage.recipeId": async (db, targetId) => {
     const img = await mkImage(db);
     return insertAndReturn(db, recipeImage, {
-      recipeId: unsafeRecipeId(targetId),
+      recipeId: parseEntityId("recipe", targetId),
       imageId: img.id,
     });
   },
@@ -424,7 +410,7 @@ const SOURCE_FACTORIES: Record<
     const section = await mkRecipeSection(db);
     return insertAndReturn(db, recipeSectionIngredient, {
       recipeSectionId: section.id,
-      ingredientId: unsafeIngredientId(targetId),
+      ingredientId: parseEntityId("ingredient", targetId),
       amounts: [],
     });
   },
@@ -433,27 +419,27 @@ const SOURCE_FACTORIES: Record<
     insertWithShortcode(db, "product", {
       name: uniq("Product"),
       manufacturer: "Test Mfr",
-      ingredientId: unsafeIngredientId(targetId),
+      ingredientId: parseEntityId("ingredient", targetId),
     }),
 
   "MealRecipe.mealId": async (db, targetId) => {
     const r = await mkRecipe(db);
     return insertAndReturn(db, mealRecipe, {
-      mealId: unsafeMealId(targetId),
+      mealId: parseEntityId("meal", targetId),
       recipeId: r.id,
     });
   },
 
   "ProductExternalId.productId": (db, targetId) =>
     insertAndReturn(db, productExternalId, {
-      productId: unsafeProductId(targetId),
+      productId: parseEntityId("product", targetId),
       source: "amazon",
       externalId: uniq("B"),
     }),
 
   "ProductUnitMappings.productId": (db, targetId) =>
     insertAndReturn(db, productUnitMappings, {
-      productId: unsafeProductId(targetId),
+      productId: parseEntityId("product", targetId),
       a: { value: 1, unit: "cup" },
       b: { value: 120, unit: "g" },
     }),
@@ -461,7 +447,7 @@ const SOURCE_FACTORIES: Record<
   "InventoryEntry.productId": async (db, targetId) => {
     const l = await mkLocation(db);
     return insertWithShortcode(db, "inventory", {
-      productId: unsafeProductId(targetId),
+      productId: parseEntityId("product", targetId),
       locationId: l.id,
       amount: { value: 1, unit: "each" },
     });
@@ -470,7 +456,7 @@ const SOURCE_FACTORIES: Record<
   "ProductImage.productId": async (db, targetId) => {
     const img = await mkImage(db);
     return insertAndReturn(db, productImage, {
-      productId: unsafeProductId(targetId),
+      productId: parseEntityId("product", targetId),
       imageId: img.id,
     });
   },
@@ -481,21 +467,21 @@ const SOURCE_FACTORIES: Record<
       costType: "materials",
       trade: "other",
       date: "2024-01-15",
-      productId: unsafeProductId(targetId),
+      productId: parseEntityId("product", targetId),
     }),
 
   "Task.subjectProductId": (db, targetId) =>
     insertWithShortcode(db, "task", {
       name: uniq("Task"),
       trade: "other",
-      subjectProductId: unsafeProductId(targetId),
+      subjectProductId: parseEntityId("product", targetId),
     }),
 
   "ProjectToolUsage.productId": async (db, targetId) => {
     const p = await mkProject(db);
     return insertAndReturn(db, projectToolUsage, {
       projectId: p.id,
-      productId: unsafeProductId(targetId),
+      productId: parseEntityId("product", targetId),
     });
   },
 
@@ -503,7 +489,7 @@ const SOURCE_FACTORIES: Record<
     const p = await mkPurchase(db);
     return insertAndReturn(db, purchaseProduct, {
       purchaseId: p.id,
-      productId: unsafeProductId(targetId),
+      productId: parseEntityId("product", targetId),
     });
   },
 
@@ -511,7 +497,7 @@ const SOURCE_FACTORIES: Record<
     const p = await mkProduct(db);
     return insertWithShortcode(db, "inventory", {
       productId: p.id,
-      locationId: unsafeLocationId(targetId),
+      locationId: parseEntityId("location", targetId),
       amount: { value: 1, unit: "each" },
     });
   },
@@ -519,7 +505,7 @@ const SOURCE_FACTORIES: Record<
   "LocationImage.locationId": async (db, targetId) => {
     const img = await mkImage(db);
     return insertAndReturn(db, locationImage, {
-      locationId: unsafeLocationId(targetId),
+      locationId: parseEntityId("location", targetId),
       imageId: img.id,
     });
   },
@@ -530,14 +516,14 @@ const SOURCE_FACTORIES: Record<
     insertWithShortcode(db, "location", {
       name: uniq("Location"),
       type: "bin",
-      parentId: unsafeLocationId(targetId),
+      parentId: parseEntityId("location", targetId),
     }),
 
   "Location.productId": (db, targetId) =>
     insertWithShortcode(db, "location", {
       name: uniq("Location"),
       type: null,
-      productId: unsafeProductId(targetId),
+      productId: parseEntityId("product", targetId),
     }),
 
   "Cookbook.productId": (db, targetId) =>
@@ -547,19 +533,19 @@ const SOURCE_FACTORIES: Record<
       subjects: [],
       sourceLabel: "test",
       rawJson: [],
-      productId: unsafeProductId(targetId),
+      productId: parseEntityId("product", targetId),
     }),
 
   "Project.parentProjectId": (db, targetId) =>
     insertWithShortcode(db, "project", {
       name: uniq("Project"),
-      parentProjectId: unsafeProjectId(targetId),
+      parentProjectId: parseEntityId("project", targetId),
     }),
 
   "ProjectDependency.projectId": async (db, targetId) => {
     const other = await mkProject(db);
     return insertAndReturn(db, projectDependency, {
-      projectId: unsafeProjectId(targetId),
+      projectId: parseEntityId("project", targetId),
       blockedByProjectId: other.id,
     });
   },
@@ -568,7 +554,7 @@ const SOURCE_FACTORIES: Record<
     const other = await mkProject(db);
     return insertAndReturn(db, projectDependency, {
       projectId: other.id,
-      blockedByProjectId: unsafeProjectId(targetId),
+      blockedByProjectId: parseEntityId("project", targetId),
     });
   },
 
@@ -576,7 +562,7 @@ const SOURCE_FACTORIES: Record<
     insertWithShortcode(db, "task", {
       name: uniq("Task"),
       trade: "other",
-      projectId: unsafeProjectId(targetId),
+      projectId: parseEntityId("project", targetId),
     }),
 
   "Expense.projectId": (db, targetId) =>
@@ -585,13 +571,13 @@ const SOURCE_FACTORIES: Record<
       costType: "materials",
       trade: "other",
       date: "2024-01-15",
-      projectId: unsafeProjectId(targetId),
+      projectId: parseEntityId("project", targetId),
     }),
 
   "ProjectImage.projectId": async (db, targetId) => {
     const img = await mkImage(db);
     return insertAndReturn(db, projectImage, {
-      projectId: unsafeProjectId(targetId),
+      projectId: parseEntityId("project", targetId),
       imageId: img.id,
     });
   },
@@ -599,7 +585,7 @@ const SOURCE_FACTORIES: Record<
   "ProjectToolUsage.projectId": async (db, targetId) => {
     const p = await mkProduct(db);
     return insertAndReturn(db, projectToolUsage, {
-      projectId: unsafeProjectId(targetId),
+      projectId: parseEntityId("project", targetId),
       productId: p.id,
     });
   },
@@ -608,13 +594,13 @@ const SOURCE_FACTORIES: Record<
     insertWithShortcode(db, "task", {
       name: uniq("Task"),
       trade: "other",
-      parentTaskId: unsafeTaskId(targetId),
+      parentTaskId: parseEntityId("task", targetId),
     }),
 
   "TaskDependency.taskId": async (db, targetId) => {
     const other = await mkTask(db);
     return insertAndReturn(db, taskDependency, {
-      taskId: unsafeTaskId(targetId),
+      taskId: parseEntityId("task", targetId),
       blockedByTaskId: other.id,
     });
   },
@@ -623,13 +609,13 @@ const SOURCE_FACTORIES: Record<
     const other = await mkTask(db);
     return insertAndReturn(db, taskDependency, {
       taskId: other.id,
-      blockedByTaskId: unsafeTaskId(targetId),
+      blockedByTaskId: parseEntityId("task", targetId),
     });
   },
 
   "Purchase.vendorId": (db, targetId) =>
     insertWithShortcode(db, "purchase", {
-      vendorId: unsafeVendorId(targetId),
+      vendorId: parseEntityId("vendor", targetId),
       date: "2024-01-15",
     }),
 
@@ -639,13 +625,13 @@ const SOURCE_FACTORIES: Record<
       costType: "materials",
       trade: "other",
       date: "2024-01-15",
-      purchaseId: unsafePurchaseId(targetId),
+      purchaseId: parseEntityId("purchase", targetId),
     }),
 
   "PurchaseImage.purchaseId": async (db, targetId) => {
     const img = await mkImage(db);
     return insertAndReturn(db, purchaseImage, {
-      purchaseId: unsafePurchaseId(targetId),
+      purchaseId: parseEntityId("purchase", targetId),
       imageId: img.id,
     });
   },
@@ -653,14 +639,14 @@ const SOURCE_FACTORIES: Record<
   "PurchaseProduct.purchaseId": async (db, targetId) => {
     const prod = await mkProduct(db);
     return insertAndReturn(db, purchaseProduct, {
-      purchaseId: unsafePurchaseId(targetId),
+      purchaseId: parseEntityId("purchase", targetId),
       productId: prod.id,
     });
   },
 
   "FinancialTransaction.accountId": (db, targetId) =>
     insertWithShortcode(db, "financialTransaction", {
-      accountId: unsafeFinancialAccountId(targetId),
+      accountId: parseEntityId("financialAccount", targetId),
       kind: "purchase",
       status: "pending",
       amount: 1,
@@ -681,7 +667,7 @@ const SOURCE_FACTORIES: Record<
       amount: 1,
       providerAmount: -1,
       rawDescription: "LIVENESS FIXTURE",
-      accountId: unsafeFinancialAccountId(targetId),
+      accountId: parseEntityId("financialAccount", targetId),
     });
   },
 
@@ -695,7 +681,7 @@ const SOURCE_FACTORIES: Record<
     });
     return insertAndReturn(db, financialTransactionAllocation, {
       transactionId: txn.id,
-      purchaseId: unsafePurchaseId(targetId),
+      purchaseId: parseEntityId("purchase", targetId),
       amount: 1,
     });
   },
@@ -703,7 +689,7 @@ const SOURCE_FACTORIES: Record<
   "FinancialTransactionAllocation.transactionId": async (db, targetId) => {
     const purch = await mkPurchase(db);
     return insertAndReturn(db, financialTransactionAllocation, {
-      transactionId: unsafeFinancialTransactionId(targetId),
+      transactionId: parseEntityId("financialTransaction", targetId),
       purchaseId: purch.id,
       amount: 1,
     });
@@ -712,7 +698,7 @@ const SOURCE_FACTORIES: Record<
   "ProductComponent.parentProductId": async (db, targetId) => {
     const component = await mkProduct(db);
     return insertAndReturn(db, productComponent, {
-      parentProductId: unsafeProductId(targetId),
+      parentProductId: parseEntityId("product", targetId),
       componentProductId: component.id,
     });
   },
@@ -721,7 +707,7 @@ const SOURCE_FACTORIES: Record<
     const kit = await mkProduct(db);
     return insertAndReturn(db, productComponent, {
       parentProductId: kit.id,
-      componentProductId: unsafeProductId(targetId),
+      componentProductId: parseEntityId("product", targetId),
     });
   },
 
@@ -729,7 +715,7 @@ const SOURCE_FACTORIES: Record<
     await getDb(db)
       .insert(productConversionCoverage)
       .values({
-        productId: unsafeProductId(targetId),
+        productId: parseEntityId("product", targetId),
         coverageTier: "complete",
         status: "ready",
         engineVersion: "liveness-fixture",

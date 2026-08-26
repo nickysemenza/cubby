@@ -1,4 +1,4 @@
-import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
+import { locationShortcode } from "@cubby/schemas/identifiers";
 import type { infLocation, LocationType } from "@cubby/schemas/location";
 import type { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
 import { z } from "zod";
@@ -12,6 +12,7 @@ import type { entitySummaryDataSchema } from "~/components/entity/entity-summary
 const now = new Date(0);
 const ts = { createdAt: now, updatedAt: now };
 let locationSeq = 0;
+const shortcodeAlphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 
 // Helper to create a location
 const makeLocation = (
@@ -20,8 +21,10 @@ const makeLocation = (
   children?: z.infer<typeof infLocation>[],
 ): z.infer<typeof infLocation> => {
   locationSeq += 1;
+  const suffix = shortcodeAlphabet[locationSeq];
+  if (!suffix) throw new Error("Location demo fixture capacity exceeded");
   return {
-    id: unsafeLocationShortcode(`LOC-${String(locationSeq).padStart(4, "0")}`),
+    id: locationShortcode.parse(`LOC-222${suffix}`),
     name,
     aliases: [],
     product: null,

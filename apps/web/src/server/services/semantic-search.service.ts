@@ -1,4 +1,7 @@
-import type { EnqueueEmbeddingBackfillOut } from "@cubby/schemas/background-jobs";
+import {
+  type EnqueueEmbeddingBackfillOut,
+  entityEmbeddingBackfillCoordinatorPayloadSchema,
+} from "@cubby/schemas/background-jobs";
 import type {
   RequestEmbeddingRefreshInput,
   RequestEmbeddingRefreshOut,
@@ -8,6 +11,7 @@ import type {
   SimilarEntitiesOut,
 } from "@cubby/schemas/search";
 import { searchableEntities, similarEntityPairs } from "@cubby/schemas/search";
+import type { z } from "zod";
 import { getErrorMessage } from "~/lib/error-utils";
 import { dispatchBackgroundJobs } from "~/server/background-dispatch";
 import {
@@ -33,42 +37,19 @@ import { getEmbeddingReadiness } from "./embedding-readiness.service";
 
 const ALL_SEARCHABLE_ENTITIES: SearchableEntity[] = [...searchableEntities];
 
-type SemanticBackfillWorkflowMetadata = {
-  source: "search.debug.semanticBackfill";
-  workflow: {
-    type: "entity-embedding.backfill.coordinator";
-    entityTypes: SearchableEntity[];
-    cursor: {
-      entityType: SearchableEntity;
-      entityId: string;
-    } | null;
-    pagesCompleted: number;
-    jobsQueued: number;
-    state: "active" | "complete";
-  };
-};
+type SemanticBackfillWorkflowMetadata = z.output<
+  typeof entityEmbeddingBackfillCoordinatorPayloadSchema
+>;
+type SemanticBackfillWorkflowMetadataInput = z.input<
+  typeof entityEmbeddingBackfillCoordinatorPayloadSchema
+>;
 
 const readSemanticBackfillWorkflowMetadata = (
   value: unknown,
 ): SemanticBackfillWorkflowMetadata | null => {
-  if (!value || typeof value !== "object") return null;
-  const workflow = (value as { workflow?: unknown }).workflow;
-  if (!workflow || typeof workflow !== "object") return null;
-  const state = workflow as Record<string, unknown>;
-  if (
-    state.type !== "entity-embedding.backfill.coordinator" ||
-    !Array.isArray(state.entityTypes) ||
-    !state.entityTypes.every((entityType) =>
-      ALL_SEARCHABLE_ENTITIES.includes(entityType as SearchableEntity),
-    ) ||
-    (state.cursor !== null && typeof state.cursor !== "object") ||
-    typeof state.pagesCompleted !== "number" ||
-    typeof state.jobsQueued !== "number" ||
-    (state.state !== "active" && state.state !== "complete")
-  ) {
-    return null;
-  }
-  return value as SemanticBackfillWorkflowMetadata;
+  const parsed =
+    entityEmbeddingBackfillCoordinatorPayloadSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 };
 
 export interface SemanticProductCandidate {
@@ -142,7 +123,7 @@ export async function enqueueEntityEmbeddingBackfill(
         jobsQueued: 0,
         state: "active",
       },
-    } satisfies SemanticBackfillWorkflowMetadata,
+    } satisfies SemanticBackfillWorkflowMetadataInput,
     initialJobs: [
       {
         kind: "entity-embedding.backfill.coordinator",
@@ -157,7 +138,7 @@ export async function enqueueEntityEmbeddingBackfill(
             jobsQueued: 0,
             state: "active",
           },
-        } satisfies SemanticBackfillWorkflowMetadata,
+        } satisfies SemanticBackfillWorkflowMetadataInput,
       },
     ],
   });
@@ -180,7 +161,7 @@ export async function continueEntityEmbeddingBackfillWorkflow(
       cursor: metadata.workflow.cursor ? metadata.workflow.cursor : undefined,
     },
   );
-  const nextMetadata: SemanticBackfillWorkflowMetadata = {
+  const nextMetadata: SemanticBackfillWorkflowMetadataInput = {
     ...metadata,
     workflow: {
       ...metadata.workflow,

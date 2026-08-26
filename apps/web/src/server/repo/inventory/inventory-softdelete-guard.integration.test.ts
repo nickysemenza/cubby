@@ -1,8 +1,6 @@
-import {
-  unsafeInventoryId,
-  unsafeLocationId,
-  unsafeProductId,
-} from "@cubby/schemas/identifiers";
+import type { EntityId } from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
+
 import { eq } from "drizzle-orm";
 import { TEST_ACTOR, TEST_HOME_ID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -49,7 +47,8 @@ describe("inventory soft-delete target guard", () => {
     );
     return {
       output,
-      entityId: unsafeLocationId(
+      entityId: parseEntityId(
+        "location",
         await requireResolvedId(output.id, "location"),
       ),
     };
@@ -63,13 +62,16 @@ describe("inventory soft-delete target guard", () => {
     );
     return {
       output,
-      entityId: unsafeProductId(await requireResolvedId(output.id, "product")),
+      entityId: parseEntityId(
+        "product",
+        await requireResolvedId(output.id, "product"),
+      ),
     };
   };
 
   const createTestEntry = async (
-    productId: ReturnType<typeof unsafeProductId>,
-    locationId: ReturnType<typeof unsafeLocationId>,
+    productId: EntityId<"product">,
+    locationId: EntityId<"location">,
   ) => {
     const output = await createInventoryEntry(
       ctx.db,
@@ -78,7 +80,8 @@ describe("inventory soft-delete target guard", () => {
     );
     return {
       output,
-      entityId: unsafeInventoryId(
+      entityId: parseEntityId(
+        "inventory",
         await requireResolvedId(output.id, "inventory"),
       ),
     };

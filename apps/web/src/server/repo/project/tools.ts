@@ -2,10 +2,7 @@ import type { RelationMutationOut } from "@cubby/schemas/common";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ImpactItem } from "@cubby/schemas/entity-integrity";
 import type { ProductId, ProjectId } from "@cubby/schemas/identifiers";
-import {
-  unsafeProductShortcode,
-  unsafeProjectShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   ProductProjectUsesOut,
   ProjectResourceOut,
@@ -427,7 +424,7 @@ export async function listProjectResources(
   return reusableRows.map((row) => {
     const category = row.category;
     return {
-      productId: unsafeProductShortcode(row.productCode),
+      productId: parseShortcodeFor("product", row.productCode),
       productName: row.productName,
       manufacturer: row.manufacturer,
       category,
@@ -1424,7 +1421,7 @@ export async function suggestProjectTools(
         row.projectPurchaseCost >= EXPENSIVE_TOOL_THRESHOLD,
     )
     .map((row) => ({
-      productId: unsafeProductShortcode(row.productCode),
+      productId: parseShortcodeFor("product", row.productCode),
       productName: row.productName,
       manufacturer: row.manufacturer,
       coverImageUrl: coverImageUrls.get(row.productId) ?? null,
@@ -1498,7 +1495,7 @@ export async function suggestProjectTools(
       chosenTradeProductIds.add(row.productId);
       const toolMetrics = metrics.get(row.productId) ?? EMPTY_METRICS;
       tradeSuggestions.push({
-        productId: unsafeProductShortcode(row.productCode),
+        productId: parseShortcodeFor("product", row.productCode),
         productName: row.productName,
         manufacturer: row.manufacturer,
         coverImageUrl: coverImageUrls.get(row.productId) ?? null,
@@ -1688,13 +1685,13 @@ export async function listProductProjectUses(
       : [];
 
   return {
-    productId: unsafeProductShortcode(productRow.shortcode),
+    productId: parseShortcodeFor("product", productRow.shortcode),
     productName: productRow.name,
     manufacturer: productRow.manufacturer,
     category,
     ...publicResourceMetrics(category, metrics),
     projects: rows.map((row) => ({
-      projectId: unsafeProjectShortcode(row.projectCode),
+      projectId: parseShortcodeFor("project", row.projectCode),
       projectName: row.projectName,
       status: row.status,
       kind: row.kind,

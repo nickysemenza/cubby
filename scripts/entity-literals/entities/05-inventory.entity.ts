@@ -38,10 +38,7 @@ export default literalEntity({
         field: "productIdFilter",
         kind: "id",
         placeholder: "Filter by product id...",
-        brandRef: {
-          module: "@cubby/schemas/identifiers",
-          export: "unsafeProductId",
-        },
+        brandRef: { entity: "product", kind: "id" },
         urlOnly: true,
       },
       {
@@ -49,10 +46,7 @@ export default literalEntity({
         field: "locationIdFilter",
         kind: "id",
         placeholder: "Filter by location id...",
-        brandRef: {
-          module: "@cubby/schemas/identifiers",
-          export: "unsafeLocationId",
-        },
+        brandRef: { entity: "location", kind: "id" },
         urlOnly: true,
       },
       {

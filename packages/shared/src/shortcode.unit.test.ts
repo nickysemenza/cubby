@@ -1,14 +1,17 @@
 import { z } from "zod";
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 
 import {
   LEGACY_SHORTCODE_PREFIX,
   SHORTCODE_CHARS,
   SHORTCODE_PREFIX,
+  type ProductShortcode,
+  type ShortcodeFor,
   type ShortcodeType,
   extractShortcodeFromScan,
   generateShortcode,
   parseShortcode,
+  parseShortcodeFor,
   shortcodeSchema,
 } from "./shortcode";
 
@@ -76,6 +79,16 @@ describe("shortcodeSchema", () => {
     }
   });
 
+  it("preserves the entity brand through generic schema lookup", () => {
+    const parsed = shortcodeSchema("product").parse("PRD-4K7M");
+    expectTypeOf(parsed).toEqualTypeOf<ProductShortcode>();
+    expectTypeOf<ShortcodeFor<"product">>().toEqualTypeOf<ProductShortcode>();
+    expectTypeOf(
+      parseShortcodeFor("product", "prd-4k7m"),
+    ).toEqualTypeOf<ProductShortcode>();
+    expect(parseShortcodeFor("product", " prd-4k7m ")).toBe("PRD-4K7M");
+  });
+
   /**
    * The regression this guards is invisible at runtime: a `transform().pipe()`
    * shape parses identically but becomes a ZodPipe, whose INPUT-side JSON Schema
@@ -99,6 +112,12 @@ describe("shortcodeSchema", () => {
 });
 
 describe("generateShortcode", () => {
+  it("returns the entity's exact branded shortcode", () => {
+    expectTypeOf(
+      generateShortcode("product"),
+    ).toEqualTypeOf<ProductShortcode>();
+  });
+
   it.each(ENTITIES)(
     "produces codes its own schema accepts for %s",
     (entity) => {
@@ -111,6 +130,13 @@ describe("generateShortcode", () => {
 });
 
 describe("parseShortcode", () => {
+  it("keeps the discriminator correlated with the shortcode brand", () => {
+    const parsed = parseShortcode("PRD-4K7M");
+    if (parsed?.type === "product") {
+      expectTypeOf(parsed.shortcode).toEqualTypeOf<ProductShortcode>();
+    }
+  });
+
   it.each(ENTITIES)("round-trips a canonical %s code", (entity) => {
     const code = generateShortcode(entity);
     expect(parseShortcode(code)).toEqual({

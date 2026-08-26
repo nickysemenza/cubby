@@ -1,9 +1,7 @@
-import {
-  unsafeLocationShortcode,
-  unsafeProductShortcode,
-} from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
+import { imageOut } from "@cubby/schemas/image";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import {
   locationChildGroupLabel,
@@ -11,8 +9,8 @@ import {
 } from "./location-visual-resolver";
 
 const image = (id: string, overrides: Partial<ImageOut> = {}): ImageOut =>
-  ({
-    id: `00000000-0000-4000-8000-${id.padStart(12, "0")}`,
+  imageOut.parse({
+    id: testShortcode("image", `IMG-${id}`),
     url: `https://example.test/${id}.jpg`,
     key: `${id}.jpg`,
     filename: `${id}.jpg`,
@@ -29,14 +27,14 @@ const image = (id: string, overrides: Partial<ImageOut> = {}): ImageOut =>
     createdAt: new Date("2026-01-01T00:00:00Z"),
     updatedAt: new Date("2026-01-01T00:00:00Z"),
     ...overrides,
-  }) as ImageOut;
+  });
 
 const location = (
   code: string,
   type: LocationType | null,
   overrides: Partial<InfLocation> = {},
 ): InfLocation => ({
-  id: unsafeLocationShortcode(`LOC-${code}`),
+  id: testShortcode("location", `LOC-${code}`),
   name: `Location ${code}`,
   aliases: [],
   type,
@@ -60,7 +58,7 @@ describe("resolveLocationVisual", () => {
       location("AAAA", null, {
         images: [own],
         product: {
-          id: unsafeProductShortcode("PRD-AAAA"),
+          id: testShortcode("product", "PRD-AAAA"),
           name: "Two drawer box",
           manufacturer: "Example",
           model: null,
@@ -83,7 +81,7 @@ describe("resolveLocationVisual", () => {
     const child = location("BBBB", "drawer", { images: [childImage] });
     const productBacked = location("AAAA", null, {
       product: {
-        id: unsafeProductShortcode("PRD-AAAA"),
+        id: testShortcode("product", "PRD-AAAA"),
         name: "Two drawer box",
         manufacturer: "Example",
         model: null,

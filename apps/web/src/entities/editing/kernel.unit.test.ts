@@ -1,4 +1,7 @@
+import { taskOut } from "@cubby/schemas/project";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+import { mock } from "~/lib/test/mock-schema";
 import {
   buildEntityEdit,
   createFakeEntityMutationPort,
@@ -15,6 +18,7 @@ import type {
 } from "./types";
 
 const editable = { mode: "editable" } as const;
+const CREATED_TASK_ID = testShortcode("task", "created");
 
 const nameField: EntityEditField<"task", EntityEditRecord, string, object> = {
   entity: "task",
@@ -161,14 +165,25 @@ describe("entity editing kernel", () => {
     const resolved = resolveEntityEdit(registry, request);
     if (!isResolvedEntityEdit(resolved)) throw new Error("expected definition");
     const build = buildEntityEdit(resolved, request, { name: "new task" });
-    const fake = createFakeEntityMutationPort();
+    const fake = createFakeEntityMutationPort({
+      execute: async () => ({
+        id: CREATED_TASK_ID,
+        result: mock(taskOut, {
+          overrides: { id: CREATED_TASK_ID, name: "new task" },
+        }),
+      }),
+    });
     const result = await executeEntityEdit(
       fake.port,
       resolved.definition,
       build,
     );
 
-    expect(result).toMatchObject({ ok: true, id: "created", changed: true });
+    expect(result).toMatchObject({
+      ok: true,
+      id: CREATED_TASK_ID,
+      changed: true,
+    });
     expect(fake.commands).toHaveLength(1);
     expect(fake.invalidations).toEqual([[["task"]]]);
     expect(fake.backgroundWork).toHaveLength(1);

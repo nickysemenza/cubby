@@ -13,11 +13,7 @@ import type {
   ProductId,
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
-import {
-  unsafeLocationShortcode,
-  unsafeProductShortcode,
-  unsafeProjectShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   DuplicateProductIdentity,
   OrphanedProduct,
@@ -226,7 +222,7 @@ export const findOrphanedProducts = async (
 
   return orphaned.map((row) => ({
     ...row,
-    id: unsafeProductShortcode(row.shortcode),
+    id: parseShortcodeFor("product", row.shortcode),
   }));
 };
 
@@ -289,7 +285,7 @@ export const loadSoldButStockedPresenterTotals = async (
   for (const row of servingRows) {
     const locations = servingByProduct.get(row.productShortcode) ?? [];
     locations.push({
-      id: unsafeLocationShortcode(row.id),
+      id: parseShortcodeFor("location", row.id),
       name: row.name,
     });
     servingByProduct.set(row.productShortcode, locations);
@@ -359,10 +355,10 @@ export const findToolsUsedOutsideOwnership = async (
     );
     if (!conflict) continue;
     rows.push({
-      id: unsafeProductShortcode(edge.productShortcode),
+      id: parseShortcodeFor("product", edge.productShortcode),
       name: edge.productName,
       manufacturer: edge.manufacturer,
-      projectId: unsafeProjectShortcode(edge.projectShortcode),
+      projectId: parseShortcodeFor("project", edge.projectShortcode),
       projectName: edge.projectName,
       conflict: conflict.kind,
       toolDate: conflict.date,
@@ -548,7 +544,7 @@ export const findDuplicateProductIdentities = async (
       manufacturer: group[0]!.manufacturer,
       model: group[0]!.model,
       products: group.map((row) => ({
-        id: unsafeProductShortcode(row.shortcode),
+        id: parseShortcodeFor("product", row.shortcode),
         name: row.name,
         gtins: (byProduct.get(row.id) ?? [])
           .filter((id) => id.source === GTIN_SOURCE)
@@ -654,7 +650,7 @@ export const findProductsWithUpcGaps = async (
 
   return candidates.map((candidate) => ({
     ...candidate,
-    shortcode: unsafeProductShortcode(candidate.shortcode),
+    shortcode: parseShortcodeFor("product", candidate.shortcode),
     hasImage: Boolean(candidate.hasImage),
   }));
 };
@@ -809,7 +805,7 @@ export const findProductsWithoutUnitMappings = async (
     .filter((row) => !isMiscProduct(row.name))
     .map((row) => ({
       ...row,
-      shortcode: unsafeProductShortcode(row.shortcode),
+      shortcode: parseShortcodeFor("product", row.shortcode),
     }));
 };
 

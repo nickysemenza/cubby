@@ -89,9 +89,9 @@ describe("mock() overrides", () => {
   it("array overrides replace wholesale", () => {
     const value = mock(duplicateUniqueProductSchema, {
       seed: 1,
-      overrides: { locations: [{ id: "loc-1", name: "Pantry" }] },
+      overrides: { locations: [{ id: "LOC-ABCD", name: "Pantry" }] },
     });
-    expect(value.locations).toEqual([{ id: "loc-1", name: "Pantry" }]);
+    expect(value.locations).toEqual([{ id: "LOC-ABCD", name: "Pantry" }]);
   });
 });
 
@@ -101,7 +101,11 @@ describe("mock() policy", () => {
     const omitted = mock(amount, { seed: 1 });
     expect(omitted).not.toHaveProperty("upperValue");
 
-    const filled = mock(amount, { seed: 1, fillOptionals: true });
+    const filled = mock(amount, {
+      seed: 1,
+      fillOptionals: true,
+      overrides: { value: 1, upperValue: 2 },
+    });
     expect(filled).toHaveProperty("upperValue");
     // NB: with fillOptionals, `upperValue` and `value` are independent randoms,
     // so a refine like `upperValue > value` is NOT guaranteed — that is why the

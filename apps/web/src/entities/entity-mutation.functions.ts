@@ -7,6 +7,9 @@ import type {
   EntityBrowserMutationInput,
   EntityBrowserMutationResult,
 } from "~/server/entity-kernel/contracts";
+import type { EntityEditResultFor } from "./editing/intent-types";
+import type { EditableEntity } from "./editing/types";
+import { parseEntityMutationOutput } from "./generated/entity-mutation-results.gen";
 
 /** @lintignore Discovered by the operation registry generator. */
 export const entityMutation = defineOperationDomain("entity", {
@@ -38,4 +41,16 @@ export function flattenEntityMutationResult(
   if (result.action === "delete")
     return { deleted: result.deleted, sideEffects: result.sideEffects };
   return result.result;
+}
+
+/** Recover the entity-specific output through the same schema that backs the kernel. */
+export function parseEntityMutationResultFor<E extends EditableEntity>(
+  entity: E,
+  value: unknown,
+): EntityEditResultFor<E>;
+export function parseEntityMutationResultFor(
+  entity: EditableEntity,
+  value: unknown,
+) {
+  return parseEntityMutationOutput(entity, value);
 }

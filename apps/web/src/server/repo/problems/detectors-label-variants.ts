@@ -33,10 +33,7 @@
  * which needs `fuzzystrmatch`.
  */
 
-import {
-  unsafeProductShortcode,
-  unsafeVendorShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { DuplicateVendor, LabelVariant } from "@cubby/schemas/problems";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { type Column, type SQL, sql } from "drizzle-orm";
@@ -152,7 +149,7 @@ export const findManufacturerSpellingVariants = (
   }).then((rows) =>
     rows.map(({ canonicalSampleId: _canonicalSampleId, ...row }) => ({
       ...row,
-      sampleId: unsafeProductShortcode(row.sampleId),
+      sampleId: parseShortcodeFor("product", row.sampleId),
     })),
   );
 
@@ -200,7 +197,7 @@ export const findDuplicateVendors = (
   }).then((rows) =>
     rows.map((row) => ({
       ...row,
-      sampleId: unsafeVendorShortcode(row.sampleId),
-      canonicalSampleId: unsafeVendorShortcode(row.canonicalSampleId),
+      sampleId: parseShortcodeFor("vendor", row.sampleId),
+      canonicalSampleId: parseShortcodeFor("vendor", row.canonicalSampleId),
     })),
   );

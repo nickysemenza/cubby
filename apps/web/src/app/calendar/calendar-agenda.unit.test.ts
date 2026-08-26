@@ -1,8 +1,6 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
-import {
-  unsafeMealShortcode,
-  unsafeTaskShortcode,
-} from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import { addDays, format, parseISO } from "date-fns";
 import { describe, expect, it } from "vitest";
 import { groupItemsByDay } from "./calendar-agenda";
@@ -14,7 +12,7 @@ const nextDay = (day: string) =>
 
 const meal = (id: string, startDate: string): CalendarItem => ({
   kind: "meal",
-  id: unsafeMealShortcode(id),
+  id: testShortcode("meal", id),
   title: id,
   name: null,
   startDate,
@@ -36,7 +34,7 @@ const task = (
   endDateExclusive: string,
 ): CalendarItem => ({
   kind: "task",
-  id: unsafeTaskShortcode(id),
+  id: testShortcode("task", id),
   title: id,
   startDate,
   endDateExclusive,
@@ -84,7 +82,10 @@ describe("groupItemsByDay", () => {
       includesDay,
     );
     const secondDay = groups.find((g) => g.day === "2026-03-02");
-    expect(secondDay?.items.map((i) => i.id)).toEqual(["TSK-1111", "MEL-2222"]);
+    expect(secondDay?.items.map((i) => i.id)).toEqual([
+      testShortcode("task", "TSK-1111"),
+      testShortcode("meal", "MEL-2222"),
+    ]);
   });
 
   it("anchors long-running spans inside the active month", () => {
@@ -95,7 +96,9 @@ describe("groupItemsByDay", () => {
     );
 
     expect(groups.map((group) => group.day)).toEqual(["2026-08-01"]);
-    expect(groups[0]?.items.map((item) => item.id)).toEqual(["TSK-1111"]);
+    expect(groups[0]?.items.map((item) => item.id)).toEqual([
+      testShortcode("task", "TSK-1111"),
+    ]);
   });
 
   it("does not create an agenda heading for a span outside the active month", () => {

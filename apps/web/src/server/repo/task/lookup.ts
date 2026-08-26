@@ -1,6 +1,5 @@
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import type { ProjectShortcode } from "@cubby/schemas/identifiers";
-import { unsafeProjectId, unsafeTaskId } from "@cubby/schemas/identifiers";
+import type { EntityId } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -63,11 +62,11 @@ import { dbTaskToAPI, effectiveTaskDueDateSql } from "./helpers";
  * `resolveAllPresent` applies the same live-row semantics as the list itself,
  * including canonical/legacy shortcode normalization.
  */
-const toUuids = async (
+const toUuids = async <E extends ShortcodeEntity>(
   db: Database,
   codes: readonly string[],
-  entity: ShortcodeEntity,
-): Promise<string[]> => {
+  entity: E,
+): Promise<EntityId<E>[]> => {
   return resolveAllPresent(db, entity, codes);
 };
 
@@ -87,16 +86,14 @@ const toUuids = async (
  */
 async function buildTaskProjectCondition(
   db: Database,
-  projectId: ProjectShortcode | ProjectShortcode[] | undefined,
+  projectId: TaskFilters["projectId"],
   includeSubProjects: boolean | undefined,
   presence?: PresenceFilter,
 ): Promise<SQL | undefined> {
   const presenceCond = presenceCondition(task.projectId, presence);
   const selectedCodes = projectId ? [projectId].flat() : [];
   if (selectedCodes.length === 0) return presenceCond;
-  const selected = (await toUuids(db, selectedCodes, "project")).map(
-    unsafeProjectId,
-  );
+  const selected = await toUuids(db, selectedCodes, "project");
   if (selected.length === 0) return presenceCond ?? sql`false`;
   if (!includeSubProjects)
     return or(eqAny(task.projectId, selected), presenceCond);
@@ -163,9 +160,7 @@ export const taskList = async (
   const parentTaskCodes = filters.parentTaskId
     ? [filters.parentTaskId].flat()
     : [];
-  const parentTaskIds = (await toUuids(db, parentTaskCodes, "task")).map(
-    unsafeTaskId,
-  );
+  const parentTaskIds = await toUuids(db, parentTaskCodes, "task");
   const scopedProjectIds = filters.projectScope
     ? await matchingEmbeddedProjectIds(db, filters.projectScope)
     : null;

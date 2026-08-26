@@ -197,10 +197,11 @@ function section<T, K extends CoverageProblemKey = never>(config: {
   const iconProp: IconProp = config.entity
     ? { entity: config.entity }
     : { icon: config.icon as LucideIcon };
-  const canonicalPresentation =
-    config.problemKeys?.length === 1
-      ? problemQuery(config.problemKeys[0] as ProblemKey)
-      : undefined;
+  const canonicalKey =
+    config.problemKeys?.length === 1 ? config.problemKeys[0] : undefined;
+  const canonicalPresentation = canonicalKey
+    ? problemQuery(canonicalKey)
+    : undefined;
   const title = config.title ?? canonicalPresentation?.title;
   const description = config.description ?? canonicalPresentation?.description;
   const emptyMessage =

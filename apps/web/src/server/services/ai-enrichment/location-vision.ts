@@ -19,8 +19,8 @@ import {
   type LocationId,
   type ProductId,
   type ProductShortcode,
-  unsafeProductId,
-  unsafeProductShortcode,
+  parseEntityId,
+  parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import { type ProductCategory, productCategory } from "@cubby/schemas/product";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
@@ -83,7 +83,7 @@ export function isLocationHasNoImagesToAnalyzeError(
 }
 
 interface DetectedProductMatch {
-  id: ReturnType<typeof unsafeProductId>;
+  id: ProductId;
   shortcode: ProductShortcode;
   name: string;
   manufacturer: string;
@@ -340,7 +340,7 @@ async function matchDetectedItems(
         let matched: DetectedProductMatch | null =
           exactMatched && exactMatchedId
             ? {
-                id: unsafeProductId(exactMatchedId),
+                id: parseEntityId("product", exactMatchedId),
                 shortcode: exactMatched.id,
                 name: exactMatched.name,
                 manufacturer: exactMatched.manufacturer,
@@ -354,7 +354,7 @@ async function matchDetectedItems(
           );
           const semanticShortcode =
             semanticMatch?.item.entityType === "product"
-              ? unsafeProductShortcode(semanticMatch.item.id)
+              ? parseShortcodeFor("product", semanticMatch.item.id)
               : null;
           const semanticEntityId = semanticShortcode
             ? await resolveLiveShortcode(db, semanticShortcode, "product")
@@ -368,7 +368,7 @@ async function matchDetectedItems(
             !existingProductIds.has(semanticShortcode)
           ) {
             matched = {
-              id: unsafeProductId(semanticEntityId),
+              id: parseEntityId("product", semanticEntityId),
               shortcode: semanticShortcode,
               name: semanticMatch.item.name,
               manufacturer: semanticMatch.item.subtitle ?? item.manufacturer,
@@ -378,7 +378,7 @@ async function matchDetectedItems(
             };
           }
         }
-        if (matched && existingProductIds.has(matched.id)) return null;
+        if (matched && existingProductIds.has(matched.shortcode)) return null;
 
         return {
           ...item,

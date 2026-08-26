@@ -1,10 +1,5 @@
-import {
-  type InventoryId,
-  type LocationId,
-  unsafeInventoryId,
-  unsafeLocationId,
-  unsafeProductId,
-} from "@cubby/schemas/identifiers";
+import type { InventoryId, LocationId } from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -49,7 +44,8 @@ describe("reconcileLocationSession", () => {
     );
     return {
       output,
-      entityId: unsafeLocationId(
+      entityId: parseEntityId(
+        "location",
         await requireResolvedId(output.id, "location"),
       ),
     };
@@ -63,7 +59,8 @@ describe("reconcileLocationSession", () => {
       makeProductInput({ name: `Bolt ${locationName}` }),
       TEST_ACTOR,
     );
-    const productEntityId = unsafeProductId(
+    const productEntityId = parseEntityId(
+      "product",
       await requireResolvedId(product.id, "product"),
     );
     const entry = await createInventoryEntry(
@@ -71,7 +68,8 @@ describe("reconcileLocationSession", () => {
       { productId: productEntityId, locationId: locEntityId, amount },
       TEST_ACTOR,
     );
-    const entryEntityId = unsafeInventoryId(
+    const entryEntityId = parseEntityId(
+      "inventory",
       await requireResolvedId(entry.id, "inventory"),
     );
     return { loc, locEntityId, entry, entryEntityId };
@@ -102,7 +100,8 @@ describe("reconcileLocationSession", () => {
     const fixture = await createInventoryEntry(
       ctx.db,
       {
-        productId: unsafeProductId(
+        productId: parseEntityId(
+          "product",
           await requireResolvedId(fixtureProduct.id, "product"),
         ),
         locationId: locEntityId,
@@ -111,7 +110,8 @@ describe("reconcileLocationSession", () => {
       },
       TEST_ACTOR,
     );
-    const fixtureEntityId = unsafeInventoryId(
+    const fixtureEntityId = parseEntityId(
+      "inventory",
       await requireResolvedId(fixture.id, "inventory"),
     );
 
@@ -156,7 +156,8 @@ describe("reconcileLocationSession", () => {
     const can = await createInventoryEntry(
       ctx.db,
       {
-        productId: unsafeProductId(
+        productId: parseEntityId(
+          "product",
           await requireResolvedId(canProduct.id, "product"),
         ),
         locationId: locEntityId,
@@ -165,7 +166,8 @@ describe("reconcileLocationSession", () => {
       },
       TEST_ACTOR,
     );
-    const canEntityId = unsafeInventoryId(
+    const canEntityId = parseEntityId(
+      "inventory",
       await requireResolvedId(can.id, "inventory"),
     );
 

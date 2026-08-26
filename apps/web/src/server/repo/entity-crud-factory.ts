@@ -34,6 +34,7 @@ import {
 import {
   ENTITY_LABEL,
   ENTITY_NOT_FOUND_REASON,
+  type EntityId,
 } from "@cubby/schemas/identifiers";
 import type { AnyColumn } from "drizzle-orm";
 import type { PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
@@ -64,20 +65,25 @@ type CrudTable = PgTable & { id: AnyColumn; deletedAt: AnyColumn };
  */
 type ReaderDb = Database | DrizzleTransaction;
 
-interface EntityReaderConfig<TRow, TOut, TId extends string, TDb = Database> {
+interface EntityReaderConfig<
+  TRow,
+  TOut,
+  E extends ShortcodeEntity,
+  TDb = Database,
+> {
   /** Drives the 404 message and the shortcode this reader resolves. */
-  entity: ShortcodeEntity;
+  entity: E;
   /** Relations-loaded fetch of a live row by id; `undefined` when absent. */
-  fetchById: (db: TDb, id: TId) => Promise<TRow | undefined>;
+  fetchById: (db: TDb, id: EntityId<E>) => Promise<TRow | undefined>;
   /** DB row → API shape. Async to support mappers that do a follow-up query. */
   fromDB: (db: TDb, row: TRow) => TOut | Promise<TOut>;
 }
 
-export interface EntityReader<TOut, TId extends string, TDb = Database> {
+export interface EntityReader<TOut, E extends ShortcodeEntity, TDb = Database> {
   /** Fetch by id, throwing `ENTITY_NOT_FOUND_REASON[entity]` when there is no live row. */
-  getByID: (db: TDb, id: TId) => Promise<TOut>;
+  getByID: (db: TDb, id: EntityId<E>) => Promise<TOut>;
   /** Fetch by id, returning `null` when there is no live row. */
-  getByIDOrNull: (db: TDb, id: TId) => Promise<TOut | null>;
+  getByIDOrNull: (db: TDb, id: EntityId<E>) => Promise<TOut | null>;
   /**
    * Fetch by PUBLIC id — the shortcode that URLs and MCP speak — returning
    * `null` when the code is malformed, belongs to another entity, or names a
@@ -90,17 +96,18 @@ export interface EntityReader<TOut, TId extends string, TDb = Database> {
 export function createEntityReader<
   TRow,
   TOut,
-  TId extends string,
+  E extends ShortcodeEntity,
   TDb = Database,
->(
-  config: EntityReaderConfig<TRow, TOut, TId, TDb>,
-): EntityReader<TOut, TId, TDb> {
-  const getByIDOrNull = async (db: TDb, id: TId): Promise<TOut | null> => {
+>(config: EntityReaderConfig<TRow, TOut, E, TDb>): EntityReader<TOut, E, TDb> {
+  const getByIDOrNull = async (
+    db: TDb,
+    id: EntityId<E>,
+  ): Promise<TOut | null> => {
     const row = await config.fetchById(db, id);
     return row ? config.fromDB(db, row) : null;
   };
 
-  const getByID = async (db: TDb, id: TId): Promise<TOut> => {
+  const getByID = async (db: TDb, id: EntityId<E>): Promise<TOut> => {
     const result = await getByIDOrNull(db, id);
     if (result === null) {
       throw createAppError(
@@ -122,7 +129,7 @@ export function createEntityReader<
       shortcode,
       config.entity,
     );
-    return id === null ? null : getByIDOrNull(db, id as TId);
+    return id === null ? null : getByIDOrNull(db, id);
   };
 
   return { getByID, getByIDOrNull, getByShortcode };
@@ -133,18 +140,21 @@ interface EntityCrudConfig<
   TRow extends Record<string, unknown>,
   TOut,
   TUpdate,
-  TId extends string,
-> extends Omit<EntityReaderConfig<TRow, TOut, TId, ReaderDb>, "entity"> {
+  E extends AuditableEntity & ShortcodeEntity,
+> extends Omit<EntityReaderConfig<TRow, TOut, E, ReaderDb>, "entity"> {
   table: TTable;
   /** Manifest key — drives the auditable / soft-delete behavior. */
-  entity: AuditableEntity & ShortcodeEntity;
+  entity: E;
   toUpdate: (data: TUpdate) => PgUpdateSetSource<TTable>;
   /** Columns whose change is recorded in the audit diff. */
   auditUpdateFields: readonly string[];
 }
 
-export interface EntityCrud<TOut, TUpdate, TId extends string>
-  extends EntityReader<TOut, TId, ReaderDb> {
+export interface EntityCrud<
+  TOut,
+  TUpdate,
+  E extends AuditableEntity & ShortcodeEntity,
+> extends EntityReader<TOut, E, ReaderDb> {
   /**
    * Diff-audited column update, atomic end to end. Accepts an already-open
    * transaction so a caller that resolves related rows first (see
@@ -152,7 +162,7 @@ export interface EntityCrud<TOut, TUpdate, TId extends string>
    */
   update: (
     db: ReaderDb,
-    id: TId,
+    id: EntityId<E>,
     data: TUpdate,
     actor: ActorContext,
   ) => Promise<TOut>;
@@ -163,12 +173,12 @@ export function createEntityCrud<
   TRow extends Record<string, unknown>,
   TOut,
   TUpdate,
-  TId extends string,
+  E extends AuditableEntity & ShortcodeEntity,
 >(
-  config: EntityCrudConfig<TTable, TRow, TOut, TUpdate, TId>,
-): EntityCrud<TOut, TUpdate, TId> {
+  config: EntityCrudConfig<TTable, TRow, TOut, TUpdate, E>,
+): EntityCrud<TOut, TUpdate, E> {
   const manifest = entityManifest[config.entity];
-  const reader = createEntityReader<TRow, TOut, TId, ReaderDb>({
+  const reader = createEntityReader<TRow, TOut, E, ReaderDb>({
     entity: config.entity,
     fetchById: config.fetchById,
     fromDB: config.fromDB,
@@ -196,7 +206,7 @@ export function createEntityCrud<
    */
   const updateTx = async (
     tx: DrizzleTransaction,
-    id: TId,
+    id: EntityId<E>,
     data: TUpdate,
     actor: ActorContext,
   ): Promise<TOut> => {
@@ -237,7 +247,7 @@ export function createEntityCrud<
 
   const update = (
     db: ReaderDb,
-    id: TId,
+    id: EntityId<E>,
     data: TUpdate,
     actor: ActorContext,
   ): Promise<TOut> =>

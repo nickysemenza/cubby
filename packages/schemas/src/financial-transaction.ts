@@ -288,13 +288,22 @@ const financialTransactionCreateShape = {
   notes: z.string().nullable().default(null),
 };
 
+const postedDateStatusSchema = z.object({
+  status: financialTransactionStatus,
+  postedDate: plainDate.nullable(),
+});
+
+const settlementStateSchema = z.object({
+  purchaseId: z.string().nullable(),
+  allocations: z.array(financialTransactionAllocationInput).optional(),
+  kind: financialTransactionKind,
+  amount: z.number(),
+});
+
 const postedRequiresDate = <T extends z.ZodType>(schema: T) =>
   schema.refine(
     (value) => {
-      const transaction = value as {
-        status: FinancialTransactionStatus;
-        postedDate: string | null;
-      };
+      const transaction = postedDateStatusSchema.parse(value);
       return transaction.status !== "posted" || transaction.postedDate !== null;
     },
     { message: "posted transactions require postedDate", path: ["postedDate"] },
@@ -302,12 +311,7 @@ const postedRequiresDate = <T extends z.ZodType>(schema: T) =>
 
 const validSettlementState = <T extends z.ZodType>(schema: T) =>
   schema.superRefine((value, ctx) => {
-    const transaction = value as {
-      purchaseId: string | null;
-      allocations?: FinancialTransactionAllocationInput[];
-      kind: FinancialTransactionKind;
-      amount: number;
-    };
+    const transaction = settlementStateSchema.parse(value);
     const allocations = transaction.allocations ?? [];
 
     // `purchaseId` is sugar for one allocation of the full amount. Supplying

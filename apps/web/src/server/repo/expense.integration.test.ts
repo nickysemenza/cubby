@@ -5,14 +5,7 @@ import type {
   PurchaseShortcode,
   VendorShortcode,
 } from "@cubby/schemas/identifiers";
-import {
-  unsafeExpenseShortcode,
-  unsafeProductId,
-  unsafeProjectShortcode,
-  unsafePurchaseId,
-  unsafePurchaseShortcode,
-  unsafeVendorShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   type ExpenseCreateInput,
   type ExpenseOut,
@@ -21,6 +14,7 @@ import {
   HOUSEHOLD_PROJECT_SHORTCODE,
   projectCreateInput,
 } from "@cubby/schemas/project";
+import { testShortcode } from "@cubby/schemas/testing";
 import { eq } from "drizzle-orm";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -112,7 +106,7 @@ const purchaseUuid = async (
 ): Promise<PurchaseId> => {
   const resolved = await resolveShortcode(db, code);
   if (!resolved) throw new Error(`purchase not found: ${code}`);
-  return unsafePurchaseId(resolved.id);
+  return parseEntityId("purchase", resolved.id);
 };
 
 describe("expense repository — CRUD", () => {
@@ -1761,7 +1755,8 @@ describe("expense repository — moveExpenses", () => {
       }),
       ctx.actor,
     );
-    const bogusProjectId = unsafeProjectShortcode(
+    const bogusProjectId = testShortcode(
+      "project",
       "00000000-0000-0000-0000-000000000000",
     );
 
@@ -1801,7 +1796,7 @@ describe("expense repository — moveExpenses", () => {
       projectCreateInput.parse({ name: "move expenses noop project" }),
       ctx.actor,
     );
-    const bogusId = unsafeExpenseShortcode("EXP-ZZZZ");
+    const bogusId = testShortcode("expense", "EXP-ZZZZ");
 
     const moved = await moveExpenses(
       ctx.db,
@@ -2878,7 +2873,7 @@ describe("expense repository — vendorId + vendorPresenceFilter OR guard", () =
       ctx.actor,
     );
 
-    const bogus = unsafeVendorShortcode("VEN-9999");
+    const bogus = testShortcode("vendor", "VEN-9999");
     const { data } = await expenseList(
       ctx.db,
       { vendorId: bogus, vendorPresenceFilter: "none" },
@@ -3006,7 +3001,8 @@ describe("expense repository — productPresenceFilter", () => {
       .where(
         eq(
           product.id,
-          unsafeProductId(
+          parseEntityId(
+            "product",
             (await resolveLiveShortcode(ctx.db, doomedRouter.id, "product"))!,
           ),
         ),
@@ -3593,7 +3589,7 @@ describe("expense repository — charge resolution on update", () => {
         ctx.db,
         stray.id,
         {
-          purchaseId: unsafePurchaseShortcode("PUR-ZZZZ"),
+          purchaseId: testShortcode("purchase", "PUR-ZZZZ"),
         },
         ctx.actor,
       ),

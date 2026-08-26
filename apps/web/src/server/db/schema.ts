@@ -234,9 +234,10 @@ const pkUuid = <T extends string = string>() =>
  * The entity's public id (`PRD-4K7M`) — what URLs, QR labels, and MCP expose.
  * The uuid PK above stays private to repositories and in-process workflows.
  *
- * Deliberately NOT branded: branding shortcode columns buys little and costs
- * friction on every insert (see the root CLAUDE.md note); the `unsafe*Shortcode`
- * cast at the repo mapper boundary is the accepted pattern.
+ * Deliberately NOT branded: the Product/Ingredient/Image spike showed that
+ * generic Drizzle table unions erase the entity correlation on inserts and
+ * comparisons. Repository mapper seams validate stored strings through the
+ * entity-specific shortcode schemas instead.
  */
 const shortcodeColumn = () => text("shortcode").notNull();
 

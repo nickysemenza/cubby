@@ -1,8 +1,12 @@
-import type {
-  ShoppingListContribution,
-  ShoppingListItem,
-  UnexpandedSubRecipe,
+import {
+  type ShoppingListContribution,
+  type ShoppingListItem,
+  shoppingListContribution,
+  shoppingListItem,
+  type UnexpandedSubRecipe,
+  unexpandedSubRecipeOut,
 } from "@cubby/schemas/meal";
+import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -17,38 +21,39 @@ vi.mock("@tanstack/react-router", () => ({
 const contribution = (
   over: Record<string, unknown> = {},
 ): ShoppingListContribution =>
-  ({
-    mealId: "MEL-1",
+  shoppingListContribution.parse({
+    mealId: testShortcode("meal", "MEL-ABCD"),
     mealName: "Dinner",
     date: "2026-06-15",
-    recipeId: "RCP-1",
+    recipeId: testShortcode("recipe", "RCP-ABCD"),
     recipeName: "Pancakes",
     scale: 1,
     needValue: 100,
     lineIndex: 0,
     via: [],
     ...over,
-  }) as unknown as ShoppingListContribution;
+  });
 
 const item = (over: Record<string, unknown> = {}): ShoppingListItem =>
-  ({
-    ingredientId: "ING-1",
+  shoppingListItem.parse({
+    ingredientId: testShortcode("ingredient", "ING-ABCD"),
     name: "flour",
     basisUnit: "g",
     needValue: 100,
     haveValue: 500,
     shortfall: 0,
+    estimatedCost: null,
     status: "ok",
     perMeal: [contribution()],
     ...over,
-  }) as unknown as ShoppingListItem;
+  });
 
 const NONE: ReadonlySet<string> = new Set();
 
 const meals = [
-  { id: "MEL-1", name: "Lunch", date: "2026-06-15" },
-  { id: "MEL-2", name: "Dinner", date: "2026-06-16" },
-] as Parameters<typeof buildShoppingColumns>[0]["meals"];
+  { id: testShortcode("meal", "MEL-ABCD"), name: "Lunch", date: "2026-06-15" },
+  { id: testShortcode("meal", "MEL-EFGH"), name: "Dinner", date: "2026-06-16" },
+] satisfies Parameters<typeof buildShoppingColumns>[0]["meals"];
 
 function renderMatrix(
   items: ShoppingListItem[],
@@ -80,31 +85,31 @@ const rowCells = (name: string) =>
 describe("ShoppingMatrix", () => {
   const twoLines = [
     item({
-      ingredientId: "ING-FLOUR",
+      ingredientId: "ING-FABC",
       name: "flour",
       perMeal: [
         contribution({
           lineIndex: 0,
-          mealId: "MEL-1",
+          mealId: "MEL-ABCD",
           recipeName: "A",
           needValue: 300,
         }),
       ],
     }),
     item({
-      ingredientId: "ING-SALT",
+      ingredientId: "ING-SFAT",
       name: "salt",
       haveValue: 0,
       perMeal: [
         contribution({
           lineIndex: 0,
-          mealId: "MEL-1",
+          mealId: "MEL-ABCD",
           recipeName: "A",
           needValue: 40,
         }),
         contribution({
           lineIndex: 1,
-          mealId: "MEL-2",
+          mealId: "MEL-EFGH",
           recipeName: "B",
           needValue: 6,
         }),
@@ -153,7 +158,7 @@ describe("ShoppingMatrix", () => {
   });
 
   it("scales shading to the visible lines when a meal is excluded", () => {
-    const { container } = renderMatrix(twoLines, [], new Set(["MEL-2"]));
+    const { container } = renderMatrix(twoLines, [], new Set(["MEL-EFGH"]));
 
     expect(
       [...container.querySelectorAll("tbody td")].filter((td) =>
@@ -169,19 +174,19 @@ describe("ShoppingMatrix", () => {
         perMeal: [
           contribution({
             lineIndex: 0,
-            mealId: "MEL-1",
+            mealId: "MEL-ABCD",
             mealName: "Lunch",
             recipeName: "A",
           }),
           contribution({
             lineIndex: 1,
-            mealId: "MEL-1",
+            mealId: "MEL-ABCD",
             mealName: "Lunch",
             recipeName: "B",
           }),
           contribution({
             lineIndex: 2,
-            mealId: "MEL-2",
+            mealId: "MEL-EFGH",
             mealName: "Dinner",
             recipeName: "C",
           }),
@@ -221,19 +226,19 @@ describe("ShoppingMatrix", () => {
 
   it("marks a column whose sub-recipe couldn't be expanded", () => {
     renderMatrix(twoLines, [
-      {
-        recipeId: "RCP-DOUGH",
+      unexpandedSubRecipeOut.parse({
+        recipeId: "RCP-DUGA",
         name: "Dough",
         reason: "missingYield",
         amount: null,
         via: [],
-        mealId: "MEL-1",
+        mealId: "MEL-ABCD",
         mealName: "Lunch",
         date: "2026-06-15",
-        parentRecipeId: "RCP-1",
+        parentRecipeId: "RCP-ABCD",
         parentRecipeName: "A",
         lineIndex: 0,
-      } as unknown as UnexpandedSubRecipe,
+      }),
     ]);
 
     expect(screen.getByLabelText("Incomplete: Dough")).toBeVisible();
@@ -246,7 +251,7 @@ describe("ShoppingMatrix", () => {
           contribution({
             lineIndex: 0,
             needValue: 120,
-            via: [{ recipeId: "RCP-DOUGH", name: "Dough" }],
+            via: [{ recipeId: "RCP-DUGA", name: "Dough" }],
           }),
         ],
       }),

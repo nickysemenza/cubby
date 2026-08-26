@@ -1,6 +1,6 @@
 import {
   type ProjectShortcode,
-  unsafeProjectShortcode,
+  parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { ExpenseOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
@@ -113,7 +113,7 @@ export function ProjectSuggestionChips({
             disabled={isPending}
             onClick={() =>
               void onAssign(
-                unsafeProjectShortcode(proposal.suggestion.id),
+                parseShortcodeFor("project", proposal.suggestion.id),
               ).then(
                 () => setProposal(null),
                 // The caller owns mutation error presentation. Keep the

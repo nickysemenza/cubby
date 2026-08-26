@@ -1,7 +1,8 @@
 import {
+  type EntityId,
   type LocationShortcode,
-  unsafeLocationId,
-  unsafeProductId,
+  parseEntityId,
+  parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { UPCLookupResponse } from "@cubby/upc-contract";
 import type { FoodSummary } from "@cubby/usda-schemas";
@@ -60,8 +61,8 @@ describe("scanAtLocation", () => {
       TEST_ACTOR,
     );
     return {
-      shortcode: out.id as LocationShortcode,
-      entityId: unsafeLocationId(await requireId(out.id, "location")),
+      shortcode: parseShortcodeFor("location", out.id),
+      entityId: parseEntityId("location", await requireId(out.id, "location")),
     };
   };
 
@@ -69,7 +70,7 @@ describe("scanAtLocation", () => {
     const out = await quickCreateProduct(ctx.db, { name, upc }, TEST_ACTOR);
     return {
       shortcode: out.id,
-      entityId: unsafeProductId(await requireId(out.id, "product")),
+      entityId: parseEntityId("product", await requireId(out.id, "product")),
     };
   };
 
@@ -83,7 +84,7 @@ describe("scanAtLocation", () => {
     );
 
   const rowsAt = async (
-    locationEntityId: ReturnType<typeof unsafeLocationId>,
+    locationEntityId: EntityId<"location">,
     productShortcode: string,
   ) => {
     const entries = await getInventoryByLocationIds(
@@ -256,8 +257,8 @@ describe("resolveScanStrays", () => {
       TEST_ACTOR,
     );
     return {
-      shortcode: out.id as LocationShortcode,
-      entityId: unsafeLocationId(await requireId(out.id, "location")),
+      shortcode: parseShortcodeFor("location", out.id),
+      entityId: parseEntityId("location", await requireId(out.id, "location")),
     };
   };
 
@@ -269,7 +270,10 @@ describe("resolveScanStrays", () => {
       { name: "Stray book", upc: "012345678911" },
       TEST_ACTOR,
     );
-    const productId = unsafeProductId(await requireId(product.id, "product"));
+    const productId = parseEntityId(
+      "product",
+      await requireId(product.id, "product"),
+    );
     const entry = await createInventoryEntry(
       ctx.db,
       { productId, locationId: source.entityId, amount: each },
@@ -312,7 +316,10 @@ describe("resolveScanStrays", () => {
       { name: "Merged book", upc: "012345678914" },
       TEST_ACTOR,
     );
-    const productId = unsafeProductId(await requireId(product.id, "product"));
+    const productId = parseEntityId(
+      "product",
+      await requireId(product.id, "product"),
+    );
     const sourceEntry = await createInventoryEntry(
       ctx.db,
       { productId, locationId: source.entityId, amount: each },
@@ -354,7 +361,10 @@ describe("resolveScanStrays", () => {
       { name: "Homebody", upc: "012345678912" },
       TEST_ACTOR,
     );
-    const productId = unsafeProductId(await requireId(product.id, "product"));
+    const productId = parseEntityId(
+      "product",
+      await requireId(product.id, "product"),
+    );
     const entry = await createInventoryEntry(
       ctx.db,
       { productId, locationId: target.entityId, amount: each },

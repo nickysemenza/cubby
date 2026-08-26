@@ -1,3 +1,4 @@
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { TaskOut, TaskStatus } from "@cubby/schemas/project";
 import {
   type CollisionDetection,
@@ -335,8 +336,9 @@ export function TaskBoard({
           screenReaderInstructions: cubbyDndScreenReaderInstructions,
           announcements: createDndAnnouncements({
             item: (id) =>
-              taskById[id.replace("task-board:drag:", "") as TaskOut["id"]]
-                ?.name ?? "task",
+              taskById[
+                parseShortcodeFor("task", id.replace("task-board:drag:", ""))
+              ]?.name ?? "task",
             target: (id) => id.replace("task-board:", "").replaceAll(":", " "),
           }),
         }}

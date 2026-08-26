@@ -1,8 +1,4 @@
-import {
-  unsafeInventoryShortcode,
-  unsafeLocationShortcode,
-  unsafeProductShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 /**
  * Location tree and hierarchy operations.
@@ -171,10 +167,10 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
   for (const entry of allInventoryEntries) {
     const existing = inventoryByLocationId.get(entry.locationId) ?? [];
     existing.push({
-      id: unsafeInventoryShortcode(entry.shortcode),
+      id: parseShortcodeFor("inventory", entry.shortcode),
       amount: entry.amount,
       productName: entry.productName,
-      productId: unsafeProductShortcode(entry.productShortcode),
+      productId: parseShortcodeFor("product", entry.productShortcode),
     });
     inventoryByLocationId.set(entry.locationId, existing);
     countsByLocationId.set(
@@ -333,13 +329,14 @@ export const getLocationInventoryBreakdown = async (
     directCounts.map((row) => [row.locationId, Number(row.itemCount)]),
   );
 
-  type MutableNode = LocationInventoryBreakdownOut & {
+  type MutableNode = Omit<LocationInventoryBreakdownOut, "children"> & {
     parentId: LocationId | null;
+    children: MutableNode[];
   };
   const byId = new Map<LocationId, MutableNode>();
   for (const row of rows) {
     byId.set(row.id, {
-      id: unsafeLocationShortcode(row.shortcode),
+      id: parseShortcodeFor("location", row.shortcode),
       name: row.name,
       type: parseLocationType(row.type, { id: row.shortcode, name: row.name }),
       directItemCount: countsByLocationId.get(row.id) ?? 0,
@@ -357,7 +354,7 @@ export const getLocationInventoryBreakdown = async (
   if (!root) return null;
 
   const finalize = (node: MutableNode): LocationInventoryBreakdownOut => {
-    const children = (node.children as MutableNode[])
+    const children = node.children
       .sort((a, b) => a.name.localeCompare(b.name))
       .map(finalize);
     return {
@@ -445,7 +442,7 @@ export const loadLocationAncestorsWithIds = async (
     const chain = byId.get(row.root);
     const rung: LocationAncestorRung = {
       locationId: row.locationId,
-      id: unsafeLocationShortcode(row.shortcode),
+      id: parseShortcodeFor("location", row.shortcode),
       name: row.name,
       type: parseLocationType(row.type, {
         id: row.shortcode,

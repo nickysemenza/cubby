@@ -48,10 +48,7 @@ export default literalEntity({
         kind: "idMulti",
         placeholder: "Filter by vendor...",
         optionsKey: "vendor",
-        brandRef: {
-          module: "@cubby/schemas/identifiers",
-          export: "unsafeVendorId",
-        },
+        brandRef: { entity: "vendor", kind: "id" },
       },
       {
         columnId: "orderId",
@@ -253,20 +250,14 @@ export default literalEntity({
         kind: "idMulti",
         placeholder: "Filter by project...",
         optionsKey: "project",
-        brandRef: {
-          module: "@cubby/schemas/identifiers",
-          export: "unsafeProjectId",
-        },
+        brandRef: { entity: "project", kind: "id" },
         nullable: { field: "projectPresenceFilter", label: "project" },
       },
       {
         columnId: "projectId",
         kind: "idMulti",
         placeholder: "Filter by project id...",
-        brandRef: {
-          module: "@cubby/schemas/identifiers",
-          export: "unsafeProjectId",
-        },
+        brandRef: { entity: "project", kind: "id" },
         urlOnly: true,
       },
       {

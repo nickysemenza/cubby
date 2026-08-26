@@ -8,6 +8,12 @@
 
 import { entityRefKey } from "@cubby/schemas/entity";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
+import type {
+  ImageShortcode,
+  IngredientShortcode,
+  ProductId,
+  ProductShortcode,
+} from "@cubby/schemas/identifiers";
 import type * as Shared from "@cubby/shared";
 import {
   PUBLIC_SHORTCODE_PREFIXES,
@@ -16,7 +22,7 @@ import {
 } from "@cubby/shared";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { location, product } from "~/server/db/schema";
 
 import { getDb } from "./database-helpers";
@@ -83,6 +89,18 @@ describe("shortcode minting", () => {
     for (const entity of shortcodeEntities) {
       expect(SHORTCODE_TABLE[entity]).toBeDefined();
     }
+  });
+
+  it("preserves exact entity brands through generic minting", async () => {
+    expectTypeOf(
+      await generateUniqueShortcode(ctx.db, "product"),
+    ).toEqualTypeOf<ProductShortcode>();
+    expectTypeOf(
+      await generateUniqueShortcode(ctx.db, "ingredient"),
+    ).toEqualTypeOf<IngredientShortcode>();
+    expectTypeOf(
+      await generateUniqueShortcode(ctx.db, "image"),
+    ).toEqualTypeOf<ImageShortcode>();
   });
 });
 
@@ -257,6 +275,9 @@ describe("resolution", () => {
 
     const byCanonical = await resolveShortcode(ctx.db, canonical);
     expect(byCanonical).toEqual({ entity: "product", id: created.entityId });
+    if (byCanonical?.entity === "product") {
+      expectTypeOf(byCanonical.id).toEqualTypeOf<ProductId>();
+    }
     expect(await resolveShortcode(ctx.db, legacy)).toEqual(byCanonical);
     expect(await resolveShortcode(ctx.db, ` ${legacy.toLowerCase()} `)).toEqual(
       byCanonical,

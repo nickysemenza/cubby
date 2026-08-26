@@ -1,0 +1,5 @@
+export const productId = z.uuid().brand("ProductId");
+export type ProductId = z.infer<typeof productId>;
+export const productOut = z.object({ id: productId, name: z.string() });
+export type ProductOut = z.output<typeof productOut>;
+export type PlainInput = { value: string };

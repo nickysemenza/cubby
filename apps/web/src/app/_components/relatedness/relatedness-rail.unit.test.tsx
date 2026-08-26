@@ -1,4 +1,5 @@
-import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import { render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -95,7 +96,7 @@ describe("RelatednessRail", () => {
   });
 
   it("refetches relatedness when its Index now batch reaches a terminal state", async () => {
-    const productId = unsafeProductShortcode("PRD-INDEX");
+    const productId = testShortcode("product", "PRD-INDEX");
     render(<RelatednessRail product={{ id: productId, tags: [] }} />);
 
     await waitFor(() => {
@@ -106,8 +107,8 @@ describe("RelatednessRail", () => {
   });
 
   it("renders image and icon identity marks for ready related products", () => {
-    const pictured = unsafeProductShortcode("PRD-PICTURED");
-    const unpictured = unsafeProductShortcode("PRD-UNPICTURED");
+    const pictured = testShortcode("product", "PRD-PICTURED");
+    const unpictured = testShortcode("product", "PRD-UNPICTURED");
     mocks.relatedness = {
       status: "ready",
       items: [
@@ -133,7 +134,7 @@ describe("RelatednessRail", () => {
 
     render(
       <RelatednessRail
-        product={{ id: unsafeProductShortcode("PRD-SOURCE"), tags: [] }}
+        product={{ id: testShortcode("product", "PRD-SOURCE"), tags: [] }}
       />,
     );
 

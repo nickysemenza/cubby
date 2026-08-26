@@ -889,20 +889,20 @@ export interface ViewProblemDeclaration {
  */
 export function viewProblemDeclarations(): ViewProblemDeclaration[] {
   const declarations = Object.entries(viewManifest).flatMap(([entity, views]) =>
-    (views ?? [])
-      .filter((view) => view.problem)
-      .map((view) => {
-        const problem = view.problem as ViewProblem;
-        const source: EntityProblemSource = {
-          kind: "entity",
-          entity: entity as Entity,
-          filters: view.filters,
-          ...(view.sort ? { sort: view.sort } : {}),
-          ...(view.layout?.columnVisibility
-            ? { columnVisibility: view.layout.columnVisibility }
-            : {}),
-        };
-        return {
+    (views ?? []).flatMap((view) => {
+      const problem = view.problem;
+      if (!problem) return [];
+      const source: EntityProblemSource = {
+        kind: "entity",
+        entity: entity as Entity,
+        filters: view.filters,
+        ...(view.sort ? { sort: view.sort } : {}),
+        ...(view.layout?.columnVisibility
+          ? { columnVisibility: view.layout.columnVisibility }
+          : {}),
+      };
+      return [
+        {
           entity: entity as Entity,
           viewId: view.id,
           sort: view.sort,
@@ -914,8 +914,9 @@ export function viewProblemDeclarations(): ViewProblemDeclaration[] {
             freshness: { kind: "live" },
             source,
           }),
-        };
-      }),
+        },
+      ];
+    }),
   );
   validateProblemQueries(declarations.map(({ problem }) => problem));
   return declarations;

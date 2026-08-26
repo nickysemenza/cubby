@@ -1,4 +1,5 @@
-import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import type { FoodSummary } from "@cubby/usda-schemas";
 import { describe, expect, it } from "vitest";
 import { convertAmountToPrice, safeConvertAmount } from "~/lib/recipe-costing";
@@ -30,7 +31,7 @@ const brandedFood = (householdText: string): FoodSummary => ({
 });
 
 const promixProduct = (householdText: string) => ({
-  id: unsafeProductShortcode("PRD-2345"),
+  id: testShortcode("product", "PRD-2345"),
   unitMappings: [],
   food: brandedFood(householdText),
   price: 39.99,

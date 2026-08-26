@@ -62,13 +62,13 @@ describe("convertAmountToPrice", () => {
     {
       name: "handles error when conversion fails",
       amount: { value: 1, unit: "InvalidUnit" } satisfies Amount,
-      mappings: [] as UnitMapping[],
+      mappings: [] satisfies UnitMapping[],
       errorContains: "Error converting to money:",
     },
     {
       name: "handles empty mappings array",
       amount: { value: 1, unit: "cup" } satisfies Amount,
-      mappings: [] as UnitMapping[], // Empty mappings
+      mappings: [] satisfies UnitMapping[], // Empty mappings
       errorContains: "Failed to convert",
     },
     {
@@ -702,7 +702,10 @@ describe("calculateTotals with the consumption model", () => {
     ]);
     const costing = computeRecipeCosting(
       [root],
-      { ...ingMap, water },
+      {
+        [ingMap.flour.id]: ingMap.flour,
+        [water.id]: water,
+      },
       getName,
       {},
     ).get(root.id);

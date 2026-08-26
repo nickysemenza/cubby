@@ -2,7 +2,6 @@ import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import type { QueryKey } from "@tanstack/react-query";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
-import type { EntityEditDraft } from "~/entities/editing/intent-types";
 import type { EditableEntity } from "~/entities/editing/types";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import { entityLabel } from "~/entities/entities";
@@ -65,9 +64,9 @@ export function useUpdateMutation<TFn extends MutationOptionsFn>({
   const registryMutation = useMutation<DataOf<TFn>, Error, VariablesOf<TFn>>({
     mutationFn: async (variables) => {
       const input = variables as { id: string; data: object };
-      const result = await commands.commitFields({
+      const result = await commands.commitRuntimeFields({
         record: { id: input.id },
-        values: input.data as Partial<EntityEditDraft<typeof commandEntity>>,
+        values: input.data,
         intent: "full",
         surface: "cell",
       });

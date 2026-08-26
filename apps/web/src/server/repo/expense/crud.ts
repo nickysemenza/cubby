@@ -11,10 +11,7 @@ import type {
   PurchaseId,
   PurchaseShortcode,
 } from "@cubby/schemas/identifiers";
-import {
-  unsafeExpenseShortcode,
-  unsafePurchaseShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   DeleteExpensesWithPurchaseEffectsOut,
   ExpenseBulkCostTypeInput,
@@ -971,12 +968,12 @@ export const deleteExpensesWithPurchaseEffects = async (
     );
     const affectedPurchaseIds = affectedPurchaseDbIds.flatMap((id) => {
       const shortcode = purchaseShortcodes.get(id);
-      return shortcode ? [unsafePurchaseShortcode(shortcode)] : [];
+      return shortcode ? [parseShortcodeFor("purchase", shortcode)] : [];
     });
     const newlyEmptyPurchaseIds = affectedPurchaseDbIds.flatMap((id) => {
       const shortcode = purchaseShortcodes.get(id);
       return shortcode && !purchasesWithLiveExpenses.has(id)
-        ? [unsafePurchaseShortcode(shortcode)]
+        ? [parseShortcodeFor("purchase", shortcode)]
         : [];
     });
 
@@ -988,7 +985,7 @@ export const deleteExpensesWithPurchaseEffects = async (
       result: {
         deleted,
         deletedIds: qualityTargets.map((row) =>
-          unsafeExpenseShortcode(row.shortcode),
+          parseShortcodeFor("expense", row.shortcode),
         ),
         affectedPurchaseIds,
         newlyEmptyPurchaseIds,

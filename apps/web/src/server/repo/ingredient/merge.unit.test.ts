@@ -1,4 +1,5 @@
-import { unsafeIngredientShortcode } from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import { TEST_ACTOR } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import type { Database } from "~/server/db/database";
@@ -37,8 +38,8 @@ const reasonOf = async (run: Promise<unknown>): Promise<unknown> => {
 };
 
 describe("mergeIngredients self-merge guard", () => {
-  const keepId = unsafeIngredientShortcode("ING-AAAA");
-  const other = unsafeIngredientShortcode("ING-BBBB");
+  const keepId = testShortcode("ingredient", "ING-AAAA");
+  const other = testShortcode("ingredient", "ING-BBBB");
 
   it("rejects merging an ingredient into itself without touching the database", async () => {
     await expect(

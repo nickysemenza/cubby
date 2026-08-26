@@ -1,0 +1,32 @@
+const productId = z.uuid().brand("ProductId");
+const locationId = z.uuid().brand("LocationId");
+type ProductId = z.infer<typeof productId>;
+type LocationId = z.output<typeof locationId>;
+type ShortcodeFor<T> = string & z.$brand<`${T & string}Shortcode`>;
+const product = value as ProductId;
+const shortcode = value as ShortcodeFor<"product">;
+const ids = value as readonly ProductId[];
+type ProductResourceOut = { productId: ProductId; name: string };
+const indexed = value as ProductResourceOut["productId"];
+type ProductAlias = ProductId;
+const aliased = value as ProductAlias;
+type ProductRow = { id: ProductId };
+const structuralAlias = value as ProductRow;
+interface ProductShape { id: ProductId }
+const structuralInterface = value as ProductShape;
+interface ExtendedProductShape extends ProductShape { name: string }
+const extendedInterface = value as ExtendedProductShape;
+type LocationRow = BaseRow & { internalId: LocationId };
+const intersectedAlias = value as LocationRow;
+function parseWithAvailableSchema<T>(schema: z.ZodType<T>, raw: unknown) {
+  return raw as T;
+}
+function reconstructSchemaOutput<T>(schema: z.ZodType<T>, raw: unknown) {
+  return raw as z.infer<T>;
+}
+function reconstructBrandedArray<T extends ProductRow>(raw: unknown) {
+  return raw as T[];
+}
+type LocalSchemaAlias = z.infer<typeof productId>;
+const localSchemaAlias = value as LocalSchemaAlias;
+const inlineBrand = value as string & z.$brand<"ProductId">;

@@ -1,6 +1,8 @@
-import type {
-  LocationShortcode,
-  ProductShortcode,
+import {
+  type LocationShortcode,
+  locationShortcode,
+  type ProductShortcode,
+  productShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
   InventoryUpdateInput,
@@ -99,6 +101,7 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
       const productIdChange = detectComboboxIdChange<ProductShortcode>(
         inventoryItem.product.id,
         values.product,
+        productShortcode.parse,
       );
       if (productIdChange) {
         updates.productId = productIdChange;
@@ -106,6 +109,7 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
       const locationIdChange = detectComboboxIdChange<LocationShortcode>(
         inventoryItem.location.id,
         values.location,
+        locationShortcode.parse,
       );
       if (locationIdChange) {
         updates.locationId = locationIdChange;

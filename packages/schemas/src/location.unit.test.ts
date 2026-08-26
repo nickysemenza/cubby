@@ -1,11 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { unsafeImageShortcode } from "./identifiers";
-import type { ImageOut } from "./image";
+import { imageOut, type ImageOut } from "./image";
+import { testShortcode } from "./test-support/identifiers";
 import { locationCoverImage } from "./location";
+import { describe, expect, it } from "vitest";
 
 const img = (overrides: Partial<ImageOut> = {}): ImageOut =>
-  ({
-    id: unsafeImageShortcode("IMG-2222"),
+  imageOut.parse({
+    id: testShortcode("image", "IMG-2222"),
     url: "https://example.com/photo.jpg",
     key: "photo.jpg",
     filename: "photo.jpg",
@@ -22,16 +22,16 @@ const img = (overrides: Partial<ImageOut> = {}): ImageOut =>
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
-  }) as ImageOut;
+  });
 
 describe("locationCoverImage", () => {
   it("prefers the location's own photo over the SKU it is", () => {
     const own = img({
-      id: unsafeImageShortcode("IMG-3333"),
+      id: testShortcode("image", "IMG-3333"),
       url: "https://example.com/bin.jpg",
     });
     const cover = img({
-      id: unsafeImageShortcode("IMG-4444"),
+      id: testShortcode("image", "IMG-4444"),
       url: "https://example.com/catalog.jpg",
     });
 
@@ -41,7 +41,7 @@ describe("locationCoverImage", () => {
   });
 
   it("falls back to the SKU's cover when the bin has no photo of its own", () => {
-    const cover = img({ id: unsafeImageShortcode("IMG-7777") });
+    const cover = img({ id: testShortcode("image", "IMG-7777") });
 
     expect(
       locationCoverImage({ images: [], product: { coverImage: cover } }),
@@ -52,10 +52,10 @@ describe("locationCoverImage", () => {
     // A PDF manual in the location gallery is not a picture of the bin; it must
     // fall through, not win and render broken.
     const manual = img({
-      id: unsafeImageShortcode("IMG-5555"),
+      id: testShortcode("image", "IMG-5555"),
       contentType: "application/pdf",
     });
-    const cover = img({ id: unsafeImageShortcode("IMG-8888") });
+    const cover = img({ id: testShortcode("image", "IMG-8888") });
 
     expect(
       locationCoverImage({ images: [manual], product: { coverImage: cover } }),
@@ -64,10 +64,10 @@ describe("locationCoverImage", () => {
 
   it("skips a failed-render own image", () => {
     const broken = img({
-      id: unsafeImageShortcode("IMG-6666"),
+      id: testShortcode("image", "IMG-6666"),
       renderStatus: "failed",
     });
-    const cover = img({ id: unsafeImageShortcode("IMG-9999") });
+    const cover = img({ id: testShortcode("image", "IMG-9999") });
 
     expect(
       locationCoverImage({ images: [broken], product: { coverImage: cover } }),
@@ -76,7 +76,7 @@ describe("locationCoverImage", () => {
 
   it("returns null rather than an undisplayable SKU cover", () => {
     const manual = img({
-      id: unsafeImageShortcode("IMG-7777"),
+      id: testShortcode("image", "IMG-7777"),
       contentType: "application/pdf",
     });
 

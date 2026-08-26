@@ -2,6 +2,12 @@ import type {
   ShoppingListContribution,
   ShoppingListItem,
 } from "@cubby/schemas/meal";
+import {
+  shoppingListContribution,
+  shoppingListItem,
+  shoppingListOut,
+} from "@cubby/schemas/meal";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import {
   buildShoppingColumns,
@@ -24,32 +30,49 @@ type ItemOverrides = Partial<
 let nextLine = 0;
 const contribution = (
   over: ContributionOverrides = {},
-): ShoppingListContribution =>
-  ({
-    mealId: "MEL-1",
+): ShoppingListContribution => {
+  const { mealId, recipeId, ...rest } = over;
+  return shoppingListContribution.parse({
+    mealId: testShortcode("meal", "MEL-1"),
     mealName: "Dinner",
     date: "2026-06-15",
-    recipeId: "RCP-1",
+    recipeId: testShortcode("recipe", "RCP-1"),
     recipeName: "Pancakes",
     scale: 1,
     needValue: 100,
     lineIndex: nextLine++,
     via: [],
-    ...over,
-  }) as ShoppingListItem["perMeal"][number];
+    ...rest,
+    ...(mealId === undefined ? {} : { mealId: testShortcode("meal", mealId) }),
+    ...(recipeId === undefined
+      ? {}
+      : { recipeId: testShortcode("recipe", recipeId) }),
+  });
+};
 
-const item = (over: ItemOverrides = {}): ShoppingListItem =>
-  ({
-    ingredientId: "ING-1",
+const item = (over: ItemOverrides = {}): ShoppingListItem => {
+  const { ingredientId, ...rest } = over;
+  return shoppingListItem.parse({
+    ingredientId: testShortcode("ingredient", "ING-1"),
     name: "flour",
     basisUnit: "g",
     needValue: 100,
     haveValue: 500,
     shortfall: 0,
     status: "ok",
+    estimatedCost: null,
     perMeal: [contribution()],
-    ...over,
-  }) as ShoppingListItem;
+    ...rest,
+    ...(ingredientId === undefined
+      ? {}
+      : {
+          ingredientId:
+            ingredientId === null
+              ? null
+              : testShortcode("ingredient", ingredientId),
+        }),
+  });
+};
 
 describe("buildShoppingRows", () => {
   it("sums need from the visible contributions only", () => {
@@ -62,7 +85,7 @@ describe("buildShoppingRows", () => {
           ],
         }),
       ],
-      new Set(["MEL-2"]),
+      new Set([testShortcode("meal", "MEL-2")]),
       NONE,
     )[0];
 
@@ -73,7 +96,7 @@ describe("buildShoppingRows", () => {
     // The load-bearing invariant: on-hand is the ingredient's global stock,
     // counted once by the server. Deriving it per contribution is exactly the
     // double-count the aggregation exists to prevent.
-    const [all, some] = [NONE, new Set(["MEL-2"])].map(
+    const [all, some] = [NONE, new Set([testShortcode("meal", "MEL-2")])].map(
       (excluded) =>
         buildShoppingRows(
           [
@@ -154,10 +177,14 @@ describe("buildShoppingRows", () => {
         }),
       ],
       NONE,
-      new Set(["ING-B"]),
+      new Set([testShortcode("ingredient", "ING-B")]),
     );
 
-    expect(rows.map((r) => r.key)).toEqual(["ING-C", "ING-A", "ING-B"]);
+    expect(rows.map((r) => r.key)).toEqual([
+      testShortcode("ingredient", "ING-C"),
+      testShortcode("ingredient", "ING-A"),
+      testShortcode("ingredient", "ING-B"),
+    ]);
   });
 });
 
@@ -186,10 +213,18 @@ describe("status after exclusion", () => {
 });
 
 describe("buildShoppingColumns", () => {
-  const meals = [
-    { id: "MEL-2", name: "Dinner", date: "2026-06-16" },
-    { id: "MEL-1", name: "Lunch", date: "2026-06-15" },
-  ] as Parameters<typeof buildShoppingColumns>[0]["meals"];
+  const meals = shoppingListOut.shape.meals.parse([
+    {
+      id: testShortcode("meal", "MEL-2"),
+      name: "Dinner",
+      date: "2026-06-16",
+    },
+    {
+      id: testShortcode("meal", "MEL-1"),
+      name: "Lunch",
+      date: "2026-06-15",
+    },
+  ]);
 
   it("orders columns by the server's meal order, not by mention order", () => {
     const { columns } = buildShoppingColumns(
@@ -207,7 +242,10 @@ describe("buildShoppingColumns", () => {
       NONE,
     );
 
-    expect(columns.map((c) => c.mealId)).toEqual(["MEL-2", "MEL-1"]);
+    expect(columns.map((c) => c.mealId)).toEqual([
+      testShortcode("meal", "MEL-2"),
+      testShortcode("meal", "MEL-1"),
+    ]);
   });
 
   it("keeps a meal that plans the same recipe twice as two columns", () => {
@@ -253,10 +291,12 @@ describe("buildShoppingColumns", () => {
           }),
         ],
       },
-      new Set(["MEL-2"]),
+      new Set([testShortcode("meal", "MEL-2")]),
     );
 
-    expect(columns.map((c) => c.mealId)).toEqual(["MEL-1"]);
+    expect(columns.map((c) => c.mealId)).toEqual([
+      testShortcode("meal", "MEL-1"),
+    ]);
     expect(groups).toHaveLength(1);
   });
 
@@ -277,7 +317,10 @@ describe("buildShoppingColumns", () => {
       NONE,
     );
 
-    expect(groups.map((g) => g.mealId)).toEqual(["MEL-2", "MEL-1"]);
+    expect(groups.map((g) => g.mealId)).toEqual([
+      testShortcode("meal", "MEL-2"),
+      testShortcode("meal", "MEL-1"),
+    ]);
     expect(groups.reduce((n, g) => n + g.columnKeys.length, 0)).toBe(
       columns.length,
     );
@@ -321,7 +364,7 @@ describe("shoppingRowsToText", () => {
     const rows = buildShoppingRows(
       [item({ name: "flour", haveValue: 0, perMeal: [contribution()] })],
       NONE,
-      new Set(["ING-1"]),
+      new Set([testShortcode("ingredient", "ING-1")]),
     );
 
     const text = shoppingRowsToText(rows, rangeLabel);

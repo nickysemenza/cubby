@@ -1,4 +1,5 @@
-import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import { describe, expect, it } from "vitest";
 import {
   EntityDetailError,
@@ -10,7 +11,7 @@ import {
 describe("entity detail transport contract", () => {
   it("uses the normalized operation detail query key", () => {
     expect(
-      entityDetailQueryKey("product", unsafeProductShortcode("PRD-4K7M")),
+      entityDetailQueryKey("product", testShortcode("product", "PRD-4K7M")),
     ).toEqual([
       "operation",
       "entity.detail",

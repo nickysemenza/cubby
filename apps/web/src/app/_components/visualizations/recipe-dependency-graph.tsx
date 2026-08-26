@@ -39,6 +39,9 @@ interface GraphLink extends d3Force.SimulationLinkDatum<GraphNode> {
   target: string | GraphNode;
 }
 
+const resolvedGraphNode = (endpoint: string | GraphNode): GraphNode | null =>
+  typeof endpoint === "string" ? null : endpoint;
+
 export function RecipeDependencyGraph({
   cookbookId,
   hideUnconnected,
@@ -232,9 +235,10 @@ function Graph({
 
         <g>
           {simLinks.map((link, i) => {
-            const source = link.source as GraphNode;
-            const target = link.target as GraphNode;
-            if (source.x == null || target.x == null) return null;
+            const source = resolvedGraphNode(link.source);
+            const target = resolvedGraphNode(link.target);
+            if (!source || !target || source.x == null || target.x == null)
+              return null;
             // Stop the line at the target's edge so the arrowhead sits clear.
             const dx = (target.x ?? 0) - (source.x ?? 0);
             const dy = (target.y ?? 0) - (source.y ?? 0);

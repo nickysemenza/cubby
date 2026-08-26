@@ -19,6 +19,10 @@ interface LiteralObject {
 }
 
 type SourceRef = Readonly<{ module: string; export: string }>;
+type IdentifierRef = Readonly<{
+  entity: string;
+  kind: "id" | "shortcode";
+}>;
 type FilterDescriptor = Readonly<{
   columnId: string;
   field: string | null;
@@ -29,7 +33,7 @@ type FilterDescriptor = Readonly<{
   optionsRef: SourceRef | null;
   optionsKey: string | null;
   label: string | null;
-  brandRef: SourceRef | null;
+  brandRef: IdentifierRef | null;
   expandRef: SourceRef | null;
   urlOnly: boolean;
   nullable: Readonly<{ field: string; label: string }> | null;
@@ -145,6 +149,19 @@ const sourceRef = (value: LiteralValue, context: string): SourceRef => {
   return {
     module: stringValue(required(object, "module", context), `${context}.module`),
     export: stringValue(required(object, "export", context), `${context}.export`),
+  };
+};
+
+const identifierRef = (value: LiteralValue, context: string): IdentifierRef => {
+  const object = objectValue(value, context);
+  exactKeys(object, ["entity", "kind"], context);
+  const kind = stringValue(required(object, "kind", context), `${context}.kind`);
+  if (kind !== "id" && kind !== "shortcode") {
+    throw new LiteralSpecError(`${context}.kind must be id or shortcode.`);
+  }
+  return {
+    entity: stringValue(required(object, "entity", context), `${context}.entity`),
+    kind,
   };
 };
 
@@ -301,7 +318,7 @@ const filterDescriptor = (
     brandRef:
       object.brandRef === undefined || object.brandRef === null
         ? null
-        : sourceRef(object.brandRef, `${context}.brandRef`),
+        : identifierRef(object.brandRef, `${context}.brandRef`),
     expandRef:
       object.expandRef === undefined || object.expandRef === null
         ? null
@@ -1021,6 +1038,33 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         `  ${JSON.stringify(key)}: z.object({items:z.array(${key}ListOutputSchema),meta:entityListMetaSchema}),`,
     )
     .join("\n");
+  const mutationOutputImportEntries = new Map<string, Set<string>>();
+  for (const { contract } of browserCrudEntitySpecs) {
+    if (!contract)
+      throw new LiteralSpecError("Browser CRUD entity is missing its contract.");
+    const exports = mutationOutputImportEntries.get(contract.output.module) ?? new Set<string>();
+    exports.add(contract.output.export);
+    mutationOutputImportEntries.set(contract.output.module, exports);
+  }
+  const mutationOutputImports = [...mutationOutputImportEntries.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(
+      ([module, exports]) =>
+        `import { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
+    )
+    .join("\n");
+  const mutationOutputTypes = browserCrudEntitySpecs
+    .map(({ key, contract }) => {
+      if (!contract) throw new LiteralSpecError("Browser CRUD entity is missing its contract.");
+      return `  ${JSON.stringify(key)}: z.output<typeof ${contract.output.export}>;`;
+    })
+    .join("\n");
+  const mutationOutputSchemas = browserCrudEntitySpecs
+    .map(({ key, contract }) => {
+      if (!contract) throw new LiteralSpecError("Browser CRUD entity is missing its contract.");
+      return `  ${JSON.stringify(key)}: ${contract.output.export},`;
+    })
+    .join("\n");
   const commandVariants = (
     action: "create" | "update",
     schema: "create" | "update",
@@ -1199,7 +1243,6 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
           ports.relationMutation.detach,
           ...entity.filterDescriptors.flatMap((descriptor) => [
             descriptor.optionsRef,
-            descriptor.brandRef,
             descriptor.expandRef,
           ]),
         ].filter((ref): ref is SourceRef => ref !== null);
@@ -1269,7 +1312,7 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         "type EntityFilterDescriptorMetadata = {\n" +
         "  columnId: string; field: string | null; urlKey: string; kind: string; placeholder: string;\n" +
         "  options: readonly Record<string, unknown>[] | null; optionsRef: EntityPortSourceRef | null; optionsKey: string | null;\n" +
-        "  label: string | null; brandRef: EntityPortSourceRef | null; expandRef: EntityPortSourceRef | null;\n" +
+        '  label: string | null; brandRef: { entity: string; kind: "id" | "shortcode" } | null; expandRef: EntityPortSourceRef | null;\n' +
         "  urlOnly: boolean; nullable: { field: string; label: string } | null;\n" +
         "};\n" +
         "type EntityPortSourceRoster = {\n" +
@@ -1357,6 +1400,24 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         "export function getEntityListOutputSchema<E extends ListEntity>(entity: E): z.ZodType<EntityListResultByEntity[E]>;\n" +
         "export function getEntityListOutputSchema(entity: ListEntity): z.ZodType {\n" +
         "  return ENTITY_LIST_OUTPUT_SCHEMAS[entity];\n" +
+        "}\n",
+    },
+    {
+      relativePath: "apps/web/src/entities/generated/entity-mutation-results.gen.ts",
+      source:
+        generatedHeader +
+        `${mutationOutputImports}\n` +
+        'import type { z } from "zod";\n\n' +
+        `const entityMutationOutputEntities = ${compactLiteral(browserCrudEntities)} as const;\n` +
+        "export type EntityMutationOutputEntity = (typeof entityMutationOutputEntities)[number];\n\n" +
+        "export type EntityMutationOutputByEntity = {\n" +
+        `${mutationOutputTypes}\n` +
+        "};\n\n" +
+        "// biome-ignore format: one generated mutation output schema per entity.\n" +
+        `const ENTITY_MUTATION_OUTPUT_SCHEMAS = {\n${mutationOutputSchemas}\n} as const;\n\n` +
+        "export function parseEntityMutationOutput<E extends EntityMutationOutputEntity>(entity: E, value: unknown): EntityMutationOutputByEntity[E];\n" +
+        "export function parseEntityMutationOutput(entity: EntityMutationOutputEntity, value: unknown): unknown {\n" +
+        "  return ENTITY_MUTATION_OUTPUT_SCHEMAS[entity].parse(value);\n" +
         "}\n",
     },
     {
@@ -1451,7 +1512,7 @@ export const renderFilterArtifacts = (entities: readonly EntityLiteral[]): Entit
     ...new Map(
       entities.flatMap(({ filterDescriptors }) =>
         filterDescriptors.flatMap((descriptor) =>
-          [descriptor.optionsRef, descriptor.brandRef, descriptor.expandRef]
+          [descriptor.optionsRef, descriptor.expandRef]
             .filter((ref): ref is SourceRef => ref !== null)
             .map((ref) => [`${ref.module}#${ref.export}`, ref] as const),
         ),
@@ -1503,7 +1564,11 @@ export const renderFilterArtifacts = (entities: readonly EntityLiteral[]): Entit
       ...(descriptor.brandRef === null
         ? []
         : [
-            `brand:${refAliases.get(`${descriptor.brandRef.module}#${descriptor.brandRef.export}`)}`,
+            `brand:(value) => ${
+              descriptor.brandRef.kind === "id"
+                ? `parseEntityId(${JSON.stringify(descriptor.brandRef.entity)}, value)`
+                : `parseShortcodeFor(${JSON.stringify(descriptor.brandRef.entity)}, value)`
+            }`,
           ]),
       ...(descriptor.expandRef === null
         ? []
@@ -1596,6 +1661,7 @@ export const renderFilterArtifacts = (entities: readonly EntityLiteral[]): Entit
       source:
         generatedHeader +
         'import type { Entity } from "@cubby/schemas/entity";\n' +
+        'import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";\n' +
         `${runtimeImports}\n` +
         'import type { FilterSpec } from "../filter-manifest";\n\n' +
         "// biome-ignore format: generated runtime filter assembly stays one entity per line.\n" +

@@ -20,6 +20,7 @@ import type {
   LocationShortcode,
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { type FC, useId, useMemo } from "react";
@@ -202,7 +203,9 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
       reason: values.reason.trim() || null,
       adjustInventory: values.adjustInventory,
       inventoryEntryId: values.adjustInventory
-        ? ((values.inventoryEntryId || null) as InventoryShortcode | null)
+        ? values.inventoryEntryId
+          ? parseShortcodeFor("inventory", values.inventoryEntryId)
+          : null
         : null,
     });
   });

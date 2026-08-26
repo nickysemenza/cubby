@@ -3,10 +3,7 @@ import type {
   LedgerPartyRefOut,
   SuggestFinancialTransferPairsInput,
 } from "@cubby/schemas/household-contribution";
-import {
-  unsafeFinancialAccountShortcode,
-  unsafeFinancialTransactionShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, asc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
@@ -68,7 +65,8 @@ export function buildFinancialTransferPairSuggestions(
               const positive = transaction.amount > 0 ? transaction : candidate;
               const negative = transaction.amount > 0 ? candidate : transaction;
               return {
-                transactionId: unsafeFinancialTransactionShortcode(
+                transactionId: parseShortcodeFor(
+                  "financialTransaction",
                   candidate.shortcode,
                 ),
                 amount: Math.abs(transaction.amount),
@@ -76,10 +74,12 @@ export function buildFinancialTransferPairSuggestions(
                   transaction.date!,
                   candidate.date!,
                 ),
-                fromAccountId: unsafeFinancialAccountShortcode(
+                fromAccountId: parseShortcodeFor(
+                  "financialAccount",
                   positive.accountShortcode,
                 ),
-                toAccountId: unsafeFinancialAccountShortcode(
+                toAccountId: parseShortcodeFor(
+                  "financialAccount",
                   negative.accountShortcode,
                 ),
                 from: positive.party,
@@ -98,7 +98,10 @@ export function buildFinancialTransferPairSuggestions(
             )
         : [];
     return {
-      transactionId: unsafeFinancialTransactionShortcode(transaction.shortcode),
+      transactionId: parseShortcodeFor(
+        "financialTransaction",
+        transaction.shortcode,
+      ),
       status:
         matches.length === 0
           ? "no_match"
@@ -156,7 +159,7 @@ const toPairingRow = (row: DbPairingRow): PairingRow => ({
   party:
     row.partyShortcode && row.partyName && row.partyKind
       ? {
-          id: row.partyShortcode as LedgerPartyRefOut["id"],
+          id: parseShortcodeFor("ledgerParty", row.partyShortcode),
           name: row.partyName,
           kind: row.partyKind,
         }

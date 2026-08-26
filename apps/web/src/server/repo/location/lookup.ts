@@ -7,8 +7,8 @@ import {
   type LocationId,
   type LocationShortcode,
   type ProductId,
-  unsafeLocationId,
-  unsafeLocationShortcode,
+  parseEntityId,
+  parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type {
   InfLocation,
@@ -103,7 +103,7 @@ export const locationParentOptions = async (
     rows.map((row) => row.id),
   );
   return rows.map((row) => ({
-    id: unsafeLocationShortcode(row.shortcode),
+    id: parseShortcodeFor("location", row.shortcode),
     name: row.name,
     ancestors: ancestorsById.get(row.id) ?? [],
   }));
@@ -118,7 +118,7 @@ export const getLocationByShortcode = async (
   shortcode: string,
 ): Promise<InfLocation | null> => {
   const id = await resolveLiveShortcode(db, shortcode, "location");
-  return id ? getLocationById(db, unsafeLocationId(id)) : null;
+  return id ? getLocationById(db, parseEntityId("location", id)) : null;
 };
 
 /**
@@ -325,7 +325,7 @@ export const getLocationPutAwayCandidates = async (
   return rows.map((row) => {
     const tally = tallyByLocation.get(row.id);
     return {
-      id: unsafeLocationShortcode(row.shortcode),
+      id: parseShortcodeFor("location", row.shortcode),
       name: row.name,
       type: parseLocationType(row.type, { id: row.id, name: row.name }),
       ancestors: ancestorsById.get(row.id) ?? [],

@@ -1,10 +1,8 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
-  unsafeInventoryId,
-  unsafeLocationId,
-  unsafeLocationShortcode,
-  unsafeProductId,
-  unsafeProductShortcode,
+  type EntityId,
+  parseEntityId,
+  parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import {
   bulkMovePayload,
@@ -65,11 +63,10 @@ export {
 const locationShortcodes = bindShortcodeResolver("location");
 const inventoryShortcodes = bindShortcodeResolver("inventory");
 
-async function resolveEntityIds<T extends string>(
-  db: Database,
-  shortcodes: T[],
-  entity: "inventory" | "location",
-): Promise<Map<T, string>> {
+async function resolveEntityIds<
+  T extends string,
+  E extends "inventory" | "location",
+>(db: Database, shortcodes: T[], entity: E): Promise<Map<T, EntityId<E>>> {
   const resolved = await resolveLiveShortcodes(db, shortcodes, entity);
   const missing = uniq(
     shortcodes.filter((shortcode) => !resolved.has(shortcode)),
@@ -80,7 +77,12 @@ async function resolveEntityIds<T extends string>(
       `${entity === "inventory" ? "Inventory entry" : "Location"}(s) not found: ${missing.join(", ")}`,
     );
   }
-  return resolved as Map<T, string>;
+  const ids = new Map<T, EntityId<E>>();
+  for (const shortcode of shortcodes) {
+    const id = resolved.get(shortcode);
+    if (id !== undefined) ids.set(shortcode, id);
+  }
+  return ids;
 }
 
 export const bulkProcessInventoryWorkflow = async (
@@ -117,13 +119,19 @@ export const bulkProcessInventoryWorkflow = async (
   ]);
   const items = await bulkProcessInventoryEntries(
     db,
-    unsafeLocationId(resolvedLocations.get(input.locationId)!),
+    parseEntityId("location", resolvedLocations.get(input.locationId)!),
     input.items.map((item) => ({
       id: item.id
-        ? unsafeInventoryId(resolvedInventories.get(item.id)!)
+        ? parseEntityId("inventory", resolvedInventories.get(item.id)!)
         : undefined,
-      productId: unsafeProductId(resolvedProducts.get(item.productId) ?? ""),
-      locationId: unsafeLocationId(resolvedLocations.get(item.locationId)!),
+      productId: parseEntityId(
+        "product",
+        resolvedProducts.get(item.productId) ?? "",
+      ),
+      locationId: parseEntityId(
+        "location",
+        resolvedLocations.get(item.locationId)!,
+      ),
       amount: item.amount,
     })),
     actorContext,
@@ -164,15 +172,18 @@ export const bulkMoveInventoryWorkflow = async (
   const items = await bulkMoveInventoryEntries(
     db,
     {
-      sourceLocationId: unsafeLocationId(
+      sourceLocationId: parseEntityId(
+        "location",
         resolvedLocations.get(input.sourceLocationId)!,
       ),
-      targetLocationId: unsafeLocationId(
+      targetLocationId: parseEntityId(
+        "location",
         resolvedLocations.get(input.targetLocationId)!,
       ),
       items: input.items.map((item) => ({
         ...item,
-        inventoryEntryId: unsafeInventoryId(
+        inventoryEntryId: parseEntityId(
+          "inventory",
           resolvedInventories.get(item.inventoryEntryId)!,
         ),
       })),
@@ -215,10 +226,12 @@ export const moveInventoryEntriesWorkflow = async (
     db,
     {
       items: input.items.map((item) => ({
-        inventoryEntryId: unsafeInventoryId(
+        inventoryEntryId: parseEntityId(
+          "inventory",
           resolvedInventories.get(item.inventoryEntryId)!,
         ),
-        targetLocationId: unsafeLocationId(
+        targetLocationId: parseEntityId(
+          "location",
           resolvedLocations.get(item.targetLocationId)!,
         ),
         quantity: item.quantity,
@@ -262,12 +275,16 @@ export const reconcileInventorySessionWorkflow = async (
   ]);
   const resolvedInput = {
     ...input,
-    locationId: unsafeLocationId(resolvedLocations.get(input.locationId)!),
+    locationId: parseEntityId(
+      "location",
+      resolvedLocations.get(input.locationId)!,
+    ),
     expectedInventoryEntryIds: input.expectedInventoryEntryIds.map((id) =>
-      unsafeInventoryId(resolvedInventories.get(id)!),
+      parseEntityId("inventory", resolvedInventories.get(id)!),
     ),
     resolutions: input.resolutions.map((resolution) => {
-      const inventoryEntryId = unsafeInventoryId(
+      const inventoryEntryId = parseEntityId(
+        "inventory",
         resolvedInventories.get(resolution.inventoryEntryId)!,
       );
       return match(resolution)
@@ -287,7 +304,8 @@ export const reconcileInventorySessionWorkflow = async (
         .with({ kind: "relocate" }, (r) => ({
           kind: "relocate" as const,
           inventoryEntryId,
-          targetLocationId: unsafeLocationId(
+          targetLocationId: parseEntityId(
+            "location",
             resolvedLocations.get(r.targetLocationId)!,
           ),
         }))
@@ -331,12 +349,12 @@ export const findInventoryDuplicatesWorkflow = async (
     excludeLocationId,
   });
   return duplicates.map((product) => ({
-    id: unsafeProductShortcode(product.shortcode),
+    id: parseShortcodeFor("product", product.shortcode),
     name: product.name,
     manufacturer: product.manufacturer,
     expectedQuantity: product.expectedQuantity,
     locations: product.inventoryEntry.map((entry) => ({
-      id: unsafeLocationShortcode(entry.location.shortcode),
+      id: parseShortcodeFor("location", entry.location.shortcode),
       name: entry.location.name,
     })),
   }));
@@ -350,7 +368,7 @@ export const getInventoryByLocationIdsWorkflow = async (
   return await getInventoryByLocationIds(
     db,
     input.locationIds.map((shortcode) =>
-      unsafeLocationId(resolved.get(shortcode)!),
+      parseEntityId("location", resolved.get(shortcode)!),
     ),
     { placement: input.placement },
   );

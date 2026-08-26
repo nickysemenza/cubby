@@ -1,16 +1,13 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
-import {
-  unsafeExpenseShortcode,
-  unsafeMealShortcode,
-  unsafeTaskShortcode,
-} from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { CalendarItemPresentation } from "./calendar-item-row";
 
 const eatingOutMeal: Extract<CalendarItem, { kind: "meal" }> = {
   kind: "meal",
-  id: unsafeMealShortcode("MEL-1111"),
+  id: testShortcode("meal", "MEL-1111"),
   title: "Dinner with Andy and a deliberately long title",
   name: "Dinner with Andy and a deliberately long title",
   startDate: "2026-08-18",
@@ -28,7 +25,7 @@ const eatingOutMeal: Extract<CalendarItem, { kind: "meal" }> = {
 
 const plannedExpense: Extract<CalendarItem, { kind: "expense" }> = {
   kind: "expense",
-  id: unsafeExpenseShortcode("EXP-1111"),
+  id: testShortcode("expense", "EXP-1111"),
   title: "Freezer tray",
   startDate: "2026-08-18",
   endDateExclusive: "2026-08-19",
@@ -99,7 +96,7 @@ describe("CalendarItemPresentation", () => {
   it("names task status and subject context without relying on color", () => {
     const task: Extract<CalendarItem, { kind: "task" }> = {
       kind: "task",
-      id: unsafeTaskShortcode("TSK-1111"),
+      id: testShortcode("task", "TSK-1111"),
       title: "Repair mixer",
       startDate: "2026-08-18",
       endDateExclusive: "2026-08-19",

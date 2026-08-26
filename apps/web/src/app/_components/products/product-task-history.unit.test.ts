@@ -1,5 +1,5 @@
-import { unsafeTaskShortcode } from "@cubby/schemas/identifiers";
 import type { TaskOut } from "@cubby/schemas/project";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { orderProductTasks } from "./product-task-history";
 
@@ -7,7 +7,8 @@ import { orderProductTasks } from "./product-task-history";
 const SHORTCODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 let taskShortcodeCounter = 0;
 const nextTaskShortcode = () =>
-  unsafeTaskShortcode(
+  testShortcode(
+    "task",
     `TSK-234${SHORTCODE_ALPHABET[taskShortcodeCounter++ % SHORTCODE_ALPHABET.length]}`,
   );
 

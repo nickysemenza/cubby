@@ -1,8 +1,7 @@
 import {
   type MealId,
+  parseShortcodeFor,
   type RecipeId,
-  unsafeMealShortcode,
-  unsafeRecipeShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
   MealKind,
@@ -120,10 +119,10 @@ export const dbMealToAPI = (row: MealRow): MealOut => {
     .filter((mr) => mr.deletedAt === null && mr.recipe.deletedAt === null)
     .map((mr) => ({
       id: mr.id,
-      mealId: unsafeMealShortcode(row.shortcode),
-      recipeId: unsafeRecipeShortcode(mr.recipe.shortcode),
+      mealId: parseShortcodeFor("meal", row.shortcode),
+      recipeId: parseShortcodeFor("recipe", mr.recipe.shortcode),
       recipe: {
-        id: unsafeRecipeShortcode(mr.recipe.shortcode),
+        id: parseShortcodeFor("recipe", mr.recipe.shortcode),
         name: mr.recipe.name,
         servings: mr.recipe.servings,
         yield: mr.recipe.yield,
@@ -137,7 +136,7 @@ export const dbMealToAPI = (row: MealRow): MealOut => {
     }));
 
   return {
-    id: unsafeMealShortcode(row.shortcode),
+    id: parseShortcodeFor("meal", row.shortcode),
     date: row.date,
     name: row.name,
     sortOrder: row.sortOrder,

@@ -4,12 +4,7 @@
  */
 
 import type { CookbookId, IngredientId } from "@cubby/schemas/identifiers";
-import {
-  unsafeCookbookShortcode,
-  unsafeIngredientShortcode,
-  unsafeRecipeId,
-  unsafeRecipeShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   IngredientCooccurrence,
   IngredientEdge,
@@ -124,7 +119,12 @@ export const getIngredientCooccurrence = async (
   for (const [recipeId, ingredientIds] of recipeIngredients) {
     const ids = Array.from(ingredientIds);
     const recipeName = recipeNames.get(recipeId) ?? "Unknown";
-    const recipeShortcode = recipeShortcodes.get(recipeId) ?? "";
+    const recipeShortcode = recipeShortcodes.get(recipeId);
+    if (!recipeShortcode) {
+      throw new Error(
+        `Recipe cooccurrence is missing shortcode for ${recipeId}`,
+      );
+    }
     for (let i = 0; i < ids.length; i++) {
       for (let j = i + 1; j < ids.length; j++) {
         const key = [ids[i], ids[j]].sort().join("|");
@@ -147,15 +147,11 @@ export const getIngredientCooccurrence = async (
     if (data.count >= minEdgeWeight) {
       const [source, target] = key.split("|") as [string, string];
       edges.push({
-        source: unsafeIngredientShortcode(
-          ingredientShortcodes.get(source) ?? "",
-        ),
-        target: unsafeIngredientShortcode(
-          ingredientShortcodes.get(target) ?? "",
-        ),
+        source: shortcodeForIngredientId(source),
+        target: shortcodeForIngredientId(target),
         weight: data.count,
         recipes: data.recipes.map((r) => ({
-          id: unsafeRecipeShortcode(r.shortcode),
+          id: parseShortcodeFor("recipe", r.shortcode),
           name: r.name,
         })),
       });
@@ -165,9 +161,16 @@ export const getIngredientCooccurrence = async (
   }
 
   const nodes: IngredientNode[] = [];
+  function shortcodeForIngredientId(id: string) {
+    const shortcode = ingredientShortcodes.get(id);
+    if (!shortcode) {
+      throw new Error(`Ingredient graph is missing shortcode for ${id}`);
+    }
+    return parseShortcodeFor("ingredient", shortcode);
+  }
   for (const id of ingredientsWithEdges) {
     nodes.push({
-      id: unsafeIngredientShortcode(ingredientShortcodes.get(id) ?? ""),
+      id: shortcodeForIngredientId(id),
       name: ingredientNames.get(id) ?? "Unknown",
       recipeCount: ingredientRecipeCount.get(id) ?? 0,
     });
@@ -205,8 +208,10 @@ export const getRecipeDependencyGraph = async (
   const cookbookNames = await getCookbookNameMap(db);
   const nameFor = (id: CookbookId | null) =>
     id ? (cookbookNames.get(id)?.name ?? null) : null;
-  const shortcodeFor = (id: CookbookId | null) =>
-    id ? unsafeCookbookShortcode(cookbookNames.get(id)?.shortcode ?? "") : null;
+  const shortcodeFor = (id: CookbookId | null) => {
+    const shortcode = id ? cookbookNames.get(id)?.shortcode : undefined;
+    return shortcode ? parseShortcodeFor("cookbook", shortcode) : null;
+  };
 
   const recipes = await dbClient.query.recipe.findMany({
     where: cookbookId
@@ -236,7 +241,7 @@ export const getRecipeDependencyGraph = async (
   const nodes = new Map<string, RecipeDepNode>();
   for (const r of recipes) {
     nodes.set(r.id, {
-      id: unsafeRecipeShortcode(r.shortcode),
+      id: parseShortcodeFor("recipe", r.shortcode),
       name: r.name,
       cookbookId: shortcodeFor(r.cookbookId),
       cookbookName: nameFor(r.cookbookId),
@@ -267,13 +272,16 @@ export const getRecipeDependencyGraph = async (
     const externals = await dbClient.query.recipe.findMany({
       where: and(
         notDeleted(recipe),
-        inArray(recipe.id, [...externalSubIds].map(unsafeRecipeId)),
+        inArray(
+          recipe.id,
+          [...externalSubIds].map((id) => parseEntityId("recipe", id)),
+        ),
       ),
       columns: { id: true, shortcode: true, name: true, cookbookId: true },
     });
     for (const e of externals) {
       nodes.set(e.id, {
-        id: unsafeRecipeShortcode(e.shortcode),
+        id: parseShortcodeFor("recipe", e.shortcode),
         name: e.name,
         cookbookId: shortcodeFor(e.cookbookId),
         cookbookName: nameFor(e.cookbookId),
@@ -357,7 +365,8 @@ export const getIngredientUsage = async (
 
   const rows = [...recipeCount.entries()]
     .map(([ingredientId, count]) => ({
-      ingredientId: unsafeIngredientShortcode(
+      ingredientId: parseShortcodeFor(
+        "ingredient",
         shortcodes.get(ingredientId) ?? "",
       ),
       name: names.get(ingredientId) ?? "Unknown",

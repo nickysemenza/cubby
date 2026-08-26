@@ -1,4 +1,8 @@
-import type { CostType, ExpenseFilters, Trade } from "@cubby/schemas/project";
+import {
+  type CostType,
+  expenseFiltersSchema,
+  type Trade,
+} from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { lazy, Suspense, useCallback, useMemo, useState } from "react";
@@ -66,10 +70,9 @@ export function ExpenseAnalyticsView() {
   // schema for).
   const filters = useMemo(() => {
     const specs = getEntityFilters("expense");
-    return buildFiltersFromManifest(
-      specs,
-      filterGetterFromSearch(specs, search),
-    ) as ExpenseFilters;
+    return expenseFiltersSchema.parse(
+      buildFiltersFromManifest(specs, filterGetterFromSearch(specs, search)),
+    );
   }, [search]);
 
   const { data, isLoading } = useQuery({

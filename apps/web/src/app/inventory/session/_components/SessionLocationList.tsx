@@ -33,7 +33,7 @@ type SessionLocationListProps = {
   onSelect: (locationId: LocationShortcode) => void;
   onScanJump: (locationId: string) => void;
   /** Re-parent a scanned stray bin into the location being recounted. */
-  onAdoptLocation: (location: InfLocation) => void;
+  onAdoptLocation: (location: Pick<InfLocation, "id" | "name">) => void;
   parentLocation: InfLocation;
   /** The bin being recounted, which a scanned bin is classified against. */
   currentLocation: InfLocation | null;

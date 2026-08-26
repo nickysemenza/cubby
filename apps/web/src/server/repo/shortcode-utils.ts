@@ -16,8 +16,8 @@
  * The read half — resolving a code back to a row — lives in `shortcode-resolver`.
  */
 
-import type { ShortcodeType } from "@cubby/shared";
-import { generateShortcode } from "@cubby/shared";
+import type { ShortcodeFor, ShortcodeType } from "@cubby/shared";
+import { generateShortcode, parseShortcodeFor } from "@cubby/shared";
 import {
   eq,
   getTableName,
@@ -101,6 +101,19 @@ export const SHORTCODE_TABLE = {
 export type ShortcodeTableFor<T extends ShortcodeType> =
   (typeof SHORTCODE_TABLE)[T];
 
+export type ShortcodeRowFor<T extends ShortcodeType> = Omit<
+  InferSelectModel<ShortcodeTableFor<T>>,
+  "shortcode"
+> & { shortcode: ShortcodeFor<T> };
+
+const parseShortcodeRow = <T extends ShortcodeType>(
+  entity: T,
+  row: InferSelectModel<ShortcodeTableFor<T>>,
+): ShortcodeRowFor<T> => {
+  const { shortcode, ...rest } = row;
+  return { ...rest, shortcode: parseShortcodeFor(entity, shortcode) };
+};
+
 /** Whether ANY row — live or soft-deleted — already holds this code. */
 const shortcodeTaken = async (
   db: Database | DrizzleTransaction,
@@ -123,10 +136,10 @@ const shortcodeTaken = async (
  *
  * @throws if no free code is found after MAX_RETRIES attempts.
  */
-export async function generateUniqueShortcode(
+export async function generateUniqueShortcode<T extends ShortcodeType>(
   db: Database | DrizzleTransaction,
-  entity: ShortcodeType,
-): Promise<string> {
+  entity: T,
+): Promise<ShortcodeFor<T>> {
   const table = SHORTCODE_TABLE[entity];
   for (let i = 0; i < MAX_RETRIES; i++) {
     const code = generateShortcode(entity);
@@ -215,7 +228,7 @@ export async function findOrCreateWithShortcode<T extends ShortcodeType>(
       | Omit<InferInsertModel<ShortcodeTableFor<T>>, "shortcode">
       | Promise<Omit<InferInsertModel<ShortcodeTableFor<T>>, "shortcode">>;
   },
-): Promise<{ row: InferSelectModel<ShortcodeTableFor<T>>; created: boolean }> {
+): Promise<{ row: ShortcodeRowFor<T>; created: boolean }> {
   const table = SHORTCODE_TABLE[entity] as ShortcodeTable;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -241,9 +254,12 @@ export async function findOrCreateWithShortcode<T extends ShortcodeType>(
       );
     });
     if (result) {
-      return result as {
-        row: InferSelectModel<ShortcodeTableFor<T>>;
-        created: boolean;
+      return {
+        row: parseShortcodeRow(
+          entity,
+          result.row as InferSelectModel<ShortcodeTableFor<T>>,
+        ),
+        created: result.created,
       };
     }
   }
@@ -256,7 +272,7 @@ export async function insertWithShortcode<T extends ShortcodeType>(
   db: Database | DrizzleTransaction,
   entity: T,
   values: Omit<InferInsertModel<ShortcodeTableFor<T>>, "shortcode">,
-): Promise<InferSelectModel<ShortcodeTableFor<T>>> {
+): Promise<ShortcodeRowFor<T>> {
   const table = SHORTCODE_TABLE[entity] as ShortcodeTable;
   const tableName = getTableName(table);
 
@@ -270,7 +286,10 @@ export async function insertWithShortcode<T extends ShortcodeType>(
             insertAndReturn(savepoint, table, row),
           )
         : await insertAndReturn(db, table, row);
-      return created as InferSelectModel<ShortcodeTableFor<T>>;
+      return parseShortcodeRow(
+        entity,
+        created as InferSelectModel<ShortcodeTableFor<T>>,
+      );
     } catch (error) {
       if (!isShortcodeCollision(error, tableName)) throw error;
       lastError = error;

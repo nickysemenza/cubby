@@ -2,20 +2,14 @@
 
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
+  EntityRef,
   ImageId,
   ImageShortcode,
+  ProductId,
   ProjectId,
   RecipeId,
 } from "@cubby/schemas/identifiers";
-import {
-  unsafeImageId,
-  unsafeImageShortcode,
-  unsafeLocationId,
-  unsafeProductId,
-  unsafeProjectId,
-  unsafePurchaseId,
-  unsafeRecipeId,
-} from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   AttachableImageEntity,
   ImageAssociation,
@@ -91,6 +85,12 @@ import {
   insertWithShortcode,
 } from "~/server/repo/shortcode-utils";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
+
+/** A gallery target's discriminator and branded private ID travel together. */
+export type AttachableImageRef = Extract<
+  EntityRef,
+  { entity: AttachableImageEntity }
+>;
 
 export const createPendingImageRecord = async (
   db: Database,
@@ -277,7 +277,7 @@ const imageWithRelationsToAPI = (
     : null;
 
   return {
-    id: unsafeImageShortcode(imageData.shortcode),
+    id: parseShortcodeFor("image", imageData.shortcode),
     url: getR2PublicUrl(imageData.key),
     key: imageData.key,
     filename: imageData.filename,
@@ -862,59 +862,58 @@ const findReferencedImageIds = async (
 /** Detach joins and reap newly unreferenced uploaded images transactionally; drop R2 keys only after commit. */
 export const detachImagesFromEntity = async (
   tx: DrizzleTransaction,
-  entityType: AttachableImageEntity,
-  entityId: string,
+  entity: AttachableImageRef,
   imageIds: ImageId[],
 ): Promise<{ deletedIds: string[]; deletedKeys: string[] }> => {
   if (imageIds.length === 0) return { deletedIds: [], deletedKeys: [] };
 
-  await match(entityType)
-    .with("product", () =>
+  await match(entity)
+    .with({ entity: "product" }, ({ id }) =>
       tx
         .delete(productImage)
         .where(
           and(
-            eq(productImage.productId, unsafeProductId(entityId)),
+            eq(productImage.productId, id),
             inArray(productImage.imageId, imageIds),
           ),
         ),
     )
-    .with("recipe", () =>
+    .with({ entity: "recipe" }, ({ id }) =>
       tx
         .delete(recipeImage)
         .where(
           and(
-            eq(recipeImage.recipeId, unsafeRecipeId(entityId)),
+            eq(recipeImage.recipeId, id),
             inArray(recipeImage.imageId, imageIds),
           ),
         ),
     )
-    .with("location", () =>
+    .with({ entity: "location" }, ({ id }) =>
       tx
         .delete(locationImage)
         .where(
           and(
-            eq(locationImage.locationId, unsafeLocationId(entityId)),
+            eq(locationImage.locationId, id),
             inArray(locationImage.imageId, imageIds),
           ),
         ),
     )
-    .with("project", () =>
+    .with({ entity: "project" }, ({ id }) =>
       tx
         .delete(projectImage)
         .where(
           and(
-            eq(projectImage.projectId, unsafeProjectId(entityId)),
+            eq(projectImage.projectId, id),
             inArray(projectImage.imageId, imageIds),
           ),
         ),
     )
-    .with("purchase", () =>
+    .with({ entity: "purchase" }, ({ id }) =>
       tx
         .delete(purchaseImage)
         .where(
           and(
-            eq(purchaseImage.purchaseId, unsafePurchaseId(entityId)),
+            eq(purchaseImage.purchaseId, id),
             inArray(purchaseImage.imageId, imageIds),
           ),
         ),
@@ -1029,7 +1028,10 @@ export const findUnreferencedImages = async (
     .where(unreferencedImageWhere(db, cutoffDate));
   // `image.id` is an unbranded column, so this is the genuine string -> brand
   // boundary: these are real uuids on their way to `deleteImages`.
-  return candidates.map((img) => ({ ...img, id: unsafeImageId(img.id) }));
+  return candidates.map((img) => ({
+    ...img,
+    id: parseEntityId("image", img.id),
+  }));
 };
 
 export const countUnreferencedImages = async (
@@ -1057,7 +1059,7 @@ export const countUnreferencedImages = async (
  */
 export const associateImagesWithProduct = async (
   db: Database,
-  productId: string,
+  productId: ProductId,
   imageIds: string[],
 ): Promise<void> => {
   const resolvedImageIds = await resolveAllPresent(db, "image", imageIds);
@@ -1115,122 +1117,100 @@ export const recipeHasImages = async (
  */
 export const assertAttachableEntityExists = async (
   db: Database,
-  entityType: AttachableImageEntity,
-  entityId: string,
+  entity: AttachableImageRef,
 ): Promise<void> => {
   // Count inside each arm so the table is a concrete type — a union of the four
   // (branded-id) tables collapses Drizzle's query inference to `never`.
-  const count = await match(entityType)
-    .with("product", () =>
-      countWhere(
-        db,
-        product,
-        and(eq(product.id, unsafeProductId(entityId)), notDeleted(product)),
-      ),
+  const count = await match(entity)
+    .with({ entity: "product" }, ({ id }) =>
+      countWhere(db, product, and(eq(product.id, id), notDeleted(product))),
     )
-    .with("recipe", () =>
-      countWhere(
-        db,
-        recipe,
-        and(eq(recipe.id, unsafeRecipeId(entityId)), notDeleted(recipe)),
-      ),
+    .with({ entity: "recipe" }, ({ id }) =>
+      countWhere(db, recipe, and(eq(recipe.id, id), notDeleted(recipe))),
     )
-    .with("location", () =>
-      countWhere(
-        db,
-        location,
-        and(eq(location.id, unsafeLocationId(entityId)), notDeleted(location)),
-      ),
+    .with({ entity: "location" }, ({ id }) =>
+      countWhere(db, location, and(eq(location.id, id), notDeleted(location))),
     )
-    .with("project", () =>
-      countWhere(
-        db,
-        project,
-        and(eq(project.id, unsafeProjectId(entityId)), notDeleted(project)),
-      ),
+    .with({ entity: "project" }, ({ id }) =>
+      countWhere(db, project, and(eq(project.id, id), notDeleted(project))),
     )
-    .with("purchase", () =>
-      countWhere(
-        db,
-        purchase,
-        and(eq(purchase.id, unsafePurchaseId(entityId)), notDeleted(purchase)),
-      ),
+    .with({ entity: "purchase" }, ({ id }) =>
+      countWhere(db, purchase, and(eq(purchase.id, id), notDeleted(purchase))),
     )
     .exhaustive();
   if (count === 0) {
     throw createAppError(
       "IMAGE_ATTACH_FAILED",
-      `${entityType} ${entityId} not found`,
+      `${entity.entity} ${entity.id} not found`,
     );
   }
 };
 
 const hasLiveAttachment = async (
   dbc: DrizzleClient | DrizzleTransaction,
-  entityType: AttachableImageEntity,
-  entityId: string,
+  entity: AttachableImageRef,
   imageId: string,
 ): Promise<boolean> => {
-  const rows = await match(entityType)
-    .with("product", () =>
+  const rows = await match(entity)
+    .with({ entity: "product" }, ({ id }) =>
       dbc
         .select({ id: productImage.id })
         .from(productImage)
         .where(
           and(
-            eq(productImage.productId, unsafeProductId(entityId)),
+            eq(productImage.productId, id),
             eq(productImage.imageId, imageId),
             notDeleted(productImage),
           ),
         )
         .limit(1),
     )
-    .with("recipe", () =>
+    .with({ entity: "recipe" }, ({ id }) =>
       dbc
         .select({ id: recipeImage.id })
         .from(recipeImage)
         .where(
           and(
-            eq(recipeImage.recipeId, unsafeRecipeId(entityId)),
+            eq(recipeImage.recipeId, id),
             eq(recipeImage.imageId, imageId),
             notDeleted(recipeImage),
           ),
         )
         .limit(1),
     )
-    .with("location", () =>
+    .with({ entity: "location" }, ({ id }) =>
       dbc
         .select({ id: locationImage.id })
         .from(locationImage)
         .where(
           and(
-            eq(locationImage.locationId, unsafeLocationId(entityId)),
+            eq(locationImage.locationId, id),
             eq(locationImage.imageId, imageId),
             notDeleted(locationImage),
           ),
         )
         .limit(1),
     )
-    .with("project", () =>
+    .with({ entity: "project" }, ({ id }) =>
       dbc
         .select({ id: projectImage.id })
         .from(projectImage)
         .where(
           and(
-            eq(projectImage.projectId, unsafeProjectId(entityId)),
+            eq(projectImage.projectId, id),
             eq(projectImage.imageId, imageId),
             notDeleted(projectImage),
           ),
         )
         .limit(1),
     )
-    .with("purchase", () =>
+    .with({ entity: "purchase" }, ({ id }) =>
       dbc
         .select({ id: purchaseImage.id })
         .from(purchaseImage)
         .where(
           and(
-            eq(purchaseImage.purchaseId, unsafePurchaseId(entityId)),
+            eq(purchaseImage.purchaseId, id),
             eq(purchaseImage.imageId, imageId),
             notDeleted(purchaseImage),
           ),
@@ -1258,96 +1238,94 @@ const hasLiveAttachment = async (
  */
 export const findAttachmentByIdempotencyKey = async (
   db: Database | DrizzleTransaction,
-  entityType: AttachableImageEntity,
-  entityId: string,
+  entity: AttachableImageRef,
   idempotencyKey: string,
 ): Promise<typeof image.$inferSelect | null> => {
   const dbc = "query" in db ? db : getDb(db);
   const candidate = await dbc.query.image.findFirst({
     where: and(
-      eq(image.targetType, entityType),
-      eq(image.targetId, entityId),
+      eq(image.targetType, entity.entity),
+      eq(image.targetId, entity.id),
       eq(image.idempotencyKey, idempotencyKey),
       notDeleted(image),
     ),
   });
   if (!candidate) return null;
-  return (await hasLiveAttachment(dbc, entityType, entityId, candidate.id))
+  return (await hasLiveAttachment(dbc, entity, candidate.id))
     ? candidate
     : null;
 };
 
 export const getImagesAttachedToEntity = async (
   db: Database,
-  entityType: AttachableImageEntity,
-  entityId: string,
+  entity: AttachableImageRef,
 ): Promise<Array<typeof image.$inferSelect>> => {
   const dbc = getDb(db);
-  return await match(entityType)
-    .with("product", () =>
+  return await match(entity)
+    .with({ entity: "product" }, ({ id }) =>
       dbc
         .select({ image })
         .from(productImage)
         .innerJoin(image, eq(productImage.imageId, image.id))
         .where(
           and(
-            eq(productImage.productId, unsafeProductId(entityId)),
+            eq(productImage.productId, id),
             notDeleted(productImage),
             notDeleted(image),
           ),
         )
         .then((rows) => rows.map((row) => row.image)),
     )
-    .with("recipe", () =>
+    .with({ entity: "recipe" }, ({ id }) =>
       dbc
         .select({ image })
         .from(recipeImage)
         .innerJoin(image, eq(recipeImage.imageId, image.id))
         .where(
           and(
-            eq(recipeImage.recipeId, unsafeRecipeId(entityId)),
+            eq(recipeImage.recipeId, id),
             notDeleted(recipeImage),
             notDeleted(image),
           ),
         )
         .then((rows) => rows.map((row) => row.image)),
     )
-    .with("location", () =>
+    .with({ entity: "location" }, ({ id }) =>
       dbc
         .select({ image })
         .from(locationImage)
         .innerJoin(image, eq(locationImage.imageId, image.id))
         .where(
           and(
-            eq(locationImage.locationId, unsafeLocationId(entityId)),
+            eq(locationImage.locationId, id),
             notDeleted(locationImage),
             notDeleted(image),
           ),
         )
         .then((rows) => rows.map((row) => row.image)),
     )
-    .with("project", () =>
+    .with({ entity: "project" }, ({ id }) =>
       dbc
         .select({ image })
         .from(projectImage)
         .innerJoin(image, eq(projectImage.imageId, image.id))
         .where(
           and(
-            eq(projectImage.projectId, unsafeProjectId(entityId)),
+            eq(projectImage.projectId, id),
             notDeleted(projectImage),
             notDeleted(image),
           ),
         )
         .then((rows) => rows.map((row) => row.image)),
     )
-    .with("purchase", () =>
+    .with({ entity: "purchase" }, ({ id }) =>
       dbc
         .select({ image })
         .from(purchaseImage)
         .innerJoin(image, eq(purchaseImage.imageId, image.id))
         .where(
           and(
-            eq(purchaseImage.purchaseId, unsafePurchaseId(entityId)),
+            eq(purchaseImage.purchaseId, id),
             notDeleted(purchaseImage),
             notDeleted(image),
           ),
@@ -1379,135 +1357,119 @@ export const updateImageIntegrity = async (
 
 const lockAttachableEntity = async (
   tx: DrizzleTransaction,
-  entityType: AttachableImageEntity,
-  entityId: string,
+  entity: AttachableImageRef,
 ): Promise<void> => {
-  const rows = await match(entityType)
-    .with("product", () =>
+  const rows = await match(entity)
+    .with({ entity: "product" }, ({ id }) =>
       tx
         .select({ id: product.id })
         .from(product)
-        .where(
-          and(eq(product.id, unsafeProductId(entityId)), notDeleted(product)),
-        )
+        .where(and(eq(product.id, id), notDeleted(product)))
         .for("update"),
     )
-    .with("recipe", () =>
+    .with({ entity: "recipe" }, ({ id }) =>
       tx
         .select({ id: recipe.id })
         .from(recipe)
-        .where(and(eq(recipe.id, unsafeRecipeId(entityId)), notDeleted(recipe)))
+        .where(and(eq(recipe.id, id), notDeleted(recipe)))
         .for("update"),
     )
-    .with("location", () =>
+    .with({ entity: "location" }, ({ id }) =>
       tx
         .select({ id: location.id })
         .from(location)
-        .where(
-          and(
-            eq(location.id, unsafeLocationId(entityId)),
-            notDeleted(location),
-          ),
-        )
+        .where(and(eq(location.id, id), notDeleted(location)))
         .for("update"),
     )
-    .with("project", () =>
+    .with({ entity: "project" }, ({ id }) =>
       tx
         .select({ id: project.id })
         .from(project)
-        .where(
-          and(eq(project.id, unsafeProjectId(entityId)), notDeleted(project)),
-        )
+        .where(and(eq(project.id, id), notDeleted(project)))
         .for("update"),
     )
-    .with("purchase", () =>
+    .with({ entity: "purchase" }, ({ id }) =>
       tx
         .select({ id: purchase.id })
         .from(purchase)
-        .where(
-          and(
-            eq(purchase.id, unsafePurchaseId(entityId)),
-            notDeleted(purchase),
-          ),
-        )
+        .where(and(eq(purchase.id, id), notDeleted(purchase)))
         .for("update"),
     )
     .exhaustive();
   if (rows.length === 0) {
     throw createAppError(
       "IMAGE_ATTACH_FAILED",
-      `${entityType} ${entityId} not found`,
+      `${entity.entity} ${entity.id} not found`,
     );
   }
 };
 
 const countDisplayableAttachedImages = async (
   tx: DrizzleTransaction,
-  entityType: AttachableImageEntity,
-  entityId: string,
+  entity: AttachableImageRef,
 ): Promise<number> => {
   const whereImage = and(notDeleted(image), displayableImageWhere);
-  const totals = await match(entityType)
-    .with("product", () =>
+  const totals = await match(entity)
+    .with({ entity: "product" }, ({ id }) =>
       tx
         .select({ total: count() })
         .from(productImage)
         .innerJoin(image, eq(productImage.imageId, image.id))
         .where(
           and(
-            eq(productImage.productId, unsafeProductId(entityId)),
+            eq(productImage.productId, id),
             notDeleted(productImage),
             whereImage,
           ),
         ),
     )
-    .with("recipe", () =>
+    .with({ entity: "recipe" }, ({ id }) =>
       tx
         .select({ total: count() })
         .from(recipeImage)
         .innerJoin(image, eq(recipeImage.imageId, image.id))
         .where(
           and(
-            eq(recipeImage.recipeId, unsafeRecipeId(entityId)),
+            eq(recipeImage.recipeId, id),
             notDeleted(recipeImage),
             whereImage,
           ),
         ),
     )
-    .with("location", () =>
+    .with({ entity: "location" }, ({ id }) =>
       tx
         .select({ total: count() })
         .from(locationImage)
         .innerJoin(image, eq(locationImage.imageId, image.id))
         .where(
           and(
-            eq(locationImage.locationId, unsafeLocationId(entityId)),
+            eq(locationImage.locationId, id),
             notDeleted(locationImage),
             whereImage,
           ),
         ),
     )
-    .with("project", () =>
+    .with({ entity: "project" }, ({ id }) =>
       tx
         .select({ total: count() })
         .from(projectImage)
         .innerJoin(image, eq(projectImage.imageId, image.id))
         .where(
           and(
-            eq(projectImage.projectId, unsafeProjectId(entityId)),
+            eq(projectImage.projectId, id),
             notDeleted(projectImage),
             whereImage,
           ),
         ),
     )
-    .with("purchase", () =>
+    .with({ entity: "purchase" }, ({ id }) =>
       tx
         .select({ total: count() })
         .from(purchaseImage)
         .innerJoin(image, eq(purchaseImage.imageId, image.id))
         .where(
           and(
-            eq(purchaseImage.purchaseId, unsafePurchaseId(entityId)),
+            eq(purchaseImage.purchaseId, id),
             notDeleted(purchaseImage),
             whereImage,
           ),
@@ -1526,39 +1488,32 @@ const countDisplayableAttachedImages = async (
  */
 const associateImageWithEntity = async (
   dbc: DrizzleClient | DrizzleTransaction,
-  entityType: AttachableImageEntity,
-  entityId: string,
+  entity: AttachableImageRef,
   imageId: ImageId,
   documentKind?: PurchaseDocumentKind,
 ): Promise<void> => {
-  await match(entityType)
-    .with("product", () =>
-      associatePendingImages(dbc, productImage, "productId", entityId, [
-        imageId,
-      ]),
+  await match(entity)
+    .with({ entity: "product" }, ({ id }) =>
+      associatePendingImages(dbc, productImage, "productId", id, [imageId]),
     )
-    .with("recipe", () =>
-      associatePendingImages(dbc, recipeImage, "recipeId", entityId, [imageId]),
+    .with({ entity: "recipe" }, ({ id }) =>
+      associatePendingImages(dbc, recipeImage, "recipeId", id, [imageId]),
     )
-    .with("location", () =>
-      associatePendingImages(dbc, locationImage, "locationId", entityId, [
-        imageId,
-      ]),
+    .with({ entity: "location" }, ({ id }) =>
+      associatePendingImages(dbc, locationImage, "locationId", id, [imageId]),
     )
-    .with("project", () =>
-      associatePendingImages(dbc, projectImage, "projectId", entityId, [
-        imageId,
-      ]),
+    .with({ entity: "project" }, ({ id }) =>
+      associatePendingImages(dbc, projectImage, "projectId", id, [imageId]),
     )
-    .with("purchase", async () => {
+    .with({ entity: "purchase" }, async ({ id }) => {
       const sortOrder = await nextImageSortOrder(
         dbc,
         purchaseImage,
         purchaseImage.purchaseId,
-        entityId,
+        id,
       );
       await dbc.insert(purchaseImage).values({
-        purchaseId: unsafePurchaseId(entityId),
+        purchaseId: id,
         imageId,
         sortOrder,
         documentKind: documentKind ?? "other",
@@ -1566,12 +1521,7 @@ const associateImageWithEntity = async (
       await dbc
         .update(purchase)
         .set({ updatedAt: new Date() })
-        .where(
-          and(
-            eq(purchase.id, unsafePurchaseId(entityId)),
-            notDeleted(purchase),
-          ),
-        );
+        .where(and(eq(purchase.id, id), notDeleted(purchase)));
     })
     .exhaustive();
 };
@@ -1606,19 +1556,11 @@ export const createAndAssociateUploadedImage = async (
     targetId?: string | null;
     idempotencyKey?: string | null;
   },
-  entityType: AttachableImageEntity,
-  entityId: string,
+  entity: AttachableImageRef,
   documentKind?: PurchaseDocumentKind,
 ): Promise<typeof image.$inferSelect> => {
-  return (
-    await createOrReuseAttachedImage(
-      db,
-      params,
-      entityType,
-      entityId,
-      documentKind,
-    )
-  ).row;
+  return (await createOrReuseAttachedImage(db, params, entity, documentKind))
+    .row;
 };
 
 /**
@@ -1631,27 +1573,21 @@ export const createOrReuseAttachedImage = async (
   params: Parameters<typeof createUploadedImageRecord>[1] & {
     expectedImageCount?: number;
   },
-  entityType: AttachableImageEntity,
-  entityId: string,
+  entity: AttachableImageRef,
   documentKind?: PurchaseDocumentKind,
 ): Promise<{ row: typeof image.$inferSelect; reused: boolean }> =>
   await withTransaction(db, async (tx) => {
-    await lockAttachableEntity(tx, entityType, entityId);
+    await lockAttachableEntity(tx, entity);
     if (params.idempotencyKey) {
       const winner = await findAttachmentByIdempotencyKey(
         tx,
-        entityType,
-        entityId,
+        entity,
         params.idempotencyKey,
       );
       if (winner) return { row: winner, reused: true };
     }
     if (params.expectedImageCount !== undefined) {
-      const actual = await countDisplayableAttachedImages(
-        tx,
-        entityType,
-        entityId,
-      );
+      const actual = await countDisplayableAttachedImages(tx, entity);
       if (actual !== params.expectedImageCount) {
         throw createAppError(
           "IMAGE_PRECONDITION_FAILED",
@@ -1672,8 +1608,8 @@ export const createOrReuseAttachedImage = async (
         ...record,
         shortcode,
         status: "UPLOADED",
-        targetType: entityType,
-        targetId: entityId,
+        targetType: entity.entity,
+        targetId: entity.id,
       })
       .onConflictDoNothing({
         target: [image.targetType, image.targetId, image.idempotencyKey],
@@ -1686,8 +1622,7 @@ export const createOrReuseAttachedImage = async (
       if (params.idempotencyKey) {
         const winner = await findAttachmentByIdempotencyKey(
           tx,
-          entityType,
-          entityId,
+          entity,
           params.idempotencyKey,
         );
         if (winner) return { row: winner, reused: true };
@@ -1698,7 +1633,7 @@ export const createOrReuseAttachedImage = async (
         // will be reporting it.
         throw createAppError(
           "IMAGE_ATTACH_FAILED",
-          `A detached file still holds idempotencyKey "${params.idempotencyKey}" for this ${entityType}. ` +
+          `A detached file still holds idempotencyKey "${params.idempotencyKey}" for this ${entity.entity}. ` +
             "Retry with a different key, and check Problems → unreferenced files.",
         );
       }
@@ -1706,9 +1641,8 @@ export const createOrReuseAttachedImage = async (
     }
     await associateImageWithEntity(
       tx,
-      entityType,
-      entityId,
-      unsafeImageId(inserted.id),
+      entity,
+      parseEntityId("image", inserted.id),
       documentKind,
     );
     return { row: inserted, reused: false };
@@ -1748,7 +1682,7 @@ export const getImagesByProjectIds = async (
   for (const row of rows) {
     const list = result[row.projectId] ?? [];
     list.push({
-      id: unsafeImageShortcode(row.shortcode),
+      id: parseShortcodeFor("image", row.shortcode),
       url: getR2PublicUrl(row.key),
       filename: row.filename,
     });

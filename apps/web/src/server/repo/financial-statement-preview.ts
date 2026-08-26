@@ -8,10 +8,7 @@ import {
   type FinancialStatementImportPreviewOut,
   financialTransactionSourceRefs,
 } from "@cubby/schemas/financial-transaction";
-import {
-  unsafeFinancialAccountShortcode,
-  unsafeFinancialTransactionShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, inArray, or, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
@@ -208,7 +205,7 @@ export async function previewFinancialStatementImport(
     const existingTransactionIds = (
       alreadyRecorded.length ? alreadyRecorded : possibleExisting
     ).map((transaction) =>
-      unsafeFinancialTransactionShortcode(transaction.shortcode),
+      parseShortcodeFor("financialTransaction", transaction.shortcode),
     );
     const status: FinancialStatementImportPreviewOut["rows"][number]["status"] =
       (fingerprintCounts.get(externalId) ?? 0) > 1
@@ -225,7 +222,7 @@ export async function previewFinancialStatementImport(
       key: row.key,
       status,
       accountId: account
-        ? unsafeFinancialAccountShortcode(account.shortcode)
+        ? parseShortcodeFor("financialAccount", account.shortcode)
         : null,
       accountName: account?.name ?? null,
       provisionalAccount: account ? null : provisionalAccountFor(row),

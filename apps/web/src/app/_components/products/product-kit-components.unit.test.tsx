@@ -1,15 +1,18 @@
-import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
 import type {
   KitMembershipOut,
   ProductComponentOut,
 } from "@cubby/schemas/product-components";
+import { testShortcode } from "@cubby/schemas/testing";
 import { flexRender } from "@tanstack/react-table";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  components: { current: [] as ProductComponentOut[] },
-  membership: { current: [] as KitMembershipOut[] },
+const mocks: {
+  components: { current: ProductComponentOut[] };
+  membership: { current: KitMembershipOut[] };
+} = vi.hoisted(() => ({
+  components: { current: [] },
+  membership: { current: [] },
 }));
 
 vi.mock("@tanstack/react-query", () => ({
@@ -118,6 +121,9 @@ vi.mock("~/app/_components/table/TableLink", () => ({
 
 import { ProductKitComponents } from "./product-kit-components";
 
+const DRILL_ID = testShortcode("product", "PRD-DRIL");
+const COMBO_ID = testShortcode("product", "PRD-COMB");
+
 /**
  * One component row. `onHandUnits` defaults to stocked so the existing cases
  * keep asserting what they were written to assert; the stock cases below pass
@@ -126,7 +132,7 @@ import { ProductKitComponents } from "./product-kit-components";
 const component = (
   over: Partial<ProductComponentOut> & { productName: string },
 ): ProductComponentOut => ({
-  productId: unsafeProductShortcode("PRD-CMP1"),
+  productId: testShortcode("product", "PRD-CMP1"),
   manufacturer: "Milwaukee",
   quantity: 1,
   price: null,
@@ -149,7 +155,7 @@ describe("ProductKitComponents", () => {
   it("renders a kit with several components, each with its quantity", () => {
     renderWith([
       {
-        productId: unsafeProductShortcode("PRD-DRIL"),
+        productId: DRILL_ID,
         productName: "Bare Drill",
         manufacturer: "Milwaukee",
         quantity: 1,
@@ -159,7 +165,7 @@ describe("ProductKitComponents", () => {
         attachedAt: new Date("2026-01-01"),
       },
       {
-        productId: unsafeProductShortcode("PRD-BATT"),
+        productId: testShortcode("product", "PRD-BATT"),
         productName: "Battery Pack",
         manufacturer: "Milwaukee",
         quantity: 2,
@@ -172,7 +178,7 @@ describe("ProductKitComponents", () => {
 
     expect(screen.getByRole("link", { name: "Bare Drill" })).toHaveAttribute(
       "href",
-      "/products/PRD-DRIL",
+      `/products/${DRILL_ID}`,
     );
     expect(screen.getByRole("link", { name: "Battery Pack" })).toBeVisible();
     expect(screen.getByText("×1")).toBeInTheDocument();
@@ -199,7 +205,7 @@ describe("ProductKitComponents", () => {
       [],
       [
         {
-          parentProductId: unsafeProductShortcode("PRD-COMB"),
+          parentProductId: COMBO_ID,
           parentProductName: "18V Combo Kit",
           manufacturer: "Milwaukee",
           quantity: 2,
@@ -217,7 +223,7 @@ describe("ProductKitComponents", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "18V Combo Kit" })).toHaveAttribute(
       "href",
-      "/products/PRD-COMB",
+      `/products/${COMBO_ID}`,
     );
     expect(screen.getByText("×2")).toBeInTheDocument();
   });
@@ -233,19 +239,19 @@ describe("ProductKitComponents", () => {
   it("renders each component's on-hand units, dashing only unanswerable ones", () => {
     renderWith([
       component({
-        productId: unsafeProductShortcode("PRD-STKD"),
+        productId: testShortcode("product", "PRD-STKD"),
         productName: "Stocked Part",
         price: 10,
         onHandUnits: 2,
       }),
       component({
-        productId: unsafeProductShortcode("PRD-GONE"),
+        productId: testShortcode("product", "PRD-GONE"),
         productName: "Unaccounted Part",
         price: 11,
         onHandUnits: 0,
       }),
       component({
-        productId: unsafeProductShortcode("PRD-MIXD"),
+        productId: testShortcode("product", "PRD-MIXD"),
         productName: "Mixed Unit Part",
         price: 12,
         onHandUnits: null,
@@ -260,7 +266,7 @@ describe("ProductKitComponents", () => {
   it("reports a fully-stocked kit as stocked by its components", () => {
     renderWith([
       component({
-        productId: unsafeProductShortcode("PRD-NST1"),
+        productId: testShortcode("product", "PRD-NST1"),
         productName: "Nightstand",
         quantity: 2,
         onHandUnits: 2,
@@ -273,12 +279,12 @@ describe("ProductKitComponents", () => {
   it("counts the stocked parts when a kit is only partly accounted for", () => {
     renderWith([
       component({
-        productId: unsafeProductShortcode("PRD-BRDG"),
+        productId: testShortcode("product", "PRD-BRDG"),
         productName: "Bridge",
         onHandUnits: 1,
       }),
       component({
-        productId: unsafeProductShortcode("PRD-BULB"),
+        productId: testShortcode("product", "PRD-BULB"),
         productName: "Bulbs",
         quantity: 3,
         onHandUnits: 0,
@@ -299,7 +305,7 @@ describe("ProductKitComponents", () => {
   it("stays silent when no component is stocked", () => {
     renderWith([
       component({
-        productId: unsafeProductShortcode("PRD-DRY1"),
+        productId: testShortcode("product", "PRD-DRY1"),
         productName: "Dust Bags",
         onHandUnits: 0,
       }),
@@ -321,7 +327,7 @@ describe("ProductKitComponents", () => {
       [],
       [
         {
-          parentProductId: unsafeProductShortcode("PRD-COMB"),
+          parentProductId: COMBO_ID,
           parentProductName: "18V Combo Kit",
           manufacturer: "Milwaukee",
           quantity: 2,

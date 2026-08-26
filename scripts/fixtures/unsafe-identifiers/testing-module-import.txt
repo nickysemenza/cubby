@@ -1,0 +1,2 @@
+import { testProductId } from "@cubby/schemas/testing";
+const product = testProductId("fixture");

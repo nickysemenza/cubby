@@ -1,4 +1,4 @@
-import { unsafeImageShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -44,7 +44,7 @@ describe("search hit thumbnails", () => {
     await updateProduct(
       ctx.db,
       product.entityId,
-      { pendingImageIds: [unsafeImageShortcode(skuPhoto.shortcode)] },
+      { pendingImageIds: [parseShortcodeFor("image", skuPhoto.shortcode)] },
       ctx.actor,
     );
 
@@ -75,7 +75,7 @@ describe("search hit thumbnails", () => {
     await updateProduct(
       ctx.db,
       product.entityId,
-      { pendingImageIds: [unsafeImageShortcode(skuPhoto.shortcode)] },
+      { pendingImageIds: [parseShortcodeFor("image", skuPhoto.shortcode)] },
       ctx.actor,
     );
 
@@ -91,7 +91,7 @@ describe("search hit thumbnails", () => {
     await updateLocation(
       ctx.db,
       location.entityId,
-      { pendingImageIds: [unsafeImageShortcode(ownPhoto.shortcode)] },
+      { pendingImageIds: [parseShortcodeFor("image", ownPhoto.shortcode)] },
       ctx.actor,
     );
     await refreshSearchDocument(ctx.db, "location", location.entityId);
@@ -119,7 +119,7 @@ describe("search hit thumbnails", () => {
     await updateProduct(
       ctx.db,
       product.entityId,
-      { pendingImageIds: [unsafeImageShortcode(skuPhoto.shortcode)] },
+      { pendingImageIds: [parseShortcodeFor("image", skuPhoto.shortcode)] },
       ctx.actor,
     );
 
@@ -137,8 +137,8 @@ describe("search hit thumbnails", () => {
       location.entityId,
       {
         pendingImageIds: [
-          unsafeImageShortcode(broken.shortcode),
-          unsafeImageShortcode(manual.shortcode),
+          parseShortcodeFor("image", broken.shortcode),
+          parseShortcodeFor("image", manual.shortcode),
         ],
       },
       ctx.actor,

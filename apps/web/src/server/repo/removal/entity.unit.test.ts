@@ -1,6 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { BrandForEntity } from "@cubby/schemas/identifiers";
-import { unsafeUserId } from "@cubby/schemas/identifiers";
+import { testEntityId, testUserId } from "@cubby/schemas/testing";
+
 import { getTableName, type SQL } from "drizzle-orm";
 import { PgDialect, type PgTable } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
@@ -24,7 +24,7 @@ import { SHORTCODE_TABLE } from "~/server/repo/shortcode-utils";
 import type { RemovableEntity } from "./core";
 import { removeEntity } from "./entity";
 
-const ACTOR: ActorContext = { userId: unsafeUserId("user-1"), source: "ui" };
+const ACTOR: ActorContext = { userId: testUserId("user-1"), source: "ui" };
 
 const AUDIT = getTableName(auditLog);
 const EMBEDDING = getTableName(entityEmbedding);
@@ -123,8 +123,8 @@ const recordingTx = (
   return { log, tx: tx as unknown as DrizzleTransaction };
 };
 
-const ids = <E extends RemovableEntity>(...v: string[]) =>
-  v as BrandForEntity<E>[];
+const ids = <E extends RemovableEntity>(entity: E, ...v: string[]) =>
+  v.map((seed) => testEntityId(entity, seed));
 
 const auditRows = (log: Statement[]) =>
   log.flatMap((s) => (s.op === "insert" && s.table === AUDIT ? s.rows : []));
@@ -134,7 +134,7 @@ describe("removeEntity — statement order", () => {
     const { log, tx } = recordingTx();
     await removeEntity(tx, {
       entity: "product",
-      ids: ids<"product">("p1"),
+      ids: ids("product", "p1"),
       removal: "soft",
       actor: ACTOR,
       children: [
@@ -164,12 +164,13 @@ describe("removeEntity — statement order", () => {
   it("counts every audited child before issuing any removal", async () => {
     // A count taken after a sibling edge had already been cleared would report
     // the wrong number, so the ordering here is behavioral, not incidental.
+    const productId = ids("product", "p1")[0]!;
     const { log, tx } = recordingTx({
-      [getTableName(productImage)]: [{ key: "p1", n: 2 }],
+      [getTableName(productImage)]: [{ key: productId, n: 2 }],
     });
     await removeEntity(tx, {
       entity: "product",
-      ids: ids<"product">("p1"),
+      ids: [productId],
       removal: "soft",
       actor: ACTOR,
       children: [
@@ -206,13 +207,14 @@ describe("removeEntity — statement order", () => {
     // The real multi-child shape (`deleteProjects`: two counted soft edges plus
     // an uncounted hard one). Order is declared, not sorted by mode, and the
     // hard edge contributes no SELECT and no `changes` key.
+    const productId = ids("product", "p1")[0]!;
     const { log, tx } = recordingTx({
-      [getTableName(productImage)]: [{ key: "p1", n: 2 }],
-      [getTableName(productUnitMappings)]: [{ key: "p1", n: 5 }],
+      [getTableName(productImage)]: [{ key: productId, n: 2 }],
+      [getTableName(productUnitMappings)]: [{ key: productId, n: 5 }],
     });
     await removeEntity(tx, {
       entity: "product",
-      ids: ids<"product">("p1"),
+      ids: [productId],
       removal: "soft",
       actor: ACTOR,
       children: [
@@ -258,7 +260,7 @@ describe("removeEntity — statement order", () => {
     const { log, tx } = recordingTx();
     await removeEntity(tx, {
       entity: "product",
-      ids: ids<"product">(),
+      ids: ids("product"),
       removal: "soft",
       actor: ACTOR,
     });
@@ -271,7 +273,7 @@ describe("removeEntity — removal mode", () => {
     const { log, tx } = recordingTx();
     await removeEntity(tx, {
       entity: "product",
-      ids: ids<"product">("p1"),
+      ids: ids("product", "p1"),
       removal: "hard",
       actor: ACTOR,
     });
@@ -292,7 +294,7 @@ describe("removeEntity — removal mode", () => {
     const { log, tx } = recordingTx();
     await removeEntity(tx, {
       entity: "task",
-      ids: ids<"task">("t1"),
+      ids: ids("task", "t1"),
       removal: "soft",
       actor: ACTOR,
       children: [
@@ -321,9 +323,10 @@ describe("removeEntity — multi-column child edges", () => {
     // the point: an edge that dropped one column would still look correct in
     // the statement log while leaving half the rows behind.
     const { log, tx } = recordingTx();
+    const taskIds = ids("task", "t1", "t2");
     await removeEntity(tx, {
       entity: "task",
-      ids: ids<"task">("t1", "t2"),
+      ids: taskIds,
       removal: "soft",
       actor: ACTOR,
       children: [
@@ -342,14 +345,15 @@ describe("removeEntity — multi-column child edges", () => {
     expect(sql).toBe(
       `("${getTableName(taskDependency)}"."taskId" in ($1, $2) or "${getTableName(taskDependency)}"."blockedByTaskId" in ($3, $4))`,
     );
-    expect(params).toEqual(["t1", "t2", "t1", "t2"]);
+    expect(params).toEqual([...taskIds, ...taskIds]);
   });
 
   it("leaves a single-column edge as a bare IN, with no OR wrapper", async () => {
     const { log, tx } = recordingTx();
+    const taskIds = ids("task", "t1");
     await removeEntity(tx, {
       entity: "task",
-      ids: ids<"task">("t1"),
+      ids: taskIds,
       removal: "soft",
       actor: ACTOR,
       children: [
@@ -365,7 +369,7 @@ describe("removeEntity — multi-column child edges", () => {
     // is "one column means no OR wrapper", and pinning the literal SQL made
     // this test fail on formatting churn that changes nothing.
     const { sql, params } = renderedWhere(log[0]);
-    expect(params).toEqual(["t1"]);
+    expect(params).toEqual(taskIds);
     expect(sql).toContain(`"${getTableName(taskDependency)}"."taskId"`);
     expect(sql).not.toMatch(/\bor\b/i);
   });
@@ -379,9 +383,10 @@ describe("removeEntity — the parent table is derived, not passed", () => {
     "removes %s rows from its own SHORTCODE_TABLE entry",
     async (entity) => {
       const { log, tx } = recordingTx();
+      const entityIds = ids(entity, "x1");
       await removeEntity(tx, {
         entity,
-        ids: ids("x1"),
+        ids: entityIds,
         removal: "soft",
         actor: ACTOR,
       });
@@ -422,7 +427,7 @@ describe("removeEntity — the type-level lock", () => {
     void removeEntity(tx, {
       entity: "product",
       // @ts-expect-error task ids cannot be passed as a product removal
-      ids: ids<"task">("t1"),
+      ids: ids("task", "t1"),
       removal: "soft",
       actor: ACTOR,
     });

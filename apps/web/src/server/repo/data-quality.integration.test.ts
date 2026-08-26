@@ -1,5 +1,6 @@
 import type { PurchaseId } from "@cubby/schemas/identifiers";
-import { unsafeImageShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { eq, inArray } from "drizzle-orm";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
@@ -82,7 +83,7 @@ describe("computed purchase and product data quality", () => {
     // the join row's raw uuid FK.
     return {
       ...joinRow,
-      imageShortcode: unsafeImageShortcode(stored.shortcode),
+      imageShortcode: parseShortcodeFor("image", stored.shortcode),
     };
   };
 

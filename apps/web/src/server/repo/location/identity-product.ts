@@ -7,7 +7,7 @@
  * putting it in either would make the pair circular.
  */
 
-import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { LocationIdentityProductOut } from "@cubby/schemas/location";
 import { isNotDeleted, mapImages } from "~/server/repo/database-helpers";
@@ -19,7 +19,7 @@ export const mapLocationIdentityProduct = (
   const product = row?.product;
   if (!product || !isNotDeleted(product)) return null;
   return {
-    id: unsafeProductShortcode(product.shortcode),
+    id: parseShortcodeFor("product", product.shortcode),
     name: product.name,
     manufacturer: product.manufacturer,
     model: product.model ?? null,

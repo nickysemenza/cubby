@@ -10,7 +10,7 @@ import type { Confidence } from "@cubby/schemas/ai";
 import {
   type IngredientId,
   type IngredientShortcode,
-  unsafeIngredientShortcode,
+  parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import { chat, maxIterations, toolDefinition } from "@tanstack/ai";
 import { DEFAULT_CHAT_MODEL } from "~/server/ai/models";
@@ -78,7 +78,7 @@ export async function suggestIngredientMerge(
     for (const r of rows)
       seen.set(r.id, {
         id: r.id,
-        shortcode: unsafeIngredientShortcode(r.shortcode),
+        shortcode: parseShortcodeFor("ingredient", r.shortcode),
         name: r.name,
       });
     if (rows.length === 0) return "No results.";

@@ -1,3 +1,4 @@
+import { entityIdSchema, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { useCallback, useRef, useState } from "react";
 import { precomputeEnrichmentProposalsStream } from "~/lib/ai.functions";
 import type { EnrichmentProposal } from "~/server/services/ai-enrichment/proposals";
@@ -9,6 +10,36 @@ interface ProposalRequest {
   /** Run the USDA matcher (skip for already-linked rows). */
   wantUsda: boolean;
   wantMerge: boolean;
+}
+
+function parseEnrichmentProposal(
+  item: Awaited<
+    ReturnType<typeof precomputeEnrichmentProposalsStream>
+  > extends AsyncIterable<infer Event>
+    ? Event extends { type: "progress"; item?: infer Item }
+      ? NonNullable<Item>
+      : never
+    : never,
+): EnrichmentProposal {
+  return {
+    ...item,
+    id: parseShortcodeFor("ingredient", item.id),
+    merge: item.merge
+      ? {
+          ...item.merge,
+          target: item.merge.target
+            ? {
+                ...item.merge.target,
+                id: entityIdSchema("ingredient").parse(item.merge.target.id),
+                shortcode: parseShortcodeFor(
+                  "ingredient",
+                  item.merge.target.shortcode,
+                ),
+              }
+            : null,
+        }
+      : null,
+  };
 }
 
 // One request = one server window (concurrency 5). A small page keeps each
@@ -53,11 +84,8 @@ export function useProposalCache() {
           const item = ev.item;
           setCache((prev) => {
             const next = new Map(prev);
-            // The JSONL schema carries plain strings while the workflow's
-            // in-process model brands public ids. The stream validates this
-            // payload before it reaches the cache, so this only restores that
-            // erased TypeScript brand at the browser boundary.
-            next.set(item.id, item as EnrichmentProposal);
+            const proposal = parseEnrichmentProposal(item);
+            next.set(proposal.id, proposal);
             return next;
           });
         }

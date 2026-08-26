@@ -1,8 +1,11 @@
-import type { Amount } from "@cubby/schemas/codec";
-import type {
-  InventoryShortcode,
-  LocationShortcode,
+import { type Amount, amount } from "@cubby/schemas/codec";
+import {
+  type InventoryShortcode,
+  inventoryShortcode,
+  type LocationShortcode,
+  locationShortcode,
 } from "@cubby/schemas/identifiers";
+import { z } from "zod";
 
 /**
  * dnd-kit payloads for the arrange surface. Both views produce the same typed
@@ -31,16 +34,33 @@ export type ArrangeDropData = {
   locationId: LocationShortcode | null;
 };
 
+const arrangeDragDataSchema = z.discriminatedUnion("arrangeDrag", [
+  z.object({
+    arrangeDrag: z.literal("location"),
+    locationId: locationShortcode,
+    parentId: locationShortcode.nullable(),
+  }),
+  z.object({
+    arrangeDrag: z.literal("item"),
+    inventoryEntryId: inventoryShortcode,
+    amount,
+    sourceLocationId: locationShortcode,
+  }),
+]);
+
+const arrangeDropDataSchema = z.object({
+  arrangeTarget: z.literal(true),
+  locationId: locationShortcode.nullable(),
+});
+
 export function asDragData(
   data: Record<string | symbol, unknown>,
 ): ArrangeDragData | null {
-  if (data.arrangeDrag === "location") return data as LocationDragData;
-  if (data.arrangeDrag === "item") return data as ItemDragData;
-  return null;
+  return arrangeDragDataSchema.safeParse(data).data ?? null;
 }
 
 export function asDropData(
   data: Record<string | symbol, unknown>,
 ): ArrangeDropData | null {
-  return data.arrangeTarget === true ? (data as ArrangeDropData) : null;
+  return arrangeDropDataSchema.safeParse(data).data ?? null;
 }

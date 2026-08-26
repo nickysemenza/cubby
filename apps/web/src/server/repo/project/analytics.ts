@@ -178,6 +178,7 @@ export async function projectDependencyIds(
     {
       ownColumn: projectDependency.projectId,
       blockedByColumn: projectDependency.blockedByProjectId,
+      entity: "project",
     },
     projectIds,
   );

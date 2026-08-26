@@ -1,9 +1,17 @@
-import type {
-  ProjectShortcode,
-  TaskShortcode,
+import {
+  type ProjectShortcode,
+  projectShortcode,
+  type TaskShortcode,
+  taskShortcode,
 } from "@cubby/schemas/identifiers";
-import type { TaskStatus, Trade } from "@cubby/schemas/project";
+import {
+  type TaskStatus,
+  type Trade,
+  taskStatusSchema,
+  tradeSchema,
+} from "@cubby/schemas/project";
 import { match } from "ts-pattern";
+import { z } from "zod";
 
 /**
  * dnd-kit payloads for the task board. A card is the drag source; a cell (a
@@ -76,6 +84,46 @@ export type TaskCreatePreset = {
   trade?: Trade;
 };
 
+const projectAxisSchema = z.object({
+  kind: z.literal("project"),
+  projectId: projectShortcode.nullable(),
+  projectName: z.string(),
+});
+
+const tradeAxisSchema = z.object({
+  kind: z.literal("trade"),
+  trade: tradeSchema,
+});
+
+const boardColumnSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("status"), status: taskStatusSchema }),
+  projectAxisSchema,
+  tradeAxisSchema,
+]);
+
+const boardLaneSchema = z.union([projectAxisSchema, tradeAxisSchema]);
+
+const taskCardDragDataSchema = z.object({
+  taskBoardDrag: z.literal(true),
+  taskId: taskShortcode,
+  status: taskStatusSchema,
+  projectId: projectShortcode.nullable(),
+  trade: tradeSchema,
+});
+
+const boardDropDataSchema = z.object({
+  taskBoardTarget: z.literal(true),
+  column: boardColumnSchema,
+  lane: boardLaneSchema.nullable(),
+});
+
+const boardCardDropDataSchema = z.object({
+  taskBoardCardTarget: z.literal(true),
+  column: boardColumnSchema,
+  lane: boardLaneSchema.nullable(),
+  targetTaskId: taskShortcode,
+});
+
 function presetForAxis(key: BoardColumnKey | BoardLaneKey): TaskCreatePreset {
   return match(key)
     .with({ kind: "status" }, (k) => ({ status: k.status }))
@@ -105,17 +153,17 @@ export function isQuickAddEligible(column: BoardColumnKey): boolean {
 export function asDragData(
   data: Record<string | symbol, unknown>,
 ): TaskCardDragData | null {
-  return data.taskBoardDrag === true ? (data as TaskCardDragData) : null;
+  return taskCardDragDataSchema.safeParse(data).data ?? null;
 }
 
 export function asDropData(
   data: Record<string | symbol, unknown>,
 ): BoardDropData | null {
-  return data.taskBoardTarget === true ? (data as BoardDropData) : null;
+  return boardDropDataSchema.safeParse(data).data ?? null;
 }
 
 export function asCardDropData(
   data: Record<string | symbol, unknown>,
 ): BoardCardDropData | null {
-  return data.taskBoardCardTarget === true ? (data as BoardCardDropData) : null;
+  return boardCardDropDataSchema.safeParse(data).data ?? null;
 }

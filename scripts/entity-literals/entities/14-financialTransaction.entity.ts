@@ -92,10 +92,7 @@ export default literalEntity({
         kind: "idMulti",
         placeholder: "Filter by account...",
         optionsKey: "account",
-        brandRef: {
-          module: "@cubby/schemas/identifiers",
-          export: "unsafeFinancialAccountShortcode",
-        },
+        brandRef: { entity: "financialAccount", kind: "shortcode" },
       },
       {
         columnId: "purchaseId",

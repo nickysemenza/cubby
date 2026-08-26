@@ -3,10 +3,10 @@ import { entityRefKey } from "@cubby/schemas/entity";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type CookbookId,
+  parseEntityId,
+  parseShortcodeFor,
   type RecipeId,
   type RecipeShortcode,
-  unsafeRecipeId,
-  unsafeRecipeShortcode,
 } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import {
@@ -182,7 +182,7 @@ export const getRecipeCoverImageUrlsByShortcodes = async (
     );
 
   for (const row of rows) {
-    const shortcode = unsafeRecipeShortcode(row.shortcode);
+    const shortcode = parseShortcodeFor("recipe", row.shortcode);
     if (!byId.has(shortcode)) byId.set(shortcode, getR2PublicUrl(row.key));
   }
   return byId;
@@ -277,12 +277,12 @@ export const getCookbookRecipesForDiff = async (
   );
   const byId = new Map(recipes.map((r) => [r.id, r]));
   return rows.flatMap((r) => {
-    const full = byId.get(unsafeRecipeShortcode(r.shortcode));
+    const full = byId.get(parseShortcodeFor("recipe", r.shortcode));
     return full
       ? [
           {
             title: r.name,
-            id: unsafeRecipeShortcode(r.shortcode),
+            id: parseShortcodeFor("recipe", r.shortcode),
             entityId: r.id,
             sig: recipeOutSignature(full),
           },
@@ -310,7 +310,7 @@ export const getRecipeByShortcode = async (
   shortcode: string,
 ): Promise<RecipeOut | null> => {
   const id = await resolveLiveShortcode(db, shortcode, "recipe");
-  return id ? getRecipeByID(db, unsafeRecipeId(id)) : null;
+  return id ? getRecipeByID(db, parseEntityId("recipe", id)) : null;
 };
 
 export const getNotionRecipePageIds = async (
@@ -336,7 +336,7 @@ export const getNotionRecipesForDiff = async (
   );
   const byId = new Map(recipes.map((r) => [r.id, r]));
   return rows.flatMap((r) => {
-    const full = byId.get(unsafeRecipeShortcode(r.shortcode));
+    const full = byId.get(parseShortcodeFor("recipe", r.shortcode));
     return r.SourceData && full
       ? [{ id: r.id, pageId: r.SourceData, recipe: full }]
       : [];

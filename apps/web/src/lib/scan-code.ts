@@ -1,4 +1,4 @@
-import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { normalizeIsbn } from "@cubby/schemas/isbn";
 import type { ProductFindOrCreateByCodeInput } from "@cubby/schemas/product";
 import type { ScanAtLocationCode } from "@cubby/schemas/scan";
@@ -154,7 +154,7 @@ export function resolveProductScan(
       ok: true,
       value: {
         kind: "product",
-        value: unsafeProductShortcode(parsed.value.shortcode),
+        value: parseShortcodeFor("product", parsed.value.shortcode),
       },
     };
   }

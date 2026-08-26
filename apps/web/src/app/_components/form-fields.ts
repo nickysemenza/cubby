@@ -1,15 +1,13 @@
 import { positiveAmount } from "@cubby/schemas/codec";
-import type {
-  IngredientShortcode,
-  LocationShortcode,
-  ProductShortcode,
-  RecipeShortcode,
-} from "@cubby/schemas/identifiers";
 import {
-  unsafeIngredientShortcode,
-  unsafeLocationShortcode,
-  unsafeProductShortcode,
-  unsafeRecipeShortcode,
+  type IngredientShortcode,
+  ingredientShortcode,
+  type LocationShortcode,
+  locationShortcode,
+  type ProductShortcode,
+  productShortcode,
+  type RecipeShortcode,
+  recipeShortcode,
 } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 import { ComboboxItem } from "~/app/_components/combobox/combobox-types";
@@ -30,40 +28,40 @@ export const optionalIngredientField = ComboboxItem.nullable();
 export function getProductShortcode(
   item: z.input<typeof requiredProductField>,
 ): ProductShortcode {
-  return unsafeProductShortcode(item!.id);
+  return productShortcode.parse(item!.id);
 }
 
 export function getLocationId(
   item: z.input<typeof requiredLocationField>,
 ): LocationShortcode {
-  return unsafeLocationShortcode(item!.id);
+  return locationShortcode.parse(item!.id);
 }
 
 export function getOptionalProductShortcode(
   item: ComboboxItem | null | undefined,
 ): ProductShortcode | undefined {
   if (!item?.id) return undefined;
-  return unsafeProductShortcode(item.id);
+  return productShortcode.parse(item.id);
 }
 
 export function getOptionalLocationId(
   item: ComboboxItem | null | undefined,
 ): LocationShortcode | undefined {
   if (!item?.id) return undefined;
-  return unsafeLocationShortcode(item.id);
+  return locationShortcode.parse(item.id);
 }
 
 export function getOptionalIngredientId(
   item: ComboboxItem | null | undefined,
 ): IngredientShortcode | undefined {
   if (!item?.id) return undefined;
-  return unsafeIngredientShortcode(item.id);
+  return ingredientShortcode.parse(item.id);
 }
 
 export function getOptionalRecipeId(
   item: ComboboxItem | null | undefined,
 ): RecipeShortcode | undefined {
-  return item?.id ? unsafeRecipeShortcode(item.id) : undefined;
+  return item?.id ? recipeShortcode.parse(item.id) : undefined;
 }
 
 export const inventoryItemWithLocationFields = z.object({

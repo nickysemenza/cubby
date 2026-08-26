@@ -119,10 +119,7 @@ export function WithIngredientSearch({
             : []
           : searchQuery.trim()
             ? (searchHits?.map((hit) =>
-                buildSearchHitComboboxItem<IngredientShortcode>(
-                  hit,
-                  "ingredient",
-                ),
+                buildSearchHitComboboxItem(hit, "ingredient"),
               ) ?? [])
             : (data?.items.map(buildIngredientComboboxItem) ?? []),
         onSearchChange,
@@ -214,7 +211,7 @@ export function WithLocationSearch({
             : []
           : searchQuery.trim()
             ? (searchHits?.map((hit) =>
-                buildSearchHitComboboxItem<LocationShortcode>(hit, "location"),
+                buildSearchHitComboboxItem(hit, "location"),
               ) ?? [])
             : (data?.items.map(buildLocationComboboxItem) ?? []),
         onSearchChange,
@@ -346,7 +343,7 @@ export function WithRecipeSearch({
             : []
           : searchQuery.trim()
             ? (searchHits?.map((hit) =>
-                buildSearchHitComboboxItem<RecipeShortcode>(hit, "recipe"),
+                buildSearchHitComboboxItem(hit, "recipe"),
               ) ?? [])
             : (data?.items.map(buildRecipeComboboxItem) ?? []),
         onSearchChange,
@@ -402,9 +399,8 @@ export function WithProjectSearch({
       ? [buildProjectComboboxItem(exactItem)]
       : []
     : searchQuery.trim()
-      ? (searchHits?.map((hit) =>
-          buildSearchHitComboboxItem<ProjectShortcode>(hit, "project"),
-        ) ?? [])
+      ? (searchHits?.map((hit) => buildSearchHitComboboxItem(hit, "project")) ??
+        [])
       : (data?.items.map(buildProjectComboboxItem) ?? []);
 
   return (
@@ -467,7 +463,7 @@ export function WithTaskSearch({
             : []
           : searchQuery.trim()
             ? (searchHits?.map((hit) =>
-                buildSearchHitComboboxItem<TaskShortcode>(hit, "task"),
+                buildSearchHitComboboxItem(hit, "task"),
               ) ?? [])
             : (data?.items.map(buildTaskComboboxItem) ?? []),
         onSearchChange,

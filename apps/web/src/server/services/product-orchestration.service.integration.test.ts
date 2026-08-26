@@ -1,4 +1,5 @@
-import { unsafeProductId } from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
+
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { UPCLookupResponse } from "@cubby/upc-contract";
 import type { FoodSummary } from "@cubby/usda-schemas";
@@ -350,7 +351,8 @@ describe("applyUpcDataWithSideEffects", () => {
     const result = await applyUpcDataWithSideEffects(
       services,
       {
-        id: unsafeProductId(
+        id: parseEntityId(
+          "product",
           (await resolveLiveShortcode(ctx.db, product.id, "product"))!,
         ),
         upc,
@@ -385,7 +387,8 @@ describe("applyUpcDataWithSideEffects", () => {
     const result = await applyUpcDataWithSideEffects(
       services,
       {
-        id: unsafeProductId(
+        id: parseEntityId(
+          "product",
           (await resolveLiveShortcode(ctx.db, product.id, "product"))!,
         ),
         upc,

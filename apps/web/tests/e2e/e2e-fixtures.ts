@@ -1,8 +1,8 @@
-import { unsafeUserId } from "@cubby/schemas/identifiers";
 import { inventoryCreatePayloadData } from "@cubby/schemas/inventory";
 import { locationCreateInput } from "@cubby/schemas/location";
 import { productCreateInput } from "@cubby/schemas/product";
 import { type TaskStatus, taskCreateInput } from "@cubby/schemas/project";
+import { testUserId } from "@cubby/schemas/testing";
 import type { Page } from "@playwright/test";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
@@ -44,7 +44,7 @@ async function fixtureUserId(page: Page) {
   };
   const userId = session.user?.id;
   if (!userId) throw new Error("Fixture session has no authenticated user id");
-  return unsafeUserId(userId);
+  return testUserId(userId);
 }
 
 async function createFixture(

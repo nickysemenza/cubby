@@ -1,4 +1,7 @@
-import type { ProductShortcode } from "@cubby/schemas/identifiers";
+import {
+  type ProductShortcode,
+  parseShortcodeFor,
+} from "@cubby/schemas/identifiers";
 import type {
   ProjectResourceOut,
   ProjectToolSuggestionOut,
@@ -482,7 +485,7 @@ function ResourcePickerDialog({
       const optimistic = variables.productIds.map((productId) => {
         const item = candidates.find((candidate) => candidate.id === productId);
         return {
-          productId: productId as ProjectResourceOut["productId"],
+          productId: parseShortcodeFor("product", productId),
           productName: item?.name ?? productId,
           manufacturer: item?.manufacturer ?? "",
           category:

@@ -255,16 +255,15 @@ return productTopLevelOut.parse(result);
 
 ### 1. Branded ID Types
 
-Always use unsafe helpers for database IDs:
+Parse raw database projections at the repository mapper seam:
 
 ```typescript
-import { unsafeProductId, unsafeLocationId } from "~/schemas/identifiers";
+import { locationId, productId } from "@cubby/schemas/identifiers";
 
-// Convert raw string IDs to branded types
 return {
-  id: unsafeProductId(rawProduct.id),
+  id: productId.parse(rawProduct.id),
   location: {
-    id: unsafeLocationId(rawLocation.id),
+    id: locationId.parse(rawLocation.id),
   },
 };
 ```

@@ -1,7 +1,7 @@
 import type { WFoodInput, WUnitMapping } from "@cubby/recipebridge";
 import {
   type ProductShortcode,
-  unsafeProductShortcode,
+  parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import {
@@ -56,7 +56,7 @@ const toUnitMapping = (m: ReadonlyDeep<WUnitMapping>): UnitMapping => ({
     m.sourceMetadata?.type === "product"
       ? {
           type: "product",
-          productId: unsafeProductShortcode(m.sourceMetadata.productId),
+          productId: parseShortcodeFor("product", m.sourceMetadata.productId),
         }
       : m.sourceMetadata?.type === "food"
         ? { type: "food", fdcId: m.sourceMetadata.fdcId }

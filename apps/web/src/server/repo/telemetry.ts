@@ -1,4 +1,4 @@
-import { unsafeUserId } from "@cubby/schemas/identifiers";
+import { userId } from "@cubby/schemas/identifiers";
 import type {
   AiUsageTelemetry,
   McpToolCallTelemetry,
@@ -44,7 +44,7 @@ export async function persistTelemetryMessages(
             entity: event.entity ?? null,
             release: event.release,
             occurredAt: new Date(event.occurredAt),
-            userId: unsafeUserId(event.userId),
+            userId: userId.parse(event.userId),
             clientId: event.clientId,
           })),
         )

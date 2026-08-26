@@ -1,9 +1,7 @@
-import {
-  unsafeLocationShortcode,
-  unsafeProductShortcode,
-} from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
+import { imageOut } from "@cubby/schemas/image";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
+import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -24,8 +22,8 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 const image = (id: string): ImageOut =>
-  ({
-    id: `00000000-0000-4000-8000-${id.padStart(12, "0")}`,
+  imageOut.parse({
+    id: testShortcode("image", `IMG-${id}`),
     url: `https://example.test/${id}.jpg`,
     key: `${id}.jpg`,
     filename: `${id}.jpg`,
@@ -41,7 +39,7 @@ const image = (id: string): ImageOut =>
     verifiedAt: null,
     createdAt: new Date("2026-01-01T00:00:00Z"),
     updatedAt: new Date("2026-01-01T00:00:00Z"),
-  }) as ImageOut;
+  });
 
 const location = (
   code: string,
@@ -49,7 +47,7 @@ const location = (
   type: LocationType | null,
   overrides: Partial<InfLocation> = {},
 ): InfLocation => ({
-  id: unsafeLocationShortcode(`LOC-${code}`),
+  id: testShortcode("location", `LOC-${code}`),
   name,
   aliases: [],
   type,
@@ -67,7 +65,7 @@ const location = (
 const containerLocation = (overrides: Partial<InfLocation> = {}) =>
   location("AAAA", "Abrasives box", null, {
     product: {
-      id: unsafeProductShortcode("PRD-AAAA"),
+      id: testShortcode("product", "PRD-AAAA"),
       name: "Two drawer tool box",
       manufacturer: "Example",
       model: "EX-2",

@@ -23,10 +23,7 @@
 import type { RelationMutationOut } from "@cubby/schemas/common";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ProductId } from "@cubby/schemas/identifiers";
-import {
-  unsafeProductShortcode,
-  unsafePurchaseShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   KitComponentRowOut,
   KitMembershipOut,
@@ -185,7 +182,7 @@ export async function listKitComponentRows(
     if (!item) return [];
     return [
       {
-        parentProductId: unsafeProductShortcode(edge.parentProductId),
+        parentProductId: parseShortcodeFor("product", edge.parentProductId),
         quantity: edge.quantity,
         product: item,
       },
@@ -238,7 +235,7 @@ export async function listProductComponents(
   return rows.map((row) => {
     const onHand = quantities.get(row.productId)?.onHand;
     return {
-      productId: unsafeProductShortcode(row.productCode),
+      productId: parseShortcodeFor("product", row.productCode),
       productName: row.productName,
       manufacturer: row.manufacturer,
       quantity: row.quantity,
@@ -335,7 +332,7 @@ async function loadMostRecentPurchaseByProductId(
     if (row.productId === null) continue;
     if (byProduct.has(row.productId)) continue;
     byProduct.set(row.productId, {
-      purchaseId: unsafePurchaseShortcode(row.purchaseCode),
+      purchaseId: parseShortcodeFor("purchase", row.purchaseCode),
       displayLabel: row.displayLabel,
       vendorName: row.vendorName,
       date: row.date,
@@ -381,7 +378,7 @@ export async function listKitMembership(
   ]);
 
   return rows.map((row) => ({
-    parentProductId: unsafeProductShortcode(row.parentCode),
+    parentProductId: parseShortcodeFor("product", row.parentCode),
     parentProductName: row.parentName,
     manufacturer: row.manufacturer,
     quantity: row.quantity,

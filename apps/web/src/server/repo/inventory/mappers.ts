@@ -1,9 +1,4 @@
-import {
-  type ProductId,
-  unsafeInventoryShortcode,
-  unsafeLocationShortcode,
-  unsafeProductShortcode,
-} from "@cubby/schemas/identifiers";
+import { type ProductId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   inventoryListItemOut,
   inventoryWithLocationAndProductOut,
@@ -38,7 +33,7 @@ type InventoryEntryBaseDB = Pick<
 >;
 
 const inventoryEntryBaseShape = (entry: InventoryEntryBaseDB) => ({
-  id: unsafeInventoryShortcode(entry.shortcode),
+  id: parseShortcodeFor("inventory", entry.shortcode),
   amount: parseInventoryAmount(entry.amount, entry.id),
   valuation: entry.valuation,
   verifiedAt: entry.verifiedAt,
@@ -72,7 +67,7 @@ export const dbInventoryEntryToAPI: (
   return {
     ...inventoryEntryBaseShape(inventoryentry),
     location: {
-      id: unsafeLocationShortcode(location.shortcode),
+      id: parseShortcodeFor("location", location.shortcode),
       lastBulkInventory: location.lastBulkInventory,
       aiDescription: location.aiDescription,
       images: mapImages(location.images),
@@ -98,7 +93,7 @@ export const dbInventoryEntryToAPI: (
       images: mapImages(product.images),
       externalIds: mapProductExternalIds(product.externalIds),
       unitMappings: mapProductUnitMappings(
-        unsafeProductShortcode(product.shortcode),
+        parseShortcodeFor("product", product.shortcode),
         product.unitMappings,
       ),
     },
@@ -114,7 +109,7 @@ export const dbInventoryEntryToListAPI: (
   return {
     ...inventoryEntryBaseShape(inventoryentry),
     location: {
-      id: unsafeLocationShortcode(location.shortcode),
+      id: parseShortcodeFor("location", location.shortcode),
       name: location.name,
       type: parseLocationType(location.type, {
         id: location.id,

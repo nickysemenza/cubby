@@ -1,11 +1,7 @@
-import {
-  unsafeExpenseShortcode,
-  unsafeProductShortcode,
-} from "@cubby/schemas/identifiers";
 import type { ExpenseOut } from "@cubby/schemas/project";
+import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { ColumnCellData } from "~/app/_components/data-table/cell-data";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
@@ -13,7 +9,7 @@ vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 import { expenseProductQuantityColumn } from "~/app/projects/shared";
 
 const EXPENSE: ExpenseOut = {
-  id: unsafeExpenseShortcode("EXP-4K7M"),
+  id: testShortcode("expense", "EXP-4K7M"),
   name: "Box of fasteners",
   cost: 20,
   date: "2026-07-20",
@@ -26,7 +22,7 @@ const EXPENSE: ExpenseOut = {
   future: false,
   projectId: null,
   projectName: null,
-  productId: unsafeProductShortcode("PRD-4K7M"),
+  productId: testShortcode("product", "PRD-4K7M"),
   productQuantity: 2,
   productName: "Fasteners",
   purchaseId: null,
@@ -101,7 +97,8 @@ describe("Expense Quantity inline editor", () => {
   // whole-number rule here would make fractional rows uneditable everywhere.
   it("accepts a fractional quantity", async () => {
     const { column, save } = buildColumn();
-    const cellData = column.meta?.cellData as ColumnCellData<ExpenseOut>;
+    const cellData = column.meta?.cellData;
+    if (!cellData) throw new Error("expected cell data");
 
     await cellData.applyPaste?.(EXPENSE, { json: 1.5 });
     expect(save).toHaveBeenCalledWith(1.5, EXPENSE);
@@ -109,7 +106,8 @@ describe("Expense Quantity inline editor", () => {
 
   it("still refuses a quantity on a row with no linked Product", async () => {
     const { column, save } = buildColumn();
-    const cellData = column.meta?.cellData as ColumnCellData<ExpenseOut>;
+    const cellData = column.meta?.cellData;
+    if (!cellData) throw new Error("expected cell data");
 
     await expect(
       cellData.applyPaste?.({ ...EXPENSE, productId: null }, { json: 2 }),
@@ -123,7 +121,8 @@ describe("Expense Quantity inline editor", () => {
   // a `!== 0` rule here would make every price concession uneditable.
   it("accepts a quantity of zero", async () => {
     const { column, save } = buildColumn();
-    const cellData = column.meta?.cellData as ColumnCellData<ExpenseOut>;
+    const cellData = column.meta?.cellData;
+    if (!cellData) throw new Error("expected cell data");
 
     await cellData.applyPaste?.(EXPENSE, { json: 0 });
     expect(save).toHaveBeenCalledWith(0, EXPENSE);
@@ -134,7 +133,8 @@ describe("Expense Quantity inline editor", () => {
   // here would make discards uneditable everywhere.
   it("accepts a negative quantity", async () => {
     const { column, save } = buildColumn();
-    const cellData = column.meta?.cellData as ColumnCellData<ExpenseOut>;
+    const cellData = column.meta?.cellData;
+    if (!cellData) throw new Error("expected cell data");
 
     await cellData.applyPaste?.(EXPENSE, { json: -1 });
     expect(save).toHaveBeenCalledWith(-1, EXPENSE);

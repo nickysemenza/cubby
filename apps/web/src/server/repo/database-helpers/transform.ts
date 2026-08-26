@@ -1,4 +1,4 @@
-import { unsafeImageShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 /**
  * Data transformation helper functions.
  * Extract, map, and transform database records.
@@ -78,7 +78,7 @@ export const mapImages = (
     .map((dbImage) => ({
       // The public code, never the uuid: `ImageOut.id` IS the shortcode, the
       // same way every other entity's API `id` is.
-      id: unsafeImageShortcode(dbImage.shortcode),
+      id: parseShortcodeFor("image", dbImage.shortcode),
       url: getR2PublicUrl(dbImage.key),
       key: dbImage.key,
       filename: dbImage.filename,

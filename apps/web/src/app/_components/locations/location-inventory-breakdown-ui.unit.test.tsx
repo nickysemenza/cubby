@@ -1,4 +1,5 @@
-import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -35,7 +36,7 @@ vi.mock("~/app/_components/visualizations/hierarchy-drilldown", () => ({
 
 import { LocationInventoryBreakdown } from "./location-inventory-breakdown";
 
-const rootId = unsafeLocationShortcode("LOC-ROOT");
+const rootId = testShortcode("location", "LOC-ROOT");
 
 beforeEach(() => {
   mocks.queryOptions.mockReset();
@@ -93,7 +94,7 @@ describe("LocationInventoryBreakdown", () => {
       totalItemCount: 3,
       children: [
         {
-          id: unsafeLocationShortcode("LOC-CHLD"),
+          id: testShortcode("location", "LOC-CHLD"),
           name: "Shelf",
           type: "shelf",
           directItemCount: 2,

@@ -1,10 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import {
-  unsafeIngredientId,
-  unsafeLocationId,
-  unsafeTaskId,
-  unsafeVendorId,
-} from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { FilterSpecCore } from "./filters";
 
 export {
@@ -24,7 +19,7 @@ export const problemFilterSemantics = {
       columnId: "location",
       field: "locationIdFilter",
       kind: "idMulti",
-      brand: unsafeLocationId,
+      brand: (value) => parseEntityId("location", value),
       nullable: { field: "inventoryPresenceFilter", label: "inventory" },
     },
     {
@@ -60,7 +55,7 @@ export const problemFilterSemantics = {
       columnId: "ingredient",
       field: "ingredientIdFilter",
       kind: "idMulti",
-      brand: unsafeIngredientId,
+      brand: (value) => parseEntityId("ingredient", value),
       nullable: { field: "ingredientPresenceFilter", label: "ingredient" },
     },
     { columnId: "inventoryMultiplicity", kind: "select" },
@@ -152,7 +147,7 @@ export const problemFilterSemantics = {
       columnId: "vendor",
       field: "vendorId",
       kind: "idMulti",
-      brand: unsafeVendorId,
+      brand: (value) => parseEntityId("vendor", value),
       nullable: { field: "vendorPresenceFilter", label: "purchase" },
     },
     { columnId: "lineKind", kind: "multiselect" },
@@ -198,7 +193,7 @@ export const problemFilterSemantics = {
       columnId: "parentTask",
       field: "parentTaskId",
       kind: "idMulti",
-      brand: unsafeTaskId,
+      brand: (value) => parseEntityId("task", value),
       nullable: { field: "parentTaskPresenceFilter", label: "parent task" },
     },
   ],

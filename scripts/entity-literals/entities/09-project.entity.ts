@@ -118,10 +118,7 @@ export default literalEntity({
         kind: "idMulti",
         placeholder: "Filter by parent project...",
         optionsKey: "project",
-        brandRef: {
-          module: "@cubby/schemas/identifiers",
-          export: "unsafeProjectId",
-        },
+        brandRef: { entity: "project", kind: "id" },
         nullable: {
           field: "parentProjectPresenceFilter",
           label: "parent project",

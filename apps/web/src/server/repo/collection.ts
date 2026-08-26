@@ -14,9 +14,8 @@ import type { ActorContext } from "@cubby/schemas/context";
 import {
   type LocationId,
   type ProductId,
-  unsafeLocationShortcode,
-  unsafeProductShortcode,
-  unsafePurchaseShortcode,
+  parseEntityId,
+  parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { Trade } from "@cubby/schemas/project";
 import { setCollectionTag } from "@cubby/shared/collection-tag";
@@ -113,7 +112,7 @@ const placementsByProductId = (
       [...productLocations.values()]
         .sort((left, right) => left.name.localeCompare(right.name))
         .map((loc) => ({
-          id: unsafeLocationShortcode(loc.shortcode),
+          id: parseShortcodeFor("location", loc.shortcode),
           name: loc.name,
           path: locationPath(loc, graph.locationsById),
         })),
@@ -198,7 +197,7 @@ const loadPurchasesByProductId = async (
     if (!row.productId) continue;
     const purchases = byProductId.get(row.productId) ?? new Map();
     purchases.set(row.purchaseId, {
-      id: unsafePurchaseShortcode(row.purchaseCode),
+      id: parseShortcodeFor("purchase", row.purchaseCode),
       orderId: row.orderId,
       displayLabel: row.displayLabel,
       date: row.date,
@@ -349,14 +348,14 @@ export const getCollectionDetail = async (
   return {
     collection: summarizeCollection(graph, slug),
     roots: roots.map((item) => ({
-      id: unsafeLocationShortcode(item.shortcode),
+      id: parseShortcodeFor("location", item.shortcode),
       name: item.name,
       path: locationPath(item, graph.locationsById),
       imageUrl: rootCoverImageUrls.get(item.id) ?? null,
     })),
     totalCount: matchingProducts.length,
     products: productPage.map((item) => ({
-      id: unsafeProductShortcode(item.shortcode),
+      id: parseShortcodeFor("product", item.shortcode),
       name: item.name,
       manufacturer: item.manufacturer,
       imageUrl: productCoverImageUrls.get(item.id) ?? null,
@@ -380,9 +379,9 @@ export const getCollectionMatrix = async (
   const graph = await loadCollectionGraph(db);
   const normalizedSearch = search?.toLocaleLowerCase();
   const secondaryFor = (item: GraphProduct | GraphLocation) =>
-    subject === "product"
-      ? (item as GraphProduct).manufacturer
-      : locationPath(item as GraphLocation, graph.locationsById).join(" / ");
+    "manufacturer" in item
+      ? item.manufacturer
+      : locationPath(item, graph.locationsById).join(" / ");
   const stateFor = (
     item: GraphProduct | GraphLocation,
     slug: CollectionSlug,
@@ -437,13 +436,15 @@ export const getCollectionMatrix = async (
   const start = pagination.pageIndex * pagination.pageSize;
   const page = source.slice(start, start + pagination.pageSize);
   const productIds =
-    subject === "product" ? page.map((item) => item.id as ProductId) : [];
+    subject === "product"
+      ? page.map((item) => parseEntityId("product", item.id))
+      : [];
   const [resolvedCoverImageUrls, purchases] = await Promise.all([
     subject === "product"
       ? getProductCoverImageUrlsByProductIds(db, productIds)
       : getLocationCoverImageUrlsByLocationIds(
           db,
-          page.map((item) => item.id as LocationId),
+          page.map((item) => parseEntityId("location", item.id)),
         ),
     loadPurchasesByProductId(db, productIds),
   ]);
@@ -458,8 +459,8 @@ export const getCollectionMatrix = async (
     return {
       id:
         subject === "product"
-          ? unsafeProductShortcode(item.shortcode)
-          : unsafeLocationShortcode(item.shortcode),
+          ? parseShortcodeFor("product", item.shortcode)
+          : parseShortcodeFor("location", item.shortcode),
       name: item.name,
       secondary: secondaryFor(item),
       imageUrl: coverImageUrls.get(item.id) ?? null,

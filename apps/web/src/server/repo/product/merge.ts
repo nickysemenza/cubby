@@ -12,7 +12,8 @@ import {
   type InventoryId,
   type ProductId,
   type ProductShortcode,
-  unsafeProductShortcode,
+  parseEntityId,
+  parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import { isbnFromGtin } from "@cubby/schemas/isbn";
@@ -675,24 +676,32 @@ async function buildProductMergePlan(
   // Deliberately sequential: this function also runs on one transaction
   // client, and pg deprecates submitting another query while that client is
   // already executing one.
-  const productRows = (await db.query.product.findMany({
-    where: and(inArray(product.id, requestedIds), notDeleted(product)),
-    columns: {
-      id: true,
-      shortcode: true,
-      name: true,
-      aliases: true,
-      tags: true,
-      fdc_id: true,
-      model: true,
-      price: true,
-      notes: true,
-      category: true,
-      ingredientId: true,
-      expectedQuantity: true,
-      stockTracked: true,
-    },
-  })) as ProductMergeRow[];
+  const productRows = (
+    await db.query.product.findMany({
+      where: and(inArray(product.id, requestedIds), notDeleted(product)),
+      columns: {
+        id: true,
+        shortcode: true,
+        name: true,
+        aliases: true,
+        tags: true,
+        fdc_id: true,
+        model: true,
+        price: true,
+        notes: true,
+        category: true,
+        ingredientId: true,
+        expectedQuantity: true,
+        stockTracked: true,
+      },
+    })
+  ).map(
+    (row): ProductMergeRow => ({
+      ...row,
+      id: parseEntityId("product", row.id),
+      shortcode: parseShortcodeFor("product", row.shortcode),
+    }),
+  );
   const keeper = productRows.find((row) => row.id === input.keepId);
   if (!keeper) {
     if (options?.allowMissingKeeper) return null;
@@ -708,113 +717,200 @@ async function buildProductMergePlan(
   });
   const liveLoserIds = losers.map((row) => row.id);
   const ids = [input.keepId, ...liveLoserIds];
-  const inventoryRows = (await db.query.inventoryEntry.findMany({
-    where: and(
-      inArray(inventoryEntry.productId, ids),
-      notDeleted(inventoryEntry),
-    ),
-    columns: {
-      id: true,
-      productId: true,
-      locationId: true,
-      placement: true,
-      amount: true,
-    },
-  })) as InventoryRow[];
-  const componentRows = await loadComponentRows(db);
-  const unitMappingRows = (await db.query.productUnitMappings.findMany({
-    where: and(
-      inArray(productUnitMappings.productId, ids),
-      notDeleted(productUnitMappings),
-    ),
-    columns: { id: true, productId: true, a: true, b: true, source: true },
-    orderBy: [asc(productUnitMappings.createdAt), asc(productUnitMappings.id)],
-  })) as UnitMappingRow[];
-  const externalIdRows = (await db.query.productExternalId.findMany({
-    where: and(
-      inArray(productExternalId.productId, ids),
-      notDeleted(productExternalId),
-    ),
-    columns: {
-      id: true,
-      productId: true,
-      source: true,
-      kind: true,
-      externalId: true,
-      url: true,
-      isPrimary: true,
-    },
-    orderBy: [
-      desc(productExternalId.isPrimary),
-      asc(productExternalId.createdAt),
-      asc(productExternalId.id),
-    ],
-  })) as ExternalIdRow[];
-  const imageRows = (await db.query.productImage.findMany({
-    where: and(inArray(productImage.productId, ids), notDeleted(productImage)),
-    columns: {
-      id: true,
-      productId: true,
-      imageId: true,
-      sortOrder: true,
-      createdAt: true,
-    },
-    orderBy: [asc(productImage.sortOrder), asc(productImage.createdAt)],
-  })) as ProductImageAssociationRow[];
-  const projectUseRows = (await db.query.projectToolUsage.findMany({
-    where: and(
-      inArray(projectToolUsage.productId, ids),
-      notDeleted(projectToolUsage),
-    ),
-    columns: { id: true, productId: true, projectId: true },
-  })) as ProjectUseAssociationRow[];
-  const purchaseRows = (await db.query.purchaseProduct.findMany({
-    where: and(
-      inArray(purchaseProduct.productId, ids),
-      notDeleted(purchaseProduct),
-    ),
-    columns: { id: true, productId: true, purchaseId: true },
-  })) as PurchaseAssociationRow[];
-  const wishRows = (await db.query.wishCandidate.findMany({
-    where: and(
-      inArray(wishCandidate.productId, ids),
-      notDeleted(wishCandidate),
-    ),
-    columns: { id: true, productId: true, wishId: true },
-  })) as WishAssociationRow[];
-  const expenses = (await db
-    .select({ id: expense.id, productId: expense.productId })
-    .from(expense)
-    .where(
-      and(inArray(expense.productId, liveLoserIds), notDeleted(expense)),
-    )) as ProductAssociationRow[];
-  const tasks = (await db
-    .select({ id: task.id, productId: task.subjectProductId })
-    .from(task)
-    .where(
-      and(inArray(task.subjectProductId, liveLoserIds), notDeleted(task)),
-    )) as ProductAssociationRow[];
-  const locations = (await db
-    .select({ id: location.id, productId: location.productId })
-    .from(location)
-    .where(
-      and(inArray(location.productId, liveLoserIds), notDeleted(location)),
-    )) as ProductAssociationRow[];
-  const cookbooks = (await db
-    .select({ id: cookbook.id, productId: cookbook.productId })
-    .from(cookbook)
-    .where(
-      and(inArray(cookbook.productId, liveLoserIds), notDeleted(cookbook)),
-    )) as ProductAssociationRow[];
-  const conversionCoverage = (await db
-    .select({
-      id: productConversionCoverage.productId,
-      productId: productConversionCoverage.productId,
+  const inventoryRows = (
+    await db.query.inventoryEntry.findMany({
+      where: and(
+        inArray(inventoryEntry.productId, ids),
+        notDeleted(inventoryEntry),
+      ),
+      columns: {
+        id: true,
+        productId: true,
+        locationId: true,
+        placement: true,
+        amount: true,
+      },
     })
-    .from(productConversionCoverage)
-    .where(
-      inArray(productConversionCoverage.productId, liveLoserIds),
-    )) as ProductAssociationRow[];
+  ).map(
+    (row): InventoryRow => ({
+      ...row,
+      id: parseEntityId("inventory", row.id),
+      productId: parseEntityId("product", row.productId),
+    }),
+  );
+  const componentRows = await loadComponentRows(db);
+  const unitMappingRows = (
+    await db.query.productUnitMappings.findMany({
+      where: and(
+        inArray(productUnitMappings.productId, ids),
+        notDeleted(productUnitMappings),
+      ),
+      columns: { id: true, productId: true, a: true, b: true, source: true },
+      orderBy: [
+        asc(productUnitMappings.createdAt),
+        asc(productUnitMappings.id),
+      ],
+    })
+  ).map(
+    (row): UnitMappingRow => ({
+      ...row,
+      productId: parseEntityId("product", row.productId),
+    }),
+  );
+  const externalIdRows = (
+    await db.query.productExternalId.findMany({
+      where: and(
+        inArray(productExternalId.productId, ids),
+        notDeleted(productExternalId),
+      ),
+      columns: {
+        id: true,
+        productId: true,
+        source: true,
+        kind: true,
+        externalId: true,
+        url: true,
+        isPrimary: true,
+      },
+      orderBy: [
+        desc(productExternalId.isPrimary),
+        asc(productExternalId.createdAt),
+        asc(productExternalId.id),
+      ],
+    })
+  ).map(
+    (row): ExternalIdRow => ({
+      ...row,
+      productId: parseEntityId("product", row.productId),
+    }),
+  );
+  const imageRows = (
+    await db.query.productImage.findMany({
+      where: and(
+        inArray(productImage.productId, ids),
+        notDeleted(productImage),
+      ),
+      columns: {
+        id: true,
+        productId: true,
+        imageId: true,
+        sortOrder: true,
+        createdAt: true,
+      },
+      orderBy: [asc(productImage.sortOrder), asc(productImage.createdAt)],
+    })
+  ).map(
+    (row): ProductImageAssociationRow => ({
+      ...row,
+      productId: parseEntityId("product", row.productId),
+    }),
+  );
+  const projectUseRows = (
+    await db.query.projectToolUsage.findMany({
+      where: and(
+        inArray(projectToolUsage.productId, ids),
+        notDeleted(projectToolUsage),
+      ),
+      columns: { id: true, productId: true, projectId: true },
+    })
+  ).map(
+    (row): ProjectUseAssociationRow => ({
+      ...row,
+      productId: parseEntityId("product", row.productId),
+    }),
+  );
+  const purchaseRows = (
+    await db.query.purchaseProduct.findMany({
+      where: and(
+        inArray(purchaseProduct.productId, ids),
+        notDeleted(purchaseProduct),
+      ),
+      columns: { id: true, productId: true, purchaseId: true },
+    })
+  ).map(
+    (row): PurchaseAssociationRow => ({
+      ...row,
+      productId: parseEntityId("product", row.productId),
+    }),
+  );
+  const wishRows = (
+    await db.query.wishCandidate.findMany({
+      where: and(
+        inArray(wishCandidate.productId, ids),
+        notDeleted(wishCandidate),
+      ),
+      columns: { id: true, productId: true, wishId: true },
+    })
+  ).map(
+    (row): WishAssociationRow => ({
+      ...row,
+      productId: parseEntityId("product", row.productId),
+    }),
+  );
+  const expenses = (
+    await db
+      .select({ id: expense.id, productId: expense.productId })
+      .from(expense)
+      .where(and(inArray(expense.productId, liveLoserIds), notDeleted(expense)))
+  ).map(
+    (row): ProductAssociationRow => ({
+      ...row,
+      productId: parseEntityId("product", row.productId),
+    }),
+  );
+  const tasks = (
+    await db
+      .select({ id: task.id, productId: task.subjectProductId })
+      .from(task)
+      .where(
+        and(inArray(task.subjectProductId, liveLoserIds), notDeleted(task)),
+      )
+  ).map(
+    (row): ProductAssociationRow => ({
+      ...row,
+      productId: parseEntityId("product", row.productId),
+    }),
+  );
+  const locations = (
+    await db
+      .select({ id: location.id, productId: location.productId })
+      .from(location)
+      .where(
+        and(inArray(location.productId, liveLoserIds), notDeleted(location)),
+      )
+  ).map(
+    (row): ProductAssociationRow => ({
+      ...row,
+      productId: parseEntityId("product", row.productId),
+    }),
+  );
+  const cookbooks = (
+    await db
+      .select({ id: cookbook.id, productId: cookbook.productId })
+      .from(cookbook)
+      .where(
+        and(inArray(cookbook.productId, liveLoserIds), notDeleted(cookbook)),
+      )
+  ).map(
+    (row): ProductAssociationRow => ({
+      ...row,
+      productId: parseEntityId("product", row.productId),
+    }),
+  );
+  const conversionCoverage = (
+    await db
+      .select({
+        id: productConversionCoverage.productId,
+        productId: productConversionCoverage.productId,
+      })
+      .from(productConversionCoverage)
+      .where(inArray(productConversionCoverage.productId, liveLoserIds))
+  ).map(
+    (row): ProductAssociationRow => ({
+      ...row,
+      productId: parseEntityId("product", row.productId),
+    }),
+  );
   const aliases = uniq([
     ...keeper.aliases,
     ...losers.map((row) => row.name),
@@ -943,7 +1039,7 @@ export const mergeProducts = async (
     const now = new Date();
     const summary: ProductMergeSummary = emptySummary(keeper.shortcode, keepId);
     summary.deletedIds = losers.map((row) =>
-      unsafeProductShortcode(row.shortcode),
+      parseShortcodeFor("product", row.shortcode),
     );
     summary.deletedEntityIds = losers.map((row) => row.id);
 
@@ -1339,7 +1435,9 @@ export const mergeProducts = async (
       await tx.delete(productConversionCoverage).where(
         inArray(
           productConversionCoverage.productId,
-          plan.conversionCoverage.map((row) => row.id as ProductId),
+          plan.conversionCoverage.map((row) =>
+            parseEntityId("product", row.id),
+          ),
         ),
       );
     }
@@ -1384,7 +1482,7 @@ const emptySummary = (
   shortcode: string,
   keepEntityId: ProductId,
 ): ProductMergeSummary => ({
-  keepId: unsafeProductShortcode(shortcode),
+  keepId: parseShortcodeFor("product", shortcode),
   deletedIds: [],
   merged: 0,
   keepEntityId,

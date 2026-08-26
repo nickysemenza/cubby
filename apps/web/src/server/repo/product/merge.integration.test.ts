@@ -1,9 +1,6 @@
 import { GTIN_SOURCE } from "@cubby/schemas/external-id";
-import {
-  type ProductId,
-  unsafeLocationId,
-  unsafeProductId,
-} from "@cubby/schemas/identifiers";
+import type { ProductId } from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { ProductCreateInput } from "@cubby/schemas/product";
 import { and, asc, eq } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
@@ -69,7 +66,7 @@ describe("mergeProducts", () => {
     );
     return {
       shortcode: created.id,
-      id: unsafeProductId(await resolveId(created.id, "product")),
+      id: parseEntityId("product", await resolveId(created.id, "product")),
     };
   };
 
@@ -79,7 +76,7 @@ describe("mergeProducts", () => {
       makeLocationInput({ name }),
       TEST_ACTOR,
     );
-    return unsafeLocationId(await resolveId(created.id, "location"));
+    return parseEntityId("location", await resolveId(created.id, "location"));
   };
 
   const liveExternalIds = (productId: ProductId) =>

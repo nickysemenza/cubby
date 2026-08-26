@@ -1,4 +1,4 @@
-import { PROBLEM_CLASS, type ProblemKey } from "@cubby/schemas/problems";
+import { PROBLEM_CLASS } from "@cubby/schemas/problems";
 import { describe, expect, it } from "vitest";
 import { diagnosticAdapters } from "~/server/services/problem-diagnostics.service";
 import { getEntityFilters } from "./filter-manifest";
@@ -178,8 +178,6 @@ describe("Problem Query registry", () => {
   });
 
   it("keeps the expected key roster sourced from the schema", () => {
-    expect(expectedProblemKeys).toEqual(
-      Object.keys(PROBLEM_CLASS) as ProblemKey[],
-    );
+    expect(expectedProblemKeys).toEqual(Object.keys(PROBLEM_CLASS));
   });
 });

@@ -1,5 +1,11 @@
 import { z } from "zod";
 import { searchableEntities } from "./entity-manifest";
+import {
+  ingredientId,
+  locationId,
+  parseEntityRef,
+  recipeId,
+} from "./identifiers";
 
 const backgroundSearchableEntitySchema = z.enum(searchableEntities);
 
@@ -63,24 +69,41 @@ export type BackgroundBatchProcessor = z.infer<
 >;
 
 export const recipeTotalsRecomputePayloadSchema = z.object({
-  recipeIds: z.array(z.string()).min(1),
+  recipeIds: z.array(recipeId).min(1),
 });
 
-export const entityEmbeddingRefreshPayloadSchema = z.object({
+const searchableEntityRefFields = {
   entityType: backgroundSearchableEntitySchema,
-  entityId: z.string(),
-  /**
-   * A coordinator records the exact normalized source hash it inspected. The
-   * worker checks it before calling the embedding provider, so a concurrent
-   * write cannot spend tokens on text that has already changed.
-   */
-  expectedEmbeddingHash: z.string().optional(),
-});
+  entityId: z.uuid(),
+};
 
-const workflowCursorSchema = z.object({
-  entityType: backgroundSearchableEntitySchema,
-  entityId: z.string(),
-});
+const parseSearchableEntityRef = <
+  T extends {
+    entityType: z.infer<typeof backgroundSearchableEntitySchema>;
+    entityId: string;
+  },
+>(
+  payload: T,
+) => {
+  const ref = parseEntityRef(payload.entityType, payload.entityId);
+  return { ...payload, entityType: ref.entity, entityId: ref.id, ref };
+};
+
+export const entityEmbeddingRefreshPayloadSchema = z
+  .object({
+    ...searchableEntityRefFields,
+    /**
+     * A coordinator records the exact normalized source hash it inspected. The
+     * worker checks it before calling the embedding provider, so a concurrent
+     * write cannot spend tokens on text that has already changed.
+     */
+    expectedEmbeddingHash: z.string().optional(),
+  })
+  .transform(parseSearchableEntityRef);
+
+const workflowCursorSchema = z
+  .object(searchableEntityRefFields)
+  .transform(parseSearchableEntityRef);
 
 export const entityEmbeddingBackfillCoordinatorPayloadSchema = z.object({
   source: z.literal("search.debug.semanticBackfill"),
@@ -95,6 +118,7 @@ export const entityEmbeddingBackfillCoordinatorPayloadSchema = z.object({
 });
 export const searchDocumentRepairCoordinatorPayloadSchema = z.object({
   source: z.literal("search.documentRepair"),
+  reused: z.boolean().optional(),
   workflow: z.object({
     type: z.literal("search-document.repair.coordinator"),
     phase: z.enum(["documents", "missing"]),
@@ -110,7 +134,7 @@ export const searchDocumentRepairCoordinatorPayloadSchema = z.object({
 });
 
 export const locationAiRefreshPayloadSchema = z.object({
-  locationId: z.string(),
+  locationId,
 });
 
 export const locationValuationRecomputePayloadSchema = z.object({
@@ -126,7 +150,7 @@ export const problemCountsRefreshPayloadSchema = z.object({
 // `suggestUsdaFoodBatch`'s `Promise.allSettled` catch. Retried on the queue's
 // own backoff instead of being silently indistinguishable from "no match".
 export const usdaMatchRetryPayloadSchema = z.object({
-  ingredientId: z.string(),
+  ingredientId,
 });
 
 export const backgroundJobPayloadSchema = z.discriminatedUnion("kind", [

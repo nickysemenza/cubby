@@ -7,13 +7,12 @@ import { mcpUsdaFoodListItemOut, mcpUsdaFoodOut } from "@cubby/schemas/mcp";
 import { mealMcpOut } from "@cubby/schemas/meal";
 import {
   type ProductMcpDetailOut,
-  type ProductMcpOut,
-  type ProductTopLevelOut,
   productMcpDetailOut,
   productMcpOut,
+  productTopLevelOut,
 } from "@cubby/schemas/product";
 import { recipeMcpOut } from "@cubby/schemas/recipe";
-import type { foodSummary } from "@cubby/usda-schemas";
+import { foodSummary } from "@cubby/usda-schemas";
 import type {
   McpServer,
   ToolCallback,
@@ -25,7 +24,10 @@ import type {
 } from "@modelcontextprotocol/sdk/types.js";
 import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import type { EntityKernelContext } from "~/server/entity-kernel";
+import {
+  type EntityKernelContext,
+  entityKernelContextSchema,
+} from "~/server/entity-kernel";
 import { toPublicErrorPayload } from "~/server/errors/app-error";
 import type { McpWorkflowCaller } from "~/server/mcp/workflow-caller";
 import { resolveProductPricing } from "~/server/repo/product/pricing";
@@ -575,27 +577,37 @@ function defineSlim<T>(schema: z.ZodType<T>, slim: (row: Row) => T) {
  * every key the schema does not declare. Nothing to remap by hand.
  */
 function slimAs<T>(schema: z.ZodType<T>) {
-  return defineSlim(schema, (row: Row) => row as unknown as T);
+  return defineSlim(schema, (row: Row) => schema.parse(row));
 }
 
 // Both inventory row flavors (`inventoryListItemOut` and
 // `inventoryWithLocationAndProductOut`) are supersets of the picked shape.
 export const slimInventory = slimAs(inventoryMcpOut);
 
-type ProductRow = ProductTopLevelOut & {
-  food?: { fdc_id?: number | null } | null;
-  // Every read path nests the linked ingredient's own row (with its
-  // public id) under `ingredient` — there is no bare `ingredientId` field on
-  // a real product row to fall back to.
-  ingredient?: { id: ProductMcpOut["ingredientId"] } | null;
-  unitMappings?: Array<{
-    a: ProductMcpOut["unitMappings"][number]["a"];
-    b: ProductMcpOut["unitMappings"][number]["b"];
-    source: string | null;
-  }>;
-};
+/**
+ * Product workflow rows are broader than the public MCP projection. Parse the
+ * exact fields this projection reads at the MCP boundary instead of trusting a
+ * structural assertion to carry branded public ids through a generic row.
+ */
+const productSlimRow = productTopLevelOut.extend({
+  food: z
+    .object({ fdc_id: z.number().nullable().optional() })
+    .nullable()
+    .optional(),
+  // Every read path nests the linked ingredient's own row (with its public id)
+  // under `ingredient`; there is no bare `ingredientId` fallback.
+  ingredient: z
+    .object({ id: productMcpOut.shape.ingredientId.unwrap() })
+    .nullable()
+    .optional(),
+  unitMappings: productMcpOut.shape.unitMappings.optional(),
+});
+type ProductRow = z.infer<typeof productSlimRow>;
+
+const parseProductSlimRow = (row: Row): ProductRow => productSlimRow.parse(row);
+
 export const slimProduct = defineSlim(productMcpOut, (pRow: Row) => {
-  const p = pRow as ProductRow;
+  const p = parseProductSlimRow(pRow);
   const displayImages = (p.images ?? []).filter(isDisplayableImageFile);
   const pricing = p.pricing ?? resolveProductPricing(p.price);
   return {
@@ -634,7 +646,7 @@ export const slimProduct = defineSlim(productMcpOut, (pRow: Row) => {
 export const slimProductDetail = defineSlim(
   productMcpDetailOut,
   (pRow: Row): ProductMcpDetailOut => {
-    const p = pRow as ProductRow;
+    const p = parseProductSlimRow(pRow);
     const base = slimProduct(pRow);
     let displayPosition = 0;
     const images = (p.images ?? []).map((file) => {
@@ -661,11 +673,14 @@ export const slimRecipe = slimAs(recipeMcpOut);
 
 export const slimMeal = slimAs(mealMcpOut);
 
-type UsdaFoodRow = z.infer<typeof foodSummary> & {
+const usdaFoodSlimRow = foodSummary.extend({
   // The real row (usda.service.ts's `getLinkedProducts`) is full
   // `ProductTopLevelOut[]` — only the fields the slim projection reads.
-  linkedProducts?: Array<Pick<ProductTopLevelOut, "id" | "name">>;
-};
+  linkedProducts: z
+    .array(productTopLevelOut.pick({ id: true, name: true }))
+    .optional(),
+});
+type UsdaFoodRow = z.infer<typeof usdaFoodSlimRow>;
 /**
  * The nutrients worth reading first, in display order, as USDA names them.
  *
@@ -709,7 +724,7 @@ function orderNutrientSummary<T extends { name: string; unit: string }>(
 }
 
 export const slimUsdaFood = defineSlim(mcpUsdaFoodOut, (fRow: Row) => {
-  const f = fRow as UsdaFoodRow;
+  const f: UsdaFoodRow = usdaFoodSlimRow.parse(fRow);
   return {
     fdc_id: f.fdc_id,
     description: f.foodInfo?.description ?? null,
@@ -1113,7 +1128,9 @@ export function registerRouterTool<
       config.call(
         getCaller(extra),
         params,
-        extra.authInfo?.extra?.entityKernel as EntityKernelContext | undefined,
+        extra.authInfo?.extra?.entityKernel === undefined
+          ? undefined
+          : entityKernelContextSchema.parse(extra.authInfo.extra.entityKernel),
       ),
   });
 }

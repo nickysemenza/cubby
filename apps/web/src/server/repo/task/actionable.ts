@@ -53,11 +53,10 @@
 import { entityRefKey } from "@cubby/schemas/entity";
 import {
   type ProjectId,
+  parseEntityId,
+  parseShortcodeFor,
   type TaskId,
   type TaskShortcode,
-  unsafeProjectId,
-  unsafeTaskId,
-  unsafeTaskShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
   ActionableTaskOut,
@@ -167,7 +166,7 @@ function buildChain(
     visited.add(key);
 
     if (currentType === "task") {
-      const t = tasksById.get(unsafeTaskId(currentId));
+      const t = tasksById.get(parseEntityId("task", currentId));
       if (!t) break;
       chain.push({
         id: t.shortcode,
@@ -201,7 +200,7 @@ function buildChain(
       break;
     }
 
-    const p = projectsById.get(unsafeProjectId(currentId));
+    const p = projectsById.get(parseEntityId("project", currentId));
     if (!p) break;
     chain.push({
       id: p.shortcode,
@@ -407,7 +406,8 @@ export async function listActionableTasks(
   const taskShortcodesById = await lookupShortcodes(db, taskRefs);
   const toTaskShortcodes = (ids: TaskId[]): TaskShortcode[] =>
     ids.map((id) =>
-      unsafeTaskShortcode(
+      parseShortcodeFor(
+        "task",
         taskShortcodesById.get(entityRefKey("task", id)) ?? "",
       ),
     );

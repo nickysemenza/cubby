@@ -1,9 +1,5 @@
 import { entityRefKey } from "@cubby/schemas/entity";
-import {
-  type LocationId,
-  type ProductId,
-  unsafeProductId,
-} from "@cubby/schemas/identifiers";
+import type { LocationId } from "@cubby/schemas/identifiers";
 import type { ProductWithFoodOut } from "@cubby/schemas/product";
 import { parseShortcode } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
@@ -21,10 +17,7 @@ import { getRecipeUsagesForIngredient } from "~/server/repo/ingredient";
 import { loadLocationAncestorsWithIds } from "~/server/repo/location/tree";
 import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
 import { dbProductToAPI, primaryGtinOf } from "~/server/repo/product/mappers";
-import {
-  enrichProductRowsWithPricing,
-  type ProductPricing,
-} from "~/server/repo/product/pricing";
+import { enrichProductRowsWithPricing } from "~/server/repo/product/pricing";
 import {
   EMPTY_QUANTITY_LEDGER,
   loadProductDetailQuantityLedgers,
@@ -105,11 +98,7 @@ export async function readLegacyProductDetail(
     () => resolveLiveShortcode(context.db, shortcode, "product"),
   );
   return entityId
-    ? getProductWithFood(
-        context.db,
-        context.usdaClient,
-        unsafeProductId(entityId),
-      )
+    ? getProductWithFood(context.db, context.usdaClient, entityId)
     : null;
 }
 
@@ -160,7 +149,10 @@ export async function readProductDetail(
     "pricing",
     async () => {
       const priced = await enrichProductRowsWithPricing(context.db, [row]);
-      return priced[0]!.pricing as ProductPricing;
+      const pricing = priced[0]?.pricing;
+      if (!pricing)
+        throw new Error("Product pricing enrichment omitted its row");
+      return pricing;
     },
   );
   const quantityLedger = await observeOperationPhase(
@@ -168,9 +160,9 @@ export async function readProductDetail(
     "quantity",
     async () => {
       const quantities = await loadProductDetailQuantityLedgers(context.db, [
-        row.id as ProductId,
+        row.id,
       ]);
-      return quantities.get(row.id as ProductId) ?? EMPTY_QUANTITY_LEDGER;
+      return quantities.get(row.id) ?? EMPTY_QUANTITY_LEDGER;
     },
   );
   const breadcrumbed = await observeOperationPhase(
@@ -178,7 +170,7 @@ export async function readProductDetail(
     "breadcrumbs",
     () =>
       hydrateProductLocationBreadcrumbs(context.db, [
-        { ...row, quantityLedger } as ProductDeepDB,
+        { ...row, quantityLedger },
       ]).then((rows) => rows[0]!),
   );
   const dataQuality = await observeOperationPhase(

@@ -17,8 +17,8 @@ import {
 import {
   type FinancialAccountId,
   type FinancialAccountShortcode,
-  unsafeFinancialAccountShortcode,
-  unsafeLedgerPartyShortcode,
+  parseEntityRef,
+  parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { buildTakeSkip } from "@cubby/schemas/pagination";
@@ -110,13 +110,13 @@ type FinancialAccountRow = Omit<
 
 const toOut = (row: FinancialAccountRow): FinancialAccountOut =>
   financialAccountOut.parse({
-    id: unsafeFinancialAccountShortcode(row.shortcode),
+    id: parseShortcodeFor("financialAccount", row.shortcode),
     name: row.name,
     identity: financialAccountIdentity.parse(row.identity),
     provisional: row.provisional,
     sourceAliases: row.sourceAliases,
     ledgerPartyId: row.ledgerPartyShortcode
-      ? unsafeLedgerPartyShortcode(row.ledgerPartyShortcode)
+      ? parseShortcodeFor("ledgerParty", row.ledgerPartyShortcode)
       : null,
     notes: row.notes,
     transactionCount: Number(row.transactionCount),
@@ -147,7 +147,7 @@ export const financialAccountOptions = async (
     .orderBy(desc(transactionCount), asc(financialAccount.name));
 
   return rows.map((row) => ({
-    id: unsafeFinancialAccountShortcode(row.shortcode),
+    id: parseShortcodeFor("financialAccount", row.shortcode),
     name: row.name,
     count: Number(row.count),
   }));
@@ -246,7 +246,7 @@ export async function listFinancialAccounts(
 const financialAccountReader = createEntityReader<
   FinancialAccountRow,
   FinancialAccountOut,
-  FinancialAccountId,
+  "financialAccount",
   Database | DrizzleTransaction
 >({
   entity: "financialAccount",
@@ -503,7 +503,7 @@ async function assertNoBlockingCounts(
   // unmappable target loud rather than silently dropping a blocker.
   const publicIdByEntityId = await lookupShortcodes(
     db,
-    blocked.map(([id]) => ({ entity: "financialAccount" as const, id })),
+    blocked.map(([id]) => parseEntityRef("financialAccount", id)),
   );
   const item = impact({
     disposition,

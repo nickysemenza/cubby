@@ -319,7 +319,7 @@ export function InventorySessionWorkbench({
    * is where it came from — wrong the moment a bin is adopted from anywhere
    * else.
    */
-  const adoptLocation = async (location: InfLocation) => {
+  const adoptLocation = async (location: Pick<InfLocation, "id" | "name">) => {
     if (!currentLocation) return;
     const previousParent = findParentLocation(tree, location.id);
     await updateLocation.mutateAsync({

@@ -37,10 +37,7 @@ export default literalEntity({
         kind: "idMulti",
         placeholder: "Filter by cookbook...",
         optionsKey: "cookbook",
-        brandRef: {
-          module: "@cubby/schemas/identifiers",
-          export: "unsafeCookbookId",
-        },
+        brandRef: { entity: "cookbook", kind: "id" },
         nullable: { field: "cookbookPresenceFilter", label: "cookbook" },
       },
       {
@@ -135,10 +132,7 @@ export default literalEntity({
         kind: "idMulti",
         placeholder: "Filter by ingredient...",
         optionsKey: "recipeIngredients",
-        brandRef: {
-          module: "@cubby/schemas/identifiers",
-          export: "unsafeIngredientId",
-        },
+        brandRef: { entity: "ingredient", kind: "id" },
         nullable: { field: "ingredientPresenceFilter", label: "ingredient" },
       },
       {

@@ -1,4 +1,7 @@
-import type { LocationShortcode } from "@cubby/schemas/identifiers";
+import {
+  type LocationShortcode,
+  parseShortcodeFor,
+} from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { ChevronRight, CornerDownRight } from "lucide-react";
 import { useRef } from "react";
@@ -89,13 +92,13 @@ export function ArrangeTree({
           data-arrange-scroll
           className="min-h-0 flex-1 overflow-y-auto rounded-none border border-[var(--border)] bg-background p-2"
         >
-          {resolvedZoom.length > 0 && zoomItems.length > 0 && (
+          {zoomRoot && resolvedZoom.length > 0 && zoomItems.length > 0 && (
             <Stack gap="tight" className="mb-2">
               {zoomItems.map((item) => (
                 <ArrangeItemChip
                   key={item.id}
                   item={item}
-                  sourceLocationId={zoomRoot?.id as LocationShortcode}
+                  sourceLocationId={parseShortcodeFor("location", zoomRoot.id)}
                   roots={roots}
                 />
               ))}

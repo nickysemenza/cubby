@@ -64,6 +64,7 @@ export interface EntityEditIssue {
 /** The minimum identity every update adapter needs. */
 export interface EntityEditRecord {
   id: string;
+  [field: string]: unknown;
 }
 
 /**
@@ -217,6 +218,17 @@ export interface EntityEditRequest<
   context?: EntityEditContext;
   /** Explicit initial field values. Creates accept them by default; updates opt in per intent. */
   seed?: Readonly<Partial<EntityEditDraft<E>>>;
+}
+
+/** Runtime-correlated request after a generic UI boundary has selected an entity. */
+export interface RuntimeEntityEditRequest<E extends EditableEntity> {
+  entity: E;
+  operation: EntityEditOperation;
+  intent?: string;
+  surface: EntityEditSurface;
+  record?: EntityEditRecord;
+  context?: EntityEditContext;
+  seed?: Readonly<Record<string, unknown>>;
 }
 
 export type EntityEditResult<E extends EditableEntity> =

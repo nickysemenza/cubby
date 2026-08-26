@@ -1,5 +1,6 @@
 import type { Amount } from "@cubby/schemas/codec";
-import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { describe, expect, it } from "vitest";
 import {
@@ -116,7 +117,7 @@ const graphFor = (
   stored: Array<{ a: Amount; b: Amount }> = [],
 ): UnitMapping[] =>
   getAllUnitMappingsFromProduct({
-    id: unsafeProductShortcode("PRD-TEST"),
+    id: testShortcode("product", "PRD-TEST"),
     unitMappings: stored.map((m) => ({ ...m, source: null })),
     food: null,
     price,

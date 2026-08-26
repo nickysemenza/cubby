@@ -1,4 +1,5 @@
-import { unsafeInventoryShortcode } from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -34,7 +35,7 @@ describe("RecommendationWorkbench placement", () => {
   it("does not move inventory until the recommendation is explicitly accepted", () => {
     render(
       <RecommendationWorkbench
-        inventoryId={unsafeInventoryShortcode("INV-PARKED")}
+        inventoryId={testShortcode("inventory", "INV-PARKED")}
         kind="placement"
       />,
     );

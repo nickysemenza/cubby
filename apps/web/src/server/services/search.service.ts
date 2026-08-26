@@ -1,3 +1,4 @@
+import { searchDocumentRepairCoordinatorPayloadSchema } from "@cubby/schemas/background-jobs";
 import { entityRefKey } from "@cubby/schemas/entity";
 import {
   type RelatedSearchOut,
@@ -8,6 +9,7 @@ import {
   searchableEntities,
 } from "@cubby/schemas/search";
 import { type SQL, sql } from "drizzle-orm";
+import type { z } from "zod";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
   continueWorkflow,
@@ -81,44 +83,18 @@ const withThumbnails = async (
   }));
 };
 
-type SearchDocumentRepairMetadata = {
-  source: "search.documentRepair";
-  reused?: boolean;
-  workflow: {
-    type: "search-document.repair.coordinator";
-    phase: "documents" | "missing";
-    cursor: { entityType: SearchableEntity; entityId: string } | null;
-    scanned: number;
-    queued: number;
-    retired: number;
-    missing: number;
-    stale: number;
-    orphaned: number;
-    state: "active" | "complete";
-  };
-};
+type SearchDocumentRepairMetadata = z.output<
+  typeof searchDocumentRepairCoordinatorPayloadSchema
+>;
+type SearchDocumentRepairMetadataInput = z.input<
+  typeof searchDocumentRepairCoordinatorPayloadSchema
+>;
 
 const readSearchDocumentRepairMetadata = (
   value: unknown,
 ): SearchDocumentRepairMetadata | null => {
-  if (!value || typeof value !== "object") return null;
-  const workflow = (value as { workflow?: unknown }).workflow as
-    | Record<string, unknown>
-    | undefined;
-  if (
-    workflow?.type !== "search-document.repair.coordinator" ||
-    (workflow.phase !== "documents" && workflow.phase !== "missing") ||
-    typeof workflow.scanned !== "number" ||
-    typeof workflow.queued !== "number" ||
-    typeof workflow.retired !== "number" ||
-    typeof workflow.missing !== "number" ||
-    typeof workflow.stale !== "number" ||
-    typeof workflow.orphaned !== "number" ||
-    ("reused" in value && typeof value.reused !== "boolean") ||
-    (workflow.state !== "active" && workflow.state !== "complete")
-  )
-    return null;
-  return value as SearchDocumentRepairMetadata;
+  const parsed = searchDocumentRepairCoordinatorPayloadSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 };
 
 /** Process one bounded document-repair audit page. */
@@ -142,7 +118,7 @@ export async function continueSearchDocumentRepairWorkflow(
       ? "missing"
       : metadata.workflow.phase;
   const complete = metadata.workflow.phase === "missing" && !page.nextCursor;
-  const next: SearchDocumentRepairMetadata = {
+  const next: SearchDocumentRepairMetadataInput = {
     ...metadata,
     workflow: {
       ...metadata.workflow,
@@ -234,7 +210,7 @@ export async function repairSearchDocuments(
             orphaned: 0,
             state: "active",
           },
-        } satisfies SearchDocumentRepairMetadata,
+        } satisfies SearchDocumentRepairMetadataInput,
       },
     ],
   });

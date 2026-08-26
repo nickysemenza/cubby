@@ -1,5 +1,4 @@
-import type { ProjectShortcode } from "@cubby/schemas/identifiers";
-import { unsafeProjectShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   costTypeSchema,
   type ExpenseOut,
@@ -30,7 +29,7 @@ import { costTypeOptions } from "./expense-options";
 
 // projectId stays a plain string here (not the branded schema) — it's the raw
 // value out of the `SelectField` dropdown; the ProjectShortcode brand is
-// applied at the server-call boundary in onSubmit via `unsafeProjectShortcode`,
+// parsed at the server-call boundary in onSubmit,
 // same convention as the Expense capture intent. `cost` is nullable +
 // refined (not a plain `z.number()`) so a cleared input reads as `null` (not
 // `undefined`) for `NullableNumericField` while still being rejected as
@@ -103,7 +102,7 @@ export function SettleExpenseDialog({
           cost: values.cost!,
           date: values.date,
           projectId: values.projectId
-            ? unsafeProjectShortcode(values.projectId)
+            ? parseShortcodeFor("project", values.projectId)
             : null,
           costType: values.costType,
           trade: values.trade,
@@ -161,7 +160,7 @@ export function SettleExpenseDialog({
           label="Trade"
           options={tradeOptions}
         />
-        <EntityValueField<SettleExpenseValues, ProjectShortcode>
+        <EntityValueField<SettleExpenseValues, "project">
           form={form}
           name="projectId"
           entity="project"

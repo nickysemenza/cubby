@@ -1,9 +1,5 @@
-import {
-  unsafeExpenseShortcode,
-  unsafePurchaseShortcode,
-  unsafeVendorShortcode,
-} from "@cubby/schemas/identifiers";
 import type { ExpenseOut } from "@cubby/schemas/project";
+import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -45,7 +41,7 @@ vi.mock("@tanstack/react-router", () => ({
 import { ExpensePurchaseSection } from "./expense-purchase-section";
 
 const expense: ExpenseOut = {
-  id: unsafeExpenseShortcode("EXP-2345"),
+  id: testShortcode("expense", "EXP-2345"),
   name: "Router bits",
   cost: 24.99,
   date: "2026-07-31",
@@ -62,10 +58,10 @@ const expense: ExpenseOut = {
   vendor: "Tool Nirvana",
   orderId: "#11325",
   orderUrl: null,
-  purchaseId: unsafePurchaseShortcode("PUR-2345"),
+  purchaseId: testShortcode("purchase", "PUR-2345"),
   purchaseDate: "2026-07-29",
   purchaseDisplayLabel: null,
-  vendorId: unsafeVendorShortcode("VEN-2345"),
+  vendorId: testShortcode("vendor", "VEN-2345"),
   vendorLogo: null,
   projectName: null,
   productName: null,
@@ -77,10 +73,10 @@ const expense: ExpenseOut = {
 };
 
 const purchase = {
-  id: unsafePurchaseShortcode("PUR-2345"),
+  id: testShortcode("purchase", "PUR-2345"),
   orderId: "#11325",
   date: "2026-07-29",
-  vendorId: unsafeVendorShortcode("VEN-2345"),
+  vendorId: testShortcode("vendor", "VEN-2345"),
   vendorName: "Tool Nirvana",
 };
 

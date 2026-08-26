@@ -1,9 +1,9 @@
-import { unsafeProductId } from "@cubby/schemas/identifiers";
 import {
   expenseCreateInput,
   projectCreateInput,
   taskCreateInput,
 } from "@cubby/schemas/project";
+import { testEntityId } from "@cubby/schemas/testing";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { mock } from "~/lib/test/mock-schema";
@@ -374,7 +374,8 @@ describe("mutation side effects integration", () => {
 
   it("orphaned embedding cleanup detects and soft-deletes dead refs", async () => {
     const config = getSemanticEmbeddingConfig();
-    const deadProductId = unsafeProductId(
+    const deadProductId = testEntityId(
+      "product",
       "00000000-0000-4000-8000-000000000099",
     );
     await upsertEntityEmbedding(ctx.db, {

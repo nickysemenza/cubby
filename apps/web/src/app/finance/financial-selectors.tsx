@@ -1,3 +1,7 @@
+import type {
+  FinancialAccountShortcode,
+  PurchaseShortcode,
+} from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { entityListQueryOptions } from "~/entities/entity-list.functions";
@@ -24,13 +28,7 @@ const accountIdentityFacts = (identity: {
 
 /** Read-only relation selectors: finance evidence must choose an existing
  * account/purchase, never silently mint a counterparty from typed text. */
-function Search({
-  children,
-  kind,
-}: {
-  children: WithEntitySearchProps<string>["children"];
-  kind: "account" | "purchase";
-}) {
+function useFinanceSearch(kind: "account" | "purchase") {
   const { searchQuery, onSearchChange } = useEntitySearch();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
   const account = useQuery({
@@ -47,70 +45,83 @@ function Search({
     }),
     enabled: enabled && kind === "purchase",
   });
-  const items = useMemo<ComboboxItem<string>[]>(
-    () =>
-      kind === "account"
-        ? (account.data?.items ?? []).map((a) => ({
-            id: a.id,
-            shortcode: a.id,
-            name: a.name,
-            secondary: a.identity.kind.replaceAll("_", " "),
-            presentation: {
-              group: a.provisional
-                ? {
-                    id: "provisional",
-                    label: "Provisional accounts",
-                    order: 1,
-                  }
-                : {
-                    id: "confirmed",
-                    label: "Confirmed accounts",
-                    order: 0,
-                  },
-              status: a.provisional
-                ? { label: "Provisional", tone: "warning" as const }
-                : undefined,
-              facts: accountIdentityFacts(a.identity),
-            },
-          }))
-        : (purchase.data?.items ?? []).map((p) => ({
-            id: p.id,
-            shortcode: p.id,
-            name:
-              p.orderId ||
-              `${p.vendorName ?? "Vendor"} · ${p.date ?? "undated"}`,
-            secondary: p.vendorName ?? undefined,
-            presentation: {
-              status:
-                p.reconciliation === "mismatch"
-                  ? { label: "Check total", tone: "warning" as const }
-                  : undefined,
-              facts: [
-                p.date ? `Purchased ${p.date}` : "Undated",
-                `$${p.expenseTotal.toFixed(2)}`,
-              ],
-            },
-          })),
-    [account.data, kind, purchase.data],
-  );
-  return (
-    <>
-      {children({
-        items,
-        onSearchChange,
-        isLoading: kind === "account" ? account.isLoading : purchase.isLoading,
-        onOpenChange,
-      })}
-    </>
-  );
+  return {
+    account,
+    onOpenChange,
+    onSearchChange,
+    purchase,
+  };
 }
+
 export function WithFinancialAccountSearch({
   children,
-}: WithEntitySearchProps<string>) {
-  return <Search kind="account">{children}</Search>;
+}: WithEntitySearchProps<FinancialAccountShortcode>) {
+  const { account, onOpenChange, onSearchChange } = useFinanceSearch("account");
+  const items = useMemo<ComboboxItem<FinancialAccountShortcode>[]>(
+    () =>
+      (account.data?.items ?? []).map((a) => ({
+        id: a.id,
+        shortcode: a.id,
+        name: a.name,
+        secondary: a.identity.kind.replaceAll("_", " "),
+        presentation: {
+          group: a.provisional
+            ? {
+                id: "provisional",
+                label: "Provisional accounts",
+                order: 1,
+              }
+            : {
+                id: "confirmed",
+                label: "Confirmed accounts",
+                order: 0,
+              },
+          status: a.provisional
+            ? { label: "Provisional", tone: "warning" as const }
+            : undefined,
+          facts: accountIdentityFacts(a.identity),
+        },
+      })),
+    [account.data],
+  );
+  return children({
+    items,
+    onSearchChange,
+    isLoading: account.isLoading,
+    onOpenChange,
+  });
 }
+
 export function WithPurchaseSearch({
   children,
-}: WithEntitySearchProps<string>) {
-  return <Search kind="purchase">{children}</Search>;
+}: WithEntitySearchProps<PurchaseShortcode>) {
+  const { onOpenChange, onSearchChange, purchase } =
+    useFinanceSearch("purchase");
+  const items = useMemo<ComboboxItem<PurchaseShortcode>[]>(
+    () =>
+      (purchase.data?.items ?? []).map((p) => ({
+        id: p.id,
+        shortcode: p.id,
+        name:
+          p.orderId || `${p.vendorName ?? "Vendor"} · ${p.date ?? "undated"}`,
+        secondary: p.vendorName ?? undefined,
+        presentation: {
+          status:
+            p.reconciliation === "mismatch"
+              ? { label: "Check total", tone: "warning" as const }
+              : undefined,
+          facts: [
+            p.date ? `Purchased ${p.date}` : "Undated",
+            `$${p.expenseTotal.toFixed(2)}`,
+          ],
+        },
+      })),
+    [purchase.data],
+  );
+  return children({
+    items,
+    onSearchChange,
+    isLoading: purchase.isLoading,
+    onOpenChange,
+  });
 }

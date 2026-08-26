@@ -7,7 +7,10 @@ import type {
   TaskShortcode,
   VendorShortcode,
 } from "@cubby/schemas/identifiers";
-import { unsafeVendorShortcode } from "@cubby/schemas/identifiers";
+import {
+  parseShortcodeFor,
+  type ShortcodeFor,
+} from "@cubby/schemas/identifiers";
 import {
   type ImageRenderStatus,
   type ImageStorageStatus,
@@ -62,10 +65,11 @@ function SearchPickerIcon({
 }
 
 /** Maps compact indexed-search hits into the picker contract. */
-export function buildSearchHitComboboxItem<TId extends string>(
+export function buildSearchHitComboboxItem<E extends SearchableEntity>(
   hit: SearchHit,
-  entity: SearchableEntity,
-): ComboboxItem<TId> {
+  entity: E,
+): ComboboxItem<ShortcodeFor<E>> {
+  const shortcode = parseShortcodeFor(entity, hit.id);
   const locationKind =
     entity === "location" ? locationType.safeParse(hit.typeHint).data : null;
   const fallback =
@@ -77,7 +81,7 @@ export function buildSearchHitComboboxItem<TId extends string>(
     ) : entity === "vendor" ? (
       <VendorMark
         vendor={hit.title}
-        vendorId={unsafeVendorShortcode(hit.id)}
+        vendorId={parseShortcodeFor("vendor", hit.id)}
         logo={hit.imageUrl ? { url: hit.imageUrl } : null}
       />
     ) : (
@@ -91,8 +95,8 @@ export function buildSearchHitComboboxItem<TId extends string>(
   return {
     // The server applies the entityTypes scope; narrowing it here preserves the
     // branded value each picker writes without ever exposing a private UUID.
-    id: hit.id as TId,
-    shortcode: hit.id,
+    id: shortcode,
+    shortcode,
     name: hit.title,
     secondary: hit.subtitle ?? hit.typeHint ?? undefined,
     detail: hit.subtitle && hit.typeHint ? hit.typeHint : undefined,

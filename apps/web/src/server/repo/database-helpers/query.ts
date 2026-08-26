@@ -1,7 +1,8 @@
-import type {
-  InternalImpactItem,
-  OperationDisposition,
-  OperationEffect,
+import {
+  type InternalImpactItem,
+  internalImpactItemSchema,
+  type OperationDisposition,
+  type OperationEffect,
 } from "@cubby/schemas/entity-integrity";
 import type { PresenceFilter, SortParams } from "@cubby/schemas/pagination";
 import type { AppErrorReason } from "@cubby/shared";
@@ -265,7 +266,7 @@ export async function lockAndValidateForDelete<TId extends string>(
     .for("update"); // 🔒 Acquires row-level lock
 
   if (locked.length !== ids.length) {
-    const foundIds = locked.map((e) => e.id as TId);
+    const foundIds = locked.map((entry) => String(entry.id));
     const missingIds = ids.filter((id) => !foundIds.includes(id));
     throw createAppError(
       `${entityName.toUpperCase()}_NOT_FOUND` as "PRODUCT_NOT_FOUND",
@@ -310,7 +311,7 @@ function dependentBlockers<TId extends string>(opts: {
   for (const id of present) byTargetId[id] = (byTargetId[id] ?? 0) + 1;
 
   return [
-    {
+    internalImpactItemSchema.parse({
       code: opts.disposition.code,
       effect: opts.disposition.effect,
       ...(opts.edgeKey ? { edgeKey: opts.edgeKey } : {}),
@@ -318,7 +319,7 @@ function dependentBlockers<TId extends string>(opts: {
       description: opts.disposition.description,
       total: present.length,
       byTargetId,
-    } as InternalImpactItem,
+    }),
   ];
 }
 
@@ -354,8 +355,8 @@ export async function assertNoDependents<TId extends string>(opts: {
   });
   if (blockers.length === 0) return;
   const ids = uniq(
-    Object.keys(blockers[0]?.byTargetId ?? {}),
-  ) as unknown as TId[];
+    opts.offendingParentIds.filter((id): id is TId => id != null),
+  );
   const offenders = await opts.fetchNames(ids);
   const names = offenders.map((o) => o.name).join(", ");
   throw createAppError(opts.reason, opts.message(offenders.length, names));

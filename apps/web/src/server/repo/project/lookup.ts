@@ -1,7 +1,4 @@
-import {
-  unsafeProjectId,
-  unsafeProjectShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -97,7 +94,7 @@ export const projectNameOptions = async (
   return rows.map((row) => {
     const window = windows.get(row.id) ?? EMPTY_PROJECT_DATE_WINDOW;
     return {
-      id: unsafeProjectShortcode(row.shortcode),
+      id: parseShortcodeFor("project", row.shortcode),
       name: row.name,
       icon: row.icon,
       effectiveStart: window.effectiveStart,
@@ -154,7 +151,9 @@ export const buildProjectListQuery = async (
   const parentProjectUuids = parentCodes.flatMap((code) => {
     const parsed = parseShortcode(code);
     const resolved = parsed ? resolvedParents.get(parsed.shortcode) : undefined;
-    return resolved?.entity === "project" ? [unsafeProjectId(resolved.id)] : [];
+    return resolved?.entity === "project"
+      ? [parseEntityId("project", resolved.id)]
+      : [];
   });
 
   // When scoped to a parent's subtree, resolve every live descendant id and

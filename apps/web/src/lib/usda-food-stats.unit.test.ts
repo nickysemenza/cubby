@@ -1,4 +1,7 @@
-import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
+import {
+  type FoodSummaryWithLinkedProducts,
+  foodSummaryWithLinkedProducts,
+} from "@cubby/schemas/usda";
 import { describe, expect, it } from "vitest";
 import { dedupeUsdaFoodsByUpc, nutrientCount } from "./usda-food-stats";
 
@@ -11,13 +14,13 @@ function makeFood(opts: {
   ingredients?: string | null;
   nutrients?: Record<string, number>;
 }): FoodSummaryWithLinkedProducts {
-  return {
+  return foodSummaryWithLinkedProducts.parse({
     fdc_id: opts.fdc_id,
     foodInfo: { data_type: "branded_food", description: "TEST" },
     legacyFoodInfo: null,
     brandedFoodInfo: opts.upc
       ? {
-          gtin_upc: opts.upc,
+          gtin_upc: opts.upc.padStart(12, "0"),
           brand_name: opts.brandName ?? null,
           brand_owner: null,
           branded_food_category: null,
@@ -34,7 +37,9 @@ function makeFood(opts: {
       nutrientsPer100: opts.nutrients ?? {},
     },
     portionInfoRaw: [],
-  } as unknown as FoodSummaryWithLinkedProducts;
+    inferredUnitMappings: [],
+    linkedProducts: [],
+  });
 }
 
 describe("nutrientCount", () => {

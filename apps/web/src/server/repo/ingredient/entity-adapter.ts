@@ -1,4 +1,4 @@
-import { unsafeIngredientId } from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   ingredientFiltersSchema,
   ingredientListItemOut,
@@ -37,7 +37,11 @@ export const ingredientEntityAdapter = defineEntityAdapter({
     get: async (ctx, shortcode) => {
       const id = await resolveLiveShortcode(ctx.db, shortcode, "ingredient");
       return id
-        ? getIngredientDetail(ctx.db, ctx.usdaClient, unsafeIngredientId(id))
+        ? getIngredientDetail(
+            ctx.db,
+            ctx.usdaClient,
+            parseEntityId("ingredient", id),
+          )
         : null;
     },
     list: (ctx, filters, sorts, pagination) =>

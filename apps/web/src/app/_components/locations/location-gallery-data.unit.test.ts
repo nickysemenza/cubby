@@ -1,9 +1,5 @@
-import {
-  unsafeInventoryShortcode,
-  unsafeLocationShortcode,
-  unsafeProductShortcode,
-} from "@cubby/schemas/identifiers";
-import type { InfLocation } from "@cubby/schemas/location";
+import { type InfLocation, infLocation } from "@cubby/schemas/location";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { buildLocationGalleryData } from "./location-gallery-data";
 
@@ -12,18 +8,26 @@ const location = (
   productIds: string[],
   children?: InfLocation[],
 ): InfLocation =>
-  ({
-    id: unsafeLocationShortcode(id),
+  infLocation.parse({
+    id: testShortcode("location", id),
     name: id,
+    aliases: [],
+    type: null,
+    product: null,
+    lastBulkInventory: null,
+    aiDescription: null,
     images: [],
+    valuation: null,
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
     inventoryItems: productIds.map((productId, index) => ({
-      id: unsafeInventoryShortcode(`INV-${String(index + 2).repeat(4)}`),
-      productId: unsafeProductShortcode(productId),
+      id: testShortcode("inventory", `INV-${String(index + 2).repeat(4)}`),
+      productId: testShortcode("product", productId),
       productName: productId,
       amount: { value: 1, unit: "item" },
     })),
     children,
-  }) as unknown as InfLocation;
+  });
 
 describe("buildLocationGalleryData", () => {
   it("indexes nested makeTree inventory and deduplicates image-summary ids", () => {

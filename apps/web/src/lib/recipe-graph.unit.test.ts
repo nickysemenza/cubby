@@ -1,8 +1,5 @@
-import {
-  unsafeIngredientShortcode,
-  unsafeRecipeShortcode,
-} from "@cubby/schemas/identifiers";
-import type { RecipeOut } from "@cubby/schemas/recipe";
+import { type RecipeOut, recipeOut } from "@cubby/schemas/recipe";
+import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import {
   collectIngredientIds,
@@ -11,8 +8,8 @@ import {
 } from "./recipe-graph";
 
 const recipe = (): RecipeOut =>
-  ({
-    id: unsafeRecipeShortcode("RCP-4444"),
+  recipeOut.parse({
+    id: testShortcode("recipe", "RCP-4444"),
     source: null,
     name: "Root",
     meta: null,
@@ -21,18 +18,20 @@ const recipe = (): RecipeOut =>
     updatedAt: new Date(),
     sections: [
       {
-        id: "s-1",
+        id: testEntityId("recipe", "section"),
         name: null,
         createdAt: new Date(),
         updatedAt: new Date(),
         instructions: [],
         ingredients: [
           {
-            id: "row-1",
+            id: testEntityId("recipe", "row-1"),
             type: "ingredient",
             ingredient: {
-              id: unsafeIngredientShortcode("ING-4444"),
+              id: testShortcode("ingredient", "ING-4444"),
               name: "Flour",
+              aliases: [],
+              naKinds: [],
               createdAt: new Date(),
               updatedAt: new Date(),
             },
@@ -42,11 +41,13 @@ const recipe = (): RecipeOut =>
             updatedAt: new Date(),
           },
           {
-            id: "row-2",
+            id: testEntityId("recipe", "row-2"),
             type: "ingredient",
             ingredient: {
-              id: unsafeIngredientShortcode("ING-4444"),
+              id: testShortcode("ingredient", "ING-4444"),
               name: "Flour again",
+              aliases: [],
+              naKinds: [],
               createdAt: new Date(),
               updatedAt: new Date(),
             },
@@ -56,11 +57,11 @@ const recipe = (): RecipeOut =>
             updatedAt: new Date(),
           },
           {
-            id: "row-3",
+            id: testEntityId("recipe", "row-3"),
             type: "recipe",
             ingredient: null,
             recipe: {
-              id: unsafeRecipeShortcode("RCP-5555"),
+              id: testShortcode("recipe", "RCP-5555"),
               name: "Sauce",
               meta: null,
               createdAt: new Date(),
@@ -73,7 +74,7 @@ const recipe = (): RecipeOut =>
         ],
       },
     ],
-  }) as RecipeOut;
+  });
 
 describe("recipe graph helpers", () => {
   it("collects unique ingredient and sub-recipe ids", () => {

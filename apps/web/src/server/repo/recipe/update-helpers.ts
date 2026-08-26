@@ -275,8 +275,7 @@ export async function updateRecipeImages(
     );
     ({ deletedKeys: detachedImageKeys } = await detachImagesFromEntity(
       tx,
-      "recipe",
-      recipeId,
+      { entity: "recipe", id: recipeId },
       idsToRemove,
     ));
   }

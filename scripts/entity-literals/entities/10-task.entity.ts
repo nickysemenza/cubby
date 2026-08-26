@@ -94,10 +94,7 @@ export default literalEntity({
         kind: "idMulti",
         placeholder: "Filter by project...",
         optionsKey: "project",
-        brandRef: {
-          module: "@cubby/schemas/identifiers",
-          export: "unsafeProjectId",
-        },
+        brandRef: { entity: "project", kind: "id" },
         nullable: { field: "projectPresenceFilter", label: "project" },
       },
       {
@@ -106,10 +103,7 @@ export default literalEntity({
         urlKey: "productId",
         kind: "id",
         placeholder: "Filter by product id...",
-        brandRef: {
-          module: "@cubby/schemas/identifiers",
-          export: "unsafeProductId",
-        },
+        brandRef: { entity: "product", kind: "id" },
         urlOnly: true,
       },
       {
@@ -118,10 +112,7 @@ export default literalEntity({
         kind: "idMulti",
         placeholder: "Filter by product...",
         optionsKey: "taskProducts",
-        brandRef: {
-          module: "@cubby/schemas/identifiers",
-          export: "unsafeProductId",
-        },
+        brandRef: { entity: "product", kind: "id" },
         nullable: { field: "subjectProductPresenceFilter", label: "product" },
       },
       {
@@ -130,10 +121,7 @@ export default literalEntity({
         kind: "idMulti",
         placeholder: "Filter by parent task...",
         optionsKey: "parentTask",
-        brandRef: {
-          module: "@cubby/schemas/identifiers",
-          export: "unsafeTaskId",
-        },
+        brandRef: { entity: "task", kind: "id" },
         nullable: { field: "parentTaskPresenceFilter", label: "parent task" },
       },
       {

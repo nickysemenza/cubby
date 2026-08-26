@@ -5,7 +5,7 @@ import type {
   ProjectShortcode,
   PurchaseShortcode,
 } from "@cubby/schemas/identifiers";
-import { unsafePurchaseId } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { mealCreateInput } from "@cubby/schemas/meal";
 import {
@@ -50,6 +50,7 @@ import { findViewProblems } from "../services/problem-views.service";
 import {
   findAllProblems,
   findFastProblems,
+  findProblemCounts,
   findTrackerProblems,
   rebuildProductConversionCoverageProjection,
   reparseStaleIngredientParses,
@@ -2335,6 +2336,12 @@ describe("problems service — totals count defects only", () => {
       all.emptyLocations.length,
     );
     expect(counts.byType.emptyLocations).toBe(all.emptyLocations.length);
+
+    const directCounts = await findProblemCounts(
+      ctx.db,
+      fakeUpcClient().client,
+    );
+    expect(directCounts).toEqual(counts);
   });
 });
 
@@ -2867,13 +2874,16 @@ describe("problems — charges not reconciling", () => {
     });
     expect(okSecond.purchaseId).toBe(okFirst.purchaseId);
 
-    const bigCharge = await setStated(big.purchaseId as PurchaseShortcode, 500);
+    const bigCharge = await setStated(
+      parseShortcodeFor("purchase", big.purchaseId),
+      500,
+    );
     const smallCharge = await setStated(
-      small.purchaseId as PurchaseShortcode,
+      parseShortcodeFor("purchase", small.purchaseId),
       100,
     );
     const okCharge = await setStated(
-      okFirst.purchaseId as PurchaseShortcode,
+      parseShortcodeFor("purchase", okFirst.purchaseId),
       100,
     );
 
@@ -2919,7 +2929,10 @@ describe("problems — charges not reconciling", () => {
       vendor: "Refund Mart",
       orderId: "RM-1",
     });
-    const charge = await setStated(kept.purchaseId as PurchaseShortcode, 100);
+    const charge = await setStated(
+      parseShortcodeFor("purchase", kept.purchaseId),
+      100,
+    );
 
     const before = await findFastProblems(ctx.db);
     expect(before.purchasesNotReconciling).toEqual([]);
@@ -2944,8 +2957,12 @@ describe("problems — charges not reconciling", () => {
       vendor: "Posted Refund Mart",
       orderId: "PRM-1",
     });
-    const charge = await setStated(line.purchaseId as PurchaseShortcode, 100);
-    const purchaseId = unsafePurchaseId(
+    const charge = await setStated(
+      parseShortcodeFor("purchase", line.purchaseId),
+      100,
+    );
+    const purchaseId = parseEntityId(
+      "purchase",
       (await resolveLiveShortcode(ctx.db, charge.id, "purchase"))!,
     );
     const account = await insertWithShortcode(ctx.db, "financialAccount", {
@@ -2996,7 +3013,7 @@ describe("problems — charges not reconciling", () => {
       vendor: "Advisory Mart",
       orderId: "AM-1",
     });
-    await setStated(line.purchaseId as PurchaseShortcode, 100);
+    await setStated(parseShortcodeFor("purchase", line.purchaseId), 100);
 
     const { purchasesNotReconciling } = await findFastProblems(ctx.db);
     expect(purchasesNotReconciling).toHaveLength(1);
@@ -3071,7 +3088,7 @@ describe("problems — duplicate spend candidates", () => {
     });
     // Tax never made it into the vendor export, so the lines fall short of what
     // the paperwork says — the shape that produced the worst real double-counts.
-    await setStated(line.purchaseId as PurchaseShortcode, 50.71);
+    await setStated(parseShortcodeFor("purchase", line.purchaseId), 50.71);
     const lump = await seedLine({
       name: "duplex outlet receptacle",
       cost: 50.71,
@@ -3222,7 +3239,8 @@ describe("problems — purchase financial settlement mismatches", () => {
     purchaseShortcode: PurchaseShortcode,
     amount: number,
   ) => {
-    const purchaseId = unsafePurchaseId(
+    const purchaseId = parseEntityId(
+      "purchase",
       (await resolveLiveShortcode(ctx.db, purchaseShortcode, "purchase"))!,
     );
     await insertSettlementTransaction(ctx.db, {
@@ -3258,8 +3276,16 @@ describe("problems — purchase financial settlement mismatches", () => {
       orderId: "SD-SHORT",
     });
     const account = await seedAccount();
-    await postCharge(account.id, settled.purchaseId as PurchaseShortcode, 120);
-    await postCharge(account.id, short.purchaseId as PurchaseShortcode, 95);
+    await postCharge(
+      account.id,
+      parseShortcodeFor("purchase", settled.purchaseId),
+      120,
+    );
+    await postCharge(
+      account.id,
+      parseShortcodeFor("purchase", short.purchaseId),
+      95,
+    );
 
     const rows = await mismatches();
     expect(rows.map((row) => row.id)).toEqual([short.purchaseId]);
@@ -3293,7 +3319,11 @@ describe("problems — purchase financial settlement mismatches", () => {
     expect(planned.purchaseId).toBe(deposit.purchaseId);
 
     const account = await seedAccount();
-    await postCharge(account.id, deposit.purchaseId as PurchaseShortcode, 100);
+    await postCharge(
+      account.id,
+      parseShortcodeFor("purchase", deposit.purchaseId),
+      100,
+    );
 
     expect(await mismatches()).toEqual([]);
   });
@@ -3315,7 +3345,11 @@ describe("problems — purchase financial settlement mismatches", () => {
       orderId: "GC-1",
     });
     const account = await seedAccount();
-    await postCharge(account.id, deposit.purchaseId as PurchaseShortcode, 88);
+    await postCharge(
+      account.id,
+      parseShortcodeFor("purchase", deposit.purchaseId),
+      88,
+    );
 
     const rows = await mismatches();
     expect(rows.map((row) => row.id)).toEqual([deposit.purchaseId]);
@@ -3352,8 +3386,16 @@ describe("problems — purchase financial settlement mismatches", () => {
       orderId: "UM-PLANNED",
     });
     const account = await seedAccount();
-    await postCharge(account.id, unknown.purchaseId as PurchaseShortcode, 95);
-    await postCharge(account.id, compared.purchaseId as PurchaseShortcode, 95);
+    await postCharge(
+      account.id,
+      parseShortcodeFor("purchase", unknown.purchaseId),
+      95,
+    );
+    await postCharge(
+      account.id,
+      parseShortcodeFor("purchase", compared.purchaseId),
+      95,
+    );
 
     const rows = await mismatches();
     expect(rows.map((row) => row.id)).toEqual([compared.purchaseId]);

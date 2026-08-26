@@ -3,14 +3,10 @@ import type {
   VendorId,
   VendorShortcode,
 } from "@cubby/schemas/identifiers";
-import {
-  unsafeImageShortcode,
-  unsafePurchaseId,
-  unsafeVendorId,
-  unsafeVendorShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { expenseCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
+import { testShortcode } from "@cubby/schemas/testing";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
@@ -190,7 +186,7 @@ describe("vendor repository — roster CRUD and list filters", () => {
         ctx.db,
         // Well-formed but never minted in this test run — same "-2222"
         // placeholder convention as shortcode.integration.test.ts.
-        unsafeVendorShortcode("VEN-2222"),
+        testShortcode("vendor", "VEN-2222"),
         { name: "Never Existed" },
         ctx.actor,
       ),
@@ -770,7 +766,7 @@ describe("vendor repository — mergeVendors", () => {
   const vendorUuid = async (shortcode: VendorShortcode): Promise<VendorId> => {
     const id = await resolveLiveShortcode(ctx.db, shortcode, "vendor");
     if (!id) throw new Error(`vendor not found: ${shortcode}`);
-    return unsafeVendorId(id);
+    return parseEntityId("vendor", id);
   };
   // The inverse direction: `findOrCreateVendor` (the import hot path) still
   // returns the internal uuid, but `mergeVendors`'s input and `VendorOut.id`
@@ -832,7 +828,7 @@ describe("vendor repository — mergeVendors", () => {
     );
 
     expect(result.vendor.logo?.id).toBe(
-      unsafeImageShortcode(keeperLogo.shortcode),
+      parseShortcodeFor("image", keeperLogo.shortcode),
     );
     expect(result.detachedImageKeys).toEqual([loserLogo.key]);
     expect(
@@ -878,7 +874,7 @@ describe("vendor repository — mergeVendors", () => {
     );
     const id = await resolveLiveShortcode(ctx.db, created.id, "purchase");
     if (!id) throw new Error(`purchase not found: ${created.id}`);
-    return unsafePurchaseId(id);
+    return parseEntityId("purchase", id);
   };
 
   it("re-points the losers' charges, soft-deletes the losers, and unions the keeper's rollups", async () => {

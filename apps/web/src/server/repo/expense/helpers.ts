@@ -5,15 +5,7 @@ import type {
   PurchaseId,
   VendorId,
 } from "@cubby/schemas/identifiers";
-import {
-  unsafeExpenseShortcode,
-  unsafeLedgerPartyShortcode,
-  unsafeProductShortcode,
-  unsafeProjectId,
-  unsafeProjectShortcode,
-  unsafePurchaseShortcode,
-  unsafeVendorShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   type ImageRenderStatus,
   type ImageStorageStatus,
@@ -104,10 +96,10 @@ export const assertQuantitySignMatchesCost = (
 
 /** Brand a resolved join shortcode, preserving null for an absent/deleted parent. */
 const toProductShortcode = (code: string | null) =>
-  code === null ? null : unsafeProductShortcode(code);
+  code === null ? null : parseShortcodeFor("product", code);
 
 const toProjectShortcode = (code: string | null) =>
-  code === null ? null : unsafeProjectShortcode(code);
+  code === null ? null : parseShortcodeFor("project", code);
 
 export type ExpenseRow = {
   id: ExpenseId;
@@ -180,7 +172,7 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
   const purchaseRow = row.purchase?.deletedAt === null ? row.purchase : null;
 
   return {
-    id: unsafeExpenseShortcode(row.shortcode),
+    id: parseShortcodeFor("expense", row.shortcode),
     name: row.name,
     cost: row.cost,
     date: row.date,
@@ -208,13 +200,13 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
     // `purchaseOut.vendorId`); `vendor` (the display name) is separately
     // gated on the vendor's own liveness via `resolveLiveJoinName`.
     purchaseId: purchaseRow
-      ? unsafePurchaseShortcode(purchaseRow.shortcode)
+      ? parseShortcodeFor("purchase", purchaseRow.shortcode)
       : null,
     purchaseDate: purchaseRow?.date ?? null,
     purchaseDisplayLabel: purchaseRow?.displayLabel ?? null,
     vendorId:
       purchaseRow?.vendor != null
-        ? unsafeVendorShortcode(purchaseRow.vendor.shortcode)
+        ? parseShortcodeFor("vendor", purchaseRow.vendor.shortcode)
         : null,
     vendor: purchaseRow ? resolveLiveJoinName(purchaseRow.vendor) : null,
     vendorLogo:
@@ -241,7 +233,7 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
       .map((value) => ({
         partyId:
           value.ledgerParty?.deletedAt === null
-            ? unsafeLedgerPartyShortcode(value.ledgerParty.shortcode)
+            ? parseShortcodeFor("ledgerParty", value.ledgerParty.shortcode)
             : null,
         weight: value.weight,
       })),
@@ -250,7 +242,7 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
       .map((value) => ({
         partyId:
           value.ledgerParty?.deletedAt === null
-            ? unsafeLedgerPartyShortcode(value.ledgerParty.shortcode)
+            ? parseShortcodeFor("ledgerParty", value.ledgerParty.shortcode)
             : null,
         weight: value.weight,
       })),
@@ -320,5 +312,5 @@ export const resolveDefaultProjectId = async (
     HOUSEHOLD_PROJECT_SHORTCODE,
     "project",
   );
-  return householdId ? unsafeProjectId(householdId) : null;
+  return householdId ? parseEntityId("project", householdId) : null;
 };

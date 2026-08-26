@@ -1,8 +1,5 @@
-import {
-  unsafeInventoryId,
-  unsafeLocationId,
-  unsafeProductId,
-} from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
+
 import { eq } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -50,7 +47,8 @@ describe("inventoryentryList product-attribute filters", () => {
       // `locationIdFilter` now takes the PUBLIC code (the repo resolves it);
       // the write paths below still take the uuid.
       shortcode: output.id,
-      entityId: unsafeLocationId(
+      entityId: parseEntityId(
+        "location",
         await requireResolvedId(output.id, "location"),
       ),
     };
@@ -62,7 +60,10 @@ describe("inventoryentryList product-attribute filters", () => {
     const output = await createProduct(ctx.db, input, TEST_ACTOR);
     return {
       output,
-      entityId: unsafeProductId(await requireResolvedId(output.id, "product")),
+      entityId: parseEntityId(
+        "product",
+        await requireResolvedId(output.id, "product"),
+      ),
     };
   };
 
@@ -102,7 +103,8 @@ describe("inventoryentryList product-attribute filters", () => {
       TEST_ACTOR,
     );
 
-    const spareId = unsafeInventoryId(
+    const spareId = parseEntityId(
+      "inventory",
       await requireResolvedId(spare.id, "inventory"),
     );
 
@@ -170,7 +172,8 @@ describe("inventoryentryList product-attribute filters", () => {
       ctx.db,
       {
         productId: productRow.entityId,
-        locationId: unsafeLocationId(
+        locationId: parseEntityId(
+          "location",
           await requireResolvedId(unknown.id, "location"),
         ),
         amount: { value: 1, unit: "each" },

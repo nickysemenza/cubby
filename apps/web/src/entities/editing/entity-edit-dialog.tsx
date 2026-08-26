@@ -1,4 +1,5 @@
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
+import { EntityEditDialogContent } from "./entity-edit-dialog-content";
 import type { EntityEditResultFor } from "./intent-types";
 import type { EditableEntity, EntityEditRequest } from "./types";
 
@@ -55,12 +56,6 @@ export interface EntityEditDialogProps<E extends EditableEntity> {
   onSuccess?: (result: EntityEditResultFor<E>) => void;
 }
 
-const EntityEditDialogContent = lazy(() =>
-  import("./entity-edit-dialog-content").then((module) => ({
-    default: module.EntityEditDialogContent,
-  })),
-);
-
 /**
  * Keep the semantic and field registries behind the interaction boundary.
  * Route definitions import this typed shell eagerly, but the full editor graph
@@ -73,9 +68,7 @@ export function EntityEditDialog<E extends EditableEntity>(
 
   return (
     <Suspense fallback={null}>
-      <EntityEditDialogContent
-        {...(props as unknown as EntityEditDialogProps<EditableEntity>)}
-      />
+      <EntityEditDialogContent {...props} />
     </Suspense>
   );
 }

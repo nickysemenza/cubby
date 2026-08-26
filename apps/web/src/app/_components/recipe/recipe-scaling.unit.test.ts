@@ -1,33 +1,56 @@
 import type { Amount } from "@cubby/schemas/codec";
-import type { RecipeOut } from "@cubby/schemas/recipe";
+import { type RecipeOut, recipeOut } from "@cubby/schemas/recipe";
+import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { scaleRecipe } from "./recipe-scaling";
 
 const row = (id: string, amounts: Amount[]) =>
   ({
-    id,
+    id: testEntityId("recipe", `row-${id}`),
     type: "ingredient",
     amounts,
     modifier: null,
     rawLine: null,
     recipe: null,
-    ingredient: { id: `i-${id}`, name: id },
+    ingredient: {
+      id: testShortcode("ingredient", `ING-${id}`),
+      name: id,
+      aliases: [],
+      naKinds: [],
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-01"),
+    },
+    createdAt: new Date("2026-01-01"),
+    updatedAt: new Date("2026-01-01"),
   }) as const;
 
 const recipe = (
   ingredients: ReadonlyArray<ReturnType<typeof row>>,
   extra: Partial<Pick<RecipeOut, "yield" | "servings">> = {},
 ): RecipeOut =>
-  ({
-    id: "r",
+  recipeOut.parse({
+    id: testShortcode("recipe", "RCP-SCALE"),
     name: "R",
+    meta: null,
     yield: null,
     servings: null,
     notes: null,
     images: [],
-    sections: [{ id: "r-s", name: null, instructions: [], ingredients }],
+    tags: [],
+    sections: [
+      {
+        id: testEntityId("recipe", "section"),
+        name: null,
+        instructions: [],
+        ingredients,
+        createdAt: new Date("2026-01-01"),
+        updatedAt: new Date("2026-01-01"),
+      },
+    ],
+    createdAt: new Date("2026-01-01"),
+    updatedAt: new Date("2026-01-01"),
     ...extra,
-  }) as unknown as RecipeOut;
+  });
 
 const amountsOf = (r: RecipeOut, i = 0) =>
   r.sections[0]!.ingredients[i]!.amounts;
@@ -90,7 +113,7 @@ describe("scaleRecipe", () => {
       recipe([row("flour", [{ value: 1, unit: "cup" }])], {
         yield: { value: 4, unit: "servings" },
         servings: 4,
-      } as Partial<RecipeOut>),
+      }),
       1.5,
     );
     expect(scaled.yield?.value).toBe(6);

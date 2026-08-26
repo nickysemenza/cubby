@@ -1,9 +1,6 @@
 import type { HouseholdContributionLedgerOut } from "@cubby/schemas/household-contribution";
-import {
-  unsafeExpenseShortcode,
-  unsafeLedgerPartyShortcode,
-  unsafeLedgerTransferShortcode,
-} from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import { render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -32,7 +29,7 @@ const ledger = {
   parties: [
     {
       party: {
-        id: unsafeLedgerPartyShortcode("LPY-H234"),
+        id: testShortcode("ledgerParty", "LPY-H234"),
         kind: "household",
         name: "Household",
       },
@@ -45,7 +42,7 @@ const ledger = {
     },
     {
       party: {
-        id: unsafeLedgerPartyShortcode("LPY-G234"),
+        id: testShortcode("ledgerParty", "LPY-G234"),
         kind: "guest",
         name: "Guest",
       },
@@ -58,7 +55,7 @@ const ledger = {
     },
     {
       party: {
-        id: unsafeLedgerPartyShortcode("LPY-M234"),
+        id: testShortcode("ledgerParty", "LPY-M234"),
         kind: "member",
         name: "Member",
       },
@@ -82,12 +79,12 @@ const ledger = {
     {
       code: "partial_funders",
       amount: 10,
-      targetIds: [unsafeExpenseShortcode("EXP-TEST")],
+      targetIds: [testShortcode("expense", "EXP-TEST")],
     },
     {
       code: "transfer_evidence_one_sided",
       amount: 40,
-      targetIds: [unsafeLedgerTransferShortcode("LTR-TEST")],
+      targetIds: [testShortcode("ledgerTransfer", "LTR-TEST")],
     },
   ],
   gapsTruncated: false,

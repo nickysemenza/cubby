@@ -1,5 +1,5 @@
-import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import {
   buildBulkMovePayloadItems,
@@ -22,7 +22,7 @@ function loc(
   children: InfLocation[] = [],
 ): InfLocation {
   return {
-    id: unsafeLocationShortcode(`LOC-${id.slice(-4).toUpperCase()}`),
+    id: testShortcode("location", `LOC-${id.slice(-4).toUpperCase()}`),
     // Fixtures share a "00000000-0000-4000-8000-..." prefix, so the shortcode
     // must key off the varying tail, not the head, to stay unique per id.
     name,

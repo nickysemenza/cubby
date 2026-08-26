@@ -163,11 +163,9 @@ const problemActionCapabilities = {
 } as const satisfies Partial<Record<ProblemKey, readonly ProblemAction[]>>;
 
 export const problemActionsFor = (key: ProblemKey): readonly ProblemAction[] =>
-  (
-    problemActionCapabilities as Partial<
-      Record<ProblemKey, readonly ProblemAction[]>
-    >
-  )[key] ?? [];
+  Object.entries(problemActionCapabilities).find(
+    ([candidate]) => candidate === key,
+  )?.[1] ?? [];
 
 /** Attach UI capabilities at registry composition, never in a query source. */
 export function withProblemActionCapabilities(

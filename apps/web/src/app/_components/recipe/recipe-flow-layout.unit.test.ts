@@ -1,5 +1,10 @@
-import type { RecipeOut } from "@cubby/schemas/recipe";
+import {
+  type RecipeOut,
+  recipeOut,
+  sectionIngredientOut,
+} from "@cubby/schemas/recipe";
 import type { RecipeFlowPlan } from "@cubby/schemas/recipe-flow";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { buildRecipeFlowLayout } from "./recipe-flow-layout";
 
@@ -10,19 +15,47 @@ const usageIds = [
   "00000000-0000-4000-8000-000000000004",
 ];
 
-const recipe = {
+const recipe: RecipeOut = recipeOut.parse({
+  id: testShortcode("recipe", "RCP-FLOW"),
+  name: "Flow",
+  meta: null,
+  images: [],
   sections: [
     {
       id: SECTION_ID,
-      ingredients: usageIds.map((id) => ({ id })),
+      name: null,
+      ingredients: usageIds.map((id, index) =>
+        sectionIngredientOut.parse({
+          id,
+          type: "ingredient",
+          amounts: [],
+          modifier: null,
+          rawLine: null,
+          recipe: null,
+          ingredient: {
+            id: testShortcode("ingredient", `ING-FLOW-${index}`),
+            name: `Ingredient ${index}`,
+            aliases: [],
+            naKinds: [],
+            createdAt: new Date("2026-01-01"),
+            updatedAt: new Date("2026-01-01"),
+          },
+          createdAt: new Date("2026-01-01"),
+          updatedAt: new Date("2026-01-01"),
+        }),
+      ),
       instructions: [
         { instruction: "Mix A and B." },
         { instruction: "Whisk C." },
         { instruction: "Combine." },
       ],
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-01"),
     },
   ],
-} as unknown as RecipeOut;
+  createdAt: new Date("2026-01-01"),
+  updatedAt: new Date("2026-01-01"),
+});
 
 const plan: RecipeFlowPlan = {
   schemaVersion: 1,

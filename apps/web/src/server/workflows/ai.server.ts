@@ -29,7 +29,7 @@ import {
   usdaFoodSuggestionInput,
   usdaFoodSuggestionOut,
 } from "@cubby/schemas/ai";
-import { unsafeIngredientId } from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 import { streamProgress } from "~/lib/bulk-progress";
 import {
@@ -238,7 +238,9 @@ export const precomputeEnrichmentProposalsWorkflow = async (
   );
   const items = input.items.flatMap((item) => {
     const id = resolved.get(item.id);
-    return id ? [{ ...item, ingredientId: unsafeIngredientId(id) }] : [];
+    return id
+      ? [{ ...item, ingredientId: parseEntityId("ingredient", id) }]
+      : [];
   });
   return precomputeEnrichmentProposals(context.usdaService, context.db, items);
 };

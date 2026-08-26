@@ -5,11 +5,7 @@ import type {
   CalendarRangeInput,
   CalendarRangeOut,
 } from "@cubby/schemas/calendar";
-import {
-  unsafeExpenseShortcode,
-  unsafeProjectShortcode,
-  unsafeTaskShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   MEAL_TYPE_LABELS,
   type MealType,
@@ -312,7 +308,7 @@ export async function getCalendarRange(
     if (!startDate || !endDate) continue;
     items.push({
       kind: "task",
-      id: unsafeTaskShortcode(row.shortcode),
+      id: parseShortcodeFor("task", row.shortcode),
       title: value.name,
       startDate,
       endDateExclusive: shiftPlainDate(endDate, 1),
@@ -334,7 +330,7 @@ export async function getCalendarRange(
     if (!value.date) continue;
     items.push({
       kind: "expense",
-      id: unsafeExpenseShortcode(row.shortcode),
+      id: parseShortcodeFor("expense", row.shortcode),
       title: value.name,
       startDate: value.date,
       endDateExclusive: shiftPlainDate(value.date, 1),
@@ -369,7 +365,7 @@ export async function getCalendarRange(
     }
     items.push({
       kind: "project",
-      id: unsafeProjectShortcode(row.shortcode),
+      id: parseShortcodeFor("project", row.shortcode),
       title: row.name,
       startDate,
       endDateExclusive: shiftPlainDate(endDate, 1),

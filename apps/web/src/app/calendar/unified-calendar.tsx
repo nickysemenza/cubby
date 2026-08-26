@@ -313,10 +313,7 @@ export function UnifiedCalendar({
     EventCalendarRenderEventRoot<CalendarItem>
   >(
     ({ occurrence }) => (
-      <PopoverTrigger
-        handle={editorHandle}
-        payload={occurrence.event.data as CalendarItem}
-      />
+      <PopoverTrigger handle={editorHandle} payload={occurrence.event.data} />
     ),
     [editorHandle],
   );

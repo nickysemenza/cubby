@@ -1,4 +1,10 @@
-import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
+import {
+  type RecipeOut,
+  recipeOut,
+  type SectionIngredientOut,
+  sectionIngredientOut,
+} from "@cubby/schemas/recipe";
+import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { ok } from "neverthrow";
 import type { ReactNode } from "react";
@@ -34,36 +40,66 @@ vi.mock("./recipe-utils", () => ({
 }));
 
 const ingredient = (id: string, name: string): SectionIngredientOut =>
-  ({
-    id,
+  sectionIngredientOut.parse({
+    id: testEntityId("recipe", `usage-${id}`),
     type: "ingredient",
     amounts: [],
     modifier: null,
     rawLine: null,
     recipe: null,
-    ingredient: { id: `ingredient-${id}`, name },
-  }) as unknown as SectionIngredientOut;
+    ingredient: {
+      id: testShortcode("ingredient", `ING-${id}`),
+      name,
+      aliases: [],
+      naKinds: [],
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-01"),
+    },
+    createdAt: new Date("2026-01-01"),
+    updatedAt: new Date("2026-01-01"),
+  });
+
+const rowKey = (id: string) => testEntityId("recipe", `usage-${id}`);
 
 const recipe = (id: string, name: string): RecipeOut =>
-  ({
-    id,
+  recipeOut.parse({
+    id: testShortcode("recipe", `RCP-${id}`),
     name,
+    meta: null,
     yield: null,
     servings: null,
     notes: null,
     source: null,
     images: [],
     sections: [],
-  }) as unknown as RecipeOut;
+    tags: [],
+    createdAt: new Date("2026-01-01"),
+    updatedAt: new Date("2026-01-01"),
+  });
 
-const costing = (): RecipeCosting =>
-  ({
-    rows: [
-      { id: "flour", priceInfo: { gram: ok({ value: 100, unit: "g" }) } },
-      { id: "water", priceInfo: { gram: ok({ value: 50, unit: "g" }) } },
-    ],
-    totals: { missingByType: { weight: ["salt"] } },
-  }) as unknown as RecipeCosting;
+const costing = (): RecipeCosting => ({
+  rows: ["flour", "water"].map((id) => ({
+    ...ingredient(id, id),
+    sectionName: null,
+    priceInfo: {
+      price: ok({ value: 0, unit: "USD" }),
+      gram: ok({ value: id === "flour" ? 100 : 50, unit: "g" }),
+      nutrient: ok({}),
+    },
+    totalsMissing: { price: false, weight: false, nutrients: false },
+  })),
+  totals: {
+    price: 0,
+    weight: 150,
+    totalIngredients: 2,
+    nutrients: {},
+    missingByType: { price: [], weight: ["salt"], nutrients: [] },
+    diagnostics: [],
+  },
+  estimatedRows: new Map(),
+  bakerPct: new Map(),
+  isFlourRows: new Map(),
+});
 
 function tree(): RecipeTreeNode {
   const child: RecipeTreeNode = {
@@ -83,8 +119,8 @@ function tree(): RecipeTreeNode {
         rows: [
           {
             kind: "stub",
-            id: "missing-child",
-            recipeId: "missing" as never,
+            id: rowKey("missing-child"),
+            recipeId: testShortcode("recipe", "missing"),
             name: "Missing preferment",
             reason: "missing",
           },
@@ -100,7 +136,7 @@ function tree(): RecipeTreeNode {
     batchEstimated: false,
     batchEstimatedReason: null,
     batchGrams: null,
-    baseRowId: "flour",
+    baseRowId: rowKey("flour"),
     sections: [
       {
         id: "root-section",
@@ -109,21 +145,21 @@ function tree(): RecipeTreeNode {
         rows: [
           {
             kind: "ingredient",
-            id: "flour",
+            id: rowKey("flour"),
             row: ingredient("flour", "Flour"),
             grams: 100,
             pct: 100,
           },
           {
             kind: "ingredient",
-            id: "water",
+            id: rowKey("water"),
             row: ingredient("water", "Water"),
             grams: 50,
             pct: 50,
           },
           {
             kind: "subrecipe",
-            id: "starter",
+            id: rowKey("starter"),
             row: ingredient("starter", "Starter"),
             grams: 20,
             pct: 20,

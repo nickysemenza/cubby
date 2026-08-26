@@ -17,7 +17,11 @@ import { entityProblemDeclarations } from "~/entities/view-manifest";
  * Drizzle expressions, or detector callbacks.
  */
 /** Full schema roster; it makes a new ProblemKey a registry compile/test gate. */
-export const expectedProblemKeys = Object.keys(PROBLEM_CLASS) as ProblemKey[];
+const isProblemKey = (key: string): key is ProblemKey =>
+  Object.hasOwn(PROBLEM_CLASS, key);
+
+export const expectedProblemKeys =
+  Object.keys(PROBLEM_CLASS).filter(isProblemKey);
 
 const definitions: readonly ProblemQuery[] = [
   ...entityProblemDeclarations(),

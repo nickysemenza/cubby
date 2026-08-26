@@ -1,4 +1,4 @@
-import { unsafePurchaseShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ProductFilters } from "@cubby/schemas/product";
 import { expenseCreateInput, projectCreateInput } from "@cubby/schemas/project";
 import { withTestDb } from "tooling/test-setup";
@@ -145,7 +145,7 @@ describe("getProductMovementTimeline", () => {
           date: "2025-03-06",
           productId: item.id,
           productQuantity: 1,
-          purchaseId: unsafePurchaseShortcode(order.shortcode),
+          purchaseId: parseShortcodeFor("purchase", order.shortcode),
           future: true,
         }),
       ),
@@ -172,7 +172,7 @@ describe("getProductMovementTimeline", () => {
           date: "2025-03-08",
           productId: item.id,
           productQuantity: 1,
-          purchaseId: unsafePurchaseShortcode(order.shortcode),
+          purchaseId: parseShortcodeFor("purchase", order.shortcode),
         }),
       ),
       ctx.actor,
@@ -383,7 +383,7 @@ describe("getProductMovementTimeline", () => {
           date: "2023-06-01",
           productId: item.id,
           productQuantity: 1,
-          purchaseId: unsafePurchaseShortcode(purchaseRow.shortcode),
+          purchaseId: parseShortcodeFor("purchase", purchaseRow.shortcode),
         }),
       ),
       ctx.actor,

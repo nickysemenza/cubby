@@ -7,7 +7,7 @@
  */
 
 import type { IngredientId } from "@cubby/schemas/identifiers";
-import { unsafeIngredientShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { IngredientWithUnusedAliases } from "@cubby/schemas/problems";
 import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { computeUnusedAliases } from "~/lib/unused-aliases";
@@ -139,7 +139,7 @@ export const findIngredientsWithUnusedAliases = async (
     });
     if (unusedAliases.length > 0) {
       problems.push({
-        id: unsafeIngredientShortcode(ing.shortcode),
+        id: parseShortcodeFor("ingredient", ing.shortcode),
         name: ing.name,
         aliases: ing.aliases,
         unusedAliases,

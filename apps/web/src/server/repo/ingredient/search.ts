@@ -9,7 +9,7 @@
 import {
   type IngredientId,
   type IngredientShortcode,
-  unsafeIngredientShortcode,
+  parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type {
   IngredientFilters,
@@ -213,7 +213,7 @@ export const mergeImpactForIngredients = async (
   return bases.map((b) => {
     const productStats = productStatsById.get(b.id);
     return {
-      id: unsafeIngredientShortcode(b.shortcode),
+      id: parseShortcodeFor("ingredient", b.shortcode),
       name: b.name,
       recipeUsageCount: recipeCountById.get(b.id) ?? 0,
       productCount: productStats?.count ?? 0,
@@ -420,7 +420,7 @@ export const getIngredientMatches = async (
   const byKey = new Map<string, IngredientNameMatch>();
   for (const row of rows) {
     const match = {
-      id: unsafeIngredientShortcode(row.shortcode),
+      id: parseShortcodeFor("ingredient", row.shortcode),
       name: row.name,
       aliases: row.aliases,
     };

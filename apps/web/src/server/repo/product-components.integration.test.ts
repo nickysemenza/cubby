@@ -6,7 +6,7 @@
  * listed inside a live kit is blocked), and quantity round-tripping.
  */
 import type { ProductId } from "@cubby/schemas/identifiers";
-import { unsafeImageShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -81,8 +81,8 @@ describe("product ⟷ product component links (kit composition)", () => {
       kit.entityId,
       {
         pendingImageIds: [
-          unsafeImageShortcode(kitManual.shortcode),
-          unsafeImageShortcode(kitCover.shortcode),
+          parseShortcodeFor("image", kitManual.shortcode),
+          parseShortcodeFor("image", kitCover.shortcode),
         ],
       },
       ctx.actor,
@@ -92,8 +92,8 @@ describe("product ⟷ product component links (kit composition)", () => {
       drill.entityId,
       {
         pendingImageIds: [
-          unsafeImageShortcode(drillMissing.shortcode),
-          unsafeImageShortcode(drillCover.shortcode),
+          parseShortcodeFor("image", drillMissing.shortcode),
+          parseShortcodeFor("image", drillCover.shortcode),
         ],
       },
       ctx.actor,

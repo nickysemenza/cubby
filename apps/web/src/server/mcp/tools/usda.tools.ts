@@ -3,7 +3,7 @@ import { mcpPaginationParams } from "@cubby/schemas/pagination";
 import { dataTypeEnum, fdcId, ndb, upc } from "@cubby/usda-schemas";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
+import { entityKernelContextSchema } from "~/server/entity-kernel/adapter";
 import {
   getCaller,
   READ_ONLY_OPEN,
@@ -14,30 +14,33 @@ import {
 } from "./_shared";
 
 export function registerUsdaTools(server: McpServer) {
+  const searchUsdaFoodsInput = z.object({
+    query: z.string().describe("Food name to search for"),
+    dataType: dataTypeEnum
+      .optional()
+      .describe("Optional exact USDA data-type filter"),
+    ...mcpPaginationParams,
+    pageSize: z
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .optional()
+      .describe("Items per page (default 25, max 100)"),
+  });
   registerMcpTool(server, {
     name: "search_usda_foods",
     description:
       "Use this when the user needs to choose among USDA FoodData Central records for Product nutrition mapping. The interactive picker shows the search, source type, macros, and existing Cubby links and lets the user refine before choosing. Do not invoke it when the Cubby Product already has a resolved USDA food or for a general nutrition question that does not require record selection.",
-    inputSchema: {
-      query: z.string().describe("Food name to search for"),
-      dataType: dataTypeEnum
-        .optional()
-        .describe("Optional exact USDA data-type filter"),
-      ...mcpPaginationParams,
-      pageSize: z
-        .number()
-        .int()
-        .min(1)
-        .max(100)
-        .optional()
-        .describe("Items per page (default 25, max 100)"),
-    },
+    inputSchema: searchUsdaFoodsInput,
     outputSchema: usdaFoodMcpListOut,
     annotations: READ_ONLY_OPEN,
     handler: async (params, extra) => {
-      const context = extra.authInfo?.extra?.entityKernel as
-        | EntityKernelContext
-        | undefined;
+      const rawContext = extra.authInfo?.extra?.entityKernel;
+      const context =
+        rawContext === undefined
+          ? undefined
+          : entityKernelContextSchema.parse(rawContext);
       if (!context?.usdaService) {
         throw new Error("MCP USDA service context is missing");
       }
@@ -46,15 +49,15 @@ export function registerUsdaTools(server: McpServer) {
         params.dataType,
         { orderBy: "relevance", direction: "asc" },
         {
-          pageIndex: (params.pageIndex as number) ?? 0,
-          pageSize: (params.pageSize as number) ?? 25,
+          pageIndex: params.pageIndex ?? 0,
+          pageSize: params.pageSize ?? 25,
         },
         true,
       );
       return {
         meta: {
-          pageIndex: (params.pageIndex as number) ?? 0,
-          pageSize: (params.pageSize as number) ?? 25,
+          pageIndex: params.pageIndex ?? 0,
+          pageSize: params.pageSize ?? 25,
           totalCount: result.count,
         },
         items: result.data.map(slimUsdaFoodListItem),
@@ -70,9 +73,11 @@ export function registerUsdaTools(server: McpServer) {
     outputSchema: usdaFoodMcpOut,
     annotations: READ_ONLY_OPEN,
     handler: async (params, extra) => {
-      const context = extra.authInfo?.extra?.entityKernel as
-        | EntityKernelContext
-        | undefined;
+      const rawContext = extra.authInfo?.extra?.entityKernel;
+      const context =
+        rawContext === undefined
+          ? undefined
+          : entityKernelContextSchema.parse(rawContext);
       if (!context?.usdaService) {
         throw new Error("MCP USDA service context is missing");
       }

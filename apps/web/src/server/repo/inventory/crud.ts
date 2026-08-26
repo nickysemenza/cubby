@@ -244,8 +244,8 @@ interface InventoryFilters {
   // Public codes, resolved to uuids inside `inventoryentryList` — see
   // `resolveFilterIds`. A code naming no live row narrows to nothing; it is
   // not a 404 for the whole list.
-  locationIdFilter?: LocationShortcode;
-  productIdFilter?: ProductShortcode;
+  locationIdFilter?: LocationShortcode | typeof UNRESOLVABLE_ENTITY_FILTER;
+  productIdFilter?: ProductShortcode | typeof UNRESOLVABLE_ENTITY_FILTER;
   manufacturerFilter?: string;
   categoryFilter?: ProductCategory | ProductCategory[];
   verifiedPresenceFilter?: "has" | "none";
@@ -687,3 +687,5 @@ export const deleteInventoryEntries = async (
     return { deleted };
   });
 };
+
+import type { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";

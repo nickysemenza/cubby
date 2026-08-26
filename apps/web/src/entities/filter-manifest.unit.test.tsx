@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { browserRoutedEntities } from "@cubby/schemas/entity-manifest";
+import { testEntityId } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
@@ -17,6 +18,11 @@ import {
   partitionFilterSpecs,
 } from "./filters";
 import { generatedEntityFilterContractCases } from "./generated/entity-filter-contracts.gen";
+
+const VENDOR_ONE = testEntityId("vendor", "VEN-4K7M");
+const VENDOR_TWO = testEntityId("vendor", "VEN-9Q2X");
+const PRODUCT_ID = testEntityId("product", "PRD-4K7M");
+const PURCHASE_ID = testEntityId("purchase", "PUR-4K7M");
 
 describe("manifestFilterConfig", () => {
   it.each([
@@ -255,9 +261,9 @@ describe("expense order-id filters", () => {
   });
 
   it("still carries a vendor alongside it as a separate condition", () => {
-    expect(build({ order: "WN63446464", vendor: "vendor-1" })).toMatchObject({
+    expect(build({ order: "WN63446464", vendor: VENDOR_ONE })).toMatchObject({
       orderId: "WN63446464",
-      vendorId: ["vendor-1"],
+      vendorId: [VENDOR_ONE],
     });
   });
 
@@ -280,14 +286,14 @@ describe("expense vendor filter", () => {
   };
 
   it("routes ?vendor= to the vendorId field as a set", () => {
-    expect(build({ vendor: "vendor-1,vendor-2" })).toEqual({
-      vendorId: ["vendor-1", "vendor-2"],
+    expect(build({ vendor: `${VENDOR_ONE},${VENDOR_TWO}` })).toEqual({
+      vendorId: [VENDOR_ONE, VENDOR_TWO],
     });
   });
 
   it("routes the (none) sentinel to vendorPresenceFilter, ORing with a selection", () => {
-    expect(build({ vendor: `vendor-1,${FILTER_NONE}` })).toEqual({
-      vendorId: ["vendor-1"],
+    expect(build({ vendor: `${VENDOR_ONE},${FILTER_NONE}` })).toEqual({
+      vendorId: [VENDOR_ONE],
       vendorPresenceFilter: "none",
     });
     expect(build({ vendor: FILTER_NONE })).toEqual({
@@ -296,7 +302,7 @@ describe("expense vendor filter", () => {
   });
 
   it("is a multiselect whose runtime roster resolves under the `vendor` key", () => {
-    const injected = [{ value: "vendor-1", label: "Home Depot" }];
+    const injected = [{ value: VENDOR_ONE, label: "Home Depot" }];
     const config = manifestFilterConfig("expense", "vendor", {
       vendor: injected,
     });
@@ -330,9 +336,9 @@ describe("purchase filters", () => {
   });
 
   it("routes ?vendor= to the vendorId field as a set", () => {
-    expect(build({ vendor: "vendor-1" })).toEqual({ vendorId: ["vendor-1"] });
-    expect(build({ vendor: "vendor-1,vendor-2" })).toEqual({
-      vendorId: ["vendor-1", "vendor-2"],
+    expect(build({ vendor: VENDOR_ONE })).toEqual({ vendorId: [VENDOR_ONE] });
+    expect(build({ vendor: `${VENDOR_ONE},${VENDOR_TWO}` })).toEqual({
+      vendorId: [VENDOR_ONE, VENDOR_TWO],
     });
   });
 
@@ -341,7 +347,7 @@ describe("purchase filters", () => {
       (s) => s.columnId === "vendor",
     );
     expect(spec?.nullable).toBeUndefined();
-    const injected = [{ value: "vendor-1", label: "Home Depot" }];
+    const injected = [{ value: VENDOR_ONE, label: "Home Depot" }];
     const config = manifestFilterConfig("purchase", "vendor", {
       vendor: injected,
     });
@@ -479,9 +485,9 @@ describe("expense URL-only scopes", () => {
     expect(
       buildFiltersFromManifest(
         specs,
-        filterGetterFromSearch(specs, { productId: "prod-1" }),
+        filterGetterFromSearch(specs, { productId: PRODUCT_ID }),
       ),
-    ).toMatchObject({ productId: "prod-1" });
+    ).toMatchObject({ productId: PRODUCT_ID });
   });
 
   it("still routes ?purchaseId= to the server filter", () => {
@@ -489,9 +495,9 @@ describe("expense URL-only scopes", () => {
     expect(
       buildFiltersFromManifest(
         specs,
-        filterGetterFromSearch(specs, { purchaseId: "purchase-1" }),
+        filterGetterFromSearch(specs, { purchaseId: PURCHASE_ID }),
       ),
-    ).toMatchObject({ purchaseId: "purchase-1" });
+    ).toMatchObject({ purchaseId: PURCHASE_ID });
   });
 
   it("still declares a search field for every URL-only key", () => {

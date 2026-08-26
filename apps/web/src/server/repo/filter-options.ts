@@ -3,7 +3,7 @@ import type {
   FilterOptionsInput,
   FilterOptionsOut,
 } from "@cubby/schemas/filter-options";
-import type { LocationId } from "@cubby/schemas/identifiers";
+import { type LocationId, parseEntityId } from "@cubby/schemas/identifiers";
 import {
   type AnyColumn,
   and,
@@ -147,6 +147,17 @@ const FILTER_OPTION_SPECS = {
 const searchCondition = (column: AnyColumn, search: string) =>
   search === "" ? undefined : ilike(column, `%${search}%`);
 
+const parseOptionRow = (row: Record<string, unknown>): OptionRow => {
+  if (typeof row.id !== "string" || typeof row.label !== "string") {
+    throw new Error("Filter option query returned an invalid row");
+  }
+  return {
+    id: row.id,
+    label: row.label,
+    detail: typeof row.detail === "string" ? row.detail : null,
+  };
+};
+
 /**
  * Minimal option rows for high-cardinality list filters. This deliberately
  * bypasses entity mappers: a dropdown never needs images, relation hydration,
@@ -182,9 +193,9 @@ async function loadRows(
   }
 
   // The projection is assembled at runtime, so Drizzle can only infer
-  // `Record<string, unknown>`; `internalId` is present exactly when a spec that
-  // declares `decorate` selected it.
-  const rows = (await query
+  // `Record<string, unknown>`. Parse the dynamic result once at this raw-query
+  // seam; `internalId` exists only for the location decorator.
+  const rows = await query
     .where(
       and(
         notDeleted(spec.from),
@@ -198,9 +209,16 @@ async function loadRows(
     )
     .orderBy(asc(spec.label), asc(spec.id))
     .limit(limit ?? 50)
-    .offset(offset)) as DecorableRow[];
+    .offset(offset);
 
-  return spec.decorate ? spec.decorate(db, rows) : rows;
+  if (!spec.decorate) return rows.map(parseOptionRow);
+  return spec.decorate(
+    db,
+    rows.map((row) => ({
+      ...parseOptionRow(row),
+      internalId: parseEntityId("location", row.internalId),
+    })),
+  );
 }
 
 export async function getFilterOptions(

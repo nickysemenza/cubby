@@ -288,7 +288,7 @@ export const toPublicImpact = (
     }
     byTargetId[publicId] = count;
   }
-  return { ...item, byTargetId } as PublicImpactItem;
+  return publicImpactItemSchema.parse({ ...item, byTargetId });
 };
 
 /**

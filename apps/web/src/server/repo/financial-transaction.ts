@@ -8,6 +8,7 @@ import type {
   FinancialTransactionUpdateData,
 } from "@cubby/schemas/financial-transaction";
 import {
+  financialTransactionKind,
   financialTransactionOut,
   financialTransactionSettlementViolation,
   financialTransactionSortableFields,
@@ -15,10 +16,7 @@ import {
 import {
   type FinancialTransactionId,
   type FinancialTransactionShortcode,
-  unsafeFinancialAccountShortcode,
-  unsafeFinancialTransactionShortcode,
-  unsafeLedgerTransferShortcode,
-  unsafePurchaseShortcode,
+  parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
@@ -149,12 +147,12 @@ type FinancialTransactionRow = Omit<
 
 const toOut = (row: FinancialTransactionRow): FinancialTransactionOut => {
   const allocations = (row.allocations ?? []).map((allocation) => ({
-    purchaseId: unsafePurchaseShortcode(allocation.purchaseId),
+    purchaseId: parseShortcodeFor("purchase", allocation.purchaseId),
     amount: Number(allocation.amount),
   }));
   return financialTransactionOut.parse({
-    id: unsafeFinancialTransactionShortcode(row.shortcode),
-    accountId: unsafeFinancialAccountShortcode(row.accountShortcode),
+    id: parseShortcodeFor("financialTransaction", row.shortcode),
+    accountId: parseShortcodeFor("financialAccount", row.accountShortcode),
     // DERIVED, not stored: the sole Purchase this transaction settled, or null
     // when it settled none or several. Kept in the output because 3,445 of
     // 3,447 transactions have exactly one allocation and every consumer of that
@@ -175,7 +173,7 @@ const toOut = (row: FinancialTransactionRow): FinancialTransactionOut => {
     notes: row.notes,
     allocations,
     ledgerTransferId: row.ledgerTransferShortcode
-      ? unsafeLedgerTransferShortcode(row.ledgerTransferShortcode)
+      ? parseShortcodeFor("ledgerTransfer", row.ledgerTransferShortcode)
       : null,
     accountName: row.accountName,
     createdAt: row.createdAt,
@@ -367,7 +365,7 @@ export async function listFinancialTransactions(
 const financialTransactionReader = createEntityReader<
   FinancialTransactionRow,
   FinancialTransactionOut,
-  FinancialTransactionId,
+  "financialTransaction",
   Database | DrizzleTransaction
 >({
   entity: "financialTransaction",
@@ -610,7 +608,7 @@ export async function updateFinancialTransaction(
           : data.purchaseId !== undefined
             ? data.purchaseId !== null
             : allocationCount > 0,
-      kind: nextKind as FinancialTransactionCreateInput["kind"],
+      kind: financialTransactionKind.parse(nextKind),
       amount: nextAmount,
     });
     if (settlementViolation)
