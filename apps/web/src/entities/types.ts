@@ -11,6 +11,9 @@ type CommonSectionType = "images" | "history" | "unit-mappings";
 
 type StandardColumnType = "image" | "name";
 
+/** First-visit row density; a stored Display choice always takes precedence. */
+type ListDefaultDensity = "comfortable" | "compact" | "dense";
+
 interface EntityDetailConfig {
   commonSections?: CommonSectionType[];
 }
@@ -18,6 +21,7 @@ interface EntityDetailConfig {
 interface EntityListConfig {
   hasUnitMappings?: boolean;
   defaultSort?: string;
+  defaultDensity?: ListDefaultDensity;
   /**
    * Direction the list opens `defaultSort` in. Defaults to "desc", which is
    * right for the date/amount columns most lists open on and WRONG for a name

@@ -534,6 +534,7 @@ const entityDefinitions = {
     ],
     list: {
       defaultSort: "transactionDate",
+      defaultDensity: "dense",
       standardColumns: [],
     },
   },

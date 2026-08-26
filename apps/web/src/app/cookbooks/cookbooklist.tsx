@@ -119,6 +119,7 @@ export function CookbookList() {
         onRowHover={onRowHover}
         onRowHoverEnd={onRowHoverEnd}
         currentRowId={preview?.id}
+        defaultDensity="dense"
         desktopInspector={dockedInspector}
       />
       <PreviewSheet />

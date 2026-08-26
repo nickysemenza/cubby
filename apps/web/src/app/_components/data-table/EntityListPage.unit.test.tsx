@@ -82,4 +82,20 @@ describe("EntityListPage inspector composition", () => {
       original: { id: "VND-4K7M" },
     });
   });
+
+  it("forwards an entity's first-visit density without changing the shared preference policy", () => {
+    render(
+      <EntityListPage
+        entity="financialTransaction"
+        columns={[]}
+        ariaLabel="Transactions table"
+      />,
+    );
+
+    const props = mocks.listWorkbench.mock.lastCall?.[0] as Record<
+      string,
+      unknown
+    >;
+    expect(props.defaultDensity).toBe("dense");
+  });
 });

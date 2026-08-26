@@ -63,6 +63,7 @@ describe("USDAFoodList", () => {
       responsiveInspector: true,
     });
     expect(props.currentRowId).toBe("usda-food:12345");
+    expect(props.defaultDensity).toBe("dense");
     expect(screen.getByText("USDA inspector")).toBeInTheDocument();
     expect(screen.getByText("Intermediate USDA preview")).toBeInTheDocument();
 

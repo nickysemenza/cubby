@@ -18,7 +18,7 @@ import { usdaFoodSortableFields } from "@cubby/schemas/usda";
 import { vendorSortableFields } from "@cubby/schemas/vendor";
 import { wishSortableFields } from "@cubby/schemas/wish";
 import { describe, expect, it } from "vitest";
-import { entities } from "./entities";
+import { browserEntityDefinition, entities } from "./entities";
 
 describe("entity sortableFields", () => {
   it("stays in sync with the canonical server schema contracts", () => {
@@ -48,6 +48,37 @@ describe("entity sortableFields", () => {
       wish: wishSortableFields,
       "usda-food": usdaFoodSortableFields,
       image: imageSortableFields,
+    });
+  });
+});
+
+describe("entity list first-visit density", () => {
+  it("keeps the registry density exception to the read-heavy transaction roster", () => {
+    const defaults = Object.fromEntries(
+      browserRoutedEntities.map((entity) => [
+        entity,
+        browserEntityDefinition(entity).list?.defaultDensity,
+      ]),
+    );
+
+    expect(defaults).toEqual({
+      ingredient: undefined,
+      product: undefined,
+      recipe: undefined,
+      cookbook: undefined,
+      location: undefined,
+      inventory: undefined,
+      meal: undefined,
+      project: undefined,
+      task: undefined,
+      vendor: undefined,
+      purchase: undefined,
+      expense: undefined,
+      financialAccount: undefined,
+      financialTransaction: "dense",
+      wish: undefined,
+      "usda-food": undefined,
+      image: undefined,
     });
   });
 });
