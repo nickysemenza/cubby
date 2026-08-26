@@ -20,9 +20,9 @@ test("workspace shell responds from phone navigation through desktop sidebar", a
     name: "Workspace navigation",
   });
   await expect(sidebar).toBeVisible();
-  // 144, not 224: the rail's own content measured 139px, so the old width
-  // spent 38% of itself on nothing.
-  expect((await sidebar.boundingBox())?.width).toBe(144);
+  // The expanded domain index uses the design-system rail width; compact mode
+  // below remains a 56px icon rail.
+  expect((await sidebar.boundingBox())?.width).toBe(224);
   await expect(
     page.getByRole("link", { name: "Home", exact: true }),
   ).toHaveAttribute("aria-current", "page");
@@ -69,7 +69,7 @@ test("workspace shell responds from phone navigation through desktop sidebar", a
     page.getByRole("button", { name: "Expand sidebar" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Expand sidebar" }).click();
-  await expect.poll(async () => (await sidebar.boundingBox())?.width).toBe(144);
+  await expect.poll(async () => (await sidebar.boundingBox())?.width).toBe(224);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(sidebar).toBeHidden();
