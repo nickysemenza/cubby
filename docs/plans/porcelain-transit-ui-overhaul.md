@@ -1,6 +1,6 @@
 # Porcelain Transit UI Overhaul
 
-Status: **In progress; T0–T5 complete, T6 ordinary-surface migration next**
+Status: **In progress; T0–T6 complete, T7 specialist-workbench migration next**
 
 Delivery: **One big-bang branch and one ready-for-review PR**
 
@@ -210,8 +210,8 @@ means the named evidence exists; implementation without evidence remains
 | T3 | Products reference workbench | T1–T2 | Complete | Approved dense table, dock, Sheet, phone projection, one Product-owned relationship-route query, direct/derived provenance, and synthetic desktop/phone examples are recorded in the evidence ledger. |
 | T4 | Canonical detail system | T1–T3 | Complete | Product detail reuses the same route model near the hero and in the full Relations journey, replaces the generic explorer without duplicate anchors, and preserves recategorized project-use history as read-only evidence. |
 | T5 | All canonical lists and details | T3–T4 | Complete | Standard, direct, and bespoke rosters share the dock/Sheet/phone-detail contract; generic routes reuse one bounded truthful relationship preview, canonical details compose Activity/Relations once, and scoped density plus responsive evidence is recorded in the ledger. |
-| T6 | Today and normal-density surfaces | T1–T2 | Pending | Attention-first dashboard, readable modules, no KPI-card theater |
-| T7 | Specialist workbenches | T1–T5 | Pending | Calendar, Gantt, spatial, reconciliation, scanner, and matrix contracts preserved |
+| T6 | Today and normal-density surfaces | T1–T2 | Complete | Attention-first daily briefing, truthful household signals, accessible question-led insights, responsive rendered-state evidence, focused tests, and full repository check |
+| T7 | Specialist workbenches | T1–T5 | In progress | Calendar/physical recovery, recommendation recovery, and a project-detail phone agenda are implemented; remaining spatial, reconciliation, scanner, matrix, and diagnostic batches are pending |
 | T8 | Peripheral web-PWA states | T1–T7 | Pending | Auth, OAuth, docs, offline, errors, loading, empty, print/export |
 | T9 | Whole-PWA hardening and finish | T0–T8 | Pending | Detector, visual review, audit, tests, reviewer verdict, DESIGN.md and sidecar |
 
@@ -291,7 +291,7 @@ check so shared coverage is not assumed blindly.
 
 | Family | Representative and sibling routes | Status | Required proof |
 | --- | --- | --- | --- |
-| Today | `/` | Pending | Attention-first desktop and phone layouts; populated/empty/error |
+| Today | `/` | Implemented, verified, reviewed | Attention-first desktop and phone layouts; populated/empty/error |
 | Products/inventory | `/products`, `/inventory`, new/bulk/session routes | Pending | Dense grid, docked inspector, mobile projection, capture and bulk workflows |
 | Locations | `/locations`, detail, arrange, photo-pass, pantry view | Pending | Hierarchy, spatial work, DnD, inspector route, phone behavior |
 | Planning | `/tasks`, `/projects`, project tools, `/calendar` | Pending | Table/detail, boards/Gantt/calendar, selection and drag states |
