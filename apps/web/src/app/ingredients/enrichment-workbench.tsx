@@ -63,6 +63,19 @@ const WORKBENCH_VIEW_OPTIONS: ViewSwitcherOption<WorkbenchView>[] = [
   { value: "review", label: "Review" },
 ];
 
+/** Keep query recovery and the successful empty state mutually exclusive. */
+export function shouldShowEnrichmentEmptyState({
+  isLoading,
+  hasError,
+  rowCount,
+}: {
+  isLoading: boolean;
+  hasError: boolean;
+  rowCount: number;
+}): boolean {
+  return !isLoading && !hasError && rowCount === 0;
+}
+
 /**
  * Dense bulk-enrichment table for ingredients with incomplete totals data —
  * the bare ones EPUB imports leave behind (no product) plus those with a product
@@ -507,7 +520,11 @@ export function EnrichmentWorkbench({
             </Row>
           )}
 
-          {!isLoading && rows.length === 0 && (
+          {shouldShowEnrichmentEmptyState({
+            isLoading,
+            hasError: !!error,
+            rowCount: rows.length,
+          }) && (
             <Empty>
               <EmptyDescription>
                 Every recipe ingredient is fully costable. Nothing to enrich.
