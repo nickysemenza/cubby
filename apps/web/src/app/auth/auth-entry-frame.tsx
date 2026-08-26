@@ -9,7 +9,7 @@ import type { ReactNode } from "react";
  */
 export function AuthEntryFrame({ children }: { children: ReactNode }) {
   return (
-    <section className="auth-background relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-8">
+    <section className="auth-background relative flex min-h-[calc(100dvh-10rem)] items-center justify-center overflow-hidden px-2 py-6 sm:px-4 sm:py-8 max-md:[&_[data-slot=button]]:min-h-11 max-md:[&_[data-slot=form-control]]:min-h-11">
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 top-1/2 border-border/70 border-t"

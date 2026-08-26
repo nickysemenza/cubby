@@ -113,9 +113,7 @@ function ConsentPage() {
     <AuthEntryFrame>
       <Card>
         <CardHeader>
-          <div className="font-mono text-2xs text-slate uppercase tracking-wider">
-            Authorize access
-          </div>
+          <div className="text-slate text-xs">Authorize access</div>
           <CardTitle>{appName}</CardTitle>
           <CardDescription>
             {clientState.kind === "loading"
@@ -149,9 +147,7 @@ function ConsentPage() {
             )}
             {scopes.length > 0 && (
               <Stack gap="sm">
-                <div className="font-mono text-2xs text-slate uppercase tracking-wider">
-                  Permissions requested
-                </div>
+                <div className="text-slate text-xs">Permissions requested</div>
                 <Stack gap="xs" as="ul">
                   {scopes.map((s) => (
                     <Row key={s} align="center" gap="sm" as="li">
