@@ -1,6 +1,6 @@
 # Porcelain Transit UI Overhaul
 
-Status: **In progress; T0–T6 complete, T7 specialist-workbench migration next**
+Status: **In progress; T0–T7 complete, T8 peripheral-state migration next**
 
 Delivery: **One big-bang branch and one ready-for-review PR**
 
@@ -211,7 +211,7 @@ means the named evidence exists; implementation without evidence remains
 | T4 | Canonical detail system | T1–T3 | Complete | Product detail reuses the same route model near the hero and in the full Relations journey, replaces the generic explorer without duplicate anchors, and preserves recategorized project-use history as read-only evidence. |
 | T5 | All canonical lists and details | T3–T4 | Complete | Standard, direct, and bespoke rosters share the dock/Sheet/phone-detail contract; generic routes reuse one bounded truthful relationship preview, canonical details compose Activity/Relations once, and scoped density plus responsive evidence is recorded in the ledger. |
 | T6 | Today and normal-density surfaces | T1–T2 | Complete | Attention-first daily briefing, truthful household signals, accessible question-led insights, responsive rendered-state evidence, focused tests, and full repository check |
-| T7 | Specialist workbenches | T1–T5 | In progress | Calendar/physical recovery, recommendation recovery, and a project-detail phone agenda are implemented; remaining spatial, reconciliation, scanner, matrix, and diagnostic batches are pending |
+| T7 | Specialist workbenches | T1–T5 | Complete | Specialist task models remain intact while calendar, physical, recommendation, cooking, collection, project, and diagnostic surfaces gain truthful recovery, phone projections/targets, focused tests, responsive review, and independent closeout |
 | T8 | Peripheral web-PWA states | T1–T7 | Pending | Auth, OAuth, docs, offline, errors, loading, empty, print/export |
 | T9 | Whole-PWA hardening and finish | T0–T8 | Pending | Detector, visual review, audit, tests, reviewer verdict, DESIGN.md and sidecar |
 
