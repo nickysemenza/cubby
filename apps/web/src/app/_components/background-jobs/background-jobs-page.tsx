@@ -219,6 +219,7 @@ export function BackgroundJobsPage({
         showFailedOnly={showFailedOnly}
         isLoading={listLoading}
         error={listQuery.error}
+        onRetry={() => void listQuery.refetch()}
         actions={drainAction}
         onExpandedBatchChange={setExpandedBatch}
         onFailedOnlyChange={(batchId, failedOnly) => {

@@ -136,7 +136,7 @@ export function ArrangeLocationRow({
             ref={setActivatorNodeRef}
             type="button"
             aria-label={`Drag ${node.name}`}
-            className="touch-none rounded p-1 text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            className="min-h-11 min-w-11 touch-none rounded p-1 text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary md:min-h-7 md:min-w-7"
             {...listeners}
             {...attributes}
           >
@@ -152,7 +152,7 @@ export function ArrangeLocationRow({
                     type="button"
                     aria-label={`Zoom into ${node.name}`}
                     onClick={() => onDrill(node.id)}
-                    className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground"
+                    className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded p-1 text-muted-foreground hover:text-foreground md:min-h-7 md:min-w-7"
                   />
                 }
               >

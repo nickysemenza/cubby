@@ -226,7 +226,7 @@ function ScanPass() {
             <Link
               to="/locations/photo-pass"
               search={{}}
-              className="text-muted-foreground text-sm underline decoration-dotted underline-offset-2"
+              className="inline-flex min-h-11 items-center px-2 text-muted-foreground text-sm underline decoration-dotted underline-offset-2 md:min-h-8 md:px-0"
             >
               Change mode
             </Link>
@@ -404,7 +404,7 @@ function QueuePass({ parent, all, type }: PhotoPassSearch) {
           <Link
             to="/locations/photo-pass"
             search={{}}
-            className="text-muted-foreground text-sm underline decoration-dotted underline-offset-2"
+            className="inline-flex min-h-11 items-center px-2 text-muted-foreground text-sm underline decoration-dotted underline-offset-2 md:min-h-8 md:px-0"
           >
             Change scope
           </Link>
@@ -422,7 +422,7 @@ function QueuePass({ parent, all, type }: PhotoPassSearch) {
           <Link
             to="/locations/photo-pass"
             search={{}}
-            className="shrink-0 text-muted-foreground text-sm underline decoration-dotted underline-offset-2"
+            className="inline-flex min-h-11 shrink-0 items-center px-2 text-muted-foreground text-sm underline decoration-dotted underline-offset-2 md:min-h-8 md:px-0"
           >
             Change scope
           </Link>
@@ -451,7 +451,7 @@ function QueuePass({ parent, all, type }: PhotoPassSearch) {
             <Link
               to="/locations/photo-pass"
               search={{}}
-              className="text-muted-foreground text-sm underline decoration-dotted underline-offset-2"
+              className="inline-flex min-h-11 items-center px-2 text-muted-foreground text-sm underline decoration-dotted underline-offset-2 md:min-h-8 md:px-0"
             >
               Start another pass
             </Link>

@@ -199,7 +199,7 @@ function BreadcrumbCrumb({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex items-center gap-1 rounded px-1.5 py-0.5 text-muted-foreground hover:text-foreground" /* tight: crumb */,
+        "flex min-h-11 items-center gap-1 rounded px-2 text-muted-foreground hover:text-foreground md:min-h-7 md:px-1.5" /* phone navigation target; compact desktop crumb */,
         isOver && "bg-primary/15 text-foreground",
       )}
     >

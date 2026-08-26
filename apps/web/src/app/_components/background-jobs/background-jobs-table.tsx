@@ -35,6 +35,7 @@ import {
 import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { useTableState } from "~/app/_components/data-table/useTableState";
 import { EntityInlineLinkById } from "~/app/_components/EntityInlineLinkById";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row } from "~/components/layout";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -96,6 +97,7 @@ interface BackgroundJobsTableProps {
   showFailedOnly: boolean;
   isLoading: boolean;
   error: unknown;
+  onRetry?: () => void;
   actions: ReactNode;
   onExpandedBatchChange: (batchId?: string) => void;
   onFailedOnlyChange: (batchId: string, failedOnly: boolean) => void;
@@ -545,7 +547,19 @@ function BackgroundJobsTable(props: BackgroundJobsTableProps) {
       table={table}
       ariaLabel="Background jobs"
       isLoading={props.isLoading}
-      error={props.error}
+      // RTable's generic error contract is read-only. Keep this operational
+      // list recoverable without changing the shared table primitive.
+      error={undefined}
+      emptyState={
+        props.error ? (
+          <div className="space-y-3">
+            <ErrorDisplay error={props.error} />
+            <Button variant="outline" onClick={() => props.onRetry?.()}>
+              Retry background jobs
+            </Button>
+          </div>
+        ) : undefined
+      }
       actions={props.actions}
       verticalAlign="top"
     />
