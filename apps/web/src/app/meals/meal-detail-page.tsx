@@ -194,7 +194,7 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
             content: (
               <Stack>
                 <Row align="end" wrap gap="md">
-                  <Stack gap="sm">
+                  <Stack gap="sm" className="w-full md:w-auto">
                     <Input
                       value={nameValue}
                       placeholder="Meal name (optional)"
