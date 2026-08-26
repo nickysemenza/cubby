@@ -29,12 +29,7 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   return (
     <thead
       data-slot="table-header"
-      // Ledger header: paper-surface band underlined by the 3px ink rule — the
-      // "printed control sheet" column header.
-      className={cn(
-        "bg-card [&_tr]:border-b-[3px] [&_tr]:border-b-foreground",
-        className,
-      )}
+      className={cn("bg-muted/60 [&_tr]:border-b", className)}
       {...props}
     />
   );
@@ -72,7 +67,7 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
         // must drive something other than the row's own background — currently
         // VendorMark's desaturate-at-rest logo. Named so it can't be captured by
         // an unrelated `group` nested inside a cell.
-        "group/row hover:bg-muted/50 data-[state=selected]:bg-[var(--row-selected)] data-[state=selected]:shadow-[inset_3px_0_0_var(--row-accent,var(--brand-ultramarine))] border-b transition-colors",
+        "group/row hover:bg-muted/60 data-[state=selected]:bg-[var(--row-selected)] data-[state=selected]:shadow-[inset_2px_0_0_var(--row-accent,var(--brand-ultramarine))] border-b transition-colors duration-100",
         className,
       )}
       {...props}

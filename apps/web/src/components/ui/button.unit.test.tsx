@@ -12,7 +12,7 @@ describe("Button phone sizing", () => {
     );
   });
 
-  it("permits an explicit compact exception without changing desktop sizing", () => {
+  it("permits a 28px desktop exception without applying the phone floor", () => {
     render(
       <Button mobileSize="compact" size="sm">
         Dense control
@@ -20,7 +20,7 @@ describe("Button phone sizing", () => {
     );
 
     const button = screen.getByRole("button", { name: "Dense control" });
-    expect(button).toHaveClass("h-6");
+    expect(button).toHaveClass("h-7");
     expect(button).not.toHaveClass("max-md:min-h-11");
   });
 });

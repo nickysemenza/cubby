@@ -205,7 +205,7 @@ means the named evidence exists; implementation without evidence remains
 | ID | Target | Depends on | Status | Completion evidence |
 | --- | --- | --- | --- | --- |
 | T0 | Governance and baselines | — | Complete | Rebased branch, approved references, relationship/calibration specs, and 18 source-state baselines are recorded in the evidence ledger |
-| T1 | Tokens, fonts, and core primitives | T0 | Pending | Token contrast checks, primitive state gallery, no hard-coded replacement colors |
+| T1 | Tokens, fonts, and core primitives | T0 | Complete | Contrast checks, production build, focused tests, and desktop/mobile primitive gallery are recorded in the evidence ledger |
 | T2 | Desktop/mobile shell and navigation | T1 | Pending | Expanded and collapsed routes, contextual mobile chrome, safe areas, keyboard behavior |
 | T3 | Products reference workbench | T1–T2 | Pending | Dense grid, filters, saved layouts, bulk actions, docked inspector, relationship path |
 | T4 | Canonical detail system | T1–T3 | Pending | Product detail plus shared section/index/relationship/activity behavior |

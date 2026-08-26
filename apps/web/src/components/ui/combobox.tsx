@@ -128,7 +128,7 @@ export function FilterableCombobox({
         ref={anchorRef}
         className={cn(
           // Structure
-          "flex w-full items-center justify-between gap-1.5 rounded-none border px-2 h-7",
+          "flex h-9 max-sm:h-11 w-full items-center justify-between gap-1.5 rounded-md border bg-card px-2.5",
           // Colors & background
           "border-border bg-input/20",
           "hover:bg-input/30",
@@ -239,11 +239,11 @@ function ComboboxPopup({
               // Size constraints - match trigger width
               "w-(--anchor-width)",
               // Shape — flat ruled panel, no elevation
-              "rounded-none border border-[var(--border)]",
+              "rounded-lg border border-[var(--border)] shadow-[var(--shadow-overlay)]",
               // Animation
               "data-open:animate-in data-closed:animate-out",
               "data-closed:fade-out-0 data-open:fade-in-0",
-              "data-closed:zoom-out-95 data-open:zoom-in-95",
+              "duration-150",
               "data-[side=bottom]:slide-in-from-top-1",
               "origin-(--transform-origin) duration-150",
             )}
@@ -258,7 +258,7 @@ function ComboboxPopup({
                     value={item.value}
                     className={cn(
                       // Compact layout
-                      "relative flex items-center gap-2 rounded-none px-2 py-1",
+                      "relative flex min-h-8 items-center gap-2 rounded-md px-2 py-1.5",
                       // Typography
                       "cursor-default text-xs outline-none select-none",
                       // Interactive states
@@ -281,7 +281,7 @@ function ComboboxPopup({
                     {item.color && (
                       <span
                         aria-hidden
-                        className="inline-block size-2 shrink-0 rounded-none"
+                        className="inline-block size-2 shrink-0 rounded-sm"
                         style={{ backgroundColor: item.color }}
                       />
                     )}
@@ -386,7 +386,7 @@ export function MultiFilterableCombobox({
       <ComboboxPrimitive.InputGroup
         ref={anchorRef}
         className={cn(
-          "flex h-7 w-full items-center justify-between gap-1.5 rounded-none border border-border bg-input/20 px-2 text-xs/relaxed outline-none transition-colors duration-150 hover:bg-input/30 focus-visible:border-ring focus-visible:ring-[2px] focus-visible:ring-ring/30 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50",
+          "flex h-9 max-sm:h-11 w-full items-center justify-between gap-1.5 rounded-md border border-border bg-card px-2.5 text-xs/relaxed outline-none transition-colors duration-150 hover:bg-muted/60 focus-visible:border-ring focus-visible:ring-[2px] focus-visible:ring-ring/30 has-[:disabled]:cursor-not-allowed has-[:disabled]:bg-muted has-[:disabled]:opacity-60",
           className,
         )}
       >

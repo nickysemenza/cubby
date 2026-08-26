@@ -35,7 +35,7 @@ Until that work lands:
 | Target | Status | Evidence |
 | --- | --- | --- |
 | T0 Governance and baselines | Complete | Branch/base above; approved mocks, calibration, truth matrix, and 18 source-state screenshots are committed together |
-| T1 Tokens, fonts, and primitives | Pending | — |
+| T1 Tokens, fonts, and primitives | Complete | Shared raw tokens, Inter-led typography, domain palette, modest geometry, restrained overlays, rebuilt core primitives, and desktop/mobile state gallery |
 | T2 Desktop/mobile shell | Pending | — |
 | T3 Products reference workbench | Pending | — |
 | T4 Canonical detail system | Pending | — |
@@ -95,3 +95,8 @@ height while retaining the named viewport width.
 | 2026-08-26 | T0 | `pnpm --filter @cubby/web run build:cf` | Pass | Production Worker build and bundle analysis completed before source capture |
 | 2026-08-26 | T0 | Focused Playwright baseline capture | Pass: 18 PNGs | 17-route batch plus bounded `/` 320×568 capture after documenting its existing hydration-marker mismatch |
 | 2026-08-26 | T0 | Visual review of Products, Product detail, and Today at desktop/mobile | Pass | Captures are readable, synthetic, and represent the pre-overhaul Warm-Paper state |
+| 2026-08-26 | T1 | Token contrast calculation | Pass | Graphite/canvas 16.51:1; secondary/surface 4.97:1; cobalt/white 5.17:1; positive/white 4.68:1; warning ink/white 6.56:1; destructive/white 5.17:1 |
+| 2026-08-26 | T1 | `pnpm typecheck` | Pass | All 12 workspace package checks plus root TypeScript check |
+| 2026-08-26 | T1 | Focused domain-wayfinding and Button unit tests | Pass: 12 tests | Includes Product→Pantry classification and 44px phone target guard |
+| 2026-08-26 | T1 | `pnpm --filter @cubby/web run build:cf` | Pass | Production app, service worker, MCP widgets, and bundle analysis |
+| 2026-08-26 | T1 | Primitive gallery at `/design` | Pass | `.impeccable/checkpoints/t1-foundation/design-1440x900.png` and `design-430x932.png`; visually reviewed at both viewports |

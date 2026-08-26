@@ -1,79 +1,76 @@
 /*
- * Warm-Paper Ledger — the brand primitives, and the single source of truth for
- * them.
+ * Porcelain Transit — shared raw brand primitives.
  *
- * Everything here is a raw value with no framework coupling: plain custom
- * properties, no Tailwind `@theme`, no `@apply`. That's what lets it be shared
- * by consumers that have nothing else in common —
- *
- *   - apps/web           Tailwind v4; maps these onto shadcn semantic tokens
- *                        (`--background: var(--brand-paper)`) and mirrors them
- *                        into `@theme` for utility generation.
- *   - apps/mcp-apps      standalone single-file HTML in a sandboxed iframe, no
- *                        Tailwind at all; consumes the vars directly.
- *
- * Import this first — consumers only reference the vars, never redefine them,
- * so ordinary cascade order does the rest.
- *
- * The look: a matte print-instrument surface. Dense mono data on warm paper,
- * panels separated by ink rules and hairlines rather than elevation, one loud
- * ultramarine reserved for the live/active value. Light mode only.
- * (2026-06-25 overhaul; supersedes the cool-neutral / terracotta "Crisp Refresh".)
+ * This file stays framework-free so apps/web and the standalone apps/mcp-apps
+ * bundles consume the same light-only palette. Keep the established variable
+ * names below: the web theme and MCP widgets import this file directly.
  */
 
 :root {
-  --brand-foreground: #16170f; /* --ink: near-black, not pure */
+  /* Core surfaces and ink. */
+  --brand-foreground: #171a21;
+  --brand-graphite: #171a21;
+  --brand-graphite-secondary: #667085;
+  --brand-canvas: #f7f9fc;
+  --brand-surface: #ffffff;
+  --brand-inset: #f1f4f8;
+  --brand-cream: #ffffff;
+  --brand-paper: #f7f9fc;
+  --brand-paper-alt: #f1f4f8;
+  --brand-hairline: #d9dee7;
+  --brand-shelf: #667085;
 
-  /* Ultramarine - the one loud thing on screen: active/hover/focus + the single
-     most important live value. Everywhere else is ink + paper. */
-  --brand-ultramarine: #2244cc;
-  --brand-ultramarine-dark: #16308f;
+  /* Interaction and domain wayfinding. */
+  --brand-ultramarine: #2563eb;
+  --brand-ultramarine-dark: #1d4ed8;
+  --brand-cobalt: #2563eb;
+  --brand-on-accent: #ffffff;
+  --brand-domain-cook: #d97706;
+  --brand-domain-pantry: #16845b;
+  --brand-domain-plan: #6d5bd0;
+  --brand-domain-house: #147d92;
+  --brand-domain-finance: #b5477c;
 
-  /* Paper ramp - the warm matte substrate. cream=raised panels/headers,
-     paper=base background, paper-alt=zebra stripe / inset (a whisper darker). */
-  --brand-cream: #fcfaf4; /* --paper-surface */
-  --brand-paper: #f7f4ec; /* --paper */
-  --brand-paper-alt: #efeae0; /* --paper-alt */
-  --brand-hairline: #d8d2c4; /* --hairline: dividers, panel borders, thin rules */
-  --brand-shelf: #6b6658; /* muted ink for secondary text/labels */
+  /* Legacy accent retained as a stable alias for non-web consumers. */
+  --brand-aubergine: #b5477c;
 
-  /* Aubergine - the second accent: a not-blue spot color reserved for the
-     recipe/cookbook entity identity, so those entities read distinct from the
-     ultramarine interactive accent. Off the blue/green/amber/red axes. */
-  --brand-aubergine: #7a3f63;
+  /* Semantic tones. Pair color with text, icon, or shape; never hue alone. */
+  --positive: #16845b;
+  --warning: #b66a00;
+  --warning-ink: #8a4f00;
+  --destructive: #c93636;
+  --slate: #667085;
+  --brand-positive: #16845b;
+  --brand-warning: #b66a00;
+  --brand-destructive: #c93636;
 
-  /* Semantic tones, all kept off the blue accent axis so nothing competes with
-     ultramarine for "this is the live value". */
-  --positive: oklch(0.5 0.1 150); /* positive / money */
-  --warning: oklch(0.62 0.13 65); /* matte amber */
-  /* Warning as TEXT. The amber above is tuned to read as amber on a fill or a
-     tint, which costs it contrast: 3.6:1 on paper, under the 4.5:1 floor. This
-     is the same hue and chroma dropped to positive/destructive lightness
-     (5.9:1 on paper, 5.3:1 on a 10% amber tint) — use it whenever the warning
-     voice has to be read rather than seen. */
-  --warning-ink: oklch(0.5 0.13 65);
-  --destructive: oklch(0.45 0.18 25); /* matte deep red */
-  --slate: oklch(0.5 0.008 80); /* mono micro-labels / eyebrows */
+  /* Geometry and depth. Resting surfaces remain shadow-free. */
+  --brand-radius-control: 6px;
+  --brand-radius-panel: 8px;
+  --brand-radius-chip: 5px;
+  --brand-radius-pill: 999px;
+  --brand-elevation-popover: 0 8px 24px rgb(23 26 33 / 0.12);
+  --brand-focus-ring: 0 0 0 2px #ffffff, 0 0 0 4px var(--brand-cobalt);
 
-  /* The signature 3px ink top-rule for panels and sticky table headers — the
-     "printed control sheet" header underline. Use via border-top / border-bottom. */
-  --rule-ink: 3px solid var(--brand-foreground);
-
-  /* Ledger easing - a flat, mechanical settle. The matte instrument panel has
-     no overshoot/bounce; motion is restrained and square. Prefixed because
-     apps/web mirrors it into `@theme` as `--ease-cozy`, and a `@theme` entry
-     referencing its own name would be circular. */
+  /* Shared rhythm and motion. Table row sizing remains a component contract. */
+  --brand-space-1: 4px;
+  --brand-space-2: 8px;
+  --brand-space-3: 12px;
+  --brand-space-4: 16px;
+  --brand-space-5: 20px;
+  --brand-space-6: 24px;
+  --brand-motion-fast: 120ms;
+  --brand-motion-standard: 180ms;
   --brand-ease-cozy: cubic-bezier(0.2, 0, 0, 1);
 
-  /* Type system. Space Grotesk for headings, Inter for UI prose, JetBrains Mono
-     as the substrate for all data / cells / metrics / numerals.
-     apps/web loads the variable faces via @fontsource and mirrors these into
-     `@theme`; apps/mcp-apps ships no font files and rides the fallbacks (three
-     base64 woff2 faces would dwarf the bundle). Hence the full fallback chains
-     here rather than in either consumer. */
+  /* Kept for consumers that still use the old rule token; new surfaces should
+     use hairlines and tonal separation instead of heavy ink rules. */
+  --rule-ink: 1px solid var(--brand-hairline);
+
+  /* Inter leads UI and headings; JetBrains Mono remains for aligned data. */
   --brand-font-heading:
-    "Space Grotesk Variable", "Space Grotesk", ui-sans-serif, system-ui,
-    sans-serif;
+    "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   --brand-font-sans:
     "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
