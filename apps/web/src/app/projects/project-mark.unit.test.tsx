@@ -22,7 +22,7 @@ describe("ProjectMark", () => {
     expect(mark).toHaveAttribute("aria-hidden", "true");
     expect(mark).toHaveAttribute("width", "14");
     expect(mark).toHaveAttribute("height", "14");
-    expect(mark).toHaveClass("text-plum");
+    expect(mark).toHaveStyle({ color: "var(--domain-house)" });
   });
 
   it("renders project identity inside a chart axis tick", () => {
@@ -57,6 +57,6 @@ describe("ProjectMark", () => {
     expect(screen.getByText("🍳")).toBeInTheDocument();
     expect(
       screen.getByText("Garage").parentElement?.querySelector("svg"),
-    ).toHaveClass("text-plum");
+    ).toHaveStyle({ color: "var(--domain-house)" });
   });
 });
