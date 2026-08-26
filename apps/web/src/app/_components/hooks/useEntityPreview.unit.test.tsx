@@ -139,6 +139,7 @@ describe("useEntityPreview intent prefetch", () => {
     expect(result.current.preview).toEqual({
       entityType: "product",
       id: "PRD-4K7M",
+      rowKey: "PRD-4K7M",
     });
     expect(queryClient.prefetchQuery).not.toHaveBeenCalled();
     expect(queryClient.cancelQueries).not.toHaveBeenCalled();
@@ -184,6 +185,7 @@ describe("useEntityPreview intent prefetch", () => {
     expect(result.current.preview).toEqual({
       entityType: "product",
       id: "PRD-4K7M",
+      rowKey: "PRD-4K7M",
     });
     expect(result.current.dockedInspector).toBeNull();
     expect(screen.queryByTestId("workbench-inspector")).not.toBeInTheDocument();
@@ -232,5 +234,27 @@ describe("useEntityPreview intent prefetch", () => {
     expect(
       screen.getByRole("heading", { name: "Product PRD-4K7M preview" }),
     ).toBeInTheDocument();
+  });
+
+  it("keeps a namespaced roster row selected while previewing its target", () => {
+    const { result } = renderHook(() =>
+      useEntityPreview(undefined, { idField: "previewId" }),
+    );
+    const candidateRow = {
+      id: "WSH-8F2:PRD-4K7M",
+      original: {
+        id: "WSH-8F2",
+        previewId: "PRD-4K7M",
+        entityType: "product" as const,
+      },
+    };
+
+    act(() => result.current.onRowClick(candidateRow));
+
+    expect(result.current.preview).toEqual({
+      entityType: "product",
+      id: "PRD-4K7M",
+      rowKey: "WSH-8F2:PRD-4K7M",
+    });
   });
 });

@@ -15,6 +15,7 @@ import { EntityWorkbenchInspector } from "../entity-workbench-inspector";
 interface PreviewState {
   entityType: Entity;
   id: string;
+  rowKey: string;
 }
 
 interface PreviewIntent {
@@ -142,6 +143,7 @@ export function useEntityPreview(
   // has its own entityType field (search results carry a per-row entityType).
   const resolveRow = useCallback(
     <T extends Record<string, unknown>>(row: {
+      id?: string;
       original: T;
     }): PreviewState | null => {
       const rowData = row.original as T & {
@@ -150,17 +152,20 @@ export function useEntityPreview(
       const entityType =
         fixedEntity ?? (rowData.entityType as Entity | undefined);
       if (!entityType) return null;
-      const id = rowData[idField];
-      if (id === undefined || id === null) return null;
-      return { entityType, id: String(id) };
+      const targetId = rowData[idField];
+      if (targetId === undefined || targetId === null) return null;
+      const id = String(targetId);
+      const rowKey = String(row.id ?? rowData.id ?? id);
+      return { entityType, id, rowKey };
     },
     [fixedEntity, idField],
   );
 
-  // Accept any row with an 'original' property that has at least an id field.
-  // Compatible with TanStack's Row<T> for any T.
+  // Accept a TanStack Row<T> or a lightweight row with an 'original' property.
+  // The row key controls list selection; idField independently identifies the
+  // canonical entity target for heterogeneous relationship rosters.
   const onRowClick = useCallback(
-    <T extends Record<string, unknown>>(row: { original: T }) => {
+    <T extends Record<string, unknown>>(row: { id?: string; original: T }) => {
       const resolved = resolveRow(row);
       if (!resolved) {
         console.warn("useEntityPreview: could not resolve entity/id from row");
@@ -180,7 +185,7 @@ export function useEntityPreview(
   );
 
   const onRowHover = useCallback(
-    <T extends Record<string, unknown>>(row: { original: T }) => {
+    <T extends Record<string, unknown>>(row: { id?: string; original: T }) => {
       const resolved = resolveRow(row);
       if (!resolved || !isBrowserRoutedEntity(resolved.entityType)) {
         return;
@@ -224,7 +229,7 @@ export function useEntityPreview(
   );
 
   const onRowHoverEnd = useCallback(
-    <T extends Record<string, unknown>>(row: { original: T }) => {
+    <T extends Record<string, unknown>>(row: { id?: string; original: T }) => {
       const resolved = resolveRow(row);
       const intent = intentRef.current;
       if (
