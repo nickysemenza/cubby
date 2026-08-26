@@ -1,6 +1,6 @@
 # Porcelain Transit UI Overhaul
 
-Status: **In progress; T0–T7 complete, T8 peripheral-state migration next**
+Status: **In progress; T0–T8 complete, T9 whole-PWA hardening next**
 
 Delivery: **One big-bang branch and one ready-for-review PR**
 
@@ -212,7 +212,7 @@ means the named evidence exists; implementation without evidence remains
 | T5 | All canonical lists and details | T3–T4 | Complete | Standard, direct, and bespoke rosters share the dock/Sheet/phone-detail contract; generic routes reuse one bounded truthful relationship preview, canonical details compose Activity/Relations once, and scoped density plus responsive evidence is recorded in the ledger. |
 | T6 | Today and normal-density surfaces | T1–T2 | Complete | Attention-first daily briefing, truthful household signals, accessible question-led insights, responsive rendered-state evidence, focused tests, and full repository check |
 | T7 | Specialist workbenches | T1–T5 | Complete | Specialist task models remain intact while calendar, physical, recommendation, cooking, collection, project, and diagnostic surfaces gain truthful recovery, phone projections/targets, focused tests, responsive review, and independent closeout |
-| T8 | Peripheral web-PWA states | T1–T7 | Pending | Auth, OAuth, docs, offline, errors, loading, empty, print/export |
+| T8 | Peripheral web-PWA states | T1–T7 | Complete | Auth/OAuth, docs, offline, route errors/not-found, loading, settings integrations, labels, print/export, generated PWA assets, responsive review, focused tests, full check, and independent closeout are recorded in the evidence ledger |
 | T9 | Whole-PWA hardening and finish | T0–T8 | Pending | Detector, visual review, audit, tests, reviewer verdict, DESIGN.md and sidecar |
 
 ### T1 — Foundation
@@ -301,9 +301,9 @@ check so shared coverage is not assumed blindly.
 | Search/intelligence | `/search`, `/ask`, recommendations, AI usage/smoke | Pending | Search-to-inspector continuity, streaming/loading/error, debug separation |
 | Physical workflows | `/scan`, `/inventory/session`, photo pass | Pending | Camera permissions, manual fallback, keyboard, safe areas, landscape |
 | Operations | `/activity`, `/problems`, background jobs, entities, MCP inspector, labels | Pending | Dense diagnostics, error/recovery, print labels |
-| Account/settings | `/settings`, account views, connected apps | Pending | Forms, sections, disabled/success/error, narrow desktop and phone |
-| Entry/peripheral | auth, OAuth consent, docs, offline, route pending/error/not-found | Pending | Complete light-mode states, accessible recovery, no old-world flash |
-| Print/export | recipe export, labels, calendar feed-facing affordances | Pending | Print legibility and semantics; application chrome excluded intentionally |
+| Account/settings | `/settings`, account views, connected apps | Implemented, verified, reviewed | Forms, sections, disabled/success/error, narrow desktop and phone |
+| Entry/peripheral | auth, OAuth consent, docs, offline, route pending/error/not-found | Implemented, verified, reviewed | Complete light-mode states, accessible recovery, no old-world flash |
+| Print/export | recipe export, labels, calendar feed-facing affordances | Implemented, verified, reviewed | Print legibility and semantics; application chrome excluded intentionally |
 
 ## 8. State and input matrix
 

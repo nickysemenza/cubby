@@ -35,7 +35,7 @@ fix only redesign-caused failures.
 | T5 Canonical lists/details | Complete | Standard, direct-workbench, Project, Wishlist, Meal, and USDA rosters share the responsive inspector/mobile-detail contract; canonical details use one section ledger for Activity and truthful relationships, first-wave fallback previews are explicit, and read-heavy density is scoped rather than global |
 | T6 Today/ordinary surfaces | Complete | Daily briefing hierarchy, truthful household signals, accessible question-led insights, responsive action targets, focused tests, full repository check, and independent closeout are recorded below |
 | T7 Specialist workbenches | Complete | Specialist task models remain intact while calendar, physical, recommendation, cooking, collection, project, and diagnostic surfaces gain truthful recovery, phone projections/targets, focused tests, responsive review, and independent closeout |
-| T8 Peripheral states | Pending | — |
+| T8 Peripheral states | Complete | Public entry, OAuth, docs, offline, loading/error/not-found, account integrations, labels/print/export, generated PWA assets, phone geometry, focused tests, full check, and independent closeout are recorded below |
 | T9 Hardening and finish | Pending | — |
 
 ## T0 required evidence
@@ -139,6 +139,16 @@ height while retaining the named viewport width.
 | 2026-08-26 | T7 | Changed-test suite | Pass: 37 tests in 9 files | Exact changed-test inventory covers collections, recipe comparison, ingredient enrichment, recommendation routing, background diagnostics, project phone agenda/date semantics, and Gantt relationship resolution/activation |
 | 2026-08-26 | T7 | `pnpm check` | Pass | Exact-head entity/start-operation generators, workspace and service-worker types, changed-file formatting, SQL safety, soft-delete coverage, and unsafe-identifier guards are green |
 | 2026-08-26 | T7 | Independent adversarial closeout | Pass after corrections; no residual P1/P2 | Corrected four initial state/first-use/date findings, selected-summary recovery, and the Gantt focus/click double-toggle; final review verified one activation opens and the next closes for pointer and native keyboard-generated clicks |
+| 2026-08-26 | T8 | Public entry and OAuth recovery | Pass | Auth and consent use a deterministic shared entry frame; OAuth consent verifies the exact requested client identity, treats all error payloads as retryable failure, rejects stale-route state, and keeps Allow disabled without an exact match |
+| 2026-08-26 | T8 | Docs, route, and entity recovery | Pass | Documentation loading/failure/not-found, route error, application not-found, invalid shortcode, and missing canonical-entity states use sentence-case Porcelain surfaces with truthful 44px recovery actions |
+| 2026-08-26 | T8 | Peripheral loading and offline states | Pass | Shared route-pending geometry, 1px skeletons, offline recovery, and public footer/header materials replace remaining old-world treatments without introducing a dark-mode branch |
+| 2026-08-26 | T8 | Account, integration, and calendar recovery | Pass | Connected-app discovery, calendar feed lookup, and orphaned OAuth-client counts distinguish request failure from valid empty/zero states and expose local Retry actions |
+| 2026-08-26 | T8 | Label print/export hardening | Pass | Lookup failure fails closed even when sibling results succeed, Print/CSV and the print portal remain unavailable on error, invalid-code counts stay truthful, and the fixed physical sheet is isolated inside a focusable internal scroller |
+| 2026-08-26 | T8 | PWA palette and generated assets | Pass | Root metadata, manifest, offline document, favicon, install icons, maskable icons, and 11 splash images use the Porcelain canvas and mark; `pnpm --dir apps/web gen:pwa-assets` regenerated and verified the asset family |
+| 2026-08-26 | T8 | Responsive rendered-state review | Pass | Auth/OAuth/docs at 320px and offline/settings/connected apps/invalid shortcode/route error/labels at 430px were inspected without page overflow; interactive phone targets measured 44px and private household data was inspected only in place |
+| 2026-08-26 | T8 | Final focused UI suite | Pass: 29 tests in 13 files | Covers exact-ID consent, docs states, label export/print geometry, entity routing, orphan maintenance, footer targets, loading skeletons, PWA metadata, calendar feed recovery, and recipe export/search behavior |
+| 2026-08-26 | T8 | `pnpm check` | Pass | Exact-head entity/start-operation generators, workspace and service-worker types, changed-file formatting, SQL safety, soft-delete coverage, and unsafe-identifier guards are green |
+| 2026-08-26 | T8 | Independent adversarial closeout | Pass after seven P2 corrections; no residual P1/P2 | Reviewer verified exact-ID OAuth gating, mixed-error export suppression, internal paper scrolling, synchronized PWA palette/assets, missing-detail recovery, orphan-count recovery, and both footer targets at `13a5340d6` |
 
 ## T3–T4 mandatory checkpoint
 
