@@ -7,8 +7,8 @@ import { useEffect, useMemo } from "react";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { backgroundBatch } from "~/lib/background-batch.functions";
-import { invalidateQueryRoots } from "~/lib/query-keys";
 import { relatedness } from "~/lib/recommendations.functions";
 import { search } from "~/lib/search.functions";
 import {
@@ -58,7 +58,7 @@ export function RelatednessRail({
     if (!refresh.data?.batchId || indexing || !batch.data) return;
     // The worker has reached a terminal state. Re-read the product's status
     // rather than leaving the rail on the request-time readiness snapshot.
-    invalidateQueryRoots(queryClient, [["operation", "relatedness.product"]]);
+    void invalidateOperationTags(queryClient, [["relatedness", "product"]]);
   }, [batch.data, indexing, queryClient, refresh.data?.batchId]);
 
   return (

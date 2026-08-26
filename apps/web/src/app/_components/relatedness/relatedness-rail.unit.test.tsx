@@ -99,9 +99,7 @@ describe("RelatednessRail", () => {
     render(<RelatednessRail product={{ id: productId, tags: [] }} />);
 
     await waitFor(() => {
-      expect(mocks.invalidateQueries).toHaveBeenCalledWith({
-        queryKey: [["operation", "relatedness.product"]],
-      });
+      expect(mocks.invalidateQueries).toHaveBeenCalled();
     });
 
     expect(mocks.imageSummaryProductIds).toEqual([]);

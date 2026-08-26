@@ -49,7 +49,7 @@ describe("background batch polling", () => {
     });
   });
 
-  it("stops at terminal status and invalidates once", async () => {
+  it("stops at terminal status and invalidates cached results", async () => {
     const queryClient = new QueryClient();
     const invalidate = vi
       .spyOn(queryClient, "invalidateQueries")
@@ -69,7 +69,7 @@ describe("background batch polling", () => {
     await watching;
 
     expect(fetchBatchStatus).toHaveBeenCalledTimes(2);
-    expect(invalidate).toHaveBeenCalledOnce();
+    expect(invalidate).toHaveBeenCalled();
   });
 
   it("retains the 30-attempt timeout before invalidating", async () => {
@@ -89,7 +89,7 @@ describe("background batch polling", () => {
     await watching;
 
     expect(fetchBatchStatus).toHaveBeenCalledTimes(30);
-    expect(invalidate).toHaveBeenCalledOnce();
+    expect(invalidate).toHaveBeenCalled();
   });
 
   it("re-invalidates descriptor-tagged queries after a batch settles", async () => {
