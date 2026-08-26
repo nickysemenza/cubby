@@ -53,7 +53,7 @@ describe("entity sortableFields", () => {
 });
 
 describe("entity list first-visit density", () => {
-  it("keeps the registry density exception to the read-heavy transaction roster", () => {
+  it("keeps registry density exceptions to read-heavy rosters", () => {
     const defaults = Object.fromEntries(
       browserRoutedEntities.map((entity) => [
         entity,
@@ -71,7 +71,7 @@ describe("entity list first-visit density", () => {
       meal: undefined,
       project: undefined,
       task: undefined,
-      vendor: undefined,
+      vendor: "dense",
       purchase: undefined,
       expense: undefined,
       financialAccount: undefined,

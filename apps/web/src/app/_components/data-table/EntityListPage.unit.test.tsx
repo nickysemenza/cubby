@@ -74,6 +74,7 @@ describe("EntityListPage inspector composition", () => {
       responsiveInspector: true,
     });
     expect(props.currentRowId).toBe("VND-4K7M");
+    expect(props.defaultDensity).toBe("dense");
     expect(screen.getByText("Vendor inspector")).toBeInTheDocument();
     expect(screen.getByText("Intermediate preview")).toBeInTheDocument();
 

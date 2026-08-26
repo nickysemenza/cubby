@@ -384,6 +384,7 @@ const entityDefinitions = {
       // vendor list overriding it page-side — descending name would have
       // landed the roster on Z→A.)
       defaultSort: "spend",
+      defaultDensity: "dense",
       standardColumns: ["name"],
     },
     // "fixed": the keeper is the vendor being viewed; candidates are every
