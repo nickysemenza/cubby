@@ -8,8 +8,8 @@ import { BookMarked, Link2, Link2Off } from "lucide-react";
 import { useState } from "react";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { productSearchQueryOptions } from "~/app/products/product.functions";
-import { recipeSetCookbookProductMutationOptions } from "~/app/recipes/recipe.functions";
+import { product } from "~/app/products/product.functions";
+import { recipe } from "~/app/recipes/recipe.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -58,7 +58,7 @@ export function CookbookPhysicalCopy({
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const setProduct = useActionMutation({
-    mutationFn: recipeSetCookbookProductMutationOptions,
+    mutationFn: recipe.setCookbookProduct.mutationOptions,
     success: (result) =>
       result.product
         ? `Linked to ${result.product.name}`
@@ -176,7 +176,7 @@ function ProductPickerDialog({
   const [search] = useDebouncedValue(searchInput, { wait: 300 });
 
   const searchQuery = useQuery({
-    ...productSearchQueryOptions({
+    ...product.search.queryOptions({
       filters: { nameFilter: search.trim() || undefined },
       pagination: { pageIndex: 0, pageSize: SEARCH_PAGE_SIZE },
       sort: [{ orderBy: "name", direction: "asc" }],

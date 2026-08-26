@@ -1,20 +1,23 @@
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { backgroundBatchSummaryQueryOptions } = vi.hoisted(() => ({
-  backgroundBatchSummaryQueryOptions: vi.fn((input: { batchId: string }) => ({
+const { summaryQueryOptions } = vi.hoisted(() => ({
+  summaryQueryOptions: vi.fn((input: { batchId: string }) => ({
     queryKey: [["background-batch", "summary"], input],
     queryFn: async () => ({ status: "running" as const }),
   })),
 }));
 
 vi.mock("~/lib/background-batch.functions", () => ({
-  backgroundBatchSummaryQueryOptions,
+  backgroundBatch: {
+    summary: { queryOptions: summaryQueryOptions },
+  },
 }));
 
 import {
   makeBatchStatusFetcher,
   watchBatchesAndInvalidate,
+  watchBatchesAndInvalidateTags,
 } from "./background-batch-polling";
 
 const queuedResult = {
@@ -41,7 +44,7 @@ describe("background batch polling", () => {
     await expect(makeBatchStatusFetcher(queryClient)("batch-1")).resolves.toBe(
       "running",
     );
-    expect(backgroundBatchSummaryQueryOptions).toHaveBeenCalledWith({
+    expect(summaryQueryOptions).toHaveBeenCalledWith({
       batchId: "batch-1",
     });
   });
@@ -87,5 +90,25 @@ describe("background batch polling", () => {
 
     expect(fetchBatchStatus).toHaveBeenCalledTimes(30);
     expect(invalidate).toHaveBeenCalledOnce();
+  });
+
+  it("re-invalidates descriptor-tagged queries after a batch settles", async () => {
+    const queryClient = new QueryClient();
+    const key = ["operation", "product.summaries", { input: {} }] as const;
+    queryClient.setQueryDefaults(key, {
+      meta: { cacheTags: [["product", "summaries"]] },
+    });
+    queryClient.setQueryData(key, { items: [] });
+
+    const watching = watchBatchesAndInvalidateTags({
+      queryClient,
+      result: queuedResult,
+      invalidateTags: [["product"]],
+      fetchBatchStatus: vi.fn().mockResolvedValue("succeeded"),
+    });
+    await vi.advanceTimersByTimeAsync(1_500);
+    await watching;
+
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
   });
 });

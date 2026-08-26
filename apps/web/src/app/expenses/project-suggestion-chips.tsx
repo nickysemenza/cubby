@@ -6,11 +6,11 @@ import type { ExpenseOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { Lightbulb } from "lucide-react";
 import { useMemo, useState } from "react";
-import { projectOptionsQueryOptions } from "~/app/projects/project.functions";
+import { project } from "~/app/projects/project.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { householdLocalDate } from "~/lib/household-date";
-import { expenseTradeAffinityQueryOptions } from "./expense.functions";
+import { expense as expenseOperations } from "./expense.functions";
 import {
   type ProjectSuggestion,
   rankProjectSuggestions,
@@ -56,11 +56,11 @@ export function ProjectSuggestionChips({
   ].join("\u0000");
 
   const { data: projects = NO_PROJECTS } = useQuery({
-    ...projectOptionsQueryOptions(),
+    ...project.options.queryOptions(),
     enabled: unassigned,
   });
   const { data: affinity = NO_AFFINITY } = useQuery({
-    ...expenseTradeAffinityQueryOptions(),
+    ...expenseOperations.tradeAffinity.queryOptions(),
     enabled: unassigned,
   });
 

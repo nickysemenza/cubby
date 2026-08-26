@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { cookbookListQueryOptions } from "~/entities/cookbook.functions";
+import { cookbook } from "~/entities/cookbook.functions";
 
 const NO_COOKBOOK_OPTIONS: Array<{ value: string; label: string }> = [];
 
@@ -17,7 +17,7 @@ const NO_COOKBOOK_OPTIONS: Array<{ value: string; label: string }> = [];
  * Note the field name: a cookbook's display name is `book`, not `name`.
  */
 export function useCookbookOptions() {
-  const { data, isLoading } = useQuery(cookbookListQueryOptions());
+  const { data, isLoading } = useQuery(cookbook.list.queryOptions(null));
 
   const options = useMemo(
     () =>

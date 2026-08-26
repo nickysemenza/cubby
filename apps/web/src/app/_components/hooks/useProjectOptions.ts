@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createElement, useMemo } from "react";
-import { projectOptionsQueryOptions } from "~/app/projects/project.functions";
+import { project } from "~/app/projects/project.functions";
 import { ProjectMark } from "~/app/projects/project-mark";
 
 const NO_PROJECT_OPTIONS: Array<{
@@ -26,7 +26,7 @@ const NO_PROJECT_ROWS: Array<{
  * `project.options` procedure (no rollups/dependency joins), not `list`.
  */
 export function useProjectOptions() {
-  const { data, isLoading } = useQuery(projectOptionsQueryOptions());
+  const { data, isLoading } = useQuery(project.options.queryOptions());
 
   const options = useMemo(
     () =>

@@ -45,7 +45,7 @@ import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMu
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
 import { mealDateLabel } from "~/app/meals/meal-format";
-import { applyProductUpcDataMutationOptions } from "~/app/products/product.functions";
+import { product as productOperations } from "~/app/products/product.functions";
 import { attentionEvidence } from "~/app/projects/attention-presentation";
 import { formatDateWithYear } from "~/app/projects/project-formatting";
 import {
@@ -66,9 +66,9 @@ import {
 import { humanize } from "~/entities/filters";
 import type { ProblemQuery } from "~/entities/problem-query";
 import { problemQuery } from "~/entities/problem-registry";
-import { problemsCleanupOrphanedEmbeddingsMutationOptions } from "~/lib/problems.functions";
+import { problems } from "~/lib/problems.functions";
 import { invalidatesFor } from "~/lib/query-keys";
-import { searchEnqueueEmbeddingBackfillMutationOptions } from "~/lib/search.functions";
+import { search } from "~/lib/search.functions";
 import { formatCurrency } from "~/lib/utils";
 import type { ProductWithBetterUpcData } from "~/server/repo/problems";
 import { BACKFILL } from "./backfill-registry";
@@ -332,7 +332,7 @@ function problemAssembly(
  */
 function UpcApplyAction({ product }: { product: ProductWithBetterUpcData }) {
   const apply = useProblemCardMutation({
-    mutationFn: applyProductUpcDataMutationOptions,
+    mutationFn: productOperations.applyUpcData.mutationOptions,
     success: `Updated ${product.name} from UPC`,
     // The whole problems.* path is always invalidated by the hook (which also
     // feeds the navbar badge count); add the product/recipe lists (price feeds
@@ -359,7 +359,7 @@ function OrphanedEmbeddingCleanupFix({
   close: () => void;
 }) {
   const cleanup = useProblemCardMutation({
-    mutationFn: problemsCleanupOrphanedEmbeddingsMutationOptions,
+    mutationFn: problems.cleanupOrphanedEmbeddings.mutationOptions,
     success: "Cleaned up orphaned embedding",
     onSuccess: close,
   });
@@ -377,7 +377,7 @@ function OrphanedEmbeddingCleanupFix({
 
 function MissingEmbeddingsBackfillAction() {
   const backfill = useProblemCardMutation({
-    mutationFn: searchEnqueueEmbeddingBackfillMutationOptions,
+    mutationFn: search.enqueueEmbeddingBackfill.mutationOptions,
     success: (data) =>
       data.reused
         ? "Embedding backfill is already running."

@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
-import { identifyProductForBrowser } from "~/lib/ai.functions";
+import { ai } from "~/lib/ai.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { ConfidenceReasoningCard } from "../ai/ai-suggest";
 import type { PendingImage } from "../PendingImageUpload";
@@ -36,7 +36,7 @@ export function IdentifyProductButton<
 
     setIsLoading(true);
     try {
-      const identification = await identifyProductForBrowser({
+      const identification = await ai.identifyProduct.call({
         imageUrls,
       });
       setResult({ value: identification, basisKey });

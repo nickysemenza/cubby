@@ -11,7 +11,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
-import { usdaFoodDetailQueryOptions } from "~/entities/usda.functions";
+import { usdaFood as usdaFoodOperations } from "~/entities/usda.functions";
 import { useHydrated } from "~/hooks/useHydrated";
 import {
   BASE_KINDS,
@@ -58,7 +58,7 @@ const KindAccent: React.FC<{
 // Component for lazy loading food data and rendering FoodPillLink
 const LazyFoodPillLink: React.FC<{ fdcId: number }> = ({ fdcId }) => {
   const { data: usdaFood, isLoading: foodLoading } = useQuery({
-    ...usdaFoodDetailQueryOptions(fdcId),
+    ...usdaFoodOperations.detail.queryOptions({ id: fdcId }),
     // Cache for 5 minutes since food data doesn't change often
     staleTime: 5 * 60 * 1000,
   });

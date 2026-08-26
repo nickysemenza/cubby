@@ -3,14 +3,14 @@ import type { AllProblems, MaintenanceCounts } from "@cubby/schemas/problems";
 import type { QueryKey } from "@tanstack/react-query";
 import { sumBy } from "es-toolkit";
 import pluralize from "pluralize";
-import { recomputeLocationValuations } from "~/app/locations/location.functions";
+import { location } from "~/app/locations/location.functions";
 import { openRecipeRecomputeStaleStream } from "~/app/recipes/recipe.functions";
 import { backfillLocationDescriptionsStream } from "~/lib/ai.functions";
 import { collectBulkStream } from "~/lib/bulk-progress";
-import { cullPendingImages } from "~/lib/image.functions";
-import { cleanupOrphanedEmbeddings } from "~/lib/problems.functions";
+import { imageUpload } from "~/lib/image.functions";
+import { problems } from "~/lib/problems.functions";
 import { queryKeys } from "~/lib/query-keys";
-import { enqueueEmbeddingBackfill } from "~/lib/search.functions";
+import { search } from "~/lib/search.functions";
 
 /** What one task did, for the run's summary toast. */
 type AutoFixOutcome = {
@@ -97,7 +97,7 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
     invalidateKeys: [queryKeys.search.all],
     // Omitting `ids` cleans every orphan — the server already supports it.
     run: async () => {
-      const r = await cleanupOrphanedEmbeddings({});
+      const r = await problems.cleanupOrphanedEmbeddings.call({});
       return {
         summary: r.deleted
           ? `cleaned ${pluralize("orphaned embedding", r.deleted, true)}`
@@ -114,7 +114,7 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
     listedCount: () => 0,
     invalidateKeys: [queryKeys.image.list],
     run: async () => {
-      const r = await cullPendingImages({
+      const r = await imageUpload.cullPendingImages.call({
         olderThanHours: CULL_PENDING_IMAGES_DEFAULT_HOURS,
       });
       return {
@@ -159,7 +159,7 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
     // rather than a needs-work one, so a bounded call can enqueue nothing useful
     // and never converge.
     run: async () => {
-      const r = await enqueueEmbeddingBackfill({});
+      const r = await search.enqueueEmbeddingBackfill.call({});
       return {
         summary: r.reused
           ? "embedding backfill is already running"
@@ -198,7 +198,7 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
     alwaysRun: true,
     invalidateKeys: [queryKeys.location.all],
     run: async () => {
-      const r = await recomputeLocationValuations();
+      const r = await location.recomputeValuations.call();
       return {
         summary: r.updated
           ? `revalued ${pluralize("location", r.updated, true)}`

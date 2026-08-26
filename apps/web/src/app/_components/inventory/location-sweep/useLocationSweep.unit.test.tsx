@@ -33,27 +33,37 @@ vi.mock("~/lib/query-keys", () => ({
 }));
 
 vi.mock("~/app/inventory/inventory.functions", () => ({
-  scanInventoryAtLocationMutationOptions: () => ({
-    mutationFn: async (input: unknown) => mocks.scan(input),
-  }),
-  resolveInventoryScanStraysMutationOptions: () => ({
-    mutationFn: async (input: unknown) => {
-      mocks.calls.push("resolveScanStrays");
-      return mocks.resolveStrays(input);
+  inventory: {
+    scanAtLocation: {
+      mutationOptions: () => ({
+        mutationFn: async (input: unknown) => mocks.scan(input),
+      }),
     },
-  }),
+    resolveScanStrays: {
+      mutationOptions: () => ({
+        mutationFn: async (input: unknown) => {
+          mocks.calls.push("resolveScanStrays");
+          return mocks.resolveStrays(input);
+        },
+      }),
+    },
+  },
 }));
 
 vi.mock("~/app/locations/location.functions", () => ({
-  bulkUpdateParentMutationOptions: () => ({
-    mutationFn: async (input: unknown) => {
-      mocks.calls.push("bulkUpdateParent");
-      return mocks.reparent(input);
+  location: {
+    bulkUpdateParent: {
+      mutationOptions: () => ({
+        mutationFn: async (input: unknown) => {
+          mocks.calls.push("bulkUpdateParent");
+          return mocks.reparent(input);
+        },
+      }),
     },
-  }),
-  ensureGlobalUnknownMutationOptions: () => ({
-    mutationFn: vi.fn(),
-  }),
+    ensureGlobalUnknown: {
+      mutationOptions: () => ({ mutationFn: vi.fn() }),
+    },
+  },
 }));
 
 vi.mock("~/entities/entity-detail.functions", () => ({

@@ -5,7 +5,7 @@ import type {
 } from "@cubby/schemas/recipe-shared";
 import { useQuery } from "@tanstack/react-query";
 import { match } from "ts-pattern";
-import { recipeExplainCostingQueryOptions } from "~/app/recipes/recipe.functions";
+import { recipe } from "~/app/recipes/recipe.functions";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -79,7 +79,7 @@ export const RecipeCostingDebugCard: React.FC<{
   recipeId: RecipeShortcode;
 }> = ({ recipeId }) => {
   const { data, error } = useQuery(
-    recipeExplainCostingQueryOptions({ id: recipeId }),
+    recipe.explainCosting.queryOptions({ id: recipeId }),
   );
 
   if (error) {

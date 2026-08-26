@@ -65,10 +65,7 @@ import { invalidateQueryRoots, queryKeys } from "~/lib/query-keys";
 import { toolTimelineConflict } from "~/lib/tool-timeline";
 import { cn, formatCurrency } from "~/lib/utils";
 import type { ToolMatrixSearch } from "~/routes/_authenticated/projects.tools";
-import {
-  projectSetToolUsageMutationOptions,
-  projectToolMatrixQueryOptions,
-} from "./project.functions";
+import { project } from "./project.functions";
 import { PROJECT_STATUS_LABELS } from "./project-formatting";
 
 /**
@@ -354,7 +351,7 @@ export function ToolMatrixPage({
     ],
   );
 
-  const { data, isLoading } = useQuery(projectToolMatrixQueryOptions(input));
+  const { data, isLoading } = useQuery(project.toolMatrix.queryOptions(input));
 
   // A hand-edited or stale URL can point past the last page after filtering.
   // The server clamps authoritatively; mirror that answer back into the URL.
@@ -377,7 +374,7 @@ export function ToolMatrixPage({
     };
   }, []);
 
-  const setUsage = useMutation(projectSetToolUsageMutationOptions());
+  const setUsage = useMutation(project.setToolUsage.mutationOptions());
 
   const toggleCell = useCallback(
     (projectId: string, productId: string, nextUsed: boolean) => {

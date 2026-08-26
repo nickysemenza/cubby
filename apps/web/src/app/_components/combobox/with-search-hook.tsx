@@ -11,11 +11,11 @@ import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { lazy, Suspense } from "react";
 import { useUpcAwareCreate } from "~/app/_components/products/use-upc-aware-create";
-import { locationSearchQueryOptions } from "~/app/locations/location.functions";
-import { productSearchQueryOptions } from "~/app/products/product.functions";
+import { location } from "~/app/locations/location.functions";
+import { product } from "~/app/products/product.functions";
 import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { entityListQueryOptions } from "~/entities/entity-list.functions";
-import { searchFindQueryOptions } from "~/lib/search.functions";
+import { search } from "~/lib/search.functions";
 import {
   buildIngredientComboboxItem,
   buildLocationComboboxItem,
@@ -80,7 +80,7 @@ export function WithIngredientSearch({
     enabled: enabled && !searchingByCode && searchQuery.trim() === "",
   });
   const { data: searchHits, isLoading: isSearchLoading } = useQuery({
-    ...searchFindQueryOptions({
+    ...search.find.queryOptions({
       query: searchQuery || "ingredient",
       entityTypes: ["ingredient"],
       limit: 20,
@@ -162,7 +162,7 @@ export function WithLocationSearch({
   const searchingByCode = parsedCode != null;
 
   const { data, isLoading } = useQuery({
-    ...locationSearchQueryOptions({
+    ...location.search.queryOptions({
       filters: { nameFilter: searchQuery },
       pagination,
       // Explicit: the list factory's default direction is `desc` (right for a
@@ -173,7 +173,7 @@ export function WithLocationSearch({
     enabled: enabled && !searchingByCode && searchQuery.trim() === "",
   });
   const { data: searchHits, isLoading: isSearchLoading } = useQuery({
-    ...searchFindQueryOptions({
+    ...search.find.queryOptions({
       query: searchQuery || "location",
       entityTypes: ["location"],
       limit: 20,
@@ -253,7 +253,7 @@ export function WithProductSearch({
   const searchingByCode = parsedCode != null;
 
   const { data, isLoading } = useQuery({
-    ...productSearchQueryOptions({
+    ...product.search.queryOptions({
       filters: { nameFilter: searchQuery },
       pagination,
     }),
@@ -323,7 +323,7 @@ export function WithRecipeSearch({
     enabled: enabled && !searchingByCode && searchQuery.trim() === "",
   });
   const { data: searchHits, isLoading: isSearchLoading } = useQuery({
-    ...searchFindQueryOptions({
+    ...search.find.queryOptions({
       query: searchQuery || "recipe",
       entityTypes: ["recipe"],
       limit: 20,
@@ -384,7 +384,7 @@ export function WithProjectSearch({
     enabled: enabled && !searchingByCode && searchQuery.trim() === "",
   });
   const { data: searchHits, isLoading: isSearchLoading } = useQuery({
-    ...searchFindQueryOptions({
+    ...search.find.queryOptions({
       query: searchQuery || "project",
       entityTypes: ["project"],
       limit: 20,
@@ -445,7 +445,7 @@ export function WithTaskSearch({
     enabled: enabled && !searchingByCode && searchQuery.trim() === "",
   });
   const { data: searchHits, isLoading: isSearchLoading } = useQuery({
-    ...searchFindQueryOptions({
+    ...search.find.queryOptions({
       query: searchQuery || "task",
       entityTypes: ["task"],
       limit: 20,

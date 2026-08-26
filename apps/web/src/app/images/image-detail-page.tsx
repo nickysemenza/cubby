@@ -3,7 +3,7 @@ import { ImageDetail } from "~/app/_components/images/image-detail";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
-import { imageDetailQueryOptions } from "~/entities/image.functions";
+import { image } from "~/entities/image.functions";
 
 interface ImageDetailPageProps {
   shortcode: string;
@@ -14,7 +14,7 @@ export default function ImageDetailPage({ shortcode }: ImageDetailPageProps) {
     data: imageDetails,
     isLoading,
     error,
-  } = useQuery(imageDetailQueryOptions(shortcode));
+  } = useQuery(image.detail.queryOptions({ id: shortcode }));
 
   if (isLoading) {
     return (

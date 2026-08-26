@@ -11,7 +11,7 @@ import RTable from "~/app/_components/data-table/Table";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { taskDueColumn, taskStatusColumn } from "~/app/projects/shared";
-import { taskChartDataQueryOptions } from "~/app/tasks/task.functions";
+import { task } from "~/app/tasks/task.functions";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
@@ -51,7 +51,7 @@ export const ProductTaskHistory: FC<{ product: ProductWithFoodOut }> = ({
 }) => {
   const helper = useMemo(() => createCubbyColumnHelper<TaskOut>(), []);
   const { data, isPending } = useQuery(
-    taskChartDataQueryOptions({ subjectProductId: product.id }),
+    task.chartData.queryOptions({ subjectProductId: product.id }),
   );
   const tasks = data ?? EMPTY_TASKS;
   const update = useUpdateMutation({

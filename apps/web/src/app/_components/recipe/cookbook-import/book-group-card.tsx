@@ -9,7 +9,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useMemo, useRef } from "react";
-import { recipeCookbookDiffQueryOptions } from "~/app/recipes/recipe.functions";
+import { recipe } from "~/app/recipes/recipe.functions";
 import { Row } from "~/components/layout/row";
 import { BulkProgressBar } from "~/components/ui/bulk-progress-bar";
 import { Button } from "~/components/ui/button";
@@ -47,7 +47,7 @@ export function BookGroupCard({
   // card show "no changes" vs "will update". Also lets a cross-recipe reference
   // link to a recipe that already exists.
   const { data: existingRecipes } = useQuery({
-    ...recipeCookbookDiffQueryOptions({ book: name }),
+    ...recipe.getCookbookDiff.queryOptions({ book: name }),
     enabled: ready && name.length > 0,
   });
   const existingByTitle = useMemo(

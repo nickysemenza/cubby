@@ -3,7 +3,7 @@ import { unsafeCookbookShortcode } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 import { Row } from "~/components/layout";
 import { NativeSelect } from "~/components/ui/native-select";
-import { cookbookListQueryOptions } from "~/entities/cookbook.functions";
+import { cookbook } from "~/entities/cookbook.functions";
 
 interface CookbookSelectProps {
   value: CookbookShortcode | undefined;
@@ -16,7 +16,7 @@ interface CookbookSelectProps {
  * CookbookShortcode boundary cast so callers deal only in branded ids.
  */
 export function CookbookSelect({ value, onChange }: CookbookSelectProps) {
-  const { data: cookbooks } = useQuery(cookbookListQueryOptions());
+  const { data: cookbooks } = useQuery(cookbook.list.queryOptions(null));
 
   return (
     <Row as="label" align="center" gap="sm" className="w-fit text-sm">

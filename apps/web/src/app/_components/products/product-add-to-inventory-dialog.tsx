@@ -20,7 +20,7 @@ import {
 } from "~/app/_components/form-fields";
 import { QuickInventoryAdd } from "~/app/_components/inventory/quick-inventory-add";
 import { LocationFieldWithAI } from "~/app/_components/locations/location-field-with-ai";
-import { productComponentsQueryOptions } from "~/app/products/product.functions";
+import { product as productOperations } from "~/app/products/product.functions";
 import { Stack } from "~/components/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Description } from "~/components/ui/description";
@@ -88,7 +88,9 @@ export const ProductAddToInventoryDialog: FC<
 > = ({ open, onOpenChange, product, accounting }) => {
   // Same query the Kit Components section makes, so this costs nothing extra.
   const { data: components } = useQuery({
-    ...productComponentsQueryOptions({ parentProductId: product.id }),
+    ...productOperations.components.queryOptions({
+      parentProductId: product.id,
+    }),
     enabled: open && (accounting?.componentCount ?? 0) > 0,
   });
   const overAccounted = useMemo(() => {

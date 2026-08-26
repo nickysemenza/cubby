@@ -7,7 +7,7 @@ import {
   formatCategoryLabel,
   getCategoryColor,
 } from "~/app/_components/products/category-theme";
-import { productCategoryDistributionQueryOptions } from "~/app/products/product.functions";
+import { product } from "~/app/products/product.functions";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizTooltip } from "./viz-overlay";
@@ -20,7 +20,7 @@ type CategoryData = {
 
 export default function ProductCategoryDonut() {
   const { data, isLoading } = useQuery(
-    productCategoryDistributionQueryOptions(),
+    product.categoryDistribution.queryOptions(),
   );
 
   if (isLoading) {

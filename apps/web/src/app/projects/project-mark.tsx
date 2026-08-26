@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { EntityIcon } from "~/entities/entities";
 import { cn } from "~/lib/utils";
-import { projectOptionsQueryOptions } from "./project.functions";
+import { project } from "./project.functions";
 
 const markClasses = {
   12: "size-3 text-xs",
@@ -66,7 +66,7 @@ export function ProjectMarkById({
   className?: string;
 }) {
   const { data } = useQuery({
-    ...projectOptionsQueryOptions(),
+    ...project.options.queryOptions(),
     enabled: icon === undefined,
   });
   const resolvedIcon = useMemo(

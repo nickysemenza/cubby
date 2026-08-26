@@ -1,7 +1,7 @@
 import type { CookbookShortcode } from "@cubby/schemas/identifiers";
 import { useState } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { recipeDeleteCookbookMutationOptions } from "~/app/recipes/recipe.functions";
+import { recipe } from "~/app/recipes/recipe.functions";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidatesFor } from "~/lib/query-keys";
@@ -33,7 +33,7 @@ export function useCookbookDelete({
     useState<CookbookDeleteTarget | null>(null);
 
   const deleteMutation = useActionMutation({
-    mutationFn: recipeDeleteCookbookMutationOptions,
+    mutationFn: recipe.deleteCookbook.mutationOptions,
     success: ({ deletedRecipes }) =>
       `Deleted ${pendingDelete?.name ?? "cookbook"} and ${deletedRecipes} recipe${deletedRecipes === 1 ? "" : "s"}`,
     invalidateKeys: invalidatesFor("recipe", "cookbook"),

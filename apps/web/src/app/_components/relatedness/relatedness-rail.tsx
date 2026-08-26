@@ -7,13 +7,10 @@ import { useEffect, useMemo } from "react";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { backgroundBatchSummaryQueryOptions } from "~/lib/background-batch.functions";
+import { backgroundBatch } from "~/lib/background-batch.functions";
 import { invalidateQueryRoots } from "~/lib/query-keys";
-import {
-  relatednessProductQueryOptions,
-  relatednessProductRootKey,
-} from "~/lib/recommendations.functions";
-import { searchRequestEmbeddingRefreshMutationOptions } from "~/lib/search.functions";
+import { relatedness } from "~/lib/recommendations.functions";
+import { search } from "~/lib/search.functions";
 import {
   ProductImageSummariesProvider,
   useHydratedProductImages,
@@ -32,10 +29,12 @@ export function RelatednessRail({
   product: { id: ProductShortcode; tags: string[] };
 }) {
   const queryClient = useQueryClient();
-  const relatedness = useQuery(relatednessProductQueryOptions(product.id));
-  const refresh = useMutation(searchRequestEmbeddingRefreshMutationOptions());
+  const relatednessQuery = useQuery(
+    relatedness.product.queryOptions(product.id),
+  );
+  const refresh = useMutation(search.requestEmbeddingRefresh.mutationOptions());
   const batch = useQuery({
-    ...backgroundBatchSummaryQueryOptions({
+    ...backgroundBatch.summary.queryOptions({
       batchId: refresh.data?.batchId ?? "00000000-0000-4000-8000-000000000000",
     }),
     enabled: refresh.data?.batchId != null,
@@ -46,8 +45,8 @@ export function RelatednessRail({
         : false,
   });
 
-  const status = relatedness.data?.status;
-  const items = relatedness.data?.items ?? EMPTY_RELATED_PRODUCTS;
+  const status = relatednessQuery.data?.status;
+  const items = relatednessQuery.data?.items ?? EMPTY_RELATED_PRODUCTS;
   const relatedProductIds = useMemo(
     () => items.map((item) => item.shortcode),
     [items],
@@ -59,7 +58,7 @@ export function RelatednessRail({
     if (!refresh.data?.batchId || indexing || !batch.data) return;
     // The worker has reached a terminal state. Re-read the product's status
     // rather than leaving the rail on the request-time readiness snapshot.
-    invalidateQueryRoots(queryClient, [relatednessProductRootKey()]);
+    invalidateQueryRoots(queryClient, [["operation", "relatedness.product"]]);
   }, [batch.data, indexing, queryClient, refresh.data?.batchId]);
 
   return (
@@ -103,7 +102,7 @@ export function RelatednessRail({
         ))}
       </ProductImageSummariesProvider>
 
-      {status === "ready" && relatedness.data?.items.length === 0 && (
+      {status === "ready" && relatednessQuery.data?.items.length === 0 && (
         <p className="text-muted-foreground text-xs">
           No related products yet.
         </p>

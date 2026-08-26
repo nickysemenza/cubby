@@ -14,10 +14,7 @@ import { Input } from "~/components/ui/input";
 import { EntityIcon, entities } from "~/entities/entities";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useIsMobile } from "~/hooks/useMobile";
-import {
-  searchFindQueryOptions,
-  searchRelatedQueryOptions,
-} from "~/lib/search.functions";
+import { search } from "~/lib/search.functions";
 import { cn } from "~/lib/utils";
 import { getRecents, pushRecent } from "../command-menu/recents";
 import { useEntityPreview } from "../hooks/useEntityPreview";
@@ -68,7 +65,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
   }, [debouncedDraft, navigate, query, type]);
 
   const primary = useQuery({
-    ...searchFindQueryOptions({
+    ...search.find.queryOptions({
       query: debouncedDraft,
       entityTypes,
       limit: 50,
@@ -77,7 +74,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
     placeholderData: keepPreviousData,
   });
   const related = useQuery({
-    ...searchRelatedQueryOptions({
+    ...search.related.queryOptions({
       query: relatedDraft,
       entityTypes,
       limit: 12,

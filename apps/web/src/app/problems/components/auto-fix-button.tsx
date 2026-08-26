@@ -15,7 +15,7 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { getErrorMessage } from "~/lib/error-utils";
-import { problemsMaintenanceCountsQueryOptions } from "~/lib/problems.functions";
+import { problems as problemOperations } from "~/lib/problems.functions";
 import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
 import { PROBLEMS_QUERY_STALE_TIME } from "../problem-query-freshness";
 import { type AutoFixTask, buildAutoFixPlan } from "./auto-fix-registry";
@@ -32,11 +32,10 @@ import { type AutoFixTask, buildAutoFixPlan } from "./auto-fix-registry";
  *   the issue count above it.
  */
 export function useAutoFixPlan(problems: AllProblems) {
-  const { data: counts } = useQuery(
-    problemsMaintenanceCountsQueryOptions({
-      staleTime: PROBLEMS_QUERY_STALE_TIME,
-    }),
-  );
+  const { data: counts } = useQuery({
+    ...problemOperations.getMaintenanceCounts.queryOptions(),
+    staleTime: PROBLEMS_QUERY_STALE_TIME,
+  });
 
   return buildAutoFixPlan(problems, counts);
 }

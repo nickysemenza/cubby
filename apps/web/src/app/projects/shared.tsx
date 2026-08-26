@@ -95,7 +95,7 @@ import {
   createExpenseProductImageColumn,
   ExpenseProductImages,
 } from "~/app/expenses/expense-product-image-column";
-import { productInventoryEntriesByIdsQueryOptions } from "~/app/products/product.functions";
+import { product } from "~/app/products/product.functions";
 import { ProjectMark } from "~/app/projects/project-mark";
 import { taskStatusOptions } from "~/app/tasks/task-options";
 import { VendorCell, VendorMark } from "~/components/entity/vendor-cell";
@@ -117,13 +117,13 @@ import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { multiSelectFilterFnBy } from "~/entities/filters";
-import { projectImageSummariesQueryOptions } from "~/entities/image.functions";
+import { image } from "~/entities/image.functions";
 import type { ProjectRowsRenderer } from "~/lib/list-view-normalization";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn, formatCurrency } from "~/lib/utils";
 import { persistedVendorId } from "~/lib/vendor-logo";
-import { projectTreeQueryOptions } from "./project.functions";
+import { project } from "./project.functions";
 import { PROJECT_STATUS_OPTIONS, projectKindOptions } from "./project-options";
 import { buildProjectTree, type ProjectTreeRow } from "./project-tree";
 import { tradeOptions } from "./trade-options";
@@ -306,7 +306,7 @@ export function TaskList({
     [tasks],
   );
   const { data: inventoryByProduct } = useQuery({
-    ...productInventoryEntriesByIdsQueryOptions({
+    ...product.inventoryEntriesByIds.queryOptions({
       ids: subjectProductIds,
     }),
     enabled: subjectProductIds.length > 0,
@@ -1215,7 +1215,7 @@ export function ProjectTable({
   const projectOptions = useDeferredFilterOptions("project");
   const [projectIds, setProjectIds] = useState<string[]>([]);
   const { data: projectImages } = useQuery({
-    ...projectImageSummariesQueryOptions({ projectIds }),
+    ...image.projectSummaries.queryOptions({ projectIds }),
     staleTime: 5 * 60 * 1000,
     enabled: projectIds.length > 0,
   });
@@ -1386,7 +1386,7 @@ export function ProjectTable({
   const tableStateOptions = useMemo(() => ({ initialSort: "startDate" }), []);
   const { workbench, data, totalCount } = useEntityList({
     entity: "project",
-    queryOptions: isTree ? projectTreeQueryOptions : undefined,
+    queryOptions: isTree ? project.tree.queryOptions : undefined,
     columns,
     filterOptions,
     deletable: deletableConfig,

@@ -22,7 +22,7 @@ import { useEntityDetail } from "../_components/hooks/useEntityDetail";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { EntityMergeDialog } from "../_components/merge/entity-merge-dialog";
 import { RelationshipSummaryTable } from "../_components/relationships/relationship-summary-table";
-import { mergeVendorsMutationOptions } from "./vendor.functions";
+import { vendor as vendorOperations } from "./vendor.functions";
 import { VendorPurchasesTable } from "./vendor-purchases-table";
 
 interface VendorDetailProps {
@@ -52,7 +52,7 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
   // `DuplicateVendorMergeFix` (problems page) invalidates past the plain
   // vendor key set.
   const mergeMutation = useActionMutation({
-    mutationFn: mergeVendorsMutationOptions,
+    mutationFn: vendorOperations.merge.mutationOptions,
     success: "Vendors merged",
     invalidateKeys: invalidatesFor("purchase"),
     onSuccess: () => setMergeOpen(false),

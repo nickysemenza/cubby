@@ -41,11 +41,7 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { cancelQueryRoots } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { EditableCell } from "../_components/data-table/editable-cell";
-import {
-  mealAddRecipeMutationOptions,
-  mealRemoveRecipeMutationOptions,
-  mealUpdateRecipeMutationOptions,
-} from "./meal.functions";
+import { meal as mealOperations } from "./meal.functions";
 import {
   mealKindBadgeVariant,
   mealKindOptions,
@@ -75,7 +71,7 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
     mutationFn: entityMutationOptionsFactory("meal", "update"),
     entity: "meal",
   });
-  const addRecipeBase = mealAddRecipeMutationOptions();
+  const addRecipeBase = mealOperations.addRecipe.mutationOptions();
   const addRecipe = useMutation({
     mutationKey: addRecipeBase.mutationKey,
     mutationFn: addRecipeBase.mutationFn,
@@ -377,7 +373,7 @@ function RecipeRow({
       current ? patch(current) : current,
     );
   };
-  const updateBase = mealUpdateRecipeMutationOptions();
+  const updateBase = mealOperations.updateRecipe.mutationOptions();
   const updateRecipe = useMutation({
     mutationKey: updateBase.mutationKey,
     mutationFn: updateBase.mutationFn,
@@ -407,7 +403,7 @@ function RecipeRow({
     },
     onSettled: onChanged,
   });
-  const removeBase = mealRemoveRecipeMutationOptions();
+  const removeBase = mealOperations.removeRecipe.mutationOptions();
   const removeRecipe = useMutation({
     mutationKey: removeBase.mutationKey,
     mutationFn: removeBase.mutationFn,

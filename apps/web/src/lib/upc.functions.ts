@@ -1,26 +1,16 @@
 import {
   productLookupResponseSchema,
-  type upcLookupInput,
+  upcLookupInput,
 } from "@cubby/upc-contract";
-import { createServerFn } from "@tanstack/react-start";
-import type { z } from "zod";
-import { startOperation } from "~/integrations/tanstack-query/start-transport";
-import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
-import { lookupUpcForBrowser } from "~/server/upc-browser.server";
+import {
+  defineOperationDomain,
+  query,
+} from "~/integrations/tanstack-query/operation-catalog";
 
-const lookupTransport = createServerFn({ method: "POST" })
-  .middleware([authenticatedStartServerFunction])
-  .validator((value: unknown) => value as z.input<typeof upcLookupInput>)
-  .handler(({ data, context }) =>
-    lookupUpcForBrowser({ data, request: context.startOperation }),
-  );
-
-const lookupOperation = startOperation({
-  operation: "upc.lookup",
-  transport: (data: z.input<typeof upcLookupInput>, { signal, headers }) =>
-    lookupTransport({ data, signal, headers }),
-  parse: (result) => productLookupResponseSchema.nullable().parse(result),
+export const upc = defineOperationDomain("upc", {
+  lookup: query({
+    input: upcLookupInput,
+    output: productLookupResponseSchema.nullable(),
+    tags: [["upc", "lookup"]],
+  }),
 });
-
-export const lookupUpc = (upc: string, signal?: AbortSignal) =>
-  lookupOperation.call({ upc }, { signal });

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   queryOptions: vi.fn(),
+  useQuery: vi.fn(),
   drilldown: vi.fn(),
   refetch: vi.fn(),
   query: {
@@ -15,10 +16,15 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@tanstack/react-query", () => ({
-  useQuery: () => mocks.query,
+  useQuery: (options: unknown) => {
+    mocks.useQuery(options);
+    return mocks.query;
+  },
 }));
 vi.mock("~/app/locations/location.functions", () => ({
-  locationInventoryBreakdownQueryOptions: mocks.queryOptions,
+  location: {
+    inventoryBreakdown: { queryOptions: mocks.queryOptions },
+  },
 }));
 vi.mock("~/app/_components/visualizations/hierarchy-drilldown", () => ({
   HierarchyDrilldown: (props: unknown) => {
@@ -33,6 +39,7 @@ const rootId = unsafeLocationShortcode("LOC-ROOT");
 
 beforeEach(() => {
   mocks.queryOptions.mockReset();
+  mocks.useQuery.mockReset();
   mocks.drilldown.mockReset();
   mocks.refetch.mockReset();
   mocks.query = {
@@ -49,9 +56,9 @@ describe("LocationInventoryBreakdown", () => {
       <LocationInventoryBreakdown shortcode={rootId} hasChildren={false} />,
     );
 
-    expect(mocks.queryOptions).toHaveBeenCalledWith(
-      { shortcode: rootId },
-      { enabled: false },
+    expect(mocks.queryOptions).toHaveBeenCalledWith({ shortcode: rootId });
+    expect(mocks.useQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ enabled: false }),
     );
     expect(container).toBeEmptyDOMElement();
   });

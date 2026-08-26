@@ -12,7 +12,7 @@ import {
   UnifiedTextField,
 } from "~/app/_components/form-utils";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { projectCreateFromTasksMutationOptions } from "~/app/projects/project.functions";
+import { project } from "~/app/projects/project.functions";
 import { projectKindOptions } from "~/app/projects/project-options";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -56,7 +56,7 @@ export function CreateProjectFromTasksDialog({
     defaultValues,
   });
   const mutation = useActionMutation({
-    mutationFn: projectCreateFromTasksMutationOptions,
+    mutationFn: project.createFromTasks.mutationOptions,
     invalidateKeys: [...invalidatesFor("task"), ...invalidatesFor("project")],
     success: (data) => `Created "${data.project.name}"`,
     onSuccess: () => onOpenChange(false),

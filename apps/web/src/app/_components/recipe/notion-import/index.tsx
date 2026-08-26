@@ -8,7 +8,7 @@ import { AlertCircle, Import, RotateCcw, Search } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { z } from "zod";
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
-import { recipePreviewNotionQueryOptions } from "~/app/recipes/recipe.functions";
+import { recipe } from "~/app/recipes/recipe.functions";
 import { Row } from "~/components/layout/row";
 import { Stack } from "~/components/layout/stack";
 import { BulkProgressBar } from "~/components/ui/bulk-progress-bar";
@@ -58,7 +58,7 @@ export function NotionImport() {
   // remain fresh for this session. Refresh is deliberate; successful imports
   // invalidate this cache so statuses reflect the committed recipes.
   const preview = useQuery({
-    ...recipePreviewNotionQueryOptions(),
+    ...recipe.previewNotionSync.queryOptions(),
     staleTime: Infinity,
     gcTime: Infinity,
   });
@@ -139,7 +139,7 @@ export function NotionImport() {
           if (r.succeeded > 0) {
             invalidateQueryRoots(queryClient, invalidatesFor("recipe"));
             invalidateQueryRoots(queryClient, [
-              recipePreviewNotionQueryOptions().queryKey,
+              recipe.previewNotionSync.queryOptions().queryKey,
             ]);
           }
         },

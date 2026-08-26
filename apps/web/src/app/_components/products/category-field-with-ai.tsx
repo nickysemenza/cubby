@@ -1,6 +1,6 @@
 import type { CategorySuggestion } from "@cubby/schemas/ai";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
-import { suggestCategoryForBrowser } from "~/lib/ai.functions";
+import { ai } from "~/lib/ai.functions";
 import { FieldWithAISuggest } from "../ai/ai-suggest";
 import { SelectField } from "../form-utils";
 import { productCategoryOptionsWithTheme } from "./product-category-icons";
@@ -52,9 +52,7 @@ export function CategoryFieldWithAI<
       basisKey={`${productName}\u0000${manufacturer}`}
       currentValue={form.watch(name)}
       fieldDirty={form.getFieldState(name).isDirty}
-      runSuggest={() =>
-        suggestCategoryForBrowser({ productName, manufacturer })
-      }
+      runSuggest={() => ai.suggestCategory.call({ productName, manufacturer })}
       onAccept={(r) =>
         form.setValue(name, r.category as TFieldValues[typeof name])
       }

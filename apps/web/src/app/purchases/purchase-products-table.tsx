@@ -19,7 +19,7 @@ import {
 import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { ProductAddToInventoryDialog } from "~/app/_components/products/product-add-to-inventory-dialog";
-import { kitComponentRowsQueryOptions } from "~/app/products/product.functions";
+import { product } from "~/app/products/product.functions";
 import { groupComponentsByParent } from "~/app/products/product-kit-rows";
 import { Badge } from "~/components/ui/badge";
 import {
@@ -30,10 +30,7 @@ import {
 } from "~/components/ui/empty";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { invalidatesFor } from "~/lib/query-keys";
-import {
-  detachPurchaseProductsMutationOptions,
-  purchaseProductsQueryOptions,
-} from "./purchase.functions";
+import { purchase } from "./purchase.functions";
 
 const EMPTY_PRODUCTS: PurchaseProductOut[] = [];
 const EMPTY_KIT_ROWS: KitComponentRowOut[] = [];
@@ -59,7 +56,7 @@ type PurchaseProductRow = {
 };
 
 export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
-  const query = useQuery(purchaseProductsQueryOptions({ purchaseId }));
+  const query = useQuery(purchase.products.queryOptions({ purchaseId }));
   const items = query.data ?? EMPTY_PRODUCTS;
   // Kits among this order's products. Gated on `componentCount` so the vast
   // majority of purchases (22 of ~3,450 contain a kit) fire no extra query.
@@ -69,7 +66,7 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
     [items],
   );
   const kitComponentsQuery = useQuery({
-    ...kitComponentRowsQueryOptions({ parentProductIds: kitIds }),
+    ...product.kitComponentRows.queryOptions({ parentProductIds: kitIds }),
     enabled: kitIds.length > 0,
   });
   const componentsByParent = useMemo(
@@ -123,7 +120,7 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
     [items, componentsByParent],
   );
   const detach = useActionMutation({
-    mutationFn: detachPurchaseProductsMutationOptions,
+    mutationFn: purchase.detachProducts.mutationOptions,
     // See the twin in `product-purchases.tsx`: detaching clears the explicit
     // link only, and an expense-backed row stays listed.
     success: "Link removed — any itemized expense still relates these",

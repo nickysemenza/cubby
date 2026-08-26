@@ -6,7 +6,7 @@ import type {
   PathValue,
   UseFormReturn,
 } from "react-hook-form";
-import { suggestLocationForBrowser } from "~/lib/ai.functions";
+import { ai } from "~/lib/ai.functions";
 import { FieldWithAISuggest } from "../ai/ai-suggest";
 import { buildLocationComboboxItem } from "../combobox/combobox-builders";
 import { ComboboxFieldWithSearch } from "../form-utils/combobox-field-with-search";
@@ -55,7 +55,7 @@ export function LocationFieldWithAI<
       basisKey={productId}
       currentValue={form.watch(name)}
       fieldDirty={form.getFieldState(name).isDirty}
-      runSuggest={() => suggestLocationForBrowser({ productId })}
+      runSuggest={() => ai.suggestLocation.call({ productId })}
       onAccept={(r) =>
         form.setValue(
           name,

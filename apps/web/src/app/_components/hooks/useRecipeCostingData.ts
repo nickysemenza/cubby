@@ -4,8 +4,8 @@ import type { RecipeGraphOut, RecipeOut } from "@cubby/schemas/recipe";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { chunk, keyBy } from "es-toolkit";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ingredientGetManyByIDsQueryOptions } from "~/app/ingredients/ingredient.functions";
-import { recipeGetManyByIDsQueryOptions } from "~/app/recipes/recipe.functions";
+import { ingredient } from "~/app/ingredients/ingredient.functions";
+import { recipe } from "~/app/recipes/recipe.functions";
 import {
   collectIngredientIds,
   collectSubRecipeIds,
@@ -44,7 +44,7 @@ async function loadRecipeCostingData(
 
     const chunks = await Promise.all(
       chunk(toFetch.sort(), ID_CHUNK_SIZE).map((ids) =>
-        queryClient.ensureQueryData(recipeGetManyByIDsQueryOptions({ ids })),
+        queryClient.ensureQueryData(recipe.getManyByIDs.queryOptions({ ids })),
       ),
     );
 
@@ -64,7 +64,9 @@ async function loadRecipeCostingData(
   ]);
   const chunkResults = await Promise.all(
     chunk(ingredientIds.sort(), ID_CHUNK_SIZE).map((ids) =>
-      queryClient.ensureQueryData(ingredientGetManyByIDsQueryOptions({ ids })),
+      queryClient.ensureQueryData(
+        ingredient.getManyByIDs.queryOptions({ ids }),
+      ),
     ),
   );
   const ingMap = keyBy(chunkResults.flat(), (ing) => ing.id);

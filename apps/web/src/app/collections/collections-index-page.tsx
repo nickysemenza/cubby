@@ -13,16 +13,12 @@ import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidateQueryRoots } from "~/lib/query-keys";
-import {
-  collectionCreateMutationOptions,
-  collectionListQueryOptions,
-  collectionListRootKey,
-} from "./collection.functions";
+import { collection } from "./collection.functions";
 
 export function CollectionsIndexPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const collections = useQuery(collectionListQueryOptions());
+  const collections = useQuery(collection.list.queryOptions(null));
   const [showCreate, setShowCreate] = useState(false);
   const nameId = useId();
   const subjectId = useId();
@@ -31,9 +27,9 @@ export function CollectionsIndexPage() {
   const [subject, setSubject] = useState<"product" | "location">("product");
   const [id, setId] = useState("");
   const create = useMutation({
-    ...collectionCreateMutationOptions(),
+    ...collection.create.mutationOptions(),
     onSuccess: async (result) => {
-      invalidateQueryRoots(queryClient, [collectionListRootKey()]);
+      invalidateQueryRoots(queryClient, [collection.list.queryKey(null)]);
       setShowCreate(false);
       setName("");
       setId("");

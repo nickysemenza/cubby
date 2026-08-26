@@ -19,10 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import {
-  searchDebugQueryOptions,
-  searchEnqueueEmbeddingBackfillMutationOptions,
-} from "~/lib/search.functions";
+import { search } from "~/lib/search.functions";
 import { getSearchResultRoute } from "./search-utils";
 
 function SearchResultEntityLink({ item }: { item: SearchHit }) {
@@ -83,10 +80,12 @@ export function SearchDebugPage() {
     ...searchableEntities,
   ]);
   const debugQuery = useQuery({
-    ...searchDebugQueryOptions({ query: submitted, limit: 10 }),
+    ...search.debug.queryOptions({ query: submitted, limit: 10 }),
     enabled: submitted.trim().length > 0,
   });
-  const backfill = useMutation(searchEnqueueEmbeddingBackfillMutationOptions());
+  const backfill = useMutation(
+    search.enqueueEmbeddingBackfill.mutationOptions(),
+  );
 
   return (
     <Stack gap="md">

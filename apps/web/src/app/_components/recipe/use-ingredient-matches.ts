@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
 import { useMemo } from "react";
-import { ingredientMatchNamesQueryOptions } from "~/app/ingredients/ingredient.functions";
+import { ingredient } from "~/app/ingredients/ingredient.functions";
 
 /** A matched ingredient (DB row), or `null` when looked up but not found. */
 export type IngredientMatch = {
@@ -32,7 +32,7 @@ export function useIngredientMatches(
   const enabled = (opts?.enabled ?? true) && uniqueNames.length > 0;
 
   const { data, isLoading } = useQuery({
-    ...ingredientMatchNamesQueryOptions({ names: uniqueNames }),
+    ...ingredient.matchNames.queryOptions({ names: uniqueNames }),
     enabled,
     staleTime: 60_000,
   });

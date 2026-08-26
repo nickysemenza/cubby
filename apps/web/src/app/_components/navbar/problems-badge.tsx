@@ -13,7 +13,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import { problemsCountsQueryOptions } from "~/lib/problems.functions";
+import { problems } from "~/lib/problems.functions";
 import { cn } from "~/lib/utils";
 
 const pl = (n: number, sing: string, plur = `${sing}s`) =>
@@ -96,10 +96,9 @@ export const ProblemsBadge = () => {
   // context, so this can reuse the server-prefetched result without risking an
   // unauthenticated request.
   const { data: count, isLoading } = useQuery({
-    ...problemsCountsQueryOptions({
-      staleTime: 5 * 60 * 1000,
-      enabled: isAuthed,
-    }),
+    ...problems.getCounts.queryOptions(),
+    staleTime: 5 * 60 * 1000,
+    enabled: isAuthed,
   });
 
   // A disabled query reports isLoading=false with empty data, so keep the

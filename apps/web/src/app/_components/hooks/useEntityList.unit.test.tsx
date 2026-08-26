@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
     (_options: CapturedTableOptions) => ({}) as Table<TestRow>,
   ),
   clearSelection: vi.fn(),
-  relatedDataPreviewsQueryOptions: vi.fn((input: unknown) => ({
+  previewsQueryOptions: vi.fn((input: unknown) => ({
     queryKey: ["related-previews", input],
   })),
 }));
@@ -76,7 +76,9 @@ vi.mock("~/entities/filters", async (importOriginal) => ({
   summarizeListState: () => undefined,
 }));
 vi.mock("~/lib/related-data.functions", () => ({
-  relatedDataPreviewsQueryOptions: mocks.relatedDataPreviewsQueryOptions,
+  relatedData: {
+    previews: { queryOptions: mocks.previewsQueryOptions },
+  },
 }));
 vi.mock("../data-table/useTableConfig", () => ({
   useTableConfig: mocks.useTableConfig,

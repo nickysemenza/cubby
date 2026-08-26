@@ -1,12 +1,12 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { cookbookDetailQueryOptions } from "./cookbook.functions";
+import { cookbook } from "./cookbook.functions";
 import { entityDetailQueryOptions } from "./entity-detail.functions";
 import {
   type GeneratedBrowserCrudEntity,
   generatedBrowserCrudEntities,
 } from "./generated/entity-routes.gen";
-import { imageDetailQueryOptions } from "./image.functions";
-import { usdaFoodDetailQueryOptions } from "./usda.functions";
+import { image } from "./image.functions";
+import { usdaFood } from "./usda.functions";
 
 export const fdcIdFromParam = (id: string): number => Number.parseInt(id, 10);
 export const usdaRouteId = (fdcId: number): string => String(fdcId);
@@ -22,11 +22,12 @@ const isGeneratedBrowserCrudEntity = (
  * route-id coercion and the explicit Image/Cookbook projections.
  */
 export function entityPreviewQueryOptions(entity: Entity, id: string) {
-  if (entity === "image") return imageDetailQueryOptions(id);
+  if (entity === "image") return image.detail.queryOptions({ id });
   if (entity === "usda-food") {
-    return usdaFoodDetailQueryOptions(fdcIdFromParam(id));
+    return usdaFood.detail.queryOptions({ id: fdcIdFromParam(id) });
   }
-  if (entity === "cookbook") return cookbookDetailQueryOptions(id);
+  if (entity === "cookbook")
+    return cookbook.detail.queryOptions({ shortcode: id });
   if (isGeneratedBrowserCrudEntity(entity)) {
     return entityDetailQueryOptions(entity, id);
   }

@@ -62,7 +62,7 @@ const page = (relationKey: string) => ({
 });
 
 vi.mock("~/lib/related-data.functions", () => ({
-  relatedDataSummaryInfiniteQueryOptions: mocks.queryOptions,
+  relatedData: { summary: { infiniteQueryOptions: mocks.queryOptions } },
 }));
 vi.mock("../data-table/Table", () => ({
   default: ({
@@ -166,6 +166,11 @@ describe("RelationshipSummaryTable", () => {
         relationKey: "vendor.products",
         sourceId: "VEN-TEST",
         sort: { field: "latestActivity", direction: "desc" },
+      }),
+      expect.objectContaining({
+        initialPageParam: 0,
+        page: expect.any(Function),
+        getNextPageParam: expect.any(Function),
       }),
     );
     expect(screen.getByTestId("summary-thumbnail")).toHaveAttribute(

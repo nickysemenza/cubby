@@ -7,7 +7,7 @@ import {
   isGeneratedBrowserCrudEntity,
 } from "~/entities/entity-contracts";
 import type { GeneratedBrowserCrudEntity } from "~/entities/generated/entity-routes.gen";
-import { imageDeleteMutationOptions } from "~/entities/image.functions";
+import { image } from "~/entities/image.functions";
 import { invalidatesFor } from "~/lib/query-keys";
 
 type DeletableEntity = GeneratedBrowserCrudEntity | "image";
@@ -92,7 +92,7 @@ export function useContractDeletable(
         mutationOptions: (callbacks: {
           onSuccess: () => void;
           onError: (err: { message?: string }) => void;
-        }) => ({ ...imageDeleteMutationOptions(), ...callbacks }),
+        }) => ({ ...image.delete.mutationOptions(), ...callbacks }),
         entityLabel: labelFor(entity),
         invalidateKeys: invalidatesFor(entity),
         entity,

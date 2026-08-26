@@ -7,10 +7,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { getErrorMessage } from "~/lib/error-utils";
-import {
-  markImageUploadedMutationOptions,
-  uploadImageMutationOptions,
-} from "~/lib/image.functions";
+import { imageUpload } from "~/lib/image.functions";
 
 export interface UploadedImage {
   id: string;
@@ -42,8 +39,12 @@ export interface UploadedImage {
 export function useImageUpload() {
   const [isUploading, setIsUploading] = useState(false);
 
-  const uploadImageMutation = useMutation(uploadImageMutationOptions());
-  const markUploadedMutation = useMutation(markImageUploadedMutationOptions());
+  const uploadImageMutation = useMutation(
+    imageUpload.uploadImage.mutationOptions(),
+  );
+  const markUploadedMutation = useMutation(
+    imageUpload.markUploaded.mutationOptions(),
+  );
 
   const uploadFile = useCallback(
     async (file: File): Promise<UploadedImage | null> => {

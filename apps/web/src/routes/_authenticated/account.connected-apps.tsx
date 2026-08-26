@@ -2,12 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import {
-  connectedAppsQueryOptions,
-  orphanedOAuthClientsQueryOptions,
-  pruneOrphanedOAuthClientsMutationOptions,
-  revokeConnectedAppMutationOptions,
-} from "~/app/account/connected-apps.functions";
+import { oauth } from "~/app/account/connected-apps.functions";
 import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import {
@@ -47,21 +42,23 @@ function ConnectedAppsPage() {
     label: string;
   } | null>(null);
 
-  const { data: apps, isLoading } = useQuery(connectedAppsQueryOptions());
+  const { data: apps, isLoading } = useQuery(
+    oauth.listConnectedApps.queryOptions(null),
+  );
 
   const { data: orphanCount = 0 } = useQuery(
-    orphanedOAuthClientsQueryOptions(),
+    oauth.countOrphanedClients.queryOptions(null),
   );
 
   const revoke = useActionMutation({
-    mutationFn: revokeConnectedAppMutationOptions,
+    mutationFn: oauth.revokeConnectedApp.mutationOptions,
     success: "Access revoked",
     invalidateKeys: [queryKeys.oauth.connectedApps],
     onSuccess: () => setPendingRevoke(null),
   });
 
   const prune = useActionMutation({
-    mutationFn: pruneOrphanedOAuthClientsMutationOptions,
+    mutationFn: oauth.pruneOrphanedClients.mutationOptions,
     success: (data) =>
       `Removed ${data.deleted.length} abandoned registration(s)`,
     invalidateKeys: [queryKeys.oauth.connectedApps, queryKeys.oauth.orphaned],
@@ -162,7 +159,7 @@ function ConnectedAppsPage() {
             variant="outline"
             size="sm"
             disabled={prune.isPending}
-            onClick={() => prune.mutate(undefined)}
+            onClick={() => prune.mutate(null)}
           >
             {prune.isPending ? "Cleaning up…" : "Clean up"}
           </Button>

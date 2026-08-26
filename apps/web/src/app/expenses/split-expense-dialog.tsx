@@ -9,7 +9,7 @@ import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { StaticPicker } from "~/app/_components/combobox/static-picker";
 import { WithProjectSearch } from "~/app/_components/combobox/with-search-hook";
 import { tradeOptions } from "~/app/projects/trade-options";
-import { splitPurchaseMutationOptions } from "~/app/purchases/purchase.functions";
+import { purchase } from "~/app/purchases/purchase.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -156,7 +156,7 @@ export function SplitExpenseDialog({
     );
 
   const splitMutation = useActionMutation({
-    mutationFn: splitPurchaseMutationOptions,
+    mutationFn: purchase.split.mutationOptions,
     success: (items) => `Split into ${items.length} expenses`,
     invalidateKeys: invalidatesFor("expense"),
     onSuccess: () => {

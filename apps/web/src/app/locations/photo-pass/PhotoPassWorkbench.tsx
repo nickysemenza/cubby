@@ -1,7 +1,4 @@
-import {
-  locationSubtreeQueryOptions,
-  locationTreeQueryOptions,
-} from "~/app/locations/location.functions";
+import { location } from "~/app/locations/location.functions";
 /**
  * Walk a queue of locations taking one photo each.
  *
@@ -264,14 +261,14 @@ function QueuePass({ parent, all, type }: PhotoPassSearch) {
   const includePhotographed = all === true;
   const { capture, discardCapture, isCapturing } = useLocationPhotoCapture();
 
-  const subtreeQuery = useQuery(
-    locationSubtreeQueryOptions(
-      { shortcode: parent ?? "LOC-2222" },
-      { enabled: parent != null },
-    ),
-  );
+  const subtreeQuery = useQuery({
+    ...location.subtree.queryOptions({
+      shortcode: parent ?? "LOC-2222",
+    }),
+    enabled: parent != null,
+  });
   const treeQuery = useQuery({
-    ...locationTreeQueryOptions(),
+    ...location.makeTree.queryOptions(),
     enabled: parent == null,
   });
   const roots = (parent ? subtreeQuery.data : treeQuery.data) ?? EMPTY_ROOTS;

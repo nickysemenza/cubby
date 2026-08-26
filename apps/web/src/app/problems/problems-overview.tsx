@@ -21,10 +21,7 @@ import {
 } from "~/components/ui/collapsible";
 import { Spinner } from "~/components/ui/spinner";
 import { useHydratedLoading } from "~/hooks/useHydrated";
-import {
-  problemsCoverageTotalsQueryOptions,
-  problemsRecipeUsageQueryOptions,
-} from "~/lib/problems.functions";
+import { problems as problemOperations } from "~/lib/problems.functions";
 import { AutoFixButton, useAutoFixPlan } from "./components/auto-fix-button";
 import { AUTO_FIX_SECTION_IDS } from "./components/auto-fix-registry";
 import { MaintenanceCard } from "./components/maintenance-card";
@@ -112,7 +109,7 @@ export function ProblemsOverview() {
     [problems],
   );
   const { data: recipeUsage } = useQuery(
-    problemsRecipeUsageQueryOptions({ productShortcodes }),
+    problemOperations.recipeUsageByProduct.queryOptions({ productShortcodes }),
   );
 
   // Denominators for the coverage meters. Its own cheap batched query — the
@@ -124,7 +121,7 @@ export function ProblemsOverview() {
   // section whose denominators haven't landed simply renders without its meter
   // (see `resolveCoverage`) instead of briefly showing "-178 / 0".
   const { data: coverageTotals } = useQuery(
-    problemsCoverageTotalsQueryOptions(),
+    problemOperations.getCoverageTotals.queryOptions(),
   );
 
   if (isLoading) {

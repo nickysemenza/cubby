@@ -10,10 +10,7 @@ import {
 } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import {
-  recipeFlowQueryOptions,
-  recipeGenerateFlowMutationOptions,
-} from "~/app/recipes/recipe.functions";
+import { recipe as recipeOperations } from "~/app/recipes/recipe.functions";
 import { MarkdownText } from "~/components/markdown";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
@@ -111,7 +108,9 @@ export function RecipeFlowView({
   const [generationError, setGenerationError] = useState<string | null>(null);
   const autoStartedFingerprint = useRef<string | null>(null);
 
-  const flowQuery = useQuery(recipeFlowQueryOptions({ id: recipe.id }));
+  const flowQuery = useQuery(
+    recipeOperations.getFlow.queryOptions({ id: recipe.id }),
+  );
   const flowState = flowQuery.data;
   const artifact =
     flowState?.status === "current" || flowState?.status === "stale"
@@ -121,7 +120,7 @@ export function RecipeFlowView({
   // Raw useMutation is intentional: automatic generation failures are rendered
   // inline in this view instead of being reduced to the shared toast-only path.
   const generation = useMutation(
-    recipeGenerateFlowMutationOptions({
+    recipeOperations.generateFlow.mutationOptions({
       onSuccess: (_data, variables) => {
         setGenerationError(null);
         setGuidanceOpen(false);

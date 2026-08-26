@@ -40,7 +40,7 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { HOUSEHOLD_TIMEZONE, householdLocalDate } from "~/lib/household-date";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import { formatCurrency } from "~/lib/utils";
-import { calendarRangeQueryOptions } from "./calendar.functions";
+import { calendar } from "./calendar.functions";
 import { CalendarAgenda } from "./calendar-agenda";
 import type { CalendarFilters } from "./calendar-filters";
 import { KIND_ICONS } from "./calendar-icons";
@@ -238,7 +238,7 @@ export function UnifiedCalendar({
     [filters, lockedKinds, visibleRange],
   );
   const { data, isLoading, isError } = useQuery({
-    ...calendarRangeQueryOptions(range),
+    ...calendar.range.queryOptions(range),
     // Without this every chip toggle blanks the month grid mid-flight.
     placeholderData: keepPreviousData,
   });

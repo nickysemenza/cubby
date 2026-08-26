@@ -27,17 +27,23 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 
 vi.mock("~/app/products/product.functions", () => ({
-  productComponentsQueryOptions: (input: unknown) => ({
-    queryKey: ["components", input],
-  }),
-  kitMembershipQueryOptions: (input: unknown) => ({
-    queryKey: ["kitMembership", input],
-  }),
-  productSearchQueryOptions: (input: unknown) => ({
-    queryKey: ["search", input],
-  }),
-  attachProductComponentsMutationOptions: () => ({}),
-  detachProductComponentsMutationOptions: () => ({}),
+  product: {
+    components: {
+      queryOptions: (input: unknown) => ({
+        queryKey: ["components", input],
+      }),
+    },
+    kitMembership: {
+      queryOptions: (input: unknown) => ({
+        queryKey: ["kitMembership", input],
+      }),
+    },
+    search: {
+      queryOptions: (input: unknown) => ({ queryKey: ["search", input] }),
+    },
+    attachComponents: { mutationOptions: () => ({}) },
+    detachComponents: { mutationOptions: () => ({}) },
+  },
 }));
 
 // Keep the table shell lightweight while exercising the real column

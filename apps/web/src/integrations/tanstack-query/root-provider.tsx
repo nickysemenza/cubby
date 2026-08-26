@@ -7,22 +7,19 @@ import type { ReactNode } from "react";
 import { toast } from "sonner";
 import superjson from "superjson";
 import { authClient } from "~/lib/auth-client";
+import {
+  makeBatchStatusFetcher,
+  watchBatchesAndInvalidateTags,
+} from "~/lib/background-batch-polling";
 import { getErrorMessage } from "~/lib/error-utils";
-import { configureQueryFreshness } from "~/lib/query-freshness";
+import {
+  invalidateOperationTags,
+  resolveInvalidationTags,
+} from "./operation-cache";
+import { operationInvalidationTags } from "./operation-catalog";
 import { installOperationRecorder } from "./operation-recorder";
 import { persister } from "./persister";
 import { shouldToastQueryError } from "./query-error-policy";
-
-// Root query-key prefixes whose data is safe + useful to persist for offline
-// warm starts. Auth/session, agent streams, and anything not listed are skipped
-// so we never write sensitive data to IndexedDB.
-const PERSISTED_ROOTS = new Set([
-  "product",
-  "location",
-  "recipe",
-  "inventory",
-  "ingredient",
-]);
 
 // Wrapper to adapt TanStack Router Link to better-auth-ui Link format
 const Link = ({
@@ -69,11 +66,22 @@ export function getContext() {
       onError: (error) => {
         deferToastError(error);
       },
+      onSuccess: (data, variables, _onMutateResult, mutation) => {
+        const invalidations =
+          operationInvalidationTags(mutation.meta?.operation, variables) ??
+          resolveInvalidationTags(mutation.meta?.invalidates);
+        if (invalidations.length === 0) return;
+        void invalidateOperationTags(queryClient, invalidations);
+        void watchBatchesAndInvalidateTags({
+          queryClient,
+          result: data,
+          invalidateTags: invalidations,
+          fetchBatchStatus: makeBatchStatusFetcher(queryClient),
+        });
+      },
     }),
   });
   if (!import.meta.env.SSR) installOperationRecorder(queryClient);
-  configureQueryFreshness(queryClient);
-
   return { queryClient };
 }
 
@@ -115,20 +123,8 @@ export function Provider({
               maxAge: 1000 * 60 * 60 * 24,
               dehydrateOptions: {
                 shouldDehydrateQuery: (query) => {
-                  // Operation keys are nested: [["product","list"], { input, type }].
-                  const head = query.queryKey?.[0];
-                  const root = Array.isArray(head) ? head[0] : head;
-                  const operation = Array.isArray(head) ? head[1] : undefined;
-                  // Persist lighter detail queries for offline warm starts, but
-                  // NOT the big `.list` payloads. superjson-serializing a list
-                  // (now up to 1000 rows) on every cache write was the dominant
-                  // main-thread cost — profiled at ~38% of scroll-time CPU, with
-                  // zero network in that window. Lists refetch fast from the
-                  // server; the persist serialize isn't worth the jank.
                   return (
-                    typeof root === "string" &&
-                    PERSISTED_ROOTS.has(root) &&
-                    operation !== "list" &&
+                    query.meta?.persistence === "persist" &&
                     query.state.status === "success"
                   );
                 },

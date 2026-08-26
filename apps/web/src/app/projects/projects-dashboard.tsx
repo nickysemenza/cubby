@@ -42,10 +42,7 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { StatGrid, StatTile } from "~/components/ui/stat-tile";
 import type { ViewSwitcherOption } from "~/components/ui/view-switcher";
 import { entities, entityDetailParams } from "~/entities/entities";
-import {
-  type ProjectImageSummaries,
-  projectImageSummariesQueryOptions,
-} from "~/entities/image.functions";
+import { image, type ProjectImageSummaries } from "~/entities/image.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import type { ProjectRowsRenderer } from "~/lib/list-view-normalization";
 import { formatCurrency } from "~/lib/utils";
@@ -59,10 +56,7 @@ import {
 } from "./dashboard-filter-state";
 import { ActiveScopeSummary, DashboardFilters } from "./dashboard-filters";
 import { NeedsAttention } from "./needs-attention";
-import {
-  projectDashboardSummaryQueryOptions,
-  projectPortfolioAnalyticsQueryOptions,
-} from "./project.functions";
+import { project } from "./project.functions";
 import {
   ProjectDataExpenseList,
   ProjectDataTaskList,
@@ -233,7 +227,7 @@ function MainDashboard({ view }: { view: DashboardView }) {
     [scopeInput],
   );
   const dashboardQuery = useQuery({
-    ...projectDashboardSummaryQueryOptions(scopeInput),
+    ...project.dashboardSummary.queryOptions(scopeInput),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -242,7 +236,7 @@ function MainDashboard({ view }: { view: DashboardView }) {
   // bounds now live in `scopeInput` itself (via `filtersToScopeInput`), so
   // there's no separate dateFrom/dateTo spread here anymore.
   const analyticsQuery = useQuery({
-    ...projectPortfolioAnalyticsQueryOptions(scopeInput),
+    ...project.portfolioAnalytics.queryOptions(scopeInput),
     staleTime: 5 * 60 * 1000,
     enabled: view === "analytics",
   });
@@ -256,7 +250,7 @@ function MainDashboard({ view }: { view: DashboardView }) {
     ? projects.map((p) => p.id)
     : NO_PROJECT_IDS;
   const { data: coverImages } = useQuery({
-    ...projectImageSummariesQueryOptions({
+    ...image.projectSummaries.queryOptions({
       projectIds: imageProjectIds,
     }),
     staleTime: 5 * 60 * 1000,
@@ -666,7 +660,7 @@ function ServerProjectGallery({
     [list.data],
   );
   const { data: images } = useQuery({
-    ...projectImageSummariesQueryOptions({ projectIds: ids }),
+    ...image.projectSummaries.queryOptions({ projectIds: ids }),
     enabled: ids.length > 0,
   });
 

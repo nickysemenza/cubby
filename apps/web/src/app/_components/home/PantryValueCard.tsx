@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Wallet } from "lucide-react";
-import { locationValuationSummaryQueryOptions } from "~/app/locations/location.functions";
+import { location } from "~/app/locations/location.functions";
 import { Row } from "~/components/layout";
 import {
   CardActionLink,
@@ -28,7 +28,7 @@ const BAR_COLORS = [
  */
 export function PantryValueCard() {
   const { data, isLoading, isError } = useQuery({
-    ...locationValuationSummaryQueryOptions(),
+    ...location.valuationSummary.queryOptions(),
   });
   const total = data?.total ?? 0;
   const bars = data?.locations ?? [];

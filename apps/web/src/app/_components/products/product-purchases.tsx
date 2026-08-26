@@ -17,11 +17,8 @@ import {
 import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import {
-  kitMembershipQueryOptions,
-  productPurchasesQueryOptions,
-} from "~/app/products/product.functions";
-import { detachPurchaseProductsMutationOptions } from "~/app/purchases/purchase.functions";
+import { product as productOperations } from "~/app/products/product.functions";
+import { purchase } from "~/app/purchases/purchase.functions";
 import { Badge } from "~/components/ui/badge";
 import {
   Empty,
@@ -38,14 +35,18 @@ const EMPTY_MEMBERSHIP: KitMembershipOut[] = [];
 type PurchaseRow = ProductPurchaseOut & { id: string; name: string };
 
 export function ProductPurchases({ productId }: { productId: string }) {
-  const query = useQuery(productPurchasesQueryOptions({ productId }));
+  const query = useQuery(
+    productOperations.purchases.queryOptions({ productId }),
+  );
   const items = query.data ?? EMPTY_PURCHASES;
   // Only consulted when `items` is empty (below) — a component of a kit is
   // never itself attached to a purchase, so the generic "attach this
   // product" advice is not just unhelpful there, it's wrong: attaching would
   // reintroduce the per-component modelling that was deliberately removed in
   // favor of the kit carrying one Expense.
-  const membershipQuery = useQuery(kitMembershipQueryOptions({ productId }));
+  const membershipQuery = useQuery(
+    productOperations.kitMembership.queryOptions({ productId }),
+  );
   const membership = membershipQuery.data ?? EMPTY_MEMBERSHIP;
   const rows = useMemo<PurchaseRow[]>(
     () =>
@@ -57,7 +58,7 @@ export function ProductPurchases({ productId }: { productId: string }) {
     [items],
   );
   const detach = useActionMutation({
-    mutationFn: detachPurchaseProductsMutationOptions,
+    mutationFn: purchase.detachProducts.mutationOptions,
     // Not "removed from purchase": detaching clears only the explicit link, and
     // a row that also has an itemized Expense stays right where it is, now
     // reading `source: "expense"`. Claiming removal would be a lie on exactly

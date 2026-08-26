@@ -21,8 +21,8 @@ import {
   useExpenseBulkActions,
 } from "~/app/_components/tracker/expense-bulk-actions";
 import { useExpenseRowActions } from "~/app/_components/tracker/expense-row-actions";
-import { expenseChartDataQueryOptions } from "~/app/expenses/expense.functions";
-import { kitMembershipQueryOptions } from "~/app/products/product.functions";
+import { expense } from "~/app/expenses/expense.functions";
+import { product as productOperations } from "~/app/products/product.functions";
 import {
   expenseCostColumn,
   expenseCostTypeColumn,
@@ -134,14 +134,14 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
     string | null
   >(null);
   const { data, isPending } = useQuery(
-    expenseChartDataQueryOptions({ productId: product.id }),
+    expense.chartData.queryOptions({ productId: product.id }),
   );
   const expenses = data ?? EMPTY_EXPENSES;
   // Only consulted when `expenses` is empty (below) — a component of a kit
   // legitimately has zero Expenses of its own, and the generic "link one"
   // empty state is actively misleading there.
   const membershipQuery = useQuery(
-    kitMembershipQueryOptions({ productId: product.id }),
+    productOperations.kitMembership.queryOptions({ productId: product.id }),
   );
   const membership = membershipQuery.data ?? EMPTY_MEMBERSHIP;
   const update = useUpdateMutation({

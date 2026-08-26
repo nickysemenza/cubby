@@ -10,7 +10,7 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import { getErrorMessage } from "~/lib/error-utils";
-import { uploadDocumentMutationOptions } from "~/lib/image.functions";
+import { imageUpload } from "~/lib/image.functions";
 import type { PendingImage } from "./PendingImageUpload";
 
 /** A document row — the PendingImage shape plus the file size for display. */
@@ -111,7 +111,7 @@ export function PendingDocumentUpload({
   }
 
   const uploadDocumentMutation = useMutation(
-    uploadDocumentMutationOptions({
+    imageUpload.uploadDocument.mutationOptions({
       onError: (error) => {
         toast.error(`Upload initialization failed: ${getErrorMessage(error)}`);
       },

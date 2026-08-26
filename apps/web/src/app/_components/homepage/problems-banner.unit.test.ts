@@ -25,7 +25,7 @@ describe("ProblemsBanner", () => {
 
     expect(mocks.useQuery).toHaveBeenCalledWith(
       expect.objectContaining({
-        queryKey: [["problems", "getCounts"], { type: "query" }],
+        queryKey: ["operation", "problems.getCounts", { input: undefined }],
         staleTime: 5 * 60 * 1000,
         enabled: true,
       }),

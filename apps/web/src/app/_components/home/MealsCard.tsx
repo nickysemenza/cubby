@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { format, isSameDay, parseISO } from "date-fns";
 import { UtensilsCrossed } from "lucide-react";
-import { mealUpcomingSummaryQueryOptions } from "~/app/meals/meal.functions";
+import { meal } from "~/app/meals/meal.functions";
 import { formatMealCost, mealListLabel } from "~/app/meals/meal-format";
 import { mealKindIcon, mealTypeIcon } from "~/app/meals/meal-options";
 import { Row, Stack } from "~/components/layout";
@@ -24,7 +24,7 @@ import type { HomeAsOfWindow } from "./home-as-of-window";
 export function MealsCard({ asOf }: { asOf: HomeAsOfWindow }) {
   const today = parseISO(asOf.meals.from);
   const { data, isError, isLoading } = useQuery(
-    mealUpcomingSummaryQueryOptions(asOf.meals),
+    meal.upcomingSummary.queryOptions(asOf.meals),
   );
 
   const meals = data ?? [];

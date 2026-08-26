@@ -9,7 +9,7 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { entities } from "~/entities/entities";
 import { useHydrated } from "~/hooks/useHydrated";
 import { authClient } from "~/lib/auth-client";
-import { dashboardCountsQueryOptions } from "~/lib/dashboard.functions";
+import { dashboard } from "~/lib/dashboard.functions";
 
 const compactFormatter = new Intl.NumberFormat("en", { notation: "compact" });
 const formatCount = (count: number): string => compactFormatter.format(count);
@@ -42,7 +42,7 @@ export default function EntityCount() {
   // old per-entity `list({pageSize:1})` cards fired discarded USDA enrichment on
   // the product/ingredient/usda cards — the homepage's USDA-on-critical-path.
   const countsQuery = useQuery({
-    ...dashboardCountsQueryOptions(),
+    ...dashboard.counts.queryOptions(),
     enabled: isAuthenticated,
   });
   const counts = countsQuery.data;

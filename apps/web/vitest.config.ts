@@ -134,6 +134,10 @@ export default defineConfig({
             ],
             // Threads reduce worker startup while preserving per-file isolation.
             pool: "threads",
+            // Unit, unit-pure, and UI share group 0. Five workers is the
+            // measured memory-efficient ceiling; keep the cap aligned across
+            // the group so one project cannot starve the others.
+            maxWorkers: 5,
             sequence: { groupOrder: 0 },
           },
         },
@@ -181,6 +185,7 @@ export default defineConfig({
             include: pureUnitTests,
             pool: "threads",
             isolate: false,
+            maxWorkers: 5,
             sequence: { groupOrder: 0 },
           },
         },
@@ -195,6 +200,7 @@ export default defineConfig({
             setupFiles: ["./tooling/ui-test-setup.ts"],
             // Threads amortize jsdom construction without sharing test state.
             pool: "threads",
+            maxWorkers: 5,
             sequence: { groupOrder: 0 },
           },
         },

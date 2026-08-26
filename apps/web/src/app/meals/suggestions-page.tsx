@@ -1,7 +1,7 @@
 import type { RecipeAvailability } from "@cubby/schemas/availability";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { makeableRecipesQueryOptions } from "~/app/recipes/recipe.functions";
+import { suggestions } from "~/app/recipes/recipe.functions";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Grid, Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -30,7 +30,7 @@ export function MealSuggestionsPage({
   const minCoverage = activeFilter.minCoverage;
 
   const { data, isLoading, error } = useQuery(
-    makeableRecipesQueryOptions({ minCoverage }),
+    suggestions.getMakeable.queryOptions({ minCoverage }),
   );
 
   return (

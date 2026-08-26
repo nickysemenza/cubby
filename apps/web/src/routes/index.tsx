@@ -8,14 +8,14 @@ import { QuickActionsCard } from "~/app/_components/home/QuickActionsCard";
 import { RecentActivityFeed } from "~/app/_components/home/RecentActivityFeed";
 import { RecordedSpendCard } from "~/app/_components/home/RecordedSpendCard";
 import { ProblemsBanner } from "~/app/_components/homepage/problems-banner";
-import { expenseMonthlySummaryQueryOptions } from "~/app/expenses/expense.functions";
-import { locationValuationSummaryQueryOptions } from "~/app/locations/location.functions";
-import { mealUpcomingSummaryQueryOptions } from "~/app/meals/meal.functions";
-import { taskSummaryQueryOptions } from "~/app/tasks/task.functions";
+import { expense } from "~/app/expenses/expense.functions";
+import { location } from "~/app/locations/location.functions";
+import { meal } from "~/app/meals/meal.functions";
+import { task } from "~/app/tasks/task.functions";
 import { CollapsibleSection, Grid, Section } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { authClient } from "~/lib/auth-client";
-import { problemsCountsQueryOptions } from "~/lib/problems.functions";
+import { problems } from "~/lib/problems.functions";
 
 const HomeInsights = lazy(async () => {
   const module = await import("~/app/_components/home/HomeInsights");
@@ -42,16 +42,16 @@ export const Route = createFileRoute("/")({
   loader: async ({ context }) => {
     const asOf = getHomeAsOfWindow();
     await Promise.allSettled([
-      context.queryClient.ensureQueryData(problemsCountsQueryOptions()),
-      context.queryClient.ensureQueryData(taskSummaryQueryOptions()),
+      context.queryClient.ensureQueryData(problems.getCounts.queryOptions()),
+      context.queryClient.ensureQueryData(task.summary.queryOptions()),
       context.queryClient.ensureQueryData(
-        mealUpcomingSummaryQueryOptions(asOf.meals),
+        meal.upcomingSummary.queryOptions(asOf.meals),
       ),
       context.queryClient.ensureQueryData(
-        locationValuationSummaryQueryOptions(),
+        location.valuationSummary.queryOptions(),
       ),
       context.queryClient.ensureQueryData(
-        expenseMonthlySummaryQueryOptions(asOf.spend.filters),
+        expense.monthlySummary.queryOptions(asOf.spend.filters),
       ),
     ]);
     return { asOf };

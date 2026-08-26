@@ -21,11 +21,8 @@ import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
-import {
-  productProjectUsesQueryOptions,
-  setProductProjectUsesMutationOptions,
-} from "~/app/products/product.functions";
-import { projectSetToolUsageMutationOptions } from "~/app/projects/project.functions";
+import { product as productOperations } from "~/app/products/product.functions";
+import { project } from "~/app/projects/project.functions";
 import { ProjectMark } from "~/app/projects/project-mark";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -82,11 +79,13 @@ const HIDDEN_RELATED_COLUMNS = {
  */
 export function ProductProjectUses({ productId }: { productId: string }) {
   const [editing, setEditing] = useState(false);
-  const query = useQuery(productProjectUsesQueryOptions({ productId }));
+  const query = useQuery(
+    productOperations.projectUses.queryOptions({ productId }),
+  );
   const data = query.data;
 
   const detach = useActionMutation({
-    mutationFn: projectSetToolUsageMutationOptions,
+    mutationFn: project.setToolUsage.mutationOptions,
     success: "Removed from project",
     invalidateKeys: invalidatesFor("project", "resource"),
   });
@@ -286,7 +285,7 @@ function ProjectUsesDialog({
   };
 
   const save = useActionMutation({
-    mutationFn: setProductProjectUsesMutationOptions,
+    mutationFn: productOperations.setProjectUses.mutationOptions,
     success: "Project uses updated",
     invalidateKeys: invalidatesFor("project", "resource"),
     onSuccess: () => resetAndClose(false),

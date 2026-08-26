@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { ChartNoAxesColumnIncreasing } from "lucide-react";
 import { useId, useMemo } from "react";
-import { expenseMonthlySummaryQueryOptions } from "~/app/expenses/expense.functions";
+import { expense } from "~/app/expenses/expense.functions";
 import { Row } from "~/components/layout";
 import {
   CardActionLink,
@@ -43,7 +43,7 @@ export function getRecordedSpendWindow(now: Date) {
  */
 export function RecordedSpendCard({ asOf }: { asOf: HomeAsOfWindow }) {
   const query = useQuery({
-    ...expenseMonthlySummaryQueryOptions(asOf.spend.filters),
+    ...expense.monthlySummary.queryOptions(asOf.spend.filters),
     staleTime: 60 * 1000,
   });
 

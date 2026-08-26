@@ -23,7 +23,7 @@ import {
   resolveDestination,
 } from "~/app/_components/inventory/destination-location-picker";
 import { useInventoryInvalidation } from "~/app/_components/inventory/hooks";
-import { bulkMoveInventoryMutationOptions } from "~/app/inventory/inventory.functions";
+import { inventory } from "~/app/inventory/inventory.functions";
 import { Row, Stack } from "~/components/layout";
 import { MutedBox } from "~/components/layout/muted-box";
 import { Button } from "~/components/ui/button";
@@ -192,7 +192,7 @@ export default function BulkMoveForm({
   const selectedItems = moveItems.filter((item) => item.selected);
 
   const bulkMoveMutation = useMutation(
-    bulkMoveInventoryMutationOptions({
+    inventory.bulkMove.mutationOptions({
       onSuccess: (data) => {
         // Force the next fetch to reseed — moved items are gone from the
         // source location and remainders have reduced quantities.

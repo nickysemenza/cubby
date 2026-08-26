@@ -1,29 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
-  backgroundBatchCancelMutationOptions,
-  backgroundBatchJobsQueryOptions,
-  backgroundBatchListQueryOptions,
-  backgroundBatchRetryMutationOptions,
-  backgroundBatchSummaryQueryOptions,
-  backgroundJobRetryMutationOptions,
-  backgroundJobsDrainMutationOptions,
+  backgroundBatch,
+  backgroundJob,
 } from "~/lib/background-batch.functions";
-import {
-  cookbookDetailQueryOptions,
-  cookbookListQueryOptions,
-} from "./cookbook.functions";
-import {
-  imageDeleteMutationOptions,
-  imageDetailQueryOptions,
-  imageListQueryOptions,
-  imageUpdateMutationOptions,
-  projectImageSummariesQueryOptions,
-} from "./image.functions";
-import {
-  usdaFoodAlternateIdQueryOptions,
-  usdaFoodDetailQueryOptions,
-  usdaFoodListQueryOptions,
-} from "./usda.functions";
+import { cookbook } from "./cookbook.functions";
+import { image } from "./image.functions";
+import { usdaFood } from "./usda.functions";
 
 describe("dedicated Start browser transports", () => {
   it("uses entity-owned canonical query keys", () => {
@@ -32,61 +14,84 @@ describe("dedicated Start browser transports", () => {
       sort: { orderBy: "createdAt" as const, direction: "desc" as const },
       pagination: { pageIndex: 0, pageSize: 10 },
     };
-    expect(imageListQueryOptions(imageListInput).queryKey).toEqual([
-      ["image", "list"],
+    expect(image.list.queryOptions(imageListInput).queryKey).toEqual([
+      "operation",
+      "image.list",
       { input: imageListInput },
     ]);
-    expect(imageDetailQueryOptions("IMG-4K7M").queryKey).toEqual([
-      ["image", "detail"],
-      { shortcode: "IMG-4K7M" },
+    expect(image.detail.queryOptions({ id: "IMG-4K7M" }).queryKey).toEqual([
+      "operation",
+      "image.detail",
+      { input: { id: "IMG-4K7M" } },
     ]);
     expect(
-      projectImageSummariesQueryOptions({ projectIds: ["PRJ-4K7M"] }).queryKey,
-    ).toEqual([["image", "projectSummaries"], { projectIds: ["PRJ-4K7M"] }]);
+      image.projectSummaries.queryOptions({ projectIds: ["PRJ-4K7M"] })
+        .queryKey,
+    ).toEqual([
+      "operation",
+      "image.projectSummaries",
+      { input: { projectIds: ["PRJ-4K7M"] } },
+    ]);
 
     const usdaListInput = {
       filters: {},
       sort: { orderBy: "fdc_id" as const, direction: "desc" as const },
       pagination: { pageIndex: 0, pageSize: 10 },
     };
-    expect(usdaFoodListQueryOptions(usdaListInput).queryKey).toEqual([
-      ["usda-food", "list"],
+    expect(usdaFood.list.queryOptions(usdaListInput).queryKey).toEqual([
+      "operation",
+      "usda-food.list",
       { input: usdaListInput },
     ]);
-    expect(usdaFoodDetailQueryOptions(123).queryKey).toEqual([
-      ["usda-food", "detail"],
-      { id: 123 },
+    expect(usdaFood.detail.queryOptions({ id: 123 }).queryKey).toEqual([
+      "operation",
+      "usda-food.detail",
+      { input: { id: 123 } },
     ]);
     expect(
-      usdaFoodAlternateIdQueryOptions({ kind: "ndb", ndb_number: 123 }),
+      usdaFood.alternateId.queryOptions({ kind: "ndb", ndb_number: 123 }),
     ).toMatchObject({
       queryKey: [
-        ["usda-food", "alternateId"],
+        "operation",
+        "usda-food.alternateId",
         { input: { kind: "ndb", ndb_number: 123 } },
       ],
     });
 
-    expect(cookbookListQueryOptions().queryKey).toEqual([["cookbook", "list"]]);
-    expect(cookbookDetailQueryOptions("not-yet-validated").queryKey).toEqual([
-      ["cookbook", "detail"],
-      { shortcode: "not-yet-validated" },
+    expect(cookbook.list.queryOptions(null).queryKey).toEqual([
+      "operation",
+      "cookbook.list",
+      { input: null },
     ]);
     expect(
-      backgroundBatchSummaryQueryOptions({ batchId: "batch-1" }).queryKey,
-    ).toEqual([["background-batch", "summary"], { batchId: "batch-1" }]);
-    expect(backgroundBatchListQueryOptions({ limit: 25 }).queryKey).toEqual([
-      ["background-batch", "list"],
+      cookbook.detail.queryOptions({ shortcode: "not-yet-validated" }).queryKey,
+    ).toEqual([
+      "operation",
+      "cookbook.detail",
+      { input: { shortcode: "not-yet-validated" } },
+    ]);
+    expect(
+      backgroundBatch.summary.queryOptions({ batchId: "batch-1" }).queryKey,
+    ).toEqual([
+      "operation",
+      "background-batch.summary",
+      { input: { batchId: "batch-1" } },
+    ]);
+    expect(backgroundBatch.list.queryOptions({ limit: 25 }).queryKey).toEqual([
+      "operation",
+      "background-batch.list",
       { input: { limit: 25 } },
     ]);
     expect(
-      backgroundBatchJobsQueryOptions({
+      backgroundBatch.jobs.queryOptions({
         batchId: "batch-1",
         pageIndex: 0,
         pageSize: 100,
         failedOnly: false,
       }).queryKey,
     ).toEqual([
-      ["background-batch", "jobs"],
+      "operation",
+      "background-batch.jobs",
       {
         input: {
           batchId: "batch-1",
@@ -100,14 +105,14 @@ describe("dedicated Start browser transports", () => {
 
   it("marks every helper as an observed Start operation", () => {
     const queries = [
-      imageDetailQueryOptions("IMG-4K7M"),
-      usdaFoodDetailQueryOptions(123),
-      usdaFoodAlternateIdQueryOptions({ kind: "upc", gtin_upc: "123" }),
-      cookbookListQueryOptions(),
-      cookbookDetailQueryOptions("CKB-4K7M"),
-      backgroundBatchSummaryQueryOptions({ batchId: "batch-1" }),
-      backgroundBatchListQueryOptions({ limit: 25 }),
-      backgroundBatchJobsQueryOptions({
+      image.detail.queryOptions({ id: "IMG-4K7M" }),
+      usdaFood.detail.queryOptions({ id: 123 }),
+      usdaFood.alternateId.queryOptions({ kind: "upc", gtin_upc: "123" }),
+      cookbook.list.queryOptions(null),
+      cookbook.detail.queryOptions({ shortcode: "CKB-4K7M" }),
+      backgroundBatch.summary.queryOptions({ batchId: "batch-1" }),
+      backgroundBatch.list.queryOptions({ limit: 25 }),
+      backgroundBatch.jobs.queryOptions({
         batchId: "batch-1",
         pageIndex: 0,
         pageSize: 100,
@@ -121,21 +126,21 @@ describe("dedicated Start browser transports", () => {
       });
     }
 
-    expect(imageUpdateMutationOptions().meta).toMatchObject({
+    expect(image.update.mutationOptions().meta).toMatchObject({
       transport: "start",
       operation: "image.update",
       observedByTransport: true,
     });
-    expect(imageDeleteMutationOptions().meta).toMatchObject({
+    expect(image.delete.mutationOptions().meta).toMatchObject({
       transport: "start",
       operation: "image.delete",
       observedByTransport: true,
     });
     for (const mutation of [
-      backgroundBatchRetryMutationOptions(),
-      backgroundJobRetryMutationOptions(),
-      backgroundBatchCancelMutationOptions(),
-      backgroundJobsDrainMutationOptions(),
+      backgroundBatch.retry.mutationOptions(),
+      backgroundJob.retry.mutationOptions(),
+      backgroundBatch.cancel.mutationOptions(),
+      backgroundJob.drain.mutationOptions(),
     ]) {
       expect(mutation.meta).toMatchObject({
         transport: "start",

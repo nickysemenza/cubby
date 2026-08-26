@@ -58,7 +58,7 @@ import {
   makeBatchStatusFetcher,
   watchBatchesAndInvalidate,
 } from "~/lib/background-batch-polling";
-import { uploadImageMutationOptions } from "~/lib/image.functions";
+import { imageUpload } from "~/lib/image.functions";
 import { invalidateQueryRoots, queryKeys } from "~/lib/query-keys";
 
 /**
@@ -74,7 +74,7 @@ const PHOTO_INVALIDATE_KEYS = [
 
 export function useLocationPhotoCapture() {
   const queryClient = useQueryClient();
-  const uploadImage = useMutation(uploadImageMutationOptions());
+  const uploadImage = useMutation(imageUpload.uploadImage.mutationOptions());
   const updateLocation = useMutation(
     entityMutationOptionsFactory("location", "update")(),
   );

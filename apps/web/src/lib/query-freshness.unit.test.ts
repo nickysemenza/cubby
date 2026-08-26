@@ -1,45 +1,34 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
-import { calendarRangeQueryOptions } from "~/app/calendar/calendar.functions";
-import { entityDetailRootKey } from "~/entities/entity-detail.functions";
-import { configureQueryFreshness } from "./query-freshness";
-import {
-  invalidateQueryRoots,
-  invalidatesFor,
-  normalizeQueryRoot,
-  queryKeys,
-} from "./query-keys";
+import { calendar } from "~/app/calendar/calendar.functions";
+import { location } from "~/app/locations/location.functions";
+import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 
-describe("configureQueryFreshness", () => {
-  it("keeps stable detail and indexes warm but preserves the mutable default", () => {
-    const client = new QueryClient({
-      defaultOptions: { queries: { staleTime: 60_000 } },
-    });
-    configureQueryFreshness(client);
+describe("operation freshness metadata", () => {
+  it("keeps stable details and indexes warm through their descriptors", () => {
+    const detail = entityDetailQueryOptions("product", "PRD-2222");
+    const tree = location.makeTree.queryOptions();
 
-    expect(
-      client.getQueryDefaults(entityDetailRootKey("product")),
-    ).toMatchObject({ staleTime: 300_000 });
-    expect(
-      client.getQueryDefaults(normalizeQueryRoot(queryKeys.location.makeTree)),
-    ).toMatchObject({ staleTime: 120_000 });
-    expect(
-      client.getQueryDefaults(normalizeQueryRoot(queryKeys.task.list)),
-    ).toEqual({});
+    expect(detail).toMatchObject({ staleTime: 300_000, gcTime: 86_400_000 });
+    expect(detail.meta).toMatchObject({ persistence: "persist" });
+    expect(tree).toMatchObject({ staleTime: 120_000 });
+    expect(tree.meta).toMatchObject({ persistence: "memory" });
   });
 });
 
-describe("invalidateQueryRoots", () => {
-  it("matches migrated Start queries through their nested entity root", () => {
+describe("operation-tag invalidation", () => {
+  it("matches normalized operation queries through descriptor metadata", async () => {
     const client = new QueryClient();
-    const key = calendarRangeQueryOptions({
+    const options = calendar.range.queryOptions({
       startDate: "2026-07-01",
       endDateExclusive: "2026-08-01",
-    }).queryKey;
-    client.setQueryData(key, { items: [], days: {} });
+    });
+    const query = client.getQueryCache().build(client, options);
+    query.setData({ items: [], days: {} });
 
-    invalidateQueryRoots(client, invalidatesFor("task"));
+    await invalidateOperationTags(client, [["calendar"]]);
 
-    expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+    expect(query.state.isInvalidated).toBe(true);
   });
 });

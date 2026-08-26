@@ -8,7 +8,24 @@ export interface CubbyOperationMeta extends Record<string, unknown> {
   speculative?: boolean;
   /** The transport wrapper records the network lifecycle and semantic ledger. */
   observedByTransport?: boolean;
+  /** Semantic cache tags owned by an operation descriptor. */
+  cacheTags?: readonly OperationCacheTag[];
+  /** Cache tags invalidated after a successful mutation. */
+  invalidates?: readonly OperationCacheTag[];
+  /** Whether a successful query is eligible for offline persistence. */
+  persistence?: "persist" | "memory";
+  /** Descriptor-owned freshness policy, also copied onto query options. */
+  freshness?: OperationFreshnessPolicy;
 }
+
+export type OperationCacheTag = readonly [string, ...string[]];
+
+export type OperationFreshnessPolicy = {
+  staleTime?: number;
+  gcTime?: number;
+  refetchOnWindowFocus?: boolean;
+  refetchOnReconnect?: boolean;
+};
 
 declare module "@tanstack/react-query" {
   interface Register {

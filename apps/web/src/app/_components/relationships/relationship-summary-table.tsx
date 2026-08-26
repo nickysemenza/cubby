@@ -13,7 +13,7 @@ import { VendorMark } from "~/components/entity/vendor-cell";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
-import { relatedDataSummaryInfiniteQueryOptions } from "~/lib/related-data.functions";
+import { relatedData } from "~/lib/related-data.functions";
 import { formatCurrency } from "~/lib/utils";
 import { createCurrencyColumn } from "../data-table/columnHelpers";
 import RTable from "../data-table/Table";
@@ -157,7 +157,11 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
   );
 
   const query = useInfiniteQuery({
-    ...relatedDataSummaryInfiniteQueryOptions(pageInput(0)),
+    ...relatedData.summary.infiniteQueryOptions(pageInput(0), {
+      initialPageParam: 0,
+      page: (input, offset) => ({ ...input, offset }),
+      getNextPageParam: (page) => page.nextOffset ?? undefined,
+    }),
     placeholderData: keepPreviousData,
   });
 

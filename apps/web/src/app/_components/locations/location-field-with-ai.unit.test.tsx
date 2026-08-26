@@ -9,7 +9,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("~/lib/ai.functions", () => ({
-  suggestLocationForBrowser: mocks.suggestLocation,
+  ai: {
+    suggestLocation: { call: mocks.suggestLocation },
+  },
 }));
 
 // The real combobox pulls the whole location roster over a Start function; this stands in

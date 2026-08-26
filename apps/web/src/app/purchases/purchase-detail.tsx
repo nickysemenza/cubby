@@ -40,10 +40,7 @@ import { RelationshipSummaryTable } from "../_components/relationships/relations
 import { FinancialSettlement } from "./financial-settlement";
 import { LinkExpensesDialog } from "./link-expenses-dialog";
 import { LinkProductsDialog } from "./link-products-dialog";
-import {
-  mergePurchaseMutationOptions,
-  purchaseProductsQueryOptions,
-} from "./purchase.functions";
+import { purchase as purchaseOperations } from "./purchase.functions";
 import { PurchaseDocuments } from "./purchase-documents";
 import { PurchaseExpensesTable } from "./purchase-expenses-table";
 import { PurchaseProductsTable } from "./purchase-products-table";
@@ -67,7 +64,7 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
   const [linkProductsOpen, setLinkProductsOpen] = useState(false);
 
   const productsQuery = useQuery(
-    purchaseProductsQueryOptions({ purchaseId: purchase.id }),
+    purchaseOperations.products.queryOptions({ purchaseId: purchase.id }),
   );
   const linkedProducts = productsQuery.data ?? EMPTY_PURCHASE_PRODUCTS;
   // Explicitly-linked products only. This list feeds the link dialog's picker,
@@ -87,7 +84,7 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
   });
 
   const mergeMutation = useActionMutation({
-    mutationFn: mergePurchaseMutationOptions,
+    mutationFn: purchaseOperations.merge.mutationOptions,
     success: "Purchases merged",
     invalidateKeys: invalidatesFor("purchase"),
     onSuccess: () => setMergeOpen(false),

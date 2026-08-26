@@ -15,7 +15,7 @@ import {
 } from "~/components/ui/empty";
 import { Spinner } from "~/components/ui/spinner";
 import { useHydrated } from "~/hooks/useHydrated";
-import { auditLogListInfiniteQueryOptions } from "~/lib/audit-log.functions";
+import { auditLogListOptions } from "~/lib/audit-log.functions";
 import { authClient } from "~/lib/auth-client";
 import { AuditLogEntryComponent } from "./audit-log-entry";
 
@@ -47,7 +47,7 @@ export function AuditLogList({
   const isAuthenticated = hydrated && !!session.data?.user;
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
     useInfiniteQuery({
-      ...auditLogListInfiniteQueryOptions(
+      ...auditLogListOptions(
         {
           entityType,
           entityId,

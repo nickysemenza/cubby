@@ -11,7 +11,7 @@ import { Description } from "~/components/ui/description";
 import { NoneValue } from "~/components/ui/none-value";
 import { parsePlainDate } from "~/lib/plain-date";
 import { formatCurrency } from "~/lib/utils";
-import { expenseChargeContextQueryOptions } from "./expense.functions";
+import { expense as expenseOperations } from "./expense.functions";
 
 // Module-level so the fallback keeps a stable reference across renders.
 const NO_OTHER_EXPENSES: ExpenseOut[] = [];
@@ -40,7 +40,7 @@ export const ExpensePurchaseSection: FC<{ expense: ExpenseOut }> = ({
   // change under the same component instance (clearing a vendor detaches the
   // Expense), and a conditional hook would break the hook order when it does.
   const { data, isPending } = useQuery(
-    expenseChargeContextQueryOptions(expense.id),
+    expenseOperations.chargeContext.queryOptions(expense.id),
   );
   const others = data?.siblings ?? NO_OTHER_EXPENSES;
 

@@ -17,7 +17,7 @@ import { TableCell, TableRow } from "~/components/ui/table";
 import { cn } from "~/lib/utils";
 import { EnrichmentEditor } from "./enrichment-editor";
 import type { EquivalenceDraft } from "./equivalence-workbench-link";
-import { ingredientRecipeUsagesQueryOptions } from "./ingredient.functions";
+import { ingredient } from "./ingredient.functions";
 import { fixBadgeLabel } from "./workbench-fix-label";
 
 // Single-sourced from the action-verb registry so the workbench can't drift
@@ -242,7 +242,7 @@ function WorkbenchEditor({
   // Recipe usages are fetched lazily (this editor mounts only when the row is
   // expanded) so the worklist query stays lean — it no longer ships every usage's
   // recipe body per row.
-  const usages = useQuery(ingredientRecipeUsagesQueryOptions({ id: row.id }));
+  const usages = useQuery(ingredient.recipeUsages.queryOptions({ id: row.id }));
 
   return (
     <EnrichmentEditor

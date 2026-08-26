@@ -3,7 +3,7 @@ import { useDebouncedValue } from "@tanstack/react-pacer";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
 import { recordCommandSearch } from "~/lib/perf/perf-store";
-import { searchFindQueryOptions } from "~/lib/search.functions";
+import { search } from "~/lib/search.functions";
 import { type QuickAction, quickActions } from "./quick-actions";
 
 const COMMAND_SEARCH_RESULT_LIMIT = 8;
@@ -40,7 +40,7 @@ export function useGlobalSearch(
   });
   const shouldSearch = query.trim().length > 0;
   const lexical = useQuery({
-    ...searchFindQueryOptions({
+    ...search.find.queryOptions({
       query,
       entityTypes: entityType ? [entityType] : undefined,
       limit: COMMAND_SEARCH_RESULT_LIMIT,

@@ -10,7 +10,7 @@ import { ArrowDown, ArrowUp, CalendarClock } from "lucide-react";
 import { useId, useMemo } from "react";
 import { DatePickerInput } from "~/app/_components/date-picker-input";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
-import { productMovementTimelineQueryOptions } from "~/app/products/product.functions";
+import { product as productOperations } from "~/app/products/product.functions";
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
 import { Grid, Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -507,7 +507,7 @@ export function ProductMovementViews({
   const search = route.useSearch();
   const order = search.movementOrder ?? "desc";
   const { data, isError, isLoading } = useQuery({
-    ...productMovementTimelineQueryOptions({
+    ...productOperations.movementTimeline.queryOptions({
       filters,
       movementFrom: search.movementFrom,
       movementTo: search.movementTo,

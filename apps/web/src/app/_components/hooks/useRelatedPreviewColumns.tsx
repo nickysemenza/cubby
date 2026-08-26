@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { type RefObject, useMemo, useRef } from "react";
 import { getSortableFields } from "~/entities/entities";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
-import { relatedDataPreviewsQueryOptions } from "~/lib/related-data.functions";
+import { relatedData } from "~/lib/related-data.functions";
 import { RelatedPreviewCell } from "../data-table/related-preview-cell";
 import type {
   CubbyColumnDef as ColumnDef,
@@ -91,7 +91,7 @@ export function useRelatedPreviewData({
   relatedStateRef: RefObject<RelatedPreviewState>;
 }): unknown {
   const relatedQuery = useQuery({
-    ...relatedDataPreviewsQueryOptions({
+    ...relatedData.previews.queryOptions({
       source: entity,
       sourceIds,
       relationKeys: visibleRelationKeys,

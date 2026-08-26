@@ -13,7 +13,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { locationTreeQueryOptions } from "~/app/locations/location.functions";
+import { location } from "~/app/locations/location.functions";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -335,7 +335,7 @@ export function LocationGallery() {
 
   // Fetch location tree
   const { data: locations, isLoading: locationsLoading } = useQuery(
-    locationTreeQueryOptions(),
+    location.makeTree.queryOptions(),
   );
 
   // `makeTree` already contains the gallery's minimal inventory projection and

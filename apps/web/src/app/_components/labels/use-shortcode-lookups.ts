@@ -1,8 +1,8 @@
 import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { locationShortcodesQueryOptions } from "~/app/locations/location.functions";
-import { productsByShortcodesQueryOptions } from "~/app/products/product.functions";
+import { location } from "~/app/locations/location.functions";
+import { product } from "~/app/products/product.functions";
 import type { LabelItem } from "./sheet-layouts";
 
 // Stable fallback for disabled queries: an inline `= []` default creates a new
@@ -26,14 +26,14 @@ export function useShortcodeLookups(shortcodes: string[]) {
   // Batch fetch: one query per entity type instead of N individual queries
   const { data: locationData = NO_ROWS, isLoading: locationsLoading } =
     useQuery({
-      ...locationShortcodesQueryOptions({
+      ...location.getByShortcodes.queryOptions({
         shortcodes: locationCodes,
       }),
       enabled: locationCodes.length > 0,
     });
 
   const { data: productData = NO_ROWS, isLoading: productsLoading } = useQuery({
-    ...productsByShortcodesQueryOptions({ shortcodes: productCodes }),
+    ...product.getByShortcodes.queryOptions({ shortcodes: productCodes }),
     enabled: productCodes.length > 0,
   });
 
