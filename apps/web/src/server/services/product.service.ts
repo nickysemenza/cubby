@@ -2,8 +2,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import {
   type ProductId,
   type ProductShortcode,
-  unsafeIngredientId,
-  unsafeProductId,
+  parseEntityId,
 } from "@cubby/schemas/identifiers";
 import type {
   ProductCreateInput,
@@ -78,7 +77,7 @@ export const getProductWithFood = async (
       return ingredientEntityId
         ? await getRecipeUsagesForIngredient(
             db,
-            unsafeIngredientId(ingredientEntityId),
+            parseEntityId("ingredient", ingredientEntityId),
           )
         : { recipeUsages: [], appearsInRecipes: [] };
     },
@@ -131,7 +130,7 @@ export const getProductSummaries = async (
   const rekey = <T>(record: Record<string, T>): Record<string, T> =>
     Object.fromEntries(
       Object.entries(record).flatMap(([id, value]) => {
-        const shortcode = shortcodeById.get(unsafeProductId(id));
+        const shortcode = shortcodeById.get(parseEntityId("product", id));
         return shortcode ? [[shortcode, value]] : [];
       }),
     );
@@ -153,7 +152,7 @@ export const getProductSummaries = async (
       ? getProductUnitMappingsByProductIds(db, ids).then((unitMappings) => {
           summaries.unitMappings = Object.fromEntries(
             Object.entries(unitMappings).flatMap(([id, mappings]) => {
-              const shortcode = shortcodeById.get(unsafeProductId(id));
+              const shortcode = shortcodeById.get(parseEntityId("product", id));
               return shortcode
                 ? [
                     [

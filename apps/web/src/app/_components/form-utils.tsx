@@ -601,18 +601,19 @@ export function buildUpdateObject<
 export function detectComboboxIdChange<TId extends string>(
   entityId: TId | string | undefined | null,
   comboboxItem: ComboboxItem | null | undefined,
+  parseId: (value: string) => TId,
 ): TId | null | undefined {
   if (entityId === null && !comboboxItem) {
     return undefined; // No change if both are null/empty
   }
   if (entityId === null && comboboxItem) {
-    return comboboxItem.id as TId; // Set new ID if entity was null
+    return parseId(comboboxItem.id); // Set new ID if entity was null
   }
   if (entityId !== null && !comboboxItem) {
     return null; // Set to null if removing association
   }
   if (comboboxItem && comboboxItem.id !== entityId) {
-    return comboboxItem.id as TId; // Change ID if different
+    return parseId(comboboxItem.id); // Change ID if different
   }
   return undefined; // No change
 }

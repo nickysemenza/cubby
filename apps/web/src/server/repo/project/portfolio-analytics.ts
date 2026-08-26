@@ -19,10 +19,7 @@
  *     aggregates (`monthlySpend`/`plannedVsActual`/`tradeActivity`), which need
  *     it to bucket by month in the first place.
  */
-import {
-  type ProjectId,
-  unsafeProjectShortcode,
-} from "@cubby/schemas/identifiers";
+import { type ProjectId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   ProjectPortfolioAnalyticsInput,
   ProjectPortfolioAnalyticsOut,
@@ -78,7 +75,7 @@ export async function projectPortfolioAnalytics(
 
   const nameById = new Map(projectRows.map((r) => [r.id, r.name]));
   const shortcodeById = new Map(
-    projectRows.map((r) => [r.id, unsafeProjectShortcode(r.shortcode)]),
+    projectRows.map((r) => [r.id, parseShortcodeFor("project", r.shortcode)]),
   );
   const { subtreeRollups } =
     wholeTree ?? (await loadProjectSubtreeRollups(db, ids));
@@ -86,7 +83,7 @@ export async function projectPortfolioAnalytics(
   const costVsEstimate = ids.map((id) => {
     const subtree = subtreeRollups.get(id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP;
     return {
-      projectId: shortcodeById.get(id) ?? unsafeProjectShortcode(""),
+      projectId: shortcodeById.get(id)!,
       projectName: nameById.get(id) ?? "",
       actual: subtree.actualSpent,
       committed: subtree.committedSpent,
@@ -96,7 +93,7 @@ export async function projectPortfolioAnalytics(
 
   const spendingByProject = ids
     .map((id) => ({
-      projectId: shortcodeById.get(id) ?? unsafeProjectShortcode(""),
+      projectId: shortcodeById.get(id)!,
       projectName: nameById.get(id) ?? "",
       spend: (subtreeRollups.get(id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP).spent,
     }))
@@ -187,7 +184,7 @@ export async function projectPortfolioAnalytics(
       openTaskCountByProject.set(row.projectId, row.openTaskCount);
   }
   const taskHeatmap = ids.map((id) => ({
-    projectId: shortcodeById.get(id) ?? unsafeProjectShortcode(""),
+    projectId: shortcodeById.get(id)!,
     projectName: nameById.get(id) ?? "",
     openTaskCount: openTaskCountByProject.get(id) ?? 0,
   }));

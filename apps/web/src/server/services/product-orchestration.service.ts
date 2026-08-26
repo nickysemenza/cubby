@@ -13,7 +13,7 @@ import {
   type IngredientId,
   type IngredientShortcode,
   type ProductId,
-  unsafeIngredientId,
+  parseEntityId,
 } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import { isbnFromGtin } from "@cubby/schemas/isbn";
@@ -61,7 +61,7 @@ const resolveIngredientEntityId = async (
 ): Promise<IngredientId> => {
   const id = await resolveLiveShortcode(db, shortcode, "ingredient");
   if (!id) throw new Error(`Ingredient ${shortcode} could not be resolved`);
-  return unsafeIngredientId(id);
+  return parseEntityId("ingredient", id);
 };
 
 export async function createProductWithSideEffects(

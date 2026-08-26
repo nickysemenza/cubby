@@ -5,9 +5,8 @@ import {
   type LocationShortcode,
   type ProductShortcode,
   type ProjectShortcode,
+  parseShortcodeFor,
   type RecipeShortcode,
-  unsafeProductShortcode,
-  unsafeProjectShortcode,
 } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { LocationType } from "@cubby/schemas/location";
@@ -1012,7 +1011,7 @@ const entityPickers = {
       name: string;
       manufacturer: string;
     }) => ({
-      id: unsafeProductShortcode(product.id),
+      id: parseShortcodeFor("product", product.id),
       name: `${product.name} (${product.manufacturer})`,
     })) as never,
   },
@@ -1068,11 +1067,12 @@ export function createSingleEntityInlineLinkColumn<
     | SingleEntityEditableConfig<T, string>
     | undefined;
   // usda-food has no generic picker, so it's never copy/pasteable here.
-  const cellData: ColumnCellData<T> | undefined =
+  const cellData: ColumnCellData<T, ComboboxItem<string> | null> | undefined =
     entity === "usda-food"
       ? undefined
-      : entityCellData<T>(
+      : entityCellData<T, string>(
           entity,
+          (value) => parseShortcodeFor(entity, value),
           (row) => {
             const item = row[accessor] as Extract<
               SingleEntityColumnData,
@@ -1081,7 +1081,11 @@ export function createSingleEntityInlineLinkColumn<
             if (!item) return null;
             const buildItem = entityPickers[entity as keyof SingleEntityIdMap]
               .buildItem as (data: NonNullable<typeof item>) => ComboboxItem;
-            return buildItem(item);
+            const built = buildItem(item);
+            return {
+              ...built,
+              id: parseShortcodeFor(entity, built.id),
+            };
           },
           editableConfig
             ? (row, id) => editableConfig.onSave(id, row)
@@ -1123,7 +1127,10 @@ export function createSingleEntityInlineLinkColumn<
             data: NonNullable<typeof item>,
           ) => ComboboxItem;
           const row = info.row.original;
-          const current = item ? buildItem(item) : null;
+          const built = item ? buildItem(item) : null;
+          const current = built
+            ? { ...built, id: parseShortcodeFor(entity, built.id) }
+            : null;
           return (
             <EditableEntityCell
               value={current}
@@ -1819,14 +1826,18 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
     };
   },
 ) {
-  const cellData = entityCellData<T>(
+  const cellData = entityCellData<T, ProjectShortcode>(
     "project",
+    (value) => parseShortcodeFor("project", value),
     (row) =>
       row.projectId && row.projectName
-        ? { id: row.projectId, name: row.projectName }
+        ? {
+            id: parseShortcodeFor("project", row.projectId),
+            name: row.projectName,
+          }
         : null,
     options?.editable
-      ? (row, id) => options.editable!.onSave(unsafeProjectShortcode(id), row)
+      ? (row, id) => options.editable!.onSave(id, row)
       : undefined,
     options?.editable
       ? (row) => options.editable!.onSave(null, row)
@@ -1859,7 +1870,7 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
 
         if (options?.editable) {
           const current: ComboboxItem<ProjectShortcode> | null =
-            id && name ? { id: unsafeProjectShortcode(id), name } : null;
+            id && name ? { id: parseShortcodeFor("project", id), name } : null;
           const row = info.row.original;
           return (
             <EditableEntityCell
@@ -1922,14 +1933,18 @@ export function createProductLinkColumn<T extends ProductRefRow>(
     };
   },
 ) {
-  const cellData = entityCellData<T>(
+  const cellData = entityCellData<T, ProductShortcode>(
     "product",
+    (value) => parseShortcodeFor("product", value),
     (row) =>
       row.productId && row.productName
-        ? { id: row.productId, name: row.productName }
+        ? {
+            id: parseShortcodeFor("product", row.productId),
+            name: row.productName,
+          }
         : null,
     options?.editable
-      ? (row, id) => options.editable!.onSave(unsafeProductShortcode(id), row)
+      ? (row, id) => options.editable!.onSave(id, row)
       : undefined,
     options?.editable
       ? (row) => options.editable!.onSave(null, row)
@@ -1955,7 +1970,7 @@ export function createProductLinkColumn<T extends ProductRefRow>(
 
         if (options?.editable) {
           const current: ComboboxItem<ProductShortcode> | null =
-            id && name ? { id: unsafeProductShortcode(id), name } : null;
+            id && name ? { id: parseShortcodeFor("product", id), name } : null;
           const row = info.row.original;
           return (
             <EditableEntityCell
@@ -2007,14 +2022,18 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
     };
   },
 ) {
-  const cellData = entityCellData<T>(
+  const cellData = entityCellData<T, ProductShortcode>(
     "product",
+    (value) => parseShortcodeFor("product", value),
     (row) =>
       row.subjectProductId && row.subjectProductName
-        ? { id: row.subjectProductId, name: row.subjectProductName }
+        ? {
+            id: parseShortcodeFor("product", row.subjectProductId),
+            name: row.subjectProductName,
+          }
         : null,
     options?.editable
-      ? (row, id) => options.editable!.onSave(unsafeProductShortcode(id), row)
+      ? (row, id) => options.editable!.onSave(id, row)
       : undefined,
     options?.editable
       ? (row) => options.editable!.onSave(null, row)
@@ -2041,7 +2060,7 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
 
         if (options?.editable) {
           const current: ComboboxItem<ProductShortcode> | null =
-            id && name ? { id: unsafeProductShortcode(id), name } : null;
+            id && name ? { id: parseShortcodeFor("product", id), name } : null;
           const row = info.row.original;
           return (
             <EditableEntityCell

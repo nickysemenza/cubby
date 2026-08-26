@@ -7,7 +7,7 @@ import {
   type FinancialTransactionId,
   type PurchaseId,
   type PurchaseShortcode,
-  unsafePurchaseShortcode,
+  parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
@@ -80,7 +80,7 @@ export async function readAllocations(
     const list = snapshot.get(row.transactionId) ?? [];
     list.push({
       purchaseId: row.purchaseId,
-      purchaseShortcode: unsafePurchaseShortcode(row.purchaseShortcode),
+      purchaseShortcode: parseShortcodeFor("purchase", row.purchaseShortcode),
       amount: Number(row.amount),
     });
     snapshot.set(row.transactionId, list);
@@ -292,7 +292,7 @@ export async function resolveAllocationInputs(
   );
   // resolveAllOrThrow throws naming every missing code, so the pairing is total.
   return rows.map((row, index) => ({
-    purchaseId: ids[index] as PurchaseId,
+    purchaseId: ids[index]!,
     amount: row.amount,
   }));
 }

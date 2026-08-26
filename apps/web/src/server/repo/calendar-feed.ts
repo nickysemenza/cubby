@@ -1,5 +1,4 @@
-import type { UserId } from "@cubby/schemas/identifiers";
-import { unsafeUserId } from "@cubby/schemas/identifiers";
+import { type UserId, userId } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { user } from "~/server/db/schema";
@@ -74,5 +73,5 @@ export async function findUserByCalendarFeedToken(
     columns: { id: true },
     where: eq(user.calendarFeedToken, token),
   });
-  return row ? unsafeUserId(row.id) : null;
+  return row ? userId.parse(row.id) : null;
 }

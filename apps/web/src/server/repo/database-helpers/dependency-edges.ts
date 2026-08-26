@@ -9,6 +9,8 @@ import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import {
   ENTITY_LABEL,
   ENTITY_NOT_FOUND_REASON,
+  type EntityId,
+  parseEntityId,
 } from "@cubby/schemas/identifiers";
 import type { AnyColumn, InferInsertModel } from "drizzle-orm";
 import { and, eq, inArray } from "drizzle-orm";
@@ -31,7 +33,7 @@ import { notDeleted } from "./query";
  */
 export async function replaceDependencyEdges<
   TEdge extends PgTable,
-  TId extends string,
+  E extends ShortcodeEntity,
 >(
   tx: DrizzleTransaction,
   edgeTable: TEdge,
@@ -41,7 +43,10 @@ export async function replaceDependencyEdges<
     /** Column on `edgeTable` identifying the "blocked-by" side (`newIds`). */
     blockedByColumn: AnyColumn;
     /** Build one edge row to insert from (ownId, blockedById). */
-    buildRow: (ownId: TId, blockedById: TId) => InferInsertModel<TEdge>;
+    buildRow: (
+      ownId: EntityId<E>,
+      blockedById: EntityId<E>,
+    ) => InferInsertModel<TEdge>;
     /** Table the incoming ids must exist (live) in. */
     entityTable: PgTable & { id: AnyColumn; deletedAt: AnyColumn };
     /**
@@ -49,10 +54,10 @@ export async function replaceDependencyEdges<
      * AppErrorReason (`ENTITY_NOT_FOUND_REASON[entity]`) thrown when an
      * incoming id doesn't exist, so the pair can't drift out of sync.
      */
-    entity: ShortcodeEntity;
+    entity: E;
   },
-  id: TId,
-  newIds: TId[],
+  id: EntityId<E>,
+  newIds: EntityId<E>[],
 ): Promise<void> {
   const deduped = uniq(newIds);
   const label = ENTITY_LABEL[opts.entity];
@@ -76,7 +81,9 @@ export async function replaceDependencyEdges<
           notDeleted(opts.entityTable),
         ),
       );
-    const liveIds = new Set((live as Array<{ id: TId }>).map((row) => row.id));
+    const liveIds = new Set(
+      live.map((row) => parseEntityId(opts.entity, row.id)),
+    );
     const missing = deduped.filter((depId) => !liveIds.has(depId));
     if (missing.length > 0) {
       throw createAppError(
@@ -109,7 +116,7 @@ export async function replaceDependencyEdges<
  */
 export async function dependencyIdsFor<
   TEdge extends PgTable,
-  TId extends string,
+  E extends ShortcodeEntity,
 >(
   db: Database,
   edgeTable: TEdge,
@@ -118,14 +125,16 @@ export async function dependencyIdsFor<
     ownColumn: AnyColumn;
     /** Column on `edgeTable` identifying the "blocked-by" side. */
     blockedByColumn: AnyColumn;
+    /** Entity schema used to validate the raw projection at this repo seam. */
+    entity: E;
   },
-  ids: TId[],
+  ids: EntityId<E>[],
 ): Promise<{
-  blockedBy: Map<TId, TId[]>;
-  blocking: Map<TId, TId[]>;
+  blockedBy: Map<EntityId<E>, EntityId<E>[]>;
+  blocking: Map<EntityId<E>, EntityId<E>[]>;
 }> {
-  const blockedBy = new Map<TId, TId[]>();
-  const blocking = new Map<TId, TId[]>();
+  const blockedBy = new Map<EntityId<E>, EntityId<E>[]>();
+  const blocking = new Map<EntityId<E>, EntityId<E>[]>();
   if (ids.length === 0) return { blockedBy, blocking };
 
   const selectCols = {
@@ -150,15 +159,19 @@ export async function dependencyIdsFor<
       .where(inArray(opts.blockedByColumn as any, ids)),
   ]);
 
-  for (const row of blockedByRows as Array<{ own: TId; blockedBy: TId }>) {
-    const arr = blockedBy.get(row.own) ?? [];
-    arr.push(row.blockedBy);
-    blockedBy.set(row.own, arr);
+  for (const row of blockedByRows) {
+    const own = parseEntityId(opts.entity, row.own);
+    const blockedById = parseEntityId(opts.entity, row.blockedBy);
+    const arr = blockedBy.get(own) ?? [];
+    arr.push(blockedById);
+    blockedBy.set(own, arr);
   }
-  for (const row of blockingRows as Array<{ own: TId; blockedBy: TId }>) {
-    const arr = blocking.get(row.blockedBy) ?? [];
-    arr.push(row.own);
-    blocking.set(row.blockedBy, arr);
+  for (const row of blockingRows) {
+    const own = parseEntityId(opts.entity, row.own);
+    const blockedById = parseEntityId(opts.entity, row.blockedBy);
+    const arr = blocking.get(blockedById) ?? [];
+    arr.push(own);
+    blocking.set(blockedById, arr);
   }
   return { blockedBy, blocking };
 }

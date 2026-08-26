@@ -112,6 +112,13 @@ export function buildFiltersFromManifest(
   get: (columnId: string) => FilterValue,
 ): Record<string, unknown> {
   const filters: Record<string, unknown> = {};
+  const brand = (spec: FilterSpecCore, value: string) => {
+    try {
+      return spec.brand?.(value) ?? value;
+    } catch {
+      return undefined;
+    }
+  };
 
   for (const spec of specs) {
     const raw = get(spec.columnId);
@@ -131,16 +138,25 @@ export function buildFiltersFromManifest(
       .with("id", () => {
         const value = single(raw);
         if (!value) return undefined;
-        return { [field]: spec.brand ? spec.brand(value) : value };
+        const parsed = brand(spec, value);
+        return parsed === undefined ? undefined : { [field]: parsed };
       })
       .with("multiselect", "idMulti", () => {
         const values = many(raw);
         if (!values) return undefined;
         // Only `idMulti` carries a brand, so the two kinds share one arm.
         const brandAll = (items: string[]) =>
-          spec.brand ? items.map(spec.brand) : items;
+          items
+            .map((value) => brand(spec, value))
+            .filter(
+              (value): value is NonNullable<typeof value> =>
+                value !== undefined,
+            );
         const nullable = spec.nullable;
-        if (!nullable) return { [field]: brandAll(values) };
+        if (!nullable) {
+          const parsed = brandAll(values);
+          return parsed.length ? { [field]: parsed } : undefined;
+        }
 
         // Partition BEFORE branding — a sentinel is not an entity id, and
         // `unsafe*Id` would happily brand the string into a lie.
@@ -153,7 +169,10 @@ export function buildFiltersFromManifest(
         if (wantsNone && wantsAny) return undefined;
         const presence = wantsNone ? "none" : wantsAny ? "has" : undefined;
         return {
-          ...(rest.length ? { [field]: brandAll(rest) } : {}),
+          ...(() => {
+            const parsed = brandAll(rest);
+            return parsed.length ? { [field]: parsed } : {};
+          })(),
           ...(presence ? { [nullable.field]: presence } : {}),
         };
       })

@@ -1,7 +1,4 @@
-import {
-  type CookbookId,
-  unsafeCookbookShortcode,
-} from "@cubby/schemas/identifiers";
+import { type CookbookId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { RecipeSource } from "@cubby/schemas/recipe-shared";
 import { match, P } from "ts-pattern";
 
@@ -75,7 +72,7 @@ export function recipeSourceFromDb({
           type: "book" as const,
           book: SourceData,
           cookbookId: cookbookShortcode
-            ? unsafeCookbookShortcode(cookbookShortcode)
+            ? parseShortcodeFor("cookbook", cookbookShortcode)
             : null,
         }),
       )

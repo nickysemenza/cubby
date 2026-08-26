@@ -34,7 +34,7 @@ import type {
   ProductId,
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
-import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { inventoryEntry, product } from "~/server/db/schema";
@@ -217,7 +217,7 @@ export const discardProductUnits = async (
       expenseId: created.id,
       expenseShortcode: created.shortcode,
       storedQuantity,
-      productShortcode: unsafeProductShortcode(prod.shortcode),
+      productShortcode: parseShortcodeFor("product", prod.shortcode),
       inventory,
       priceAffectedProductIds,
     };

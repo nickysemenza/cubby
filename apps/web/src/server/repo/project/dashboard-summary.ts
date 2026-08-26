@@ -7,10 +7,7 @@
  * "hidden purely for having no date" counts behind the date chips. See
  * packages/schemas/src/project.ts's `projectDashboardSummaryOut` doc comment.
  */
-import {
-  type ProjectId,
-  unsafeProjectShortcode,
-} from "@cubby/schemas/identifiers";
+import { type ProjectId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   ProjectDashboardSummaryInput,
   ProjectDashboardSummaryOut,
@@ -365,7 +362,8 @@ export async function projectDashboardSummary(
   const statusByProject = new Map<ProjectId, ProjectTaskStatusBreakdown>();
   for (const id of ids) {
     statusByProject.set(id, {
-      projectId: unsafeProjectShortcode(
+      projectId: parseShortcodeFor(
+        "project",
         subtreeLoad.shortcodeById.get(id) ?? "",
       ),
       notStarted: 0,

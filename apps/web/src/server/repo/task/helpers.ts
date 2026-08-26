@@ -4,11 +4,7 @@ import type {
   TaskId,
   TaskShortcode,
 } from "@cubby/schemas/identifiers";
-import {
-  unsafeProductShortcode,
-  unsafeProjectShortcode,
-  unsafeTaskShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { TaskOut } from "@cubby/schemas/project";
 import { sql } from "drizzle-orm";
 import { task } from "~/server/db/schema";
@@ -21,13 +17,13 @@ import {
 
 /** Brand a resolved join shortcode, preserving null for an absent/deleted parent. */
 const toProductShortcode = (code: string | null) =>
-  code === null ? null : unsafeProductShortcode(code);
+  code === null ? null : parseShortcodeFor("product", code);
 
 const toProjectShortcode = (code: string | null) =>
-  code === null ? null : unsafeProjectShortcode(code);
+  code === null ? null : parseShortcodeFor("project", code);
 
 const toTaskShortcode = (code: string | null) =>
-  code === null ? null : unsafeTaskShortcode(code);
+  code === null ? null : parseShortcodeFor("task", code);
 
 export const effectiveTaskDueDateSql = () =>
   sql`coalesce(${task.dueEndDate}, ${task.dueDate})`;
@@ -72,7 +68,7 @@ export const dbTaskToAPI = (
   subtaskCount = 0,
   doneSubtaskCount = 0,
 ): TaskOut => ({
-  id: unsafeTaskShortcode(row.shortcode),
+  id: parseShortcodeFor("task", row.shortcode),
   name: row.name,
   status: row.status,
   // Resolved through the join rather than the raw FK column — the permanent

@@ -1,7 +1,4 @@
-import {
-  type ProjectId,
-  unsafeProjectShortcode,
-} from "@cubby/schemas/identifiers";
+import { type ProjectId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   ProjectDateWindow,
   ProjectOut,
@@ -125,25 +122,27 @@ const dbProjectToAPI = ({
   parentProjectShortcode: string | null;
   childProjectIds: string[];
 }): ProjectOut => ({
-  id: unsafeProjectShortcode(row.shortcode),
+  id: parseShortcodeFor("project", row.shortcode),
   name: row.name,
   status: row.status,
   kind: row.kind,
   locations: row.locations,
   costEstimate: row.costEstimate,
   parentProjectId: parentProjectShortcode
-    ? unsafeProjectShortcode(parentProjectShortcode)
+    ? parseShortcodeFor("project", parentProjectShortcode)
     : null,
   parentProjectName,
-  childProjectIds: childProjectIds.map(unsafeProjectShortcode),
+  childProjectIds: childProjectIds.map((id) =>
+    parseShortcodeFor("project", id),
+  ),
   startDate: row.startDate,
   endDate: row.endDate,
   icon: row.icon,
   notes: row.notes,
   googleDriveFolderUrl: row.googleDriveFolderUrl,
   notionPageUrl: row.notionPageUrl,
-  blockedByIds: blockedByIds.map(unsafeProjectShortcode),
-  blockingIds: blockingIds.map(unsafeProjectShortcode),
+  blockedByIds: blockedByIds.map((id) => parseShortcodeFor("project", id)),
+  blockingIds: blockingIds.map((id) => parseShortcodeFor("project", id)),
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
   rollup: { ...ownRollup, subtree: subtreeRollup },

@@ -1,6 +1,7 @@
-import type {
-  InventoryShortcode,
-  ProductShortcode,
+import {
+  type InventoryShortcode,
+  type ProductShortcode,
+  parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { RecommendationKind } from "@cubby/schemas/recommendations";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -284,7 +285,7 @@ function ProductRelatednessRecommendation({
               onClick={() =>
                 dismiss.mutate({
                   sourceId,
-                  targetId: item.shortcode as ProductShortcode,
+                  targetId: parseShortcodeFor("product", item.shortcode),
                 })
               }
             >

@@ -13,7 +13,6 @@ import { EntityInlineLink } from "../EntityInlineLink";
 import { EntityInlineLinkList } from "../EntityInlineLinkList";
 import { tryFormatAmount } from "../inventory/format-amount";
 import { TruncatedList } from "../TruncatedList";
-import type { CellClipboardSpec } from "./cell-clipboard";
 import { EditableEntityCell } from "./editable-entity-cell";
 import {
   entityCellClipboard,
@@ -100,22 +99,6 @@ export function InventoryEntriesCell<
 
   if (entries.length === 0) {
     if (inlineEdit) {
-      const clipboard: CellClipboardSpec = {
-        kindKey: "entity:location",
-        // Copy disabled (no getCopyPayload) — nothing to copy from an empty cell.
-        onPasteValue: async ({ json }) => {
-          const pasted = json as { id?: unknown; name?: unknown } | undefined;
-          if (
-            !pasted ||
-            typeof pasted.id !== "string" ||
-            typeof pasted.name !== "string"
-          ) {
-            throw new Error("Paste a location cell here");
-          }
-          await inlineEdit.onCreateEntry(row, pasted.id as LocationShortcode);
-          return { id: pasted.id, name: pasted.name };
-        },
-      };
       return (
         <EditableEntityCell
           value={null}
@@ -125,7 +108,9 @@ export function InventoryEntriesCell<
           onSave={async (locationId) => {
             if (locationId) await inlineEdit.onCreateEntry(row, locationId);
           }}
-          clipboard={clipboard}
+          clipboard={entityCellClipboard("location", null, (locationId) =>
+            inlineEdit.onCreateEntry(row, locationId),
+          )}
           renderValue={() => <NoneValue />}
         />
       );

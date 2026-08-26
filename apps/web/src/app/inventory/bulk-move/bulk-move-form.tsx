@@ -1,4 +1,4 @@
-import { unsafeInventoryShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   BulkMoveItem,
   inventoryListItemOut,
@@ -230,7 +230,7 @@ export default function BulkMoveForm({
 
     try {
       const items: BulkMoveItem[] = selectedItems.map((item) => ({
-        inventoryEntryId: unsafeInventoryShortcode(item.inventoryEntryId),
+        inventoryEntryId: parseShortcodeFor("inventory", item.inventoryEntryId),
         quantity: {
           value: item.moveQuantity,
           unit: item.unit,

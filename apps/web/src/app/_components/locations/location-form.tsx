@@ -1,6 +1,8 @@
-import type {
-  LocationShortcode,
-  ProductShortcode,
+import {
+  type LocationShortcode,
+  locationShortcode,
+  type ProductShortcode,
+  productShortcode,
 } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import {
@@ -157,6 +159,7 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
       const productIdChange = detectComboboxIdChange<ProductShortcode>(
         location.product?.id,
         values.product,
+        productShortcode.parse,
       );
       if (productIdChange !== undefined) {
         updates.productId = productIdChange;
@@ -167,6 +170,7 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
       const parentIdChange = detectComboboxIdChange<LocationShortcode>(
         location.parent?.id,
         values.parent,
+        locationShortcode.parse,
       );
       if (parentIdChange !== undefined) {
         updates.parentId = parentIdChange;

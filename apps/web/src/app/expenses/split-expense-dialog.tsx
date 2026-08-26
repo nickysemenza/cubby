@@ -1,5 +1,7 @@
-import type { PurchaseShortcode } from "@cubby/schemas/identifiers";
-import { unsafeProjectShortcode } from "@cubby/schemas/identifiers";
+import {
+  type PurchaseShortcode,
+  parseShortcodeFor,
+} from "@cubby/schemas/identifiers";
 import type { CostType, ExpenseOut, Trade } from "@cubby/schemas/project";
 import { useNavigate } from "@tanstack/react-router";
 import { sumBy } from "es-toolkit";
@@ -270,7 +272,7 @@ export function SplitExpenseDialog({
                   <WithProjectSearch>
                     {({ items, onSearchChange, isLoading, onOpenChange }) => {
                       const selectedId = part.projectId
-                        ? unsafeProjectShortcode(part.projectId)
+                        ? parseShortcodeFor("project", part.projectId)
                         : null;
                       const selected = selectedId
                         ? (items.find((item) => item.id === selectedId) ?? {
@@ -401,7 +403,7 @@ export function SplitExpenseDialog({
                   // Plain string out of the picker — branded as a shortcode at
                   // this boundary, same convention as the create/settle dialogs.
                   projectId: part.projectId
-                    ? unsafeProjectShortcode(part.projectId)
+                    ? parseShortcodeFor("project", part.projectId)
                     : null,
                   productId: part.keepProduct ? expense.productId : null,
                   productQuantity:

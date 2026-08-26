@@ -20,8 +20,7 @@
  */
 import {
   type ProjectShortcode,
-  unsafeProjectShortcode,
-  unsafeVendorShortcode,
+  parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type {
   ExpenseAnalyticsOut,
@@ -210,11 +209,11 @@ export async function expenseAnalytics(
     cumulative,
     byProject: byProjectRows.map(({ projectShortcode, ...row }) => ({
       ...row,
-      projectId: unsafeProjectShortcode(projectShortcode),
+      projectId: parseShortcodeFor("project", projectShortcode),
     })),
     byVendor: byVendor.map(({ vendorShortcode, ...row }) => ({
       ...row,
-      vendorId: unsafeVendorShortcode(vendorShortcode),
+      vendorId: parseShortcodeFor("vendor", vendorShortcode),
     })),
   };
 }
@@ -257,7 +256,7 @@ export async function expenseTradeAffinity(
     .groupBy(project.shortcode, expense.trade);
 
   return rows.map((row) => ({
-    projectId: unsafeProjectShortcode(row.projectShortcode),
+    projectId: parseShortcodeFor("project", row.projectShortcode),
     trade: row.trade,
     count: row.count,
   }));

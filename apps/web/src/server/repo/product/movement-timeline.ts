@@ -1,11 +1,4 @@
-import {
-  unsafeExpenseShortcode,
-  unsafeProductId,
-  unsafeProductShortcode,
-  unsafeProjectShortcode,
-  unsafePurchaseShortcode,
-  unsafeVendorShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   ProductMovementGroupOut,
   ProductMovementLineOut,
@@ -69,10 +62,10 @@ export async function getProductMovementTimeline(
     "product",
   );
   const idByCode = new Map(
-    [...resolved].map(([code, id]) => [code, unsafeProductId(id)]),
+    [...resolved].map(([code, id]) => [code, parseEntityId("product", id)]),
   );
   const codeById = new Map(
-    [...idByCode].map(([code, id]) => [id, unsafeProductShortcode(code)]),
+    [...idByCode].map(([code, id]) => [id, parseShortcodeFor("product", code)]),
   );
   const productIds = [...idByCode.values()];
   if (productIds.length === 0) return emptyTimeline();
@@ -153,7 +146,7 @@ export async function getProductMovementTimeline(
     if (input.movementFrom && date < input.movementFrom) return [];
     if (input.movementTo && date > input.movementTo) return [];
     const movement: ProductMovementLineOut = {
-      expenseId: unsafeExpenseShortcode(row.expenseCode),
+      expenseId: parseShortcodeFor("expense", row.expenseCode),
       productId,
       name: row.expenseName,
       kind: classification.kind,
@@ -164,7 +157,7 @@ export async function getProductMovementTimeline(
       chargedTo:
         row.projectCode && row.projectName
           ? {
-              id: unsafeProjectShortcode(row.projectCode),
+              id: parseShortcodeFor("project", row.projectCode),
               name: row.projectName,
             }
           : null,
@@ -179,14 +172,14 @@ export async function getProductMovementTimeline(
         purchase:
           row.purchaseId && row.purchaseCode
             ? {
-                id: unsafePurchaseShortcode(row.purchaseCode),
+                id: parseShortcodeFor("purchase", row.purchaseCode),
                 displayLabel: row.purchaseDisplayLabel,
                 orderId: row.orderId,
                 date: row.purchaseDate,
                 vendor:
                   row.vendorCode && row.vendorName
                     ? {
-                        id: unsafeVendorShortcode(row.vendorCode),
+                        id: parseShortcodeFor("vendor", row.vendorCode),
                         name: row.vendorName,
                       }
                     : null,
@@ -221,14 +214,14 @@ export async function getProductMovementTimeline(
         key: `purchase:${row.purchaseCode}`,
         date: row.purchaseDate,
         purchase: {
-          id: unsafePurchaseShortcode(row.purchaseCode),
+          id: parseShortcodeFor("purchase", row.purchaseCode),
           displayLabel: row.purchaseDisplayLabel,
           orderId: row.orderId,
           date: row.purchaseDate,
           vendor:
             row.vendorCode && row.vendorName
               ? {
-                  id: unsafeVendorShortcode(row.vendorCode),
+                  id: parseShortcodeFor("vendor", row.vendorCode),
                   name: row.vendorName,
                 }
               : null,
@@ -319,7 +312,7 @@ export async function getProductMovementTimeline(
         coverImageUrl: item.images[0]?.url ?? null,
         usedOnProjects: (usagesByProduct[privateId] ?? [])
           .map((row) => ({
-            id: unsafeProjectShortcode(row.projectCode),
+            id: parseShortcodeFor("project", row.projectCode),
             name: row.projectName,
           }))
           .sort((left, right) => left.name.localeCompare(right.name)),

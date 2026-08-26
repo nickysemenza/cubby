@@ -26,10 +26,7 @@
  * is a `groupBy` away from being N-columns-wide.
  */
 import type { ProductId, ProjectId } from "@cubby/schemas/identifiers";
-import {
-  unsafeProductShortcode,
-  unsafeProjectShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   ProjectToolMatrixCellOut,
   ProjectToolMatrixColumnOut,
@@ -575,7 +572,7 @@ export async function projectToolMatrix(
     map.set(key, (map.get(key) ?? 0) + 1);
 
   for (const column of columnRecords) {
-    const projectCode = unsafeProjectShortcode(column.shortcode);
+    const projectCode = parseShortcodeFor("project", column.shortcode);
     const attachedHere = new Set<ProductId>();
 
     for (const row of rowRecords) {
@@ -584,7 +581,7 @@ export async function projectToolMatrix(
       attachedHere.add(row.productId);
       cells.push({
         projectId: projectCode,
-        productId: unsafeProductShortcode(row.shortcode),
+        productId: parseShortcodeFor("product", row.shortcode),
         state: "attached",
         lane: null,
         matchedTrade: null,
@@ -606,7 +603,7 @@ export async function projectToolMatrix(
         if (attachedHere.has(row.productId)) continue;
         directSuggestions.push({
           projectId: projectCode,
-          productId: unsafeProductShortcode(row.shortcode),
+          productId: parseShortcodeFor("product", row.shortcode),
           state: "suggested",
           lane: "purchased_here",
           matchedTrade: null,
@@ -634,7 +631,7 @@ export async function projectToolMatrix(
         if (cost < EXPENSIVE_TOOL_THRESHOLD || !wantsLane("purchased_here")) {
           cells.push({
             projectId: projectCode,
-            productId: unsafeProductShortcode(row.shortcode),
+            productId: parseShortcodeFor("product", row.shortcode),
             state: "purchase_evidence",
             lane: null,
             matchedTrade: null,
@@ -705,7 +702,7 @@ export async function projectToolMatrix(
         if (!record) continue;
         cells.push({
           projectId: projectCode,
-          productId: unsafeProductShortcode(record.shortcode),
+          productId: parseShortcodeFor("product", record.shortcode),
           state: "suggested",
           lane: "trade_match",
           matchedTrade: signal.trade,
@@ -722,7 +719,7 @@ export async function projectToolMatrix(
     const groupKey =
       filters.groupBy === "trade" ? (trade ?? "") : record.manufacturer.trim();
     return {
-      productId: unsafeProductShortcode(record.shortcode),
+      productId: parseShortcodeFor("product", record.shortcode),
       productName: record.name,
       manufacturer: record.manufacturer,
       groupKey,
@@ -754,7 +751,7 @@ export async function projectToolMatrix(
   }));
 
   const columns: ProjectToolMatrixColumnOut[] = columnRecords.map((record) => ({
-    projectId: unsafeProjectShortcode(record.shortcode),
+    projectId: parseShortcodeFor("project", record.shortcode),
     projectName: record.name,
     icon: record.icon,
     status: record.status,

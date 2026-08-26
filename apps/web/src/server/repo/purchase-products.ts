@@ -36,10 +36,7 @@
 import type { RelationMutationOut } from "@cubby/schemas/common";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ProductId, PurchaseId } from "@cubby/schemas/identifiers";
-import {
-  unsafeProductShortcode,
-  unsafePurchaseShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   ProductPurchaseOut,
   PurchaseProductOut,
@@ -251,7 +248,7 @@ export async function listPurchaseProducts(
   ]);
 
   return rows.map((row) => ({
-    productId: unsafeProductShortcode(row.productCode),
+    productId: parseShortcodeFor("product", row.productCode),
     productName: row.productName,
     manufacturer: row.manufacturer,
     price: prices.get(row.productId) ?? null,
@@ -312,7 +309,7 @@ export async function listProductPurchases(
   ).sort((a, b) => b.date.localeCompare(a.date));
 
   return rows.map((row) => ({
-    purchaseId: unsafePurchaseShortcode(row.purchaseCode),
+    purchaseId: parseShortcodeFor("purchase", row.purchaseCode),
     displayLabel: row.displayLabel,
     date: row.date,
     vendorName: row.vendorName,

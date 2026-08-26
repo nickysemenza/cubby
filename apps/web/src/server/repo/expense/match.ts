@@ -50,11 +50,7 @@
  * query makes it structurally impossible for a grading signal to drift into a
  * filter — which it must never become.
  */
-import {
-  unsafeExpenseShortcode,
-  unsafePurchaseId,
-  unsafePurchaseShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   ExpenseMatchCandidate,
   ExpenseMatchOptions,
@@ -363,7 +359,7 @@ export const matchExpenses = async (
   const purchaseIds = [
     ...new Set(
       res.rows.flatMap((row) =>
-        row.purchaseId ? [unsafePurchaseId(row.purchaseId)] : [],
+        row.purchaseId ? [parseEntityId("purchase", row.purchaseId)] : [],
       ),
     ),
   ];
@@ -385,7 +381,7 @@ export const matchExpenses = async (
       cost === null || inputRow.amount === 0 ? null : cost / inputRow.amount;
 
     const candidate: ExpenseMatchCandidate = {
-      expenseId: unsafeExpenseShortcode(raw.expenseShortcode),
+      expenseId: parseShortcodeFor("expense", raw.expenseShortcode),
       name: raw.name,
       cost,
       date: raw.date,
@@ -398,13 +394,13 @@ export const matchExpenses = async (
       purchase:
         raw.purchaseShortcode && raw.purchaseId
           ? (() => {
-              const purchaseId = unsafePurchaseId(raw.purchaseId);
+              const purchaseId = parseEntityId("purchase", raw.purchaseId);
               const financial =
                 financialByPurchase.get(purchaseId) ??
                 emptyPurchaseFinancialAggregate();
               const expenseTotal = Number(raw.purchaseExpenseTotal);
               return {
-                id: unsafePurchaseShortcode(raw.purchaseShortcode),
+                id: parseShortcodeFor("purchase", raw.purchaseShortcode),
                 vendorName: raw.vendorName,
                 orderId: raw.orderId,
                 expenseCount: Number(raw.purchaseExpenseCount),

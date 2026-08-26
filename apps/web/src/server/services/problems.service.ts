@@ -4,10 +4,9 @@ import type { ActorContext } from "@cubby/schemas/context";
 import {
   type IngredientId,
   type ProductId,
+  parseEntityId,
+  parseShortcodeFor,
   type RecipeId,
-  unsafeIngredientId,
-  unsafeIngredientShortcode,
-  unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
 import { CULL_PENDING_IMAGES_DEFAULT_HOURS } from "@cubby/schemas/image";
 import {
@@ -184,7 +183,7 @@ const findProductCoverageProblems = async (
       p.id,
       synthesizeEffectiveMappings({
         ...p,
-        id: unsafeProductShortcode(p.shortcode),
+        id: parseShortcodeFor("product", p.shortcode),
       }),
     ]),
   );
@@ -243,14 +242,14 @@ const findProductCoverageProblems = async (
       effective.some((m) => isMoneyUnit(m.a.unit) || isMoneyUnit(m.b.unit));
 
     ingredientsWithPartialCoverage.push({
-      id: unsafeProductShortcode(p.shortcode),
+      id: parseShortcodeFor("product", p.shortcode),
       name: p.name,
       manufacturer: p.manufacturer,
       coverage: { covered: [...cov.covered], applicable: [...applicable] },
       hasPrice,
       hasUsdaLink: p.food != null,
       usdaUnavailable: p.usdaUnavailable ?? false,
-      ingredientId: unsafeIngredientShortcode(p.ingredient.shortcode),
+      ingredientId: parseShortcodeFor("ingredient", p.ingredient.shortcode),
     });
   }
 
@@ -273,7 +272,7 @@ const findProductCoverageProblems = async (
     });
     if (islands.length >= 2) {
       productsWithIslandedMappings.push({
-        id: unsafeProductShortcode(p.shortcode),
+        id: parseShortcodeFor("product", p.shortcode),
         name: p.name,
         manufacturer: p.manufacturer,
         islandCount: islands.length,
@@ -475,7 +474,7 @@ export async function* pruneAllUnusedAliases(
       return entityId
         ? [
             {
-              ingredientId: unsafeIngredientId(entityId),
+              ingredientId: parseEntityId("ingredient", entityId),
               remove: row.unusedAliases,
             },
           ]
@@ -559,7 +558,7 @@ const presentCoverageExactRows = async (
     ...islandPage.data.map((row) => row.id),
   ]);
   const idsByCode = await resolveLiveShortcodes(db, selectedCodes, "product");
-  const ids = [...idsByCode.values()] as ProductId[];
+  const ids = [...idsByCode.values()];
   const [products, projection] = await Promise.all([
     loadProductsForCoverage(db, ids),
     loadProductConversionCoverageProjection(db, ids),
@@ -575,7 +574,7 @@ const presentCoverageExactRows = async (
 
   const partial = partialPage.data.map((row) => {
     const product = byCode.get(row.id);
-    const productId = idsByCode.get(row.id) as ProductId | undefined;
+    const productId = idsByCode.get(row.id);
     const coverage = productId ? projection.get(productId) : undefined;
     if (!product || !coverage || product.ingredient?.shortcode == null) {
       throw new Error(
@@ -583,7 +582,7 @@ const presentCoverageExactRows = async (
       );
     }
     return {
-      id: unsafeProductShortcode(product.shortcode),
+      id: parseShortcodeFor("product", product.shortcode),
       name: product.name,
       manufacturer: product.manufacturer,
       coverage: {
@@ -595,12 +594,15 @@ const presentCoverageExactRows = async (
       hasPrice: product.price != null,
       hasUsdaLink: product.food != null,
       usdaUnavailable: product.usdaUnavailable ?? false,
-      ingredientId: unsafeIngredientShortcode(product.ingredient.shortcode),
+      ingredientId: parseShortcodeFor(
+        "ingredient",
+        product.ingredient.shortcode,
+      ),
     };
   });
   const islands = islandPage.data.map((row) => {
     const product = byCode.get(row.id);
-    const productId = idsByCode.get(row.id) as ProductId | undefined;
+    const productId = idsByCode.get(row.id);
     const coverage = productId ? projection.get(productId) : undefined;
     if (!product || !coverage) {
       throw new Error(
@@ -609,7 +611,7 @@ const presentCoverageExactRows = async (
     }
     const effective = synthesizeEffectiveMappings({
       ...product,
-      id: unsafeProductShortcode(product.shortcode),
+      id: parseShortcodeFor("product", product.shortcode),
     });
     // A transient presentation-time USDA miss must not change the already
     // selected projection membership. Fall back to stored maps for the card's
@@ -618,7 +620,7 @@ const presentCoverageExactRows = async (
       effective ?? product.unitMappings,
     );
     return {
-      id: unsafeProductShortcode(product.shortcode),
+      id: parseShortcodeFor("product", product.shortcode),
       name: product.name,
       manufacturer: product.manufacturer,
       islandCount: coverage.islandCount,

@@ -1,7 +1,6 @@
 import {
   type LocationShortcode,
-  unsafeInventoryShortcode,
-  unsafeLocationShortcode,
+  parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -49,10 +48,10 @@ export function useArrangeMutations() {
           treeKey,
           applyLocationMove(
             prev,
-            unsafeLocationShortcode(dragId),
+            parseShortcodeFor("location", dragId),
             vars.parentId == null
               ? null
-              : unsafeLocationShortcode(vars.parentId),
+              : parseShortcodeFor("location", vars.parentId),
           ),
         );
       }
@@ -79,9 +78,9 @@ export function useArrangeMutations() {
           treeKey,
           applyItemMove(
             prev,
-            unsafeInventoryShortcode(first.inventoryEntryId),
-            unsafeLocationShortcode(vars.sourceLocationId),
-            unsafeLocationShortcode(vars.targetLocationId),
+            parseShortcodeFor("inventory", first.inventoryEntryId),
+            parseShortcodeFor("location", vars.sourceLocationId),
+            parseShortcodeFor("location", vars.targetLocationId),
           ),
         );
       }

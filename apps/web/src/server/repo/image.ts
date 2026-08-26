@@ -2,20 +2,13 @@
 
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
+  EntityRef,
   ImageId,
   ImageShortcode,
   ProjectId,
   RecipeId,
 } from "@cubby/schemas/identifiers";
-import {
-  unsafeImageId,
-  unsafeImageShortcode,
-  unsafeLocationId,
-  unsafeProductId,
-  unsafeProjectId,
-  unsafePurchaseId,
-  unsafeRecipeId,
-} from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   AttachableImageEntity,
   ImageAssociation,
@@ -91,6 +84,8 @@ import {
   insertWithShortcode,
 } from "~/server/repo/shortcode-utils";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
+
+type AttachableImageRef = Extract<EntityRef, { entity: AttachableImageEntity }>;
 
 export const createPendingImageRecord = async (
   db: Database,
@@ -277,7 +272,7 @@ const imageWithRelationsToAPI = (
     : null;
 
   return {
-    id: unsafeImageShortcode(imageData.shortcode),
+    id: parseShortcodeFor("image", imageData.shortcode),
     url: getR2PublicUrl(imageData.key),
     key: imageData.key,
     filename: imageData.filename,
@@ -862,59 +857,58 @@ const findReferencedImageIds = async (
 /** Detach joins and reap newly unreferenced uploaded images transactionally; drop R2 keys only after commit. */
 export const detachImagesFromEntity = async (
   tx: DrizzleTransaction,
-  entityType: AttachableImageEntity,
-  entityId: string,
+  entity: AttachableImageRef,
   imageIds: ImageId[],
 ): Promise<{ deletedIds: string[]; deletedKeys: string[] }> => {
   if (imageIds.length === 0) return { deletedIds: [], deletedKeys: [] };
 
-  await match(entityType)
-    .with("product", () =>
+  await match(entity)
+    .with({ entity: "product" }, ({ id }) =>
       tx
         .delete(productImage)
         .where(
           and(
-            eq(productImage.productId, unsafeProductId(entityId)),
+            eq(productImage.productId, id),
             inArray(productImage.imageId, imageIds),
           ),
         ),
     )
-    .with("recipe", () =>
+    .with({ entity: "recipe" }, ({ id }) =>
       tx
         .delete(recipeImage)
         .where(
           and(
-            eq(recipeImage.recipeId, unsafeRecipeId(entityId)),
+            eq(recipeImage.recipeId, id),
             inArray(recipeImage.imageId, imageIds),
           ),
         ),
     )
-    .with("location", () =>
+    .with({ entity: "location" }, ({ id }) =>
       tx
         .delete(locationImage)
         .where(
           and(
-            eq(locationImage.locationId, unsafeLocationId(entityId)),
+            eq(locationImage.locationId, id),
             inArray(locationImage.imageId, imageIds),
           ),
         ),
     )
-    .with("project", () =>
+    .with({ entity: "project" }, ({ id }) =>
       tx
         .delete(projectImage)
         .where(
           and(
-            eq(projectImage.projectId, unsafeProjectId(entityId)),
+            eq(projectImage.projectId, id),
             inArray(projectImage.imageId, imageIds),
           ),
         ),
     )
-    .with("purchase", () =>
+    .with({ entity: "purchase" }, ({ id }) =>
       tx
         .delete(purchaseImage)
         .where(
           and(
-            eq(purchaseImage.purchaseId, unsafePurchaseId(entityId)),
+            eq(purchaseImage.purchaseId, id),
             inArray(purchaseImage.imageId, imageIds),
           ),
         ),
@@ -1029,7 +1023,10 @@ export const findUnreferencedImages = async (
     .where(unreferencedImageWhere(db, cutoffDate));
   // `image.id` is an unbranded column, so this is the genuine string -> brand
   // boundary: these are real uuids on their way to `deleteImages`.
-  return candidates.map((img) => ({ ...img, id: unsafeImageId(img.id) }));
+  return candidates.map((img) => ({
+    ...img,
+    id: parseEntityId("image", img.id),
+  }));
 };
 
 export const countUnreferencedImages = async (
@@ -1125,35 +1122,50 @@ export const assertAttachableEntityExists = async (
       countWhere(
         db,
         product,
-        and(eq(product.id, unsafeProductId(entityId)), notDeleted(product)),
+        and(
+          eq(product.id, parseEntityId("product", entityId)),
+          notDeleted(product),
+        ),
       ),
     )
     .with("recipe", () =>
       countWhere(
         db,
         recipe,
-        and(eq(recipe.id, unsafeRecipeId(entityId)), notDeleted(recipe)),
+        and(
+          eq(recipe.id, parseEntityId("recipe", entityId)),
+          notDeleted(recipe),
+        ),
       ),
     )
     .with("location", () =>
       countWhere(
         db,
         location,
-        and(eq(location.id, unsafeLocationId(entityId)), notDeleted(location)),
+        and(
+          eq(location.id, parseEntityId("location", entityId)),
+          notDeleted(location),
+        ),
       ),
     )
     .with("project", () =>
       countWhere(
         db,
         project,
-        and(eq(project.id, unsafeProjectId(entityId)), notDeleted(project)),
+        and(
+          eq(project.id, parseEntityId("project", entityId)),
+          notDeleted(project),
+        ),
       ),
     )
     .with("purchase", () =>
       countWhere(
         db,
         purchase,
-        and(eq(purchase.id, unsafePurchaseId(entityId)), notDeleted(purchase)),
+        and(
+          eq(purchase.id, parseEntityId("purchase", entityId)),
+          notDeleted(purchase),
+        ),
       ),
     )
     .exhaustive();
@@ -1178,7 +1190,7 @@ const hasLiveAttachment = async (
         .from(productImage)
         .where(
           and(
-            eq(productImage.productId, unsafeProductId(entityId)),
+            eq(productImage.productId, parseEntityId("product", entityId)),
             eq(productImage.imageId, imageId),
             notDeleted(productImage),
           ),
@@ -1191,7 +1203,7 @@ const hasLiveAttachment = async (
         .from(recipeImage)
         .where(
           and(
-            eq(recipeImage.recipeId, unsafeRecipeId(entityId)),
+            eq(recipeImage.recipeId, parseEntityId("recipe", entityId)),
             eq(recipeImage.imageId, imageId),
             notDeleted(recipeImage),
           ),
@@ -1204,7 +1216,7 @@ const hasLiveAttachment = async (
         .from(locationImage)
         .where(
           and(
-            eq(locationImage.locationId, unsafeLocationId(entityId)),
+            eq(locationImage.locationId, parseEntityId("location", entityId)),
             eq(locationImage.imageId, imageId),
             notDeleted(locationImage),
           ),
@@ -1217,7 +1229,7 @@ const hasLiveAttachment = async (
         .from(projectImage)
         .where(
           and(
-            eq(projectImage.projectId, unsafeProjectId(entityId)),
+            eq(projectImage.projectId, parseEntityId("project", entityId)),
             eq(projectImage.imageId, imageId),
             notDeleted(projectImage),
           ),
@@ -1230,7 +1242,7 @@ const hasLiveAttachment = async (
         .from(purchaseImage)
         .where(
           and(
-            eq(purchaseImage.purchaseId, unsafePurchaseId(entityId)),
+            eq(purchaseImage.purchaseId, parseEntityId("purchase", entityId)),
             eq(purchaseImage.imageId, imageId),
             notDeleted(purchaseImage),
           ),
@@ -1291,7 +1303,7 @@ export const getImagesAttachedToEntity = async (
         .innerJoin(image, eq(productImage.imageId, image.id))
         .where(
           and(
-            eq(productImage.productId, unsafeProductId(entityId)),
+            eq(productImage.productId, parseEntityId("product", entityId)),
             notDeleted(productImage),
             notDeleted(image),
           ),
@@ -1305,7 +1317,7 @@ export const getImagesAttachedToEntity = async (
         .innerJoin(image, eq(recipeImage.imageId, image.id))
         .where(
           and(
-            eq(recipeImage.recipeId, unsafeRecipeId(entityId)),
+            eq(recipeImage.recipeId, parseEntityId("recipe", entityId)),
             notDeleted(recipeImage),
             notDeleted(image),
           ),
@@ -1319,7 +1331,7 @@ export const getImagesAttachedToEntity = async (
         .innerJoin(image, eq(locationImage.imageId, image.id))
         .where(
           and(
-            eq(locationImage.locationId, unsafeLocationId(entityId)),
+            eq(locationImage.locationId, parseEntityId("location", entityId)),
             notDeleted(locationImage),
             notDeleted(image),
           ),
@@ -1333,7 +1345,7 @@ export const getImagesAttachedToEntity = async (
         .innerJoin(image, eq(projectImage.imageId, image.id))
         .where(
           and(
-            eq(projectImage.projectId, unsafeProjectId(entityId)),
+            eq(projectImage.projectId, parseEntityId("project", entityId)),
             notDeleted(projectImage),
             notDeleted(image),
           ),
@@ -1347,7 +1359,7 @@ export const getImagesAttachedToEntity = async (
         .innerJoin(image, eq(purchaseImage.imageId, image.id))
         .where(
           and(
-            eq(purchaseImage.purchaseId, unsafePurchaseId(entityId)),
+            eq(purchaseImage.purchaseId, parseEntityId("purchase", entityId)),
             notDeleted(purchaseImage),
             notDeleted(image),
           ),
@@ -1388,7 +1400,10 @@ const lockAttachableEntity = async (
         .select({ id: product.id })
         .from(product)
         .where(
-          and(eq(product.id, unsafeProductId(entityId)), notDeleted(product)),
+          and(
+            eq(product.id, parseEntityId("product", entityId)),
+            notDeleted(product),
+          ),
         )
         .for("update"),
     )
@@ -1396,7 +1411,12 @@ const lockAttachableEntity = async (
       tx
         .select({ id: recipe.id })
         .from(recipe)
-        .where(and(eq(recipe.id, unsafeRecipeId(entityId)), notDeleted(recipe)))
+        .where(
+          and(
+            eq(recipe.id, parseEntityId("recipe", entityId)),
+            notDeleted(recipe),
+          ),
+        )
         .for("update"),
     )
     .with("location", () =>
@@ -1405,7 +1425,7 @@ const lockAttachableEntity = async (
         .from(location)
         .where(
           and(
-            eq(location.id, unsafeLocationId(entityId)),
+            eq(location.id, parseEntityId("location", entityId)),
             notDeleted(location),
           ),
         )
@@ -1416,7 +1436,10 @@ const lockAttachableEntity = async (
         .select({ id: project.id })
         .from(project)
         .where(
-          and(eq(project.id, unsafeProjectId(entityId)), notDeleted(project)),
+          and(
+            eq(project.id, parseEntityId("project", entityId)),
+            notDeleted(project),
+          ),
         )
         .for("update"),
     )
@@ -1426,7 +1449,7 @@ const lockAttachableEntity = async (
         .from(purchase)
         .where(
           and(
-            eq(purchase.id, unsafePurchaseId(entityId)),
+            eq(purchase.id, parseEntityId("purchase", entityId)),
             notDeleted(purchase),
           ),
         )
@@ -1455,7 +1478,7 @@ const countDisplayableAttachedImages = async (
         .innerJoin(image, eq(productImage.imageId, image.id))
         .where(
           and(
-            eq(productImage.productId, unsafeProductId(entityId)),
+            eq(productImage.productId, parseEntityId("product", entityId)),
             notDeleted(productImage),
             whereImage,
           ),
@@ -1468,7 +1491,7 @@ const countDisplayableAttachedImages = async (
         .innerJoin(image, eq(recipeImage.imageId, image.id))
         .where(
           and(
-            eq(recipeImage.recipeId, unsafeRecipeId(entityId)),
+            eq(recipeImage.recipeId, parseEntityId("recipe", entityId)),
             notDeleted(recipeImage),
             whereImage,
           ),
@@ -1481,7 +1504,7 @@ const countDisplayableAttachedImages = async (
         .innerJoin(image, eq(locationImage.imageId, image.id))
         .where(
           and(
-            eq(locationImage.locationId, unsafeLocationId(entityId)),
+            eq(locationImage.locationId, parseEntityId("location", entityId)),
             notDeleted(locationImage),
             whereImage,
           ),
@@ -1494,7 +1517,7 @@ const countDisplayableAttachedImages = async (
         .innerJoin(image, eq(projectImage.imageId, image.id))
         .where(
           and(
-            eq(projectImage.projectId, unsafeProjectId(entityId)),
+            eq(projectImage.projectId, parseEntityId("project", entityId)),
             notDeleted(projectImage),
             whereImage,
           ),
@@ -1507,7 +1530,7 @@ const countDisplayableAttachedImages = async (
         .innerJoin(image, eq(purchaseImage.imageId, image.id))
         .where(
           and(
-            eq(purchaseImage.purchaseId, unsafePurchaseId(entityId)),
+            eq(purchaseImage.purchaseId, parseEntityId("purchase", entityId)),
             notDeleted(purchaseImage),
             whereImage,
           ),
@@ -1558,7 +1581,7 @@ const associateImageWithEntity = async (
         entityId,
       );
       await dbc.insert(purchaseImage).values({
-        purchaseId: unsafePurchaseId(entityId),
+        purchaseId: parseEntityId("purchase", entityId),
         imageId,
         sortOrder,
         documentKind: documentKind ?? "other",
@@ -1568,7 +1591,7 @@ const associateImageWithEntity = async (
         .set({ updatedAt: new Date() })
         .where(
           and(
-            eq(purchase.id, unsafePurchaseId(entityId)),
+            eq(purchase.id, parseEntityId("purchase", entityId)),
             notDeleted(purchase),
           ),
         );
@@ -1708,7 +1731,7 @@ export const createOrReuseAttachedImage = async (
       tx,
       entityType,
       entityId,
-      unsafeImageId(inserted.id),
+      parseEntityId("image", inserted.id),
       documentKind,
     );
     return { row: inserted, reused: false };
@@ -1748,7 +1771,7 @@ export const getImagesByProjectIds = async (
   for (const row of rows) {
     const list = result[row.projectId] ?? [];
     list.push({
-      id: unsafeImageShortcode(row.shortcode),
+      id: parseShortcodeFor("image", row.shortcode),
       url: getR2PublicUrl(row.key),
       filename: row.filename,
     });

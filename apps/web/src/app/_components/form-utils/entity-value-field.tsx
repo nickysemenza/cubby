@@ -1,3 +1,7 @@
+import {
+  parseShortcodeFor,
+  type ShortcodeFor,
+} from "@cubby/schemas/identifiers";
 import type { ReactNode } from "react";
 import {
   Controller,
@@ -14,7 +18,7 @@ import { FormFieldGroup } from "../forms/form-field-group";
 /** React Hook Form adapter for assignments whose persisted value is the id. */
 export function EntityValueField<
   TFieldValues extends FieldValues,
-  TId extends string,
+  E extends PickerEntity,
 >({
   form,
   name,
@@ -26,10 +30,10 @@ export function EntityValueField<
 }: {
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
-  entity: PickerEntity;
+  entity: E;
   label?: string;
   placeholder?: string;
-  SearchProvider: (props: WithEntitySearchProps<TId>) => ReactNode;
+  SearchProvider: (props: WithEntitySearchProps<ShortcodeFor<E>>) => ReactNode;
   clearable?: boolean;
 }) {
   return (
@@ -39,11 +43,16 @@ export function EntityValueField<
           control={form.control}
           name={name}
           render={({ field, fieldState }) => {
-            const id = (field.value as TId | null | undefined) ?? null;
+            const id =
+              typeof field.value === "string"
+                ? parseShortcodeFor(entity, field.value)
+                : null;
             const selected =
               items.find((item) => item.id === id) ??
               (id
-                ? ({ id, shortcode: id, name: id } satisfies ComboboxItem<TId>)
+                ? ({ id, shortcode: id, name: id } satisfies ComboboxItem<
+                    ShortcodeFor<E>
+                  >)
                 : null);
             return (
               <FormFieldGroup

@@ -1,8 +1,4 @@
-import {
-  unsafeProductShortcode,
-  unsafeProjectShortcode,
-  unsafeVendorShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { isEqual } from "es-toolkit";
 import { householdLocalDate } from "~/lib/household-date";
 import { invalidatesFor } from "~/lib/query-keys";
@@ -842,10 +838,10 @@ export const entityEditRegistry = defineEntityEditRegistry({
           buildData: (patch) => ({
             ...patch,
             projectId: patch.projectId
-              ? unsafeProjectShortcode(String(patch.projectId))
+              ? parseShortcodeFor("project", patch.projectId)
               : null,
             subjectProductId: patch.subjectProductId
-              ? unsafeProductShortcode(String(patch.subjectProductId))
+              ? parseShortcodeFor("product", patch.subjectProductId)
               : null,
             trade: patch.trade ?? "other",
             dueEndDate: null,
@@ -897,7 +893,7 @@ export const entityEditRegistry = defineEntityEditRegistry({
               ...patch,
               lineKind: patch.lineKind === "auto" ? undefined : patch.lineKind,
               projectId: patch.projectId
-                ? unsafeProjectShortcode(String(patch.projectId))
+                ? parseShortcodeFor("project", patch.projectId)
                 : null,
               productId: patch.productId ?? null,
               productQuantity: patch.productId
@@ -994,7 +990,7 @@ export const entityEditRegistry = defineEntityEditRegistry({
             }),
             buildData: (patch) => ({
               ...patch,
-              vendorId: unsafeVendorShortcode(String(patch.vendorId)),
+              vendorId: parseShortcodeFor("vendor", patch.vendorId),
             }),
           },
         ),

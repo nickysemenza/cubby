@@ -1,4 +1,4 @@
-import type { IngredientShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   cleanupOrphanedEntityEmbeddingsInput,
   cleanupOrphanedEntityEmbeddingsOut,
@@ -126,10 +126,13 @@ export const deleteUnusedIngredientsWorkflow = async (
   c: ProblemsWorkflowContext,
   input: z.output<typeof deleteUnusedIngredientsInput>,
 ) => {
-  const shortcodes = (input.ingredientIds ??
-    (input.allFromProblem
-      ? await findAllViewProblemIds(c.db, input.allFromProblem)
-      : [])) as IngredientShortcode[];
+  const shortcodes = input.ingredientIds
+    ? input.ingredientIds.map((id) => parseShortcodeFor("ingredient", id))
+    : input.allFromProblem
+      ? (await findAllViewProblemIds(c.db, input.allFromProblem)).map((id) =>
+          parseShortcodeFor("ingredient", id),
+        )
+      : [];
   const entityIds = await resolveAllOrThrow(c.db, "ingredient", shortcodes);
   const result = await deleteUnusedIngredients(
     c.db,

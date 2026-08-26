@@ -265,7 +265,7 @@ export async function lockAndValidateForDelete<TId extends string>(
     .for("update"); // 🔒 Acquires row-level lock
 
   if (locked.length !== ids.length) {
-    const foundIds = locked.map((e) => e.id as TId);
+    const foundIds = locked.map((entry) => String(entry.id));
     const missingIds = ids.filter((id) => !foundIds.includes(id));
     throw createAppError(
       `${entityName.toUpperCase()}_NOT_FOUND` as "PRODUCT_NOT_FOUND",
@@ -354,8 +354,8 @@ export async function assertNoDependents<TId extends string>(opts: {
   });
   if (blockers.length === 0) return;
   const ids = uniq(
-    Object.keys(blockers[0]?.byTargetId ?? {}),
-  ) as unknown as TId[];
+    opts.offendingParentIds.filter((id): id is TId => id != null),
+  );
   const offenders = await opts.fetchNames(ids);
   const names = offenders.map((o) => o.name).join(", ");
   throw createAppError(opts.reason, opts.message(offenders.length, names));

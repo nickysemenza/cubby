@@ -17,7 +17,7 @@ import type {
   TaskId,
   TaskShortcode,
 } from "@cubby/schemas/identifiers";
-import { unsafeTaskShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   TaskBulkDueDateInput,
   TaskBulkMoveInput,
@@ -118,6 +118,7 @@ export async function taskDependencyIds(
     {
       ownColumn: taskDependency.taskId,
       blockedByColumn: taskDependency.blockedByTaskId,
+      entity: "task",
     },
     taskIds,
   );
@@ -133,9 +134,12 @@ export async function taskDependencyIds(
   const refs: EntityRef[] = allTaskIds.map((id) => ({ entity: "task", id }));
   const codes = await lookupShortcodes(db, refs);
   const toShortcodes = (ids: TaskId[]): TaskShortcode[] =>
-    ids.map((id) =>
-      unsafeTaskShortcode(codes.get(entityRefKey("task", id)) ?? ""),
-    );
+    ids.map((id) => {
+      const shortcode = codes.get(entityRefKey("task", id));
+      if (!shortcode)
+        throw new Error(`Task relation is missing shortcode for ${id}`);
+      return parseShortcodeFor("task", shortcode);
+    });
 
   return {
     blockedBy: new Map(
@@ -735,7 +739,7 @@ export const reorderTasks = async (
       ranks.map((r) => r.id),
     );
     const resolvedRanks = ranks.map((r, i) => ({
-      id: rankedIds[i] as TaskId,
+      id: rankedIds[i]!,
       sortOrder: r.sortOrder,
     }));
 

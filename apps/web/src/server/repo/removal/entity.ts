@@ -37,7 +37,7 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
-import type { BrandForEntity } from "@cubby/schemas/identifiers";
+import type { EntityId } from "@cubby/schemas/identifiers";
 import { and, inArray, or, type SQL } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
@@ -211,7 +211,7 @@ export const removeEntity = async <E extends RemovableEntity>(
   dbOrTx: Database | DrizzleTransaction,
   args: {
     entity: E;
-    ids: readonly BrandForEntity<E>[];
+    ids: readonly EntityId<E>[];
     removal: "soft" | "hard";
     actor: ActorContext;
     children?: readonly ChildCascade[];

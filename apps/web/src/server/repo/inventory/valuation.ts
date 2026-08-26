@@ -14,7 +14,7 @@
  */
 
 import type { ProductId } from "@cubby/schemas/identifiers";
-import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { and, inArray } from "drizzle-orm";
 import { uniq } from "es-toolkit";
@@ -71,7 +71,7 @@ export const loadValuationGraphs = async (
     rows.map((row) => [
       row.id,
       getAllUnitMappingsFromProduct({
-        id: unsafeProductShortcode(row.shortcode),
+        id: parseShortcodeFor("product", row.shortcode),
         unitMappings: storedMappings[row.id] ?? [],
         food: null,
         price: row.price,

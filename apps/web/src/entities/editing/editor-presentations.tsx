@@ -1,8 +1,3 @@
-import type {
-  ProductShortcode,
-  ProjectShortcode,
-  VendorShortcode,
-} from "@cubby/schemas/identifiers";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
@@ -148,7 +143,7 @@ function TaskCaptureFields({ form }: EntityEditorFieldsProps) {
         options={tradeOptions}
         nullable
       />
-      <EntityValueField<Record<string, unknown>, ProjectShortcode>
+      <EntityValueField<Record<string, unknown>, "project">
         form={form}
         name="projectId"
         entity="project"
@@ -156,7 +151,7 @@ function TaskCaptureFields({ form }: EntityEditorFieldsProps) {
         SearchProvider={WithProjectSearch}
         clearable
       />
-      <EntityValueField<Record<string, unknown>, ProductShortcode>
+      <EntityValueField<Record<string, unknown>, "product">
         form={form}
         name="subjectProductId"
         entity="product"
@@ -258,7 +253,7 @@ function ExpenseCaptureFields({ form, context }: EntityEditorFieldsProps) {
         label="Order #"
         placeholder="Vendor order #"
       />
-      <EntityValueField<Record<string, unknown>, ProjectShortcode>
+      <EntityValueField<Record<string, unknown>, "project">
         form={form}
         name="projectId"
         entity="project"
@@ -336,7 +331,7 @@ function VendorCaptureFields({ form }: EntityEditorFieldsProps) {
 function PurchaseCaptureFields({ form }: EntityEditorFieldsProps) {
   return (
     <>
-      <EntityValueField<Record<string, unknown>, VendorShortcode>
+      <EntityValueField<Record<string, unknown>, "vendor">
         form={form}
         name="vendorId"
         entity="vendor"

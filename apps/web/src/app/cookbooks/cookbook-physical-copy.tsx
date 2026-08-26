@@ -67,13 +67,15 @@ export function CookbookPhysicalCopy({
     onSuccess: () => setPickerOpen(false),
   });
 
-  const detail = useQuery({
-    ...entityDetailQueryOptions(
-      "product",
-      product?.id ?? ("PRD-2222" as ProductShortcode),
-    ),
-    enabled: product != null,
-  });
+  const detail = useQuery(
+    product
+      ? entityDetailQueryOptions("product", product.id)
+      : {
+          queryKey: [["product", "detail"], { shortcode: "" }] as const,
+          queryFn: () => Promise.resolve(null),
+          enabled: false,
+        },
+  );
 
   if (!product) {
     return (

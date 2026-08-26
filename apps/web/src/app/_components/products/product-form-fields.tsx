@@ -2,7 +2,7 @@ import {
   type ExternalIdInput,
   externalIdKind,
 } from "@cubby/schemas/external-id";
-import type { IngredientShortcode } from "@cubby/schemas/identifiers";
+import { ingredientShortcode } from "@cubby/schemas/identifiers";
 import { normalizeIsbn } from "@cubby/schemas/isbn";
 import { hasFoodIndicators } from "@cubby/schemas/product";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
@@ -135,14 +135,18 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
   const fdcValue = form.watch("fdc_id" as Path<TFieldValues>) as number | null;
   const upcValue = form.watch("upc" as Path<TFieldValues>) as string | null;
   const isbnValue = form.watch("isbn" as Path<TFieldValues>) as string | null;
-  const ingredientValue = form.watch("ingredient" as Path<TFieldValues>) as {
-    id?: IngredientShortcode;
-  } | null;
+  const ingredientValue = form.watch("ingredient" as Path<TFieldValues>);
+  const ingredientId =
+    typeof ingredientValue === "object" &&
+    ingredientValue !== null &&
+    "id" in ingredientValue
+      ? ingredientShortcode.safeParse(ingredientValue.id).data
+      : undefined;
 
   const isMisc = isMiscProduct(nameValue);
   const isFoodForced = hasFoodIndicators({
     fdc_id: fdcValue,
-    ingredientId: ingredientValue?.id,
+    ingredientId,
   });
   const isBookForced =
     !isFoodForced && isbnValue != null && normalizeIsbn(isbnValue) !== null;

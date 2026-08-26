@@ -18,7 +18,7 @@
  * `loadProjectSubtreeRollups`). `projectDashboardSummary` passes its bundle
  * in; `problems.service.ts` calls this standalone and lets it load its own.
  */
-import { type ProjectId, unsafeProjectId } from "@cubby/schemas/identifiers";
+import { type ProjectId, parseEntityId } from "@cubby/schemas/identifiers";
 import {
   describeAttentionItem,
   isLiveProjectStatus,
@@ -439,7 +439,7 @@ export async function computeAttentionItems(
   );
   const toProjectUuid = (code: string): ProjectId | null => {
     const ref = actionableProjectRefs.get(code);
-    return ref ? unsafeProjectId(ref.id) : null;
+    return ref ? parseEntityId("project", ref.id) : null;
   };
 
   const projectsWithNext = new Set<ProjectId>();

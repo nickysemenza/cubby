@@ -1,7 +1,4 @@
-import {
-  unsafeIngredientShortcode,
-  unsafeRecipeShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import type {
   RecipeGraphOut,
@@ -155,7 +152,7 @@ const sectionIngredientToAPI = (
       type: "ingredient",
       recipe: null,
       ingredient: {
-        id: unsafeIngredientShortcode(ingredient.shortcode),
+        id: parseShortcodeFor("ingredient", ingredient.shortcode),
         name: ingredient.name,
         aliases: ingredient.aliases,
         createdAt: ingredient.createdAt,
@@ -177,7 +174,7 @@ export const dbRecipeToTopLevelShape = (
   recipeData: RecipeSelect & { cookbook?: { shortcode: string } | null },
 ): RecipeTopLevel => {
   return {
-    id: unsafeRecipeShortcode(recipeData.shortcode),
+    id: parseShortcodeFor("recipe", recipeData.shortcode),
     name: recipeData.name,
     createdAt: recipeData.createdAt,
     updatedAt: recipeData.updatedAt,

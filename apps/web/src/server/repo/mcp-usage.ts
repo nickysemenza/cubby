@@ -1,5 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity-core";
-import { unsafeUserId } from "@cubby/schemas/identifiers";
+import { userId } from "@cubby/schemas/identifiers";
 import type {
   McpToolCallOutcome,
   McpToolCallSurface,
@@ -230,7 +230,7 @@ export async function listMcpUsageActivity(
   if (input.toolName) conditions.push(eq(mcpToolCall.toolName, input.toolName));
   if (input.entity) conditions.push(eq(mcpToolCall.entity, input.entity));
   if (input.userId) {
-    conditions.push(eq(mcpToolCall.userId, unsafeUserId(input.userId)));
+    conditions.push(eq(mcpToolCall.userId, userId.parse(input.userId)));
   }
   if (input.clientId !== undefined) {
     conditions.push(

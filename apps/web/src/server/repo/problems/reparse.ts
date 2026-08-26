@@ -9,10 +9,7 @@
 
 import type { Amount } from "@cubby/schemas/codec";
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
-import {
-  unsafeIngredientShortcode,
-  unsafeRecipeShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { StaleIngredientParse } from "@cubby/schemas/problems";
 import { and, count, eq, isNotNull, isNull } from "drizzle-orm";
 import { computeParseDrift, hasDrift } from "~/lib/parse-drift";
@@ -109,10 +106,10 @@ export const findStaleIngredientParses = async (
       stale.push({
         recipeSectionIngredientId: row.recipeSectionIngredientId,
         recipeEntityId: row.recipeId,
-        recipeId: unsafeRecipeShortcode(row.recipeShortcode),
+        recipeId: parseShortcodeFor("recipe", row.recipeShortcode),
         recipeName: row.recipeName,
         ingredientEntityId: row.ingredientId,
-        ingredientId: unsafeIngredientShortcode(row.ingredientShortcode),
+        ingredientId: parseShortcodeFor("ingredient", row.ingredientShortcode),
         storedName: row.storedName,
         rawLine: row.rawLine,
         parsedName: fresh.name,

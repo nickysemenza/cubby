@@ -1,8 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import {
-  unsafeFinancialAccountShortcode,
-  unsafeFinancialTransactionShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { buildTakeSkip } from "@cubby/schemas/pagination";
 import type {
@@ -159,10 +156,13 @@ const toOut = (row: StatementRowRow): StatementRowOut =>
     amount: Number(row.amount),
     providerAmount: Number(row.providerAmount),
     accountId: row.accountShortcode
-      ? unsafeFinancialAccountShortcode(String(row.accountShortcode))
+      ? parseShortcodeFor("financialAccount", String(row.accountShortcode))
       : null,
     transactionId: row.transactionShortcode
-      ? unsafeFinancialTransactionShortcode(String(row.transactionShortcode))
+      ? parseShortcodeFor(
+          "financialTransaction",
+          String(row.transactionShortcode),
+        )
       : null,
   });
 

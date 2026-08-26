@@ -13,9 +13,9 @@ import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import type { EntityRef } from "@cubby/schemas/entity";
 import {
   type IngredientId,
+  parseEntityId,
   type RecipeId,
   type RecipeShortcode,
-  unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
 import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
 import type { RecipeGraphOut } from "@cubby/schemas/recipe";
@@ -422,7 +422,7 @@ export class RecipeCostingService {
       const { totals: next } = computed;
       const idValue = resolvedRecipeIds.get(r.id);
       if (!idValue) continue;
-      const id = unsafeRecipeId(idValue);
+      const id = parseEntityId("recipe", idValue);
       if (totalsDiffer(r.totals, next)) {
         updates.push({ id, totals: next });
         changedIds.push(id);

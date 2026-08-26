@@ -145,9 +145,9 @@ export function EditableCell<T>({
   );
 }
 
-export function useCellEditState(
-  clipboard: CellClipboardSpec | undefined,
-  onPasted?: (value: unknown) => void,
+export function useCellEditState<TSaved = unknown>(
+  clipboard: CellClipboardSpec<TSaved> | undefined,
+  onPasted?: (value: TSaved) => void,
 ) {
   const [isEditing, setIsEditing] = useState(false);
   // Type-to-edit seed (a printable char that opened the editor), captured at

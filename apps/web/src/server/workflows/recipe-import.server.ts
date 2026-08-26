@@ -1,7 +1,7 @@
 import {
+  parseShortcodeFor,
   type RecipeId,
   type RecipeShortcode,
-  unsafeRecipeShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
   chunkRequestInput,
@@ -97,7 +97,7 @@ export const insertImportWorkflow = async (
     entity: { entityType: "recipe", entityId: result.id },
     source: "recipe.import",
   });
-  return { id: unsafeRecipeShortcode(result.shortcode) };
+  return { id: parseShortcodeFor("recipe", result.shortcode) };
 };
 
 export const upsertCookbookWorkflow = async (
@@ -183,7 +183,7 @@ export async function* importCookbookWorkflow(
         importContext,
       );
       insertedIds.push(id);
-      return { index, ok: true, id: unsafeRecipeShortcode(shortcode) };
+      return { index, ok: true, id: parseShortcodeFor("recipe", shortcode) };
     },
     {
       onError: (index, _i, error) => ({
@@ -315,7 +315,7 @@ export async function* importNotionSyncWorkflow(
       return {
         pageId,
         ok: true,
-        id: unsafeRecipeShortcode(result.shortcode),
+        id: parseShortcodeFor("recipe", result.shortcode),
         status: existing.has(normalizeNotionId(pageId)) ? "updated" : "created",
       };
     },

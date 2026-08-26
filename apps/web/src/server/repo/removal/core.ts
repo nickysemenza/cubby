@@ -55,7 +55,7 @@ import type {
   AuditableEntity,
   ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
-import type { BrandForEntity } from "@cubby/schemas/identifiers";
+import type { EntityId } from "@cubby/schemas/identifiers";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { searchableEntities } from "@cubby/schemas/search";
 import type { DrizzleTransaction } from "~/server/db";
@@ -146,7 +146,7 @@ export const cascadeRemoval = async <E extends RemovableEntity>(
      * is a compile error — the mis-targeting `finalizeMerge`'s looser
      * `<Id extends string>` still allows.
      */
-    ids: readonly BrandForEntity<E>[];
+    ids: readonly EntityId<E>[];
     audit: { into: AuditEntryInput[] } | { actor: ActorContext };
     counts?: CascadeCounts;
   },

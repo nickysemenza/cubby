@@ -1,4 +1,4 @@
-import { unsafeVendorId } from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   mergeVendorsInput,
   mergeVendorsOut,
@@ -48,7 +48,7 @@ export const vendorEntityAdapter = defineEntityAdapter({
       const entityId = await resolveLiveShortcode(ctx.db, vendor.id, "vendor");
       return {
         output: { vendor, mergeSummary },
-        entityId: entityId ? unsafeVendorId(entityId) : null,
+        entityId: entityId ? parseEntityId("vendor", entityId) : null,
         detachedImageKeys,
       };
     },

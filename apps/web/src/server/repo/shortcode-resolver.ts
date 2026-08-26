@@ -3,12 +3,18 @@
 import { entityRefKey } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import {
-  type BrandForEntity,
   ENTITY_LABEL,
   ENTITY_NOT_FOUND_REASON,
-  unsafeIdForEntity,
+  type EntityId,
+  type EntityRef,
+  parseEntityId,
+  parseEntityRef,
 } from "@cubby/schemas/identifiers";
-import { type ParsedShortcode, parseShortcode } from "@cubby/shared";
+import {
+  parseShortcode,
+  parseShortcodeFor,
+  type ShortcodeFor,
+} from "@cubby/shared";
 import { and, eq, inArray } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
@@ -37,12 +43,7 @@ import { createAppError } from "~/server/errors/app-error";
 import { notDeleted, unwrapDb } from "./database-helpers";
 import { SHORTCODE_TABLE, type ShortcodeTable } from "./shortcode-utils";
 
-type IdAndCode = { id: string; shortcode: string };
-
-export interface EntityRef {
-  entity: ShortcodeEntity;
-  id: string;
-}
+export type { EntityRef } from "@cubby/schemas/identifiers";
 
 /** Accepts legacy codes; `parseShortcode` normalizes them before lookup. */
 export async function resolveShortcode(
@@ -52,7 +53,7 @@ export async function resolveShortcode(
   const parsed = parseShortcode(code);
   if (!parsed) return null;
   const [row] = await resolveParsed(db, parsed.type, [parsed.shortcode]);
-  return row ? { entity: row.entity, id: row.id } : null;
+  return row ? parseEntityRef(row.entity, row.id) : null;
 }
 
 /** Resolves only live rows of the expected entity; a mismatched prefix is null. */
@@ -60,17 +61,18 @@ export async function resolveLiveShortcode<E extends ShortcodeEntity>(
   db: Database | DrizzleTransaction,
   code: string,
   entity: E,
-): Promise<string | null> {
+): Promise<EntityId<E> | null> {
   const parsed = parseShortcode(code);
   if (!parsed || parsed.type !== entity) return null;
 
   const table: ShortcodeTable = SHORTCODE_TABLE[entity];
-  const rows = (await unwrapDb(db)
+  const rows = await unwrapDb(db)
     .select({ id: table.id })
     .from(table)
     .where(and(eq(table.shortcode, parsed.shortcode), notDeleted(table)))
-    .limit(1)) as { id: string }[];
-  return rows[0]?.id ?? null;
+    .limit(1);
+  const row = rows[0];
+  return row ? parseEntityId(entity, row.id) : null;
 }
 
 /** Invalid, cross-entity, and soft-deleted codes are absent from the result. */
@@ -78,7 +80,7 @@ export async function resolveLiveShortcodes<E extends ShortcodeEntity>(
   db: Database | DrizzleTransaction,
   codes: readonly string[],
   entity: E,
-): Promise<Map<string, string>> {
+): Promise<Map<string, EntityId<E>>> {
   const canonical = new Map<string, string>(); // canonical code -> original code
   for (const code of codes) {
     const parsed = parseShortcode(code);
@@ -87,17 +89,20 @@ export async function resolveLiveShortcodes<E extends ShortcodeEntity>(
   if (canonical.size === 0) return new Map();
 
   const table: ShortcodeTable = SHORTCODE_TABLE[entity];
-  const rows = (await unwrapDb(db)
+  const rows = await unwrapDb(db)
     .select({ id: table.id, shortcode: table.shortcode })
     .from(table)
     .where(
       and(inArray(table.shortcode, [...canonical.keys()]), notDeleted(table)),
-    )) as IdAndCode[];
+    );
 
-  const resolved = new Map<string, string>();
+  const resolved = new Map<string, EntityId<E>>();
   for (const row of rows) {
-    const originalCode = canonical.get(row.shortcode);
-    if (originalCode !== undefined) resolved.set(originalCode, row.id);
+    const shortcode = parseShortcodeFor(entity, row.shortcode);
+    const originalCode = canonical.get(shortcode);
+    if (originalCode !== undefined) {
+      resolved.set(originalCode, parseEntityId(entity, row.id));
+    }
   }
   return resolved;
 }
@@ -106,7 +111,7 @@ export async function resolveOrThrow<E extends ShortcodeEntity>(
   db: Database | DrizzleTransaction,
   entity: E,
   code: string,
-): Promise<BrandForEntity<E>> {
+): Promise<EntityId<E>> {
   const id = await resolveLiveShortcode(db, code, entity);
   if (id === null) {
     throw createAppError(
@@ -114,7 +119,7 @@ export async function resolveOrThrow<E extends ShortcodeEntity>(
       `${ENTITY_LABEL[entity]} not found: ${code}`,
     );
   }
-  return unsafeIdForEntity[entity](id);
+  return id;
 }
 
 /** A missing just-created row is an invariant failure, not a client 404. */
@@ -122,14 +127,14 @@ export async function resolveCreatedOrInvariant<E extends ShortcodeEntity>(
   db: Database | DrizzleTransaction,
   entity: E,
   code: string,
-): Promise<BrandForEntity<E>> {
+): Promise<EntityId<E>> {
   const id = await resolveLiveShortcode(db, code, entity);
   if (!id) {
     throw new Error(
       `Created ${ENTITY_LABEL[entity].toLowerCase()} ${code} could not be resolved`,
     );
   }
-  return unsafeIdForEntity[entity](id);
+  return id;
 }
 
 /** Throws with every missing code; returns IDs positionally with duplicates. */
@@ -137,7 +142,7 @@ export async function resolveAllOrThrow<E extends ShortcodeEntity>(
   db: Database | DrizzleTransaction,
   entity: E,
   codes: readonly string[],
-): Promise<BrandForEntity<E>[]> {
+): Promise<EntityId<E>[]> {
   if (codes.length === 0) return [];
   const resolved = await resolveLiveShortcodes(db, codes, entity);
   const missing = codes.filter((code) => !resolved.has(code));
@@ -147,7 +152,7 @@ export async function resolveAllOrThrow<E extends ShortcodeEntity>(
       `${ENTITY_LABEL[entity]} not found: ${uniq(missing).join(", ")}`,
     );
   }
-  return codes.map((code) => unsafeIdForEntity[entity](resolved.get(code)!));
+  return codes.map((code) => resolved.get(code)!);
 }
 
 /** Drops unresolved codes while preserving the order of resolved ones. */
@@ -155,12 +160,12 @@ export async function resolveAllPresent<E extends ShortcodeEntity>(
   db: Database | DrizzleTransaction,
   entity: E,
   codes: readonly string[],
-): Promise<BrandForEntity<E>[]> {
+): Promise<EntityId<E>[]> {
   if (codes.length === 0) return [];
   const resolved = await resolveLiveShortcodes(db, codes, entity);
   return codes.flatMap((code) => {
     const id = resolved.get(code);
-    return id === undefined ? [] : [unsafeIdForEntity[entity](id)];
+    return id === undefined ? [] : [id];
   });
 }
 
@@ -180,7 +185,7 @@ export async function resolveFilterIds<E extends ShortcodeEntity>(
   db: Database | DrizzleTransaction,
   entity: E,
   value: string | readonly string[] | undefined,
-): Promise<BrandForEntity<E>[] | undefined> {
+): Promise<EntityId<E>[] | undefined> {
   if (value === undefined) return undefined;
   const codes = typeof value === "string" ? [value] : value;
   if (codes.length === 0) return undefined;
@@ -206,7 +211,7 @@ export async function resolveShortcodes(
     [...byEntity].map(async ([entity, entityCodes]) => {
       const rows = await resolveParsed(db, entity, entityCodes);
       for (const row of rows) {
-        resolved.set(row.shortcode, { entity: row.entity, id: row.id });
+        resolved.set(row.shortcode, parseEntityRef(row.entity, row.id));
       }
     }),
   );
@@ -232,12 +237,16 @@ export async function lookupShortcodes(
       // Soft-deleted rows are included on purpose: a payload can legitimately
       // reference a row that was deleted after it was assembled, and rendering
       // its (tombstoned) code beats rendering a raw uuid.
-      const rows = (await unwrapDb(db)
+      const rows = await unwrapDb(db)
         .select({ id: table.id, shortcode: table.shortcode })
         .from(table)
-        .where(inArray(table.id, [...ids]))) as IdAndCode[];
+        .where(inArray(table.id, [...ids]));
       for (const row of rows) {
-        codes.set(entityRefKey(entity, row.id), row.shortcode);
+        const id = parseEntityId(entity, row.id);
+        codes.set(
+          entityRefKey(entity, id),
+          parseShortcodeFor(entity, row.shortcode),
+        );
       }
     }),
   );
@@ -293,15 +302,17 @@ export async function lookupEntityLabels(
       // includes-deleted: same reasoning as `lookupShortcodes` — an audit row
       // or other assembled payload can legitimately name a row deleted after
       // the fact, and its (past) name is what makes that entry readable.
-      const rows = (await unwrapDb(db)
+      const rows = await unwrapDb(db)
         .select({ id: table.id, name: nameColumn })
         .from(table)
-        .where(inArray(table.id, [...ids]))) as {
-        id: string;
-        name: string | null;
-      }[];
+        .where(inArray(table.id, [...ids]));
       for (const row of rows) {
-        if (row.name) names.set(entityRefKey(entity, row.id), row.name);
+        if (typeof row.name === "string") {
+          names.set(
+            entityRefKey(entity, parseEntityId(entity, row.id)),
+            row.name,
+          );
+        }
       }
     }),
   );
@@ -323,7 +334,10 @@ async function inventoryEntryLabels(
     .innerJoin(product, eq(inventoryEntry.productId, product.id))
     .innerJoin(location, eq(inventoryEntry.locationId, location.id))
     .where(
-      inArray(inventoryEntry.id, [...ids].map(unsafeIdForEntity.inventory)),
+      inArray(
+        inventoryEntry.id,
+        [...ids].map((id) => parseEntityId("inventory", id)),
+      ),
     );
 
   const labels = new Map<string, string>();
@@ -339,11 +353,17 @@ async function inventoryEntryLabels(
   return labels;
 }
 
-async function resolveParsed(
+interface ResolvedRow<E extends ShortcodeEntity> {
+  entity: E;
+  id: EntityId<E>;
+  shortcode: ShortcodeFor<E>;
+}
+
+async function resolveParsed<E extends ShortcodeEntity>(
   db: Database | DrizzleTransaction,
-  entity: ParsedShortcode["type"],
+  entity: E,
   codes: readonly string[],
-): Promise<(EntityRef & { shortcode: string })[]> {
+): Promise<ResolvedRow<E>[]> {
   if (codes.length === 0) return [];
   const table: ShortcodeTable = SHORTCODE_TABLE[entity];
   // No `notDeleted` filter: resolution answers "what does this code name",
@@ -351,13 +371,13 @@ async function resolveParsed(
   // detail route) get their 404 from the subsequent `getByID`, which does
   // filter — and that split is deliberate, so scanning the label on a bin you
   // deleted says "this location was deleted" rather than "no such code".
-  const rows = (await unwrapDb(db)
+  const rows = await unwrapDb(db)
     .select({ id: table.id, shortcode: table.shortcode })
     .from(table)
-    .where(inArray(table.shortcode, [...codes]))) as IdAndCode[];
+    .where(inArray(table.shortcode, [...codes]));
   return rows.map((row) => ({
     entity,
-    id: row.id,
-    shortcode: row.shortcode,
+    id: parseEntityId(entity, row.id),
+    shortcode: parseShortcodeFor(entity, row.shortcode),
   }));
 }

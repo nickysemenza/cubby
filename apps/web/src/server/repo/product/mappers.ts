@@ -3,13 +3,7 @@ import {
   canonicalExternalIdUrl,
   GTIN_SOURCE,
 } from "@cubby/schemas/external-id";
-import {
-  unsafeCookbookShortcode,
-  unsafeIngredientShortcode,
-  unsafeInventoryShortcode,
-  unsafeLocationShortcode,
-  unsafeProductShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   InventoryListProductOut,
   ProductInventoryEmbedOut,
@@ -125,7 +119,7 @@ export const mapProductUnitMappings = (
 export const dbProductToTopLevelShape = (
   productData: ProductTopLevelDB,
 ): ProductTopLevelOut => ({
-  id: unsafeProductShortcode(productData.shortcode),
+  id: parseShortcodeFor("product", productData.shortcode),
   name: productData.name,
   aliases: productData.aliases ?? [],
   tags: productData.tags ?? [],
@@ -169,7 +163,7 @@ const dbProductToPickerItemShape = (
     onHand: ProductPickerItemOut["onHand"];
   },
 ): ProductPickerItemOut => ({
-  id: unsafeProductShortcode(productData.shortcode),
+  id: parseShortcodeFor("product", productData.shortcode),
   name: productData.name,
   manufacturer: productData.manufacturer,
   category: productData.category,
@@ -204,7 +198,7 @@ export const dbProductToInventoryEmbedShape = (
     primaryGtin: string | null;
   },
 ): ProductInventoryEmbedOut => ({
-  id: unsafeProductShortcode(productData.shortcode),
+  id: parseShortcodeFor("product", productData.shortcode),
   name: productData.name,
   primaryGtin: productData.primaryGtin,
   fdc_id: productData.fdc_id,
@@ -225,7 +219,7 @@ export const dbProductToInventoryListShape = (
     primaryGtin: string | null;
   },
 ): InventoryListProductOut => ({
-  id: unsafeProductShortcode(productData.shortcode),
+  id: parseShortcodeFor("product", productData.shortcode),
   name: productData.name,
   manufacturer: productData.manufacturer,
   primaryGtin: productData.primaryGtin,
@@ -242,7 +236,7 @@ export const dbProductToInventoryListShape = (
 const dbProductIngredientToShape = (
   ingredientData: typeof ingredient.$inferSelect,
 ) => ({
-  id: unsafeIngredientShortcode(ingredientData.shortcode),
+  id: parseShortcodeFor("ingredient", ingredientData.shortcode),
   name: ingredientData.name,
   aliases: ingredientData.aliases,
   naKinds: ingredientData.naKinds,
@@ -253,7 +247,7 @@ const dbProductIngredientToShape = (
 const dbLocationToProductListInventoryShape = (
   locationData: RowWithOptionalAliasesAndTags<typeof location.$inferSelect>,
 ) => ({
-  id: unsafeLocationShortcode(locationData.shortcode),
+  id: parseShortcodeFor("location", locationData.shortcode),
   name: locationData.name,
   type: parseLocationType(locationData.type, {
     id: locationData.id,
@@ -278,7 +272,7 @@ export const mapProductListInventoryEntries = (
   mapRelation(
     entries.filter((entry) => isNotDeleted(entry.location)),
     (entry) => ({
-      id: unsafeInventoryShortcode(entry.shortcode),
+      id: parseShortcodeFor("inventory", entry.shortcode),
       amount: parseInventoryAmount(entry.amount, entry.id),
       valuation: entry.valuation,
       verifiedAt: entry.verifiedAt,
@@ -357,7 +351,7 @@ export const dbProductToListAPI = (
         ? dbProductIngredientToShape(productData.ingredient)
         : null,
     unitMappings: mapProductUnitMappings(
-      unsafeProductShortcode(productData.shortcode),
+      parseShortcodeFor("product", productData.shortcode),
       productData.unitMappings,
     ),
     inventoryEntry,
@@ -394,7 +388,7 @@ export const dbProductToAPI = (
   const mappedInventoryEntry = mapRelation(
     inventoryEntry.filter((entry) => isNotDeleted(entry.location)),
     (entry) => ({
-      id: unsafeInventoryShortcode(entry.shortcode),
+      id: parseShortcodeFor("inventory", entry.shortcode),
       amount: parseInventoryAmount(entry.amount, entry.id),
       valuation: entry.valuation,
       verifiedAt: entry.verifiedAt,
@@ -402,7 +396,7 @@ export const dbProductToAPI = (
       createdAt: entry.createdAt,
       updatedAt: entry.updatedAt,
       location: {
-        id: unsafeLocationShortcode(entry.location.shortcode),
+        id: parseShortcodeFor("location", entry.location.shortcode),
         name: entry.location.name,
         aliases: entry.location.aliases,
         // Null whenever the location IS a product; only a present value is
@@ -425,7 +419,7 @@ export const dbProductToAPI = (
   );
 
   const result = {
-    id: unsafeProductShortcode(productData.shortcode),
+    id: parseShortcodeFor("product", productData.shortcode),
     name: productData.name,
     aliases: productData.aliases ?? [],
     tags: productData.tags ?? [],
@@ -445,7 +439,7 @@ export const dbProductToAPI = (
     updatedAt: productData.updatedAt,
     ingredient: ingredient ? dbProductIngredientToShape(ingredient) : null,
     unitMappings: mapProductUnitMappings(
-      unsafeProductShortcode(productData.shortcode),
+      parseShortcodeFor("product", productData.shortcode),
       unitMappings,
     ),
     externalIds: mapProductExternalIds(productData.externalIds),
@@ -456,7 +450,7 @@ export const dbProductToAPI = (
     // counts only live locations — the two must agree or the hero contradicts
     // the table beneath it.
     servingAsLocations: mapRelation(productData.locations ?? [], (loc) => ({
-      id: unsafeLocationShortcode(loc.shortcode),
+      id: parseShortcodeFor("location", loc.shortcode),
       name: loc.name,
       type: parseLocationType(loc.type, { id: loc.id, name: loc.name }),
       // This row carries no image columns — the select is scalar-only on
@@ -472,7 +466,7 @@ export const dbProductToAPI = (
     // its shelf link on the product page.
     cookbook:
       mapRelation(productData.cookbooks ?? [], (cb) => ({
-        id: unsafeCookbookShortcode(cb.shortcode),
+        id: parseShortcodeFor("cookbook", cb.shortcode),
         name: cb.name,
         recipeCount: Number(productData.cookbookRecipeCount ?? 0),
       }))[0] ?? null,

@@ -1,9 +1,5 @@
 import { entityRefKey } from "@cubby/schemas/entity";
-import {
-  type LocationId,
-  type ProductId,
-  unsafeProductId,
-} from "@cubby/schemas/identifiers";
+import { type LocationId, parseEntityId } from "@cubby/schemas/identifiers";
 import type { ProductWithFoodOut } from "@cubby/schemas/product";
 import { parseShortcode } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
@@ -108,7 +104,7 @@ export async function readLegacyProductDetail(
     ? getProductWithFood(
         context.db,
         context.usdaClient,
-        unsafeProductId(entityId),
+        parseEntityId("product", entityId),
       )
     : null;
 }
@@ -168,9 +164,12 @@ export async function readProductDetail(
     "quantity",
     async () => {
       const quantities = await loadProductDetailQuantityLedgers(context.db, [
-        row.id as ProductId,
+        parseEntityId("product", row.id),
       ]);
-      return quantities.get(row.id as ProductId) ?? EMPTY_QUANTITY_LEDGER;
+      return (
+        quantities.get(parseEntityId("product", row.id)) ??
+        EMPTY_QUANTITY_LEDGER
+      );
     },
   );
   const breadcrumbed = await observeOperationPhase(

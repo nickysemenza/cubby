@@ -9,6 +9,7 @@ import {
   entityManifest,
   type ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
+import { parseEntityRef } from "@cubby/schemas/identifiers";
 import { and, desc, eq, gte, lt, lte, or, type SQL } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { EDGE_KEY_TARGET_ENTITY } from "~/server/db/entity-incoming-edges";
@@ -248,7 +249,7 @@ function collectChangeRefs(
     if (!targetEntity) continue;
     for (const value of [diff.from, diff.to]) {
       if (typeof value === "string" && value.length > 0) {
-        refs.push({ entity: targetEntity, id: value });
+        refs.push(parseEntityRef(targetEntity, value));
       }
     }
   }
@@ -392,10 +393,9 @@ export async function getAuditLog(
       : undefined
     : undefined;
 
-  const entryRefs: EntityRef[] = returnEntries.map((entry) => ({
-    entity: entry.entityType,
-    id: entry.entityId,
-  }));
+  const entryRefs: EntityRef[] = returnEntries.map((entry) =>
+    parseEntityRef(entry.entityType, entry.entityId),
+  );
 
   // Both lookups are batched per entity type — never a per-row query — and run
   // together so the name resolution costs no extra round-trip latency. The

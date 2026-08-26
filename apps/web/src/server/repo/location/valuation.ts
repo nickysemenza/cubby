@@ -5,10 +5,7 @@
  * lint: services go through repo functions).
  */
 
-import {
-  type LocationId,
-  unsafeLocationShortcode,
-} from "@cubby/schemas/identifiers";
+import { type LocationId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   LocationValuation,
   LocationValuationSummaryOut,
@@ -64,7 +61,7 @@ export const getLocationValuationSummary = async (
   return {
     total: Number(rows[0]?.total ?? 0),
     locations: rows.map((row) => ({
-      id: unsafeLocationShortcode(row.id),
+      id: parseShortcodeFor("location", row.id),
       name: row.name,
       value: Number(row.value),
     })),

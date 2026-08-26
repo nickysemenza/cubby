@@ -1,8 +1,5 @@
 import { mutationSideEffectsSchema } from "@cubby/schemas/background-jobs";
-import type {
-  IngredientId,
-  IngredientShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   enrichmentRowsOut,
   enrichmentWorkbenchInput,
@@ -89,7 +86,9 @@ export const enrichmentWorkbenchWorkflow = async (
     focusId: input?.focusId
       ? await ingredients.one(db, input.focusId)
       : undefined,
-    focusShortcode: input?.focusId as IngredientShortcode | undefined,
+    focusShortcode: input?.focusId
+      ? parseShortcodeFor("ingredient", input.focusId)
+      : undefined,
   });
 export const resolveOrCreateWorkflow = async (
   db: Database,
@@ -103,7 +102,7 @@ export const resolveOrCreateWorkflow = async (
       action: "created" as const,
       entity: {
         entityType: "ingredient" as const,
-        entityId: ingredient.entityId as IngredientId,
+        entityId: parseEntityId("ingredient", ingredient.entityId),
       },
       source: "ingredient.resolveOrCreate",
     })),

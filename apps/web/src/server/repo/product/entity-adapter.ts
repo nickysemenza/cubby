@@ -1,4 +1,4 @@
-import { unsafeIngredientId } from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   mergeProductsInput,
   productFiltersSchema,
@@ -46,7 +46,7 @@ async function linkedProductIngredientIds(db: Database, shortcodes: string[]) {
     products.flatMap((row) => (row.ingredient ? [row.ingredient.id] : [])),
     "ingredient",
   );
-  return [...resolved.values()].map(unsafeIngredientId);
+  return [...resolved.values()].map((id) => parseEntityId("ingredient", id));
 }
 
 export const productEntityAdapter = defineEntityAdapter({

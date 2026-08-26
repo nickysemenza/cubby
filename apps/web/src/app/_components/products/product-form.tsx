@@ -1,5 +1,8 @@
 import { displayGtin, externalIdInput } from "@cubby/schemas/external-id";
-import type { IngredientShortcode } from "@cubby/schemas/identifiers";
+import {
+  type IngredientShortcode,
+  ingredientShortcode,
+} from "@cubby/schemas/identifiers";
 import { type ImageOut, partitionEntityFiles } from "@cubby/schemas/image";
 import {
   isbnFromGtin,
@@ -349,6 +352,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       const ingredientId = detectComboboxIdChange<IngredientShortcode>(
         product.ingredient ? product.ingredient.id : null,
         values.ingredient,
+        ingredientShortcode.parse,
       );
 
       if (ingredientId !== undefined) {

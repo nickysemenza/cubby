@@ -14,9 +14,8 @@ import {
   type CookbookId,
   type CookbookShortcode,
   type ProductId,
+  parseShortcodeFor,
   type RecipeId,
-  unsafeCookbookShortcode,
-  unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
@@ -125,7 +124,7 @@ export const upsertCookbook = async (
         action: existingId ? "update" : "create",
       });
       return {
-        output: { id: unsafeCookbookShortcode(row.shortcode) },
+        output: { id: parseShortcodeFor("cookbook", row.shortcode) },
         entityId: id,
       };
     });
@@ -224,12 +223,12 @@ const readCookbookSummaries = async (
   return rows.map(
     ({ productId, productShortcode, productName, coverKey, ...r }) => ({
       ...r,
-      id: unsafeCookbookShortcode(r.shortcode),
+      id: parseShortcodeFor("cookbook", r.shortcode),
       coverUrl: coverKey ? getR2PublicUrl(coverKey) : null,
       product:
         productId && productShortcode && productName
           ? {
-              id: unsafeProductShortcode(productShortcode),
+              id: parseShortcodeFor("product", productShortcode),
               name: productName,
               coverUrl: productCovers.get(productId) ?? null,
             }
@@ -284,7 +283,7 @@ export const setCookbookProduct = async (
       action: "update",
       changes: { productId: { from: before.productId, to: productId } },
     });
-    return unsafeCookbookShortcode(updated.shortcode);
+    return parseShortcodeFor("cookbook", updated.shortcode);
   });
 
   // Re-read through the shared projection outside the transaction so the

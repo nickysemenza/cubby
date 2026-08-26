@@ -1,10 +1,5 @@
 import type { IngredientId } from "@cubby/schemas/identifiers";
-import {
-  unsafeExpenseShortcode,
-  unsafeIngredientId,
-  unsafeInventoryShortcode,
-  unsafeProductId,
-} from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   buildPaginatedResponse,
   normalizeSorts,
@@ -160,7 +155,7 @@ export async function searchProductsWorkflow(
   );
   const semanticIds = semantic
     .filter((candidate) => candidate.similarity >= 0.75)
-    .map((candidate) => unsafeProductId(candidate.item.entityId));
+    .map((candidate) => parseEntityId("product", candidate.item.entityId));
   const semanticItems = (
     await getProductPickerItemsByIds(context.readDb, semanticIds)
   ).filter(
@@ -507,11 +502,14 @@ export async function discardProductWorkflow(
     "product.discard",
   );
   return {
-    expenseId: unsafeExpenseShortcode(result.expenseShortcode),
+    expenseId: parseShortcodeFor("expense", result.expenseShortcode),
     storedQuantity: result.storedQuantity,
     inventory: result.inventory
       ? {
-          entryId: unsafeInventoryShortcode(result.inventory.entryShortcode),
+          entryId: parseShortcodeFor(
+            "inventory",
+            result.inventory.entryShortcode,
+          ),
           removed: result.inventory.removed,
           remainingValue: result.inventory.remainingValue,
         }
@@ -548,7 +546,8 @@ export async function* createManyProductsWorkflow(
           product.ingredient.id,
           "ingredient",
         );
-        if (ingredientId) ingredientIds.push(unsafeIngredientId(ingredientId));
+        if (ingredientId)
+          ingredientIds.push(parseEntityId("ingredient", ingredientId));
       }
     },
     {

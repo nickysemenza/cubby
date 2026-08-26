@@ -7,9 +7,8 @@ import type {
 } from "@cubby/schemas/entity-integrity";
 import {
   type PurchaseId,
-  unsafeImageShortcode,
-  unsafeVendorId,
-  unsafeVendorShortcode,
+  parseEntityId,
+  parseShortcodeFor,
   type VendorId,
   type VendorShortcode,
 } from "@cubby/schemas/identifiers";
@@ -214,7 +213,7 @@ type VendorRow = {
 };
 
 const dbVendorToAPI = (row: VendorRow): VendorOut => ({
-  id: unsafeVendorShortcode(row.shortcode),
+  id: parseShortcodeFor("vendor", row.shortcode),
   name: row.name,
   website: row.website,
   orderUrlTemplate: row.orderUrlTemplate,
@@ -224,7 +223,7 @@ const dbVendorToAPI = (row: VendorRow): VendorOut => ({
   latestPurchaseDate: row.latestPurchaseDate,
   logo: row.logo && {
     ...row.logo,
-    id: unsafeImageShortcode(row.logo.id),
+    id: parseShortcodeFor("image", row.logo.id),
     url: getR2PublicUrl(row.logo.key),
   },
   createdAt: row.createdAt,
@@ -367,7 +366,7 @@ export const getVendorByShortcode = async (
   shortcode: string,
 ): Promise<VendorOut | null> => {
   const id = await resolveLiveShortcode(db, shortcode, "vendor");
-  return id ? getVendorByID(db, unsafeVendorId(id)) : null;
+  return id ? getVendorByID(db, parseEntityId("vendor", id)) : null;
 };
 
 export const vendorOptions = async (
@@ -393,7 +392,7 @@ export const vendorOptions = async (
     .orderBy(desc(vendorPurchaseCount), asc(vendor.name));
 
   return rows.map((row) => ({
-    id: unsafeVendorShortcode(row.shortcode),
+    id: parseShortcodeFor("vendor", row.shortcode),
     name: row.name,
     count: Number(row.count),
     logo: row.logoKey ? { url: getR2PublicUrl(row.logoKey) } : null,
@@ -599,7 +598,9 @@ const planVendorMerge = async (
     })
     .from(vendor)
     .where(inArray(vendor.id, losers));
-  const deletedIds = loserRows.map((r) => unsafeVendorShortcode(r.shortcode));
+  const deletedIds = loserRows.map((r) =>
+    parseShortcodeFor("vendor", r.shortcode),
+  );
 
   const carried: VendorMergePlan["carried"] = {};
   if (keeperRow?.website == null) {

@@ -1,10 +1,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import type { IngredientShortcode, RecipeId } from "@cubby/schemas/identifiers";
-import {
-  unsafeIngredientShortcode,
-  unsafeRecipeShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { normalizeImportRecipe } from "~/lib/import-recipe-normalizer";
@@ -69,7 +66,7 @@ const makeIngredientResolvers = (
       let p = plain.get(key);
       if (!p) {
         p = findOrCreateIngredient(exec, name).then((i) => {
-          const shortcode = unsafeIngredientShortcode(i.shortcode);
+          const shortcode = parseShortcodeFor("ingredient", i.shortcode);
           sharedIds?.set(key, shortcode);
           return shortcode;
         });
@@ -155,7 +152,7 @@ const importRecipeToRecipeInput = async (
                   return {
                     type: "recipe" as const,
                     ingredientId: null,
-                    recipeId: unsafeRecipeShortcode(recipeId),
+                    recipeId: parseShortcodeFor("recipe", recipeId),
                     amounts: parsed.amounts.map((a) => ({
                       value: a.value,
                       unit: a.unit,

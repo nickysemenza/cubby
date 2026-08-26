@@ -1,5 +1,5 @@
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { unsafeProjectId } from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -143,7 +143,7 @@ export const buildExpenseWhereClause = async (
       expense.projectId,
       uniq(
         selectedProjectIds.flatMap((id) => {
-          const projectId = unsafeProjectId(id);
+          const projectId = parseEntityId("project", id);
           return [
             projectId,
             ...collectDescendantIds(childrenByParent, projectId),

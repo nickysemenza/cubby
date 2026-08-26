@@ -38,7 +38,7 @@ import type { FilterableComboboxItem } from "./editable-cell";
  * row (not a value captured from a single rendered cell) so the range engine
  * can copy/paste against the whole row model, virtualized rows included.
  */
-export interface ColumnCellData<TData> {
+export interface ColumnCellData<TData, TSaved = unknown> {
   kind: CellKind;
   /**
    * Typed numeric projection for read-only selection statistics. This is
@@ -52,9 +52,9 @@ export interface ColumnCellData<TData> {
   applyPaste?: (
     row: TData,
     payload: { json?: unknown; text?: string },
-  ) => Promise<unknown>;
+  ) => Promise<TSaved>;
   /** Absent unless this specific relation is nullable. */
-  applyClear?: (row: TData) => Promise<unknown>;
+  applyClear?: (row: TData) => Promise<TSaved>;
 }
 
 /**
@@ -65,10 +65,10 @@ export interface ColumnCellData<TData> {
  * parsing, etc. live in exactly one place (and the range engine, which calls
  * `applyPaste` directly, gets the same validation for free).
  */
-export function specFromCellData<TData>(
-  cellData: ColumnCellData<TData>,
+export function specFromCellData<TData, TSaved>(
+  cellData: ColumnCellData<TData, TSaved>,
   row: TData,
-): CellClipboardSpec {
+): CellClipboardSpec<TSaved> {
   const { kind, getCopyPayload, applyPaste } = cellData;
   return {
     kindKey: kind,
@@ -83,7 +83,7 @@ export function textCellData<TData>(
   kind: CellKind,
   getValue: (row: TData) => string | null,
   save?: (row: TData, value: string | null) => Promise<void>,
-): ColumnCellData<TData> {
+): ColumnCellData<TData, string | null> {
   return {
     kind,
     getCopyPayload: (row) => {
@@ -193,12 +193,13 @@ export function selectCellData<TData>(
  * cell). Text paste is rejected — id resolution by name would be guesswork;
  * server-side validation still applies to the pasted id.
  */
-export function entityCellData<TData>(
+export function entityCellData<TData, TId extends string>(
   entity: string,
-  getItem: (row: TData) => ComboboxItem | null,
-  save?: (row: TData, id: string) => Promise<void>,
+  parseId: (value: unknown) => TId,
+  getItem: (row: TData) => ComboboxItem<TId> | null,
+  save?: (row: TData, id: TId) => Promise<void>,
   clear?: (row: TData) => Promise<void>,
-): ColumnCellData<TData> {
+): ColumnCellData<TData, ComboboxItem<TId> | null> {
   return {
     kind: `entity:${entity}`,
     getCopyPayload: (row) => {
@@ -209,14 +210,20 @@ export function entityCellData<TData>(
     },
     applyPaste: save
       ? async (row, { json }) => {
-          const pasted = json as { id?: unknown; name?: unknown } | undefined;
           if (
-            !pasted ||
-            typeof pasted.id !== "string" ||
-            typeof pasted.name !== "string"
+            !json ||
+            typeof json !== "object" ||
+            !("id" in json) ||
+            !("name" in json) ||
+            typeof json.id !== "string" ||
+            typeof json.name !== "string"
           ) {
             throw new Error(`Paste a ${entity} cell here`);
           }
+          const pasted = {
+            id: parseId(json.id),
+            name: json.name,
+          };
           await save(row, pasted.id);
           return { id: pasted.id, name: pasted.name };
         }

@@ -2,11 +2,7 @@ import {
   type BackgroundJobKind,
   backgroundJobPayloadSchema,
 } from "@cubby/schemas/background-jobs";
-import {
-  unsafeIngredientId,
-  unsafeLocationId,
-  unsafeRecipeId,
-} from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { match } from "ts-pattern";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
@@ -185,7 +181,7 @@ async function runBackgroundJobPayload(
       const { recomputeRecipeIds } = await import("./queue-recompute");
       await recomputeRecipeIds({
         database: db,
-        recipeIds: p.payload.recipeIds.map((id) => unsafeRecipeId(id)),
+        recipeIds: p.payload.recipeIds.map((id) => parseEntityId("recipe", id)),
         batchId,
       });
       return "succeeded" as const;
@@ -282,9 +278,13 @@ async function runBackgroundJobPayload(
       const { describeLocation, isLocationHasNoImagesToAnalyzeError } =
         await import("./services/ai-enrichment/location-vision");
       try {
-        await describeLocation(db, unsafeLocationId(p.payload.locationId), {
-          batchId,
-        });
+        await describeLocation(
+          db,
+          parseEntityId("location", p.payload.locationId),
+          {
+            batchId,
+          },
+        );
       } catch (error) {
         if (isLocationHasNoImagesToAnalyzeError(error))
           return "skipped" as const;
@@ -296,9 +296,13 @@ async function runBackgroundJobPayload(
       const { detectInventoryItems, isLocationHasNoImagesToAnalyzeError } =
         await import("./services/ai-enrichment/location-vision");
       try {
-        await detectInventoryItems(db, unsafeLocationId(p.payload.locationId), {
-          batchId,
-        });
+        await detectInventoryItems(
+          db,
+          parseEntityId("location", p.payload.locationId),
+          {
+            batchId,
+          },
+        );
       } catch (error) {
         if (isLocationHasNoImagesToAnalyzeError(error))
           return "skipped" as const;
@@ -335,7 +339,10 @@ async function runBackgroundJobPayload(
       );
       // Real failures propagate (no catch here) — failOrRetryBackgroundJob is
       // what turns those into the queue's own attempts/backoff.
-      await retryUsdaMatch(db, unsafeIngredientId(p.payload.ingredientId));
+      await retryUsdaMatch(
+        db,
+        parseEntityId("ingredient", p.payload.ingredientId),
+      );
       return "succeeded" as const;
     })
     .exhaustive();

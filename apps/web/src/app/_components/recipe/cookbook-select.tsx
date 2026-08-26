@@ -1,5 +1,7 @@
-import type { CookbookShortcode } from "@cubby/schemas/identifiers";
-import { unsafeCookbookShortcode } from "@cubby/schemas/identifiers";
+import {
+  type CookbookShortcode,
+  cookbookShortcode,
+} from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 import { Row } from "~/components/layout";
 import { NativeSelect } from "~/components/ui/native-select";
@@ -26,7 +28,7 @@ export function CookbookSelect({ value, onChange }: CookbookSelectProps) {
         onChange={(e) =>
           onChange(
             e.target.value
-              ? unsafeCookbookShortcode(e.target.value)
+              ? cookbookShortcode.parse(e.target.value)
               : undefined,
           )
         }

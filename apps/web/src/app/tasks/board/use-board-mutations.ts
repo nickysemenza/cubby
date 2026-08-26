@@ -1,6 +1,6 @@
 import {
+  parseShortcodeFor,
   type TaskShortcode,
-  unsafeProjectShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
   TaskBoardInput,
@@ -126,7 +126,7 @@ export function useBoardMutations(target: BoardCacheTarget) {
             projectId:
               data.projectId == null
                 ? null
-                : unsafeProjectShortcode(data.projectId),
+                : parseShortcodeFor("project", data.projectId),
             projectName: nextProjectName ?? null,
           }
         : {}),

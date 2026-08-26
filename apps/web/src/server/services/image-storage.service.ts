@@ -1,8 +1,5 @@
 import type { ImageShortcode } from "@cubby/schemas/identifiers";
-import {
-  unsafeImageId,
-  unsafeImageShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   AttachFileResponse,
   CreateFileUploadInput,
@@ -78,7 +75,7 @@ const initiatePendingUpload = async (
 
   return {
     uploadUrl,
-    imageId: unsafeImageShortcode(createdImage.shortcode),
+    imageId: parseShortcodeFor("image", createdImage.shortcode),
     key,
     url,
   };
@@ -146,7 +143,7 @@ export const importImageFromUrl = async (
       const existing = await getImageByKey(db, key);
       if (existing) {
         return {
-          imageId: unsafeImageShortcode(existing.shortcode),
+          imageId: parseShortcodeFor("image", existing.shortcode),
           key: existing.key,
           url: existing.url,
         };
@@ -159,7 +156,7 @@ export const importImageFromUrl = async (
         contentType: "application/octet-stream",
       });
       return {
-        imageId: unsafeImageShortcode(createdImage.shortcode),
+        imageId: parseShortcodeFor("image", createdImage.shortcode),
         key,
         url: getR2PublicUrl(key),
       };
@@ -192,7 +189,7 @@ export const importImageFromUrl = async (
   }
 
   return {
-    imageId: unsafeImageShortcode(createdImage.shortcode),
+    imageId: parseShortcodeFor("image", createdImage.shortcode),
     key: stored.key,
     url: stored.url,
   };
@@ -376,7 +373,7 @@ export const attachFileToEntity = async (
     );
     if (existing) {
       return {
-        imageId: unsafeImageShortcode(existing.shortcode),
+        imageId: parseShortcodeFor("image", existing.shortcode),
         url: getR2PublicUrl(existing.key),
         filename: existing.filename,
         contentType: existing.contentType,
@@ -534,7 +531,7 @@ export const attachFileToEntity = async (
     try {
       // The staging handle is a genuine raw `Image.id` uuid, not a shortcode.
       const { deletedKeys } = await deleteImages(db, [
-        unsafeImageId(input.uploadId),
+        parseEntityId("image", input.uploadId),
       ]);
       await deleteStoredObjects(deletedKeys);
     } catch (cleanupError) {
@@ -543,7 +540,7 @@ export const attachFileToEntity = async (
   }
 
   return {
-    imageId: unsafeImageShortcode(created.row.shortcode),
+    imageId: parseShortcodeFor("image", created.row.shortcode),
     url: getR2PublicUrl(created.row.key),
     filename: created.row.filename,
     contentType: created.row.contentType,

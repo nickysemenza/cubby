@@ -8,9 +8,8 @@ import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type LocationId,
   type ProductId,
-  unsafeLocationId,
-  unsafeLocationShortcode,
-  unsafeProductId,
+  parseEntityId,
+  parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
@@ -227,7 +226,7 @@ const createLocationTx = async (
           "Cannot set parent: the specified parent location does not exist",
         );
       }
-      parentId = unsafeLocationId(resolvedParent);
+      parentId = parseEntityId("location", resolvedParent);
     } else {
       parentId = (await getHomeLocation(tx)).id;
     }
@@ -235,7 +234,8 @@ const createLocationTx = async (
     // for the location being created — hence the raw resolve rather than
     // `resolveOrThrow`.
     const productId = data.productId
-      ? unsafeProductId(
+      ? parseEntityId(
+          "product",
           (await resolveLiveShortcode(tx, data.productId, "product")) ??
             raiseMissingProduct(),
         )
@@ -311,7 +311,7 @@ export const ensureGlobalUnknownLocation = async (
         name: "Unknown",
         aliases: [],
         type: "area",
-        parentId: unsafeLocationShortcode(home.shortcode),
+        parentId: parseShortcodeFor("location", home.shortcode),
       },
       actor,
     );
@@ -376,7 +376,7 @@ export const updateLocation = async (
             "Cannot set parent: the specified parent location does not exist",
           );
         }
-        parentId = unsafeLocationId(resolved);
+        parentId = parseEntityId("location", resolved);
         if (await wouldCreateParentCycle(tx, id, parentId)) {
           throw createAppError(
             "LOCATION_CYCLE_DETECTED",
@@ -390,7 +390,8 @@ export const updateLocation = async (
       productId =
         data.productId === null
           ? null
-          : unsafeProductId(
+          : parseEntityId(
+              "product",
               (await resolveLiveShortcode(tx, data.productId, "product")) ??
                 raiseMissingProduct(),
             );
@@ -435,8 +436,7 @@ export const updateLocation = async (
       );
       ({ deletedKeys: detachedImageKeys } = await detachImagesFromEntity(
         tx,
-        "location",
-        updated.id,
+        { entity: "location", id: updated.id },
         idsToRemove,
       ));
     }
@@ -1125,7 +1125,7 @@ const locationRosterPage = async (
   const ancestorsById = await loadLocationAncestors(db, ids);
 
   const data = results.map((row) => ({
-    id: unsafeLocationShortcode(row.shortcode),
+    id: parseShortcodeFor("location", row.shortcode),
     name: row.name,
     type: parseLocationType(row.type, { id: row.id, name: row.name }),
     aliases: row.aliases ?? [],

@@ -24,10 +24,8 @@ import type {
 } from "@cubby/schemas/identifiers";
 import {
   ENTITY_NOT_FOUND_REASON,
-  unsafeProductId,
-  unsafeProductShortcode,
-  unsafePurchaseId,
-  unsafePurchaseShortcode,
+  parseEntityId,
+  parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import {
   type ImageRenderStatus,
@@ -585,7 +583,7 @@ const buildProductDataQuality = (
   },
 ): DataQuality => {
   const gaps: FingerprintedGap[] = [];
-  const targetId = unsafeProductShortcode(row.shortcode);
+  const targetId = parseShortcodeFor("product", row.shortcode);
   const add = (check: ProductDataCheck, message: string) => {
     gaps.push({
       check,
@@ -1047,7 +1045,7 @@ export const loadPurchaseDataQualities = async (
   for (const row of purchases) {
     const purchaseExpenses = expensesByPurchase[row.id] ?? [];
     const gaps: FingerprintedGap[] = [];
-    const targetId = unsafePurchaseShortcode(row.shortcode);
+    const targetId = parseShortcodeFor("purchase", row.shortcode);
     const add = (check: PurchaseDataCheck, message: string) => {
       gaps.push({
         check,
@@ -1201,7 +1199,7 @@ const mutateException = async (
               .from(purchase)
               .where(
                 and(
-                  eq(purchase.id, unsafePurchaseId(resolved)),
+                  eq(purchase.id, parseEntityId("purchase", resolved)),
                   notDeleted(purchase),
                 ),
               )
@@ -1216,7 +1214,7 @@ const mutateException = async (
               .from(product)
               .where(
                 and(
-                  eq(product.id, unsafeProductId(resolved)),
+                  eq(product.id, parseEntityId("product", resolved)),
                   notDeleted(product),
                 ),
               )
@@ -1246,7 +1244,7 @@ const mutateException = async (
                   .from(purchase)
                   .where(
                     and(
-                      eq(purchase.id, unsafePurchaseId(resolved)),
+                      eq(purchase.id, parseEntityId("purchase", resolved)),
                       notDeleted(purchase),
                     ),
                   )
@@ -1264,7 +1262,7 @@ const mutateException = async (
                   .from(product)
                   .where(
                     and(
-                      eq(product.id, unsafeProductId(resolved)),
+                      eq(product.id, parseEntityId("product", resolved)),
                       notDeleted(product),
                     ),
                   )
@@ -1304,14 +1302,14 @@ const mutateException = async (
         tx,
         purchase,
         { dataExceptions: next, updatedAt: now },
-        unsafePurchaseId(resolved),
+        parseEntityId("purchase", resolved),
       );
     } else {
       await updateLiveAndReturn(
         tx,
         product,
         { dataExceptions: next, updatedAt: now },
-        unsafeProductId(resolved),
+        parseEntityId("product", resolved),
       );
     }
     const changes = computeChanges(
@@ -1324,8 +1322,8 @@ const mutateException = async (
         entityType,
         entityId:
           parsed.type === "purchase"
-            ? unsafePurchaseId(resolved)
-            : unsafeProductId(resolved),
+            ? parseEntityId("purchase", resolved)
+            : parseEntityId("product", resolved),
         action: "update",
         changes,
       });
@@ -1333,12 +1331,14 @@ const mutateException = async (
   });
 
   return parsed.type === "purchase"
-    ? (await loadPurchaseDataQualities(db, [unsafePurchaseId(resolved)])).get(
-        unsafePurchaseId(resolved),
-      )!
-    : (await loadProductDataQualities(db, [unsafeProductId(resolved)])).get(
-        unsafeProductId(resolved),
-      )!;
+    ? (
+        await loadPurchaseDataQualities(db, [
+          parseEntityId("purchase", resolved),
+        ])
+      ).get(parseEntityId("purchase", resolved))!
+    : (
+        await loadProductDataQualities(db, [parseEntityId("product", resolved)])
+      ).get(parseEntityId("product", resolved))!;
 };
 
 export const setDataException = (
@@ -1410,7 +1410,7 @@ export const findProductExternalIdCollisions = async (
             kind: matches[0]!.kind as ExternalIdKind,
             externalId: matches[0]!.externalId,
             products: matches.map((row) => ({
-              id: unsafeProductShortcode(row.productShortcode),
+              id: parseShortcodeFor("product", row.productShortcode),
               name: row.productName,
             })),
           },
@@ -1438,7 +1438,7 @@ export const findProductExternalIdCollisions = async (
                   : ("owned_by_other" as const)
               : ("collision" as const),
         products: matches.map((row) => ({
-          id: unsafeProductShortcode(row.productShortcode),
+          id: parseShortcodeFor("product", row.productShortcode),
           name: row.productName,
         })),
       };

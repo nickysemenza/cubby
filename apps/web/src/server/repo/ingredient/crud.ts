@@ -8,7 +8,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import {
   type IngredientId,
   type IngredientShortcode,
-  unsafeIngredientShortcode,
+  parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type {
   IngredientWithRecipesAndProductOut,
@@ -229,7 +229,7 @@ export const resolveOrCreateIngredients = async (
     for (const row of existing) {
       const entry = {
         id: row.id,
-        shortcode: unsafeIngredientShortcode(row.shortcode),
+        shortcode: parseShortcodeFor("ingredient", row.shortcode),
         canonicalName: row.name,
         aliases: row.aliases,
         created: false,
@@ -253,7 +253,7 @@ export const resolveOrCreateIngredients = async (
     });
     resolved.set(key, {
       id: row.id,
-      shortcode: unsafeIngredientShortcode(row.shortcode),
+      shortcode: parseShortcodeFor("ingredient", row.shortcode),
       canonicalName: row.name,
       aliases: row.aliases,
       created,

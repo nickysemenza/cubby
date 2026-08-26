@@ -1,8 +1,5 @@
 import { calendarItemKind } from "@cubby/schemas/calendar";
-import {
-  unsafeProjectShortcode,
-  unsafeVendorShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { createElement } from "react";
 import { futureFilterOptions } from "~/app/expenses/expense-options";
 import {
@@ -65,11 +62,9 @@ export const calendarFilterSpecs: readonly FilterSpec[] = [
     field: "projectId",
     kind: "idMulti",
     // The WIRE takes shortcodes (`oneOrMany(projectShortcode)`), so the brand
-    // is the shortcode brand. The entity manifests' project/vendor specs brand
-    // with `unsafeProjectId`/`unsafeVendorId` against the same shortcode wire —
-    // a latent mislabel that only survives because `brand` is typed
-    // `(v: string) => unknown`. Don't copy it here.
-    brand: unsafeProjectShortcode,
+    // is the shortcode brand. The entity manifests now declare their identifier
+    // kind explicitly, so every filter parser uses the same wire contract.
+    brand: (value) => parseShortcodeFor("project", value),
     label: "Project",
     placeholder: "Filter by project...",
     optionsKey: "project",
@@ -93,7 +88,7 @@ export const calendarFilterSpecs: readonly FilterSpec[] = [
     columnId: "vendor",
     field: "expenseVendorId",
     kind: "idMulti",
-    brand: unsafeVendorShortcode,
+    brand: (value) => parseShortcodeFor("vendor", value),
     label: "Vendor",
     placeholder: "Filter by vendor...",
     optionsKey: "vendor",

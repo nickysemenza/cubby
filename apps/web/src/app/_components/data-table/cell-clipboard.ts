@@ -37,7 +37,7 @@ interface CellCopyPayload {
   json: unknown;
 }
 
-export interface CellClipboardSpec {
+export interface CellClipboardSpec<TSaved = unknown> {
   kindKey: string;
   /** Omit (or return null) to disable copy for this cell. */
   getCopyPayload?: () => CellCopyPayload | null;
@@ -49,7 +49,7 @@ export interface CellClipboardSpec {
   onPasteValue?: (payload: {
     json?: unknown;
     text?: string;
-  }) => Promise<unknown>;
+  }) => Promise<TSaved>;
   /** Paste is ignored while the cell is mid-edit. */
   isEditing?: () => boolean;
 }

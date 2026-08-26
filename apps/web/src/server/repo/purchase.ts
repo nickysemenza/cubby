@@ -12,11 +12,8 @@ import {
   type ProductId,
   type PurchaseId,
   type PurchaseShortcode,
-  unsafeExpenseId,
-  unsafeImageShortcode,
-  unsafePurchaseId,
-  unsafePurchaseShortcode,
-  unsafeVendorShortcode,
+  parseEntityId,
+  parseShortcodeFor,
   type VendorId,
 } from "@cubby/schemas/identifiers";
 import {
@@ -320,8 +317,8 @@ const dbPurchaseToAPI = (
   images: PurchaseOut["images"] = [],
   financial: PurchaseFinancialAggregate = emptyPurchaseFinancialAggregate(),
 ): PurchaseOut => ({
-  id: unsafePurchaseShortcode(row.shortcode),
-  vendorId: unsafeVendorShortcode(row.vendorShortcode),
+  id: parseShortcodeFor("purchase", row.shortcode),
+  vendorId: parseShortcodeFor("vendor", row.vendorShortcode),
   orderId: row.orderId,
   displayLabel: row.displayLabel,
   date: row.date,
@@ -381,7 +378,7 @@ const loadPurchaseImages = async (
     .orderBy(asc(purchaseImage.sortOrder), asc(purchaseImage.createdAt));
   return rows.map(({ shortcode, key, ...rest }) => ({
     ...rest,
-    id: unsafeImageShortcode(shortcode),
+    id: parseShortcodeFor("image", shortcode),
     key,
     url: getR2PublicUrl(key),
   }));
@@ -412,8 +409,7 @@ const syncPurchaseImages = async (
     const idsToRemove = await resolveAllPresent(tx, "image", removeImageIds);
     ({ deletedKeys: detachedImageKeys } = await detachImagesFromEntity(
       tx,
-      "purchase",
-      id,
+      { entity: "purchase", id },
       idsToRemove,
     ));
   }
@@ -691,11 +687,11 @@ export const getPurchaseLinkIdentityByID = async (
 
   return row
     ? {
-        id: unsafePurchaseShortcode(row.shortcode),
+        id: parseShortcodeFor("purchase", row.shortcode),
         orderId: row.orderId,
         displayLabel: row.displayLabel,
         date: row.date,
-        vendorId: unsafeVendorShortcode(row.vendorShortcode),
+        vendorId: parseShortcodeFor("vendor", row.vendorShortcode),
         vendorName: row.vendorName,
       }
     : null;
@@ -706,7 +702,7 @@ export const getPurchaseByShortcode = async (
   shortcode: string,
 ): Promise<PurchaseOut | null> => {
   const id = await resolveLiveShortcode(db, shortcode, "purchase");
-  return id ? getPurchaseByID(db, unsafePurchaseId(id)) : null;
+  return id ? getPurchaseByID(db, parseEntityId("purchase", id)) : null;
 };
 
 export const reclassifyPurchaseDocument = async (
@@ -972,9 +968,13 @@ export const linkExpensesToPurchase = async (
       `Expense(s) not found: ${missingExpenses.join(", ")}`,
     );
   }
-  const expenseIds = input.expenseIds.map((code) =>
-    unsafeExpenseId(resolvedExpenses.get(code)?.id ?? ""),
-  );
+  const expenseIds = input.expenseIds.map((code) => {
+    const ref = resolvedExpenses.get(code);
+    if (ref?.entity !== "expense") {
+      throw createAppError("EXPENSE_NOT_FOUND", `Expense not found: ${code}`);
+    }
+    return ref.id;
+  });
 
   await withTransaction(db, async (tx) => {
     const target = await tx.query.purchase.findFirst({
@@ -1528,7 +1528,10 @@ export const foldChargeInto = async (
   const movedExpenseProducts =
     moved.length > 0
       ? await tx.query.expense.findMany({
-          where: inArray(expense.id, moved.map(unsafeExpenseId)),
+          where: inArray(
+            expense.id,
+            moved.map((id) => parseEntityId("expense", id)),
+          ),
           columns: { productId: true },
         })
       : [];

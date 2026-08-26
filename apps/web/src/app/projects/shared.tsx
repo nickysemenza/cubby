@@ -20,14 +20,15 @@ import type {
 import { partition } from "es-toolkit";
 import { ListFilter, ListTodo, ShoppingCart } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { z } from "zod";
 import {
   type VendorName,
   WithVendorSearch,
 } from "~/app/_components/combobox/with-vendor-search";
 import {
+  entityCellData,
   numberCellData,
   specFromCellData,
-  textCellData,
 } from "~/app/_components/data-table/cell-data";
 import {
   createActionsColumn,
@@ -726,17 +727,13 @@ export function expenseVendorColumn(
     asPurchase?: boolean;
   },
 ) {
-  const cellData = {
-    ...textCellData<ExpenseOut>(
-      "text",
-      (row) => row.vendor,
-      (row, value) => save(value, row),
-    ),
-    applyClear: async (row: ExpenseOut) => {
-      await save(null, row);
-      return null;
-    },
-  };
+  const cellData = entityCellData<ExpenseOut, VendorName>(
+    "vendor",
+    (value) => z.string().min(1).parse(value),
+    (row) => (row.vendor ? { id: row.vendor, name: row.vendor } : null),
+    (row, value) => save(value, row),
+    (row) => save(null, row),
+  );
 
   return helper.accessor((row) => row.vendor, {
     id: "vendor",

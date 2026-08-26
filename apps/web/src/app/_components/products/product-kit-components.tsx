@@ -1,4 +1,7 @@
-import type { ProductShortcode } from "@cubby/schemas/identifiers";
+import {
+  type ProductShortcode,
+  parseShortcodeFor,
+} from "@cubby/schemas/identifiers";
 import type { ProductPickerItemOut } from "@cubby/schemas/product";
 import type {
   KitMembershipOut,
@@ -259,11 +262,11 @@ function AddComponentsDialog({
     setSelected((previous) => {
       const quantities = new Map(previous);
       for (const id of Object.keys(rowSelection)) {
-        if (!next[id]) quantities.delete(id as ProductShortcode);
+        if (!next[id]) quantities.delete(parseShortcodeFor("product", id));
       }
       for (const id of Object.keys(next)) {
         if (next[id]) {
-          const productId = id as ProductShortcode;
+          const productId = parseShortcodeFor("product", id);
           quantities.set(productId, quantities.get(productId) ?? 1);
         }
       }

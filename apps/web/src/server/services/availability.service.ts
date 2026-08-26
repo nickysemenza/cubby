@@ -16,10 +16,9 @@ import {
   type IngredientShortcode,
   type ProductId,
   type ProductShortcode,
+  parseEntityId,
+  parseShortcodeFor,
   type RecipeShortcode,
-  unsafeIngredientShortcode,
-  unsafeProductId,
-  unsafeRecipeShortcode,
 } from "@cubby/schemas/identifiers";
 import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
 import type { RecipeGraphOut } from "@cubby/schemas/recipe";
@@ -60,14 +59,14 @@ const resolveProductIds = async (
   const resolved = await resolveLiveShortcodes(db, shortcodes, "product");
   const ids = shortcodes.flatMap((shortcode) => {
     const id = resolved.get(shortcode);
-    return id ? [unsafeProductId(id)] : [];
+    return id ? [parseEntityId("product", id)] : [];
   });
   return {
     ids,
     shortcodeById: new Map(
       shortcodes.flatMap((shortcode) => {
         const id = resolved.get(shortcode);
-        return id ? [[unsafeProductId(id), shortcode] as const] : [];
+        return id ? [[parseEntityId("product", id), shortcode] as const] : [];
       }),
     ),
   };
@@ -137,7 +136,7 @@ const toWNeedsRecipe = (recipe: RecipeGraphOut): WNeedsRecipe => ({
 
 const toVia = (via: { recipe_id: string; name: string }[]): NeedVia[] =>
   via.map((v) => ({
-    recipeId: unsafeRecipeShortcode(v.recipe_id),
+    recipeId: parseShortcodeFor("recipe", v.recipe_id),
     name: v.name,
   }));
 
@@ -212,7 +211,7 @@ export class AvailabilityService {
     });
 
     const contributions: NeedContribution[] = expanded.needs.map((n) => ({
-      ingredientId: unsafeIngredientShortcode(n.ingredient_id),
+      ingredientId: parseShortcodeFor("ingredient", n.ingredient_id),
       name: n.name,
       amount: n.amount ? fromWAmount(n.amount) : null,
       lineIndex: n.line_index,
@@ -220,7 +219,7 @@ export class AvailabilityService {
     }));
 
     const blocked: BlockedSubRecipe[] = expanded.blocked.map((b) => ({
-      recipeId: unsafeRecipeShortcode(b.recipe_id),
+      recipeId: parseShortcodeFor("recipe", b.recipe_id),
       name: b.name,
       reason: b.reason,
       amount: b.amount ? fromWAmount(b.amount) : null,

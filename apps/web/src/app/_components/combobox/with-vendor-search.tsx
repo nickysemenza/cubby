@@ -114,7 +114,7 @@ export function WithVendorSearch({
     // `vendorId` prop.
     if (!isTypedSearch) return rows.map(buildVendorNameComboboxItem);
     return (searchHits ?? []).map((hit) => {
-      const item = buildSearchHitComboboxItem<VendorShortcode>(hit, "vendor");
+      const item = buildSearchHitComboboxItem(hit, "vendor");
       return { ...item, id: hit.title };
     });
   }, [isTypedSearch, rows, searchHits]);
@@ -159,7 +159,7 @@ export function WithVendorShortcodeSearch({
   const items = useMemo<ComboboxItem<VendorShortcode>[]>(() => {
     if (!isTypedSearch) return rows.map(buildVendorShortcodeComboboxItem);
     return (searchHits ?? []).map((hit) =>
-      buildSearchHitComboboxItem<VendorShortcode>(hit, "vendor"),
+      buildSearchHitComboboxItem(hit, "vendor"),
     );
   }, [isTypedSearch, rows, searchHits]);
 

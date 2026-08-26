@@ -12,7 +12,8 @@ import {
   type InventoryId,
   type ProductId,
   type ProductShortcode,
-  unsafeProductShortcode,
+  parseEntityId,
+  parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import { isbnFromGtin } from "@cubby/schemas/isbn";
@@ -943,7 +944,7 @@ export const mergeProducts = async (
     const now = new Date();
     const summary: ProductMergeSummary = emptySummary(keeper.shortcode, keepId);
     summary.deletedIds = losers.map((row) =>
-      unsafeProductShortcode(row.shortcode),
+      parseShortcodeFor("product", row.shortcode),
     );
     summary.deletedEntityIds = losers.map((row) => row.id);
 
@@ -1339,7 +1340,9 @@ export const mergeProducts = async (
       await tx.delete(productConversionCoverage).where(
         inArray(
           productConversionCoverage.productId,
-          plan.conversionCoverage.map((row) => row.id as ProductId),
+          plan.conversionCoverage.map((row) =>
+            parseEntityId("product", row.id),
+          ),
         ),
       );
     }
@@ -1384,7 +1387,7 @@ const emptySummary = (
   shortcode: string,
   keepEntityId: ProductId,
 ): ProductMergeSummary => ({
-  keepId: unsafeProductShortcode(shortcode),
+  keepId: parseShortcodeFor("product", shortcode),
   deletedIds: [],
   merged: 0,
   keepEntityId,

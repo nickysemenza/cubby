@@ -10,7 +10,7 @@ import type { RecipeId } from "@cubby/schemas/identifiers";
 import {
   type IngredientId,
   type IngredientShortcode,
-  unsafeIngredientShortcode,
+  parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { MergeSummaryOut } from "@cubby/schemas/ingredient";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -120,11 +120,11 @@ export const findFuzzyMergeCandidates = async (
   // Already ordered best-first per source; keep the top `perRow` for each.
   const out = new Map<IngredientShortcode, FuzzyMergeCandidate[]>();
   for (const r of res.rows as unknown as Row[]) {
-    const key = unsafeIngredientShortcode(r.source_shortcode);
+    const key = parseShortcodeFor("ingredient", r.source_shortcode);
     const arr = out.get(key) ?? [];
     if (arr.length >= perRow) continue;
     arr.push({
-      id: unsafeIngredientShortcode(r.cand_shortcode),
+      id: parseShortcodeFor("ingredient", r.cand_shortcode),
       name: r.cand_name,
       similarity: Number(r.sim),
     });
@@ -254,7 +254,9 @@ export const mergeIngredients = async (
     return {
       newAliases,
       aliasesAdded: newAliases.filter((a) => !existing.has(a)),
-      deletedIds: aliasRecs.map((a) => unsafeIngredientShortcode(a.shortcode)),
+      deletedIds: aliasRecs.map((a) =>
+        parseShortcodeFor("ingredient", a.shortcode),
+      ),
       deletedEntityIds: aliasRecs.map((a) => a.id),
       movedRecipeIds,
       affectedRecipeIds,

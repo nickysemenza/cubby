@@ -7,7 +7,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { Entity } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import type { BrandForEntity } from "@cubby/schemas/identifiers";
+import type { EntityId } from "@cubby/schemas/identifiers";
 import { type AnyColumn, and, getTableColumns, inArray } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
@@ -50,11 +50,11 @@ export const resolveMergeTargets = async <E extends ShortcodeEntity>(
     keepId: string;
     mergeIds: readonly string[];
   },
-): Promise<{ keepId: BrandForEntity<E>; loserIds: BrandForEntity<E>[] }> => {
+): Promise<{ keepId: EntityId<E>; loserIds: EntityId<E>[] }> => {
   assertDistinctMergeTargets(args.entity, args.keepId, args.mergeIds);
   const codes = uniq([args.keepId, ...args.mergeIds]);
   const ids = await resolveAllOrThrow(db, args.entity, codes);
-  const byCode = new Map<string, BrandForEntity<E>>(
+  const byCode = new Map<string, EntityId<E>>(
     codes.map((code, i) => [code, ids[i]!]),
   );
   const keepId = byCode.get(args.keepId)!;
@@ -124,8 +124,8 @@ export const finalizeMerge = async <E extends RemovableEntity>(
   args: {
     entity: E;
     table: MergeableTable;
-    keepId: BrandForEntity<E>;
-    loserIds: readonly BrandForEntity<E>[];
+    keepId: EntityId<E>;
+    loserIds: readonly EntityId<E>[];
     /** `hard` is `mergeIngredients` only; every other merge soft-deletes. */
     removal: "soft" | "hard";
     /** Omit for a merge with no actor context (`mergeIngredients`). */

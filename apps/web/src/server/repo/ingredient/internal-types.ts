@@ -8,10 +8,7 @@
  */
 
 import type { DataQuality } from "@cubby/schemas/data-quality";
-import {
-  unsafeIngredientShortcode,
-  unsafeProductShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { IngredientOut } from "@cubby/schemas/ingredient";
 import {
   type IngredientListItem,
@@ -117,7 +114,7 @@ type IngredientLeanDB = typeof ingredient.$inferSelect & {
 export const dbIngredientToTopLevelShape = (
   ingredientData: IngredientSelect,
 ): IngredientOut => ({
-  id: unsafeIngredientShortcode(ingredientData.shortcode),
+  id: parseShortcodeFor("ingredient", ingredientData.shortcode),
   name: ingredientData.name,
   aliases: ingredientData.aliases,
   naKinds: ingredientData.naKinds,
@@ -163,7 +160,7 @@ export const mapIngredientProductsLean = (
     return {
       ...baseProduct,
       unitMappings: mapProductUnitMappings(
-        unsafeProductShortcode(prod.shortcode),
+        parseShortcodeFor("product", prod.shortcode),
         prod.unitMappings,
       ),
     };
