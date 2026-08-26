@@ -548,7 +548,7 @@ export default function RTable<TItem extends RowData>(
               // A page-level table now sits flush against the rail and the
               // command header (the shell spends no gutter), so its own left
               // and top borders would double the rail's border and the
-              // header's 3px ink rule. Drop them and let the page chrome BE
+              // header separator. Drop them and let the page chrome be
               // the table's edge; an embedded table floats in a section and
               // still needs all four.
               embedded ? "border" : "border-r border-b",

@@ -61,7 +61,7 @@ export function ProjectContributionReport({
         <section aria-labelledby={beneficiariesHeadingId}>
           <h3
             id={beneficiariesHeadingId}
-            className="eyebrow mb-2 border-foreground border-b-[3px] pb-1"
+            className="eyebrow mb-2 border-foreground border-b pb-1"
           >
             Beneficiaries
           </h3>
@@ -107,7 +107,7 @@ export function ProjectContributionReport({
         <section aria-labelledby={fundersHeadingId}>
           <h3
             id={fundersHeadingId}
-            className="eyebrow mb-2 border-foreground border-b-[3px] pb-1"
+            className="eyebrow mb-2 border-foreground border-b pb-1"
           >
             Original funders
           </h3>

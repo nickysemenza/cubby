@@ -429,7 +429,7 @@ function EventCalendarMonthWeek({
       data-slot="event-calendar-month-row"
       className={cn(
         "relative grid min-h-0 border-b last:border-b-0",
-        divider === "rule" && "border-b-[3px] border-b-foreground last:border-b-0",
+        divider === "rule" && "border-b border-b-foreground last:border-b-0",
       )}
       style={{ gridTemplateColumns }}
     >

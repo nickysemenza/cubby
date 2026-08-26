@@ -293,15 +293,15 @@ check so shared coverage is not assumed blindly.
 | Family | Representative and sibling routes | Status | Required proof |
 | --- | --- | --- | --- |
 | Today | `/` | Implemented, verified, reviewed | Attention-first desktop and phone layouts; populated/empty/error |
-| Products/inventory | `/products`, `/inventory`, new/bulk/session routes | Pending | Dense grid, docked inspector, mobile projection, capture and bulk workflows |
-| Locations | `/locations`, detail, arrange, photo-pass, pantry view | Pending | Hierarchy, spatial work, DnD, inspector route, phone behavior |
-| Planning | `/tasks`, `/projects`, project tools, `/calendar` | Pending | Table/detail, boards/Gantt/calendar, selection and drag states |
-| Cooking | `/recipes`, cookbooks, ingredients, meals and all workbenches | Pending | Table/detail, long-form read/edit, matrices, import/export, shopping |
-| Spending | `/expenses`, purchases, vendors, accounts, transactions, statement rows, contributions | Pending | Numeric alignment, reconciliation, totals, selection stats, no misleading spend |
-| Collections/media | `/collections`, assignments, `/images`, wishes | Pending | Alternate views, assignment matrix, galleries, details |
-| Search/intelligence | `/search`, `/ask`, recommendations, AI usage/smoke | Pending | Search-to-inspector continuity, streaming/loading/error, debug separation |
-| Physical workflows | `/scan`, `/inventory/session`, photo pass | Pending | Camera permissions, manual fallback, keyboard, safe areas, landscape |
-| Operations | `/activity`, `/problems`, background jobs, entities, MCP inspector, labels | Pending | Dense diagnostics, error/recovery, print labels |
+| Products/inventory | `/products`, `/inventory`, new/bulk/session routes | Implemented, verified, reviewed | Dense grid, docked inspector, mobile projection, capture and bulk workflows |
+| Locations | `/locations`, detail, arrange, photo-pass, pantry view | Implemented, verified, reviewed | Hierarchy, spatial work, DnD, inspector route, phone behavior |
+| Planning | `/tasks`, `/projects`, project tools, `/calendar` | Implemented, verified, reviewed | Table/detail, boards/Gantt/calendar, selection and drag states |
+| Cooking | `/recipes`, cookbooks, ingredients, meals and all workbenches | Implemented, verified, reviewed | Table/detail, long-form read/edit, matrices, import/export, shopping |
+| Spending | `/expenses`, purchases, vendors, accounts, transactions, statement rows, contributions | Implemented, verified, reviewed | Numeric alignment, reconciliation, totals, selection stats, no misleading spend |
+| Collections/media | `/collections`, assignments, `/images`, wishes | Implemented, verified, reviewed | Alternate views, assignment matrix, galleries, details |
+| Search/intelligence | `/search`, `/ask`, recommendations, AI usage/smoke | Implemented, verified, reviewed | Search-to-inspector continuity, streaming/loading/error, debug separation |
+| Physical workflows | `/scan`, `/inventory/session`, photo pass | Implemented, verified, reviewed | Camera permissions, manual fallback, keyboard, safe areas, landscape |
+| Operations | `/activity`, `/problems`, background jobs, entities, MCP inspector, labels | Implemented, verified, reviewed | Dense diagnostics, error/recovery, print labels |
 | Account/settings | `/settings`, account views, connected apps | Implemented, verified, reviewed | Forms, sections, disabled/success/error, narrow desktop and phone |
 | Entry/peripheral | auth, OAuth consent, docs, offline, route pending/error/not-found | Implemented, verified, reviewed | Complete light-mode states, accessible recovery, no old-world flash |
 | Print/export | recipe export, labels, calendar feed-facing affordances | Implemented, verified, reviewed | Print legibility and semantics; application chrome excluded intentionally |

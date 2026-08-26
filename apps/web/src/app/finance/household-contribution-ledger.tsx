@@ -127,7 +127,7 @@ export function HouseholdContributionLedgerReport({
       </StatGrid>
 
       <section aria-labelledby={partyHeadingId}>
-        <div className="mb-2 flex items-baseline justify-between gap-2 border-foreground border-b-[3px] pb-1">
+        <div className="mb-2 flex items-baseline justify-between gap-2 border-foreground border-b pb-1">
           <h2 id={partyHeadingId} className="eyebrow my-0">
             Household contribution by party
           </h2>
@@ -180,7 +180,7 @@ export function HouseholdContributionLedgerReport({
       </section>
 
       <section aria-labelledby={checksHeadingId}>
-        <div className="mb-2 border-foreground border-b-[3px] pb-1">
+        <div className="mb-2 border-foreground border-b pb-1">
           <h2 id={checksHeadingId} className="eyebrow my-0">
             Accounting checks
           </h2>
@@ -189,7 +189,7 @@ export function HouseholdContributionLedgerReport({
       </section>
 
       <section aria-labelledby={gapsHeadingId}>
-        <div className="mb-2 flex items-baseline justify-between gap-2 border-foreground border-b-[3px] pb-1">
+        <div className="mb-2 flex items-baseline justify-between gap-2 border-foreground border-b pb-1">
           <h2 id={gapsHeadingId} className="eyebrow my-0">
             Reconciliation gaps
           </h2>

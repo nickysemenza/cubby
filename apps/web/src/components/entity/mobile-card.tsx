@@ -79,7 +79,10 @@ function PrimaryTitle({
 
   if (detailsHref) {
     return (
-      <Link to={detailsHref} className="block w-full min-w-0 text-left">
+      <Link
+        to={detailsHref}
+        className="flex min-h-11 w-full min-w-0 items-center text-left"
+      >
         {content}
       </Link>
     );
@@ -88,7 +91,7 @@ function PrimaryTitle({
     return (
       <button
         type="button"
-        className="block w-full min-w-0 text-left"
+        className="flex min-h-11 w-full min-w-0 items-center text-left"
         onClick={onClick}
       >
         {content}

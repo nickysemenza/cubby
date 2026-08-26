@@ -1,6 +1,16 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import type { AnchorHTMLAttributes } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { MobileCard } from "./mobile-card";
+
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({
+    to,
+    ...props
+  }: AnchorHTMLAttributes<HTMLAnchorElement> & { to: string }) => (
+    <a href={to} {...props} />
+  ),
+}));
 
 /**
  * The regression that prompted this: a row declared six values and rendered
@@ -68,6 +78,7 @@ describe.each(["row", "card"] as const)(
       fireEvent.click(title);
 
       expect(onClick).toHaveBeenCalledOnce();
+      expect(title).toHaveClass("min-h-11");
       if (variant === "row") {
         expect(screen.getByRole("group")).toHaveClass("min-h-11");
       }
@@ -90,6 +101,12 @@ describe.each(["row", "card"] as const)(
     });
   },
 );
+
+it("gives a canonical detail title a full phone touch target", () => {
+  render(<MobileCard variant="row" title="Item" detailsHref="/products/one" />);
+
+  expect(screen.getByRole("link", { name: "Item" })).toHaveClass("min-h-11");
+});
 
 describe("MobileCard interactive row semantics", () => {
   it("keeps selection and row actions as valid siblings of the title control", () => {

@@ -119,7 +119,7 @@ export function SweepMissingReview({
   if (missing === null) return null;
 
   return (
-    <Stack gap="sm" className="border-t-[3px] border-t-foreground pt-4">
+    <Stack gap="sm" className="border-t border-t-foreground pt-4">
       <Stack gap="tight">
         <span className="font-mono text-[0.625rem] text-slate uppercase tracking-[0.05em]">
           Not seen
