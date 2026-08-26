@@ -43,7 +43,7 @@ export const Route = createFileRoute("/")({
     const asOf = getHomeAsOfWindow();
     await Promise.allSettled([
       context.queryClient.ensureQueryData(problems.getCounts.queryOptions()),
-      context.queryClient.ensureQueryData(task.summary.queryOptions()),
+      context.queryClient.ensureQueryData(task.todayBriefing.queryOptions()),
       context.queryClient.ensureQueryData(
         meal.upcomingSummary.queryOptions(asOf.meals),
       ),

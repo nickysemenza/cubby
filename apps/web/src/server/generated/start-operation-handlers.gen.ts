@@ -874,6 +874,10 @@ export const START_OPERATION_HANDLER_LOADERS = {
     const module = await import("~/server/task-browser.server");
     return module.getTaskTimelineForBrowser as unknown as StartOperationHandler;
   },
+  "task.todayBriefing": async () => {
+    const module = await import("~/server/task-browser.server");
+    return module.getTaskTodayBriefingForBrowser as unknown as StartOperationHandler;
+  },
   "upc.lookup": async () => {
     const module = await import("~/server/upc-browser.server");
     return module.lookupUpcForBrowser as unknown as StartOperationHandler;

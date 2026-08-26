@@ -26,6 +26,8 @@ import {
   taskSummaryWorkflow,
   taskTimelineOut,
   taskTimelineWorkflow,
+  taskTodayBriefingOut,
+  taskTodayBriefingWorkflow,
 } from "~/server/workflows/task.server";
 
 export const listActionableTasksForBrowser = (o: {
@@ -65,6 +67,18 @@ export const getTaskSummaryForBrowser = (o: {
     outputSchema: taskSummaryOut,
     request: o.request,
     run: (c) => taskSummaryWorkflow(c.db),
+  });
+export const getTaskTodayBriefingForBrowser = (o: {
+  request: StartOperationRequest;
+}) =>
+  runStartOperation({
+    operation: "task.todayBriefing",
+    type: "query",
+    input: undefined,
+    inputSchema: z.undefined(),
+    outputSchema: taskTodayBriefingOut,
+    request: o.request,
+    run: (c) => taskTodayBriefingWorkflow(c.db),
   });
 export const getTaskBoardForBrowser = (o: {
   data: z.input<typeof taskFiltersSchema>;

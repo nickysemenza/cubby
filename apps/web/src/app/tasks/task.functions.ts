@@ -22,6 +22,11 @@ export const task = defineOperationDomain("task", {
     output: schemas.taskSummaryOut,
     tags: [["task"], ["task", "summary"]],
   }),
+  todayBriefing: query({
+    input: z.undefined(),
+    output: schemas.taskTodayBriefingOut,
+    tags: [["task"], ["task", "todayBriefing"]],
+  }),
   board: query({
     input: schemas.taskFiltersSchema,
     output: schemas.taskBoardOut,

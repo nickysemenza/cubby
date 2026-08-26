@@ -18,6 +18,7 @@ import {
   getTaskBoard,
   getTaskByShortcode,
   getTaskSummary,
+  getTaskTodayBriefing,
   moveTasks,
   setTasksStatus,
   taskList,
@@ -1739,6 +1740,156 @@ describe("task repository — getTaskSummary", () => {
     );
     expect(actionable.later.map((r) => r.id)).toEqual([laterTask.id]);
     expect(actionable.blocked.map((r) => r.task.id)).toEqual([blockedTask.id]);
+  });
+});
+
+describe("task repository — getTaskTodayBriefing", () => {
+  const ctx = withTestDb();
+
+  it("matches actionable classification and order while returning only the first four ready projections", async () => {
+    const { output: projectBlocker } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "briefing project blocker" }),
+      ctx.actor,
+    );
+    const { output: blockedProject } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "briefing blocked project" }),
+      ctx.actor,
+    );
+    await updateProject(
+      ctx.db,
+      blockedProject.id,
+      { blockedByIds: [projectBlocker.id] },
+      ctx.actor,
+    );
+
+    const { output: taskBlocker } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "briefing task blocker" }),
+      ctx.actor,
+    );
+    const { output: taskBlocked } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "briefing task blocked" }),
+      ctx.actor,
+    );
+    await updateTask(
+      ctx.db,
+      taskBlocked.id,
+      { blockedByIds: [taskBlocker.id] },
+      ctx.actor,
+    );
+
+    const { output: manualBlocked } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "briefing manually blocked",
+        status: "blocked",
+      }),
+      ctx.actor,
+    );
+    const { output: projectBlocked } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "briefing inherits project block",
+        projectId: blockedProject.id,
+      }),
+      ctx.actor,
+    );
+    const { output: overdue } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "briefing overdue",
+        dueDate: householdDaysAgo(1),
+      }),
+      ctx.actor,
+    );
+    const { output: inProgress } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "briefing in progress",
+        dueDate: householdDaysFromNow(1),
+        status: "in_progress",
+      }),
+      ctx.actor,
+    );
+    const { output: scheduled } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "briefing scheduled",
+        dueDate: householdDaysFromNow(1),
+      }),
+      ctx.actor,
+    );
+    const { output: undated } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "briefing undated" }),
+      ctx.actor,
+    );
+    const { output: extra } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "briefing extra" }),
+      ctx.actor,
+    );
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "briefing later",
+        status: "later",
+      }),
+      ctx.actor,
+    );
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "briefing child subtask",
+        parentTaskId: overdue.id,
+      }),
+      ctx.actor,
+    );
+
+    const [briefing, actionable, summary] = await Promise.all([
+      getTaskTodayBriefing(ctx.db),
+      listActionableTasks(ctx.db),
+      getTaskSummary(ctx.db),
+    ]);
+
+    expect(briefing.next).toEqual(
+      actionable.next.slice(0, 4).map((item) => ({
+        id: item.id,
+        name: item.name,
+        status: item.status,
+        dueDate: item.dueDate,
+        dueEndDate: item.dueEndDate,
+        projectId: item.projectId,
+        projectName: item.projectName,
+      })),
+    );
+    expect(briefing.next.slice(0, 3).map((item) => item.id)).toEqual([
+      overdue.id,
+      inProgress.id,
+      scheduled.id,
+    ]);
+    expect(briefing.next[3]?.id).toBe(extra.id);
+    const previewIds = briefing.next.map((item) => item.id);
+    expect(previewIds).not.toContain(taskBlocked.id);
+    expect(previewIds).not.toContain(manualBlocked.id);
+    expect(previewIds).not.toContain(projectBlocked.id);
+    expect(briefing.next).toHaveLength(4);
+    expect(previewIds).not.toContain(undated.id);
+    expect(briefing.nextCount).toBe(actionable.next.length);
+    expect(briefing.laterCount).toBe(actionable.later.length);
+    expect(briefing.blockedCount).toBe(actionable.blocked.length);
+    expect(briefing.overdueCount).toBe(summary.overdue);
+    expect(briefing.dueThisWeekCount).toBe(summary.dueThisWeek);
   });
 });
 

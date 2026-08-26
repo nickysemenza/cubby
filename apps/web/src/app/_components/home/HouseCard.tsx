@@ -1,8 +1,11 @@
-import type { ActionableTaskOut, TaskSummaryOut } from "@cubby/schemas/project";
+import type {
+  TaskTodayBriefingItemOut,
+  TaskTodayBriefingOut,
+} from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Hammer } from "lucide-react";
-import { useEffect, useId, useState } from "react";
+import { useId } from "react";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { formatDateRange } from "~/app/projects/project-formatting";
 import { task } from "~/app/tasks/task.functions";
@@ -10,30 +13,48 @@ import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import { getErrorMessage } from "~/lib/error-utils";
 
-const EMPTY_TASK_FILTERS = {};
-const TODAY_TASK_LIMIT = 4;
 export const TODAY_ENTITY_LINK_CLASS = "min-h-11 items-center sm:min-h-0";
+type TodayBriefingCounts = Pick<
+  TaskTodayBriefingOut,
+  | "nextCount"
+  | "laterCount"
+  | "blockedCount"
+  | "overdueCount"
+  | "dueThisWeekCount"
+> & { next: readonly unknown[] };
 
 /**
- * The actual next-work order belongs to `task.listActionable`: it is already
- * overdue-first and explains blocked work in the Tasks route. Today only takes
- * a bounded prefix for a daily briefing; it never invents a client-side score.
+ * Today's briefing receives only this already-ranked prefix from the server;
+ * it never invents a client-side score or has to fetch the actionable graph.
  */
-export function visibleTodayTasks<T>(rows: readonly T[]): T[] {
-  return rows.slice(0, TODAY_TASK_LIMIT);
-}
-
-function taskEvidence(summary: TaskSummaryOut | undefined): string | null {
-  if (!summary) return null;
+export function taskBriefingEvidence(
+  briefing: TodayBriefingCounts | undefined,
+): string | null {
+  if (!briefing) return null;
   const parts = [
-    summary.overdue > 0 ? `${summary.overdue} overdue` : null,
-    summary.dueThisWeek > 0 ? `${summary.dueThisWeek} due this week` : null,
-    summary.blocked > 0 ? `${summary.blocked} blocked` : null,
+    briefing.overdueCount > 0 ? `${briefing.overdueCount} overdue` : null,
+    briefing.dueThisWeekCount > 0
+      ? `${briefing.dueThisWeekCount} due this week`
+      : null,
+    briefing.blockedCount > 0 ? `${briefing.blockedCount} blocked` : null,
   ].filter(Boolean);
   return parts.length > 0 ? parts.join(" · ") : "Nothing urgent is due.";
 }
 
-function TodayTaskRow({ task: item }: { task: ActionableTaskOut }) {
+export function taskBriefingSecondary(
+  briefing: TodayBriefingCounts | undefined,
+): string | null {
+  if (!briefing) return null;
+  const hiddenNext = Math.max(briefing.nextCount - briefing.next.length, 0);
+  const parts = [
+    hiddenNext > 0 ? `${hiddenNext} more ready` : null,
+    briefing.laterCount > 0 ? `${briefing.laterCount} later` : null,
+    briefing.blockedCount > 0 ? `${briefing.blockedCount} blocked` : null,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+function TodayTaskRow({ task: item }: { task: TaskTodayBriefingItemOut }) {
   return (
     <div className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 border-border border-b py-2 last:border-b-0 sm:min-h-0 sm:py-1.5">
       <EntityInlineLink
@@ -64,33 +85,14 @@ function TodayTaskRow({ task: item }: { task: ActionableTaskOut }) {
 }
 
 /**
- * The daily work briefing keeps its first paint on the small task summary.
- * The complete actionable graph begins only after mount so Home's loader does
- * not become hostage to a larger work queue read.
+ * The bounded briefing query is safe to preload with the rest of Today's
+ * first paint: it shares actionable blocking semantics without hydrating the
+ * full graph or its why-chain display data.
  */
 export function TodayAttention() {
-  const [showQueue, setShowQueue] = useState(false);
   const titleId = useId();
-  useEffect(() => setShowQueue(true), []);
-
-  const summary = useQuery(task.summary.queryOptions());
-  const queue = useQuery({
-    ...task.listActionable.queryOptions(EMPTY_TASK_FILTERS),
-    enabled: showQueue,
-  });
-  const next = visibleTodayTasks(queue.data?.next ?? []);
-  const hiddenNext = Math.max((queue.data?.next.length ?? 0) - next.length, 0);
-  const secondary = [
-    hiddenNext > 0 ? `${hiddenNext} more ready` : null,
-    (queue.data?.later.length ?? 0) > 0
-      ? `${queue.data?.later.length} later`
-      : null,
-    (queue.data?.blocked.length ?? 0) > 0
-      ? `${queue.data?.blocked.length} blocked`
-      : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const briefing = useQuery(task.todayBriefing.queryOptions());
+  const secondary = taskBriefingSecondary(briefing.data);
 
   return (
     <section aria-labelledby={titleId} className="min-w-0">
@@ -117,9 +119,9 @@ export function TodayAttention() {
         </Button>
       </div>
 
-      {summary.isLoading ? (
+      {briefing.isLoading ? (
         <Skeleton className="mt-2 h-4 w-44" />
-      ) : summary.isError ? (
+      ) : briefing.isError ? (
         <p className="mt-2 text-muted-foreground text-xs">
           Task summary is unavailable right now.
           <Button
@@ -127,19 +129,19 @@ export function TodayAttention() {
             variant="link"
             size="sm"
             className="ml-1 min-h-11 px-0 text-xs sm:min-h-0"
-            onClick={() => summary.refetch()}
+            onClick={() => briefing.refetch()}
           >
             Retry
           </Button>
         </p>
       ) : (
         <p className="mt-2 font-mono text-2xs text-muted-foreground uppercase">
-          {taskEvidence(summary.data)}
+          {taskBriefingEvidence(briefing.data)}
         </p>
       )}
 
       <div className="mt-2 border-border border-y">
-        {!showQueue || queue.isLoading ? (
+        {briefing.isLoading ? (
           <div
             className="space-y-2 py-2"
             role="status"
@@ -148,36 +150,38 @@ export function TodayAttention() {
             <Skeleton className="h-5 w-full" />
             <Skeleton className="h-5 w-4/5" />
           </div>
-        ) : queue.isError ? (
+        ) : briefing.isError ? (
           <div className="flex min-h-16 items-center justify-between gap-3 py-2">
             <p className="text-muted-foreground text-xs">
               Couldn&apos;t load the next task queue:{" "}
-              {getErrorMessage(queue.error)}
+              {getErrorMessage(briefing.error)}
             </p>
             <Button
               type="button"
               variant="outline"
               size="sm"
               className="min-h-11 shrink-0 sm:min-h-0"
-              onClick={() => queue.refetch()}
+              onClick={() => briefing.refetch()}
             >
               Retry
             </Button>
           </div>
-        ) : next.length === 0 ? (
+        ) : briefing.data?.next.length === 0 ? (
           <p className="min-h-16 content-center py-2 text-muted-foreground text-sm">
             Nothing ready right now. Open work is blocked or set aside.
           </p>
         ) : (
-          next.map((item) => <TodayTaskRow key={item.id} task={item} />)
+          briefing.data?.next.map((item) => (
+            <TodayTaskRow key={item.id} task={item} />
+          ))
         )}
       </div>
 
-      {secondary && (
+      {secondary ? (
         <p className="mt-2 font-mono text-2xs text-muted-foreground uppercase">
           {secondary}
         </p>
-      )}
+      ) : null}
     </section>
   );
 }

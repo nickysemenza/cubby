@@ -12,6 +12,7 @@ import {
   taskOut,
   taskSummaryOut,
   taskTimelineOut,
+  taskTodayBriefingOut,
 } from "@cubby/schemas/project";
 import type { z } from "zod";
 import type { Database } from "~/server/db";
@@ -20,6 +21,7 @@ import {
   getTaskBoard,
   getTaskSummary,
   getTaskTimeline,
+  getTaskTodayBriefing,
   listActionableTasks,
   moveTasks,
   reorderTasks,
@@ -43,6 +45,7 @@ export {
   taskOut,
   taskSummaryOut,
   taskTimelineOut,
+  taskTodayBriefingOut,
 };
 
 const FETCH_ALL = { pageIndex: 0, pageSize: 100_000 } as const;
@@ -64,6 +67,8 @@ export const taskChartDataWorkflow = async (
     )
   ).data;
 export const taskSummaryWorkflow = (db: Database) => getTaskSummary(db);
+export const taskTodayBriefingWorkflow = (db: Database) =>
+  getTaskTodayBriefing(db);
 export const taskBoardWorkflow = (
   db: Database,
   input: z.output<typeof taskFiltersSchema>,
