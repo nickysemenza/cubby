@@ -229,7 +229,7 @@ export function buildTimelineGates(
 }
 
 function publicResourceMetrics(
-  category: ReusableResourceCategory,
+  category: ReusableResourceCategory | null,
   metrics: ResourceMetrics,
 ) {
   return {
@@ -1637,8 +1637,14 @@ export async function listProductProjectUses(
   if (!productRow) {
     throw createAppError("PRODUCT_NOT_FOUND", `Product ${productId} not found`);
   }
-  assertReusableCategory(productId, productRow);
-  const category = productRow.category;
+  // ProjectToolUsage is durable history. It may predate a legitimate category
+  // correction, so reads must never reinterpret a live edge as nonexistent.
+  // Writes continue through assertReusableResource/assertUsagePair, which keep
+  // the tools/software admission policy intact.
+  const category: ReusableResourceCategory | null =
+    productRow.category === "tools" || productRow.category === "software"
+      ? productRow.category
+      : null;
 
   const rows = await dbc
     .select({
@@ -1688,7 +1694,8 @@ export async function listProductProjectUses(
     productId: parseShortcodeFor("product", productRow.shortcode),
     productName: productRow.name,
     manufacturer: productRow.manufacturer,
-    category,
+    category: productRow.category,
+    canEdit: category !== null,
     ...publicResourceMetrics(category, metrics),
     projects: rows.map((row) => ({
       projectId: parseShortcodeFor("project", row.projectCode),
