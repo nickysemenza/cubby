@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildEvents, buildResources, dateForDay } from "./CubbyGantt";
+import {
+  buildEvents,
+  buildResources,
+  dateForDay,
+  dependencyDisclosureFor,
+} from "./CubbyGantt";
 import type { GanttRow } from "./gantt-model";
 
 const project: GanttRow = {
@@ -54,5 +59,37 @@ describe("CubbyGantt adapters", () => {
       milestone: true,
     });
     expect(taskEvent?.end.getTime()).toBe(dateForDay(20_003).getTime());
+  });
+
+  it("resolves a selected row's predecessors and successors by name", () => {
+    const dependent: GanttRow = {
+      ...task,
+      id: "task-2",
+      name: "Fit doors",
+      blockedByIds: ["task-1", "missing-task"],
+      blockingIds: ["project-1"],
+    };
+    const disclosure = dependencyDisclosureFor(
+      dependent,
+      new Map<string, GanttRow>([
+        [project.id, project] as const,
+        [task.id, task] as const,
+        [dependent.id, dependent] as const,
+      ]),
+    );
+
+    expect(disclosure).toMatchObject({
+      row: { name: "Fit doors" },
+      blockedBy: [{ name: "Install cabinets" }],
+      blocking: [{ name: "Kitchen" }],
+      missingBlockedByCount: 1,
+      missingBlockingCount: 0,
+    });
+  });
+
+  it("does not invent a dependency disclosure for a row without links", () => {
+    expect(
+      dependencyDisclosureFor(task, new Map([[task.id, task]])),
+    ).toBeNull();
   });
 });

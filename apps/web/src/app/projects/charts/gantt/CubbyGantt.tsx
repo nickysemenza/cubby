@@ -1,6 +1,6 @@
 import { TZDate } from "@date-fns/tz";
-import { Link2 } from "lucide-react";
-import { type ReactNode, useMemo, useState } from "react";
+import { Link2, X } from "lucide-react";
+import { type ReactNode, useId, useMemo, useState } from "react";
 import { match } from "ts-pattern";
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
 import {
@@ -33,6 +33,16 @@ interface CubbyGanttData {
   openEnded: boolean;
   status: string | null;
 }
+
+type GanttWorkRow = Exclude<GanttRow, { kind: "group" }>;
+
+export type GanttDependencyDisclosure = {
+  row: GanttWorkRow;
+  blockedBy: GanttWorkRow[];
+  blocking: GanttWorkRow[];
+  missingBlockedByCount: number;
+  missingBlockingCount: number;
+};
 
 interface CubbyGanttProps {
   rows: GanttRow[];
@@ -108,6 +118,69 @@ function dependencyCount(row: GanttRow): number {
   return row.kind === "group"
     ? 0
     : row.blockedByIds.length + row.blockingIds.length;
+}
+
+/**
+ * Resolve a selected row's graph neighbours into readable records. A
+ * collapsed or filtered neighbour remains counted rather than silently
+ * disappearing, which keeps the selected-row disclosure truthful.
+ */
+export function dependencyDisclosureFor(
+  row: GanttRow | undefined,
+  rowById: ReadonlyMap<string, GanttRow>,
+): GanttDependencyDisclosure | null {
+  if (!row || row.kind === "group" || dependencyCount(row) === 0) return null;
+
+  const resolve = (ids: readonly string[]) => {
+    const found: GanttWorkRow[] = [];
+    let missing = 0;
+    for (const id of ids) {
+      const related = rowById.get(id);
+      if (!related || related.kind === "group") missing += 1;
+      else found.push(related);
+    }
+    return { found, missing };
+  };
+  const blockedBy = resolve(row.blockedByIds);
+  const blocking = resolve(row.blockingIds);
+  return {
+    row,
+    blockedBy: blockedBy.found,
+    blocking: blocking.found,
+    missingBlockedByCount: blockedBy.missing,
+    missingBlockingCount: blocking.missing,
+  };
+}
+
+function DependencyNames({
+  label,
+  rows,
+  missingCount,
+  renderName,
+}: {
+  label: string;
+  rows: GanttWorkRow[];
+  missingCount: number;
+  renderName?: (row: GanttRow) => ReactNode;
+}) {
+  if (rows.length === 0 && missingCount === 0) return null;
+  return (
+    <span className="inline-flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+      <span className="font-mono text-2xs text-slate uppercase tracking-wider">
+        {label} · {rows.length + missingCount}
+      </span>
+      {rows.map((row) => (
+        <span key={row.id} className="text-foreground">
+          {renderName ? renderName(row) : row.name}
+        </span>
+      ))}
+      {missingCount > 0 && (
+        <span className="text-muted-foreground">
+          {missingCount} unavailable
+        </span>
+      )}
+    </span>
+  );
 }
 
 export function buildResources(rows: GanttRow[]): GanttResource[] {
@@ -246,6 +319,8 @@ export function CubbyGantt({
   emptyMessage = "No dated work yet.",
 }: CubbyGanttProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const disclosureId = useId();
   const rowById = useMemo(
     () => new Map(rows.map((row) => [row.id, row])),
     [rows],
@@ -255,12 +330,21 @@ export function CubbyGantt({
     () => buildEvents(rows, window.endDay, chainIds),
     [chainIds, rows, window.endDay],
   );
+  const activeId = hoveredId ?? selectedId;
   const connectedIds = useMemo(() => {
-    if (!hoveredId) return null;
-    const row = rowById.get(hoveredId);
-    if (!row || row.kind === "group") return new Set([hoveredId]);
-    return new Set([hoveredId, ...row.blockedByIds, ...row.blockingIds]);
-  }, [hoveredId, rowById]);
+    if (!activeId) return null;
+    const row = rowById.get(activeId);
+    if (!row || row.kind === "group") return new Set([activeId]);
+    return new Set([activeId, ...row.blockedByIds, ...row.blockingIds]);
+  }, [activeId, rowById]);
+  const selectedDisclosure = useMemo(
+    () =>
+      dependencyDisclosureFor(
+        selectedId ? rowById.get(selectedId) : undefined,
+        rowById,
+      ),
+    [rowById, selectedId],
+  );
   const dependencyEdges = useMemo<GanttDependencyEdge[]>(
     () =>
       edges.map(([fromId, toId]) => ({
@@ -297,116 +381,163 @@ export function CubbyGantt({
         render: ({ resource }: { resource: GanttResource }) => {
           const row = rowById.get(resource.id);
           const count = row ? dependencyCount(row) : 0;
+          const rowName =
+            row && row.kind !== "group" ? row.name : resource.title;
           return count > 0 ? (
-            <Row align="center" gap="xs" className="text-muted-foreground">
+            <button
+              type="button"
+              aria-controls={disclosureId}
+              aria-expanded={selectedId === row?.id}
+              aria-label={`Show ${count} dependency ${count === 1 ? "relationship" : "relationships"} for ${rowName}`}
+              className="inline-flex size-7 items-center justify-center gap-1 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onFocus={() => row && setSelectedId(row.id)}
+              onClick={() =>
+                row &&
+                setSelectedId((current) => (current === row.id ? null : row.id))
+              }
+            >
               <Link2 className="size-3" />
               <span className="font-mono text-2xs">{count}</span>
-            </Row>
+            </button>
           ) : null;
         },
       },
     ],
-    [rowById],
+    [disclosureId, rowById, selectedId],
   );
   const centerDay = Math.floor((window.startDay + window.endDay) / 2);
 
   return (
-    <Gantt<CubbyGanttData>
-      events={events}
-      resources={resources}
-      defaultDate={dateForDay(centerDay)}
-      defaultScale={scaleForWindow(window)}
-      timeZone={HOUSEHOLD_TIMEZONE}
-      rangeBounds={{
-        min: dateForDay(window.startDay),
-        max: dateForDay(window.endDay + 1),
-      }}
-      treePanel={TREE_PANEL}
-      columns={columns}
-      collapsedGroups={collapsedGroups}
-      onCollapsedGroupsChange={onCollapsedGroupsChange}
-      dependencyEdges={dependencyEdges}
-      initialCenter={dateForDay(centerDay)}
-      className="h-[34rem] overflow-hidden border border-[var(--border)] bg-background"
-      getEventClassName={({ occurrence }) => {
-        const data = occurrence.event.data;
-        if (!data) return undefined;
-        return cn(
-          data.kind === "envelope" &&
-            "h-1! self-center rounded-none! border-(--gantt-event-color)/60 border-x bg-(--gantt-event-color)/20! p-0!",
-          data.milestone &&
-            "mx-auto size-3! rotate-45 rounded-none! border border-(--gantt-event-color) bg-(--gantt-event-color)/60! p-0!",
-          data.critical && "ring-2 ring-primary/60",
-          data.openEnded && "rounded-e-none! border-e-2 border-e-dashed",
-          data.status === "blocked" && "ring-2 ring-destructive/70",
-          data.status === "later" && "border border-dashed",
-          connectedIds &&
-            !connectedIds.has(data.rowId) &&
-            "opacity-30 hover:opacity-100",
-        );
-      }}
-      renderEvent={({ occurrence }) => {
-        const data = occurrence.event.data;
-        if (data?.kind === "envelope" || data?.milestone) {
-          return <span className="sr-only">{occurrence.event.title}</span>;
-        }
-        return (
-          <>
-            <span className="relative truncate font-medium">
-              {occurrence.event.title}
-            </span>
-            {data?.critical && (
-              <Link2
-                className="relative size-3 shrink-0"
-                aria-label="Critical chain"
-              />
-            )}
-          </>
-        );
-      }}
-      renderResourceLabel={({ resource }) => {
-        const row = rowById.get(resource.id);
-        if (!row) return resource.title;
-        if (row.kind === "group") return `${row.label} (${row.count})`;
-        return (
-          <Row
-            align="center"
-            gap="xs"
-            className="min-w-0"
-            title={row.name}
-            onMouseEnter={() => setHoveredId(row.id)}
-            onMouseLeave={() => setHoveredId(null)}
+    <>
+      {selectedDisclosure && (
+        <div
+          id={disclosureId}
+          aria-live="polite"
+          className="flex min-h-8 flex-wrap items-center gap-x-3 gap-y-1 border-y bg-muted/40 px-2 py-1 text-xs"
+        >
+          <span className="font-medium text-foreground">
+            {selectedDisclosure.row.name}
+          </span>
+          <DependencyNames
+            label="Blocked by"
+            rows={selectedDisclosure.blockedBy}
+            missingCount={selectedDisclosure.missingBlockedByCount}
+            renderName={renderName}
+          />
+          <DependencyNames
+            label="Unblocks"
+            rows={selectedDisclosure.blocking}
+            missingCount={selectedDisclosure.missingBlockingCount}
+            renderName={renderName}
+          />
+          <button
+            type="button"
+            aria-label={`Clear dependency summary for ${selectedDisclosure.row.name}`}
+            className="ml-auto inline-flex size-7 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => setSelectedId(null)}
           >
-            {row.trade && (
-              <TradeIcon
-                trade={row.trade}
-                className="size-3 shrink-0 text-muted-foreground"
-              />
-            )}
-            <span className="min-w-0 truncate">
-              {renderName ? renderName(row) : row.name}
-            </span>
-          </Row>
-        );
-      }}
-      renderSummary={({ progress }) => (
-        <div className="relative h-2">
-          <span className="absolute start-0 top-0 h-2 w-px bg-muted-foreground/60" />
-          <span className="absolute end-0 top-0 h-2 w-px bg-muted-foreground/60" />
-          <div className="absolute inset-x-0 top-1 h-1 bg-muted-foreground/20">
-            {progress != null && (
-              <div
-                className="h-full bg-muted-foreground/50"
-                style={{ width: `${progress}%` }}
-              />
-            )}
-          </div>
+            <X className="size-3" />
+          </button>
         </div>
       )}
-      renderNoResources={() => <ChartEmpty title={emptyMessage} />}
-    >
-      <GanttNav />
-      <GanttView />
-    </Gantt>
+      <Gantt<CubbyGanttData>
+        events={events}
+        resources={resources}
+        defaultDate={dateForDay(centerDay)}
+        defaultScale={scaleForWindow(window)}
+        timeZone={HOUSEHOLD_TIMEZONE}
+        rangeBounds={{
+          min: dateForDay(window.startDay),
+          max: dateForDay(window.endDay + 1),
+        }}
+        treePanel={TREE_PANEL}
+        columns={columns}
+        collapsedGroups={collapsedGroups}
+        onCollapsedGroupsChange={onCollapsedGroupsChange}
+        dependencyEdges={dependencyEdges}
+        initialCenter={dateForDay(centerDay)}
+        className="h-[34rem] overflow-hidden border border-[var(--border)] bg-background"
+        getEventClassName={({ occurrence }) => {
+          const data = occurrence.event.data;
+          if (!data) return undefined;
+          return cn(
+            data.kind === "envelope" &&
+              "h-1! self-center rounded-none! border-(--gantt-event-color)/60 border-x bg-(--gantt-event-color)/20! p-0!",
+            data.milestone &&
+              "mx-auto size-3! rotate-45 rounded-none! border border-(--gantt-event-color) bg-(--gantt-event-color)/60! p-0!",
+            data.critical && "ring-2 ring-primary/60",
+            data.openEnded && "rounded-e-none! border-e-2 border-e-dashed",
+            data.status === "blocked" && "ring-2 ring-destructive/70",
+            data.status === "later" && "border border-dashed",
+            connectedIds &&
+              !connectedIds.has(data.rowId) &&
+              "opacity-30 hover:opacity-100",
+          );
+        }}
+        renderEvent={({ occurrence }) => {
+          const data = occurrence.event.data;
+          if (data?.kind === "envelope" || data?.milestone) {
+            return <span className="sr-only">{occurrence.event.title}</span>;
+          }
+          return (
+            <>
+              <span className="relative truncate font-medium">
+                {occurrence.event.title}
+              </span>
+              {data?.critical && (
+                <Link2
+                  className="relative size-3 shrink-0"
+                  aria-label="Critical chain"
+                />
+              )}
+            </>
+          );
+        }}
+        renderResourceLabel={({ resource }) => {
+          const row = rowById.get(resource.id);
+          if (!row) return resource.title;
+          if (row.kind === "group") return `${row.label} (${row.count})`;
+          return (
+            <Row
+              align="center"
+              gap="xs"
+              className="min-w-0"
+              title={row.name}
+              onFocusCapture={() => setSelectedId(row.id)}
+              onMouseEnter={() => setHoveredId(row.id)}
+              onMouseLeave={() => setHoveredId(null)}
+            >
+              {row.trade && (
+                <TradeIcon
+                  trade={row.trade}
+                  className="size-3 shrink-0 text-muted-foreground"
+                />
+              )}
+              <span className="min-w-0 truncate">
+                {renderName ? renderName(row) : row.name}
+              </span>
+            </Row>
+          );
+        }}
+        renderSummary={({ progress }) => (
+          <div className="relative h-2">
+            <span className="absolute start-0 top-0 h-2 w-px bg-muted-foreground/60" />
+            <span className="absolute end-0 top-0 h-2 w-px bg-muted-foreground/60" />
+            <div className="absolute inset-x-0 top-1 h-1 bg-muted-foreground/20">
+              {progress != null && (
+                <div
+                  className="h-full bg-muted-foreground/50"
+                  style={{ width: `${progress}%` }}
+                />
+              )}
+            </div>
+          </div>
+        )}
+        renderNoResources={() => <ChartEmpty title={emptyMessage} />}
+      >
+        <GanttNav />
+        <GanttView />
+      </Gantt>
+    </>
   );
 }
