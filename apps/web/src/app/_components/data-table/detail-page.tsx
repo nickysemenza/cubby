@@ -123,7 +123,7 @@ function heroVisual({
   ) : undefined;
 }
 
-export function DetailAnchorIndex({
+function DetailAnchorIndex({
   sections,
 }: {
   sections: Array<Pick<DetailSection, "id" | "title" | "includeInIndex">>;

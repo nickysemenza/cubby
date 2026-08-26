@@ -1,4 +1,4 @@
-export interface PublicClient {
+interface PublicClient {
   client_id: string;
   client_name?: string;
   client_uri?: string;
@@ -13,7 +13,7 @@ export type PublicClientLookupState =
   | { kind: "invalid"; message: string }
   | { kind: "error"; message: string };
 
-export interface PublicClientLookupResponse {
+interface PublicClientLookupResponse {
   data?: PublicClient | null;
   error?: { message?: string } | null;
 }

@@ -13,7 +13,7 @@ import { cn } from "~/lib/utils";
 
 type RouteTone = "direct" | "derived";
 
-export type RouteSample = {
+type RouteSample = {
   id: string;
   label: string;
   to: string;

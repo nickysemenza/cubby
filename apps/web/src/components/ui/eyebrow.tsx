@@ -5,7 +5,7 @@ import { cn } from "~/lib/utils";
  * The shared eyebrow label class. The look itself lives in the `eyebrow` CSS
  * utility (styles.css) — this constant is just its name, for `cn()` consumers.
  */
-export const EYEBROW_CLASS = "eyebrow";
+const EYEBROW_CLASS = "eyebrow";
 
 /**
  * The mono eyebrow label, backed by the `eyebrow` CSS utility (see styles.css).
