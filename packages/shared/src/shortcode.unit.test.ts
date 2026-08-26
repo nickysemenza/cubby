@@ -154,10 +154,10 @@ describe("parseShortcode", () => {
 describe("extractShortcodeFromScan", () => {
   it("reads a code out of a label URL, canonical or legacy", () => {
     expect(
-      extractShortcodeFromScan("https://cubby.nickysemenza.com/PRD-4K7M"),
+      extractShortcodeFromScan("https://cubby.example.com/PRD-4K7M"),
     ).toMatchObject({ type: "product", shortcode: "PRD-4K7M" });
     expect(
-      extractShortcodeFromScan("https://cubby.nickysemenza.com/L-4K7M"),
+      extractShortcodeFromScan("https://cubby.example.com/L-4K7M"),
     ).toMatchObject({ type: "location", shortcode: "LOC-4K7M", legacy: true });
   });
 

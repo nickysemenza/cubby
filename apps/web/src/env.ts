@@ -14,15 +14,12 @@ export const env = createEnv({
     R2_PUBLIC_URL: z.string().url(),
     R2_KEY_PREFIX: z.string().min(1).default("cubby-dev"),
     USDA_API_URL: z.string().url().default("http://localhost:8080/"),
-    UPC_LOOKUP_API_URL: z
-      .string()
-      .url()
-      .default("https://upc-lookup.nicky.workers.dev"),
+    UPC_LOOKUP_API_URL: z.string().url(),
     UPC_LOOKUP_API_KEY: z.string().min(1).optional(),
     BETTER_AUTH_SECRET: z.string().min(1),
     BETTER_AUTH_URL: z.string().url().optional(),
     // Set only on preview deploys (CI `--var`) to share the session cookie
-    // across all *.nicky.workers.dev preview hosts. Unset in prod. See auth.ts.
+    // across the configured preview-host suffix. Unset in prod. See auth.ts.
     COOKIE_DOMAIN: z.string().min(1).optional(),
     // Personal instance: signup is closed unless this is explicitly "true".
     ALLOW_SIGNUP: z.enum(["true", "false"]).default("false"),

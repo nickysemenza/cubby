@@ -32,7 +32,7 @@ describe("ScanWorkbench", () => {
     openManualEntry();
 
     fireEvent.change(screen.getByLabelText("Code"), {
-      target: { value: "https://cubby.nickysemenza.com/LOC-4K7M" },
+      target: { value: "https://cubby.example.com/LOC-4K7M" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Open" }));
 

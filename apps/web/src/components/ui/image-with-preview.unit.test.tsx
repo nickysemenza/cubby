@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { ImageWithPreview } from "./image-with-preview";
 
-const BUCKET_SRC = "https://media.nickysemenza.com/cubby/images/a.jpg";
+const BUCKET_SRC = `${__R2_PUBLIC_URL__}/cubby/images/a.jpg`;
 
 describe("ImageWithPreview", () => {
   it("transforms the thumbnail at `size` when displayWidth is omitted", () => {
@@ -13,10 +13,10 @@ describe("ImageWithPreview", () => {
     render(<ImageWithPreview src={BUCKET_SRC} alt="p" size={32} />);
     const img = screen.getByRole("img", { name: "p" });
     expect(img.getAttribute("src")).toBe(
-      "https://media.nickysemenza.com/cdn-cgi/image/width=32,quality=80,format=auto,fit=scale-down/cubby/images/a.jpg",
+      `${__R2_PUBLIC_URL__}/cdn-cgi/image/width=32,quality=80,format=auto,fit=scale-down/cubby/images/a.jpg`,
     );
     expect(img.getAttribute("srcset")).toBe(
-      "https://media.nickysemenza.com/cdn-cgi/image/width=32,quality=80,format=auto,fit=scale-down/cubby/images/a.jpg 1x, https://media.nickysemenza.com/cdn-cgi/image/width=64,quality=80,format=auto,fit=scale-down/cubby/images/a.jpg 2x",
+      `${__R2_PUBLIC_URL__}/cdn-cgi/image/width=32,quality=80,format=auto,fit=scale-down/cubby/images/a.jpg 1x, ${__R2_PUBLIC_URL__}/cdn-cgi/image/width=64,quality=80,format=auto,fit=scale-down/cubby/images/a.jpg 2x`,
     );
   });
 

@@ -1,7 +1,7 @@
 // Parse a pasted USDA food reference into an fdc_id, so the food-search box can
 // jump straight to one exact food when name search buries it. Accepts:
 //   - a bare numeric id: "384417"
-//   - our worker URL:    "https://usda-api.nicky.workers.dev/api/foods/384417"
+//   - a worker URL:      "https://usda.example.com/api/foods/384417"
 //   - the FDC detail URL: "https://fdc.nal.usda.gov/food-details/384417/nutrients"
 // Returns the id, or null for ordinary text searches (which flow to FTS as before).
 //
