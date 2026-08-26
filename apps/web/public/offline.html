@@ -3,21 +3,23 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#fcfaf4" />
+    <meta name="theme-color" content="#f7f9fc" />
     <title>Offline · Cubby</title>
     <style>
       :root {
-        --bg: #f7f4ec;
-        --ink: #16170f;
-        --muted: #6b6658;
-        --accent: #2244cc;
+        --bg: #f7f9fc;
+        --surface: #ffffff;
+        --ink: #171a21;
+        --muted: #667085;
+        --hairline: #d9dee7;
+        --accent: #2563eb;
       }
       * { box-sizing: border-box; }
       html, body { margin: 0; height: 100%; }
       body {
         background: var(--bg);
         color: var(--ink);
-        font-family: ui-sans-serif, system-ui, -apple-system, "Nunito Variable", sans-serif;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -26,10 +28,17 @@
         text-align: center;
         -webkit-font-smoothing: antialiased;
       }
-      main { max-width: 22rem; }
-      svg { width: 4rem; height: 4rem; margin: 0 auto 1.25rem; display: block; }
+      main {
+        width: 100%;
+        max-width: 24rem;
+        border: 1px solid var(--hairline);
+        border-radius: 8px;
+        background: var(--surface);
+        padding: 2rem;
+      }
+      svg { width: 3rem; height: 3rem; margin: 0 auto 1rem; display: block; }
       h1 {
-        font-family: "Space Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
         letter-spacing: -0.02em;
         font-size: 1.6rem;
         font-weight: 700;
@@ -39,20 +48,20 @@
       button {
         min-height: 44px;
         appearance: none;
-        border: 2px solid var(--ink);
-        background: var(--ink);
-        color: var(--bg);
+        border: 1px solid var(--accent);
+        background: var(--accent);
+        color: #ffffff;
         font: inherit;
         font-weight: 600;
         padding: 0.65rem 1.4rem;
-        border-radius: 0.6rem;
+        border-radius: 6px;
         cursor: pointer;
-        box-shadow: 3px 3px 0 var(--accent);
-        transition: transform 0.06s ease, box-shadow 0.06s ease;
+        transition: background 120ms cubic-bezier(0.2, 0, 0, 1);
       }
-      button:active {
-        transform: translate(2px, 2px);
-        box-shadow: 1px 1px 0 var(--accent);
+      button:hover { background: #1d4ed8; }
+      button:focus-visible {
+        outline: 2px solid #ffffff;
+        box-shadow: 0 0 0 4px var(--accent);
       }
     </style>
   </head>
@@ -71,7 +80,7 @@
         <rect x="44" y="38" width="8" height="10" rx="2" fill="#fdfbf7" />
       </svg>
       <h1>You're offline</h1>
-      <p>Cubby needs a connection to load your pantry. Check your network and try again.</p>
+      <p>Cubby needs a connection to load this page. Check your network and try again.</p>
       <button type="button" onclick="location.reload()">Try again</button>
     </main>
   </body>
