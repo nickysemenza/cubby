@@ -13,6 +13,7 @@ import {
   AuthenticatedShellAccount,
   AuthenticatedShellControls,
 } from "./authenticated-shell-controls";
+import { domainWayfinding } from "./domain-wayfinding";
 import { resolveMobileRoute } from "./mobile-route-descriptor";
 import {
   homeNavItem,
@@ -70,7 +71,7 @@ export function AuthenticatedAppShell({
       data-hydrated={hydrated ? "true" : "false"}
       data-mobile-keyboard={keyboardOpen ? "open" : "closed"}
       className={cn(
-        "min-h-dvh bg-background [--app-chrome-bottom:calc(3.5rem+3px+env(safe-area-inset-bottom))] [--app-chrome-top:calc(3rem+3px+env(safe-area-inset-top))] md:flex md:[--app-chrome-bottom:0rem] md:[--app-chrome-top:3rem]",
+        "min-h-dvh bg-background [--app-chrome-bottom:calc(3.5rem+1px+env(safe-area-inset-bottom))] [--app-chrome-top:calc(3rem+1px+env(safe-area-inset-top))] md:flex md:[--app-chrome-bottom:0rem] md:[--app-chrome-top:3rem]",
         keyboardOpen && "[--app-chrome-bottom:0rem]",
       )}
     >
@@ -81,7 +82,7 @@ export function AuthenticatedAppShell({
       <div className="flex min-h-dvh min-w-0 flex-1 flex-col">
         {/* Today owns the Cubby mark. Working routes use semantic local chrome
             so a deep link still says where it is and where Back will go. */}
-        <div className="safe-top sticky top-0 z-40 border-b-[3px] border-b-foreground bg-card md:hidden print:hidden">
+        <div className="safe-top sticky top-0 z-40 border-border border-b bg-card md:hidden print:hidden">
           <MobileRouteBar pathname={pathname} onSearchClick={onSearchClick} />
           {navigationProgress}
         </div>
@@ -161,8 +162,8 @@ function DesktopCommandHeader({
   navigationProgress,
 }: Pick<AuthenticatedAppShellProps, "onSearchClick" | "navigationProgress">) {
   return (
-    <header className="sticky top-0 z-40 hidden h-12 items-center border-b-[3px] border-b-foreground bg-card px-4 md:flex md:px-6 print:hidden">
-      <p className="font-heading font-semibold text-sm">Cubby workspace</p>
+    <header className="sticky top-0 z-40 hidden h-12 items-center border-border border-b bg-card px-4 md:flex md:px-6 print:hidden">
+      <p className="font-medium text-muted-foreground text-xs">Cubby</p>
       <Button
         variant="ghost"
         size="sm"
@@ -214,7 +215,7 @@ function WorkspaceSidebar({
     <aside
       className={cn(
         "sticky top-0 hidden h-dvh shrink-0 border-border border-r bg-card md:flex md:w-14 md:flex-col lg:transition-[width] lg:duration-150 print:hidden",
-        expanded ? "lg:w-36" : "lg:w-14",
+        expanded ? "lg:w-56" : "lg:w-14",
       )}
       aria-label="Workspace navigation"
     >
@@ -414,12 +415,49 @@ function SidebarGroup({
       </div>
       {expanded && (
         <div className="hidden lg:block">
-          <Suspense fallback={<SidebarRailGroupFallback group={group} />}>
-            <RailGroupFlyout group={group} activeTo={activeTo} expanded />
-          </Suspense>
+          <SidebarExpandedDomainGroup group={group} activeTo={activeTo} />
         </div>
       )}
     </>
+  );
+}
+
+/** The expanded rail is a direct route index; collapsed mode keeps the flyout. */
+function SidebarExpandedDomainGroup({
+  group,
+  activeTo,
+}: {
+  group: NavGroup;
+  activeTo: string | undefined;
+}) {
+  const domain = group.domain ? domainWayfinding(group.domain) : null;
+  const Icon = group.icon;
+
+  return (
+    <section
+      className="mb-4 border-l pl-2"
+      style={
+        domain ? { borderLeftColor: `var(${domain.accentToken})` } : undefined
+      }
+      aria-label={group.label}
+    >
+      <div className="mb-1 flex h-6 items-center gap-2 font-medium text-foreground text-xs">
+        <span
+          style={domain ? { color: `var(${domain.accentToken})` } : undefined}
+          aria-hidden="true"
+        >
+          <Icon className="size-3.5" />
+        </span>
+        <span>{group.label}</span>
+      </div>
+      {group.children.map((item) => (
+        <SidebarFullLeaf
+          key={item.to}
+          item={item}
+          active={activeTo === item.to}
+        />
+      ))}
+    </section>
   );
 }
 
@@ -450,7 +488,7 @@ function SidebarFullLeaf({ item, active }: { item: NavItem; active: boolean }) {
       )}
     >
       <Icon className="size-3.5 shrink-0" />
-      <span className="truncate">{item.railLabel ?? item.label}</span>
+      <span className="truncate">{item.label}</span>
     </Link>
   );
 }

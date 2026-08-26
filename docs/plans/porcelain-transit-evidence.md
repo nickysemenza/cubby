@@ -8,27 +8,20 @@ branch.
 ## Baseline
 
 - Branch: `codex/porcelain-transit-ui`
-- Rebased base: `origin/main` at `a8c4c06b4`
-- Rebase verified: 2026-08-25, `HEAD...origin/main` = `0 0`
+- Rebased base: `origin/main` at `8ca2408ef`
+- Rebase verified: 2026-08-26; the two Porcelain Transit commits rebased cleanly and the uncommitted T2 shell diff was restored without conflict
 - Initial application edits: none
 - Planning assets were preserved from the detached worktree before rebasing.
 
-## Known external dependency
+## Resolved external dependency
 
-The user has an inflight E2E stabilization branch that will be proposed
-separately. Current remote evidence identifies it as
-`origin/codex/stabilize-inline-editor-e2e` at `92315b6d5`; it bounds inline
-editor `fill` and `Enter` actions inside the retry loop.
+The user's E2E stabilization work landed on `main` as `8ca2408ef`
+(`test(e2e): preserve inline editor retries (#923)`) before the T2 checkpoint.
+It bounds inline-editor `fill` and `Enter` actions inside the retry loop.
 
-Until that work lands:
-
-- Do not weaken, delete, or speculatively rewrite inline-editor E2E coverage to
-  make this redesign green.
-- Attribute a failure to the inflight fix only when its exact error and touched
-  helper match that branch's change.
-- Continue to fix redesign-caused failures.
-- Rebase the completed stabilization PR before final exact-head validation, or
-  explicitly prove that its change is already present in `main`.
+The redesign continues to treat that helper and coverage as upstream-owned:
+do not weaken, delete, or speculatively rewrite it to make visual work green;
+fix only redesign-caused failures.
 
 ## Target ledger
 
@@ -36,7 +29,7 @@ Until that work lands:
 | --- | --- | --- |
 | T0 Governance and baselines | Complete | Branch/base above; approved mocks, calibration, truth matrix, and 18 source-state screenshots are committed together |
 | T1 Tokens, fonts, and primitives | Complete | Shared raw tokens, Inter-led typography, domain palette, modest geometry, restrained overlays, rebuilt core primitives, and desktop/mobile state gallery |
-| T2 Desktop/mobile shell | Pending | — |
+| T2 Desktop/mobile shell | Complete | 224px expanded and 56px collapsed rail, 48px command band, five domain groups, preserved contextual mobile chrome, focused tests/typecheck, independent review, and desktop/mobile visual checkpoint |
 | T3 Products reference workbench | Pending | — |
 | T4 Canonical detail system | Pending | — |
 | T5 Canonical lists/details | Pending | — |
@@ -100,3 +93,8 @@ height while retaining the named viewport width.
 | 2026-08-26 | T1 | Focused domain-wayfinding and Button unit tests | Pass: 12 tests | Includes Product→Pantry classification and 44px phone target guard |
 | 2026-08-26 | T1 | `pnpm --filter @cubby/web run build:cf` | Pass | Production app, service worker, MCP widgets, and bundle analysis |
 | 2026-08-26 | T1 | Primitive gallery at `/design` | Pass | `.impeccable/checkpoints/t1-foundation/design-1440x900.png` and `design-430x932.png`; visually reviewed at both viewports |
+| 2026-08-26 | T2 | Rebase onto latest `origin/main` | Pass | Base is `8ca2408ef`; both committed UI changes rebased and the six-file shell diff restored without conflict; upstream now includes E2E retry PR #923 |
+| 2026-08-26 | T2 | Navigation and workspace-navigator focused tests | Pass: 36 tests | Covers route uniqueness, domain/group agreement, full expanded-rail labels, search, and navigator rendering |
+| 2026-08-26 | T2 | `pnpm typecheck:web` and `git diff --check` | Pass | Web and service-worker TypeScript checks are clean after reviewer corrections |
+| 2026-08-26 | T2 | Independent shell review | Pass after corrections | Confirmed 224px rail, 56px collapsed rail, 48px command band, safe-area/keyboard behavior; corrected Cook label contrast, Meals/Plan route truth, and obsolete shortened labels |
+| 2026-08-26 | T2 | Products shell at desktop/mobile | Pass | `.impeccable/checkpoints/t2-shell/products-1440x900.png` and `products-430x932.png`; computed dimensions verified as 224px rail and 48px command band |
