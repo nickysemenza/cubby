@@ -44,7 +44,7 @@ describe("DetailSections ledger", () => {
       <DetailSections sections={sections} rawData={{ id: "example" }} />,
     );
 
-    expect(screen.getByText("Record index")).toBeInTheDocument();
+    expect(screen.getByText("Sections")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Story" })).toHaveAttribute(
       "href",
       "#story",
@@ -122,6 +122,6 @@ describe("DetailSections ledger", () => {
     );
 
     expect(screen.queryByText("Empty")).not.toBeInTheDocument();
-    expect(screen.queryByText("Record index")).not.toBeInTheDocument();
+    expect(screen.queryByText("Sections")).not.toBeInTheDocument();
   });
 });

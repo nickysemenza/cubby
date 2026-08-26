@@ -1,6 +1,6 @@
 # Porcelain Transit UI Overhaul
 
-Status: **In progress; T0–T2 complete**
+Status: **In progress; T0–T2 complete, T3–T4 at the mandatory user checkpoint**
 
 Delivery: **One big-bang branch and one ready-for-review PR**
 
@@ -207,8 +207,8 @@ means the named evidence exists; implementation without evidence remains
 | T0 | Governance and baselines | — | Complete | Rebased branch, approved references, relationship/calibration specs, and 18 source-state baselines are recorded in the evidence ledger |
 | T1 | Tokens, fonts, and core primitives | T0 | Complete | Contrast checks, production build, focused tests, and desktop/mobile primitive gallery are recorded in the evidence ledger |
 | T2 | Desktop/mobile shell and navigation | T1 | Complete | 224px/56px desktop rail, 48px command band, five truthful domain groups, preserved contextual mobile chrome/safe areas/keyboard behavior, focused tests, typecheck, and desktop/mobile screenshots are recorded in the evidence ledger |
-| T3 | Products reference workbench | T1–T2 | Pending | Dense grid, filters, saved layouts, bulk actions, docked inspector, relationship path |
-| T4 | Canonical detail system | T1–T3 | Pending | Product detail plus shared section/index/relationship/activity behavior |
+| T3 | Products reference workbench | T1–T2 | Checkpoint | 28px opt-in grid, filters/layouts/actions preserved, independent current-row state, 400px docked inspector, 1024px Sheet, phone cards, and truthful Product→Inventory/Location stations are implemented and captured; awaiting user direction approval |
+| T4 | Canonical detail system | T1–T3 | Checkpoint | Product detail reuses the route, domain-spined identity hero, plain-language metadata/stats, responsive section index, normal-density sections, and canonical phone navigation; awaiting user direction approval |
 | T5 | All canonical lists and details | T3–T4 | Pending | Every listed entity migrated with mobile projection and honest actions |
 | T6 | Today and normal-density surfaces | T1–T2 | Pending | Attention-first dashboard, readable modules, no KPI-card theater |
 | T7 | Specialist workbenches | T1–T5 | Pending | Calendar, Gantt, spatial, reconciliation, scanner, and matrix contracts preserved |

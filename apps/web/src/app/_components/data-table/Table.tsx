@@ -41,6 +41,7 @@ import type { CubbyTable as ITable, CubbyRow as Row } from "./table-features";
 import { columnWidthValue } from "./table-layout";
 import { useDataTableController } from "./useDataTableController";
 import type { GroupConfig } from "./useGroupedList";
+import type { TableDensity } from "./useTableDensity";
 
 // Faint row guides every `rowHeight` px so the virtualized spacer (the gap the
 // renderer hasn't filled yet on a fast scroll) reads as empty table rows
@@ -68,6 +69,13 @@ export interface RTableProps<TItem extends RowData> {
   entity?: Entity;
   /** Callback when a row is clicked */
   onRowClick?: (row: Row<TItem>) => void;
+  /**
+   * Record presently shown in the desktop inspector. This intentionally stays
+   * separate from TanStack's row selection, which drives bulk actions.
+   */
+  currentRowId?: string;
+  /** First-visit density for this surface; stored user choice remains global. */
+  defaultDensity?: TableDensity;
   /** Callback when a row is hovered (desktop) — used to prefetch row data */
   onRowHover?: (row: Row<TItem>) => void;
   /** Cancels an uncommitted row-preview intent. */
@@ -134,6 +142,11 @@ export interface RTableProps<TItem extends RowData> {
   emptyState?: ReactNode;
   /** Expense-ledger-only desktop selection count/sum/average status. */
   showCellSelectionStats?: boolean;
+  /**
+   * Wide-desktop companion pane for a current record. Page workbenches may use
+   * it; embedded relationship ledgers retain their existing standalone shape.
+   */
+  desktopInspector?: ReactNode;
   /** Server-side facet counts for the table's filter controls. */
   filterOptionHints?: Readonly<
     Record<string, Readonly<Record<string, string>>>
@@ -154,6 +167,8 @@ export default function RTable<TItem extends RowData>(
     timing,
     entity,
     onRowClick,
+    currentRowId,
+    defaultDensity,
     onRowHover,
     onRowHoverEnd,
     infiniteScroll,
@@ -168,6 +183,7 @@ export default function RTable<TItem extends RowData>(
     toolbarMode = "auto",
     emptyState,
     showCellSelectionStats = false,
+    desktopInspector,
     filterOptionHints,
   } = props;
   const pageIdentity = usePageIdentity();
@@ -201,6 +217,7 @@ export default function RTable<TItem extends RowData>(
     grouped,
     verticalAlign,
     onRowClick,
+    defaultDensity,
   });
 
   // Desktop tables get spreadsheet-style cell selection; mobile does not.
@@ -293,6 +310,7 @@ export default function RTable<TItem extends RowData>(
   const desktopToolbar = showToolbar ? (
     <DataTableToolbar
       table={table}
+      defaultDensity={defaultDensity}
       entity={entity}
       filterOptionHints={filterOptionHints}
       additionalContent={
@@ -444,6 +462,7 @@ export default function RTable<TItem extends RowData>(
                       row={row}
                       rowIndex={item.rowIndex}
                       isSelected={isSelected}
+                      isCurrent={currentRowId === row.id}
                       isExpanded={row.getIsExpanded()}
                       // Focus follows v9's durable focus corner and is subscribed at the
                       // row, not the virtualized body owner.
@@ -522,7 +541,7 @@ export default function RTable<TItem extends RowData>(
             // the pane between them takes the rest, so both stay on screen
             // without `position: sticky` and the rows scroll inside the table.
             className={cn(
-              "hidden flex-col border-[var(--border)] md:flex",
+              "relative hidden flex-col border-[var(--border)] md:flex",
               // A page-level table now sits flush against the rail and the
               // command header (the shell spends no gutter), so its own left
               // and top borders would double the rail's border and the
@@ -530,6 +549,7 @@ export default function RTable<TItem extends RowData>(
               // the table's edge; an embedded table floats in a section and
               // still needs all four.
               embedded ? "border" : "border-r border-b",
+              desktopInspector && !embedded && "xl:pr-[25rem]",
             )}
             style={
               {
@@ -541,6 +561,13 @@ export default function RTable<TItem extends RowData>(
                 maxHeight: embedded
                   ? "60vh"
                   : paneMaxHeight != null
+                    ? `${paneMaxHeight}px`
+                    : undefined,
+                // A docked record inspector is a workbench pane, not a table
+                // footer. Keep it at the available viewport height even when a
+                // filter leaves only one or two table rows.
+                height:
+                  desktopInspector && !embedded && paneMaxHeight != null
                     ? `${paneMaxHeight}px`
                     : undefined,
               } as React.CSSProperties
@@ -725,6 +752,14 @@ export default function RTable<TItem extends RowData>(
                 />
               </div>
             )}
+            {desktopInspector && !embedded && (
+              <div
+                className="absolute inset-y-0 right-0 hidden w-[25rem] overflow-y-auto border-border border-l bg-card xl:block"
+                data-desktop-inspector
+              >
+                {desktopInspector}
+              </div>
+            )}
           </div>
         </CellSelectionContext.Provider>
       )}
@@ -750,6 +785,7 @@ export default function RTable<TItem extends RowData>(
           rowContentVersion={rowContentVersion}
           portalWorkbenchUtilities={externalToolbar}
           emptyState={emptyState}
+          defaultDensity={defaultDensity}
         />
       )}
 

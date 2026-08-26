@@ -92,4 +92,23 @@ describe("ListWorkbench", () => {
     expect(screen.getByText("Net cost: $42")).toBeTruthy();
     expect(screen.getByText("No expenses linked")).toBeTruthy();
   });
+
+  it("passes current-record state and an optional desktop inspector to page tables", () => {
+    const model: ListWorkbenchModel<TestRow> = {
+      entity: "product",
+      table,
+    };
+
+    render(
+      <ListWorkbench
+        model={model}
+        currentRowId="PRD-4K7M"
+        desktopInspector={<aside>Product inspector</aside>}
+      />,
+    );
+
+    const props = renderTable.mock.lastCall?.[0] as Record<string, unknown>;
+    expect(props.currentRowId).toBe("PRD-4K7M");
+    expect(props.desktopInspector).toBeTruthy();
+  });
 });

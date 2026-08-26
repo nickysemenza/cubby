@@ -8,7 +8,13 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
 import { CalendarRange, Clock3, Rows3, Table2 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   VerbMenuItem,
   verbBulkAction,
@@ -26,6 +32,7 @@ import { usePageCount } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
+import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
 import { OptionalStatusText, StatusText } from "~/components/ui/status-text";
 import {
   Tooltip,
@@ -34,6 +41,7 @@ import {
 } from "~/components/ui/tooltip";
 import type { ViewSwitcherOption } from "~/components/ui/view-switcher";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { useIsMobile } from "~/hooks/useMobile";
 import { dataQualityOptions } from "~/lib/data-quality-options";
 import { invalidatesFor } from "~/lib/query-keys";
 import { relatedData } from "~/lib/related-data.functions";
@@ -75,6 +83,7 @@ import { ProductAddToInventoryDialog } from "../_components/products/product-add
 import { productCategoryOptionsWithTheme } from "../_components/products/product-category-icons";
 import { ProductDiscardDialog } from "../_components/products/product-discard-dialog";
 import { ProductShelf } from "../_components/products/product-shelf";
+import { ProductWorkbenchInspector } from "../_components/products/product-workbench-inspector";
 import { TruncatedList } from "../_components/TruncatedList";
 import { SetFieldDialog } from "../_components/tracker/set-field-dialog";
 import {
@@ -108,6 +117,25 @@ const NO_VENDOR_OPTIONS: FilterableComboboxItem[] = [];
 const NO_FILTER_OPTIONS: FilterableComboboxItem[] = [];
 /** Stable empty default so `nest` keeps its identity while kits load. */
 const EMPTY_KIT_ROWS: KitComponentRowOut[] = [];
+
+const DOCKED_INSPECTOR_QUERY = "(min-width: 1280px)";
+const subscribeDockedInspector = (onStoreChange: () => void) => {
+  if (!window.matchMedia) return () => {};
+  const query = window.matchMedia(DOCKED_INSPECTOR_QUERY);
+  query.addEventListener("change", onStoreChange);
+  return () => query.removeEventListener("change", onStoreChange);
+};
+const getDockedInspectorSnapshot = () =>
+  window.matchMedia?.(DOCKED_INSPECTOR_QUERY).matches ?? false;
+const getServerDockedInspectorSnapshot = () => false;
+
+function useDockedInspector(): boolean {
+  return useSyncExternalStore(
+    subscribeDockedInspector,
+    getDockedInspectorSnapshot,
+    getServerDockedInspectorSnapshot,
+  );
+}
 
 // The generic tones fit here: tracked really is the resolved/good outcome.
 const STOCK_TRACKED_OPTIONS = booleanCellOptions({
@@ -222,8 +250,27 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
     () => createCubbyColumnHelper<ProductTreeRow>(),
     [],
   );
-  const { onRowClick, onRowHover, onRowHoverEnd, PreviewSheet } =
-    useEntityPreview("product");
+  const {
+    onRowClick: selectPreview,
+    onRowHover,
+    onRowHoverEnd,
+    preview,
+    closePreview,
+  } = useEntityPreview("product");
+  const [currentRowId, setCurrentRowId] = useState<string | null>(null);
+  const dockedInspector = useDockedInspector();
+  const isMobile = useIsMobile();
+  const selectCurrentProduct = useCallback(
+    (row: { id: string; original: ProductTreeRow }) => {
+      setCurrentRowId(row.id);
+      selectPreview(row);
+    },
+    [selectPreview],
+  );
+  const closeCurrentProduct = useCallback(() => {
+    setCurrentRowId(null);
+    closePreview();
+  }, [closePreview]);
   // Runtime picklist for the manifest's `tags` spec (optionsKey: "tags").
   const { options: tagOptions } = useProductTagOptions();
   const projectOptions = useDeferredFilterOptions("project");
@@ -1094,9 +1141,19 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
           <ListWorkbench
             model={workbench}
             ariaLabel="Products Table"
-            onRowClick={onRowClick}
+            onRowClick={selectCurrentProduct}
             onRowHover={onRowHover}
             onRowHoverEnd={onRowHoverEnd}
+            currentRowId={currentRowId ?? undefined}
+            defaultDensity="dense"
+            desktopInspector={
+              dockedInspector && preview ? (
+                <ProductWorkbenchInspector
+                  productId={preview.id}
+                  onClose={closeCurrentProduct}
+                />
+              ) : undefined
+            }
           />
         )}
         {view === "shelf" && (
@@ -1111,7 +1168,21 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
           <ProductMovementViews filters={currentFilters} view={view} />
         )}
       </Stack>
-      <PreviewSheet />
+      {view === "table" && preview && !dockedInspector && !isMobile ? (
+        <Sheet open onOpenChange={(open) => !open && closeCurrentProduct()}>
+          <SheetContent
+            side="right"
+            className="!w-[25rem] !max-w-[calc(100vw-2rem)] p-0"
+            showCloseButton={false}
+          >
+            <SheetTitle className="sr-only">Product inspector</SheetTitle>
+            <ProductWorkbenchInspector
+              productId={preview.id}
+              onClose={closeCurrentProduct}
+            />
+          </SheetContent>
+        </Sheet>
+      ) : null}
       {view !== "table" && workbench.deleteDialog}
       {discardProduct && (
         <ProductDiscardDialog

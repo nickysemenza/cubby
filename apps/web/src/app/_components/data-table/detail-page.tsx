@@ -174,10 +174,10 @@ export function DetailAnchorIndex({
   return (
     <nav
       aria-label="Record sections"
-      className="sticky top-[var(--app-chrome-top)] z-30 flex min-h-11 items-stretch overflow-x-auto overscroll-x-contain border-foreground border-b-[3px] bg-card px-1 [scrollbar-width:none] md:min-h-9 md:items-center md:gap-1 md:px-2 [&::-webkit-scrollbar]:hidden"
+      className="sticky top-[var(--app-chrome-top)] z-30 flex min-h-11 items-stretch overflow-x-auto overscroll-x-contain border-border border-b bg-card px-1 [scrollbar-width:none] md:min-h-9 md:items-center md:gap-1 md:px-2 [&::-webkit-scrollbar]:hidden"
     >
-      <span className="hidden shrink-0 pr-2 font-mono text-2xs text-slate uppercase tracking-wider md:block">
-        Record index
+      <span className="hidden shrink-0 pr-2 font-medium text-muted-foreground text-xs md:block">
+        Sections
       </span>
       {indexed.map((section) => (
         <a

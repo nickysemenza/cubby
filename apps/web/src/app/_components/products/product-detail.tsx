@@ -63,6 +63,7 @@ import { ProductProjectUses } from "./product-project-uses";
 import { ProductPurchases } from "./product-purchases";
 import { ProductStockedAt } from "./product-stocked-at";
 import { ProductTaskHistory } from "./product-task-history";
+import { ProductRelationshipRoute } from "./product-workbench-inspector";
 
 interface ProductDetailProps {
   product: ProductWithFoodOut;
@@ -493,6 +494,11 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       heroStamp={presence.stamp}
       heroStats={heroStats}
     >
+      {(entries.length > 0 || product.servingAsLocations.length > 0) && (
+        <div className="border-border border-b bg-card px-2 py-2 md:px-4">
+          <ProductRelationshipRoute product={product} />
+        </div>
+      )}
       <DetailSections
         sections={sections}
         rawData={product}
