@@ -47,7 +47,12 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
-import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
+import {
+  Empty,
+  EmptyActions,
+  EmptyDescription,
+  EmptyTitle,
+} from "~/components/ui/empty";
 import { Spinner } from "~/components/ui/spinner";
 import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -166,11 +171,12 @@ function ScanPass() {
   const [shortcode, setShortcode] = useState<LocationShortcode | null>(null);
   const { capture, discardCapture, isCapturing } = useLocationPhotoCapture();
 
-  const { data: location, isLoading } = useQuery(
+  const scanQuery = useQuery(
     entityDetailQueryOptions("location", shortcode ?? "LOC-2222", {
       enabled: shortcode != null,
     }),
   );
+  const { data: location, isLoading } = scanQuery;
 
   const stop = useMemo<PhotoStop | null>(() => {
     if (!location) return null;
@@ -230,7 +236,13 @@ function ScanPass() {
 
       {isLoading && <Spinner />}
 
-      {stop ? (
+      {scanQuery.isError ? (
+        <PhotoPassLoadError
+          title="Couldn't load this scanned location"
+          detail={getErrorMessage(scanQuery.error)}
+          onRetry={() => void scanQuery.refetch()}
+        />
+      ) : stop ? (
         <PhotoPassStop
           key={stop.id}
           stop={stop}
@@ -271,8 +283,9 @@ function QueuePass({ parent, all, type }: PhotoPassSearch) {
     ...location.makeTree.queryOptions(),
     enabled: parent == null,
   });
-  const roots = (parent ? subtreeQuery.data : treeQuery.data) ?? EMPTY_ROOTS;
-  const isLoading = parent ? subtreeQuery.isLoading : treeQuery.isLoading;
+  const activeQuery = parent ? subtreeQuery : treeQuery;
+  const roots = activeQuery.data ?? EMPTY_ROOTS;
+  const isLoading = activeQuery.isLoading;
 
   // Every location in scope, keyed by id — the live content behind each stop.
   // Built unfiltered so a location that has just been photographed (and would
@@ -328,6 +341,18 @@ function QueuePass({ parent, all, type }: PhotoPassSearch) {
       <Row justify="center" className="py-12">
         <Spinner />
       </Row>
+    );
+  }
+
+  // An empty queue is a success state. Keep a failed scope query distinct so
+  // a transient outage cannot present a completed or empty photo pass.
+  if (activeQuery.isError) {
+    return (
+      <PhotoPassLoadError
+        title="Couldn't load this photo pass"
+        detail={getErrorMessage(activeQuery.error)}
+        onRetry={() => void activeQuery.refetch()}
+      />
     );
   }
 
@@ -444,5 +469,32 @@ function QueuePass({ parent, all, type }: PhotoPassSearch) {
         />
       )}
     </Stack>
+  );
+}
+
+export function PhotoPassLoadError({
+  title,
+  detail,
+  onRetry,
+}: {
+  title: string;
+  detail: string;
+  onRetry: () => void;
+}) {
+  return (
+    <Empty role="alert">
+      <EmptyTitle>{title}</EmptyTitle>
+      <EmptyDescription>{detail}</EmptyDescription>
+      <EmptyActions>
+        <Button
+          type="button"
+          variant="outline"
+          className="min-h-12 md:min-h-10"
+          onClick={onRetry}
+        >
+          Retry
+        </Button>
+      </EmptyActions>
+    </Empty>
   );
 }
