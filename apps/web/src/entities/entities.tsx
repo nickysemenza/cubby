@@ -25,6 +25,10 @@ import {
   ReceiptText,
   Store,
 } from "lucide-react";
+import {
+  domainForEntity,
+  domainWayfinding,
+} from "~/app/_components/navigation/domain-wayfinding";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { cn, formatCurrency } from "~/lib/utils";
 import { entityListQueryOptions } from "./entity-list.functions";
@@ -687,10 +691,15 @@ export const EntityIcon = ({
 }: { entity: Entity; colored?: boolean } & LucideProps) => {
   if (!isBrowserRoutedEntity(entity)) return null;
   const def = entities[entity];
+  const domain = colored ? domainForEntity(entity) : null;
+  const domainColor = domain
+    ? `var(${domainWayfinding(domain).accentToken})`
+    : undefined;
   return (
     <def.lucideIcon
-      className={cn(colored && def.color.text, className)}
       {...props}
+      className={cn(colored && !domainColor && def.color.text, className)}
+      style={{ ...(domainColor ? { color: domainColor } : {}), ...props.style }}
     />
   );
 };
