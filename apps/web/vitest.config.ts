@@ -80,6 +80,7 @@ const pgliteIntegrationTests = [
   "src/server/repo/meal.integration.test.ts",
   "src/server/repo/product/analytics.integration.test.ts",
   "src/server/repo/product/conversion-coverage.integration.test.ts",
+  "src/server/repo/product/relationship-route.integration.test.ts",
   "src/server/repo/recipe-section-order.integration.test.ts",
 ];
 const pgliteTemplatePath =

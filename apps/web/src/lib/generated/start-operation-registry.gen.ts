@@ -503,6 +503,11 @@ export const START_OPERATIONS = {
     productPhases: [],
   },
   "product.quickCreate": { kind: "mutation", entities: [], productPhases: [] },
+  "product.relationshipRoute": {
+    kind: "query",
+    entities: [],
+    productPhases: [],
+  },
   "product.search": { kind: "query", entities: [], productPhases: [] },
   "product.setProjectUses": {
     kind: "mutation",

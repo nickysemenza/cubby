@@ -45,6 +45,7 @@ import {
   productShortcode,
   projectShortcode,
   purchaseShortcode,
+  taskShortcode,
   vendorShortcode,
 } from "./identifiers";
 import {
@@ -68,7 +69,8 @@ import {
   presenceFilter,
 } from "./pagination";
 import { baseKind } from "./problems";
-import { plainDate, taskStatusSchema } from "./project";
+import { plainDate, projectStatusSchema, taskStatusSchema } from "./project";
+import { purchaseProductSource } from "./purchase";
 import { recipeUsageOut } from "./recipe";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import {
@@ -951,6 +953,97 @@ export const productInventoryEntriesByIdOut = z.record(
 );
 export type ProductInventoryEntriesByIdOut = z.infer<
   typeof productInventoryEntriesByIdOut
+>;
+
+/**
+ * Compact, Product-owned route data for the inspector and canonical detail
+ * page. This is intentionally not the generic related-view transport: a
+ * Product needs to distinguish stock from a Location whose identity it is,
+ * purchase provenance from ordinary spend, and a Product used on a project
+ * from a Product merely purchased for one.
+ *
+ * Every preview is bounded at the repository seam; `count` is always the
+ * complete live cardinality, before that cap. All ids are canonical public
+ * shortcodes so the caller can navigate without learning database ids.
+ */
+export const productRelationshipRouteInput = z.object({
+  productId: productShortcode,
+});
+
+const productRelationshipPreview = <T extends z.ZodType>(item: T) =>
+  z.object({
+    count: z.number().int().nonnegative(),
+    preview: z.array(item).max(3),
+  });
+
+const productRelationshipEntityRef = <T extends z.ZodType>(id: T) =>
+  z.object({ id, name: z.string() });
+
+const productRelationshipProjectRef = productRelationshipEntityRef(
+  projectShortcode,
+).extend({ status: projectStatusSchema });
+
+const productRelationshipExpenseOut = z.object({
+  id: expenseShortcode,
+  name: z.string(),
+  cost: moneyNullable,
+  date: plainDate,
+  project: productRelationshipProjectRef.nullable(),
+});
+
+const productRelationshipPurchaseOut = z.object({
+  id: purchaseShortcode,
+  displayLabel: z.string().nullable(),
+  orderId: z.string().nullable(),
+  date: plainDate,
+  vendor: productRelationshipEntityRef(vendorShortcode).nullable(),
+  source: purchaseProductSource,
+  linkAttachedAt: z.date().nullable(),
+});
+
+const productRelationshipTaskOut = z.object({
+  id: taskShortcode,
+  name: z.string(),
+  status: taskStatusSchema,
+  dueDate: plainDate.nullable(),
+  project: productRelationshipProjectRef.nullable(),
+});
+
+const productRelationshipInventoryOut = z.object({
+  id: inventoryShortcode,
+  amount,
+  placement: z.enum(inventoryPlacementValues),
+  location: productRelationshipEntityRef(locationShortcode),
+});
+
+export const productRelationshipRouteOut = z.object({
+  productId: productShortcode,
+  inventory: productRelationshipPreview(productRelationshipInventoryOut).extend(
+    {
+      stockCount: z.number().int().nonnegative(),
+      installedCount: z.number().int().nonnegative(),
+    },
+  ),
+  identityLocations: productRelationshipPreview(
+    productRelationshipEntityRef(locationShortcode),
+  ),
+  expenses: productRelationshipPreview(productRelationshipExpenseOut).extend({
+    netCost: money,
+  }),
+  purchases: productRelationshipPreview(productRelationshipPurchaseOut),
+  usedOnProjects: productRelationshipPreview(productRelationshipProjectRef),
+  purchasedForProjects: productRelationshipPreview(
+    productRelationshipProjectRef,
+  ),
+  tasks: productRelationshipPreview(productRelationshipTaskOut).extend({
+    openCount: z.number().int().nonnegative(),
+  }),
+  vendors: productRelationshipPreview(
+    productRelationshipEntityRef(vendorShortcode),
+  ),
+});
+export type ProductRelationshipRouteOut = z.infer<
+  typeof productRelationshipRouteOut
 >;
 
 export const productListItemOut = z.object({
