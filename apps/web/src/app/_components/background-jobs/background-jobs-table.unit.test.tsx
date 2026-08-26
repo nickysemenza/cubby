@@ -89,6 +89,8 @@ const job: BackgroundJobSummary = {
 function renderWorkbench(
   selectedBatchId?: string,
   batches: BackgroundBatchSummary[] = [batch],
+  error: unknown = null,
+  onRetry = vi.fn(),
 ) {
   const rows = buildBackgroundJobRows({
     batches,
@@ -112,7 +114,8 @@ function renderWorkbench(
       selectedBatchId={selectedBatchId}
       showFailedOnly={false}
       isLoading={false}
-      error={null}
+      error={error}
+      onRetry={onRetry}
       actions={<button type="button">Drain pending</button>}
       onExpandedBatchChange={onExpandedBatchChange}
       onFailedOnlyChange={onFailedOnlyChange}
@@ -195,5 +198,21 @@ describe("BackgroundJobsTable", () => {
     fireEvent.click(screen.getByText("Show failed jobs"));
 
     expect(onFailedOnlyChange).toHaveBeenCalledWith("batch-1", true);
+  });
+
+  it("keeps cached rows recoverable when the list query errors", () => {
+    const onRetry = vi.fn();
+    renderWorkbench(
+      undefined,
+      [batch],
+      new Error("Queue unavailable"),
+      onRetry,
+    );
+
+    expect(screen.getByRole("alert")).toBeVisible();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Retry background jobs" }),
+    );
+    expect(onRetry).toHaveBeenCalledOnce();
   });
 });

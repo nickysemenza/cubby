@@ -332,7 +332,7 @@ function RecordCell({ row }: CubbyCellContext<BackgroundJobTableRow, string>) {
   }
   if (value.rowType === "status")
     return (
-      <Row align="center" gap="xs" className="pl-6">
+      <Row align="center" gap="xs" className="min-h-11 pl-6 md:min-h-7">
         {value.loadState === "loading" ? <Spinner size="sm" /> : null}
         <span
           className={
@@ -343,6 +343,18 @@ function RecordCell({ row }: CubbyCellContext<BackgroundJobTableRow, string>) {
         >
           {value.name}
         </span>
+        {value.retry ? (
+          <Button
+            variant="outline"
+            size="xs"
+            onClick={(event) => {
+              event.stopPropagation();
+              value.retry?.();
+            }}
+          >
+            Retry
+          </Button>
+        ) : null}
       </Row>
     );
   return (
@@ -543,26 +555,27 @@ function BackgroundJobsTable(props: BackgroundJobsTableProps) {
     meta: { defaultLayout: layout.defaultLayout },
   });
   return (
-    <RTable
-      table={table}
-      ariaLabel="Background jobs"
-      isLoading={props.isLoading}
-      // RTable's generic error contract is read-only. Keep this operational
-      // list recoverable without changing the shared table primitive.
-      error={undefined}
-      emptyState={
-        props.error ? (
-          <div className="space-y-3">
-            <ErrorDisplay error={props.error} />
-            <Button variant="outline" onClick={() => props.onRetry?.()}>
-              Retry background jobs
-            </Button>
-          </div>
-        ) : undefined
-      }
-      actions={props.actions}
-      verticalAlign="top"
-    />
+    <div className="space-y-2">
+      {props.error ? (
+        <div className="space-y-2">
+          <ErrorDisplay error={props.error} />
+          <Button variant="outline" onClick={() => props.onRetry?.()}>
+            Retry background jobs
+          </Button>
+        </div>
+      ) : null}
+      <RTable
+        table={table}
+        ariaLabel="Background jobs"
+        isLoading={props.isLoading}
+        // RTable's generic error contract is read-only. Keep this operational
+        // list recoverable without changing the shared table primitive.
+        error={undefined}
+        emptyState={undefined}
+        actions={props.actions}
+        verticalAlign="top"
+      />
+    </div>
   );
 }
 

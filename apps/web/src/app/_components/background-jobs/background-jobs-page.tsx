@@ -151,6 +151,7 @@ export function BackgroundJobsPage({
       selectedJobs = {
         status: "error",
         message: getErrorMessage(jobsQuery.error),
+        retry: () => void jobsQuery.refetch(),
       };
     else if (!jobsQuery.data) selectedJobs = { status: "loading" };
     else
