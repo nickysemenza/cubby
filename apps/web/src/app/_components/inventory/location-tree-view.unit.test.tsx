@@ -40,7 +40,7 @@ const FLOUR_ID = testShortcode("inventory", "INV-FLOUR");
 const RICE_ID = testShortcode("inventory", "INV-RICE");
 
 const kitchenImage: ImageOut = imageOut.parse({
-  id: "00000000-0000-4000-8000-000000000001",
+  id: testShortcode("image", "IMG-KITCHEN"),
   url: "https://example.test/kitchen.jpg",
   key: "kitchen.jpg",
   filename: "kitchen.jpg",

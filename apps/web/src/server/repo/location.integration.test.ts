@@ -85,7 +85,7 @@ describe("findOrCreateLocationByName", () => {
         .values({
           name,
           type: "room",
-          shortcode: "LRACE1",
+          shortcode: parseShortcodeFor("location", "LOC-RACE"),
           parentId: TEST_HOME_ID,
         })
         .returning();

@@ -1,5 +1,6 @@
 import { productWithMappingsAndFoodOut } from "@cubby/schemas/product";
 import { testShortcode } from "@cubby/schemas/testing";
+import { foodSummary } from "@cubby/usda-schemas";
 import { describe, expect, it } from "vitest";
 import { mock } from "~/lib/test/mock-schema";
 import { selectNutritionProduct } from "./ingredient-detail";
@@ -14,7 +15,13 @@ const productWithFood = (shortcode: string, price: number | null) =>
     overrides: {
       id: testShortcode("product", shortcode),
       price,
-      food: { nutritionInfo: {} },
+      externalIds: [],
+      food: mock(foodSummary, {
+        seed: 3,
+        overrides: {
+          nutritionInfo: { nutrientSummary: [], nutrientsPer100: {} },
+        },
+      }),
     },
   });
 
@@ -24,6 +31,7 @@ const productWithoutFood = (shortcode: string, price: number | null) =>
     overrides: {
       id: testShortcode("product", shortcode),
       price,
+      externalIds: [],
       food: null,
     },
   });

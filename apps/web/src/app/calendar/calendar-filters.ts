@@ -1,6 +1,6 @@
 import {
-  type CalendarRangeInput,
-  calendarRangeInput,
+  type CalendarFiltersInput,
+  calendarFiltersInput,
 } from "@cubby/schemas/calendar";
 import {
   buildFiltersFromManifest,
@@ -8,10 +8,7 @@ import {
 } from "~/entities/filters";
 import { calendarFilterSpecs } from "./calendar-filter-specs";
 
-export type CalendarFilters = Omit<
-  CalendarRangeInput,
-  "startDate" | "endDateExclusive"
->;
+export type CalendarFilters = CalendarFiltersInput;
 
 /**
  * URL search params → the filter half of `calendar.range`'s input.
@@ -22,14 +19,12 @@ export type CalendarFilters = Omit<
 export function buildCalendarFilters(
   search: Record<string, unknown>,
 ): CalendarFilters {
-  const filters = calendarRangeInput
-    .omit({ startDate: true, endDateExclusive: true })
-    .parse(
-      buildFiltersFromManifest(
-        calendarFilterSpecs,
-        filterGetterFromSearch(calendarFilterSpecs, search),
-      ),
-    );
+  const filters = calendarFiltersInput.parse(
+    buildFiltersFromManifest(
+      calendarFilterSpecs,
+      filterGetterFromSearch(calendarFilterSpecs, search),
+    ),
+  );
   // Always subtree-expanded, with no spec and no URL key: a project's calendar
   // BAR is already the subtree-folded window, so scoping to a parent without
   // its descendants would draw a span covering dates whose tasks and expenses

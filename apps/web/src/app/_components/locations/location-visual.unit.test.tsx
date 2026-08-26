@@ -23,7 +23,7 @@ vi.mock("@tanstack/react-router", () => ({
 
 const image = (id: string): ImageOut =>
   imageOut.parse({
-    id: `00000000-0000-4000-8000-${id.padStart(12, "0")}`,
+    id: testShortcode("image", `IMG-${id}`),
     url: `https://example.test/${id}.jpg`,
     key: `${id}.jpg`,
     filename: `${id}.jpg`,

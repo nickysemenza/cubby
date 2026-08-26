@@ -1,3 +1,4 @@
+import { imageOut } from "@cubby/schemas/image";
 import { ingredientWithFoodOut } from "@cubby/schemas/ingredient";
 import { infLocation } from "@cubby/schemas/location";
 import { productWithMappingsAndFoodOut } from "@cubby/schemas/product";
@@ -54,7 +55,12 @@ describe("toLocationCard", () => {
         name: "garbage bin area",
         type: "area",
         product: null,
-        images: [{ url: "https://example.com/bin.jpg" }],
+        images: [
+          mock(imageOut, {
+            seed: 2,
+            overrides: { url: "https://example.com/bin.jpg" },
+          }),
+        ],
         totalItemCount: 2,
       },
     });
@@ -91,7 +97,11 @@ describe("toLocationCard", () => {
         product: {
           id: testShortcode("product", "PRD-9H64"),
           name: "27 Gal. Tough Storage Tote",
+          manufacturer: "Example",
+          model: null,
           category: "supplies",
+          coverImage: null,
+          price: null,
         },
       },
     });
@@ -111,7 +121,15 @@ describe("toIngredientCard", () => {
         product: [
           mock(productWithMappingsAndFoodOut, {
             seed: 2,
-            overrides: { images: [{ url: "https://example.com/oil.jpg" }] },
+            overrides: {
+              externalIds: [],
+              images: [
+                mock(imageOut, {
+                  seed: 3,
+                  overrides: { url: "https://example.com/oil.jpg" },
+                }),
+              ],
+            },
           }),
         ],
       },

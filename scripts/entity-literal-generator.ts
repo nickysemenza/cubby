@@ -1038,6 +1038,33 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         `  ${JSON.stringify(key)}: z.object({items:z.array(${key}ListOutputSchema),meta:entityListMetaSchema}),`,
     )
     .join("\n");
+  const mutationOutputImportEntries = new Map<string, Set<string>>();
+  for (const { contract } of browserCrudEntitySpecs) {
+    if (!contract)
+      throw new LiteralSpecError("Browser CRUD entity is missing its contract.");
+    const exports = mutationOutputImportEntries.get(contract.output.module) ?? new Set<string>();
+    exports.add(contract.output.export);
+    mutationOutputImportEntries.set(contract.output.module, exports);
+  }
+  const mutationOutputImports = [...mutationOutputImportEntries.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(
+      ([module, exports]) =>
+        `import { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
+    )
+    .join("\n");
+  const mutationOutputTypes = browserCrudEntitySpecs
+    .map(({ key, contract }) => {
+      if (!contract) throw new LiteralSpecError("Browser CRUD entity is missing its contract.");
+      return `  ${JSON.stringify(key)}: z.output<typeof ${contract.output.export}>;`;
+    })
+    .join("\n");
+  const mutationOutputSchemas = browserCrudEntitySpecs
+    .map(({ key, contract }) => {
+      if (!contract) throw new LiteralSpecError("Browser CRUD entity is missing its contract.");
+      return `  ${JSON.stringify(key)}: ${contract.output.export},`;
+    })
+    .join("\n");
   const commandVariants = (
     action: "create" | "update",
     schema: "create" | "update",
@@ -1373,6 +1400,24 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         "export function getEntityListOutputSchema<E extends ListEntity>(entity: E): z.ZodType<EntityListResultByEntity[E]>;\n" +
         "export function getEntityListOutputSchema(entity: ListEntity): z.ZodType {\n" +
         "  return ENTITY_LIST_OUTPUT_SCHEMAS[entity];\n" +
+        "}\n",
+    },
+    {
+      relativePath: "apps/web/src/entities/generated/entity-mutation-results.gen.ts",
+      source:
+        generatedHeader +
+        `${mutationOutputImports}\n` +
+        'import type { z } from "zod";\n\n' +
+        `export const entityMutationOutputEntities = ${compactLiteral(browserCrudEntities)} as const;\n` +
+        "export type EntityMutationOutputEntity = (typeof entityMutationOutputEntities)[number];\n\n" +
+        "export type EntityMutationOutputByEntity = {\n" +
+        `${mutationOutputTypes}\n` +
+        "};\n\n" +
+        "// biome-ignore format: one generated mutation output schema per entity.\n" +
+        `const ENTITY_MUTATION_OUTPUT_SCHEMAS = {\n${mutationOutputSchemas}\n} as const;\n\n` +
+        "export function parseEntityMutationOutput<E extends EntityMutationOutputEntity>(entity: E, value: unknown): EntityMutationOutputByEntity[E];\n" +
+        "export function parseEntityMutationOutput(entity: EntityMutationOutputEntity, value: unknown): unknown {\n" +
+        "  return ENTITY_MUTATION_OUTPUT_SCHEMAS[entity].parse(value);\n" +
         "}\n",
     },
     {

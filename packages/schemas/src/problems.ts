@@ -1159,10 +1159,12 @@ export const countProblems = (all: AllProblems): ProblemsCount => {
     ),
   );
   const byType = problemsCountSchema.shape.byType.parse(
-    Object.entries(arrays).map(([key, items]) => [
-      key,
-      sectionSize(key, items, sectionTotals),
-    ]),
+    Object.fromEntries(
+      Object.entries(arrays).map(([key, items]) => [
+        key,
+        sectionSize(key, items, sectionTotals),
+      ]),
+    ),
   );
   // `byType` stays the FULL roster (coverage keys included) so per-detector
   // consumers and the MCP `type` slices keep working; only the totals split.

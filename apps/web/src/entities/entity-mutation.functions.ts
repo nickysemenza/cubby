@@ -7,9 +7,9 @@ import type {
   EntityBrowserMutationInput,
   EntityBrowserMutationResult,
 } from "~/server/entity-kernel/contracts";
-import { ENTITY_BINDINGS } from "~/server/generated/entity-bindings.gen";
 import type { EntityEditResultFor } from "./editing/intent-types";
 import type { EditableEntity } from "./editing/types";
+import { parseEntityMutationOutput } from "./generated/entity-mutation-results.gen";
 
 /** @lintignore Discovered by the operation registry generator. */
 export const entityMutation = defineOperationDomain("entity", {
@@ -52,7 +52,5 @@ export function parseEntityMutationResultFor(
   entity: EditableEntity,
   value: unknown,
 ) {
-  const binding = ENTITY_BINDINGS[entity].crud;
-  if (!binding) throw new Error(`${entity} has no CRUD output schema.`);
-  return binding.output.parse(value);
+  return parseEntityMutationOutput(entity, value);
 }
