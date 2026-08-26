@@ -1018,29 +1018,33 @@ const productRelationshipInventoryOut = z.object({
 
 export const productRelationshipRouteOut = z.object({
   productId: productShortcode,
-  inventory: productRelationshipPreview(productRelationshipInventoryOut).extend(
-    {
+  direct: z.object({
+    inventory: productRelationshipPreview(
+      productRelationshipInventoryOut,
+    ).extend({
       stockCount: z.number().int().nonnegative(),
       installedCount: z.number().int().nonnegative(),
-    },
-  ),
-  identityLocations: productRelationshipPreview(
-    productRelationshipEntityRef(locationShortcode),
-  ),
-  expenses: productRelationshipPreview(productRelationshipExpenseOut).extend({
-    netCost: money,
+    }),
+    identityLocations: productRelationshipPreview(
+      productRelationshipEntityRef(locationShortcode),
+    ),
+    expenses: productRelationshipPreview(productRelationshipExpenseOut).extend({
+      netCost: money,
+    }),
+    purchases: productRelationshipPreview(productRelationshipPurchaseOut),
+    usedOnProjects: productRelationshipPreview(productRelationshipProjectRef),
+    tasks: productRelationshipPreview(productRelationshipTaskOut).extend({
+      openCount: z.number().int().nonnegative(),
+    }),
   }),
-  purchases: productRelationshipPreview(productRelationshipPurchaseOut),
-  usedOnProjects: productRelationshipPreview(productRelationshipProjectRef),
-  purchasedForProjects: productRelationshipPreview(
-    productRelationshipProjectRef,
-  ),
-  tasks: productRelationshipPreview(productRelationshipTaskOut).extend({
-    openCount: z.number().int().nonnegative(),
+  derived: z.object({
+    purchasedForProjects: productRelationshipPreview(
+      productRelationshipProjectRef,
+    ),
+    vendors: productRelationshipPreview(
+      productRelationshipEntityRef(vendorShortcode),
+    ),
   }),
-  vendors: productRelationshipPreview(
-    productRelationshipEntityRef(vendorShortcode),
-  ),
 });
 export type ProductRelationshipRouteOut = z.infer<
   typeof productRelationshipRouteOut

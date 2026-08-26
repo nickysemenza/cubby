@@ -17,7 +17,9 @@ import {
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { createTask } from "~/server/repo/task";
+import { findOrCreateVendor } from "~/server/repo/vendor";
 import { getProductRelationshipRoute } from "./relationship-route";
 
 describe("getProductRelationshipRoute", () => {
@@ -93,6 +95,83 @@ describe("getProductRelationshipRoute", () => {
       }),
       ctx.actor,
     );
+    const linkOnlyPurchase = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: await findOrCreateVendor(ctx.db, "Link-only vendor"),
+      date: "2026-03-08",
+      displayLabel: "Route link-only purchase",
+    });
+    await attachPurchaseProducts(
+      ctx.db,
+      linkOnlyPurchase.id,
+      [product.entityId],
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "Route explicit purchase second line",
+        cost: 1,
+        date: "2026-03-05",
+        productId: product.id,
+        productQuantity: 1,
+        purchaseId: linkedExpense.output.purchaseId,
+      }),
+      ctx.actor,
+    );
+    const expenseOnlyPurchase = await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "Route expense-only first line",
+        cost: 2,
+        date: "2026-03-09",
+        productId: product.id,
+        productQuantity: 1,
+        vendor: "Expense-only vendor",
+        orderId: "ROUTE-EXPENSE",
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "Route expense-only second line",
+        cost: 3,
+        date: "2026-03-09",
+        productId: product.id,
+        productQuantity: 1,
+        purchaseId: expenseOnlyPurchase.output.purchaseId,
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "Route planned spend",
+        cost: 50,
+        date: "2026-03-06",
+        future: true,
+        productId: product.id,
+        productQuantity: 1,
+        projectId: project.output.id,
+        vendor: "Future-only vendor",
+        orderId: "ROUTE-FUTURE",
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "Route exit",
+        cost: -10,
+        date: "2026-03-07",
+        productId: product.id,
+        productQuantity: -1,
+        projectId: project.output.id,
+        vendor: "Exit-only vendor",
+        orderId: "ROUTE-EXIT",
+      }),
+      ctx.actor,
+    );
     await attachPurchaseProducts(
       ctx.db,
       await resolveOrThrow(
@@ -123,35 +202,56 @@ describe("getProductRelationshipRoute", () => {
     const route = await getProductRelationshipRoute(ctx.db, product.entityId);
 
     expect(route.productId).toBe(product.id);
-    expect(route.inventory).toMatchObject({
+    expect(route.direct.inventory).toMatchObject({
       count: 2,
       stockCount: 1,
       installedCount: 1,
     });
-    expect(route.identityLocations).toMatchObject({ count: 1 });
-    expect(route.expenses).toMatchObject({ count: 5, netCost: 19 });
-    expect(route.expenses.preview).toHaveLength(3);
-    expect(route.purchases).toMatchObject({ count: 5 });
-    expect(route.purchases.preview).toHaveLength(3);
+    expect(route.direct.identityLocations).toMatchObject({ count: 1 });
+    expect(route.direct.expenses).toMatchObject({ count: 10, netCost: 65 });
+    expect(route.direct.expenses.preview).toHaveLength(3);
+    expect(route.direct.purchases).toMatchObject({ count: 7 });
+    expect(route.direct.purchases.preview).toHaveLength(3);
     expect(
-      route.purchases.preview.find((row) => row.orderId === "ROUTE-BOTH")
+      route.direct.purchases.preview.find((row) => row.orderId === "ROUTE-BOTH")
         ?.source,
     ).toBe("both");
-    expect(route.usedOnProjects).toMatchObject({ count: 1 });
-    expect(route.purchasedForProjects).toMatchObject({ count: 1 });
-    expect(route.tasks).toMatchObject({ count: 1, openCount: 1 });
-    expect(route.vendors).toMatchObject({ count: 1 });
+    expect(
+      route.direct.purchases.preview.find(
+        (row) => row.displayLabel === "Route link-only purchase",
+      )?.source,
+    ).toBe("link");
+    expect(
+      route.direct.purchases.preview.find(
+        (row) => row.orderId === "ROUTE-EXPENSE",
+      )?.source,
+    ).toBe("expense");
+    expect(route.direct.usedOnProjects).toMatchObject({ count: 1 });
+    expect(route.derived.purchasedForProjects).toMatchObject({ count: 1 });
+    expect(route.direct.tasks).toMatchObject({ count: 1, openCount: 1 });
+    expect(route.derived.vendors).toMatchObject({ count: 2 });
+    expect(route.derived.vendors.preview.map((vendor) => vendor.name)).toEqual(
+      expect.arrayContaining(["Route vendor", "Expense-only vendor"]),
+    );
+    expect(
+      route.derived.vendors.preview.map((vendor) => vendor.name),
+    ).not.toContain("Future-only vendor");
+    expect(
+      route.derived.vendors.preview.map((vendor) => vendor.name),
+    ).not.toContain("Exit-only vendor");
     expect(route).toEqual(
       expect.objectContaining({
-        inventory: expect.objectContaining({
-          preview: expect.arrayContaining([
-            expect.objectContaining({ id: expect.stringMatching(/^INV-/) }),
-          ]),
-        }),
-        purchases: expect.objectContaining({
-          preview: expect.arrayContaining([
-            expect.objectContaining({ id: expect.stringMatching(/^PUR-/) }),
-          ]),
+        direct: expect.objectContaining({
+          inventory: expect.objectContaining({
+            preview: expect.arrayContaining([
+              expect.objectContaining({ id: expect.stringMatching(/^INV-/) }),
+            ]),
+          }),
+          purchases: expect.objectContaining({
+            preview: expect.arrayContaining([
+              expect.objectContaining({ id: expect.stringMatching(/^PUR-/) }),
+            ]),
+          }),
         }),
       }),
     );
@@ -213,10 +313,10 @@ describe("getProductRelationshipRoute", () => {
       .where(eq(location.id, identityLocation.entityId));
 
     const route = await getProductRelationshipRoute(ctx.db, product.entityId);
-    expect(route.inventory.count).toBe(0);
-    expect(route.identityLocations.count).toBe(0);
-    expect(route.expenses.count).toBe(0);
-    expect(route.purchases.count).toBe(0);
-    expect(route.vendors.count).toBe(0);
+    expect(route.direct.inventory.count).toBe(0);
+    expect(route.direct.identityLocations.count).toBe(0);
+    expect(route.direct.expenses.count).toBe(0);
+    expect(route.direct.purchases.count).toBe(0);
+    expect(route.derived.vendors.count).toBe(0);
   });
 });

@@ -87,7 +87,18 @@ export const product = defineOperationDomain("product", {
   }),
   relationshipRoute: query({
     ...productWorkflowSchemas.relationshipRoute,
-    tags: [["product"], ["product", "relationshipRoute"]],
+    tags: [
+      ["product"],
+      ["product", "relationshipRoute"],
+      ["inventory"],
+      ["location"],
+      ["expense"],
+      ["purchase"],
+      ["project"],
+      ["project", "resource"],
+      ["task"],
+      ["vendor"],
+    ],
   }),
   components: query({
     ...productWorkflowSchemas.components,

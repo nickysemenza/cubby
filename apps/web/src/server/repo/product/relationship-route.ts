@@ -9,7 +9,7 @@
  */
 import { type ProductId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ProductRelationshipRouteOut } from "@cubby/schemas/product";
-import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
+import { and, asc, countDistinct, desc, eq, isNotNull, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
   expense,
@@ -57,7 +57,11 @@ const mergePurchaseRelations = (rows: readonly PurchaseRelationRow[]) => {
       merged.set(row.purchaseId, row);
       continue;
     }
-    merged.set(row.purchaseId, { ...existing, source: "both" });
+    // Several Expense rows on one Purchase still establish just the one
+    // expense-derived edge. `both` means the sparse link and the ledger edge
+    // coexist, never merely that a pair happened to have two ledger lines.
+    const source = existing.source === row.source ? existing.source : "both";
+    merged.set(row.purchaseId, { ...existing, source });
   }
   return [...merged.values()].sort((a, b) => b.date.localeCompare(a.date));
 };
@@ -80,10 +84,15 @@ export async function getProductRelationshipRoute(
     expenseRows,
     purchaseLinkRows,
     purchaseExpenseRows,
+    purchaseLinkCountRows,
+    purchaseExpenseCountRows,
+    purchaseOverlapCountRows,
     usedProjectRows,
     purchasedProjectRows,
+    purchasedProjectCountRows,
     taskRows,
     vendorRows,
+    vendorCountRows,
   ] = await Promise.all([
     dbc.query.product.findFirst({
       where: and(eq(product.id, productId), notDeleted(product)),
@@ -91,6 +100,15 @@ export async function getProductRelationshipRoute(
     }),
     dbc
       .select({
+        totalCount: sql<number>`count(*) over ()::int`.mapWith(Number),
+        stockCount:
+          sql<number>`count(*) filter (where ${inventoryEntry.placement} = 'stock') over ()::int`.mapWith(
+            Number,
+          ),
+        installedCount:
+          sql<number>`count(*) filter (where ${inventoryEntry.placement} = 'installed') over ()::int`.mapWith(
+            Number,
+          ),
         id: inventoryEntry.shortcode,
         amount: inventoryEntry.amount,
         placement: inventoryEntry.placement,
@@ -108,14 +126,25 @@ export async function getProductRelationshipRoute(
           notDeleted(inventoryEntry),
         ),
       )
-      .orderBy(asc(location.name), asc(inventoryEntry.shortcode)),
-    dbc
-      .select({ id: location.shortcode, name: location.name })
-      .from(location)
-      .where(and(eq(location.productId, productId), notDeleted(location)))
-      .orderBy(asc(location.name), asc(location.shortcode)),
+      .orderBy(asc(location.name), asc(inventoryEntry.shortcode))
+      .limit(PREVIEW_LIMIT),
     dbc
       .select({
+        totalCount: sql<number>`count(*) over ()::int`.mapWith(Number),
+        id: location.shortcode,
+        name: location.name,
+      })
+      .from(location)
+      .where(and(eq(location.productId, productId), notDeleted(location)))
+      .orderBy(asc(location.name), asc(location.shortcode))
+      .limit(PREVIEW_LIMIT),
+    dbc
+      .select({
+        totalCount: sql<number>`count(*) over ()::int`.mapWith(Number),
+        netCost:
+          sql<number>`coalesce(sum(${expense.cost}) over (), 0)::double precision`.mapWith(
+            Number,
+          ),
         id: expense.shortcode,
         name: expense.name,
         cost: expense.cost,
@@ -127,7 +156,8 @@ export async function getProductRelationshipRoute(
       .from(expense)
       .leftJoin(project, liveProject)
       .where(and(eq(expense.productId, productId), notDeleted(expense)))
-      .orderBy(desc(expense.date), asc(expense.shortcode)),
+      .orderBy(desc(expense.date), asc(expense.shortcode))
+      .limit(PREVIEW_LIMIT),
     dbc
       .select({
         purchaseId: purchase.id,
@@ -151,7 +181,9 @@ export async function getProductRelationshipRoute(
           eq(purchaseProduct.productId, productId),
           notDeleted(purchaseProduct),
         ),
-      ),
+      )
+      .orderBy(desc(purchase.date), asc(purchase.shortcode))
+      .limit(PREVIEW_LIMIT),
     dbc
       .select({
         purchaseId: purchase.id,
@@ -170,9 +202,53 @@ export async function getProductRelationshipRoute(
         and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
       )
       .leftJoin(vendor, liveVendor)
+      .where(expensePairPredicate(eq(expense.productId, productId)))
+      .orderBy(desc(purchase.date), asc(purchase.shortcode))
+      .limit(PREVIEW_LIMIT),
+    dbc
+      .select({ count: countDistinct(purchase.id) })
+      .from(purchaseProduct)
+      .innerJoin(
+        purchase,
+        and(eq(purchase.id, purchaseProduct.purchaseId), notDeleted(purchase)),
+      )
+      .where(
+        and(
+          eq(purchaseProduct.productId, productId),
+          notDeleted(purchaseProduct),
+        ),
+      ),
+    dbc
+      .select({ count: countDistinct(purchase.id) })
+      .from(expense)
+      .innerJoin(
+        purchase,
+        and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
+      )
       .where(expensePairPredicate(eq(expense.productId, productId))),
     dbc
+      .select({ count: countDistinct(purchase.id) })
+      .from(purchaseProduct)
+      .innerJoin(
+        purchase,
+        and(eq(purchase.id, purchaseProduct.purchaseId), notDeleted(purchase)),
+      )
+      .innerJoin(
+        expense,
+        and(
+          eq(expense.purchaseId, purchase.id),
+          expensePairPredicate(eq(expense.productId, productId)),
+        ),
+      )
+      .where(
+        and(
+          eq(purchaseProduct.productId, productId),
+          notDeleted(purchaseProduct),
+        ),
+      ),
+    dbc
       .select({
+        totalCount: sql<number>`count(*) over ()::int`.mapWith(Number),
         id: project.shortcode,
         name: project.name,
         status: project.status,
@@ -188,7 +264,8 @@ export async function getProductRelationshipRoute(
           notDeleted(projectToolUsage),
         ),
       )
-      .orderBy(desc(projectToolUsage.createdAt), asc(project.name)),
+      .orderBy(desc(projectToolUsage.createdAt), asc(project.name))
+      .limit(PREVIEW_LIMIT),
     dbc
       .selectDistinct({
         id: project.shortcode,
@@ -203,9 +280,25 @@ export async function getProductRelationshipRoute(
           isNotNull(expense.projectId),
         ),
       )
-      .orderBy(asc(project.name), asc(project.shortcode)),
+      .orderBy(asc(project.name), asc(project.shortcode))
+      .limit(PREVIEW_LIMIT),
+    dbc
+      .select({ count: countDistinct(project.id) })
+      .from(expense)
+      .innerJoin(project, liveProject)
+      .where(
+        and(
+          expensePairPredicate(eq(expense.productId, productId)),
+          isNotNull(expense.projectId),
+        ),
+      ),
     dbc
       .select({
+        totalCount: sql<number>`count(*) over ()::int`.mapWith(Number),
+        openCount:
+          sql<number>`count(*) filter (where ${task.status} <> 'done') over ()::int`.mapWith(
+            Number,
+          ),
         id: task.shortcode,
         name: task.name,
         status: task.status,
@@ -220,7 +313,8 @@ export async function getProductRelationshipRoute(
         and(eq(project.id, task.projectId), notDeleted(project)),
       )
       .where(and(eq(task.subjectProductId, productId), notDeleted(task)))
-      .orderBy(asc(task.status), asc(task.dueDate), asc(task.name)),
+      .orderBy(asc(task.status), asc(task.dueDate), asc(task.name))
+      .limit(PREVIEW_LIMIT),
     dbc
       .selectDistinct({ id: vendor.shortcode, name: vendor.name })
       .from(expense)
@@ -230,7 +324,17 @@ export async function getProductRelationshipRoute(
       )
       .innerJoin(vendor, liveVendor)
       .where(expensePairPredicate(eq(expense.productId, productId)))
-      .orderBy(asc(vendor.name), asc(vendor.shortcode)),
+      .orderBy(asc(vendor.name), asc(vendor.shortcode))
+      .limit(PREVIEW_LIMIT),
+    dbc
+      .select({ count: countDistinct(vendor.id) })
+      .from(expense)
+      .innerJoin(
+        purchase,
+        and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
+      )
+      .innerJoin(vendor, liveVendor)
+      .where(expensePairPredicate(eq(expense.productId, productId))),
   ]);
 
   if (!productRow) {
@@ -281,70 +385,76 @@ export async function getProductRelationshipRoute(
 
   return {
     productId: parseShortcodeFor("product", productRow.shortcode),
-    inventory: {
-      count: inventory.length,
-      stockCount: inventory.filter((row) => row.placement === "stock").length,
-      installedCount: inventory.filter((row) => row.placement === "installed")
-        .length,
-      preview: inventory.slice(0, PREVIEW_LIMIT),
+    direct: {
+      inventory: {
+        count: inventoryRows[0]?.totalCount ?? 0,
+        stockCount: inventoryRows[0]?.stockCount ?? 0,
+        installedCount: inventoryRows[0]?.installedCount ?? 0,
+        preview: inventory,
+      },
+      identityLocations: {
+        count: identityLocationRows[0]?.totalCount ?? 0,
+        preview: identityLocationRows.map((row) => ({
+          id: parseShortcodeFor("location", row.id),
+          name: row.name,
+        })),
+      },
+      expenses: {
+        count: expenseRows[0]?.totalCount ?? 0,
+        netCost: expenseRows[0]?.netCost ?? 0,
+        preview: expenses,
+      },
+      purchases: {
+        count:
+          Number(purchaseLinkCountRows[0]?.count ?? 0) +
+          Number(purchaseExpenseCountRows[0]?.count ?? 0) -
+          Number(purchaseOverlapCountRows[0]?.count ?? 0),
+        preview: purchases.slice(0, PREVIEW_LIMIT).map((row) => ({
+          id: parseShortcodeFor("purchase", row.purchaseCode),
+          displayLabel: row.displayLabel,
+          orderId: row.orderId,
+          date: row.date,
+          vendor:
+            row.vendorCode && row.vendorName
+              ? {
+                  id: parseShortcodeFor("vendor", row.vendorCode),
+                  name: row.vendorName,
+                }
+              : null,
+          source: row.source,
+          linkAttachedAt: row.linkAttachedAt,
+        })),
+      },
+      usedOnProjects: {
+        count: usedProjectRows[0]?.totalCount ?? 0,
+        preview: usedProjectRows.map((row) => ({
+          id: parseShortcodeFor("project", row.id),
+          name: row.name,
+          status: row.status,
+        })),
+      },
+      tasks: {
+        count: taskRows[0]?.totalCount ?? 0,
+        openCount: taskRows[0]?.openCount ?? 0,
+        preview: tasks,
+      },
     },
-    identityLocations: {
-      count: identityLocationRows.length,
-      preview: identityLocationRows.slice(0, PREVIEW_LIMIT).map((row) => ({
-        id: parseShortcodeFor("location", row.id),
-        name: row.name,
-      })),
-    },
-    expenses: {
-      count: expenses.length,
-      netCost: expenses.reduce((total, row) => total + (row.cost ?? 0), 0),
-      preview: expenses.slice(0, PREVIEW_LIMIT),
-    },
-    purchases: {
-      count: purchases.length,
-      preview: purchases.slice(0, PREVIEW_LIMIT).map((row) => ({
-        id: parseShortcodeFor("purchase", row.purchaseCode),
-        displayLabel: row.displayLabel,
-        orderId: row.orderId,
-        date: row.date,
-        vendor:
-          row.vendorCode && row.vendorName
-            ? {
-                id: parseShortcodeFor("vendor", row.vendorCode),
-                name: row.vendorName,
-              }
-            : null,
-        source: row.source,
-        linkAttachedAt: row.linkAttachedAt,
-      })),
-    },
-    usedOnProjects: {
-      count: usedProjectRows.length,
-      preview: usedProjectRows.slice(0, PREVIEW_LIMIT).map((row) => ({
-        id: parseShortcodeFor("project", row.id),
-        name: row.name,
-        status: row.status,
-      })),
-    },
-    purchasedForProjects: {
-      count: purchasedProjectRows.length,
-      preview: purchasedProjectRows.slice(0, PREVIEW_LIMIT).map((row) => ({
-        id: parseShortcodeFor("project", row.id),
-        name: row.name,
-        status: row.status,
-      })),
-    },
-    tasks: {
-      count: tasks.length,
-      openCount: tasks.filter((row) => row.status !== "done").length,
-      preview: tasks.slice(0, PREVIEW_LIMIT),
-    },
-    vendors: {
-      count: vendorRows.length,
-      preview: vendorRows.slice(0, PREVIEW_LIMIT).map((row) => ({
-        id: parseShortcodeFor("vendor", row.id),
-        name: row.name,
-      })),
+    derived: {
+      purchasedForProjects: {
+        count: Number(purchasedProjectCountRows[0]?.count ?? 0),
+        preview: purchasedProjectRows.map((row) => ({
+          id: parseShortcodeFor("project", row.id),
+          name: row.name,
+          status: row.status,
+        })),
+      },
+      vendors: {
+        count: Number(vendorCountRows[0]?.count ?? 0),
+        preview: vendorRows.map((row) => ({
+          id: parseShortcodeFor("vendor", row.id),
+          name: row.name,
+        })),
+      },
     },
   };
 }
