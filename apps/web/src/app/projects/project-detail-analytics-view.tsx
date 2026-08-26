@@ -34,10 +34,11 @@ export type ProjectAgendaGroup = {
 };
 
 /**
- * The phone companion to the project Gantt. A task appears only at its own
- * start date (not every date it spans), while a sub-project appears at the
- * beginning of its effective date window. This keeps a long renovation
- * readable without pretending the detailed Gantt can shrink into a phone.
+ * The phone companion to the project Gantt. A task appears at its own start,
+ * or at its end when only an end constraint is known, while a sub-project
+ * appears at the beginning of its effective date window. This keeps a long
+ * renovation readable without pretending the detailed Gantt can shrink into
+ * a phone.
  */
 export function buildProjectAgendaGroups(
   projectId: string,
@@ -47,7 +48,8 @@ export function buildProjectAgendaGroups(
   const entries: ProjectAgendaEntry[] = [];
 
   for (const task of tasks) {
-    if (task.dueDate) entries.push({ kind: "task", day: task.dueDate, task });
+    const day = task.dueDate ?? task.dueEndDate;
+    if (day) entries.push({ kind: "task", day, task });
   }
   for (const project of subtreeProjects) {
     if (project.id === projectId) continue;
@@ -77,6 +79,12 @@ export function buildProjectAgendaGroups(
     }));
 }
 
+export function formatProjectAgendaTaskDate(task: TaskOut): string {
+  return task.dueDate
+    ? formatDateRange(task.dueDate, task.dueEndDate)
+    : `Ends ${formatDate(task.dueEndDate!)}`;
+}
+
 function undatedSubprojects(
   projectId: string,
   subtreeProjects: readonly ProjectOut[],
@@ -99,7 +107,9 @@ function ProjectTimelineAgenda({
   subtreeProjects: ProjectOut[];
 }) {
   const groups = buildProjectAgendaGroups(projectId, tasks, subtreeProjects);
-  const unscheduledTasks = tasks.filter((task) => task.dueDate == null);
+  const unscheduledTasks = tasks.filter(
+    (task) => task.dueDate == null && task.dueEndDate == null,
+  );
   const unscheduledProjects = undatedSubprojects(projectId, subtreeProjects);
 
   return (
@@ -134,10 +144,7 @@ function ProjectTimelineAgenda({
                           {entry.task.name}
                         </span>
                         <span className="shrink-0 font-mono text-2xs text-slate">
-                          {formatDateRange(
-                            entry.task.dueDate,
-                            entry.task.dueEndDate,
-                          )}
+                          {formatProjectAgendaTaskDate(entry.task)}
                         </span>
                       </Link>
                       <div className="flex min-h-7 items-center gap-x-2 border-t px-2 py-1 font-mono text-2xs text-slate">

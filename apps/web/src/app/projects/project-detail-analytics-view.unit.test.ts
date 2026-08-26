@@ -1,7 +1,10 @@
 import { projectOut, taskOut } from "@cubby/schemas/project";
 import { describe, expect, it } from "vitest";
 import { mock } from "~/lib/test/mock-schema";
-import { buildProjectAgendaGroups } from "./project-detail-analytics-view";
+import {
+  buildProjectAgendaGroups,
+  formatProjectAgendaTaskDate,
+} from "./project-detail-analytics-view";
 
 const task = (name: string, dueDate: string | null, dueEndDate = dueDate) =>
   mock(taskOut, { overrides: { name, dueDate, dueEndDate } });
@@ -54,6 +57,15 @@ describe("buildProjectAgendaGroups", () => {
 
     expect(groups).toHaveLength(1);
     expect(groups[0]?.day).toBe("2026-04-01");
+  });
+
+  it("schedules an end-only task at its end and labels that constraint", () => {
+    const endOnly = task("Inspection deadline", null, "2026-04-08");
+    const groups = buildProjectAgendaGroups("PRJ-ABCD", [endOnly], []);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.day).toBe("2026-04-08");
+    expect(formatProjectAgendaTaskDate(endOnly)).toBe("Ends Apr 8");
   });
 
   it("omits the current project and undated records", () => {
