@@ -1,6 +1,6 @@
 # Porcelain Transit UI Overhaul
 
-Status: **In progress; T0–T4 complete, T5 canonical-route migration next**
+Status: **In progress; T0–T4 complete, T5 canonical-route migration underway**
 
 Delivery: **One big-bang branch and one ready-for-review PR**
 
@@ -209,7 +209,7 @@ means the named evidence exists; implementation without evidence remains
 | T2 | Desktop/mobile shell and navigation | T1 | Complete | 224px/56px desktop rail, 48px command band, five truthful domain groups, preserved contextual mobile chrome/safe areas/keyboard behavior, focused tests, typecheck, and desktop/mobile screenshots are recorded in the evidence ledger |
 | T3 | Products reference workbench | T1–T2 | Complete | Approved dense table, dock, Sheet, phone projection, one Product-owned relationship-route query, direct/derived provenance, and synthetic desktop/phone examples are recorded in the evidence ledger. |
 | T4 | Canonical detail system | T1–T3 | Complete | Product detail reuses the same route model near the hero and in the full Relations journey, replaces the generic explorer without duplicate anchors, and preserves recategorized project-use history as read-only evidence. |
-| T5 | All canonical lists and details | T3–T4 | Pending | Every listed entity migrated with mobile projection and honest actions |
+| T5 | All canonical lists and details | T3–T4 | In progress | Standard entity rosters now share the wide dock/intermediate Sheet/phone-detail inspector contract; direct-workbench siblings and bespoke details remain. |
 | T6 | Today and normal-density surfaces | T1–T2 | Pending | Attention-first dashboard, readable modules, no KPI-card theater |
 | T7 | Specialist workbenches | T1–T5 | Pending | Calendar, Gantt, spatial, reconciliation, scanner, and matrix contracts preserved |
 | T8 | Peripheral web-PWA states | T1–T7 | Pending | Auth, OAuth, docs, offline, errors, loading, empty, print/export |

@@ -425,21 +425,23 @@ export function RelationshipTree({
 
   if (!activePreset) return null;
 
-  // Each render walks in display order. Keep the first contextual occurrence
-  // strong and render later appearances as muted references: that preserves
-  // truthful paths without making repeated records look like new ones.
-  const seenEntityKeys = new Set<string>();
-  const renderEntity: (item: RelationshipEntity, depth: number) => ReactNode = (
-    item,
-    depth,
-  ) => {
+  // Reference detection follows the active ancestor path, not mutable render
+  // order. Child components may render more than once in React Strict Mode; a
+  // shared `seen` Set would therefore relabel every ordinary first-level row
+  // as a cycle on its second render. The path also preserves the useful
+  // distinction between a genuine cycle and one record appearing truthfully
+  // in two sibling relationship branches.
+  const renderEntity = (
+    item: RelationshipEntity,
+    depth: number,
+    ancestorKeys: ReadonlySet<string>,
+  ): ReactNode => {
     // A bounded outline remains legible and prevents a manually-expanded
     // cyclic graph from becoming an unbounded DOM tree. The detail link still
     // gives the record a full fresh root context.
     const identity = entityKey(item);
-    const duplicate = seenEntityKeys.has(identity);
-    seenEntityKeys.add(identity);
-    const reference = depth >= 6 || duplicate;
+    const reference = depth >= 6 || ancestorKeys.has(identity);
+    const childAncestors = new Set(ancestorKeys).add(identity);
     const nodeKey = `${activePreset.key}:entity:${entityKey(item)}`;
     const childGroups = nodeGroups[nodeKey];
     const hasChildren =
@@ -484,7 +486,9 @@ export function RelationshipTree({
                 page={pages[stateKey]}
                 onLoadMore={() => void loadPage(group, true, item)}
                 loadChildren={loadChildren}
-                renderEntity={renderEntity}
+                renderEntity={(child, childDepth) =>
+                  renderEntity(child, childDepth, childAncestors)
+                }
               />
             );
           })}
@@ -531,7 +535,9 @@ export function RelationshipTree({
               page={pages[stateKey]}
               onLoadMore={() => void loadPage(group, true)}
               loadChildren={loadChildren}
-              renderEntity={renderEntity}
+              renderEntity={(item, depth) =>
+                renderEntity(item, depth, new Set())
+              }
             />
           );
         })}

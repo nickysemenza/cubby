@@ -32,7 +32,7 @@ fix only redesign-caused failures.
 | T2 Desktop/mobile shell | Complete | 224px expanded and 56px collapsed rail, 48px command band, five domain groups, preserved contextual mobile chrome, focused tests/typecheck, independent review, and desktop/mobile visual checkpoint |
 | T3 Products reference workbench | Complete | Approved 28px Product density, docked inspector, Sheet, phone projection, one Product-owned relationship query, fixed direct/derived semantics, bounded previews, explicit provenance, and synthetic desktop/phone examples |
 | T4 Canonical detail system | Complete | Product detail reuses the same relationship query near the hero and in its full route ledger, suppresses the generic duplicate explorer, and preserves recategorized project-use history as read-only evidence |
-| T5 Canonical lists/details | Pending | — |
+| T5 Canonical lists/details | In progress | Standard `EntityListPage` rosters now share a compact Overview/Relations/Activity inspector at wide desktop, the same inspector in an intermediate Sheet, and canonical detail navigation on phone; direct-workbench and bespoke siblings remain |
 | T6 Today/ordinary surfaces | Pending | — |
 | T7 Specialist workbenches | Pending | — |
 | T8 Peripheral states | Pending | — |
@@ -106,6 +106,9 @@ height while retaining the named viewport width.
 | 2026-08-26 | T3–T4 | Relationship and shared-detail UI tests | Pass | Covers direct/derived labels and zero states, inspector reuse, page-owned relationship replacement, read-only historical project uses, and retained reusable-category edit affordances |
 | 2026-08-26 | T3–T4 | `pnpm typecheck:web` and `pnpm check` | Pass | Contract and historical-use commits pass web/workspace type checks and the full repository check |
 | 2026-08-26 | T3–T4 | Synthetic relationship-route visual review | Pass | Public-placeholder desktop and phone examples confirm compact strip, bounded branches, provenance, derived separation, horizontal phone scrolling, and 44px phone targets |
+| 2026-08-26 | T5 | Generic inspector and responsive preview tests | Pass: 17 tests in 4 files | Covers lazy capability-gated tabs, per-record state reset, canonical Open/Close actions, named dialogs, hover prefetch, legacy Sheet compatibility, wide dock, intermediate Sheet, mobile suppression, current-row forwarding, and Strict Mode relationship reference semantics |
+| 2026-08-26 | T5 | `pnpm typecheck:web` and `git diff --check` | Pass | Generic inspector, responsive selection seam, first sibling-list integration, and relationship-cycle correction are type/whitespace clean |
+| 2026-08-26 | T5 | Responsive canonical roster visual review | Pass for first batch | A standard Vendor roster was manually verified at 1440×900 (dock), 1024×768 (Sheet), and 430×932 (direct canonical card links); no private-data capture was retained |
 
 ## T3–T4 mandatory checkpoint
 
@@ -140,3 +143,26 @@ rollups, no false chains, stable canonical links, explicit zero/error states,
 and read-only preservation of historical evidence when a Product category
 changes. The earlier payload-only route remains baseline evidence, not the
 current contract.
+
+## T5 migration progress
+
+The first shared batch extends Product's three-level inspection rhythm without
+copying its Product-owned relationship semantics. `EntityListPage` rosters now
+select one current record independently of bulk selection and render:
+
+- a 25rem compact inspector dock at 1280px and wider;
+- the same composition in a right Sheet from 768–1279px; and
+- no inspector on phone, where semantic cards keep their canonical detail
+  links.
+
+The generic inspector uses compact manifest overviews, the registered
+relationship explorer, and audit history behind capability-gated lazy tabs. It
+never mounts a complete detail page inside a dock. Unsupported compact overview
+types state that limitation and keep the canonical Open action instead of
+inventing summary fields.
+
+This first integration covers the standard `EntityListPage` rosters: Locations,
+Recipes, Tasks, Vendors, Financial Accounts, Financial Transactions, and Images.
+Products retain their approved domain-owned inspector. Direct `ListWorkbench`
+callers and bespoke list/detail compositions remain explicit T5 batches rather
+than being treated as implicitly complete.
