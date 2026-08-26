@@ -11,10 +11,13 @@ import {
   type LocationShortcode,
   type ProductId,
   type ProductShortcode,
-  unsafeLocationId,
-  unsafeLocationShortcode,
-  unsafeUserId,
+  parseEntityId,
 } from "@cubby/schemas/identifiers";
+import {
+  testEntityId,
+  testShortcode,
+  testUserId,
+} from "@cubby/schemas/testing";
 import {
   IntegreSQLClient,
   type IntegreSQLDatabaseConfig,
@@ -126,18 +129,19 @@ export async function countTestDbQueries<T>(
 }
 
 export const TEST_USER_ID = "test-user-id";
-export const TEST_HOME_ID = unsafeLocationId(
+export const TEST_HOME_ID = testEntityId(
+  "location",
   "00000000-0000-4000-8000-000000000001",
 );
-export const TEST_HOME_SHORTCODE = unsafeLocationShortcode("LOC-HM3E");
+export const TEST_HOME_SHORTCODE = testShortcode("location", "LOC-HM3E");
 
 /**
  * The authenticated actor every integration test runs as. Mirrors what
  * `buildTestDB()` returns — import this instead of redefining a local
- * `TEST_ACTOR` (or `unsafeUserId("test-user-id")`) per file.
+ * `TEST_ACTOR` (or `testUserId("test-user-id")`) per file.
  */
 export const TEST_ACTOR: ActorContext = {
-  userId: unsafeUserId(TEST_USER_ID),
+  userId: testUserId(TEST_USER_ID),
   source: "ui",
 };
 
@@ -449,7 +453,7 @@ export async function closeTestDb() {
  * cookbook/EPUB importers stamp `"epub_import"`).
  */
 export function withTestDb(source: AuditSource = "ui"): TestDbContext {
-  const actor = buildActorContext(unsafeUserId(TEST_USER_ID), source);
+  const actor = buildActorContext(testUserId(TEST_USER_ID), source);
   // `db` is assigned in the beforeEach below before any test reads it; the cast
   // keeps call sites free of an `undefined` union they'd otherwise have to narrow.
   const ctx: TestDbContext = {
@@ -548,7 +552,7 @@ export async function seedFromCSV(
       );
       const resolved = await resolveLiveShortcode(db, created.id, "product");
       if (!resolved) throw new Error("seedFromCSV: created product not found");
-      productId = resolved as ProductId;
+      productId = parseEntityId("product", resolved);
       productEntityIds.set(row.product_name, productId);
       productIds.set(row.product_name, created.id);
     }
@@ -611,7 +615,7 @@ export async function seedEntity<E extends ShortcodeEntity>(
 
   const input = mock(binding.createInput, { overrides });
   const baseContext = createTestRequestContext(db, {
-    auth: { userId: unsafeUserId("test-user-id") },
+    auth: { userId: testUserId("test-user-id") },
   });
   if (!baseContext.actorContext) {
     throw new Error("seedEntity: test actor is required");

@@ -1,10 +1,5 @@
-import {
-  type InventoryId,
-  type LocationId,
-  unsafeInventoryId,
-  unsafeLocationId,
-  unsafeProductId,
-} from "@cubby/schemas/identifiers";
+import type { InventoryId, LocationId } from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -46,7 +41,8 @@ describe("bulkProcessInventoryEntries staleness guard", () => {
       makeProductInput({ name: `Bolt ${productName}` }),
       TEST_ACTOR,
     );
-    const productEntityId = unsafeProductId(
+    const productEntityId = parseEntityId(
+      "product",
       await requireResolvedId(product.id, "product"),
     );
     const entry = await createInventoryEntry(
@@ -54,7 +50,8 @@ describe("bulkProcessInventoryEntries staleness guard", () => {
       { productId: productEntityId, locationId, amount },
       TEST_ACTOR,
     );
-    const entryEntityId = unsafeInventoryId(
+    const entryEntityId = parseEntityId(
+      "inventory",
       await requireResolvedId(entry.id, "inventory"),
     );
     const item = {
@@ -72,7 +69,8 @@ describe("bulkProcessInventoryEntries staleness guard", () => {
       makeLocationInput({ name }),
       TEST_ACTOR,
     );
-    const locationEntityId = unsafeLocationId(
+    const locationEntityId = parseEntityId(
+      "location",
       await requireResolvedId(loc.id, "location"),
     );
     const first = await addEntry(locationEntityId, `${name}-A`);

@@ -1,23 +1,24 @@
-import { unsafeProjectShortcode } from "@cubby/schemas/identifiers";
 import type { ProjectOut } from "@cubby/schemas/project";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { buildProjectTree } from "./project-tree";
 
 /** Minimal `ProjectOut`-shaped fixture — only `id`/`parentProjectId` vary;
  * every other field is a fixed, valid default the builder never reads.
- * `id`/`parentProjectId` are now the shortcode itself (post-cutover); these
- * are unsafe casts, not zod-validated, so the readable test names double as
- * the fixture's "shortcode" without needing to match the real PRJ-XXXX shape. */
+ * Readable seeds are converted to deterministic, schema-valid project
+ * shortcodes; callers should assert against the resulting fixture values. */
 function proj(id: string, parentProjectId?: string): ProjectOut {
   return {
-    id: unsafeProjectShortcode(id),
+    id: testShortcode("project", id),
     name: id,
     status: "planning",
     kind: null,
     locations: [],
     costEstimate: null,
     parentProjectId:
-      parentProjectId != null ? unsafeProjectShortcode(parentProjectId) : null,
+      parentProjectId != null
+        ? testShortcode("project", parentProjectId)
+        : null,
     startDate: null,
     endDate: null,
     icon: null,
@@ -81,7 +82,7 @@ describe("buildProjectTree", () => {
     const b = proj("b");
     const c = proj("c");
     const rows = buildProjectTree([a, b, c]);
-    expect(rows.map((r) => r.id)).toEqual(["a", "b", "c"]);
+    expect(rows.map((r) => r.id)).toEqual([a.id, b.id, c.id]);
     for (const row of rows) expect(row.subRows).toEqual([]);
   });
 
@@ -91,15 +92,15 @@ describe("buildProjectTree", () => {
     const child2 = proj("child2", "parent");
     const rows = buildProjectTree([parent, child1, child2]);
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.id).toBe("parent");
-    expect(rows[0]?.subRows.map((r) => r.id)).toEqual(["child1", "child2"]);
+    expect(rows[0]?.id).toBe(parent.id);
+    expect(rows[0]?.subRows.map((r) => r.id)).toEqual([child1.id, child2.id]);
   });
 
   it("promotes a child to a root when its parent was filtered out", () => {
     const child = proj("child", "missing-parent");
     const rows = buildProjectTree([child]);
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.id).toBe("child");
+    expect(rows[0]?.id).toBe(child.id);
     expect(rows[0]?.subRows).toEqual([]);
   });
 
@@ -109,11 +110,11 @@ describe("buildProjectTree", () => {
     const c = proj("c", "b");
     const rows = buildProjectTree([a, b, c]);
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.id).toBe("a");
+    expect(rows[0]?.id).toBe(a.id);
     expect(rows[0]?.subRows).toHaveLength(1);
-    expect(rows[0]?.subRows[0]?.id).toBe("b");
+    expect(rows[0]?.subRows[0]?.id).toBe(b.id);
     expect(rows[0]?.subRows[0]?.subRows).toHaveLength(1);
-    expect(rows[0]?.subRows[0]?.subRows[0]?.id).toBe("c");
+    expect(rows[0]?.subRows[0]?.subRows[0]?.id).toBe(c.id);
     expect(rows[0]?.subRows[0]?.subRows[0]?.subRows).toEqual([]);
   });
 
@@ -123,7 +124,7 @@ describe("buildProjectTree", () => {
     const rows = buildProjectTree([a, b]);
     const flat = flatten(rows);
     expect(flat).toHaveLength(2);
-    expect(new Set(flat)).toEqual(new Set(["a", "b"]));
+    expect(new Set(flat)).toEqual(new Set([a.id, b.id]));
   });
 
   it("terminates without throwing on a chain longer than the depth cap", () => {
@@ -137,7 +138,7 @@ describe("buildProjectTree", () => {
     // promoted as spurious extra roots) — same "just stop walking deeper"
     // behaviour as gantt-model.ts. Only the single true root survives.
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.id).toBe("n0");
+    expect(rows[0]?.id).toBe(testShortcode("project", "n0"));
     const flat = flatten(rows);
     expect(flat.length).toBeLessThan(105);
     expect(flat.length).toBeGreaterThan(0);
@@ -150,6 +151,6 @@ describe("buildProjectTree", () => {
     const childA = proj("childA", "parent");
     // Input order is B then A — output should follow input, not alpha sort.
     const rows = buildProjectTree([parent, childB, childA]);
-    expect(rows[0]?.subRows.map((r) => r.id)).toEqual(["childB", "childA"]);
+    expect(rows[0]?.subRows.map((r) => r.id)).toEqual([childB.id, childA.id]);
   });
 });

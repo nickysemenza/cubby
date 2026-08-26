@@ -1,8 +1,5 @@
-import {
-  unsafeFinancialAccountShortcode,
-  unsafeFinancialTransactionShortcode,
-  unsafeProjectShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+
 import { and, eq, isNull } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -218,7 +215,7 @@ describe("consolidated household ledger", () => {
             notes: null,
             sourceClaims: [],
             evidenceTransactionIds: rows.map((row) =>
-              unsafeFinancialTransactionShortcode(row.shortcode),
+              parseShortcodeFor("financialTransaction", row.shortcode),
             ),
           },
           ctx.actor,
@@ -244,8 +241,8 @@ describe("consolidated household ledger", () => {
         notes: null,
         sourceClaims: [],
         evidenceTransactionIds: [
-          unsafeFinancialTransactionShortcode(outflow.shortcode),
-          unsafeFinancialTransactionShortcode(inflow.shortcode),
+          parseShortcodeFor("financialTransaction", outflow.shortcode),
+          parseShortcodeFor("financialTransaction", inflow.shortcode),
         ],
       },
       ctx.actor,
@@ -254,7 +251,7 @@ describe("consolidated household ledger", () => {
     await expect(
       updateFinancialTransaction(
         ctx.db,
-        unsafeFinancialTransactionShortcode(outflow.shortcode),
+        parseShortcodeFor("financialTransaction", outflow.shortcode),
         { status: "pending" },
         ctx.actor,
       ),
@@ -262,7 +259,7 @@ describe("consolidated household ledger", () => {
     await expect(
       updateFinancialAccount(
         ctx.db,
-        unsafeFinancialAccountShortcode(memberAccount.shortcode),
+        parseShortcodeFor("financialAccount", memberAccount.shortcode),
         { ledgerPartyId: household.output.id },
         ctx.actor,
       ),
@@ -273,7 +270,7 @@ describe("consolidated household ledger", () => {
         transfer.output!.id,
         {
           evidenceTransactionIds: [
-            unsafeFinancialTransactionShortcode(inflow.shortcode),
+            parseShortcodeFor("financialTransaction", inflow.shortcode),
           ],
           sourceClaims: [
             {
@@ -319,7 +316,7 @@ describe("consolidated household ledger", () => {
     await expect(
       deleteFinancialTransactions(
         ctx.db,
-        [unsafeFinancialTransactionShortcode(inflow.shortcode)],
+        [parseShortcodeFor("financialTransaction", inflow.shortcode)],
         ctx.actor,
       ),
     ).rejects.toThrow("cannot be deleted until the transfer releases it");
@@ -1255,7 +1252,7 @@ describe("consolidated household ledger", () => {
     }
 
     const renovationReport = await projectContribution(ctx.db, {
-      projectId: unsafeProjectShortcode(renovation.shortcode),
+      projectId: parseShortcodeFor("project", renovation.shortcode),
       includeSubprojects: true,
     });
     expect(renovationReport).toMatchObject({
@@ -1274,7 +1271,7 @@ describe("consolidated household ledger", () => {
     ]);
 
     const soloReport = await projectContribution(ctx.db, {
-      projectId: unsafeProjectShortcode(solo.shortcode),
+      projectId: parseShortcodeFor("project", solo.shortcode),
       includeSubprojects: true,
     });
     expect(soloReport.parties).toEqual([
@@ -1285,7 +1282,7 @@ describe("consolidated household ledger", () => {
     ]);
 
     const tripReport = await projectContribution(ctx.db, {
-      projectId: unsafeProjectShortcode(trip.shortcode),
+      projectId: parseShortcodeFor("project", trip.shortcode),
       includeSubprojects: true,
     });
     expect(tripReport).toMatchObject({
@@ -1313,7 +1310,7 @@ describe("consolidated household ledger", () => {
     );
 
     const unknownReport = await projectContribution(ctx.db, {
-      projectId: unsafeProjectShortcode(unknown.shortcode),
+      projectId: parseShortcodeFor("project", unknown.shortcode),
       includeSubprojects: true,
     });
     expect(unknownReport).toMatchObject({

@@ -1,6 +1,7 @@
-import { unsafeIngredientId } from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { IngredientFilters } from "@cubby/schemas/ingredient";
 import { expenseCreateInput } from "@cubby/schemas/project";
+import { testEntityId } from "@cubby/schemas/testing";
 import { count, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -376,7 +377,10 @@ describe("ingredient", () => {
 
   it("merge fails loud on an unknown alias id (no silent no-op)", async () => {
     const a = await findOrCreateIngredient(ctx.db, "keeper");
-    const bogus = unsafeIngredientId("00000000-0000-0000-0000-000000000000");
+    const bogus = testEntityId(
+      "ingredient",
+      "00000000-0000-0000-0000-000000000000",
+    );
 
     await expect(
       mergeIngredients(
@@ -564,7 +568,7 @@ describe("ingredient", () => {
       throw new Error("test setup: ingredient did not resolve");
 
     const [row] = await getIngredientsByIDsLean(ctx.db, [
-      unsafeIngredientId(ingredientUuid),
+      parseEntityId("ingredient", ingredientUuid),
     ]);
     const pricedResult = row?.product.find(
       (product) => product.id === priced.id,
@@ -797,7 +801,8 @@ describe("deleteIngredients", () => {
       { name: "Recipe-Blocked Ingredient", aliases: [] },
       ctx.actor,
     );
-    const usedIngredientId = unsafeIngredientId(
+    const usedIngredientId = parseEntityId(
+      "ingredient",
       (await resolveLiveShortcode(ctx.db, usedIngredient.id, "ingredient"))!,
     );
     const usingRecipe = await createRecipe(
@@ -837,7 +842,8 @@ describe("deleteIngredients", () => {
       { name: "Product-Blocked Ingredient", aliases: [] },
       ctx.actor,
     );
-    const linkedIngredientId = unsafeIngredientId(
+    const linkedIngredientId = parseEntityId(
+      "ingredient",
       (await resolveLiveShortcode(ctx.db, linkedIngredient.id, "ingredient"))!,
     );
     const linkedProduct = await createProduct(
@@ -870,7 +876,8 @@ describe("previewMergeIngredientCandidates", () => {
 
   it("ranks USDA link > products > recipe usages > aliases, and carries the underlying counts in detail", async () => {
     const entityIdOf = async (shortcode: string) =>
-      unsafeIngredientId(
+      parseEntityId(
+        "ingredient",
         (await resolveLiveShortcode(ctx.db, shortcode, "ingredient"))!,
       );
 
@@ -934,7 +941,7 @@ describe("previewMergeIngredientCandidates", () => {
 
     // `previewMergeIngredientCandidates` takes entity uuids but returns
     // `MergeCandidate.id` as the public shortcode (see
-    // `mergeImpactForIngredients`'s final `unsafeIngredientShortcode(b.shortcode)`
+    // `mergeImpactForIngredients`'s final `parseShortcodeFor("ingredient", b.shortcode)`
     // map) — two different id spaces, resolved and looked up accordingly.
     const [usdaId, productId, recipeId, aliasId] = await Promise.all([
       entityIdOf(usdaLinked.id),
@@ -1019,7 +1026,8 @@ describe("ingredient repository — transactional update", () => {
         { name: "joins-outer-tx before", aliases: [] },
         ctx.actor,
       );
-      const createdId = unsafeIngredientId(
+      const createdId = parseEntityId(
+        "ingredient",
         (await resolveLiveShortcode(tx, created.id, "ingredient"))!,
       );
       return updateIngredient(
@@ -1032,7 +1040,8 @@ describe("ingredient repository — transactional update", () => {
 
     expect(renamed.name).toBe("joins-outer-tx after");
     // And it really committed with the outer transaction.
-    const renamedId = unsafeIngredientId(
+    const renamedId = parseEntityId(
+      "ingredient",
       (await resolveLiveShortcode(ctx.db, renamed.id, "ingredient"))!,
     );
     expect((await getIngredientByID(ctx.db, renamedId)).name).toBe(
@@ -1047,7 +1056,8 @@ describe("ingredient repository — transactional update", () => {
       { name: original, aliases: [] },
       ctx.actor,
     );
-    const createdId = unsafeIngredientId(
+    const createdId = parseEntityId(
+      "ingredient",
       (await resolveLiveShortcode(ctx.db, created.id, "ingredient"))!,
     );
 

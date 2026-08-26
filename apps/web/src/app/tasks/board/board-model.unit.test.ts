@@ -1,8 +1,5 @@
-import {
-  unsafeProjectShortcode,
-  unsafeTaskShortcode,
-} from "@cubby/schemas/identifiers";
 import type { TaskOut } from "@cubby/schemas/project";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import {
   buildColumns,
@@ -16,6 +13,8 @@ import {
 } from "./board-model";
 import type { TaskCardDragData } from "./board-types";
 
+const taskId = (seed: string) => testShortcode("task", seed);
+
 function task(params: {
   id: string;
   name?: string;
@@ -28,12 +27,12 @@ function task(params: {
   updatedAt?: Date;
 }): TaskOut {
   return {
-    id: unsafeTaskShortcode(params.id),
+    id: testShortcode("task", params.id),
     name: params.name ?? params.id,
     status: params.status ?? "not_started",
     projectId:
       params.projectId != null
-        ? unsafeProjectShortcode(params.projectId)
+        ? testShortcode("project", params.projectId)
         : null,
     projectName: params.projectName ?? null,
     subjectProductId: null,
@@ -67,34 +66,46 @@ describe("compareCards", () => {
   it("orders by dueDate ascending", () => {
     const a = task({ id: "a", dueDate: "2026-03-01" });
     const b = task({ id: "b", dueDate: "2026-01-01" });
-    expect([a, b].sort(compareCards).map((t) => t.id)).toEqual(["b", "a"]);
+    expect([a, b].sort(compareCards).map((t) => t.id)).toEqual([
+      taskId("b"),
+      taskId("a"),
+    ]);
   });
 
   it("puts null dueDate last", () => {
     const a = task({ id: "a", dueDate: null });
     const b = task({ id: "b", dueDate: "2026-01-01" });
-    expect([a, b].sort(compareCards).map((t) => t.id)).toEqual(["b", "a"]);
+    expect([a, b].sort(compareCards).map((t) => t.id)).toEqual([
+      taskId("b"),
+      taskId("a"),
+    ]);
   });
 
   it("breaks dueDate ties by name", () => {
     const a = task({ id: "a", name: "Zebra", dueDate: "2026-01-01" });
     const b = task({ id: "b", name: "Apple", dueDate: "2026-01-01" });
-    expect([a, b].sort(compareCards).map((t) => t.id)).toEqual(["b", "a"]);
+    expect([a, b].sort(compareCards).map((t) => t.id)).toEqual([
+      taskId("b"),
+      taskId("a"),
+    ]);
   });
 
   it("puts a ranked card ahead of an unranked one, even with a later due date", () => {
     const ranked = task({ id: "a", dueDate: "2026-12-01", sortOrder: 1024 });
     const unranked = task({ id: "b", dueDate: "2026-01-01" });
     expect([unranked, ranked].sort(compareCards).map((t) => t.id)).toEqual([
-      "a",
-      "b",
+      taskId("a"),
+      taskId("b"),
     ]);
   });
 
   it("orders two ranked cards by ascending sortOrder", () => {
     const a = task({ id: "a", sortOrder: 2048 });
     const b = task({ id: "b", sortOrder: 1024 });
-    expect([a, b].sort(compareCards).map((t) => t.id)).toEqual(["b", "a"]);
+    expect([a, b].sort(compareCards).map((t) => t.id)).toEqual([
+      taskId("b"),
+      taskId("a"),
+    ]);
   });
 });
 
@@ -121,9 +132,9 @@ describe("computeRank", () => {
     expect(computeRank(cards, 1)).toEqual({
       kind: "materialize",
       ranks: [
-        { id: "r1", sortOrder: 1024 },
-        { id: "d", sortOrder: 2048 },
-        { id: "r2", sortOrder: 3072 },
+        { id: taskId("r1"), sortOrder: 1024 },
+        { id: taskId("d"), sortOrder: 2048 },
+        { id: taskId("r2"), sortOrder: 3072 },
       ],
     });
   });
@@ -154,8 +165,8 @@ describe("computeRank", () => {
     expect(computeRank(cards, 1)).toEqual({
       kind: "materialize",
       ranks: [
-        { id: "u1", sortOrder: 1024 },
-        { id: "d", sortOrder: 2048 },
+        { id: taskId("u1"), sortOrder: 1024 },
+        { id: taskId("d"), sortOrder: 2048 },
       ],
     });
   });
@@ -238,7 +249,7 @@ describe("cellTasks", () => {
       { kind: "status", status: "not_started" },
       null,
     );
-    expect(cards.map((t) => t.id)).toEqual(["b", "a"]);
+    expect(cards.map((t) => t.id)).toEqual([taskId("b"), taskId("a")]);
     expect(totalCount).toBe(2);
   });
 
@@ -257,7 +268,7 @@ describe("cellTasks", () => {
     );
     expect(totalCount).toBe(DONE_COLUMN_CAP + 5);
     expect(cards).toHaveLength(DONE_COLUMN_CAP);
-    expect(cards[0]?.id).toBe(`d${DONE_COLUMN_CAP + 4}`);
+    expect(cards[0]?.id).toBe(taskId(`d${DONE_COLUMN_CAP + 4}`));
   });
 
   it("hides done tasks in project columns and reports the hidden count", () => {
@@ -270,12 +281,12 @@ describe("cellTasks", () => {
       tasks,
       {
         kind: "project",
-        projectId: unsafeProjectShortcode("p1"),
+        projectId: testShortcode("project", "p1"),
         projectName: "Attic",
       },
       null,
     );
-    expect(cards.map((t) => t.id)).toEqual(["a"]);
+    expect(cards.map((t) => t.id)).toEqual([taskId("a")]);
     expect(totalCount).toBe(3);
     expect(hiddenDoneCount).toBe(2);
   });
@@ -301,7 +312,7 @@ describe("cellTasks", () => {
       { kind: "status", status: "done" },
       null,
     );
-    expect(cards.map((t) => t.id)).toEqual(["recent", "old"]);
+    expect(cards.map((t) => t.id)).toEqual([taskId("recent"), taskId("old")]);
   });
 
   it("orders a non-done cell by sortOrder ahead of the derived order", () => {
@@ -319,7 +330,7 @@ describe("cellTasks", () => {
       { kind: "status", status: "not_started" },
       null,
     );
-    expect(cards.map((t) => t.id)).toEqual(["b", "a"]);
+    expect(cards.map((t) => t.id)).toEqual([taskId("b"), taskId("a")]);
   });
 
   it("respects the lane when filtering", () => {
@@ -332,7 +343,7 @@ describe("cellTasks", () => {
       { kind: "status", status: "not_started" },
       { kind: "project", projectId: null, projectName: INBOX_LABEL },
     );
-    expect(inbox.cards.map((t) => t.id)).toEqual(["b"]);
+    expect(inbox.cards.map((t) => t.id)).toEqual([taskId("b")]);
   });
 });
 
@@ -368,13 +379,13 @@ describe("computeMove", () => {
         column: { kind: "status", status: "in_progress" },
         lane: {
           kind: "project",
-          projectId: unsafeProjectShortcode("p2"),
+          projectId: testShortcode("project", "p2"),
           projectName: "B",
         },
       }),
     ).toEqual({
       status: "in_progress",
-      projectId: unsafeProjectShortcode("p2"),
+      projectId: testShortcode("project", "p2"),
     });
   });
 
@@ -392,12 +403,12 @@ describe("computeMove", () => {
       computeMove(drag(t), {
         column: {
           kind: "project",
-          projectId: unsafeProjectShortcode("p2"),
+          projectId: testShortcode("project", "p2"),
           projectName: "B",
         },
         lane: null,
       }),
-    ).toEqual({ projectId: unsafeProjectShortcode("p2") });
+    ).toEqual({ projectId: testShortcode("project", "p2") });
   });
 
   it("writes only trade on a trade-column drop", () => {
@@ -414,7 +425,7 @@ describe("computeMove", () => {
       computeMove(drag(t), {
         column: {
           kind: "project",
-          projectId: unsafeProjectShortcode("p1"),
+          projectId: testShortcode("project", "p1"),
           projectName: "A",
         },
         lane: null,

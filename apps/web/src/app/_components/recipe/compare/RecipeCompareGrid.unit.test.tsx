@@ -1,4 +1,5 @@
-import { unsafeRecipeShortcode } from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -12,7 +13,7 @@ vi.mock("@tanstack/react-router", () => ({
 
 const comparedRecipe: ComparedRecipe = {
   recipe: {
-    id: unsafeRecipeShortcode("RCP-TEST"),
+    id: testShortcode("recipe", "RCP-TEST"),
     name: "Test recipe",
     createdAt: new Date("2026-01-01T00:00:00Z"),
     updatedAt: new Date("2026-01-01T00:00:00Z"),

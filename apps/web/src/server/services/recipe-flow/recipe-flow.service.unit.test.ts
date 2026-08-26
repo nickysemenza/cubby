@@ -1,10 +1,10 @@
-import { unsafeRecipeId } from "@cubby/schemas/identifiers";
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import type {
   RecipeFlowAiPlan,
   RecipeFlowArtifact,
   RecipeFlowPlan,
 } from "@cubby/schemas/recipe-flow";
+import { testEntityId } from "@cubby/schemas/testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "~/server/db";
 
@@ -32,7 +32,10 @@ vi.mock("~/server/clients/anthropic", () => ({
 
 import { generateRecipeFlow, getRecipeFlowState } from "./recipe-flow.service";
 
-const RECIPE_ID = unsafeRecipeId("00000000-0000-4000-8000-000000000001");
+const RECIPE_ID = testEntityId(
+  "recipe",
+  "00000000-0000-4000-8000-000000000001",
+);
 const SECTION_ID = "00000000-0000-4000-8000-000000000002";
 const USAGE_ID = "00000000-0000-4000-8000-000000000003";
 

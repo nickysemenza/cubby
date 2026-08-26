@@ -1,4 +1,5 @@
-import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { ComponentProps, ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -23,9 +24,9 @@ vi.mock("@tanstack/react-router", () => ({
   ),
 }));
 
-const workshop = unsafeLocationShortcode("LOC-WRKS");
-const upperZone = unsafeLocationShortcode("LOC-UPPR");
-const utilityRoom = unsafeLocationShortcode("LOC-UTIL");
+const workshop = testShortcode("location", "LOC-WRKS");
+const upperZone = testShortcode("location", "LOC-UPPR");
+const utilityRoom = testShortcode("location", "LOC-UTIL");
 
 const tree: HierarchyDrilldownNode = {
   id: "home",

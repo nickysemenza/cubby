@@ -1,5 +1,6 @@
 import type { LocationSuggestionAiResult } from "@cubby/schemas/ai";
-import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import { describe, expect, it } from "vitest";
 import type { LocationPutAwayCandidate } from "~/server/repo/location";
 import {
@@ -19,7 +20,7 @@ const candidate = (
   categorySiblings: 0,
   holdsProduct: false,
   ...overrides,
-  id: unsafeLocationShortcode(overrides.id),
+  id: testShortcode("location", overrides.id),
 });
 
 const aiResult = (locationId: string): LocationSuggestionAiResult => ({
@@ -36,12 +37,12 @@ describe("formatLocationCandidates", () => {
         name: "Shelf 3",
         ancestors: [
           {
-            id: unsafeLocationShortcode("LOC-AAAA"),
+            id: testShortcode("location", "LOC-AAAA"),
             name: "Garage",
             type: "room",
           },
           {
-            id: unsafeLocationShortcode("LOC-BBBB"),
+            id: testShortcode("location", "LOC-BBBB"),
             name: "Shelving Unit",
             type: "area",
           },
@@ -51,7 +52,7 @@ describe("formatLocationCandidates", () => {
     ]);
 
     expect(lines).toBe(
-      "LOC-1111 | Garage > Shelving Unit > Shelf 3 (shelf) - 12 items",
+      `${testShortcode("location", "LOC-1111")} | Garage > Shelving Unit > Shelf 3 (shelf) - 12 items`,
     );
   });
 
@@ -102,7 +103,7 @@ describe("resolveSuggestedLocation", () => {
       name: "PACKOUT Wall",
       ancestors: [
         {
-          id: unsafeLocationShortcode("LOC-AAAA"),
+          id: testShortcode("location", "LOC-AAAA"),
           name: "Garage",
           type: "room",
         },

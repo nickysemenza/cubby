@@ -1,9 +1,6 @@
-import {
-  unsafeLocationShortcode,
-  unsafeProductShortcode,
-} from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import {
   locationChildGroupLabel,
@@ -36,7 +33,7 @@ const location = (
   type: LocationType | null,
   overrides: Partial<InfLocation> = {},
 ): InfLocation => ({
-  id: unsafeLocationShortcode(`LOC-${code}`),
+  id: testShortcode("location", `LOC-${code}`),
   name: `Location ${code}`,
   aliases: [],
   type,
@@ -60,7 +57,7 @@ describe("resolveLocationVisual", () => {
       location("AAAA", null, {
         images: [own],
         product: {
-          id: unsafeProductShortcode("PRD-AAAA"),
+          id: testShortcode("product", "PRD-AAAA"),
           name: "Two drawer box",
           manufacturer: "Example",
           model: null,
@@ -83,7 +80,7 @@ describe("resolveLocationVisual", () => {
     const child = location("BBBB", "drawer", { images: [childImage] });
     const productBacked = location("AAAA", null, {
       product: {
-        id: unsafeProductShortcode("PRD-AAAA"),
+        id: testShortcode("product", "PRD-AAAA"),
         name: "Two drawer box",
         manufacturer: "Example",
         model: null,

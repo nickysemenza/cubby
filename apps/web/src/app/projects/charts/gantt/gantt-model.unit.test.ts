@@ -1,8 +1,5 @@
-import {
-  unsafeProjectShortcode,
-  unsafeTaskShortcode,
-} from "@cubby/schemas/identifiers";
 import type { ProjectOut, TaskOut } from "@cubby/schemas/project";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { toDayIndex } from "./gantt-date";
 import {
@@ -12,9 +9,11 @@ import {
   type GanttRow,
 } from "./gantt-model";
 
-/** `id`/`parentProjectId`/`projectId`/`parentTaskId` are now the shortcode
- * itself (post-cutover). These are unsafe casts, not zod-validated, so the
- * readable test names double as the fixture's "shortcode" directly. */
+const projectId = (seed: string) => testShortcode("project", seed);
+const taskId = (seed: string) => testShortcode("task", seed);
+
+/** Readable fixture labels are converted to deterministic schema-valid
+ * shortcodes while names remain readable in assertions. */
 function project(params: {
   id: string;
   parentProjectId?: string | null;
@@ -31,7 +30,7 @@ function project(params: {
   const taskCount = params.taskCount ?? 0;
   const doneTaskCount = params.doneTaskCount ?? 0;
   return {
-    id: unsafeProjectShortcode(params.id),
+    id: testShortcode("project", params.id),
     name: params.id,
     status: params.status ?? "planning",
     kind: params.kind ?? null,
@@ -39,7 +38,7 @@ function project(params: {
     costEstimate: null,
     parentProjectId:
       params.parentProjectId != null
-        ? unsafeProjectShortcode(params.parentProjectId)
+        ? testShortcode("project", params.parentProjectId)
         : null,
     startDate: params.startDate ?? null,
     endDate: params.endDate ?? null,
@@ -93,16 +92,16 @@ function task(params: {
   status?: TaskOut["status"];
 }): TaskOut {
   return {
-    id: unsafeTaskShortcode(params.id),
+    id: testShortcode("task", params.id),
     name: params.id,
     status: params.status ?? "not_started",
     projectId:
       params.projectId != null
-        ? unsafeProjectShortcode(params.projectId)
+        ? testShortcode("project", params.projectId)
         : null,
     parentTaskId:
       params.parentTaskId != null
-        ? unsafeTaskShortcode(params.parentTaskId)
+        ? testShortcode("task", params.parentTaskId)
         : null,
     dueDate: params.dueDate ?? null,
     dueEndDate: params.dueEndDate ?? null,
@@ -141,13 +140,13 @@ describe("buildPortfolioRows", () => {
     const grandchild = project({ id: "grandchild", parentProjectId: "child" });
     const { rows } = buildPortfolioRows(
       [root, child, grandchild],
-      new Set(["root", "child"]),
+      new Set([projectId("root"), projectId("child")]),
     );
     const projects = projectRowsOf(rows);
     expect(projects.map((p) => [p.id, p.depth])).toEqual([
-      ["root", 0],
-      ["child", 1],
-      ["grandchild", 2],
+      [projectId("root"), 0],
+      [projectId("child"), 1],
+      [projectId("grandchild"), 2],
     ]);
   });
 
@@ -166,7 +165,7 @@ describe("buildPortfolioRows", () => {
     const { rows } = buildPortfolioRows([orphan], new Set());
     const projects = projectRowsOf(rows);
     expect(projects).toHaveLength(1);
-    expect(projects[0]?.id).toBe("orphan");
+    expect(projects[0]?.id).toBe(projectId("orphan"));
     expect(projects[0]?.depth).toBe(0);
   });
 
@@ -187,8 +186,13 @@ describe("buildPortfolioRows", () => {
       startDate: "2026-01-15",
       endDate: "2026-06-01",
     });
-    const { rows } = buildPortfolioRows([parent, child], new Set(["parent"]));
-    const parentRow = projectRowsOf(rows).find((r) => r.id === "parent");
+    const { rows } = buildPortfolioRows(
+      [parent, child],
+      new Set([projectId("parent")]),
+    );
+    const parentRow = projectRowsOf(rows).find(
+      (r) => r.id === projectId("parent"),
+    );
     expect(parentRow?.openEnded).toBe(true);
     expect(parentRow?.envelope).toBeNull();
   });
@@ -201,8 +205,13 @@ describe("buildPortfolioRows", () => {
       startDate: "2025-11-01",
       endDate: "2026-02-01",
     });
-    const { rows } = buildPortfolioRows([parent, child], new Set(["parent"]));
-    const parentRow = projectRowsOf(rows).find((r) => r.id === "parent");
+    const { rows } = buildPortfolioRows(
+      [parent, child],
+      new Set([projectId("parent")]),
+    );
+    const parentRow = projectRowsOf(rows).find(
+      (r) => r.id === projectId("parent"),
+    );
     expect(parentRow?.envelope).toEqual({
       startDay: toDayIndex("2025-11-01"),
       endDay: toDayIndex("2026-01-10"),
@@ -221,8 +230,13 @@ describe("buildPortfolioRows", () => {
       startDate: "2026-01-05",
       endDate: "2026-01-25",
     });
-    const { rows } = buildPortfolioRows([parent, child], new Set(["parent"]));
-    const parentRow = projectRowsOf(rows).find((r) => r.id === "parent");
+    const { rows } = buildPortfolioRows(
+      [parent, child],
+      new Set([projectId("parent")]),
+    );
+    const parentRow = projectRowsOf(rows).find(
+      (r) => r.id === projectId("parent"),
+    );
     expect(parentRow?.envelope).toEqual({
       startDay: toDayIndex("2026-01-05"),
       endDay: toDayIndex("2026-01-25"),
@@ -241,8 +255,13 @@ describe("buildPortfolioRows", () => {
       startDate: "2026-01-10",
       endDate: "2026-01-20",
     });
-    const { rows } = buildPortfolioRows([parent, child], new Set(["parent"]));
-    const parentRow = projectRowsOf(rows).find((r) => r.id === "parent");
+    const { rows } = buildPortfolioRows(
+      [parent, child],
+      new Set([projectId("parent")]),
+    );
+    const parentRow = projectRowsOf(rows).find(
+      (r) => r.id === projectId("parent"),
+    );
     expect(parentRow?.envelope).toBeNull();
   });
 
@@ -254,8 +273,13 @@ describe("buildPortfolioRows", () => {
       startDate: "2026-02-01",
       endDate: "2026-02-05",
     });
-    const { rows } = buildPortfolioRows([parent, child], new Set(["parent"]));
-    const parentRow = projectRowsOf(rows).find((r) => r.id === "parent");
+    const { rows } = buildPortfolioRows(
+      [parent, child],
+      new Set([projectId("parent")]),
+    );
+    const parentRow = projectRowsOf(rows).find(
+      (r) => r.id === projectId("parent"),
+    );
     expect(parentRow?.envelope).toEqual({
       startDay: toDayIndex("2026-02-01"),
       endDay: toDayIndex("2026-02-05"),
@@ -267,9 +291,9 @@ describe("buildPortfolioRows", () => {
     const child = project({ id: "child", parentProjectId: "parent" });
     const { unscheduled, extent } = buildPortfolioRows(
       [parent, child],
-      new Set(["parent"]),
+      new Set([projectId("parent")]),
     );
-    expect(unscheduled.map((p) => p.id)).toEqual(["parent"]);
+    expect(unscheduled.map((p) => p.id)).toEqual([projectId("parent")]);
     expect(extent).toBeNull();
   });
 
@@ -283,8 +307,10 @@ describe("buildPortfolioRows", () => {
     });
     const leaf = project({ id: "leaf", taskCount: 4, doneTaskCount: 3 }); // 0.75
     const { rows } = buildPortfolioRows([parent, leaf], new Set());
-    const parentRow = projectRowsOf(rows).find((r) => r.id === "parent");
-    const leafRow = projectRowsOf(rows).find((r) => r.id === "leaf");
+    const parentRow = projectRowsOf(rows).find(
+      (r) => r.id === projectId("parent"),
+    );
+    const leafRow = projectRowsOf(rows).find((r) => r.id === projectId("leaf"));
     expect(parentRow?.progress).toBeCloseTo(0.5);
     expect(leafRow?.progress).toBeCloseTo(0.75);
   });
@@ -336,11 +362,11 @@ describe("buildPortfolioRows", () => {
     );
     expect(kindOrder).toEqual([
       "group:Furniture",
-      "furniture-1",
+      projectId("furniture-1"),
       "group:Garden",
-      "garden-1",
+      projectId("garden-1"),
       "group:Other",
-      "no-kind",
+      projectId("no-kind"),
     ]);
   });
 });
@@ -367,10 +393,10 @@ describe("buildProjectRows", () => {
     const undated = task({ id: "t-undated", projectId: "root" });
 
     const { rows, unscheduled } = buildProjectRows(
-      "root",
+      projectId("root"),
       [subA],
       [rootTask, subTask, subSubtask, undated],
-      new Set(["subA"]),
+      new Set([projectId("subA")]),
     );
 
     expect(
@@ -378,12 +404,12 @@ describe("buildProjectRows", () => {
         r.kind === "group" ? [r.kind, r.id, null] : [r.kind, r.id, r.depth],
       ),
     ).toEqual([
-      ["task", "t-root", 0],
-      ["project", "subA", 0],
-      ["task", "t-sub", 1],
-      ["task", "t-sub-sub", 2],
+      ["task", taskId("t-root"), 0],
+      ["project", projectId("subA"), 0],
+      ["task", taskId("t-sub"), 1],
+      ["task", taskId("t-sub-sub"), 2],
     ]);
-    expect(unscheduled.map((t) => t.id)).toEqual(["t-undated"]);
+    expect(unscheduled.map((t) => t.id)).toEqual([taskId("t-undated")]);
   });
 
   it("hides a sub-project's tasks when it is collapsed, but still marks it expandable", () => {
@@ -393,11 +419,16 @@ describe("buildProjectRows", () => {
       projectId: "subA",
       dueDate: "2026-03-05",
     });
-    const { rows } = buildProjectRows("root", [subA], [subTask], new Set());
+    const { rows } = buildProjectRows(
+      projectId("root"),
+      [subA],
+      [subTask],
+      new Set(),
+    );
     expect(rows).toEqual([
       expect.objectContaining({
         kind: "project",
-        id: "subA",
+        id: projectId("subA"),
         expandable: true,
         expanded: false,
       }),
@@ -411,9 +442,18 @@ describe("buildProjectRows", () => {
       parentTaskId: "missing-parent-task",
       dueDate: "2026-03-01",
     });
-    const { rows } = buildProjectRows("root", [], [rootTask], new Set());
+    const { rows } = buildProjectRows(
+      projectId("root"),
+      [],
+      [rootTask],
+      new Set(),
+    );
     expect(rows).toEqual([
-      expect.objectContaining({ kind: "task", id: "t-root", depth: 0 }),
+      expect.objectContaining({
+        kind: "task",
+        id: taskId("t-root"),
+        depth: 0,
+      }),
     ]);
   });
 
@@ -449,7 +489,10 @@ describe("buildProjectRows", () => {
     });
     const b = project({ id: "b", parentProjectId: "a", endDate: "2026-03-01" });
 
-    const result = buildPortfolioRows([a, b], new Set(["a", "b"]));
+    const result = buildPortfolioRows(
+      [a, b],
+      new Set([projectId("a"), projectId("b")]),
+    );
 
     expect(result.rows).toEqual([]);
     expect(result.extent).toEqual({

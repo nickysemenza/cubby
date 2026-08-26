@@ -1,9 +1,5 @@
-import {
-  unsafeExpenseShortcode,
-  unsafePurchaseShortcode,
-  unsafeVendorShortcode,
-} from "@cubby/schemas/identifiers";
 import type { ExpenseOut } from "@cubby/schemas/project";
+import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -33,7 +29,7 @@ vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 import { expenseVendorColumn } from "~/app/projects/shared";
 
 const LINKED: ExpenseOut = {
-  id: unsafeExpenseShortcode("EXP-4K7M"),
+  id: testShortcode("expense", "EXP-4K7M"),
   name: "Dust extractor",
   cost: 500,
   date: "2026-07-20",
@@ -49,10 +45,10 @@ const LINKED: ExpenseOut = {
   productId: null,
   productQuantity: null,
   productName: null,
-  purchaseId: unsafePurchaseShortcode("PUR-4K7M"),
+  purchaseId: testShortcode("purchase", "PUR-4K7M"),
   purchaseDate: "2026-07-19",
   purchaseDisplayLabel: null,
-  vendorId: unsafeVendorShortcode("VEN-4K7M"),
+  vendorId: testShortcode("vendor", "VEN-4K7M"),
   vendorLogo: null,
   vendor: "Tool Shop",
   orderId: "ORDER-42",

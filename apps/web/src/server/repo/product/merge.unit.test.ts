@@ -1,4 +1,5 @@
-import { type ProductId, unsafeProductId } from "@cubby/schemas/identifiers";
+import type { ProductId } from "@cubby/schemas/identifiers";
+import { testEntityId } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import {
   findMergeComponentCycle,
@@ -13,7 +14,7 @@ import {
  * seed through the write path that exists precisely to prevent them.
  */
 const p = (name: string): ProductId =>
-  unsafeProductId(`00000000-0000-4000-8000-${name.padStart(12, "0")}`);
+  testEntityId("product", `00000000-0000-4000-8000-${name.padStart(12, "0")}`);
 
 const edge = (parent: ProductId, component: ProductId) => ({
   parentProductId: parent,

@@ -702,7 +702,10 @@ describe("calculateTotals with the consumption model", () => {
     ]);
     const costing = computeRecipeCosting(
       [root],
-      { ...ingMap, water },
+      {
+        [ingMap.flour.id]: ingMap.flour,
+        [water.id]: water,
+      },
       getName,
       {},
     ).get(root.id);

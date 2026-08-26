@@ -1,9 +1,5 @@
-import {
-  unsafeInventoryShortcode,
-  unsafeLocationShortcode,
-  unsafeProductShortcode,
-} from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { buildLocationGalleryData } from "./location-gallery-data";
 
@@ -13,12 +9,12 @@ const location = (
   children?: InfLocation[],
 ): InfLocation =>
   ({
-    id: unsafeLocationShortcode(id),
+    id: testShortcode("location", id),
     name: id,
     images: [],
     inventoryItems: productIds.map((productId, index) => ({
-      id: unsafeInventoryShortcode(`INV-${String(index + 2).repeat(4)}`),
-      productId: unsafeProductShortcode(productId),
+      id: testShortcode("inventory", `INV-${String(index + 2).repeat(4)}`),
+      productId: testShortcode("product", productId),
       productName: productId,
       amount: { value: 1, unit: "item" },
     })),

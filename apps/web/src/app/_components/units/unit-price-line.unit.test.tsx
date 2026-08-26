@@ -1,4 +1,5 @@
-import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
@@ -16,7 +17,7 @@ const mappingsFor = (
   }[] = [],
 ) =>
   getAllUnitMappingsFromProduct({
-    id: unsafeProductShortcode("PRD-2345"),
+    id: testShortcode("product", "PRD-2345"),
     unitMappings,
     food: null,
     price,

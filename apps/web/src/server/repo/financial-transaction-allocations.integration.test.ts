@@ -3,10 +3,8 @@ import {
   financialTransactionCreateInput,
   financialTransactionUpdateData,
 } from "@cubby/schemas/financial-transaction";
-import type {
-  FinancialTransactionShortcode,
-  PurchaseShortcode,
-} from "@cubby/schemas/identifiers";
+import type { FinancialTransactionShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -244,7 +242,11 @@ describe("settlement allocations — write path", () => {
       ],
     });
 
-    await deletePurchases(ctx.db, [a.id as PurchaseShortcode], ctx.actor);
+    await deletePurchases(
+      ctx.db,
+      [parseShortcodeFor("purchase", a.id)],
+      ctx.actor,
+    );
 
     // The sibling slice on b goes too: a partial set is not a legal state,
     // whereas zero allocations is legal and re-enterable.
@@ -272,7 +274,11 @@ describe("settlement allocations — write path", () => {
     });
 
     await expect(
-      deleteEmptyPurchases(ctx.db, [a.id as PurchaseShortcode], ctx.actor),
+      deleteEmptyPurchases(
+        ctx.db,
+        [parseShortcodeFor("purchase", a.id)],
+        ctx.actor,
+      ),
     ).rejects.toThrow(/settlement allocations/);
   });
 

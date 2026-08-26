@@ -1,4 +1,5 @@
-import { unsafeUserId } from "@cubby/schemas/identifiers";
+import { testUserId } from "@cubby/schemas/testing";
+
 import { wishCreateInput, wishOut } from "@cubby/schemas/wish";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { withTestDb } from "tooling/test-setup";
@@ -14,7 +15,7 @@ describe("MCP entity kernel boundary", () => {
 
   it("runs a real protocol-to-kernel shortcode round trip", async () => {
     const entityKernel = createTestRequestContext(ctx.db, {
-      auth: { userId: unsafeUserId("test-user-id") },
+      auth: { userId: testUserId("test-user-id") },
     }) as EntityKernelContext;
     const callEntity = (command: Record<string, unknown>) => {
       const server = new McpServer({ name: "test", version: "1.0.0" });

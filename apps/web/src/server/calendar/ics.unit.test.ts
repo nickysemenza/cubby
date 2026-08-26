@@ -4,10 +4,7 @@ import {
   calendarMealItem,
   calendarTaskItem,
 } from "@cubby/schemas/calendar";
-import {
-  unsafeMealShortcode,
-  unsafeTaskShortcode,
-} from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { mock } from "~/lib/test/mock-schema";
 import { kindsForFeed, renderIcs } from "./ics";
@@ -30,7 +27,7 @@ const meal = (overrides: DeepPartial<MealItem> = {}): MealItem =>
   mock(calendarMealItem, {
     seed: 1,
     overrides: {
-      id: unsafeMealShortcode("MEL-4K7M"),
+      id: testShortcode("meal", "MEL-4K7M"),
       title: "Taco night",
       startDate: "2026-08-15",
       endDateExclusive: "2026-08-16",
@@ -51,7 +48,7 @@ const task = (overrides: DeepPartial<TaskItem> = {}): TaskItem =>
   mock(calendarTaskItem, {
     seed: 1,
     overrides: {
-      id: unsafeTaskShortcode("TSK-9H64"),
+      id: testShortcode("task", "TSK-9H64"),
       title: "Seal the deck",
       startDate: "2026-08-20",
       endDateExclusive: "2026-08-21",

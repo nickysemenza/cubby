@@ -6,7 +6,7 @@
  * transaction on the unique index rather than produce a wrong answer).
  */
 import type { ProductShortcode, PurchaseId } from "@cubby/schemas/identifiers";
-import { unsafePurchaseShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { expenseCreateInput } from "@cubby/schemas/project";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -120,7 +120,8 @@ describe("purchase ↔ product links", () => {
       const purchases = await listProductPurchases(ctx.db, bolt.entityId);
       expect(purchases).toHaveLength(1);
 
-      const purchaseId = unsafePurchaseShortcode(
+      const purchaseId = parseShortcodeFor(
+        "purchase",
         purchases[0]?.purchaseId ?? "",
       );
       const products = await listPurchaseProducts(
@@ -250,7 +251,7 @@ describe("purchase ↔ product links", () => {
       const orderId = await resolveOrThrow(
         ctx.db,
         "purchase",
-        unsafePurchaseShortcode(row?.purchaseId ?? ""),
+        parseShortcodeFor("purchase", row?.purchaseId ?? ""),
       );
       await attachPurchaseProducts(ctx.db, orderId, [both.entityId], ctx.actor);
 
@@ -512,8 +513,8 @@ describe("purchase ↔ product links", () => {
     await mergePurchases(
       ctx.db,
       {
-        keepId: unsafePurchaseShortcode(survivor.shortcode),
-        mergeIds: [unsafePurchaseShortcode(absorbed.shortcode)],
+        keepId: parseShortcodeFor("purchase", survivor.shortcode),
+        mergeIds: [parseShortcodeFor("purchase", absorbed.shortcode)],
       },
       ctx.actor,
     );

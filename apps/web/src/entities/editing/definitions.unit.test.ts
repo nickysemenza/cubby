@@ -1,5 +1,5 @@
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
-import { unsafeFinancialAccountShortcode } from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { entityEditRegistry } from "./definitions";
 import { buildEntityEdit, resolveEntityEdit } from "./kernel";
@@ -97,7 +97,7 @@ describe("entity edit definitions", () => {
   it("keeps finance update payloads minimal when replacement arrays are unchanged", () => {
     const record = {
       id: "FTX-TEST",
-      accountId: unsafeFinancialAccountShortcode("FAC-TEST"),
+      accountId: testShortcode("financialAccount", "FAC-TEST"),
       purchaseId: null,
       kind: "purchase" as const,
       status: "posted" as const,

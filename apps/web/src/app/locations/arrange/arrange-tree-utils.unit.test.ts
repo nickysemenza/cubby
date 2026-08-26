@@ -1,11 +1,8 @@
-import {
-  unsafeInventoryShortcode,
-  unsafeLocationShortcode,
-} from "@cubby/schemas/identifiers";
 import type {
   InfLocation,
   InventoryItemForTree,
 } from "@cubby/schemas/location";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { canDropOnArrangeTarget } from "./arrange-drop-policy";
 import {
@@ -30,7 +27,7 @@ function loc(
   items: InventoryItemForTree[] = [],
 ): InfLocation {
   return {
-    id: unsafeLocationShortcode(id),
+    id: testShortcode("location", id),
     name,
     children,
     inventoryItems: items,
@@ -39,15 +36,15 @@ function loc(
 
 function item(id: string, productId: string): InventoryItemForTree {
   return {
-    id: unsafeInventoryShortcode(id),
+    id: testShortcode("inventory", id),
     amount: { value: 1, unit: "count" },
     productName: `p-${productId}`,
-    productId: unsafeLocationShortcode(productId),
+    productId: testShortcode("product", productId),
   } as unknown as InventoryItemForTree;
 }
 
-const L = (id: string) => unsafeLocationShortcode(id);
-const I = (id: string) => unsafeInventoryShortcode(id);
+const L = (id: string) => testShortcode("location", id);
+const I = (id: string) => testShortcode("inventory", id);
 
 // Home → [garage → [shelfA → [bin1], shelfB], kitchen → [pantry], Unknown]
 function buildTree(): InfLocation[] {

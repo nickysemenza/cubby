@@ -1,7 +1,5 @@
-import {
-  unsafeMealShortcode,
-  unsafeRecipeShortcode,
-} from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -28,7 +26,7 @@ vi.mock("@tanstack/react-query", () => ({
     return {
       data: [
         {
-          id: unsafeMealShortcode("MEL-4K7M"),
+          id: testShortcode("meal", "MEL-4K7M"),
           name: "Tuesday dinner",
           date: "2026-06-16",
           mealType: "dinner",
@@ -36,7 +34,7 @@ vi.mock("@tanstack/react-query", () => ({
           recipes: [{ recipe: { name: "Soup" } }],
         },
         {
-          id: unsafeMealShortcode("MEL-9Q2X"),
+          id: testShortcode("meal", "MEL-9Q2X"),
           name: "Corner Deli",
           date: "2026-06-16",
           mealType: "lunch",
@@ -73,7 +71,7 @@ vi.mock("~/entities/entity-contracts", () => ({
         if (action === "create") mocks.createMeal(variables);
         if (action === "update") mocks.updateMeal(variables);
         return {
-          item: { id: unsafeMealShortcode("MEL-4K7M"), date: "2026-06-16" },
+          item: { id: testShortcode("meal", "MEL-4K7M"), date: "2026-06-16" },
           sideEffects: { backgroundBatches: [] },
         };
       },
@@ -92,7 +90,7 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
 
 import { AddToMeal } from "./add-to-meal";
 
-const recipeId = unsafeRecipeShortcode("RCP-4K7M");
+const recipeId = testShortcode("recipe", "RCP-4K7M");
 
 afterEach(() => {
   vi.clearAllMocks();

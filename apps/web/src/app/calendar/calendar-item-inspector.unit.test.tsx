@@ -1,5 +1,6 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
-import { unsafeExpenseShortcode } from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { type ReactNode, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -53,7 +54,7 @@ vi.mock("@tanstack/react-router", () => ({
 
 const expense: Extract<CalendarItem, { kind: "expense" }> = {
   kind: "expense",
-  id: unsafeExpenseShortcode("EXP-1111"),
+  id: testShortcode("expense", "EXP-1111"),
   title: "Freezer tray",
   startDate: "2026-08-18",
   endDateExclusive: "2026-08-19",

@@ -1,3 +1,4 @@
+import { parseEntityId } from "@cubby/schemas/identifiers";
 /**
  * The embedding-cascade invariant: a removal must soft-delete the removed row's
  * `EntityEmbedding` in the same transaction. A live embedding pointing at a
@@ -35,11 +36,6 @@
  * (expense, cookbook, ingredient, discard, mutation-side-effects).
  */
 
-import {
-  unsafeInventoryId,
-  unsafeLocationId,
-  unsafeProductId,
-} from "@cubby/schemas/identifiers";
 import {
   expenseCreateInput,
   projectCreateInput,
@@ -142,7 +138,7 @@ const embeddingProbes = (ctx: TestDbContext) => {
       );
       return {
         shortcode: row.id,
-        id: unsafeLocationId(await resolveId(row.id, "location")),
+        id: parseEntityId("location", await resolveId(row.id, "location")),
       };
     },
 
@@ -154,7 +150,7 @@ const embeddingProbes = (ctx: TestDbContext) => {
       );
       return {
         shortcode: row.id,
-        id: unsafeProductId(await resolveId(row.id, "product")),
+        id: parseEntityId("product", await resolveId(row.id, "product")),
       };
     },
   };
@@ -181,7 +177,8 @@ describe("inventory removal cascades entity embeddings (no orphans)", () => {
       },
       TEST_ACTOR,
     );
-    const entryEntityId = unsafeInventoryId(
+    const entryEntityId = parseEntityId(
+      "inventory",
       await resolveId(entry.id, "inventory"),
     );
     return { locationEntityId, entry, entryEntityId };
@@ -250,7 +247,8 @@ describe("inventory removal cascades entity embeddings (no orphans)", () => {
       { productId: productEntityId, locationId: targetEntityId, amount },
       TEST_ACTOR,
     );
-    const sourceEntryId = unsafeInventoryId(
+    const sourceEntryId = parseEntityId(
+      "inventory",
       await resolveId(sourceEntry.id, "inventory"),
     );
     await seedEmbedding("inventory", sourceEntryId);

@@ -1,9 +1,5 @@
-import {
-  unsafeInventoryShortcode,
-  unsafeLocationShortcode,
-  unsafeProductShortcode,
-} from "@cubby/schemas/identifiers";
 import type { ProductWithFoodOut } from "@cubby/schemas/product";
+import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -95,21 +91,21 @@ vi.mock("./product-discard-dialog", () => ({
 import { ProductStockedAt } from "./product-stocked-at";
 
 const entry = (id: string, locationId: string) => ({
-  id: unsafeInventoryShortcode(id),
+  id: testShortcode("inventory", id),
   amount: { value: 2, unit: "each" },
   valuation: 10,
   verifiedAt: null,
   createdAt: new Date("2026-01-01"),
   updatedAt: new Date("2026-01-01"),
   location: {
-    id: unsafeLocationShortcode(locationId),
+    id: testShortcode("location", locationId),
     name: "shelf",
     ancestors: [],
   },
 });
 
 const product = {
-  id: unsafeProductShortcode("PRD-AAAA"),
+  id: testShortcode("product", "PRD-AAAA"),
   name: "Bora Clamp",
   unitMappings: [],
   price: null,
@@ -127,7 +123,7 @@ const locationsOnlyProduct = {
   inventoryEntry: [],
   servingAsLocations: [
     {
-      id: unsafeLocationShortcode("LOC-CCCC"),
+      id: testShortcode("location", "LOC-CCCC"),
       name: "chrome wire shelf",
       type: null,
       ancestors: [],

@@ -1,10 +1,10 @@
-import { type LocationId, unsafeLocationId } from "@cubby/schemas/identifiers";
+import { testEntityId } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { rollupLocationValuations } from "./location-valuation-rollup";
 
 const loc = (id: string, parentId?: string) => ({
-  id: unsafeLocationId(id),
-  parentId: parentId ? unsafeLocationId(parentId) : null,
+  id: testEntityId("location", id),
+  parentId: parentId ? testEntityId("location", parentId) : null,
 });
 
 /** A location that IS a product — a tote, bin or rack worth `price`. */
@@ -17,7 +17,11 @@ const item = (
   locationId: string,
   valuation: number | null,
   productName = "Olive oil",
-) => ({ locationId: unsafeLocationId(locationId), valuation, productName });
+) => ({
+  locationId: testEntityId("location", locationId),
+  valuation,
+  productName,
+});
 
 const fixture = (locationId: string, valuation: number | null) => ({
   ...item(locationId, valuation, "Rotary dimmer"),
@@ -33,11 +37,11 @@ describe("rollupLocationValuations", () => {
       [loc("room"), vessel("bin", "room", 199)],
     );
 
-    const bin = result.get(unsafeLocationId("bin"))!;
+    const bin = result.get(testEntityId("location", "bin"))!;
     expect(bin.directValuation).toBe(12); // contents only
     expect(bin.container?.directValuation).toBe(0);
 
-    const room = result.get(unsafeLocationId("room"))!;
+    const room = result.get(testEntityId("location", "room"))!;
     expect(room.container?.directValuation).toBe(199);
     expect(room.container?.directItemCount).toBe(1);
     // The vessel's price never leaks into the contents figures.
@@ -56,19 +60,19 @@ describe("rollupLocationValuations", () => {
       ],
     );
 
-    const garage = result.get(unsafeLocationId("garage"))!;
+    const garage = result.get(testEntityId("location", "garage"))!;
     expect(garage.container?.directValuation).toBe(0);
     expect(garage.container?.totalValuation).toBe(125);
     expect(garage.container?.totalItemCount).toBe(2);
 
-    const cart = result.get(unsafeLocationId("cart"))!;
+    const cart = result.get(testEntityId("location", "cart"))!;
     expect(cart.container?.directValuation).toBe(25);
     expect(cart.container?.totalValuation).toBe(25);
   });
 
   it("leaves the container bucket empty when nothing is a product", () => {
     const result = rollupLocationValuations([item("a", 5)], [loc("a")]);
-    const a = result.get(unsafeLocationId("a"))!;
+    const a = result.get(testEntityId("location", "a"))!;
     expect(a.container).toEqual({
       directValuation: 0,
       totalValuation: 0,
@@ -88,7 +92,7 @@ describe("rollupLocationValuations", () => {
       ],
       [loc("a")],
     );
-    const a = result.get(unsafeLocationId("a"))!;
+    const a = result.get(testEntityId("location", "a"))!;
     expect(a.directValuation).toBe(8.5);
     expect(a.directItemCount).toBe(5);
     expect(a.direct).toEqual({
@@ -117,7 +121,7 @@ describe("rollupLocationValuations", () => {
         loc("garage", "house"),
       ],
     );
-    const get = (id: string) => result.get(unsafeLocationId(id))!;
+    const get = (id: string) => result.get(testEntityId("location", id))!;
 
     expect(get("pantry").totalValuation).toBe(80);
     expect(get("kitchen").directValuation).toBe(50);
@@ -133,7 +137,7 @@ describe("rollupLocationValuations", () => {
       [item("kitchen", 50), fixture("kitchen", 730), fixture("kitchen", null)],
       [loc("kitchen")],
     );
-    const k = result.get(unsafeLocationId("kitchen"))!;
+    const k = result.get(testEntityId("location", "kitchen"))!;
 
     // The headline figures answer "what could I walk over and count".
     expect(k.directValuation).toBe(50);
@@ -151,7 +155,7 @@ describe("rollupLocationValuations", () => {
       [item("kitchen", 50), fixture("kitchen", 730), fixture("pantry", 20)],
       [loc("house"), loc("kitchen", "house"), loc("pantry", "kitchen")],
     );
-    const house = result.get(unsafeLocationId("house"))!;
+    const house = result.get(testEntityId("location", "house"))!;
     expect(house.totalValuation).toBe(50);
     expect(house.totalItemCount).toBe(1);
     expect(house.installed?.totalValuation).toBe(750);
@@ -163,12 +167,14 @@ describe("rollupLocationValuations", () => {
       [item("a", 0.1), item("a", 0.2)],
       [loc("a")],
     );
-    expect(result.get(unsafeLocationId("a"))!.directValuation).toBe(0.3);
+    expect(result.get(testEntityId("location", "a"))!.directValuation).toBe(
+      0.3,
+    );
   });
 
   it("includes locations with no inventory as zeroed rollups", () => {
     const result = rollupLocationValuations([], [loc("empty")]);
-    const e = result.get(unsafeLocationId("empty") as LocationId)!;
+    const e = result.get(testEntityId("location", "empty"))!;
     expect(e.directValuation).toBe(0);
     expect(e.totalValuation).toBe(0);
     expect(e.total).toEqual({ priced: 0, missingPricing: 0, miscNoPrice: 0 });

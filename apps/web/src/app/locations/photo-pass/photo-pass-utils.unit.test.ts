@@ -1,9 +1,6 @@
-import {
-  unsafeLocationShortcode,
-  unsafeProductShortcode,
-} from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { flattenPhotoStops, needsPhoto } from "./photo-pass-utils";
 
@@ -40,7 +37,7 @@ function loc(
   } = {},
 ): InfLocation {
   return {
-    id: unsafeLocationShortcode(`LOC-${code}`),
+    id: testShortcode("location", `LOC-${code}`),
     name,
     aliases: [],
     product: extra.product ?? null,
@@ -95,7 +92,7 @@ describe("needsPhoto", () => {
   it("still requires a true location photo when a linked product has a cover", () => {
     const productBacked = loc("AAAA", "Drawer box", null, {
       product: {
-        id: unsafeProductShortcode("PRD-AAAA"),
+        id: testShortcode("product", "PRD-AAAA"),
         name: "Two drawer box",
         manufacturer: "Example",
         model: null,

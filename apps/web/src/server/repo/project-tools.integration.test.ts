@@ -1,5 +1,5 @@
 import type { ProductId } from "@cubby/schemas/identifiers";
-import { unsafeImageShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   projectCreateInput,
   projectToolMatrixInput,
@@ -63,7 +63,7 @@ describe("project reusable resources", () => {
     await updateProduct(
       ctx.db,
       tool.entityId,
-      { pendingImageIds: [unsafeImageShortcode(toolCover.shortcode)] },
+      { pendingImageIds: [parseShortcodeFor("image", toolCover.shortcode)] },
       ctx.actor,
     );
 
@@ -464,13 +464,15 @@ describe("project reusable resources", () => {
     await updateProduct(
       ctx.db,
       purchasedHere.entityId,
-      { pendingImageIds: [unsafeImageShortcode(purchasedCover.shortcode)] },
+      {
+        pendingImageIds: [parseShortcodeFor("image", purchasedCover.shortcode)],
+      },
       ctx.actor,
     );
     await updateProduct(
       ctx.db,
       reusedTradeTool.entityId,
-      { pendingImageIds: [unsafeImageShortcode(reusedCover.shortcode)] },
+      { pendingImageIds: [parseShortcodeFor("image", reusedCover.shortcode)] },
       ctx.actor,
     );
     const oneUseCheapTool = await createProduct(

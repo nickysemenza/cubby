@@ -1,22 +1,19 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
-import {
-  unsafeInventoryShortcode,
-  unsafeLocationShortcode,
-  unsafeProductShortcode,
-} from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import { describe, expect, it } from "vitest";
 import { planScan, type ScanFacts } from "./scan-plan";
 
-const HERE = unsafeLocationShortcode("LOC-HERE");
-const AWAY = unsafeLocationShortcode("LOC-AWAY");
-const ATTIC = unsafeLocationShortcode("LOC-ATTC");
+const HERE = testShortcode("location", "LOC-HERE");
+const AWAY = testShortcode("location", "LOC-AWAY");
+const ATTIC = testShortcode("location", "LOC-ATTC");
 
 const PRODUCT = {
-  id: unsafeProductShortcode("PRD-BOOK"),
+  id: testShortcode("product", "PRD-BOOK"),
   name: "The Pragmatic Programmer",
 };
 
-const entry = (id: string) => unsafeInventoryShortcode(id);
+const entry = (id: string) => testShortcode("inventory", id);
 
 const row = (
   id: string,

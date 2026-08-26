@@ -1,10 +1,5 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
-import {
-  unsafeImageShortcode,
-  unsafeInventoryId,
-  unsafeLocationId,
-  unsafeProductId,
-} from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { count, eq } from "drizzle-orm";
 import {
@@ -160,7 +155,8 @@ describe("getLocationValuationSummary", () => {
         .where(
           eq(
             location.id,
-            unsafeLocationId(
+            parseEntityId(
+              "location",
               (await resolveLiveShortcode(ctx.db, shortcode, "location"))!,
             ),
           ),
@@ -181,11 +177,13 @@ describe("getLocationInventoryBreakdown", () => {
   const ctx = withTestDb();
 
   const locationId = async (shortcode: string) =>
-    unsafeLocationId(
+    parseEntityId(
+      "location",
       (await resolveLiveShortcode(ctx.db, shortcode, "location"))!,
     );
   const productId = async (shortcode: string) =>
-    unsafeProductId(
+    parseEntityId(
+      "product",
       (await resolveLiveShortcode(ctx.db, shortcode, "product"))!,
     );
 
@@ -349,11 +347,13 @@ describe("getLocationById item counts", () => {
   const ctx = withTestDb();
 
   const locationId = async (shortcode: string) =>
-    unsafeLocationId(
+    parseEntityId(
+      "location",
       (await resolveLiveShortcode(ctx.db, shortcode, "location"))!,
     );
   const productId = async (shortcode: string) =>
-    unsafeProductId(
+    parseEntityId(
+      "product",
       (await resolveLiveShortcode(ctx.db, shortcode, "product"))!,
     );
 
@@ -491,7 +491,8 @@ describe("duplicate location names", () => {
       makeLocationInput({ name: "Other Bin" }),
       ctx.actor,
     );
-    const otherId = unsafeLocationId(
+    const otherId = parseEntityId(
+      "location",
       (await resolveLiveShortcode(ctx.db, other.id, "location"))!,
     );
 
@@ -521,10 +522,12 @@ describe("bulkReparentLocations", () => {
       ctx.actor,
     );
 
-    const childId = unsafeLocationId(
+    const childId = parseEntityId(
+      "location",
       (await resolveLiveShortcode(ctx.db, child.id, "location"))!,
     );
-    const parentId = unsafeLocationId(
+    const parentId = parseEntityId(
+      "location",
       (await resolveLiveShortcode(ctx.db, parent.id, "location"))!,
     );
 
@@ -547,7 +550,8 @@ describe("bulkReparentLocations", () => {
       makeLocationInput({ name: "Back Home", parentId: parent.id }),
       ctx.actor,
     );
-    const childId = unsafeLocationId(
+    const childId = parseEntityId(
+      "location",
       (await resolveLiveShortcode(ctx.db, child.id, "location"))!,
     );
 
@@ -576,7 +580,8 @@ describe("Home hierarchy invariants", () => {
       makeLocationInput({ name: "Child", parentId: parent.id }),
       ctx.actor,
     );
-    const childId = unsafeLocationId(
+    const childId = parseEntityId(
+      "location",
       (await resolveLiveShortcode(ctx.db, child.id, "location"))!,
     );
 
@@ -589,7 +594,8 @@ describe("Home hierarchy invariants", () => {
 
   it("creates and finds Unknown beneath Home", async () => {
     const unknown = await ensureGlobalUnknownLocation(ctx.db, ctx.actor);
-    const unknownId = unsafeLocationId(
+    const unknownId = parseEntityId(
+      "location",
       (await resolveLiveShortcode(ctx.db, unknown.id, "location"))!,
     );
 
@@ -621,10 +627,12 @@ describe("deleteLocations hierarchy", () => {
       makeLocationInput({ name: "Bin", parentId: shelf.id }),
       ctx.actor,
     );
-    const shelfId = unsafeLocationId(
+    const shelfId = parseEntityId(
+      "location",
       (await resolveLiveShortcode(ctx.db, shelf.id, "location"))!,
     );
-    const binId = unsafeLocationId(
+    const binId = parseEntityId(
+      "location",
       (await resolveLiveShortcode(ctx.db, bin.id, "location"))!,
     );
 
@@ -646,7 +654,8 @@ describe("deleteLocations hierarchy", () => {
       makeLocationInput({ name: "Inventory-Blocked Location" }),
       ctx.actor,
     );
-    const stockedId = unsafeLocationId(
+    const stockedId = parseEntityId(
+      "location",
       (await resolveLiveShortcode(ctx.db, stocked.id, "location"))!,
     );
     const product = await createProduct(
@@ -657,7 +666,8 @@ describe("deleteLocations hierarchy", () => {
       }),
       ctx.actor,
     );
-    const productId = unsafeProductId(
+    const productId = parseEntityId(
+      "product",
       (await resolveLiveShortcode(ctx.db, product.id, "product"))!,
     );
     const entry = await createInventoryEntry(
@@ -669,7 +679,8 @@ describe("deleteLocations hierarchy", () => {
       },
       ctx.actor,
     );
-    const entryId = unsafeInventoryId(
+    const entryId = parseEntityId(
+      "inventory",
       (await resolveLiveShortcode(ctx.db, entry.id, "inventory"))!,
     );
 
@@ -715,7 +726,8 @@ describe("locationSearch picker rows", () => {
   };
 
   const idOf = async (shortcode: string) =>
-    unsafeLocationId(
+    parseEntityId(
+      "location",
       (await resolveLiveShortcode(ctx.db, shortcode, "location"))!,
     );
 
@@ -834,7 +846,7 @@ describe("locationSearch picker rows", () => {
 
     const found = await searchFor("Photographed Bin");
     expect(found.data[0]!.coverImage?.id).toBe(
-      unsafeImageShortcode(usable.shortcode),
+      parseShortcodeFor("image", usable.shortcode),
     );
   });
 
@@ -855,7 +867,8 @@ describe("locationSearch picker rows", () => {
       makeProductInput({ name: "Picker vessel with cover" }),
       ctx.actor,
     );
-    const vesselId = unsafeProductId(
+    const vesselId = parseEntityId(
+      "product",
       (await resolveLiveShortcode(ctx.db, vessel.id, "product"))!,
     );
     const productCover = await insertWithShortcode(ctx.db, "image", {
@@ -879,7 +892,7 @@ describe("locationSearch picker rows", () => {
     );
 
     expect((await searchFor(created.name)).data[0]!.coverImage?.id).toBe(
-      unsafeImageShortcode(productCover.shortcode),
+      parseShortcodeFor("image", productCover.shortcode),
     );
 
     const ownPhoto = await insertWithShortcode(ctx.db, "image", {
@@ -895,7 +908,7 @@ describe("locationSearch picker rows", () => {
     });
 
     expect((await searchFor(created.name)).data[0]!.coverImage?.id).toBe(
-      unsafeImageShortcode(ownPhoto.shortcode),
+      parseShortcodeFor("image", ownPhoto.shortcode),
     );
   });
 
@@ -932,7 +945,7 @@ describe("locationSearch picker rows", () => {
 
     const found = await searchFor("Optioned Bin");
     expect(found.data[0]!.coverImage?.id).toBe(
-      unsafeImageShortcode(img.shortcode),
+      parseShortcodeFor("image", img.shortcode),
     );
   });
 });
@@ -946,7 +959,8 @@ describe("buildLocationTree identity product hydration", () => {
       makeProductInput({ name: "Tree vessel with cover" }),
       ctx.actor,
     );
-    const vesselId = unsafeProductId(
+    const vesselId = parseEntityId(
+      "product",
       (await resolveLiveShortcode(ctx.db, vessel.id, "product"))!,
     );
     const cover = await insertWithShortcode(ctx.db, "image", {
@@ -973,7 +987,7 @@ describe("buildLocationTree identity product hydration", () => {
     const row = home?.children?.find((location) => location.id === created.id);
     expect(row?.product).toMatchObject({
       id: vessel.id,
-      coverImage: { id: unsafeImageShortcode(cover.shortcode) },
+      coverImage: { id: parseShortcodeFor("image", cover.shortcode) },
     });
   });
 });
@@ -1038,10 +1052,12 @@ describe("locationList parentPresenceFilter", () => {
       await createInventoryEntry(
         ctx.db,
         {
-          productId: unsafeProductId(
+          productId: parseEntityId(
+            "product",
             (await resolveLiveShortcode(ctx.db, p.id, "product"))!,
           ),
-          locationId: unsafeLocationId(
+          locationId: parseEntityId(
+            "location",
             (await resolveLiveShortcode(ctx.db, stocked.id, "location"))!,
           ),
           amount: { value: 1, unit: "each" },
@@ -1083,7 +1099,8 @@ describe("locationList parentPresenceFilter", () => {
         .where(
           eq(
             location.id,
-            unsafeLocationId(
+            parseEntityId(
+              "location",
               (await resolveLiveShortcode(ctx.db, empty.id, "location"))!,
             ),
           ),
@@ -1125,10 +1142,12 @@ describe("locationList parentPresenceFilter", () => {
       await createInventoryEntry(
         ctx.db,
         {
-          productId: unsafeProductId(
+          productId: parseEntityId(
+            "product",
             (await resolveLiveShortcode(ctx.db, doomed.id, "product"))!,
           ),
-          locationId: unsafeLocationId(
+          locationId: parseEntityId(
+            "location",
             (await resolveLiveShortcode(ctx.db, shelf.id, "location"))!,
           ),
           amount: { value: 1, unit: "each" },
@@ -1141,7 +1160,8 @@ describe("locationList parentPresenceFilter", () => {
         .where(
           eq(
             product.id,
-            unsafeProductId(
+            parseEntityId(
+              "product",
               (await resolveLiveShortcode(ctx.db, doomed.id, "product"))!,
             ),
           ),
@@ -1184,7 +1204,8 @@ describe("locationList imagePresenceFilter", () => {
       makeLocationInput({ name }),
       ctx.actor,
     );
-    const entityId = unsafeLocationId(
+    const entityId = parseEntityId(
+      "location",
       (await resolveLiveShortcode(ctx.db, created.id, "location"))!,
     );
     const img = await insertWithShortcode(ctx.db, "image", {
@@ -1271,7 +1292,7 @@ describe("attaching a photo as the new cover", () => {
 
   /** The public `IMG-` code `ImageOut.id` hands back for a raw `image` row. */
   const shortcodeOf = (img: { shortcode: string }) =>
-    unsafeImageShortcode(img.shortcode);
+    parseShortcodeFor("image", img.shortcode);
 
   /** Attach `image` and make it the cover, exactly as the capture hook does.
    * `pendingImageIds` and `imageOrder` both take the public `IMG-` shortcode
@@ -1281,7 +1302,8 @@ describe("attaching a photo as the new cover", () => {
     shortcode: LocationShortcode,
     image: { id: string; shortcode: string },
   ) => {
-    const id = unsafeLocationId(
+    const id = parseEntityId(
+      "location",
       (await resolveLiveShortcode(ctx.db, shortcode, "location"))!,
     );
     const code = shortcodeOf(image);
@@ -1355,7 +1377,8 @@ describe("attaching a photo as the new cover", () => {
       makeLocationInput({ name: "Legacy Shelf" }),
       ctx.actor,
     );
-    const locationId = unsafeLocationId(
+    const locationId = parseEntityId(
+      "location",
       (await resolveLiveShortcode(ctx.db, shelf.id, "location"))!,
     );
 
@@ -1392,7 +1415,8 @@ describe("attaching a photo as the new cover", () => {
     const badFrame = await pendingImage("bad-frame");
     await captureAsCover(shelf.id, badFrame);
 
-    const locationId = unsafeLocationId(
+    const locationId = parseEntityId(
+      "location",
       (await resolveLiveShortcode(ctx.db, shelf.id, "location"))!,
     );
     await updateLocation(

@@ -1,5 +1,5 @@
 import { entityRefKey } from "@cubby/schemas/entity";
-import { unsafeImageShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { projectCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
@@ -40,7 +40,7 @@ describe("resolveEntityDisplayImages", () => {
     await updateProduct(
       ctx.db,
       product.entityId,
-      { pendingImageIds: [unsafeImageShortcode(catalogImage.shortcode)] },
+      { pendingImageIds: [parseShortcodeFor("image", catalogImage.shortcode)] },
       ctx.actor,
     );
     const location = await createLocationFixture(
@@ -71,7 +71,7 @@ describe("resolveEntityDisplayImages", () => {
     await updateRecipe(
       ctx.db,
       recipe.entityId,
-      { pendingImageIds: [unsafeImageShortcode(recipeImage.shortcode)] },
+      { pendingImageIds: [parseShortcodeFor("image", recipeImage.shortcode)] },
       ctx.actor,
     );
 
@@ -116,7 +116,7 @@ describe("resolveEntityDisplayImages", () => {
         vendorId: vendor.output.id,
         orderId: "DISPLAY-1",
         date: "2026-08-21",
-        pendingImageIds: [unsafeImageShortcode(purchaseCover.shortcode)],
+        pendingImageIds: [parseShortcodeFor("image", purchaseCover.shortcode)],
       }),
       ctx.actor,
     );
@@ -198,7 +198,7 @@ describe("resolveEntityDisplayImages", () => {
     await updateProduct(
       ctx.db,
       product.entityId,
-      { pendingImageIds: [unsafeImageShortcode(productCover.shortcode)] },
+      { pendingImageIds: [parseShortcodeFor("image", productCover.shortcode)] },
       ctx.actor,
     );
     const location = await createLocationFixture(
@@ -207,7 +207,9 @@ describe("resolveEntityDisplayImages", () => {
         name: "Fallback location",
         type: null,
         productId: product.id,
-        pendingImageIds: [unsafeImageShortcode(brokenLocationCover.shortcode)],
+        pendingImageIds: [
+          parseShortcodeFor("image", brokenLocationCover.shortcode),
+        ],
       }),
       ctx.actor,
     );
@@ -226,7 +228,7 @@ describe("resolveEntityDisplayImages", () => {
         name: "Photographed location",
         type: null,
         productId: product.id,
-        pendingImageIds: [unsafeImageShortcode(ownCover.shortcode)],
+        pendingImageIds: [parseShortcodeFor("image", ownCover.shortcode)],
       }),
       ctx.actor,
     );

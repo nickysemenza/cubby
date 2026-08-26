@@ -1,15 +1,16 @@
-import type { FinancialAccountFilters } from "@cubby/schemas/financial-account";
-import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
-import type { FinancialTransactionFilters } from "@cubby/schemas/financial-transaction";
-import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
 import {
-  unsafeFinancialAccountShortcode,
-  unsafePurchaseId,
-  unsafePurchaseShortcode,
-} from "@cubby/schemas/identifiers";
+  type FinancialAccountFilters,
+  financialAccountCreateInput,
+} from "@cubby/schemas/financial-account";
+import {
+  type FinancialTransactionFilters,
+  financialTransactionCreateInput,
+} from "@cubby/schemas/financial-transaction";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { expenseCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { relatedViewRegistry } from "@cubby/schemas/related-view";
+import { testShortcode } from "@cubby/schemas/testing";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -264,7 +265,7 @@ describe("financial repositories — critical invariants", () => {
       {
         accountId: [
           createdAccount.id,
-          unsafeFinancialAccountShortcode("FAC-ZZZZ"),
+          testShortcode("financialAccount", "FAC-ZZZZ"),
         ],
       },
       [],
@@ -275,7 +276,7 @@ describe("financial repositories — critical invariants", () => {
 
     const allBogus = await listFinancialTransactions(
       ctx.db,
-      { accountId: [unsafeFinancialAccountShortcode("FAC-ZZZZ")] },
+      { accountId: [testShortcode("financialAccount", "FAC-ZZZZ")] },
       [],
       page,
     );
@@ -285,7 +286,7 @@ describe("financial repositories — critical invariants", () => {
   // The two header-filter rosters. Both are load-bearing in a way a shape test
   // wouldn't catch: `financialAccountOptions` must emit SHORTCODES, because the
   // manifest's `accountId` spec brands option values with
-  // `unsafeFinancialAccountShortcode` and the server parses them with
+  // Internal shortcode strings are parsed at the server boundary with
   // `oneOrMany(financialAccountShortcode)` — a uuid here would brand into a lie
   // and resolve to nothing. And `financialTransactionSourceOptions` is raw SQL
   // over a LATERAL unnest of `sourceRefs`, so its grouping, its per-row fan-out,
@@ -888,8 +889,8 @@ describe("financial repositories — critical invariants", () => {
     expect(updated.output.purchaseId).toBeNull();
 
     for (const filters of [
-      { accountId: unsafeFinancialAccountShortcode("FAC-2222") },
-      { purchaseId: unsafePurchaseShortcode("PUR-2222") },
+      { accountId: testShortcode("financialAccount", "FAC-2222") },
+      { purchaseId: testShortcode("purchase", "PUR-2222") },
     ]) {
       const filtered = await listFinancialTransactions(ctx.db, filters, [], {
         pageIndex: 0,
@@ -1065,7 +1066,8 @@ describe("financial repositories — critical invariants", () => {
       }),
       ctx.actor,
     );
-    const p1Uuid = unsafePurchaseId(
+    const p1Uuid = parseEntityId(
+      "purchase",
       (await resolveLiveShortcode(ctx.db, p1.id, "purchase"))!,
     );
     expect(
@@ -1132,7 +1134,8 @@ describe("financial repositories — critical invariants", () => {
         { purchaseId: purchase.id, expenseIds: [line.output.id] },
         ctx.actor,
       );
-      const uuid = unsafePurchaseId(
+      const uuid = parseEntityId(
+        "purchase",
         (await resolveLiveShortcode(ctx.db, purchase.id, "purchase"))!,
       );
       return { purchase, uuid };
@@ -1405,7 +1408,8 @@ describe("financial repositories — critical invariants", () => {
       { purchaseId: sale.id, expenseIds: [proceeds.output.id] },
       ctx.actor,
     );
-    const saleUuid = unsafePurchaseId(
+    const saleUuid = parseEntityId(
+      "purchase",
       (await resolveLiveShortcode(ctx.db, sale.id, "purchase"))!,
     );
 

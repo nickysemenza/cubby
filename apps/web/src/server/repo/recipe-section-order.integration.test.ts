@@ -1,4 +1,4 @@
-import { unsafeRecipeId } from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -42,7 +42,11 @@ describe("recipe section ordering", () => {
 
   const entityIdOf = async (
     id: Awaited<ReturnType<typeof createRecipe>>["id"],
-  ) => unsafeRecipeId((await resolveLiveShortcode(ctx.db, id, "recipe"))!);
+  ) =>
+    parseEntityId(
+      "recipe",
+      (await resolveLiveShortcode(ctx.db, id, "recipe"))!,
+    );
 
   it("returns sections and ingredients in the order they were created", async () => {
     const created = await createRecipe(ctx.db, buildInput(), ctx.actor);

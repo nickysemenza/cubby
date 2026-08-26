@@ -1,10 +1,10 @@
 import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
 import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
-import { unsafeFinancialAccountShortcode } from "@cubby/schemas/identifiers";
 import {
   findStatementRowDriftInput,
   recordStatementRowsInput,
 } from "@cubby/schemas/statement-row";
+import { testShortcode } from "@cubby/schemas/testing";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -675,7 +675,7 @@ describe("statement row ledger", () => {
       fingerprint: "fp-account",
     });
     const unknown = await listStatementRows(ctx.db, {
-      accountId: unsafeFinancialAccountShortcode("FAC-ZZZZ"),
+      accountId: testShortcode("financialAccount", "FAC-ZZZZ"),
     });
     expect(unknown.count).toBe(0);
   });

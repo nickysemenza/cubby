@@ -1,8 +1,4 @@
-import {
-  type ProjectId,
-  unsafeProjectId,
-  unsafeProjectShortcode,
-} from "@cubby/schemas/identifiers";
+import type { ProjectId } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import type {
   ExpenseCreateInput,
@@ -14,6 +10,7 @@ import {
   projectCreateInput,
   taskCreateInput,
 } from "@cubby/schemas/project";
+import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { eq, or } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -375,7 +372,7 @@ describe("project repository", () => {
       projectCreateInput.parse({ name: "test project missing dep" }),
       ctx.actor,
     );
-    const missingId = unsafeProjectShortcode("PRJ-9999");
+    const missingId = testShortcode("project", "PRJ-9999");
 
     await expect(
       updateProject(
@@ -579,7 +576,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
   });
 
   it("rejects a nonexistent or soft-deleted parentProjectId with NOT_FOUND", async () => {
-    const missingId = unsafeProjectShortcode("PRJ-9999");
+    const missingId = testShortcode("project", "PRJ-9999");
     await expect(
       createProject(
         ctx.db,
@@ -1544,10 +1541,10 @@ describe("project repository — date windows (derivation)", () => {
   // project-tree.unit.test.ts use for their own cycle-termination tests.
   it("does not hang on a cyclic parent chain — depth-capped at MAX_PROJECT_TREE_DEPTH", () => {
     const a: ProjectParentRow = {
-      id: unsafeProjectId("cycle-a"),
+      id: testEntityId("project", "cycle-a"),
       shortcode: "PRJ-4K7M",
       name: "cycle a",
-      parentProjectId: unsafeProjectId("cycle-b"),
+      parentProjectId: testEntityId("project", "cycle-b"),
       costEstimate: null,
       startDate: null,
       endDate: null,
@@ -1555,10 +1552,10 @@ describe("project repository — date windows (derivation)", () => {
       updatedAt: new Date("2024-01-01T00:00:00Z"),
     };
     const b: ProjectParentRow = {
-      id: unsafeProjectId("cycle-b"),
+      id: testEntityId("project", "cycle-b"),
       shortcode: "PRJ-5N8Q",
       name: "cycle b",
-      parentProjectId: unsafeProjectId("cycle-a"),
+      parentProjectId: testEntityId("project", "cycle-a"),
       costEstimate: null,
       startDate: null,
       endDate: null,

@@ -1,11 +1,7 @@
 import type { Amount } from "@cubby/schemas/codec";
-import {
-  unsafeIngredientShortcode,
-  unsafeProductShortcode,
-  unsafeRecipeShortcode,
-} from "@cubby/schemas/identifiers";
 import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient";
 import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
+import { testShortcode } from "@cubby/schemas/testing";
 import {
   type CostingRow,
   computeRecipeCosting,
@@ -48,7 +44,7 @@ export const makeProduct = (
     mappings?: { a: Amount; b: Amount }[];
   } = {},
 ): Product => ({
-  id: unsafeProductShortcode("PRD-TEST"),
+  id: testShortcode("product", "PRD-TEST"),
   name: idStr,
   aliases: [],
   tags: [],
@@ -117,7 +113,7 @@ export const ingredientWith = (
   name: string,
   product: IngredientWithFoodOut["product"],
 ): IngredientWithFoodOut => ({
-  id: unsafeIngredientShortcode(idStr),
+  id: testShortcode("ingredient", idStr),
   name,
   recipe: null,
   recipeUsages: [],
@@ -160,7 +156,7 @@ export const makeEntry = (
   type: "ingredient",
   ...dates,
   ingredient: {
-    id: unsafeIngredientShortcode(idStr),
+    id: testShortcode("ingredient", idStr),
     name,
     ...dates,
   },
@@ -190,7 +186,7 @@ export const makeSubRecipe = (
   yieldValue: RecipeOut["yield"],
   ingredients: SectionIngredientOut[],
 ): RecipeOut => ({
-  id: unsafeRecipeShortcode(idStr),
+  id: testShortcode("recipe", idStr),
   name,
   ...dates,
   meta: null,
@@ -205,7 +201,7 @@ export const makeSubRecipe = (
 // Wrap loose costing rows in a root recipe (one section per row, preserving
 // each row's sectionName) and run the unified engine.
 export const makeRootRecipe = (rows: CostingRow[]): RecipeOut => ({
-  id: unsafeRecipeShortcode("root"),
+  id: testShortcode("recipe", "root"),
   name: "root",
   ...dates,
   meta: null,
@@ -229,12 +225,31 @@ export const costRecipe = (
   recipeMap: Record<string, RecipeOut> = {},
 ): RecipeCosting => {
   const root = makeRootRecipe(rows);
-  const costing = computeRecipeCosting([root], ingMap, getName, recipeMap).get(
-    root.id,
+  // Fixture callers use readable keys ("flour", "sauce"), while the rows
+  // carry schema-valid deterministic shortcodes. Keep the readable aliases,
+  // but also index each value by its actual branded id so the engine can join
+  // rows to their entities exactly as production data does.
+  const ingredientsById = normalizeIngredientMap(ingMap);
+  const recipesById = Object.fromEntries(
+    Object.values(recipeMap).map((recipe) => [recipe.id, recipe]),
   );
+  const costing = computeRecipeCosting(
+    [root],
+    { ...ingMap, ...ingredientsById },
+    getName,
+    { ...recipeMap, ...recipesById },
+  ).get(root.id);
   if (!costing) throw new Error("engine returned no costing for the root");
   return costing;
 };
+
+/** Index fixture ingredients by their schema-valid ids for downstream passes. */
+export const normalizeIngredientMap = (
+  ingMap: Record<string, IngredientWithFoodOut>,
+): Record<string, IngredientWithFoodOut> =>
+  Object.fromEntries(
+    Object.values(ingMap).map((ingredient) => [ingredient.id, ingredient]),
+  );
 
 export const calculateTotals = (
   rows: CostingRow[],

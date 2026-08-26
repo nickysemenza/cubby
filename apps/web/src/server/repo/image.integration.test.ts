@@ -1,8 +1,5 @@
 import type { ProjectId } from "@cubby/schemas/identifiers";
-import {
-  unsafeImageId,
-  unsafeImageShortcode,
-} from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { projectCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { eq } from "drizzle-orm";
@@ -196,7 +193,7 @@ describe("image repository", () => {
     ).resolves.toEqual({
       [project.entityId]: [
         {
-          id: unsafeImageShortcode(cover.shortcode),
+          id: parseShortcodeFor("image", cover.shortcode),
           url: getR2PublicUrl(cover.key),
           filename: "cover.jpg",
         },
@@ -383,7 +380,9 @@ describe("image repository — purchase (charge) documents", () => {
       charge.uuid,
     );
 
-    const result = await deleteImages(ctx.db, [unsafeImageId(uploaded.id)]);
+    const result = await deleteImages(ctx.db, [
+      parseEntityId("image", uploaded.id),
+    ]);
     expect(result.deletedIds).toEqual([uploaded.id]);
 
     const [joinRow] = await getDb(ctx.db)
@@ -449,8 +448,8 @@ describe("image repository — purchase (charge) documents", () => {
       const attached = await attachToProject(projectId, "solo.jpg");
 
       const result = await withTransaction(ctx.db, (tx) =>
-        detachImagesFromEntity(tx, "project", projectId, [
-          unsafeImageId(attached.id),
+        detachImagesFromEntity(tx, { entity: "project", id: projectId }, [
+          parseEntityId("image", attached.id),
         ]),
       );
 
@@ -469,8 +468,8 @@ describe("image repository — purchase (charge) documents", () => {
       });
 
       const result = await withTransaction(ctx.db, (tx) =>
-        detachImagesFromEntity(tx, "project", projectA, [
-          unsafeImageId(attached.id),
+        detachImagesFromEntity(tx, { entity: "project", id: projectA }, [
+          parseEntityId("image", attached.id),
         ]),
       );
 
@@ -503,8 +502,8 @@ describe("image repository — purchase (charge) documents", () => {
       await deleteCookbook(ctx.db, cookbookId, ctx.actor);
 
       const result = await withTransaction(ctx.db, (tx) =>
-        detachImagesFromEntity(tx, "project", projectId, [
-          unsafeImageId(attached.id),
+        detachImagesFromEntity(tx, { entity: "project", id: projectId }, [
+          parseEntityId("image", attached.id),
         ]),
       );
 
@@ -532,8 +531,8 @@ describe("image repository — purchase (charge) documents", () => {
         .returning();
 
       const result = await withTransaction(ctx.db, (tx) =>
-        detachImagesFromEntity(tx, "project", projectA, [
-          unsafeImageId(attached.id),
+        detachImagesFromEntity(tx, { entity: "project", id: projectA }, [
+          parseEntityId("image", attached.id),
         ]),
       );
 

@@ -1,4 +1,5 @@
-import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -104,7 +105,7 @@ const render = (locationId = "LOC-SHF2") =>
   renderHook(
     (props: { locationId: string }) =>
       useLocationSweep({
-        locationId: unsafeLocationShortcode(props.locationId),
+        locationId: testShortcode("location", props.locationId),
         onSettled: () => {},
       }),
     { wrapper, initialProps: { locationId } },

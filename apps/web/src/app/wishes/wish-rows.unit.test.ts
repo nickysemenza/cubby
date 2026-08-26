@@ -1,17 +1,17 @@
-import {
-  unsafeProductShortcode,
-  unsafeWishShortcode,
-} from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import type { WishCandidateOut, WishOut } from "@cubby/schemas/wish";
 import { describe, expect, it } from "vitest";
 import { wishPriceRange } from "./wish-price-range";
 import { buildWishRows, wishSubRows } from "./wish-rows";
 
+const wishId = (seed: string) => testShortcode("wish", seed);
+
 const candidate = (
   shortcode: string,
   price: number | null,
 ): WishCandidateOut => ({
-  id: unsafeProductShortcode(shortcode),
+  id: testShortcode("product", shortcode),
   name: `Product ${shortcode}`,
   manufacturer: "Acme",
   model: null,
@@ -23,7 +23,7 @@ const wish = (
   shortcode: string,
   candidates: WishCandidateOut[] = [],
 ): WishOut => ({
-  id: unsafeWishShortcode(shortcode),
+  id: testShortcode("wish", shortcode),
   name: `Wish ${shortcode}`,
   notes: null,
   acquiredAt: null,
@@ -46,7 +46,10 @@ describe("buildWishRows", () => {
     const childIds = rows.flatMap((row) =>
       row.kind === "wish" ? row.subRows.map((child) => child.id) : [],
     );
-    expect(childIds).toEqual(["WSH-0001:PRD-AAAA", "WSH-0002:PRD-AAAA"]);
+    expect(childIds).toEqual([
+      `${wishId("WSH-0001")}:PRD-AAAA`,
+      `${wishId("WSH-0002")}:PRD-AAAA`,
+    ]);
     expect(new Set(childIds).size).toBe(2);
   });
 

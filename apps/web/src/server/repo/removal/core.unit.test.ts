@@ -1,16 +1,16 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { AuditableEntity } from "@cubby/schemas/entity-manifest";
 import { auditableEntities } from "@cubby/schemas/entity-manifest";
-import { type BrandForEntity, unsafeUserId } from "@cubby/schemas/identifiers";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { searchableEntities } from "@cubby/schemas/search";
+import { testEntityId, testUserId } from "@cubby/schemas/testing";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type { DrizzleTransaction } from "~/server/db";
 import type { AuditEntryInput } from "~/server/repo/audit-log";
 import { SHORTCODE_TABLE } from "~/server/repo/shortcode-utils";
 import { cascadeRemoval, type RemovableEntity } from "./core";
 
-const ACTOR: ActorContext = { userId: unsafeUserId("user-1"), source: "ui" };
+const ACTOR: ActorContext = { userId: testUserId("user-1"), source: "ui" };
 
 /**
  * A `tx` that records the shape of what a removal issues, without a database.
@@ -45,8 +45,8 @@ const recordingTx = () => {
   return { log, tx: tx as unknown as DrizzleTransaction };
 };
 
-const ids = <E extends RemovableEntity>(...v: string[]) =>
-  v as BrandForEntity<E>[];
+const ids = <E extends RemovableEntity>(entity: E, ...v: string[]) =>
+  v.map((seed) => testEntityId(entity, seed));
 
 describe("cascadeRemoval — derived search and suggestion cleanup", () => {
   // Table-driven over the whole searchable roster: the point of deriving the
@@ -56,9 +56,10 @@ describe("cascadeRemoval — derived search and suggestion cleanup", () => {
     "issues the embedding UPDATE for %s",
     async (entity) => {
       const { log, tx } = recordingTx();
+      const entityIds = ids(entity as RemovableEntity, "id-1", "id-2");
       await cascadeRemoval(tx, {
         entity: entity as RemovableEntity,
-        ids: ids("id-1", "id-2"),
+        ids: entityIds,
         audit: { actor: ACTOR },
       });
       // SearchDocument, EntityEmbedding, and source-scoped suggestion
@@ -67,7 +68,7 @@ describe("cascadeRemoval — derived search and suggestion cleanup", () => {
       expect(log.updates.every((update) => "deletedAt" in update.values)).toBe(
         true,
       );
-      expect(log.inserted.map((row) => row.entityId)).toEqual(["id-1", "id-2"]);
+      expect(log.inserted.map((row) => row.entityId)).toEqual(entityIds);
       expect(log.inserted.every((row) => row.action === "delete")).toBe(true);
       expect(log.inserted.every((row) => row.entityType === entity)).toBe(true);
     },
@@ -81,7 +82,7 @@ describe("cascadeRemoval — derived search and suggestion cleanup", () => {
     const { log, tx } = recordingTx();
     await cascadeRemoval(tx, {
       entity: "notSearchable" as unknown as RemovableEntity,
-      ids: ids("id-1"),
+      ids: ids("product", "id-1"),
       audit: { actor: ACTOR },
     });
     expect(log.updates).toEqual([]);
@@ -94,7 +95,7 @@ describe("cascadeRemoval — derived search and suggestion cleanup", () => {
     const { log, tx } = recordingTx();
     await cascadeRemoval(tx, {
       entity: "product",
-      ids: ids(),
+      ids: ids("product"),
       audit: { actor: ACTOR },
     });
     expect(log).toEqual({ updates: [], inserted: [] });
@@ -102,11 +103,17 @@ describe("cascadeRemoval — derived search and suggestion cleanup", () => {
 
   it("renders cascade counts as a from→0 diff, omitting zero counts", async () => {
     const { log, tx } = recordingTx();
+    const productIds = ids("product", "p1", "p2");
     await cascadeRemoval(tx, {
       entity: "product",
-      ids: ids("p1", "p2"),
+      ids: productIds,
       audit: { actor: ACTOR },
-      counts: { cascadedImages: { p1: 3, p2: 0 } },
+      counts: {
+        cascadedImages: {
+          [productIds[0]!]: 3,
+          [productIds[1]!]: 0,
+        },
+      },
     });
     expect(log.inserted[0]?.changes).toEqual({
       cascadedImages: { from: 3, to: 0 },
@@ -121,7 +128,7 @@ describe("cascadeRemoval — derived search and suggestion cleanup", () => {
     ];
     await cascadeRemoval(tx, {
       entity: "inventory",
-      ids: ids("gone"),
+      ids: ids("inventory", "gone"),
       audit: { into: buffer },
     });
     expect(log.inserted).toEqual([]);
@@ -149,7 +156,7 @@ describe("cascadeRemoval — the type-level lock", () => {
     void cascadeRemoval(tx, {
       entity: "inventory",
       // @ts-expect-error product ids cannot be passed as an inventory removal
-      ids: ids<"product">("prd-1"),
+      ids: ids("product", "prd-1"),
       audit: { actor: ACTOR },
     });
   });

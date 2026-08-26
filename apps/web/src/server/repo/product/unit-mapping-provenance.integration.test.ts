@@ -1,4 +1,5 @@
-import { unsafeProductId } from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
+
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { parseShortcode } from "@cubby/shared";
 import { withTestDb } from "tooling/test-setup";
@@ -65,7 +66,7 @@ describe("unit-mapping provenance is the public shortcode", () => {
     const detail = await getProductWithFood(
       ctx.db,
       createTestRequestContext(ctx.db).usdaClient,
-      unsafeProductId(uuid!),
+      parseEntityId("product", uuid!),
     );
     const ids = provenanceIds(detail.unitMappings);
 

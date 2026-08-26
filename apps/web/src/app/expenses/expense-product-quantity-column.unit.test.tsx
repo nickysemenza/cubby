@@ -1,8 +1,5 @@
-import {
-  unsafeExpenseShortcode,
-  unsafeProductShortcode,
-} from "@cubby/schemas/identifiers";
 import type { ExpenseOut } from "@cubby/schemas/project";
+import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { ColumnCellData } from "~/app/_components/data-table/cell-data";
@@ -13,7 +10,7 @@ vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 import { expenseProductQuantityColumn } from "~/app/projects/shared";
 
 const EXPENSE: ExpenseOut = {
-  id: unsafeExpenseShortcode("EXP-4K7M"),
+  id: testShortcode("expense", "EXP-4K7M"),
   name: "Box of fasteners",
   cost: 20,
   date: "2026-07-20",
@@ -26,7 +23,7 @@ const EXPENSE: ExpenseOut = {
   future: false,
   projectId: null,
   projectName: null,
-  productId: unsafeProductShortcode("PRD-4K7M"),
+  productId: testShortcode("product", "PRD-4K7M"),
   productQuantity: 2,
   productName: "Fasteners",
   purchaseId: null,

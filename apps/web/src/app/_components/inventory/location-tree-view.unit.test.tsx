@@ -1,9 +1,6 @@
-import {
-  unsafeInventoryShortcode,
-  unsafeProductShortcode,
-} from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import type { InfLocation } from "@cubby/schemas/location";
+import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -38,8 +35,8 @@ vi.mock("@tanstack/react-router", () => ({
 
 import { LocationTree } from "./location-tree-view";
 
-const FLOUR_ID = unsafeInventoryShortcode("INV-FLOUR");
-const RICE_ID = unsafeInventoryShortcode("INV-RICE");
+const FLOUR_ID = testShortcode("inventory", "INV-FLOUR");
+const RICE_ID = testShortcode("inventory", "INV-RICE");
 
 const kitchenImage = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -83,7 +80,7 @@ function treeData(): InfLocation[] {
           id: RICE_ID,
           amount: { value: 2, unit: "lb" },
           productName: "Jasmine Rice",
-          productId: unsafeProductShortcode("PRD-RICE"),
+          productId: testShortcode("product", "PRD-RICE"),
         },
       ],
       children: [
@@ -96,7 +93,7 @@ function treeData(): InfLocation[] {
               id: FLOUR_ID,
               amount: { value: 5, unit: "lb" },
               productName: "Bread Flour",
-              productId: unsafeProductShortcode("PRD-FLOUR"),
+              productId: testShortcode("product", "PRD-FLOUR"),
             },
           ],
         },

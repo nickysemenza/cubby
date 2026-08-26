@@ -1,9 +1,6 @@
 import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
-import {
-  unsafeInventoryId,
-  unsafeProductId,
-  unsafeProjectId,
-} from "@cubby/schemas/identifiers";
+import { testEntityId } from "@cubby/schemas/testing";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "~/server/db";
 import {
@@ -128,9 +125,9 @@ describe("runMutationSideEffectsForEntities batching", () => {
     });
 
     const inventoryIds = [
-      unsafeInventoryId("00000000-0000-4000-8000-000000000001"),
-      unsafeInventoryId("00000000-0000-4000-8000-000000000002"),
-      unsafeInventoryId("00000000-0000-4000-8000-000000000003"),
+      testEntityId("inventory", "00000000-0000-4000-8000-000000000001"),
+      testEntityId("inventory", "00000000-0000-4000-8000-000000000002"),
+      testEntityId("inventory", "00000000-0000-4000-8000-000000000003"),
     ];
 
     await runMutationSideEffectsForEntities(
@@ -184,8 +181,12 @@ describe("runMutationSideEffectsForEntities batching", () => {
       }),
     });
 
-    const productId = unsafeProductId("00000000-0000-4000-8000-000000000004");
-    const inventoryId = unsafeInventoryId(
+    const productId = testEntityId(
+      "product",
+      "00000000-0000-4000-8000-000000000004",
+    );
+    const inventoryId = testEntityId(
+      "inventory",
       "00000000-0000-4000-8000-000000000005",
     );
     // The product's own inventory-refresh handler and a direct inventory
@@ -240,7 +241,10 @@ describe("runMutationSideEffectsForEntities batching", () => {
         action: "updated",
         entity: {
           entityType: "project",
-          entityId: unsafeProjectId("00000000-0000-4000-8000-000000000006"),
+          entityId: testEntityId(
+            "project",
+            "00000000-0000-4000-8000-000000000006",
+          ),
         },
         source: "project.update",
       }),

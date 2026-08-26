@@ -1,4 +1,5 @@
-import { unsafeIngredientShortcode } from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import { describe, expect, it } from "vitest";
 import {
   enrichmentWorkbenchQueryInput,
@@ -11,7 +12,7 @@ describe("equivalence workbench deep link", () => {
   it("carries the ingredient and candidate conversion into visible URL state", () => {
     expect(
       equivalenceWorkbenchSearch({
-        ingredientId: unsafeIngredientShortcode("ING-4K7M"),
+        ingredientId: testShortcode("ingredient", "ING-4K7M"),
         ingredientName: "Flour",
         unitA: "cup",
         unitB: "g",

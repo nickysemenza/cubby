@@ -1,6 +1,6 @@
-import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
 import type { ProductListItem } from "@cubby/schemas/product";
 import type { KitComponentRowOut } from "@cubby/schemas/product-components";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import {
   buildProductTreeRows,
@@ -9,16 +9,18 @@ import {
   productTreeSubRows,
 } from "./product-kit-rows";
 
+const productId = (seed: string) => testShortcode("product", seed);
+
 const productAt = (shortcode: string, componentCount = 0) =>
   ({
-    id: unsafeProductShortcode(shortcode),
+    id: testShortcode("product", shortcode),
     name: `Product ${shortcode}`,
     componentCount,
   }) as unknown as ProductListItem;
 
 const componentOf = (parent: string, child: string, quantity = 1) =>
   ({
-    parentProductId: unsafeProductShortcode(parent),
+    parentProductId: testShortcode("product", parent),
     quantity,
     product: productAt(child),
   }) as unknown as KitComponentRowOut;
@@ -40,10 +42,13 @@ describe("buildProductTreeRows", () => {
     const childKeys = rows
       .flatMap((row) => row.subRows ?? [])
       .map((r) => r.rowKey);
-    expect(childKeys).toEqual(["PRD-KITA:PRD-SHRD", "PRD-KITB:PRD-SHRD"]);
+    expect(childKeys).toEqual([
+      `${productId("PRD-KITA")}:${productId("PRD-SHRD")}`,
+      `${productId("PRD-KITB")}:${productId("PRD-SHRD")}`,
+    ]);
     expect(new Set(childKeys).size).toBe(2);
-    expect(childKeys).not.toContain("PRD-SHRD");
-    expect(rows.map((r) => r.rowKey)).toContain("PRD-SHRD");
+    expect(childKeys).not.toContain(productId("PRD-SHRD"));
+    expect(rows.map((r) => r.rowKey)).toContain(productId("PRD-SHRD"));
   });
 
   it("keeps the real shortcode on every row, at both depths", () => {
@@ -56,9 +61,11 @@ describe("buildProductTreeRows", () => {
     // link, inline edit, and row action on a component to `PRD-KITA:PRD-PART`,
     // and the type system cannot catch it — a branded shortcode's *input* type
     // is a plain string, so the bad value assigns cleanly into every mutation.
-    expect(rows[0]?.id).toBe("PRD-KITA");
-    expect(rows[0]?.subRows?.[0]?.id).toBe("PRD-PART");
-    expect(rows[0]?.subRows?.[0]?.rowKey).toBe("PRD-KITA:PRD-PART");
+    expect(rows[0]?.id).toBe(productId("PRD-KITA"));
+    expect(rows[0]?.subRows?.[0]?.id).toBe(productId("PRD-PART"));
+    expect(rows[0]?.subRows?.[0]?.rowKey).toBe(
+      `${productId("PRD-KITA")}:${productId("PRD-PART")}`,
+    );
   });
 
   it("omits subRows entirely when a product has no components", () => {

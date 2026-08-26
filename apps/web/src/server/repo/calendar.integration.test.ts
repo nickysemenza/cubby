@@ -1,11 +1,11 @@
 import type { CalendarItemKind } from "@cubby/schemas/calendar";
-import { unsafeProjectShortcode } from "@cubby/schemas/identifiers";
 import { mealCreateInput } from "@cubby/schemas/meal";
 import {
   expenseCreateInput,
   projectCreateInput,
   taskCreateInput,
 } from "@cubby/schemas/project";
+import { testShortcode } from "@cubby/schemas/testing";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { productImage, recipeImage } from "~/server/db/schema";
@@ -24,7 +24,7 @@ import {
 import { createTask } from "./task";
 
 /** A well-formed project shortcode that resolves to no row. */
-const MISSING_PROJECT = unsafeProjectShortcode("PRJ-ZZZZ");
+const MISSING_PROJECT = testShortcode("project", "PRJ-ZZZZ");
 
 describe("calendar repository", () => {
   const ctx = withTestDb();

@@ -1,12 +1,9 @@
-import {
-  unsafeExpenseShortcode,
-  unsafePurchaseShortcode,
-} from "@cubby/schemas/identifiers";
 import type {
   AllProblems,
   DuplicateSpendCandidate,
 } from "@cubby/schemas/problems";
 import { PROBLEM_CLASS } from "@cubby/schemas/problems";
+import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -51,11 +48,11 @@ vi.mock("@tanstack/react-router", () => ({
 const candidate = (
   overrides: Partial<DuplicateSpendCandidate> = {},
 ): DuplicateSpendCandidate => ({
-  id: unsafeExpenseShortcode("EXP-VF9A"),
+  id: testShortcode("expense", "EXP-VF9A"),
   expenseName: "washer stacking bracket",
   cost: 43.44,
   expenseDate: "2024-05-06",
-  purchaseId: unsafePurchaseShortcode("PUR-YUKU"),
+  purchaseId: testShortcode("purchase", "PUR-YUKU"),
   vendorName: "Best Buy",
   purchaseDate: "2024-05-06",
   purchaseExpenseTotal: 43.44,
@@ -100,7 +97,7 @@ describe("duplicate spend section", () => {
       ]),
       undefined as never,
     );
-    const { container } = render(<>{node}</>);
+    const { container } = render(node);
 
     expect(screen.getByText("washer stacking bracket")).toBeTruthy();
     // The stated-total arm must show the stated total, not the line sum — the
@@ -120,7 +117,7 @@ describe("duplicate spend section", () => {
   });
 
   it("renders the common row against the purchase's line sum, with no gap or alternate badges", () => {
-    render(<>{entry()?.node(problems([candidate()]), undefined as never)}</>);
+    render(entry()?.node(problems([candidate()]), undefined as never));
 
     expect(screen.getByText(/Best Buy expense total of \$43\.44/)).toBeTruthy();
     expect(screen.getByText(/across 2 lines/)).toBeTruthy();
@@ -140,7 +137,7 @@ describe("duplicate spend section", () => {
       ]),
       undefined as never,
     );
-    render(<>{node}</>);
+    render(node);
 
     expect(screen.getByText(/deleted vendor expense total/)).toBeTruthy();
     expect(screen.getByText(/across 1 line$/)).toBeTruthy();
@@ -149,7 +146,7 @@ describe("duplicate spend section", () => {
   });
 
   it("renders the empty state when nothing is flagged", () => {
-    render(<>{entry()?.node(problems([]), undefined as never)}</>);
+    render(entry()?.node(problems([]), undefined as never));
     expect(
       screen.getByText(
         "No unlinked expense looks like a purchase already recorded.",

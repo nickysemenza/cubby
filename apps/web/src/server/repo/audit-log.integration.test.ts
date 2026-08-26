@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { AuditEntityType } from "@cubby/schemas/audit";
-import { unsafeImageShortcode } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -175,8 +176,8 @@ describe("getAuditLog — entityName", () => {
     );
     await updateProduct(
       ctx.db,
-      row.entityId,
-      { pendingImageIds: [unsafeImageShortcode(cover.shortcode)] },
+      parseEntityId("product", row.entityId),
+      { pendingImageIds: [parseShortcodeFor("image", cover.shortcode)] },
       ctx.actor,
     );
     await auditRowFor("product", row.entityId);

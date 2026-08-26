@@ -1,4 +1,5 @@
-import { unsafeImageShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { getCollectionDetail, getCollectionMatrix } from "./collection";
@@ -39,7 +40,7 @@ describe("Collection assignment matrix", () => {
     await updateProduct(
       ctx.db,
       direct.entityId,
-      { pendingImageIds: [unsafeImageShortcode(cover.shortcode)] },
+      { pendingImageIds: [parseShortcodeFor("image", cover.shortcode)] },
       ctx.actor,
     );
     const shelf = await createLocationFixture(

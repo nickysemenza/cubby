@@ -1,12 +1,7 @@
-import {
-  unsafeExpenseShortcode,
-  unsafeProductShortcode,
-  unsafePurchaseShortcode,
-  unsafeVendorShortcode,
-} from "@cubby/schemas/identifiers";
 import type { ProductWithFoodOut } from "@cubby/schemas/product";
 import type { KitMembershipOut } from "@cubby/schemas/product-components";
 import type { ExpenseOut } from "@cubby/schemas/project";
+import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -113,8 +108,10 @@ vi.mock("~/app/_components/EntityInlineLink", () => ({
 
 import { ProductExpenseHistory } from "./product-expense-history";
 
+const COMBO_ID = testShortcode("product", "PRD-COMB");
+
 const product = {
-  id: unsafeProductShortcode("PRD-BATT"),
+  id: testShortcode("product", "PRD-BATT"),
   name: "Battery Pack",
   pricing: {
     derivedPrice: null,
@@ -128,7 +125,7 @@ const product = {
 } as unknown as ProductWithFoodOut;
 
 const membershipEntry: KitMembershipOut = {
-  parentProductId: unsafeProductShortcode("PRD-COMB"),
+  parentProductId: COMBO_ID,
   parentProductName: "18V Combo Kit",
   manufacturer: "Milwaukee",
   quantity: 2,
@@ -140,7 +137,7 @@ const membershipEntry: KitMembershipOut = {
 };
 
 const expense: ExpenseOut = {
-  id: unsafeExpenseShortcode("EXP-2345"),
+  id: testShortcode("expense", "EXP-2345"),
   name: "Battery pack",
   cost: 49,
   date: "2026-07-31",
@@ -152,15 +149,15 @@ const expense: ExpenseOut = {
   notes: null,
   future: false,
   projectId: null,
-  productId: unsafeProductShortcode("PRD-BATT"),
+  productId: testShortcode("product", "PRD-BATT"),
   productQuantity: 1,
   vendor: "Home Depot",
   orderId: "#123",
   orderUrl: null,
-  purchaseId: unsafePurchaseShortcode("PUR-2345"),
+  purchaseId: testShortcode("purchase", "PUR-2345"),
   purchaseDate: "2026-07-29",
   purchaseDisplayLabel: null,
-  vendorId: unsafeVendorShortcode("VEN-2345"),
+  vendorId: testShortcode("vendor", "VEN-2345"),
   vendorLogo: null,
   projectName: null,
   productName: "Battery Pack",
@@ -199,7 +196,7 @@ describe("ProductExpenseHistory empty states", () => {
     expect(screen.getByText("No expenses of its own")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "18V Combo Kit" })).toHaveAttribute(
       "href",
-      "/products/PRD-COMB",
+      `/products/${COMBO_ID}`,
     );
     expect(screen.getByText(/derived share/)).toBeInTheDocument();
     expect(screen.getByText("See the kit's expenses →")).toBeInTheDocument();

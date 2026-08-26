@@ -1,3 +1,4 @@
+import { testShortcode } from "@cubby/schemas/testing";
 /**
  * The unit default has to survive all the way to the mutation, not just sit in
  * `defaultValues`: `amount` requires `unit: z.string().min(1)`, so an empty
@@ -5,10 +6,6 @@
  * all. That failure is invisible to a test that only reads the field.
  */
 
-import {
-  unsafeLocationShortcode,
-  unsafeProductShortcode,
-} from "@cubby/schemas/identifiers";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -66,10 +63,10 @@ describe("QuickInventoryAdd", () => {
     const { container } = render(
       <QueryClientProvider client={new QueryClient()}>
         <QuickInventoryAdd
-          locationId={unsafeLocationShortcode("LOC-2222")}
+          locationId={testShortcode("location", "LOC-2222")}
           onSuccess={vi.fn()}
           initialProduct={{
-            id: unsafeProductShortcode("PRD-4K7M"),
+            id: testShortcode("product", "PRD-4K7M"),
             name: "Source Drill",
           }}
         />

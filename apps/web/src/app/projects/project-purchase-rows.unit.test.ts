@@ -1,10 +1,6 @@
-import {
-  unsafeExpenseShortcode,
-  unsafeProjectShortcode,
-  unsafePurchaseShortcode,
-} from "@cubby/schemas/identifiers";
 import { expenseOut } from "@cubby/schemas/project";
 import { purchaseOut } from "@cubby/schemas/purchase";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { mock } from "~/lib/test/mock-schema";
 import {
@@ -12,14 +8,14 @@ import {
   projectPurchaseSubRows,
 } from "./project-purchase-rows";
 
-const THIS_PROJECT = unsafeProjectShortcode("PRJ-AAAA");
-const OTHER_PROJECT = unsafeProjectShortcode("PRJ-BBBB");
+const THIS_PROJECT = testShortcode("project", "PRJ-AAAA");
+const OTHER_PROJECT = testShortcode("project", "PRJ-BBBB");
 
 const purchase = (shortcode: string, expenseCount: number) =>
   mock(purchaseOut, {
     seed: 1,
     overrides: {
-      id: unsafePurchaseShortcode(shortcode),
+      id: testShortcode("purchase", shortcode),
       orderId: `order-${shortcode}`,
       displayLabel: null,
       date: "2026-01-05",
@@ -36,11 +32,12 @@ const expense = (
   mock(expenseOut, {
     seed: 2,
     overrides: {
-      id: unsafeExpenseShortcode(shortcode),
+      id: testShortcode("expense", shortcode),
       name: `Line ${shortcode}`,
       purchaseId:
-        purchaseId === null ? null : unsafePurchaseShortcode(purchaseId),
-      projectId: projectId === null ? null : unsafeProjectShortcode(projectId),
+        purchaseId === null ? null : testShortcode("purchase", purchaseId),
+      projectId:
+        projectId === null ? null : testShortcode("project", projectId),
       date: "2026-01-05",
       cost,
     },
@@ -120,8 +117,12 @@ describe("buildProjectPurchaseRows", () => {
       THIS_PROJECT,
     )[0]!;
     const child = projectPurchaseSubRows(row)?.[0];
-    expect(child?.id).toBe("PUR-0005:EXP-0008");
-    expect(child?.kind === "expense" && child.expenseId).toBe("EXP-0008");
+    expect(child?.id).toBe(
+      `${testShortcode("purchase", "PUR-0005")}:${testShortcode("expense", "EXP-0008")}`,
+    );
+    expect(child?.kind === "expense" && child.expenseId).toBe(
+      testShortcode("expense", "EXP-0008"),
+    );
   });
 
   it("flattens a date onto both row kinds so one date column serves the tree", () => {

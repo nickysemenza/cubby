@@ -6,12 +6,7 @@ import type {
   VendorId,
   VendorShortcode,
 } from "@cubby/schemas/identifiers";
-import {
-  unsafeExpenseId,
-  unsafePurchaseId,
-  unsafePurchaseShortcode,
-  unsafeVendorId,
-} from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { isDocumentFile } from "@cubby/schemas/image";
 import {
   type ExpenseOut,
@@ -24,6 +19,7 @@ import {
   reconcilePurchase,
   splitExpenseInput,
 } from "@cubby/schemas/purchase";
+import { testShortcode } from "@cubby/schemas/testing";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
@@ -111,7 +107,7 @@ const purchaseUuid = async (
 ): Promise<PurchaseId> => {
   const id = await resolveLiveShortcode(db, shortcode, "purchase");
   if (!id) throw new Error(`test setup: purchase ${shortcode} did not resolve`);
-  return unsafePurchaseId(id);
+  return parseEntityId("purchase", id);
 };
 
 const vendorUuid = async (
@@ -120,7 +116,7 @@ const vendorUuid = async (
 ): Promise<VendorId> => {
   const id = await resolveLiveShortcode(db, shortcode, "vendor");
   if (!id) throw new Error(`test setup: vendor ${shortcode} did not resolve`);
-  return unsafeVendorId(id);
+  return parseEntityId("vendor", id);
 };
 
 const expenseUuid = async (
@@ -129,7 +125,7 @@ const expenseUuid = async (
 ): Promise<ExpenseId> => {
   const id = await resolveLiveShortcode(db, shortcode, "expense");
   if (!id) throw new Error(`test setup: expense ${shortcode} did not resolve`);
-  return unsafeExpenseId(id);
+  return parseEntityId("expense", id);
 };
 
 const vendorShortcodeByName = async (
@@ -521,7 +517,7 @@ describe("purchase repository — linkExpensesToPurchase", () => {
       linkExpensesToPurchase(
         ctx.db,
         {
-          purchaseId: unsafePurchaseShortcode("PUR-9999"),
+          purchaseId: testShortcode("purchase", "PUR-9999"),
           expenseIds: [line.id],
         },
         ctx.actor,
@@ -1530,7 +1526,7 @@ describe("purchase repository — updatePurchase collision + liveness guards", (
     await expect(
       updatePurchase(
         ctx.db,
-        unsafePurchaseShortcode("PUR-9999"),
+        testShortcode("purchase", "PUR-9999"),
         { notes: "no such charge" },
         ctx.actor,
       ),
@@ -1997,7 +1993,8 @@ describe("purchase repository — purchase worklist filters", () => {
       sourceAliases: [],
       notes: null,
     });
-    const refundPurchaseId = unsafePurchaseId(
+    const refundPurchaseId = parseEntityId(
+      "purchase",
       (await resolveLiveShortcode(ctx.db, refundAdjusted, "purchase"))!,
     );
     await insertSettlementTransaction(ctx.db, {
@@ -2015,7 +2012,8 @@ describe("purchase repository — purchase worklist filters", () => {
       notes: null,
     });
     const expectedOnly = await makeCharge("FILTER-EXPECTED", 100, 99.98);
-    const expectedPurchaseId = unsafePurchaseId(
+    const expectedPurchaseId = parseEntityId(
+      "purchase",
       (await resolveLiveShortcode(ctx.db, expectedOnly, "purchase"))!,
     );
     await insertSettlementTransaction(ctx.db, {
@@ -2033,7 +2031,8 @@ describe("purchase repository — purchase worklist filters", () => {
       notes: null,
     });
     const nonRefund = await makeCharge("FILTER-NON-REFUND", 100, 99.97);
-    const nonRefundPurchaseId = unsafePurchaseId(
+    const nonRefundPurchaseId = parseEntityId(
+      "purchase",
       (await resolveLiveShortcode(ctx.db, nonRefund, "purchase"))!,
     );
     await insertSettlementTransaction(ctx.db, {

@@ -1,5 +1,6 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
-import { unsafeProjectShortcode } from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import { describe, expect, it } from "vitest";
 import { itemSpanLabel } from "./calendar-span";
 
@@ -8,7 +9,7 @@ const projectSpan = (
   endDateExclusive: string,
 ): CalendarItem => ({
   kind: "project",
-  id: unsafeProjectShortcode("PRJ-4K7M"),
+  id: testShortcode("project", "PRJ-4K7M"),
   title: "Kitchen Remodel",
   startDate,
   endDateExclusive,

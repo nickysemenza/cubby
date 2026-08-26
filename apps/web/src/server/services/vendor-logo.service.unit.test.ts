@@ -1,7 +1,5 @@
-import {
-  unsafeVendorId,
-  unsafeVendorShortcode,
-} from "@cubby/schemas/identifiers";
+import { testEntityId, testShortcode } from "@cubby/schemas/testing";
+
 import type * as ExternalFetch from "@cubby/shared/external-fetch";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ImageIntegrity from "~/server/services/image-integrity";
@@ -48,8 +46,11 @@ import {
   normalizeVendorWebsite,
 } from "./vendor-logo.service";
 
-const VENDOR_ID = unsafeVendorShortcode("VEN-2345");
-const ENTITY_ID = unsafeVendorId("00000000-0000-4000-8000-000000000222");
+const VENDOR_ID = testShortcode("vendor", "VEN-2345");
+const ENTITY_ID = testEntityId(
+  "vendor",
+  "00000000-0000-4000-8000-000000000222",
+);
 const inspected = (size: number) => ({
   contentType: "image/png",
   width: size,

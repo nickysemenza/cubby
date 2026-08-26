@@ -224,7 +224,9 @@ describe("form-utils", () => {
     ];
 
     it.each(CASES)("$name", ({ entityId, combobox, expected }) => {
-      expect(detectComboboxIdChange(entityId, combobox)).toBe(expected);
+      expect(detectComboboxIdChange(entityId, combobox, (value) => value)).toBe(
+        expected,
+      );
     });
   });
 });

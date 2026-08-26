@@ -62,6 +62,7 @@ vi.mock("@cubby/shared/external-fetch", async (importActual) => ({
 
 import { imageShortcode } from "@cubby/schemas/identifiers";
 import type { McpAttachFileInput } from "@cubby/schemas/image";
+import { testEntityId } from "@cubby/schemas/testing";
 import { ExternalFetchError } from "@cubby/shared/external-fetch";
 import {
   attachFileToEntity,
@@ -71,6 +72,11 @@ import {
 
 const PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
+const STAGED_UPLOAD_ID = testEntityId("image", "staged-upload");
+const EXISTING_IMAGE_ID = testEntityId("image", "existing-image");
+const MISSING_UPLOAD_ID = testEntityId("image", "missing-upload");
+const STANDALONE_IMAGE_ID = testEntityId("image", "standalone-image");
 
 describe("importImageFromUrl", () => {
   beforeEach(() => {
@@ -364,7 +370,7 @@ describe("attachFileToEntity", () => {
   it("returns an existing idempotency winner before fetching or uploading", async () => {
     mocks.findAttachmentByIdempotencyKey.mockResolvedValueOnce({
       id: "winner-1",
-      shortcode: "IMG-7771",
+      shortcode: "IMG-7QRS",
       key: "cubby/images/winner.png",
       filename: "winner.png",
       contentType: "image/png",
@@ -378,7 +384,7 @@ describe("attachFileToEntity", () => {
       idempotencyKey: "stable-key",
     });
 
-    expect(result.imageId).toBe("IMG-7771");
+    expect(result.imageId).toBe("IMG-7QRS");
     expect(result.reused).toBe(true);
     expect(mocks.uploadToS3).not.toHaveBeenCalled();
   });
@@ -458,7 +464,7 @@ describe("attachFileToEntity", () => {
   // returns an `uploadId`, both bare uuids over the same table.
   describe("uploadId mode", () => {
     const stagedRow = {
-      id: "upl-1",
+      id: STAGED_UPLOAD_ID,
       key: "cubby/images/staged.png",
       filename: "staged.png",
       contentType: "image/png",
@@ -473,17 +479,17 @@ describe("attachFileToEntity", () => {
         arrayBuffer: async () => Buffer.from(PNG_BASE64, "base64"),
       });
       mocks.deleteImages.mockResolvedValue({
-        deletedIds: ["upl-1"],
+        deletedIds: [STAGED_UPLOAD_ID],
         deletedKeys: ["cubby/images/staged.png"],
       });
 
       const result = await attachFileToEntity({} as never, {
         ...base,
-        uploadId: "upl-1",
+        uploadId: STAGED_UPLOAD_ID,
       });
 
       expect(result.kind).toBe("image");
-      expect(mocks.deleteImages).toHaveBeenCalledWith({}, ["upl-1"]);
+      expect(mocks.deleteImages).toHaveBeenCalledWith({}, [STAGED_UPLOAD_ID]);
     });
 
     it("refuses an uploadId that names an already-attached image", async () => {
@@ -494,7 +500,10 @@ describe("attachFileToEntity", () => {
       });
 
       await expect(
-        attachFileToEntity({} as never, { ...base, uploadId: "img-existing" }),
+        attachFileToEntity({} as never, {
+          ...base,
+          uploadId: EXISTING_IMAGE_ID,
+        }),
       ).rejects.toThrow(/not a staged upload/);
 
       // The point of the guard: nothing is uploaded, and above all the
@@ -512,7 +521,10 @@ describe("attachFileToEntity", () => {
       );
 
       await expect(
-        attachFileToEntity({} as never, { ...base, uploadId: "upl-missing" }),
+        attachFileToEntity({} as never, {
+          ...base,
+          uploadId: MISSING_UPLOAD_ID,
+        }),
       ).rejects.toThrow(/Call create_file_upload first/);
     });
 
@@ -520,7 +532,10 @@ describe("attachFileToEntity", () => {
       mocks.getImageById.mockRejectedValue(new Error("database unavailable"));
 
       await expect(
-        attachFileToEntity({} as never, { ...base, uploadId: "upl-1" }),
+        attachFileToEntity({} as never, {
+          ...base,
+          uploadId: STAGED_UPLOAD_ID,
+        }),
       ).rejects.toThrow("database unavailable");
     });
 
@@ -535,7 +550,7 @@ describe("attachFileToEntity", () => {
       await expect(
         attachFileToEntity({} as never, {
           ...base,
-          uploadId: "img-standalone",
+          uploadId: STANDALONE_IMAGE_ID,
         }),
       ).rejects.toThrow(/not a staged upload/);
       expect(mocks.deleteImages).not.toHaveBeenCalled();

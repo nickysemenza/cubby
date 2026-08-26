@@ -1,9 +1,9 @@
-import {
-  type IngredientId,
-  type ProductShortcode,
-  type RecipeId,
-  unsafeRecipeId,
+import type {
+  IngredientId,
+  ProductShortcode,
+  RecipeId,
 } from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 import { setCfEnv } from "~/server/cf-env";
@@ -74,7 +74,7 @@ describe("product mutation recipe-cost staleness", () => {
     );
     const entityId = await resolveLiveShortcode(ctx.db, recipe.id, "recipe");
     if (!entityId) throw new Error("seed failed: recipe did not resolve");
-    return unsafeRecipeId(entityId);
+    return parseEntityId("recipe", entityId);
   };
 
   const totalsComputedAt = async (id: RecipeId) =>

@@ -1,4 +1,5 @@
-import { type ProjectId, unsafeProjectId } from "@cubby/schemas/identifiers";
+import type { ProjectId } from "@cubby/schemas/identifiers";
+import { testEntityId } from "@cubby/schemas/testing";
 import { asc } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
@@ -331,8 +332,8 @@ describe("replaceDependencyEdges self-reference guard", () => {
     },
   ) as unknown as DrizzleTransaction;
 
-  const A = unsafeProjectId("11111111-1111-4111-8111-111111111111");
-  const B = unsafeProjectId("22222222-2222-4222-8222-222222222222");
+  const A = testEntityId("project", "11111111-1111-4111-8111-111111111111");
+  const B = testEntityId("project", "22222222-2222-4222-8222-222222222222");
 
   const opts = {
     ownColumn: projectDependency.projectId,

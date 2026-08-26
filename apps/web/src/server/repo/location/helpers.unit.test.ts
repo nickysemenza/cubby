@@ -1,38 +1,48 @@
 import {
-  unsafeImageShortcode,
-  unsafeInventoryId,
-  unsafeInventoryShortcode,
-  unsafeLocationId,
-  unsafeLocationShortcode,
-  unsafeProductId,
-  unsafeProductShortcode,
-} from "@cubby/schemas/identifiers";
-import {
   locationListItemOut,
   locationListRefOut,
 } from "@cubby/schemas/location";
+import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { resolveProductPricing } from "~/server/repo/product/pricing";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 import { dbLocationToAPI, dbLocationToListAPI } from "./helpers";
 import type { LocationListDB } from "./internal-types";
 
-const LOCATION_ID = unsafeLocationId("123e4567-e89b-12d3-a456-426614174000");
-const PARENT_ID = unsafeLocationId("223e4567-e89b-12d3-a456-426614174000");
-const CHILD_ID = unsafeLocationId("323e4567-e89b-12d3-a456-426614174000");
-const DELETED_CHILD_ID = unsafeLocationId(
+const LOCATION_ID = testEntityId(
+  "location",
+  "123e4567-e89b-12d3-a456-426614174000",
+);
+const PARENT_ID = testEntityId(
+  "location",
+  "223e4567-e89b-12d3-a456-426614174000",
+);
+const CHILD_ID = testEntityId(
+  "location",
+  "323e4567-e89b-12d3-a456-426614174000",
+);
+const DELETED_CHILD_ID = testEntityId(
+  "location",
   "423e4567-e89b-12d3-a456-426614174000",
 );
-const PRODUCT_ID = unsafeProductId("523e4567-e89b-12d3-a456-426614174000");
-const DELETED_PRODUCT_ID = unsafeProductId(
+const PRODUCT_ID = testEntityId(
+  "product",
+  "523e4567-e89b-12d3-a456-426614174000",
+);
+const DELETED_PRODUCT_ID = testEntityId(
+  "product",
   "623e4567-e89b-12d3-a456-426614174000",
 );
-const INVENTORY_ID = unsafeInventoryId("723e4567-e89b-12d3-a456-426614174000");
-const DELETED_PRODUCT_INVENTORY_ID = unsafeInventoryId(
+const INVENTORY_ID = testEntityId(
+  "inventory",
+  "723e4567-e89b-12d3-a456-426614174000",
+);
+const DELETED_PRODUCT_INVENTORY_ID = testEntityId(
+  "inventory",
   "823e4567-e89b-12d3-a456-426614174000",
 );
 const IMAGE_SHORTCODE = "IMG-2345";
-const IMAGE_ID = unsafeImageShortcode(IMAGE_SHORTCODE);
+const IMAGE_ID = testShortcode("image", IMAGE_SHORTCODE);
 const DELETED_IMAGE_SHORTCODE = "IMG-6789";
 const CREATED_AT = new Date("2024-01-01T00:00:00.000Z");
 const UPDATED_AT = new Date("2024-01-02T00:00:00.000Z");
@@ -137,7 +147,7 @@ describe("location mappers", () => {
     });
 
     expect(result).toMatchObject({
-      id: unsafeLocationShortcode("LOC-TEST"),
+      id: testShortcode("location", "LOC-TEST"),
       name: "Pantry",
       images: [{ id: IMAGE_ID, url: getR2PublicUrl(image.key) }],
     });
@@ -190,27 +200,27 @@ describe("location mappers", () => {
     const result = dbLocationToListAPI(row, pricingByProductId);
 
     expect(result.parent).toEqual({
-      id: unsafeLocationShortcode("LOC-2345"),
+      id: testShortcode("location", "LOC-2345"),
       name: "Kitchen",
       type: "room",
     });
     expect(locationListRefOut.parse(result.parent)).toEqual(result.parent);
     expect(result.children).toEqual([
       {
-        id: unsafeLocationShortcode("LOC-3456"),
+        id: testShortcode("location", "LOC-3456"),
         name: "Shelf",
         type: "shelf",
       },
     ]);
     expect(result.inventoryEntries).toEqual([
       {
-        id: unsafeInventoryShortcode("INV-2345"),
+        id: testShortcode("inventory", "INV-2345"),
         amount: { value: 2, unit: "each" },
         valuation: 9,
         createdAt: CREATED_AT,
         updatedAt: UPDATED_AT,
         product: {
-          id: unsafeProductShortcode("PRD-TEST"),
+          id: testShortcode("product", "PRD-TEST"),
           name: "Flour",
           primaryGtin: null,
           fdc_id: null,

@@ -1,5 +1,11 @@
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { buildFinancialTransferPairSuggestions } from "./financial-transfer-pairing";
+
+const transactionShortcode = (seed: string) =>
+  testShortcode("financialTransaction", seed);
+const accountShortcode = (seed: string) =>
+  testShortcode("financialAccount", seed);
 
 describe("buildFinancialTransferPairSuggestions", () => {
   it("suggests one opposite, different-account evidence leg", () => {
@@ -7,9 +13,9 @@ describe("buildFinancialTransferPairSuggestions", () => {
       [
         {
           id: "outflow-id",
-          shortcode: "FTX-OUTFLOW",
+          shortcode: transactionShortcode("FTX-OUTFLOW"),
           accountId: "account-a",
-          accountShortcode: "FAC-A",
+          accountShortcode: accountShortcode("FAC-A"),
           amount: 120,
           date: "2026-08-20",
           party: { kind: "member", id: "LPY-A" as never, name: "Alex" },
@@ -18,9 +24,9 @@ describe("buildFinancialTransferPairSuggestions", () => {
       [
         {
           id: "inflow-id",
-          shortcode: "FTX-INFLOW",
+          shortcode: transactionShortcode("FTX-INFLOW"),
           accountId: "account-b",
-          accountShortcode: "FAC-B",
+          accountShortcode: accountShortcode("FAC-B"),
           amount: -120,
           date: "2026-08-22",
           party: {
@@ -35,15 +41,15 @@ describe("buildFinancialTransferPairSuggestions", () => {
 
     expect(suggestions).toEqual([
       {
-        transactionId: "FTX-OUTFLOW",
+        transactionId: transactionShortcode("FTX-OUTFLOW"),
         status: "proposed",
         candidates: [
           expect.objectContaining({
-            transactionId: "FTX-INFLOW",
+            transactionId: transactionShortcode("FTX-INFLOW"),
             amount: 120,
             dateDistanceDays: 2,
-            fromAccountId: "FAC-A",
-            toAccountId: "FAC-B",
+            fromAccountId: accountShortcode("FAC-A"),
+            toAccountId: accountShortcode("FAC-B"),
             from: { kind: "member", id: "LPY-A", name: "Alex" },
             to: {
               kind: "household",
@@ -61,9 +67,9 @@ describe("buildFinancialTransferPairSuggestions", () => {
       [
         {
           id: "target",
-          shortcode: "FTX-TARGET",
+          shortcode: transactionShortcode("FTX-TARGET"),
           accountId: "account-a",
-          accountShortcode: "FAC-A",
+          accountShortcode: accountShortcode("FAC-A"),
           amount: 20,
           date: "2026-08-20",
           party: null,
@@ -72,18 +78,18 @@ describe("buildFinancialTransferPairSuggestions", () => {
       [
         {
           id: "same-direction",
-          shortcode: "FTX-SAME-DIRECTION",
+          shortcode: transactionShortcode("FTX-SAME-DIRECTION"),
           accountId: "account-b",
-          accountShortcode: "FAC-B",
+          accountShortcode: accountShortcode("FAC-B"),
           amount: 20,
           date: "2026-08-20",
           party: null,
         },
         {
           id: "same-account",
-          shortcode: "FTX-SAME-ACCOUNT",
+          shortcode: transactionShortcode("FTX-SAME-ACCOUNT"),
           accountId: "account-a",
-          accountShortcode: "FAC-A",
+          accountShortcode: accountShortcode("FAC-A"),
           amount: -20,
           date: "2026-08-20",
           party: null,
@@ -93,7 +99,7 @@ describe("buildFinancialTransferPairSuggestions", () => {
     );
 
     expect(suggestions[0]).toMatchObject({
-      transactionId: "FTX-TARGET",
+      transactionId: transactionShortcode("FTX-TARGET"),
       status: "no_match",
       candidates: [],
     });
@@ -104,7 +110,7 @@ describe("buildFinancialTransferPairSuggestions", () => {
       [
         {
           id: "already-used",
-          shortcode: "FTX-ALREADY-USED",
+          shortcode: transactionShortcode("FTX-ALREADY-USED"),
           accountId: "account-a",
           accountShortcode: "FAC-A",
           amount: 20,
@@ -116,9 +122,9 @@ describe("buildFinancialTransferPairSuggestions", () => {
       [
         {
           id: "otherwise-match",
-          shortcode: "FTX-OTHER",
+          shortcode: transactionShortcode("FTX-OTHER"),
           accountId: "account-b",
-          accountShortcode: "FAC-B",
+          accountShortcode: accountShortcode("FAC-B"),
           amount: -20,
           date: "2026-08-20",
           party: null,
@@ -136,9 +142,9 @@ describe("buildFinancialTransferPairSuggestions", () => {
   it("keeps an ambiguous result ambiguous after limiting its displayed candidates", () => {
     const target = {
       id: "target",
-      shortcode: "FTX-TARGET",
+      shortcode: transactionShortcode("FTX-TARGET"),
       accountId: "account-a",
-      accountShortcode: "FAC-A",
+      accountShortcode: accountShortcode("FAC-A"),
       amount: 20,
       date: "2026-08-20",
       party: null,
@@ -149,17 +155,17 @@ describe("buildFinancialTransferPairSuggestions", () => {
         {
           ...target,
           id: "candidate-1",
-          shortcode: "FTX-C1",
+          shortcode: transactionShortcode("FTX-C1"),
           accountId: "account-b",
-          accountShortcode: "FAC-B",
+          accountShortcode: accountShortcode("FAC-B"),
           amount: -20,
         },
         {
           ...target,
           id: "candidate-2",
-          shortcode: "FTX-C2",
+          shortcode: transactionShortcode("FTX-C2"),
           accountId: "account-c",
-          accountShortcode: "FAC-C",
+          accountShortcode: accountShortcode("FAC-C"),
           amount: -20,
         },
       ],

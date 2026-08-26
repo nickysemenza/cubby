@@ -1,5 +1,5 @@
 import type { Amount } from "@cubby/schemas/codec";
-import { unsafeIngredientShortcode } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { makeableRecipesOut } from "@cubby/schemas/suggestions";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -32,7 +32,7 @@ describe("recipe workflows", () => {
             ingredients: [
               {
                 type: "ingredient" as const,
-                ingredientId: unsafeIngredientShortcode(ingredientId),
+                ingredientId: parseShortcodeFor("ingredient", ingredientId),
                 recipeId: null,
                 amounts: [need],
               },

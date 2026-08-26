@@ -1,4 +1,5 @@
-import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import { describe, expect, it } from "vitest";
 import {
   buildLocationInventoryBreakdown,
@@ -8,14 +9,14 @@ import {
 describe("buildLocationInventoryBreakdown", () => {
   it("keeps direct stock distinct from descendant totals", () => {
     const tree = buildLocationInventoryBreakdown({
-      id: unsafeLocationShortcode("LOC-GAR1"),
+      id: testShortcode("location", "LOC-GAR1"),
       name: "Garage",
       type: "room",
       directItemCount: 2,
       totalItemCount: 7,
       children: [
         {
-          id: unsafeLocationShortcode("LOC-AREA"),
+          id: testShortcode("location", "LOC-AREA"),
           name: "Area 1",
           type: "area",
           directItemCount: 5,
@@ -43,7 +44,7 @@ describe("buildLocationInventoryBreakdown", () => {
 
   it("does not invent a direct contribution for a purely structural location", () => {
     const tree = buildLocationInventoryBreakdown({
-      id: unsafeLocationShortcode("LOC-HOME"),
+      id: testShortcode("location", "LOC-HOME"),
       name: "Home",
       type: "area",
       directItemCount: 0,
@@ -57,7 +58,7 @@ describe("buildLocationInventoryBreakdown", () => {
 
   it("only exposes the drill-down when a child holds stock", () => {
     const directOnly = {
-      id: unsafeLocationShortcode("LOC-DIRC"),
+      id: testShortcode("location", "LOC-DIRC"),
       name: "Garage",
       type: "room" as const,
       directItemCount: 2,

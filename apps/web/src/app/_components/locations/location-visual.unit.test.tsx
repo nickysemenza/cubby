@@ -1,9 +1,6 @@
-import {
-  unsafeLocationShortcode,
-  unsafeProductShortcode,
-} from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
+import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -49,7 +46,7 @@ const location = (
   type: LocationType | null,
   overrides: Partial<InfLocation> = {},
 ): InfLocation => ({
-  id: unsafeLocationShortcode(`LOC-${code}`),
+  id: testShortcode("location", `LOC-${code}`),
   name,
   aliases: [],
   type,
@@ -67,7 +64,7 @@ const location = (
 const containerLocation = (overrides: Partial<InfLocation> = {}) =>
   location("AAAA", "Abrasives box", null, {
     product: {
-      id: unsafeProductShortcode("PRD-AAAA"),
+      id: testShortcode("product", "PRD-AAAA"),
       name: "Two drawer tool box",
       manufacturer: "Example",
       model: "EX-2",

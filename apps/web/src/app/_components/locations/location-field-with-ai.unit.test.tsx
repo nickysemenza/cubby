@@ -1,4 +1,5 @@
-import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useForm } from "react-hook-form";
 import { describe, expect, it, vi } from "vitest";
@@ -43,7 +44,7 @@ function Harness() {
     <LocationFieldWithAI
       form={form}
       name="location"
-      productId={unsafeProductShortcode("PRD-4K7M")}
+      productId={testShortcode("product", "PRD-4K7M")}
     />
   );
 }

@@ -1,7 +1,5 @@
-import {
-  unsafeInventoryId,
-  unsafeLocationId,
-} from "@cubby/schemas/identifiers";
+import { testEntityId } from "@cubby/schemas/testing";
+
 import { TEST_ACTOR } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import type { Database } from "~/server/db/database";
@@ -28,9 +26,15 @@ const explodingDb = new Proxy(
   },
 ) as Database;
 
-const LOCATION_A = unsafeLocationId("11111111-1111-4111-8111-111111111111");
-const LOCATION_B = unsafeLocationId("22222222-2222-4222-8222-222222222222");
-const ENTRY = unsafeInventoryId("33333333-3333-4333-8333-333333333333");
+const LOCATION_A = testEntityId(
+  "location",
+  "11111111-1111-4111-8111-111111111111",
+);
+const LOCATION_B = testEntityId(
+  "location",
+  "22222222-2222-4222-8222-222222222222",
+);
+const ENTRY = testEntityId("inventory", "33333333-3333-4333-8333-333333333333");
 
 const payload = (
   sourceLocationId: typeof LOCATION_A,

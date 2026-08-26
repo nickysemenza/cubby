@@ -1,7 +1,7 @@
-import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
 import { ingredientWithFoodOut } from "@cubby/schemas/ingredient";
 import { infLocation } from "@cubby/schemas/location";
 import { productWithMappingsAndFoodOut } from "@cubby/schemas/product";
+import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { mock } from "~/lib/test/mock-schema";
@@ -89,7 +89,7 @@ describe("toLocationCard", () => {
         name: "garbage bin area",
         type: null,
         product: {
-          id: unsafeProductShortcode("PRD-9H64"),
+          id: testShortcode("product", "PRD-9H64"),
           name: "27 Gal. Tough Storage Tote",
           category: "supplies",
         },

@@ -1,5 +1,5 @@
-import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
 import { productWithMappingsAndFoodOut } from "@cubby/schemas/product";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { mock } from "~/lib/test/mock-schema";
 import { selectNutritionProduct } from "./ingredient-detail";
@@ -12,7 +12,7 @@ const productWithFood = (shortcode: string, price: number | null) =>
   mock(productWithMappingsAndFoodOut, {
     seed: 1,
     overrides: {
-      id: unsafeProductShortcode(shortcode),
+      id: testShortcode("product", shortcode),
       price,
       food: { nutritionInfo: {} },
     },
@@ -22,7 +22,7 @@ const productWithoutFood = (shortcode: string, price: number | null) =>
   mock(productWithMappingsAndFoodOut, {
     seed: 2,
     overrides: {
-      id: unsafeProductShortcode(shortcode),
+      id: testShortcode("product", shortcode),
       price,
       food: null,
     },

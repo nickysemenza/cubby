@@ -1,13 +1,11 @@
 import type { Amount } from "@cubby/schemas/codec";
-import {
-  type InventoryShortcode,
-  type LocationShortcode,
-  type ProductShortcode,
-  unsafeInventoryShortcode,
-  unsafeLocationShortcode,
-  unsafeProductShortcode,
+import type {
+  InventoryShortcode,
+  LocationShortcode,
+  ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import type { LocationType } from "@cubby/schemas/location";
+import { testShortcode } from "@cubby/schemas/testing";
 import {
   fireEvent,
   render,
@@ -47,11 +45,11 @@ import type { WithEntitySearchProps } from "../combobox/with-search-hook";
 import { InventoryEntriesCell } from "./inventory-entries-cell";
 
 const PANTRY: ComboboxItem<LocationShortcode> = {
-  id: unsafeLocationShortcode("loc-1"),
+  id: testShortcode("location", "loc-1"),
   name: "Pantry (shelf)",
 };
 const FRIDGE: ComboboxItem<LocationShortcode> = {
-  id: unsafeLocationShortcode("loc-2"),
+  id: testShortcode("location", "loc-2"),
   name: "Fridge (shelf)",
 };
 const STATIC_ITEMS: ComboboxItem<LocationShortcode>[] = [PANTRY, FRIDGE];
@@ -81,7 +79,7 @@ interface TestRow {
 }
 
 const ROW: TestRow = {
-  id: unsafeProductShortcode("PRD-2345"),
+  id: testShortcode("product", "PRD-2345"),
   name: "Flour",
 };
 
@@ -139,7 +137,7 @@ describe("InventoryEntriesCell", () => {
     await waitFor(() => {
       expect(onCreateEntry).toHaveBeenCalledTimes(1);
     });
-    expect(onCreateEntry).toHaveBeenCalledWith(ROW, "loc-2");
+    expect(onCreateEntry).toHaveBeenCalledWith(ROW, FRIDGE.id);
     expect(onMoveEntry).not.toHaveBeenCalled();
   });
 
@@ -147,10 +145,10 @@ describe("InventoryEntriesCell", () => {
     const onMoveEntry = vi.fn().mockResolvedValue(undefined);
     const onCreateEntry = vi.fn().mockResolvedValue(undefined);
     const entry: TestEntry = {
-      id: unsafeInventoryShortcode("inv-1"),
+      id: testShortcode("inventory", "inv-1"),
       amount: { value: 2, unit: "lb" },
       location: {
-        id: unsafeLocationShortcode("loc-1"),
+        id: testShortcode("location", "loc-1"),
         name: "Pantry",
         type: "shelf",
       },
@@ -182,7 +180,7 @@ describe("InventoryEntriesCell", () => {
     await waitFor(() => {
       expect(onMoveEntry).toHaveBeenCalledTimes(1);
     });
-    expect(onMoveEntry).toHaveBeenCalledWith(entry, "loc-2");
+    expect(onMoveEntry).toHaveBeenCalledWith(entry, FRIDGE.id);
     expect(onCreateEntry).not.toHaveBeenCalled();
   });
 
@@ -192,19 +190,19 @@ describe("InventoryEntriesCell", () => {
     const onCreateEntry = vi.fn().mockResolvedValue(undefined);
     const entries: TestEntry[] = [
       {
-        id: unsafeInventoryShortcode("inv-1"),
+        id: testShortcode("inventory", "inv-1"),
         amount: { value: 2, unit: "lb" },
         location: {
-          id: unsafeLocationShortcode("loc-1"),
+          id: testShortcode("location", "loc-1"),
           name: "Pantry",
           type: "shelf",
         },
       },
       {
-        id: unsafeInventoryShortcode("inv-2"),
+        id: testShortcode("inventory", "inv-2"),
         amount: { value: 1, unit: "lb" },
         location: {
-          id: unsafeLocationShortcode("loc-2"),
+          id: testShortcode("location", "loc-2"),
           name: "Fridge",
           type: "shelf",
         },

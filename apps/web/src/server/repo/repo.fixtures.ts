@@ -1,15 +1,11 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import {
+  type EntityId,
   type IngredientId,
   type IngredientShortcode,
-  unsafeIngredientId,
-  unsafeIngredientShortcode,
-  unsafeInventoryId,
-  unsafeLocationId,
-  unsafeMealId,
-  unsafeProductId,
-  unsafeRecipeId,
+  parseEntityId,
+  parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
@@ -93,21 +89,20 @@ export const makeProductInput = <
  */
 const retainEntityId =
   <
+    E extends ShortcodeEntity,
     TOut extends { id: string },
-    TBrand extends string,
     TArgs extends [Database | DrizzleTransaction, ...unknown[]],
   >(
-    entity: ShortcodeEntity,
-    brand: (id: string) => TBrand,
+    entity: E,
     createFn: (...args: TArgs) => Promise<TOut | null | undefined>,
   ) =>
-  async (...args: TArgs): Promise<TOut & { entityId: TBrand }> => {
+  async (...args: TArgs): Promise<TOut & { entityId: EntityId<E> }> => {
     const [db] = args;
     const output = await createFn(...args);
     if (!output) throw new Error(`fixture: ${entity} not created`);
     const resolvedId = await resolveLiveShortcode(db, output.id, entity);
     if (!resolvedId) throw new Error(`fixture: created ${entity} not found`);
-    return { ...output, entityId: brand(resolvedId) };
+    return { ...output, entityId: parseEntityId(entity, resolvedId) };
   };
 
 /** Resolves a public ingredient id before handing off to `createProduct`. */
@@ -130,7 +125,7 @@ const createProductWithResolvedIngredient = async (
     {
       ...data,
       ingredientId: resolvedIngredientId
-        ? unsafeIngredientId(resolvedIngredientId)
+        ? parseEntityId("ingredient", resolvedIngredientId)
         : null,
     },
     actor,
@@ -145,7 +140,6 @@ const createProductWithResolvedIngredient = async (
  */
 export const createProductFixture = retainEntityId(
   "product",
-  unsafeProductId,
   createProductWithResolvedIngredient,
 );
 
@@ -158,20 +152,15 @@ export const updateProductNameFixtureRaw = async (
   await getDb(db)
     .update(product)
     .set({ name })
-    .where(eq(product.id, unsafeProductId(productId)));
+    .where(eq(product.id, parseEntityId("product", productId)));
 };
 
 export const createIngredientFixture = retainEntityId(
   "ingredient",
-  unsafeIngredientId,
   createIngredient,
 );
 
-export const createLocationFixture = retainEntityId(
-  "location",
-  unsafeLocationId,
-  createLocation,
-);
+export const createLocationFixture = retainEntityId("location", createLocation);
 
 /** Resolves canonical public product/location ids before `createInventoryEntry`. */
 const createInventoryWithResolvedIds = async (
@@ -201,8 +190,8 @@ const createInventoryWithResolvedIds = async (
     db,
     {
       ...data,
-      productId: unsafeProductId(rawProductId),
-      locationId: unsafeLocationId(rawLocationId),
+      productId: parseEntityId("product", rawProductId),
+      locationId: parseEntityId("location", rawLocationId),
     },
     actor,
   );
@@ -214,7 +203,6 @@ const createInventoryWithResolvedIds = async (
  */
 export const createInventoryFixture = retainEntityId(
   "inventory",
-  unsafeInventoryId,
   createInventoryWithResolvedIds,
 );
 
@@ -265,7 +253,7 @@ export const ingredientRef = (
   opts: { amounts?: Amount[]; modifier?: string; rawLine?: string } = {},
 ): RecipeIngredientInput => ({
   type: "ingredient" as const,
-  ingredientId: unsafeIngredientShortcode(id),
+  ingredientId: parseShortcodeFor("ingredient", id),
   recipeId: null,
   amounts: opts.amounts ?? [{ value: 1, unit: "cup" }],
   ...(opts.modifier !== undefined ? { modifier: opts.modifier } : {}),
@@ -288,17 +276,9 @@ export const makeRecipeInput = (
   ...("tags" in opts ? { tags: opts.tags } : {}),
 });
 
-export const createRecipeFixture = retainEntityId(
-  "recipe",
-  unsafeRecipeId,
-  createRecipe,
-);
+export const createRecipeFixture = retainEntityId("recipe", createRecipe);
 
-export const createMealFixture = retainEntityId(
-  "meal",
-  unsafeMealId,
-  createMeal,
-);
+export const createMealFixture = retainEntityId("meal", createMeal);
 
 export const makeImportRecipe = (
   overrides: Partial<ImportRecipe> = {},
@@ -360,7 +340,7 @@ export const seedIngredientWithStock = async (
   const productInput = makeProductInput({
     name: `Test ${opts.name}`,
     manufacturer: "test",
-    ingredientId: unsafeIngredientShortcode(ingredient.shortcode),
+    ingredientId: parseShortcodeFor("ingredient", ingredient.shortcode),
     unitMappings: [CUP_TO_GRAM],
   });
   const product = await createProduct(
@@ -378,8 +358,8 @@ export const seedIngredientWithStock = async (
   await createInventoryEntry(
     db,
     {
-      productId: unsafeProductId(productId),
-      locationId: unsafeLocationId(locationId),
+      productId: parseEntityId("product", productId),
+      locationId: parseEntityId("location", locationId),
       amount: opts.onHand,
     },
     actor,

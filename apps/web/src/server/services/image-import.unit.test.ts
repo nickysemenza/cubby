@@ -1,4 +1,5 @@
-import { unsafeRecipeId } from "@cubby/schemas/identifiers";
+import { testEntityId } from "@cubby/schemas/testing";
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -19,7 +20,10 @@ vi.mock("~/server/services/image-storage.service", () => ({
 
 import { importRecipeImageFromUrl } from "./image-import";
 
-const RECIPE_ID = unsafeRecipeId("11111111-1111-1111-1111-111111111111");
+const RECIPE_ID = testEntityId(
+  "recipe",
+  "11111111-1111-1111-1111-111111111111",
+);
 const SOURCE_URL = "https://recipes.example/photo.jpg";
 const db = {} as never;
 

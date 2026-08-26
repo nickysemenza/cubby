@@ -1,5 +1,6 @@
 import type { Amount } from "@cubby/schemas/codec";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import { amountCellData, dateCellData, entityCellData } from "./cell-data";
 
 interface Row {
@@ -11,8 +12,9 @@ const filled: Row = { id: "row-1", relation: { id: "rel-1", name: "One" } };
 
 describe("entityCellData clear capability", () => {
   it("does not expose clearing for a required relation", () => {
-    const data = entityCellData<Row>(
+    const data = entityCellData<Row, string>(
       "location",
+      (value) => z.string().parse(value),
       (row) => row.relation,
       async () => {},
     );
@@ -21,8 +23,9 @@ describe("entityCellData clear capability", () => {
 
   it("exposes clearing only when the nullable adapter supplies it", async () => {
     const clear = vi.fn().mockResolvedValue(undefined);
-    const data = entityCellData<Row>(
+    const data = entityCellData<Row, string>(
       "location",
+      (value) => z.string().parse(value),
       (row) => row.relation,
       async () => {},
       clear,

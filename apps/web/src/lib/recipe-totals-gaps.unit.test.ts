@@ -1,4 +1,5 @@
 import type { Amount } from "@cubby/schemas/codec";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import {
   type BaseKind,
@@ -17,6 +18,7 @@ import {
   makeProduct,
   makeSubRecipe,
   makeSubRecipeEntry,
+  normalizeIngredientMap,
   type Product,
 } from "~/lib/recipe-costing.fixtures";
 import {
@@ -139,7 +141,10 @@ describe("deriveRecipeTotalsGaps — classification", () => {
     const rows = [makeEntry("ing", ingredient, line)];
     const ingMap = { ing: ingredientWith("ing", ingredient, products) };
 
-    const gaps = deriveRecipeTotalsGaps(costRecipe(rows, ingMap), ingMap);
+    const gaps = deriveRecipeTotalsGaps(
+      costRecipe(rows, ingMap),
+      normalizeIngredientMap(ingMap),
+    );
 
     if (expected === null) {
       expect(gaps).toHaveLength(0);
@@ -158,10 +163,16 @@ describe("deriveRecipeTotalsGaps — multi-row", () => {
     ];
     const ingMap = { h: ingredientWith("h", "salt", []) };
 
-    const gaps = deriveRecipeTotalsGaps(costRecipe(rows, ingMap), ingMap);
+    const gaps = deriveRecipeTotalsGaps(
+      costRecipe(rows, ingMap),
+      normalizeIngredientMap(ingMap),
+    );
 
     expect(gaps).toHaveLength(1);
-    expect(gaps[0]).toMatchObject({ source: "ingredient", ingredientId: "h" });
+    expect(gaps[0]).toMatchObject({
+      source: "ingredient",
+      ingredientId: testShortcode("ingredient", "h"),
+    });
   });
 
   it("gaps sort by leverage; fully-costed lines drop out", () => {
@@ -183,7 +194,10 @@ describe("deriveRecipeTotalsGaps — multi-row", () => {
       a: ingredientWith("a", "flour", []),
     };
 
-    const gaps = deriveRecipeTotalsGaps(costRecipe(rows, ingMap), ingMap);
+    const gaps = deriveRecipeTotalsGaps(
+      costRecipe(rows, ingMap),
+      normalizeIngredientMap(ingMap),
+    );
 
     expect(gaps.map((x) => x.kind)).toEqual([
       "no-product",
@@ -202,12 +216,15 @@ describe("deriveRecipeTotalsGaps — sub-recipes", () => {
     );
     const rows = [makeSubRecipeEntry(sauce, [])];
 
-    const gaps = deriveRecipeTotalsGaps(costRecipe(rows, {}, { sauce }), {});
+    const gaps = deriveRecipeTotalsGaps(
+      costRecipe(rows, {}, { sauce }),
+      normalizeIngredientMap({}),
+    );
 
     expect(gaps).toHaveLength(1);
     expect(gaps[0]).toMatchObject({
       source: "recipe",
-      recipeId: "sauce",
+      recipeId: testShortcode("recipe", "sauce"),
       name: "tomato sauce",
       kind: "set-subrecipe-amount",
       missing: { price: true, weight: true, nutrients: true },
@@ -223,13 +240,13 @@ describe("deriveRecipeTotalsGaps — sub-recipes", () => {
 
     const gaps = deriveRecipeTotalsGaps(
       costRecipe(rows, { tomato }, { sauce }),
-      { tomato },
+      normalizeIngredientMap({ tomato }),
     );
 
     expect(gaps).toHaveLength(1);
     expect(gaps[0]).toMatchObject({
       source: "recipe",
-      recipeId: "sauce",
+      recipeId: testShortcode("recipe", "sauce"),
       kind: "set-subrecipe-yield",
       missing: { price: true, weight: true, nutrients: true },
     });
@@ -254,13 +271,13 @@ describe("deriveRecipeTotalsGaps — sub-recipes", () => {
 
     const gaps = deriveRecipeTotalsGaps(
       costRecipe(rows, { tomato }, { sauce }),
-      { tomato },
+      normalizeIngredientMap({ tomato }),
     );
 
     expect(gaps).toHaveLength(1);
     expect(gaps[0]).toMatchObject({
       source: "recipe",
-      recipeId: "sauce",
+      recipeId: testShortcode("recipe", "sauce"),
       kind: "fix-subrecipe-totals",
       missing: { price: true, weight: false, nutrients: false },
     });

@@ -1,8 +1,5 @@
-import {
-  type RecipeId,
-  unsafeRecipeId,
-  unsafeRecipeShortcode,
-} from "@cubby/schemas/identifiers";
+import type { RecipeId } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 import { setCfEnv } from "~/server/cf-env";
@@ -105,9 +102,9 @@ describe("recipe deletion cost-staleness workflows", () => {
     ]);
     if (!childEntityId || !parentEntityId) throw new Error("seed failed");
     return {
-      child: unsafeRecipeId(childEntityId),
+      child: parseEntityId("recipe", childEntityId),
       childCode: child.id,
-      parent: unsafeRecipeId(parentEntityId),
+      parent: parseEntityId("recipe", parentEntityId),
     };
   };
 
@@ -169,7 +166,7 @@ describe("recipe deletion cost-staleness workflows", () => {
             ingredients: [
               {
                 type: "recipe",
-                recipeId: unsafeRecipeShortcode(child.shortcode),
+                recipeId: parseShortcodeFor("recipe", child.shortcode),
                 ingredientId: null,
                 amounts: [{ value: 1, unit: "each" }],
               },
@@ -185,7 +182,7 @@ describe("recipe deletion cost-staleness workflows", () => {
       "recipe",
     );
     if (!parentEntityId) throw new Error("seed failed");
-    const resolvedParentId = unsafeRecipeId(parentEntityId);
+    const resolvedParentId = parseEntityId("recipe", parentEntityId);
     await recompute([resolvedParentId, child.id]);
     expect(
       (await getRecipeTotalsState(ctx.db, resolvedParentId))?.totalsComputedAt,
@@ -236,8 +233,8 @@ describe("recipe deletion cost-staleness workflows", () => {
     ]);
     if (!childId || !parentId) throw new Error("seed failed");
     return {
-      child: unsafeRecipeId(childId),
-      parent: unsafeRecipeId(parentId),
+      child: parseEntityId("recipe", childId),
+      parent: parseEntityId("recipe", parentId),
       parentCode: parent.id,
     };
   };
@@ -268,7 +265,7 @@ describe("recipe deletion cost-staleness workflows", () => {
     );
     const entityId = await resolveLiveShortcode(ctx.db, created.id, "recipe");
     if (!entityId) throw new Error("seed failed");
-    const target = unsafeRecipeId(entityId);
+    const target = parseEntityId("recipe", entityId);
 
     await recompute([target]);
     expect(

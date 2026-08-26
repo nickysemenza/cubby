@@ -1,4 +1,5 @@
-import { unsafeVendorShortcode } from "@cubby/schemas/identifiers";
+import { testShortcode } from "@cubby/schemas/testing";
+
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -23,7 +24,7 @@ vi.mock("~/app/vendors/vendor.functions", () => ({
 import { VendorLogoFetchAction } from "./vendor-logo-fetch-action";
 
 const vendor = {
-  id: unsafeVendorShortcode("VEN-2345"),
+  id: testShortcode("vendor", "VEN-2345"),
   name: "Example Supply",
   website: "https://example.com",
 };
