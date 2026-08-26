@@ -126,8 +126,8 @@ function UsageTable({
 }) {
   return (
     <Table
-      containerClassName="overflow-hidden border border-[var(--border)]"
-      className="table-auto"
+      containerClassName="border border-[var(--border)]"
+      className="min-w-[26rem] table-auto"
     >
       <TableHeader>
         <TableRow>

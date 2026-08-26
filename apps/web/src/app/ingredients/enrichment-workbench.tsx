@@ -112,6 +112,7 @@ export function EnrichmentWorkbench({
     data: worklist,
     isLoading: worklistLoading,
     error,
+    refetch,
   } = useQuery(
     // Pass no input when unscoped so the query key matches the plain worklist.
     ingredient.enrichmentWorkbench.queryOptions(
@@ -485,9 +486,25 @@ export function EnrichmentWorkbench({
           )}
 
           {error && (
-            <StatusText as="div" tone="destructive" className="text-sm">
-              {error.message}
-            </StatusText>
+            <Row
+              align="center"
+              wrap
+              gap="sm"
+              className="border border-destructive/40 bg-destructive/5 px-3 py-2"
+            >
+              <StatusText as="div" tone="destructive" className="text-sm">
+                {error.message}
+              </StatusText>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-h-11 sm:min-h-0"
+                onClick={() => void refetch()}
+              >
+                Try again
+              </Button>
+            </Row>
           )}
 
           {!isLoading && rows.length === 0 && (
@@ -500,8 +517,8 @@ export function EnrichmentWorkbench({
 
           {visible.length > 0 && (
             <Table
-              className="table-auto"
-              containerClassName="overflow-hidden border border-[var(--border)]"
+              className="min-w-[42rem] table-auto"
+              containerClassName="border border-[var(--border)]"
             >
               <TableHeader>
                 <TableRow>

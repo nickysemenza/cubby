@@ -47,4 +47,16 @@ describe("RecipeCompareGrid", () => {
       "font-normal",
     );
   });
+
+  it("labels each remove control with the recipe name", () => {
+    render(
+      <RecipeCompareGrid compared={[comparedRecipe]} onRemove={vi.fn()} />,
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: "Remove Test recipe from comparison",
+      }),
+    ).toHaveClass("size-11", "sm:size-5");
+  });
 });
