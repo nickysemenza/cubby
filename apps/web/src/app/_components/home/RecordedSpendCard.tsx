@@ -9,6 +9,7 @@ import {
   CardActionLink,
   DashboardCard,
 } from "~/components/layout/dashboard-card";
+import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import { formatCurrency } from "~/lib/utils";
 import { getHomeAsOfWindow, type HomeAsOfWindow } from "./home-as-of-window";
@@ -36,6 +37,17 @@ export function getRecordedSpendWindow(now: Date) {
   return getHomeAsOfWindow(now).spend;
 }
 
+export function describeRecordedSpendChange(
+  current: ExpenseMonthlyAggregate | undefined,
+  previous: ExpenseMonthlyAggregate | undefined,
+) {
+  if (!current) return "No current month-to-date total.";
+  if (!previous) {
+    return `${formatCurrency(current.net)} month-to-date; no prior calendar month to compare.`;
+  }
+  return `${formatCurrency(current.net)} month-to-date; prior calendar month was ${formatCurrency(previous.net)}.`;
+}
+
 /**
  * Six complete/current calendar months of recorded household spend. This is a
  * focused home read over the ledger's existing SQL aggregate, never a second
@@ -51,7 +63,8 @@ export function RecordedSpendCard({ asOf }: { asOf: HomeAsOfWindow }) {
     () => fillRecordedSpendMonths(query.data ?? [], asOf.spend.months),
     [asOf.spend.months, query.data],
   );
-  const currentMonth = monthly.at(-1)?.net ?? 0;
+  const current = monthly.at(-1);
+  const previous = monthly.at(-2);
 
   return (
     <DashboardCard
@@ -66,9 +79,19 @@ export function RecordedSpendCard({ asOf }: { asOf: HomeAsOfWindow }) {
           <Skeleton className="mt-4 h-40 w-full" />
         </>
       ) : query.isError ? (
-        <p className="text-muted-foreground text-sm">
-          Spend is unavailable right now.
-        </p>
+        <div className="space-y-3">
+          <p className="text-muted-foreground text-sm">
+            Spend is unavailable right now.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 sm:h-7"
+            onClick={() => query.refetch()}
+          >
+            Retry
+          </Button>
+        </div>
       ) : query.data?.length === 0 ? (
         <p className="text-muted-foreground text-sm">
           No recorded expenses in this period.
@@ -77,10 +100,14 @@ export function RecordedSpendCard({ asOf }: { asOf: HomeAsOfWindow }) {
         <>
           <Row align="baseline" gap="xs">
             <span className="font-mono font-semibold text-xl tabular-nums">
-              {formatCurrency(currentMonth)}
+              {formatCurrency(current?.net ?? 0)}
             </span>
             <span className="text-muted-foreground text-xs">this month</span>
           </Row>
+          <p className="mt-1 text-muted-foreground text-xs">
+            {describeRecordedSpendChange(current, previous)} Recorded expenses
+            only; open Ledger to review the entries behind this total.
+          </p>
           <RecordedSpendBars monthly={monthly} />
         </>
       )}
@@ -95,12 +122,16 @@ function RecordedSpendBars({
 }) {
   const summaryId = useId();
   const maxMagnitude = Math.max(...monthly.map((row) => Math.abs(row.net)), 1);
-  const currentMonth = monthly.at(-1)?.month;
+  const currentMonth = monthly.at(-1);
+  const previousMonth = monthly.at(-2);
 
   return (
     <figure className="mt-2" aria-labelledby={summaryId}>
       <figcaption id={summaryId} className="sr-only">
-        Recorded spend by month for the last six calendar months.
+        How is recorded spend changing month to month? Current month is
+        {formatCurrency(currentMonth?.net ?? 0)}.{" "}
+        {describeRecordedSpendChange(currentMonth, previousMonth)} Recorded
+        expenses only.
       </figcaption>
       <div
         aria-hidden="true"
@@ -118,7 +149,7 @@ function RecordedSpendBars({
                 {row.net >= 0 && (
                   <div
                     className={
-                      row.month === currentMonth
+                      row.month === currentMonth?.month
                         ? "w-full bg-chart-1"
                         : "w-full bg-chart-2"
                     }

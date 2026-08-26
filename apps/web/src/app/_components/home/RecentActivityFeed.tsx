@@ -61,8 +61,16 @@ export function RecentActivityFeed({ limit = 5 }: RecentActivityFeedProps) {
           <AuditLogList limit={limit} showEntityLink variant="ledger" />
         ) : (
           <div className="space-y-2" data-testid="activity-placeholder">
-            <Skeleton className="h-5 w-full" />
-            <Skeleton className="h-5 w-3/4" />
+            {Array.from(
+              { length: limit },
+              (_, index) => `activity-placeholder-${index}`,
+            ).map((placeholderKey) => (
+              <Skeleton
+                key={placeholderKey}
+                data-testid="activity-placeholder-row"
+                className="h-11 w-full sm:h-7"
+              />
+            ))}
           </div>
         )}
       </DashboardCard>

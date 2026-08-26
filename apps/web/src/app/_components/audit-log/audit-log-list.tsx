@@ -2,13 +2,14 @@ import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { AuditSource } from "@cubby/schemas/context";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { uniqBy } from "es-toolkit";
-import { Activity } from "lucide-react";
+import { Activity, CircleAlert } from "lucide-react";
 import { useMemo } from "react";
 import { Row } from "~/components/layout";
 import { AuditTimeline } from "~/components/reui/timeline";
 import { Button } from "~/components/ui/button";
 import {
   Empty,
+  EmptyActions,
   EmptyDescription,
   EmptyIcon,
   EmptyTitle,
@@ -17,6 +18,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { useHydrated } from "~/hooks/useHydrated";
 import { auditLogListOptions } from "~/lib/audit-log.functions";
 import { authClient } from "~/lib/auth-client";
+import { getErrorMessage } from "~/lib/error-utils";
 import { AuditLogEntryComponent } from "./audit-log-entry";
 
 interface AuditLogListProps {
@@ -45,21 +47,29 @@ export function AuditLogList({
   // signed out (this list renders on the public home page).
   const hydrated = useHydrated();
   const isAuthenticated = hydrated && !!session.data?.user;
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
-    useInfiniteQuery({
-      ...auditLogListOptions(
-        {
-          entityType,
-          entityId,
-          source,
-          limit,
-        },
-        {
-          getNextPageParam: (lastPage) => lastPage.nextCursor,
-        },
-      ),
-      enabled: isAuthenticated,
-    });
+  const {
+    data,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isError,
+    isFetchingNextPage,
+    isLoading,
+    refetch,
+  } = useInfiniteQuery({
+    ...auditLogListOptions(
+      {
+        entityType,
+        entityId,
+        source,
+        limit,
+      },
+      {
+        getNextPageParam: (lastPage) => lastPage.nextCursor,
+      },
+    ),
+    enabled: isAuthenticated,
+  });
 
   const entries = useMemo(
     () =>
@@ -78,6 +88,28 @@ export function AuditLogList({
       <Row align="center" justify="center" className="py-6">
         <Spinner size="md" className="text-muted-foreground" />
       </Row>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Empty variant="minimal" className="py-6">
+        <EmptyIcon icon={CircleAlert} />
+        <EmptyTitle>Couldn&apos;t load activity</EmptyTitle>
+        <EmptyDescription>
+          {getErrorMessage(error) || "Try again to load recent activity."}
+        </EmptyDescription>
+        <EmptyActions>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 sm:h-7"
+            onClick={() => refetch()}
+          >
+            Retry
+          </Button>
+        </EmptyActions>
+      </Empty>
     );
   }
 
