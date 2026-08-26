@@ -9,6 +9,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
 import { useMemo } from "react";
+import { formatDate } from "~/app/projects/project-formatting";
 import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
 import type { EntityDetailRoute } from "~/entities/entities";
 import {
@@ -101,11 +102,17 @@ export function relationshipRouteSourceFromRecord(
   const id = typeof record.id === "string" ? record.id : fallbackId;
   if (!id) return null;
   const title = record[entityInspectorMetadata[entity].titleField];
-  if (typeof title !== "string" || title.trim().length === 0) return null;
+  const label =
+    typeof title === "string" && title.trim().length > 0
+      ? title
+      : entity === "meal" && typeof record.date === "string"
+        ? formatDate(record.date)
+        : null;
+  if (!label) return null;
   return {
     entity,
     id,
-    label: title,
+    label,
   };
 }
 

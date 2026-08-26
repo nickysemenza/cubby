@@ -64,6 +64,23 @@ const groups: RelatedPreviewGroup[] = [
   },
 ];
 
+const MEAL_ID = "MEL-ROUTE";
+const mealGroups: RelatedPreviewGroup[] = [
+  {
+    sourceId: MEAL_ID,
+    relationKey: "meal.recipes",
+    totalCount: 1,
+    items: [
+      {
+        entity: "recipe",
+        id: "RCP-ONE",
+        label: "Fixture recipe",
+        displayImage: null,
+      },
+    ],
+  },
+];
+
 function renderPreview() {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -125,6 +142,49 @@ describe("relationshipRoutePreviewModel", () => {
       id: SOURCE_ID,
       label: "Fixture vendor",
     });
+  });
+
+  it("keeps an unnamed Meal's date identity and canonical route", () => {
+    const source = relationshipRouteSourceFromRecord("meal", {
+      id: MEAL_ID,
+      name: "",
+      date: "2026-01-02",
+    });
+    expect(source).toEqual({ entity: "meal", id: MEAL_ID, label: "Jan 2" });
+    expect(
+      relationshipRoutePreviewModel({
+        source: source!,
+        views: relatedViewsFor("meal"),
+        groups: mealGroups,
+      }),
+    ).toMatchObject({ source });
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, staleTime: Number.POSITIVE_INFINITY },
+      },
+    });
+    queryClient.setQueryData(
+      relatedData.previews.queryOptions({
+        source: "meal",
+        sourceIds: [MEAL_ID],
+        relationKeys: relatedViewsFor("meal").map((view) => view.key),
+      }).queryKey,
+      mealGroups,
+    );
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RelationshipRoutePreview
+          entity="meal"
+          sourceId={MEAL_ID}
+          source={source}
+        />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByText("Jan 2").closest("a")).toHaveAttribute(
+      "href",
+      `/meals/${MEAL_ID}`,
+    );
   });
 
   it("subscribes to an already-loaded inspector preview without fetching again", () => {
