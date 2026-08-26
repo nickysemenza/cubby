@@ -45,9 +45,9 @@
     "build:cf": "node ../../scripts/ensure-mcp-apps.ts && rm -rf dist && DEPLOY_TARGET=cloudflare NODE_ENV=production vite build && node scripts/build-sw.mjs && tsx scripts/analyze-client-bundle.ts --check",
     "deploy:cf": "pnpm run build:cf && wrangler deploy --config dist/server/wrangler.json",
     "preview:cf": "pnpm run build:cf && wrangler dev --config dist/server/wrangler.json",
-    "gen:apple-icon": "magick -background none public/favicon.svg -resize 180x180 public/apple-touch-icon.png",
-    "gen:pwa-icons": "magick -background none public/favicon.svg -resize 192x192 public/icon-192.png && magick -background none public/favicon.svg -resize 512x512 public/icon-512.png && magick -size 512x512 xc:'#f7f9fc' \\( public/icon-512.png -resize 360x360 \\) -gravity center -composite public/icon-512-maskable.png",
-    "gen:pwa-splash": "mkdir -p public/splash && for size in 750x1334:192 1125x2436:256 828x1792:256 1170x2532:256 1284x2778:256 1179x2556:256 1290x2796:256 1206x2622:256 1320x2868:256 1620x2160:300 1668x2388:300 2048x2732:360; do dim=${size%%:*}; icon=${size##*:}; magick -size $dim xc:'#f7f9fc' \\( public/icon-512.png -resize ${icon}x${icon} \\) -gravity center -composite public/splash/apple-splash-${dim}.png; done",
+    "gen:apple-icon": "magick -background none public/favicon.svg -resize 180x180 -depth 8 -strip public/apple-touch-icon.png",
+    "gen:pwa-icons": "magick -background none public/favicon.svg -resize 192x192 -depth 8 -strip public/icon-192.png && magick -background none public/favicon.svg -resize 512x512 -depth 8 -strip public/icon-512.png && magick -size 512x512 xc:'#f7f9fc' \\( public/icon-512.png -resize 360x360 \\) -gravity center -composite -depth 8 -strip public/icon-512-maskable.png",
+    "gen:pwa-splash": "mkdir -p public/splash && for size in 750x1334:192 1125x2436:256 828x1792:256 1170x2532:256 1284x2778:256 1179x2556:256 1290x2796:256 1206x2622:256 1320x2868:256 1620x2160:300 1668x2388:300 2048x2732:360; do dim=${size%%:*}; icon=${size##*:}; magick -size $dim xc:'#f7f9fc' \\( public/icon-512.png -resize ${icon}x${icon} \\) -gravity center -composite -depth 8 -strip public/splash/apple-splash-${dim}.png; done",
     "gen:pwa-assets": "pnpm run gen:apple-icon && pnpm run gen:pwa-icons && pnpm run gen:pwa-splash"
   },
   "dependencies": {
