@@ -133,7 +133,10 @@ function Home() {
 
       {/* Activity is useful context after the immediate operating picture, but
           it does not compete with today's actions for the first decision. */}
-      <Section title="Recent activity">
+      <Section
+        title="What changed"
+        description="The latest recorded changes across the household."
+      >
         <RecentActivityFeed limit={6} />
       </Section>
 

@@ -75,14 +75,6 @@ export function IngredientUsagePanel({
 
     return (
       <Stack gap="sm">
-        <div>
-          <h4 className="font-medium text-sm">
-            Which ingredients power recipes?
-          </h4>
-          <Description size="xs">
-            Most-used ingredients in the selected cookbook scope.
-          </Description>
-        </div>
         <IngredientUsageChart rows={rows} maxBars={limit} />
         <nav
           aria-label="Top recipe ingredients"
@@ -102,7 +94,7 @@ export function IngredientUsagePanel({
         {rows.length > limit && (
           <Link
             to="/ingredients"
-            className="text-primary text-xs hover:underline"
+            className="inline-flex min-h-11 items-center text-primary text-xs hover:underline sm:min-h-0"
           >
             View all {rows.length} ingredients →
           </Link>

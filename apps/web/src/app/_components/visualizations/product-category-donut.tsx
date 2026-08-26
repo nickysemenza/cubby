@@ -202,7 +202,7 @@ function DonutChart({ data }: DonutChartProps) {
               <g key={slice.category ?? "uncategorized"}>
                 <Link
                   to="/products"
-                  search={{ category: slice.category ?? "" }}
+                  search={slice.category ? { category: slice.category } : {}}
                   aria-label={`${categoryLabel}: ${slice.productCount.toLocaleString()} product${slice.productCount !== 1 ? "s" : ""}`}
                 >
                   {/* biome-ignore lint/a11y/noStaticElementInteractions: D3 donut chart hover interaction */}
