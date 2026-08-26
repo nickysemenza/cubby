@@ -1224,8 +1224,14 @@ export function ProjectTable({
       label: value,
     })),
   });
-  const { onRowClick, onRowHover, onRowHoverEnd, PreviewSheet } =
-    useEntityPreview("project");
+  const {
+    onRowClick,
+    onRowHover,
+    onRowHoverEnd,
+    PreviewSheet,
+    preview,
+    dockedInspector,
+  } = useEntityPreview("project", { responsiveInspector: true });
 
   const updateProjectMutation = useUpdateMutation({
     mutationFn: entityMutationOptionsFactory("project", "update"),
@@ -1430,6 +1436,8 @@ export function ProjectTable({
         onRowClick={onRowClick}
         onRowHover={onRowHover}
         onRowHoverEnd={onRowHoverEnd}
+        currentRowId={preview?.rowKey ?? preview?.id}
+        desktopInspector={dockedInspector}
       />
       {isTree && (
         <TreePaginationNote
