@@ -22,7 +22,7 @@ export type RecommendationKind = z.infer<typeof recommendationKind>;
 /** Only an entity shortcode is permitted in the workbench URL. */
 export const recommendationWorkbenchSearch = z
   .object({
-    kind: recommendationKind,
+    kind: recommendationKind.optional(),
     source: productShortcode.optional(),
     inventory: inventoryShortcode.optional(),
   })
