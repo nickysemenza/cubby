@@ -111,6 +111,11 @@ const countPoolQueries = (pool: Pool): Pool => {
 export async function countTestDbQueries<T>(
   run: () => Promise<T>,
 ): Promise<{ result: T; queryCount: number; statements: string[] }> {
+  if (usesPglite()) {
+    throw new Error(
+      "countTestDbQueries requires the node-postgres provider; keep query-count contracts in the IntegreSQL project",
+    );
+  }
   const measurement = { count: 0, statements: [] as string[] };
   const result = await queryMeasurement.run(measurement, run);
   return {
@@ -252,6 +257,8 @@ let fileDb: {
   testId: number;
 } | null = null;
 
+const usesPglite = () => process.env.CUBBY_TEST_DB_PROVIDER === "pglite";
+
 /** `TRUNCATE` target list, resolved once per file (see {@link resetTestDb}). */
 let truncateTargets = "";
 
@@ -362,6 +369,13 @@ async function getFileDb() {
  * error in some unrelated later test rather than here.
  */
 async function resetTestDb() {
+  if (usesPglite()) {
+    const { resetPgliteTestDb } = await import("./pglite-test-db");
+    return await resetPgliteTestDb({
+      user: { id: TEST_USER_ID, name: "Test User", email: "test@example.com" },
+      home: { id: TEST_HOME_ID, shortcode: TEST_HOME_SHORTCODE },
+    });
+  }
   const { rawDb, pool } = await getFileDb();
 
   // Evict every other connection to this database first. TRUNCATE needs
@@ -380,6 +394,7 @@ async function resetTestDb() {
   await pool.query(`TRUNCATE ${truncateTargets} RESTART IDENTITY CASCADE`);
   await seedTestUser(rawDb);
   await seedTestHome(rawDb);
+  return (await getFileDb()).db;
 }
 
 /** Holder returned by {@link withTestDb}; fields are live before each test. */
@@ -399,6 +414,11 @@ export interface TestDbContext {
  * their databases would never be handed back.
  */
 export async function closeTestDb() {
+  if (usesPglite()) {
+    const { closePgliteTestDb } = await import("./pglite-test-db");
+    await closePgliteTestDb();
+    return;
+  }
   if (!fileDb) return;
   const { pool, testId } = fileDb;
   fileDb = null;
@@ -438,8 +458,7 @@ export function withTestDb(source: AuditSource = "ui"): TestDbContext {
   };
 
   beforeEach(async () => {
-    await resetTestDb();
-    ctx.db = (await getFileDb()).db;
+    ctx.db = await resetTestDb();
     ctx.actor = actor;
   });
   return ctx;

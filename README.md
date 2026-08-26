@@ -255,7 +255,7 @@ erDiagram
 
 ## 🛠️ Development Setup
 
-Prereqs: **Node** (see [.nvmrc](.nvmrc), currently `v24`), **pnpm** (pinned in [package.json](package.json) — `packageManager: pnpm@10.34.1`), **Docker**, **wrangler** (for CF Workers work).
+Prereqs: **Node** (see [.nvmrc](.nvmrc), currently `v24`), **pnpm** (pinned in [package.json](package.json) — `packageManager: pnpm@10.34.1`), and **wrangler** (for CF Workers work). Docker is optional for the normal test loop; use it for the local app database and explicit PostgreSQL-parity tests.
 
 ```sh
 # 1. Install
@@ -265,7 +265,8 @@ pnpm install
 cp apps/web/.env.example apps/web/.env
 # Edit apps/web/.env — see "Environment Variables" below
 
-# 3. Local services (Postgres 17 + IntegresQL + Jaeger)
+# 3. Local services for app development and PostgreSQL-parity tests
+#    (not needed for the default Vitest or Playwright commands)
 docker-compose up -d
 
 # 4. Web DB schema
@@ -336,8 +337,9 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
   without an injected `PORT` auto-picks a free port; the main checkout remains
   strict on `:3000`.
 - **Shared services:** docker-compose (Postgres/IntegresQL/Jaeger) binds fixed host
-  ports — `docker-compose up -d` once from any checkout and all worktrees reuse them
-  for `test`/`test:e2e`.
+  ports — `docker-compose up -d` once from any checkout and all worktrees reuse
+  them for app development and the explicit `*:postgres` parity commands. The
+  default Vitest and Playwright commands use in-process PGlite and need no Docker.
 - **⚠ Always pass `-p cubby` to compose from a worktree.** Compose derives its
   project name from the *directory* name, so `docker compose up -d` inside
   `.claude/worktrees/<branch>/` creates a **second, parallel stack**
@@ -368,8 +370,12 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
 | `pnpm run lint` | Recursive package Biome lint |
 | `pnpm run format:check` | Recursive package Biome format/lint check |
 | `pnpm run format:write` | Recursive package Biome auto-fix |
-| `pnpm run test` | Recursive non-watch Vitest unit + integration |
-| `pnpm run test:e2e` | Playwright E2E (uses IntegresQL) |
+| `pnpm run test` | Docker-free Vitest unit/UI plus portable PGlite database tests |
+| `pnpm run test:pglite` | PGlite schema contract plus portable repository integration tests |
+| `pnpm run test:integration:postgres` | Full repository integration suite on PostgreSQL/IntegreSQL (requires Docker) |
+| `pnpm run test:e2e tests/e2e/<file>.spec.ts` | Playwright E2E on PGlite; targeted files are the normal local loop |
+| `pnpm run test:e2e:postgres` | Playwright E2E on PostgreSQL/IntegreSQL for explicit local parity (requires Docker) |
+| `pnpm run test:local` | Optional full Docker-free Vitest + Playwright run |
 | `pnpm --filter @cubby/web run db:push` | Push the web Drizzle schema to the configured Postgres DB |
 | `pnpm --filter @cubby/web run build:cf` | Build only the main web Worker |
 
@@ -396,10 +402,11 @@ In dev, `await __jsProfile(5000)` in the browser console captures a CPU flame su
 | Suffix | Purpose | Runner |
 |---|---|---|
 | `*.unit.test.ts` | Unit tests | Vitest |
-| `*.integration.test.ts` | Integration tests (real DB via IntegresQL) | Vitest |
+| `*.integration.test.ts` | Repository integration; portable subset also runs on PGlite | Vitest |
 | `*.spec.ts` | E2E tests | Playwright |
 
-E2E tests use IntegresQL to spin up fresh databases per test — see memory notes for SSR hydration gotchas and the `e2e-helpers.ts` shared helpers.
+Local E2E uses one ephemeral PGlite database per run; CI uses an IntegreSQL
+PostgreSQL clone. See `e2e-helpers.ts` for the shared browser fixtures.
 
 ### File Naming Conventions
 
