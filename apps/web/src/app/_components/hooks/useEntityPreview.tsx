@@ -7,8 +7,8 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { Sheet, SheetContent } from "~/components/ui/sheet";
-import { isBrowserRoutedEntity } from "~/entities/entities";
+import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
+import { entityLabel, isBrowserRoutedEntity } from "~/entities/entities";
 import { entityPreviewQueryOptions } from "~/entities/entity-query";
 import { EntityWorkbenchInspector } from "../entity-workbench-inspector";
 
@@ -83,11 +83,16 @@ function PreviewSheetView({
         className="!w-[25rem] !max-w-[calc(100vw-2rem)] overflow-y-auto p-0"
       >
         {preview && (
-          <EntityWorkbenchInspector
-            entity={preview.entityType}
-            id={preview.id}
-            onClose={onClose}
-          />
+          <>
+            <SheetTitle className="sr-only">
+              {entityLabel(preview.entityType)} {preview.id} preview
+            </SheetTitle>
+            <EntityWorkbenchInspector
+              entity={preview.entityType}
+              id={preview.id}
+              onClose={onClose}
+            />
+          </>
         )}
       </SheetContent>
     </Sheet>

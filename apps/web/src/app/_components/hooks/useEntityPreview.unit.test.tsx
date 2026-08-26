@@ -25,6 +25,7 @@ vi.mock("~/components/ui/sheet", () => ({
     <div data-testid="preview-sheet">{children}</div>
   ),
   SheetContent: ({ children }: PropsWithChildren) => <div>{children}</div>,
+  SheetTitle: ({ children }: PropsWithChildren) => <h2>{children}</h2>,
 }));
 
 vi.mock("../entity-workbench-inspector", () => ({
@@ -228,5 +229,8 @@ describe("useEntityPreview intent prefetch", () => {
     expect(screen.getByTestId("preview-sheet")).toContainElement(
       screen.getByTestId("workbench-inspector"),
     );
+    expect(
+      screen.getByRole("heading", { name: "Product PRD-4K7M preview" }),
+    ).toBeInTheDocument();
   });
 });
