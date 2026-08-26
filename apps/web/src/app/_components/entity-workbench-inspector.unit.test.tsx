@@ -64,6 +64,7 @@ import { EntityWorkbenchInspector } from "./entity-workbench-inspector";
 
 const VENDOR_ID = "VEN-WORKBENCH";
 const IMAGE_ID = "IMG-WORKBENCH";
+const LEDGER_PARTY_ID = "LPY-WORKBENCH";
 
 describe("EntityWorkbenchInspector", () => {
   beforeEach(() => {
@@ -86,6 +87,7 @@ describe("EntityWorkbenchInspector", () => {
     expect(mocks.preview).toHaveBeenCalledWith({
       entity: "vendor",
       id: VENDOR_ID,
+      showOpenAction: false,
     });
     expect(mocks.relationships).not.toHaveBeenCalled();
     expect(mocks.activity).not.toHaveBeenCalled();
@@ -116,18 +118,30 @@ describe("EntityWorkbenchInspector", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("uses an identity-only fallback for an unsupported compact entity", () => {
+  it("uses a compact overview for a first-wave image entity", () => {
     render(<EntityWorkbenchInspector entity="image" id={IMAGE_ID} />);
 
-    expect(screen.queryByTestId("compact-preview")).not.toBeInTheDocument();
-    expect(
-      screen.getByText("Open the full record to inspect its details."),
-    ).toBeVisible();
-    expect(screen.queryByRole("tab", { name: "Relations" })).toBeNull();
-    expect(screen.queryByRole("tab", { name: "Activity" })).toBeNull();
+    expect(screen.getByTestId("compact-preview")).toBeInTheDocument();
+    expect(mocks.preview).toHaveBeenCalledWith({
+      entity: "image",
+      id: IMAGE_ID,
+      showOpenAction: false,
+    });
     const openLink = screen.getByLabelText("Open full image details");
     expect(openLink.tagName).toBe("A");
     expect(openLink).toHaveAttribute("data-router-link", "true");
+  });
+
+  it("does not promise an unavailable full record for a route-less fallback", () => {
+    render(
+      <EntityWorkbenchInspector entity="ledgerParty" id={LEDGER_PARTY_ID} />,
+    );
+
+    expect(screen.queryByTestId("compact-preview")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Use Relations or Activity to inspect linked records."),
+    ).toBeVisible();
+    expect(screen.queryByRole("button", { name: /open full/i })).toBeNull();
   });
 
   it("resets to Overview when the selected record changes", () => {
@@ -138,7 +152,9 @@ describe("EntityWorkbenchInspector", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Relations" }));
     expect(screen.getByTestId("relationship-explorer")).toBeInTheDocument();
 
-    rerender(<EntityWorkbenchInspector entity="image" id={IMAGE_ID} />);
+    rerender(
+      <EntityWorkbenchInspector entity="ledgerParty" id={LEDGER_PARTY_ID} />,
+    );
 
     expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute(
       "aria-selected",
@@ -146,7 +162,7 @@ describe("EntityWorkbenchInspector", () => {
     );
     expect(screen.queryByTestId("relationship-explorer")).toBeNull();
     expect(
-      screen.getByText("Open the full record to inspect its details."),
+      screen.getByText("Use Relations or Activity to inspect linked records."),
     ).toBeVisible();
   });
 });

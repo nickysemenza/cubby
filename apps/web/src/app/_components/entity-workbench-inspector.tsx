@@ -42,6 +42,10 @@ const COMPACT_OVERVIEW_ENTITIES: ReadonlySet<Entity> =
     "expense",
     "purchase",
     "vendor",
+    "financialAccount",
+    "financialTransaction",
+    "wish",
+    "image",
   ]);
 
 const supportsCompactOverview = (
@@ -99,7 +103,9 @@ function UnsupportedOverview({ entity, id }: { entity: Entity; id: string }) {
       </div>
       <p className="font-mono text-muted-foreground text-xs">{id}</p>
       <p className="text-muted-foreground text-xs">
-        Open the full record to inspect its details.
+        {isBrowserRoutedEntity(entity)
+          ? "Open the full record to inspect its details."
+          : "Use Relations or Activity to inspect linked records."}
       </p>
     </div>
   );
@@ -197,7 +203,11 @@ function EntityWorkbenchInspectorContent({
         {activeTab === "overview" ? (
           <TabsContent value="overview">
             {supportsCompactOverview(entity) ? (
-              <EntityPreviewContent entity={entity} id={id} />
+              <EntityPreviewContent
+                entity={entity}
+                id={id}
+                showOpenAction={false}
+              />
             ) : (
               <UnsupportedOverview entity={entity} id={id} />
             )}

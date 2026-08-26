@@ -11,4 +11,8 @@ export type HoverPreviewEntity =
   | "task"
   | "expense"
   | "purchase"
-  | "vendor";
+  | "vendor"
+  | "financialAccount"
+  | "financialTransaction"
+  | "wish"
+  | "image";

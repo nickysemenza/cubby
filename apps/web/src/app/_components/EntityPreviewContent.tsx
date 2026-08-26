@@ -1,5 +1,7 @@
 import { displayGtin } from "@cubby/schemas/external-id";
+import type { FinancialAccountOut } from "@cubby/schemas/financial-account";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import type { ImageAssociation, ImageWithEntity } from "@cubby/schemas/image";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import { locationCoverImage } from "@cubby/schemas/location";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
@@ -23,9 +25,10 @@ import {
 } from "~/app/projects/project-formatting";
 import { ProjectMark, ProjectMarkById } from "~/app/projects/project-mark";
 import { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
+import { wishPriceRange } from "~/app/wishes/wish-price-range";
 import { Row } from "~/components/layout";
 import { cookbook } from "~/entities/cookbook.functions";
-import { EntityIcon } from "~/entities/entities";
+import { EntityIcon, entities, entityDetailParams } from "~/entities/entities";
 import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { fdcIdFromParam } from "~/entities/entity-query";
 import type {
@@ -34,6 +37,7 @@ import type {
 } from "~/entities/generated/entity-details.gen";
 import { image } from "~/entities/image.functions";
 import { usdaFood } from "~/entities/usda.functions";
+import { formatCurrencyRange } from "~/lib/format-range";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
@@ -350,12 +354,23 @@ export function toUsdaCard(
   };
 }
 
-export function UsdaFoodPreviewContent({ fdcId }: { fdcId: number }) {
+export function UsdaFoodPreviewContent({
+  fdcId,
+  showOpenAction = true,
+}: {
+  fdcId: number;
+  showOpenAction?: boolean;
+}) {
   const query = useQuery(usdaFood.detail.queryOptions({ id: fdcId }));
 
   return (
     <PreviewQuery query={query} label="Food">
-      {(data) => <ManifestCard {...toUsdaCard(fdcId, data)} />}
+      {(data) => (
+        <ManifestCard
+          {...toUsdaCard(fdcId, data)}
+          showOpenAction={showOpenAction}
+        />
+      )}
     </PreviewQuery>
   );
 }
@@ -495,14 +510,25 @@ export function toCookbookCard(data: CookbookSummary): ManifestCardProps {
   };
 }
 
-export function CookbookPreviewContent({ cookbookId }: { cookbookId: string }) {
+export function CookbookPreviewContent({
+  cookbookId,
+  showOpenAction = true,
+}: {
+  cookbookId: string;
+  showOpenAction?: boolean;
+}) {
   const query = useQuery(
     cookbook.detail.queryOptions({ shortcode: cookbookId }),
   );
 
   return (
     <PreviewQuery query={query} label="Cookbook">
-      {(data) => <ManifestCard {...toCookbookCard(data)} />}
+      {(data) => (
+        <ManifestCard
+          {...toCookbookCard(data)}
+          showOpenAction={showOpenAction}
+        />
+      )}
     </PreviewQuery>
   );
 }
@@ -778,6 +804,190 @@ export function toVendorCard(
   };
 }
 
+// ── Financial accounts ─────────────────────────────────────────────────────
+
+function financialAccountIdentitySummary(
+  identity: FinancialAccountOut["identity"],
+) {
+  const provider =
+    identity.kind === "credit_card"
+      ? identity.issuer
+      : identity.kind === "bank_account" || identity.kind === "other"
+        ? identity.institution
+        : identity.kind === "stored_value"
+          ? identity.provider
+          : null;
+  const last4 = "last4" in identity ? identity.last4 : null;
+
+  return [
+    capitalize(identity.kind.replaceAll("_", " ")),
+    provider,
+    last4 ? `•••• ${last4}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+export function toFinancialAccountCard(
+  data: EntityDetailByEntity["financialAccount"],
+): ManifestCardProps {
+  return {
+    entity: "financialAccount",
+    routeParam: data.id,
+    icon: <EntityIcon entity="financialAccount" size={14} colored />,
+    name: data.name,
+    tag: "account",
+    identity: financialAccountIdentitySummary(data.identity),
+    body: [
+      {
+        kind: "stats",
+        stats: [
+          { label: "Transactions", value: data.transactionCount },
+          {
+            label: "Status",
+            value: data.provisional ? "Provisional" : "Known",
+          },
+        ],
+      },
+    ],
+  };
+}
+
+// ── Financial transactions ─────────────────────────────────────────────────
+
+const financialAccountCrossLink = (
+  shortcode: string,
+  name: string,
+): CrossLink => ({
+  to: "/financial-accounts/$shortcode",
+  params: { shortcode },
+  icon: <EntityIcon entity="financialAccount" size={12} colored />,
+  label: name,
+});
+
+export function toFinancialTransactionCard(
+  data: EntityDetailByEntity["financialTransaction"],
+): ManifestCardProps {
+  return {
+    entity: "financialTransaction",
+    routeParam: data.id,
+    icon: <EntityIcon entity="financialTransaction" size={14} colored />,
+    name: data.merchant ?? data.rawDescription ?? data.id,
+    tag: "transaction",
+    identity: [
+      capitalize(data.kind.replaceAll("_", " ")),
+      capitalize(data.status),
+    ].join(" · "),
+    crossLinks: [
+      financialAccountCrossLink(
+        data.accountId,
+        data.accountName ?? data.accountId,
+      ),
+    ],
+    body: [
+      {
+        kind: "stats",
+        stats: [
+          { label: "Amount", value: formatCurrency(data.amount) },
+          {
+            label: "Date",
+            value: data.postedDate ?? data.transactionDate ?? "—",
+          },
+          { label: "Purchases", value: data.allocations.length },
+        ],
+      },
+    ],
+  };
+}
+
+// ── Wishes ─────────────────────────────────────────────────────────────────
+
+export function toWishCard(
+  data: EntityDetailByEntity["wish"],
+): ManifestCardProps {
+  const priceRange = wishPriceRange(data.candidates);
+
+  return {
+    entity: "wish",
+    routeParam: data.id,
+    icon: <EntityIcon entity="wish" size={14} colored />,
+    name: data.name,
+    tag: "wish",
+    identity: data.acquiredAt
+      ? `Acquired ${formatDate(data.acquiredAt.toISOString())}`
+      : "Open",
+    body: [
+      {
+        kind: "stats",
+        stats: [
+          { label: "Candidates", value: data.candidates.length },
+          {
+            label: "Price range",
+            value: priceRange
+              ? formatCurrencyRange(priceRange.low, priceRange.high)
+              : "—",
+          },
+        ],
+      },
+      ...(data.candidates.length > 0
+        ? [
+            {
+              kind: "products" as const,
+              products: data.candidates.map((candidate) => ({
+                id: candidate.id,
+                name: candidate.name,
+                manufacturer: candidate.manufacturer,
+              })),
+            },
+          ]
+        : []),
+    ],
+  };
+}
+
+// ── Images ─────────────────────────────────────────────────────────────────
+
+const imageAssociationCrossLink = (
+  association: ImageAssociation,
+): CrossLink => ({
+  to: entities[association.entityType].routes.detail,
+  params: entityDetailParams(association.entityId),
+  icon: <EntityIcon entity={association.entityType} size={12} colored />,
+  label: `${association.entityName} · ${association.role}`,
+});
+
+export function toImageCard(data: ImageWithEntity): ManifestCardProps {
+  const dimensions =
+    data.width !== null && data.height !== null
+      ? `${data.width} × ${data.height}`
+      : "—";
+
+  return {
+    entity: "image",
+    routeParam: data.id,
+    icon: <EntityIcon entity="image" size={14} colored />,
+    name: data.filename,
+    tag: "image",
+    identity: data.status.toLowerCase(),
+    crossLinks:
+      data.associations.length > 0
+        ? data.associations.map(imageAssociationCrossLink)
+        : undefined,
+    body: [
+      ...(data.status === "UPLOADED"
+        ? [{ kind: "thumb" as const, url: data.url }]
+        : []),
+      {
+        kind: "stats",
+        stats: [
+          { label: "Dimensions", value: dimensions },
+          { label: "Associations", value: data.associations.length },
+        ],
+      },
+    ],
+  };
+}
+
 // ── Generic dispatch ────────────────────────────────────────────────────────
 
 interface PreviewSpec<D> {
@@ -794,7 +1004,7 @@ function defineSpec<D>(spec: PreviewSpec<D>): PreviewSpec<unknown> {
 
 type StandardPreviewEntity = Exclude<
   HoverPreviewEntity,
-  "usda-food" | "cookbook" | "project"
+  "usda-food" | "cookbook" | "project" | "image"
 >;
 
 const PREVIEW_TABLE: Record<StandardPreviewEntity, PreviewSpec<unknown>> = {
@@ -838,14 +1048,28 @@ const PREVIEW_TABLE: Record<StandardPreviewEntity, PreviewSpec<unknown>> = {
     label: "Vendor",
     toCard: toVendorCard,
   }),
+  financialAccount: defineSpec({
+    label: "Financial account",
+    toCard: toFinancialAccountCard,
+  }),
+  financialTransaction: defineSpec({
+    label: "Financial transaction",
+    toCard: toFinancialTransactionCard,
+  }),
+  wish: defineSpec({
+    label: "Wish",
+    toCard: toWishCard,
+  }),
 };
 
 function GenericPreviewContent({
   entity,
   id,
+  showOpenAction,
 }: {
   entity: StandardPreviewEntity;
   id: string;
+  showOpenAction: boolean;
 }) {
   const spec = PREVIEW_TABLE[entity];
   const query = useQuery(
@@ -854,12 +1078,20 @@ function GenericPreviewContent({
 
   return (
     <PreviewQuery query={query} label={spec.label}>
-      {(data) => <ManifestCard {...spec.toCard(data)} />}
+      {(data) => (
+        <ManifestCard {...spec.toCard(data)} showOpenAction={showOpenAction} />
+      )}
     </PreviewQuery>
   );
 }
 
-function ProjectPreviewContent({ id }: { id: string }) {
+function ProjectPreviewContent({
+  id,
+  showOpenAction,
+}: {
+  id: string;
+  showOpenAction: boolean;
+}) {
   const projectId = parseShortcodeFor("project", id);
   const query = useQuery(entityDetailQueryOptions("project", id));
   const coverQuery = useQuery(
@@ -876,7 +1108,30 @@ function ProjectPreviewContent({ id }: { id: string }) {
 
   return (
     <PreviewQuery query={{ data, isLoading: query.isLoading }} label="Project">
-      {(project) => <ManifestCard {...toProjectCard(project)} />}
+      {(project) => (
+        <ManifestCard
+          {...toProjectCard(project)}
+          showOpenAction={showOpenAction}
+        />
+      )}
+    </PreviewQuery>
+  );
+}
+
+function ImagePreviewContent({
+  id,
+  showOpenAction,
+}: {
+  id: string;
+  showOpenAction: boolean;
+}) {
+  const query = useQuery(image.detail.queryOptions({ id }));
+
+  return (
+    <PreviewQuery query={query} label="Image">
+      {(data) => (
+        <ManifestCard {...toImageCard(data)} showOpenAction={showOpenAction} />
+      )}
     </PreviewQuery>
   );
 }
@@ -884,9 +1139,11 @@ function ProjectPreviewContent({ id }: { id: string }) {
 export function EntityPreviewContent({
   entity,
   id,
+  showOpenAction = true,
 }: {
   entity: HoverPreviewEntity;
   id: string;
+  showOpenAction?: boolean;
 }) {
   // usda-food and cookbook fetch differently enough (fdc_id coercion and
   // specialized projections) to stay their own small components.
@@ -894,8 +1151,26 @@ export function EntityPreviewContent({
   // entities remounts rather than changing the hooks a single instance calls
   // (project's extra cover-image query is one more hook than the rest).
   if (entity === "usda-food")
-    return <UsdaFoodPreviewContent fdcId={fdcIdFromParam(id)} />;
-  if (entity === "cookbook") return <CookbookPreviewContent cookbookId={id} />;
-  if (entity === "project") return <ProjectPreviewContent id={id} />;
-  return <GenericPreviewContent key={entity} entity={entity} id={id} />;
+    return (
+      <UsdaFoodPreviewContent
+        fdcId={fdcIdFromParam(id)}
+        showOpenAction={showOpenAction}
+      />
+    );
+  if (entity === "cookbook")
+    return (
+      <CookbookPreviewContent cookbookId={id} showOpenAction={showOpenAction} />
+    );
+  if (entity === "project")
+    return <ProjectPreviewContent id={id} showOpenAction={showOpenAction} />;
+  if (entity === "image")
+    return <ImagePreviewContent id={id} showOpenAction={showOpenAction} />;
+  return (
+    <GenericPreviewContent
+      key={entity}
+      entity={entity}
+      id={id}
+      showOpenAction={showOpenAction}
+    />
+  );
 }

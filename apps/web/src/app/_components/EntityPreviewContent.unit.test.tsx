@@ -1,12 +1,22 @@
-import { imageOut } from "@cubby/schemas/image";
+import { financialAccountOut } from "@cubby/schemas/financial-account";
+import { financialTransactionOut } from "@cubby/schemas/financial-transaction";
+import { imageOut, imageWithEntitySchema } from "@cubby/schemas/image";
 import { ingredientWithFoodOut } from "@cubby/schemas/ingredient";
 import { infLocation } from "@cubby/schemas/location";
 import { productWithMappingsAndFoodOut } from "@cubby/schemas/product";
 import { testShortcode } from "@cubby/schemas/testing";
+import { wishOut } from "@cubby/schemas/wish";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { mock } from "~/lib/test/mock-schema";
-import { toIngredientCard, toLocationCard } from "./EntityPreviewContent";
+import {
+  toFinancialAccountCard,
+  toFinancialTransactionCard,
+  toImageCard,
+  toIngredientCard,
+  toLocationCard,
+  toWishCard,
+} from "./EntityPreviewContent";
 import { PreviewQuery } from "./preview/preview-query";
 
 describe("PreviewQuery", () => {
@@ -141,5 +151,158 @@ describe("toIngredientCard", () => {
       kind: "thumb",
       url: "https://example.com/oil.jpg",
     });
+  });
+});
+
+describe("first-wave compact cards", () => {
+  it("summarizes account identity and transaction count from the existing detail payload", () => {
+    const account = mock(financialAccountOut, {
+      seed: 4,
+      overrides: {
+        name: "Household Visa",
+        identity: {
+          kind: "credit_card",
+          issuer: "Example Bank",
+          network: "visa",
+          last4: "4242",
+        },
+        provisional: false,
+        transactionCount: 23,
+      },
+    });
+
+    const card = toFinancialAccountCard(account);
+
+    expect(card.name).toBe("Household Visa");
+    expect(card.identity).toBe("Credit card · Example Bank · •••• 4242");
+    expect(card.body).toEqual([
+      {
+        kind: "stats",
+        stats: [
+          { label: "Transactions", value: 23 },
+          { label: "Status", value: "Known" },
+        ],
+      },
+    ]);
+  });
+
+  it("keeps a transaction's account connection in its compact card", () => {
+    const transaction = mock(financialTransactionOut, {
+      seed: 5,
+      overrides: {
+        accountId: testShortcode("financialAccount", "FAC-4K7M"),
+        accountName: "Household Visa",
+        merchant: "Hardware store",
+        rawDescription: null,
+        allocations: [],
+      },
+    });
+
+    const card = toFinancialTransactionCard(transaction);
+
+    expect(card.name).toBe("Hardware store");
+    expect(card.crossLinks).toEqual([
+      expect.objectContaining({
+        to: "/financial-accounts/$shortcode",
+        params: { shortcode: "FAC-4K7M" },
+        label: "Household Visa",
+      }),
+    ]);
+  });
+
+  it("shows wish candidates and preserves unknown prices as unknown", () => {
+    const wish = mock(wishOut, {
+      seed: 6,
+      overrides: {
+        name: "Workshop light",
+        acquiredAt: null,
+        candidates: [
+          {
+            id: testShortcode("product", "PRD-4K7M"),
+            name: "Bench lamp",
+            manufacturer: "Example",
+            model: null,
+            price: null,
+            inventoried: false,
+          },
+        ],
+      },
+    });
+
+    const card = toWishCard(wish);
+
+    expect(card.identity).toBe("Open");
+    expect(card.body).toEqual([
+      {
+        kind: "stats",
+        stats: [
+          { label: "Candidates", value: 1 },
+          { label: "Price range", value: "—" },
+        ],
+      },
+      {
+        kind: "products",
+        products: [
+          {
+            id: "PRD-4K7M",
+            name: "Bench lamp",
+            manufacturer: "Example",
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("shows every existing image association without a second query", () => {
+    const image = mock(imageWithEntitySchema, {
+      seed: 7,
+      overrides: {
+        filename: "workbench.jpg",
+        status: "UPLOADED",
+        width: 1600,
+        height: 1200,
+        associations: [
+          {
+            entityType: "product",
+            entityId: testShortcode("product", "PRD-4K7M"),
+            entityName: "Bench lamp",
+            role: "cover",
+          },
+          {
+            entityType: "project",
+            entityId: testShortcode("project", "PRJ-7M2X"),
+            entityName: "Workshop refresh",
+            role: "attachment",
+          },
+        ],
+      },
+    });
+
+    const card = toImageCard(image);
+
+    expect(card.crossLinks).toEqual([
+      expect.objectContaining({
+        to: "/products/$shortcode",
+        params: { shortcode: "PRD-4K7M" },
+        label: "Bench lamp · cover",
+      }),
+      expect.objectContaining({
+        to: "/projects/$shortcode",
+        params: { shortcode: "PRJ-7M2X" },
+        label: "Workshop refresh · attachment",
+      }),
+    ]);
+    expect(card.body).toEqual(
+      expect.arrayContaining([
+        { kind: "thumb", url: image.url },
+        {
+          kind: "stats",
+          stats: [
+            { label: "Dimensions", value: "1600 × 1200" },
+            { label: "Associations", value: 2 },
+          ],
+        },
+      ]),
+    );
   });
 });
