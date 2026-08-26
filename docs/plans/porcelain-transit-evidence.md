@@ -32,7 +32,7 @@ fix only redesign-caused failures.
 | T2 Desktop/mobile shell | Complete | 224px expanded and 56px collapsed rail, 48px command band, five domain groups, preserved contextual mobile chrome, focused tests/typecheck, independent review, and desktop/mobile visual checkpoint |
 | T3 Products reference workbench | Complete | Approved 28px Product density, docked inspector, Sheet, phone projection, one Product-owned relationship query, fixed direct/derived semantics, bounded previews, explicit provenance, and synthetic desktop/phone examples |
 | T4 Canonical detail system | Complete | Product detail reuses the same relationship query near the hero and in its full route ledger, suppresses the generic duplicate explorer, and preserves recategorized project-use history as read-only evidence |
-| T5 Canonical lists/details | In progress | Standard `EntityListPage` rosters now share a compact Overview/Relations/Activity inspector at wide desktop, the same inspector in an intermediate Sheet, and canonical detail navigation on phone; direct-workbench and bespoke siblings remain |
+| T5 Canonical lists/details | In progress | Standard, direct-workbench, Project, and heterogeneous Wishlist rosters now share one responsive current-record inspector contract; canonical detail compositions and actions remain under review |
 | T6 Today/ordinary surfaces | Pending | — |
 | T7 Specialist workbenches | Pending | — |
 | T8 Peripheral states | Pending | — |
@@ -106,9 +106,13 @@ height while retaining the named viewport width.
 | 2026-08-26 | T3–T4 | Relationship and shared-detail UI tests | Pass | Covers direct/derived labels and zero states, inspector reuse, page-owned relationship replacement, read-only historical project uses, and retained reusable-category edit affordances |
 | 2026-08-26 | T3–T4 | `pnpm typecheck:web` and `pnpm check` | Pass | Contract and historical-use commits pass web/workspace type checks and the full repository check |
 | 2026-08-26 | T3–T4 | Synthetic relationship-route visual review | Pass | Public-placeholder desktop and phone examples confirm compact strip, bounded branches, provenance, derived separation, horizontal phone scrolling, and 44px phone targets |
-| 2026-08-26 | T5 | Generic inspector and responsive preview tests | Pass: 17 tests in 4 files | Covers lazy capability-gated tabs, per-record state reset, canonical Open/Close actions, named dialogs, hover prefetch, legacy Sheet compatibility, wide dock, intermediate Sheet, mobile suppression, current-row forwarding, and Strict Mode relationship reference semantics |
+| 2026-08-26 | T5 | Generic inspector and responsive preview tests | Pass: 27 tests in 5 files | Covers lazy capability-gated tabs, per-record state reset, canonical Open/Close actions, named dialogs, hover prefetch, legacy Sheet compatibility, wide dock, intermediate Sheet, mobile suppression, current-row forwarding, heterogeneous Wish/Product identities, and Strict Mode relationship reference semantics |
 | 2026-08-26 | T5 | `pnpm typecheck:web` and `git diff --check` | Pass | Generic inspector, responsive selection seam, first sibling-list integration, and relationship-cycle correction are type/whitespace clean |
 | 2026-08-26 | T5 | Responsive canonical roster visual review | Pass for first batch | A standard Vendor roster was manually verified at 1440×900 (dock), 1024×768 (Sheet), and 430×932 (direct canonical card links); no private-data capture was retained |
+| 2026-08-26 | T5 | Direct-roster inspector propagation | Pass | Cookbooks, Ingredients, Inventory table view, Purchases, and Expenses now opt into the same current-row dock/Sheet/phone contract; alternate views and embedded ledgers remain untouched |
+| 2026-08-26 | T5 | Direct-roster desktop visual review | Pass | A representative Purchase roster was manually verified with a compact 25rem inspector and canonical Overview/Relations/Activity content at 1440×900; no private-data capture was retained |
+| 2026-08-26 | T5 | Bespoke-roster inspector propagation | Pass | Project tree/flat views and Wishlist's heterogeneous Wish/Product tree now preserve canonical entity identity separately from TanStack row identity while using the shared responsive inspector |
+| 2026-08-26 | T5 | Wishlist parent/child visual review | Pass | At 1440×900, a Wish row opened the honest fallback inspector and its expanded Product candidate opened a Product inspector with the candidate shortcode and selected-row treatment; no private-data capture was retained |
 
 ## T3–T4 mandatory checkpoint
 
@@ -161,8 +165,17 @@ never mounts a complete detail page inside a dock. Unsupported compact overview
 types state that limitation and keep the canonical Open action instead of
 inventing summary fields.
 
-This first integration covers the standard `EntityListPage` rosters: Locations,
+The first integration covers the standard `EntityListPage` rosters: Locations,
 Recipes, Tasks, Vendors, Financial Accounts, Financial Transactions, and Images.
-Products retain their approved domain-owned inspector. Direct `ListWorkbench`
-callers and bespoke list/detail compositions remain explicit T5 batches rather
-than being treated as implicitly complete.
+The next mechanical batch extends it to existing direct preview owners:
+Cookbooks, Ingredients, Inventory's table view, Purchases, and Expenses. The
+bespoke batch covers Project tree/flat views and Wishlist's heterogeneous
+Wish/Product tree. Its namespaced row keys remain distinct from the canonical
+Wish or Product target, so expanding a candidate neither highlights the parent
+nor opens the wrong entity.
+
+Products retain their approved domain-owned inspector. The remaining T5 work is
+therefore canonical detail composition, action placement, and honest compact
+summaries for entity types whose manifest currently exposes no preview fields;
+specialist workbenches and ordinary dashboard surfaces remain bounded to later
+targets.

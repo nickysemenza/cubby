@@ -28,7 +28,11 @@ vi.mock("../hooks/useEntityPreview", () => ({
       onRowHover: vi.fn(),
       onRowHoverEnd: vi.fn(),
       PreviewSheet: () => <div>Intermediate preview</div>,
-      preview: { entityType: "vendor", id: "VND-4K7M" },
+      preview: {
+        entityType: "vendor",
+        id: "VND-4K7M",
+        rowKey: "VND-4K7M",
+      },
       dockedInspector: <aside>Vendor inspector</aside>,
     };
   },

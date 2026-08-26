@@ -127,7 +127,7 @@ export function EntityListPage<
         getRowClassName={getRowClassName}
         showCellSelectionStats={showCellSelectionStats}
         verticalAlign={verticalAlign}
-        currentRowId={currentPreview?.id}
+        currentRowId={currentPreview?.rowKey}
         desktopInspector={dockedInspector}
         onRowClick={onRowClick ?? rowClick}
         onRowHover={onRowHover ?? rowHover}
