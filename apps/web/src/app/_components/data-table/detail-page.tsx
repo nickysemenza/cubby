@@ -18,7 +18,10 @@ import { AuditLogList } from "../audit-log/audit-log-list";
 import { EntityHero } from "../EntityHero";
 import JsonRenderer from "../json-renderer";
 import { RelationshipExplorer } from "../relationships/relationship-explorer";
-import { RelationshipRoutePreview } from "../relationships/relationship-route-preview";
+import {
+  RelationshipRoutePreview,
+  relationshipRouteSourceFromRecord,
+} from "../relationships/relationship-route-preview";
 import { relationshipsSectionIcon } from "../relationships/relationship-tree";
 
 /** Stable id every auto-appended Activity section uses — also the opt-out key: a
@@ -371,6 +374,21 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   const hasOwnRelationshipSection = sections.some(
     (section) => section.id === "relationships",
   );
+  const relationshipSource = pageDetail
+    ? relationshipRouteSourceFromRecord(
+        pageDetail.entity,
+        pageDetail.rawData,
+        sourceId,
+      )
+    : null;
+  const relationshipPreview =
+    pageDetail && sourceId && hasSourceViews && !hasOwnRelationshipSection ? (
+      <RelationshipRoutePreview
+        entity={pageDetail.entity}
+        sourceId={sourceId}
+        source={relationshipSource}
+      />
+    ) : null;
   const relationshipSection: DetailSection | undefined =
     pageDetail && sourceId && hasSourceViews && !hasOwnRelationshipSection
       ? {
@@ -379,16 +397,10 @@ export const DetailSections: FC<DetailSectionsProps> = ({
           icon: relationshipsSectionIcon,
           placement: "full",
           content: (
-            <div className="space-y-3">
-              <RelationshipRoutePreview
-                entity={pageDetail.entity}
-                sourceId={sourceId}
-              />
-              <RelationshipExplorer
-                entity={pageDetail.entity}
-                sourceId={sourceId}
-              />
-            </div>
+            <RelationshipExplorer
+              entity={pageDetail.entity}
+              sourceId={sourceId}
+            />
           ),
         }
       : undefined;
@@ -434,6 +446,7 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   return (
     <div className="space-y-2 sm:space-y-4">
       <DetailAnchorIndex sections={allSections} />
+      {relationshipPreview}
       <div className="fade-in-0 slide-in-from-bottom-1 animate-in duration-150 motion-reduce:animate-none">
         {renderResponsiveLayout({
           sections: allSections,

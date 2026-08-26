@@ -26,6 +26,13 @@ vi.mock("../relationships/relationship-route-preview", () => ({
     mocks.relationshipRoute(props);
     return <div data-testid="relationship-route-preview" />;
   },
+  relationshipRouteSourceFromRecord: (
+    entity: string,
+    rawData: { id?: string; name?: string },
+  ) =>
+    rawData.id && rawData.name
+      ? { entity, id: rawData.id, label: rawData.name }
+      : null,
 }));
 vi.mock("../audit-log/audit-log-list", () => ({
   AuditLogList: () => <div data-testid="audit-log">Audit log</div>,
@@ -167,7 +174,7 @@ describe("DetailSections ledger", () => {
   it("adds the bounded route preview before a generic relationship explorer", () => {
     mocks.pageDetail.current = {
       entity: "vendor",
-      rawData: { id: "VEN-EXAMPLE" },
+      rawData: { id: "VEN-EXAMPLE", name: "Fixture vendor" },
     };
 
     render(
@@ -176,10 +183,23 @@ describe("DetailSections ledger", () => {
 
     expect(screen.getByTestId("relationship-route-preview")).toBeVisible();
     expect(screen.getByTestId("generic-relationships")).toBeVisible();
-    expect(mocks.relationshipRoute).toHaveBeenCalledWith({
-      entity: "vendor",
-      sourceId: "VEN-EXAMPLE",
-    });
+    expect(screen.getAllByTestId("relationship-route-preview")).toHaveLength(1);
+    expect(
+      screen
+        .getByTestId("relationship-route-preview")
+        .compareDocumentPosition(screen.getByTestId("generic-relationships")),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(mocks.relationshipRoute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entity: "vendor",
+        sourceId: "VEN-EXAMPLE",
+        source: {
+          entity: "vendor",
+          id: "VEN-EXAMPLE",
+          label: "Fixture vendor",
+        },
+      }),
+    );
     expect(mocks.relationshipExplorer).toHaveBeenCalledWith({
       entity: "vendor",
       sourceId: "VEN-EXAMPLE",

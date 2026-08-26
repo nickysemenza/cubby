@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
 import {
   type RelatedPreviewGroup,
   type RelatedPreviewItem,
@@ -13,9 +14,9 @@ import type { EntityDetailRoute } from "~/entities/entities";
 import {
   entities,
   entityDetailParams,
-  entityLabel,
   isBrowserRoutedEntity,
 } from "~/entities/entities";
+import { entityPreviewQueryOptions } from "~/entities/entity-query";
 import { relatedData } from "~/lib/related-data.functions";
 import { cn } from "~/lib/utils";
 import { TableLink } from "../table/TableLink";
@@ -37,6 +38,13 @@ export interface RelationshipRoutePreviewModel {
   };
 }
 
+export interface RelationshipRouteSource {
+  entity: Entity;
+  id: string;
+  /** The already-loaded record title, never an entity-type placeholder. */
+  label: string;
+}
+
 type PreviewableRelatedView = Pick<RelatedViewDefinition, "label"> & {
   key: RelatedPreviewGroup["relationKey"];
 };
@@ -47,13 +55,11 @@ type PreviewableRelatedView = Pick<RelatedViewDefinition, "label"> & {
  * preview's first endpoint as the parent of the next one.
  */
 export function relationshipRoutePreviewModel({
-  entity,
-  sourceId,
+  source,
   views,
   groups,
 }: {
-  entity: Entity;
-  sourceId: string;
+  source: RelationshipRouteSource;
   views: readonly PreviewableRelatedView[];
   groups: readonly RelatedPreviewGroup[];
 }): RelationshipRoutePreviewModel | null {
@@ -69,17 +75,37 @@ export function relationshipRoutePreviewModel({
   if (!primaryGroup) return null;
 
   return {
-    source: {
-      entity,
-      id: sourceId,
-      label: entityLabel(entity),
-    },
+    source,
     relation: {
       key: primaryView.key,
       label: primaryView.label,
       totalCount: primaryGroup.totalCount,
       endpoints: primaryGroup.items.slice(0, ROUTE_PREVIEW_LIMIT),
     },
+  };
+}
+
+/**
+ * Makes a route source from a record the caller has already loaded. The
+ * generated title field is the same identity the entity's list/detail
+ * contracts use. A partial record stays absent rather than inventing a generic
+ * entity label for a station that has not loaded its identity yet.
+ */
+export function relationshipRouteSourceFromRecord(
+  entity: Entity,
+  rawData: unknown,
+  fallbackId?: string,
+): RelationshipRouteSource | null {
+  if (!rawData || typeof rawData !== "object") return null;
+  const record = rawData as Record<string, unknown>;
+  const id = typeof record.id === "string" ? record.id : fallbackId;
+  if (!id) return null;
+  const title = record[entityInspectorMetadata[entity].titleField];
+  if (typeof title !== "string" || title.trim().length === 0) return null;
+  return {
+    entity,
+    id,
+    label: title,
   };
 }
 
@@ -91,6 +117,7 @@ export function relationshipRoutePreviewModel({
 export function useRelationshipRoutePreview(
   entity: Entity,
   sourceId: string | undefined,
+  source?: RelationshipRouteSource | null,
 ) {
   const views = useMemo(() => relatedViewsFor(entity), [entity]);
   const relationKeys = useMemo(() => views.map((view) => view.key), [views]);
@@ -105,13 +132,68 @@ export function useRelationshipRoutePreview(
   const groups = query.data ?? NO_PREVIEW_GROUPS;
   const model = useMemo(
     () =>
-      sourceId
-        ? relationshipRoutePreviewModel({ entity, sourceId, views, groups })
+      sourceId && source
+        ? relationshipRoutePreviewModel({
+            source,
+            views,
+            groups,
+          })
         : null,
-    [entity, groups, sourceId, views],
+    [groups, source, sourceId, views],
   );
 
   return { groups, model, query, relationKeys, views };
+}
+
+/**
+ * Subscribes to the inspector's existing detail-preview cache without fetching.
+ * The inspector has already mounted its compact preview; this only gives the
+ * relationship station the same record identity once that data is available.
+ */
+export function useRelationshipRouteSource(
+  entity: Entity,
+  sourceId: string | undefined,
+) {
+  const query = useQuery({
+    ...entityPreviewQueryOptions(entity, sourceId ?? ""),
+    enabled: false,
+  } as never);
+  return useMemo(
+    () => relationshipRouteSourceFromRecord(entity, query.data, sourceId),
+    [entity, query.data, sourceId],
+  );
+}
+
+function SourcePreview({ source }: { source: RelationshipRouteSource }) {
+  const contents = (
+    <>
+      <EntityIdentityMark
+        entity={source.entity}
+        displayImage={null}
+        size="inline"
+      />
+      <span className="min-w-0 truncate font-medium">{source.label}</span>
+      <span className="shrink-0 font-mono text-2xs text-slate">
+        {source.id}
+      </span>
+    </>
+  );
+  const className =
+    "flex min-w-36 max-w-52 items-center gap-1.5 whitespace-nowrap text-xs";
+
+  if (!isBrowserRoutedEntity(source.entity))
+    return <span className={className}>{contents}</span>;
+
+  return (
+    <TableLink
+      to={entities[source.entity].routes.detail as EntityDetailRoute}
+      params={entityDetailParams(source.id)}
+      className={className}
+      variant="muted"
+    >
+      {contents}
+    </TableLink>
+  );
 }
 
 function EndpointPreview({ endpoint }: { endpoint: RelatedPreviewItem }) {
@@ -153,13 +235,20 @@ function EndpointPreview({ endpoint }: { endpoint: RelatedPreviewItem }) {
 export function RelationshipRoutePreview({
   entity,
   sourceId,
+  source,
   className,
 }: {
   entity: Entity;
   sourceId: string | undefined;
+  source?: RelationshipRouteSource | null;
   className?: string;
 }) {
-  const { model } = useRelationshipRoutePreview(entity, sourceId);
+  const cachedSource = useRelationshipRouteSource(entity, sourceId);
+  const { model } = useRelationshipRoutePreview(
+    entity,
+    sourceId,
+    source ?? cachedSource,
+  );
   if (!model) return null;
 
   return (
@@ -170,17 +259,7 @@ export function RelationshipRoutePreview({
     >
       <div className="overflow-x-auto overscroll-x-contain [scrollbar-width:thin]">
         <div className="flex min-w-max items-center gap-2 px-1 md:min-w-0 md:flex-wrap">
-          <div className="flex items-center gap-1.5 whitespace-nowrap text-xs">
-            <EntityIdentityMark
-              entity={model.source.entity}
-              displayImage={null}
-              size="inline"
-            />
-            <span className="font-medium">{model.source.label}</span>
-            <span className="font-mono text-2xs text-slate">
-              {model.source.id}
-            </span>
-          </div>
+          <SourcePreview source={model.source} />
           <ArrowRight aria-hidden className="size-3 shrink-0 text-slate" />
           <div className="flex items-center gap-1 whitespace-nowrap font-medium text-xs">
             <span>{model.relation.label}</span>

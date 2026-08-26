@@ -1,13 +1,16 @@
 import type { RelatedPreviewGroup } from "@cubby/schemas/related-view";
 import { relatedViewsFor } from "@cubby/schemas/related-view";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, renderHook, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { entityPreviewQueryOptions } from "~/entities/entity-query";
 import { relatedData } from "~/lib/related-data.functions";
 import {
   RelationshipRoutePreview,
   relationshipRoutePreviewModel,
+  relationshipRouteSourceFromRecord,
+  useRelationshipRouteSource,
 } from "./relationship-route-preview";
 
 vi.mock("@tanstack/react-router", () => ({
@@ -79,7 +82,11 @@ function renderPreview() {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <RelationshipRoutePreview entity="vendor" sourceId={SOURCE_ID} />
+      <RelationshipRoutePreview
+        entity="vendor"
+        sourceId={SOURCE_ID}
+        source={{ entity: "vendor", id: SOURCE_ID, label: "Fixture vendor" }}
+      />
     </QueryClientProvider>,
   );
 }
@@ -87,14 +94,13 @@ function renderPreview() {
 describe("relationshipRoutePreviewModel", () => {
   it("chooses the first nonempty registered edge and preserves endpoint siblings", () => {
     const model = relationshipRoutePreviewModel({
-      entity: "vendor",
-      sourceId: SOURCE_ID,
+      source: { entity: "vendor", id: SOURCE_ID, label: "Fixture vendor" },
       views: relatedViewsFor("vendor"),
       groups,
     });
 
     expect(model).toMatchObject({
-      source: { entity: "vendor", id: SOURCE_ID, label: "Vendor" },
+      source: { entity: "vendor", id: SOURCE_ID, label: "Fixture vendor" },
       relation: {
         key: "vendor.products",
         label: "Products",
@@ -107,6 +113,53 @@ describe("relationshipRoutePreviewModel", () => {
       "PRD-THREE",
     ]);
   });
+
+  it("uses the configured loaded-record identity rather than an entity noun", () => {
+    expect(
+      relationshipRouteSourceFromRecord("vendor", {
+        id: SOURCE_ID,
+        name: "Fixture vendor",
+      }),
+    ).toEqual({
+      entity: "vendor",
+      id: SOURCE_ID,
+      label: "Fixture vendor",
+    });
+  });
+
+  it("subscribes to an already-loaded inspector preview without fetching again", () => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, staleTime: Number.POSITIVE_INFINITY },
+      },
+    });
+    queryClient.setQueryData(
+      entityPreviewQueryOptions("vendor", SOURCE_ID).queryKey,
+      { id: SOURCE_ID, name: "Fixture vendor" },
+    );
+
+    const { result } = renderHook(
+      () => useRelationshipRouteSource("vendor", SOURCE_ID),
+      {
+        wrapper: ({ children }) => (
+          <QueryClientProvider client={queryClient}>
+            {children}
+          </QueryClientProvider>
+        ),
+      },
+    );
+
+    expect(result.current).toEqual({
+      entity: "vendor",
+      id: SOURCE_ID,
+      label: "Fixture vendor",
+    });
+    expect(
+      queryClient.getQueryState(
+        entityPreviewQueryOptions("vendor", SOURCE_ID).queryKey,
+      )?.fetchStatus,
+    ).toBe("idle");
+  });
 });
 
 describe("RelationshipRoutePreview", () => {
@@ -114,7 +167,7 @@ describe("RelationshipRoutePreview", () => {
     renderPreview();
 
     expect(screen.getByTestId("relationship-route-preview")).toBeVisible();
-    expect(screen.getByText("Vendor")).toBeVisible();
+    expect(screen.getByText("Fixture vendor")).toBeVisible();
     expect(screen.getByText("Products")).toBeVisible();
     expect(screen.getByText("+2")).toBeVisible();
     expect(screen.getByRole("list")).toHaveAttribute(
@@ -122,6 +175,10 @@ describe("RelationshipRoutePreview", () => {
       "Products endpoints",
     );
     expect(screen.getAllByRole("listitem")).toHaveLength(4);
+    expect(screen.getByText("Fixture vendor").closest("a")).toHaveAttribute(
+      "href",
+      `/vendors/${SOURCE_ID}`,
+    );
     expect(screen.getByText("First endpoint").closest("a")).toHaveAttribute(
       "href",
       "/products/PRD-ONE",
