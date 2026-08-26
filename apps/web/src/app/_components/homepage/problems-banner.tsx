@@ -1,7 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import { useHydrated } from "~/hooks/useHydrated";
-import { authClient } from "~/lib/auth-client";
+import { Link, useRouteContext } from "@tanstack/react-router";
 import { problemsCountsQueryOptions } from "~/lib/problems.functions";
 import { cn } from "~/lib/utils";
 
@@ -19,10 +17,12 @@ import { cn } from "~/lib/utils";
  * wrong" and "this hasn't been filed yet".
  */
 export function ProblemsBanner() {
-  const session = authClient.useSession();
-  const enabled = useHydrated() && !!session.data?.user;
+  const { isAuthed } = useRouteContext({ from: "__root__" });
   const { data: counts, isLoading } = useQuery({
-    ...problemsCountsQueryOptions({ staleTime: 5 * 60 * 1000, enabled }),
+    ...problemsCountsQueryOptions({
+      staleTime: 5 * 60 * 1000,
+      enabled: isAuthed,
+    }),
   });
   const defects = counts?.total ?? 0;
   const coverageTotal = counts?.coverageTotal ?? 0;
@@ -54,7 +54,7 @@ export function ProblemsBanner() {
         <span className="text-xs">Everything checks out.</span>
       )}
       {coverageTotal > 0 && (
-        <span className="ml-auto truncate font-mono text-2xs uppercase opacity-70">
+        <span className="ml-auto truncate font-mono text-2xs text-warning-ink uppercase">
           {coverageTotal.toLocaleString()} coverage gaps
         </span>
       )}

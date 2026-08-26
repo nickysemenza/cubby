@@ -1,8 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { ingredientGetByNameQueryOptions } from "~/app/ingredients/ingredient.functions";
-import { getIngredientMappings } from "~/lib/unit-mapping-utils";
-import { wasm } from "~/lib/wasm";
 
 // "250 g flour in cups" / "1.5 cups sugar to g" / "2 tbsp butter as oz"
 const CONVERSION_RE =
@@ -48,44 +46,69 @@ export function useConversionAnswer(search: string): ConversionAnswer | null {
     staleTime: 5 * 60 * 1000,
   });
 
-  return useMemo(() => {
-    if (!parsed || !ingredient) return null;
-    const mappings = getIngredientMappings(ingredient);
-    if (mappings.length === 0) return null;
-
-    const amount = { value: parsed.value, unit: parsed.unit };
-    try {
-      // Both sides canonicalize to grams (standard units natively, custom
-      // units like "cup" via the mapping graph); the ratio is the answer.
-      const grams = wasm.conv_amount_to_kind(mappings, "weight", amount);
-      const gramsPerTarget = wasm.conv_amount_to_kind(mappings, "weight", {
-        value: 1,
-        unit: parsed.target,
-      });
-      if (!grams || !gramsPerTarget || gramsPerTarget.value <= 0) return null;
-      const converted = {
-        value: grams.value / gramsPerTarget.value,
-        unit: parsed.target,
-      };
-
-      let cost: string | null = null;
+  const { data: conversion } = useQuery({
+    queryKey: [
+      "command-menu",
+      "conversion",
+      parsed?.value,
+      parsed?.unit,
+      parsed?.target,
+      ingredient,
+    ],
+    enabled: parsed !== null && ingredient !== undefined,
+    staleTime: Number.POSITIVE_INFINITY,
+    queryFn: async ({ signal }): Promise<ConversionAnswer | null> => {
+      if (!parsed || !ingredient) return null;
       try {
-        const money = wasm.conv_amount_to_kind(mappings, "money", amount);
-        cost = money ? wasm.format_amount(money) : null;
-      } catch {
-        cost = null;
-      }
+        const [{ getIngredientMappings }, { wasm }] = await Promise.all([
+          import("~/lib/unit-mapping-utils"),
+          import("~/lib/wasm"),
+        ]);
+        if (signal.aborted) return null;
+        const mappings = getIngredientMappings(ingredient);
+        if (mappings.length === 0) return null;
 
-      return {
-        input: wasm.format_amount(amount),
-        ingredientName: ingredient.name,
-        ingredientShortcode: ingredient.id,
-        result: wasm.format_amount(converted),
-        cost,
-      };
-    } catch {
-      // No weight path between these units for this ingredient.
-      return null;
-    }
-  }, [parsed, ingredient]);
+        const amount = { value: parsed.value, unit: parsed.unit };
+        try {
+          // Both sides canonicalize to grams (standard units natively, custom
+          // units like "cup" via the mapping graph); the ratio is the answer.
+          const grams = wasm.conv_amount_to_kind(mappings, "weight", amount);
+          const gramsPerTarget = wasm.conv_amount_to_kind(mappings, "weight", {
+            value: 1,
+            unit: parsed.target,
+          });
+          if (!grams || !gramsPerTarget || gramsPerTarget.value <= 0) {
+            return null;
+          }
+          const converted = {
+            value: grams.value / gramsPerTarget.value,
+            unit: parsed.target,
+          };
+
+          let cost: string | null = null;
+          try {
+            const money = wasm.conv_amount_to_kind(mappings, "money", amount);
+            cost = money ? wasm.format_amount(money) : null;
+          } catch {
+            cost = null;
+          }
+
+          return {
+            input: wasm.format_amount(amount),
+            ingredientName: ingredient.name,
+            ingredientShortcode: ingredient.id,
+            result: wasm.format_amount(converted),
+            cost,
+          };
+        } catch {
+          // No weight path between these units for this ingredient.
+          return null;
+        }
+      } catch {
+        return null;
+      }
+    },
+  });
+
+  return conversion ?? null;
 }

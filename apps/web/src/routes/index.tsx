@@ -1,24 +1,30 @@
-import type { CookbookShortcode } from "@cubby/schemas/identifiers";
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { ListChecks, MapPin, PieChart, Share2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { HouseCard } from "~/app/_components/home/HouseCard";
+import { getHomeAsOfWindow } from "~/app/_components/home/home-as-of-window";
 import { MealsCard } from "~/app/_components/home/MealsCard";
 import { PantryValueCard } from "~/app/_components/home/PantryValueCard";
 import { QuickActionsCard } from "~/app/_components/home/QuickActionsCard";
 import { RecentActivityFeed } from "~/app/_components/home/RecentActivityFeed";
 import { RecordedSpendCard } from "~/app/_components/home/RecordedSpendCard";
-import EntityCount from "~/app/_components/homepage/entitycount";
 import { ProblemsBanner } from "~/app/_components/homepage/problems-banner";
-import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-usage-panel";
-import { CookbookSelect } from "~/app/_components/recipe/cookbook-select";
-import IngredientNetwork from "~/app/_components/visualizations/ingredient-network";
-import LocationSunburst from "~/app/_components/visualizations/location-sunburst";
-import ProductCategoryDonut from "~/app/_components/visualizations/product-category-donut";
-import { CollapsibleSection, Grid, Section, Stack } from "~/components/layout";
-import { DashboardCard } from "~/components/layout/dashboard-card";
+import { expenseMonthlySummaryQueryOptions } from "~/app/expenses/expense.functions";
+import { locationValuationSummaryQueryOptions } from "~/app/locations/location.functions";
+import { mealUpcomingSummaryQueryOptions } from "~/app/meals/meal.functions";
+import { taskSummaryQueryOptions } from "~/app/tasks/task.functions";
+import { CollapsibleSection, Grid, Section } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { authClient } from "~/lib/auth-client";
+import { problemsCountsQueryOptions } from "~/lib/problems.functions";
+
+const HomeInsights = lazy(async () => {
+  const module = await import("~/app/_components/home/HomeInsights");
+  return { default: module.HomeInsights };
+});
+
+const EntityCount = lazy(
+  () => import("~/app/_components/homepage/entitycount"),
+);
 
 export const Route = createFileRoute("/")({
   // The home dashboard is authenticated-only (the counts/feeds are all
@@ -33,6 +39,23 @@ export const Route = createFileRoute("/")({
       });
     }
   },
+  loader: async ({ context }) => {
+    const asOf = getHomeAsOfWindow();
+    await Promise.allSettled([
+      context.queryClient.ensureQueryData(problemsCountsQueryOptions()),
+      context.queryClient.ensureQueryData(taskSummaryQueryOptions()),
+      context.queryClient.ensureQueryData(
+        mealUpcomingSummaryQueryOptions(asOf.meals),
+      ),
+      context.queryClient.ensureQueryData(
+        locationValuationSummaryQueryOptions(),
+      ),
+      context.queryClient.ensureQueryData(
+        expenseMonthlySummaryQueryOptions(asOf.spend.filters),
+      ),
+    ]);
+    return { asOf };
+  },
   component: Home,
 });
 
@@ -44,6 +67,7 @@ function timeOfDay(date: Date): string {
 }
 
 function Home() {
+  const { asOf } = Route.useLoaderData();
   const session = authClient.useSession();
   // Clock-dependent text is set after mount so SSR (UTC) and the client's
   // local timezone can't disagree during hydration.
@@ -92,7 +116,7 @@ function Home() {
       >
         <Grid cols="pair" gap="md">
           <HouseCard />
-          <MealsCard />
+          <MealsCard asOf={asOf} />
         </Grid>
       </Section>
 
@@ -110,7 +134,7 @@ function Home() {
             <PantryValueCard />
           </div>
           <div className="lg:order-1">
-            <RecordedSpendCard />
+            <RecordedSpendCard asOf={asOf} />
           </div>
         </Grid>
       </Section>
@@ -125,7 +149,15 @@ function Home() {
         title="Browse records"
         summary="Everything the household has on record"
       >
-        <EntityCount />
+        <Suspense
+          fallback={
+            <p className="min-h-24 text-muted-foreground text-sm" role="status">
+              Loading record counts…
+            </p>
+          }
+        >
+          <EntityCount />
+        </Suspense>
       </CollapsibleSection>
 
       {/* Insights — the visualization panels folded in from the retired
@@ -136,52 +168,16 @@ function Home() {
           while open, so a closed region runs no queries at all, and the panels
           need no per-panel scroll-gating of their own. */}
       <CollapsibleSection title="Insights" summary="Four exploratory views">
-        <Grid cols="pair" gap="md">
-          <DashboardCard
-            icon={PieChart}
-            title="Products by category"
-            description="Distribution across categories — click a slice to view products."
-          >
-            <ProductCategoryDonut />
-          </DashboardCard>
-
-          <DashboardCard
-            icon={MapPin}
-            title="Inventory by location"
-            description="Where inventory value sits across your locations."
-          >
-            <LocationSunburst />
-          </DashboardCard>
-
-          <DashboardCard
-            icon={Share2}
-            title="Ingredient relationships"
-            description="Ingredients that co-occur across recipes; larger nodes are used more."
-          >
-            <IngredientNetwork />
-          </DashboardCard>
-
-          <DashboardCard
-            icon={ListChecks}
-            title="Ingredient usage"
-            description="How many recipes use each ingredient; scope by cookbook."
-          >
-            <IngredientUsageSection />
-          </DashboardCard>
-        </Grid>
+        <Suspense
+          fallback={
+            <p className="min-h-24 text-muted-foreground text-sm" role="status">
+              Loading insights…
+            </p>
+          }
+        >
+          <HomeInsights />
+        </Suspense>
       </CollapsibleSection>
     </Page>
-  );
-}
-
-function IngredientUsageSection() {
-  const [cookbookId, setCookbookId] = useState<CookbookShortcode | undefined>();
-
-  return (
-    <Stack>
-      <CookbookSelect value={cookbookId} onChange={setCookbookId} />
-      {/* 12 bars ≈ the network panel's 400px, so the insight row stays level. */}
-      <IngredientUsagePanel cookbookId={cookbookId} limit={12} />
-    </Stack>
   );
 }
