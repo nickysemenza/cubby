@@ -1,7 +1,6 @@
 # Porcelain Transit UI Overhaul
 
-Status: **T0–T8 complete; T9 implementation and audit complete, independent
-review and PR gate pending**
+Status: **T0–T9 complete; ready-for-review PR gate pending**
 
 Delivery: **One big-bang branch and one ready-for-review PR**
 
@@ -214,7 +213,7 @@ means the named evidence exists; implementation without evidence remains
 | T6 | Today and normal-density surfaces | T1–T2 | Complete | Attention-first daily briefing, truthful household signals, accessible question-led insights, responsive rendered-state evidence, focused tests, and full repository check |
 | T7 | Specialist workbenches | T1–T5 | Complete | Specialist task models remain intact while calendar, physical, recommendation, cooking, collection, project, and diagnostic surfaces gain truthful recovery, phone projections/targets, focused tests, responsive review, and independent closeout |
 | T8 | Peripheral web-PWA states | T1–T7 | Complete | Auth/OAuth, docs, offline, route errors/not-found, loading, settings integrations, labels, print/export, generated PWA assets, responsive review, focused tests, full check, and independent closeout are recorded in the evidence ledger |
-| T9 | Whole-PWA hardening and finish | T0–T8 | In progress | Detector, whole-PWA visual review, 19/20 audit, exact changed-test suite, production build, DESIGN.md, sidecar, and final screenshots are complete; independent reviewer and PR gate remain |
+| T9 | Whole-PWA hardening and finish | T0–T8 | Complete | Detector, whole-PWA visual review, 19/20 audit, exact changed-test suite, production build, DESIGN.md, sidecar, final screenshots, and independent CLEAR verdict |
 
 ### T1 — Foundation
 
@@ -448,23 +447,23 @@ by agent turns. This is a routing budget, not a quality waiver.
 
 The overhaul is done only when all statements below are true:
 
-- [ ] T0–T9 are complete with evidence linked from the implementation ledger.
-- [ ] Every route family has migrated; no ordinary app surface visibly mixes
+- [x] T0–T9 are complete with evidence linked from the implementation ledger.
+- [x] Every route family has migrated; no ordinary app surface visibly mixes
       Warm-Paper Ledger and Porcelain Transit.
-- [ ] The route-led shell, expressive domain colors, dense reference grid,
+- [x] The route-led shell, expressive domain colors, dense reference grid,
       docked inspector, and truthful entity routes are recognizable in the
       shipped Products surface.
-- [ ] All canonical list routes retain their full table capabilities and have
+- [x] All canonical list routes retain their full table capabilities and have
       an intentional mobile projection.
-- [ ] All canonical details expose relationships/activity without duplication
+- [x] All canonical details expose relationships/activity without duplication
       and retain dedicated workflows for complex actions.
-- [ ] Every specialist surface preserves its task model and adopts the shared
+- [x] Every specialist surface preserves its task model and adopts the shared
       material/control language.
-- [ ] Phone surfaces remain native-feeling, safe-area aware, keyboard aware,
+- [x] Phone surfaces remain native-feeling, safe-area aware, keyboard aware,
       free of accidental horizontal overflow, and usable at 320px.
-- [ ] All realistic loading, empty, error, disabled, permission, offline,
+- [x] All realistic loading, empty, error, disabled, permission, offline,
       selection, editing, and long-content states are handled.
-- [ ] Existing product invariants and data semantics remain true.
+- [x] Existing product invariants and data semantics remain true.
 - [ ] Functional, visual, accessibility, detector, reviewer, audit, and exact
       CI gates in section 11 pass.
 - [ ] Final screenshots, review verdict, audit score, design documents, and
