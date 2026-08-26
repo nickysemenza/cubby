@@ -32,8 +32,14 @@ export function CookbookList() {
     cookbook.list.queryOptions(null),
   );
   const { requestDelete, dialog } = useCookbookDelete();
-  const { onRowClick, onRowHover, onRowHoverEnd, PreviewSheet } =
-    useEntityPreview("cookbook");
+  const {
+    onRowClick,
+    onRowHover,
+    onRowHoverEnd,
+    PreviewSheet,
+    preview,
+    dockedInspector,
+  } = useEntityPreview("cookbook", { responsiveInspector: true });
 
   const columns = useMemo(
     () => [
@@ -112,6 +118,8 @@ export function CookbookList() {
         onRowClick={onRowClick}
         onRowHover={onRowHover}
         onRowHoverEnd={onRowHoverEnd}
+        currentRowId={preview?.id}
+        desktopInspector={dockedInspector}
       />
       <PreviewSheet />
       {dialog}
