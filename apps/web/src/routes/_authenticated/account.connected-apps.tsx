@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { oauth } from "~/app/account/connected-apps.functions";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import {
@@ -42,9 +43,12 @@ function ConnectedAppsPage() {
     label: string;
   } | null>(null);
 
-  const { data: apps, isLoading } = useQuery(
-    oauth.listConnectedApps.queryOptions(null),
-  );
+  const {
+    data: apps,
+    isLoading,
+    error,
+    refetch,
+  } = useQuery(oauth.listConnectedApps.queryOptions(null));
 
   const { data: orphanCount = 0 } = useQuery(
     oauth.countOrphanedClients.queryOptions(null),
@@ -74,6 +78,13 @@ function ConnectedAppsPage() {
 
       {isLoading ? (
         <p className="text-muted-foreground text-xs">Loading…</p>
+      ) : error ? (
+        <Stack gap="sm">
+          <ErrorDisplay error={error} />
+          <Button variant="outline" onClick={() => void refetch()}>
+            Retry connected apps
+          </Button>
+        </Stack>
       ) : !apps?.length ? (
         <p className="text-muted-foreground text-xs">
           Nothing connected. Add cubby as a connector in Claude (or any MCP

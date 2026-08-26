@@ -20,6 +20,7 @@ import {
 } from "~/app/_components/labels/sheet-layouts";
 import { useQrUrls } from "~/app/_components/labels/use-qr-urls";
 import { useShortcodeLookups } from "~/app/_components/labels/use-shortcode-lookups";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
@@ -68,7 +69,7 @@ function LabelsPage() {
     return uniq(list);
   }, [codes]);
 
-  const { items, isLoading } = useShortcodeLookups(shortcodes);
+  const { items, isLoading, error, refetch } = useShortcodeLookups(shortcodes);
 
   const { qrUrls, allQrReady } = useQrUrls(items, format);
 
@@ -212,6 +213,15 @@ function LabelsPage() {
           <Card>
             <CardContent className="py-6 text-center">
               <p className="text-muted-foreground">Loading...</p>
+            </CardContent>
+          </Card>
+        ) : error ? (
+          <Card>
+            <CardContent className="space-y-3 py-6">
+              <ErrorDisplay error={error} />
+              <Button variant="outline" onClick={() => void refetch()}>
+                Retry label lookup
+              </Button>
             </CardContent>
           </Card>
         ) : isSheetFormat(format) ? (
