@@ -9,6 +9,7 @@ import { Link } from "@tanstack/react-router";
 import { ExternalLink, X } from "lucide-react";
 import { type FC, type ReactNode, useMemo, useState } from "react";
 import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
+import { EntityCover } from "~/components/entity/entity-cover";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
@@ -192,15 +193,12 @@ export function ProductWorkbenchInspector({
     >
       <header className="border-border border-b p-3">
         <div className="flex items-start gap-2">
-          {coverImage ? (
-            <img
-              src={coverImage.url}
-              alt=""
-              width={40}
-              height={40}
-              className="size-10 rounded-md border border-border object-cover"
-            />
-          ) : null}
+          <EntityCover
+            images={coverImage ? [coverImage] : []}
+            entity="product"
+            size={40}
+            className="rounded-md border border-border"
+          />
           <div className="min-w-0 flex-1">
             <span className="inline-flex items-center gap-1 font-medium text-2xs text-[var(--domain-pantry)]">
               <span

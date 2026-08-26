@@ -46,6 +46,7 @@ import {
 const SETTLE_MS = 400;
 const MOBILE_PAGE_SIZE = 25;
 const PAGE_SIZE_OPTIONS = [100, 250, 500] as const;
+const EMPTY_COLLECTIONS: CollectionSlug[] = [];
 type MatrixRow = CollectionMatrixRow;
 
 const directlyAssigned = (state: CollectionCellState): boolean =>
@@ -405,7 +406,7 @@ export function CollectionAssignmentMatrix({
   const matrixRows = matrix.data?.rows ?? [];
   const subjectLabel = subject === "product" ? "Products" : "Locations";
   const secondaryLabel = subject === "product" ? "Manufacturer" : "Path";
-  const availableCollections = matrix.data?.collections ?? [];
+  const availableCollections = matrix.data?.collections ?? EMPTY_COLLECTIONS;
   const selectedMobileCollection = availableCollections.includes(
     mobileCollection ?? collection ?? "",
   )

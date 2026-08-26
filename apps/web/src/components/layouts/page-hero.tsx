@@ -484,7 +484,7 @@ function DetailPlate({
       )}
 
       <Card
-        className="border-x-0 border-l-2 md:border-r"
+        className="border-x-0 border-l-[length:var(--border-spine-card)] md:border-r"
         style={domainAccent ? { borderLeftColor: domainAccent } : undefined}
         data-testid="detail-spec-plate"
       >
@@ -499,7 +499,7 @@ function DetailPlate({
               </h1>
             </div>
             <DetailPlateActions actions={heroActions} />
-            <div className="col-span-2 flex flex-wrap items-center gap-2 text-muted-foreground text-xs">
+            <div className="col-span-2 flex flex-wrap items-center gap-2 font-mono text-muted-foreground text-xs">
               {heroNo && (
                 <span className="md:hidden">
                   <CopyableHeroNo heroNo={heroNo} />
@@ -523,10 +523,8 @@ function DetailPlate({
                     i > 0 && "border-border border-l pl-4",
                   )}
                 >
-                  <div className="text-muted-foreground text-xs">
-                    {stat.label}
-                  </div>
-                  <div className="truncate font-semibold text-base tabular-nums">
+                  <Eyebrow as="div">{stat.label}</Eyebrow>
+                  <div className="truncate font-mono font-semibold text-base tabular-nums">
                     {stat.value}
                   </div>
                 </div>
