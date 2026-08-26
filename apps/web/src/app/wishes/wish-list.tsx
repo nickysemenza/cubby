@@ -68,6 +68,9 @@ const WISH_TREE_CONFIG = {
         },
 } as const;
 
+const wishMobileDetailsHref = (row: WishRow) =>
+  `/${entities[row.entityType].basePath}/${row.previewId}`;
+
 export function WishList() {
   const columnHelper = useMemo(() => createCubbyColumnHelper<WishRow>(), []);
   const {
@@ -307,6 +310,7 @@ export function WishList() {
           onRowHoverEnd={onRowHoverEnd}
           currentRowId={preview?.rowKey ?? preview?.id}
           desktopInspector={dockedInspector}
+          getMobileDetailsHref={wishMobileDetailsHref}
         />
         <PreviewSheet />
       </ProductImageSummariesProvider>

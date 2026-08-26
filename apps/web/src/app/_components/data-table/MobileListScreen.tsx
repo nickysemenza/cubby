@@ -25,6 +25,7 @@ interface MobileRefreshControls {
 interface MobileListScreenProps<TItem extends RowData> {
   table: ITable<TItem>;
   entity?: Entity;
+  getDetailsHref?: (item: TItem) => string | undefined;
   additionalToolbarContent?: ReactNode;
   actions?: ReactNode;
   bulkActionBar?: ReactNode;
@@ -49,6 +50,7 @@ interface MobileListScreenProps<TItem extends RowData> {
 export function MobileListScreen<TItem extends RowData>({
   table,
   entity,
+  getDetailsHref,
   additionalToolbarContent,
   actions,
   bulkActionBar,
@@ -135,6 +137,7 @@ export function MobileListScreen<TItem extends RowData>({
             <MobileCardView
               table={table}
               entity={entity}
+              getDetailsHref={getDetailsHref}
               infiniteScroll={infiniteScroll}
               groupConfig={groupConfig}
               grouped={grouped}

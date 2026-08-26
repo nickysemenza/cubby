@@ -67,6 +67,8 @@ export interface RTableProps<TItem extends RowData> {
   timing?: QueryTiming;
   /** Entity type for mobile card navigation - when provided, cards become clickable */
   entity?: Entity;
+  /** Canonical mobile destination for rows whose entity type varies by row. */
+  getMobileDetailsHref?: (item: TItem) => string | undefined;
   /** Callback when a row is clicked */
   onRowClick?: (row: Row<TItem>) => void;
   /**
@@ -166,6 +168,7 @@ export default function RTable<TItem extends RowData>(
     ariaLabel = "Data Table",
     timing,
     entity,
+    getMobileDetailsHref,
     onRowClick,
     currentRowId,
     defaultDensity,
@@ -771,6 +774,7 @@ export default function RTable<TItem extends RowData>(
         <MobileListScreen
           table={table}
           entity={entity}
+          getDetailsHref={getMobileDetailsHref}
           additionalToolbarContent={additionalToolbarContent}
           actions={actions}
           bulkActionBar={bulkActionBar}

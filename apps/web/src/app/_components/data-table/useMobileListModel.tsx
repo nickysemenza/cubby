@@ -179,10 +179,13 @@ function getPriority(
 export function useMobileListModel<TItem extends RowData>({
   table,
   entity,
+  getDetailsHref,
   rowContentVersion,
 }: {
   table: ITable<TItem>;
   entity?: Entity;
+  /** Per-row canonical route for heterogeneous rosters. */
+  getDetailsHref?: (item: TItem) => string | undefined;
   /** External cell-render state snapshot; see useTableConfig. */
   rowContentVersion?: unknown;
 }): MobileListRowModel<TItem>[] {
@@ -315,7 +318,8 @@ export function useMobileListModel<TItem extends RowData>({
         // that no longer resolves.
         const shortcode = rowData.id as string | undefined;
         const detailsHref =
-          basePath && shortcode ? `/${basePath}/${shortcode}` : undefined;
+          getDetailsHref?.(row.original) ??
+          (basePath && shortcode ? `/${basePath}/${shortcode}` : undefined);
 
         return {
           row,
@@ -334,7 +338,14 @@ export function useMobileListModel<TItem extends RowData>({
           reserveImageSlot,
         };
       }),
-    [basePath, entity, reserveImageSlot, rowContentVersion, rows],
+    [
+      basePath,
+      entity,
+      getDetailsHref,
+      reserveImageSlot,
+      rowContentVersion,
+      rows,
+    ],
   );
 }
 
