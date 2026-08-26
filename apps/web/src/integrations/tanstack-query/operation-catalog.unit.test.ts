@@ -39,6 +39,9 @@ describe("operation catalog", () => {
       { entity: "product", input: { entity: "product", id: "P1" } },
     ]);
     expect(
+      entityDetail.policy({ entity: "product", id: "P1" }).meta.cacheTags,
+    ).toContainEqual(["product"]);
+    expect(
       entityDetail.infiniteQueryOptions(
         { entity: "product", id: "P1" },
         {

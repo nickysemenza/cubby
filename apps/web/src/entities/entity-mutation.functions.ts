@@ -8,6 +8,7 @@ import type {
   EntityBrowserMutationResult,
 } from "~/server/entity-kernel/contracts";
 
+/** @lintignore Discovered by the operation registry generator. */
 export const entityMutation = defineOperationDomain("entity", {
   mutate: mutation({
     input: z.custom<EntityBrowserMutationInput>(),

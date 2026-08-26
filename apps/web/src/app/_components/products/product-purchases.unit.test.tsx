@@ -41,7 +41,11 @@ vi.mock("~/app/products/product.functions", () => ({
 }));
 
 vi.mock("~/app/purchases/purchase.functions", () => ({
-  detachPurchaseProductsMutationOptions: () => ({}),
+  purchase: {
+    detachProducts: {
+      mutationOptions: () => ({}),
+    },
+  },
 }));
 
 vi.mock("~/app/_components/EntityInlineLink", () => ({

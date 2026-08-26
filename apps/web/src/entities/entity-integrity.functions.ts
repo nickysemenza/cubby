@@ -1,5 +1,4 @@
 import {
-  type IntegrityCatalog,
   integrityCatalogSchema,
   referentialLivenessViolationSchema,
 } from "@cubby/schemas/entity-integrity";
@@ -33,5 +32,3 @@ export const integrityProblems = defineOperationDomain("problems", {
     tags: [["problems"]],
   }),
 });
-
-export type { IntegrityCatalog };

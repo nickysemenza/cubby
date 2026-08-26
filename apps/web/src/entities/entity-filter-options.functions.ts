@@ -1,5 +1,4 @@
 import {
-  type FilterOptionsInput,
   filterOptionsInput,
   filterOptionsOut,
 } from "@cubby/schemas/filter-options";
@@ -15,5 +14,3 @@ export const entityFilterOptions = defineOperationDomain("entity", {
     tags: [["entity", "filterOptions"]],
   }),
 });
-
-export type { FilterOptionsInput };

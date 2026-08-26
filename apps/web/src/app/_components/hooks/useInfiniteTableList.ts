@@ -1,5 +1,9 @@
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef } from "react";
+import {
+  infiniteOperationQueryKey,
+  type OperationQueryKey,
+} from "~/integrations/tanstack-query/operation-catalog";
 import type { QueryTiming } from "~/lib/query-timing";
 import type { TableStateReturn } from "../data-table/useTableState";
 import {
@@ -76,18 +80,17 @@ export function useInfiniteTableList<
     groupBy,
   });
 
-  const infiniteQueryKey = useMemo(
-    () => [
-      ...queryOptions({
-        sort: sortParams,
-        pagination: { pageIndex: 0, pageSize: pagination.pageSize },
-        filters,
-        ...(groupBy && { groupBy }),
-      }).queryKey,
-      "__infinite__",
-    ],
-    [queryOptions, sortParams, pagination.pageSize, filters, groupBy],
-  );
+  const infiniteQueryKey = useMemo(() => {
+    const finiteQueryKey = queryOptions({
+      sort: sortParams,
+      pagination: { pageIndex: 0, pageSize: pagination.pageSize },
+      filters,
+      ...(groupBy && { groupBy }),
+    }).queryKey;
+    return finiteQueryKey[0] === "operation"
+      ? infiniteOperationQueryKey(finiteQueryKey as OperationQueryKey<unknown>)
+      : [...finiteQueryKey, "__infinite__"];
+  }, [queryOptions, sortParams, pagination.pageSize, filters, groupBy]);
 
   const pageOptions = useMemo(
     () => (pageParam: number) =>

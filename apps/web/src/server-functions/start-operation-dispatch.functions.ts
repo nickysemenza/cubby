@@ -24,10 +24,10 @@ const dispatchStartOperationServerFunction = createServerFn({
       startOperationDispatchInput.parse(value) as StartOperationDispatchInput,
   )
   .handler(async ({ data, context }) => {
-    const { dispatchRegisteredStartOperation } = await import(
+    const { dispatchStartOperation } = await import(
       "~/server/start-operation-dispatch.server"
     );
-    return (await dispatchRegisteredStartOperation({
+    return (await dispatchStartOperation({
       operation: data.operation,
       input: data.input,
       request: context.startOperation,

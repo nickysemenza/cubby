@@ -36,9 +36,13 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 
 vi.mock("~/app/expenses/expense.functions", () => ({
-  expenseChartDataQueryOptions: (input: unknown) => ({
-    queryKey: ["chartData", input],
-  }),
+  expense: {
+    chartData: {
+      queryOptions: (input: unknown) => ({
+        queryKey: ["chartData", input],
+      }),
+    },
+  },
 }));
 
 vi.mock("~/app/products/product.functions", () => ({

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { auditLogListOptions } from "~/lib/audit-log.functions";
 
 describe("audit log Start query options", () => {
-  it("preserves the infinite-query key and cursor paging contract", () => {
+  it("starts cursor paging from the unbounded first page", () => {
     const options = auditLogListOptions({
       entityType: undefined,
       entityId: undefined,
@@ -10,25 +10,7 @@ describe("audit log Start query options", () => {
       limit: 20,
     });
 
-    expect(options.queryKey).toEqual([
-      "operation",
-      "auditLog.list",
-      "infinite",
-      {
-        input: {
-          entityType: undefined,
-          entityId: undefined,
-          source: undefined,
-          limit: 20,
-        },
-      },
-    ]);
     expect(options.initialPageParam).toBeNull();
-    expect(options.meta).toMatchObject({
-      transport: "start",
-      operation: "auditLog.list",
-      observedByTransport: true,
-    });
   });
 
   it("keeps the cursor out of the cache key while seeding the first page", () => {

@@ -1,4 +1,6 @@
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import type { OperationCacheTag } from "~/integrations/tanstack-query/operation-meta";
 
 const entityKey = <TEntity extends string>(entity: TEntity) =>
   [entity] as const;
@@ -453,8 +455,16 @@ export function invalidatesFor<E extends InvalidationEntity>(
 
 export function normalizeQueryRoot(key: QueryKey): QueryKey {
   if (key.length === 0) return key;
+  if (key[0] === "operation") return key;
   return Array.isArray(key[0]) ? key : [key];
 }
+
+const operationTagForQueryRoot = (
+  key: QueryKey,
+): OperationCacheTag | undefined => {
+  const root = Array.isArray(key[0]) ? key[0][0] : key[0];
+  return typeof root === "string" && root !== "operation" ? [root] : undefined;
+};
 
 export function invalidateQueryRoots(
   queryClient: QueryClient,
@@ -465,6 +475,10 @@ export function invalidateQueryRoots(
       queryKey: normalizeQueryRoot(key),
     });
   }
+  const operationTags = keys
+    .map(operationTagForQueryRoot)
+    .filter((tag): tag is OperationCacheTag => tag !== undefined);
+  void invalidateOperationTags(queryClient, operationTags);
 }
 
 export async function cancelQueryRoots(

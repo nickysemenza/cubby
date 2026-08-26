@@ -101,6 +101,15 @@ export type InfiniteOperationQueryKey<Input> = readonly [
   { entity?: string; input: Input },
 ];
 
+export const infiniteOperationQueryKey = <Input>(
+  queryKey: OperationQueryKey<Input>,
+): InfiniteOperationQueryKey<Input> => [
+  queryKey[0],
+  queryKey[1],
+  "infinite",
+  queryKey[2],
+];
+
 const invalidationPolicies = new Map<
   StartOperationId,
   (input: unknown) => readonly OperationCacheTag[]
@@ -207,7 +216,10 @@ const descriptorMeta = (
   observedByTransport: true,
   ...(definition.kind === "query"
     ? {
-        cacheTags: definition.tags ?? [],
+        cacheTags: [
+          ...(definition.tags ?? []),
+          ...(entity ? ([[entity]] as const) : []),
+        ],
         persistence:
           typeof definition.persistence === "function"
             ? input === NO_POLICY_INPUT
@@ -364,7 +376,10 @@ function buildDescriptor<Definition extends AnyDefinition>(options: {
           operation.call(infiniteOptions.page(input, pageParam as PageParam), {
             signal,
           }),
-        initialPageParam: infiniteOptions.initialPageParam ?? (0 as PageParam),
+        initialPageParam:
+          "initialPageParam" in infiniteOptions
+            ? (infiniteOptions.initialPageParam as PageParam)
+            : (0 as PageParam),
         getNextPageParam: infiniteOptions.getNextPageParam,
         meta: queryPolicy(input).meta,
         ...queryPolicy(input).freshness,

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   EntityDetailError,
   entityDetailQueryKey,
+  entityDetailQueryOptions,
   entityDetailRootKey,
 } from "./entity-detail.functions";
 
@@ -41,6 +42,12 @@ describe("entity detail transport contract", () => {
         input: { entity: "location", shortcode: "LOC-4K7M" },
       },
     ]);
+  });
+
+  it("allows an empty placeholder while a conditional query is disabled", () => {
+    expect(() =>
+      entityDetailQueryOptions("product", "", { enabled: false }),
+    ).not.toThrow();
   });
 
   it("exposes neutral error details to existing browser error handling", () => {

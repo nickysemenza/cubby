@@ -5,6 +5,7 @@ import {
   query,
 } from "~/integrations/tanstack-query/operation-catalog";
 
+/** @lintignore Discovered by the operation registry generator. */
 export const auditLog = defineOperationDomain("auditLog", {
   list: query({
     input: auditLogListInput,

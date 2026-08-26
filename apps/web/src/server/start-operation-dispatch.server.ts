@@ -42,5 +42,3 @@ export async function dispatchStartOperation(
   const handler: StartOperationHandler = await loader();
   return await handler({ data: options.input, request: options.request });
 }
-
-export const dispatchRegisteredStartOperation = dispatchStartOperation;

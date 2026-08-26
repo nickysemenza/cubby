@@ -1,5 +1,5 @@
 import { cookbookSummariesOut } from "@cubby/schemas/import-recipe";
-import { type CookbookSummary, cookbookSummary } from "@cubby/schemas/recipe";
+import { cookbookSummary } from "@cubby/schemas/recipe";
 import { z } from "zod";
 import {
   defineOperationDomain,
@@ -23,5 +23,3 @@ export const cookbook = defineOperationDomain("cookbook", {
     tags: [["cookbook"]],
   }),
 });
-
-export type { CookbookSummary };

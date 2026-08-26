@@ -4,6 +4,7 @@ import { defaultPagination } from "~/app/_components/data-table/tableUtils";
 import {
   defineOperationDomain,
   type InfiniteOperationQueryKey,
+  infiniteOperationQueryKey,
   type OperationQueryKey,
   query,
 } from "~/integrations/tanstack-query/operation-catalog";
@@ -33,6 +34,7 @@ const stableIndexFreshness = {
   refetchOnReconnect: true,
 } as const;
 
+/** @lintignore Discovered by the operation registry generator. */
 export const entityList = defineOperationDomain("entity", {
   list: query({
     input: z.custom<EntityListInputByEntity[ListEntity]>(),
@@ -92,13 +94,8 @@ export function compileEntityListInput(
   };
 }
 
-export const entityListRootKey = <E extends ListEntity>(entity: E) =>
-  entityList.list
-    .forEntity(entity)
-    .queryKey(
-      parseEntityListInput(entity, { entity } as EntityListInputByEntity[E]),
-    )
-    .slice(0, 2);
+export const entityListRootKey = <E extends ListEntity>(_entity: E) =>
+  ["operation", entityList.list.id] as const;
 
 export function entityListQueryOptions<E extends ListEntity>(
   entity: E,
@@ -137,12 +134,9 @@ export function entityInfiniteListQueryOptions<E extends ListEntity>(
   }) as EntityListInputByEntity[E];
   const policy = operation.policy(parsed);
   return infiniteQueryOptions({
-    queryKey: [
-      "operation",
-      operation.id,
-      "infinite",
-      { entity, input: parsed },
-    ] as InfiniteOperationQueryKey<EntityListInputByEntity[E]>,
+    queryKey: infiniteOperationQueryKey(
+      operation.queryKey(parsed),
+    ) as InfiniteOperationQueryKey<EntityListInputByEntity[E]>,
     queryFn: async ({ pageParam, signal }) => {
       const pageInput = parseEntityListInput(entity, {
         entity,

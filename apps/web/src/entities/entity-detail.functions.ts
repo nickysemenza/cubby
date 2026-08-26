@@ -42,6 +42,7 @@ export class EntityDetailError extends Error {
   }
 }
 
+/** @lintignore Discovered by the operation registry generator. */
 export const entityDetail = defineOperationDomain("entity", {
   detail: query({
     input: z.custom<EntityDetailInputByEntity[DetailEntity]>(),
@@ -85,17 +86,24 @@ export function entityDetailQueryOptions<E extends DetailEntity>(
 ) {
   const queryKey = entityDetailQueryKey(entity, shortcode);
   const operation = entityDetail.detail.forEntity(entity);
-  const input = parseEntityDetailInput(entity, {
+  const input = {
     entity,
     shortcode: queryKey[2].input.shortcode,
-  }) as EntityDetailInputByEntity[E];
+  } as EntityDetailInputByEntity[E];
   const policy = operation.policy(input);
   return queryOptions({
     queryKey: queryKey as OperationQueryKey<EntityDetailInputByEntity[E]>,
-    queryFn: async ({ signal }) =>
-      (await operation.call(input, { signal })) as
+    // Some conditional detail queries use an empty placeholder while disabled.
+    // Validate when React Query actually executes, not while rendering options.
+    queryFn: async ({ signal }) => {
+      const parsed = parseEntityDetailInput(
+        entity,
+        input,
+      ) as EntityDetailInputByEntity[E];
+      return (await operation.call(parsed, { signal })) as
         | EntityDetailByEntity[E]
-        | null,
+        | null;
+    },
     meta: policy.meta,
     ...policy.freshness,
     ...options,
