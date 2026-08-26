@@ -11,7 +11,7 @@ export function AppFooter() {
         align="center"
         justify="between"
         gap="sm"
-        className="mx-auto w-full max-w-7xl px-4 py-2 font-mono text-2xs text-muted-foreground uppercase tracking-[0.12em] md:px-6"
+        className="mx-auto w-full max-w-7xl px-4 py-2 font-mono text-2xs text-muted-foreground md:px-6"
       >
         <Row align="center" gap="sm">
           <span>

@@ -286,7 +286,7 @@ function RootComponent() {
         </AuthenticatedAppShell>
       ) : (
         <div className="flex min-h-dvh flex-col">
-          <div className="safe-top sticky top-0 z-40 border-b-[3px] border-b-foreground bg-card print:hidden">
+          <div className="safe-top sticky top-0 z-40 border-b bg-card print:hidden">
             <div className="mx-auto flex h-12 w-full max-w-7xl items-center px-2 md:px-6">
               <MainNav className="mx-0" onSearchClick={openCommandMenu} />
             </div>
