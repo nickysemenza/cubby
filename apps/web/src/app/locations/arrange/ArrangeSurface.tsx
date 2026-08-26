@@ -135,7 +135,7 @@ export function ArrangeSurface({
             step={1}
             value={depth}
             onChange={(e) => setDepth(Number(e.target.value))}
-            className="accent-primary"
+            className="h-11 accent-primary md:h-auto"
             aria-label="Render depth"
           />
           <span className="w-3 font-mono text-xs tabular-nums">{depth}</span>
