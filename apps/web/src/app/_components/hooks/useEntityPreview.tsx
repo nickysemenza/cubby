@@ -1,10 +1,16 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { Sheet, SheetContent } from "~/components/ui/sheet";
 import { isBrowserRoutedEntity } from "~/entities/entities";
 import { entityPreviewQueryOptions } from "~/entities/entity-query";
-import { EntityPreviewPanel } from "../search/entity-preview-panel";
+import { EntityWorkbenchInspector } from "../entity-workbench-inspector";
 
 interface PreviewState {
   entityType: Entity;
@@ -19,6 +25,31 @@ interface PreviewIntent {
 }
 
 const PREVIEW_INTENT_DELAY_MS = 200;
+const DOCK_MEDIA_QUERY = "(min-width: 1280px)";
+const SHEET_MEDIA_QUERY = "(min-width: 768px) and (max-width: 1279px)";
+
+type PreviewPresentation = "dock" | "sheet" | "mobile";
+
+const previewPresentation = (): PreviewPresentation => {
+  if (typeof window === "undefined") return "mobile";
+  if (window.matchMedia(DOCK_MEDIA_QUERY).matches) return "dock";
+  if (window.matchMedia(SHEET_MEDIA_QUERY).matches) return "sheet";
+  return "mobile";
+};
+
+const subscribePreviewPresentation = (onStoreChange: () => void) => {
+  if (typeof window === "undefined") return () => undefined;
+  const dock = window.matchMedia(DOCK_MEDIA_QUERY);
+  const sheet = window.matchMedia(SHEET_MEDIA_QUERY);
+  dock.addEventListener("change", onStoreChange);
+  sheet.addEventListener("change", onStoreChange);
+  return () => {
+    dock.removeEventListener("change", onStoreChange);
+    sheet.removeEventListener("change", onStoreChange);
+  };
+};
+
+const getServerPreviewPresentation = (): PreviewPresentation => "mobile";
 
 interface UseEntityPreviewOptions {
   /** Field to use as ID (default: "id") */
@@ -38,9 +69,17 @@ function PreviewSheetView({
 }) {
   return (
     <Sheet open={!!preview} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="right" className="!w-1/2 !max-w-none overflow-y-auto">
+      <SheetContent
+        side="right"
+        showCloseButton={false}
+        className="!w-[25rem] !max-w-[calc(100vw-2rem)] overflow-y-auto p-0"
+      >
         {preview && (
-          <EntityPreviewPanel entityType={preview.entityType} id={preview.id} />
+          <EntityWorkbenchInspector
+            entity={preview.entityType}
+            id={preview.id}
+            onClose={onClose}
+          />
         )}
       </SheetContent>
     </Sheet>
@@ -52,6 +91,11 @@ export function useEntityPreview(
   options?: UseEntityPreviewOptions,
 ) {
   const [preview, setPreview] = useState<PreviewState | null>(null);
+  const presentation = useSyncExternalStore(
+    subscribePreviewPresentation,
+    previewPresentation,
+    getServerPreviewPresentation,
+  );
   const idField = options?.idField ?? "id";
   const queryClient = useQueryClient();
   const intentRef = useRef<PreviewIntent | null>(null);
@@ -188,15 +232,30 @@ export function useEntityPreview(
   // host re-render for unrelated reasons (e.g. list background refetch)
   // doesn't remount the sheet — only an actual preview state change does.
   const PreviewSheet = useCallback(
-    () => <PreviewSheetView preview={preview} onClose={closePreview} />,
-    [preview, closePreview],
+    () => (
+      <PreviewSheetView
+        preview={presentation === "sheet" ? preview : null}
+        onClose={closePreview}
+      />
+    ),
+    [presentation, preview, closePreview],
   );
+
+  const dockedInspector =
+    presentation === "dock" && preview ? (
+      <EntityWorkbenchInspector
+        entity={preview.entityType}
+        id={preview.id}
+        onClose={closePreview}
+      />
+    ) : null;
 
   return {
     onRowClick,
     onRowHover,
     onRowHoverEnd,
     PreviewSheet,
+    dockedInspector,
     preview,
     setPreview,
     closePreview,
