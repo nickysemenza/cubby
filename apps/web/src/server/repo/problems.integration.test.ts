@@ -50,6 +50,7 @@ import { findViewProblems } from "../services/problem-views.service";
 import {
   findAllProblems,
   findFastProblems,
+  findProblemCounts,
   findTrackerProblems,
   rebuildProductConversionCoverageProjection,
   reparseStaleIngredientParses,
@@ -2335,6 +2336,12 @@ describe("problems service — totals count defects only", () => {
       all.emptyLocations.length,
     );
     expect(counts.byType.emptyLocations).toBe(all.emptyLocations.length);
+
+    const directCounts = await findProblemCounts(
+      ctx.db,
+      fakeUpcClient().client,
+    );
+    expect(directCounts).toEqual(counts);
   });
 });
 

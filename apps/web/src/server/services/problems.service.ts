@@ -1450,10 +1450,12 @@ export const findProblemCounts = async (
   ) as Record<string, () => Promise<number>>;
   const counts = await traceAllBounded(tasks, 4);
   const byType = problemsCountSchema.shape.byType.parse(
-    declarations.map((definition) => [
-      definition.key,
-      Number(counts[definition.key] ?? 0),
-    ]),
+    Object.fromEntries(
+      declarations.map((definition) => [
+        definition.key,
+        Number(counts[definition.key] ?? 0),
+      ]),
+    ),
   );
   const totalFor = (problemClass: "defect" | "coverage") =>
     declarations.reduce(
