@@ -56,7 +56,7 @@ import type {
   EntityEditRecord,
 } from "./types";
 
-export type EntityEditorForm = UseFormReturn<Record<string, unknown>>;
+type EntityEditorForm = UseFormReturn<Record<string, unknown>>;
 
 interface EntityEditorFieldsProps {
   form: EntityEditorForm;
