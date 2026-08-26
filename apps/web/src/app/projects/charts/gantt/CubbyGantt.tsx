@@ -390,7 +390,6 @@ export function CubbyGantt({
               aria-expanded={selectedId === row?.id}
               aria-label={`Show ${count} dependency ${count === 1 ? "relationship" : "relationships"} for ${rowName}`}
               className="inline-flex size-7 items-center justify-center gap-1 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              onFocus={() => row && setSelectedId(row.id)}
               onClick={() =>
                 row &&
                 setSelectedId((current) => (current === row.id ? null : row.id))
