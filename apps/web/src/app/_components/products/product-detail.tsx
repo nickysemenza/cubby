@@ -59,7 +59,10 @@ import { ProductExpenseHistory } from "./product-expense-history";
 import { ProductForm } from "./product-form";
 import { heroPresence } from "./product-hero-presence";
 import { ProductKitComponents } from "./product-kit-components";
-import { ProductProjectUses } from "./product-project-uses";
+import {
+  ProductProjectUses,
+  shouldShowProductProjectUses,
+} from "./product-project-uses";
 import { ProductPurchases } from "./product-purchases";
 import {
   ProductRelationshipRouteContent,
@@ -84,6 +87,10 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   });
 
   const isNonFood = isNonFoodCategory(product.category);
+  const shouldShowProjectUses = shouldShowProductProjectUses(
+    product.category,
+    relationshipRouteQuery.data?.direct.usedOnProjects.count ?? 0,
+  );
 
   // PDF manuals share the images relation — hero/gallery get only real
   // images; documents render in their own Manuals section.
@@ -235,7 +242,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
         />
       ),
     },
-    ...(product.category === "tools" || product.category === "software"
+    ...(shouldShowProjectUses
       ? [
           {
             id: "project-uses",
