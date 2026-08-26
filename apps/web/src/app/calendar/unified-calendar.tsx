@@ -449,7 +449,7 @@ export function UnifiedCalendar({
                     Nothing planned this {period}.{" "}
                     <button
                       type="button"
-                      className="underline hover:text-primary"
+                      className="inline-flex min-h-11 items-center underline hover:text-primary md:min-h-0"
                       onClick={() =>
                         setCreateKind(
                           (lockedKinds ?? filters?.kinds ?? ALL_KINDS)[0] ??
