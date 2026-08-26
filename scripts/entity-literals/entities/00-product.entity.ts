@@ -87,10 +87,7 @@ export default literalEntity({
         kind: "idMulti",
         placeholder: "Filter locations...",
         optionsKey: "productLocations",
-        brandRef: {
-          module: "@cubby/schemas/identifiers",
-          export: "unsafeLocationId",
-        },
+        brandRef: { entity: "location", kind: "id" },
         nullable: { field: "inventoryPresenceFilter", label: "inventory" },
       },
       {
@@ -109,10 +106,7 @@ export default literalEntity({
         kind: "idMulti",
         placeholder: "Filter ingredient...",
         optionsKey: "productIngredients",
-        brandRef: {
-          module: "@cubby/schemas/identifiers",
-          export: "unsafeIngredientId",
-        },
+        brandRef: { entity: "ingredient", kind: "id" },
         nullable: { field: "ingredientPresenceFilter", label: "ingredient" },
       },
       {
@@ -367,10 +361,7 @@ export default literalEntity({
         kind: "idMulti",
         placeholder: "Filter by vendor...",
         optionsKey: "productVendors",
-        brandRef: {
-          module: "@cubby/schemas/identifiers",
-          export: "unsafeVendorId",
-        },
+        brandRef: { entity: "vendor", kind: "id" },
         nullable: { field: "vendorPresenceFilter", label: "vendor" },
       },
       {
@@ -380,10 +371,7 @@ export default literalEntity({
         kind: "idMulti",
         placeholder: "Filter by project...",
         optionsKey: "project",
-        brandRef: {
-          module: "@cubby/schemas/identifiers",
-          export: "unsafeProjectId",
-        },
+        brandRef: { entity: "project", kind: "id" },
         nullable: { field: "projectPresenceFilter", label: "project" },
       },
       {
@@ -412,10 +400,7 @@ export default literalEntity({
         kind: "idMulti",
         placeholder: "Filter by purchase...",
         optionsKey: "productPurchases",
-        brandRef: {
-          module: "@cubby/schemas/identifiers",
-          export: "unsafePurchaseId",
-        },
+        brandRef: { entity: "purchase", kind: "id" },
         nullable: { field: "purchasePresenceFilter", label: "purchase" },
       },
       {

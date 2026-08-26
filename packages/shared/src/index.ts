@@ -25,6 +25,7 @@ export {
   wishShortcode,
   generateShortcode,
   parseShortcode,
+  parseShortcodeFor,
   extractShortcodeFromScan,
   getShortcodeUrl,
 } from "./shortcode";
@@ -46,6 +47,7 @@ export type {
   ProjectShortcode,
   PurchaseShortcode,
   RecipeShortcode,
+  ShortcodeFor,
   ShortcodeType,
   TaskShortcode,
   VendorShortcode,

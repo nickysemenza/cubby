@@ -90,10 +90,7 @@ export default literalEntity({
         kind: "idMulti",
         placeholder: "Filter product...",
         optionsKey: "locationProducts",
-        brandRef: {
-          module: "@cubby/schemas/identifiers",
-          export: "unsafeProductId",
-        },
+        brandRef: { entity: "product", kind: "id" },
         nullable: { field: "productPresenceFilter", label: "product" },
       },
       {
@@ -102,10 +99,7 @@ export default literalEntity({
         kind: "idMulti",
         placeholder: "Filter parent...",
         optionsKey: "parentLocation",
-        brandRef: {
-          module: "@cubby/schemas/identifiers",
-          export: "unsafeLocationId",
-        },
+        brandRef: { entity: "location", kind: "id" },
         nullable: { field: "parentPresenceFilter", label: "parent" },
       },
       {

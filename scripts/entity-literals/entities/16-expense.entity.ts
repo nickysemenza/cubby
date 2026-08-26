@@ -210,10 +210,7 @@ export default literalEntity({
         kind: "idMulti",
         placeholder: "Filter by project...",
         optionsKey: "project",
-        brandRef: {
-          module: "@cubby/schemas/identifiers",
-          export: "unsafeProjectId",
-        },
+        brandRef: { entity: "project", kind: "id" },
         nullable: { field: "projectPresenceFilter", label: "project" },
       },
       {
@@ -227,10 +224,7 @@ export default literalEntity({
         columnId: "productId",
         kind: "id",
         placeholder: "Filter by product id...",
-        brandRef: {
-          module: "@cubby/schemas/identifiers",
-          export: "unsafeProductId",
-        },
+        brandRef: { entity: "product", kind: "id" },
         urlOnly: true,
       },
       {
@@ -249,10 +243,7 @@ export default literalEntity({
         kind: "idMulti",
         placeholder: "Filter by vendor...",
         optionsKey: "vendor",
-        brandRef: {
-          module: "@cubby/schemas/identifiers",
-          export: "unsafeVendorId",
-        },
+        brandRef: { entity: "vendor", kind: "id" },
         nullable: { field: "vendorPresenceFilter", label: "purchase" },
       },
       {
@@ -277,10 +268,7 @@ export default literalEntity({
         columnId: "purchaseId",
         kind: "id",
         placeholder: "Filter by purchase id...",
-        brandRef: {
-          module: "@cubby/schemas/identifiers",
-          export: "unsafePurchaseId",
-        },
+        brandRef: { entity: "purchase", kind: "id" },
         urlOnly: true,
       },
       {

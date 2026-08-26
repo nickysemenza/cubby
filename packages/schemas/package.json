@@ -17,6 +17,7 @@
     "./relatedness": "./src/relatedness.ts",
     "./recommendations": "./src/recommendations.ts",
     "./identifiers": "./src/identifiers.ts",
+    "./testing": "./src/test-support/identifiers.ts",
     "./common": "./src/common.ts",
     "./pagination": "./src/pagination.ts",
     "./context": "./src/context.ts",
