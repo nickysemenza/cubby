@@ -103,10 +103,9 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
           "A private household workspace for inventory, purchases, projects, recipes, and meal planning.",
       },
       {
-        // Warm-Paper Ledger: the iOS status-bar tint matches the paper-surface
-        // sticky header (bg-card) instead of the old dark chrome.
+        // Keep browser and installed-PWA chrome on the Porcelain canvas.
         name: "theme-color",
-        content: "#fcfaf4",
+        content: "#f7f9fc",
       },
       {
         name: "apple-mobile-web-app-title",

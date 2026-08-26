@@ -42,9 +42,12 @@ export async function verifyPublicClient(
 
   try {
     const result = await lookup(clientId);
-    if (result.data) return { kind: "verified", client: result.data };
+    if (result.data?.client_id === clientId) {
+      return { kind: "verified", client: result.data };
+    }
+    if (result.data) return { kind: "error", message: LOOKUP_FAILED };
 
-    if (result.error?.message) {
+    if (result.error) {
       return { kind: "error", message: LOOKUP_FAILED };
     }
 
@@ -57,8 +60,14 @@ export async function verifyPublicClient(
 /** The Allow control is never a fallback for a loading or unknown client. */
 export function canAllowConsent(
   hydrated: boolean,
+  requestedClientId: string | undefined,
   client: PublicClientLookupState,
   submitting: boolean,
 ) {
-  return hydrated && client.kind === "verified" && !submitting;
+  return (
+    hydrated &&
+    client.kind === "verified" &&
+    client.client.client_id === requestedClientId &&
+    !submitting
+  );
 }

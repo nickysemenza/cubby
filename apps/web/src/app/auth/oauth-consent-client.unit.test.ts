@@ -12,16 +12,29 @@ const VERIFIED: PublicClientLookupState = {
 
 describe("OAuth consent client verification", () => {
   it("only allows approval after hydrated, verified client metadata", () => {
-    expect(canAllowConsent(false, VERIFIED, false)).toBe(false);
-    expect(canAllowConsent(true, { kind: "loading" }, false)).toBe(false);
+    expect(canAllowConsent(false, "client-1", VERIFIED, false)).toBe(false);
+    expect(canAllowConsent(true, "client-1", { kind: "loading" }, false)).toBe(
+      false,
+    );
     expect(
-      canAllowConsent(true, { kind: "invalid", message: "Missing" }, false),
+      canAllowConsent(
+        true,
+        "client-1",
+        { kind: "invalid", message: "Missing" },
+        false,
+      ),
     ).toBe(false);
     expect(
-      canAllowConsent(true, { kind: "error", message: "Offline" }, false),
+      canAllowConsent(
+        true,
+        "client-1",
+        { kind: "error", message: "Offline" },
+        false,
+      ),
     ).toBe(false);
-    expect(canAllowConsent(true, VERIFIED, true)).toBe(false);
-    expect(canAllowConsent(true, VERIFIED, false)).toBe(true);
+    expect(canAllowConsent(true, "client-1", VERIFIED, true)).toBe(false);
+    expect(canAllowConsent(true, "client-2", VERIFIED, false)).toBe(false);
+    expect(canAllowConsent(true, "client-1", VERIFIED, false)).toBe(true);
   });
 
   it("distinguishes a missing or removed client from a retryable lookup failure", async () => {
@@ -45,6 +58,13 @@ describe("OAuth consent client verification", () => {
         kind: "error",
       },
     );
+
+    lookup.mockResolvedValueOnce({ error: {} });
+    await expect(verifyPublicClient("client-1", lookup)).resolves.toMatchObject(
+      {
+        kind: "error",
+      },
+    );
   });
 
   it("recovers to verified metadata on a later retry", async () => {
@@ -61,5 +81,14 @@ describe("OAuth consent client verification", () => {
     await expect(verifyPublicClient("client-1", lookup)).resolves.toEqual(
       VERIFIED,
     );
+  });
+
+  it("rejects metadata returned for a different requested client", async () => {
+    const lookup = vi.fn().mockResolvedValue({ data: VERIFIED.client });
+
+    await expect(verifyPublicClient("client-2", lookup)).resolves.toMatchObject(
+      { kind: "error" },
+    );
+    expect(canAllowConsent(true, "client-2", VERIFIED, false)).toBe(false);
   });
 });

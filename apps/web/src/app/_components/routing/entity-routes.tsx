@@ -2,7 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { UseSuspenseQueryOptions } from "@tanstack/react-query";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { Link, useParams } from "@tanstack/react-router";
+import { Link, notFound, useParams } from "@tanstack/react-router";
 import type { ComponentType, ReactNode } from "react";
 import type { PageLayout } from "~/components/layout/page-wrapper";
 import { Page } from "~/components/page/Page";
@@ -187,9 +187,10 @@ export function detailPage<TQuery extends DetailQueryFactory>({
 
     useDetailTitle(shortcode, (data ? title(data) : undefined) ?? undefined);
 
-    // The loader already threw notFound for an unknown code; this guard only
-    // satisfies the nullable output type.
-    if (!data) return null;
+    // The loader covers the initial request. Focus/reconnect refetches can
+    // still observe a record deleted since navigation, which is a real
+    // not-found transition rather than a blank successful detail page.
+    if (!data) throw notFound();
 
     return render(data, shortcode);
   };

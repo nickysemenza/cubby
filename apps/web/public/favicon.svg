@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <title>Cubby</title>
-  <rect x="2" y="2" width="60" height="60" rx="8" fill="#fcfaf4" stroke="#16170f" stroke-width="3"/>
-  <rect x="9" y="10" width="46" height="3" rx="1" fill="#c9c0ae"/>
-  <rect x="9" y="30" width="46" height="3" rx="1" fill="#c9c0ae"/>
-  <rect x="9" y="50" width="46" height="3" rx="1" fill="#c9c0ae"/>
-  <rect x="12" y="15" width="10" height="13" rx="1" fill="#2244cc"/>
-  <circle cx="32" cy="22" r="6" fill="#16170f"/>
-  <rect x="42" y="17" width="10" height="11" rx="1" fill="#2244cc"/>
-  <circle cx="16" cy="42" r="5" fill="#16170f"/>
-  <rect x="26" y="35" width="12" height="13" rx="1" fill="#2244cc"/>
-  <rect x="44" y="38" width="8" height="10" rx="1" fill="#16170f"/>
+  <rect x="2" y="2" width="60" height="60" rx="8" fill="#ffffff" stroke="#d9dee7" stroke-width="1.5"/>
+  <rect x="9" y="10" width="46" height="2" rx="1" fill="#d9dee7"/>
+  <rect x="9" y="30" width="46" height="2" rx="1" fill="#d9dee7"/>
+  <rect x="9" y="50" width="46" height="2" rx="1" fill="#d9dee7"/>
+  <rect x="12" y="15" width="10" height="13" rx="2" fill="#2563eb"/>
+  <circle cx="32" cy="22" r="6" fill="#16845b"/>
+  <rect x="42" y="17" width="10" height="11" rx="2" fill="#6d5bd0"/>
+  <circle cx="16" cy="42" r="5" fill="#147d92"/>
+  <rect x="26" y="35" width="12" height="13" rx="2" fill="#d97706"/>
+  <rect x="44" y="38" width="8" height="10" rx="2" fill="#b5477c"/>
 </svg>

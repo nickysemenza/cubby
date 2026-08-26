@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { oauth } from "~/app/account/connected-apps.functions";
+import { OrphanedClientMaintenance } from "~/app/account/orphaned-client-maintenance";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
@@ -50,9 +51,11 @@ function ConnectedAppsPage() {
     refetch,
   } = useQuery(oauth.listConnectedApps.queryOptions(null));
 
-  const { data: orphanCount = 0 } = useQuery(
-    oauth.countOrphanedClients.queryOptions(null),
-  );
+  const {
+    data: orphanCount,
+    error: orphanError,
+    refetch: refetchOrphanCount,
+  } = useQuery(oauth.countOrphanedClients.queryOptions(null));
 
   const revoke = useActionMutation({
     mutationFn: oauth.revokeConnectedApp.mutationOptions,
@@ -159,23 +162,13 @@ function ConnectedAppsPage() {
         </Table>
       )}
 
-      {orphanCount > 0 && (
-        <Row align="center" gap="sm">
-          <span className="text-muted-foreground text-xs">
-            {orphanCount} abandoned registration
-            {orphanCount === 1 ? "" : "s"} — connect attempts that never reached
-            the consent screen.
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={prune.isPending}
-            onClick={() => prune.mutate(null)}
-          >
-            {prune.isPending ? "Cleaning up…" : "Clean up"}
-          </Button>
-        </Row>
-      )}
+      <OrphanedClientMaintenance
+        count={orphanCount}
+        error={orphanError}
+        isCleaning={prune.isPending}
+        onCleanup={() => prune.mutate(null)}
+        onRetry={() => void refetchOrphanCount()}
+      />
 
       <AlertDialog
         open={pendingRevoke !== null}

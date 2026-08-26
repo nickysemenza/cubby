@@ -49,8 +49,12 @@ const SCOPE_DESCRIPTIONS: Record<string, string> = {
 function ConsentPage() {
   const { client_id: clientId, scope } = Route.useSearch();
   const hydrated = useHydrated();
-  const [clientState, setClientState] = useState<PublicClientLookupState>({
-    kind: "loading",
+  const [clientSnapshot, setClientSnapshot] = useState<{
+    clientId: string | undefined;
+    state: PublicClientLookupState;
+  }>({
+    clientId,
+    state: { kind: "loading" },
   });
   const clientLookupVersion = useRef(0);
   const [submitting, setSubmitting] = useState<"accept" | "deny" | null>(null);
@@ -60,7 +64,7 @@ function ConsentPage() {
 
   const loadClient = useCallback(async () => {
     const requestVersion = ++clientLookupVersion.current;
-    setClientState({ kind: "loading" });
+    setClientSnapshot({ clientId, state: { kind: "loading" } });
     const nextState = await verifyPublicClient(clientId, (requestedClientId) =>
       // $fetch rather than a generated method: this endpoint is only ever
       // called from this one screen, and the explicit path avoids depending on
@@ -70,7 +74,7 @@ function ConsentPage() {
       }),
     );
     if (requestVersion === clientLookupVersion.current) {
-      setClientState(nextState);
+      setClientSnapshot({ clientId, state: nextState });
     }
   }, [clientId]);
 
@@ -101,10 +105,15 @@ function ConsentPage() {
     }
   }
 
+  const clientState: PublicClientLookupState =
+    clientSnapshot.clientId === clientId
+      ? clientSnapshot.state
+      : { kind: "loading" };
   const client = clientState.kind === "verified" ? clientState.client : null;
   const appName = client?.client_name ?? "Requested application";
   const allowEnabled = canAllowConsent(
     hydrated,
+    clientId,
     clientState,
     submitting !== null,
   );
