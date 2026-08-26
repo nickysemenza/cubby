@@ -32,7 +32,7 @@ fix only redesign-caused failures.
 | T2 Desktop/mobile shell | Complete | 224px expanded and 56px collapsed rail, 48px command band, five domain groups, preserved contextual mobile chrome, focused tests/typecheck, independent review, and desktop/mobile visual checkpoint |
 | T3 Products reference workbench | Complete | Approved 28px Product density, docked inspector, Sheet, phone projection, one Product-owned relationship query, fixed direct/derived semantics, bounded previews, explicit provenance, and synthetic desktop/phone examples |
 | T4 Canonical detail system | Complete | Product detail reuses the same relationship query near the hero and in its full route ledger, suppresses the generic duplicate explorer, and preserves recategorized project-use history as read-only evidence |
-| T5 Canonical lists/details | In progress | Standard, direct-workbench, Project, and heterogeneous Wishlist rosters now share one responsive current-record inspector contract; canonical detail compositions and actions remain under review |
+| T5 Canonical lists/details | Complete | Standard, direct-workbench, Project, Wishlist, Meal, and USDA rosters share the responsive inspector/mobile-detail contract; canonical details use one section ledger for Activity and truthful relationships, first-wave fallback previews are explicit, and read-heavy density is scoped rather than global |
 | T6 Today/ordinary surfaces | Pending | — |
 | T7 Specialist workbenches | Pending | — |
 | T8 Peripheral states | Pending | — |
@@ -113,6 +113,14 @@ height while retaining the named viewport width.
 | 2026-08-26 | T5 | Direct-roster desktop visual review | Pass | A representative Purchase roster was manually verified with a compact 25rem inspector and canonical Overview/Relations/Activity content at 1440×900; no private-data capture was retained |
 | 2026-08-26 | T5 | Bespoke-roster inspector propagation | Pass | Project tree/flat views and Wishlist's heterogeneous Wish/Product tree now preserve canonical entity identity separately from TanStack row identity while using the shared responsive inspector |
 | 2026-08-26 | T5 | Wishlist parent/child visual review | Pass | At 1440×900, a Wish row opened the honest fallback inspector and its expanded Product candidate opened a Product inspector with the candidate shortcode and selected-row treatment; no private-data capture was retained |
+| 2026-08-26 | T5 | Remaining roster and compact-preview coverage | Pass | Meals and USDA Foods now use intentional responsive inspector/mobile projections; Financial Account, Financial Transaction, Wish, and Image provide honest compact previews without embedding full details or duplicating Open actions |
+| 2026-08-26 | T5 | Canonical detail composition | Pass | Image, Recipe, and Cookbook details use one `DetailSections` ledger; Cookbook retains its physical-copy and recipes/ingredients workflows while gaining Activity, and generic details append one relationship section without duplicating Product's page-owned route |
+| 2026-08-26 | T5 | Shared relationship route contract | Pass | One cached bounded preview adapter feeds generic inspector Overview, canonical detail, and the full relationship explorer; it renders the actual linked source record through one real relation to sibling endpoints, sits directly below the detail section index, suppresses Product's specialist contract, and leaves branch pagination lazy |
+| 2026-08-26 | T5 | Density and domain-wayfinding policy | Pass | Dense first visits are explicit only for canonical read-heavy Products, Vendors, Transactions, Cookbooks, USDA Foods, and Wishlist rosters; stored preference still wins, editable/multiline tables remain compact, and entity marks resolve through the five domain colors |
+| 2026-08-26 | T5 | Final focused UI suite | Pass: 124 tests in 23 files | Covers roster plumbing, canonical mobile identity, compact previews, route-model truth, detail ledgers, density defaults, domain marks, Product suppression, named and unnamed Meal identities, USDA projections, and shared control regressions |
+| 2026-08-26 | T5 | Desktop/phone relationship and Meal review | Pass | Live Vendor inspector and detail show one bounded route preview plus the full lazy relationship tree at 1440×1000 and 430×932 with no page overflow; Meal name control measures 414×44px at 430px. Private household data was inspected only in place; no capture was retained |
+| 2026-08-26 | T5 | `pnpm check` | Pass | Entity/start-operation generators, workspace and service-worker types, changed-file formatting, SQL safety, soft-delete coverage, and unsafe-identifier guards are green |
+| 2026-08-26 | T5 | Independent adversarial closeout | Pass: no P1/P2 | Final review verified direct-phone route placement, real canonically linked source identity including unnamed Meal date fallback, no added identity fetch, lazy relationship branches, Product suppression, Vendor dense first visit, and stored-density precedence |
 
 ## T3–T4 mandatory checkpoint
 
@@ -165,17 +173,24 @@ never mounts a complete detail page inside a dock. Unsupported compact overview
 types state that limitation and keep the canonical Open action instead of
 inventing summary fields.
 
-The first integration covers the standard `EntityListPage` rosters: Locations,
-Recipes, Tasks, Vendors, Financial Accounts, Financial Transactions, and Images.
-The next mechanical batch extends it to existing direct preview owners:
-Cookbooks, Ingredients, Inventory's table view, Purchases, and Expenses. The
-bespoke batch covers Project tree/flat views and Wishlist's heterogeneous
-Wish/Product tree. Its namespaced row keys remain distinct from the canonical
-Wish or Product target, so expanding a candidate neither highlights the parent
-nor opens the wrong entity.
+The standard `EntityListPage` batch covers Locations, Recipes, Tasks, Vendors,
+Financial Accounts, Financial Transactions, and Images. Direct preview owners
+cover Cookbooks, Ingredients, Inventory's table view, Purchases, and Expenses.
+The bespoke batch covers Project tree/flat views, Meals, USDA Foods, and
+Wishlist's heterogeneous Wish/Product tree. Namespaced row keys remain distinct
+from canonical Wish or Product targets, so expanding a candidate neither
+highlights the parent nor opens the wrong entity on desktop or phone.
 
-Products retain their approved domain-owned inspector. The remaining T5 work is
-therefore canonical detail composition, action placement, and honest compact
-summaries for entity types whose manifest currently exposes no preview fields;
-specialist workbenches and ordinary dashboard surfaces remain bounded to later
-targets.
+Generic routes now share one bounded relationship-preview model: the actual
+canonically linked source record, a labeled real relation, and at most three
+sibling endpoints. Inspector Overview, the route directly below a detail's
+section index, and the full explorer reuse cached queries; deeper branches load
+only after an explicit tree action. Product retains its approved domain-owned
+route and is suppressed from this generic composition.
+
+Image, Recipe, and Cookbook details now use the shared section ledger without
+nested indexes or duplicate relationship/activity content. The first-wave
+Financial Account, Financial Transaction, Wish, and Image compact summaries are
+explicit rather than fabricated. Read-heavy first-visit density is opt-in and
+stored preference still wins. Specialist workbenches and ordinary dashboard
+surfaces remain intentionally bounded to T6–T8.
