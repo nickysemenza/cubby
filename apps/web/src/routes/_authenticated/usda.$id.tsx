@@ -5,7 +5,7 @@ import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
-import { usdaFoodDetailQueryOptions } from "~/entities/usda.functions";
+import { usdaFood } from "~/entities/usda.functions";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { pageTitle } from "~/lib/page-title";
 
@@ -19,7 +19,7 @@ export const Route = createFileRoute("/_authenticated/usda/$id")({
   ssr: false,
   loader: async ({ params, context }) => {
     const data = await context.queryClient.ensureQueryData(
-      usdaFoodDetailQueryOptions(parseInt(params.id, 10)),
+      usdaFood.detail.queryOptions({ id: parseInt(params.id, 10) }),
     );
     if (!data) throw notFound();
   },
@@ -44,7 +44,7 @@ function USDAFoodDetailPage() {
   const numericId = parseInt(id, 10);
 
   const { data: food } = useSuspenseQuery(
-    usdaFoodDetailQueryOptions(numericId),
+    usdaFood.detail.queryOptions({ id: numericId }),
   );
 
   // Loader throws notFound() for null — guaranteed non-null at runtime

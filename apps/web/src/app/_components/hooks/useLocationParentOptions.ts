@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { locationParentOptionsQueryOptions } from "~/app/locations/location.functions";
+import { location } from "~/app/locations/location.functions";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 
 const NO_PARENT_LOCATION_OPTIONS: FilterableComboboxItem[] = [];
@@ -13,7 +13,7 @@ const NO_PARENT_LOCATION_OPTIONS: FilterableComboboxItem[] = [];
  * repo/location/lookup.ts's `locationParentOptions`.
  */
 export function useLocationParentOptions() {
-  const { data, isLoading } = useQuery(locationParentOptionsQueryOptions());
+  const { data, isLoading } = useQuery(location.parentOptions.queryOptions());
 
   const options = useMemo<FilterableComboboxItem[]>(
     () =>

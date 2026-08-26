@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { productTagOptionsQueryOptions } from "~/app/products/product.functions";
+import { product } from "~/app/products/product.functions";
 
 const NO_TAG_OPTIONS: Array<{ value: string; label: string }> = [];
 
@@ -12,7 +12,7 @@ const NO_TAG_OPTIONS: Array<{ value: string; label: string }> = [];
  * ("M18 (13)" next to a stray "m18 (1)") before it spreads.
  */
 export function useProductTagOptions() {
-  const { data, isLoading } = useQuery(productTagOptionsQueryOptions());
+  const { data, isLoading } = useQuery(product.tagOptions.queryOptions());
 
   const options = useMemo(
     () =>

@@ -51,7 +51,7 @@ describe("kernel browser transport", () => {
     >();
   });
 
-  it("maps generated list contracts onto Start-compatible list cache keys", () => {
+  it("maps generated list contracts onto normalized operation cache keys", () => {
     const params = {
       filters: {},
       sort: { orderBy: "name", direction: "asc" as const },
@@ -60,7 +60,11 @@ describe("kernel browser transport", () => {
 
     const options = entityListQueryOptions("product", params);
 
-    expect(options.queryKey).toEqual([["product", "list"], { input: params }]);
+    expect(options.queryKey).toEqual([
+      "operation",
+      "entity.list",
+      { entity: "product", input: { entity: "product", ...params } },
+    ]);
     expect(options.queryFn).toEqual(expect.any(Function));
   });
 

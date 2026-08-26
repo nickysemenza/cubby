@@ -25,11 +25,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import {
-  statementRowsImportsQueryOptions,
-  statementRowsListQueryOptions,
-  statementRowsSummaryQueryOptions,
-} from "~/lib/statement-row.functions";
+import { statementRow } from "~/lib/statement-row.functions";
 import { formatCurrency } from "~/lib/utils";
 import {
   createCurrencyColumn,
@@ -160,7 +156,7 @@ function StatementRowSummary({
     [filters],
   );
   const { data, isLoading, error } = useQuery(
-    statementRowsSummaryQueryOptions({ filters: summaryFilters }),
+    statementRow.summary.queryOptions({ filters: summaryFilters }),
   );
 
   // A settled query with no data means it errored — `isLoading` alone would
@@ -218,7 +214,7 @@ function StatementRowFilterBar({
     }>,
   ) => void;
 }) {
-  const importsQuery = useQuery(statementRowsImportsQueryOptions({}));
+  const importsQuery = useQuery(statementRow.imports.queryOptions({}));
   const sourceOptions = useMemo(
     () =>
       importsQuery.data
@@ -356,7 +352,7 @@ export function StatementRowList() {
       : { orderBy: "statementDate", direction: sortParams.direction };
 
   const listQuery = useQuery(
-    statementRowsListQueryOptions({
+    statementRow.list.queryOptions({
       filters,
       sort,
       pagination: tableState.pagination,
@@ -369,7 +365,7 @@ export function StatementRowList() {
   // cheap aggregate query over the same (matchState-inclusive) filters gives
   // it the true full-filtered-set total instead.
   const footerTotalsQuery = useQuery(
-    statementRowsSummaryQueryOptions({ filters }),
+    statementRow.summary.queryOptions({ filters }),
   );
 
   const columns = useMemo(

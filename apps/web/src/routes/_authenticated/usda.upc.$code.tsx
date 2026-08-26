@@ -5,7 +5,7 @@ import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Skeleton } from "~/components/ui/skeleton";
-import { usdaFoodAlternateIdQueryOptions } from "~/entities/usda.functions";
+import { usdaFood } from "~/entities/usda.functions";
 import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/usda/upc/$code")({
@@ -24,7 +24,7 @@ function USDAUPCLookupPage() {
     isLoading,
     error,
   } = useQuery(
-    usdaFoodAlternateIdQueryOptions({ kind: "upc", gtin_upc: code }),
+    usdaFood.alternateId.queryOptions({ kind: "upc", gtin_upc: code }),
   );
 
   useEffect(() => {

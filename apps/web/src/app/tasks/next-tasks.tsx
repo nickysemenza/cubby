@@ -30,7 +30,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { getErrorMessage } from "~/lib/error-utils";
-import { taskListActionableQueryOptions } from "./task.functions";
+import { task } from "./task.functions";
 import { TASK_STATUS_LABELS, taskStatusBadgeVariant } from "./task-options";
 
 /** A single chain node (task or project) as a linked breadcrumb chip. */
@@ -153,7 +153,7 @@ function TaskRows({ rows }: { rows: ActionableTaskOut[] }) {
 /** The `/tasks?view=next` surface: Next / Someday / Blocked, from `task.listActionable`. */
 export function NextTasks({ filters }: { filters: TaskFilters }) {
   const { data, isLoading, isError, error, refetch } = useQuery(
-    taskListActionableQueryOptions(filters),
+    task.listActionable.queryOptions(filters),
   );
 
   if (isError) {

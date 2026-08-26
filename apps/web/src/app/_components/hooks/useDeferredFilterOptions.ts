@@ -2,7 +2,7 @@ import type { FilterOptionKind } from "@cubby/schemas/filter-options";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
-import { entityFilterOptionsQueryOptions } from "~/entities/entity-filter-options.functions";
+import { entityFilterOptions } from "~/entities/entity-filter-options.functions";
 import type { DeferredFilterOptionSource } from "./filter-option-types";
 
 const sameIds = (left: readonly string[], right: readonly string[]) =>
@@ -23,7 +23,7 @@ export function useDeferredFilterOptions(
   const [search] = useDebouncedValue(searchInput, { wait: 250 });
 
   const query = useQuery({
-    ...entityFilterOptionsQueryOptions({
+    ...entityFilterOptions.filterOptions.queryOptions({
       kind,
       search,
       selectedIds: [...selectedIds],

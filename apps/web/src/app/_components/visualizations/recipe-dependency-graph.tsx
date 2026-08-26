@@ -14,7 +14,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { recipeDependencyGraphQueryOptions } from "~/app/recipes/recipe.functions";
+import { recipe } from "~/app/recipes/recipe.functions";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizOverlay, VizTooltip } from "./viz-overlay";
@@ -47,7 +47,7 @@ export function RecipeDependencyGraph({
   hideUnconnected: boolean;
 }) {
   const { data, isLoading } = useQuery(
-    recipeDependencyGraphQueryOptions({ cookbookId }),
+    recipe.getDependencyGraph.queryOptions({ cookbookId }),
   );
 
   // Restrict to nodes that participate in an edge when asked — most recipes have

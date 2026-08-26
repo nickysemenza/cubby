@@ -1,27 +1,30 @@
 import type { FoodSummary } from "@cubby/usda-schemas";
 import { createContext, type ReactNode, useContext } from "react";
 import { useChunkedRecordQuery } from "~/app/_components/hooks/useChunkedRecordQuery";
-import { productSummariesQueryOptions } from "~/app/products/product.functions";
+import { product as productOperations } from "~/app/products/product.functions";
 
 type ProductFoodMap = Record<string, FoodSummary | null>;
 
 const ProductFoodSummariesContext = createContext<ProductFoodMap>({});
 const EMPTY_PRODUCT_FOOD_MAP: ProductFoodMap = {};
+type ProductSummaries = Awaited<
+  ReturnType<typeof productOperations.summaries.call>
+>;
 
 export function useProductFoodSummaries(productIds: readonly string[]) {
   return useChunkedRecordQuery({
     ids: productIds,
     empty: EMPTY_PRODUCT_FOOD_MAP,
-    queryOptions: (chunkIds) =>
-      productSummariesQueryOptions(
-        { ids: chunkIds, include: ["food"] },
-        {
-          enabled: chunkIds.length > 0,
-          staleTime: 5 * 60 * 1000,
-          gcTime: 30 * 60 * 1000,
-          select: (data) => data.food ?? EMPTY_PRODUCT_FOOD_MAP,
-        },
-      ),
+    queryOptions: (chunkIds) => ({
+      ...productOperations.summaries.queryOptions({
+        ids: chunkIds,
+        include: ["food"],
+      }),
+      enabled: chunkIds.length > 0,
+      staleTime: 5 * 60 * 1000,
+      gcTime: 30 * 60 * 1000,
+      select: (data: ProductSummaries) => data.food ?? EMPTY_PRODUCT_FOOD_MAP,
+    }),
   });
 }
 

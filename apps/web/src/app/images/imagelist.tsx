@@ -13,15 +13,12 @@ import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTab
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { ImageAssociationLinks } from "~/app/_components/images/image-associations";
 import { imageStatusOptions } from "~/app/images/image-options";
-import {
-  imageListQueryOptions,
-  imageUpdateMutationOptions,
-} from "~/entities/image.functions";
+import { image } from "~/entities/image.functions";
 import { UploadImageDialog } from "./upload-image-dialog";
 
 export default function ImageList() {
   const queryOptions = useCallback<ListQueryOptionsFn<unknown>>(
-    (params) => imageListQueryOptions(params as never),
+    (params) => image.list.queryOptions(params as never),
     [],
   );
   const columnHelper = useMemo(
@@ -30,7 +27,7 @@ export default function ImageList() {
   );
 
   const updateImageMutation = useUpdateMutation({
-    mutationFn: () => imageUpdateMutationOptions(),
+    mutationFn: () => image.update.mutationOptions(),
     entity: "image",
   });
   // Images use `filename`, not `name` — see useNameEditable's `field` param.

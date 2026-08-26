@@ -7,7 +7,7 @@ import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
 import { entityDetailQueryKey } from "~/entities/entity-detail.functions";
-import { describeLocationMutationOptions } from "~/lib/ai.functions";
+import { ai } from "~/lib/ai.functions";
 
 interface AiDescriptionSectionProps {
   locationId: LocationShortcode;
@@ -21,7 +21,7 @@ export const AiDescriptionSection: FC<AiDescriptionSectionProps> = ({
   hasImages,
 }) => {
   const describeMutation = useActionMutation({
-    mutationFn: describeLocationMutationOptions,
+    mutationFn: ai.describeLocation.mutationOptions,
     success: "Description saved.",
     invalidateKeys: [entityDetailQueryKey("location", locationId)],
   });

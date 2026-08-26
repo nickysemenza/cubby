@@ -1,7 +1,4 @@
-import {
-  bulkUpdateParentMutationOptions,
-  ensureGlobalUnknownMutationOptions,
-} from "~/app/locations/location.functions";
+import { location } from "~/app/locations/location.functions";
 /**
  * The state behind a location sweep: a serialized scan queue and the strays it
  * turns up.
@@ -32,10 +29,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { ScanFeedbackEntry } from "~/app/_components/inventory/persistent-scanner";
-import {
-  resolveInventoryScanStraysMutationOptions,
-  scanInventoryAtLocationMutationOptions,
-} from "~/app/inventory/inventory.functions";
+import { inventory } from "~/app/inventory/inventory.functions";
 import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
@@ -172,12 +166,16 @@ export function useLocationSweep({
     null,
   );
 
-  const scanMutation = useMutation(scanInventoryAtLocationMutationOptions());
+  const scanMutation = useMutation(inventory.scanAtLocation.mutationOptions());
   const commitMutation = useMutation(
-    resolveInventoryScanStraysMutationOptions(),
+    inventory.resolveScanStrays.mutationOptions(),
   );
-  const reparentMutation = useMutation(bulkUpdateParentMutationOptions());
-  const unknownMutation = useMutation(ensureGlobalUnknownMutationOptions());
+  const reparentMutation = useMutation(
+    location.bulkUpdateParent.mutationOptions(),
+  );
+  const unknownMutation = useMutation(
+    location.ensureGlobalUnknown.mutationOptions(),
+  );
 
   // The drain loop reads these through refs so a scan enqueued mid-flight is
   // picked up by the loop already running, rather than starting a second one.
@@ -616,7 +614,7 @@ export function useLocationSweep({
       try {
         // Idempotent: it returns the one global Unknown, creating it only if
         // this household has never parked anything before.
-        const unknown = await unknownMutation.mutateAsync();
+        const unknown = await unknownMutation.mutateAsync(undefined);
         await relocateMissing(binId, unknown.id);
       } catch (error) {
         toast.error(getErrorMessage(error));

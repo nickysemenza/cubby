@@ -26,8 +26,9 @@ import { StatTile } from "~/components/ui/stat-tile";
 import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { entities, isBrowserRoutedEntity } from "~/entities/entities";
 import {
-  entityIntegrityCatalogQueryOptions,
-  referentialLivenessQueryOptions,
+  entityIntegrity,
+  integrityProblems,
+  REFERENTIAL_LIVENESS_INPUT,
 } from "~/entities/entity-integrity.functions";
 import {
   type EntityGraphLens,
@@ -70,11 +71,11 @@ const EFFECT_VARIANT: Record<OperationEffect, BadgeVariant> = {
  */
 export function EntityIntegrityTab() {
   const { data: catalog, isLoading: catalogLoading } = useQuery(
-    entityIntegrityCatalogQueryOptions(),
+    entityIntegrity.catalog.queryOptions(null),
   );
   const { data: violations = EMPTY_REFERENTIAL_LIVENESS_VIOLATIONS } = useQuery(
     {
-      ...referentialLivenessQueryOptions(),
+      ...integrityProblems.getByType.queryOptions(REFERENTIAL_LIVENESS_INPUT),
       staleTime: REFERENTIAL_LIVENESS_STALE_TIME,
       select: (result) => result.items,
     },

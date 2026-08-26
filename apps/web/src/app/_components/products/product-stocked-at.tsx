@@ -27,7 +27,7 @@ import { DeleteInventoryDialog } from "~/app/_components/inventory/delete-invent
 import { MoveInventoryDialog } from "~/app/_components/inventory/move-inventory-dialog";
 import { HierarchyDrilldown } from "~/app/_components/visualizations/hierarchy-drilldown";
 import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
-import { productComponentsQueryOptions } from "~/app/products/product.functions";
+import { product as productOperations } from "~/app/products/product.functions";
 import { Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
@@ -47,7 +47,7 @@ const HeldAsComponents: FC<{ productId: ProductShortcode }> = ({
   productId,
 }) => {
   const { data } = useQuery(
-    productComponentsQueryOptions({ parentProductId: productId }),
+    productOperations.components.queryOptions({ parentProductId: productId }),
   );
   if (!data || data.length === 0) return null;
   return (

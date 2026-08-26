@@ -28,16 +28,24 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 
 vi.mock("~/app/products/product.functions", () => ({
-  productPurchasesQueryOptions: (input: unknown) => ({
-    queryKey: ["purchases", input],
-  }),
-  kitMembershipQueryOptions: (input: unknown) => ({
-    queryKey: ["kitMembership", input],
-  }),
+  product: {
+    purchases: {
+      queryOptions: (input: unknown) => ({ queryKey: ["purchases", input] }),
+    },
+    kitMembership: {
+      queryOptions: (input: unknown) => ({
+        queryKey: ["kitMembership", input],
+      }),
+    },
+  },
 }));
 
 vi.mock("~/app/purchases/purchase.functions", () => ({
-  detachPurchaseProductsMutationOptions: () => ({}),
+  purchase: {
+    detachProducts: {
+      mutationOptions: () => ({}),
+    },
+  },
 }));
 
 vi.mock("~/app/_components/EntityInlineLink", () => ({

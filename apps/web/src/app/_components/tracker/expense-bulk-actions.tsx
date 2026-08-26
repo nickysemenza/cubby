@@ -1,10 +1,6 @@
 import type { CostType, ExpenseOut, Trade } from "@cubby/schemas/project";
 import { useMemo, useState } from "react";
-import {
-  expenseBulkMoveMutationOptions,
-  expenseBulkSetCostTypeMutationOptions,
-  expenseBulkSetTradeMutationOptions,
-} from "~/app/expenses/expense.functions";
+import { expense } from "~/app/expenses/expense.functions";
 import { costTypeOptions } from "~/app/expenses/expense-options";
 import { tradeOptions } from "~/app/projects/trade-options";
 import { invalidatesFor } from "~/lib/query-keys";
@@ -103,7 +99,7 @@ export function ExpenseBulkActionDialogs({
       );
 
   const moveMutation = useActionMutation({
-    mutationFn: expenseBulkMoveMutationOptions,
+    mutationFn: expense.bulkMove.mutationOptions,
     invalidateKeys: invalidatesFor("expense"),
     success: resultMessage("Moved"),
     onSuccess: () => {
@@ -112,7 +108,7 @@ export function ExpenseBulkActionDialogs({
     },
   });
   const tradeMutation = useActionMutation({
-    mutationFn: expenseBulkSetTradeMutationOptions,
+    mutationFn: expense.bulkSetTrade.mutationOptions,
     invalidateKeys: invalidatesFor("expense"),
     success: resultMessage("Updated"),
     onSuccess: () => {
@@ -121,7 +117,7 @@ export function ExpenseBulkActionDialogs({
     },
   });
   const costTypeMutation = useActionMutation({
-    mutationFn: expenseBulkSetCostTypeMutationOptions,
+    mutationFn: expense.bulkSetCostType.mutationOptions,
     invalidateKeys: invalidatesFor("expense"),
     success: resultMessage("Updated"),
     onSuccess: () => {

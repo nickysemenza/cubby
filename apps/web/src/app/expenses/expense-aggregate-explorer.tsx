@@ -30,7 +30,7 @@ import { NativeSelect } from "~/components/ui/native-select";
 import { Switch } from "~/components/ui/switch";
 import { copyText } from "~/lib/clipboard";
 import { cn, formatCount, formatCurrency } from "~/lib/utils";
-import { expenseAnalyzeQueryOptions } from "./expense.functions";
+import { expense } from "./expense.functions";
 import {
   canSwapExpenseAnalyzeAxes,
   DEFAULT_EXPENSE_ANALYZE_CONFIG,
@@ -769,7 +769,7 @@ export function ExpenseAggregateExplorer({
     columnDimension,
   );
   const query = useQuery({
-    ...expenseAnalyzeQueryOptions({
+    ...expense.analyze.queryOptions({
       filters,
       rowDimension,
       columnDimension,

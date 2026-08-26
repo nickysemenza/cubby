@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { useMemo } from "react";
-import { recipeHarvestEquivalencesQueryOptions } from "~/app/recipes/recipe.functions";
+import { recipe } from "~/app/recipes/recipe.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -59,7 +59,7 @@ export function EquivalencesReport() {
     error,
     refetch,
   } = useQuery({
-    ...recipeHarvestEquivalencesQueryOptions(),
+    ...recipe.harvestEquivalences.queryOptions(),
     staleTime: 5 * 60 * 1000,
   });
   // Hydration-stable: the server renders mid-scan with no candidates, while the

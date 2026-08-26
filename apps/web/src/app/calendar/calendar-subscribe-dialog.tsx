@@ -1,11 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import {
-  calendarFeedQueryKey,
-  calendarFeedQueryOptions,
-  calendarRotateFeedMutationOptions,
-} from "~/app/calendar/calendar.functions";
+import { calendar } from "~/app/calendar/calendar.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button, buttonVariants } from "~/components/ui/button";
 import {
@@ -83,7 +79,7 @@ export function CalendarSubscribeDialog() {
   // still reads as null there — and the empty state's "Create feed" button
   // rotates, which would break a subscription the user had already added.
   const feed = useQuery({
-    ...calendarFeedQueryOptions(),
+    ...calendar.getFeed.queryOptions(),
     enabled: open,
   });
   const [rotated, setRotated] = useState<string | null>(null);
@@ -91,10 +87,7 @@ export function CalendarSubscribeDialog() {
   const hadFeed = (feed.data?.token ?? null) !== null;
 
   const rotate = useActionMutation({
-    mutationFn: calendarRotateFeedMutationOptions,
-    // Without this the cache still holds the previous token, so closing and
-    // reopening the dialog would offer a URL that has already stopped working.
-    invalidateKeys: [calendarFeedQueryKey],
+    mutationFn: calendar.rotateFeed.mutationOptions,
     success: hadFeed
       ? "Calendar feed URLs regenerated"
       : "Calendar feed created",

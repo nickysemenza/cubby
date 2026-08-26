@@ -1,34 +1,14 @@
+import { dashboardCountsOut } from "@cubby/schemas/dashboard";
+import { z } from "zod";
 import {
-  type DashboardCountsOut,
-  dashboardCountsOut,
-} from "@cubby/schemas/dashboard";
-import { queryOptions } from "@tanstack/react-query";
-import { createServerFn } from "@tanstack/react-start";
-import { startOperation } from "~/integrations/tanstack-query/start-transport";
-import * as dashboardBrowser from "~/server/dashboard-browser.server";
-import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
+  defineOperationDomain,
+  query,
+} from "~/integrations/tanstack-query/operation-catalog";
 
-const getDashboardCountsTransport = createServerFn({ method: "GET" })
-  .middleware([authenticatedStartServerFunction])
-  .handler(
-    async ({ context }) =>
-      await dashboardBrowser.getDashboardCountsForBrowser({
-        request: context.startOperation,
-      }),
-  );
-
-const dashboardCountsOperation = startOperation<undefined, DashboardCountsOut>({
-  operation: "dashboard.counts",
-  transport: (_input, { signal, headers }) =>
-    getDashboardCountsTransport({ signal, headers }),
-  parse: (result) => dashboardCountsOut.parse(result),
+export const dashboard = defineOperationDomain("dashboard", {
+  counts: query({
+    input: z.undefined(),
+    output: dashboardCountsOut,
+    tags: [["dashboard", "counts"]],
+  }),
 });
-
-export const dashboardCountsQueryOptions = (options?: { enabled?: boolean }) =>
-  queryOptions({
-    queryKey: [["dashboard", "counts"], { type: "query" }] as const,
-    meta: dashboardCountsOperation.meta,
-    queryFn: ({ signal }) =>
-      dashboardCountsOperation.call(undefined, { signal }),
-    ...options,
-  });

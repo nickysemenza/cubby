@@ -5,7 +5,7 @@ import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Skeleton } from "~/components/ui/skeleton";
-import { usdaFoodAlternateIdQueryOptions } from "~/entities/usda.functions";
+import { usdaFood } from "~/entities/usda.functions";
 import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/usda/ndb/$code")({
@@ -24,7 +24,7 @@ function USDANDBLookupPage() {
     isLoading,
     error,
   } = useQuery(
-    usdaFoodAlternateIdQueryOptions({
+    usdaFood.alternateId.queryOptions({
       kind: "ndb",
       ndb_number: parseInt(code, 10),
     }),

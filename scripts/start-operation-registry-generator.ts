@@ -9,9 +9,18 @@ const OUTPUT = join(
   SOURCE_ROOT,
   "lib/generated/start-operation-registry.gen.ts",
 );
+const HANDLER_OUTPUT = join(
+  SOURCE_ROOT,
+  "server/generated/start-operation-handlers.gen.ts",
+);
 
 type Kind = "query" | "mutation" | "subscription";
 type Definition = { kind: Kind; entities: Set<string> };
+type HandlerDefinition = {
+  kind?: Exclude<Kind, "subscription">;
+  module: string;
+  exportName: string;
+};
 type AstNode = { type: string; [key: string]: unknown };
 
 const sourceFiles = (directory: string): string[] =>
@@ -60,6 +69,121 @@ const OBJECT_CALLS = new Set([
 const QUERY_CALLS = new Set(["defineQuery", "noInputOperation"]);
 const MUTATION_CALLS = new Set(["defineMutation"]);
 
+const walk = (node: AstNode, visit: (node: AstNode) => void): void => {
+  visit(node);
+  for (const value of Object.values(node)) {
+    if (Array.isArray(value)) {
+      for (const child of value) {
+        if (child && typeof child === "object" && "type" in child) {
+          walk(child as AstNode, visit);
+        }
+      }
+    } else if (value && typeof value === "object" && "type" in value) {
+      walk(value as AstNode, visit);
+    }
+  }
+};
+
+const serverHandlerSource = (path: string): boolean =>
+  path.endsWith("-browser.server.ts") ||
+  path.endsWith("/server/entity-runtime.server.ts");
+
+const moduleSpecifier = (path: string): string =>
+  `~/${relative(SOURCE_ROOT, path)
+    .replaceAll("\\", "/")
+    .replace(/\.[cm]?[jt]sx?$/u, "")}`;
+
+/**
+ * Browser projections already declare the authoritative operation id inside
+ * each exported handler. Compile those declarations into lazy adapters rather
+ * than maintaining a second handwritten dispatcher registry.
+ */
+export const collectStartOperationHandlers = (): Map<
+  string,
+  HandlerDefinition
+> => {
+  const handlers = new Map<string, HandlerDefinition>();
+  for (const path of sourceFiles(SOURCE_ROOT).filter(serverHandlerSource)) {
+    const program = parseSync(path, readFileSync(path, "utf8"), {
+      lang: path.endsWith("x") ? "tsx" : "ts",
+    }).program as unknown as AstNode;
+    const body = Array.isArray(program.body) ? (program.body as AstNode[]) : [];
+    for (const statement of body) {
+      const declaration =
+        statement.type === "ExportNamedDeclaration"
+          ? (statement.declaration as AstNode | undefined)
+          : undefined;
+      if (!declaration) continue;
+
+      const exports: { exportName: string; implementation: AstNode }[] = [];
+      if (declaration.type === "VariableDeclaration") {
+        const declarations = Array.isArray(declaration.declarations)
+          ? (declaration.declarations as AstNode[])
+          : [];
+        for (const variable of declarations) {
+          const id = variable.id as AstNode | undefined;
+          const implementation = variable.init as AstNode | undefined;
+          if (typeof id?.name === "string" && implementation) {
+            exports.push({ exportName: id.name, implementation });
+          }
+        }
+      } else if (declaration.type === "FunctionDeclaration") {
+        const id = declaration.id as AstNode | undefined;
+        if (typeof id?.name === "string") {
+          exports.push({ exportName: id.name, implementation: declaration });
+        }
+      }
+
+      for (const candidate of exports) {
+        const operationIds = new Set<string>();
+        const kinds = new Set<Exclude<Kind, "subscription">>();
+        walk(candidate.implementation, (node) => {
+          if (node.type !== "Property") return;
+          const key = node.key as AstNode | undefined;
+          const value = node.value as AstNode | undefined;
+          const keyName = key?.name ?? key?.value;
+          if (
+            (keyName === "operation" || keyName === "name") &&
+            value?.type === "Literal" &&
+            typeof value.value === "string" &&
+            value.value.includes(".")
+          ) {
+            operationIds.add(value.value);
+          }
+          if (
+            keyName === "type" &&
+            value?.type === "Literal" &&
+            (value.value === "query" || value.value === "mutation")
+          ) {
+            kinds.add(value.value);
+          }
+        });
+        if (operationIds.size === 0) continue;
+        if (operationIds.size !== 1 || kinds.size > 1) {
+          throw new Error(
+            `Unable to compile browser operation ${relative(ROOT, path)}:${candidate.exportName}`,
+          );
+        }
+        const operation = [...operationIds][0];
+        if (!operation) continue;
+        const definition = {
+          kind: [...kinds][0],
+          module: moduleSpecifier(path),
+          exportName: candidate.exportName,
+        } satisfies HandlerDefinition;
+        const existing = handlers.get(operation);
+        if (existing) {
+          throw new Error(
+            `Duplicate browser operation ${operation}: ${existing.module}.${existing.exportName} and ${definition.module}.${definition.exportName}`,
+          );
+        }
+        handlers.set(operation, definition);
+      }
+    }
+  }
+  return handlers;
+};
+
 export const collectStartOperations = (): Map<string, Definition> => {
   const operations = new Map<string, Definition>();
   const add = (
@@ -87,11 +211,40 @@ export const collectStartOperations = (): Map<string, Definition> => {
       readFileSync(path, "utf8"),
       { lang: path.endsWith("x") ? "tsx" : "ts" },
     ).program as unknown as AstNode;
-    const visit = (node: AstNode): void => {
+    walk(source, (node) => {
       if (node.type === "CallExpression") {
         const name = calledName(node.callee as AstNode);
         const args = node.arguments as AstNode[];
         const first = args[0];
+        if (
+          name === "defineOperationDomain" &&
+          first?.type === "Literal" &&
+          typeof first.value === "string" &&
+          args[1]?.type === "ObjectExpression"
+        ) {
+          const definitions = Array.isArray(args[1].properties)
+            ? (args[1].properties as AstNode[])
+            : [];
+          for (const property of definitions) {
+            if (property.type !== "Property") continue;
+            const key = property.key as AstNode | undefined;
+            const value = property.value as AstNode | undefined;
+            if (value?.type !== "CallExpression") continue;
+            const operationName = key?.name ?? key?.value;
+            const definitionKind = calledName(value.callee as AstNode);
+            if (
+              typeof operationName === "string" &&
+              (definitionKind === "query" || definitionKind === "mutation")
+            ) {
+              add(
+                `${first.value}.${operationName}`,
+                definitionKind,
+                path,
+              );
+            }
+          }
+          return;
+        }
         if (name && OBJECT_CALLS.has(name) && first?.type === "ObjectExpression") {
           const operation = propertyString(first, "operation");
           if (operation) {
@@ -112,7 +265,11 @@ export const collectStartOperations = (): Map<string, Definition> => {
             ((name === "defineOperation" || name === "operation") &&
               first.value.includes(".")))
         ) {
-          const declaredKind = args[3] as AstNode | undefined;
+          const declaredKind = args.find(
+            (argument) =>
+              argument.type === "Literal" &&
+              (argument.value === "query" || argument.value === "mutation"),
+          );
           add(
             first.value,
             MUTATION_CALLS.has(name) || declaredKind?.value === "mutation"
@@ -122,19 +279,22 @@ export const collectStartOperations = (): Map<string, Definition> => {
           );
         }
       }
-      for (const value of Object.values(node)) {
-        if (Array.isArray(value)) {
-          for (const child of value) {
-            if (child && typeof child === "object" && "type" in child) {
-              visit(child as AstNode);
-            }
-          }
-        } else if (value && typeof value === "object" && "type" in value) {
-          visit(value as AstNode);
-        }
-      }
-    };
-    visit(source);
+    });
+  }
+  for (const [operation, handler] of collectStartOperationHandlers()) {
+    const declared = operations.get(operation);
+    if (declared && handler.kind && declared.kind !== handler.kind) {
+      throw new Error(
+        `${operation} is declared as ${declared.kind} but its server handler is ${handler.kind}`,
+      );
+    }
+    if (!declared) {
+      add(
+        operation,
+        handler.kind ?? "query",
+        join(SOURCE_ROOT, handler.module.slice(2)),
+      );
+    }
   }
   return operations;
 };
@@ -194,24 +354,53 @@ export const renderStartOperationRegistry = (): string => {
     `}[StartOperationId];\n`;
 };
 
-const unformatted = renderStartOperationRegistry();
-const formatted = spawnSync(
-  "pnpm",
-  ["exec", "biome", "format", "--stdin-file-path", OUTPUT],
-  { input: unformatted, encoding: "utf8" },
-);
-if (formatted.status !== 0) {
-  throw new Error(formatted.stderr || "Unable to format Start operation registry");
-}
-const rendered = formatted.stdout;
-if (process.argv.includes("--check")) {
-  const current = readFileSync(OUTPUT, "utf8");
-  if (current !== rendered) {
-    console.error(
-      "Generated Start operation registry is stale. Run pnpm start-operations:generate.",
-    );
-    process.exitCode = 1;
+export const renderStartOperationHandlers = (): string => {
+  const handlers = [...collectStartOperationHandlers()].sort(([a], [b]) =>
+    a.localeCompare(b),
+  );
+  return (
+    `/** Generated by scripts/start-operation-registry-generator.ts. */\n` +
+    `import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";\n` +
+    `import type { StartOperationResult } from "~/server/start-operation.contract";\n` +
+    `import type { StartOperationRequest } from "~/server/start-operation.server";\n` +
+    `\nexport type StartOperationHandler = (options: { data: unknown; request: StartOperationRequest }) => Promise<StartOperationResult<unknown>>;\n` +
+    `export type StartOperationHandlerLoader = () => Promise<StartOperationHandler>;\n` +
+    `\nexport const START_OPERATION_HANDLER_LOADERS = {\n${handlers
+      .map(
+        ([operation, handler]) =>
+          `  ${JSON.stringify(operation)}: async () => { const module = await import(${JSON.stringify(handler.module)}); return module.${handler.exportName} as unknown as StartOperationHandler; },`,
+      )
+      .join("\n")}\n} as const satisfies Record<StartOperationIdOfKind<"query" | "mutation">, StartOperationHandlerLoader>;\n`
+  );
+};
+
+const format = (path: string, source: string): string => {
+  const formatted = spawnSync(
+    "pnpm",
+    ["exec", "biome", "format", "--stdin-file-path", path],
+    { input: source, encoding: "utf8" },
+  );
+  if (formatted.status !== 0) {
+    throw new Error(formatted.stderr || `Unable to format ${relative(ROOT, path)}`);
   }
-} else {
-  writeFileSync(OUTPUT, rendered);
+  return formatted.stdout;
+};
+
+const outputs = [
+  [OUTPUT, renderStartOperationRegistry()],
+  [HANDLER_OUTPUT, renderStartOperationHandlers()],
+] as const;
+for (const [path, source] of outputs) {
+  const rendered = format(path, source);
+  if (process.argv.includes("--check")) {
+    const current = readFileSync(path, "utf8");
+    if (current !== rendered) {
+      console.error(
+        `${relative(ROOT, path)} is stale. Run pnpm start-operations:generate.`,
+      );
+      process.exitCode = 1;
+    }
+  } else {
+    writeFileSync(path, rendered);
+  }
 }

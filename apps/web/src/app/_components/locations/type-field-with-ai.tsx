@@ -1,6 +1,6 @@
 import type { LocationTypeSuggestion } from "@cubby/schemas/ai";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
-import { suggestLocationTypeForBrowser } from "~/lib/ai.functions";
+import { ai } from "~/lib/ai.functions";
 import { FieldWithAISuggest } from "../ai/ai-suggest";
 import { SelectField } from "../form-utils";
 import { locationTypeOptionsWithTheme } from "./location-icons";
@@ -43,7 +43,7 @@ export function TypeFieldWithAI<
       basisKey={locationName}
       currentValue={form.watch(name)}
       fieldDirty={form.getFieldState(name).isDirty}
-      runSuggest={() => suggestLocationTypeForBrowser({ locationName })}
+      runSuggest={() => ai.suggestLocationType.call({ locationName })}
       onAccept={(r) => form.setValue(name, r.type as TFieldValues[typeof name])}
     />
   );

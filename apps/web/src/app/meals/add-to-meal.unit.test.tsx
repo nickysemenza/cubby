@@ -50,14 +50,20 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 
 vi.mock("./meal.functions", () => ({
-  mealDateRangeQueryOptions: (input: unknown) => {
-    mocks.getByDateRange(input);
-    return { queryKey: ["meal-range"] };
+  meal: {
+    getByDateRange: {
+      queryOptions: (input: unknown) => {
+        mocks.getByDateRange(input);
+        return { queryKey: ["meal-range"] };
+      },
+    },
+    addRecipe: {
+      mutationOptions: (options: Record<string, unknown>) => ({
+        ...options,
+        mutationFn: mocks.addRecipe,
+      }),
+    },
   },
-  mealAddRecipeMutationOptions: (options: Record<string, unknown>) => ({
-    ...options,
-    mutationFn: mocks.addRecipe,
-  }),
 }));
 
 vi.mock("~/entities/entity-contracts", () => ({

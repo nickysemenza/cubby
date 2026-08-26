@@ -15,7 +15,7 @@ import {
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
-import { problemsDeleteUnusedMutationOptions } from "~/lib/problems.functions";
+import { problems } from "~/lib/problems.functions";
 import { invalidatesFor } from "~/lib/query-keys";
 
 /**
@@ -39,7 +39,7 @@ export function UnusedIngredientDeleteFix({
 }) {
   const noun = alsoDeleteProducts ? "Ingredient and product(s)" : "Ingredient";
   const remove = useProblemCardMutation({
-    mutationFn: problemsDeleteUnusedMutationOptions,
+    mutationFn: problems.deleteUnused.mutationOptions,
     // The endpoint reports per-ingredient failures (e.g. a product still has
     // inventory) instead of throwing, so the toast text reflects the outcome.
     success: (data) =>
@@ -148,7 +148,7 @@ export function DeleteAllUnusedButton({
   alsoDeleteProducts: boolean;
 }) {
   const remove = useActionMutation({
-    mutationFn: problemsDeleteUnusedMutationOptions,
+    mutationFn: problems.deleteUnused.mutationOptions,
     success: (data) =>
       data.failed.length > 0
         ? `Deleted ${data.deleted}, ${data.failed.length} failed (e.g. ${data.failed[0]?.reason ?? "unknown"})`

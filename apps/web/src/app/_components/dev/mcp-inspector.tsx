@@ -13,7 +13,7 @@ import {
 import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { mcpCatalogQueryOptions } from "~/lib/mcp.functions";
+import { mcp } from "~/lib/mcp.functions";
 import { McpUsageDashboard } from "./mcp-usage-dashboard";
 
 type ToolAnnotations = {
@@ -101,7 +101,7 @@ function SchemaPanel({
 }
 
 function CatalogInspector() {
-  const { data, isLoading, error } = useQuery(mcpCatalogQueryOptions());
+  const { data, isLoading, error } = useQuery(mcp.listTools.queryOptions(null));
   const [query, setQuery] = useState("");
   const [selectedName, setSelectedName] = useState<string | null>(null);
 

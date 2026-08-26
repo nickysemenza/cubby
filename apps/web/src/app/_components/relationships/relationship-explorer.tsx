@@ -6,10 +6,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { useHydratedLoading } from "~/hooks/useHydrated";
-import {
-  relatedDataBranchQueryOptions,
-  relatedDataPreviewsQueryOptions,
-} from "~/lib/related-data.functions";
+import { relatedData } from "~/lib/related-data.functions";
 import { type RelationshipPreset, RelationshipTree } from "./relationship-tree";
 
 const NO_PREVIEW_GROUPS: RelatedPreviewGroup[] = [];
@@ -44,7 +41,7 @@ export function RelationshipExplorer({
   const primaryRelationKey =
     entity === "vendor" ? "vendor.purchases" : relationKeys[0];
   const query = useQuery({
-    ...relatedDataPreviewsQueryOptions({
+    ...relatedData.previews.queryOptions({
       source: entity,
       sourceIds: sourceId ? [sourceId] : [],
       relationKeys,
@@ -52,7 +49,7 @@ export function RelationshipExplorer({
     enabled: Boolean(sourceId) && relationKeys.length > 0,
   });
   const primaryBranchQuery = useQuery({
-    ...relatedDataBranchQueryOptions({
+    ...relatedData.branch.queryOptions({
       relationKey: primaryRelationKey as (typeof relationKeys)[number],
       sourceId: sourceId ?? "",
       limit: 25,
@@ -142,7 +139,7 @@ export function RelationshipExplorer({
       const branchSourceId = parent?.id ?? sourceId;
       if (!branchSourceId) return { items: [], hasMore: false };
       const page = await queryClient.fetchQuery(
-        relatedDataBranchQueryOptions({
+        relatedData.branch.queryOptions({
           relationKey: relationKey as (typeof relationKeys)[number],
           sourceId: branchSourceId,
           offset,

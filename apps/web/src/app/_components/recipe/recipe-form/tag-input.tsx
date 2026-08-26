@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { FC } from "react";
 import { ChipsInput } from "~/app/_components/forms/chips-input";
-import { recipeGetAllTagsQueryOptions } from "~/app/recipes/recipe.functions";
+import { recipe } from "~/app/recipes/recipe.functions";
 import { Description } from "~/components/ui/description";
 import {
   getTagColor,
@@ -42,7 +42,7 @@ export const TagInput: FC<TagInputProps> = ({
   onEmptyEnter,
 }) => {
   const tags = value ?? [];
-  const { data: existingTags } = useQuery(recipeGetAllTagsQueryOptions());
+  const { data: existingTags } = useQuery(recipe.getAllTags.queryOptions());
 
   const getSuggestions = (inputValue: string): string[] => {
     const input = inputValue.toLowerCase();

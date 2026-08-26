@@ -1,4 +1,4 @@
-import { locationSubtreeQueryOptions } from "~/app/locations/location.functions";
+import { location } from "~/app/locations/location.functions";
 /**
  * The Table-view rendering of a location's sub-locations: one row per
  * descendant, twirling down through every level in a single fetch.
@@ -67,7 +67,7 @@ export function LocationChildrenTable({
     data = NO_LOCATIONS,
     isLoading,
     error,
-  } = useQuery(locationSubtreeQueryOptions({ shortcode: locationId }));
+  } = useQuery(location.subtree.queryOptions({ shortcode: locationId }));
 
   const rows = useMemo(() => toRows(data), [data]);
 

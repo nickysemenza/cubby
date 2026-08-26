@@ -37,10 +37,7 @@ import {
 } from "~/components/ui/view-switcher";
 import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { useHydrated } from "~/hooks/useHydrated";
-import {
-  suggestIngredientMergeBatchMutationOptions,
-  suggestUsdaFoodBatchMutationOptions,
-} from "~/lib/ai.functions";
+import { ai } from "~/lib/ai.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
@@ -48,10 +45,7 @@ import {
   type EquivalenceDraft,
   enrichmentWorkbenchQueryInput,
 } from "./equivalence-workbench-link";
-import {
-  ingredientEnrichmentWorkbenchQueryOptions,
-  ingredientMergeMutationOptions,
-} from "./ingredient.functions";
+import { ingredient } from "./ingredient.functions";
 import { ReviewQueue } from "./review-queue";
 import { SuggestionReviewTray } from "./suggestion-review-tray";
 import {
@@ -120,7 +114,7 @@ export function EnrichmentWorkbench({
     error,
   } = useQuery(
     // Pass no input when unscoped so the query key matches the plain worklist.
-    ingredientEnrichmentWorkbenchQueryOptions(
+    ingredient.enrichmentWorkbench.queryOptions(
       enrichmentWorkbenchQueryInput({ focus, recipeId, initialConversion }),
     ),
   );
@@ -212,7 +206,7 @@ export function EnrichmentWorkbench({
 
   const clearSelection = () => setSelected(new Set());
 
-  const suggestUsda = useMutation(suggestUsdaFoodBatchMutationOptions());
+  const suggestUsda = useMutation(ai.suggestUsdaFoodBatch.mutationOptions());
   const createMany = useBulkActionMutation({
     run: (vars: z.input<typeof productCreateManyInput>) =>
       createManyProductsStream(vars),
@@ -257,10 +251,10 @@ export function EnrichmentWorkbench({
     error: (err) => `Failed: ${getErrorMessage(err)}`,
   });
   const suggestMerges = useMutation(
-    suggestIngredientMergeBatchMutationOptions(),
+    ai.suggestIngredientMergeBatch.mutationOptions(),
   );
   const mergeMutation = useActionMutation({
-    mutationFn: ingredientMergeMutationOptions,
+    mutationFn: ingredient.merge.mutationOptions,
     success: (data) => savedWithBackgroundWork(data.sideEffects, "Merged"),
     invalidateKeys: invalidatesFor("ingredient", "merge"),
     error: (err) => `Merge failed: ${getErrorMessage(err)}`,

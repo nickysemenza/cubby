@@ -1,5 +1,11 @@
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { infiniteOperationQueryKey } from "~/integrations/tanstack-query/operation-catalog";
+import {
+  compileEntityListInput,
+  entityInfiniteListQueryOptions,
+  entityListQueryOptions,
+} from "./entity-list.functions";
 import { ensureEntityListSsr, entityListDefaultSort } from "./entity-list-ssr";
 
 afterEach(() => vi.restoreAllMocks());
@@ -43,28 +49,34 @@ describe("ensureEntityListSsr", () => {
     expect(ensure).toHaveBeenCalledOnce();
   });
 
-  it("uses a route renderer's explicit opening sort in the hydration key", async () => {
-    const queryClient = new QueryClient();
-    const ensure = vi
-      .spyOn(queryClient, "ensureInfiniteQueryData")
-      .mockResolvedValue({ pages: [], pageParams: [] });
-
-    await ensureEntityListSsr({
-      queryClient,
-      entity: "project",
-      search: {},
-      defaultSort: { orderBy: "startDate", direction: "desc" },
-    });
-
-    expect(ensure.mock.calls[0]?.[0].queryKey).toEqual([
-      ["project", "list"],
+  it("compiles a route renderer's explicit opening sort", () => {
+    const input = compileEntityListInput(
+      "project",
+      {},
       {
-        input: expect.objectContaining({
-          sort: [{ orderBy: "startDate", direction: "desc" }],
-        }),
+        defaultSort: { orderBy: "startDate", direction: "desc" },
       },
-      "__infinite__",
-    ]);
+    );
+
+    expect(input.sort).toEqual([{ orderBy: "startDate", direction: "desc" }]);
+  });
+
+  it("shares the operation infinite key between SSR and the mounted list", () => {
+    const input = compileEntityListInput("product", {});
+    const finite = entityListQueryOptions("product", input);
+    const ssr = entityInfiniteListQueryOptions("product", input);
+
+    expect(ssr.queryKey).toEqual(infiniteOperationQueryKey(finite.queryKey));
+  });
+
+  it("allows incomplete filters while a conditional finite query is disabled", () => {
+    expect(() =>
+      entityListQueryOptions("inventory", {
+        sort: { orderBy: "createdAt", direction: "desc" },
+        pagination: { pageIndex: 0, pageSize: 100 },
+        filters: { locationIdFilter: "" },
+      }),
+    ).not.toThrow();
   });
 
   it("does not start a route preload that is already abandoned", async () => {

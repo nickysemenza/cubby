@@ -4,7 +4,7 @@ import {
   HierarchyDrilldown,
   type HierarchyDrilldownNode,
 } from "~/app/_components/visualizations/hierarchy-drilldown";
-import { locationInventoryBreakdownQueryOptions } from "~/app/locations/location.functions";
+import { location } from "~/app/locations/location.functions";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 
@@ -83,12 +83,10 @@ export function LocationInventoryBreakdown({
   shortcode: LocationInventoryBreakdownOut["id"];
   hasChildren: boolean;
 }) {
-  const breakdown = useQuery(
-    locationInventoryBreakdownQueryOptions(
-      { shortcode },
-      { enabled: hasChildren },
-    ),
-  );
+  const breakdown = useQuery({
+    ...location.inventoryBreakdown.queryOptions({ shortcode }),
+    enabled: hasChildren,
+  });
 
   if (!hasChildren) return null;
   if (breakdown.isPending) return <LocationInventoryBreakdownSkeleton />;

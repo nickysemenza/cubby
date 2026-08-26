@@ -8,10 +8,7 @@ import { Columns3, ListTree } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { collectTreeProductIds } from "~/app/_components/locations/location-gallery-data";
 import { ProductImageSummariesProvider } from "~/app/_components/products/product-image-summaries";
-import {
-  ensureGlobalUnknownMutationOptions,
-  locationTreeQueryOptions,
-} from "~/app/locations/location.functions";
+import { location } from "~/app/locations/location.functions";
 import { Row, Stack } from "~/components/layout";
 import {
   ViewSwitcher,
@@ -67,7 +64,7 @@ export function ArrangeSurface({
     // Arrange is a live mutation surface. The shared tree is normally warm for
     // two minutes, but restoring a pre-move persisted cache after an immediate
     // reload must revalidate instead of showing the old hierarchy as current.
-    { ...locationTreeQueryOptions(), staleTime: 0 },
+    { ...location.makeTree.queryOptions(), staleTime: 0 },
   );
   const { moveLocation, moveItem } = useArrangeMutations();
   const depthId = useId();
@@ -102,7 +99,9 @@ export function ArrangeSurface({
 
   // Create the global "Unknown" staging location once, lazily, only if it's
   // missing — so a first visit provisions it but repeat visits don't re-write.
-  const ensureUnknown = useMutation(ensureGlobalUnknownMutationOptions());
+  const ensureUnknown = useMutation(
+    location.ensureGlobalUnknown.mutationOptions(),
+  );
   const ensuredRef = useRef(false);
   useEffect(() => {
     if (unknownRoot || ensuredRef.current || ensureUnknown.isPending) return;
@@ -110,7 +109,7 @@ export function ArrangeSurface({
     ensureUnknown.mutate(undefined, {
       onSuccess: () =>
         invalidateQueryRoots(queryClient, [
-          locationTreeQueryOptions().queryKey,
+          location.makeTree.queryOptions().queryKey,
         ]),
     });
   }, [unknownRoot, ensureUnknown, queryClient]);

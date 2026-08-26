@@ -11,7 +11,7 @@ import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
 import { RoutePending } from "~/components/route-pending";
 import { pageTitle } from "~/lib/page-title";
-import { problemsFastQueryOptions } from "~/lib/problems.functions";
+import { problems } from "~/lib/problems.functions";
 import { urlStringParam } from "~/lib/search-params";
 
 // The overview pulls in all five independently loaded Problems lanes plus the
@@ -52,7 +52,7 @@ export const Route = createFileRoute("/_authenticated/problems")({
   // The heavy WASM/network groups are deliberately NOT prefetched here — keeping
   // their CPU out of the SSR invocation is the whole point.
   loader: ({ context }) => {
-    void context.queryClient.prefetchQuery(problemsFastQueryOptions());
+    void context.queryClient.prefetchQuery(problems.getFast.queryOptions());
   },
   pendingComponent: RoutePending,
   errorComponent: RouteErrorComponent,

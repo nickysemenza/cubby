@@ -14,11 +14,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import {
-  usdaFoodDetailQueryOptions,
-  usdaFoodListQueryOptions,
-} from "~/entities/usda.functions";
-import { suggestUsdaFoodForBrowser } from "~/lib/ai.functions";
+import { usdaFood } from "~/entities/usda.functions";
+import { ai } from "~/lib/ai.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { parseUsdaFoodRef } from "~/lib/parse-usda-food-ref";
 import { type DedupedFood, dedupeUsdaFoodsByUpc } from "~/lib/usda-food-stats";
@@ -89,7 +86,7 @@ export function UsdaFoodSearchField({
       : searchQuery.trim() || initialQuery?.trim() || undefined;
 
   const { data, isLoading } = useQuery({
-    ...usdaFoodListQueryOptions({
+    ...usdaFood.list.queryOptions({
       // foodsOnly hides the Foundation sampling pipeline + experimental records,
       // which are provenance noise, not pickable foods. dataTypes narrows further
       // (e.g. "Generic" surfaces the reference foods branded items out-rank).
@@ -109,7 +106,7 @@ export function UsdaFoodSearchField({
   });
 
   const { data: byIdFood, isLoading: byIdLoading } = useQuery({
-    ...usdaFoodDetailQueryOptions(parsedFdcId ?? 0),
+    ...usdaFood.detail.queryOptions({ id: parsedFdcId ?? 0 }),
     enabled: parsedFdcId != null,
   });
 
@@ -147,7 +144,7 @@ export function UsdaFoodSearchField({
     if (!name) return;
     setIsSuggesting(true);
     try {
-      const result = await suggestUsdaFoodForBrowser({
+      const result = await ai.suggestUsdaFood.call({
         ingredientName: name,
       });
       if (result.food) {

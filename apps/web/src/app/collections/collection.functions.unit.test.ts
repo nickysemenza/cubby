@@ -1,102 +1,36 @@
 import { describe, expect, it } from "vitest";
-import {
-  collectionCreateMutationOptions,
-  collectionDetailQueryOptions,
-  collectionDetailRootKey,
-  collectionListQueryOptions,
-  collectionListRootKey,
-  collectionMatrixQueryOptions,
-  collectionMatrixRootKey,
-  collectionSetMutationOptions,
-} from "./collection.functions";
+import { collection } from "./collection.functions";
 
-describe("Collection Start operations", () => {
-  it("preserves the Collection query-key roots", () => {
-    expect(collectionListRootKey()).toEqual([
-      ["collection", "list"],
-      { type: "query" },
-    ]);
-    expect(collectionDetailRootKey()).toEqual([
-      ["collection", "detail"],
-      { type: "query" },
-    ]);
-    expect(collectionMatrixRootKey()).toEqual([
-      ["collection", "matrix"],
-      { type: "query" },
-    ]);
-
-    expect(collectionListQueryOptions().queryKey).toEqual([
-      ["collection", "list"],
-      { type: "query" },
-    ]);
-    expect(
-      collectionDetailQueryOptions({
-        collection: "painting",
-        pagination: { pageIndex: 0, pageSize: 50 },
-      }).queryKey,
-    ).toEqual([
-      ["collection", "detail"],
-      {
-        input: {
-          collection: "painting",
-          pagination: { pageIndex: 0, pageSize: 50 },
-        },
-        type: "query",
-      },
-    ]);
-    expect(
-      collectionMatrixQueryOptions({
-        subject: "product",
-        sort: "name-asc",
-        pagination: { pageIndex: 0, pageSize: 100 },
-      }).queryKey,
-    ).toEqual([
-      ["collection", "matrix"],
-      {
-        input: {
-          subject: "product",
-          sort: "name-asc",
-          pagination: { pageIndex: 0, pageSize: 100 },
-        },
-        type: "query",
-      },
-    ]);
-  });
-
-  it("labels every helper as an observed Start operation", () => {
+describe("Collection operation catalog", () => {
+  it("binds every operation to the shared Start transport", () => {
     const helpers = [
-      collectionListQueryOptions(),
-      collectionDetailQueryOptions({ collection: "painting" }),
-      collectionMatrixQueryOptions({ subject: "location" }),
-      collectionSetMutationOptions(),
-      collectionCreateMutationOptions(),
+      collection.list.queryOptions(null),
+      collection.detail.queryOptions({ collection: "painting" }),
+      collection.matrix.queryOptions({ subject: "location" }),
+      collection.set.mutationOptions(),
+      collection.create.mutationOptions(),
     ];
 
     expect(helpers.map((helper) => helper.meta)).toEqual([
       expect.objectContaining({
-        transport: "start",
         operation: "collection.list",
-        observedByTransport: true,
+        transport: "start",
       }),
       expect.objectContaining({
-        transport: "start",
         operation: "collection.detail",
-        observedByTransport: true,
+        transport: "start",
       }),
       expect.objectContaining({
-        transport: "start",
         operation: "collection.matrix",
-        observedByTransport: true,
+        transport: "start",
       }),
       expect.objectContaining({
-        transport: "start",
         operation: "collection.set",
-        observedByTransport: true,
+        transport: "start",
       }),
       expect.objectContaining({
-        transport: "start",
         operation: "collection.create",
-        observedByTransport: true,
+        transport: "start",
       }),
     ]);
   });

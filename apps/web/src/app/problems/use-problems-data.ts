@@ -6,13 +6,7 @@ import {
 } from "@cubby/schemas/problems";
 import { useQueries } from "@tanstack/react-query";
 import type { ProblemExecutionLane } from "~/entities/problem-query";
-import {
-  problemsCoverageQueryOptions,
-  problemsFastQueryOptions,
-  problemsTrackerQueryOptions,
-  problemsUpcQueryOptions,
-  problemsViewsQueryOptions,
-} from "~/lib/problems.functions";
+import { problems } from "~/lib/problems.functions";
 import type { ProblemLaneState } from "./problem-lane-state";
 import { PROBLEMS_QUERY_STALE_TIME } from "./problem-query-freshness";
 
@@ -44,11 +38,15 @@ export function useProblemsData(opts?: {
   const staleTime = opts?.staleTime ?? PROBLEMS_QUERY_STALE_TIME;
   const enabled = opts?.enabled;
   const problemGroupQueries = {
-    getFast: problemsFastQueryOptions({ staleTime, enabled }),
-    getViews: problemsViewsQueryOptions({ staleTime, enabled }),
-    getCoverage: problemsCoverageQueryOptions({ staleTime, enabled }),
-    getUpc: problemsUpcQueryOptions({ staleTime, enabled }),
-    getTracker: problemsTrackerQueryOptions({ staleTime, enabled }),
+    getFast: { ...problems.getFast.queryOptions(), staleTime, enabled },
+    getViews: { ...problems.getViews.queryOptions(), staleTime, enabled },
+    getCoverage: {
+      ...problems.getCoverage.queryOptions(),
+      staleTime,
+      enabled,
+    },
+    getUpc: { ...problems.getUpc.queryOptions(), staleTime, enabled },
+    getTracker: { ...problems.getTracker.queryOptions(), staleTime, enabled },
   };
   return useQueries({
     queries: [

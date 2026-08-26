@@ -13,17 +13,8 @@ import {
 import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
-import { askAgentForBrowser } from "~/lib/agent.functions";
-import {
-  auditCategoriesForBrowser,
-  detectInventoryItemsForBrowser,
-  identifyProductForBrowser,
-  parseSearchForBrowser,
-  suggestCategoryForBrowser,
-  suggestLocationForBrowser,
-  suggestLocationTypeForBrowser,
-  suggestUsdaFoodForBrowser,
-} from "~/lib/ai.functions";
+import { agent } from "~/lib/agent.functions";
+import { ai } from "~/lib/ai.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 
 const MODEL = "claude-haiku-4-5";
@@ -46,7 +37,7 @@ const SPECS: EndpointSpec[] = [
     description: "Structured output — product → category",
     defaultInput: { productName: "cordless drill", manufacturer: "DeWalt" },
     run: (i) =>
-      suggestCategoryForBrowser(
+      ai.suggestCategory.call(
         i as { productName: string; manufacturer: string },
       ),
   },
@@ -55,7 +46,7 @@ const SPECS: EndpointSpec[] = [
     label: "ai.suggestLocationType",
     description: "Structured output — location name → type",
     defaultInput: { locationName: "workbench drawer 3" },
-    run: (i) => suggestLocationTypeForBrowser(i as { locationName: string }),
+    run: (i) => ai.suggestLocationType.call(i as { locationName: string }),
   },
   {
     key: "suggestLocation",
@@ -63,28 +54,28 @@ const SPECS: EndpointSpec[] = [
     description:
       "Structured output over your real location roster — product → where to put it",
     defaultInput: { productId: "PRD-XXXX" },
-    run: (i) => suggestLocationForBrowser(i as { productId: string }),
+    run: (i) => ai.suggestLocation.call(i as { productId: string }),
   },
   {
     key: "parseSearch",
     label: "ai.parseSearch",
     description: "Structured output — free-text search → filters",
     defaultInput: { query: "where are my canned tomatoes in the pantry" },
-    run: (i) => parseSearchForBrowser(i as { query: string }),
+    run: (i) => ai.parseSearch.call(i as { query: string }),
   },
   {
     key: "suggestUsdaFood",
     label: "ai.suggestUsdaFood",
     description: "Agentic tool loop — search USDA → select best food",
     defaultInput: { ingredientName: "olive oil" },
-    run: (i) => suggestUsdaFoodForBrowser(i as { ingredientName: string }),
+    run: (i) => ai.suggestUsdaFood.call(i as { ingredientName: string }),
   },
   {
     key: "auditCategories",
     label: "ai.auditCategories",
     description: "Structured output over your real product catalog",
     defaultInput: undefined,
-    run: () => auditCategoriesForBrowser(),
+    run: () => ai.auditCategories.call(),
   },
   {
     key: "identifyProduct",
@@ -94,7 +85,7 @@ const SPECS: EndpointSpec[] = [
     defaultInput: {
       imageUrls: [`${__R2_PUBLIC_URL__}/cubby/replace-with-a-real-key.jpg`],
     },
-    run: (i) => identifyProductForBrowser(i as { imageUrls: string[] }),
+    run: (i) => ai.identifyProduct.call(i as { imageUrls: string[] }),
   },
   {
     key: "detectInventoryItems",
@@ -102,14 +93,14 @@ const SPECS: EndpointSpec[] = [
     description:
       "Vision — cached structured location inventory detection with product matching",
     defaultInput: { locationId: "replace-with-location-uuid" },
-    run: (i) => detectInventoryItemsForBrowser(i as { locationId: string }),
+    run: (i) => ai.detectInventoryItems.call(i as { locationId: string }),
   },
   {
     key: "agentAsk",
     label: "agent.ask",
     description: "Agentic MCP loop (non-streaming) over your data",
     defaultInput: { query: "how many products do I have?" },
-    run: (i) => askAgentForBrowser(i as { query: string }),
+    run: (i) => agent.ask.call(i as { query: string }),
   },
 ];
 

@@ -8,7 +8,16 @@ import {
 
 vi.mock("~/lib/flags", () => ({ getFlag: () => true }));
 
-beforeEach(() => vi.stubGlobal("window", {}));
+const mocks = vi.hoisted(() => ({ dispatch: vi.fn() }));
+
+vi.mock("~/server-functions/start-operation-dispatch.functions", () => ({
+  dispatchStartOperationTransport: mocks.dispatch,
+}));
+
+beforeEach(() => {
+  vi.stubGlobal("window", {});
+  mocks.dispatch.mockReset();
+});
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -17,6 +26,36 @@ afterEach(() => {
 const ok = <T>(data: T): StartOperationResult<T> => ({ ok: true, data });
 
 describe("Start operation binding", () => {
+  it("uses the lazy shared dispatcher when no explicit transport is supplied", async () => {
+    mocks.dispatch.mockResolvedValue(ok({ items: ["one"] }));
+    const operation = startOperation<{ entity: string }, { items: string[] }>({
+      operation: "entity.list",
+      parse: (result) => result as { items: string[] },
+    });
+
+    await expect(operation.call({ entity: "product" })).resolves.toEqual({
+      items: ["one"],
+    });
+    expect(mocks.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { operation: "entity.list", input: { entity: "product" } },
+      }),
+    );
+  });
+
+  it("keeps an explicit transport independent from the shared dispatcher", async () => {
+    const transport = vi.fn(() => Promise.resolve(ok("local")));
+    const operation = startOperation<null, string>({
+      operation: "cookbook.list",
+      transport,
+      parse: (result) => result as string,
+    });
+
+    await expect(operation.call(null)).resolves.toBe("local");
+    expect(transport).toHaveBeenCalledOnce();
+    expect(mocks.dispatch).not.toHaveBeenCalled();
+  });
+
   it("keeps the operation id in browser observability without sending it", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     const operation = startOperation<{ entity: string }, { items: unknown[] }>({
@@ -69,7 +108,6 @@ describe("Start operation binding", () => {
   it("derives query metadata from the same declaration the call observes", () => {
     const operation = startOperation<null, null>({
       operation: "cookbook.list",
-      entity: "cookbook",
       transport: () => Promise.resolve(ok(null)),
       parse: () => null,
     });
@@ -77,11 +115,10 @@ describe("Start operation binding", () => {
     expect(operation.meta).toEqual({
       transport: "start",
       operation: "cookbook.list",
-      entity: "cookbook",
       observedByTransport: true,
     });
-    expect(() => operation.forEntity("recipe")).toThrow(
-      "recipe is not registered for cookbook.list",
+    expect(() => operation.forEntity("cookbook")).toThrow(
+      "cookbook is not registered for cookbook.list",
     );
   });
 

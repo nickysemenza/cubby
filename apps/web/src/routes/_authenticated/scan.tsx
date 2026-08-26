@@ -2,7 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
 import { useProductLookupInvalidation } from "~/app/_components/inventory/hooks/useInventoryMutation";
-import { findOrCreateProductByCodeMutationOptions } from "~/app/products/product.functions";
+import { product } from "~/app/products/product.functions";
 import { ScanWorkbench } from "~/app/scan/ScanWorkbench";
 import { Page } from "~/components/page/Page";
 import { pageTitle } from "~/lib/page-title";
@@ -17,7 +17,7 @@ function ScanPage() {
   const navigate = useNavigate();
   const invalidateProductLookup = useProductLookupInvalidation();
   const findOrCreate = useMutation(
-    findOrCreateProductByCodeMutationOptions({
+    product.findOrCreateByCode.mutationOptions({
       onSuccess: invalidateProductLookup,
     }),
   );

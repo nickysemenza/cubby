@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { cookbook } from "~/entities/cookbook.functions";
 import { Route } from "./cookbooks.$shortcode";
 
 describe("cookbook detail loader", () => {
@@ -16,7 +17,7 @@ describe("cookbook detail loader", () => {
     await loader({ params: { shortcode: "CKB-ALPHA" }, context } as never);
     expect(ensureQueryData).toHaveBeenCalledWith(
       expect.objectContaining({
-        queryKey: [["cookbook", "detail"], { shortcode: "CKB-ALPHA" }],
+        queryKey: cookbook.detail.queryKey({ shortcode: "CKB-ALPHA" }),
       }),
     );
 

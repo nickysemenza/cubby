@@ -4,7 +4,9 @@ import type {
 } from "@cubby/schemas/background-jobs";
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
-import { backgroundBatchSummaryQueryOptions } from "~/lib/background-batch.functions";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import type { OperationCacheTag } from "~/integrations/tanstack-query/operation-meta";
+import { backgroundBatch } from "~/lib/background-batch.functions";
 import { invalidateQueryRoots } from "~/lib/query-keys";
 
 /**
@@ -17,7 +19,7 @@ export function makeBatchStatusFetcher(queryClient: QueryClient) {
   return (batchId: string): Promise<BackgroundBatchStatus> =>
     queryClient
       .fetchQuery({
-        ...backgroundBatchSummaryQueryOptions({ batchId }),
+        ...backgroundBatch.summary.queryOptions({ batchId }),
         staleTime: 0,
       })
       .then((batch) => batch.status);
@@ -56,17 +58,15 @@ function extractSideEffects(result: unknown): MutationSideEffects | undefined {
  * No-op when there are no still-running batches — e.g. dev inline processing,
  * which returns already-terminal batches.
  */
-export async function watchBatchesAndInvalidate({
-  queryClient,
+async function watchBatches({
   result,
-  invalidateKeys,
   fetchBatchStatus,
+  afterSettled,
 }: {
-  queryClient: QueryClient;
   /** The mutation result; side-effects are extracted from it if present. */
   result: unknown;
-  invalidateKeys: readonly QueryKey[];
   fetchBatchStatus: (batchId: string) => Promise<BackgroundBatchStatus>;
+  afterSettled: () => void | Promise<void>;
 }): Promise<void> {
   const sideEffects = extractSideEffects(result);
   let pending = uniq(
@@ -96,5 +96,41 @@ export async function watchBatchesAndInvalidate({
     pending = stillPending;
   }
 
-  invalidateQueryRoots(queryClient, invalidateKeys);
+  await afterSettled();
+}
+
+export async function watchBatchesAndInvalidate({
+  queryClient,
+  result,
+  invalidateKeys,
+  fetchBatchStatus,
+}: {
+  queryClient: QueryClient;
+  result: unknown;
+  invalidateKeys: readonly QueryKey[];
+  fetchBatchStatus: (batchId: string) => Promise<BackgroundBatchStatus>;
+}): Promise<void> {
+  await watchBatches({
+    result,
+    fetchBatchStatus,
+    afterSettled: () => invalidateQueryRoots(queryClient, invalidateKeys),
+  });
+}
+
+export async function watchBatchesAndInvalidateTags({
+  queryClient,
+  result,
+  invalidateTags,
+  fetchBatchStatus,
+}: {
+  queryClient: QueryClient;
+  result: unknown;
+  invalidateTags: readonly OperationCacheTag[];
+  fetchBatchStatus: (batchId: string) => Promise<BackgroundBatchStatus>;
+}): Promise<void> {
+  await watchBatches({
+    result,
+    fetchBatchStatus,
+    afterSettled: () => invalidateOperationTags(queryClient, invalidateTags),
+  });
 }

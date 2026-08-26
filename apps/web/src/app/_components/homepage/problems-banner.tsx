@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useRouteContext } from "@tanstack/react-router";
-import { problemsCountsQueryOptions } from "~/lib/problems.functions";
+import { problems } from "~/lib/problems.functions";
 import { cn } from "~/lib/utils";
 
 /**
@@ -19,10 +19,9 @@ import { cn } from "~/lib/utils";
 export function ProblemsBanner() {
   const { isAuthed } = useRouteContext({ from: "__root__" });
   const { data: counts, isLoading } = useQuery({
-    ...problemsCountsQueryOptions({
-      staleTime: 5 * 60 * 1000,
-      enabled: isAuthed,
-    }),
+    ...problems.getCounts.queryOptions(),
+    staleTime: 5 * 60 * 1000,
+    enabled: isAuthed,
   });
   const defects = counts?.total ?? 0;
   const coverageTotal = counts?.coverageTotal ?? 0;

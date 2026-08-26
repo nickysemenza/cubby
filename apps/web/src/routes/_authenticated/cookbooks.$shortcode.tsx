@@ -21,7 +21,7 @@ import { BulkProgressBar } from "~/components/ui/bulk-progress-bar";
 import { Button } from "~/components/ui/button";
 import { Image } from "~/components/ui/image";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { cookbookDetailQueryOptions } from "~/entities/cookbook.functions";
+import { cookbook as cookbookOperations } from "~/entities/cookbook.functions";
 import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { useTabParam } from "~/hooks/useTabParam";
@@ -48,7 +48,7 @@ export const Route = createFileRoute("/_authenticated/cookbooks/$shortcode")({
   validateSearch: searchSchema,
   loader: async ({ params, context }) => {
     const cookbook = await context.queryClient.ensureQueryData(
-      cookbookDetailQueryOptions(params.shortcode),
+      cookbookOperations.detail.queryOptions({ shortcode: params.shortcode }),
     );
     if (!cookbook) throw notFound();
   },
@@ -62,7 +62,7 @@ export const Route = createFileRoute("/_authenticated/cookbooks/$shortcode")({
 function CookbookDetailPage() {
   const { shortcode } = Route.useParams();
   const { data: cookbook } = useSuspenseQuery(
-    cookbookDetailQueryOptions(shortcode),
+    cookbookOperations.detail.queryOptions({ shortcode }),
   );
   // The loader establishes this before the route body mounts. Keep the guard
   // for a cache update that removes the current cookbook after navigation.

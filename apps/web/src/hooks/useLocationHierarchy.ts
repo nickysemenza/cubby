@@ -8,7 +8,7 @@ import {
   mergePricingStatus,
   type PricingStatus,
 } from "~/app/_components/locations/calculate-inventory-valuation";
-import { locationTreeQueryOptions } from "~/app/locations/location.functions";
+import { location } from "~/app/locations/location.functions";
 import { useHydratedLoading } from "~/hooks/useHydrated";
 
 // Persisted location.valuation stores pricing as bare counts; the viz nodes use
@@ -73,7 +73,7 @@ export function useLocationHierarchy(
 ): UseLocationHierarchyResult {
   const { valuationMode = "itemCount" } = options;
 
-  const locations = useQuery(locationTreeQueryOptions());
+  const locations = useQuery(location.makeTree.queryOptions());
   const isLoading = useHydratedLoading(locations.isLoading);
 
   const hierarchyData = useMemo(() => {

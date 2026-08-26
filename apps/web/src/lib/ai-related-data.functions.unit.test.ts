@@ -1,57 +1,60 @@
 import { describe, expect, it } from "vitest";
-import {
-  aiUsageSummaryQueryOptions,
-  describeLocationMutationOptions,
-  suggestCategoryQueryOptions,
-} from "./ai.functions";
-import {
-  relatedDataBranchQueryOptions,
-  relatedDataSummaryInfiniteQueryOptions,
-} from "./related-data.functions";
+import { ai } from "./ai.functions";
+import { relatedData } from "./related-data.functions";
 
 describe("AI and related-data Start contracts", () => {
   it("preserves the established cache key shapes", () => {
     expect(
-      suggestCategoryQueryOptions({
+      ai.suggestCategory.queryOptions({
         productName: "Cordless drill",
         manufacturer: "Example",
       }).queryKey,
     ).toEqual([
-      ["ai", "suggestCategory"],
+      "operation",
+      "ai.suggestCategory",
       {
         input: { productName: "Cordless drill", manufacturer: "Example" },
-        type: "query",
       },
     ]);
-    expect(aiUsageSummaryQueryOptions({ days: 7 }).queryKey).toEqual([
-      ["ai", "usageSummary"],
-      { input: { days: 7 }, type: "query" },
+    expect(ai.usageSummary.queryOptions({ days: 7 }).queryKey).toEqual([
+      "operation",
+      "ai.usageSummary",
+      { input: { days: 7 } },
     ]);
     expect(
-      relatedDataBranchQueryOptions({
+      relatedData.branch.queryOptions({
         relationKey: "vendor.products",
         sourceId: "VEN-4K7M",
         limit: 25,
       }).queryKey,
     ).toEqual([
-      ["relatedData", "branch"],
+      "operation",
+      "relatedData.branch",
       {
         input: {
           relationKey: "vendor.products",
           sourceId: "VEN-4K7M",
           limit: 25,
         },
-        type: "query",
       },
     ]);
     expect(
-      relatedDataSummaryInfiniteQueryOptions({
-        relationKey: "vendor.products",
-        sourceId: "VEN-4K7M",
-        limit: 25,
-      }).queryKey,
+      relatedData.summary.infiniteQueryOptions(
+        {
+          relationKey: "vendor.products",
+          sourceId: "VEN-4K7M",
+          offset: 0,
+          limit: 25,
+        },
+        {
+          page: (input, offset) => ({ ...input, offset }),
+          getNextPageParam: (page) => page.nextOffset ?? undefined,
+        },
+      ).queryKey,
     ).toEqual([
-      ["relatedData", "summary"],
+      "operation",
+      "relatedData.summary",
+      "infinite",
       {
         input: {
           relationKey: "vendor.products",
@@ -59,20 +62,18 @@ describe("AI and related-data Start contracts", () => {
           limit: 25,
           offset: 0,
         },
-        type: "query",
       },
-      "__infinite__",
     ]);
   });
 
   it("marks every helper as an observed Start operation", () => {
     for (const options of [
-      suggestCategoryQueryOptions({
+      ai.suggestCategory.queryOptions({
         productName: "Cordless drill",
         manufacturer: "Example",
       }),
-      aiUsageSummaryQueryOptions({ days: 7 }),
-      describeLocationMutationOptions(),
+      ai.usageSummary.queryOptions({ days: 7 }),
+      ai.describeLocation.mutationOptions(),
     ]) {
       expect(options.meta).toMatchObject({
         transport: "start",

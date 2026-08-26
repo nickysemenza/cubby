@@ -36,15 +36,23 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 
 vi.mock("~/app/expenses/expense.functions", () => ({
-  expenseChartDataQueryOptions: (input: unknown) => ({
-    queryKey: ["chartData", input],
-  }),
+  expense: {
+    chartData: {
+      queryOptions: (input: unknown) => ({
+        queryKey: ["chartData", input],
+      }),
+    },
+  },
 }));
 
 vi.mock("~/app/products/product.functions", () => ({
-  kitMembershipQueryOptions: (input: unknown) => ({
-    queryKey: ["kitMembership", input],
-  }),
+  product: {
+    kitMembership: {
+      queryOptions: (input: unknown) => ({
+        queryKey: ["kitMembership", input],
+      }),
+    },
+  },
 }));
 
 // This suite only exercises the empty/table-vs-empty branches, not the table

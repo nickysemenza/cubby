@@ -28,7 +28,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { formatCurrency } from "~/lib/utils";
-import { householdContributionLedgerQueryOptions } from "./household-contribution.functions";
+import { householdContribution } from "./household-contribution.functions";
 
 function CheckMark({ ok }: { ok: boolean }) {
   return ok ? (
@@ -260,7 +260,9 @@ export function HouseholdContributionLedger() {
   const asOfId = useId();
   const [asOf, setAsOf] = useState<string | null>(null);
   const input = useMemo(() => (asOf ? { asOf } : {}), [asOf]);
-  const ledgerQuery = useQuery(householdContributionLedgerQueryOptions(input));
+  const ledgerQuery = useQuery(
+    householdContribution.ledger.queryOptions(input),
+  );
   const data = ledgerQuery.data;
 
   return (

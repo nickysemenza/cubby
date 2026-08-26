@@ -106,13 +106,17 @@ test("core entity list, detail, and mutation ride named Start operations", async
   for (const request of detailRequests) {
     expect(request.method).toBe("POST");
     const detailUrl = new URL(request.url);
-    expect(detailUrl.pathname).toBe(
-      "/_serverFn/entities-entity-detail-get-entity-detail",
-    );
+    expect(detailUrl.pathname).toContain("start-operation-dispatch");
     expect(detailUrl.search).toBe("");
     expect(payloadOf(request.url, "")).not.toContain('["entity","shortcode"]');
     expect(payloadOf("", request.body)).toContain('["entity","shortcode"]');
   }
+
+  // IDs are intentionally private, but every ordinary operation must share
+  // the one dispatcher URL instead of compiling a domain graph of endpoints.
+  expect(
+    new Set(starts.map((request) => new URL(request.url).pathname)).size,
+  ).toBe(1);
 
   expect(starts).toEqual(
     expect.arrayContaining([

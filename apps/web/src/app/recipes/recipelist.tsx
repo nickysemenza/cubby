@@ -18,7 +18,7 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
 import { invalidatesFor } from "~/lib/query-keys";
-import { relatedDataOptionsQueryOptions } from "~/lib/related-data.functions";
+import { relatedData } from "~/lib/related-data.functions";
 import {
   numberCellData,
   specFromCellData,
@@ -48,7 +48,7 @@ import {
 } from "../_components/recipe/recipe-utils";
 import { useDuplicateRecipe } from "../_components/recipe/use-duplicate-recipe";
 import { TruncatedList } from "../_components/TruncatedList";
-import { recipeRecomputeOneMutationOptions } from "./recipe.functions";
+import { recipe as recipeOperations } from "./recipe.functions";
 import { totalsLookStuck } from "./recipe-totals-staleness";
 
 /**
@@ -95,7 +95,7 @@ function StuckTotalsCell({
   withAction: boolean;
 }) {
   const recompute = useActionMutation({
-    mutationFn: recipeRecomputeOneMutationOptions,
+    mutationFn: recipeOperations.recomputeOne.mutationOptions,
     success: "Recomputed recipe totals.",
     invalidateKeys: invalidatesFor("recipe", "list"),
   });
@@ -164,7 +164,7 @@ export function RecipeList({
   const { options: tagOptions } = useRecipeTagOptions();
   const { options: cookbookOptions } = useCookbookOptions();
   const ingredientOptionsQuery = useQuery(
-    relatedDataOptionsQueryOptions({
+    relatedData.options.queryOptions({
       relationKey: "recipe.ingredients",
       limit: 100,
     }),

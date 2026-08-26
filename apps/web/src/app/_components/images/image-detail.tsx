@@ -10,10 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { Image } from "~/components/ui/image";
-import {
-  imageDeleteMutationOptions,
-  imageUpdateMutationOptions,
-} from "~/entities/image.functions";
+import { image as imageOperations } from "~/entities/image.functions";
 import { EditableCell } from "../data-table/editable-cell";
 import { useEntityDelete } from "../hooks/useEntityDelete";
 import { useUpdateMutation } from "../hooks/useUpdateMutation";
@@ -24,7 +21,7 @@ interface ImageDetailProps {
 
 export function ImageDetail({ image }: ImageDetailProps) {
   const updateMutation = useUpdateMutation({
-    mutationFn: () => imageUpdateMutationOptions(),
+    mutationFn: () => imageOperations.update.mutationOptions(),
     entity: "image",
   });
 
@@ -39,7 +36,7 @@ export function ImageDetail({ image }: ImageDetailProps) {
     name: image.filename,
     entity: "image",
     mutationOptions: (callbacks) => ({
-      ...imageDeleteMutationOptions(),
+      ...imageOperations.delete.mutationOptions(),
       ...callbacks,
     }),
     redirectTo: "/images",

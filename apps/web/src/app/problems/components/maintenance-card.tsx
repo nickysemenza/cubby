@@ -5,10 +5,10 @@ import { Link } from "@tanstack/react-router";
 import pluralize from "pluralize";
 import type { ReactNode } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { recomputeValuationsMutationOptions } from "~/app/locations/location.functions";
+import { location } from "~/app/locations/location.functions";
 import {
   openRecipeRecomputeAllStream,
-  recipeDryRunQueryOptions,
+  recipe,
 } from "~/app/recipes/recipe.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -21,22 +21,14 @@ import {
 } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { entityListRootKey } from "~/entities/entity-list.functions";
-import {
-  cleanupUnreferencedImagesMutationOptions,
-  cullPendingImagesMutationOptions,
-} from "~/lib/image.functions";
+import { imageUpload } from "~/lib/image.functions";
 import {
   openProblemsPruneAliasesStream,
   openProblemsReparseStream,
-  problemsDryRunPruneAliasesQueryOptions,
-  problemsDryRunReparseQueryOptions,
-  problemsMaintenanceCountsQueryOptions,
+  problems,
 } from "~/lib/problems.functions";
 import { invalidatesFor, queryKeys } from "~/lib/query-keys";
-import {
-  searchDocumentHealthQueryOptions,
-  searchRepairDocumentsMutationOptions,
-} from "~/lib/search.functions";
+import { search } from "~/lib/search.functions";
 import { PROBLEMS_QUERY_STALE_TIME } from "../problem-query-freshness";
 import { searchDocumentMaintenanceRefetchInterval } from "../search-document-maintenance-query";
 import { BACKFILL } from "./backfill-registry";
@@ -145,17 +137,16 @@ function MaintenanceDryRunRow({
 // queue and links the toast there (mirrors "Analyze descriptions").
 function RecomputeAction() {
   const dryRun = useQuery({
-    ...recipeDryRunQueryOptions(),
+    ...recipe.dryRunRecomputeTotals.queryOptions(),
     enabled: false,
   });
   // Cheap always-on count of recipes whose totals are stale (pending recompute) —
   // shares the card's cached query, so no extra round-trip. The queue normally
   // clears these in seconds; a lingering count flags a stuck/lost wave.
-  const { data: counts } = useQuery(
-    problemsMaintenanceCountsQueryOptions({
-      staleTime: PROBLEMS_QUERY_STALE_TIME,
-    }),
-  );
+  const { data: counts } = useQuery({
+    ...problems.getMaintenanceCounts.queryOptions(),
+    staleTime: PROBLEMS_QUERY_STALE_TIME,
+  });
   return (
     <MaintenanceDryRunRow
       summary={
@@ -209,7 +200,7 @@ function RecomputeAction() {
 // "Re-parse all" applies + recomputes affected totals.
 function ReparseAction() {
   const dryRun = useQuery({
-    ...problemsDryRunReparseQueryOptions(),
+    ...problems.dryRunReparse.queryOptions(),
     enabled: false,
   });
   return (
@@ -246,7 +237,7 @@ function ReparseAction() {
 // counts what would be pruned; "Prune all" applies it.
 function PruneAliasesAction() {
   const dryRun = useQuery({
-    ...problemsDryRunPruneAliasesQueryOptions(),
+    ...problems.dryRunPruneAliases.queryOptions(),
     enabled: false,
   });
   return (
@@ -282,13 +273,13 @@ function PruneAliasesAction() {
 // full-catalog diagnostic from the Problems page.
 function SearchDocumentsAction() {
   const health = useQuery({
-    ...searchDocumentHealthQueryOptions(),
+    ...search.documentHealth.queryOptions(),
     staleTime: 30_000,
     refetchInterval: (query) =>
       searchDocumentMaintenanceRefetchInterval(query.state.data),
   });
   const repair = useActionMutation({
-    mutationFn: searchRepairDocumentsMutationOptions,
+    mutationFn: search.repairDocuments.mutationOptions,
     invalidateKeys: [queryKeys.search.all],
     success: (result) => (
       <span>
@@ -352,7 +343,7 @@ function SearchDocumentsAction() {
 // mutation, so it uses useActionMutation rather than the BackfillButton stream.
 function CullPendingImagesAction() {
   const cull = useActionMutation({
-    mutationFn: cullPendingImagesMutationOptions,
+    mutationFn: imageUpload.cullPendingImages.mutationOptions,
     success: (data) =>
       data.count > 0
         ? `Deleted ${pluralize("pending image", data.count, true)}.`
@@ -377,7 +368,7 @@ function CullPendingImagesAction() {
 // whose cascade soft-deletes the join row and leaves the file behind.
 function CleanupUnreferencedImagesAction() {
   const cleanup = useActionMutation({
-    mutationFn: cleanupUnreferencedImagesMutationOptions,
+    mutationFn: imageUpload.cleanupUnreferencedImages.mutationOptions,
     success: (data) =>
       data.count > 0
         ? `Deleted ${pluralize("unreferenced file", data.count, true)}.`
@@ -399,7 +390,7 @@ function CleanupUnreferencedImagesAction() {
 // net for writes that bypass the router (raw SQL / postgres MCP).
 function RecomputeValuationsAction() {
   const recompute = useActionMutation({
-    mutationFn: recomputeValuationsMutationOptions,
+    mutationFn: location.recomputeValuations.mutationOptions,
     success: (data) =>
       `Recomputed ${pluralize("location", data.updated, true)}.`,
     invalidateKeys: VALUATION_INVALIDATE_KEYS,
@@ -504,11 +495,10 @@ const MAINTENANCE_TOOLS: {
  */
 export function MaintenanceCard() {
   // Dry-run "N affected" figures — one cheap DB/WASM query (no USDA/UPC network).
-  const { data: counts } = useQuery(
-    problemsMaintenanceCountsQueryOptions({
-      staleTime: PROBLEMS_QUERY_STALE_TIME,
-    }),
-  );
+  const { data: counts } = useQuery({
+    ...problems.getMaintenanceCounts.queryOptions(),
+    staleTime: PROBLEMS_QUERY_STALE_TIME,
+  });
 
   return (
     <Card>

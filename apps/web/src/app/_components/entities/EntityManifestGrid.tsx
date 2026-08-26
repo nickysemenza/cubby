@@ -31,7 +31,7 @@ import {
 } from "~/entities/entities";
 import {
   type EntityInspectorHealth,
-  entityInspectorHealthQueryOptions,
+  entityInspectorHealth,
 } from "~/entities/entity-inspector-health";
 import { viewsForEntity } from "~/entities/view-manifest";
 import { authClient } from "~/lib/auth-client";
@@ -587,9 +587,10 @@ export function EntityManifestGrid({
   active?: boolean;
 }) {
   const session = authClient.useSession();
-  const { data: health } = useQuery(
-    entityInspectorHealthQueryOptions(active && !!session.data?.user),
-  );
+  const { data: health } = useQuery({
+    ...entityInspectorHealth.inspectorHealth.queryOptions(null),
+    enabled: active && !!session.data?.user,
+  });
   const counts = health?.counts;
   const crudCount = allEntities.filter(
     (entity) => entityInspectorMetadata[entity].kernelActions.length > 0,

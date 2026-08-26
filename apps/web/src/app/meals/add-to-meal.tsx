@@ -21,10 +21,7 @@ import { Label } from "~/components/ui/label";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import {
-  mealAddRecipeMutationOptions,
-  mealDateRangeQueryOptions,
-} from "./meal.functions";
+import { meal } from "./meal.functions";
 import { mealListLabel } from "./meal-format";
 import { mealKindOptions, mealTypeOptions } from "./meal-options";
 import { useInvalidateMeals } from "./use-meal-mutations";
@@ -70,7 +67,7 @@ export function AddToMeal({ recipeId }: { recipeId: RecipeShortcode }) {
   const switchId = useId();
 
   const existingMeals = useQuery({
-    ...mealDateRangeQueryOptions({ from: date, to: date }),
+    ...meal.getByDateRange.queryOptions({ from: date, to: date }),
     enabled: open,
   });
 
@@ -122,7 +119,7 @@ export function AddToMeal({ recipeId }: { recipeId: RecipeShortcode }) {
   const createMeal = useMutation(
     entityMutationOptionsFactory("meal", "create")({ onSuccess }),
   );
-  const addRecipe = useMutation(mealAddRecipeMutationOptions({ onSuccess }));
+  const addRecipe = useMutation(meal.addRecipe.mutationOptions({ onSuccess }));
   const updateMeal = useMutation(
     entityMutationOptionsFactory("meal", "update")(),
   );

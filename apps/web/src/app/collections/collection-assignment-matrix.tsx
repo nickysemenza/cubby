@@ -36,12 +36,7 @@ import { invalidateQueryRoots } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
 import {
   type CollectionMatrixRow,
-  collectionCreateMutationOptions,
-  collectionDetailRootKey,
-  collectionListRootKey,
-  collectionMatrixQueryOptions,
-  collectionMatrixRootKey,
-  collectionSetMutationOptions,
+  collection as collectionOperations,
 } from "./collection.functions";
 import {
   CopyableShortcode,
@@ -109,12 +104,12 @@ function NewCollectionDialog({
   const slug = normalizeCollectionSlug(name);
 
   const create = useMutation({
-    ...collectionCreateMutationOptions(),
+    ...collectionOperations.create.mutationOptions(),
     onSuccess: (result) => {
       invalidateQueryRoots(queryClient, [
-        collectionMatrixRootKey(),
-        collectionListRootKey(),
-        collectionDetailRootKey(),
+        ["operation", "collection.matrix"],
+        ["operation", "collection.list"],
+        ["operation", "collection.detail"],
       ]);
       toast.success(`${formatCollectionLabel(result.slug)} created`);
       setOpen(false);
@@ -244,12 +239,12 @@ export function CollectionAssignmentMatrix({
     }),
     [collection, membership, page, pageSize, search, sort, subject],
   );
-  const matrix = useQuery(collectionMatrixQueryOptions(input));
+  const matrix = useQuery(collectionOperations.matrix.queryOptions(input));
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
   const mutation = useMutation({
-    ...collectionSetMutationOptions(),
+    ...collectionOperations.set.mutationOptions(),
     retry: 2,
     onSuccess: (_result, variables) => {
       const key = `${variables.subject}:${variables.id}:${variables.collection}`;
@@ -259,9 +254,9 @@ export function CollectionAssignmentMatrix({
         return next;
       });
       invalidateQueryRoots(queryClient, [
-        collectionMatrixRootKey(),
-        collectionListRootKey(),
-        collectionDetailRootKey(),
+        ["operation", "collection.matrix"],
+        ["operation", "collection.list"],
+        ["operation", "collection.detail"],
       ]);
     },
     onError: (error, variables) => {

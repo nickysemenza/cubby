@@ -17,7 +17,7 @@ import {
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { importImageFromUrlMutationOptions } from "~/lib/image.functions";
+import { imageUpload } from "~/lib/image.functions";
 import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
 import { useImageUpload } from "./use-image-upload";
 
@@ -37,7 +37,7 @@ export function UploadImageDialog() {
   // Single-shot mutation (unlike the multi-step file upload) — useActionMutation
   // fits: one call, one toast, one invalidation.
   const importFromUrl = useActionMutation({
-    mutationFn: importImageFromUrlMutationOptions,
+    mutationFn: imageUpload.importFromUrl.mutationOptions,
     success: "Image imported.",
     invalidateKeys: invalidatesFor("image"),
     onSuccess: () => setUrl(""),

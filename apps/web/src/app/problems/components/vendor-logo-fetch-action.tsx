@@ -1,7 +1,7 @@
 import type { VendorOut } from "@cubby/schemas/vendor";
 import { ImageDown } from "lucide-react";
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
-import { fetchVendorLogoMutationOptions } from "~/app/vendors/vendor.functions";
+import { vendor as vendorOperations } from "~/app/vendors/vendor.functions";
 import { Button } from "~/components/ui/button";
 import { invalidatesFor, queryKeys } from "~/lib/query-keys";
 
@@ -14,7 +14,7 @@ export function VendorLogoFetchAction({
   vendor: VendorLogoTarget;
 }) {
   const fetchLogo = useProblemCardMutation({
-    mutationFn: fetchVendorLogoMutationOptions,
+    mutationFn: vendorOperations.fetchLogo.mutationOptions,
     success: `Added logo for ${vendor.name}`,
     invalidateKeys: [...invalidatesFor("vendor"), queryKeys.search.all],
   });

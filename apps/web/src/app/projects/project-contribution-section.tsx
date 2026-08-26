@@ -8,7 +8,7 @@ import {
   contributionGapLabels,
   ledgerPartyLabel,
 } from "~/app/_components/household-contribution-format";
-import { projectContributionQueryOptions } from "~/app/finance/household-contribution.functions";
+import { householdContribution } from "~/app/finance/household-contribution.functions";
 import { Row, Stack } from "~/components/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
@@ -198,7 +198,7 @@ export function ProjectContributionSection({
   projectId: string;
 }) {
   const query = useQuery(
-    projectContributionQueryOptions({
+    householdContribution.project.queryOptions({
       projectId,
       includeSubprojects: true,
     }),

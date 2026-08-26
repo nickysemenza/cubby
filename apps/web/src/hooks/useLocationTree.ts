@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { locationTreeQueryOptions } from "~/app/locations/location.functions";
+import { location } from "~/app/locations/location.functions";
 import { useHydrated } from "~/hooks/useHydrated";
 
 /**
@@ -11,7 +11,7 @@ import { useHydrated } from "~/hooks/useHydrated";
  */
 export function useLocationTree() {
   const hydrated = useHydrated();
-  const query = useQuery(locationTreeQueryOptions());
+  const query = useQuery(location.makeTree.queryOptions());
   return {
     ...query,
     data: hydrated ? query.data : undefined,

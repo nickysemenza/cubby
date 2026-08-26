@@ -13,7 +13,11 @@ vi.mock("~/app/_components/hooks/useProblemCardMutation", () => ({
 }));
 
 vi.mock("~/app/vendors/vendor.functions", () => ({
-  fetchVendorLogoMutationOptions: mocks.fetchVendorLogoMutationOptions,
+  vendor: {
+    fetchLogo: {
+      mutationOptions: mocks.fetchVendorLogoMutationOptions,
+    },
+  },
 }));
 
 import { VendorLogoFetchAction } from "./vendor-logo-fetch-action";

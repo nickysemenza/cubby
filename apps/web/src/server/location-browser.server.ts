@@ -38,106 +38,121 @@ const run = <I extends z.ZodType, O>(options: {
   run: Parameters<typeof runStartOperation<I, O>>[0]["run"];
 }) => runStartOperation(options);
 
-export const makeTreeForBrowser = (request: StartOperationRequest) =>
+export const makeTreeForBrowser = (options: {
+  data: undefined;
+  request: StartOperationRequest;
+}) =>
   run({
     operation: "location.makeTree",
     type: "query",
     input: undefined,
     inputSchema: z.undefined(),
     outputSchema: infLocationListOut,
-    request,
+    request: options.request,
     run: makeTreeWorkflow,
   });
-export const valuationSummaryForBrowser = (request: StartOperationRequest) =>
+export const valuationSummaryForBrowser = (options: {
+  data: undefined;
+  request: StartOperationRequest;
+}) =>
   run({
     operation: "location.valuationSummary",
     type: "query",
     input: undefined,
     inputSchema: z.undefined(),
     outputSchema: locationValuationSummaryOut,
-    request,
+    request: options.request,
     run: valuationSummaryWorkflow,
   });
-export const subtreeForBrowser = (
-  data: { shortcode: string },
-  request: StartOperationRequest,
-) =>
+export const subtreeForBrowser = (options: {
+  data: { shortcode: string };
+  request: StartOperationRequest;
+}) =>
   run({
     operation: "location.subtree",
     type: "query",
-    input: data,
+    input: options.data,
     inputSchema: z.object({ shortcode: z.string() }),
     outputSchema: infLocationListOut,
-    request,
+    request: options.request,
     run: subtreeWorkflow,
   });
-export const inventoryBreakdownForBrowser = (
-  data: { shortcode: string },
-  request: StartOperationRequest,
-) =>
+export const inventoryBreakdownForBrowser = (options: {
+  data: { shortcode: string };
+  request: StartOperationRequest;
+}) =>
   run({
     operation: "location.inventoryBreakdown",
     type: "query",
-    input: data,
+    input: options.data,
     inputSchema: z.object({ shortcode: z.string() }),
     outputSchema: locationInventoryBreakdownOut.nullable(),
-    request,
+    request: options.request,
     run: inventoryBreakdownWorkflow,
   });
-export const parentOptionsForBrowser = (request: StartOperationRequest) =>
+export const parentOptionsForBrowser = (options: {
+  data: undefined;
+  request: StartOperationRequest;
+}) =>
   run({
     operation: "location.parentOptions",
     type: "query",
     input: undefined,
     inputSchema: z.undefined(),
     outputSchema: z.array(locationParentOptionsOut),
-    request,
+    request: options.request,
     run: parentOptionsWorkflow,
   });
-export const ensureGlobalUnknownForBrowser = (request: StartOperationRequest) =>
+export const ensureGlobalUnknownForBrowser = (options: {
+  data: undefined;
+  request: StartOperationRequest;
+}) =>
   run({
     operation: "location.ensureGlobalUnknown",
     type: "mutation",
     input: undefined,
     inputSchema: z.undefined(),
     outputSchema: infLocation,
-    request,
+    request: options.request,
     run: ensureGlobalUnknownWorkflow,
   });
-export const bulkUpdateParentForBrowser = (
-  data: z.input<typeof locationBulkUpdateParentInput>,
-  request: StartOperationRequest,
-) =>
+export const bulkUpdateParentForBrowser = (options: {
+  data: z.input<typeof locationBulkUpdateParentInput>;
+  request: StartOperationRequest;
+}) =>
   run({
     operation: "location.bulkUpdateParent",
     type: "mutation",
-    input: data,
+    input: options.data,
     inputSchema: locationBulkUpdateParentInput,
     outputSchema: locationBulkUpdateParentOut,
-    request,
+    request: options.request,
     run: bulkUpdateParentWorkflow,
   });
-export const getByShortcodesForBrowser = (
-  data: z.input<typeof locationShortcodesInput>,
-  request: StartOperationRequest,
-) =>
+export const getByShortcodesForBrowser = (options: {
+  data: z.input<typeof locationShortcodesInput>;
+  request: StartOperationRequest;
+}) =>
   run({
     operation: "location.getByShortcodes",
     type: "query",
-    input: data,
+    input: options.data,
     inputSchema: locationShortcodesInput,
     outputSchema: locationsWithParentNameOut,
-    request,
+    request: options.request,
     run: getByShortcodesWorkflow,
   });
-export const recomputeValuationsForBrowser = (request: StartOperationRequest) =>
+export const recomputeValuationsForBrowser = (options: {
+  data: undefined;
+  request: StartOperationRequest;
+}) =>
   run({
     operation: "location.recomputeValuations",
     type: "mutation",
     input: undefined,
     inputSchema: z.undefined(),
     outputSchema: recomputeLocationValuationsOut,
-    request,
+    request: options.request,
     run: recomputeValuationsWorkflow,
   });
 
@@ -150,16 +165,16 @@ const searchOutput = z.object({
   data: z.array(locationPickerItemOut),
   count: z.number(),
 });
-export const searchForBrowser = (
-  data: z.input<typeof rosterInput>,
-  request: StartOperationRequest,
-) =>
+export const searchForBrowser = (options: {
+  data: z.input<typeof rosterInput>;
+  request: StartOperationRequest;
+}) =>
   run({
     operation: "location.search",
     type: "query",
-    input: data,
+    input: options.data,
     inputSchema: rosterInput,
     outputSchema: searchOutput,
-    request,
+    request: options.request,
     run: locationSearchWorkflow,
   });

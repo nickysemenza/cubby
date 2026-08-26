@@ -13,11 +13,7 @@ import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { z } from "zod";
-import {
-  taskBoardQueryOptions,
-  taskBulkReorderMutationOptions,
-  taskChartDataQueryOptions,
-} from "~/app/tasks/task.functions";
+import { task } from "~/app/tasks/task.functions";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
@@ -96,8 +92,8 @@ export function useBoardMutations(target: BoardCacheTarget) {
   const queryClient = useQueryClient();
   const queryKey: QueryKey =
     target.source === "chartData"
-      ? taskChartDataQueryOptions(target.filters).queryKey
-      : taskBoardQueryOptions(target.input).queryKey;
+      ? task.chartData.queryOptions(target.filters).queryKey
+      : task.board.queryOptions(target.input).queryKey;
 
   const patchTaskFields = (
     task: TaskOut,
@@ -144,6 +140,7 @@ export function useBoardMutations(target: BoardCacheTarget) {
   const update = useMutation({
     mutationKey: base.mutationKey,
     mutationFn: base.mutationFn,
+    meta: base.meta,
     onMutate: async (
       vars,
     ): Promise<OptimisticContext<TaskOut[] | TaskBoardOut>> => {
@@ -172,10 +169,11 @@ export function useBoardMutations(target: BoardCacheTarget) {
   // optional axis move on the dragged card. Optimistically patches every
   // affected id in the same cache so the manual prefix re-orders instantly,
   // then reconciles via onSettled.
-  const reorderBase = taskBulkReorderMutationOptions();
+  const reorderBase = task.bulkReorder.mutationOptions();
   const reorder = useMutation({
     mutationKey: reorderBase.mutationKey,
     mutationFn: reorderBase.mutationFn,
+    meta: reorderBase.meta,
     onMutate: async (
       vars,
     ): Promise<OptimisticContext<TaskOut[] | TaskBoardOut>> => {
@@ -217,6 +215,7 @@ export function useBoardMutations(target: BoardCacheTarget) {
   const remove = useMutation({
     mutationKey: deleteBase.mutationKey,
     mutationFn: deleteBase.mutationFn,
+    meta: deleteBase.meta,
     onMutate: async (vars: {
       ids: string[];
     }): Promise<OptimisticContext<TaskOut[] | TaskBoardOut>> => {

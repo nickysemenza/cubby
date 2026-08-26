@@ -12,7 +12,7 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Kbd, KbdGroup } from "~/components/ui/kbd";
 import { Spinner } from "~/components/ui/spinner";
-import { usdaFoodListQueryOptions } from "~/entities/usda.functions";
+import { usdaFood } from "~/entities/usda.functions";
 import { dedupeUsdaFoodsByUpc } from "~/lib/usda-food-stats";
 import type { EnrichmentProposal } from "~/server/services/ai-enrichment/proposals";
 import {
@@ -75,7 +75,7 @@ function QueueUsdaPicker({
 
   // Other USDA options (generic reference foods, relevance-ranked, deduped).
   const { data: altData, isLoading: altLoading } = useQuery(
-    usdaFoodListQueryOptions({
+    usdaFood.list.queryOptions({
       filters: {
         nameFilter: rowName,
         foodsOnly: true,

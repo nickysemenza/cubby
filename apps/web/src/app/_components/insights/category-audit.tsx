@@ -13,11 +13,11 @@ import {
 } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
-import { auditCategoriesMutationOptions } from "~/lib/ai.functions";
+import { ai } from "~/lib/ai.functions";
 
 export function CategoryAudit() {
   const auditMutation = useActionMutation({
-    mutationFn: auditCategoriesMutationOptions,
+    mutationFn: ai.auditCategories.mutationOptions,
   });
 
   const result = auditMutation.data;

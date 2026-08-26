@@ -6,11 +6,8 @@ import {
 import type { InfLocation } from "@cubby/schemas/location";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { bulkMoveInventoryMutationOptions } from "~/app/inventory/inventory.functions";
-import {
-  bulkUpdateParentMutationOptions,
-  locationTreeQueryOptions,
-} from "~/app/locations/location.functions";
+import { inventory } from "~/app/inventory/inventory.functions";
+import { location } from "~/app/locations/location.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
   cancelQueryRoots,
@@ -37,9 +34,9 @@ type OptimisticContext = { prev: InfLocation[] | undefined };
  */
 export function useArrangeMutations() {
   const queryClient = useQueryClient();
-  const treeKey = locationTreeQueryOptions().queryKey;
+  const treeKey = location.makeTree.queryOptions().queryKey;
 
-  const reparentBase = bulkUpdateParentMutationOptions();
+  const reparentBase = location.bulkUpdateParent.mutationOptions();
   const reparent = useMutation({
     mutationKey: reparentBase.mutationKey,
     mutationFn: reparentBase.mutationFn,
@@ -69,7 +66,7 @@ export function useArrangeMutations() {
       invalidateQueryRoots(queryClient, invalidatesFor("inventory")),
   });
 
-  const moveBase = bulkMoveInventoryMutationOptions();
+  const moveBase = inventory.bulkMove.mutationOptions();
   const move = useMutation({
     mutationKey: moveBase.mutationKey,
     mutationFn: moveBase.mutationFn,

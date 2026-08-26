@@ -13,17 +13,9 @@ import { match } from "ts-pattern";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { LocationScanButton } from "~/app/_components/locations/location-scan-button";
 import { QueuePassResumePrompt } from "~/app/_components/queue-pass/QueuePassProgress";
-import {
-  bulkMoveInventoryMutationOptions,
-  inventoryByLocationIdsQueryOptions,
-  inventoryDuplicatesQueryOptions,
-  reconcileInventorySessionMutationOptions,
-} from "~/app/inventory/inventory.functions";
-import {
-  ensureGlobalUnknownMutationOptions,
-  locationTreeQueryOptions,
-} from "~/app/locations/location.functions";
-import { productQuantitySummariesQueryOptions } from "~/app/products/product.functions";
+import { inventory } from "~/app/inventory/inventory.functions";
+import { location } from "~/app/locations/location.functions";
+import { product } from "~/app/products/product.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button, buttonVariants } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -64,9 +56,11 @@ export function InventorySessionWorkbench({
   const ensureUnknownStarted = useRef(false);
 
   const { data: tree, isLoading: treeLoading } = useQuery(
-    locationTreeQueryOptions(),
+    location.makeTree.queryOptions(),
   );
-  const ensureUnknown = useMutation(ensureGlobalUnknownMutationOptions());
+  const ensureUnknown = useMutation(
+    location.ensureGlobalUnknown.mutationOptions(),
+  );
 
   useEffect(() => {
     if (ensureUnknownStarted.current) return;
@@ -130,7 +124,7 @@ export function InventorySessionWorkbench({
   // `reconcileLocationSession`, or the stale guard compares two different
   // populations and every commit throws INVENTORY_STALE.
   const inventoryQuery = useQuery({
-    ...inventoryByLocationIdsQueryOptions({
+    ...inventory.getByLocationIds.queryOptions({
       locationIds,
       placement: "stock",
     }),
@@ -139,7 +133,7 @@ export function InventorySessionWorkbench({
 
   // Products flagged as duplicate-unique (expected once, but present in >1
   // location) — badged inline so a recount can catch the stray copy.
-  const duplicateQuery = useQuery(inventoryDuplicatesQueryOptions({}));
+  const duplicateQuery = useQuery(inventory.findDuplicates.queryOptions({}));
   const duplicateProductIds = useMemo(
     () => new Set((duplicateQuery.data ?? []).map((p) => p.id)),
     [duplicateQuery.data],
@@ -172,7 +166,7 @@ export function InventorySessionWorkbench({
     [inventoryQuery.data, sessionLocationIds],
   );
   const quantitySummariesQuery = useQuery({
-    ...productQuantitySummariesQueryOptions({ ids: sessionProductIds }),
+    ...product.quantitySummaries.queryOptions({ ids: sessionProductIds }),
     enabled: sessionProductIds.length > 0,
     // A pass is a point-in-time review. Keep its ledger comparison stable while
     // the pass itself writes recount adjustments.
@@ -201,7 +195,7 @@ export function InventorySessionWorkbench({
   );
 
   const bulkMove = useActionMutation({
-    mutationFn: bulkMoveInventoryMutationOptions,
+    mutationFn: inventory.bulkMove.mutationOptions,
     invalidateKeys: sessionInvalidateKeys,
   });
   const updateLocation = useActionMutation({
@@ -212,7 +206,7 @@ export function InventorySessionWorkbench({
   // resolutions leave the staged map (read from `variables`, so it's never the
   // stale closure) and we advance to the next bin.
   const reconcile = useMutation(
-    reconcileInventorySessionMutationOptions({
+    inventory.reconcileSession.mutationOptions({
       onSuccess: (data, variables) => {
         invalidateSession(data);
         setItemResolutions((prev) => {

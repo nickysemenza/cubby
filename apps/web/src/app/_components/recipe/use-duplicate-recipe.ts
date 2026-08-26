@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { recipeDuplicateMutationOptions } from "~/app/recipes/recipe.functions";
+import { recipe } from "~/app/recipes/recipe.functions";
 import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
@@ -13,7 +13,7 @@ import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 export function useDuplicateRecipe() {
   const navigate = useNavigate();
   const mutation = useActionMutation({
-    mutationFn: recipeDuplicateMutationOptions,
+    mutationFn: recipe.duplicate.mutationOptions,
     success: (data) => savedWithBackgroundWork(data.sideEffects, "Duplicated"),
     invalidateKeys: invalidatesFor("recipe", "list"),
     onSuccess: (data) => {

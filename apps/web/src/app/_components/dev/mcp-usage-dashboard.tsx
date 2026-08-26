@@ -23,10 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import {
-  mcpUsageActivityInfiniteQueryOptions,
-  mcpUsageDashboardQueryOptions,
-} from "~/lib/mcp.functions";
+import { mcp } from "~/lib/mcp.functions";
 import { nivoBarChrome, nivoChartTheme } from "~/lib/nivo-theme";
 import { formatCount } from "~/lib/utils";
 
@@ -290,14 +287,22 @@ function ActivityTable({
   toolName: string | null;
   entity: Entity | null;
 }) {
-  const query = useInfiniteQuery({
-    ...mcpUsageActivityInfiniteQueryOptions({
-      window,
-      toolName: toolName ?? undefined,
-      entity: entity ?? undefined,
-      limit: 25,
+  const activityScope = {
+    window,
+    toolName: toolName ?? undefined,
+    entity: entity ?? undefined,
+    limit: 25,
+  };
+  const query = useInfiniteQuery(
+    mcp.usageActivity.infiniteQueryOptions<string | null>(activityScope, {
+      initialPageParam: null,
+      page: (input, cursor) => ({
+        ...input,
+        ...(cursor === null ? {} : { cursor }),
+      }),
+      getNextPageParam: (page) => page.nextCursor ?? undefined,
     }),
-  });
+  );
   const entries = query.data?.pages.flatMap((page) => page.entries) ?? [];
 
   return (
@@ -386,7 +391,7 @@ export function McpUsageDashboard() {
     key: ToolSort;
     descending: boolean;
   }>({ key: "periodCalls", descending: true });
-  const query = useQuery(mcpUsageDashboardQueryOptions({ window }));
+  const query = useQuery(mcp.usageDashboard.queryOptions({ window }));
   const data = query.data;
   const tools = useMemo(() => {
     if (!data) return [];

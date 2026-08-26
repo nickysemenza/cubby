@@ -2,7 +2,7 @@ import type { CookbookShortcode } from "@cubby/schemas/identifiers";
 import type { IngredientUsageRow } from "@cubby/schemas/ingredient-usage";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { recipeIngredientUsageQueryOptions } from "~/app/recipes/recipe.functions";
+import { recipe } from "~/app/recipes/recipe.functions";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import {
@@ -33,7 +33,7 @@ export function IngredientUsagePanel({
   limit?: number;
 }) {
   const { data, isLoading } = useQuery(
-    recipeIngredientUsageQueryOptions({ cookbookId }),
+    recipe.getIngredientUsage.queryOptions({ cookbookId }),
   );
 
   if (isLoading) {

@@ -21,7 +21,7 @@ import {
   TradeCostMatrixAggregate,
 } from "./charts/trade-cost-aggregate";
 import { VendorBreakdown } from "./charts/vendor-breakdown";
-import { expenseAnalyticsQueryOptions } from "./expense.functions";
+import { expense } from "./expense.functions";
 import {
   type ExpenseAnalyzeConfig,
   expenseAnalyzeConfigFromSearch,
@@ -73,7 +73,7 @@ export function ExpenseAnalyticsView() {
   }, [search]);
 
   const { data, isLoading } = useQuery({
-    ...expenseAnalyticsQueryOptions(filters),
+    ...expense.analytics.queryOptions(filters),
     staleTime: 60 * 1000,
   });
   const analyzeConfig = useMemo(

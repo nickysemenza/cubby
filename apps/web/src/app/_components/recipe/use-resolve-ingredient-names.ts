@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { uniqBy } from "es-toolkit";
-import { ingredientResolveOrCreateMutationOptions } from "~/app/ingredients/ingredient.functions";
+import { ingredient } from "~/app/ingredients/ingredient.functions";
 import { invalidateQueryRoots, queryKeys } from "~/lib/query-keys";
 import type { IngredientMatch } from "./use-ingredient-matches";
 
@@ -28,7 +28,7 @@ export const ingredientNameKey = (name: string) => name.trim().toLowerCase();
 export function useResolveIngredientNames() {
   const queryClient = useQueryClient();
   const resolveMutation = useMutation(
-    ingredientResolveOrCreateMutationOptions(),
+    ingredient.resolveOrCreate.mutationOptions(),
   );
 
   /** Lowercased requested name → its resolved ingredient. */

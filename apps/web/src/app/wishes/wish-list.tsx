@@ -21,7 +21,7 @@ import { NoneValue } from "~/components/ui/none-value";
 import { wishCreateRequest } from "~/entities/editing/editor-requests";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { formatCurrencyRange, rangeMidpoint } from "~/lib/format-range";
-import { relatedDataOptionsQueryOptions } from "~/lib/related-data.functions";
+import { relatedData } from "~/lib/related-data.functions";
 import { formatCurrency } from "~/lib/utils";
 import { wishPriceRange } from "./wish-price-range";
 import { buildWishRows, type WishRow, wishSubRows } from "./wish-rows";
@@ -235,7 +235,7 @@ export function WishList() {
   // catalog: only a Product that is somebody's candidate can narrow this list,
   // and the hint is the number of wishes naming it.
   const candidateOptionsQuery = useQuery(
-    relatedDataOptionsQueryOptions({
+    relatedData.options.queryOptions({
       relationKey: "wish.candidates",
       limit: 100,
     }),

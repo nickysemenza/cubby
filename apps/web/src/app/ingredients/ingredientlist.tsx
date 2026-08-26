@@ -13,7 +13,7 @@ import {
   useHydratedProductFood,
   useProductFoodSummaries,
 } from "~/app/_components/products/product-food-summaries";
-import { mergeIngredients } from "~/app/ingredients/ingredient.functions";
+import { ingredient } from "~/app/ingredients/ingredient.functions";
 import { Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
@@ -278,7 +278,7 @@ export function IngredientList() {
       mergeRows?.find((i) => i.id === keepId)?.name ?? "ingredient";
     setMergePending(true);
     try {
-      const result = await mergeIngredients({
+      const result = await ingredient.merge.call({
         keepId,
         mergeIds: aliasIds,
       });

@@ -20,12 +20,7 @@ import {
   useProductFoodSummaries,
 } from "~/app/_components/products/product-food-summaries";
 import { UnitPriceLine } from "~/app/_components/units/unit-price-line";
-import {
-  bulkSetProductStockTrackedMutationOptions,
-  kitComponentRowsQueryOptions,
-  productExternalIdSourceOptionsQueryOptions,
-  productManufacturerOptionsQueryOptions,
-} from "~/app/products/product.functions";
+import { product as productOperations } from "~/app/products/product.functions";
 import { Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
@@ -41,7 +36,7 @@ import type { ViewSwitcherOption } from "~/components/ui/view-switcher";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { dataQualityOptions } from "~/lib/data-quality-options";
 import { invalidatesFor } from "~/lib/query-keys";
-import { relatedDataOptionsQueryOptions } from "~/lib/related-data.functions";
+import { relatedData } from "~/lib/related-data.functions";
 import { booleanCellOptions, presenceCellOptions } from "~/lib/select-options";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { formatCurrency } from "~/lib/utils";
@@ -235,10 +230,10 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
   const locationOptions = useDeferredFilterOptions("locationWithInventory");
   const ingredientOptions = useDeferredFilterOptions("ingredientWithProduct");
   const manufacturerOptionsQuery = useQuery(
-    productManufacturerOptionsQueryOptions(),
+    productOperations.manufacturerOptions.queryOptions(),
   );
   const externalIdSourceOptionsQuery = useQuery(
-    productExternalIdSourceOptionsQueryOptions(),
+    productOperations.externalIdSourceOptions.queryOptions(),
   );
   const manufacturerOptions = useMemo<FilterableComboboxItem[]>(
     () =>
@@ -263,13 +258,13 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
   // `product.vendors` also ensures only Vendors that can match a Product are
   // offered here.
   const vendorOptionsQuery = useQuery(
-    relatedDataOptionsQueryOptions({
+    relatedData.options.queryOptions({
       relationKey: "product.vendors",
       limit: 100,
     }),
   );
   const purchaseOptionsQuery = useQuery(
-    relatedDataOptionsQueryOptions({
+    relatedData.options.queryOptions({
       relationKey: "product.purchases",
       limit: 100,
     }),
@@ -311,7 +306,7 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
     [],
   );
   const stockTrackingMutation = useActionMutation({
-    mutationFn: bulkSetProductStockTrackedMutationOptions,
+    mutationFn: productOperations.bulkSetStockTracked.mutationOptions,
     invalidateKeys: invalidatesFor("product"),
     success: (data: { items: unknown[] }) =>
       `Updated ${data.items.length} product${data.items.length !== 1 ? "s" : ""}`,
@@ -939,7 +934,9 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
   // sidesteps that class of bug rather than managing it.
   const [kitIds, setKitIds] = useState<string[]>([]);
   const kitComponentsQuery = useQuery({
-    ...kitComponentRowsQueryOptions({ parentProductIds: kitIds }),
+    ...productOperations.kitComponentRows.queryOptions({
+      parentProductIds: kitIds,
+    }),
     enabled: kitIds.length > 0,
   });
   const componentsByParent = useMemo(

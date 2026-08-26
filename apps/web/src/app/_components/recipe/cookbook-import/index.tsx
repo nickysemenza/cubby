@@ -18,11 +18,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
-import {
-  recipeCookbookSourceQueryOptions,
-  recipeExtractCookbookChunkMutationOptions,
-  recipeUpsertCookbookMutationOptions,
-} from "~/app/recipes/recipe.functions";
+import { recipe } from "~/app/recipes/recipe.functions";
 import { Row } from "~/components/layout/row";
 import { Stack } from "~/components/layout/stack";
 import {
@@ -37,7 +33,7 @@ import {
 } from "~/components/ui/alert-dialog";
 import { Description } from "~/components/ui/description";
 import { getErrorMessage } from "~/lib/error-utils";
-import { uploadImageMutationOptions } from "~/lib/image.functions";
+import { imageUpload } from "~/lib/image.functions";
 import { wasm } from "~/lib/wasm";
 import { openWorkflowStream } from "~/lib/workflow-stream";
 import { BookGroupCard } from "./book-group-card";
@@ -80,8 +76,10 @@ export function CookbookImport({
   /** When set, re-open this cookbook's stored extraction for selective re-import. */
   loadCookbookId?: string;
 }) {
-  const extractChunk = useMutation(recipeExtractCookbookChunkMutationOptions());
-  const upsertCookbook = useMutation(recipeUpsertCookbookMutationOptions());
+  const extractChunk = useMutation(
+    recipe.extractCookbookChunk.mutationOptions(),
+  );
+  const upsertCookbook = useMutation(recipe.upsertCookbook.mutationOptions());
   // Per-recipe outcome streamed back from `importCookbookStream`, keyed by the
   // recipe's index in `book.recipes` so each card maps to its result. `start` is
   // referentially stable, so destructure it for the importBook callback's deps.
@@ -90,7 +88,7 @@ export function CookbookImport({
     | { index: number; ok: false; error: string },
     { succeeded: number; failed: number }
   >();
-  const uploadImageMut = useMutation(uploadImageMutationOptions());
+  const uploadImageMut = useMutation(imageUpload.uploadImage.mutationOptions());
 
   const [books, setBooks] = useState<Book[]>([]);
   // Raw EPUB bytes by source, cached so a book can re-run extraction (retry after
@@ -154,7 +152,9 @@ export function CookbookImport({
   // the user can selectively re-import (no EPUB, no LLM). The cookbookId marks it
   // so importBook skips upsertCookbook; BookGroupCard flags already-imported titles.
   const source = useQuery({
-    ...recipeCookbookSourceQueryOptions({ cookbookId: loadCookbookId ?? "" }),
+    ...recipe.getCookbookSource.queryOptions({
+      cookbookId: loadCookbookId ?? "",
+    }),
     enabled: !!loadCookbookId,
   });
   const [seeded, setSeeded] = useState(false);

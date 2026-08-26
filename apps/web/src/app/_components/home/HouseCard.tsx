@@ -2,7 +2,7 @@ import type { TaskSummaryOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Hammer } from "lucide-react";
-import { taskSummaryQueryOptions } from "~/app/tasks/task.functions";
+import { task } from "~/app/tasks/task.functions";
 import { Grid } from "~/components/layout";
 import {
   CardActionLink,
@@ -32,7 +32,7 @@ const STATS: HouseStat[] = [
 ];
 
 function useTaskSummary() {
-  return useQuery(taskSummaryQueryOptions());
+  return useQuery(task.summary.queryOptions());
 }
 
 /**

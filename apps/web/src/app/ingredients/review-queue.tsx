@@ -12,7 +12,7 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import type { EnrichmentEditorHandle } from "./enrichment-editor";
-import { ingredientMergeMutationOptions } from "./ingredient.functions";
+import { ingredient } from "./ingredient.functions";
 import { type MergeOption, ReviewCard } from "./review-card";
 import { useProposalCache } from "./use-proposal-cache";
 import { hasUsdaLink } from "./workbench-editor-core";
@@ -104,7 +104,7 @@ export function ReviewQueue({
     error: (err) => `Failed: ${getErrorMessage(err)}`,
   });
   const mergeMutation = useActionMutation({
-    mutationFn: ingredientMergeMutationOptions,
+    mutationFn: ingredient.merge.mutationOptions,
     success: (d) => savedWithBackgroundWork(d.sideEffects, "Merged"),
     invalidateKeys: invalidatesFor("ingredient", "merge"),
     onSuccess: () => markProcessed(mergeSourceRef.current),

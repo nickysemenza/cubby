@@ -11,7 +11,7 @@ import {
   requiredLocationField,
 } from "~/app/_components/form-fields";
 import { ComboboxFieldWithSearch } from "~/app/_components/form-utils/combobox-field-with-search";
-import { bulkUpdateParentMutationOptions } from "~/app/locations/location.functions";
+import { location } from "~/app/locations/location.functions";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Stack } from "~/components/layout";
 import { StatusText } from "~/components/ui/status-text";
@@ -52,7 +52,7 @@ export function BulkReparentLocationsDialog({
   });
 
   const bulkUpdateParent = useMutation({
-    ...bulkUpdateParentMutationOptions(),
+    ...location.bulkUpdateParent.mutationOptions(),
     onSuccess: ({ updated }) => {
       invalidateQueryRoots(queryClient, [
         ...invalidatesFor("location"),

@@ -8,8 +8,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import {
-  financialAccountOptionsQueryOptions,
-  financialTransactionSourceOptionsQueryOptions,
+  financialAccount,
+  financialTransaction,
 } from "~/app/finance/finance.functions";
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
@@ -55,10 +55,10 @@ export function FinancialTransactionList() {
   // transaction FORM uses a search-as-you-type account combobox instead — a
   // header control needs the whole list up front, a form does not.
   const { data: accounts = NO_OPTIONS } = useQuery(
-    financialAccountOptionsQueryOptions(),
+    financialAccount.options.queryOptions(null),
   );
   const { data: sources = NO_SOURCES } = useQuery(
-    financialTransactionSourceOptionsQueryOptions(),
+    financialTransaction.sourceOptions.queryOptions(null),
   );
   const filterOptions = useFilterOptions({
     account: accounts.map((a) => ({

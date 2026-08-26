@@ -16,7 +16,7 @@ import { listChromePage } from "~/app/_components/routing/entity-routes";
 import { Row, Stack } from "~/components/layout";
 import { NativeSelect } from "~/components/ui/native-select";
 import { entityPluralLabel } from "~/entities/entities";
-import { auditLogListInfiniteQueryOptions } from "~/lib/audit-log.functions";
+import { auditLogListOptions } from "~/lib/audit-log.functions";
 import { pageTitle } from "~/lib/page-title";
 
 const searchSchema = z.object({
@@ -56,7 +56,7 @@ export const Route = createFileRoute("/_authenticated/activity")({
   }),
   loader: async ({ context, deps }) => {
     void context.queryClient.prefetchInfiniteQuery(
-      auditLogListInfiniteQueryOptions(
+      auditLogListOptions(
         { limit: 20, entityType: deps.entityType, source: deps.source },
         { getNextPageParam: (lastPage) => lastPage.nextCursor },
       ),

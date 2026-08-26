@@ -26,7 +26,7 @@ import { type FC, useId, useMemo } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { discardProductMutationOptions } from "~/app/products/product.functions";
+import { product as productOperations } from "~/app/products/product.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -119,7 +119,7 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
   };
 
   const discard = useActionMutation({
-    mutationFn: discardProductMutationOptions,
+    mutationFn: productOperations.discard.mutationOptions,
     success: (result) =>
       // `inventory.removed` was dead payload until now: the server reports that
       // it soft-deleted the shelf row and the toast said nothing about it.

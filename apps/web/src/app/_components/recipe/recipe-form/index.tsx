@@ -12,10 +12,7 @@ import {
 import { type FC, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
-import {
-  recipeParseHtmlMutationOptions,
-  recipeScrapeMutationOptions,
-} from "~/app/recipes/recipe.functions";
+import { recipe as recipeOperations } from "~/app/recipes/recipe.functions";
 import { Row, Stack } from "~/components/layout";
 import {
   AlertDialog,
@@ -135,8 +132,10 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
   );
 
   // Scrape mutation + parse-only fallback for pasted HTML
-  const scrapeMutation = useMutation(recipeScrapeMutationOptions());
-  const parseHtmlMutation = useMutation(recipeParseHtmlMutationOptions());
+  const scrapeMutation = useMutation(recipeOperations.scrape.mutationOptions());
+  const parseHtmlMutation = useMutation(
+    recipeOperations.parseHtml.mutationOptions(),
+  );
 
   // Get the recipe entity in edit mode
   const recipe = mode === "edit" ? props.entity : undefined;

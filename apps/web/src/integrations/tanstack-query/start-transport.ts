@@ -95,11 +95,26 @@ export type StartCallOptions = {
   speculative?: boolean;
 };
 
-/** What a bound Start server function needs from its caller, and nothing more. */
+/** Explicit adapter shape used by focused tests and in-process callers. */
 type StartTransportInvocation<Input> = (
   input: Input,
   transport: { signal?: AbortSignal; headers: HeadersInit },
 ) => Promise<StartOperationResult<unknown>>;
+
+async function dispatchStartOperation<Input>(
+  operation: StartOperationId,
+  input: Input,
+  transport: { signal?: AbortSignal; headers: HeadersInit },
+): Promise<StartOperationResult<unknown>> {
+  const { dispatchStartOperationTransport } = await import(
+    "~/server-functions/start-operation-dispatch.functions"
+  );
+  return await dispatchStartOperationTransport({
+    data: { operation, input },
+    signal: transport.signal,
+    headers: transport.headers,
+  });
+}
 
 export interface StartOperation<Input, Output> {
   readonly operation: StartOperationId;
@@ -114,21 +129,19 @@ export interface StartOperation<Input, Output> {
 }
 
 /**
- * Bind one Start server function to its operation name, output parser, and
- * error type once, and hand back everything a caller needs: the observed call
- * and the Query metadata that describes it.
- *
- * The `transport` function must be declared at module top level with
- * `createServerFn(...)` — the TanStack Start compiler only transforms
- * statically recognizable declarations, so a server function created inside
- * this helper would never be extracted from the client bundle. Callers pass the
- * already-declared server function in; this module only wraps the call.
+ * Bind an operation name, parser, and optional adapter once. Production calls
+ * lazily import the one shared Start dispatcher; importing a domain catalog
+ * never initializes Start or any server module.
  */
 export function startOperation<Input, Output>(config: {
   operation: StartOperationId;
   kind?: "query" | "mutation";
   entity?: string;
-  transport: StartTransportInvocation<Input>;
+  /**
+   * Override the shared dispatcher. Production operations normally omit this;
+   * focused transport tests and exceptional adapters may still supply one.
+   */
+  transport?: StartTransportInvocation<Input>;
   parse: (data: unknown, input: Input) => Output;
   createError?: (error: PublicStartOperationError) => Error;
 }): StartOperation<Input, Output> {
@@ -161,7 +174,11 @@ export function startOperation<Input, Output>(config: {
           config.parse(
             unwrapStartOperationResult(
               config.operation,
-              await config.transport(input, {
+              await (
+                config.transport ??
+                ((value, transport) =>
+                  dispatchStartOperation(config.operation, value, transport))
+              )(input, {
                 signal: options?.signal,
                 headers,
               }),

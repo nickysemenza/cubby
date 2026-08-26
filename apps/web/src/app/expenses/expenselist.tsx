@@ -40,10 +40,7 @@ import {
   useExpenseBulkActions,
 } from "../_components/tracker/expense-bulk-actions";
 import { useExpenseRowActions } from "../_components/tracker/expense-row-actions";
-import {
-  expenseAnalyticsQueryOptions,
-  expenseFacetCountsQueryOptions,
-} from "./expense.functions";
+import { expense } from "./expense.functions";
 import {
   createExpenseProductImageColumn,
   ExpenseProductImages,
@@ -418,14 +415,14 @@ export function ExpenseList() {
   // column filters. Reusing it (rather than rebuilding from table state) is
   // what keeps this compact totals row reporting on exactly the rows below it.
   const analyticsQuery = useQuery({
-    ...expenseAnalyticsQueryOptions(currentFilters),
+    ...expense.analytics.queryOptions(currentFilters),
     placeholderData: keepPreviousData,
   });
   // Facet counts are calculated over the complete server population, never
   // the currently appended infinite pages. Each count omits only its own
   // predicate in `expense.facetCounts`, so alternatives remain meaningful.
   const facetCountsQuery = useQuery({
-    ...expenseFacetCountsQueryOptions({
+    ...expense.facetCounts.queryOptions({
       filters: currentFilters,
       facetIds: [...EXPENSE_FACET_IDS],
     }),

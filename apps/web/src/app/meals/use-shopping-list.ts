@@ -2,7 +2,7 @@ import type { ShoppingListOut, UnexpandedSubRecipe } from "@cubby/schemas/meal";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
-import { mealShoppingListQueryOptions } from "./meal.functions";
+import { meal } from "./meal.functions";
 import { getDefaultShoppingRange } from "./meal-search";
 import {
   buildShoppingColumns,
@@ -64,7 +64,7 @@ export function useShoppingList(
 
   const query = useQuery(
     // Date-only "YYYY-MM-DD" bounds — no timezone conversion.
-    mealShoppingListQueryOptions({ from: fromStr, to: toStr }),
+    meal.getShoppingList.queryOptions({ from: fromStr, to: toStr }),
   );
   const { data } = query;
 

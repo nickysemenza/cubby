@@ -25,13 +25,7 @@ import {
 } from "~/app/_components/data-table/table-features";
 import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import {
-  attachProductComponentsMutationOptions,
-  detachProductComponentsMutationOptions,
-  kitMembershipQueryOptions,
-  productComponentsQueryOptions,
-  productSearchQueryOptions,
-} from "~/app/products/product.functions";
+import { product as productOperations } from "~/app/products/product.functions";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -220,7 +214,7 @@ function AddComponentsDialog({
   const [search] = useDebouncedValue(searchInput, { wait: 300 });
 
   const searchQuery = useQuery({
-    ...productSearchQueryOptions({
+    ...productOperations.search.queryOptions({
       filters: { nameFilter: search.trim() || undefined },
       pagination: { pageIndex: 0, pageSize: SEARCH_PAGE_SIZE },
       sort: [{ orderBy: "name", direction: "asc" }],
@@ -248,7 +242,7 @@ function AddComponentsDialog({
     onOpenChange(next);
   };
   const attach = useActionMutation({
-    mutationFn: attachProductComponentsMutationOptions,
+    mutationFn: productOperations.attachComponents.mutationOptions,
     success: (result) =>
       `Added ${result.changed} component${result.changed === 1 ? "" : "s"}`,
     invalidateKeys: invalidatesFor("product", "component"),
@@ -417,9 +411,11 @@ function AddComponentsDialog({
 export function ProductKitComponents({ productId }: { productId: string }) {
   const [addOpen, setAddOpen] = useState(false);
   const componentsQuery = useQuery(
-    productComponentsQueryOptions({ parentProductId: productId }),
+    productOperations.components.queryOptions({ parentProductId: productId }),
   );
-  const membershipQuery = useQuery(kitMembershipQueryOptions({ productId }));
+  const membershipQuery = useQuery(
+    productOperations.kitMembership.queryOptions({ productId }),
+  );
   const components = componentsQuery.data ?? EMPTY_COMPONENTS;
   const membership = membershipQuery.data ?? EMPTY_MEMBERSHIP;
   const componentRows = useMemo<ProductRow[]>(
@@ -461,12 +457,12 @@ export function ProductKitComponents({ productId }: { productId: string }) {
   );
 
   const detachComponent = useActionMutation({
-    mutationFn: detachProductComponentsMutationOptions,
+    mutationFn: productOperations.detachComponents.mutationOptions,
     success: "Component removed",
     invalidateKeys: invalidatesFor("product", "component"),
   });
   const detachMembership = useActionMutation({
-    mutationFn: detachProductComponentsMutationOptions,
+    mutationFn: productOperations.detachComponents.mutationOptions,
     success: "Removed from kit",
     invalidateKeys: invalidatesFor("product", "component"),
   });

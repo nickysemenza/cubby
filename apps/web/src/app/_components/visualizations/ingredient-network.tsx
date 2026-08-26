@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import * as d3Force from "d3-force";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { recipeCooccurrenceQueryOptions } from "~/app/recipes/recipe.functions";
+import { recipe } from "~/app/recipes/recipe.functions";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizOverlay, VizTooltip } from "./viz-overlay";
@@ -22,7 +22,7 @@ interface NetworkLink extends d3Force.SimulationLinkDatum<NetworkNode> {
 
 export default function IngredientNetwork() {
   const { data, isLoading } = useQuery(
-    recipeCooccurrenceQueryOptions({ minEdgeWeight: 2 }),
+    recipe.getIngredientCooccurrence.queryOptions({ minEdgeWeight: 2 }),
   );
 
   if (isLoading) {

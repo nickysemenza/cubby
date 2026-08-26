@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { locationTreeQueryOptions } from "~/app/locations/location.functions";
+import { location } from "~/app/locations/location.functions";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useAllInventoryItems } from "../_components/inventory/use-all-inventory-items";
 import {
@@ -44,7 +44,7 @@ export function useIsometricPantry() {
   const cameraRef = useRef<Camera | null>(null);
   const roomsRef = useRef<RoomData[]>([]);
 
-  const treeQuery = useQuery(locationTreeQueryOptions());
+  const treeQuery = useQuery(location.makeTree.queryOptions());
 
   const inventoryQuery = useAllInventoryItems();
 

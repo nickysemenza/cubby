@@ -3,10 +3,10 @@ import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
-import { vendorOptionsQueryOptions } from "~/app/vendors/vendor.functions";
+import { vendor } from "~/app/vendors/vendor.functions";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
-import { searchFindQueryOptions } from "~/lib/search.functions";
+import { search } from "~/lib/search.functions";
 import {
   buildSearchHitComboboxItem,
   buildVendorNameComboboxItem,
@@ -41,11 +41,11 @@ function useVendorSearchRows() {
   const searchingByCode = parsedCode != null;
 
   const { data, isLoading } = useQuery({
-    ...vendorOptionsQueryOptions(),
+    ...vendor.options.queryOptions(null),
     enabled: enabled && !searchingByCode && searchQuery.trim() === "",
   });
   const { data: searchHits, isLoading: isSearchLoading } = useQuery({
-    ...searchFindQueryOptions({
+    ...search.find.queryOptions({
       query: searchQuery || "vendor",
       entityTypes: ["vendor"],
       limit: 20,

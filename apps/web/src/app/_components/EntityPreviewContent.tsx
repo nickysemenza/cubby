@@ -24,7 +24,7 @@ import {
 import { ProjectMark, ProjectMarkById } from "~/app/projects/project-mark";
 import { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
 import { Row } from "~/components/layout";
-import { cookbookDetailQueryOptions } from "~/entities/cookbook.functions";
+import { cookbook } from "~/entities/cookbook.functions";
 import { EntityIcon } from "~/entities/entities";
 import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { fdcIdFromParam } from "~/entities/entity-query";
@@ -32,8 +32,8 @@ import type {
   DetailEntity,
   EntityDetailByEntity,
 } from "~/entities/generated/entity-details.gen";
-import { projectImageSummariesQueryOptions } from "~/entities/image.functions";
-import { usdaFoodDetailQueryOptions } from "~/entities/usda.functions";
+import { image } from "~/entities/image.functions";
+import { usdaFood } from "~/entities/usda.functions";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
@@ -351,7 +351,7 @@ export function toUsdaCard(
 }
 
 export function UsdaFoodPreviewContent({ fdcId }: { fdcId: number }) {
-  const query = useQuery(usdaFoodDetailQueryOptions(fdcId));
+  const query = useQuery(usdaFood.detail.queryOptions({ id: fdcId }));
 
   return (
     <PreviewQuery query={query} label="Food">
@@ -496,7 +496,9 @@ export function toCookbookCard(data: CookbookSummary): ManifestCardProps {
 }
 
 export function CookbookPreviewContent({ cookbookId }: { cookbookId: string }) {
-  const query = useQuery(cookbookDetailQueryOptions(cookbookId));
+  const query = useQuery(
+    cookbook.detail.queryOptions({ shortcode: cookbookId }),
+  );
 
   return (
     <PreviewQuery query={query} label="Cookbook">
@@ -860,7 +862,7 @@ function GenericPreviewContent({
 function ProjectPreviewContent({ id }: { id: string }) {
   const query = useQuery(entityDetailQueryOptions("project", id));
   const coverQuery = useQuery(
-    projectImageSummariesQueryOptions({
+    image.projectSummaries.queryOptions({
       projectIds: [id as ProjectShortcode],
     }),
   );

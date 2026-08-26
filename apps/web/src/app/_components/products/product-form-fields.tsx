@@ -21,7 +21,7 @@ import { Image } from "~/components/ui/image";
 import { sectionRuleClass } from "~/components/ui/section-rule";
 import { Spinner } from "~/components/ui/spinner";
 import type { useImageState } from "~/hooks/useImageState";
-import { lookupUpc } from "~/lib/upc.functions";
+import { upc } from "~/lib/upc.functions";
 import { cn } from "~/lib/utils";
 import { UsdaFoodSearchField } from "../combobox/with-usda-food-search";
 import {
@@ -164,7 +164,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
 
     setIsLookingUp(true);
     try {
-      const result = await lookupUpc(upcValue);
+      const result = await upc.lookup.call({ upc: upcValue });
       if (result) {
         if (result.name) {
           form.setValue(

@@ -1,11 +1,6 @@
 import type { BackgroundBatchStatus } from "@cubby/schemas/background-jobs";
 import { getErrorMessage } from "@cubby/shared";
-import {
-  type QueryKey,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { StepForward } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -15,18 +10,9 @@ import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { useHydratedLoading } from "~/hooks/useHydrated";
 import {
-  backgroundBatchCancelMutationOptions,
-  backgroundBatchJobsQueryOptions,
-  backgroundBatchJobsRootKey,
-  backgroundBatchListQueryOptions,
-  backgroundBatchListRootKey,
-  backgroundBatchRetryMutationOptions,
-  backgroundBatchSummaryQueryOptions,
-  backgroundBatchSummaryRootKey,
-  backgroundJobRetryMutationOptions,
-  backgroundJobsDrainMutationOptions,
+  backgroundBatch,
+  backgroundJob,
 } from "~/lib/background-batch.functions";
-import { invalidateQueryRoots } from "~/lib/query-keys";
 import {
   buildBackgroundJobRows,
   type SelectedJobsState,
@@ -70,7 +56,7 @@ export function BackgroundJobsPage({
   );
 
   const listQuery = useQuery({
-    ...backgroundBatchListQueryOptions({ limit: 25 }),
+    ...backgroundBatch.list.queryOptions({ limit: 25 }),
     refetchInterval: (query) => {
       const batches = query.state.data;
       if (!batches) return false;
@@ -85,7 +71,7 @@ export function BackgroundJobsPage({
 
   const selectedInput = { batchId: selectedBatchId ?? "" };
   const summaryQuery = useQuery({
-    ...backgroundBatchSummaryQueryOptions(selectedInput),
+    ...backgroundBatch.summary.queryOptions(selectedInput),
     enabled: Boolean(selectedBatchId),
     refetchInterval: (query) =>
       query.state.data && isBatchLive(query.state.data.status)
@@ -93,7 +79,7 @@ export function BackgroundJobsPage({
         : false,
   });
   const jobsQuery = useQuery({
-    ...backgroundBatchJobsQueryOptions({
+    ...backgroundBatch.jobs.queryOptions({
       batchId: selectedBatchId ?? "",
       pageIndex,
       pageSize: JOB_PAGE_SIZE,
@@ -119,34 +105,38 @@ export function BackgroundJobsPage({
     previousStatusRef.current = undefined;
   }, [selectedBatchId]);
 
+  const invalidateOperations = (...operations: readonly { id: string }[]) => {
+    for (const operation of operations) {
+      void queryClient.invalidateQueries({
+        queryKey: ["operation", operation.id],
+      });
+    }
+  };
   const invalidateAfterMutation = () => {
     setPageIndex(0);
-    invalidateQueryRoots(queryClient, [
-      backgroundBatchListRootKey(),
-      backgroundBatchSummaryRootKey(),
-      backgroundBatchJobsRootKey(),
-    ]);
+    invalidateOperations(
+      backgroundBatch.list,
+      backgroundBatch.summary,
+      backgroundBatch.jobs,
+    );
   };
-  const invalidateList = () => {
-    const keys: QueryKey[] = [backgroundBatchListRootKey()];
-    invalidateQueryRoots(queryClient, keys);
-  };
+  const invalidateList = () => invalidateOperations(backgroundBatch.list);
   const drain = useMutation({
-    ...backgroundJobsDrainMutationOptions(),
+    ...backgroundJob.drain.mutationOptions(),
     onSuccess: invalidateList,
   });
   const retry = useMutation({
-    ...backgroundBatchRetryMutationOptions(),
+    ...backgroundBatch.retry.mutationOptions(),
     onSuccess: () => invalidateAfterMutation(),
   });
   const retryJob = useMutation({
-    ...backgroundJobRetryMutationOptions(),
+    ...backgroundJob.retry.mutationOptions(),
     onSuccess: () => {
       if (selectedBatchId) invalidateAfterMutation();
     },
   });
   const cancel = useMutation({
-    ...backgroundBatchCancelMutationOptions(),
+    ...backgroundBatch.cancel.mutationOptions(),
     onSuccess: () => invalidateAfterMutation(),
   });
 

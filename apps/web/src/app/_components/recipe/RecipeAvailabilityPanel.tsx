@@ -8,7 +8,7 @@ import {
   statusClass,
   statusLabel,
 } from "~/app/meals/meal-format";
-import { recipeAvailabilityQueryOptions } from "~/app/recipes/recipe.functions";
+import { suggestions } from "~/app/recipes/recipe.functions";
 import { Row, Stack } from "~/components/layout";
 import { Skeleton } from "~/components/ui/skeleton";
 import { cn } from "~/lib/utils";
@@ -56,7 +56,7 @@ export function RecipeAvailabilityPanel({
   recipeId: RecipeShortcode;
 }) {
   const { data, isLoading, isError } = useQuery(
-    recipeAvailabilityQueryOptions({ recipeId }),
+    suggestions.getRecipeAvailability.queryOptions({ recipeId }),
   );
 
   // Read-only nicety on someone else's page — a failed inventory cross-check

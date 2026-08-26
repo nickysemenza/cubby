@@ -16,7 +16,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Skeleton } from "~/components/ui/skeleton";
-import { collectionDetailQueryOptions } from "./collection.functions";
+import { collection as collectionOperations } from "./collection.functions";
 import {
   CopyableShortcode,
   ProductPlacementsPopover,
@@ -58,7 +58,7 @@ export function CollectionDetailPage({
   const rootsHeadingId = useId();
   const productsHeadingId = useId();
   const result = useQuery(
-    collectionDetailQueryOptions({
+    collectionOperations.detail.queryOptions({
       collection,
       search,
       pagination: { pageIndex: page - 1, pageSize: PAGE_SIZE },

@@ -12,7 +12,7 @@ import { createCubbyColumnHelper } from "~/app/_components/data-table/table-feat
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { usePageCount } from "~/components/page/Page";
-import { cookbookListQueryOptions } from "~/entities/cookbook.functions";
+import { cookbook } from "~/entities/cookbook.functions";
 import { useCookbookDelete } from "./use-cookbook-delete";
 
 /**
@@ -28,7 +28,9 @@ export function CookbookList() {
     () => createCubbyColumnHelper<CookbookSummary>(),
     [],
   );
-  const { data: cookbooks } = useSuspenseQuery(cookbookListQueryOptions());
+  const { data: cookbooks } = useSuspenseQuery(
+    cookbook.list.queryOptions(null),
+  );
   const { requestDelete, dialog } = useCookbookDelete();
   const { onRowClick, onRowHover, onRowHoverEnd, PreviewSheet } =
     useEntityPreview("cookbook");

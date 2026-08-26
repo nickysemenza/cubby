@@ -14,7 +14,7 @@ import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { NoneValue } from "~/components/ui/none-value";
-import { usdaFoodListQueryOptions } from "~/entities/usda.functions";
+import { usdaFood } from "~/entities/usda.functions";
 import { USDA_KINDS } from "~/lib/conversion-coverage";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { nutrientCount } from "~/lib/usda-food-stats";
@@ -80,7 +80,7 @@ export function USDAFoodList() {
         pagination: params.pagination,
         sort: params.sort,
       };
-      const base = usdaFoodListQueryOptions({
+      const base = usdaFood.list.queryOptions({
         ...listParams,
         sort: searching
           ? [{ orderBy: "relevance", direction: "asc" }]

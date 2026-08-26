@@ -14,10 +14,7 @@ import { Image } from "~/components/ui/image";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { getErrorMessage } from "~/lib/error-utils";
-import {
-  importImageFromUrlMutationOptions,
-  uploadImageMutationOptions,
-} from "~/lib/image.functions";
+import { imageUpload } from "~/lib/image.functions";
 import { cn } from "~/lib/utils";
 
 export interface PendingImage {
@@ -79,7 +76,7 @@ export function PendingImageUpload({
   }
 
   const uploadImageMutation = useMutation(
-    uploadImageMutationOptions({
+    imageUpload.uploadImage.mutationOptions({
       onError: (error) => {
         toast.error(`Upload initialization failed: ${getErrorMessage(error)}`);
       },
@@ -87,7 +84,7 @@ export function PendingImageUpload({
   );
 
   const importFromUrlMutation = useMutation(
-    importImageFromUrlMutationOptions({
+    imageUpload.importFromUrl.mutationOptions({
       onError: (error) => {
         toast.error(`Import failed: ${getErrorMessage(error)}`);
       },

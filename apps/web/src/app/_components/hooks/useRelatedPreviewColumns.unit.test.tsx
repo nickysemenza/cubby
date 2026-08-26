@@ -13,7 +13,7 @@ vi.mock("@tanstack/react-query", () => ({
   useQuery: () => queryState.current,
 }));
 vi.mock("~/lib/related-data.functions", () => ({
-  relatedDataPreviewsQueryOptions: queryState.queryOptions,
+  relatedData: { previews: { queryOptions: queryState.queryOptions } },
 }));
 vi.mock("~/entities/entities", () => ({
   getSortableFields: () => [],

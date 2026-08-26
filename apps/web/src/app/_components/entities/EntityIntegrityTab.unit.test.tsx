@@ -41,8 +41,11 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 
 vi.mock("~/entities/entity-integrity.functions", () => ({
-  entityIntegrityCatalogQueryOptions: mocks.catalogQueryOptions,
-  referentialLivenessQueryOptions: mocks.violationsQueryOptions,
+  entityIntegrity: { catalog: { queryOptions: mocks.catalogQueryOptions } },
+  integrityProblems: {
+    getByType: { queryOptions: mocks.violationsQueryOptions },
+  },
+  REFERENTIAL_LIVENESS_INPUT: { key: "referentialLivenessViolations" },
 }));
 
 // If this broad dashboard hook returns, the integrity tab has regressed back to

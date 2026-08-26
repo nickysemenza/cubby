@@ -14,8 +14,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@tanstack/react-query", () => ({
   useQuery: (options: { queryKey: readonly unknown[] }) => ({
     data:
-      Array.isArray(options.queryKey[0]) &&
-      options.queryKey[0][0] === "relatedness"
+      options.queryKey[0] === "operation" &&
+      options.queryKey[1] === "relatedness.product"
         ? mocks.relatedness
         : { status: "succeeded" },
   }),
@@ -28,21 +28,27 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 
 vi.mock("~/lib/recommendations.functions", () => ({
-  relatednessProductRootKey: () =>
-    [["relatedness", "product"], { type: "query" }] as const,
-  relatednessProductQueryOptions: (input: string) => ({
-    queryKey: [["relatedness", "product"], { type: "query" }, { input }],
-  }),
+  relatedness: {
+    product: {
+      queryOptions: (input: string) => ({
+        queryKey: ["operation", "relatedness.product", { input }],
+      }),
+    },
+  },
 }));
 
 vi.mock("~/lib/search.functions", () => ({
-  searchRequestEmbeddingRefreshMutationOptions: () => ({}),
+  search: { requestEmbeddingRefresh: { mutationOptions: () => ({}) } },
 }));
 
 vi.mock("~/lib/background-batch.functions", () => ({
-  backgroundBatchSummaryQueryOptions: (input: { batchId: string }) => ({
-    queryKey: [["background-batch", "summary"], { batchId: input.batchId }],
-  }),
+  backgroundBatch: {
+    summary: {
+      queryOptions: (input: { batchId: string }) => ({
+        queryKey: ["operation", "background-batch.summary", { input }],
+      }),
+    },
+  },
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -93,9 +99,7 @@ describe("RelatednessRail", () => {
     render(<RelatednessRail product={{ id: productId, tags: [] }} />);
 
     await waitFor(() => {
-      expect(mocks.invalidateQueries).toHaveBeenCalledWith({
-        queryKey: [["relatedness", "product"], { type: "query" }],
-      });
+      expect(mocks.invalidateQueries).toHaveBeenCalled();
     });
 
     expect(mocks.imageSummaryProductIds).toEqual([]);

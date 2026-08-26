@@ -44,7 +44,7 @@ import { entityListQueryOptions } from "~/entities/entity-list.functions";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { invalidatesFor } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
-import { linkPurchaseMutationOptions } from "./purchase.functions";
+import { purchase as purchaseOperations } from "./purchase.functions";
 
 const NO_CANDIDATES: ExpenseOut[] = [];
 const CANDIDATE_PAGE_SIZE = 100;
@@ -115,7 +115,7 @@ export function LinkExpensesDialog({
     onOpenChange(next);
   };
   const linkMutation = useActionMutation({
-    mutationFn: linkPurchaseMutationOptions,
+    mutationFn: purchaseOperations.link.mutationOptions,
     success: "Expenses attached to this purchase",
     invalidateKeys: invalidatesFor("purchase"),
     onSuccess: () => resetAndClose(false),

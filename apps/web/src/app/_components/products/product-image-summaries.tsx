@@ -1,27 +1,31 @@
 import { type ImageOut, isDisplayableImageFile } from "@cubby/schemas/image";
 import { createContext, type ReactNode, useContext, useMemo } from "react";
 import { useChunkedRecordQuery } from "~/app/_components/hooks/useChunkedRecordQuery";
-import { productSummariesQueryOptions } from "~/app/products/product.functions";
+import { product as productOperations } from "~/app/products/product.functions";
 
 type ProductImageMap = Record<string, ImageOut[]>;
 
 const ProductImageSummariesContext = createContext<ProductImageMap>({});
 const EMPTY_PRODUCT_IMAGE_MAP: ProductImageMap = {};
+type ProductSummaries = Awaited<
+  ReturnType<typeof productOperations.summaries.call>
+>;
 
 function useProductImageSummaries(productIds: readonly string[]) {
   return useChunkedRecordQuery({
     ids: productIds,
     empty: EMPTY_PRODUCT_IMAGE_MAP,
-    queryOptions: (chunkIds) =>
-      productSummariesQueryOptions(
-        { ids: chunkIds, include: ["images"] },
-        {
-          enabled: chunkIds.length > 0,
-          staleTime: 5 * 60 * 1000,
-          gcTime: 30 * 60 * 1000,
-          select: (data) => data.images ?? EMPTY_PRODUCT_IMAGE_MAP,
-        },
-      ),
+    queryOptions: (chunkIds) => ({
+      ...productOperations.summaries.queryOptions({
+        ids: chunkIds,
+        include: ["images"],
+      }),
+      enabled: chunkIds.length > 0,
+      staleTime: 5 * 60 * 1000,
+      gcTime: 30 * 60 * 1000,
+      select: (data: ProductSummaries) =>
+        data.images ?? EMPTY_PRODUCT_IMAGE_MAP,
+    }),
   });
 }
 

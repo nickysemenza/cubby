@@ -24,7 +24,7 @@ import {
 } from "~/app/_components/inventory/destination-location-picker";
 import type { InventoryDialogItem } from "~/app/_components/inventory/dialog-item";
 import { useInventoryInvalidation } from "~/app/_components/inventory/hooks";
-import { moveInventoryEntriesMutationOptions } from "~/app/inventory/inventory.functions";
+import { inventory } from "~/app/inventory/inventory.functions";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { getErrorMessage } from "~/lib/error-utils";
 
@@ -53,7 +53,7 @@ export function MoveInventoryDialog({
   ).filter((id): id is LocationShortcode => Boolean(id));
 
   const moveMutation = useMutation(
-    moveInventoryEntriesMutationOptions({
+    inventory.moveEntries.mutationOptions({
       onError: (err) => {
         setError(err.message || "Failed to move items");
       },
