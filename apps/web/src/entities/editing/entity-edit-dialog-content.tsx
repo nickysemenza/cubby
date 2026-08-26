@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { toast } from "sonner";
 import { FormWrapper } from "~/app/_components/form-utils";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
-import type { EntityEditorForm } from "./editor-presentations";
 import { getEntityEditorPresentation } from "./editor-presentations";
 import type { EntityEditDialogProps } from "./entity-edit-dialog";
 import type {
@@ -76,7 +75,7 @@ export function EntityEditDialogContent<E extends EditableEntity>({
         submitButtonText={presentation.submitLabel ?? "Create"}
       >
         <presentation.Fields
-          form={session.form as unknown as EntityEditorForm}
+          form={session.form}
           context={context}
           record={record}
         />

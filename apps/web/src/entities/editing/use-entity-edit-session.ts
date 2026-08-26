@@ -1,9 +1,8 @@
 import { isEqual } from "es-toolkit";
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import type { Path, PathValue, UseFormReturn } from "react-hook-form";
+import type { Path, UseFormReturn } from "react-hook-form";
 import { useForm, useWatch } from "react-hook-form";
 import { entityEditRegistry } from "./definitions";
-import type { EntityEditDraft } from "./intent-types";
 import {
   buildEntityEdit,
   initialEntityEditValues,
@@ -19,17 +18,16 @@ import type {
 } from "./types";
 import { useEntityCommands } from "./use-entity-commands";
 
+type RuntimeEntityEditDraft = Record<string, unknown>;
+
 export interface EntityEditSession<E extends EditableEntity> {
   /** Exposed so specialized form adapters can use RHF's native field helpers. */
-  readonly form: UseFormReturn<EntityEditDraft<E>>;
-  readonly values: Readonly<EntityEditDraft<E>>;
+  readonly form: UseFormReturn<RuntimeEntityEditDraft>;
+  readonly values: Readonly<RuntimeEntityEditDraft>;
   readonly access: EntityEditAccess | null;
   readonly isPending: boolean;
   readonly issues: readonly EntityEditIssue[];
-  set<P extends Path<EntityEditDraft<E>>>(
-    field: P,
-    value: PathValue<EntityEditDraft<E>, P>,
-  ): void;
+  set(field: Path<RuntimeEntityEditDraft>, value: unknown): void;
   reset(): void;
   submit(): Promise<EntityEditResult<E>>;
 }
@@ -74,7 +72,9 @@ export function useEntityEditSession<E extends EditableEntity>(
         : {},
     [stableRequest, resolved],
   );
-  const form = useForm<EntityEditDraft<E>>();
+  const form = useForm<RuntimeEntityEditDraft>({
+    defaultValues: initialValues,
+  });
   useWatch({ control: form.control });
   const values = form.getValues();
 
@@ -112,10 +112,7 @@ export function useEntityEditSession<E extends EditableEntity>(
     [form],
   );
   const set = useCallback(
-    <P extends Path<EntityEditDraft<E>>>(
-      field: P,
-      value: PathValue<EntityEditDraft<E>, P>,
-    ) => {
+    (field: Path<RuntimeEntityEditDraft>, value: unknown) => {
       form.setValue(field, value, { shouldDirty: true });
     },
     [form],
