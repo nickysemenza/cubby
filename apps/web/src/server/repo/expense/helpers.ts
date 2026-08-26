@@ -33,6 +33,7 @@ import {
   resolveLiveJoinShortcode,
 } from "~/server/repo/database-helpers";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 /**
  * Reject a quantity whose sign contradicts the money's direction.
@@ -143,7 +144,7 @@ export type ExpenseRow = {
       orderUrlTemplate: string | null;
       deletedAt: Date | null;
       logo: {
-        url: string;
+        key: string;
         contentType: string;
         renderStatus: ImageRenderStatus | null;
         storageStatus: ImageStorageStatus | null;
@@ -220,7 +221,7 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
       purchaseRow?.vendor?.deletedAt === null &&
       purchaseRow.vendor.logo?.deletedAt === null &&
       isDisplayableImageFile(purchaseRow.vendor.logo)
-        ? { url: purchaseRow.vendor.logo.url }
+        ? { url: getR2PublicUrl(purchaseRow.vendor.logo.key) }
         : null,
     orderId: purchaseRow?.orderId ?? null,
     // Derived, never stored: the vendor's own order page for this order. Gated

@@ -99,6 +99,7 @@ import {
   resolveLiveShortcode,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 import { buildLocationWithChildren, dbLocationToListAPI } from "./helpers";
 import { getHomeLocation } from "./home";
 import type {
@@ -1221,7 +1222,7 @@ export const findLocationsNeedingAiDescription = async (
         columns: {},
         with: {
           image: {
-            columns: { url: true },
+            columns: { key: true },
           },
         },
       },
@@ -1233,7 +1234,7 @@ export const findLocationsNeedingAiDescription = async (
     .map((loc) => ({
       id: loc.id,
       name: loc.name,
-      imageUrls: loc.images.map((li) => li.image.url),
+      imageUrls: loc.images.map((li) => getR2PublicUrl(li.image.key)),
     }));
 };
 

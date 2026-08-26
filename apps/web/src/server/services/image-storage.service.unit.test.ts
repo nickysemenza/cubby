@@ -40,16 +40,19 @@ vi.mock("~/server/repo/shortcode-resolver", () => ({
 vi.mock("~/server/utils/s3", () => ({
   contentTypeToExtension: (ct: string) => (ct === "image/png" ? "png" : "jpg"),
   deleteS3Object: mocks.deleteS3Object,
-  extractKeyFromUrl: vi.fn(),
   fetchAndStoreImage: mocks.fetchAndStoreImage,
   generateImageKey: (filename: string) => `cubby/images/${filename}`,
   generateDocumentKey: (filename: string, folder?: string) =>
     `cubby/documents/${folder ? `${folder}/` : ""}${filename}`,
   generatePresignedUploadUrl: mocks.generatePresignedUploadUrl,
   getS3Object: mocks.getS3Object,
-  getS3ObjectUrl: (key: string) => `https://images.example/${key}`,
-  isOurBucketUrl: () => false,
   uploadToS3: mocks.uploadToS3,
+}));
+
+vi.mock("~/server/utils/r2-public-url", () => ({
+  extractKeyFromUrl: vi.fn(),
+  getR2PublicUrl: (key: string) => `https://images.example/${key}`,
+  isOurBucketUrl: () => false,
 }));
 
 vi.mock("@cubby/shared/external-fetch", async (importActual) => ({
@@ -189,7 +192,11 @@ describe("attachFileToEntity", () => {
     mocks.createOrReuseAttachedImage.mockImplementation(
       async (
         _db: unknown,
-        params: { url: string; filename: string; contentType: string },
+        params: {
+          key: string;
+          filename: string;
+          contentType: string;
+        },
       ) => ({
         // `shortcode` too: `attachFileResponse.imageId` is the public `IMG-`
         // code now, so a row without one yields `undefined` downstream.
@@ -358,7 +365,7 @@ describe("attachFileToEntity", () => {
     mocks.findAttachmentByIdempotencyKey.mockResolvedValueOnce({
       id: "winner-1",
       shortcode: "IMG-7771",
-      url: "https://images.example/winner.png",
+      key: "cubby/images/winner.png",
       filename: "winner.png",
       contentType: "image/png",
       idempotencyKey: "stable-key",
@@ -381,7 +388,7 @@ describe("attachFileToEntity", () => {
       row: {
         id: "winner-2",
         shortcode: "IMG-7772",
-        url: "https://images.example/winner.png",
+        key: "cubby/images/winner.png",
         filename: "winner.png",
         contentType: "image/png",
         idempotencyKey: "race-key",

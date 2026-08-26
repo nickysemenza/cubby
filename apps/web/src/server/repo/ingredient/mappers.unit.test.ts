@@ -181,7 +181,6 @@ describe("ingredient product mappers", () => {
           {
             image: {
               shortcode: IMAGE_SHORTCODE,
-              url: "https://example.com/image.jpg",
               key: "image.jpg",
               filename: "image.jpg",
               size: 100,
@@ -196,7 +195,6 @@ describe("ingredient product mappers", () => {
           {
             image: {
               shortcode: DELETED_IMAGE_SHORTCODE,
-              url: "https://example.com/deleted.jpg",
               key: "deleted.jpg",
               filename: "deleted.jpg",
               size: 100,

@@ -15,6 +15,7 @@ import {
   productWithIngredientAndInventoryAndMappingsOut,
 } from "@cubby/schemas/product";
 import { describe, expect, it } from "vitest";
+import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 import {
   dbProductToAPI,
   dbProductToListAPI,
@@ -90,7 +91,6 @@ const baseProduct = {
 
 const baseImage = {
   shortcode: IMAGE_SHORTCODE,
-  url: "https://example.com/image.jpg",
   key: "image.jpg",
   filename: "image.jpg",
   size: 100,
@@ -103,7 +103,6 @@ const baseImage = {
 
 const joinedImage = {
   shortcode: JOIN_IMAGE_SHORTCODE,
-  url: "https://example.com/joined.jpg",
   key: "joined.jpg",
   filename: "joined.jpg",
   size: 200,
@@ -199,8 +198,8 @@ describe("product mappers", () => {
       name: "Flour",
       manufacturer: "Generic",
       images: [
-        { id: IMAGE_ID, url: "https://example.com/image.jpg" },
-        { id: JOIN_IMAGE_ID, url: "https://example.com/joined.jpg" },
+        { id: IMAGE_ID, url: getR2PublicUrl(baseImage.key) },
+        { id: JOIN_IMAGE_ID, url: getR2PublicUrl(joinedImage.key) },
       ],
       externalIds: [{ id: EXTERNAL_ID, source: "amazon" }],
     });

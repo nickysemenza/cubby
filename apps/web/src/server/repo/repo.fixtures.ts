@@ -24,6 +24,7 @@ import { eq } from "drizzle-orm";
 import { mock } from "~/lib/test/mock-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { type image, product } from "~/server/db/schema";
+import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 import { getDb } from "./database-helpers";
 import { createIngredient, findOrCreateIngredient } from "./ingredient";
 import { createInventoryEntry } from "./inventory";
@@ -400,13 +401,14 @@ export const createImageFixture = async (
   db: Database,
   name: string,
   overrides: Partial<Omit<typeof image.$inferInsert, "shortcode">> = {},
-) =>
-  await insertWithShortcode(db, "image", {
+) => {
+  const row = await insertWithShortcode(db, "image", {
     key: `fixture-${name}`,
-    url: `https://example.com/${name}.png`,
     filename: `${name}.png`,
     contentType: "image/png",
     size: 100,
     status: "UPLOADED",
     ...overrides,
   });
+  return { ...row, url: getR2PublicUrl(row.key) };
+};

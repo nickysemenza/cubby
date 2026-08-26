@@ -6,6 +6,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
 import { productImage, projectImage } from "~/server/db/schema";
+import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 import { insertAndReturn } from "./database-helpers";
 import { createExpense, deleteExpenses } from "./expense";
 import { createProject } from "./project";
@@ -75,7 +76,6 @@ describe("expense-backed relationship summaries", () => {
       ctx.actor,
     );
     const thumbnail = await insertWithShortcode(ctx.db, "image", {
-      url: "https://example.com/summary-product.jpg",
       key: "summary-product-image",
       filename: "summary-product.jpg",
       size: 1,
@@ -86,7 +86,6 @@ describe("expense-backed relationship summaries", () => {
       imageId: thumbnail.id,
     });
     const projectDocument = await insertWithShortcode(ctx.db, "image", {
-      url: "https://example.com/summary-project.pdf",
       key: "summary-project-document",
       filename: "summary-project.pdf",
       size: 1,
@@ -98,7 +97,6 @@ describe("expense-backed relationship summaries", () => {
       sortOrder: -1,
     });
     const projectThumbnail = await insertWithShortcode(ctx.db, "image", {
-      url: "https://example.com/summary-project.jpg",
       key: "summary-project-image",
       filename: "summary-project.jpg",
       size: 1,
@@ -224,7 +222,7 @@ describe("expense-backed relationship summaries", () => {
       target: {
         image: {
           id: thumbnail.id,
-          url: "https://example.com/summary-product.jpg",
+          url: getR2PublicUrl(thumbnail.key),
           filename: "summary-product.jpg",
           contentType: "image/jpeg",
         },
@@ -243,7 +241,7 @@ describe("expense-backed relationship summaries", () => {
       target: {
         image: {
           id: projectThumbnail.id,
-          url: "https://example.com/summary-project.jpg",
+          url: getR2PublicUrl(projectThumbnail.key),
           filename: "summary-project.jpg",
           contentType: "image/jpeg",
         },

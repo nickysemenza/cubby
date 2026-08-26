@@ -96,7 +96,6 @@ const softDelete = (db: Database, tableName: string, id: string) =>
 
 const mkImage = (db: Database) =>
   insertWithShortcode(db, "image", {
-    url: `https://example.com/${uniq("img")}.png`,
     key: uniq("test/img"),
     filename: "img.png",
     size: 1,

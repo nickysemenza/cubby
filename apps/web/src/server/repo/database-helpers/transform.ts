@@ -8,6 +8,7 @@ import { amount } from "@cubby/schemas/codec";
 import type { ImageOut } from "@cubby/schemas/image";
 import type { z } from "zod";
 import { parseWithContext } from "~/lib/zod-utils";
+import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 import { isNotDeleted } from "./query";
 
 /**
@@ -36,7 +37,6 @@ export type RowWithOptionalAliasesAndTags<
 export type MappableImageRecord = {
   /** The public `IMG-` code. `id` (the uuid) is deliberately NOT projected. */
   shortcode: string;
-  url: string;
   key: string;
   filename: string;
   size: number;
@@ -79,7 +79,7 @@ export const mapImages = (
       // The public code, never the uuid: `ImageOut.id` IS the shortcode, the
       // same way every other entity's API `id` is.
       id: unsafeImageShortcode(dbImage.shortcode),
-      url: dbImage.url,
+      url: getR2PublicUrl(dbImage.key),
       key: dbImage.key,
       filename: dbImage.filename,
       size: dbImage.size,

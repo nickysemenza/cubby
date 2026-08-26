@@ -82,6 +82,7 @@ import {
   findOrCreateWithShortcode,
   insertWithShortcode,
 } from "~/server/repo/shortcode-utils";
+import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 export const VENDOR_DELETE_EDGE_POLICY = {
   "Purchase.vendorId": {
@@ -159,7 +160,6 @@ const vendorColumns = {
   latestPurchaseDate: vendorLatestPurchaseDate,
   logo: {
     id: image.shortcode,
-    url: image.url,
     key: image.key,
     filename: image.filename,
     size: image.size,
@@ -191,7 +191,6 @@ type VendorRow = {
   latestPurchaseDate: string | null;
   logo: {
     id: string;
-    url: string;
     key: string;
     filename: string;
     size: number;
@@ -223,7 +222,11 @@ const dbVendorToAPI = (row: VendorRow): VendorOut => ({
   purchaseCount: Number(row.purchaseCount),
   spend: Number(row.spend),
   latestPurchaseDate: row.latestPurchaseDate,
-  logo: row.logo && { ...row.logo, id: unsafeImageShortcode(row.logo.id) },
+  logo: row.logo && {
+    ...row.logo,
+    id: unsafeImageShortcode(row.logo.id),
+    url: getR2PublicUrl(row.logo.key),
+  },
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });
@@ -375,7 +378,7 @@ export const vendorOptions = async (
       shortcode: vendor.shortcode,
       name: vendor.name,
       count: vendorPurchaseCount,
-      logoUrl: image.url,
+      logoKey: image.key,
     })
     .from(vendor)
     .leftJoin(
@@ -393,7 +396,7 @@ export const vendorOptions = async (
     id: unsafeVendorShortcode(row.shortcode),
     name: row.name,
     count: Number(row.count),
-    logo: row.logoUrl ? { url: row.logoUrl } : null,
+    logo: row.logoKey ? { url: getR2PublicUrl(row.logoKey) } : null,
   }));
 };
 

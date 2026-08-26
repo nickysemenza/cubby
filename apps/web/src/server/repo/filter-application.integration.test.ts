@@ -519,7 +519,6 @@ const seedWorld = async (ctx: {
   for (const filename of ["guard-alpha.jpg", "guard-beta.jpg"]) {
     await createUploadedImageRecord(db, {
       key: `test/${crypto.randomUUID()}.jpg`,
-      url: `https://example.com/${filename}`,
       filename,
       contentType: "image/jpeg",
       size: 2048,

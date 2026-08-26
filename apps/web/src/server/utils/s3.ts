@@ -10,6 +10,7 @@ import {
 import { AwsClient } from "aws4fetch";
 import { env } from "~/env";
 import { AppError, createAppError } from "~/server/errors/app-error";
+import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 // SigV4 fetch signer for Cloudflare R2 (S3 API). aws4fetch is Workers-native and
 // runs identically in Node (vite dev) and Workers — no dev/prod split. R2 requires
@@ -23,7 +24,7 @@ const r2 = new AwsClient({
 });
 
 // S3-API object URL (for signing/PUT/DELETE), distinct from the public delivery
-// URL produced by getS3ObjectUrl.
+// URL produced by getR2PublicUrl.
 const objectUrl = (key: string) =>
   `${env.R2_ENDPOINT}/${env.R2_BUCKET_NAME}/${key}`;
 
@@ -108,31 +109,6 @@ export const generateDocumentKey = (
   const prefix = env.R2_KEY_PREFIX;
   const folderSegment = sanitizedFolder ? `${sanitizedFolder}/` : "";
   return `${prefix}/documents/${folderSegment}${sanitizedFilename}`;
-};
-
-/**
- * Generate an R2 object URL
- */
-export const getS3ObjectUrl = (key: string): string => {
-  // For Cloudflare R2, the URL format is the public URL to your bucket
-  return `${env.R2_PUBLIC_URL}/${key}`;
-};
-
-/**
- * Check if a URL is from our R2 bucket
- */
-export const isOurBucketUrl = (url: string): boolean => {
-  return url.startsWith(env.R2_PUBLIC_URL);
-};
-
-/**
- * Extract the S3 key from one of our bucket URLs
- * Returns null if URL is not from our bucket
- */
-export const extractKeyFromUrl = (url: string): string | null => {
-  const prefix = `${env.R2_PUBLIC_URL}/`;
-  if (!url.startsWith(prefix)) return null;
-  return url.slice(prefix.length);
 };
 
 /**
@@ -238,7 +214,7 @@ export const fetchAndStoreImage = async (
       contentType,
     });
 
-    const url = getS3ObjectUrl(key);
+    const url = getR2PublicUrl(key);
 
     return {
       key,

@@ -24,7 +24,6 @@ import {
   contentTypeToExtension,
   deleteS3Object,
   generateImageKey,
-  getS3ObjectUrl,
   uploadToS3,
 } from "~/server/utils/s3";
 
@@ -170,7 +169,6 @@ export async function fetchAndAttachVendorLogo(
         expectedWebsite: current.website,
         image: {
           key,
-          url: getS3ObjectUrl(key),
           filename,
           size: candidate.bytes.length,
           ...candidate.inspected,

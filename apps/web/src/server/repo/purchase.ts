@@ -151,6 +151,7 @@ import {
   findOrCreateWithShortcode,
   insertWithShortcode,
 } from "~/server/repo/shortcode-utils";
+import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 export const PURCHASE_DELETE_EDGE_POLICY = {
   "Expense.purchaseId": {
@@ -260,8 +261,8 @@ const purchaseVendorOrderUrlTemplate = correlated<string | null>(
      WHERE v."id" = "Purchase"."vendorId" AND v."deletedAt" IS NULL)`,
 );
 
-const purchaseVendorLogoUrl = sql<string | null>`(
-  SELECT logo."url" FROM "Vendor" v
+const purchaseVendorLogoKey = sql<string | null>`(
+  SELECT logo."key" FROM "Vendor" v
   JOIN "Image" logo ON logo."id" = v."logoImageId"
   WHERE v."id" = ${sql.raw('"Purchase"."vendorId"')}
     AND v."deletedAt" IS NULL
@@ -282,7 +283,7 @@ const purchaseColumns = {
   vendorName: purchaseVendorName,
   vendorShortcode: purchaseVendorShortcode,
   vendorOrderUrlTemplate: purchaseVendorOrderUrlTemplate,
-  vendorLogoUrl: purchaseVendorLogoUrl,
+  vendorLogoKey: purchaseVendorLogoKey,
   expenseCount: purchaseExpenseCount,
   unpricedExpenseCount: purchaseUnpricedExpenseCount,
   expenseTotal: purchaseExpenseTotal,
@@ -304,7 +305,7 @@ type PurchaseRow = {
   vendorName: string | null;
   vendorShortcode: string;
   vendorOrderUrlTemplate: string | null;
-  vendorLogoUrl: string | null;
+  vendorLogoKey: string | null;
   expenseCount: number;
   unpricedExpenseCount: number;
   expenseTotal: number;
@@ -327,7 +328,9 @@ const dbPurchaseToAPI = (
   statedTotal: row.statedTotal,
   notes: row.notes,
   vendorName: row.vendorName,
-  vendorLogo: row.vendorLogoUrl ? { url: row.vendorLogoUrl } : null,
+  vendorLogo: row.vendorLogoKey
+    ? { url: getR2PublicUrl(row.vendorLogoKey) }
+    : null,
   orderUrl: purchaseOrderUrl({
     orderUrlTemplate: row.vendorOrderUrlTemplate,
     orderId: row.orderId,
@@ -361,7 +364,6 @@ const loadPurchaseImages = async (
   const rows = await unwrapDb(db)
     .select({
       shortcode: image.shortcode,
-      url: image.url,
       filename: image.filename,
       contentType: image.contentType,
       key: image.key,
@@ -377,9 +379,11 @@ const loadPurchaseImages = async (
       ),
     )
     .orderBy(asc(purchaseImage.sortOrder), asc(purchaseImage.createdAt));
-  return rows.map(({ shortcode, ...rest }) => ({
+  return rows.map(({ shortcode, key, ...rest }) => ({
     ...rest,
     id: unsafeImageShortcode(shortcode),
+    key,
+    url: getR2PublicUrl(key),
   }));
 };
 

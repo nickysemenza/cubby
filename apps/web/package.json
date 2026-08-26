@@ -176,6 +176,7 @@
     "drizzle-kit": "^0.31.10",
     "esbuild": "^0.28.1",
     "jsdom": "^30.0.0",
+    "jsonc-parser": "^3.3.1",
     "postcss": "^8.5.20",
     "rollup": "^4.62.2",
     "shadcn": "^4.13.1",

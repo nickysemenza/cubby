@@ -142,7 +142,6 @@ describe("detectInventoryItems cached result filtering", () => {
     );
     const image = await createUploadedImageRecord(ctx.db, {
       key: "ai-inventory-cache-filter.jpg",
-      url: "https://example.com/ai-inventory-cache-filter.jpg",
       filename: "ai-inventory-cache-filter.jpg",
       contentType: "image/jpeg",
       size: 123,

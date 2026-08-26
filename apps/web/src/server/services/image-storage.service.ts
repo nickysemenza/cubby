@@ -44,16 +44,18 @@ import {
   inspectImageFile,
 } from "~/server/services/image-integrity";
 import {
+  extractKeyFromUrl,
+  getR2PublicUrl,
+  isOurBucketUrl,
+} from "~/server/utils/r2-public-url";
+import {
   contentTypeToExtension,
   deleteS3Object,
-  extractKeyFromUrl,
   fetchAndStoreImage,
   generateDocumentKey,
   generateImageKey,
   generatePresignedUploadUrl,
   getS3Object,
-  getS3ObjectUrl,
-  isOurBucketUrl,
   uploadToS3,
 } from "~/server/utils/s3";
 
@@ -62,13 +64,12 @@ const initiatePendingUpload = async (
   input: { filename: string; contentType: string; size: number },
   key: string,
 ) => {
-  const url = getS3ObjectUrl(key);
+  const url = getR2PublicUrl(key);
   const createdImage = await createPendingImageRecord(db, {
     filename: input.filename,
     contentType: input.contentType,
     size: input.size,
     key,
-    url,
   });
   const uploadUrl = await generatePresignedUploadUrl({
     key,
@@ -156,12 +157,11 @@ export const importImageFromUrl = async (
         filename: params.filenamePrefix,
         size: 0,
         contentType: "application/octet-stream",
-        url: params.sourceUrl,
       });
       return {
         imageId: unsafeImageShortcode(createdImage.shortcode),
         key,
-        url: params.sourceUrl,
+        url: getR2PublicUrl(key),
       };
     }
   }
@@ -183,7 +183,6 @@ export const importImageFromUrl = async (
       filename: `${params.filenamePrefix}.${contentTypeToExtension(stored.contentType)}`,
       size: stored.size,
       contentType: stored.contentType,
-      url: stored.url,
     });
   } catch (error) {
     await deleteS3Object(stored.key).catch((cleanupError) => {
@@ -378,7 +377,7 @@ export const attachFileToEntity = async (
     if (existing) {
       return {
         imageId: unsafeImageShortcode(existing.shortcode),
-        url: existing.url,
+        url: getR2PublicUrl(existing.key),
         filename: existing.filename,
         contentType: existing.contentType,
         kind: existing.contentType === PDF_CONTENT_TYPE ? "document" : "image",
@@ -492,8 +491,6 @@ export const attachFileToEntity = async (
     : generateImageKey(filename);
 
   await uploadToS3({ key, body: bytes, contentType });
-  const url = getS3ObjectUrl(key);
-
   // 4. Insert the row + associate in one transaction (owned by the repo), so a
   // failure in either step (e.g. the target was deleted since step 0) rolls back
   // the DB write; the catch then removes the now-orphaned R2 object.
@@ -503,7 +500,6 @@ export const attachFileToEntity = async (
       db,
       {
         key,
-        url,
         filename,
         size: bytes.length,
         ...inspected,
@@ -548,7 +544,7 @@ export const attachFileToEntity = async (
 
   return {
     imageId: unsafeImageShortcode(created.row.shortcode),
-    url: created.row.url,
+    url: getR2PublicUrl(created.row.key),
     filename: created.row.filename,
     contentType: created.row.contentType,
     kind: created.row.contentType === PDF_CONTENT_TYPE ? "document" : "image",

@@ -13,6 +13,7 @@ import {
 } from "@cubby/schemas/location";
 import { describe, expect, it } from "vitest";
 import { resolveProductPricing } from "~/server/repo/product/pricing";
+import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 import { dbLocationToAPI, dbLocationToListAPI } from "./helpers";
 import type { LocationListDB } from "./internal-types";
 
@@ -79,7 +80,6 @@ const deletedChildLocation = {
 
 const image = {
   shortcode: IMAGE_SHORTCODE,
-  url: "https://example.com/location.jpg",
   key: "location.jpg",
   filename: "location.jpg",
   size: 100,
@@ -93,7 +93,6 @@ const image = {
 const deletedImage = {
   ...image,
   shortcode: DELETED_IMAGE_SHORTCODE,
-  url: "https://example.com/deleted.jpg",
   deletedAt: DELETED_AT,
 };
 
@@ -140,7 +139,7 @@ describe("location mappers", () => {
     expect(result).toMatchObject({
       id: unsafeLocationShortcode("LOC-TEST"),
       name: "Pantry",
-      images: [{ id: IMAGE_ID, url: "https://example.com/location.jpg" }],
+      images: [{ id: IMAGE_ID, url: getR2PublicUrl(image.key) }],
     });
     expect(result.images).toHaveLength(1);
     expect(result).not.toHaveProperty("deletedAt");

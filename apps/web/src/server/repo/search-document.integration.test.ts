@@ -27,6 +27,7 @@ import {
   inspectSearchDocumentHealth,
   repairSearchDocuments,
 } from "~/server/services/search.service";
+import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 describe("SearchDocument indexed retrieval", () => {
   const ctx = withTestDb();
@@ -206,14 +207,12 @@ describe("SearchDocument indexed retrieval", () => {
     );
     const pdf = await insertWithShortcode(ctx.db, "image", {
       key: `test/${crypto.randomUUID()}.pdf`,
-      url: "https://example.com/ignored.pdf",
       filename: "ignored.pdf",
       contentType: "application/pdf",
       size: 123,
     });
     const cover = await insertWithShortcode(ctx.db, "image", {
       key: `test/${crypto.randomUUID()}.jpg`,
-      url: "https://example.com/cover.jpg",
       filename: "cover.jpg",
       contentType: "image/jpeg",
       size: 456,
@@ -233,7 +232,10 @@ describe("SearchDocument indexed retrieval", () => {
       entityTypes: ["product"],
       limit: 1,
     });
-    expect(hit).toMatchObject({ id: product.id, imageUrl: cover.url });
+    expect(hit).toMatchObject({
+      id: product.id,
+      imageUrl: getR2PublicUrl(cover.key),
+    });
   });
 
   it("hydrates a location thumbnail from its identity product, after any own photo", async () => {
@@ -244,7 +246,6 @@ describe("SearchDocument indexed retrieval", () => {
     );
     const productCover = await insertWithShortcode(ctx.db, "image", {
       key: `test/${crypto.randomUUID()}.jpg`,
-      url: "https://example.com/location-product-cover.jpg",
       filename: "location-product-cover.jpg",
       contentType: "image/jpeg",
       size: 456,
@@ -269,11 +270,12 @@ describe("SearchDocument indexed retrieval", () => {
         entityTypes: ["location"],
         limit: 1,
       });
-    expect((await search())[0]).toMatchObject({ imageUrl: productCover.url });
+    expect((await search())[0]).toMatchObject({
+      imageUrl: getR2PublicUrl(productCover.key),
+    });
 
     const ownPhoto = await insertWithShortcode(ctx.db, "image", {
       key: `test/${crypto.randomUUID()}.jpg`,
-      url: "https://example.com/location-own-cover.jpg",
       filename: "location-own-cover.jpg",
       contentType: "image/jpeg",
       size: 456,
@@ -283,7 +285,9 @@ describe("SearchDocument indexed retrieval", () => {
       imageId: ownPhoto.id,
     });
 
-    expect((await search())[0]).toMatchObject({ imageUrl: ownPhoto.url });
+    expect((await search())[0]).toMatchObject({
+      imageUrl: getR2PublicUrl(ownPhoto.key),
+    });
   });
 
   it("diagnoses missing, stale, and orphaned documents", async () => {

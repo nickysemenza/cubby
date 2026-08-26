@@ -1656,7 +1656,6 @@ describe("problems repo", () => {
 
     const attachImage = async (productId: ProductId) => {
       const img = await insertWithShortcode(ctx.db, "image", {
-        url: "https://example.com/i.jpg",
         key: `key-${productId}`,
         filename: "i.jpg",
         size: 1,
@@ -1669,7 +1668,6 @@ describe("problems repo", () => {
 
     const attachPdf = async (productId: ProductId) => {
       const img = await insertWithShortcode(ctx.db, "image", {
-        url: "https://example.com/manual.pdf",
         key: `pdf-key-${productId}`,
         filename: "manual.pdf",
         size: 1,
@@ -2796,7 +2794,6 @@ describe("problems — vendor mini-logo coverage", () => {
     await seedLine("Logo-backed Vendor", "M-1");
     const vendorId = await findOrCreateVendor(ctx.db, "Logo-backed Vendor");
     const logo = await insertWithShortcode(ctx.db, "image", {
-      url: "https://example.com/vendor-logo.png",
       key: `vendor-logo-${vendorId}`,
       filename: "vendor-logo.png",
       size: 1,

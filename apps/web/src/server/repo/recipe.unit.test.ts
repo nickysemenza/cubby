@@ -12,6 +12,7 @@ import {
   recipeUsageOut,
 } from "@cubby/schemas/recipe";
 import { describe, expect, it } from "vitest";
+import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 import { computeRecipeUsages, dbRecipeToAPIShallow } from "./recipe";
 import { dbRecipeToAPI, dbRecipeToAPIGraph } from "./recipe/helpers";
 import type { RecipeDeepDB, RecipeGraphDB } from "./recipe/internal-types";
@@ -80,7 +81,6 @@ const baseIngredientRelation = {
 
 const image = {
   shortcode: IMAGE_SHORTCODE,
-  url: "https://example.com/recipe.jpg",
   key: "recipe.jpg",
   filename: "recipe.jpg",
   size: 100,
@@ -94,7 +94,6 @@ const image = {
 const deletedImage = {
   ...image,
   shortcode: DELETED_IMAGE_SHORTCODE,
-  url: "https://example.com/deleted.jpg",
 };
 
 const fullRecipeRow = {
@@ -225,7 +224,7 @@ describe("recipe repository helpers", () => {
     expect(result).toMatchObject({
       id: unsafeRecipeShortcode("RCP-A3F2"),
       name: "Test Recipe",
-      images: [{ id: IMAGE_ID, url: "https://example.com/recipe.jpg" }],
+      images: [{ id: IMAGE_ID, url: getR2PublicUrl(image.key) }],
       sections: [
         {
           id: SECTION_ID,

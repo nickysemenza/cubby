@@ -6,11 +6,10 @@ import {
   GTIN_SOURCE,
   storedExternalIdUrl,
 } from "@cubby/schemas/external-id";
-import {
-  type IngredientId,
-  type LocationId,
-  type ProductId,
-  unsafeImageShortcode,
+import type {
+  IngredientId,
+  LocationId,
+  ProductId,
 } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import {
@@ -98,6 +97,7 @@ import {
   insertAndReturn,
   type ListReadIntent,
   lockAndValidateForDelete,
+  mapImages,
   notDeleted,
   presenceCondition,
   rangeConditions,
@@ -115,6 +115,7 @@ import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 import {
   currentProductConversionCoverageCondition,
   markProductConversionCoverageInputStale,
@@ -448,10 +449,8 @@ export const getProductImagesByProductIds = async (
     .orderBy(asc(productImage.sortOrder), asc(productImage.createdAt));
 
   for (const row of rows) {
-    result[row.productId]?.push({
-      ...row.image,
-      id: unsafeImageShortcode(row.image.shortcode),
-    });
+    const [mapped] = mapImages([row.image]);
+    if (mapped) result[row.productId]?.push(mapped);
   }
 
   return result;
@@ -1064,7 +1063,7 @@ export const getProductCoverImageUrlsByProductIds = async (
   if (ids.length === 0) return byId;
 
   const rows = await getDb(db)
-    .select({ productId: productImage.productId, url: image.url })
+    .select({ productId: productImage.productId, key: image.key })
     .from(productImage)
     .innerJoin(image, eq(image.id, productImage.imageId))
     .where(
@@ -1083,7 +1082,9 @@ export const getProductCoverImageUrlsByProductIds = async (
     );
 
   for (const row of rows) {
-    if (!byId.has(row.productId)) byId.set(row.productId, row.url);
+    if (!byId.has(row.productId)) {
+      byId.set(row.productId, getR2PublicUrl(row.key));
+    }
   }
   return byId;
 };

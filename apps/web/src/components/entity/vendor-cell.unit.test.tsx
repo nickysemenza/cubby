@@ -20,9 +20,9 @@ vi.mock("~/app/_components/EntityPreviewLink", () => ({
 }));
 
 const SEEDED_ID = "VEN-ABCD";
-const EBAY_LOGO = { url: "https://foobucket.nicky.fun/vendors/ebay.png" };
+const EBAY_LOGO = { url: "https://media.nickysemenza.com/vendors/ebay.png" };
 const HOME_DEPOT_LOGO = {
-  url: "https://foobucket.nicky.fun/vendors/home-depot.png",
+  url: "https://media.nickysemenza.com/vendors/home-depot.png",
 };
 // Deliberately a name that slugs to nothing in the manifest, so any logo that
 // renders for it can only have come from `vendorId` resolution, never from

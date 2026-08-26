@@ -991,7 +991,6 @@ export const image = pgTable(
     id: pkUuid(),
     /** Public IMG- shortcode; every local-table entity has a public identifier. */
     shortcode: shortcodeColumn(),
-    url: text("url").notNull(),
     key: text("key").notNull(),
     filename: text("filename").notNull(),
     size: integer("size").notNull(),

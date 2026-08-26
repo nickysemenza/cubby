@@ -54,13 +54,13 @@ describe("Image", () => {
     expect(screen.queryByText("entity icon")).toBeNull();
   });
 
-  const BUCKET_SRC = "https://foobucket.nicky.fun/cubby/images/a.jpg";
+  const BUCKET_SRC = "https://media.nickysemenza.com/cubby/images/a.jpg";
 
   it("requests a CF transform + 2x srcSet when displayWidth is set on a bucket URL", () => {
     render(<Image src={BUCKET_SRC} alt="p" displayWidth={400} />);
     const img = screen.getByRole("img", { name: "p" });
     expect(img.getAttribute("src")).toBe(
-      "https://foobucket.nicky.fun/cdn-cgi/image/width=400,quality=80,format=auto,fit=scale-down/cubby/images/a.jpg",
+      "https://media.nickysemenza.com/cdn-cgi/image/width=400,quality=80,format=auto,fit=scale-down/cubby/images/a.jpg",
     );
     expect(img.getAttribute("srcset")).toContain("width=800"); // 2x
   });

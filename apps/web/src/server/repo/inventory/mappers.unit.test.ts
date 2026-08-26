@@ -158,7 +158,6 @@ describe("inventory mappers", () => {
           {
             image: {
               shortcode: IMAGE_SHORTCODE,
-              url: "https://example.com/image.jpg",
               key: "image.jpg",
               filename: "image.jpg",
               size: 100,

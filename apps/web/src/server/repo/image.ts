@@ -90,18 +90,17 @@ import {
   generateUniqueShortcode,
   insertWithShortcode,
 } from "~/server/repo/shortcode-utils";
+import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 export const createPendingImageRecord = async (
   db: Database,
   {
     key,
-    url,
     filename,
     contentType,
     size,
   }: {
     key: string;
-    url: string;
     filename: string;
     contentType: string;
     size: number;
@@ -114,7 +113,6 @@ export const createPendingImageRecord = async (
     filename,
     size,
     contentType,
-    url,
     status: "PENDING",
   });
 };
@@ -123,7 +121,6 @@ export const createUploadedImageRecord = async (
   db: Database | DrizzleTransaction,
   params: {
     key: string;
-    url: string;
     filename: string;
     contentType: string;
     size: number;
@@ -281,7 +278,7 @@ const imageWithRelationsToAPI = (
 
   return {
     id: unsafeImageShortcode(imageData.shortcode),
-    url: imageData.url,
+    url: getR2PublicUrl(imageData.key),
     key: imageData.key,
     filename: imageData.filename,
     size: imageData.size,
@@ -616,12 +613,13 @@ export const getImageByKey = async (
       id: true,
       // Selected because callers report the PUBLIC id back to a client.
       shortcode: true,
-      url: true,
       key: true,
     },
   });
 
-  return imageRecord ?? null;
+  return imageRecord
+    ? { ...imageRecord, url: getR2PublicUrl(imageRecord.key) }
+    : null;
 };
 
 /**
@@ -1589,7 +1587,6 @@ export const createAndAssociateUploadedImage = async (
   db: Database,
   params: {
     key: string;
-    url: string;
     filename: string;
     contentType: string;
     size: number;
@@ -1729,7 +1726,7 @@ export const getImagesByProjectIds = async (
     .select({
       projectId: projectImage.projectId,
       shortcode: image.shortcode,
-      url: image.url,
+      key: image.key,
       filename: image.filename,
     })
     .from(projectImage)
@@ -1752,7 +1749,7 @@ export const getImagesByProjectIds = async (
     const list = result[row.projectId] ?? [];
     list.push({
       id: unsafeImageShortcode(row.shortcode),
-      url: row.url,
+      url: getR2PublicUrl(row.key),
       filename: row.filename,
     });
     result[row.projectId] = list;

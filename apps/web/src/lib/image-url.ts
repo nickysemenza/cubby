@@ -6,9 +6,10 @@
 // API responses untouched. The transform is done by CF's edge, not our worker,
 // so this works identically in dev (vite) and prod.
 //
-// Host is hardcoded (not read from env) because this runs on the client where
-// R2_PUBLIC_URL isn't available, and CF transforms only work on this zone anyway.
-const BUCKET_ORIGIN = "https://foobucket.nicky.fun";
+// Vite injects the public origin from wrangler.jsonc for client and SSR builds.
+// Keeping that deployment config authoritative prevents stored object keys from
+// acquiring a second, client-only hostname setting.
+const BUCKET_ORIGIN = __R2_PUBLIC_URL__;
 const BUCKET_HOST = new URL(BUCKET_ORIGIN).hostname;
 
 const isTransformable = (parsed: URL): boolean =>

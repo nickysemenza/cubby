@@ -39,7 +39,6 @@ vi.mock("~/server/utils/s3", () => ({
   contentTypeToExtension: () => "png",
   deleteS3Object: mocks.deleteS3Object,
   generateImageKey: () => "cubby/images/vendor.png",
-  getS3ObjectUrl: (key: string) => `https://images.example/${key}`,
   uploadToS3: mocks.uploadToS3,
 }));
 

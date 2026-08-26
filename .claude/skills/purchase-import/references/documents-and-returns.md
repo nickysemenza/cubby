@@ -58,7 +58,7 @@ signed with `aws4fetch` (already a repo dependency) against `R2_ENDPOINT` /
 `apps/web/.env`. Either way the bytes are read from disk by the HTTP client and
 never pass through model output, which is the whole point.
 
-Then call `attach_file` with `url: "https://foobucket.nicky.fun/staging/..."`. The
+Then call `attach_file` with `url: "https://media.nickysemenza.com/staging/..."`. The
 server re-uploads the bytes to a canonical `cubby/documents/PUR-xxxx/` key, so the
 staged object is not referenced afterwards — **delete it**. A deleted staged
 object may still return 200 from CDN cache; re-check with a cache-busting query
