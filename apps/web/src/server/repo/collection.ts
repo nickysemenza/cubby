@@ -379,9 +379,9 @@ export const getCollectionMatrix = async (
   const graph = await loadCollectionGraph(db);
   const normalizedSearch = search?.toLocaleLowerCase();
   const secondaryFor = (item: GraphProduct | GraphLocation) =>
-    subject === "product"
-      ? (item as GraphProduct).manufacturer
-      : locationPath(item as GraphLocation, graph.locationsById).join(" / ");
+    "manufacturer" in item
+      ? item.manufacturer
+      : locationPath(item, graph.locationsById).join(" / ");
   const stateFor = (
     item: GraphProduct | GraphLocation,
     slug: CollectionSlug,

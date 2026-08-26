@@ -67,16 +67,6 @@ export function CookbookPhysicalCopy({
     onSuccess: () => setPickerOpen(false),
   });
 
-  const detail = useQuery(
-    product
-      ? entityDetailQueryOptions("product", product.id)
-      : {
-          queryKey: [["product", "detail"], { shortcode: "" }] as const,
-          queryFn: () => Promise.resolve(null),
-          enabled: false,
-        },
-  );
-
   if (!product) {
     return (
       <>
@@ -99,6 +89,30 @@ export function CookbookPhysicalCopy({
       </>
     );
   }
+
+  return (
+    <LinkedCookbookPhysicalCopy
+      product={product}
+      isPending={setProduct.isPending}
+      onUnlink={() => setProduct.mutate({ cookbookId, productId: null })}
+    />
+  );
+}
+
+function LinkedCookbookPhysicalCopy({
+  product,
+  isPending,
+  onUnlink,
+}: {
+  product: {
+    id: ProductShortcode;
+    name: string;
+    coverUrl: string | null;
+  };
+  isPending: boolean;
+  onUnlink: () => void;
+}) {
+  const detail = useQuery(entityDetailQueryOptions("product", product.id));
 
   // Every live shelf placement, not just the first: a book can sit in two
   // rooms, and naming only one would be quietly wrong.
@@ -141,8 +155,8 @@ export function CookbookPhysicalCopy({
       <Button
         variant="ghost"
         size="sm"
-        disabled={setProduct.isPending}
-        onClick={() => setProduct.mutate({ cookbookId, productId: null })}
+        disabled={isPending}
+        onClick={onUnlink}
         title="This product isn't this book"
       >
         <Link2Off className="size-4" />

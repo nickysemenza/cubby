@@ -79,7 +79,10 @@ export interface RecipeFilters {
   // the cookbook detail page. Public codes: `recipeList` resolves them itself
   // via `resolveFilterIds`, so a code naming no live cookbook narrows to
   // nothing rather than 404ing the whole list.
-  cookbookId?: CookbookShortcode | CookbookShortcode[];
+  cookbookId?:
+    | CookbookShortcode
+    | typeof UNRESOLVABLE_ENTITY_FILTER
+    | Array<CookbookShortcode | typeof UNRESOLVABLE_ENTITY_FILTER>;
   // The cookbook column's "(none)" / "Has cookbook" sentinel. ORs with
   // `cookbookId` rather than narrowing it (see `tagsPresenceFilter` above).
   cookbookPresenceFilter?: PresenceFilter;
@@ -108,3 +111,5 @@ export interface RecipeFilters {
   totalMinutesMin?: number;
   totalMinutesMax?: number;
 }
+
+import type { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";

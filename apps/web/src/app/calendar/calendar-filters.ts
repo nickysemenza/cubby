@@ -1,4 +1,7 @@
-import type { CalendarRangeInput } from "@cubby/schemas/calendar";
+import {
+  type CalendarRangeInput,
+  calendarRangeInput,
+} from "@cubby/schemas/calendar";
 import {
   buildFiltersFromManifest,
   filterGetterFromSearch,
@@ -19,10 +22,14 @@ export type CalendarFilters = Omit<
 export function buildCalendarFilters(
   search: Record<string, unknown>,
 ): CalendarFilters {
-  const filters = buildFiltersFromManifest(
-    calendarFilterSpecs,
-    filterGetterFromSearch(calendarFilterSpecs, search),
-  ) as CalendarFilters;
+  const filters = calendarRangeInput
+    .omit({ startDate: true, endDateExclusive: true })
+    .parse(
+      buildFiltersFromManifest(
+        calendarFilterSpecs,
+        filterGetterFromSearch(calendarFilterSpecs, search),
+      ),
+    );
   // Always subtree-expanded, with no spec and no URL key: a project's calendar
   // BAR is already the subtree-folded window, so scoping to a parent without
   // its descendants would draw a span covering dates whose tasks and expenses

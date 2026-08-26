@@ -2,7 +2,6 @@ import type { ActorContext } from "@cubby/schemas/context";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type ProductId,
-  parseEntityId,
   parseShortcodeFor,
   type WishId,
   type WishShortcode,
@@ -342,7 +341,7 @@ export const getWishByShortcode = async (
   shortcode: string,
 ): Promise<WishOut | null> => {
   const id = await resolveLiveShortcode(db, shortcode, "wish");
-  return id ? getWishByID(db, parseEntityId("wish", id)) : null;
+  return id ? getWishByID(db, id) : null;
 };
 
 async function resolveToolProductIds(
@@ -357,9 +356,7 @@ async function resolveToolProductIds(
       "Every Wishlist candidate must be a live Tool Product.",
     );
   }
-  const ids = codes.map((code) =>
-    parseEntityId("product", resolved.get(code)!),
-  );
+  const ids = codes.map((code) => resolved.get(code)!);
   const tools = await tx.query.product.findMany({
     where: and(
       inArray(product.id, ids),

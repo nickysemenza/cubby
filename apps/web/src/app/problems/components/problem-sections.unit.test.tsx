@@ -1,5 +1,6 @@
 import {
   type AllProblems,
+  EMPTY_PROBLEM_ARRAYS,
   PROBLEM_CLASS,
   type ProblemKey,
 } from "@cubby/schemas/problems";
@@ -8,7 +9,9 @@ import { PROBLEM_SECTIONS } from "./problem-sections";
 
 type Section = (typeof PROBLEM_SECTIONS)[number];
 
-const ALL_PROBLEM_KEYS = Object.keys(PROBLEM_CLASS) as ProblemKey[];
+const ALL_PROBLEM_KEYS = Object.keys(PROBLEM_CLASS).filter(
+  (key): key is ProblemKey => key in PROBLEM_CLASS,
+);
 
 /**
  * The detector keys a section actually renders, taken from the section itself
@@ -19,7 +22,12 @@ const ALL_PROBLEM_KEYS = Object.keys(PROBLEM_CLASS) as ProblemKey[];
  */
 function keysReadBy(section: Section): ProblemKey[] {
   const read = new Set<string>();
-  const probe = new Proxy({} as AllProblems, {
+  const probe: AllProblems = {
+    ...EMPTY_PROBLEM_ARRAYS,
+    sectionTotals: {},
+    totalProblems: 0,
+  };
+  const proxied = new Proxy(probe, {
     get: (_target, property) => {
       if (typeof property === "string" && property !== "sectionTotals") {
         read.add(property);
@@ -27,8 +35,8 @@ function keysReadBy(section: Section): ProblemKey[] {
       return [];
     },
   });
-  section.count(probe);
-  return [...read] as ProblemKey[];
+  section.count(proxied);
+  return [...read].filter((key): key is ProblemKey => key in PROBLEM_CLASS);
 }
 
 const sorted = (keys: readonly string[]) => [...keys].sort();

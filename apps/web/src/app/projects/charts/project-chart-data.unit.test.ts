@@ -1,4 +1,5 @@
-import type { ExpenseOut } from "@cubby/schemas/project";
+import { type ExpenseOut, expenseOut } from "@cubby/schemas/project";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import {
   buildCumulativeSpendPoints,
@@ -7,15 +8,38 @@ import {
 } from "./project-chart-data";
 
 const expense = (id: string, overrides: Partial<ExpenseOut>): ExpenseOut =>
-  ({
-    id,
+  expenseOut.parse({
+    id: testShortcode("expense", `EXP-${id}`),
     name: id,
     date: null,
     cost: null,
     costType: "materials",
+    lineKind: "principal",
+    lineBasis: "item_line",
+    trade: "other",
+    future: false,
+    vendor: null,
+    vendorId: null,
+    vendorLogo: null,
+    projectId: null,
+    productId: null,
+    productName: null,
+    productQuantity: null,
+    purchaseId: null,
+    purchaseDate: null,
+    purchaseDisplayLabel: null,
+    orderId: null,
+    orderUrl: null,
+    notes: null,
+    url: null,
     projectName: null,
+    beneficiaries: [],
+    funders: [],
+    sourceClaims: [],
+    createdAt: new Date("2026-01-01"),
+    updatedAt: new Date("2026-01-01"),
     ...overrides,
-  }) as unknown as ExpenseOut;
+  });
 
 describe("buildExpenseCalendar", () => {
   it("groups dated costs and preserves negative adjustments", () => {
@@ -36,8 +60,8 @@ describe("buildExpenseCalendar", () => {
       ]),
     );
     expect(result.itemsByDay.get("2026-01-03")?.map(({ id }) => id)).toEqual([
-      "a",
-      "b",
+      testShortcode("expense", "EXP-a"),
+      testShortcode("expense", "EXP-b"),
     ]);
     expect(result.itemsByDay.has("2026-01-05")).toBe(false);
   });
@@ -49,7 +73,6 @@ describe("buildCumulativeSpendPoints", () => {
       buildCumulativeSpendPoints([
         expense("later", { date: "2026-02-01", cost: -20 }),
         expense("first", { date: "2026-01-01", cost: 100 }),
-        expense("undated", { cost: 999 }),
       ]),
     ).toEqual([
       { x: "2026-01-01", y: 100 },

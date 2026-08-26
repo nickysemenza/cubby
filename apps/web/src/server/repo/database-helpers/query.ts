@@ -1,7 +1,8 @@
-import type {
-  InternalImpactItem,
-  OperationDisposition,
-  OperationEffect,
+import {
+  type InternalImpactItem,
+  internalImpactItemSchema,
+  type OperationDisposition,
+  type OperationEffect,
 } from "@cubby/schemas/entity-integrity";
 import type { PresenceFilter, SortParams } from "@cubby/schemas/pagination";
 import type { AppErrorReason } from "@cubby/shared";
@@ -310,7 +311,7 @@ function dependentBlockers<TId extends string>(opts: {
   for (const id of present) byTargetId[id] = (byTargetId[id] ?? 0) + 1;
 
   return [
-    {
+    internalImpactItemSchema.parse({
       code: opts.disposition.code,
       effect: opts.disposition.effect,
       ...(opts.edgeKey ? { edgeKey: opts.edgeKey } : {}),
@@ -318,7 +319,7 @@ function dependentBlockers<TId extends string>(opts: {
       description: opts.disposition.description,
       total: present.length,
       byTargetId,
-    } as InternalImpactItem,
+    }),
   ];
 }
 

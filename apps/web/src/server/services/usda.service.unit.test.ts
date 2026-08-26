@@ -1,5 +1,9 @@
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import type { ProductTopLevelOut } from "@cubby/schemas/product";
+import {
+  type ProductTopLevelOut,
+  productTopLevelOut,
+} from "@cubby/schemas/product";
+import { testShortcode } from "@cubby/schemas/testing";
 import type {
   DataType,
   FoodLookupParam,
@@ -63,7 +67,45 @@ const LINKED_COUNTS_BY_UPC: Record<string, number> = {
 };
 
 const dummyProducts = (count: number): ProductTopLevelOut[] =>
-  Array.from({ length: count }, () => ({}) as ProductTopLevelOut);
+  Array.from({ length: count }, (_, index) =>
+    productTopLevelOut.parse({
+      id: testShortcode("product", `PRD-USDA-${index}`),
+      name: `Linked product ${index}`,
+      aliases: [],
+      tags: [],
+      primaryGtin: null,
+      fdc_id: null,
+      manufacturer: "Test",
+      model: null,
+      notes: null,
+      expectedQuantity: null,
+      category: null,
+      images: [],
+      externalIds: [],
+      price: null,
+      pricing: {
+        derivedPrice: null,
+        effectivePrice: null,
+        source: "none",
+        knownExpenseCount: 0,
+        unknownExpenseCount: 0,
+        knownUnitCount: 0,
+        partial: false,
+      },
+      usdaUnavailable: null,
+      stockTracked: null,
+      dataQuality: {
+        status: "complete",
+        facets: [],
+        gaps: [],
+        exceptions: [],
+        relatedGaps: [],
+        relatedExceptions: [],
+      },
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-01"),
+    }),
+  );
 
 function makeService() {
   const usdaClient = {

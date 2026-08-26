@@ -30,7 +30,7 @@ export type ExecuteEntity = (
 ) => Promise<EntityResult>;
 
 const runKernelEntity: ExecuteEntity = async (context, command) =>
-  (await executeEntity(context, command as never)) as EntityResult;
+  executeEntity(context, command);
 
 export function registerEntityTools(
   server: McpServer,

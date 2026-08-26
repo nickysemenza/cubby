@@ -57,7 +57,6 @@ import { QuickInventoryAdd } from "../inventory/quick-inventory-add";
 import {
   calculateInventoryValuation,
   formatPricingCountsSummary,
-  type InventoryItem,
 } from "./calculate-inventory-valuation";
 import { LocationChildrenTable } from "./location-children-table";
 import { locationContentsVisibility } from "./location-contents-state";
@@ -180,9 +179,7 @@ function ValuationBreakdown({ location }: { location: InfLocation }) {
     ),
   );
   const breakdown = useMemo(
-    () =>
-      calculateInventoryValuation((data?.items ?? []) as InventoryItem[])
-        .breakdown,
+    () => calculateInventoryValuation(data?.items ?? []).breakdown,
     [data],
   );
 

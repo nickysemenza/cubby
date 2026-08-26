@@ -1,3 +1,5 @@
+import { recipeOut } from "@cubby/schemas/recipe";
+import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -5,20 +7,54 @@ import { EMPTY_MARK } from "~/components/matrix/matrix-chrome";
 import { IngredientComponentGrid } from "./IngredientComponentGrid";
 import type { RecipeTreeNode } from "./recipe-tree";
 
-const component = (id: string, name: string) =>
-  ({ recipe: { id, name, yield: null }, costing: null }) as RecipeTreeNode;
+const DOUGH_ID = testShortcode("recipe", "dough");
+const ROOT_ID = testShortcode("recipe", "root");
+
+const component = (id: string, name: string): RecipeTreeNode => ({
+  recipe: recipeOut.parse({
+    id: testShortcode("recipe", id),
+    name,
+    meta: null,
+    yield: null,
+    servings: null,
+    notes: null,
+    images: [],
+    displayImage: null,
+    tags: [],
+    sections: [
+      {
+        id: testEntityId("recipe", `${id}-section`),
+        name: null,
+        instructions: [],
+        ingredients: [],
+        createdAt: new Date("2026-01-01"),
+        updatedAt: new Date("2026-01-01"),
+      },
+    ],
+    createdAt: new Date("2026-01-01"),
+    updatedAt: new Date("2026-01-01"),
+  }),
+  costing: null,
+  depth: 0,
+  cumulativeFactor: 1,
+  batchEstimated: false,
+  batchEstimatedReason: null,
+  batchGrams: null,
+  baseRowId: null,
+  sections: [],
+});
 
 vi.mock("./recipe-tree", () => ({
   flattenComponents: () => [
-    component("RCP-DOUGH", "Dough"),
-    component("RCP-ROOT", "Assembly"),
+    component(DOUGH_ID, "Dough"),
+    component(ROOT_ID, "Assembly"),
   ],
   buildIngredientMatrix: () => [
     {
       ingredientId: "ing-flour",
       ingredientShortcode: "ING-FLOUR",
       name: "flour",
-      byComponent: new Map([["RCP-DOUGH", 500]]),
+      byComponent: new Map([[DOUGH_ID, 500]]),
       total: 500,
       estimated: false,
     },
@@ -27,15 +63,15 @@ vi.mock("./recipe-tree", () => ({
       ingredientShortcode: "ING-SALT",
       name: "salt",
       byComponent: new Map([
-        ["RCP-DOUGH", 10],
-        ["RCP-ROOT", 2],
+        [DOUGH_ID, 10],
+        [ROOT_ID, 2],
       ]),
       total: 12,
       estimated: true,
     },
   ],
   fullBatchCostByComponent: () => ({
-    byComponent: new Map([["RCP-DOUGH", { price: 1.5, priceUpper: 2.25 }]]),
+    byComponent: new Map([[DOUGH_ID, { price: 1.5, priceUpper: 2.25 }]]),
     total: 1.5,
     totalUpper: 2.25,
   }),
@@ -54,7 +90,7 @@ vi.mock("./recipe-utils", () => ({
   formatMakes: () => null,
 }));
 
-const tree = {} as RecipeTreeNode;
+const tree = component("grid-root", "Grid root");
 
 const rowCells = (name: string) =>
   within(screen.getByRole("rowheader", { name }).parentElement as HTMLElement)

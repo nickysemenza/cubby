@@ -5,12 +5,11 @@ import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import type { EntityEditorForm } from "./editor-presentations";
 import { getEntityEditorPresentation } from "./editor-presentations";
 import type { EntityEditDialogProps } from "./entity-edit-dialog";
-import type { EntityEditResultFor } from "./intent-types";
 import type {
   EditableEntity,
   EntityEditOperation,
   EntityEditRecord,
-  EntityEditRequest,
+  RuntimeEntityEditRequest,
 } from "./types";
 import { useEntityEditSession } from "./use-entity-edit-session";
 
@@ -20,10 +19,11 @@ export function EntityEditDialogContent<E extends EditableEntity>({
   request,
   onSuccess,
 }: EntityEditDialogProps<E>) {
-  const session = useEntityEditSession({
+  const sessionRequest: RuntimeEntityEditRequest<E> = {
     ...request,
     surface: "dialog",
-  } as unknown as EntityEditRequest<E>);
+  };
+  const session = useEntityEditSession(sessionRequest);
   const presentation = getEntityEditorPresentation(
     request as {
       entity: string;
@@ -67,7 +67,7 @@ export function EntityEditDialogContent<E extends EditableEntity>({
             if (!result.ok) return;
             toast.success(presentation.successMessage(result.result));
             close();
-            onSuccess?.(result.result as EntityEditResultFor<E>);
+            if (result.result) onSuccess?.(result.result);
           });
         }}
         isPending={session.isPending}

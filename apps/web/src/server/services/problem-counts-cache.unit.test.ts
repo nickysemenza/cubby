@@ -1,4 +1,4 @@
-import type { ProblemsCount } from "@cubby/schemas/problems";
+import { problemsCountSchema } from "@cubby/schemas/problems";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectedProblemKeys } from "~/entities/problem-registry";
 import type { ProblemCountsCacheAdapter } from "~/server/cf-env";
@@ -10,13 +10,12 @@ vi.mock("~/server/services/problems.service", () => ({
   findProblemCounts: findProblemCountsMock,
 }));
 
-const counts = (total: number): ProblemsCount => ({
-  total,
-  coverageTotal: total + 1,
-  byType: Object.fromEntries(
-    expectedProblemKeys.map((key) => [key, 0]),
-  ) as ProblemsCount["byType"],
-});
+const counts = (total: number) =>
+  problemsCountSchema.parse({
+    total,
+    coverageTotal: total + 1,
+    byType: Object.fromEntries(expectedProblemKeys.map((key) => [key, 0])),
+  });
 
 function memoryCache(initial?: string) {
   const values = new Map<string, string>();

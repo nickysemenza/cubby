@@ -1,4 +1,7 @@
-import type { ProductWithFoodOut } from "@cubby/schemas/product";
+import {
+  type ProductWithFoodOut,
+  productWithFoodOut,
+} from "@cubby/schemas/product";
 import type { KitMembershipOut } from "@cubby/schemas/product-components";
 import type { ExpenseOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
@@ -6,9 +9,12 @@ import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  expenses: { current: [] as ExpenseOut[] },
-  membership: { current: [] as KitMembershipOut[] },
+const mocks: {
+  expenses: { current: ExpenseOut[] };
+  membership: { current: KitMembershipOut[] };
+} = vi.hoisted(() => ({
+  expenses: { current: [] },
+  membership: { current: [] },
 }));
 
 vi.mock("@tanstack/react-query", () => ({
@@ -110,9 +116,21 @@ import { ProductExpenseHistory } from "./product-expense-history";
 
 const COMBO_ID = testShortcode("product", "PRD-COMB");
 
-const product = {
+const product: ProductWithFoodOut = productWithFoodOut.parse({
   id: testShortcode("product", "PRD-BATT"),
   name: "Battery Pack",
+  aliases: [],
+  tags: [],
+  primaryGtin: null,
+  fdc_id: null,
+  manufacturer: "Milwaukee",
+  model: null,
+  notes: null,
+  expectedQuantity: null,
+  category: "tools",
+  images: [],
+  externalIds: [],
+  price: null,
   pricing: {
     derivedPrice: null,
     effectivePrice: null,
@@ -122,7 +140,37 @@ const product = {
     knownUnitCount: 0,
     partial: false,
   },
-} as unknown as ProductWithFoodOut;
+  usdaUnavailable: null,
+  stockTracked: null,
+  dataQuality: {
+    status: "complete",
+    facets: [],
+    gaps: [],
+    exceptions: [],
+    relatedGaps: [],
+    relatedExceptions: [],
+  },
+  ingredient: null,
+  unitMappings: [],
+  inventoryEntry: [],
+  servingAsLocations: [],
+  componentCount: 0,
+  food: null,
+  recipeUsages: [],
+  cookbook: null,
+  quantityLedger: {
+    acquiredUnits: 0,
+    exitedUnits: 0,
+    expectedQuantity: 0,
+    unknownAcquisitionLines: 0,
+    unknownExitLines: 0,
+    locationCount: 0,
+  },
+  onHandUnits: 0,
+  quantityVariance: 0,
+  createdAt: new Date("2026-01-01"),
+  updatedAt: new Date("2026-01-01"),
+});
 
 const membershipEntry: KitMembershipOut = {
   parentProductId: COMBO_ID,

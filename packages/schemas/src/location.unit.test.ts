@@ -1,10 +1,10 @@
+import { imageOut, type ImageOut } from "./image";
 import { testShortcode } from "./test-support/identifiers";
-import type { ImageOut } from "./image";
 import { locationCoverImage } from "./location";
 import { describe, expect, it } from "vitest";
 
 const img = (overrides: Partial<ImageOut> = {}): ImageOut =>
-  ({
+  imageOut.parse({
     id: testShortcode("image", "IMG-2222"),
     url: "https://example.com/photo.jpg",
     key: "photo.jpg",
@@ -22,7 +22,7 @@ const img = (overrides: Partial<ImageOut> = {}): ImageOut =>
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
-  }) as ImageOut;
+  });
 
 describe("locationCoverImage", () => {
   it("prefers the location's own photo over the SKU it is", () => {

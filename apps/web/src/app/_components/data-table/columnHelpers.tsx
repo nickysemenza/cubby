@@ -1025,6 +1025,10 @@ const entityPickers = {
   },
 } satisfies Record<keyof SingleEntityIdMap, unknown>;
 
+function getEntityPicker(entity: keyof SingleEntityIdMap) {
+  return entityPickers[entity];
+}
+
 /**
  * Clipboard spec for entity-picker cells. `entity:<name>` kinds deliberately
  * paste across tables (a location copied on the Locations page pastes into
@@ -1079,8 +1083,9 @@ export function createSingleEntityInlineLinkColumn<
               { entity: TEntity }
             >["data"];
             if (!item) return null;
-            const buildItem = entityPickers[entity as keyof SingleEntityIdMap]
-              .buildItem as (data: NonNullable<typeof item>) => ComboboxItem;
+            const buildItem = getEntityPicker(entity).buildItem as (
+              data: NonNullable<typeof item>,
+            ) => ComboboxItem;
             const built = buildItem(item);
             return {
               ...built,
@@ -1122,7 +1127,7 @@ export function createSingleEntityInlineLinkColumn<
           entity !== "usda-food" &&
           (editable.isEditable?.(info.row.original) ?? true)
         ) {
-          const picker = entityPickers[entity as keyof SingleEntityIdMap];
+          const picker = getEntityPicker(entity);
           const buildItem = picker.buildItem as (
             data: NonNullable<typeof item>,
           ) => ComboboxItem;

@@ -1,5 +1,9 @@
 import type { ImageShortcode } from "@cubby/schemas/identifiers";
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  parseEntityId,
+  parseEntityRef,
+  parseShortcodeFor,
+} from "@cubby/schemas/identifiers";
 import type {
   AttachFileResponse,
   CreateFileUploadInput,
@@ -360,15 +364,15 @@ export const attachFileToEntity = async (
       `${input.entityType} ${input.entityId} not found`,
     );
   }
-  await assertAttachableEntityExists(db, input.entityType, entityId);
+  const entity = parseEntityRef(input.entityType, entityId);
+  await assertAttachableEntityExists(db, entity);
 
   // A cheap retry can return before fetching/uploading bytes. The same lookup
   // runs under the target-row lock in the repo to close the upload race.
   if (input.idempotencyKey) {
     const existing = await findAttachmentByIdempotencyKey(
       db,
-      input.entityType,
-      entityId,
+      entity,
       input.idempotencyKey,
     );
     if (existing) {
@@ -503,8 +507,7 @@ export const attachFileToEntity = async (
         idempotencyKey: input.idempotencyKey,
         expectedImageCount: input.expectedImageCount,
       },
-      input.entityType,
-      entityId,
+      entity,
       input.documentKind,
     );
   } catch (error) {

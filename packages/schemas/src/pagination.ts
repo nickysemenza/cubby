@@ -105,17 +105,18 @@ export const oneOrMany = <T extends z.ZodTypeAny>(schema: T) =>
  * The union's JSON metadata is DERIVED from the canonical schema. Publishing
  * its pattern at the field level keeps MCP clients on the public shortcode
  * contract: the internal value can round-trip through JSON transport, but is not
- * advertised as a valid external id. The return type likewise stays the
- * canonical branded type because application code must never mint the
- * internal value as an entity id; only the URL filter boundary produces it.
+ * advertised as a valid external id. The output type deliberately exposes the
+ * sentinel as a separate literal alongside the canonical brand, so internal
+ * callers must handle the invalid-filter state instead of treating it as an
+ * entity id. Only the URL filter boundary produces that literal.
  */
-export const entityFilter = <T extends z.ZodTypeAny>(schema: T): T => {
+export const entityFilter = <T extends z.ZodTypeAny>(schema: T) => {
   const jsonSchema = z.toJSONSchema(schema);
   return z.union([schema, z.literal(UNRESOLVABLE_ENTITY_FILTER)]).meta({
     type: jsonSchema.type,
     pattern: jsonSchema.pattern,
     description: jsonSchema.description,
-  }) as unknown as T;
+  });
 };
 
 export const entityFilterList = <T extends z.ZodTypeAny>(schema: T) =>

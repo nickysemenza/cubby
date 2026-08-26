@@ -1,0 +1,12 @@
+import type {
+  PlainInput,
+  ProductId as RenamedProductId,
+  ProductOut,
+} from "./brand-provenance-source";
+import { productOut } from "./brand-provenance-source";
+const direct = value as RenamedProductId;
+type ImportedAlias = RenamedProductId;
+const alias = value as ImportedAlias;
+const structural = value as ProductOut;
+const reconstructed = value as z.infer<typeof productOut>;
+const plain = value as PlainInput;

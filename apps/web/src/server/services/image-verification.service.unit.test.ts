@@ -1,3 +1,4 @@
+import { testEntityId } from "@cubby/schemas/testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -52,11 +53,19 @@ describe("verifyProductImages", () => {
   });
 
   it("records a missing R2 object", async () => {
+    const productId = testEntityId("product", "missing");
     mocks.getS3Object.mockResolvedValue(new Response(null, { status: 404 }));
 
-    await expect(
-      verifyProductImages({} as never, "product-uuid"),
-    ).resolves.toEqual([{ imageId: stored.id, storageStatus: "missing" }]);
+    await expect(verifyProductImages({} as never, productId)).resolves.toEqual([
+      { imageId: stored.id, storageStatus: "missing" },
+    ]);
+    expect(mocks.getImagesAttachedToEntity).toHaveBeenCalledWith(
+      {},
+      {
+        entity: "product",
+        id: productId,
+      },
+    );
     expect(mocks.updateImageIntegrity).toHaveBeenCalledWith(
       {},
       stored.id,
@@ -76,7 +85,7 @@ describe("verifyProductImages", () => {
     );
 
     await expect(
-      verifyProductImages({} as never, "product-uuid"),
+      verifyProductImages({} as never, testEntityId("product", "backfill")),
     ).resolves.toEqual([{ imageId: stored.id, storageStatus: "available" }]);
     expect(mocks.updateImageIntegrity).toHaveBeenCalledWith(
       {},
@@ -97,7 +106,7 @@ describe("verifyProductImages", () => {
     );
 
     await expect(
-      verifyProductImages({} as never, "product-uuid"),
+      verifyProductImages({} as never, testEntityId("product", "mismatch")),
     ).resolves.toEqual([
       { imageId: stored.id, storageStatus: "metadata_mismatch" },
     ]);

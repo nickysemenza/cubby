@@ -1,5 +1,5 @@
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import type { EntityId, ProjectShortcode } from "@cubby/schemas/identifiers";
+import type { EntityId } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -86,7 +86,7 @@ const toUuids = async <E extends ShortcodeEntity>(
  */
 async function buildTaskProjectCondition(
   db: Database,
-  projectId: ProjectShortcode | ProjectShortcode[] | undefined,
+  projectId: TaskFilters["projectId"],
   includeSubProjects: boolean | undefined,
   presence?: PresenceFilter,
 ): Promise<SQL | undefined> {

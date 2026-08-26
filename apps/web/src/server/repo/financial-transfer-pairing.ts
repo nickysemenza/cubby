@@ -159,7 +159,7 @@ const toPairingRow = (row: DbPairingRow): PairingRow => ({
   party:
     row.partyShortcode && row.partyName && row.partyKind
       ? {
-          id: row.partyShortcode as LedgerPartyRefOut["id"],
+          id: parseShortcodeFor("ledgerParty", row.partyShortcode),
           name: row.partyName,
           kind: row.partyKind,
         }

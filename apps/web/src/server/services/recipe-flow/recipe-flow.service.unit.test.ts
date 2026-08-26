@@ -1,10 +1,14 @@
-import type { RecipeOut } from "@cubby/schemas/recipe";
+import {
+  type RecipeOut,
+  recipeOut,
+  sectionIngredientOut,
+} from "@cubby/schemas/recipe";
 import type {
   RecipeFlowAiPlan,
   RecipeFlowArtifact,
   RecipeFlowPlan,
 } from "@cubby/schemas/recipe-flow";
-import { testEntityId } from "@cubby/schemas/testing";
+import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "~/server/db";
 
@@ -39,32 +43,43 @@ const RECIPE_ID = testEntityId(
 const SECTION_ID = "00000000-0000-4000-8000-000000000002";
 const USAGE_ID = "00000000-0000-4000-8000-000000000003";
 
-const recipe = {
-  id: RECIPE_ID,
+const recipe: RecipeOut = recipeOut.parse({
+  id: testShortcode("recipe", "RCP-TOAST"),
   name: "Toast",
+  meta: null,
   sections: [
     {
       id: SECTION_ID,
       name: null,
       ingredients: [
-        {
+        sectionIngredientOut.parse({
           id: USAGE_ID,
           type: "ingredient",
           ingredient: {
-            id: "00000000-0000-4000-8000-000000000004",
+            id: testShortcode("ingredient", "ING-BREAD"),
             name: "bread",
+            aliases: [],
+            naKinds: [],
+            createdAt: new Date("2026-01-01"),
+            updatedAt: new Date("2026-01-01"),
           },
           recipe: null,
           amounts: [],
           rawLine: "1 slice bread",
           modifier: null,
-        },
+          createdAt: new Date("2026-01-01"),
+          updatedAt: new Date("2026-01-01"),
+        }),
       ],
       instructions: [{ instruction: "Toast until golden." }],
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-01"),
     },
   ],
   images: [],
-} as unknown as RecipeOut;
+  createdAt: new Date("2026-01-01"),
+  updatedAt: new Date("2026-01-01"),
+});
 
 const validPlan = (): RecipeFlowPlan => ({
   schemaVersion: 1,

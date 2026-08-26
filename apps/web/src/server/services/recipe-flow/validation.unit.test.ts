@@ -1,8 +1,13 @@
-import type { RecipeOut } from "@cubby/schemas/recipe";
+import {
+  type RecipeOut,
+  recipeOut,
+  sectionIngredientOut,
+} from "@cubby/schemas/recipe";
 import {
   type RecipeFlowPlan,
   recipeFlowGenerateInputSchema,
 } from "@cubby/schemas/recipe-flow";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { validateRecipeFlowPlan } from "./validation";
 
@@ -10,43 +15,60 @@ const SECTION_ID = "00000000-0000-4000-8000-000000000001";
 const FLOUR_USAGE = "00000000-0000-4000-8000-000000000002";
 const WATER_USAGE = "00000000-0000-4000-8000-000000000003";
 
-const recipe = {
-  id: "00000000-0000-4000-8000-000000000004",
+const recipe: RecipeOut = recipeOut.parse({
+  id: testShortcode("recipe", "RCP-BREAD"),
   name: "Bread",
   sections: [
     {
       id: SECTION_ID,
       name: null,
       ingredients: [
-        {
+        sectionIngredientOut.parse({
           id: FLOUR_USAGE,
           type: "ingredient",
           ingredient: {
-            id: "00000000-0000-4000-8000-000000000005",
+            id: testShortcode("ingredient", "ING-FLOUR"),
             name: "flour",
+            aliases: [],
+            naKinds: [],
+            createdAt: new Date("2026-01-01"),
+            updatedAt: new Date("2026-01-01"),
           },
           recipe: null,
           amounts: [],
-        },
-        {
+          createdAt: new Date("2026-01-01"),
+          updatedAt: new Date("2026-01-01"),
+        }),
+        sectionIngredientOut.parse({
           id: WATER_USAGE,
           type: "ingredient",
           ingredient: {
-            id: "00000000-0000-4000-8000-000000000006",
+            id: testShortcode("ingredient", "ING-WATER"),
             name: "water",
+            aliases: [],
+            naKinds: [],
+            createdAt: new Date("2026-01-01"),
+            updatedAt: new Date("2026-01-01"),
           },
           recipe: null,
           amounts: [],
-        },
+          createdAt: new Date("2026-01-01"),
+          updatedAt: new Date("2026-01-01"),
+        }),
       ],
       instructions: [
         { instruction: "Mix the flour and water." },
         { instruction: "Bake until deeply browned." },
       ],
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-01"),
     },
   ],
   images: [],
-} as unknown as RecipeOut;
+  meta: null,
+  createdAt: new Date("2026-01-01"),
+  updatedAt: new Date("2026-01-01"),
+});
 
 const validPlan = (): RecipeFlowPlan => ({
   schemaVersion: 1,

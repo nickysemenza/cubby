@@ -18,13 +18,14 @@
  * `loadProjectSubtreeRollups`). `projectDashboardSummary` passes its bundle
  * in; `problems.service.ts` calls this standalone and lets it load its own.
  */
-import { type ProjectId, parseEntityId } from "@cubby/schemas/identifiers";
+import type { ProjectId } from "@cubby/schemas/identifiers";
 import {
   describeAttentionItem,
   isLiveProjectStatus,
   type ProjectAttentionDescribable,
   type ProjectAttentionItem,
   type ProjectAttentionType,
+  projectAttentionItemSchema,
 } from "@cubby/schemas/project";
 import {
   type AnyColumn,
@@ -104,7 +105,7 @@ const attentionItem = <T extends ProjectAttentionType>(
     discriminator?: string;
   },
 ): ProjectAttentionItem =>
-  ({
+  projectAttentionItemSchema.parse({
     key: attentionKey(row.type, row.entityId, row.discriminator),
     type: row.type,
     severity: row.severity,
@@ -116,7 +117,7 @@ const attentionItem = <T extends ProjectAttentionType>(
     amount: row.amount,
     href: row.href,
     facts: row.facts,
-  }) as ProjectAttentionItem;
+  });
 
 export async function computeAttentionItems(
   db: Database,
@@ -439,7 +440,7 @@ export async function computeAttentionItems(
   );
   const toProjectUuid = (code: string): ProjectId | null => {
     const ref = actionableProjectRefs.get(code);
-    return ref ? parseEntityId("project", ref.id) : null;
+    return ref?.entity === "project" ? ref.id : null;
   };
 
   const projectsWithNext = new Set<ProjectId>();

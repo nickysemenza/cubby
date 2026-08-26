@@ -1,35 +1,30 @@
 import { err, ok } from "neverthrow";
 import { describe, expect, it } from "vitest";
-import type { IngredientDataItem, RecipeCosting } from "~/lib/recipe-costing";
 import {
   computeScalingPercentages,
   formatScalingPct,
   pickDefaultBaseRowId,
 } from "./recipe-scaling-pct";
 
-// Only the fields the scaling helpers actually read (id and the resolved gram
-// Result) — cast through unknown to skip the full costing row. `flour` feeds the
-// engine-classified isFlourRows map the base picker consults.
-const mkRow = (id: string, grams: number | null) =>
-  ({
-    id,
-    priceInfo: {
-      gram: grams == null ? err("no weight") : ok({ value: grams, unit: "g" }),
-      price: err("n/a"),
-      nutrient: err("n/a"),
-    },
-  }) as unknown as IngredientDataItem;
+type ScalingCosting = Parameters<typeof pickDefaultBaseRowId>[0];
+type ScalingRow = ScalingCosting["rows"][number];
+
+const mkRow = (id: string, grams: number | null): ScalingRow => ({
+  id,
+  priceInfo: {
+    gram: grams == null ? err("no weight") : ok({ value: grams, unit: "g" }),
+    price: err("n/a"),
+    nutrient: err("n/a"),
+  },
+});
 
 const mkCosting = (
-  rows: IngredientDataItem[],
+  rows: ScalingRow[],
   flourIds: string[] = [],
-): RecipeCosting =>
-  ({
-    rows,
-    estimatedRows: new Map(),
-    bakerPct: new Map(),
-    isFlourRows: new Map(rows.map((r) => [r.id, flourIds.includes(r.id)])),
-  }) as unknown as RecipeCosting;
+): ScalingCosting => ({
+  rows,
+  isFlourRows: new Map(rows.map((r) => [r.id, flourIds.includes(r.id)])),
+});
 
 describe("pickDefaultBaseRowId", () => {
   it("prefers flour even when it isn't the heaviest", () => {

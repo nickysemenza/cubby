@@ -1,5 +1,6 @@
-import type { AttachableImageEntity } from "@cubby/schemas/image";
+import type { ProductId } from "@cubby/schemas/identifiers";
 import type { Database } from "~/server/db";
+import type { AttachableImageRef } from "~/server/repo/image";
 import {
   getImagesAttachedToEntity,
   updateImageIntegrity,
@@ -16,10 +17,9 @@ export type ImageVerificationResult = {
  * rows without making product/detail reads perform R2 network I/O. */
 const verifyEntityImages = async (
   db: Database,
-  entityType: AttachableImageEntity,
-  entityId: string,
+  entity: AttachableImageRef,
 ): Promise<ImageVerificationResult[]> => {
-  const rows = await getImagesAttachedToEntity(db, entityType, entityId);
+  const rows = await getImagesAttachedToEntity(db, entity);
   const results: ImageVerificationResult[] = [];
   for (const row of rows) {
     const response = await getS3Object(row.key);
@@ -79,6 +79,6 @@ const verifyEntityImages = async (
 
 export const verifyProductImages = async (
   db: Database,
-  productId: string,
+  productId: ProductId,
 ): Promise<ImageVerificationResult[]> =>
-  verifyEntityImages(db, "product", productId);
+  verifyEntityImages(db, { entity: "product", id: productId });

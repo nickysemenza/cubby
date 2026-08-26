@@ -1,4 +1,9 @@
-import type { RecipeOut } from "@cubby/schemas/recipe";
+import {
+  type RecipeOut,
+  recipeOut,
+  sectionIngredientOut,
+} from "@cubby/schemas/recipe";
+import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { ok } from "neverthrow";
 import { describe, expect, it } from "vitest";
 import type { IngredientDataItem, RecipeCosting } from "~/lib/recipe-costing";
@@ -17,61 +22,127 @@ const STUB_PORTS: YieldPorts = {
   massGrams: (a) => (a.unit === "g" ? a.value : null),
 };
 
-const mkRow = (id: string, grams: number): IngredientDataItem =>
-  ({
-    id,
-    priceInfo: { gram: ok({ value: grams, unit: "g" }) },
-  }) as unknown as IngredientDataItem;
+const recipeKey = (id: string) => testShortcode("recipe", `RCP-${id}`);
+const rowKey = (id: string) => testEntityId("recipe", `row-${id}`);
 
-const mkCosting = (
-  rowGrams: Record<string, number>,
-  weight: number,
-): RecipeCosting =>
-  ({
-    rows: Object.entries(rowGrams).map(([id, g]) => mkRow(id, g)),
-    totals: { weight },
-    estimatedRows: new Map(),
-    bakerPct: new Map(),
-    isFlourRows: new Map(),
-  }) as unknown as RecipeCosting;
-
-const ing = (id: string, ingredientId: string, name: string) =>
-  ({
-    id,
+const mkRow = (id: string, grams: number): IngredientDataItem => ({
+  ...sectionIngredientOut.parse({
+    id: rowKey(id),
     type: "ingredient",
     amounts: [],
     modifier: null,
     rawLine: null,
     recipe: null,
-    ingredient: { id: ingredientId, name },
-  }) as const;
+    ingredient: {
+      id: testShortcode("ingredient", `ING-${id}`),
+      name: id,
+      aliases: [],
+      naKinds: [],
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-01"),
+    },
+    createdAt: new Date("2026-01-01"),
+    updatedAt: new Date("2026-01-01"),
+  }),
+  sectionName: null,
+  priceInfo: {
+    price: ok({ value: 0, unit: "USD" }),
+    gram: ok({ value: grams, unit: "g" }),
+    nutrient: ok({}),
+  },
+  totalsMissing: { price: false, weight: false, nutrients: false },
+});
+
+const mkCosting = (
+  rowGrams: Record<string, number>,
+  weight: number,
+): RecipeCosting => ({
+  rows: Object.entries(rowGrams).map(([id, g]) => mkRow(id, g)),
+  totals: {
+    price: 0,
+    priceUpper: undefined,
+    nutrients: {},
+    nutrientsUpper: undefined,
+    weight,
+    weightUpper: undefined,
+    totalIngredients: Object.keys(rowGrams).length,
+    missingByType: { price: [], weight: [], nutrients: [] },
+    diagnostics: [],
+  },
+  estimatedRows: new Map(),
+  bakerPct: new Map(),
+  isFlourRows: new Map(),
+});
+
+const ing = (id: string, ingredientId: string, name: string) =>
+  sectionIngredientOut.parse({
+    id: rowKey(id),
+    type: "ingredient",
+    amounts: [],
+    modifier: null,
+    rawLine: null,
+    recipe: null,
+    ingredient: {
+      id: testShortcode("ingredient", `ING-${ingredientId}`),
+      name,
+      aliases: [],
+      naKinds: [],
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-01"),
+    },
+    createdAt: new Date("2026-01-01"),
+    updatedAt: new Date("2026-01-01"),
+  });
 
 const sub = (id: string, recipeId: string, name: string) =>
-  ({
-    id,
+  sectionIngredientOut.parse({
+    id: rowKey(id),
     type: "recipe",
     amounts: [],
     modifier: null,
     rawLine: null,
     ingredient: null,
-    recipe: { id: recipeId, name },
-  }) as const;
+    recipe: {
+      id: recipeKey(recipeId),
+      name,
+      meta: null,
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-01"),
+    },
+    createdAt: new Date("2026-01-01"),
+    updatedAt: new Date("2026-01-01"),
+  });
+
+const recipeId = recipeKey;
 
 const recipe = (
   id: string,
   name: string,
   ingredients: ReadonlyArray<ReturnType<typeof ing> | ReturnType<typeof sub>>,
 ): RecipeOut =>
-  ({
-    id,
+  recipeOut.parse({
+    id: recipeId(id),
     name,
+    meta: null,
     yield: null,
     servings: null,
     notes: null,
     images: [],
     displayImage: null,
-    sections: [{ id: `${id}-s`, name: null, instructions: [], ingredients }],
-  }) as unknown as RecipeOut;
+    tags: [],
+    sections: [
+      {
+        id: testEntityId("recipe", `section-${id}`),
+        name: null,
+        instructions: [],
+        ingredients,
+        createdAt: new Date("2026-01-01"),
+        updatedAt: new Date("2026-01-01"),
+      },
+    ],
+    createdAt: new Date("2026-01-01"),
+    updatedAt: new Date("2026-01-01"),
+  });
 
 // Sof (sub) + a duplicated ingredient X, used in both root and sub.
 const buildFixture = () => {
@@ -81,10 +152,15 @@ const buildFixture = () => {
     ing("ri-x", "i-x", "X"),
   ]);
   const costingById = new Map<string, RecipeCosting>([
-    ["r-root", mkCosting({ "sr-sof": 50, "ri-x": 100 }, 150)],
-    ["r-sof", mkCosting({ "si-x": 100 }, 100)],
+    [recipeId("r-root"), mkCosting({ "sr-sof": 50, "ri-x": 100 }, 150)],
+    [recipeId("r-sof"), mkCosting({ "si-x": 100 }, 100)],
   ]);
-  return buildRecipeTree(root, costingById, { "r-sof": sof }, STUB_PORTS);
+  return buildRecipeTree(
+    root,
+    costingById,
+    { [recipeId("r-sof")]: sof },
+    STUB_PORTS,
+  );
 };
 
 const stubQty = () => "Q";

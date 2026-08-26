@@ -2,7 +2,7 @@ import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import type { output as ZodOutput, ZodSchema } from "zod";
+import { type output as ZodOutput, type ZodSchema, z } from "zod";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
@@ -27,6 +27,22 @@ export interface EntityKernelContext {
     locationValuation: LocationValuationService;
   };
 }
+
+const isEntityKernelContext = (value: unknown): value is EntityKernelContext =>
+  typeof value === "object" &&
+  value !== null &&
+  "db" in value &&
+  "readDb" in value &&
+  "actorContext" in value &&
+  "usdaClient" in value &&
+  "upcLookupClient" in value &&
+  "services" in value;
+
+/** Validate the explicitly injected MCP capability at the auth boundary. */
+export const entityKernelContextSchema = z.custom<EntityKernelContext>(
+  isEntityKernelContext,
+  "expected an entity-kernel request context",
+);
 
 export interface EntityKernelDeleteResult {
   deleted: number;
@@ -61,41 +77,41 @@ export interface EntityKernelBinding {
     merge?: Record<string, OperationDisposition>;
   };
   repository: {
-    get: (ctx: EntityKernelContext, id: unknown) => Promise<unknown | null>;
-    list: (
+    get(ctx: EntityKernelContext, id: unknown): Promise<unknown | null>;
+    list(
       ctx: EntityKernelContext,
       filters: unknown,
       sorts: SortParams[],
       pagination: PaginationParams,
       groupBy?: string,
-    ) => Promise<{
+    ): Promise<{
       data: unknown[];
       count: number;
       sums?: Record<string, number>;
     }>;
-    create?: (
+    create?(
       ctx: EntityKernelContext,
       data: unknown,
-    ) => Promise<{
+    ): Promise<{
       output: unknown;
       entityId: unknown;
       detachedImageKeys?: string[];
       backgroundBatches?: BackgroundBatchRef[];
     }>;
-    update?: (
+    update?(
       ctx: EntityKernelContext,
       id: unknown,
       data: unknown,
-    ) => Promise<{
+    ): Promise<{
       output: unknown;
       entityId: unknown;
       detachedImageKeys?: string[];
       backgroundBatches?: BackgroundBatchRef[];
     }>;
-    delete: (
+    delete(
       ctx: EntityKernelContext,
       ids: unknown[],
-    ) => Promise<EntityKernelDeleteResult>;
+    ): Promise<EntityKernelDeleteResult>;
   };
   merge?: {
     input: ZodSchema;

@@ -37,7 +37,7 @@ function CalendarItemInspector({ handle }: CalendarItemInspectorProps) {
   return (
     <Popover handle={handle} onOpenChange={setOpen}>
       {({ payload }) => {
-        const item = payload as CalendarItem | undefined;
+        const item = payload;
         return item ? (
           <CalendarInspectorOverlay
             key={`${item.kind}:${item.id}`}

@@ -376,8 +376,7 @@ describe("image repository — purchase (charge) documents", () => {
         contentType: "application/pdf",
         size: 4096,
       },
-      "purchase",
-      charge.uuid,
+      { entity: "purchase", id: charge.uuid },
     );
 
     const result = await deleteImages(ctx.db, [
@@ -427,8 +426,7 @@ describe("image repository — purchase (charge) documents", () => {
           contentType: "image/jpeg",
           size: 1024,
         },
-        "project",
-        projectId,
+        { entity: "project", id: projectId },
       );
 
     const makeProject = async (name: string) =>
@@ -576,8 +574,7 @@ describe("image repository — purchase (charge) documents", () => {
           contentType: "image/jpeg",
           size: 1024,
         },
-        "project",
-        projectId,
+        { entity: "project", id: projectId },
       );
       return { projectId, attached };
     };
@@ -645,8 +642,7 @@ describe("image repository — purchase (charge) documents", () => {
     await expect(
       findAttachmentByIdempotencyKey(
         ctx.db,
-        "project",
-        project.entityId,
+        { entity: "project", id: project.entityId },
         "enrichment:v1",
       ),
     ).resolves.toBeNull();
@@ -683,8 +679,7 @@ describe("image repository — purchase (charge) documents", () => {
           contentType: "image/jpeg",
           size: 1024,
         },
-        "project",
-        projectId,
+        { entity: "project", id: projectId },
       );
       const pending = await makePendingImage();
       const coverOnly = await createUploadedImageRecord(ctx.db, {
@@ -760,8 +755,7 @@ describe("image repository — purchase (charge) documents", () => {
         contentType: "application/pdf",
         size: 2048,
       },
-      "purchase",
-      charge.uuid,
+      { entity: "purchase", id: charge.uuid },
     );
 
     const found = await getImageById(ctx.db, uploaded.id);

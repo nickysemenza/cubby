@@ -1,1 +1,8 @@
 const operation = value as StartOperationId;
+type SingleEntityIdMap = { product: ProductId };
+const entityKey = value as keyof SingleEntityIdMap;
+type ProductId = string;
+type PlainInput = { value: string };
+type ExpenseOut = { total: number; orderId: string };
+const plain = value as PlainInput;
+const expense = value as ExpenseOut;

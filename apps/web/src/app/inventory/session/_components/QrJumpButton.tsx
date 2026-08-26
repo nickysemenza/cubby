@@ -25,7 +25,7 @@ export function QrJumpButton({
   current: InfLocation | null;
   onJump: (locationId: string) => void;
   /** Re-parent a stray bin into the current one. */
-  onAdopt: (location: InfLocation) => void;
+  onAdopt: (location: Pick<InfLocation, "id" | "name">) => void;
   manualEntry?: boolean;
 }) {
   const navigate = useNavigate();
@@ -99,11 +99,11 @@ export function QrJumpButton({
  */
 function adoptTarget(
   parent: InfLocation,
-  targetId: string,
+  targetId: InfLocation["id"],
   name: string,
-): InfLocation {
+): Pick<InfLocation, "id" | "name"> {
   const found = findInTree(parent, targetId);
-  return found ?? ({ id: targetId, name } as InfLocation);
+  return found ?? { id: targetId, name };
 }
 
 function findInTree(node: InfLocation, id: string): InfLocation | null {

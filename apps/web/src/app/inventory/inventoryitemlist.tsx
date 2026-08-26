@@ -40,7 +40,6 @@ import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { InventoryDiscardDialog } from "../_components/inventory/inventory-discard-dialog";
 import { InventoryShelf } from "../_components/inventory/inventory-shelf";
 import { MoveInventoryDialog } from "../_components/inventory/move-inventory-dialog";
-import type { InventoryItem } from "../_components/locations/calculate-inventory-valuation";
 import { InventoryValuationSummary } from "../_components/locations/inventory-valuation-summary";
 import { CategoryLabel } from "../_components/products/CategoryLabel";
 import { productCategoryOptionsWithTheme } from "../_components/products/product-category-icons";
@@ -353,10 +352,7 @@ export function InventoryItemList() {
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           {scopeChips}
           {view === "shelf" && (
-            <InventoryValuationSummary
-              items={data as InventoryItem[]}
-              variant="compact"
-            />
+            <InventoryValuationSummary items={data} variant="compact" />
           )}
         </div>
         <ViewSwitcher
@@ -378,10 +374,7 @@ export function InventoryItemList() {
         <ListWorkbench
           model={workbench}
           contextualStatus={
-            <InventoryValuationSummary
-              items={data as InventoryItem[]}
-              variant="compact"
-            />
+            <InventoryValuationSummary items={data} variant="compact" />
           }
           ariaLabel="Inventory Items Table"
           onRowClick={onRowClick}

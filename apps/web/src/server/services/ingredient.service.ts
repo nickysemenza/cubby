@@ -164,7 +164,7 @@ export const enrichmentWorkbench = async (
       },
       recommendedFix,
       priceMode: "package",
-      mergeCandidates: [] as EnrichmentRow["mergeCandidates"],
+      mergeCandidates: [],
     };
   });
 

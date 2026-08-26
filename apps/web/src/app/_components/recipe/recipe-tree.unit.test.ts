@@ -1,5 +1,10 @@
-import type { RecipeOut } from "@cubby/schemas/recipe";
-import { ok } from "neverthrow";
+import {
+  type RecipeOut,
+  recipeOut,
+  sectionIngredientOut,
+} from "@cubby/schemas/recipe";
+import { testEntityId, testShortcode } from "@cubby/schemas/testing";
+import { err, ok } from "neverthrow";
 import { describe, expect, it } from "vitest";
 import type { IngredientDataItem, RecipeCosting } from "~/lib/recipe-costing";
 import {
@@ -14,61 +19,127 @@ import {
 } from "./recipe-tree";
 import { WASM_YIELD_PORTS } from "./yield-ports";
 
-const mkRow = (id: string, grams: number): IngredientDataItem =>
-  ({
-    id,
-    priceInfo: { gram: ok({ value: grams, unit: "g" }) },
-  }) as unknown as IngredientDataItem;
+const recipeKey = (id: string) => testShortcode("recipe", `RCP-${id}`);
+const ingredientKey = (id: string) => testShortcode("ingredient", `ING-${id}`);
+const rowKey = (id: string) => testEntityId("recipe", `usage-${id}`);
+
+const mkRow = (id: string, grams: number): IngredientDataItem => ({
+  ...sectionIngredientOut.parse({
+    id: rowKey(id),
+    type: "ingredient",
+    amounts: [],
+    modifier: null,
+    rawLine: null,
+    recipe: null,
+    ingredient: {
+      id: ingredientKey(id),
+      name: id,
+      aliases: [],
+      naKinds: [],
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-01"),
+    },
+    createdAt: new Date("2026-01-01"),
+    updatedAt: new Date("2026-01-01"),
+  }),
+  sectionName: null,
+  priceInfo: {
+    price: err("no price"),
+    gram: ok({ value: grams, unit: "g" }),
+    nutrient: err("no nutrients"),
+  },
+  totalsMissing: { price: true, weight: false, nutrients: true },
+});
 
 /** A row carrying a resolved price, optionally ranged ("2–3 cups"). */
 const mkPricedRow = (
   id: string,
   price: number,
   upper?: number,
-): IngredientDataItem =>
-  ({
-    id,
-    priceInfo: {
-      gram: ok({ value: 1, unit: "g" }),
-      price: ok({
-        value: price,
-        unit: "dollar",
-        ...(upper != null ? { upper_value: upper } : {}),
-      }),
-    },
-  }) as unknown as IngredientDataItem;
-
-const mkPricedCosting = (rows: IngredientDataItem[]): RecipeCosting =>
-  ({
-    rows,
-    totals: { weight: 100 },
-    estimatedRows: new Map(),
-    bakerPct: new Map(),
-    isFlourRows: new Map(),
-  }) as unknown as RecipeCosting;
-
-const mkCosting = (
-  rowGrams: Record<string, number>,
-  weight: number,
-): RecipeCosting =>
-  ({
-    rows: Object.entries(rowGrams).map(([id, g]) => mkRow(id, g)),
-    totals: { weight },
-    estimatedRows: new Map(),
-    bakerPct: new Map(),
-    isFlourRows: new Map(),
-  }) as unknown as RecipeCosting;
-
-const ing = (id: string, ingredientId: string, name: string) =>
-  ({
-    id,
+): IngredientDataItem => ({
+  ...sectionIngredientOut.parse({
+    id: rowKey(id),
     type: "ingredient",
     amounts: [],
     modifier: null,
     rawLine: null,
     recipe: null,
-    ingredient: { id: ingredientId, name },
-  }) as const;
+    ingredient: {
+      id: ingredientKey(id),
+      name: id,
+      aliases: [],
+      naKinds: [],
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-01"),
+    },
+    createdAt: new Date("2026-01-01"),
+    updatedAt: new Date("2026-01-01"),
+  }),
+  sectionName: null,
+  priceInfo: {
+    gram: ok({ value: 1, unit: "g" }),
+    price: ok({
+      value: price,
+      unit: "dollar",
+      ...(upper != null ? { upper_value: upper } : {}),
+    }),
+    nutrient: err("no nutrients"),
+  },
+  totalsMissing: { price: false, weight: false, nutrients: true },
+});
+
+const mkPricedCosting = (rows: IngredientDataItem[]): RecipeCosting => ({
+  rows,
+  totals: {
+    price: 0,
+    nutrients: {},
+    weight: 100,
+    totalIngredients: rows.length,
+    missingByType: { price: [], weight: [], nutrients: [] },
+    diagnostics: [],
+  },
+  estimatedRows: new Map(),
+  bakerPct: new Map(),
+  isFlourRows: new Map(),
+});
+
+const mkCosting = (
+  rowGrams: Record<string, number>,
+  weight: number,
+): RecipeCosting => ({
+  rows: Object.entries(rowGrams).map(([id, g]) => mkRow(id, g)),
+  totals: {
+    price: 0,
+    nutrients: {},
+    weight,
+    totalIngredients: Object.keys(rowGrams).length,
+    missingByType: { price: [], weight: [], nutrients: [] },
+    diagnostics: [],
+  },
+  estimatedRows: new Map(),
+  bakerPct: new Map(),
+  isFlourRows: new Map(),
+});
+
+const ing = (id: string, ingredientId: string, name: string) =>
+  sectionIngredientOut.parse({
+    id: testEntityId("recipe", `usage-${id}`),
+    type: "ingredient",
+    amounts: [],
+    modifier: null,
+    rawLine: null,
+    recipe: null,
+    ingredient: {
+      id: testShortcode("ingredient", `ING-${ingredientId}`),
+      name,
+      aliases: [],
+      naKinds: [],
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-01"),
+    },
+    createdAt: new Date("2026-01-01"),
+    updatedAt: new Date("2026-01-01"),
+  });
 
 // Sub-recipe references carry a written amount, because that's what the engine
 // scales against. (They always did in real data; the fixtures used to omit it
@@ -80,15 +151,23 @@ const sub = (
   name: string,
   amounts: ReadonlyArray<{ value: number; unit: string }> = [],
 ) =>
-  ({
-    id,
+  sectionIngredientOut.parse({
+    id: testEntityId("recipe", `usage-${id}`),
     type: "recipe",
     amounts,
     modifier: null,
     rawLine: null,
     ingredient: null,
-    recipe: { id: recipeId, name },
-  }) as const;
+    recipe: {
+      id: recipeKey(recipeId),
+      name,
+      meta: null,
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-01"),
+    },
+    createdAt: new Date("2026-01-01"),
+    updatedAt: new Date("2026-01-01"),
+  });
 
 const recipe = (
   id: string,
@@ -96,16 +175,29 @@ const recipe = (
   ingredients: ReadonlyArray<ReturnType<typeof ing> | ReturnType<typeof sub>>,
   opts: { yield?: { value: number; unit: string } } = {},
 ): RecipeOut =>
-  ({
-    id,
+  recipeOut.parse({
+    id: recipeKey(id),
     name,
+    meta: null,
     yield: opts.yield ?? null,
     servings: null,
     notes: null,
     images: [],
     displayImage: null,
-    sections: [{ id: `${id}-s`, name: null, instructions: [], ingredients }],
-  }) as unknown as RecipeOut;
+    tags: [],
+    sections: [
+      {
+        id: testEntityId("recipe", `section-${id}`),
+        name: null,
+        instructions: [],
+        ingredients,
+        createdAt: new Date("2026-01-01"),
+        updatedAt: new Date("2026-01-01"),
+      },
+    ],
+    createdAt: new Date("2026-01-01"),
+    updatedAt: new Date("2026-01-01"),
+  });
 
 const firstRows = (node: RecipeTreeNode) => node.sections[0]?.rows ?? [];
 
@@ -124,14 +216,14 @@ describe("buildRecipeTree", () => {
       ing("ri-mush", "i-mush", "mushroom"),
     ]);
     const costingById = new Map<string, RecipeCosting>([
-      ["r-root", mkCosting({ "sr-sof": 360, "ri-mush": 600 }, 960)],
-      ["r-sof", mkCosting({ "si-onion": 360 }, 360)],
+      [recipeKey("r-root"), mkCosting({ "sr-sof": 360, "ri-mush": 600 }, 960)],
+      [recipeKey("r-sof"), mkCosting({ "si-onion": 360 }, 360)],
     ]);
 
     const tree = buildRecipeTree(
       root,
       costingById,
-      { "r-sof": sof },
+      { [recipeKey("r-sof")]: sof },
       WASM_YIELD_PORTS,
     );
     expect(tree.depth).toBe(0);
@@ -143,7 +235,7 @@ describe("buildRecipeTree", () => {
 
     const subRow = rows[0];
     if (subRow?.kind !== "subrecipe") throw new Error("expected subrecipe");
-    expect(subRow.child.recipe.id).toBe("r-sof");
+    expect(subRow.child.recipe.id).toBe(recipeKey("r-sof"));
     expect(subRow.child.cumulativeFactor).toBe(1);
     expect(subRow.child.batchEstimated).toBe(false);
   });
@@ -159,14 +251,14 @@ describe("buildRecipeTree", () => {
       sub("sr-sof", "r-sof", "Soffritto", [{ value: 180, unit: "g" }]),
     ]);
     const costingById = new Map<string, RecipeCosting>([
-      ["r-root", mkCosting({ "sr-sof": 180 }, 180)], // uses 180 g
-      ["r-sof", mkCosting({ "si-onion": 360 }, 360)],
+      [recipeKey("r-root"), mkCosting({ "sr-sof": 180 }, 180)], // uses 180 g
+      [recipeKey("r-sof"), mkCosting({ "si-onion": 360 }, 360)],
     ]);
 
     const tree = buildRecipeTree(
       root,
       costingById,
-      { "r-sof": sof },
+      { [recipeKey("r-sof")]: sof },
       WASM_YIELD_PORTS,
     );
     const subRow = firstRows(tree)[0];
@@ -188,13 +280,13 @@ describe("buildRecipeTree", () => {
       sub("sr-chx", "r-chx", "Roast chicken", [{ value: 130, unit: "g" }]),
     ]);
     const costingById = new Map<string, RecipeCosting>([
-      ["r-root", mkCosting({ "sr-chx": 130 }, 130)],
-      ["r-chx", mkCosting({ "ci-bird": 2000 }, 2000)],
+      [recipeKey("r-root"), mkCosting({ "sr-chx": 130 }, 130)],
+      [recipeKey("r-chx"), mkCosting({ "ci-bird": 2000 }, 2000)],
     ]);
     const tree = buildRecipeTree(
       root,
       costingById,
-      { "r-chx": chicken },
+      { [recipeKey("r-chx")]: chicken },
       WASM_YIELD_PORTS,
     );
     const subRow = firstRows(tree)[0];
@@ -209,13 +301,13 @@ describe("buildRecipeTree", () => {
     ]);
     const root = recipe("r-root", "R", [sub("sr-sof", "r-sof", "Soffritto")]);
     const costingById = new Map<string, RecipeCosting>([
-      ["r-root", mkCosting({}, 0)],
-      ["r-sof", mkCosting({ "si-onion": 360 }, 360)],
+      [recipeKey("r-root"), mkCosting({}, 0)],
+      [recipeKey("r-sof"), mkCosting({ "si-onion": 360 }, 360)],
     ]);
     const tree = buildRecipeTree(
       root,
       costingById,
-      { "r-sof": sof },
+      { [recipeKey("r-sof")]: sof },
       WASM_YIELD_PORTS,
     );
     const subRow = firstRows(tree)[0];
@@ -228,13 +320,13 @@ describe("buildRecipeTree", () => {
     const a = recipe("r-a", "A", [sub("sa", "r-b", "B")]);
     const b = recipe("r-b", "B", [sub("sb", "r-a", "A")]);
     const costingById = new Map<string, RecipeCosting>([
-      ["r-a", mkCosting({ sa: 100 }, 100)],
-      ["r-b", mkCosting({ sb: 100 }, 100)],
+      [recipeKey("r-a"), mkCosting({ sa: 100 }, 100)],
+      [recipeKey("r-b"), mkCosting({ sb: 100 }, 100)],
     ]);
     const tree = buildRecipeTree(
       a,
       costingById,
-      { "r-a": a, "r-b": b },
+      { [recipeKey("r-a")]: a, [recipeKey("r-b")]: b },
       WASM_YIELD_PORTS,
     );
     const bRow = firstRows(tree)[0];
@@ -248,7 +340,7 @@ describe("buildRecipeTree", () => {
     const root = recipe("r-root", "R", [sub("s1", "r-gone", "Gone")]);
     const tree = buildRecipeTree(
       root,
-      new Map([["r-root", mkCosting({ s1: 50 }, 50)]]),
+      new Map([[recipeKey("r-root"), mkCosting({ s1: 50 }, 50)]]),
       {},
       WASM_YIELD_PORTS,
     );
@@ -262,12 +354,23 @@ describe("batchYieldGrams", () => {
   const node = (
     recipeYield: { value: number; unit: string } | null,
     weight: number | null,
-  ): RecipeTreeNode =>
-    ({
-      recipe: { yield: recipeYield },
-      batchGrams: recipeYield ? WASM_YIELD_PORTS.massGrams(recipeYield) : null,
-      costing: weight == null ? null : { totals: { weight } },
-    }) as unknown as RecipeTreeNode;
+  ): RecipeTreeNode => {
+    const built = buildRecipeTree(
+      recipe(
+        "yield-node",
+        "Yield node",
+        [],
+        recipeYield ? { yield: recipeYield } : {},
+      ),
+      new Map(),
+      {},
+      WASM_YIELD_PORTS,
+    );
+    return {
+      ...built,
+      costing: weight == null ? null : mkCosting({}, weight),
+    };
+  };
 
   it("uses a mass yield", () => {
     expect(batchYieldGrams(node({ value: 1.2, unit: "kg" }, 999))).toBe(1200);
@@ -364,18 +467,18 @@ describe("flattenComponents", () => {
       ing("ri-x", "i-x", "X"),
     ]);
     const costingById = new Map<string, RecipeCosting>([
-      ["r-root", mkCosting({ "sr-sof": 100, "ri-x": 100 }, 200)],
-      ["r-sof", mkCosting({ "si-x": 100 }, 100)],
+      [recipeKey("r-root"), mkCosting({ "sr-sof": 100, "ri-x": 100 }, 200)],
+      [recipeKey("r-sof"), mkCosting({ "si-x": 100 }, 100)],
     ]);
     const tree = buildRecipeTree(
       root,
       costingById,
-      { "r-sof": sof },
+      { [recipeKey("r-sof")]: sof },
       WASM_YIELD_PORTS,
     );
     expect(flattenComponents(tree).map((n) => n.recipe.id)).toEqual([
-      "r-sof",
-      "r-root",
+      recipeKey("r-sof"),
+      recipeKey("r-root"),
     ]);
   });
 });
@@ -390,16 +493,18 @@ describe("fullBatchNeeds", () => {
       ing("ri-x", "i-x", "X"),
     ]);
     const costingById = new Map<string, RecipeCosting>([
-      ["r-root", mkCosting({ "sr-sof": 50, "ri-x": 100 }, 150)],
-      ["r-sof", mkCosting({ "si-x": 100 }, 100)],
+      [recipeKey("r-root"), mkCosting({ "sr-sof": 50, "ri-x": 100 }, 150)],
+      [recipeKey("r-sof"), mkCosting({ "si-x": 100 }, 100)],
     ]);
     const tree = buildRecipeTree(
       root,
       costingById,
-      { "r-sof": sof },
+      { [recipeKey("r-sof")]: sof },
       WASM_YIELD_PORTS,
     );
-    const x = fullBatchNeeds(tree).find((n) => n.ingredientId === "i-x");
+    const x = fullBatchNeeds(tree).find(
+      (n) => n.ingredientId === ingredientKey("i-x"),
+    );
     expect(x?.grams).toBe(200); // 100 (root assembly) + 100 (full Sof batch)
   });
 });
@@ -415,29 +520,32 @@ describe("buildIngredientMatrix", () => {
       ing("ri-y", "i-y", "Y"),
     ]);
     const costingById = new Map<string, RecipeCosting>([
-      ["r-root", mkCosting({ "sr-sof": 50, "ri-x": 100, "ri-y": 40 }, 190)],
-      ["r-sof", mkCosting({ "si-x": 100 }, 100)],
+      [
+        recipeKey("r-root"),
+        mkCosting({ "sr-sof": 50, "ri-x": 100, "ri-y": 40 }, 190),
+      ],
+      [recipeKey("r-sof"), mkCosting({ "si-x": 100 }, 100)],
     ]);
     const tree = buildRecipeTree(
       root,
       costingById,
-      { "r-sof": sof },
+      { [recipeKey("r-sof")]: sof },
       WASM_YIELD_PORTS,
     );
     const rows = buildIngredientMatrix(tree);
 
     expect(flattenComponents(tree).map((n) => n.recipe.id)).toEqual([
-      "r-sof",
-      "r-root",
+      recipeKey("r-sof"),
+      recipeKey("r-root"),
     ]);
 
-    const xRow = rows.find((r) => r.ingredientId === "i-x");
-    expect(xRow?.byComponent.get("r-sof")).toBe(100); // full Sof batch
-    expect(xRow?.byComponent.get("r-root")).toBe(100);
+    const xRow = rows.find((r) => r.ingredientId === ingredientKey("i-x"));
+    expect(xRow?.byComponent.get(recipeKey("r-sof"))).toBe(100); // full Sof batch
+    expect(xRow?.byComponent.get(recipeKey("r-root"))).toBe(100);
     expect(xRow?.total).toBe(200); // = fullBatchNeeds figure
 
-    const yRow = rows.find((r) => r.ingredientId === "i-y");
-    expect(yRow?.byComponent.has("r-sof")).toBe(false); // only in root
+    const yRow = rows.find((r) => r.ingredientId === ingredientKey("i-y"));
+    expect(yRow?.byComponent.has(recipeKey("r-sof"))).toBe(false); // only in root
     expect(yRow?.total).toBe(40);
   });
 
@@ -450,25 +558,26 @@ describe("buildIngredientMatrix", () => {
       sub("s2", "r-sof", "Sof"),
     ]);
     const costingById = new Map<string, RecipeCosting>([
-      ["r-root", mkCosting({ s1: 50, s2: 30 }, 80)],
-      ["r-sof", mkCosting({ "si-x": 100 }, 100)],
+      [recipeKey("r-root"), mkCosting({ s1: 50, s2: 30 }, 80)],
+      [recipeKey("r-sof"), mkCosting({ "si-x": 100 }, 100)],
     ]);
     const tree = buildRecipeTree(
       root,
       costingById,
-      { "r-sof": sof },
+      { [recipeKey("r-sof")]: sof },
       WASM_YIELD_PORTS,
     );
     const rows = buildIngredientMatrix(tree);
 
     expect(
-      flattenComponents(tree).filter((n) => n.recipe.id === "r-sof"),
+      flattenComponents(tree).filter((n) => n.recipe.id === recipeKey("r-sof")),
     ).toHaveLength(1);
-    const xRow = rows.find((r) => r.ingredientId === "i-x");
-    expect(xRow?.byComponent.get("r-sof")).toBe(100);
+    const xRow = rows.find((r) => r.ingredientId === ingredientKey("i-x"));
+    expect(xRow?.byComponent.get(recipeKey("r-sof"))).toBe(100);
     expect(xRow?.total).toBe(100);
     expect(
-      fullBatchNeeds(tree).find((n) => n.ingredientId === "i-x")?.grams,
+      fullBatchNeeds(tree).find((n) => n.ingredientId === ingredientKey("i-x"))
+        ?.grams,
     ).toBe(100);
   });
 });
@@ -488,21 +597,21 @@ describe("firstExpansionRowIds", () => {
     ]);
     const costingById = new Map<string, RecipeCosting>([
       [
-        "r-root",
+        recipeKey("r-root"),
         mkCosting({ "sr-sof-1": 360, "ri-x": 100, "sr-sof-2": 360 }, 820),
       ],
-      ["r-sof", mkCosting({ "si-onion": 360 }, 360)],
+      [recipeKey("r-sof"), mkCosting({ "si-onion": 360 }, 360)],
     ]);
 
     const tree = buildRecipeTree(
       root,
       costingById,
-      { "r-sof": sof },
+      { [recipeKey("r-sof")]: sof },
       WASM_YIELD_PORTS,
     );
     const ids = firstExpansionRowIds(tree);
-    expect(ids.has("sr-sof-1")).toBe(true);
-    expect(ids.has("sr-sof-2")).toBe(false);
+    expect(ids.has(rowKey("sr-sof-1"))).toBe(true);
+    expect(ids.has(rowKey("sr-sof-2"))).toBe(false);
     expect(ids.size).toBe(1);
   });
 });
@@ -516,7 +625,7 @@ describe("fullBatchCostByComponent", () => {
     return fullBatchCostByComponent(
       buildRecipeTree(
         root,
-        new Map([["r-root", mkPricedCosting(rows)]]),
+        new Map([[recipeKey("r-root"), mkPricedCosting(rows)]]),
         {},
         WASM_YIELD_PORTS,
       ),
@@ -528,7 +637,7 @@ describe("fullBatchCostByComponent", () => {
       mkPricedRow("a", 1.5),
       mkPricedRow("b", 2.25),
     ]);
-    expect(byComponent.get("r-root")?.price).toBeCloseTo(3.75);
+    expect(byComponent.get(recipeKey("r-root"))?.price).toBeCloseTo(3.75);
     expect(total).toBeCloseTo(3.75);
   });
 
@@ -537,7 +646,10 @@ describe("fullBatchCostByComponent", () => {
       mkPricedRow("a", 1.0, 2.0),
       mkPricedRow("b", 0.5),
     ]);
-    expect(byComponent.get("r-root")).toEqual({ price: 1.5, priceUpper: 2.5 });
+    expect(byComponent.get(recipeKey("r-root"))).toEqual({
+      price: 1.5,
+      priceUpper: 2.5,
+    });
     expect(total).toBeCloseTo(1.5);
     expect(totalUpper).toBeCloseTo(2.5);
   });

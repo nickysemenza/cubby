@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import {
   executeEntityMutation,
   flattenEntityMutationResult,
+  parseEntityMutationResultFor,
 } from "~/entities/entity-mutation.functions";
 import {
   makeBatchStatusFetcher,
@@ -11,11 +12,7 @@ import {
 import { getAppErrorDetails } from "~/lib/error-utils";
 import { invalidateQueryRoots } from "~/lib/query-keys";
 import { entityEditRegistry } from "./definitions";
-import type {
-  EntityEditDraft,
-  EntityEditIntent,
-  EntityEditResultFor,
-} from "./intent-types";
+import type { EntityEditDraft, EntityEditIntent } from "./intent-types";
 import {
   buildEntityEdit,
   initialEntityEditValues,
@@ -29,9 +26,9 @@ import type {
   EntityEditCommand,
   EntityEditIssue,
   EntityEditRecord,
-  EntityEditRequest,
   EntityEditResult,
   EntityMutationPort,
+  RuntimeEntityEditRequest,
 } from "./types";
 
 /**
@@ -107,7 +104,13 @@ function useEntityMutationPort(): EntityMutationPort {
             `${command.entity} ${command.operation} did not return an id.`,
           );
         }
-        return { id: resultId, result: flattenEntityMutationResult(result) };
+        return {
+          id: resultId,
+          result: parseEntityMutationResultFor(
+            command.entity,
+            flattenEntityMutationResult(result),
+          ),
+        };
       },
       invalidate: async (keys) => {
         invalidateQueryRoots(queryClient, keys);
@@ -146,6 +149,13 @@ export interface EntityCommands<E extends EditableEntity> {
     record: EntityEditRecord;
     values: Readonly<Partial<EntityEditDraft<E>>>;
     intent?: EntityEditIntent<E, "update">;
+    surface?: "cell" | "detail" | "preview" | "calendar";
+  }): Promise<EntityEditResult<E>>;
+  /** Generic transport adapter after the entity/payload correlation is erased. */
+  commitRuntimeFields(input: {
+    record: EntityEditRecord;
+    values: Readonly<object>;
+    intent?: string;
     surface?: "cell" | "detail" | "preview" | "calendar";
   }): Promise<EntityEditResult<E>>;
   commitField(input: {
@@ -202,7 +212,7 @@ export function useEntityCommands<E extends EditableEntity>(
           entity,
           id: execution.id,
           changed: true,
-          result: execution.result as EntityEditResultFor<E>,
+          result: parseEntityMutationResultFor(entity, execution.result),
         };
       } catch (error) {
         const nextIssues = issuesFromRefusal(error);
@@ -257,13 +267,13 @@ export function useEntityCommands<E extends EditableEntity>(
       context?: Readonly<Record<string, unknown>>;
       surface?: "create-page" | "dialog" | "quick-create";
     }): Promise<EntityEditResult<E>> => {
-      const request = {
+      const request: RuntimeEntityEditRequest<E> = {
         entity,
         operation: "create",
         intent,
         surface,
         context,
-      } as EntityEditRequest<E>;
+      };
       const resolved = resolveEntityEdit(entityEditRegistry, request);
       if (!isResolvedEntityEdit(resolved)) {
         setIssues(resolved.issues);
@@ -287,17 +297,17 @@ export function useEntityCommands<E extends EditableEntity>(
       surface = "cell",
     }: {
       record: EntityEditRecord;
-      values: Readonly<Partial<EntityEditDraft<E>>>;
-      intent?: EntityEditIntent<E, "update">;
+      values: Readonly<object>;
+      intent?: string;
       surface?: "cell" | "detail" | "preview" | "calendar";
     }): Promise<EntityEditResult<E>> => {
-      const request = {
+      const request: RuntimeEntityEditRequest<E> = {
         entity,
         operation: "update",
         intent,
         surface,
         record,
-      } as EntityEditRequest<E>;
+      };
       const resolved = resolveEntityEdit(entityEditRegistry, request);
       if (!isResolvedEntityEdit(resolved)) {
         setIssues(resolved.issues);
@@ -343,7 +353,7 @@ export function useEntityCommands<E extends EditableEntity>(
     }) =>
       await commitFields({
         ...input,
-        values: { [field]: value } as unknown as Partial<EntityEditDraft<E>>,
+        values: { [field]: value },
       }),
     [commitFields],
   );
@@ -356,6 +366,7 @@ export function useEntityCommands<E extends EditableEntity>(
     create,
     remove,
     commitFields,
+    commitRuntimeFields: commitFields,
     commitField,
   };
 }

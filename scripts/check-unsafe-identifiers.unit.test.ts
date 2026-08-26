@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
-import { scanSource } from "./check-unsafe-identifiers.ts";
+import { scanSource, scanSources } from "./check-unsafe-identifiers.ts";
 
 const fixtureDirectory = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -61,17 +61,79 @@ describe("unsafe identifier guard", () => {
     ]);
   });
 
+  it("rejects re-exports and non-static module loading bypasses", () => {
+    const violations = scanSource(
+      "module-bypass-imports.txt",
+      fixture("module-bypass-imports.txt"),
+    );
+
+    assert.deepEqual(violations.map((violation) => violation.kind), [
+      "unsafe-helper-import",
+      "unsafe-helper-import",
+      "unsafe-helper-import",
+      "unsafe-helper-import",
+      "unsafe-helper-import",
+    ]);
+  });
+
+  it("allows test-only module loading in test paths", () => {
+    assert.deepEqual(
+      scanSource(
+        "src/example.unit.test.ts",
+        `export * from "@cubby/schemas/testing";
+const dynamicallyLoaded = import("@cubby/schemas/testing");
+const required = require("@cubby/schemas/testing");
+`,
+      ),
+      [],
+    );
+  });
+
   it("rejects branded assertions, including generic and array forms", () => {
     const violations = scanSource(
       "branded-assertions.txt",
       fixture("branded-assertions.txt"),
     );
 
-    assert.equal(violations.length, 3);
+    assert.equal(violations.length, 14);
     assert.equal(
       violations.every((violation) => violation.kind === "branded-assertion"),
       true,
     );
+  });
+
+  it("resolves branded schema outputs through imported aliases", () => {
+    const violations = scanSources([
+      {
+        file: resolve(fixtureDirectory, "brand-provenance-source.ts"),
+        source: fixture("brand-provenance-source.txt"),
+      },
+      {
+        file: resolve(fixtureDirectory, "brand-provenance-consumer.ts"),
+        source: fixture("brand-provenance-consumer.txt"),
+      },
+    ]);
+
+    assert.equal(violations.length, 4);
+    assert.equal(
+      violations.every((violation) => violation.kind === "branded-assertion"),
+      true,
+    );
+  });
+
+  it("rejects computed, destructured, and indirect-module bypasses", () => {
+    const violations = scanSource(
+      "src/adversarial-bypasses.ts",
+      fixture("adversarial-bypasses.txt"),
+    );
+
+    assert.deepEqual(violations.map((violation) => violation.kind), [
+      "unsafe-helper-call",
+      "unsafe-helper-declaration",
+      "unsafe-helper-call",
+      "unsafe-helper-import",
+      "unsafe-helper-import",
+    ]);
   });
 
   it("does not treat ordinary parsing or strings as violations", () => {

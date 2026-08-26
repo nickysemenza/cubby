@@ -1,4 +1,4 @@
-import type { LocationOut } from "@cubby/schemas/location";
+import { type LocationOut, locationOut } from "@cubby/schemas/location";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { IngredientForm } from "~/app/_components/ingredients/ingredient-form";
@@ -6,6 +6,7 @@ import { LocationForm } from "~/app/_components/locations/location-form";
 import { ProductForm } from "~/app/_components/products/product-form";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { getErrorMessage } from "~/lib/error-utils";
+import { parseEntityMutationResultFor } from "../entity-mutation.functions";
 import type { EntityEditResultFor } from "./intent-types";
 import { useEntityCommands } from "./use-entity-commands";
 
@@ -57,14 +58,14 @@ export function EntityFormDialog<E extends FormDialogEntity>({
         intent: "full",
         data,
       });
-      const result = execution.result;
+      const result = parseEntityMutationResultFor(entity, execution.result);
       const name =
         result && typeof result === "object" && "name" in result
           ? String(result.name)
           : entity;
       toast.success(`Created "${name}"`);
       onOpenChange(false);
-      onSuccess?.(result as EntityEditResultFor<E>);
+      onSuccess?.(result);
       return result;
     } catch (cause) {
       setError(getErrorMessage(cause));
@@ -121,7 +122,7 @@ export function EntityFormDialog<E extends FormDialogEntity>({
           isPending={commands.isPending}
           error={error}
           onCancel={close}
-          onCreate={async (data) => (await submit(data)) as LocationOut}
+          onCreate={async (data) => locationOut.parse(await submit(data))}
           initialName={seed.name}
           initialParent={seed.parentLocation}
         />

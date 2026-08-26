@@ -1,4 +1,7 @@
-import type { EntityKernelContext } from "~/server/entity-kernel";
+import {
+  type EntityKernelContext,
+  entityKernelContextSchema,
+} from "~/server/entity-kernel";
 
 type ToolExtra = { authInfo?: { extra?: Record<string, unknown> } };
 
@@ -7,5 +10,5 @@ export function getEntityKernelContext(extra: ToolExtra): EntityKernelContext {
   const context = extra.authInfo?.extra?.entityKernel;
   if (!context)
     throw new Error("Authenticated entity-kernel context is missing");
-  return context as EntityKernelContext;
+  return entityKernelContextSchema.parse(context);
 }

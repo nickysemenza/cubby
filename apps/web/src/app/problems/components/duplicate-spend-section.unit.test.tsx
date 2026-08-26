@@ -2,7 +2,7 @@ import type {
   AllProblems,
   DuplicateSpendCandidate,
 } from "@cubby/schemas/problems";
-import { PROBLEM_CLASS } from "@cubby/schemas/problems";
+import { EMPTY_PROBLEM_ARRAYS, PROBLEM_CLASS } from "@cubby/schemas/problems";
 import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -65,8 +65,12 @@ const candidate = (
   ...overrides,
 });
 
-const problems = (rows: DuplicateSpendCandidate[]): AllProblems =>
-  ({ duplicateSpendCandidates: rows }) as AllProblems;
+const problems = (rows: DuplicateSpendCandidate[]): AllProblems => ({
+  ...EMPTY_PROBLEM_ARRAYS,
+  duplicateSpendCandidates: rows,
+  sectionTotals: {},
+  totalProblems: rows.length,
+});
 
 const entry = () =>
   PROBLEM_SECTIONS.find((s) => s.id === "duplicate-spend-candidates");

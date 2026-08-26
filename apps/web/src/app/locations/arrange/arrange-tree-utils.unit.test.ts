@@ -2,6 +2,7 @@ import type {
   InfLocation,
   InventoryItemForTree,
 } from "@cubby/schemas/location";
+import { infLocation } from "@cubby/schemas/location";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { canDropOnArrangeTarget } from "./arrange-drop-policy";
@@ -26,21 +27,48 @@ function loc(
   children: InfLocation[] = [],
   items: InventoryItemForTree[] = [],
 ): InfLocation {
-  return {
+  return infLocation.parse({
     id: testShortcode("location", id),
     name,
+    aliases: [],
+    type: null,
+    product: null,
+    lastBulkInventory: null,
+    aiDescription: null,
+    images: [],
+    valuation: null,
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
     children,
     inventoryItems: items,
-  } as unknown as InfLocation;
+  });
 }
 
 function item(id: string, productId: string): InventoryItemForTree {
-  return {
-    id: testShortcode("inventory", id),
-    amount: { value: 1, unit: "count" },
-    productName: `p-${productId}`,
-    productId: testShortcode("product", productId),
-  } as unknown as InventoryItemForTree;
+  const parsed = infLocation.parse({
+    id: testShortcode("location", `item-${id}`),
+    name: "fixture location",
+    aliases: [],
+    type: null,
+    product: null,
+    lastBulkInventory: null,
+    aiDescription: null,
+    images: [],
+    valuation: null,
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
+    inventoryItems: [
+      {
+        id: testShortcode("inventory", id),
+        amount: { value: 1, unit: "count" },
+        productName: `p-${productId}`,
+        productId: testShortcode("product", productId),
+      },
+    ],
+  });
+  const [inventoryItem] = parsed.inventoryItems ?? [];
+  if (!inventoryItem) throw new Error("fixture inventory item was not parsed");
+  return inventoryItem;
 }
 
 const L = (id: string) => testShortcode("location", id);

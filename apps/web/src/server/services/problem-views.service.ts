@@ -16,6 +16,20 @@ import type {
   StaleLocation,
   UnusedIngredient,
 } from "@cubby/schemas/problems";
+import {
+  emptyCookedMealSchema,
+  emptyLocationSchema,
+  ingredientWithoutProductSchema,
+  locationWithoutAiDescriptionSchema,
+  negativeExpectedQuantitySchema,
+  neverVerifiedInventorySchema,
+  productMissingPriceSchema,
+  productWithoutMappingsSchema,
+  recipeWithoutInstructionsSchema,
+  staleLocationSchema,
+  unusedIngredientSchema,
+} from "@cubby/schemas/problems";
+import { z } from "zod";
 import { compileProblemFilters } from "~/entities/problem-filter-semantics";
 import type {
   DiagnosticKey,
@@ -481,7 +495,7 @@ export const executeProblem = async (
  * to the schema's shape.
  */
 const toNeverVerified = (row: ListRow): NeverVerifiedInventory => {
-  const r = row as unknown as NeverVerifiedInventory;
+  const r = neverVerifiedInventorySchema.parse(row);
   return {
     id: r.id,
     amount: r.amount,
@@ -492,9 +506,17 @@ const toNeverVerified = (row: ListRow): NeverVerifiedInventory => {
 };
 
 const toUnusedIngredient = (row: ListRow): UnusedIngredient => {
-  const r = row as unknown as UnusedIngredient & {
-    product: { id: UnusedIngredient["products"][number]["id"]; name: string }[];
-  };
+  const r = unusedIngredientSchema
+    .omit({ products: true })
+    .extend({
+      product: z.array(
+        z.object({
+          id: unusedIngredientSchema.shape.products.element.shape.id,
+          name: z.string(),
+        }),
+      ),
+    })
+    .parse(row);
   return {
     id: r.id,
     name: r.name,
@@ -507,9 +529,10 @@ const toUnusedIngredient = (row: ListRow): UnusedIngredient => {
 const toLocationWithoutAiDescription = (
   row: ListRow,
 ): LocationWithoutAiDescription => {
-  const r = row as unknown as LocationWithoutAiDescription & {
-    images: unknown[];
-  };
+  const r = locationWithoutAiDescriptionSchema
+    .omit({ imageCount: true })
+    .extend({ images: z.array(z.unknown()) })
+    .parse(row);
   return {
     id: r.id,
     name: r.name,
@@ -523,9 +546,10 @@ const toLocationWithoutAiDescription = (
 };
 
 const toEmptyLocation = (row: ListRow): EmptyLocation => {
-  const r = row as unknown as EmptyLocation & {
-    images: { id: string; url: string }[];
-  };
+  const r = emptyLocationSchema
+    .omit({ firstImageId: true, firstImageUrl: true })
+    .extend({ images: z.array(z.object({ id: z.string(), url: z.string() })) })
+    .parse(row);
   // The detector built these two with a pair of correlated subqueries ordered
   // by LocationImage.createdAt; the list's `images` relation is `imageOrder`-
   // first, so this is the cover rather than the oldest. Display-only — the card
@@ -544,15 +568,18 @@ const toEmptyLocation = (row: ListRow): EmptyLocation => {
 };
 
 const toNegativeExpectedQuantity = (row: ListRow): NegativeExpectedQuantity => {
-  const r = row as unknown as {
-    id: NegativeExpectedQuantity["id"];
-    name: string;
-    manufacturer: string;
-    quantityLedger: Omit<
-      NegativeExpectedQuantity,
-      "id" | "name" | "manufacturer"
-    >;
-  };
+  const r = z
+    .object({
+      id: negativeExpectedQuantitySchema.shape.id,
+      name: z.string(),
+      manufacturer: z.string(),
+      quantityLedger: negativeExpectedQuantitySchema.omit({
+        id: true,
+        name: true,
+        manufacturer: true,
+      }),
+    })
+    .parse(row);
   return {
     id: r.id,
     name: r.name,
@@ -562,20 +589,25 @@ const toNegativeExpectedQuantity = (row: ListRow): NegativeExpectedQuantity => {
 };
 
 const toEmptyCookedMeal = (row: ListRow): EmptyCookedMeal => {
-  const r = row as unknown as EmptyCookedMeal;
+  const r = emptyCookedMealSchema.parse(row);
   return { id: r.id, name: r.name, date: r.date };
 };
 
 const toProductMissingPrice = (row: ListRow): ProductMissingPrice => {
-  const r = row as unknown as ProductMissingPrice & {
-    inventoryEntry: {
-      amount: { value: number };
-      location: {
-        id: ProductMissingPrice["locations"][number]["id"];
-        name: string;
-      };
-    }[];
-  };
+  const r = productMissingPriceSchema
+    .omit({ inventoryQuantity: true, locations: true })
+    .extend({
+      inventoryEntry: z.array(
+        z.object({
+          amount: z.object({ value: z.number() }),
+          location: z.object({
+            id: productMissingPriceSchema.shape.locations.element.shape.id,
+            name: z.string(),
+          }),
+        }),
+      ),
+    })
+    .parse(row);
   return {
     id: r.id,
     name: r.name,
@@ -589,10 +621,17 @@ const toProductMissingPrice = (row: ListRow): ProductMissingPrice => {
 };
 
 const toProductWithoutMappings = (row: ListRow): ProductWithoutMappings => {
-  const r = row as unknown as ProductWithoutMappings & {
-    ingredient: { id: ProductWithoutMappings["ingredientId"] } | null;
-    usdaUnavailable: boolean | null;
-  };
+  const r = productWithoutMappingsSchema
+    .omit({ isIngredient: true, ingredientId: true, usdaUnavailable: true })
+    .extend({
+      ingredient: z
+        .object({
+          id: productWithoutMappingsSchema.shape.ingredientId.unwrap(),
+        })
+        .nullable(),
+      usdaUnavailable: z.boolean().nullable(),
+    })
+    .parse(row);
   return {
     id: r.id,
     name: r.name,
@@ -610,9 +649,10 @@ const toProductWithoutMappings = (row: ListRow): ProductWithoutMappings => {
 };
 
 const toStaleLocation = (row: ListRow): StaleLocation => {
-  const r = row as unknown as StaleLocation & {
-    inventoryEntries: unknown[];
-  };
+  const r = staleLocationSchema
+    .omit({ itemCount: true })
+    .extend({ inventoryEntries: z.array(z.unknown()) })
+    .parse(row);
   return {
     id: r.id,
     name: r.name,
@@ -627,14 +667,15 @@ const toStaleLocation = (row: ListRow): StaleLocation => {
 const toRecipeWithoutInstructions = (
   row: ListRow,
 ): RecipeWithoutInstructions => {
-  const r = row as unknown as RecipeWithoutInstructions;
+  const r = recipeWithoutInstructionsSchema.parse(row);
   return { id: r.id, name: r.name, sectionCount: r.sectionCount };
 };
 
 const toIngredientWithoutProduct = (row: ListRow): IngredientWithoutProduct => {
-  const r = row as unknown as IngredientWithoutProduct & {
-    ownRecipeCount: number;
-  };
+  const r = ingredientWithoutProductSchema
+    .omit({ recipeCount: true })
+    .extend({ ownRecipeCount: z.number() })
+    .parse(row);
   return {
     id: r.id,
     name: r.name,

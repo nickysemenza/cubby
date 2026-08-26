@@ -329,8 +329,9 @@ export const getLocationInventoryBreakdown = async (
     directCounts.map((row) => [row.locationId, Number(row.itemCount)]),
   );
 
-  type MutableNode = LocationInventoryBreakdownOut & {
+  type MutableNode = Omit<LocationInventoryBreakdownOut, "children"> & {
     parentId: LocationId | null;
+    children: MutableNode[];
   };
   const byId = new Map<LocationId, MutableNode>();
   for (const row of rows) {
@@ -353,7 +354,7 @@ export const getLocationInventoryBreakdown = async (
   if (!root) return null;
 
   const finalize = (node: MutableNode): LocationInventoryBreakdownOut => {
-    const children = (node.children as MutableNode[])
+    const children = node.children
       .sort((a, b) => a.name.localeCompare(b.name))
       .map(finalize);
     return {

@@ -1,4 +1,5 @@
 import type { ImageOut } from "@cubby/schemas/image";
+import { imageOut } from "@cubby/schemas/image";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
@@ -21,7 +22,7 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 const image = (id: string): ImageOut =>
-  ({
+  imageOut.parse({
     id: `00000000-0000-4000-8000-${id.padStart(12, "0")}`,
     url: `https://example.test/${id}.jpg`,
     key: `${id}.jpg`,
@@ -38,7 +39,7 @@ const image = (id: string): ImageOut =>
     verifiedAt: null,
     createdAt: new Date("2026-01-01T00:00:00Z"),
     updatedAt: new Date("2026-01-01T00:00:00Z"),
-  }) as ImageOut;
+  });
 
 const location = (
   code: string,

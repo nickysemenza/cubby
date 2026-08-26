@@ -11,9 +11,11 @@ import {
 import { CULL_PENDING_IMAGES_DEFAULT_HOURS } from "@cubby/schemas/image";
 import {
   type AllProblems,
+  allProblemsSchema,
   assembleAllProblems,
   type CoverageTotals,
   type IngredientWithPartialCoverage,
+  ingredientWithPartialCoverageSchema,
   type MaintenanceCounts,
   type ProblemKey,
   type ProblemsCount,
@@ -23,15 +25,22 @@ import {
   type ProblemsUpc,
   type ProductWithBetterUpcData,
   type ProductWithIslandedMappings,
-  type ProductWithTitleDerivableSize,
+  problemsCountSchema,
+  productWithBetterUpcDataSchema,
+  productWithIslandedMappingsSchema,
   TRACKER_PROBLEM_KEY_BY_TYPE,
 } from "@cubby/schemas/problems";
 import type {
   ProjectAttentionItem,
   ProjectAttentionType,
 } from "@cubby/schemas/project";
+import {
+  projectAttentionItemSchema,
+  projectAttentionTypeSchema,
+} from "@cubby/schemas/project";
 import { isMiscProduct, isNonFoodCategory } from "@cubby/shared";
 import { sum, uniq, uniqBy } from "es-toolkit";
+import type { z } from "zod";
 import { problemQueryDeclarations } from "~/entities/problem-registry";
 import {
   BASE_KINDS,
@@ -495,6 +504,7 @@ type ExactProblemPage = Awaited<ReturnType<typeof executeProblem>>;
 const diagnosticItems = async <T extends readonly unknown[]>(
   db: Database,
   diagnostic: Parameters<typeof runDiagnostic>[1],
+  itemsSchema: z.ZodType<T>,
 ): Promise<Omit<DiagnosticSampleResult, "items"> & { items: T }> => {
   const result = await runDiagnostic(
     db,
@@ -505,7 +515,7 @@ const diagnosticItems = async <T extends readonly unknown[]>(
       limit: 12,
     },
   );
-  return { ...result, items: result.items as T };
+  return { ...result, items: itemsSchema.parse(result.items) };
 };
 
 const runExactProblemPages = async (
@@ -517,19 +527,15 @@ const runExactProblemPages = async (
     diagnostic?: DiagnosticRunOptions;
   },
 ): Promise<Partial<Record<ProblemKey, ExactProblemPage>>> => {
-  const tasks = Object.fromEntries(
-    keys.map((key) => [
-      key,
-      () =>
-        executeProblem(db, key, {
-          projectionFreshness: options?.projectionFreshness,
-          diagnostic: options?.diagnostic,
-        }),
-    ]),
-  ) as Record<string, () => Promise<ExactProblemPage>>;
-  return traceAllBounded(tasks, options?.concurrency ?? 4) as Promise<
-    Partial<Record<ProblemKey, ExactProblemPage>>
-  >;
+  const tasks: Record<string, () => Promise<ExactProblemPage>> = {};
+  for (const key of keys) {
+    tasks[key] = () =>
+      executeProblem(db, key, {
+        projectionFreshness: options?.projectionFreshness,
+        diagnostic: options?.diagnostic,
+      });
+  }
+  return await traceAllBounded(tasks, options?.concurrency ?? 4);
 };
 
 const exactSectionTotals = (
@@ -581,15 +587,13 @@ const presentCoverageExactRows = async (
         `Canonical conversion coverage Problem selected ${row.id}, but bounded presentation hydration was incomplete`,
       );
     }
-    return {
+    return ingredientWithPartialCoverageSchema.parse({
       id: parseShortcodeFor("product", product.shortcode),
       name: product.name,
       manufacturer: product.manufacturer,
       coverage: {
-        covered:
-          coverage.coveredKinds as IngredientWithPartialCoverage["coverage"]["covered"],
-        applicable:
-          coverage.applicableKinds as IngredientWithPartialCoverage["coverage"]["applicable"],
+        covered: coverage.coveredKinds,
+        applicable: coverage.applicableKinds,
       },
       hasPrice: product.price != null,
       hasUsdaLink: product.food != null,
@@ -598,7 +602,7 @@ const presentCoverageExactRows = async (
         "ingredient",
         product.ingredient.shortcode,
       ),
-    };
+    });
   });
   const islands = islandPage.data.map((row) => {
     const product = byCode.get(row.id);
@@ -619,7 +623,7 @@ const presentCoverageExactRows = async (
     const islandUnits = wasm.detect_unit_mapping_islands(
       effective ?? product.unitMappings,
     );
-    return {
+    return productWithIslandedMappingsSchema.parse({
       id: parseShortcodeFor("product", product.shortcode),
       name: product.name,
       manufacturer: product.manufacturer,
@@ -629,12 +633,10 @@ const presentCoverageExactRows = async (
         exampleUnit: units[0] ?? "unknown",
       })),
       coverage: {
-        covered:
-          coverage.coveredKinds as ProductWithIslandedMappings["coverage"]["covered"],
-        applicable:
-          coverage.applicableKinds as ProductWithIslandedMappings["coverage"]["applicable"],
+        covered: coverage.coveredKinds,
+        applicable: coverage.applicableKinds,
       },
-    };
+    });
   });
   return {
     ingredientsWithPartialCoverage: partial,
@@ -650,7 +652,7 @@ const presentCoverageExactRows = async (
  * Keeping it next to the lane makes that boundary reviewable and prevents a
  * rich card from accidentally becoming a second detector.
  */
-const presentFastExactRows = <T>(
+const presentFastExactRows = (
   key: string,
   page: ExactProblemPage,
   hydration?: {
@@ -668,7 +670,7 @@ const presentFastExactRows = <T>(
       ProblemsFast["financialTransactionAllocationDefects"][number]
     >;
   },
-): T[] =>
+): unknown[] =>
   page.data.map((row) => {
     const r = row as Record<string, unknown>;
     const id = String(r.id);
@@ -844,7 +846,34 @@ const presentFastExactRows = <T>(
           `No exact card presenter declared for Problem "${key}"`,
         );
     }
-  }) as T[];
+  });
+
+/**
+ * Exact Problem pages are generic list rows, so their card projections cross a
+ * raw-data seam. Validate the projection against the declared wire schema
+ * before returning it; callers never reconstruct branded card types with a
+ * structural assertion.
+ */
+const presentFastExactProblem = <T>(
+  key: FastEntityProblemKey,
+  page: ExactProblemPage,
+  itemsSchema: z.ZodType<T>,
+  hydration?: {
+    vendorExpenseCounts?: Map<string, { expenseRowCount: number }>;
+    soldTotals?: Map<
+      string,
+      {
+        soldQuantity: number;
+        proceeds: number;
+        servingLocations: { id: string; name: string }[];
+      }
+    >;
+    allocationDefects?: Map<
+      string,
+      ProblemsFast["financialTransactionAllocationDefects"][number]
+    >;
+  },
+): T => itemsSchema.parse(presentFastExactRows(key, page, hydration));
 
 const presentSingleFastProblem = async (
   db: Database,
@@ -852,30 +881,36 @@ const presentSingleFastProblem = async (
   page: ExactProblemPage,
 ): Promise<unknown[]> => {
   if (key === "vendorsWithoutLogos") {
-    return presentFastExactRows(key, page, {
-      vendorExpenseCounts: await loadVendorLogoPresenterCounts(
-        db,
-        page.data.map((row) => row.id),
-      ),
-    });
+    return allProblemsSchema.shape.vendorsWithoutLogos.parse(
+      presentFastExactRows(key, page, {
+        vendorExpenseCounts: await loadVendorLogoPresenterCounts(
+          db,
+          page.data.map((row) => row.id),
+        ),
+      }),
+    );
   }
   if (key === "soldButStillStocked") {
-    return presentFastExactRows(key, page, {
-      soldTotals: await loadSoldButStockedPresenterTotals(
-        db,
-        page.data.map((row) => row.id),
-      ),
-    });
+    return allProblemsSchema.shape.soldButStillStocked.parse(
+      presentFastExactRows(key, page, {
+        soldTotals: await loadSoldButStockedPresenterTotals(
+          db,
+          page.data.map((row) => row.id),
+        ),
+      }),
+    );
   }
   if (key === "financialTransactionAllocationDefects") {
-    return presentFastExactRows(key, page, {
-      allocationDefects: await loadAllocationDefectPresenters(
-        db,
-        page.data.map((row) => row.id),
-      ),
-    });
+    return allProblemsSchema.shape.financialTransactionAllocationDefects.parse(
+      presentFastExactRows(key, page, {
+        allocationDefects: await loadAllocationDefectPresenters(
+          db,
+          page.data.map((row) => row.id),
+        ),
+      }),
+    );
   }
-  return presentFastExactRows(key, page);
+  return allProblemsSchema.shape[key].parse(presentFastExactRows(key, page));
 };
 
 const FAST_ENTITY_PROBLEM_KEYS = [
@@ -895,6 +930,13 @@ const FAST_ENTITY_PROBLEM_KEYS = [
   "financialTransactionAllocationDefects",
 ] as const satisfies readonly ProblemKey[];
 
+type FastEntityProblemKey = (typeof FAST_ENTITY_PROBLEM_KEYS)[number];
+
+const isFastEntityProblemKey = (
+  key: ProblemKey,
+): key is (typeof FAST_ENTITY_PROBLEM_KEYS)[number] =>
+  FAST_ENTITY_PROBLEM_KEYS.some((candidate) => candidate === key);
+
 /** Fast Problems stays DB-only: no WASM or provider calls. */
 export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
   const exactKeys = FAST_ENTITY_PROBLEM_KEYS;
@@ -907,77 +949,94 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     traceAllBounded(
       {
         duplicateProductIdentities: () =>
-          diagnosticItems<ProblemsFast["duplicateProductIdentities"]>(
+          diagnosticItems(
             db,
             "duplicate-product-identities",
+            allProblemsSchema.shape.duplicateProductIdentities,
           ),
         orphanedProducts: () =>
-          diagnosticItems<ProblemsFast["orphanedProducts"]>(
+          diagnosticItems(
             db,
             "orphaned-products",
+            allProblemsSchema.shape.orphanedProducts,
           ),
         partiallyImportedCookbooks: () =>
-          diagnosticItems<ProblemsFast["partiallyImportedCookbooks"]>(
+          diagnosticItems(
             db,
             "partially-imported-cookbooks",
+            allProblemsSchema.shape.partiallyImportedCookbooks,
           ),
         toolsUsedOutsideOwnership: () =>
-          diagnosticItems<ProblemsFast["toolsUsedOutsideOwnership"]>(
+          diagnosticItems(
             db,
             "tools-used-outside-ownership",
+            allProblemsSchema.shape.toolsUsedOutsideOwnership,
           ),
         orphanedEntityEmbeddings: () =>
-          diagnosticItems<ProblemsFast["orphanedEntityEmbeddings"]>(
+          diagnosticItems(
             db,
             "orphaned-entity-embeddings",
+            allProblemsSchema.shape.orphanedEntityEmbeddings,
           ),
         entitiesMissingEmbeddings: () =>
-          diagnosticItems<ProblemsFast["entitiesMissingEmbeddings"]>(
+          diagnosticItems(
             db,
             "entities-missing-embeddings",
+            allProblemsSchema.shape.entitiesMissingEmbeddings,
           ),
         staleParentRecipes: () =>
-          diagnosticItems<ProblemsFast["staleParentRecipes"]>(
+          diagnosticItems(
             db,
             "stale-parent-recipes",
+            allProblemsSchema.shape.staleParentRecipes,
           ),
         manufacturerSpellingVariants: () =>
-          diagnosticItems<ProblemsFast["manufacturerSpellingVariants"]>(
+          diagnosticItems(
             db,
             "manufacturer-spelling-variants",
+            allProblemsSchema.shape.manufacturerSpellingVariants,
           ),
         duplicateVendors: () =>
-          diagnosticItems<ProblemsFast["duplicateVendors"]>(
+          diagnosticItems(
             db,
             "duplicate-vendors",
+            allProblemsSchema.shape.duplicateVendors,
           ),
         duplicateSpendCandidates: () =>
-          diagnosticItems<ProblemsFast["duplicateSpendCandidates"]>(
+          diagnosticItems(
             db,
             "duplicate-spend-candidates",
+            allProblemsSchema.shape.duplicateSpendCandidates,
           ),
         duplicateFinancialTransactionSourceRefs: () =>
-          diagnosticItems<
-            ProblemsFast["duplicateFinancialTransactionSourceRefs"]
-          >(db, "duplicate-financial-transaction-source-refs"),
+          diagnosticItems(
+            db,
+            "duplicate-financial-transaction-source-refs",
+            allProblemsSchema.shape.duplicateFinancialTransactionSourceRefs,
+          ),
         duplicateFinancialAccountSourceAliases: () =>
-          diagnosticItems<
-            ProblemsFast["duplicateFinancialAccountSourceAliases"]
-          >(db, "duplicate-financial-account-source-aliases"),
+          diagnosticItems(
+            db,
+            "duplicate-financial-account-source-aliases",
+            allProblemsSchema.shape.duplicateFinancialAccountSourceAliases,
+          ),
         invalidFinancialJson: () =>
-          diagnosticItems<ProblemsFast["invalidFinancialJson"]>(
+          diagnosticItems(
             db,
             "invalid-financial-json",
+            allProblemsSchema.shape.invalidFinancialJson,
           ),
         incompleteStatementImports: () =>
-          diagnosticItems<ProblemsFast["incompleteStatementImports"]>(
+          diagnosticItems(
             db,
             "incomplete-statement-imports",
+            allProblemsSchema.shape.incompleteStatementImports,
           ),
         referentialLivenessViolations: () =>
-          diagnosticItems<ProblemsFast["referentialLivenessViolations"]>(
+          diagnosticItems(
             db,
             "referential-liveness-violations",
+            allProblemsSchema.shape.referentialLivenessViolations,
           ),
       },
       2,
@@ -1032,63 +1091,77 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
 
   return {
     ...legacy,
-    duplicateInventory: presentFastExactRows(
+    duplicateInventory: presentFastExactProblem(
       "duplicateInventory",
       page("duplicateInventory"),
+      allProblemsSchema.shape.duplicateInventory,
     ),
-    soldButStillStocked: presentFastExactRows(
+    soldButStillStocked: presentFastExactProblem(
       "soldButStillStocked",
       page("soldButStillStocked"),
+      allProblemsSchema.shape.soldButStillStocked,
       hydration,
     ),
-    kitsCountedTwice: presentFastExactRows(
+    kitsCountedTwice: presentFastExactProblem(
       "kitsCountedTwice",
       page("kitsCountedTwice"),
+      allProblemsSchema.shape.kitsCountedTwice,
     ),
-    unlinkedExitExpenses: presentFastExactRows(
+    unlinkedExitExpenses: presentFastExactProblem(
       "unlinkedExitExpenses",
       page("unlinkedExitExpenses"),
+      allProblemsSchema.shape.unlinkedExitExpenses,
     ),
-    purchaselessExitExpenses: presentFastExactRows(
+    purchaselessExitExpenses: presentFastExactProblem(
       "purchaselessExitExpenses",
       page("purchaselessExitExpenses"),
+      allProblemsSchema.shape.purchaselessExitExpenses,
     ),
-    productsWithNoImages: presentFastExactRows(
+    productsWithNoImages: presentFastExactProblem(
       "productsWithNoImages",
       page("productsWithNoImages"),
+      allProblemsSchema.shape.productsWithNoImages,
     ),
-    unreferencedImages: presentFastExactRows(
+    unreferencedImages: presentFastExactProblem(
       "unreferencedImages",
       page("unreferencedImages"),
+      allProblemsSchema.shape.unreferencedImages,
     ),
-    understatedCostMeals: presentFastExactRows(
+    understatedCostMeals: presentFastExactProblem(
       "understatedCostMeals",
       page("understatedCostMeals"),
+      allProblemsSchema.shape.understatedCostMeals,
     ),
-    unknownParkedItems: presentFastExactRows(
+    unknownParkedItems: presentFastExactProblem(
       "unknownParkedItems",
       page("unknownParkedItems"),
+      allProblemsSchema.shape.unknownParkedItems,
     ),
-    inventoryWithoutPricePath: presentFastExactRows(
+    inventoryWithoutPricePath: presentFastExactProblem(
       "inventoryWithoutPricePath",
       page("inventoryWithoutPricePath"),
+      allProblemsSchema.shape.inventoryWithoutPricePath,
     ),
-    vendorsWithoutLogos: presentFastExactRows(
+    vendorsWithoutLogos: presentFastExactProblem(
       "vendorsWithoutLogos",
       page("vendorsWithoutLogos"),
+      allProblemsSchema.shape.vendorsWithoutLogos,
       hydration,
     ),
-    purchasesNotReconciling: presentFastExactRows(
+    purchasesNotReconciling: presentFastExactProblem(
       "purchasesNotReconciling",
       page("purchasesNotReconciling"),
+      allProblemsSchema.shape.purchasesNotReconciling,
     ),
-    purchaseFinancialSettlementMismatches: presentFastExactRows(
+    purchaseFinancialSettlementMismatches: presentFastExactProblem(
       "purchaseFinancialSettlementMismatches",
       page("purchaseFinancialSettlementMismatches"),
+      allProblemsSchema.shape.purchaseFinancialSettlementMismatches,
     ),
-    financialTransactionAllocationDefects: presentFastExactRows(
+    financialTransactionAllocationDefects: presentFastExactProblem(
       "financialTransactionAllocationDefects",
       page("financialTransactionAllocationDefects"),
+      allProblemsSchema.shape.financialTransactionAllocationDefects,
       hydration,
     ),
     sectionTotals: { ...derivedTotals, ...exactSectionTotals(exact) },
@@ -1163,9 +1236,10 @@ export const findCoverageProblems = async (
     ingredientsPage,
     islandsPage,
   );
-  const titleSized = await diagnosticItems<ProductWithTitleDerivableSize[]>(
+  const titleSized = await diagnosticItems(
     db,
     "title-derivable-unit-size",
+    allProblemsSchema.shape.productsWithTitleDerivableSize,
   );
   return {
     ...presented,
@@ -1197,7 +1271,7 @@ const findProductsWithBetterUpcData = async (
     throw new Error("UPC diagnostic adapter omitted its freshness contract");
   }
   return {
-    products: result.items as ProductWithBetterUpcData[],
+    products: productWithBetterUpcDataSchema.array().parse(result.items),
     count: result.count,
     freshness: result.freshness,
   };
@@ -1225,9 +1299,19 @@ type TrackerEntityProblemKey = Exclude<
   "projectsWithDateDrift"
 >;
 
-const TRACKER_TYPE_BY_KEY = Object.fromEntries(
-  Object.entries(TRACKER_PROBLEM_KEY_BY_TYPE).map(([type, key]) => [key, type]),
-) as Record<ProblemKey, ProjectAttentionType>;
+const trackerTypeFor = (key: TrackerEntityProblemKey): ProjectAttentionType => {
+  const entry = Object.entries(TRACKER_PROBLEM_KEY_BY_TYPE).find(
+    ([, problemKey]) => problemKey === key,
+  );
+  if (!entry) throw new Error(`No attention type declared for "${key}"`);
+  return projectAttentionTypeSchema.parse(entry[0]);
+};
+
+const isTrackerEntityProblemKey = (
+  key: ProblemKey,
+): key is TrackerEntityProblemKey =>
+  key !== "projectsWithDateDrift" &&
+  TRACKER_PROBLEM_KEYS.some((candidate) => candidate === key);
 
 const indexAttentionItems = (
   items: readonly ProjectAttentionItem[],
@@ -1254,7 +1338,7 @@ const presentTrackerProblem = (
   page: ExactProblemPage,
   index: Map<string, ProjectAttentionItem>,
 ): ProjectAttentionItem[] => {
-  const type = TRACKER_TYPE_BY_KEY[key];
+  const type = trackerTypeFor(key);
   return page.data.flatMap((row) => {
     const id = String((row as { id: unknown }).id);
     const item = index.get(`${type}:${id}`);
@@ -1314,8 +1398,9 @@ export const findTrackerProblems = async (
       page("blockedWorkProjects"),
       index,
     ),
-    projectsWithDateDrift: page("projectsWithDateDrift")
-      .items as ProjectAttentionItem[],
+    projectsWithDateDrift: projectAttentionItemSchema
+      .array()
+      .parse(page("projectsWithDateDrift").items),
     sectionTotals: {
       ...exactSectionTotals(exact),
     },
@@ -1364,12 +1449,12 @@ export const findProblemCounts = async (
     ]),
   ) as Record<string, () => Promise<number>>;
   const counts = await traceAllBounded(tasks, 4);
-  const byType = Object.fromEntries(
+  const byType = problemsCountSchema.shape.byType.parse(
     declarations.map((definition) => [
       definition.key,
       Number(counts[definition.key] ?? 0),
     ]),
-  ) as ProblemsCount["byType"];
+  );
   const totalFor = (problemClass: "defect" | "coverage") =>
     declarations.reduce(
       (total, definition) =>
@@ -1395,14 +1480,10 @@ export const findProblemByType = async (
   const result = await executeProblem(db, key, {
     diagnostic: { upcLookupClient },
   });
-  if ((FAST_ENTITY_PROBLEM_KEYS as readonly ProblemKey[]).includes(key)) {
+  if (isFastEntityProblemKey(key)) {
     return {
       type: key,
-      items: await presentSingleFastProblem(
-        db,
-        key as (typeof FAST_ENTITY_PROBLEM_KEYS)[number],
-        result,
-      ),
+      items: await presentSingleFastProblem(db, key, result),
       total: result.count,
     };
   }
@@ -1426,18 +1507,11 @@ export const findProblemByType = async (
       total: result.count,
     };
   }
-  if (
-    key !== "projectsWithDateDrift" &&
-    (TRACKER_PROBLEM_KEYS as readonly ProblemKey[]).includes(key)
-  ) {
+  if (key !== "projectsWithDateDrift" && isTrackerEntityProblemKey(key)) {
     const index = indexAttentionItems(await computeAttentionItems(db));
     return {
       type: key,
-      items: presentTrackerProblem(
-        key as TrackerEntityProblemKey,
-        result,
-        index,
-      ),
+      items: presentTrackerProblem(key, result, index),
       total: result.count,
     };
   }

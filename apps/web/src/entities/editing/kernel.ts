@@ -1,5 +1,5 @@
 import type { QueryKey } from "@tanstack/react-query";
-import type { EntityEditResultFor } from "./intent-types";
+import { parseEntityMutationResultFor } from "../entity-mutation.functions";
 import { type EntityEditRegistry, getEntityEditDefinition } from "./registry";
 import type {
   EditableEntity,
@@ -13,9 +13,9 @@ import type {
   EntityEditIssue,
   EntityEditOperationDefinition,
   EntityEditRecord,
-  EntityEditRequest,
   EntityEditResult,
   EntityMutationPort,
+  RuntimeEntityEditRequest,
 } from "./types";
 
 const EMPTY_CONTEXT: EntityEditContext = {};
@@ -40,7 +40,7 @@ const denied = (access: EntityEditAccess): EntityEditIssue =>
 /** Resolve all declarative choices before draft creation or mutation work. */
 export function resolveEntityEdit<E extends EditableEntity>(
   registry: EntityEditRegistry,
-  request: EntityEditRequest<E>,
+  request: RuntimeEntityEditRequest<E>,
 ): ResolvedEntityEdit<E> | { issues: readonly EntityEditIssue[] } {
   const definition = getEntityEditDefinition(registry, request.entity);
   const operation = definition.operations[request.operation];
@@ -102,7 +102,7 @@ export function isResolvedEntityEdit<E extends EditableEntity>(
 /** Build one stable initial-value bag for a selected semantic surface. */
 export function initialEntityEditValues<E extends EditableEntity>(
   resolved: ResolvedEntityEdit<E>,
-  request: EntityEditRequest<E>,
+  request: RuntimeEntityEditRequest<E>,
 ): Record<string, unknown> {
   const intent = resolved.intentDefinition;
   const defaults =
@@ -135,7 +135,7 @@ export function initialEntityEditValues<E extends EditableEntity>(
  */
 export function buildEntityEdit<E extends EditableEntity>(
   resolved: ResolvedEntityEdit<E>,
-  request: EntityEditRequest<E>,
+  request: RuntimeEntityEditRequest<E>,
   values: Readonly<Record<string, unknown>>,
 ): EntityEditBuildResult<E> {
   const intent = resolved.intentDefinition;
@@ -246,7 +246,7 @@ export async function executeEntityEdit<E extends EditableEntity>(
     entity: definition.entity,
     id: execution.id,
     changed: true,
-    result: execution.result as EntityEditResultFor<E>,
+    result: parseEntityMutationResultFor(definition.entity, execution.result),
   };
 }
 

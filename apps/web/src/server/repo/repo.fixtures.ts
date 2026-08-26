@@ -46,7 +46,7 @@ type RecipeIngredientInput = NonNullable<
 type ProductFixtureInput<
   Ingredient extends IngredientId | IngredientShortcode | null | undefined,
 > = Omit<ProductCreateInput, "ingredientId"> & {
-  ingredientId: Ingredient extends undefined ? null : Ingredient;
+  ingredientId: Ingredient | null;
 };
 
 /**
@@ -64,8 +64,9 @@ export const makeProductInput = <
   overrides: Omit<Partial<ProductCreateInput>, "ingredientId"> & {
     ingredientId?: Ingredient;
   } = {},
-): ProductFixtureInput<Ingredient> =>
-  ({
+): ProductFixtureInput<Ingredient> => {
+  const { ingredientId, ...rest } = overrides;
+  return {
     name: "Test Product",
     aliases: [],
     tags: [],
@@ -74,11 +75,12 @@ export const makeProductInput = <
     upc: null,
     fdc_id: null,
     expectedQuantity: null,
-    ingredientId: null,
+    ingredientId: ingredientId ?? null,
     unitMappings: [],
     externalIds: [],
-    ...overrides,
-  }) as ProductFixtureInput<Ingredient>;
+    ...rest,
+  };
+};
 
 /**
  * Wraps `createX(db, data, actor)` with the create → resolve → throw → brand

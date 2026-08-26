@@ -1,0 +1,5 @@
+export { unsafeProductId } from "@cubby/schemas/identifiers";
+export * from "@cubby/schemas/testing";
+export { testProductId } from "@cubby/schemas/testing";
+const dynamicallyLoaded = import("@cubby/schemas/testing");
+const required = require("@cubby/schemas/testing");

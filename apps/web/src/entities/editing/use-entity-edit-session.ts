@@ -1,11 +1,6 @@
 import { isEqual } from "es-toolkit";
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import type {
-  DefaultValues,
-  Path,
-  PathValue,
-  UseFormReturn,
-} from "react-hook-form";
+import type { Path, PathValue, UseFormReturn } from "react-hook-form";
 import { useForm, useWatch } from "react-hook-form";
 import { entityEditRegistry } from "./definitions";
 import type { EntityEditDraft } from "./intent-types";
@@ -19,8 +14,8 @@ import type {
   EditableEntity,
   EntityEditAccess,
   EntityEditIssue,
-  EntityEditRequest,
   EntityEditResult,
+  RuntimeEntityEditRequest,
 } from "./types";
 import { useEntityCommands } from "./use-entity-commands";
 
@@ -39,14 +34,21 @@ export interface EntityEditSession<E extends EditableEntity> {
   submit(): Promise<EntityEditResult<E>>;
 }
 
+function isDraftField<T extends object>(
+  values: T,
+  field: string,
+): field is Path<T> {
+  return field in values;
+}
+
 /**
  * Hosts commonly construct a request inline. Preserve an in-progress draft
  * across referentially-new but structurally-identical request objects, while a
  * record, seed, context, intent, or surface change still resets deliberately.
  */
 function useStableEntityEditRequest<E extends EditableEntity>(
-  request: EntityEditRequest<E>,
-): EntityEditRequest<E> {
+  request: RuntimeEntityEditRequest<E>,
+): RuntimeEntityEditRequest<E> {
   const last = useRef(request);
   if (!isEqual(last.current, request)) last.current = request;
   return last.current;
@@ -57,7 +59,7 @@ function useStableEntityEditRequest<E extends EditableEntity>(
  * page forms, sheets, dialogs, and previews choose their own presentation.
  */
 export function useEntityEditSession<E extends EditableEntity>(
-  request: EntityEditRequest<E>,
+  request: RuntimeEntityEditRequest<E>,
 ): EntityEditSession<E> {
   const stableRequest = useStableEntityEditRequest(request);
   const commands = useEntityCommands(stableRequest.entity);
@@ -72,10 +74,9 @@ export function useEntityEditSession<E extends EditableEntity>(
         : {},
     [stableRequest, resolved],
   );
-  const form = useForm<EntityEditDraft<E>>({
-    defaultValues: initialValues as DefaultValues<EntityEditDraft<E>>,
-  });
-  const values = useWatch({ control: form.control }) as EntityEditDraft<E>;
+  const form = useForm<EntityEditDraft<E>>();
+  useWatch({ control: form.control });
+  const values = form.getValues();
 
   useEffect(() => {
     form.reset(initialValues);
@@ -96,10 +97,16 @@ export function useEntityEditSession<E extends EditableEntity>(
     (nextIssues: readonly EntityEditIssue[]) => {
       form.clearErrors();
       for (const nextIssue of nextIssues) {
-        form.setError(
-          (nextIssue.field ?? "root.server") as Path<EntityEditDraft<E>>,
-          { type: nextIssue.source, message: nextIssue.message },
-        );
+        const error = {
+          type: nextIssue.source,
+          message: nextIssue.message,
+        };
+        const values = form.getValues();
+        if (nextIssue.field && isDraftField(values, nextIssue.field)) {
+          form.setError(nextIssue.field, error);
+        } else {
+          form.setError("root.server", error);
+        }
       }
     },
     [form],

@@ -9,6 +9,7 @@ import type {
   TaskOut,
   taskFiltersSchema,
 } from "@cubby/schemas/project";
+import { taskBoardOut, taskOut } from "@cubby/schemas/project";
 import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -54,8 +55,11 @@ function readFlatList(
 ): TaskOut[] | undefined {
   if (!data) return undefined;
   return source === "chartData"
-    ? (data as TaskOut[])
-    : [...(data as TaskBoardOut).active, ...(data as TaskBoardOut).recentDone];
+    ? taskOut.array().parse(data)
+    : (() => {
+        const board = taskBoardOut.parse(data);
+        return [...board.active, ...board.recentDone];
+      })();
 }
 
 /**
@@ -72,7 +76,7 @@ function writeFlatList(
   source: BoardCacheTarget["source"],
 ): TaskOut[] | TaskBoardOut {
   if (source === "chartData") return nextList;
-  const prevBoard = prevData as TaskBoardOut;
+  const prevBoard = taskBoardOut.parse(prevData);
   const active = nextList.filter((t) => t.status !== "done");
   const recentDone = nextList.filter((t) => t.status === "done");
   const doneCount =

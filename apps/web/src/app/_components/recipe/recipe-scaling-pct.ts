@@ -1,4 +1,4 @@
-import type { IngredientDataItem, RecipeCosting } from "~/lib/recipe-costing";
+import type { IngredientDataItem } from "~/lib/recipe-costing";
 
 // Scaling percentages for the "Spec" recipe view — Modernist Cuisine's SCALING
 // column. This is baker's percentage with a *selectable* 100% base instead of
@@ -9,7 +9,17 @@ import type { IngredientDataItem, RecipeCosting } from "~/lib/recipe-costing";
 // own-gram-based `bakerPct`, so the percentage and the printed grams agree.
 
 /** Resolved gram weight for a row, or null when the line can't reach grams. */
-const gramsForRow = (row: IngredientDataItem): number | null => {
+type ScalingRow = {
+  id: string;
+  priceInfo: IngredientDataItem["priceInfo"];
+};
+
+type ScalingCosting = {
+  rows: readonly ScalingRow[];
+  isFlourRows: ReadonlyMap<string, boolean>;
+};
+
+const gramsForRow = (row: ScalingRow): number | null => {
   const gram = row.priceInfo?.gram;
   return gram?.isOk() ? gram.value.value : null;
 };
@@ -20,7 +30,9 @@ const gramsForRow = (row: IngredientDataItem): number | null => {
  * when nothing weighs in. The heaviest fallback keeps a sensible anchor for
  * non-baking recipes.
  */
-export const pickDefaultBaseRowId = (costing: RecipeCosting): string | null => {
+export const pickDefaultBaseRowId = (
+  costing: ScalingCosting,
+): string | null => {
   const flour = costing.rows.find(
     (r) => gramsForRow(r) != null && costing.isFlourRows.get(r.id) === true,
   );
@@ -44,7 +56,7 @@ export const pickDefaultBaseRowId = (costing: RecipeCosting): string | null => {
  * factor cancels in the ratio.
  */
 export const computeScalingPercentages = (
-  costing: RecipeCosting,
+  costing: ScalingCosting,
   baseRowId: string | null,
 ): Map<string, number | null> => {
   const baseRow = baseRowId

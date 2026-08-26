@@ -51,7 +51,7 @@ import {
 const DEFAULT_PAGINATION: PaginationParams = { pageIndex: 0, pageSize: 10 };
 
 function bindingFor(entity: EntityKernelEntity): EntityKernelBinding {
-  return ENTITY_KERNEL_BINDINGS[entity] as unknown as EntityKernelBinding;
+  return ENTITY_KERNEL_BINDINGS[entity];
 }
 
 function parseSorts(

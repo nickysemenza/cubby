@@ -901,6 +901,8 @@ export type ProblemKey = keyof typeof allProblemArrayFields;
 
 export type ProblemArrays = { [K in ProblemKey]: AllProblems[K] };
 
+const problemArraysSchema = z.object(allProblemArrayFields);
+
 /**
  * Every detector key at empty. The Problems page merges four separately-loaded
  * cost groups into one `AllProblems`, and a group that hasn't resolved yet has
@@ -913,10 +915,11 @@ export type ProblemArrays = { [K in ProblemKey]: AllProblems[K] };
  * churning the memos downstream of the merge on every recompute.
  */
 export const EMPTY_PROBLEM_ARRAYS: ProblemArrays = Object.freeze(
-  Object.keys(allProblemArrayFields).reduce((empty, key) => {
-    empty[key as ProblemKey] = [];
-    return empty;
-  }, {} as ProblemArrays),
+  problemArraysSchema.parse(
+    Object.fromEntries(
+      Object.keys(allProblemArrayFields).map((key) => [key, []]),
+    ),
+  ),
 );
 
 export const PROBLEM_CLASS = {
@@ -1068,7 +1071,10 @@ export type CoverageProblemKey = {
 }[ProblemKey];
 
 const isDefectKey = (key: string): boolean =>
-  PROBLEM_CLASS[key as ProblemKey] === "defect";
+  Object.entries(PROBLEM_CLASS).some(
+    ([candidate, problemClass]) =>
+      candidate === key && problemClass === "defect",
+  );
 
 /**
  * Sum only the `defect` sections. The single definition of "how many problems
@@ -1147,15 +1153,17 @@ export const countProblems = (all: AllProblems): ProblemsCount => {
   } = all;
   // Freshness metadata sits beside detector arrays in the aggregate contract.
   // Keep the mechanically-derived count roster arrays-only as promised.
-  const arrays = Object.fromEntries(
-    Object.entries(all).filter(([, value]) => Array.isArray(value)),
-  ) as ProblemArrays;
-  const byType = Object.fromEntries(
+  const arrays = problemArraysSchema.parse(
+    Object.fromEntries(
+      Object.entries(all).filter(([, value]) => Array.isArray(value)),
+    ),
+  );
+  const byType = problemsCountSchema.shape.byType.parse(
     Object.entries(arrays).map(([key, items]) => [
       key,
       sectionSize(key, items, sectionTotals),
     ]),
-  ) as ProblemsCount["byType"];
+  );
   // `byType` stays the FULL roster (coverage keys included) so per-detector
   // consumers and the MCP `type` slices keep working; only the totals split.
   return {

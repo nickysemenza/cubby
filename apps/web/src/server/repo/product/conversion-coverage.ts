@@ -1,6 +1,7 @@
 /** Persistence seam for the catalog-wide conversion projection. */
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { z } from "zod";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   product,
@@ -10,6 +11,7 @@ import {
 import { getDb, unwrapDb } from "~/server/repo/database-helpers";
 
 const PRODUCT_CONVERSION_COVERAGE_ENGINE_VERSION = "conversion-coverage-v1";
+const productConversionCoverageStatusSchema = z.enum(["ready", "unavailable"]);
 
 // USDA is an external input to the shared conversion graph. We do not get an
 // upstream change feed, so a bounded refresh window is the durable invalidation
@@ -128,7 +130,7 @@ export const loadProductConversionCoverageProjection = async (
       row.productId,
       {
         ...row,
-        status: row.status as ProductConversionCoverageProjection["status"],
+        status: productConversionCoverageStatusSchema.parse(row.status),
       },
     ]),
   );

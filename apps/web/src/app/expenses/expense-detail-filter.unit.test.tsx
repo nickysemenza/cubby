@@ -1,4 +1,5 @@
-import type { ExpenseOut } from "@cubby/schemas/project";
+import { type ExpenseOut, expenseOut } from "@cubby/schemas/project";
+import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -91,8 +92,8 @@ vi.mock("./split-expense-dialog", () => ({ SplitExpenseDialog: () => null }));
 
 import { ExpenseDetail } from "./expense-detail";
 
-const expense = {
-  id: "EXP-4K7M",
+const expense: ExpenseOut = expenseOut.parse({
+  id: testShortcode("expense", "EXP-4K7M"),
   name: "Copper pipe",
   cost: 42,
   date: "2026-08-18",
@@ -114,7 +115,14 @@ const expense = {
   orderUrl: null,
   notes: null,
   url: null,
-} as unknown as ExpenseOut;
+  purchaseDate: null,
+  purchaseDisplayLabel: null,
+  sourceClaims: [],
+  beneficiaries: [],
+  funders: [],
+  createdAt: new Date("2026-01-01"),
+  updatedAt: new Date("2026-01-01"),
+});
 
 describe("ExpenseDetail filter links", () => {
   it("keeps the editable value primary and exposes a separate cohort action", () => {

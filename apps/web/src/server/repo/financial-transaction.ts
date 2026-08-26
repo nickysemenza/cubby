@@ -8,6 +8,7 @@ import type {
   FinancialTransactionUpdateData,
 } from "@cubby/schemas/financial-transaction";
 import {
+  financialTransactionKind,
   financialTransactionOut,
   financialTransactionSettlementViolation,
   financialTransactionSortableFields,
@@ -607,7 +608,7 @@ export async function updateFinancialTransaction(
           : data.purchaseId !== undefined
             ? data.purchaseId !== null
             : allocationCount > 0,
-      kind: nextKind as FinancialTransactionCreateInput["kind"],
+      kind: financialTransactionKind.parse(nextKind),
       amount: nextAmount,
     });
     if (settlementViolation)

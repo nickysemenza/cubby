@@ -210,17 +210,6 @@ const KIND_SPECS: {
   },
 };
 
-/**
- * The spec for an item's kind.
- *
- * The cast is the single place the correlation between `item.kind` and its
- * spec's parameter type is asserted — TypeScript cannot follow that through an
- * index into a mapped type. Confining it here is the point: one asserted line
- * instead of a `kind ===` ladder repeated per property.
- */
-const specFor = (item: PublishableCalendarItem) =>
-  KIND_SPECS[item.kind] as CalendarKindSpec<PublishableKind>;
-
 /** Whether this feed publishes the item: kind membership, then the kind's own filter. */
 function isPublishable(
   item: CalendarItem,
@@ -228,8 +217,9 @@ function isPublishable(
 ): item is PublishableCalendarItem {
   const kinds: readonly CalendarItem["kind"][] = FEED_KINDS[feed];
   if (!kinds.includes(item.kind)) return false;
-  const publishable = item as PublishableCalendarItem;
-  return specFor(publishable).includes(publishable);
+  if (item.kind === "meal") return KIND_SPECS.meal.includes(item);
+  if (item.kind === "task") return KIND_SPECS.task.includes(item);
+  return false;
 }
 
 /**
@@ -239,9 +229,9 @@ function isPublishable(
  * A timed event ignores `endDateExclusive` entirely: its end is its own
  * duration past its start, not the day after it.
  */
-function boundaryLines(
-  item: PublishableCalendarItem,
-  spec: CalendarKindSpec<PublishableKind>,
+function boundaryLines<K extends PublishableKind>(
+  item: ItemOfKind<K>,
+  spec: CalendarKindSpec<K>,
 ): string[] {
   const timing = spec.timing?.(item) ?? null;
   if (!timing) {
@@ -257,8 +247,11 @@ function boundaryLines(
   return [`DTSTART:${icsTimestamp(start)}`, `DTEND:${icsTimestamp(end)}`];
 }
 
-function toEvent(item: PublishableCalendarItem, opts: IcsOptions): string[] {
-  const spec = specFor(item);
+function toEventFor<K extends PublishableKind>(
+  item: ItemOfKind<K>,
+  spec: CalendarKindSpec<K>,
+  opts: IcsOptions,
+): string[] {
   // UID must be stable across polls so an edit updates the event in place
   // rather than duplicating it. Shortcodes are permanent and never reassigned
   // (not even on merge), which is exactly the guarantee a UID needs.
@@ -275,6 +268,12 @@ function toEvent(item: PublishableCalendarItem, opts: IcsOptions): string[] {
   if (description) lines.push(`DESCRIPTION:${escapeText(description)}`);
   lines.push("END:VEVENT");
   return lines;
+}
+
+function toEvent(item: PublishableCalendarItem, opts: IcsOptions): string[] {
+  return item.kind === "meal"
+    ? toEventFor(item, KIND_SPECS.meal, opts)
+    : toEventFor(item, KIND_SPECS.task, opts);
 }
 
 /**

@@ -189,6 +189,8 @@ describe("initiateDocumentUpload", () => {
 });
 
 describe("attachFileToEntity", () => {
+  const resolvedProductId = testEntityId("product", "attach-target");
+
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.assertAttachableEntityExists.mockResolvedValue(undefined);
@@ -216,7 +218,7 @@ describe("attachFileToEntity", () => {
       }),
     );
     mocks.findAttachmentByIdempotencyKey.mockResolvedValue(null);
-    mocks.resolveLiveShortcode.mockResolvedValue("prod-1");
+    mocks.resolveLiveShortcode.mockResolvedValue(resolvedProductId);
   });
 
   const base = {
@@ -244,8 +246,7 @@ describe("attachFileToEntity", () => {
     expect(mocks.createOrReuseAttachedImage).toHaveBeenCalledWith(
       {},
       expect.objectContaining({ contentType: "image/png", size: 70 }),
-      "product",
-      "prod-1",
+      { entity: "product", id: resolvedProductId },
       undefined,
     );
   });

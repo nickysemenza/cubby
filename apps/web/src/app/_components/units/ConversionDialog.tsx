@@ -117,10 +117,7 @@ function ConversionDialogContent({
   // Function to perform conversions using useCallback for memoization
   const performConversions = React.useCallback(
     (currentAmount: Amount) => {
-      const results: Record<AmountKind, Result<WAmount>> = {} as Record<
-        AmountKind,
-        Result<WAmount>
-      >;
+      const results: Partial<Record<AmountKind, Result<WAmount>>> = {};
       const resultPaths: Partial<
         Record<AmountKind, readonly WConversionStep[]>
       > = {};

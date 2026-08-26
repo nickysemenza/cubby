@@ -1,6 +1,9 @@
 "use client";
 
-import type { LocationShortcode } from "@cubby/schemas/identifiers";
+import {
+  type LocationShortcode,
+  parseShortcodeFor,
+} from "@cubby/schemas/identifiers";
 import type { LocationType } from "@cubby/schemas/location";
 import { Pencil } from "lucide-react";
 import type { ReactNode } from "react";
@@ -20,16 +23,21 @@ import {
   type InventoryRelatedEntity,
 } from "./inventory-column-helpers";
 
-/** A single (transient, structurally-cast) location shape read off a row's
- * related-entity accessor — {@link InventoryEntryBase}'s `location` field is
- * intentionally loose (plain `string` id) so it also fits `product` rows;
- * the branded-id cast happens once here at the inline-edit boundary. */
-type LocationLike = {
-  id: LocationShortcode;
-  shortcode: string;
-  name: string;
-  type: LocationType | null;
-};
+/**
+ * The inventory column's generic related-row accessor can also describe a
+ * product. Inline location editing is the boundary that requires a location
+ * summary, so establish both its shape and its public-id proof here.
+ */
+function locationSummary(
+  related: InventoryRelatedEntity["data"] | undefined,
+): { id: LocationShortcode; name: string; type: LocationType | null } | null {
+  if (!related || !("type" in related)) return null;
+  return {
+    id: parseShortcodeFor("location", related.id),
+    name: related.name,
+    type: related.type,
+  };
+}
 
 interface InventoryEntriesInlineEditConfig<T, TEntry> {
   /** WithLocationSearch — injected so unit tests can stub it. */
@@ -136,9 +144,7 @@ export function InventoryEntriesCell<
   if (layout === "inline") {
     if (inlineEdit && entries.length === 1) {
       const entry = entries[0]!;
-      const related = getRelatedEntity(entry) as unknown as
-        | LocationLike
-        | undefined;
+      const related = locationSummary(getRelatedEntity(entry));
       const current = related ? buildLocationComboboxItem(related) : null;
 
       return (

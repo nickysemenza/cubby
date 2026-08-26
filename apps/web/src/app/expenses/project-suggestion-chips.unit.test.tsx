@@ -1,4 +1,5 @@
-import type { ExpenseOut } from "@cubby/schemas/project";
+import { expenseOut } from "@cubby/schemas/project";
+import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ProjectSuggestionChips } from "./project-suggestion-chips";
@@ -31,12 +32,37 @@ vi.mock("@tanstack/react-query", () => ({
   }),
 }));
 
-const expense = {
-  id: "EXP-PLAN",
+const expense = expenseOut.parse({
+  id: testShortcode("expense", "EXP-PLAN"),
+  name: "Planned expense",
+  cost: 0,
   projectId: null,
   date: "2026-08-12",
+  lineKind: "principal",
+  lineBasis: "item_line",
+  costType: "materials",
   trade: "electrical",
-} as ExpenseOut;
+  future: false,
+  vendor: null,
+  vendorId: null,
+  vendorLogo: null,
+  productId: null,
+  productName: null,
+  productQuantity: null,
+  purchaseId: null,
+  purchaseDate: null,
+  purchaseDisplayLabel: null,
+  orderId: null,
+  orderUrl: null,
+  notes: null,
+  url: null,
+  projectName: null,
+  beneficiaries: [],
+  funders: [],
+  sourceClaims: [],
+  createdAt: new Date("2026-01-01"),
+  updatedAt: new Date("2026-01-01"),
+});
 
 describe("ProjectSuggestionChips", () => {
   it("does not assign until the selected proposal is accepted", () => {

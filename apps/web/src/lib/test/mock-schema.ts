@@ -13,7 +13,7 @@
 // Design notes (Zod 4.4.x internals, verified empirically):
 // - The runtime shape lives at `schema._zod.def`; `def.type` is the discriminator.
 // - `.brand()` is type-only — a branded id is just a `string` schema at runtime,
-//   so we emit a uuid and the final `as z.infer<T>` cast lines the brand up.
+//   so we emit a uuid and let the final schema parse preserve its inferred brand.
 // - `.refine()` does NOT wrap — `amount` stays `type: "object"`, so the
 //   omit-optionals policy below makes `{ value, unit }` (no `upperValue`) which
 //   satisfies its `upperValue > value` refinement for free.
@@ -58,7 +58,7 @@ export function mock<T extends z.ZodType>(
   const base = gen(schema, 0, opts.fillOptionals ?? false);
   const merged =
     opts.overrides !== undefined ? deepMerge(base, opts.overrides) : base;
-  return merged as z.infer<T>;
+  return schema.parse(merged);
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: walking Zod's internal def shape.

@@ -6,10 +6,10 @@ import {
   GTIN_SOURCE,
   storedExternalIdUrl,
 } from "@cubby/schemas/external-id";
-import {
-  type IngredientId,
-  type LocationId,
-  type ProductId,
+import type {
+  IngredientId,
+  LocationId,
+  ProductId,
 } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import {

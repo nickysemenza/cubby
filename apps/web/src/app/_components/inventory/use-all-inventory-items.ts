@@ -29,9 +29,9 @@ export function useAllInventoryItems() {
       if (!options.queryFn) {
         throw new Error("Missing inventory list query function");
       }
-      return (await options.queryFn({
+      return await options.queryFn({
         queryKey: options.queryKey,
-      } as never)) as InventoryListPage;
+      } as never);
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage: InventoryListPage) => {

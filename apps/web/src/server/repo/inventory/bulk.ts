@@ -93,7 +93,7 @@ async function batchFetchResults(
   );
   return resultIds
     .map((id) => fetchedById.get(id))
-    .filter((r) => r != null) as InventoryEntryDeepDB[];
+    .filter((r): r is InventoryEntryDeepDB => r != null);
 }
 
 const loadInventoryEntryPricing = async (

@@ -85,7 +85,7 @@ it("formatYield drops the bare-count 'whole' unit", () => {
 });
 
 it("getServingBasis prefers servings and labels yield units", () => {
-  const base = {
+  const base: RecipeOut = {
     id: testShortcode("recipe", "RCP-2347"),
     name: "Recipe",
     meta: null,
@@ -93,7 +93,7 @@ it("getServingBasis prefers servings and labels yield units", () => {
     sections: [],
     createdAt: new Date(),
     updatedAt: new Date(),
-  } as RecipeOut;
+  };
 
   expect(getServingBasis({ ...base, servings: 4 })).toEqual({
     divisor: 4,

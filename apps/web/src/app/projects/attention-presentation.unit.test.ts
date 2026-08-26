@@ -1,4 +1,8 @@
-import type { ProjectAttentionItem } from "@cubby/schemas/project";
+import {
+  type ProjectAttentionItem,
+  projectAttentionItemSchema,
+} from "@cubby/schemas/project";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { attentionEvidence } from "./attention-presentation";
 
@@ -16,19 +20,19 @@ const item = <T extends ProjectAttentionItem["type"]>(
   type: T,
   facts: Extract<ProjectAttentionItem, { type: T }>["facts"],
 ): ProjectAttentionItem =>
-  ({
+  projectAttentionItemSchema.parse({
     key: `${type}:PRJ-0001`,
     type,
     severity: "info",
     name: "Placeholder",
     description: "",
     entityType: "project",
-    entityId: "PRJ-0001",
+    entityId: testShortcode("project", "PRJ-0001"),
     date: null,
     amount: null,
     href: "/projects/PRJ-0001",
     facts,
-  }) as ProjectAttentionItem;
+  });
 
 describe("attentionEvidence", () => {
   it.each([

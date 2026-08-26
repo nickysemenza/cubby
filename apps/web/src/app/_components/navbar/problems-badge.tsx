@@ -1,8 +1,4 @@
-import {
-  PROBLEM_CLASS,
-  type ProblemKey,
-  type ProblemsCount,
-} from "@cubby/schemas/problems";
+import { PROBLEM_CLASS, type ProblemsCount } from "@cubby/schemas/problems";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useRouteContext } from "@tanstack/react-router";
 import { AlertTriangle, Check } from "lucide-react";
@@ -122,9 +118,14 @@ export const ProblemsBadge = () => {
       // Coverage keys are in `byType` (per-detector consumers still want them)
       // but NOT in `total`, so listing them here would break the "breakdown sums
       // to the badge" contract the Record above exists to guarantee.
-      if (PROBLEM_CLASS[key as ProblemKey] !== "defect") return [];
-      const n = count.byType[key as keyof ProblemsCount["byType"]];
-      return n > 0 ? [phrase(n)] : [];
+      const problemClass = Object.entries(PROBLEM_CLASS).find(
+        ([candidate]) => candidate === key,
+      )?.[1];
+      if (problemClass !== "defect") return [];
+      const n = Object.entries(count.byType).find(
+        ([candidate]) => candidate === key,
+      )?.[1];
+      return n && n > 0 ? [phrase(n)] : [];
     },
   );
 

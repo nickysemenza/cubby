@@ -2,7 +2,6 @@ import {
   type BackgroundJobKind,
   backgroundJobPayloadSchema,
 } from "@cubby/schemas/background-jobs";
-import { parseEntityId } from "@cubby/schemas/identifiers";
 import { match } from "ts-pattern";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
@@ -181,23 +180,16 @@ async function runBackgroundJobPayload(
       const { recomputeRecipeIds } = await import("./queue-recompute");
       await recomputeRecipeIds({
         database: db,
-        recipeIds: p.payload.recipeIds.map((id) => parseEntityId("recipe", id)),
+        recipeIds: p.payload.recipeIds,
         batchId,
       });
       return "succeeded" as const;
     })
     .with({ kind: "entity-embedding.refresh" }, async (p) => {
-      const refreshed = await refreshSearchDocument(
-        db,
-        p.payload.entityType,
-        p.payload.entityId,
-      );
+      const { ref } = p.payload;
+      const refreshed = await refreshSearchDocument(db, ref.entity, ref.id);
       if (refreshed.status !== "upserted") return "skipped" as const;
-      const text = await getSearchDocumentEmbeddingText(
-        db,
-        p.payload.entityType,
-        p.payload.entityId,
-      );
+      const text = await getSearchDocumentEmbeddingText(db, ref.entity, ref.id);
       if (!text) return "skipped" as const;
       if (p.payload.expectedEmbeddingHash) {
         const currentHash = await embeddingTextHash({
@@ -242,8 +234,8 @@ async function runBackgroundJobPayload(
         db,
         feature: "entity-embedding",
         entity: {
-          entityType: p.payload.entityType,
-          entityId: p.payload.entityId,
+          entityType: ref.entity,
+          entityId: ref.id,
         },
         batchId,
       });
@@ -278,13 +270,9 @@ async function runBackgroundJobPayload(
       const { describeLocation, isLocationHasNoImagesToAnalyzeError } =
         await import("./services/ai-enrichment/location-vision");
       try {
-        await describeLocation(
-          db,
-          parseEntityId("location", p.payload.locationId),
-          {
-            batchId,
-          },
-        );
+        await describeLocation(db, p.payload.locationId, {
+          batchId,
+        });
       } catch (error) {
         if (isLocationHasNoImagesToAnalyzeError(error))
           return "skipped" as const;
@@ -296,13 +284,9 @@ async function runBackgroundJobPayload(
       const { detectInventoryItems, isLocationHasNoImagesToAnalyzeError } =
         await import("./services/ai-enrichment/location-vision");
       try {
-        await detectInventoryItems(
-          db,
-          parseEntityId("location", p.payload.locationId),
-          {
-            batchId,
-          },
-        );
+        await detectInventoryItems(db, p.payload.locationId, {
+          batchId,
+        });
       } catch (error) {
         if (isLocationHasNoImagesToAnalyzeError(error))
           return "skipped" as const;
@@ -339,10 +323,7 @@ async function runBackgroundJobPayload(
       );
       // Real failures propagate (no catch here) — failOrRetryBackgroundJob is
       // what turns those into the queue's own attempts/backoff.
-      await retryUsdaMatch(
-        db,
-        parseEntityId("ingredient", p.payload.ingredientId),
-      );
+      await retryUsdaMatch(db, p.payload.ingredientId);
       return "succeeded" as const;
     })
     .exhaustive();

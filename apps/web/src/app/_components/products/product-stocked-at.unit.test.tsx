@@ -1,4 +1,7 @@
-import type { ProductWithFoodOut } from "@cubby/schemas/product";
+import {
+  type ProductWithFoodOut,
+  productWithFoodOut,
+} from "@cubby/schemas/product";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -95,30 +98,88 @@ const entry = (id: string, locationId: string) => ({
   amount: { value: 2, unit: "each" },
   valuation: 10,
   verifiedAt: null,
+  placement: "stock" as const,
   createdAt: new Date("2026-01-01"),
   updatedAt: new Date("2026-01-01"),
   location: {
     id: testShortcode("location", locationId),
     name: "shelf",
+    aliases: [],
+    tags: [],
+    type: null,
+    product: null,
+    lastBulkInventory: null,
+    aiDescription: null,
+    images: [],
+    valuation: null,
+    displayImage: null,
     ancestors: [],
+    createdAt: new Date("2026-01-01"),
+    updatedAt: new Date("2026-01-01"),
   },
 });
 
-const product = {
+const product: ProductWithFoodOut = productWithFoodOut.parse({
   id: testShortcode("product", "PRD-AAAA"),
   name: "Bora Clamp",
+  aliases: [],
+  tags: [],
+  primaryGtin: null,
+  fdc_id: null,
+  manufacturer: "Bora",
+  model: null,
+  notes: null,
+  expectedQuantity: null,
+  category: "tools",
+  images: [],
+  externalIds: [],
   unitMappings: [],
   price: null,
-  pricing: { effectivePrice: 26.26, derivedPrice: 26.26, source: "derived" },
+  pricing: {
+    effectivePrice: 26.26,
+    derivedPrice: 26.26,
+    source: "derived",
+    knownExpenseCount: 0,
+    unknownExpenseCount: 0,
+    knownUnitCount: 0,
+    partial: false,
+  },
   inventoryEntry: [
     entry("INV-AAAA", "LOC-AAAA"),
     entry("INV-BBBB", "LOC-BBBB"),
   ],
   servingAsLocations: [],
-} as unknown as ProductWithFoodOut;
+  ingredient: null,
+  food: null,
+  recipeUsages: [],
+  cookbook: null,
+  componentCount: 0,
+  usdaUnavailable: null,
+  stockTracked: null,
+  dataQuality: {
+    status: "complete",
+    facets: [],
+    gaps: [],
+    exceptions: [],
+    relatedGaps: [],
+    relatedExceptions: [],
+  },
+  quantityLedger: {
+    acquiredUnits: 0,
+    exitedUnits: 0,
+    expectedQuantity: 0,
+    unknownAcquisitionLines: 0,
+    unknownExitLines: 0,
+    locationCount: 0,
+  },
+  onHandUnits: 4,
+  quantityVariance: 0,
+  createdAt: new Date("2026-01-01"),
+  updatedAt: new Date("2026-01-01"),
+});
 
 /** A product held only as bins in service — no loose stock at all. */
-const locationsOnlyProduct = {
+const locationsOnlyProduct: ProductWithFoodOut = productWithFoodOut.parse({
   ...product,
   inventoryEntry: [],
   servingAsLocations: [
@@ -126,10 +187,11 @@ const locationsOnlyProduct = {
       id: testShortcode("location", "LOC-CCCC"),
       name: "chrome wire shelf",
       type: null,
+      displayImage: null,
       ancestors: [],
     },
   ],
-} as unknown as ProductWithFoodOut;
+});
 
 /**
  * Render the table, then fire one row action against the row the component
@@ -173,13 +235,11 @@ describe("ProductStockedAt", () => {
   it("renders the empty shelf state instead of a table when nothing is stocked", () => {
     render(
       <ProductStockedAt
-        product={
-          {
-            ...product,
-            inventoryEntry: [],
-            servingAsLocations: [],
-          } as ProductWithFoodOut
-        }
+        product={productWithFoodOut.parse({
+          ...product,
+          inventoryEntry: [],
+          servingAsLocations: [],
+        })}
       />,
     );
     expect(mocks.rTable).not.toHaveBeenCalled();
@@ -205,17 +265,19 @@ describe("ProductStockedAt", () => {
   it("lets the manual override win over the derived price", () => {
     render(
       <ProductStockedAt
-        product={
-          {
-            ...locationsOnlyProduct,
-            price: 40,
-            pricing: {
-              effectivePrice: 40,
-              derivedPrice: 26.26,
-              source: "explicit",
-            },
-          } as unknown as ProductWithFoodOut
-        }
+        product={productWithFoodOut.parse({
+          ...locationsOnlyProduct,
+          price: 40,
+          pricing: {
+            effectivePrice: 40,
+            derivedPrice: 26.26,
+            source: "explicit",
+            knownExpenseCount: 0,
+            unknownExpenseCount: 0,
+            knownUnitCount: 0,
+            partial: false,
+          },
+        })}
       />,
     );
     expect(mocks.rows.current[0]).toMatchObject({ valuation: 40 });

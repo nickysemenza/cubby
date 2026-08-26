@@ -7,9 +7,12 @@ import { flexRender } from "@tanstack/react-table";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  components: { current: [] as ProductComponentOut[] },
-  membership: { current: [] as KitMembershipOut[] },
+const mocks: {
+  components: { current: ProductComponentOut[] };
+  membership: { current: KitMembershipOut[] };
+} = vi.hoisted(() => ({
+  components: { current: [] },
+  membership: { current: [] },
 }));
 
 vi.mock("@tanstack/react-query", () => ({

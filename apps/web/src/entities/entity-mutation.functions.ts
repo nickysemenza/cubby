@@ -7,6 +7,9 @@ import type {
   EntityBrowserMutationInput,
   EntityBrowserMutationResult,
 } from "~/server/entity-kernel/contracts";
+import { ENTITY_BINDINGS } from "~/server/generated/entity-bindings.gen";
+import type { EntityEditResultFor } from "./editing/intent-types";
+import type { EditableEntity } from "./editing/types";
 
 /** @lintignore Discovered by the operation registry generator. */
 export const entityMutation = defineOperationDomain("entity", {
@@ -38,4 +41,18 @@ export function flattenEntityMutationResult(
   if (result.action === "delete")
     return { deleted: result.deleted, sideEffects: result.sideEffects };
   return result.result;
+}
+
+/** Recover the entity-specific output through the same schema that backs the kernel. */
+export function parseEntityMutationResultFor<E extends EditableEntity>(
+  entity: E,
+  value: unknown,
+): EntityEditResultFor<E>;
+export function parseEntityMutationResultFor(
+  entity: EditableEntity,
+  value: unknown,
+) {
+  const binding = ENTITY_BINDINGS[entity].crud;
+  if (!binding) throw new Error(`${entity} has no CRUD output schema.`);
+  return binding.output.parse(value);
 }

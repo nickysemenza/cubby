@@ -14,7 +14,7 @@ import {
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { groupBy } from "es-toolkit";
 import { z } from "zod";
-import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
+import { entityKernelContextSchema } from "~/server/entity-kernel/adapter";
 import { listCookbooks } from "~/server/repo/cookbook";
 import {
   getCaller,
@@ -147,9 +147,11 @@ export function registerRecipeTools(server: McpServer) {
     outputSchema: cookbookSummariesMcpOut,
     annotations: READ_ONLY_CLOSED,
     handler: async (_params, extra) => {
-      const context = extra.authInfo?.extra?.entityKernel as
-        | EntityKernelContext
-        | undefined;
+      const rawContext = extra.authInfo?.extra?.entityKernel;
+      const context =
+        rawContext === undefined
+          ? undefined
+          : entityKernelContextSchema.parse(rawContext);
       if (!context) throw new Error("MCP entity kernel context is missing");
       const result = await listCookbooks(context.readDb);
       return { items: result };

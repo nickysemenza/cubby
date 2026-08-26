@@ -1,6 +1,5 @@
 import type { ShortcodeFor } from "@cubby/shared";
 import { SHORTCODE_CHARS, SHORTCODE_PREFIX } from "@cubby/shared";
-import { z } from "zod";
 import {
   cookbookId,
   cookbookShortcode,
@@ -36,6 +35,7 @@ import {
   taskShortcode,
   vendorId,
   vendorShortcode,
+  userId,
   wishId,
   wishShortcode,
   type EntityId,
@@ -45,12 +45,8 @@ import type { ShortcodeEntity } from "../entity-manifest";
 
 export type { EntityId, ShortcodeFor };
 
-// User/session ids are intentionally not UUIDs, so they have no entity entry
-// in the generic factory below. Keep the test boundary schema-backed anyway.
-const testUserIdSchema = z.string().min(1).brand("UserId");
-
 export function testUserId(seed: string): UserId {
-  return testUserIdSchema.parse(seed);
+  return userId.parse(seed);
 }
 
 /** Four independent 32-bit lanes keep the fixture value stable across runtimes. */
