@@ -74,7 +74,10 @@ describe("project reusable resources", () => {
     });
     await expect(
       setProductProjectUses(ctx.db, product.entityId, [], ctx.actor),
-    ).rejects.toMatchObject({ code: "PRODUCT_CATEGORY_INELIGIBLE" });
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      cause: { reason: "PRODUCT_CATEGORY_INELIGIBLE" },
+    });
   });
 
   it("records exact-project reuse and calculates net lifetime cost per use", async () => {
