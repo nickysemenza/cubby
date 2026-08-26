@@ -92,9 +92,7 @@ const SPECS: EndpointSpec[] = [
     description:
       "Vision — paste 1-5 public image URLs (R2 images work; Anthropic fetches them server-side)",
     defaultInput: {
-      imageUrls: [
-        "https://media.nickysemenza.com/cubby/replace-with-a-real-key.jpg",
-      ],
+      imageUrls: [`${__R2_PUBLIC_URL__}/cubby/replace-with-a-real-key.jpg`],
     },
     run: (i) => identifyProductForBrowser(i as { imageUrls: string[] }),
   },

@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("~/lib/auth", () => ({
-  MCP_RESOURCE: "https://cubby.nickysemenza.com/api/mcp",
+  MCP_RESOURCE: "https://cubby.example.com/api/mcp",
 }));
 
 const { withDefaultResource } = await import("./default-resource");
 
-const TOKEN_URL = "https://cubby.nickysemenza.com/api/auth/oauth2/token";
+const TOKEN_URL = "https://cubby.example.com/api/auth/oauth2/token";
 
 function form(body: Record<string, string>, url = TOKEN_URL) {
   return new Request(url, {
@@ -29,7 +29,7 @@ describe("withDefaultResource", () => {
     );
 
     expect((await params(result)).get("resource")).toBe(
-      "https://cubby.nickysemenza.com/api/mcp",
+      "https://cubby.example.com/api/mcp",
     );
   });
 
@@ -52,7 +52,7 @@ describe("withDefaultResource", () => {
 
     expect(await result.json()).toEqual({
       grant_type: "refresh_token",
-      resource: "https://cubby.nickysemenza.com/api/mcp",
+      resource: "https://cubby.example.com/api/mcp",
     });
   });
 
@@ -69,7 +69,7 @@ describe("withDefaultResource", () => {
   it.each([
     [
       "a non-token auth path",
-      form({}, "https://cubby.nickysemenza.com/api/auth/sign-in/email"),
+      form({}, "https://cubby.example.com/api/auth/sign-in/email"),
     ],
     ["a GET", new Request(TOKEN_URL, { method: "GET" })],
   ])("does not touch %s", async (_, request) => {

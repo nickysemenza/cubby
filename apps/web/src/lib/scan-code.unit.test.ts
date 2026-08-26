@@ -9,8 +9,8 @@ describe("resolveScanCode", () => {
   it.each([
     ["PRD-4K7M", "PRD-4K7M", "product"],
     [" prd-4k7m ", "PRD-4K7M", "product"],
-    ["https://cubby.nickysemenza.com/LOC-4K7M", "LOC-4K7M", "location"],
-    ["https://cubby.nickysemenza.com/L-4K7M", "LOC-4K7M", "location"],
+    ["https://cubby.example.com/LOC-4K7M", "LOC-4K7M", "location"],
+    ["https://cubby.example.com/L-4K7M", "LOC-4K7M", "location"],
   ])("resolves the Cubby label %s", (raw, shortcode, type) => {
     expect(resolveScanCode(raw)).toEqual({
       ok: true,
@@ -66,8 +66,8 @@ describe("resolveLocationScan", () => {
   it.each([
     ["LOC-4K7M", "LOC-4K7M"],
     [" loc-4k7m ", "LOC-4K7M"],
-    ["https://cubby.nickysemenza.com/LOC-4K7M", "LOC-4K7M"],
-    ["https://cubby.nickysemenza.com/L-4K7M", "LOC-4K7M"],
+    ["https://cubby.example.com/LOC-4K7M", "LOC-4K7M"],
+    ["https://cubby.example.com/L-4K7M", "LOC-4K7M"],
   ])("accepts the location label %s", (raw, shortcode) => {
     expect(resolveLocationScan(raw)).toEqual({ ok: true, value: shortcode });
   });

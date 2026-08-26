@@ -34,6 +34,10 @@ async function globalSetup(_config: FullConfig): Promise<void> {
   const e2eConfig = JSON.parse(
     readFileSync(path.join(webRoot, "dist/server/wrangler.json"), "utf8"),
   ) as Record<string, unknown>;
+  const compatibilityDate = e2eConfig.compatibility_date;
+  if (typeof compatibilityDate !== "string") {
+    throw new Error("Built Wrangler config is missing compatibility_date");
+  }
   delete e2eConfig.ai;
   writeFileSync(
     path.join(webRoot, "dist/server/wrangler.e2e.json"),
@@ -82,14 +86,14 @@ async function globalSetup(_config: FullConfig): Promise<void> {
         config: {
           name: "e2e-usda-empty",
           main: "tests/e2e/harness-services/usda-empty.ts",
-          compatibility_date: "2026-06-16",
+          compatibility_date: compatibilityDate,
         },
       },
       {
         config: {
           name: "e2e-upc-empty",
           main: "tests/e2e/harness-services/upc-empty.ts",
-          compatibility_date: "2026-06-16",
+          compatibility_date: compatibilityDate,
         },
       },
     ],

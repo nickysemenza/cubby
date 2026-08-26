@@ -14,9 +14,9 @@ const isDev = process.env.NODE_ENV !== "production";
 // better-auth, which infers baseURL per request): `validAudiences` gates which
 // `resource` an MCP client may request a token for. Same isDev switch the
 // passkey rpID below uses, for the same reason — one known host per env, no new
-// env var. Preview deploys get unique `<prefix>-cubby.nicky.workers.dev` hosts
-// that can't be enumerated here, so OAuth-MCP is prod + local dev only (previews
-// keep the rest of auth; only /api/mcp is unreachable there).
+// env var. Preview deploys get unique hosts that can't be enumerated here, so
+// OAuth-MCP is prod + local dev only (previews keep the rest of auth; only
+// /api/mcp is unreachable there).
 const appUrl = isDev
   ? "http://localhost:3000"
   : "https://cubby.nickysemenza.com";
@@ -33,14 +33,12 @@ export const OAUTH_ISSUER = `${appUrl}/api/auth`;
 // (`claude -p`, Agent SDK) keep working after the one interactive login.
 export const OAUTH_SCOPES = ["openid", "profile", "email", "offline_access"];
 
-// Preview deploys (`wrangler versions upload`) each get a unique host
-// `<prefix>-cubby.nicky.workers.dev`, so a host-only session cookie forces a
-// fresh login on every preview. CI injects COOKIE_DOMAIN=.nicky.workers.dev via
-// `--var` on preview uploads (see ci.yaml `preview-cf`); scoping the cookie to
-// the whole account subdomain means one login on any preview carries to all of
-// them. Unset in prod (custom domain) — prod keeps a host-only cookie on
-// cubby.nickysemenza.com, unchanged. Passkeys still won't work on previews
-// (rpID is bound to cubby.nickysemenza.com below); this only covers the session.
+// Preview deploys (`wrangler versions upload`) each get a unique host, so a
+// host-only session cookie forces a fresh login on every preview. CI injects
+// COOKIE_DOMAIN via `--var` on preview uploads (see preview-cf.yaml); scoping
+// the cookie to the configured preview suffix means one login carries to all
+// previews. Unset in prod, which keeps a host-only cookie. Passkeys remain
+// bound to the production WebAuthn RP; this only covers the session.
 const previewCookieDomain = env.COOKIE_DOMAIN;
 
 export const auth = betterAuth({
@@ -157,13 +155,12 @@ export const auth = betterAuth({
   // lives in the shared DB, so an existing login already carries across ports; this
   // only unblocks origin validation.
   //
-  // In prod, trust the mobile scheme plus per-PR preview deploys served at
-  // https://<prefix>-cubby.nicky.workers.dev (see ci.yaml `preview-cf`). The
-  // wildcard is scoped to our own account subdomain — better-auth's `*` doesn't
-  // cross `/`, so this only widens the auth-origin (CSRF) surface to workers on
-  // nicky.workers.dev. Passkeys still won't work on previews (rpID is bound to
-  // cubby.nickysemenza.com above); email/password does. The custom domain is the
-  // deployed origin, trusted automatically as the baseURL.
+  // In prod, trust the mobile scheme plus per-PR preview deploys (see
+  // preview-cf.yaml). The wildcard is scoped to our account subdomain —
+  // better-auth's `*` doesn't cross `/`, so this only widens the auth-origin
+  // (CSRF) surface to those Workers. Passkeys remain bound to the production
+  // WebAuthn RP; email/password works on previews. The custom domain is trusted
+  // automatically as the baseURL.
   trustedOrigins: isDev
     ? (request) => {
         const base = [
