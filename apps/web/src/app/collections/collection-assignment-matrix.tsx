@@ -44,6 +44,7 @@ import {
 } from "./collection-product-context";
 
 const SETTLE_MS = 400;
+const MOBILE_PAGE_SIZE = 25;
 const PAGE_SIZE_OPTIONS = [100, 250, 500] as const;
 type MatrixRow = CollectionMatrixRow;
 
@@ -83,6 +84,74 @@ function MatrixPager({
         onClick={() => onPageChange(page + 1)}
       >
         <ChevronRight />
+      </Button>
+    </div>
+  );
+}
+
+function MobileMatrixPager({
+  page,
+  pageCount,
+  rangeStart,
+  rangeEnd,
+  totalCount,
+  onPageChange,
+}: {
+  page: number;
+  pageCount: number;
+  rangeStart: number;
+  rangeEnd: number;
+  totalCount: number;
+  onPageChange: (page: number) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 px-2 py-2">
+      <span className="font-mono text-2xs text-muted-foreground tabular-nums">
+        {rangeStart.toLocaleString()}–{rangeEnd.toLocaleString()} of{" "}
+        {totalCount.toLocaleString()}
+      </span>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="icon-sm"
+          aria-label="Previous 25 assignments"
+          disabled={page <= 1}
+          onClick={() => onPageChange(page - 1)}
+        >
+          <ChevronLeft />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon-sm"
+          aria-label="Next 25 assignments"
+          disabled={page >= pageCount}
+          onClick={() => onPageChange(page + 1)}
+        >
+          <ChevronRight />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function MatrixLoadError({
+  error,
+  onRetry,
+}: {
+  error: Error;
+  onRetry: () => void;
+}) {
+  return (
+    <div
+      role="alert"
+      className="flex flex-col items-center gap-2 border-border border-y px-2 py-6 text-center"
+    >
+      <p className="font-medium">Couldn’t load assignments</p>
+      <p className="max-w-prose text-muted-foreground text-xs">
+        {error.message}
+      </p>
+      <Button variant="outline" onClick={onRetry}>
+        Retry
       </Button>
     </div>
   );
@@ -228,6 +297,9 @@ export function CollectionAssignmentMatrix({
   }) => void;
 }) {
   const queryClient = useQueryClient();
+  const mobileSubjectId = useId();
+  const mobileCollectionId = useId();
+  const mobileRowsHeadingId = useId();
   const input = useMemo(
     () => ({
       subject,
@@ -241,6 +313,10 @@ export function CollectionAssignmentMatrix({
   );
   const matrix = useQuery(collectionOperations.matrix.queryOptions(input));
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
+  const [mobileCollection, setMobileCollection] = useState<CollectionSlug>();
+  const [mobilePage, setMobilePage] = useState(() =>
+    Math.max(1, Math.ceil(((page - 1) * pageSize + 1) / MOBILE_PAGE_SIZE)),
+  );
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
   const mutation = useMutation({
@@ -329,6 +405,46 @@ export function CollectionAssignmentMatrix({
   const matrixRows = matrix.data?.rows ?? [];
   const subjectLabel = subject === "product" ? "Products" : "Locations";
   const secondaryLabel = subject === "product" ? "Manufacturer" : "Path";
+  const availableCollections = matrix.data?.collections ?? [];
+  const selectedMobileCollection = availableCollections.includes(
+    mobileCollection ?? collection ?? "",
+  )
+    ? (mobileCollection ?? collection)
+    : availableCollections[0];
+  const mobilePageCount = Math.max(1, Math.ceil(totalCount / MOBILE_PAGE_SIZE));
+  const mobileRangeStart =
+    totalCount === 0 ? 0 : (mobilePage - 1) * MOBILE_PAGE_SIZE + 1;
+  const mobileRangeEnd = Math.min(mobilePage * MOBILE_PAGE_SIZE, totalCount);
+  const mobileBatchOffset =
+    (mobilePage - 1) * MOBILE_PAGE_SIZE - (page - 1) * pageSize;
+  const mobileRows = matrixRows.slice(
+    mobileBatchOffset,
+    mobileBatchOffset + MOBILE_PAGE_SIZE,
+  );
+
+  useEffect(() => {
+    if (mobileCollection && availableCollections.includes(mobileCollection)) {
+      return;
+    }
+    setMobileCollection(
+      collection && availableCollections.includes(collection)
+        ? collection
+        : availableCollections[0],
+    );
+  }, [availableCollections, collection, mobileCollection]);
+
+  useEffect(() => {
+    setMobilePage(
+      Math.max(1, Math.ceil(((page - 1) * pageSize + 1) / MOBILE_PAGE_SIZE)),
+    );
+  }, [page, pageSize]);
+
+  const changeMobilePage = (nextPage: number) => {
+    const nextServerPage =
+      Math.floor(((nextPage - 1) * MOBILE_PAGE_SIZE) / pageSize) + 1;
+    setMobilePage(nextPage);
+    if (nextServerPage !== page) onSearchChange({ page: nextServerPage });
+  };
 
   return (
     <Stack gap="xs" className="pb-24">
@@ -450,11 +566,188 @@ export function CollectionAssignmentMatrix({
         </div>
       </div>
 
-      <div className="border-border border-y py-6 text-center md:hidden">
-        <p className="font-medium">Use the Product or Location form</p>
-        <p className="text-muted-foreground text-xs">
-          The dense assignment matrix is available on a wider screen.
-        </p>
+      <div className="overflow-x-hidden border-border border-y md:hidden">
+        {matrix.isLoading ? (
+          <p className="px-2 py-6 text-center text-muted-foreground">
+            Loading assignments…
+          </p>
+        ) : matrix.error ? (
+          <MatrixLoadError
+            error={matrix.error}
+            onRetry={() => matrix.refetch()}
+          />
+        ) : availableCollections.length === 0 ? (
+          <div className="px-2 py-6 text-center">
+            <p className="font-medium">No Collections yet</p>
+            <p className="text-muted-foreground text-xs">
+              Create a Collection before assigning{" "}
+              {subjectLabel.toLocaleLowerCase()}.
+            </p>
+          </div>
+        ) : (
+          <div>
+            <div className="grid gap-2 border-border border-b bg-card px-2 py-2">
+              <label
+                htmlFor={mobileSubjectId}
+                className="grid gap-1 font-medium text-xs"
+              >
+                Show rows for
+                <NativeSelect
+                  id={mobileSubjectId}
+                  aria-label="Assignment subject"
+                  value={subject}
+                  onChange={(event) =>
+                    onSearchChange({
+                      subject: event.target.value as "product" | "location",
+                      page: 1,
+                    })
+                  }
+                >
+                  <option value="product">Products</option>
+                  <option value="location">Locations</option>
+                </NativeSelect>
+              </label>
+              <label
+                htmlFor={mobileCollectionId}
+                className="grid gap-1 font-medium text-xs"
+              >
+                Assign to Collection
+                <NativeSelect
+                  id={mobileCollectionId}
+                  aria-label="Assign to Collection"
+                  value={selectedMobileCollection ?? ""}
+                  onChange={(event) =>
+                    setMobileCollection(event.target.value as CollectionSlug)
+                  }
+                >
+                  {availableCollections.map((slug) => (
+                    <option key={slug} value={slug}>
+                      {formatCollectionLabel(slug)}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </label>
+              <div className="flex items-center justify-between gap-2 font-mono text-2xs text-muted-foreground tabular-nums">
+                <span>
+                  {mobileRangeStart.toLocaleString()}–
+                  {mobileRangeEnd.toLocaleString()} of{" "}
+                  {totalCount.toLocaleString()}
+                </span>
+                <span>Direct assignments are editable</span>
+              </div>
+            </div>
+
+            {rows.length === 0 ? (
+              <p className="px-2 py-6 text-center text-muted-foreground">
+                No {subjectLabel.toLocaleLowerCase()} match these filters.
+              </p>
+            ) : mobileRows.length === 0 ? (
+              <p className="px-2 py-6 text-center text-muted-foreground">
+                Loading the next assignments…
+              </p>
+            ) : (
+              <section aria-labelledby={mobileRowsHeadingId}>
+                <h2
+                  id={mobileRowsHeadingId}
+                  className="border-border border-b bg-muted/30 px-2 py-2 font-mono text-2xs text-muted-foreground uppercase tracking-wider"
+                >
+                  {subjectLabel}
+                </h2>
+                <ul className="divide-y divide-border">
+                  {mobileRows.map((row) => {
+                    const state = selectedMobileCollection
+                      ? (row.states[selectedMobileCollection] ?? "empty")
+                      : "empty";
+                    const key = selectedMobileCollection
+                      ? `${subject}:${row.id}:${selectedMobileCollection}`
+                      : "";
+                    const assigned = selectedMobileCollection
+                      ? (overrides[key] ?? directlyAssigned(state))
+                      : false;
+                    const inherited = state === "inherited" || state === "both";
+                    const assignmentLabel = assigned
+                      ? "Direct"
+                      : inherited
+                        ? "Inherited"
+                        : "Assign";
+
+                    return (
+                      <li
+                        key={row.id}
+                        className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-2 py-1.5"
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          <Image
+                            src={row.imageUrl ?? ""}
+                            alt=""
+                            displayWidth={32}
+                            className="size-8 shrink-0 border border-border bg-card object-cover"
+                            fallback={
+                              <EntityIcon
+                                entity={subject}
+                                className="size-3.5 text-muted-foreground"
+                              />
+                            }
+                          />
+                          <div className="min-w-0">
+                            <Link
+                              {...entityDetailLink(subject, row.id)}
+                              title={row.name}
+                              className="block truncate font-medium underline decoration-border/70 decoration-dotted underline-offset-2 hover:text-primary hover:decoration-primary hover:decoration-solid"
+                            >
+                              {row.name}
+                            </Link>
+                            {row.secondary && (
+                              <p
+                                className="truncate text-2xs text-muted-foreground"
+                                title={row.secondary}
+                              >
+                                {row.secondary}
+                              </p>
+                            )}
+                            {inherited && !assigned && (
+                              <p className="text-2xs text-muted-foreground">
+                                Inherited membership remains if removed.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant={assigned ? "secondary" : "outline"}
+                          size="sm"
+                          aria-pressed={assigned}
+                          aria-label={`${assigned ? "Remove" : "Add"} direct ${formatCollectionLabel(selectedMobileCollection ?? "collection")} assignment for ${row.name}${inherited ? "; inherited membership remains" : ""}`}
+                          disabled={!selectedMobileCollection}
+                          onClick={() => {
+                            if (selectedMobileCollection) {
+                              schedule(row, selectedMobileCollection);
+                            }
+                          }}
+                        >
+                          {assigned && <Check />}
+                          {inherited && !assigned && <MapPin />}
+                          {assignmentLabel}
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            )}
+
+            <div className="border-border border-t">
+              <MobileMatrixPager
+                page={mobilePage}
+                pageCount={mobilePageCount}
+                rangeStart={mobileRangeStart}
+                rangeEnd={mobileRangeEnd}
+                totalCount={totalCount}
+                onPageChange={changeMobilePage}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="hidden md:block">
@@ -463,9 +756,10 @@ export function CollectionAssignmentMatrix({
             Loading assignments…
           </p>
         ) : matrix.error ? (
-          <p className="py-8 text-center text-destructive">
-            {matrix.error.message}
-          </p>
+          <MatrixLoadError
+            error={matrix.error}
+            onRetry={() => matrix.refetch()}
+          />
         ) : columns.length === 0 ? (
           <p className="border-border border-y py-8 text-center text-muted-foreground">
             Create a Collection before managing assignments.
