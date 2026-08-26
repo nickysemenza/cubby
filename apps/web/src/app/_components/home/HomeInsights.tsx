@@ -15,28 +15,28 @@ export function HomeInsights() {
     <Grid cols="pair" gap="md">
       <DashboardCard
         icon={PieChart}
-        title="Products by category"
+        title="Which categories hold our products?"
         description="Distribution across categories — click a slice to view products."
       >
         <ProductCategoryDonut />
       </DashboardCard>
       <DashboardCard
         icon={MapPin}
-        title="Inventory by location"
+        title="Where is our inventory?"
         description="Where inventory value sits across your locations."
       >
         <LocationSunburst />
       </DashboardCard>
       <DashboardCard
         icon={Share2}
-        title="Ingredient relationships"
+        title="Which ingredients travel together?"
         description="Ingredients that co-occur across recipes; larger nodes are used more."
       >
         <IngredientNetwork />
       </DashboardCard>
       <DashboardCard
         icon={ListChecks}
-        title="Ingredient usage"
+        title="Which ingredients power our recipes?"
         description="How many recipes use each ingredient; scope by cookbook."
       >
         <IngredientUsageSection />

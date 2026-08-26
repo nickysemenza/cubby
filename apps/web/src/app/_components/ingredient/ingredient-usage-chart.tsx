@@ -1,6 +1,7 @@
 import type { IngredientUsageRow } from "@cubby/schemas/ingredient-usage";
 import { ResponsiveBar } from "@nivo/bar";
 import { Carrot } from "lucide-react";
+import { useId, useMemo } from "react";
 import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
 import { nivoBarChrome, nivoChartTheme } from "~/lib/nivo-theme";
@@ -21,6 +22,18 @@ export function IngredientUsageChart({
     .map((r) => ({ ingredient: r.name, recipes: r.recipeCount }))
     .reverse();
 
+  const summaryId = useId();
+  const chartSummary = useMemo(() => {
+    const top = rows
+      .slice(0, 3)
+      .map(
+        (row) =>
+          `${row.name} ${row.recipeCount} recipe${row.recipeCount === 1 ? "" : "s"}`,
+      )
+      .join("; ");
+    return `Ingredient usage: ${top}; ${rows.length} ingredients total`;
+  }, [rows]);
+
   if (data.length === 0) {
     return <ChartEmpty icon={Carrot} title="No ingredient usage yet." />;
   }
@@ -28,7 +41,15 @@ export function IngredientUsageChart({
   const chartHeight = Math.max(300, data.length * 28 + 60);
 
   return (
-    <div style={{ height: chartHeight }}>
+    <div
+      role="img"
+      aria-label={chartSummary}
+      aria-describedby={summaryId}
+      style={{ height: chartHeight }}
+    >
+      <p id={summaryId} className="sr-only">
+        {chartSummary}.
+      </p>
       <ResponsiveBar
         data={data}
         keys={["recipes"]}

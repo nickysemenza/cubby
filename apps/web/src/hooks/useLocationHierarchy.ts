@@ -60,6 +60,8 @@ interface UseLocationHierarchyOptions {
 interface UseLocationHierarchyResult {
   data: LocationHierarchyNode | null;
   isLoading: boolean;
+  isError: boolean;
+  refetch: () => Promise<unknown>;
 }
 
 /**
@@ -130,5 +132,7 @@ export function useLocationHierarchy(
   return {
     data: isLoading ? null : hierarchyData,
     isLoading,
+    isError: locations.isError,
+    refetch: locations.refetch,
   };
 }
