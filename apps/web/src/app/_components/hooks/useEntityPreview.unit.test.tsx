@@ -145,7 +145,9 @@ describe("useEntityPreview intent prefetch", () => {
 
   it("docks the selected inspector at desktop widths", () => {
     viewport = "dock";
-    const { result } = renderHook(() => useEntityPreview("product"));
+    const { result } = renderHook(() =>
+      useEntityPreview("product", { responsiveInspector: true }),
+    );
 
     act(() => result.current.onRowClick(row("PRD-4K7M")));
     render(result.current.dockedInspector);
@@ -157,7 +159,9 @@ describe("useEntityPreview intent prefetch", () => {
 
   it("uses the same inspector in a compact Sheet at medium widths", () => {
     viewport = "sheet";
-    const { result } = renderHook(() => useEntityPreview("product"));
+    const { result } = renderHook(() =>
+      useEntityPreview("product", { responsiveInspector: true }),
+    );
 
     act(() => result.current.onRowClick(row("PRD-4K7M")));
     render(<result.current.PreviewSheet />);
@@ -169,7 +173,9 @@ describe("useEntityPreview intent prefetch", () => {
   });
 
   it("keeps selection state but renders no inspector on mobile", () => {
-    const { result } = renderHook(() => useEntityPreview("product"));
+    const { result } = renderHook(() =>
+      useEntityPreview("product", { responsiveInspector: true }),
+    );
 
     act(() => result.current.onRowClick(row("PRD-4K7M")));
     render(<result.current.PreviewSheet />);
@@ -184,7 +190,9 @@ describe("useEntityPreview intent prefetch", () => {
 
   it("moves an open preview between dock and Sheet when the viewport changes", () => {
     viewport = "dock";
-    const { result } = renderHook(() => useEntityPreview("product"));
+    const { result } = renderHook(() =>
+      useEntityPreview("product", { responsiveInspector: true }),
+    );
     act(() => result.current.onRowClick(row("PRD-4K7M")));
 
     expect(result.current.dockedInspector).not.toBeNull();
@@ -194,6 +202,31 @@ describe("useEntityPreview intent prefetch", () => {
     expect(result.current.dockedInspector).toBeNull();
     expect(screen.getByTestId("workbench-inspector")).toHaveTextContent(
       "product:PRD-4K7M",
+    );
+  });
+
+  it("keeps the legacy Sheet visible at desktop widths", () => {
+    viewport = "dock";
+    const { result } = renderHook(() => useEntityPreview("product"));
+
+    act(() => result.current.onRowClick(row("PRD-4K7M")));
+    render(<result.current.PreviewSheet />);
+
+    expect(result.current.dockedInspector).toBeNull();
+    expect(screen.getByTestId("preview-sheet")).toContainElement(
+      screen.getByTestId("workbench-inspector"),
+    );
+  });
+
+  it("keeps the legacy Sheet visible at mobile widths", () => {
+    const { result } = renderHook(() => useEntityPreview("product"));
+
+    act(() => result.current.onRowClick(row("PRD-4K7M")));
+    render(<result.current.PreviewSheet />);
+
+    expect(result.current.dockedInspector).toBeNull();
+    expect(screen.getByTestId("preview-sheet")).toContainElement(
+      screen.getByTestId("workbench-inspector"),
     );
   });
 });

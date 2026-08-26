@@ -54,6 +54,14 @@ const getServerPreviewPresentation = (): PreviewPresentation => "mobile";
 interface UseEntityPreviewOptions {
   /** Field to use as ID (default: "id") */
   idField?: string;
+  /**
+   * Opt into the workbench presentation: dock at desktop, Sheet at tablet,
+   * and canonical navigation-only cards at mobile widths.
+   *
+   * Legacy callers that only render PreviewSheet stay Sheet-only at every
+   * viewport so selecting a row never becomes invisible.
+   */
+  responsiveInspector?: boolean;
 }
 
 // Module-level so its identity never changes across renders — a component
@@ -97,6 +105,7 @@ export function useEntityPreview(
     getServerPreviewPresentation,
   );
   const idField = options?.idField ?? "id";
+  const responsiveInspector = options?.responsiveInspector ?? false;
   const queryClient = useQueryClient();
   const intentRef = useRef<PreviewIntent | null>(null);
 
@@ -234,15 +243,17 @@ export function useEntityPreview(
   const PreviewSheet = useCallback(
     () => (
       <PreviewSheetView
-        preview={presentation === "sheet" ? preview : null}
+        preview={
+          !responsiveInspector || presentation === "sheet" ? preview : null
+        }
         onClose={closePreview}
       />
     ),
-    [presentation, preview, closePreview],
+    [responsiveInspector, presentation, preview, closePreview],
   );
 
   const dockedInspector =
-    presentation === "dock" && preview ? (
+    responsiveInspector && presentation === "dock" && preview ? (
       <EntityWorkbenchInspector
         entity={preview.entityType}
         id={preview.id}
