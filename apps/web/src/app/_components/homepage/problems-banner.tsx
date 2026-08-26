@@ -16,6 +16,12 @@ import { cn } from "~/lib/utils";
  * backlog trails it as quiet context, which is the difference between "this is
  * wrong" and "this hasn't been filed yet".
  */
+export function problemsBannerMessage(defects: number): string {
+  return defects > 0
+    ? `${defects === 1 ? "problem needs" : "problems need"} attention`
+    : "No defects found.";
+}
+
 export function ProblemsBanner() {
   const { isAuthed } = useRouteContext({ from: "__root__" });
   const { data: counts, isLoading } = useQuery({
@@ -45,12 +51,10 @@ export function ProblemsBanner() {
           <span className="font-mono font-semibold text-xs tabular-nums">
             {defects.toLocaleString()}
           </span>
-          <span className="text-xs">
-            {defects === 1 ? "problem needs" : "problems need"} attention
-          </span>
+          <span className="text-xs">{problemsBannerMessage(defects)}</span>
         </>
       ) : (
-        <span className="text-xs">Everything checks out.</span>
+        <span className="text-xs">{problemsBannerMessage(defects)}</span>
       )}
       {coverageTotal > 0 && (
         <span className="ml-auto truncate font-mono text-2xs text-warning-ink uppercase">

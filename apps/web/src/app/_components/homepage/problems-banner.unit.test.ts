@@ -13,7 +13,7 @@ vi.mock("@tanstack/react-router", () => ({
   useRouteContext: () => ({ isAuthed: true }),
 }));
 
-import { ProblemsBanner } from "./problems-banner";
+import { ProblemsBanner, problemsBannerMessage } from "./problems-banner";
 
 describe("ProblemsBanner", () => {
   beforeEach(() => {
@@ -30,5 +30,9 @@ describe("ProblemsBanner", () => {
         enabled: true,
       }),
     );
+  });
+
+  it("does not claim everything checks out when coverage remains", () => {
+    expect(problemsBannerMessage(0)).toBe("No defects found.");
   });
 });

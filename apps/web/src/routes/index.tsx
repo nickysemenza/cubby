@@ -1,10 +1,10 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useState } from "react";
-import { HouseCard } from "~/app/_components/home/HouseCard";
+import { TodayAttention } from "~/app/_components/home/HouseCard";
 import { getHomeAsOfWindow } from "~/app/_components/home/home-as-of-window";
-import { MealsCard } from "~/app/_components/home/MealsCard";
+import { TodayMeals } from "~/app/_components/home/MealsCard";
 import { PantryValueCard } from "~/app/_components/home/PantryValueCard";
-import { QuickActionsCard } from "~/app/_components/home/QuickActionsCard";
+import { DailyPasses } from "~/app/_components/home/QuickActionsCard";
 import { RecentActivityFeed } from "~/app/_components/home/RecentActivityFeed";
 import { RecordedSpendCard } from "~/app/_components/home/RecordedSpendCard";
 import { ProblemsBanner } from "~/app/_components/homepage/problems-banner";
@@ -83,7 +83,6 @@ function Home() {
   return (
     <Page
       variant="list"
-      eyebrow="Keep everything in its place"
       title={greeting}
       mobileTitleVisible
       actions={
@@ -98,29 +97,22 @@ function Home() {
           </p>
         ) : null
       }
-      layout="full"
+      layout="contained"
     >
       {/* Status bar — absent only when there is nothing outstanding at all.
           It carries the destructive tone for real defects and a quiet one for
           a coverage-only backlog, which is why it can render either way. */}
       <ProblemsBanner />
 
-      {/* What to act on leads the page. The ordering rule for this route is
-          "does this number change what I do in the next ten minutes" — open
-          work and this week's meals do; a valuation total does not, so the
-          signals region now sits below rather than above. On a phone this
-          also means the first viewport is work, not net worth. */}
-      <Section
-        title="Needs attention"
-        description="Open work and what is planned to cook."
-      >
-        <Grid cols="pair" gap="md">
-          <HouseCard />
-          <MealsCard asOf={asOf} />
-        </Grid>
-      </Section>
+      {/* The daily briefing owns the first decision. Desktop gives the ranked
+          task queue twice the room of meals; phone keeps the same reading order
+          as a vertical briefing. */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
+        <TodayAttention />
+        <TodayMeals asOf={asOf} />
+      </div>
 
-      <QuickActionsCard />
+      <DailyPasses />
 
       {/* The household's two operating signals — state of what is on hand and
           what has been spent. Mobile puts pantry first because it is the
