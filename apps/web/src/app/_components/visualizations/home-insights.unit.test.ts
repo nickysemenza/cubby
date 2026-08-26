@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { productSearchSchema } from "~/entities/list-search";
 import {
   LOCATION_SUNBURST_DESCRIPTION,
   LOCATION_SUNBURST_METRIC,
@@ -13,8 +14,8 @@ describe("Home insight metric and drilldown contracts", () => {
   });
 
   it("routes the uncategorized slice to the null-category roster", () => {
-    expect(productCategoryDrilldown(null)).toEqual({
-      categoryPresenceFilter: "none",
+    expect(productSearchSchema.parse(productCategoryDrilldown(null))).toEqual({
+      category: "__none__",
     });
     expect(productCategoryDrilldown("food")).toEqual({ category: "food" });
   });

@@ -8,6 +8,7 @@ import {
   getCategoryColor,
 } from "~/app/_components/products/category-theme";
 import { product } from "~/app/products/product.functions";
+import { FILTER_NONE } from "~/entities/filters";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizTooltip } from "./viz-overlay";
@@ -84,7 +85,7 @@ interface DonutChartProps {
 }
 
 export function productCategoryDrilldown(category: ProductCategory | null) {
-  return category ? { category } : { categoryPresenceFilter: "none" as const };
+  return { category: category ?? FILTER_NONE };
 }
 
 function DonutChart({ data }: DonutChartProps) {
