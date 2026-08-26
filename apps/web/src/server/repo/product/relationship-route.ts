@@ -9,7 +9,17 @@
  */
 import { type ProductId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ProductRelationshipRouteOut } from "@cubby/schemas/product";
-import { and, asc, countDistinct, desc, eq, isNotNull, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  countDistinct,
+  desc,
+  eq,
+  isNotNull,
+  isNull,
+  sql,
+} from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
   expense,
@@ -90,6 +100,7 @@ export async function getProductRelationshipRoute(
     usedProjectRows,
     purchasedProjectRows,
     purchasedProjectCountRows,
+    unassignedExpenseCountRows,
     taskRows,
     vendorRows,
     vendorCountRows,
@@ -185,7 +196,7 @@ export async function getProductRelationshipRoute(
       .orderBy(desc(purchase.date), asc(purchase.shortcode))
       .limit(PREVIEW_LIMIT),
     dbc
-      .select({
+      .selectDistinct({
         purchaseId: purchase.id,
         purchaseCode: purchase.shortcode,
         displayLabel: purchase.displayLabel,
@@ -290,6 +301,15 @@ export async function getProductRelationshipRoute(
         and(
           expensePairPredicate(eq(expense.productId, productId)),
           isNotNull(expense.projectId),
+        ),
+      ),
+    dbc
+      .select({ count: count() })
+      .from(expense)
+      .where(
+        and(
+          expensePairPredicate(eq(expense.productId, productId)),
+          isNull(expense.projectId),
         ),
       ),
     dbc
@@ -442,6 +462,9 @@ export async function getProductRelationshipRoute(
     derived: {
       purchasedForProjects: {
         count: Number(purchasedProjectCountRows[0]?.count ?? 0),
+        unassignedExpenseCount: Number(
+          unassignedExpenseCountRows[0]?.count ?? 0,
+        ),
         preview: purchasedProjectRows.map((row) => ({
           id: parseShortcodeFor("project", row.id),
           name: row.name,

@@ -1040,7 +1040,7 @@ export const productRelationshipRouteOut = z.object({
   derived: z.object({
     purchasedForProjects: productRelationshipPreview(
       productRelationshipProjectRef,
-    ),
+    ).extend({ unassignedExpenseCount: z.number().int().nonnegative() }),
     vendors: productRelationshipPreview(
       productRelationshipEntityRef(vendorShortcode),
     ),
