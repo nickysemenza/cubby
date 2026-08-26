@@ -21,6 +21,12 @@ import { RelationshipExplorer } from "./relationships/relationship-explorer";
 
 type InspectorTab = "overview" | "relations" | "activity";
 
+type EntityWorkbenchInspectorProps = {
+  entity: Entity;
+  id: string;
+  onClose?: () => void;
+};
+
 const COMPACT_OVERVIEW_ENTITIES: ReadonlySet<Entity> =
   new Set<HoverPreviewEntity>([
     "recipe",
@@ -108,11 +114,22 @@ export function EntityWorkbenchInspector({
   entity,
   id,
   onClose,
-}: {
-  entity: Entity;
-  id: string;
-  onClose?: () => void;
-}) {
+}: EntityWorkbenchInspectorProps) {
+  return (
+    <EntityWorkbenchInspectorContent
+      key={`${entity}:${id}`}
+      entity={entity}
+      id={id}
+      onClose={onClose}
+    />
+  );
+}
+
+function EntityWorkbenchInspectorContent({
+  entity,
+  id,
+  onClose,
+}: EntityWorkbenchInspectorProps) {
   const [activeTab, setActiveTab] = useState<InspectorTab>("overview");
   const hasRelations = relatedViewsFor(entity).length > 0;
   const hasActivity = isAuditableEntity(entity);

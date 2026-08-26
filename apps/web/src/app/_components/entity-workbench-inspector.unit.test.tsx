@@ -129,4 +129,24 @@ describe("EntityWorkbenchInspector", () => {
     expect(openLink.tagName).toBe("A");
     expect(openLink).toHaveAttribute("data-router-link", "true");
   });
+
+  it("resets to Overview when the selected record changes", () => {
+    const { rerender } = render(
+      <EntityWorkbenchInspector entity="vendor" id={VENDOR_ID} />,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Relations" }));
+    expect(screen.getByTestId("relationship-explorer")).toBeInTheDocument();
+
+    rerender(<EntityWorkbenchInspector entity="image" id={IMAGE_ID} />);
+
+    expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.queryByTestId("relationship-explorer")).toBeNull();
+    expect(
+      screen.getByText("Open the full record to inspect its details."),
+    ).toBeVisible();
+  });
 });
