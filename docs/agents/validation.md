@@ -3,11 +3,12 @@
 ## Test placement
 
 Choose by what can fail: unit (`*.unit.test.ts`, pure/node), UI
-(`*.unit.test.tsx`, jsdom/RTL), integration (`*.integration.test.ts`, real
-Postgres through IntegreSQL), E2E (`tests/e2e/**/*.spec.ts`, built browser app).
-Write the lowest tier that can expose the regression; do not duplicate the same
-assertion across tiers. Real SQL invariants remain integration tests. Guard
-scripts that CI depends on remain load-bearing.
+(`*.unit.test.tsx`, jsdom/RTL), portable integration (`*.integration.test.ts`,
+PGlite plus PostgreSQL in CI), PostgreSQL-only integration (independent
+sessions, locks, pools, driver behavior), or E2E (`tests/e2e/**/*.spec.ts`, built
+browser app). Write the lowest tier that can expose the regression; do not
+duplicate the same assertion across tiers. Real SQL invariants remain database
+tests. Guard scripts that CI depends on remain load-bearing.
 
 ## Commands and ownership
 
@@ -15,18 +16,33 @@ While editing, run one file: `pnpm test:file src/…` from the repo root. That i
 the spelling — the transcripts carried three competing ones (`pnpm vitest run`,
 `pnpm exec vitest`, `npx vitest run`) for the same job. The path is relative to
 `apps/web`, because that is where Vitest's root is; a repo-root-relative path
-matches nothing and exits 1 with "No test files found". It works for any tier,
-including a single `*.integration.test.ts`, which is bounded and cheap.
+matches nothing and exits 1 with "No test files found". Portable integration
+files registered in the `pglite-integration` project stay Docker-free. Use
+`pnpm test:file:postgres src/…` for a PostgreSQL-only integration file.
 
-`pnpm test:unit`, `pnpm test:ui`, `pnpm test:integration` (requires
-`docker compose -p cubby up -d`), and `pnpm test:e2e` are the whole-tier
-commands. Reserve full `pnpm test` for pre-PR or cross-layer work.
+`pnpm test:unit`, `pnpm test:ui`, and `pnpm test:pglite` are the whole local
+Vitest tiers. `pnpm test:e2e tests/e2e/<file>.spec.ts` is the normal targeted
+browser loop; `pnpm test:e2e` runs the optional full browser suite. Those
+commands use PGlite and need no Docker. The PGlite E2E lane is intentionally
+serialized because its PostgreSQL socket multiplexer is not safe under
+concurrent mutation-heavy specs. `pnpm test:integration:postgres` and
+`pnpm test:e2e:postgres` select IntegreSQL for local parity after
+`docker compose -p cubby up -d`. Reserve full `pnpm test` or `pnpm test:local`
+for pre-PR or cross-layer work.
 
-**Integration is opt-in.** A bare `vitest run` no longer registers the
-integration project, so it cannot silently cost ten minutes; reach it with
-`--project integration`, `pnpm test:integration`, or `CUBBY_TEST_INTEGRATION=1`.
-That tier was 1,879 invocations and 12h over three weeks — more than unit, ui,
-and e2e combined — so it is a decision, not a reflex.
+**Full PostgreSQL integration is opt-in.** A bare `vitest run` registers the
+small portable PGlite subset, but not the complete PostgreSQL project, so it
+cannot silently cost ten minutes or require Docker. Reach the complete project
+with `--project integration`, `pnpm test:integration:postgres`, or
+`CUBBY_TEST_INTEGRATION=1`. That tier was 1,879 invocations and 12h over three
+weeks — more than unit, ui, and e2e combined — so it is a decision, not a
+reflex. CI remains authoritative: portable integration files run against both
+PGlite and PostgreSQL, and every lock/concurrency/driver contract runs against
+PostgreSQL.
+
+`pnpm test:changed` is likewise Docker-free and does not register the
+PostgreSQL-only project. Use `pnpm test:changed:postgres <ref>` when changed
+integration coverage needs the real backend.
 
 **Never re-run a tier to find out what failed.** Every run ends with a compact
 list of the failing tests, and writes the same list to

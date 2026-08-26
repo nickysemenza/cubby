@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import react from "@vitejs/plugin-react";
 import type { Plugin } from "vite";
@@ -72,6 +73,21 @@ const mcpContractTests = [
   "src/server/mcp/mcp-protocol.unit.test.ts",
   "src/server/mcp/mcp-workflow-tools.unit.test.ts",
 ];
+const pgliteIntegrationTests = [
+  "src/server/repo/calendar.integration.test.ts",
+  "src/server/repo/collection.integration.test.ts",
+  "src/server/repo/meal.integration.test.ts",
+  "src/server/repo/product/analytics.integration.test.ts",
+  "src/server/repo/product/conversion-coverage.integration.test.ts",
+  "src/server/repo/recipe-section-order.integration.test.ts",
+];
+const pgliteTemplatePath =
+  process.env.CUBBY_PGLITE_TEMPLATE_PATH ??
+  join(tmpdir(), `cubby-pglite-vitest-${process.pid}.tar.gz`);
+// Vitest applies project `env` only in workers, while global setup runs in the
+// controller process. The path is harmless outside the PGlite project; only
+// that project's worker env selects the PGlite database provider.
+process.env.CUBBY_PGLITE_TEMPLATE_PATH = pgliteTemplatePath;
 
 export default defineConfig({
   define: {
@@ -117,6 +133,27 @@ export default defineConfig({
             // Threads reduce worker startup while preserving per-file isolation.
             pool: "threads",
             sequence: { groupOrder: 0 },
+          },
+        },
+        {
+          // A deliberately portable subset. Concurrency, locking, pool, and
+          // node-postgres-specific integration contracts remain in the real
+          // PostgreSQL project below and continue to run in CI.
+          extends: true,
+          test: {
+            globalSetup: ["./tooling/pglite-global-setup.ts"],
+            setupFiles: ["./tooling/integration-teardown.ts"],
+            name: "pglite-integration",
+            include: pgliteIntegrationTests.map((file) => `**/${file}`),
+            pool: "forks",
+            maxWorkers: 2,
+            testTimeout: 30000,
+            hookTimeout: 60000,
+            sequence: { groupOrder: 2 },
+            env: {
+              CUBBY_TEST_DB_PROVIDER: "pglite",
+              CUBBY_PGLITE_TEMPLATE_PATH: pgliteTemplatePath,
+            },
           },
         },
         {

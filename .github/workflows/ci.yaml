@@ -324,7 +324,7 @@ jobs:
           - tier: ui-4
             args: --project ui --shard=4/4
           - tier: pure-pglite
-            args: --project unit-pure --project pglite
+            args: --project unit-pure --project pglite --project pglite-integration
           - tier: mcp-contract
             args: --project mcp-contract
     steps:
@@ -532,6 +532,7 @@ jobs:
       E2E_TEST_USER_EMAIL: nicky@test.com
       E2E_TEST_USER_PASSWORD: password1234
       BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9
+      CUBBY_E2E_DATABASE: postgres
       INTEGRESQL_URL: http://integresql:5000
       INTEGRESQL_DATABASE_HOST: postgres
     services:
@@ -619,7 +620,7 @@ jobs:
           path: packages/wasm
       - name: Run Playwright tests
         shell: bash
-        run: pnpm --filter @cubby/web run test:e2e --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+        run: pnpm --filter @cubby/web run test:e2e:postgres --shard=${{ matrix.shard }}/${{ strategy.job-total }}
       - name: Save Playwright report
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

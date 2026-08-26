@@ -15,13 +15,15 @@ dotenv.config({ path: path.resolve(__dirname, ".env") });
  * See https://playwright.dev/docs/test-configuration.
  */
 const isCI = !!process.env.CI;
+const localUsesPGlite =
+  !isCI && (process.env.CUBBY_E2E_DATABASE ?? "pglite") === "pglite";
 
 export default defineConfig({
   testDir: "./tests/e2e",
   /* CI dev server is slower — give tests more room */
   timeout: isCI ? 60_000 : 30_000,
 
-  /* Global setup/teardown - starts dev server with fresh IntegresQL database */
+  /* Global setup/teardown starts the Worker harness with a fresh database. */
   globalSetup: "./tests/e2e/e2e-global-setup.ts",
   globalTeardown: "./tests/e2e/e2e-global-teardown.ts",
 
@@ -31,8 +33,10 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
-  /* Run tests with 2 workers on CI for faster execution. */
-  workers: process.env.CI ? 2 : undefined,
+  /* PGlite multiplexes one database connection. Concurrent mutation-heavy
+     specs can corrupt its socket protocol, so serialize only that local lane;
+     preserve the existing two-worker CI/PostgreSQL behavior. */
+  workers: localUsesPGlite ? 1 : isCI ? 2 : undefined,
   /* Backstop for a dead dev server, which fails every remaining test
      identically (see the exit handler in e2e-global-setup.ts): uncapped, that
      is ~20 tests x 3 attempts of ECONNREFUSED burying the one line that
@@ -85,5 +89,5 @@ export default defineConfig({
     },
   ],
 
-  /* Note: the Cloudflare harness is handled by globalSetup with a fresh IntegreSQL database. */
+  /* The Cloudflare harness and selected database are handled by globalSetup. */
 });

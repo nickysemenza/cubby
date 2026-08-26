@@ -1,17 +1,9 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  IntegreSQLClient,
-  type IntegreSQLDatabaseConfig,
-} from "@devoxa/integresql-client";
 import { chromium, type FullConfig } from "@playwright/test";
-import { pushSchema } from "drizzle-kit/api";
-import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
-import { createTestHarness } from "wrangler";
-import * as schema from "../../src/server/db/schema";
-import { ensureDbExtensions } from "../../tooling/db-extensions";
+import { createTestHarness, type TestHarness } from "wrangler";
+import { createE2EDatabase } from "./e2e-database";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,74 +13,14 @@ const webkitAuthFile = path.join(
   "../../playwright/.auth/user-webkit.json",
 );
 
-const integreSQL = new IntegreSQLClient({
-  url: process.env.INTEGRESQL_URL ?? "http://localhost:5000",
-});
-const integreSQLDatabaseHost =
-  process.env.INTEGRESQL_DATABASE_HOST ?? "localhost";
-
-const remapDBConfig = (
-  databaseConfig: IntegreSQLDatabaseConfig,
-): IntegreSQLDatabaseConfig => {
-  databaseConfig.host = integreSQLDatabaseHost;
-  databaseConfig.port = 5432;
-  return databaseConfig;
-};
-
 async function globalSetup(_config: FullConfig): Promise<void> {
-  console.log("[E2E Setup] Getting fresh database from IntegresQL...");
+  const database = await createE2EDatabase();
+  const { databaseUrl } = database;
+  console.log(`[E2E Setup] Database provider: ${database.kind}`);
 
-  // 1. Get fresh database from IntegresQL
-  // Schema.ts is the single source of truth — the template is pushed from it.
-  const hash = await integreSQL.hashFiles(["./src/server/db/schema.ts"]);
-
-  // Initialize template if needed
-  await integreSQL.initializeTemplate(hash, async (databaseConfig) => {
-    const connectionUrl = integreSQL.databaseConfigToConnectionUrl(
-      remapDBConfig(databaseConfig),
-    );
-
-    console.log("[E2E Setup] Pushing schema to template database...");
-    const pool = new Pool({ connectionString: connectionUrl });
-    const db = drizzle(pool);
-    // pushSchema doesn't manage extensions; create them before pushing
-    // (mirrors db:push and integration setup).
-    await ensureDbExtensions(db);
-    // See test-setup.ts: bridge the duplicated drizzle-orm PgDatabase types.
-    const { apply } = await pushSchema(
-      schema,
-      db as unknown as Parameters<typeof pushSchema>[1],
-      ["public"],
-    );
-    await apply();
-    console.log("[E2E Setup] Template database schema pushed");
-    await pool.end();
-  });
-
-  // Get test database
-  const databaseConfig = await integreSQL.getTestDatabase(hash);
-  const databaseUrl = integreSQL.databaseConfigToConnectionUrl(
-    remapDBConfig(databaseConfig),
-  );
-
-  console.log(`[E2E Setup] Using database: ${databaseConfig.database}`);
-
-  // The application requires one real hierarchy root. IntegreSQL templates are
-  // cached by schema hash, so seed the checked-out test database rather than
-  // the template: this also repairs databases cloned from an older empty
-  // template after the invariant was introduced.
-  const seedPool = new Pool({ connectionString: databaseUrl });
-  try {
-    await drizzle(seedPool).insert(schema.location).values({
-      shortcode: "LOC-HM3E",
-      name: "Home",
-      aliases: [],
-      type: "house",
-      parentId: null,
-    });
-  } finally {
-    await seedPool.end();
-  }
+  // Install the provider before starting the harness so global teardown can
+  // always close the PGlite socket and WASM database after Worker shutdown.
+  (globalThis as Record<string, unknown>).__E2E_DATABASE__ = database;
 
   // 2. Start the Cloudflare test harness against the production build.
   const webRoot = path.join(__dirname, "../..");
@@ -112,7 +44,8 @@ async function globalSetup(_config: FullConfig): Promise<void> {
     databaseUrl;
   process.env.WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE_CACHED =
     databaseUrl;
-  const harness = createTestHarness({
+  let harness: TestHarness | undefined;
+  harness = createTestHarness({
     root: webRoot,
     workers: [
       {
@@ -170,12 +103,13 @@ async function globalSetup(_config: FullConfig): Promise<void> {
   } catch (error) {
     harness.debug();
     await harness.close();
+    await database.close();
+    delete (globalThis as Record<string, unknown>).__E2E_DATABASE__;
     throw error;
   }
 
   // Store the live harness for the reporter and global teardown.
   (globalThis as Record<string, unknown>).__E2E_HARNESS__ = harness;
-  (globalThis as Record<string, unknown>).__E2E_DB_URL__ = databaseUrl;
   process.env.E2E_DATABASE_URL = databaseUrl;
   // Playwright resolves project.use before global setup. Its documented global
   // setup environment handoff lets the shared test fixture supply the harness's
