@@ -36,7 +36,7 @@ fix only redesign-caused failures.
 | T6 Today/ordinary surfaces | Complete | Daily briefing hierarchy, truthful household signals, accessible question-led insights, responsive action targets, focused tests, full repository check, and independent closeout are recorded below |
 | T7 Specialist workbenches | Complete | Specialist task models remain intact while calendar, physical, recommendation, cooking, collection, project, and diagnostic surfaces gain truthful recovery, phone projections/targets, focused tests, responsive review, and independent closeout |
 | T8 Peripheral states | Complete | Public entry, OAuth, docs, offline, loading/error/not-found, account integrations, labels/print/export, generated PWA assets, phone geometry, focused tests, full check, and independent closeout are recorded below |
-| T9 Hardening and finish | Pending | — |
+| T9 Hardening and finish | In progress | Whole-PWA polish, detector triage, read-only audit, route matrices, recovery hardening, final synthetic screenshots, DESIGN.md/sidecar, production build, repository check, changed-test suite, and full E2E are complete; independent verdict and PR gate remain |
 
 ## T0 required evidence
 
@@ -149,6 +149,27 @@ height while retaining the named viewport width.
 | 2026-08-26 | T8 | Final focused UI suite | Pass: 29 tests in 13 files | Covers exact-ID consent, docs states, label export/print geometry, entity routing, orphan maintenance, footer targets, loading skeletons, PWA metadata, calendar feed recovery, and recipe export/search behavior |
 | 2026-08-26 | T8 | `pnpm check` | Pass | Exact-head entity/start-operation generators, workspace and service-worker types, changed-file formatting, SQL safety, soft-delete coverage, and unsafe-identifier guards are green |
 | 2026-08-26 | T8 | Independent adversarial closeout | Pass after seven P2 corrections; no residual P1/P2 | Reviewer verified exact-ID OAuth gating, mixed-error export suppression, internal paper scrolling, synchronized PWA palette/assets, missing-detail recovery, orphan-count recovery, and both footer targets at `13a5340d6` |
+| 2026-08-26 | T9 | Whole-PWA polish and truth-state hardening | Pass | Search, AI Usage, and MCP catalog now distinguish loading, empty, and failure states with local Retry actions; shared phone controls, Arrange, relationship trees, and task cards meet the 44px target contract |
+| 2026-08-26 | T9 | Impeccable detector and classification | Pass: no unresolved P0/P1 | One prescribed detector run identified stale docs, intentional Inter usage, test-fixture false positives, justified Canvas/offline boundaries, and real thick-rule/Canvas residues; the real findings were corrected and the detector was not rerun |
+| 2026-08-26 | T9 | Read-only Impeccable audit | Pass: 19/20; no residual P1/P2 | Accessibility 3/4 conservatively reflects the absence of a fresh whole-PWA automated WCAG crawl; performance, responsive behavior, theming, and implementation integrity scored 4/4 after bounded corrections |
+| 2026-08-26 | T9 | Whole-PWA rendered route matrices | Pass | Fourteen core routes were inspected at 430px and 1440px; operations and cooking specialists were inspected at phone width; Scan was checked at 844×390; no accidental page overflow or undersized visible control remained. Private household data was inspected only in place and not captured |
+| 2026-08-26 | T9 | Final synthetic screenshot set | Pass | `.impeccable/checkpoints/t9-finish/` contains privacy-safe Products workbench, phone roster, and phone Product detail captures; the detail capture shows the truthful Product → Stock → Location route |
+| 2026-08-26 | T9 | Production build and PWA precache | Pass | `pnpm --dir apps/web build` passed after generated PWA images were stripped and quantized; service-worker precache is 1,231,649 gzip bytes against the 1.35 MiB budget |
+| 2026-08-26 | T9 | `pnpm check` | Pass | Entity/start-operation generators, workspace and service-worker types, changed-file formatting, SQL safety, soft-delete coverage, and unsafe-identifier guards are green |
+| 2026-08-26 | T9 | `pnpm test:changed origin/main` | Pass: 306 files, 2,110 tests | Two stale `text-plum` assertions from the first run were corrected to the canonical House-domain token; the exact corrected tier passed in 104.19s |
+| 2026-08-26 | T9 | Full Playwright E2E | Pass on bounded retry | The first attempt failed in global setup with a transient Better Auth empty-500 response and ran zero tests; one bounded retry completed the full suite and teardown successfully |
+| 2026-08-26 | T9 | Shipped design contract | Pass | `apps/web/DESIGN.md` and `.impeccable/design.json` describe the same Porcelain Transit visual world, density asymmetry, domain wayfinding, entity-route interaction, responsive behavior, and intentional boundaries |
+
+## T9 final visual checkpoint
+
+All files in `.impeccable/checkpoints/t9-finish/` use synthetic placeholder
+records. No household or production data is present.
+
+| Surface | Evidence |
+| --- | --- |
+| Dense Products workbench at desktop | `products-workbench-1440x900.png` |
+| Products list projection at phone width | `products-mobile-430x932.png` |
+| Product detail and relationship route at phone width | `product-detail-mobile-430x932.png` |
 
 ## T3–T4 mandatory checkpoint
 

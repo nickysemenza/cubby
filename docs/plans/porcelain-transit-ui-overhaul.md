@@ -1,6 +1,7 @@
 # Porcelain Transit UI Overhaul
 
-Status: **In progress; T0–T8 complete, T9 whole-PWA hardening next**
+Status: **T0–T8 complete; T9 implementation and audit complete, independent
+review and PR gate pending**
 
 Delivery: **One big-bang branch and one ready-for-review PR**
 
@@ -213,7 +214,7 @@ means the named evidence exists; implementation without evidence remains
 | T6 | Today and normal-density surfaces | T1–T2 | Complete | Attention-first daily briefing, truthful household signals, accessible question-led insights, responsive rendered-state evidence, focused tests, and full repository check |
 | T7 | Specialist workbenches | T1–T5 | Complete | Specialist task models remain intact while calendar, physical, recommendation, cooking, collection, project, and diagnostic surfaces gain truthful recovery, phone projections/targets, focused tests, responsive review, and independent closeout |
 | T8 | Peripheral web-PWA states | T1–T7 | Complete | Auth/OAuth, docs, offline, route errors/not-found, loading, settings integrations, labels, print/export, generated PWA assets, responsive review, focused tests, full check, and independent closeout are recorded in the evidence ledger |
-| T9 | Whole-PWA hardening and finish | T0–T8 | Pending | Detector, visual review, audit, tests, reviewer verdict, DESIGN.md and sidecar |
+| T9 | Whole-PWA hardening and finish | T0–T8 | In progress | Detector, whole-PWA visual review, 19/20 audit, exact changed-test suite, production build, DESIGN.md, sidecar, and final screenshots are complete; independent reviewer and PR gate remain |
 
 ### T1 — Foundation
 
