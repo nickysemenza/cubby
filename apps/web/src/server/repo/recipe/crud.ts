@@ -90,6 +90,7 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { TraceNames, withTrace } from "~/server/tracing";
+import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 export const RECIPE_DELETE_EDGE_POLICY = {
   "RecipeSection.recipeId": {
@@ -160,7 +161,7 @@ export const getRecipeCoverImageUrlsByShortcodes = async (
   if (ids.length === 0) return byId;
 
   const rows = await getDb(db)
-    .select({ shortcode: recipe.shortcode, url: image.url })
+    .select({ shortcode: recipe.shortcode, key: image.key })
     .from(recipe)
     .innerJoin(recipeImage, eq(recipeImage.recipeId, recipe.id))
     .innerJoin(image, eq(image.id, recipeImage.imageId))
@@ -182,7 +183,7 @@ export const getRecipeCoverImageUrlsByShortcodes = async (
 
   for (const row of rows) {
     const shortcode = unsafeRecipeShortcode(row.shortcode);
-    if (!byId.has(shortcode)) byId.set(shortcode, row.url);
+    if (!byId.has(shortcode)) byId.set(shortcode, getR2PublicUrl(row.key));
   }
   return byId;
 };

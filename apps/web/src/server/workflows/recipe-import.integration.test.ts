@@ -15,6 +15,7 @@ import { makeImportRecipe } from "~/server/repo/repo.fixtures";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
+import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 import { insertImportWorkflow } from "./recipe-import.server";
 
 describe("insertImportWorkflow image persistence", () => {
@@ -63,7 +64,7 @@ describe("insertImportWorkflow image persistence", () => {
       `recipe-${entityId}`,
     );
     expect(await attachedImages(id)).toMatchObject([
-      { url: "https://images.example/imports/hero.jpg", status: "UPLOADED" },
+      { url: getR2PublicUrl("imports/hero.jpg"), status: "UPLOADED" },
     ]);
 
     const second = await insertImportWorkflow(workflowContext(), imported);

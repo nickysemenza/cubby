@@ -45,6 +45,7 @@ import {
 } from "~/server/repo/recipe";
 import { removeEntity } from "~/server/repo/removal";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 export const COOKBOOK_DELETE_EDGE_POLICY = {
   "Recipe.cookbookId": {
@@ -187,7 +188,7 @@ const readCookbookSummaries = async (
       author: cookbook.author,
       subjects: cookbook.subjects,
       recipeCount: sql<number>`count(${recipe.id})::int`,
-      coverUrl: image.url,
+      coverKey: image.key,
       sourceRecipeCount: sql<number>`coalesce(jsonb_array_length(${cookbook.rawJson}), 0)::int`,
       productId: cookbook.productId,
       productShortcode: product.shortcode,
@@ -209,7 +210,7 @@ const readCookbookSummaries = async (
         shortcode ? eq(cookbook.shortcode, shortcode) : undefined,
       ),
     )
-    .groupBy(cookbook.id, image.url, product.id)
+    .groupBy(cookbook.id, image.key, product.id)
     .orderBy(cookbook.name);
 
   // The linked product's own cover, via the shared batched reader rather than a
@@ -220,19 +221,21 @@ const readCookbookSummaries = async (
     rows.flatMap((r) => (r.productId ? [r.productId] : [])),
   );
 
-  return rows.map(({ productId, productShortcode, productName, ...r }) => ({
-    ...r,
-    id: unsafeCookbookShortcode(r.shortcode),
-    coverUrl: r.coverUrl ?? null,
-    product:
-      productId && productShortcode && productName
-        ? {
-            id: unsafeProductShortcode(productShortcode),
-            name: productName,
-            coverUrl: productCovers.get(productId) ?? null,
-          }
-        : null,
-  }));
+  return rows.map(
+    ({ productId, productShortcode, productName, coverKey, ...r }) => ({
+      ...r,
+      id: unsafeCookbookShortcode(r.shortcode),
+      coverUrl: coverKey ? getR2PublicUrl(coverKey) : null,
+      product:
+        productId && productShortcode && productName
+          ? {
+              id: unsafeProductShortcode(productShortcode),
+              name: productName,
+              coverUrl: productCovers.get(productId) ?? null,
+            }
+          : null,
+    }),
+  );
 };
 
 export const listCookbooks = async (db: Database): Promise<CookbookSummary[]> =>

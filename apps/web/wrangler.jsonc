@@ -133,7 +133,7 @@
     "PRODUCT_DETAIL_READER": "legacy",
     "R2_ENDPOINT": "https://9f10f078d35d86c78dedece2300a6b88.r2.cloudflarestorage.com",
     "R2_BUCKET_NAME": "foo",
-    "R2_PUBLIC_URL": "https://foobucket.nicky.fun",
+    "R2_PUBLIC_URL": "https://media.nickysemenza.com",
     "R2_KEY_PREFIX": "cubby",
     "USDA_API_URL": "https://usda-api.nicky.workers.dev/",
     "UPC_LOOKUP_API_URL": "https://upc-lookup.nicky.workers.dev"

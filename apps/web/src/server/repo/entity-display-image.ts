@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/repo/database-helpers";
 import { displayableImageSql } from "~/server/repo/image-displayability";
+import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 /** A private database identity used only while hydrating public read models. */
 export interface EntityDisplayImageRef {
@@ -23,7 +24,7 @@ const DISPLAY_IMAGE_ENTITIES = new Set<Entity>([
   "vendor",
 ]);
 
-type DisplayImageRow = EntityDisplayImageRef & { url: string | null };
+type DisplayImageRow = EntityDisplayImageRef & { key: string | null };
 
 const rowsOf = (result: unknown): DisplayImageRow[] => {
   if (Array.isArray(result)) return result as DisplayImageRow[];
@@ -63,9 +64,9 @@ export async function resolveEntityDisplayImages(
   const result = await getDb(db).execute(sql`
     WITH refs("entityType", "entityId") AS (VALUES ${values})
     SELECT refs."entityType", refs."entityId"::text AS "entityId", (
-      SELECT candidates.url
+      SELECT candidates.key
       FROM (
-        SELECT i.url, 0 AS priority, pi."sortOrder", pi."createdAt", i.id AS "imageId"
+        SELECT i.key, 0 AS priority, pi."sortOrder", pi."createdAt", i.id AS "imageId"
         FROM "ProductImage" pi
         JOIN "Image" i ON i.id = pi."imageId"
         WHERE refs."entityType" IN ('product', 'inventory')
@@ -78,20 +79,20 @@ export async function resolveEntityDisplayImages(
           END
           AND pi."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
         UNION ALL
-        SELECT i.url, 0 AS priority, ri."sortOrder", ri."createdAt", i.id AS "imageId"
+        SELECT i.key, 0 AS priority, ri."sortOrder", ri."createdAt", i.id AS "imageId"
         FROM "RecipeImage" ri
         JOIN "Image" i ON i.id = ri."imageId"
         WHERE refs."entityType" = 'recipe' AND ri."recipeId" = refs."entityId"
           AND ri."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
         UNION ALL
-        SELECT i.url, 0 AS priority, li."sortOrder", li."createdAt", i.id AS "imageId"
+        SELECT i.key, 0 AS priority, li."sortOrder", li."createdAt", i.id AS "imageId"
         FROM "LocationImage" li
         JOIN "Image" i ON i.id = li."imageId"
         WHERE refs."entityType" = 'location' AND li."locationId" = refs."entityId"
           AND li."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
         UNION ALL
         -- A location's own photo wins; the Product it represents is fallback.
-        SELECT i.url, 1 AS priority, pi."sortOrder", pi."createdAt", i.id AS "imageId"
+        SELECT i.key, 1 AS priority, pi."sortOrder", pi."createdAt", i.id AS "imageId"
         FROM "ProductImage" pi
         JOIN "Image" i ON i.id = pi."imageId"
         WHERE refs."entityType" = 'location'
@@ -101,25 +102,25 @@ export async function resolveEntityDisplayImages(
           )
           AND pi."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
         UNION ALL
-        SELECT i.url, 0 AS priority, 0 AS "sortOrder", c."createdAt", i.id AS "imageId"
+        SELECT i.key, 0 AS priority, 0 AS "sortOrder", c."createdAt", i.id AS "imageId"
         FROM "Cookbook" c
         JOIN "Image" i ON i.id = c."coverImageId"
         WHERE refs."entityType" = 'cookbook' AND c.id = refs."entityId"
           AND c."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
         UNION ALL
-        SELECT i.url, 0 AS priority, pri."sortOrder", pri."createdAt", i.id AS "imageId"
+        SELECT i.key, 0 AS priority, pri."sortOrder", pri."createdAt", i.id AS "imageId"
         FROM "ProjectImage" pri
         JOIN "Image" i ON i.id = pri."imageId"
         WHERE refs."entityType" = 'project' AND pri."projectId" = refs."entityId"
           AND pri."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
         UNION ALL
-        SELECT i.url, 0 AS priority, pui."sortOrder", pui."createdAt", i.id AS "imageId"
+        SELECT i.key, 0 AS priority, pui."sortOrder", pui."createdAt", i.id AS "imageId"
         FROM "PurchaseImage" pui
         JOIN "Image" i ON i.id = pui."imageId"
         WHERE refs."entityType" = 'purchase' AND pui."purchaseId" = refs."entityId"
           AND pui."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}
         UNION ALL
-        SELECT i.url, 0 AS priority, 0 AS "sortOrder", v."createdAt", i.id AS "imageId"
+        SELECT i.key, 0 AS priority, 0 AS "sortOrder", v."createdAt", i.id AS "imageId"
         FROM "Vendor" v
         JOIN "Image" i ON i.id = v."logoImageId"
         WHERE refs."entityType" = 'vendor' AND v.id = refs."entityId"
@@ -127,14 +128,19 @@ export async function resolveEntityDisplayImages(
       ) candidates
       ORDER BY candidates.priority, candidates."sortOrder", candidates."createdAt", candidates."imageId"
       LIMIT 1
-    ) AS url
+    ) AS key
     FROM refs
   `);
 
   return new Map(
     rowsOf(result).flatMap((row) =>
-      row.url
-        ? [[entityRefKey(row.entityType, row.entityId), { url: row.url }]]
+      row.key
+        ? [
+            [
+              entityRefKey(row.entityType, row.entityId),
+              { url: getR2PublicUrl(row.key) },
+            ],
+          ]
         : [],
     ),
   );

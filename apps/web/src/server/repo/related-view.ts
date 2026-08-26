@@ -24,6 +24,7 @@ import type { Database } from "~/server/db";
 import { getDb } from "~/server/repo/database-helpers";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { compileTraversal } from "~/server/repo/relatedness/traversal";
+import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 interface RelatedViewSqlPresentation {
   label: string;
@@ -496,7 +497,7 @@ export async function loadRelatedSummary(
   const imageJoin = definition.imageTarget
     ? definition.imageTarget === "vendor"
       ? `LEFT JOIN LATERAL (
-        SELECT i."id", i."url", i."filename", i."contentType"
+        SELECT i."id", i."key", i."filename", i."contentType"
         FROM "Image" i
         WHERE i."id" = t."logoImageId"
           AND i."deletedAt" IS NULL
@@ -506,7 +507,7 @@ export async function loadRelatedSummary(
         LIMIT 1
       ) img ON TRUE`
       : `LEFT JOIN LATERAL (
-        SELECT i."id", i."url", i."filename", i."contentType"
+        SELECT i."id", i."key", i."filename", i."contentType"
         FROM "${definition.imageTarget === "product" ? "ProductImage" : "ProjectImage"}" ti
         JOIN "Image" i ON i."id" = ti."imageId" AND i."deletedAt" IS NULL
         WHERE ti."${definition.imageTarget}Id" = t."id"
@@ -538,8 +539,8 @@ export async function loadRelatedSummary(
     knownAcquiredUnits: `"knownAcquiredUnits"`,
   }[sort.field];
   const imageColumns = definition.imageTarget
-    ? sql`img."id"::text AS "imageId", img."url" AS "imageUrl", img."filename" AS "imageFilename", img."contentType" AS "imageContentType"`
-    : sql`NULL::text AS "imageId", NULL::text AS "imageUrl", NULL::text AS "imageFilename", NULL::text AS "imageContentType"`;
+    ? sql`img."id"::text AS "imageId", img."key" AS "imageKey", img."filename" AS "imageFilename", img."contentType" AS "imageContentType"`
+    : sql`NULL::text AS "imageId", NULL::text AS "imageKey", NULL::text AS "imageFilename", NULL::text AS "imageContentType"`;
   const query = sql`
     WITH RECURSIVE ${scope}, targeted AS (
       SELECT se.*, t."shortcode" AS "targetId", t."name" AS "targetLabel", ${imageColumns}
@@ -550,7 +551,7 @@ export async function loadRelatedSummary(
         ${search ? sql`AND t."name" ILIKE ${`%${search}%`}` : sql``}
     ), grouped AS (
       SELECT
-        "targetId", "targetLabel", "imageId", "imageUrl", "imageFilename", "imageContentType",
+        "targetId", "targetLabel", "imageId", "imageKey", "imageFilename", "imageContentType",
         count(DISTINCT "expenseId")::int AS "expenseCount",
         count(DISTINCT "purchaseId")::int AS "purchaseCount",
         count(DISTINCT "expenseId") FILTER (WHERE "cost" IS NULL)::int AS "unpricedExpenseCount",
@@ -559,7 +560,7 @@ export async function loadRelatedSummary(
         COALESCE(sum("productQuantity") FILTER (WHERE "cost" > 0 AND NOT "future" AND "productQuantity" IS NOT NULL), 0)::double precision AS "knownAcquiredUnits",
         count(DISTINCT "expenseId") FILTER (WHERE "cost" > 0 AND NOT "future" AND "productQuantity" IS NULL)::int AS "unknownAcquisitionQuantityCount"
       FROM targeted
-      GROUP BY "targetId", "targetLabel", "imageId", "imageUrl", "imageFilename", "imageContentType"
+      GROUP BY "targetId", "targetLabel", "imageId", "imageKey", "imageFilename", "imageContentType"
     ), totals AS (
       SELECT
         count(DISTINCT "expenseId")::int AS "totalExpenseCount",
@@ -582,7 +583,7 @@ export async function loadRelatedSummary(
     targetId: string | null;
     targetLabel: string | null;
     imageId: string | null;
-    imageUrl: string | null;
+    imageKey: string | null;
     imageFilename: string | null;
     imageContentType: string | null;
     expenseCount: number | string;
@@ -637,12 +638,12 @@ export async function loadRelatedSummary(
               label: row.targetLabel,
               image:
                 row.imageId &&
-                row.imageUrl &&
+                row.imageKey &&
                 row.imageFilename &&
                 row.imageContentType
                   ? {
                       id: row.imageId,
-                      url: row.imageUrl,
+                      url: getR2PublicUrl(row.imageKey),
                       filename: row.imageFilename,
                       contentType: row.imageContentType,
                     }

@@ -9,6 +9,7 @@ import { defineConfig, type Plugin, type PluginOption } from "vite";
 import wasm from "vite-plugin-wasm";
 import { isGitWorktree } from "./tooling/git-worktree";
 import { createServerFunctionIdGenerator } from "./tooling/server-function-id.ts";
+import { readR2PublicUrlFromWrangler } from "./tooling/wrangler-public-config.ts";
 
 const isCloudflare = process.env.DEPLOY_TARGET === "cloudflare";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -19,6 +20,7 @@ const sourceCommit = process.env.CUBBY_SOURCE_COMMIT?.slice(0, 7) || gitCommit;
 const sourceBranch =
   process.env.CUBBY_SOURCE_BRANCH ||
   execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf-8" }).trim();
+const r2PublicUrl = readR2PublicUrlFromWrangler();
 
 /**
  * Stub pg-native for CF Workers. Vite emits a bare `throw` for unresolvable
@@ -149,6 +151,7 @@ export default defineConfig(async () => {
       __SOURCE_COMMIT__: JSON.stringify(sourceCommit),
       __SOURCE_BRANCH__: JSON.stringify(sourceBranch),
       __BUILD_DATE__: JSON.stringify(new Date().toISOString()),
+      __R2_PUBLIC_URL__: JSON.stringify(r2PublicUrl),
       ...(isCloudflare ? { __CF_WORKERS__: "true" } : {}),
     },
     server: {

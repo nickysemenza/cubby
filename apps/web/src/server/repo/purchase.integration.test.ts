@@ -1072,7 +1072,6 @@ describe("purchase repository — mergePurchases", () => {
     const purchaseIdUuid = await purchaseUuid(ctx.db, purchaseShortcodeId);
     const img = await insertWithShortcode(ctx.db, "image", {
       key: `test-documents/${label}.pdf`,
-      url: `https://example.com/${label}.pdf`,
       filename: `${label}.pdf`,
       contentType: "application/pdf",
       size: 100,
@@ -1559,7 +1558,6 @@ describe("purchase repository — deletion cascades", () => {
     const purchaseId = await purchaseUuid(ctx.db, emptyPurchase.id);
     const document = await insertWithShortcode(ctx.db, "image", {
       key: "test-documents/empty-delete.pdf",
-      url: "https://example.com/empty-delete.pdf",
       filename: "empty-delete.pdf",
       contentType: "application/pdf",
       size: 100,
@@ -1734,7 +1732,6 @@ describe("purchase repository — deletion cascades", () => {
 
     const img = await insertWithShortcode(ctx.db, "image", {
       key: "test-documents/deleted-charge.pdf",
-      url: "https://example.com/deleted-charge.pdf",
       filename: "deleted-charge.pdf",
       contentType: "application/pdf",
       size: 100,

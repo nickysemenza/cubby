@@ -95,7 +95,7 @@ const withProjectAndProductNameOnly = {
           with: {
             logo: {
               columns: {
-                url: true,
+                key: true,
                 contentType: true,
                 renderStatus: true,
                 storageStatus: true,

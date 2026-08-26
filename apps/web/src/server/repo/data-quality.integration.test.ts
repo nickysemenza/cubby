@@ -68,7 +68,6 @@ describe("computed purchase and product data quality", () => {
   ) => {
     const stored = await insertWithShortcode(ctx.db, "image", {
       key: `test/${crypto.randomUUID()}.pdf`,
-      url: `https://example.test/${crypto.randomUUID()}.pdf`,
       filename: "evidence.pdf",
       contentType: "application/pdf",
       size: 12,

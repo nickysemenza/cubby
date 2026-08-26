@@ -396,7 +396,6 @@ describe("project repository", () => {
       );
     const img = await insertWithShortcode(ctx.db, "image", {
       key: "test-project-image-key",
-      url: "https://example.com/test-project-image.jpg",
       filename: "test-project-image.jpg",
       contentType: "image/jpeg",
       size: 100,
@@ -3076,7 +3075,6 @@ describe("project repository — imagePresenceFilter", () => {
   ) => {
     const img = await insertWithShortcode(ctx.db, "image", {
       key: `image-presence-${entityId}-${overrides.contentType ?? "png"}`,
-      url: "https://example.com/image-presence.png",
       filename: "image-presence.png",
       contentType: overrides.contentType ?? "image/png",
       size: 100,

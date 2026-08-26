@@ -15,6 +15,7 @@ import {
   purchaseImage,
   vendor,
 } from "~/server/db/schema";
+import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 import { deleteCookbook, upsertCookbook } from "./cookbook";
 import { getDb, insertAndReturn, withTransaction } from "./database-helpers";
 import {
@@ -45,7 +46,6 @@ describe("image repository", () => {
   const makePendingImage = async (overrides?: { filename?: string }) =>
     createPendingImageRecord(ctx.db, {
       key: `test/${crypto.randomUUID()}.jpg`,
-      url: "https://example.com/test.jpg",
       filename: overrides?.filename ?? "original.jpg",
       contentType: "image/jpeg",
       size: 1024,
@@ -54,7 +54,6 @@ describe("image repository", () => {
   it("renames an image and leaves every other column untouched", async () => {
     const created = await createUploadedImageRecord(ctx.db, {
       key: `test/${crypto.randomUUID()}.jpg`,
-      url: "https://example.com/original.jpg",
       filename: "original.jpg",
       contentType: "image/jpeg",
       size: 2048,
@@ -66,7 +65,7 @@ describe("image repository", () => {
 
     expect(updated.filename).toEqual("renamed.jpg");
     expect(updated.key).toEqual(created.key);
-    expect(updated.url).toEqual(created.url);
+    expect(updated.url).toEqual(getR2PublicUrl(created.key));
     expect(updated.size).toEqual(created.size);
     expect(updated.contentType).toEqual(created.contentType);
     expect(updated.status).toEqual(created.status);
@@ -83,7 +82,6 @@ describe("image repository", () => {
   it("returns every direct vendor-logo association for a shared image", async () => {
     const logo = await createUploadedImageRecord(ctx.db, {
       key: `vendors/${crypto.randomUUID()}.png`,
-      url: "https://example.com/shared-logo.png",
       filename: "shared-logo.png",
       contentType: "image/png",
       size: 1024,
@@ -145,7 +143,6 @@ describe("image repository", () => {
   it("markImageUploaded is scoped to PENDING rows and cannot resurrect a FAILED/already-UPLOADED row", async () => {
     const uploaded = await createUploadedImageRecord(ctx.db, {
       key: `test/${crypto.randomUUID()}.jpg`,
-      url: "https://example.com/already.jpg",
       filename: "already.jpg",
       contentType: "image/jpeg",
       size: 512,
@@ -162,14 +159,12 @@ describe("image repository", () => {
     );
     const pdf = await insertWithShortcode(ctx.db, "image", {
       key: `test/${crypto.randomUUID()}.pdf`,
-      url: "https://example.com/project.pdf",
       filename: "project.pdf",
       contentType: "application/pdf",
       size: 1024,
     });
     const failed = await insertWithShortcode(ctx.db, "image", {
       key: `test/${crypto.randomUUID()}-failed.jpg`,
-      url: "https://example.com/failed.jpg",
       filename: "failed.jpg",
       contentType: "image/jpeg",
       size: 1024,
@@ -177,7 +172,6 @@ describe("image repository", () => {
     });
     const cover = await insertWithShortcode(ctx.db, "image", {
       key: `test/${crypto.randomUUID()}-cover.jpg`,
-      url: "https://example.com/cover.jpg",
       filename: "cover.jpg",
       contentType: "image/jpeg",
       size: 1024,
@@ -203,7 +197,7 @@ describe("image repository", () => {
       [project.entityId]: [
         {
           id: unsafeImageShortcode(cover.shortcode),
-          url: "https://example.com/cover.jpg",
+          url: getR2PublicUrl(cover.key),
           filename: "cover.jpg",
         },
       ],
@@ -350,7 +344,6 @@ describe("image repository — purchase (charge) documents", () => {
   const makePendingImage = async () =>
     createPendingImageRecord(ctx.db, {
       key: `test/${crypto.randomUUID()}.jpg`,
-      url: "https://example.com/test.jpg",
       filename: "original.jpg",
       contentType: "image/jpeg",
       size: 1024,
@@ -382,7 +375,6 @@ describe("image repository — purchase (charge) documents", () => {
       ctx.db,
       {
         key: `test-documents/${crypto.randomUUID()}.pdf`,
-        url: "https://example.com/invoice.pdf",
         filename: "invoice.pdf",
         contentType: "application/pdf",
         size: 4096,
@@ -432,7 +424,6 @@ describe("image repository — purchase (charge) documents", () => {
         ctx.db,
         {
           key: `test/${crypto.randomUUID()}-${filename}`,
-          url: `https://example.com/${filename}`,
           filename,
           contentType: "image/jpeg",
           size: 1024,
@@ -582,7 +573,6 @@ describe("image repository — purchase (charge) documents", () => {
         ctx.db,
         {
           key: `test/${crypto.randomUUID()}.jpg`,
-          url: "https://example.com/doomed.jpg",
           filename: "doomed.jpg",
           contentType: "image/jpeg",
           size: 1024,
@@ -645,7 +635,6 @@ describe("image repository — purchase (charge) documents", () => {
     );
     const orphan = await createUploadedImageRecord(ctx.db, {
       key: `test/${crypto.randomUUID()}.jpg`,
-      url: "https://example.com/orphan.jpg",
       filename: "orphan.jpg",
       contentType: "image/jpeg",
       size: 1024,
@@ -683,7 +672,6 @@ describe("image repository — purchase (charge) documents", () => {
 
       const orphan = await createUploadedImageRecord(ctx.db, {
         key: `test/${crypto.randomUUID()}.jpg`,
-        url: "https://example.com/unref.jpg",
         filename: "unref.jpg",
         contentType: "image/jpeg",
         size: 1024,
@@ -692,7 +680,6 @@ describe("image repository — purchase (charge) documents", () => {
         ctx.db,
         {
           key: `test/${crypto.randomUUID()}.jpg`,
-          url: "https://example.com/attached.jpg",
           filename: "attached.jpg",
           contentType: "image/jpeg",
           size: 1024,
@@ -703,7 +690,6 @@ describe("image repository — purchase (charge) documents", () => {
       const pending = await makePendingImage();
       const coverOnly = await createUploadedImageRecord(ctx.db, {
         key: `test/${crypto.randomUUID()}.jpg`,
-        url: "https://example.com/book.jpg",
         filename: "book.jpg",
         contentType: "image/jpeg",
         size: 1024,
@@ -752,7 +738,6 @@ describe("image repository — purchase (charge) documents", () => {
     it("leaves a just-created row alone until the grace window passes", async () => {
       const fresh = await createUploadedImageRecord(ctx.db, {
         key: `test/${crypto.randomUUID()}.jpg`,
-        url: "https://example.com/fresh.jpg",
         filename: "fresh.jpg",
         contentType: "image/jpeg",
         size: 1024,
@@ -772,7 +757,6 @@ describe("image repository — purchase (charge) documents", () => {
       ctx.db,
       {
         key: `test-documents/${crypto.randomUUID()}.pdf`,
-        url: "https://example.com/invoice-2.pdf",
         filename: "invoice-2.pdf",
         contentType: "application/pdf",
         size: 2048,

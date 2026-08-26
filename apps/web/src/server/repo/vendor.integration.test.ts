@@ -24,6 +24,7 @@ import {
   purchaseImage,
   vendor,
 } from "~/server/db/schema";
+import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 import { getDb, insertAndReturn, notDeleted } from "./database-helpers";
 import { createExpense, deleteExpenses, expenseList } from "./expense";
 import {
@@ -432,7 +433,6 @@ describe("vendor repository — vendorOptions picklist", () => {
 
   it("propagates the resolved logo through options, purchase rows, and expense rows", async () => {
     const logo = await insertWithShortcode(ctx.db, "image", {
-      url: "https://example.com/propagated-vendor-logo.png",
       key: "propagated-vendor-logo.png",
       filename: "propagated-vendor-logo.png",
       size: 1,
@@ -473,10 +473,14 @@ describe("vendor repository — vendorOptions picklist", () => {
       expenseList(ctx.db, { vendorId: created.output.id }, [], page),
     ]);
     expect(options.find((row) => row.id === created.output.id)?.logo).toEqual({
-      url: logo.url,
+      url: getR2PublicUrl(logo.key),
     });
-    expect(purchases.data[0]?.vendorLogo).toEqual({ url: logo.url });
-    expect(expenses.data[0]?.vendorLogo).toEqual({ url: logo.url });
+    expect(purchases.data[0]?.vendorLogo).toEqual({
+      url: getR2PublicUrl(logo.key),
+    });
+    expect(expenses.data[0]?.vendorLogo).toEqual({
+      url: getR2PublicUrl(logo.key),
+    });
   });
 });
 
@@ -516,7 +520,6 @@ describe("vendor repository — deletion guard", () => {
 
   it("reaps an exclusive logo but preserves an image shared by another vendor", async () => {
     const logo = await insertWithShortcode(ctx.db, "image", {
-      url: "https://example.com/shared-vendor-logo.png",
       key: "shared-vendor-logo.png",
       filename: "shared-vendor-logo.png",
       size: 1,
@@ -565,7 +568,6 @@ describe("vendor repository — replaceVendorLogo", () => {
   const ctx = withTestDb();
 
   const fetchedLogo = (label: string) => ({
-    url: `https://images.example/${label}.png`,
     key: `vendor-logos/${label}.png`,
     filename: `${label}.png`,
     size: 256,
@@ -792,14 +794,12 @@ describe("vendor repository — mergeVendors", () => {
   it("returns the R2 key when a losing logo becomes unreferenced", async () => {
     const [keeperLogo, loserLogo] = await Promise.all([
       insertWithShortcode(ctx.db, "image", {
-        url: "https://example.com/keeper-logo.png",
         key: "keeper-logo.png",
         filename: "keeper-logo.png",
         size: 1,
         contentType: "image/png",
       }),
       insertWithShortcode(ctx.db, "image", {
-        url: "https://example.com/loser-logo.png",
         key: "loser-logo.png",
         filename: "loser-logo.png",
         size: 1,
@@ -845,7 +845,6 @@ describe("vendor repository — mergeVendors", () => {
   const attachDocumentRow = async (purchaseId: PurchaseId, label: string) => {
     const img = await insertWithShortcode(ctx.db, "image", {
       key: `test-documents/${label}.pdf`,
-      url: `https://example.com/${label}.pdf`,
       filename: `${label}.pdf`,
       contentType: "application/pdf",
       size: 100,

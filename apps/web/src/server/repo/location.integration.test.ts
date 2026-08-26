@@ -810,7 +810,6 @@ describe("locationSearch picker rows", () => {
     ) => {
       const img = await insertWithShortcode(ctx.db, "image", {
         key,
-        url: `https://example.com/${key}.png`,
         filename: `${key}.png`,
         contentType: overrides.contentType ?? "image/png",
         size: 100,
@@ -861,7 +860,6 @@ describe("locationSearch picker rows", () => {
     );
     const productCover = await insertWithShortcode(ctx.db, "image", {
       key: "picker-vessel-cover",
-      url: "https://example.com/picker-vessel-cover.png",
       filename: "picker-vessel-cover.png",
       contentType: "image/png",
       size: 100,
@@ -886,7 +884,6 @@ describe("locationSearch picker rows", () => {
 
     const ownPhoto = await insertWithShortcode(ctx.db, "image", {
       key: "picker-location-cover",
-      url: "https://example.com/picker-location-cover.png",
       filename: "picker-location-cover.png",
       contentType: "image/png",
       size: 100,
@@ -911,7 +908,6 @@ describe("locationSearch picker rows", () => {
     const entityId = await idOf(leaf!.id);
     const img = await insertWithShortcode(ctx.db, "image", {
       key: "optioned-bin",
-      url: "https://example.com/optioned-bin.png",
       filename: "optioned-bin.png",
       contentType: "image/png",
       size: 100,
@@ -955,7 +951,6 @@ describe("buildLocationTree identity product hydration", () => {
     );
     const cover = await insertWithShortcode(ctx.db, "image", {
       key: "tree-vessel-cover",
-      url: "https://example.com/tree-vessel-cover.png",
       filename: "tree-vessel-cover.png",
       contentType: "image/png",
       size: 100,
@@ -1194,7 +1189,6 @@ describe("locationList imagePresenceFilter", () => {
     );
     const img = await insertWithShortcode(ctx.db, "image", {
       key: `location-presence-${name}`,
-      url: "https://example.com/location-presence.png",
       filename: "location-presence.png",
       contentType: overrides.contentType ?? "image/png",
       size: 100,
@@ -1269,7 +1263,6 @@ describe("attaching a photo as the new cover", () => {
   const pendingImage = async (name: string) =>
     await insertWithShortcode(ctx.db, "image", {
       key: `cover-${name}`,
-      url: `https://example.com/cover-${name}.png`,
       filename: `${name}.png`,
       contentType: "image/png",
       size: 100,
