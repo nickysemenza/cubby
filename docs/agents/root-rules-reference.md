@@ -187,7 +187,7 @@ Use these instead of inline patterns:
 | Manual conditions array + notDeleted + formatSearchTerm    | `buildSearchConditions(table, filters, extras)` | `~/server/repo/database-helpers`             |
 | `ComboboxItem.refine()` for required product               | `requiredProductField`                          | `~/app/_components/form-fields`              |
 | `ComboboxItem.refine()` for required location              | `requiredLocationField`                         | `~/app/_components/form-fields`              |
-| `as ProductId`, `as LocationId`, etc.                      | `unsafeProductId()`, `unsafeLocationId()`, etc. | `@cubby/schemas/identifiers`                 |
+| `as ProductId`, `as LocationId`, etc.                      | Parse with the entity schema at ingress, or fix the typed producer | `@cubby/schemas/identifiers` |
 | Inline `["inventoryItem"]` query keys                      | `queryKeys.inventoryItem.list`                  | `~/lib/query-keys`                           |
 | `Array.from(new Set(arr))` or `[...new Set(arr)]`          | `uniq(arr)` / `uniqBy(arr, fn)`                 | `es-toolkit`                                 |
 | Hand-rolled `keyBy`/`groupBy`/`sumBy`/`partition`/`sum`    | the es-toolkit fn of the same name              | `es-toolkit`                                 |
@@ -197,7 +197,7 @@ Use these instead of inline patterns:
 | `pMap(ids, (id) => getIngredientByID(...))` per-id loops    | `getIngredientsByIDs(db, usdaClient, ids)`      | `~/server/services/ingredient.service`       |
 | Unparsed workflow output                                   | Parse the explicit output schema at the Start/MCP boundary | `~/server/workflows`                    |
 | Hand-rolled merge that deletes losers, cascades embeddings, and writes audit separately | `finalizeMerge` (plus `resolveMergeTargets`/`repointEdge`) | `~/server/repo/merge` |
-| `resolveLiveShortcode` + `if (!id) throw createAppError("X_NOT_FOUND", …)` + `unsafeXId` | `resolveOrThrow(db, entity, code)` | `~/server/repo/shortcode-resolver` |
+| `resolveLiveShortcode` + `if (!id) throw createAppError("X_NOT_FOUND", …)` | `resolveOrThrow(db, entity, code)` | `~/server/repo/shortcode-resolver` |
 | `resolveLiveShortcodes` + collect-missing + throw | `resolveAllOrThrow(db, entity, codes)` | `~/server/repo/shortcode-resolver` |
 | `resolveLiveShortcodes` + `.flatMap`/`.filter` that drops misses | `resolveAllPresent(db, entity, codes)` | `~/server/repo/shortcode-resolver` |
 
@@ -234,13 +234,32 @@ All major entities (products, recipes, locations, ingredients, inventory, projec
 
 ## Branded IDs
 
-Use branded ID schemas from `@cubby/schemas/identifiers` (e.g., `locationId`, `productId`) instead of plain `z.string()`. This prevents mixing up entity IDs at compile time.
+Use branded ID schemas from `@cubby/schemas/identifiers` (e.g., `locationId`,
+`productId`) instead of plain `z.string()`. Generic entity code uses
+`EntityId<E>`, `entityIdSchema(entity)`, and `parseEntityId(entity, value)` so
+the entity discriminant and identifier brand remain correlated. This prevents
+mixing up entity IDs at compile time.
 
 DB id columns are branded with `.$type<XxxId>()` in `schema.ts` (PKs + FK refs to core entities: recipe, ingredient, product, location, inventory, cookbook, user, project, task, vendor, purchase, expense), so Drizzle queries return branded ids **natively** — no cast needed when reading or writing entity ids. Relation reads inherit column brands, so nested `.id`s are branded too.
 
-The `unsafe*Id()` / `unsafe*Shortcode()` converters are for genuine `string → brand` boundaries only: untyped external strings, synthetic ids (e.g. `"_root"`), and tests. They are **type-guarded** — passing an already-branded value is a compile error (the cast would be a no-op; brand it upstream instead). This is the lint rule (Biome has no custom-rule support at the pinned version, so the type system enforces it via `pnpm typecheck`).
+Parse strings exactly once at genuine ingress seams: auth, persisted JSON,
+external input, DOM events, imports, and raw SQL. Everywhere else, fix the
+producer or shared interface so it returns the correct brand directly. Never
+fabricate an empty or cross-entity id for disabled state or a row key; represent
+absence with optional state and use dedicated presentation keys. Tests use
+`testEntityId(entity, seed)` and `testShortcode(entity, seed)` from
+`@cubby/schemas/testing`; malformed-input tests keep their raw strings. The AST
+identifier guard runs across production, tests, tooling, fixtures, and generated
+TypeScript in `pnpm check`.
 
-Don't brand shortcode columns — those add insert-side friction for negligible payoff; the `unsafe*Shortcode` casts at the repo boundary are the accepted pattern there. **`Image` is no longer the exception this rule used to name.** Since `image` became a full `ShortcodeEntity`, the *schema-layer* `ImageId` brand is real and load-bearing: `EntityIdBrand` and `unsafeIdForEntity` are keyed by `ShortcodeEntity`, which is what lets `resolveAllPresent(tx, "image", …)` return a typed `ImageId[]` — and that typing is what turns "forgot to resolve an `IMG-` code before a join-table write" into a compile error instead of a runtime `invalid input syntax for type uuid`. The *column* (`Image.id`) deliberately stays unbranded: five join tables carry unbranded `imageId` FKs plus `Image.targetId`, and ~25 `eq(image.id, …)`/`inArray(image.id, …)` sites would have to follow it for no runtime gain. The friction this rule warned about is real — it just lives on the compare/join side, not the insert side. Branded schema inputs accept a plain string (their input type is `string`), so most search-param ids need no cast at all.
+Don't brand shortcode columns: Drizzle's generic table unions erase the
+entity-specific brand in insert, collision-retry, relation, and comparison
+paths. Parse shortcode columns at repository mapper seams with
+`parseShortcodeFor(entity, value)` instead. **`Image` is no longer an id-system
+exception.** It is a full `ShortcodeEntity`, and correlated `EntityRef<E>` plus
+typed resolvers ensure an `IMG-` code is resolved before a join-table write.
+The physical `Image.id` and shortcode columns deliberately remain unbranded;
+the schema and repository boundary carry the runtime proof.
 
 ## Shortcodes are the public id; uuids are private
 

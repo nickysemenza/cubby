@@ -1,0 +1,1 @@
+export const unsafeProductId = (value: string) => value;

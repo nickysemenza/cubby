@@ -1,0 +1,3 @@
+const product = value as ProductId;
+const shortcode = value as ShortcodeFor<"product">;
+const ids = value as readonly ProductId[];

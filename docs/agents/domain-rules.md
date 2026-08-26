@@ -31,10 +31,14 @@ re-check transactionally regardless.
 
 ## IDs and runtime traps
 
-Use branded identifier schemas; only use `unsafe*Id` at a genuine string
-boundary. UUIDs never enter URLs or MCP—shortcodes do. Resolve codes through
-`shortcode-resolver`, mint through `insertWithShortcode`, never reuse them, and
-keep `shortcodeSchema` a `ZodString`.
+Use branded identifier schemas and parse strings once at genuine ingress seams
+(auth, persisted JSON, external input, DOM events, imports, and raw SQL). Typed
+producers and resolvers return branded values directly; never reconstruct a
+brand with an assertion or unsafe converter. Tests use the deterministic
+schema-backed factories from `@cubby/schemas/testing`. UUIDs never enter URLs or
+MCP—shortcodes do. Resolve codes through `shortcode-resolver`, mint through
+`insertWithShortcode`, never reuse them, and keep `shortcodeSchema` a
+`ZodString`.
 
 On workerd, wall clocks omit synchronous CPU: use CPU-time/sampling for WASM or
 JS hot paths. WASM hot-path tracing stays `trace, skip_all`; a global INFO
