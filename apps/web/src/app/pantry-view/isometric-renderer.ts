@@ -447,8 +447,8 @@ function drawItemsOnLevels(
     const remaining = items.length - itemIdx;
     const lastLevel = shelfLevels[shelfLevels.length - 1] ?? 0;
     const p = toScreen(gx + w / 2, gy + d + 0.3, gz + lastLevel + 1, cx, cy);
-    ctx.fillStyle = "rgba(0,0,0,0.6)";
-    ctx.font = "bold 11px system-ui, sans-serif";
+    ctx.fillStyle = "rgba(23, 26, 33, 0.7)";
+    ctx.font = '600 11px "Inter Variable", Inter, system-ui, sans-serif';
     ctx.textAlign = "center";
     ctx.fillText(`+${remaining} more`, p.x, p.y);
   }
@@ -541,7 +541,7 @@ function drawZoneDivider(
   const top = toScreen(gx, 0, 0.02, cx, cy);
   const bottom = toScreen(gx, roomD, 0.02, cx, cy);
 
-  ctx.strokeStyle = "rgba(34, 68, 204, 0.28)";
+  ctx.strokeStyle = "rgba(37, 99, 235, 0.28)";
   ctx.lineWidth = 1.5;
   ctx.setLineDash([6, 4]);
   ctx.beginPath();
@@ -590,8 +590,8 @@ function drawGroupLabels(
     const centerGx = (group.minGx + group.maxGx + group.maxW) / 2;
     const labelPos = toScreen(centerGx, -0.3, ROOM_H + 0.3, cx, cy);
 
-    ctx.font = "9px system-ui, sans-serif";
-    ctx.fillStyle = "rgba(42, 40, 36, 0.45)";
+    ctx.font = '9px "Inter Variable", Inter, system-ui, sans-serif';
+    ctx.fillStyle = "rgba(102, 112, 133, 0.72)";
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
     ctx.fillText(group.name, labelPos.x, labelPos.y);
@@ -729,14 +729,14 @@ export function renderScene(
     const sx = titleWorld.x * camera.zoom + camera.x;
     const sy = titleWorld.y * camera.zoom + camera.y;
 
-    ctx.font = "bold 13px system-ui, sans-serif";
-    ctx.fillStyle = "rgba(42, 40, 36, 0.85)";
+    ctx.font = '600 13px "Inter Variable", Inter, system-ui, sans-serif';
+    ctx.fillStyle = "rgba(23, 26, 33, 0.92)";
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
     ctx.fillText(room.name, sx, sy);
 
-    ctx.font = "11px system-ui, sans-serif";
-    ctx.fillStyle = "rgba(42, 40, 36, 0.45)";
+    ctx.font = '11px "Inter Variable", Inter, system-ui, sans-serif';
+    ctx.fillStyle = "rgba(102, 112, 133, 0.82)";
     ctx.fillText(
       `${room.totalItemCount} item${room.totalItemCount !== 1 ? "s" : ""}`,
       sx,
@@ -761,13 +761,13 @@ export function renderScene(
         const lx = labelWorld.x * camera.zoom + camera.x;
         const ly = labelWorld.y * camera.zoom + camera.y;
 
-        ctx.font = "10px system-ui, sans-serif";
+        ctx.font = '10px "Inter Variable", Inter, system-ui, sans-serif';
         ctx.fillStyle = zone.labelColor;
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
         ctx.fillText(zone.name, lx, ly);
 
-        ctx.font = "9px system-ui, sans-serif";
+        ctx.font = '9px "Inter Variable", Inter, system-ui, sans-serif';
         ctx.fillStyle = zone.labelColor.replace("0.75", "0.45");
         ctx.fillText(
           `${zone.totalItemCount} item${zone.totalItemCount !== 1 ? "s" : ""}`,
