@@ -25,9 +25,13 @@ const DARK_RING_FILLS = new Set([
   "var(--chart-4)",
 ]);
 
+export const LOCATION_SUNBURST_METRIC = "itemCount" as const;
+export const LOCATION_SUNBURST_DESCRIPTION =
+  "How owned-item counts are distributed across your locations.";
+
 export default function LocationSunburst() {
   const { data, isError, isLoading, refetch } = useLocationHierarchy({
-    valuationMode: "itemCount",
+    valuationMode: LOCATION_SUNBURST_METRIC,
   });
 
   if (isLoading) {

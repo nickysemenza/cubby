@@ -12,6 +12,7 @@ import { getErrorMessage } from "~/lib/error-utils";
 
 const EMPTY_TASK_FILTERS = {};
 const TODAY_TASK_LIMIT = 4;
+export const TODAY_ENTITY_LINK_CLASS = "min-h-11 items-center sm:min-h-0";
 
 /**
  * The actual next-work order belongs to `task.listActionable`: it is already
@@ -39,6 +40,7 @@ function TodayTaskRow({ task: item }: { task: ActionableTaskOut }) {
         entity="task"
         data={{ id: item.id, name: item.name, status: item.status }}
         displayImage={undefined}
+        className={TODAY_ENTITY_LINK_CLASS}
         truncate
       />
       <span className="font-mono text-2xs text-muted-foreground tabular-nums">
@@ -49,6 +51,7 @@ function TodayTaskRow({ task: item }: { task: ActionableTaskOut }) {
           entity="project"
           data={{ id: item.projectId, name: item.projectName }}
           displayImage={undefined}
+          className={TODAY_ENTITY_LINK_CLASS}
           compact
         />
       ) : (

@@ -83,6 +83,10 @@ interface DonutChartProps {
   data: CategoryData[];
 }
 
+export function productCategoryDrilldown(category: ProductCategory | null) {
+  return category ? { category } : { categoryPresenceFilter: "none" as const };
+}
+
 function DonutChart({ data }: DonutChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const summaryId = useId();
@@ -202,7 +206,7 @@ function DonutChart({ data }: DonutChartProps) {
               <g key={slice.category ?? "uncategorized"}>
                 <Link
                   to="/products"
-                  search={slice.category ? { category: slice.category } : {}}
+                  search={productCategoryDrilldown(slice.category)}
                   aria-label={`${categoryLabel}: ${slice.productCount.toLocaleString()} product${slice.productCount !== 1 ? "s" : ""}`}
                 >
                   {/* biome-ignore lint/a11y/noStaticElementInteractions: D3 donut chart hover interaction */}

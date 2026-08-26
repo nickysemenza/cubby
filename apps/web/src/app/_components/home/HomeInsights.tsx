@@ -4,7 +4,9 @@ import { useState } from "react";
 import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-usage-panel";
 import { CookbookSelect } from "~/app/_components/recipe/cookbook-select";
 import IngredientNetwork from "~/app/_components/visualizations/ingredient-network";
-import LocationSunburst from "~/app/_components/visualizations/location-sunburst";
+import LocationSunburst, {
+  LOCATION_SUNBURST_DESCRIPTION,
+} from "~/app/_components/visualizations/location-sunburst";
 import ProductCategoryDonut from "~/app/_components/visualizations/product-category-donut";
 import { Grid, Stack } from "~/components/layout";
 import { DashboardCard } from "~/components/layout/dashboard-card";
@@ -23,7 +25,7 @@ export function HomeInsights() {
       <DashboardCard
         icon={MapPin}
         title="Where is our inventory?"
-        description="Where inventory value sits across your locations."
+        description={LOCATION_SUNBURST_DESCRIPTION}
       >
         <LocationSunburst />
       </DashboardCard>
