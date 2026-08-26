@@ -63,6 +63,7 @@ interface BuildRowsInput {
   selectedBatchId?: string;
   selectedBatch?: BackgroundBatchSummary;
   selectedBatchError?: string;
+  selectedBatchRetry?: () => void;
   selectedJobs?: SelectedJobsState;
 }
 
@@ -135,6 +136,7 @@ function buildBackgroundJobRows({
   selectedBatchId,
   selectedBatch,
   selectedBatchError,
+  selectedBatchRetry,
   selectedJobs,
 }: BuildRowsInput): BackgroundJobTableRow[] {
   const recentIds = new Set(batches.map(({ id }) => id));
@@ -155,7 +157,12 @@ function buildBackgroundJobRows({
       ...(selected
         ? {
             subRows: selectedBatchError
-              ? [statusRow(batch.id, "error", selectedBatchError)]
+              ? [
+                  {
+                    ...statusRow(batch.id, "error", selectedBatchError),
+                    retry: selectedBatchRetry,
+                  },
+                ]
               : children(batch.id, selectedJobs),
           }
         : {}),
@@ -168,7 +175,10 @@ function buildBackgroundJobRows({
     };
   });
   if (selectedBatchId && selectedBatchError && !recentIds.has(selectedBatchId))
-    rows.unshift(statusRow(selectedBatchId, "error", selectedBatchError));
+    rows.unshift({
+      ...statusRow(selectedBatchId, "error", selectedBatchError),
+      retry: selectedBatchRetry,
+    });
   return rows;
 }
 

@@ -91,10 +91,14 @@ function renderWorkbench(
   batches: BackgroundBatchSummary[] = [batch],
   error: unknown = null,
   onRetry = vi.fn(),
+  selectedBatchError?: string,
+  selectedBatchRetry = vi.fn(),
 ) {
   const rows = buildBackgroundJobRows({
     batches,
     selectedBatchId,
+    selectedBatchError,
+    selectedBatchRetry,
     selectedJobs: selectedBatchId
       ? {
           status: "ready",
@@ -214,5 +218,26 @@ describe("BackgroundJobsTable", () => {
       screen.getByRole("button", { name: "Retry background jobs" }),
     );
     expect(onRetry).toHaveBeenCalledOnce();
+  });
+
+  it("renders a retry action for a recent selected-summary error", () => {
+    const selectedBatchRetry = vi.fn();
+    const { table } = renderWorkbench(
+      batch.id,
+      [batch],
+      null,
+      vi.fn(),
+      "Summary unavailable",
+      selectedBatchRetry,
+    );
+    const statusRow = table.getRow("status:batch-1:error");
+    const cell = statusRow
+      .getAllCells()
+      .find(({ column }) => column.id === "record");
+    if (!cell) throw new Error("Missing status cell");
+    render(flexRender(cell.column.columnDef.cell, cell.getContext()));
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(selectedBatchRetry).toHaveBeenCalledOnce();
   });
 });

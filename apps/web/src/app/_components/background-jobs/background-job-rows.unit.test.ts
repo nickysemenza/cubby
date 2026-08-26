@@ -147,10 +147,12 @@ describe("background job table rows", () => {
   });
 
   it("keeps a selected summary error visible for a recent batch", () => {
+    const retry = () => {};
     const [row] = buildBackgroundJobRows({
       batches: [batch],
       selectedBatchId: batch.id,
       selectedBatchError: "Summary unavailable",
+      selectedBatchRetry: retry,
       selectedJobs: { status: "loading" },
     });
 
@@ -159,6 +161,7 @@ describe("background job table rows", () => {
         rowType: "status",
         loadState: "error",
         name: "Summary unavailable",
+        retry,
       }),
     ]);
   });

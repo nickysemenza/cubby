@@ -172,6 +172,7 @@ export function BackgroundJobsPage({
     selectedBatchError: summaryQuery.error
       ? getErrorMessage(summaryQuery.error)
       : undefined,
+    selectedBatchRetry: () => void summaryQuery.refetch(),
     selectedJobs,
   });
 
