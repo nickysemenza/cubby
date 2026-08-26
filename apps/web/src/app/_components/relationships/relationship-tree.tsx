@@ -203,7 +203,7 @@ function GroupRow({
     <div>
       <button
         type="button"
-        className="flex w-full items-center gap-1 border-[var(--border)] border-t px-2 py-1 text-left font-mono text-2xs text-slate uppercase tracking-wider hover:bg-muted"
+        className="flex min-h-11 w-full items-center gap-1 border-[var(--border)] border-t px-2 py-1 text-left font-mono text-2xs text-slate uppercase tracking-wider hover:bg-muted md:min-h-0"
         style={{ paddingLeft: `${depth * 1.25 + 0.5}rem` }}
         aria-expanded={expanded}
         onClick={onToggle}

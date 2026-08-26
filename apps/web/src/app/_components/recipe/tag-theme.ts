@@ -42,10 +42,10 @@ function isKnownPrefix(prefix: string): prefix is TagPrefix {
 }
 
 /**
- * Color palette for tag prefixes, mapped onto the Warm-Paper Ledger semantic
- * tokens (styles.css) rather than raw HSL so tags track the design system:
- * cuisine→warning (warm), author→primary (ultramarine), cookbook→plum
- * (aubergine, the recipe/cookbook accent), plain→slate (neutral). Returned as
+ * Color palette for tag prefixes, mapped onto Porcelain semantic tokens
+ * (styles.css) rather than raw HSL so tags track the design system:
+ * cuisine→warning, author→primary, cookbook→finance-domain magenta,
+ * plain→graphite-secondary. Returned as
  * `var(--token)` strings for use in inline `color` / `borderColor`.
  */
 const tagPrefixColors: Record<TagPrefix, string> = {

@@ -379,7 +379,7 @@ export function AuditLogEntryComponent({
               </Row>
 
               {hasChanges && (
-                <CollapsibleTrigger className="mt-2 flex items-center gap-1 text-muted-foreground text-xs transition-colors hover:text-foreground">
+                <CollapsibleTrigger className="mt-1 flex min-h-11 items-center gap-1 text-muted-foreground text-xs transition-colors hover:text-foreground md:mt-2 md:min-h-0">
                   {isOpen ? (
                     <ChevronDown className="size-3" />
                   ) : (

@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
 import {
   Card,
   CardContent,
@@ -100,8 +101,29 @@ function SchemaPanel({
   );
 }
 
+export function CatalogErrorState({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
+  return (
+    <Stack role="alert" gap="sm" className="items-start">
+      <Description className="text-destructive">
+        Failed to load MCP catalog: {message}
+      </Description>
+      <Button type="button" variant="outline" onClick={onRetry}>
+        Retry catalog
+      </Button>
+    </Stack>
+  );
+}
+
 function CatalogInspector() {
-  const { data, isLoading, error } = useQuery(mcp.listTools.queryOptions(null));
+  const { data, isLoading, error, refetch } = useQuery(
+    mcp.listTools.queryOptions(null),
+  );
   const [query, setQuery] = useState("");
   const [selectedName, setSelectedName] = useState<string | null>(null);
 
@@ -123,9 +145,10 @@ function CatalogInspector() {
   if (isLoading) return <SimpleLoading />;
   if (error) {
     return (
-      <Description className="text-destructive">
-        Failed to load MCP catalog: {error.message}
-      </Description>
+      <CatalogErrorState
+        message={error.message}
+        onRetry={() => void refetch()}
+      />
     );
   }
 

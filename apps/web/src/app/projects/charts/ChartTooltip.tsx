@@ -3,10 +3,9 @@ import type { CSSProperties, ReactNode } from "react";
 import { cn, formatCurrency } from "~/lib/utils";
 
 /**
- * The shared nivo/chart tooltip surface. Warm-Paper Ledger separation idiom:
- * a hairline `ring-1 ring-border` on `bg-popover`, no shadow — the ring reads
- * as the ledger rule that lifts the tooltip off the chart. Owns the surface so
- * padding/size/elevation can't drift across the 12+ chart call sites.
+ * The shared nivo/chart tooltip surface. Porcelain separation uses a hairline
+ * `ring-1 ring-border` on `bg-popover`; it owns the surface so padding, size,
+ * and elevation cannot drift across the 12+ chart call sites.
  *
  * This component deliberately stays in normal flow: nivo owns cursor tracking,
  * measurement, and edge flipping in the wrapper around this surface.

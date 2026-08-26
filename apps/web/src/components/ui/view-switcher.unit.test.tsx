@@ -18,6 +18,10 @@ describe("ViewSwitcher", () => {
     );
 
     expect(screen.getByRole("button", { name: "Grid view" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Grid view" })).toHaveClass(
+      "min-h-11",
+      "min-w-11",
+    );
     expect(screen.getByText("Grid")).toHaveClass("max-md:sr-only");
     expect(screen.getByText("List")).toHaveClass("max-md:sr-only");
   });

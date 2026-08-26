@@ -167,7 +167,7 @@ function EntityIndex({
           aria-current={selected === entity ? "true" : undefined}
           onClick={() => onSelect(entity)}
           className={cn(
-            "border-border/60 border-r border-b px-4 py-2 text-left font-mono text-xs",
+            "min-h-11 border-border/60 border-r border-b px-4 py-2 text-left font-mono text-xs",
             selected === entity && "bg-primary text-primary-foreground",
           )}
         >
@@ -285,9 +285,9 @@ export function EntityInspector({
 
   return (
     <article className="space-y-6" aria-labelledby={headingId}>
-      <header className="border-primary border-l-4 pl-4">
+      <header className="border-primary border-l pl-3">
         <div className="flex flex-wrap items-baseline gap-2">
-          <h2 id={headingId} className="font-serif text-2xl">
+          <h2 id={headingId} className="font-heading text-2xl">
             {metadata.singular}
           </h2>
           <Badge variant="outline" className="font-mono text-2xs">

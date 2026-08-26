@@ -17,17 +17,16 @@ import {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-// Warm-Paper Ledger palette. The canvas can't read CSS vars, so these mirror
-// styles.css (paper #f4f0e6, ink ~hsl(40,4%,18%), ultramarine #2244cc) as the
-// HSL/rgba literals the shading math (parseHSL/adjustLight) needs. Floor/walls
-// are paper neutrals, baseboard is ink, the scene sits on paper. Zones use the
-// single ultramarine accent at low opacity instead of a rainbow.
-const FLOOR_COLOR_1 = "hsl(42, 18%, 84%)";
-const FLOOR_COLOR_2 = "hsl(42, 16%, 79%)";
-const WALL_BACK_COLOR = "hsl(42, 20%, 92%)";
-const WALL_LEFT_COLOR = "hsl(42, 18%, 88%)";
-const BASEBOARD_COLOR = "hsl(40, 6%, 30%)";
-const BG_COLOR = "#f4f0e6";
+// Porcelain Transit palette. Canvas cannot read CSS vars, so these mirror the
+// cool canvas/inset/hairline/graphite primitives as HSL literals for the
+// shading math (parseHSL/adjustLight). Zones use cobalt at low opacity instead
+// of a rainbow.
+const FLOOR_COLOR_1 = "hsl(216, 28%, 92%)";
+const FLOOR_COLOR_2 = "hsl(216, 24%, 88%)";
+const WALL_BACK_COLOR = "hsl(216, 45%, 98%)";
+const WALL_LEFT_COLOR = "hsl(214, 33%, 95%)";
+const BASEBOARD_COLOR = "hsl(219, 18%, 40%)";
+const BG_COLOR = "#f7f9fc";
 
 // ─── Projection ──────────────────────────────────────────────────────────────
 
@@ -787,9 +786,9 @@ export function drawTooltip(
 ) {
   const padding = 10;
   const lineHeight = 18;
-  ctx.font = "bold 12px system-ui, sans-serif";
+  ctx.font = '600 12px "Inter Variable", Inter, system-ui, sans-serif';
   const labelW = ctx.measureText(target.label).width;
-  ctx.font = "11px system-ui, sans-serif";
+  ctx.font = '11px "Inter Variable", Inter, system-ui, sans-serif';
   const detailW = target.detail ? ctx.measureText(target.detail).width : 0;
   const boxW = Math.max(labelW, detailW) + padding * 2;
   const boxH = (target.detail ? 2 : 1) * lineHeight + padding * 1.5;
@@ -799,26 +798,26 @@ export function drawTooltip(
   if (tx + boxW > canvasW - 10) tx = target.screenX - boxW - 14;
   if (ty < 10) ty = target.screenY + 14;
 
-  // Flat ledger tooltip: paper card, hairline ink rule, square-ish corner, no
-  // drop shadow (matte figure, not a floating chip).
-  ctx.fillStyle = "rgba(244, 240, 230, 0.97)";
+  // Flat Porcelain tooltip: white surface, cool hairline, modest control
+  // radius, and no ambient shadow.
+  ctx.fillStyle = "rgba(255, 255, 255, 0.98)";
   ctx.beginPath();
-  ctx.roundRect(tx, ty, boxW, boxH, 2);
+  ctx.roundRect(tx, ty, boxW, boxH, 6);
   ctx.fill();
 
-  ctx.strokeStyle = "rgba(40, 38, 34, 0.45)";
+  ctx.strokeStyle = "rgba(23, 26, 33, 0.18)";
   ctx.lineWidth = 1;
   ctx.stroke();
 
-  ctx.fillStyle = "#2a2824";
-  ctx.font = "bold 12px system-ui, sans-serif";
+  ctx.fillStyle = "#171a21";
+  ctx.font = '600 12px "Inter Variable", Inter, system-ui, sans-serif';
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
   ctx.fillText(target.label, tx + padding, ty + padding);
 
   if (target.detail) {
-    ctx.fillStyle = "rgba(42, 40, 36, 0.6)";
-    ctx.font = "11px system-ui, sans-serif";
+    ctx.fillStyle = "rgba(102, 112, 133, 0.95)";
+    ctx.font = '11px "Inter Variable", Inter, system-ui, sans-serif';
     ctx.fillText(target.detail, tx + padding, ty + padding + lineHeight);
   }
 }
@@ -829,14 +828,14 @@ export function drawTitle(
   totalItems: number,
   totalRooms: number,
 ) {
-  ctx.fillStyle = "rgba(42, 40, 36, 0.85)";
-  ctx.font = "bold 20px system-ui, sans-serif";
+  ctx.fillStyle = "rgba(23, 26, 33, 0.92)";
+  ctx.font = '600 20px "Inter Variable", Inter, system-ui, sans-serif';
   ctx.textAlign = "right";
   ctx.textBaseline = "top";
   ctx.fillText("Isometric Pantry", canvasW - 24, 20);
 
-  ctx.fillStyle = "rgba(42, 40, 36, 0.5)";
-  ctx.font = "12px system-ui, sans-serif";
+  ctx.fillStyle = "rgba(102, 112, 133, 0.95)";
+  ctx.font = '12px "Inter Variable", Inter, system-ui, sans-serif';
   ctx.fillText(
     `${totalItems} item${totalItems !== 1 ? "s" : ""} in ${totalRooms} room${totalRooms !== 1 ? "s" : ""}`,
     canvasW - 24,

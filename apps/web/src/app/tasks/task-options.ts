@@ -20,7 +20,7 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   done: "Done",
 };
 
-/** Badge tone per status — warm-paper ledger semantic tokens, not raw colors. */
+/** Badge tone per status — Porcelain semantic tokens, not raw colors. */
 export const taskStatusBadgeVariant: Record<
   TaskStatus,
   "secondary" | "outline" | "warning" | "destructive" | "positive"

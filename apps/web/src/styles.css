@@ -75,8 +75,8 @@
     /* font-sans must be explicit: Tailwind v4 preflight doesn't wire --font-sans
        to the document, so without this the app silently runs on system fonts. */
     @apply bg-background font-sans text-foreground;
-    /* iOS PWA target: suppress the default gray tap-highlight box; we provide
-       our own warm active: states for press feedback. */
+    /* iOS PWA target: suppress the default gray tap-highlight box; shared
+       active states provide press feedback. */
     -webkit-tap-highlight-color: transparent;
   }
 
@@ -177,8 +177,8 @@
   --shadow-scan-flash: 0 0 0 9999px oklch(0 0 0 / 0.55);
   /* Chart labels sit on flat matte fills now, so no text shadow is needed. */
   --text-shadow-chart: none;
-  --border-spine: 3px;
-  --border-spine-card: 2px;
+  --border-spine: 1px;
+  --border-spine-card: 1px;
 
   /* Core colors: cool porcelain canvas, white working surfaces, quiet insets. */
   --background: var(--brand-paper);
@@ -292,10 +292,10 @@
   --chart-negative: var(--destructive);
   --chart-neutral: oklch(0.66 0.006 80);
 
-  /* Trade *phase* families — the one place the ledger allows categorical hue,
+  /* Trade *phase* families — a specialist categorical exception,
      scoped to the project Gantt where grouping 20 trades into six build phases
      needs a colour channel the monochrome ramp can't give. Deliberately muted
-     (chroma ≤ 0.085) and mid-lightness so they harmonise with the warm paper
+     (chroma ≤ 0.085) and mid-lightness so they harmonise with the cool planes
      rather than reading as a rainbow. Six distinct hues spread around the
      wheel: terracotta / teal / ochre / plum / sage / slate. */
   --phase-structure: oklch(0.58 0.085 45); /* demo · framing · drywall */
@@ -504,7 +504,7 @@
 
   /* Trailing gutter cell. It renders AFTER the actions column, so the content
      block ends with the actions column's own border-right as the terminating
-     ledger rule. The header copy is pinned to `w-0` (see Table.tsx) — left
+     grid rule. The header copy is pinned to `w-0` (see Table.tsx) — left
      unsized it's the only auto cell under table-fixed and swallows the table's
      entire surplus width, leaving dead space beside clipping columns. */
   .table-grid-lines th[data-spacer],
@@ -563,7 +563,7 @@
     }
   }
 
-  /* Auth page background - flat paper, no gradient (matte ledger) */
+  /* Auth page background: flat Porcelain canvas, no decorative gradient. */
   .auth-background {
     @apply bg-background;
   }

@@ -41,12 +41,11 @@ import type { EntityColor, EntityDefinition } from "./types";
  * page-hero accent bar, table row-hover/selected bars — while the tailwind
  * trio dresses icon tiles and badges.
  *
- * Warm-Paper Ledger: there is no per-entity warm hue ladder anymore — the live
- * accent is the lone ultramarine (`--primary`), and quieter surfaces fall to
- * the neutral ink-slate. Status semantics (`--positive`/`--warning`) are the
- * only colored exceptions, kept for the entities whose accent encodes state.
- * The two entities that dress against their accent (ingredient, image) spell
- * their color out rather than joining a hue.
+ * Porcelain Transit: page and row accents resolve through the five domain
+ * lines, while quieter entities use graphite. Status semantics
+ * (`--positive`/`--warning`) stay separate from domain identity. Entities that
+ * need a distinct state treatment spell it out rather than joining a generic
+ * hue ladder.
  */
 const INK = {
   primary: {

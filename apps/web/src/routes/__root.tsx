@@ -1,6 +1,6 @@
 // Fontsource variable fonts - loaded via bundler for better performance.
-// Warm-Paper Ledger type system: Space Grotesk (geometric sans) for headings,
-// JetBrains Mono for all data/metrics, Inter for body/UI prose. Fraunces retired.
+// Porcelain Transit type system: Inter carries headings and UI prose while
+// JetBrains Mono is reserved for aligned data, measures, dates, and codes.
 import "../fonts.css";
 
 import type { QueryClient } from "@tanstack/react-query";

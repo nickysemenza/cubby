@@ -23,10 +23,9 @@ const hasVendorLogo = (logo: VendorLogo): logo is { url: string } =>
  * and wedding vendors (42 of 82 vendors appear exactly once, and ~100 rows will
  * never have a logo), so the monogram is a first-class path, not an edge case.
  *
- * Desaturated at rest so a ledger full of logos stays as quiet as the rest of
- * the Warm-Paper palette, returning to full color on the hovered row — the color
- * arrives on the row you're actually reading. Touch has no hover to resolve it,
- * so below `sm` the mark is simply always in color.
+ * Desaturated at rest so a dense vendor grid stays quiet, returning to full
+ * color on the hovered row. Touch has no hover to resolve it, so below `sm` the
+ * mark is simply always in color.
  */
 export function VendorMark({
   vendor,

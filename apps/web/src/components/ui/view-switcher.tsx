@@ -54,7 +54,7 @@ export function ChoiceSwitcher<T extends string>({
             // Phone-only touch floor. DESIGN.md keeps desktop controls compact
             // (28px) but requires 40–48px on phones, and the `sm` toggle size
             // is 24px — well under half a finger.
-            className="min-h-11 md:min-h-0"
+            className="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
           >
             {Icon && (
               <Icon

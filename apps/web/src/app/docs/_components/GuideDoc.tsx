@@ -45,7 +45,7 @@ const components = {
   ),
   blockquote: (props: ElementProps<"blockquote">) => (
     <blockquote
-      className="my-4 border-primary/40 border-l-2 bg-muted/40 py-2 pl-2 text-muted-foreground"
+      className="my-4 border-primary/40 border-l bg-muted/40 py-2 pl-2 text-muted-foreground"
       {...clean(props)}
     />
   ),
