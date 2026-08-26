@@ -1408,7 +1408,7 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         generatedHeader +
         `${mutationOutputImports}\n` +
         'import type { z } from "zod";\n\n' +
-        `export const entityMutationOutputEntities = ${compactLiteral(browserCrudEntities)} as const;\n` +
+        `const entityMutationOutputEntities = ${compactLiteral(browserCrudEntities)} as const;\n` +
         "export type EntityMutationOutputEntity = (typeof entityMutationOutputEntities)[number];\n\n" +
         "export type EntityMutationOutputByEntity = {\n" +
         `${mutationOutputTypes}\n` +
