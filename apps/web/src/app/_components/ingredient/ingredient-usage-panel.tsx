@@ -93,7 +93,7 @@ export function IngredientUsagePanel({
               key={row.ingredientId}
               to="/ingredients/$shortcode"
               params={{ shortcode: row.ingredientId }}
-              className="inline-flex min-h-11 items-center px-2 text-primary text-xs hover:underline"
+              className="inline-flex min-h-11 items-center px-2 text-primary text-xs hover:underline sm:min-h-0"
             >
               {row.name} ({row.recipeCount})
             </Link>

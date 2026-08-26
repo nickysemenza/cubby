@@ -389,7 +389,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
               key={ingredient.id}
               to="/ingredients/$shortcode"
               params={{ shortcode: ingredient.id }}
-              className="inline-flex min-h-11 items-center px-2 text-primary text-xs hover:underline"
+              className="inline-flex min-h-11 items-center px-2 text-primary text-xs hover:underline sm:min-h-0"
             >
               {ingredient.name} ({ingredient.recipeCount})
             </Link>

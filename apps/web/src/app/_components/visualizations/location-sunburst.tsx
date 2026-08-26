@@ -294,7 +294,7 @@ function Sunburst({ data }: SunburstProps) {
               key={node.data.id}
               to="/locations/$shortcode"
               params={{ shortcode: node.data.shortcode }}
-              className="inline-flex min-h-11 items-center px-2 text-primary text-xs hover:underline"
+              className="inline-flex min-h-11 items-center px-2 text-primary text-xs hover:underline sm:min-h-0"
             >
               {node.data.name} ({node.data.totalCount})
             </Link>
