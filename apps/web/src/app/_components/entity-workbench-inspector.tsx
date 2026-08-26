@@ -18,6 +18,7 @@ import {
 import { EntityPreviewContent } from "./EntityPreviewContent";
 import type { HoverPreviewEntity } from "./preview/preview-entities";
 import { RelationshipExplorer } from "./relationships/relationship-explorer";
+import { RelationshipRoutePreview } from "./relationships/relationship-route-preview";
 
 type InspectorTab = "overview" | "relations" | "activity";
 
@@ -137,7 +138,10 @@ function EntityWorkbenchInspectorContent({
   onClose,
 }: EntityWorkbenchInspectorProps) {
   const [activeTab, setActiveTab] = useState<InspectorTab>("overview");
-  const hasRelations = relatedViewsFor(entity).length > 0;
+  // Product has a page-owned relationship contract and a specialist inspector.
+  // Do not add the generic graph beside that richer route.
+  const hasRelations =
+    entity !== "product" && relatedViewsFor(entity).length > 0;
   const hasActivity = isAuditableEntity(entity);
   const label = entityLabel(entity);
 
@@ -202,15 +206,20 @@ function EntityWorkbenchInspectorContent({
         </TabsList>
         {activeTab === "overview" ? (
           <TabsContent value="overview">
-            {supportsCompactOverview(entity) ? (
-              <EntityPreviewContent
-                entity={entity}
-                id={id}
-                showOpenAction={false}
-              />
-            ) : (
-              <UnsupportedOverview entity={entity} id={id} />
-            )}
+            <div className="space-y-2">
+              {supportsCompactOverview(entity) ? (
+                <EntityPreviewContent
+                  entity={entity}
+                  id={id}
+                  showOpenAction={false}
+                />
+              ) : (
+                <UnsupportedOverview entity={entity} id={id} />
+              )}
+              {hasRelations ? (
+                <RelationshipRoutePreview entity={entity} sourceId={id} />
+              ) : null}
+            </div>
           </TabsContent>
         ) : null}
         {activeTab === "relations" && hasRelations ? (

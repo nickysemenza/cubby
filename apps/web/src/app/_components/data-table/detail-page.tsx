@@ -18,6 +18,7 @@ import { AuditLogList } from "../audit-log/audit-log-list";
 import { EntityHero } from "../EntityHero";
 import JsonRenderer from "../json-renderer";
 import { RelationshipExplorer } from "../relationships/relationship-explorer";
+import { RelationshipRoutePreview } from "../relationships/relationship-route-preview";
 import { relationshipsSectionIcon } from "../relationships/relationship-tree";
 
 /** Stable id every auto-appended Activity section uses — also the opt-out key: a
@@ -378,10 +379,16 @@ export const DetailSections: FC<DetailSectionsProps> = ({
           icon: relationshipsSectionIcon,
           placement: "full",
           content: (
-            <RelationshipExplorer
-              entity={pageDetail.entity}
-              sourceId={sourceId}
-            />
+            <div className="space-y-3">
+              <RelationshipRoutePreview
+                entity={pageDetail.entity}
+                sourceId={sourceId}
+              />
+              <RelationshipExplorer
+                entity={pageDetail.entity}
+                sourceId={sourceId}
+              />
+            </div>
           ),
         }
       : undefined;

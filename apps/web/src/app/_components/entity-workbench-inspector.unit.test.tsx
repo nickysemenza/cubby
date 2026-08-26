@@ -7,10 +7,12 @@ const mocks = vi.hoisted(
   (): {
     preview: Mock<(props: unknown) => void>;
     relationships: Mock<(props: unknown) => void>;
+    relationshipRoute: Mock<(props: unknown) => void>;
     activity: Mock<(props: unknown) => void>;
   } => ({
     preview: vi.fn(),
     relationships: vi.fn(),
+    relationshipRoute: vi.fn(),
     activity: vi.fn(),
   }),
 );
@@ -53,6 +55,13 @@ vi.mock("./relationships/relationship-explorer", () => ({
   },
 }));
 
+vi.mock("./relationships/relationship-route-preview", () => ({
+  RelationshipRoutePreview: (props: unknown) => {
+    mocks.relationshipRoute(props);
+    return <div data-testid="relationship-route-preview" />;
+  },
+}));
+
 vi.mock("./audit-log/audit-log-list", () => ({
   AuditLogList: (props: unknown) => {
     mocks.activity(props);
@@ -65,11 +74,13 @@ import { EntityWorkbenchInspector } from "./entity-workbench-inspector";
 const VENDOR_ID = "VEN-WORKBENCH";
 const IMAGE_ID = "IMG-WORKBENCH";
 const LEDGER_PARTY_ID = "LPY-WORKBENCH";
+const PRODUCT_ID = "PRD-WORKBENCH";
 
 describe("EntityWorkbenchInspector", () => {
   beforeEach(() => {
     mocks.preview.mockClear();
     mocks.relationships.mockClear();
+    mocks.relationshipRoute.mockClear();
     mocks.activity.mockClear();
   });
 
@@ -90,6 +101,10 @@ describe("EntityWorkbenchInspector", () => {
       showOpenAction: false,
     });
     expect(mocks.relationships).not.toHaveBeenCalled();
+    expect(mocks.relationshipRoute).toHaveBeenCalledWith({
+      entity: "vendor",
+      sourceId: VENDOR_ID,
+    });
     expect(mocks.activity).not.toHaveBeenCalled();
     expect(screen.getByRole("tab", { name: "Relations" })).toBeVisible();
     expect(screen.getByRole("tab", { name: "Activity" })).toBeVisible();
@@ -130,6 +145,14 @@ describe("EntityWorkbenchInspector", () => {
     const openLink = screen.getByLabelText("Open full image details");
     expect(openLink.tagName).toBe("A");
     expect(openLink).toHaveAttribute("data-router-link", "true");
+    expect(mocks.relationshipRoute).not.toHaveBeenCalled();
+  });
+
+  it("does not mount the generic relationship path for Product", () => {
+    render(<EntityWorkbenchInspector entity="product" id={PRODUCT_ID} />);
+
+    expect(mocks.relationshipRoute).not.toHaveBeenCalled();
+    expect(screen.queryByRole("tab", { name: "Relations" })).toBeNull();
   });
 
   it("does not promise an unavailable full record for a route-less fallback", () => {

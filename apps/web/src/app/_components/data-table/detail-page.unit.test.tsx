@@ -6,6 +6,7 @@ import { type DetailSection, DetailSections } from "./detail-page";
 const mocks = vi.hoisted(() => ({
   pageDetail: { current: undefined as unknown },
   relationshipExplorer: vi.fn(),
+  relationshipRoute: vi.fn(),
 }));
 
 vi.mock("~/hooks/useDebug", () => ({
@@ -18,6 +19,12 @@ vi.mock("../relationships/relationship-explorer", () => ({
   RelationshipExplorer: (props: unknown) => {
     mocks.relationshipExplorer(props);
     return <div data-testid="generic-relationships">Generic relationships</div>;
+  },
+}));
+vi.mock("../relationships/relationship-route-preview", () => ({
+  RelationshipRoutePreview: (props: unknown) => {
+    mocks.relationshipRoute(props);
+    return <div data-testid="relationship-route-preview" />;
   },
 }));
 vi.mock("../audit-log/audit-log-list", () => ({
@@ -53,6 +60,7 @@ describe("DetailSections ledger", () => {
     HTMLElement.prototype.scrollIntoView = vi.fn();
     mocks.pageDetail.current = undefined;
     mocks.relationshipExplorer.mockClear();
+    mocks.relationshipRoute.mockClear();
   });
 
   it("renders stable responsive tracks and a ruled section index", () => {
@@ -153,6 +161,29 @@ describe("DetailSections ledger", () => {
       screen.queryByTestId("generic-relationships"),
     ).not.toBeInTheDocument();
     expect(mocks.relationshipExplorer).not.toHaveBeenCalled();
+    expect(mocks.relationshipRoute).not.toHaveBeenCalled();
+  });
+
+  it("adds the bounded route preview before a generic relationship explorer", () => {
+    mocks.pageDetail.current = {
+      entity: "vendor",
+      rawData: { id: "VEN-EXAMPLE" },
+    };
+
+    render(
+      <DetailSections sections={sections} rawData={{ id: "VEN-EXAMPLE" }} />,
+    );
+
+    expect(screen.getByTestId("relationship-route-preview")).toBeVisible();
+    expect(screen.getByTestId("generic-relationships")).toBeVisible();
+    expect(mocks.relationshipRoute).toHaveBeenCalledWith({
+      entity: "vendor",
+      sourceId: "VEN-EXAMPLE",
+    });
+    expect(mocks.relationshipExplorer).toHaveBeenCalledWith({
+      entity: "vendor",
+      sourceId: "VEN-EXAMPLE",
+    });
   });
 
   it("omits empty sections without leaving an index target", () => {

@@ -1,23 +1,15 @@
 import type { Entity } from "@cubby/schemas/entity";
-import {
-  type RelatedPreviewGroup,
-  relatedViewsFor,
-} from "@cubby/schemas/related-view";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { useHydratedLoading } from "~/hooks/useHydrated";
 import { relatedData } from "~/lib/related-data.functions";
+import { useRelationshipRoutePreview } from "./relationship-route-preview";
 import { type RelationshipPreset, RelationshipTree } from "./relationship-tree";
 
-const NO_PREVIEW_GROUPS: RelatedPreviewGroup[] = [];
-
-function presetLabel(
-  entity: Entity,
-  key: "connections" | "purchase" | "product",
-) {
+function presetLabel(key: "connections" | "purchase" | "product") {
   if (key === "purchase") return "By purchase";
   if (key === "product") return "By product";
-  return entity === "product" ? "Acquisition & stock" : "Connections";
+  return "Connections";
 }
 
 /**
@@ -33,29 +25,10 @@ export function RelationshipExplorer({
   sourceId: string | undefined;
 }) {
   const queryClient = useQueryClient();
-  const views = useMemo(() => relatedViewsFor(entity), [entity]);
-  const relationKeys = useMemo(() => views.map((view) => view.key), [views]);
-  // The recommended preset opens with a real page, rather than the three-row
-  // table preview. Vendor deliberately leads with purchases; other entities
-  // lead with their first registered relationship.
-  const primaryRelationKey =
-    entity === "vendor" ? "vendor.purchases" : relationKeys[0];
-  const query = useQuery({
-    ...relatedData.previews.queryOptions({
-      source: entity,
-      sourceIds: sourceId ? [sourceId] : [],
-      relationKeys,
-    }),
-    enabled: Boolean(sourceId) && relationKeys.length > 0,
-  });
-  const primaryBranchQuery = useQuery({
-    ...relatedData.branch.queryOptions({
-      relationKey: primaryRelationKey as (typeof relationKeys)[number],
-      sourceId: sourceId ?? "",
-      limit: 25,
-    }),
-    enabled: Boolean(sourceId && primaryRelationKey),
-  });
+  const { groups, query, relationKeys, views } = useRelationshipRoutePreview(
+    entity,
+    sourceId,
+  );
   // Hydration-stable: whether the previews have landed differs between the SSR
   // render and the first client render (TanStack Start's query stream races
   // React's hydration), and the two branches below differ by a whole subtree.
@@ -67,17 +40,8 @@ export function RelationshipExplorer({
   // `relationKeys` means empty `views`, which returns null above.)
   const previewsHydratedLoading = useHydratedLoading(query.isLoading);
   const previewsLoading = Boolean(sourceId) && previewsHydratedLoading;
-  const groups = query.data ?? NO_PREVIEW_GROUPS;
   const presets = useMemo<RelationshipPreset[]>(() => {
     const byKey = new Map(groups.map((group) => [group.relationKey, group]));
-    if (primaryBranchQuery.data) {
-      byKey.set(primaryBranchQuery.data.relationKey, {
-        sourceId: primaryBranchQuery.data.sourceId,
-        relationKey: primaryBranchQuery.data.relationKey,
-        totalCount: primaryBranchQuery.data.totalCount,
-        items: primaryBranchQuery.data.items.slice(0, 3),
-      });
-    }
     const makePreset = (
       key: "connections" | "purchase" | "product",
       preferred: string[] = [],
@@ -92,21 +56,15 @@ export function RelationshipExplorer({
       });
       return {
         key,
-        label: presetLabel(entity, key),
+        label: presetLabel(key),
         groups: orderedViews.map((view) => {
           const group = byKey.get(view.key);
           return {
             key: view.key,
             label: view.label,
             totalCount: group?.totalCount ?? 0,
-            items:
-              view.key === primaryBranchQuery.data?.relationKey
-                ? primaryBranchQuery.data.items
-                : group?.items,
-            hasMore:
-              view.key === primaryBranchQuery.data?.relationKey
-                ? primaryBranchQuery.data.nextOffset !== null
-                : (group?.totalCount ?? 0) > (group?.items.length ?? 0),
+            items: group?.items,
+            hasMore: (group?.totalCount ?? 0) > (group?.items.length ?? 0),
           };
         }),
       };
@@ -124,7 +82,7 @@ export function RelationshipExplorer({
       ];
     }
     return [makePreset("connections")];
-  }, [entity, groups, primaryBranchQuery.data, views]);
+  }, [entity, groups, views]);
 
   const loadChildren = useCallback(
     async ({
