@@ -22,11 +22,8 @@ import type { HomeAsOfWindow } from "./home-as-of-window";
 export function TodayMeals({ asOf }: { asOf: HomeAsOfWindow }) {
   const titleId = useId();
   const today = parseISO(asOf.meals.from);
-  const { data, isError, isLoading } = useQuery(
-    meal.upcomingSummary.queryOptions(asOf.meals),
-  );
-
-  const meals = data ?? [];
+  const mealsQuery = useQuery(meal.upcomingSummary.queryOptions(asOf.meals));
+  const meals = mealsQuery.data ?? [];
 
   return (
     <section aria-labelledby={titleId} className="min-w-0">
@@ -57,15 +54,26 @@ export function TodayMeals({ asOf }: { asOf: HomeAsOfWindow }) {
       </div>
 
       <Stack gap="xs" className="mt-2">
-        {isLoading ? (
+        {mealsQuery.isLoading ? (
           <>
             <Skeleton className="h-5 w-full" />
             <Skeleton className="h-5 w-3/4" />
           </>
-        ) : isError ? (
-          <p className="min-h-12 text-muted-foreground text-sm">
-            Meals are unavailable right now.
-          </p>
+        ) : mealsQuery.isError ? (
+          <div className="flex min-h-16 items-center justify-between gap-3">
+            <p className="text-muted-foreground text-sm">
+              Meals are unavailable right now.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="min-h-11 shrink-0 sm:min-h-0"
+              onClick={() => mealsQuery.refetch()}
+            >
+              Retry
+            </Button>
+          </div>
         ) : meals.length === 0 ? (
           <p className="min-h-12 content-center text-muted-foreground text-sm">
             Nothing planned this week.

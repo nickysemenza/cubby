@@ -123,7 +123,7 @@ export function TodayAttention() {
             type="button"
             variant="link"
             size="sm"
-            className="ml-1 h-auto px-0 text-xs"
+            className="ml-1 min-h-11 px-0 text-xs sm:min-h-0"
             onClick={() => summary.refetch()}
           >
             Retry
@@ -155,6 +155,7 @@ export function TodayAttention() {
               type="button"
               variant="outline"
               size="sm"
+              className="min-h-11 shrink-0 sm:min-h-0"
               onClick={() => queue.refetch()}
             >
               Retry
