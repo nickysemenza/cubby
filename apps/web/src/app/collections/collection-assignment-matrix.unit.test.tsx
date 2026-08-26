@@ -181,6 +181,44 @@ describe("CollectionAssignmentMatrix mobile projection", () => {
     expect(assignment).toHaveTextContent("Assign");
   });
 
+  it("keeps a thumb-sized detail link beside the assignment control", () => {
+    renderMatrix();
+
+    expect(screen.getByRole("link", { name: "Primer" })).toHaveClass(
+      "min-h-11",
+    );
+  });
+
+  it("keeps the mobile subject selector and valid creation path when empty", () => {
+    mocks.matrix.data = {
+      collections: [],
+      rows: [
+        {
+          id: "PRD-PAINT",
+          name: "Primer",
+          secondary: "Example paint",
+          imageUrl: null,
+          placements: [],
+          purchases: [],
+          states: { painting: "empty", kitchen: "empty" },
+        },
+      ],
+      totalCount: 1,
+    };
+
+    renderMatrix();
+
+    expect(
+      screen.getByRole("combobox", { name: "Assignment subject" }),
+    ).toHaveValue("product");
+    expect(screen.getByText("No Collections yet")).toBeVisible();
+    expect(
+      screen
+        .getAllByRole("button", { name: "New Collection" })
+        .some((button) => !button.hasAttribute("disabled")),
+    ).toBe(true);
+  });
+
   it("keeps the phone ledger to 25 rows while paging within the fetched batch", () => {
     mocks.matrix.data = {
       collections: ["painting"],

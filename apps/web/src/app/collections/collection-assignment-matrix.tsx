@@ -577,12 +577,36 @@ export function CollectionAssignmentMatrix({
             onRetry={() => matrix.refetch()}
           />
         ) : availableCollections.length === 0 ? (
-          <div className="px-2 py-6 text-center">
-            <p className="font-medium">No Collections yet</p>
-            <p className="text-muted-foreground text-xs">
-              Create a Collection before assigning{" "}
-              {subjectLabel.toLocaleLowerCase()}.
-            </p>
+          <div className="grid gap-2 px-2 py-4">
+            <label
+              htmlFor={mobileSubjectId}
+              className="grid gap-1 font-medium text-xs"
+            >
+              Show rows for
+              <NativeSelect
+                id={mobileSubjectId}
+                aria-label="Assignment subject"
+                value={subject}
+                onChange={(event) =>
+                  onSearchChange({
+                    subject: event.target.value as "product" | "location",
+                    page: 1,
+                  })
+                }
+              >
+                <option value="product">Products</option>
+                <option value="location">Locations</option>
+              </NativeSelect>
+            </label>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="font-medium">No Collections yet</p>
+                <p className="text-muted-foreground text-xs">
+                  Start with one {subject} from this page.
+                </p>
+              </div>
+              <NewCollectionDialog subject={subject} rows={matrixRows} />
+            </div>
           </div>
         ) : (
           <div>
@@ -676,7 +700,7 @@ export function CollectionAssignmentMatrix({
                         key={row.id}
                         className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-2 py-1.5"
                       >
-                        <div className="flex min-w-0 items-center gap-2">
+                        <div className="flex min-h-11 min-w-0 items-center gap-2">
                           <Image
                             src={row.imageUrl ?? ""}
                             alt=""
@@ -693,7 +717,7 @@ export function CollectionAssignmentMatrix({
                             <Link
                               {...entityDetailLink(subject, row.id)}
                               title={row.name}
-                              className="block truncate font-medium underline decoration-border/70 decoration-dotted underline-offset-2 hover:text-primary hover:decoration-primary hover:decoration-solid"
+                              className="flex min-h-11 items-center truncate font-medium underline decoration-border/70 decoration-dotted underline-offset-2 hover:text-primary hover:decoration-primary hover:decoration-solid"
                             >
                               {row.name}
                             </Link>
