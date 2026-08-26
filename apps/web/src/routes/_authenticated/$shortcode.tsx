@@ -11,11 +11,22 @@
  */
 
 import { parseShortcode } from "@cubby/shared";
-import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  notFound,
+  redirect,
+} from "@tanstack/react-router";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
-import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
+import { Button } from "~/components/ui/button";
+import {
+  Empty,
+  EmptyActions,
+  EmptyDescription,
+  EmptyTitle,
+} from "~/components/ui/empty";
 import {
   entities,
   entityDetailParams,
@@ -43,6 +54,11 @@ export const Route = createFileRoute("/_authenticated/$shortcode")({
         <EmptyDescription>
           This QR label doesn't match anything in Cubby.
         </EmptyDescription>
+        <EmptyActions>
+          <Button render={<Link to="/scan" />} nativeButton={false}>
+            Scan another code
+          </Button>
+        </EmptyActions>
       </Empty>
     </Page>
   ),

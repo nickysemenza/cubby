@@ -1,11 +1,19 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { UseSuspenseQueryOptions } from "@tanstack/react-query";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { useParams } from "@tanstack/react-router";
+import { Link, useParams } from "@tanstack/react-router";
 import type { ComponentType, ReactNode } from "react";
 import type { PageLayout } from "~/components/layout/page-wrapper";
 import { Page } from "~/components/page/Page";
-import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
+import { Button } from "~/components/ui/button";
+import {
+  Empty,
+  EmptyActions,
+  EmptyDescription,
+  EmptyTitle,
+} from "~/components/ui/empty";
+import { entities } from "~/entities/entities";
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
 
 /**
@@ -189,7 +197,7 @@ export function detailPage<TQuery extends DetailQueryFactory>({
 
 /** The `notFoundComponent` every entity detail route renders. */
 export function notFoundPage(
-  entity: Entity,
+  entity: BrowserRoutedEntity,
   title: string,
   description: string,
 ) {
@@ -199,6 +207,15 @@ export function notFoundPage(
         <Empty>
           <EmptyTitle>{title}</EmptyTitle>
           <EmptyDescription>{description}</EmptyDescription>
+          <EmptyActions>
+            <Button
+              variant="outline"
+              render={<Link to={entities[entity].routes.list} />}
+              nativeButton={false}
+            >
+              Browse {entities[entity].pluralLabel.toLocaleLowerCase()}
+            </Button>
+          </EmptyActions>
         </Empty>
       </Page>
     );
