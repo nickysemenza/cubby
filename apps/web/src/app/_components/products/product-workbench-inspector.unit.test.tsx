@@ -4,7 +4,7 @@ import {
   productWithFoodOut,
 } from "@cubby/schemas/product";
 import { testShortcode } from "@cubby/schemas/testing";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import type { Mock } from "vitest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -258,15 +258,14 @@ const relationshipRoute: ProductRelationshipRouteOut = {
     tasks: { count: 0, openCount: 0, preview: [] },
   },
   derived: {
-    purchasedForProjects: { count: 0, preview: [] },
+    purchasedForProjects: {
+      count: 0,
+      preview: [],
+      unassignedExpenseCount: 2,
+    },
     vendors: {
-      count: 1,
-      preview: [
-        {
-          id: testShortcode("vendor", "VEN-INSPECT"),
-          name: "Tool supply",
-        },
-      ],
+      count: 0,
+      preview: [],
     },
   },
 };
@@ -310,24 +309,52 @@ describe("ProductWorkbenchInspector", () => {
     expect(mocks.relationshipQuery).toHaveBeenCalledWith({
       productId: product.id,
     });
-    expect(screen.getByText("Stored at")).toBeInTheDocument();
-    expect(screen.getByText("Serves as location")).toBeInTheDocument();
-    expect(screen.getByText("Purchased through")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Stock/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Also a location/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Purchases/ }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Expense + order link")).toBeInTheDocument();
     expect(screen.getByText("Derived from those records")).toBeInTheDocument();
     expect(screen.getByText("Vendors")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Vendors/ })).toHaveAttribute(
-      "aria-expanded",
-      "false",
-    );
+    const vendors = screen.getByRole("button", { name: /Vendors/ });
+    expect(vendors).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(vendors);
     expect(
-      screen.getByRole("link", { name: "Direct Stored at: Tool cabinet" }),
+      screen.getByText("No vendor rollups from product spend yet."),
+    ).toBeInTheDocument();
+    const purchasedForProjects = screen.getByRole("button", {
+      name: /Purchased for projects/,
+    });
+    expect(purchasedForProjects).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(purchasedForProjects);
+    expect(
+      screen.getByText("2 acquisition expenses not assigned to a project."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", {
+        name: /acquisition expenses not assigned to a project/,
+      }),
+    ).not.toBeInTheDocument();
+    rerender(
+      <ProductRelationshipRoute
+        product={productWithFoodOut.parse({
+          ...product,
+          category: "household",
+        })}
+      />,
+    );
+    expect(screen.getByText("Used on projects")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Direct Stock: Tool cabinet" }),
     ).toHaveAttribute(
       "href",
       `/inventory/${relationshipRoute.direct.inventory.preview[0]?.id}`,
     );
     expect(
-      screen.getByRole("link", { name: "Direct Stored at: Tool cabinet" }),
+      screen.getByRole("link", { name: "Direct Stock: Tool cabinet" }),
     ).toHaveAttribute("data-router-link", "true");
 
     mocks.route.current = {
@@ -348,12 +375,19 @@ describe("ProductWorkbenchInspector", () => {
     };
     rerender(<ProductRelationshipRoute product={product} />);
 
-    expect(screen.getByText("Stored at")).toBeInTheDocument();
+    expect(screen.getByText("Stock")).toBeInTheDocument();
     expect(screen.getByText("No stock records yet.")).toBeInTheDocument();
-    expect(screen.getByText("Serves as location")).toBeInTheDocument();
+    expect(screen.getByText("Also a location")).toBeInTheDocument();
     expect(
       screen.getByText("This product does not identify a location."),
     ).toBeInTheDocument();
+    const stockBranch = screen
+      .getByRole("button", { name: /^Stock0$/ })
+      .closest("li");
+    expect(stockBranch).not.toBeNull();
+    expect(
+      within(stockBranch as HTMLElement).queryByRole("link"),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps embedded stock and location evidence available when the route request fails", () => {

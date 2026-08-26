@@ -29,6 +29,7 @@ type RouteBranch = {
   samples: RouteSample[];
   detailHash: string;
   emptyCopy: string;
+  evidence?: string;
 };
 
 type BranchShape<T> = {
@@ -117,7 +118,7 @@ function toRouteModel(
   const direct: RouteBranch[] = [
     routeBranch(
       "stock",
-      "Stored at",
+      "Stock",
       "direct",
       summary.direct.inventory,
       "stocked-at",
@@ -131,7 +132,7 @@ function toRouteModel(
     ),
     routeBranch(
       "identity-locations",
-      "Serves as location",
+      "Also a location",
       "direct",
       summary.direct.identityLocations,
       "stocked-at",
@@ -144,7 +145,7 @@ function toRouteModel(
     ),
     routeBranch(
       "expenses",
-      "Expense history",
+      "Expenses",
       "direct",
       summary.direct.expenses,
       "expense-history",
@@ -158,7 +159,7 @@ function toRouteModel(
     ),
     routeBranch(
       "purchases",
-      "Purchased through",
+      "Purchases",
       "direct",
       summary.direct.purchases,
       "purchases",
@@ -176,7 +177,9 @@ function toRouteModel(
               : "Via expense",
       }),
     ),
-    ...(product.category === "tools" || product.category === "software"
+    ...(product.category === "tools" ||
+    product.category === "software" ||
+    summary.direct.usedOnProjects.count > 0
       ? [
           routeBranch(
             "used-on-projects",
@@ -213,20 +216,26 @@ function toRouteModel(
       : []),
   ];
 
+  const purchasedForProjects = routeBranch(
+    "purchased-for-projects",
+    "Purchased for projects",
+    "derived",
+    summary.derived.purchasedForProjects,
+    "expense-history",
+    "No project purchases are attributed from product expenses.",
+    (record) => ({
+      id: record.id,
+      label: record.name,
+      to: `/projects/${encodeURIComponent(record.id)}`,
+    }),
+  );
+  if (summary.derived.purchasedForProjects.unassignedExpenseCount > 0) {
+    const count = summary.derived.purchasedForProjects.unassignedExpenseCount;
+    purchasedForProjects.evidence = `${count} acquisition expense${count === 1 ? "" : "s"} not assigned to a project.`;
+  }
+
   const derived: RouteBranch[] = [
-    routeBranch(
-      "purchased-for-projects",
-      "Purchased for projects",
-      "derived",
-      summary.derived.purchasedForProjects,
-      "expense-history",
-      "No project purchases are attributed from product expenses.",
-      (record) => ({
-        id: record.id,
-        label: record.name,
-        to: `/projects/${encodeURIComponent(record.id)}`,
-      }),
-    ),
+    purchasedForProjects,
     routeBranch(
       "vendors",
       "Vendors",
@@ -240,7 +249,7 @@ function toRouteModel(
         to: `/vendors/${encodeURIComponent(record.id)}`,
       }),
     ),
-  ].filter((branch) => branch.count > 0);
+  ];
 
   return { direct, derived };
 }
@@ -253,7 +262,7 @@ function fallbackRouteModel(product: ProductWithFoodOut): {
   if (product.inventoryEntry.length > 0) {
     direct.push({
       id: "stock",
-      label: "Stored at",
+      label: "Stock",
       kind: "direct",
       count: product.inventoryEntry.length,
       detailHash: "stocked-at",
@@ -269,7 +278,7 @@ function fallbackRouteModel(product: ProductWithFoodOut): {
   if (product.servingAsLocations.length > 0) {
     direct.push({
       id: "identity-locations",
-      label: "Serves as location",
+      label: "Also a location",
       kind: "direct",
       count: product.servingAsLocations.length,
       detailHash: "stocked-at",
@@ -294,6 +303,7 @@ function RouteBranchRows({
   const [expanded, setExpanded] = useState(branch.kind === "direct");
   const panelId = useId();
   const samples = branch.samples.slice(0, 3);
+  const showDetailLink = branch.count > 0 || Boolean(branch.evidence);
 
   return (
     <li className="border-border border-b last:border-b-0">
@@ -319,14 +329,16 @@ function RouteBranchRows({
             {branch.count}
           </span>
         </button>
-        <ProductSectionLink
-          productId={productId}
-          hash={branch.detailHash}
-          className="inline-flex min-h-11 shrink-0 items-center text-primary text-xs underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 md:min-h-8"
-        >
-          View all
-          <ExternalLink aria-hidden className="ml-1 size-3" />
-        </ProductSectionLink>
+        {showDetailLink ? (
+          <ProductSectionLink
+            productId={productId}
+            hash={branch.detailHash}
+            className="inline-flex min-h-11 shrink-0 items-center text-primary text-xs underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 md:min-h-8"
+          >
+            View all
+            <ExternalLink aria-hidden className="ml-1 size-3" />
+          </ProductSectionLink>
+        ) : null}
       </div>
       {expanded ? (
         <ul
@@ -363,6 +375,9 @@ function RouteBranchRows({
           ) : (
             <li className="py-1 text-muted-foreground">{branch.emptyCopy}</li>
           )}
+          {branch.evidence ? (
+            <li className="py-1 text-muted-foreground">{branch.evidence}</li>
+          ) : null}
           {branch.count > samples.length ? (
             <li className="pt-1">
               <ProductSectionLink
