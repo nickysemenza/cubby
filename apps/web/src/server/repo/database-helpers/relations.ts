@@ -17,7 +17,7 @@
  * relations not yet annotated here.
  */
 
-import { type AnyColumn, asc, sql } from "drizzle-orm";
+import { type AnyColumn, and, asc, sql } from "drizzle-orm";
 import {
   inventoryEntry,
   location,
@@ -29,6 +29,10 @@ import {
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
+// Deep path, never the `database-helpers` barrel: these are top-level const
+// initializations, so an import cycle here is a TDZ crash at startup.
+import { productAcquisitionDateSql } from "~/server/repo/expense-aggregate-sql";
+import { stockOnly } from "~/server/repo/inventory/placement";
 import { notDeleted } from "./query";
 
 /**
@@ -347,13 +351,13 @@ export const relations = {
           sql<number>`(SELECT COALESCE(sum(e."cost"), 0)::double precision FROM "Expense" e WHERE e."productId" = "product"."id" AND e."deletedAt" IS NULL)`.as(
             "expenseTotal",
           ),
-        // A Product can be present on several Expense lines and Purchases.
-        // The list's compact provenance date is the latest live Purchase date.
-        purchaseDate: sql<
-          string | null
-        >`(SELECT max(p."date") FROM "Expense" e JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL WHERE e."productId" = "product"."id" AND e."deletedAt" IS NULL)`.as(
-          "purchaseDate",
-        ),
+        // A Product can be present on several Expense lines and Purchases, in
+        // BOTH directions — a sale or disposal is a Purchase too. The column
+        // means the latest ACQUISITION, so it reads the shared fragment that
+        // the sort and both filters in product/crud.ts also read; the three
+        // agreeing by hand is exactly how this shipped showing eBay-sale dates
+        // as "purchase date" on 185 products.
+        purchaseDate: productAcquisitionDateSql().as("purchaseDate"),
       },
     },
   },
@@ -427,7 +431,16 @@ export const relations = {
           with: { product: locationIdentityProduct },
         },
         inventoryEntries: {
-          where: notDeleted(inventoryEntry),
+          // Browse/count surface, so `stockOnly()` per the rule in
+          // `inventory/placement.ts`. Without it the cell listed installed
+          // fixtures that the sort and both count filters
+          // (`locationIdsMeetingInventoryMinimum`, `directItemCountMin/Max`)
+          // exclude — "wire spools" rendered 49 chips and sorted as 25.
+          //
+          // The PRODUCT list's Locations cell is the deliberate opposite; see
+          // the note in `product/crud.ts`. Same column helper, opposite correct
+          // answer per direction.
+          where: and(notDeleted(inventoryEntry), stockOnly()),
           with: {
             // See the `inventory.list` note below: the embedded product's
             // barcode is derived from its primary `gtin` identifier row.
@@ -464,6 +477,9 @@ export const relations = {
             },
           },
         },
+        // includes-installed: the detail page's Contents is an ownership and
+        // identity surface, not a browse/count one — a fixture wired into this
+        // room must stay listed as held here.
         inventoryEntries: {
           with: {
             product: { with: { externalIds: true } },

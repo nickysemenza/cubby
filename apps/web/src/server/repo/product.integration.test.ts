@@ -2140,6 +2140,162 @@ describe("product repository", () => {
           unassignedProduct.id,
         ]);
       });
+
+      /**
+       * The column means the latest ACQUISITION, not the latest Purchase of any
+       * direction. A sale, return, or disposal is a Purchase too — modelled as
+       * one whose Expenses sum negative (`repo/product/ownership.ts`) — so
+       * without the acquisition predicate an eBay sale rendered as the
+       * product's "purchase date" on 185 live products.
+       *
+       * The last case is the load-bearing one: it asserts the SORT as well as
+       * the cell. The three sites (cell in `database-helpers/relations.ts`,
+       * ORDER BY and both filters in `product/crud.ts`) previously agreed with
+       * each other and were wrong together, which is exactly why every
+       * cell-only assertion above still passed. Reverting any single site to a
+       * hand-written restatement must fail here.
+       */
+      it("dates from acquisitions only, falling back to the expense when no Purchase exists", async () => {
+        const soldOnly = await createProduct(
+          ctx.db,
+          makeProductInput({ name: "Exit Only Widget", upc: "710000000030" }),
+          ctx.actor,
+        );
+        const noCounterparty = await createProduct(
+          ctx.db,
+          makeProductInput({ name: "Salvaged Widget", upc: "710000000031" }),
+          ctx.actor,
+        );
+        const boughtThenSold = await createProduct(
+          ctx.db,
+          makeProductInput({ name: "Flipped Widget", upc: "710000000032" }),
+          ctx.actor,
+        );
+        const control = await createProduct(
+          ctx.db,
+          makeProductInput({ name: "Kept Widget", upc: "710000000033" }),
+          ctx.actor,
+        );
+
+        // Only ever left: a negative line against a real Purchase.
+        await createExpense(
+          ctx.db,
+          makeExpenseInput({
+            name: "Exit Only Widget sale",
+            productId: soldOnly.id,
+            vendor: "Resale Channel",
+            date: "2026-06-01",
+            cost: -40,
+            productQuantity: -1,
+          }),
+          ctx.actor,
+        );
+
+        // Deliberately Purchase-less: `vendor: null` attaches no Purchase, the
+        // shape of an item conveyed with the house or found/salvaged.
+        await createExpense(
+          ctx.db,
+          makeExpenseInput({
+            name: "Salvaged Widget — no counterparty",
+            productId: noCounterparty.id,
+            vendor: null,
+            date: "2026-04-01",
+          }),
+          ctx.actor,
+        );
+
+        await createExpense(
+          ctx.db,
+          makeExpenseInput({
+            name: "Flipped Widget purchase",
+            productId: boughtThenSold.id,
+            vendor: "Flip Store",
+            date: "2026-01-05",
+          }),
+          ctx.actor,
+        );
+        await createExpense(
+          ctx.db,
+          makeExpenseInput({
+            name: "Flipped Widget sale",
+            productId: boughtThenSold.id,
+            vendor: "Resale Channel",
+            date: "2026-05-01",
+            cost: -60,
+            productQuantity: -1,
+          }),
+          ctx.actor,
+        );
+        await createExpense(
+          ctx.db,
+          makeExpenseInput({
+            name: "Kept Widget purchase",
+            productId: control.id,
+            vendor: "Flip Store",
+            date: "2026-03-01",
+          }),
+          ctx.actor,
+        );
+
+        const cellOf = async (id: (typeof soldOnly)["id"]) => {
+          const all = await listWith({});
+          return all.data.find((row) => row.id === id)?.purchaseDate;
+        };
+
+        // Exit-only reads blank; the sale date is not a purchase date.
+        expect(await cellOf(soldOnly.id)).toBeNull();
+        // The Purchase-less acquisition dates from its own Expense.
+        expect(await cellOf(noCounterparty.id)).toBe("2026-04-01");
+        // A later sale does not move the acquisition date forward.
+        expect(await cellOf(boughtThenSold.id)).toBe("2026-01-05");
+
+        const presenceHas = await listWith({
+          purchaseDatePresenceFilter: "has",
+        });
+        expect(presenceHas.data.map((row) => row.id)).not.toContain(
+          soldOnly.id,
+        );
+        expect(presenceHas.data.map((row) => row.id)).toContain(
+          noCounterparty.id,
+        );
+        const presenceNone = await listWith({
+          purchaseDatePresenceFilter: "none",
+        });
+        expect(presenceNone.data.map((row) => row.id)).toContain(soldOnly.id);
+
+        // The range filter reads the same fragment, so it sees the April
+        // expense date and does NOT see either sale.
+        const inApril = await listWith({
+          purchaseDateFrom: "2026-04-01",
+          purchaseDateTo: "2026-04-30",
+        });
+        expect(inApril.data.map((row) => row.id)).toContain(noCounterparty.id);
+        expect(inApril.data.map((row) => row.id)).not.toContain(soldOnly.id);
+        expect(inApril.data.map((row) => row.id)).not.toContain(
+          boughtThenSold.id,
+        );
+
+        // The coupling assertion: sorting must rank by the same value the cell
+        // shows. `boughtThenSold` (acquired 2026-01-05) sorts BELOW `control`
+        // (acquired 2026-03-01) even though its latest Purchase is 2026-05-01.
+        const sorted = await productList(
+          ctx.db,
+          { nameFilter: "Widget" },
+          [{ orderBy: "purchaseDate", direction: "desc" }],
+          { pageIndex: 0, pageSize: 10 },
+        );
+        const order = sorted.data.map((row) => row.id);
+        expect(order.indexOf(noCounterparty.id)).toBeLessThan(
+          order.indexOf(control.id),
+        );
+        expect(order.indexOf(control.id)).toBeLessThan(
+          order.indexOf(boughtThenSold.id),
+        );
+        // Nulls last: the exit-only product sorts after every acquisition.
+        expect(order.indexOf(boughtThenSold.id)).toBeLessThan(
+          order.indexOf(soldOnly.id),
+        );
+      });
     });
 
     describe("usdaPresenceFilter", () => {
