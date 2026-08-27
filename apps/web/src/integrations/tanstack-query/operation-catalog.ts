@@ -8,7 +8,9 @@ import {
   type UseMutationOptions,
 } from "@tanstack/react-query";
 import type { z } from "zod";
+import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
 import type { StartOperationId } from "~/lib/start-operation-observability";
+import { openWorkflowStream } from "~/lib/workflow-stream";
 import type {
   CubbyOperationMeta,
   OperationCacheTag,
@@ -66,9 +68,32 @@ export type MutationDefinition<
       }["bivarianceHack"];
 };
 
-type AnyDefinition =
+/**
+ * A server-pushed NDJSON workflow stream: one request, many events, no cache
+ * entry. The event schema is keyed `event` rather than `output` ON PURPOSE —
+ * that is what keeps a subscription structurally outside
+ * `implementOperationDomain`'s `OperationDomainDescriptor` (which requires
+ * `definition.output` and a `"query" | "mutation"` kind), so the two server
+ * tables stay separate without either one having to widen its wall.
+ *
+ * There is no `invalidates`: a stream's writes land progressively, so the call
+ * site decides when the run is far enough along to re-read (usually `onDone`).
+ */
+export type SubscriptionDefinition<
+  Input extends z.ZodTypeAny,
+  Event extends z.ZodTypeAny,
+> = {
+  kind: "subscription";
+  input: Input;
+  event: Event;
+};
+
+type AnyOperationDefinition =
   | QueryDefinition<z.ZodTypeAny, z.ZodTypeAny>
   | MutationDefinition<z.ZodTypeAny, z.ZodTypeAny>;
+type AnyDefinition =
+  | AnyOperationDefinition
+  | SubscriptionDefinition<z.ZodTypeAny, z.ZodTypeAny>;
 
 export const query = <Input extends z.ZodTypeAny, Output extends z.ZodTypeAny>(
   definition: Omit<QueryDefinition<Input, Output>, "kind">,
@@ -81,10 +106,23 @@ export const mutation = <
   definition: Omit<MutationDefinition<Input, Output>, "kind">,
 ): MutationDefinition<Input, Output> => ({ ...definition, kind: "mutation" });
 
+export const subscription = <
+  Input extends z.ZodTypeAny,
+  Event extends z.ZodTypeAny,
+>(
+  definition: Omit<SubscriptionDefinition<Input, Event>, "kind">,
+): SubscriptionDefinition<Input, Event> => ({
+  ...definition,
+  kind: "subscription",
+});
+
 type InputOf<Definition extends AnyDefinition> = z.input<Definition["input"]>;
-type OutputOf<Definition extends AnyDefinition> = z.output<
-  Definition["output"]
->;
+/** Conditional so it resolves for the subscription arm too, which has none. */
+type OutputOf<Definition extends AnyDefinition> = Definition extends {
+  output: infer Output extends z.ZodTypeAny;
+}
+  ? z.output<Output>
+  : never;
 type InputArguments<Input> = undefined extends Input
   ? [input?: Input]
   : [input: Input];
@@ -197,16 +235,36 @@ type MutationDescriptor<
   ): MutationDescriptor<Input, Output>;
 };
 
+type SubscriptionDescriptor<
+  Input extends z.ZodTypeAny,
+  Event extends z.ZodTypeAny,
+> = {
+  readonly id: StartOperationIdOfKind<"subscription">;
+  readonly definition: SubscriptionDefinition<Input, Event>;
+  /**
+   * Opens the stream. There is no `queryOptions`/`mutationOptions` sibling:
+   * a stream has no cache entry, and its consumers (`useBulkStream`,
+   * `useAgentStream`) drive it directly.
+   */
+  open(
+    ...args: undefined extends z.input<Input>
+      ? [input?: z.input<Input>, options?: { signal?: AbortSignal }]
+      : [input: z.input<Input>, options?: { signal?: AbortSignal }]
+  ): Promise<AsyncIterable<z.output<Event>>>;
+};
+
 export type OperationDescriptorFor<Definition extends AnyDefinition> =
   Definition extends QueryDefinition<infer Input, infer Output>
     ? QueryDescriptor<Input, Output>
     : Definition extends MutationDefinition<infer Input, infer Output>
       ? MutationDescriptor<Input, Output>
-      : never;
+      : Definition extends SubscriptionDefinition<infer Input, infer Event>
+        ? SubscriptionDescriptor<Input, Event>
+        : never;
 
 const descriptorMeta = (
   id: StartOperationId,
-  definition: AnyDefinition,
+  definition: AnyOperationDefinition,
   entity?: string,
   input: unknown | typeof NO_POLICY_INPUT = NO_POLICY_INPUT,
 ) => ({
@@ -264,6 +322,31 @@ function buildDescriptor<Definition extends AnyDefinition>(options: {
   transport?: OperationTransport;
 }): OperationDescriptorFor<Definition> {
   const { id, definition, entity, transport } = options;
+  if (definition.kind === "subscription") {
+    return {
+      id,
+      definition,
+      // The URL is derived from the operation id, so a stream cannot be
+      // pointed at the wrong route: the one dispatch route resolves the id
+      // against the same generated registry the descriptor was built from.
+      // `kind: "mutation"` is the CLIENT-side observation bucket (perf-store
+      // row + `markFreshReads()`); every workflow stream writes. The wire
+      // `x-cubby-operation-kind` header is read from the registry and stays
+      // "subscription".
+      open: (
+        input: InputOf<Definition>,
+        callOptions?: { signal?: AbortSignal },
+      ) =>
+        openWorkflowStream({
+          operation: id as StartOperationIdOfKind<"subscription">,
+          kind: "mutation",
+          url: `/api/workflow-stream/${id}`,
+          input,
+          eventSchema: definition.event,
+          ...(callOptions?.signal ? { signal: callOptions.signal } : {}),
+        }),
+    } as unknown as OperationDescriptorFor<Definition>;
+  }
   const operation = startOperation<InputOf<Definition>, OutputOf<Definition>>({
     operation: id,
     kind: definition.kind,

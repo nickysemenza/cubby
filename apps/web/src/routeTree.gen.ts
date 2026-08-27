@@ -111,6 +111,7 @@ import { Route as ApiRecipeStreamImportNotionRouteImport } from './routes/api/re
 import { Route as ApiRecipeStreamRecomputeAllRouteImport } from './routes/api/recipe-stream/recompute-all'
 import { Route as ApiRecipeStreamRecomputeStaleRouteImport } from './routes/api/recipe-stream/recompute-stale'
 import { Route as ApiRecipeStreamReprocessCookbookRouteImport } from './routes/api/recipe-stream/reprocess-cookbook'
+import { Route as ApiWorkflowStreamOperationRouteImport } from './routes/api/workflow-stream/$operation'
 import { Route as DotwellKnownOauthAuthorizationServerApiAuthRouteImport } from './routes/[.]well-known.oauth-authorization-server.api.auth'
 import { Route as DotwellKnownOauthProtectedResourceApiMcpRouteImport } from './routes/[.]well-known.oauth-protected-resource.api.mcp'
 import { Route as AuthenticatedRecipesShortcodeExportRouteImport } from './routes/_authenticated/recipes.$shortcode_.export'
@@ -700,6 +701,12 @@ const ApiRecipeStreamReprocessCookbookRoute =
     path: '/api/recipe-stream/reprocess-cookbook',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiWorkflowStreamOperationRoute =
+  ApiWorkflowStreamOperationRouteImport.update({
+    id: '/api/workflow-stream/$operation',
+    path: '/api/workflow-stream/$operation',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const DotwellKnownOauthAuthorizationServerApiAuthRoute =
   DotwellKnownOauthAuthorizationServerApiAuthRouteImport.update({
     id: '/api/auth',
@@ -818,6 +825,7 @@ export interface FileRoutesByFullPath {
   '/api/recipe-stream/recompute-all': typeof ApiRecipeStreamRecomputeAllRoute
   '/api/recipe-stream/recompute-stale': typeof ApiRecipeStreamRecomputeStaleRoute
   '/api/recipe-stream/reprocess-cookbook': typeof ApiRecipeStreamReprocessCookbookRoute
+  '/api/workflow-stream/$operation': typeof ApiWorkflowStreamOperationRoute
   '/collections/': typeof AuthenticatedCollectionsIndexRoute
   '/cookbooks/': typeof AuthenticatedCookbooksIndexRoute
   '/expenses/': typeof AuthenticatedExpensesIndexRoute
@@ -926,6 +934,7 @@ export interface FileRoutesByTo {
   '/api/recipe-stream/recompute-all': typeof ApiRecipeStreamRecomputeAllRoute
   '/api/recipe-stream/recompute-stale': typeof ApiRecipeStreamRecomputeStaleRoute
   '/api/recipe-stream/reprocess-cookbook': typeof ApiRecipeStreamReprocessCookbookRoute
+  '/api/workflow-stream/$operation': typeof ApiWorkflowStreamOperationRoute
   '/collections': typeof AuthenticatedCollectionsIndexRoute
   '/cookbooks': typeof AuthenticatedCookbooksIndexRoute
   '/expenses': typeof AuthenticatedExpensesIndexRoute
@@ -1037,6 +1046,7 @@ export interface FileRoutesById {
   '/api/recipe-stream/recompute-all': typeof ApiRecipeStreamRecomputeAllRoute
   '/api/recipe-stream/recompute-stale': typeof ApiRecipeStreamRecomputeStaleRoute
   '/api/recipe-stream/reprocess-cookbook': typeof ApiRecipeStreamReprocessCookbookRoute
+  '/api/workflow-stream/$operation': typeof ApiWorkflowStreamOperationRoute
   '/_authenticated/collections/': typeof AuthenticatedCollectionsIndexRoute
   '/_authenticated/cookbooks/': typeof AuthenticatedCookbooksIndexRoute
   '/_authenticated/expenses/': typeof AuthenticatedExpensesIndexRoute
@@ -1148,6 +1158,7 @@ export interface FileRouteTypes {
     | '/api/recipe-stream/recompute-all'
     | '/api/recipe-stream/recompute-stale'
     | '/api/recipe-stream/reprocess-cookbook'
+    | '/api/workflow-stream/$operation'
     | '/collections/'
     | '/cookbooks/'
     | '/expenses/'
@@ -1256,6 +1267,7 @@ export interface FileRouteTypes {
     | '/api/recipe-stream/recompute-all'
     | '/api/recipe-stream/recompute-stale'
     | '/api/recipe-stream/reprocess-cookbook'
+    | '/api/workflow-stream/$operation'
     | '/collections'
     | '/cookbooks'
     | '/expenses'
@@ -1366,6 +1378,7 @@ export interface FileRouteTypes {
     | '/api/recipe-stream/recompute-all'
     | '/api/recipe-stream/recompute-stale'
     | '/api/recipe-stream/reprocess-cookbook'
+    | '/api/workflow-stream/$operation'
     | '/_authenticated/collections/'
     | '/_authenticated/cookbooks/'
     | '/_authenticated/expenses/'
@@ -1419,6 +1432,7 @@ export interface RootRouteChildren {
   ApiRecipeStreamRecomputeAllRoute: typeof ApiRecipeStreamRecomputeAllRoute
   ApiRecipeStreamRecomputeStaleRoute: typeof ApiRecipeStreamRecomputeStaleRoute
   ApiRecipeStreamReprocessCookbookRoute: typeof ApiRecipeStreamReprocessCookbookRoute
+  ApiWorkflowStreamOperationRoute: typeof ApiWorkflowStreamOperationRoute
   ApiCalendarTokenFeedRoute: typeof ApiCalendarTokenFeedRoute
 }
 
@@ -2138,6 +2152,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiRecipeStreamReprocessCookbookRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/workflow-stream/$operation': {
+      id: '/api/workflow-stream/$operation'
+      path: '/api/workflow-stream/$operation'
+      fullPath: '/api/workflow-stream/$operation'
+      preLoaderRoute: typeof ApiWorkflowStreamOperationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/.well-known/oauth-authorization-server/api/auth': {
       id: '/.well-known/oauth-authorization-server/api/auth'
       path: '/api/auth'
@@ -2438,6 +2459,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiRecipeStreamRecomputeAllRoute: ApiRecipeStreamRecomputeAllRoute,
   ApiRecipeStreamRecomputeStaleRoute: ApiRecipeStreamRecomputeStaleRoute,
   ApiRecipeStreamReprocessCookbookRoute: ApiRecipeStreamReprocessCookbookRoute,
+  ApiWorkflowStreamOperationRoute: ApiWorkflowStreamOperationRoute,
   ApiCalendarTokenFeedRoute: ApiCalendarTokenFeedRoute,
 }
 export const routeTree = rootRouteImport

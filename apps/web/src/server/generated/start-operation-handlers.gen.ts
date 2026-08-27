@@ -2,12 +2,14 @@
 import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
 import type { StartOperationResult } from "~/server/start-operation.contract";
 import type { StartOperationRequest } from "~/server/start-operation.server";
+import type { WorkflowStreamHandler } from "~/server/subscription-domain.server";
 
 export type StartOperationHandler = (options: {
   data: unknown;
   request: StartOperationRequest;
 }) => Promise<StartOperationResult<unknown>>;
 export type StartOperationHandlerLoader = () => Promise<StartOperationHandler>;
+export type WorkflowStreamHandlerLoader = () => Promise<WorkflowStreamHandler>;
 
 export const START_OPERATION_HANDLER_LOADERS = {
   "agent.ask": async () =>
@@ -690,4 +692,14 @@ export const START_OPERATION_HANDLER_LOADERS = {
 } as const satisfies Record<
   StartOperationIdOfKind<"query" | "mutation">,
   StartOperationHandlerLoader
+>;
+
+/**
+ * Partial, unlike its sibling: coverage of the subscription ids is enforced
+ * by the generator's declared-but-unimplemented check, which names the missing
+ * member and its module. What this annotation still buys is key validity — a
+ * loader keyed to an id the registry does not carry as a subscription.
+ */
+export const WORKFLOW_STREAM_HANDLER_LOADERS = {} as const satisfies Partial<
+  Record<StartOperationIdOfKind<"subscription">, WorkflowStreamHandlerLoader>
 >;
