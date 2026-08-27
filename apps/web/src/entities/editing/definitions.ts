@@ -2,7 +2,6 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { isEqual } from "es-toolkit";
 import { householdLocalDate } from "~/lib/household-date";
 import type { EntityEditRegistry } from "./registry";
-import { defineEntityEditRegistry } from "./registry";
 import type {
   EditableEntity,
   EntityEditAccess,
@@ -251,21 +250,19 @@ type EntityEditBuilders = {
  * bound to its own key, so a definition cannot name a different entity.
  */
 const defineEntityEdits = (builders: EntityEditBuilders): EntityEditRegistry =>
-  defineEntityEditRegistry(
-    Object.fromEntries(
-      Object.entries(builders).map(([entity, build]) => [
-        entity,
-        // `Object.entries` erases the key/value correlation the mapped type
-        // above enforces; this is the only place it has to be re-asserted.
-        buildDefinition(
-          entity as EditableEntity,
-          build as (
-            f: EntityEditBuilder<EditableEntity>,
-          ) => EntityEditBody<EditableEntity>,
-        ),
-      ]),
-    ) as EntityEditRegistry,
-  );
+  Object.fromEntries(
+    Object.entries(builders).map(([entity, build]) => [
+      entity,
+      // `Object.entries` erases the key/value correlation the mapped type
+      // above enforces; this is the only place it has to be re-asserted.
+      buildDefinition(
+        entity as EditableEntity,
+        build as (
+          f: EntityEditBuilder<EditableEntity>,
+        ) => EntityEditBody<EditableEntity>,
+      ),
+    ]),
+  ) as EntityEditRegistry;
 
 const requiredDate =
   (
