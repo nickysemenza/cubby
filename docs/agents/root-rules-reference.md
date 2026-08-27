@@ -13,7 +13,12 @@ The **[Tenets](../../README.md#tenets)** there are binding on design proposals: 
   the repo's unit/UI tests plus its portable PGlite database subset. Prefer,
   from the repo root: `pnpm test:unit`, `pnpm test:ui`, `pnpm test:pglite`, or
   `pnpm test:changed` (Vitest `--changed`; pass a ref for a branch diff). A
-  single portable file is faster still with `pnpm test:file src/…`. Use
+  single portable file is faster still with `pnpm test:file src/…`. `unit` and
+  `ui` are separate Vitest projects (`*.unit.test.ts` under node vs.
+  `*.unit.test.tsx` under jsdom, per `apps/web/vitest.config.ts`) and neither
+  runs the other's files, so a change touching any `.tsx` under `apps/web/src`
+  needs `test:ui` too, even when `test:unit` looks like the narrowest tier.
+  Use
   `pnpm test:file:postgres src/…` or `pnpm test:integration:postgres` only when
   the behavior requires real independent sessions, locks, pools, or
   node-postgres fidelity; those commands need `docker compose -p cubby up -d`.

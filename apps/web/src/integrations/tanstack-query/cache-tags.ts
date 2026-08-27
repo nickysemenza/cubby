@@ -328,6 +328,24 @@ export const ripple = {
   problems: rippleTags([["problems"]]),
 } as const satisfies Record<string, readonly OperationCacheTag[]>;
 
+/**
+ * Reverse-check audit (do not re-derive this — read it): does every declared
+ * query tag get invalidated by SOME mutation? Checked once, across 171
+ * declared query tags and 31 distinct invalidation tags: 19 orphans, ZERO
+ * confirmed bugs. `["entity","list"]` / `["entity","detail"]` look orphaned
+ * statically but are matched at runtime via the `[[entity]]` root
+ * `descriptorMeta` appends to every query. `statementRow` (×3),
+ * `householdContribution` (×2), and `auditLog.list` declare no client
+ * mutation at all, because those writes arrive over MCP from a different
+ * client than this one. The rest — `ai` (×4), `mcp` (×3), `upc.lookup`,
+ * `relatedness.product`, `entity.inspectorHealth`, `entityIntegrity` — are
+ * external or derived reads with nothing that "writes" them from this app.
+ * A global `staleTime: 60_000` at `root-provider.tsx:53` means none of these
+ * is ever PERMANENTLY stale even when nothing invalidates it, which is why a
+ * reverse-direction checker was not built. Revisit only if that default is
+ * raised, or a descriptor declares `staleTime: Infinity`.
+ */
+
 /** `entityRipple` hands back the SAME array reference for the same entity, so
  * the result stays safe to pass into a hook dependency array or a memoized
  * config — the contract `invalidatesFor` documented. */
