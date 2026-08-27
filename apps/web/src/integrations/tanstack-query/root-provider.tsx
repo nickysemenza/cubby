@@ -67,9 +67,21 @@ export function getContext() {
         deferToastError(error);
       },
       onSuccess: (data, variables, _onMutateResult, mutation) => {
+        // `meta.invalidates` wins whenever it says anything. The registered
+        // policy is keyed on the operation id and reads the OPERATION's input,
+        // but a mutation can be hung on a descriptor whose `variables` are the
+        // call site's own shape — `entityMutationOptionsFactory` passes
+        // `{ id, data }` to an `entity.mutate` policy that expects a command
+        // envelope. The descriptor-owned tag list on `meta` is the one that
+        // knows the entity in that case. Behaviour-preserving for every
+        // pre-existing descriptor: a static `invalidates:` already puts the
+        // policy's exact output on `meta`, and a dynamic one leaves it empty.
+        const declared = resolveInvalidationTags(mutation.meta?.invalidates);
         const invalidations =
-          operationInvalidationTags(mutation.meta?.operation, variables) ??
-          resolveInvalidationTags(mutation.meta?.invalidates);
+          declared.length > 0
+            ? declared
+            : (operationInvalidationTags(mutation.meta?.operation, variables) ??
+              []);
         if (invalidations.length === 0) return;
         void invalidateOperationTags(queryClient, invalidations);
         void watchBatchesAndInvalidateTags({
