@@ -1,11 +1,14 @@
-import type { VendorShortcode } from "@cubby/schemas/identifiers";
+import {
+  parseShortcodeFor,
+  type VendorShortcode,
+} from "@cubby/schemas/identifiers";
 import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { vendor } from "~/app/vendors/vendor.functions";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { search } from "~/lib/search.functions";
 import {
   buildSearchHitComboboxItem,
@@ -53,7 +56,7 @@ function useVendorSearchRows() {
     enabled: enabled && !searchingByCode && searchQuery.trim() !== "",
   });
   const { data: exactItem, isLoading: isExactLoading } = useQuery(
-    entityDetailQueryOptions("vendor", exactCode ?? "VEN-2222", {
+    entityDetailFor("vendor").queryOptions(exactCode ?? "VEN-2222", {
       enabled: exactCode != null,
     }),
   );
@@ -179,7 +182,14 @@ export function WithVendorShortcodeSearch({
         throw new Error(message);
       }
       toast.success(`Added vendor ${result.result.name}`);
-      return buildVendorShortcodeComboboxItem(result.result as never);
+      // EntityEditResultFor deliberately types `id` as a plain string and
+      // `name` as optional; this is the ingress where the fresh vendor enters
+      // branded-shortcode land, so parse the id for real instead of asserting,
+      // and fall back to the name the vendor was created with.
+      return buildVendorShortcodeComboboxItem({
+        id: parseShortcodeFor("vendor", result.result.id),
+        name: result.result.name ?? name.trim(),
+      });
     },
     [commands],
   );

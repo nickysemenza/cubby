@@ -3,7 +3,7 @@ import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 import type { z } from "zod";
-import { entityListQueryOptions } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list.functions";
 import { flattenUniquePageItems } from "../hooks/infinite-page-utils";
 
 type InventoryItem = z.infer<typeof inventoryListItemOut>;
@@ -15,7 +15,7 @@ type InventoryListPage = {
 
 export function useAllInventoryItems() {
   const pageOptions = (pageIndex: number) =>
-    entityListQueryOptions("inventory", {
+    entityListFor("inventory").queryOptions({
       sort: { orderBy: "createdAt", direction: "desc" },
       pagination: { pageIndex, pageSize: MAX_PAGE_SIZE },
       filters: {},

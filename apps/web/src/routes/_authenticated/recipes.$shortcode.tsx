@@ -30,9 +30,8 @@ import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
 import { Button } from "~/components/ui/button";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { shortcodeHead } from "~/lib/page-title";
-import { invalidatesFor } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 
 const searchSchema = z.object({
@@ -75,7 +74,7 @@ const RecipeNotFound = notFoundPage(
 );
 
 const RecipeDetailPage = detailPage({
-  query: (shortcode) => entityDetailQueryOptions("recipe", shortcode),
+  query: (shortcode) => entityDetailFor("recipe").queryOptions(shortcode),
   render: (recipe) => <RecipeDetailBody recipe={recipe} />,
   title: (recipe) => recipe.name,
 });
@@ -85,7 +84,7 @@ export const Route = createFileRoute("/_authenticated/recipes/$shortcode")({
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   loader: async ({ params, context }) => {
     const data = await context.queryClient.ensureQueryData(
-      entityDetailQueryOptions("recipe", params.shortcode),
+      entityDetailFor("recipe").queryOptions(params.shortcode),
     );
     if (!data) throw notFound();
   },
@@ -135,7 +134,6 @@ function RecipeDetailBody({ recipe }: { recipe: RecipeOut }) {
     entity: "recipe",
     mutationOptions: (callbacks) =>
       entityMutationOptionsFactory("recipe", "delete")(callbacks),
-    invalidateKeys: invalidatesFor("recipe", "list"),
     redirectTo: "/recipes",
   });
 

@@ -42,7 +42,6 @@ import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { Spinner } from "~/components/ui/spinner";
-import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { getLocationId, requiredLocationField } from "../form-fields";
 import { ComboboxFieldWithSearch } from "../form-utils/combobox-field-with-search";
@@ -142,8 +141,6 @@ export const ProductBulkAddToInventoryDialog: FC<
 
   const addMutation = useActionMutation({
     mutationFn: inventory.bulkAdd.mutationOptions,
-    // The inventory fan-out already covers location, product and problems.
-    invalidateKeys: invalidatesFor("inventory"),
     success: (data) =>
       savedWithBackgroundWork(
         data.sideEffects,

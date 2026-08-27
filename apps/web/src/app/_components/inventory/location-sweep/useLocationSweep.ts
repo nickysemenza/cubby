@@ -30,10 +30,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { ScanFeedbackEntry } from "~/app/_components/inventory/persistent-scanner";
 import { inventory } from "~/app/inventory/inventory.functions";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
-import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
 import { resolveLocationScan, resolveProductScan } from "~/lib/scan-code";
 import type { SweepFollowUp } from "./SweepProductFollowUp";
 import type { QueuedBin, SweepBinVerdict } from "./sweep-bin-plan";
@@ -274,7 +273,9 @@ export function useLocationSweep({
 
   const fetchLocation = useCallback(
     (shortcode: string) =>
-      queryClient.fetchQuery(entityDetailQueryOptions("location", shortcode)),
+      queryClient.fetchQuery(
+        entityDetailFor("location").queryOptions(shortcode),
+      ),
     [queryClient],
   );
 
@@ -482,10 +483,6 @@ export function useLocationSweep({
           // the number of ids REQUESTED, which is not evidence of a change.
           outcome.bins.moved = adoptedIds.length;
           setBins([]);
-          invalidateQueryRoots(
-            queryClient,
-            invalidatesFor("location", "reparent"),
-          );
           onSettled();
         } catch (error) {
           // The item filter below assumes the reparents landed, so a bin
@@ -549,15 +546,7 @@ export function useLocationSweep({
       toast.success(commitSummary(outcome));
       return outcome;
     },
-    [
-      strays,
-      bins,
-      locationId,
-      commitMutation,
-      reparentMutation,
-      queryClient,
-      onSettled,
-    ],
+    [strays, bins, locationId, commitMutation, reparentMutation, onSettled],
   );
 
   /**
@@ -597,16 +586,12 @@ export function useLocationSweep({
       try {
         await reparentMutation.mutateAsync({ ids: [binId], parentId });
         setMissing((prev) => prev?.filter((bin) => bin.id !== binId) ?? null);
-        invalidateQueryRoots(
-          queryClient,
-          invalidatesFor("location", "reparent"),
-        );
         onSettled();
       } catch (error) {
         toast.error(getErrorMessage(error));
       }
     },
-    [reparentMutation, queryClient, onSettled],
+    [reparentMutation, onSettled],
   );
 
   const sendMissingToUnknown = useCallback(

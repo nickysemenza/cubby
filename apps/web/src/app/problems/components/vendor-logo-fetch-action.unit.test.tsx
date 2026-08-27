@@ -5,12 +5,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   mutate: vi.fn(),
-  useProblemCardMutation: vi.fn(),
+  useActionMutation: vi.fn(),
   fetchVendorLogoMutationOptions: vi.fn(),
 }));
 
-vi.mock("~/app/_components/hooks/useProblemCardMutation", () => ({
-  useProblemCardMutation: mocks.useProblemCardMutation,
+vi.mock("~/app/_components/hooks/useActionMutation", () => ({
+  useActionMutation: mocks.useActionMutation,
 }));
 
 vi.mock("~/app/vendors/vendor.functions", () => ({
@@ -32,7 +32,7 @@ const vendor = {
 describe("VendorLogoFetchAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.useProblemCardMutation.mockReturnValue({
+    mocks.useActionMutation.mockReturnValue({
       mutate: mocks.mutate,
       isPending: false,
     });
@@ -43,11 +43,10 @@ describe("VendorLogoFetchAction", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Fetch logo" }));
     expect(mocks.mutate).toHaveBeenCalledWith({ id: vendor.id });
-    expect(mocks.useProblemCardMutation).toHaveBeenCalledWith(
+    expect(mocks.useActionMutation).toHaveBeenCalledWith(
       expect.objectContaining({
         mutationFn: mocks.fetchVendorLogoMutationOptions,
         success: "Added logo for Example Supply",
-        invalidateKeys: expect.arrayContaining([["vendor"], ["search"]]),
       }),
     );
   });
@@ -61,7 +60,7 @@ describe("VendorLogoFetchAction", () => {
   });
 
   it("shows a disabled pending state", () => {
-    mocks.useProblemCardMutation.mockReturnValue({
+    mocks.useActionMutation.mockReturnValue({
       mutate: mocks.mutate,
       isPending: true,
     });

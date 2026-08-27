@@ -29,7 +29,10 @@ import { wishPriceRange } from "~/app/wishes/wish-price-range";
 import { Row } from "~/components/layout";
 import { cookbook } from "~/entities/cookbook.functions";
 import { EntityIcon, entities, entityDetailParams } from "~/entities/entities";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import {
+  type EntityDetailScoped,
+  entityDetailFor,
+} from "~/entities/entity-detail.functions";
 import { fdcIdFromParam } from "~/entities/entity-query";
 import type {
   DetailEntity,
@@ -1072,8 +1075,15 @@ function GenericPreviewContent({
   showOpenAction: boolean;
 }) {
   const spec = PREVIEW_TABLE[entity];
+  // `entity` is a runtime union, so `entityDetailFor` infers the whole
+  // 16-entity union and `useQuery` cannot pick one overload. Name the widened
+  // options type instead of erasing it — the per-entity checking already
+  // happened at each `defineSpec` entry above (see the type-erasure boundary
+  // note on `defineSpec`).
   const query = useQuery(
-    entityDetailQueryOptions(entity as DetailEntity, id) as never,
+    entityDetailFor(entity as DetailEntity).queryOptions(id) as ReturnType<
+      EntityDetailScoped<DetailEntity>["queryOptions"]
+    >,
   );
 
   return (
@@ -1093,7 +1103,7 @@ function ProjectPreviewContent({
   showOpenAction: boolean;
 }) {
   const projectId = parseShortcodeFor("project", id);
-  const query = useQuery(entityDetailQueryOptions("project", id));
+  const query = useQuery(entityDetailFor("project").queryOptions(id));
   const coverQuery = useQuery(
     image.projectSummaries.queryOptions({
       projectIds: [projectId],

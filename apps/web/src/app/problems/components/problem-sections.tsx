@@ -41,7 +41,7 @@ import {
   Wrench,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
+import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
 import { mealDateLabel } from "~/app/meals/meal-format";
@@ -67,7 +67,6 @@ import { humanize } from "~/entities/filters";
 import type { ProblemQuery } from "~/entities/problem-query";
 import { problemQuery } from "~/entities/problem-registry";
 import { problems } from "~/lib/problems.functions";
-import { invalidatesFor } from "~/lib/query-keys";
 import { search } from "~/lib/search.functions";
 import { formatCurrency } from "~/lib/utils";
 import type { ProductWithBetterUpcData } from "~/server/repo/problems";
@@ -332,13 +331,12 @@ function problemAssembly(
  * out of the list once the problems queries invalidate.
  */
 function UpcApplyAction({ product }: { product: ProductWithBetterUpcData }) {
-  const apply = useProblemCardMutation({
+  const apply = useActionMutation({
     mutationFn: productOperations.applyUpcData.mutationOptions,
     success: `Updated ${product.name} from UPC`,
     // The whole problems.* path is always invalidated by the hook (which also
     // feeds the navbar badge count); add the product/recipe lists (price feeds
     // cost).
-    invalidateKeys: invalidatesFor("product", "recipe"),
   });
   return (
     <Button
@@ -359,7 +357,7 @@ function OrphanedEmbeddingCleanupFix({
   id: string;
   close: () => void;
 }) {
-  const cleanup = useProblemCardMutation({
+  const cleanup = useActionMutation({
     mutationFn: problems.cleanupOrphanedEmbeddings.mutationOptions,
     success: "Cleaned up orphaned embedding",
     onSuccess: close,
@@ -377,7 +375,7 @@ function OrphanedEmbeddingCleanupFix({
 }
 
 function MissingEmbeddingsBackfillAction() {
-  const backfill = useProblemCardMutation({
+  const backfill = useActionMutation({
     mutationFn: search.enqueueEmbeddingBackfill.mutationOptions,
     success: (data) =>
       data.reused

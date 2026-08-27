@@ -16,7 +16,6 @@ import { DetailEditAction } from "~/components/ui/detail-edit-action";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import {
   describeProductPricingSource,
@@ -64,7 +63,6 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
     mutationFn: productUpdateMutationOptions,
     // Surface the eager recompute (dependent recipes / inventory valuations).
     success: (data) => savedWithBackgroundWork(data.sideEffects),
-    invalidateKeys: invalidatesFor("product", "valuation"),
     error: (err) => getErrorMessage(err) || "Failed to update product",
   });
 

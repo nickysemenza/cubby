@@ -902,6 +902,10 @@ const compactLiteral = (value: unknown) =>
     (_, key: string) => `${key}:`,
   );
 
+/** PascalCase model name (as recorded in `descriptor.dbTable`) to its Drizzle export name. */
+const lowerCamelCase = (value: string): string =>
+  value.length === 0 ? value : `${value[0]?.toLowerCase() ?? ""}${value.slice(1)}`;
+
 const browserRouteExtension: Readonly<
   Partial<Record<string, Readonly<{ basePath: string; detailParam?: string }>>>
 > = {
@@ -1315,6 +1319,28 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
   const portTypeImports = [...portTypeModuleAliases.entries()]
     .map(([module, alias]) => `import type * as ${alias} from ${JSON.stringify(module)};`)
     .join("\n");
+  // Every table with a public shortcode, keyed the same way as SHORTCODE_PREFIX.
+  // The Drizzle export name is always lowerCamelCase(dbTable) from the single
+  // `~/server/db/schema` module — verified for all current shortcode entities.
+  const shortcodeTableEntities = entities
+    .flatMap((entity) => {
+      const { dbTable } = entity.descriptor;
+      return entity.shortcode === null || dbTable === null || dbTable === undefined
+        ? []
+        : [
+            {
+              key: entity.key,
+              dbTable: stringValue(dbTable, `${entity.key}.descriptor.dbTable`),
+            },
+          ];
+    })
+    .sort((left, right) => left.key.localeCompare(right.key));
+  const shortcodeTableImportNames = [
+    ...new Set(shortcodeTableEntities.map(({ dbTable }) => lowerCamelCase(dbTable))),
+  ].sort((left, right) => left.localeCompare(right));
+  const shortcodeTableBindings = shortcodeTableEntities
+    .map(({ key, dbTable }) => `  ${JSON.stringify(key)}: ${lowerCamelCase(dbTable)},`)
+    .join("\n");
   return [
     {
       relativePath: "packages/shared/src/generated/shortcode-registry.gen.ts",
@@ -1559,6 +1585,15 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         "// biome-ignore format: generated runtime assembly stays one entity per line.\n" +
         `export const ENTITY_KERNEL_BINDINGS = {\n${runtimeBindings}\n} as const satisfies Record<EntityKernelEntity, unknown> & { readonly __portExportChecks?: EntityPortExportChecks };\n`,
     },
+    {
+      relativePath: "apps/web/src/server/repo/generated/shortcode-tables.gen.ts",
+      source:
+        generatedHeader +
+        "// biome-ignore format: generated table imports stay one entity per line.\n" +
+        `import {\n${shortcodeTableImportNames.map((name) => `  ${name},`).join("\n")}\n} from "~/server/db/schema";\n\n` +
+        "// biome-ignore format: generated table bindings stay one entity per line.\n" +
+        `export const SHORTCODE_TABLE = {\n${shortcodeTableBindings}\n} as const;\n`,
+    },
   ];
 };
 
@@ -1756,7 +1791,7 @@ const sealArtifact = (root: string, artifact: EntityArtifacts): EntityArtifacts 
   };
 };
 
-const generatedName = /^(?:entity-literal-.+|entity-manifest-data|entity-inspector|entity-details|entity-lists|entity-filter-catalog|entity-filter-bindings|entity-filter-fields|entity-bindings|entity-routes|entity-kernel-bindings|entity-kernel-entities|entity-runtime-ports|filter-search-fields|shortcode-registry)\.gen\.ts$/;
+const generatedName = /^(?:entity-literal-.+|entity-manifest-data|entity-inspector|entity-details|entity-lists|entity-filter-catalog|entity-filter-bindings|entity-filter-fields|entity-bindings|entity-routes|entity-kernel-bindings|entity-kernel-entities|entity-runtime-ports|filter-search-fields|shortcode-registry|shortcode-tables)\.gen\.ts$/;
 
 const findExtraArtifacts = async (root: string, artifacts: readonly EntityArtifacts[]) => {
   const expected = new Set(artifacts.map(({ relativePath }) => relativePath));

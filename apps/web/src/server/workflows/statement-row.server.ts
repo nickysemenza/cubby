@@ -1,17 +1,11 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import {
+import type {
   deleteStatementRowsInput,
   findStatementRowDriftInput,
-  findStatementRowDriftOut,
   listStatementImportsInput,
   listStatementRowsInput,
   recordStatementRowsInput,
-  recordStatementRowsOut,
-  statementImportListOut,
-  statementRowListOut,
   statementRowSummaryInput,
-  statementRowSummaryOut,
-  statementRowWriteOut,
   updateStatementRowsInput,
 } from "@cubby/schemas/statement-row";
 import type { z } from "zod";
@@ -25,20 +19,6 @@ import {
   recordStatementRows,
   updateStatementRows,
 } from "~/server/repo/statement-row";
-
-export const statementRowWorkflowSchemas = {
-  list: { input: listStatementRowsInput, output: statementRowListOut },
-  summary: { input: statementRowSummaryInput, output: statementRowSummaryOut },
-  imports: { input: listStatementImportsInput, output: statementImportListOut },
-  drift: {
-    input: findStatementRowDriftInput,
-    output: findStatementRowDriftOut,
-  },
-  record: { input: recordStatementRowsInput, output: recordStatementRowsOut },
-  update: { input: updateStatementRowsInput, output: statementRowWriteOut },
-  delete: { input: deleteStatementRowsInput, output: statementRowWriteOut },
-} as const;
-
 export const listStatementRowsWorkflow = (
   db: Database,
   input: z.output<typeof listStatementRowsInput>,

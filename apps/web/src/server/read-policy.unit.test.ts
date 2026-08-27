@@ -32,33 +32,17 @@ describe("cached-read policy", () => {
   it("uses the cached read handle only for user-facing search operations", () => {
     const browser = read("./search-browser.server.ts");
     const mcpCaller = read("./mcp/workflow-caller.ts");
-    const find = between(
-      browser,
-      "export const findSearchHitsForBrowser",
-      "export const inspectSearchDocumentHealthForBrowser",
-    );
+    const find = between(browser, "find:", "documentHealth:");
     const documentHealth = between(
       browser,
-      "export const inspectSearchDocumentHealthForBrowser",
-      "export const repairSearchDocumentsForBrowser",
+      "documentHealth:",
+      "repairDocuments:",
     );
-    const repairDocuments = between(
-      browser,
-      "export const repairSearchDocumentsForBrowser",
-      "export const findRelatedSearchHitsForBrowser",
-    );
-    const related = between(
-      browser,
-      "export const findRelatedSearchHitsForBrowser",
-      "export const inspectSearchDebugForBrowser",
-    );
-    const debug = between(
-      browser,
-      "export const inspectSearchDebugForBrowser",
-      "export const enqueueEmbeddingBackfillForBrowser",
-    );
+    const repairDocuments = between(browser, "repairDocuments:", "related:");
+    const related = between(browser, "related:", "debug:");
+    const debug = between(browser, "debug:", "enqueueEmbeddingBackfill:");
     const mutations = browser.slice(
-      browser.indexOf("export const enqueueEmbeddingBackfillForBrowser"),
+      browser.indexOf("enqueueEmbeddingBackfill:"),
     );
     const mcpSearch = between(mcpCaller, "search: {", "statementRow: {");
 
@@ -93,11 +77,7 @@ describe("cached-read policy", () => {
     expect(runtime).toContain('action: "list"');
     expect(runtime).toContain('action: "get"');
     expect(
-      between(
-        runtime,
-        'operation: "entity.detail"',
-        "export async function getEntityFilterOptions",
-      ),
+      between(runtime, "entityDetailHandlers", "entityFilterOptionsHandlers"),
     ).toContain('readPolicy: "context"');
   });
 

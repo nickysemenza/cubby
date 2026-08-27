@@ -190,7 +190,7 @@ export function InventorySessionWorkbench({
   const atUnknownLocation =
     !!unknownLocation && currentLocation?.id === unknownLocation.id;
 
-  const { sessionInvalidateKeys, invalidate } = useSessionMutations();
+  const { invalidate } = useSessionMutations();
 
   // reconcile is a documented useActionMutation carve-out (variables-driven
   // setState in onSuccess), so it keeps this shared invalidator inline.
@@ -201,11 +201,13 @@ export function InventorySessionWorkbench({
 
   const bulkMove = useActionMutation({
     mutationFn: inventory.bulkMove.mutationOptions,
-    invalidateKeys: sessionInvalidateKeys,
   });
   const updateLocation = useActionMutation({
     mutationFn: entityMutationOptionsFactory("location", "update"),
-    invalidateKeys: sessionInvalidateKeys,
+    // A location write's own ripple does not reach the session's inventory
+    // panes; the audit session reads both sides of the bin, so it settles with
+    // the shared session invalidator (which also polls any enqueued batches).
+    onSuccess: invalidateSession,
   });
   // "Done" commits the staged diff for the current bin. On success the committed
   // resolutions leave the staged map (read from `variables`, so it's never the

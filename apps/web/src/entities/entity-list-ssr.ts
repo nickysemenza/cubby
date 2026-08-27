@@ -1,9 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { browserEntityDefinition } from "./entities";
-import {
-  compileEntityListInput,
-  entityInfiniteListQueryOptions,
-} from "./entity-list.functions";
+import { compileEntityListInput, entityListFor } from "./entity-list.functions";
 import type { ListEntity } from "./generated/entity-lists.gen";
 
 /**
@@ -21,8 +18,7 @@ export async function ensureEntityListSsr<E extends ListEntity>(options: {
   if (options.active === false) return;
   const defaultSort =
     options.defaultSort ?? entityListDefaultSort(options.entity);
-  const query = entityInfiniteListQueryOptions(
-    options.entity,
+  const query = entityListFor(options.entity).infiniteQueryOptions(
     compileEntityListInput(options.entity, options.search, {
       defaultSort,
     }),

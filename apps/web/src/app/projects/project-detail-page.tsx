@@ -73,7 +73,7 @@ import {
 } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityListQueryOptions } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list.functions";
 import { image } from "~/entities/image.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { formatCurrency } from "~/lib/utils";
@@ -509,7 +509,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   const images = imageMap?.[project.id] ?? NO_IMAGES;
 
   const { data: childProjectsPage } = useQuery(
-    entityListQueryOptions("project", {
+    entityListFor("project").queryOptions({
       filters: { parentProjectId: project.id },
       sort: { orderBy: "name", direction: "asc" },
       pagination: { pageIndex: 0, pageSize: 200 },
@@ -521,8 +521,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   const [isCreatingExpense, setIsCreatingExpense] = useState(false);
 
   const { data: ganttSubtreePage } = useQuery(
-    entityListQueryOptions(
-      "project",
+    entityListFor("project").queryOptions(
       projectGanttSubtreeQueryParams(project.id),
     ),
   );

@@ -1,8 +1,11 @@
+import { hasFdcLink } from "@cubby/schemas/product";
 import { z } from "zod";
+import { entityRipple, ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
 } from "~/integrations/tanstack-query/operation-catalog";
+import type { OperationCacheTag } from "~/integrations/tanstack-query/operation-meta";
 import type {
   EntityBrowserMutationInput,
   EntityBrowserMutationResult,
@@ -11,12 +14,54 @@ import type { EntityEditResultFor } from "./editing/intent-types";
 import type { EditableEntity } from "./editing/types";
 import { parseEntityMutationOutput } from "./generated/entity-mutation-results.gen";
 
+/**
+ * A product create/update whose payload names an ingredient link (and,
+ * optionally, an explicit USDA food link) moves more than a plain product
+ * write does: the linked ingredient's own queries, and the linked usda-food
+ * detail query, both go stale otherwise. Widening `ripple.product` /
+ * `ripple.productBase` unconditionally would cost every product write in the
+ * app a refetch of ingredient/usda-food queries it never touches — so this
+ * widens only when the mutation's own input says the link is really there.
+ * Named callers today: `usda-food-actions.tsx`'s "link to an ingredient"
+ * flow and the ingredient-enrichment create paths
+ * (`enrich-ingredient-dialog.tsx`, `enrichment-editor.tsx`).
+ */
+function productWriteTags(
+  input: EntityBrowserMutationInput,
+): readonly OperationCacheTag[] {
+  if (
+    input.entity !== "product" ||
+    (input.action !== "create" && input.action !== "update")
+  ) {
+    return entityRipple("product");
+  }
+  const ingredientId = input.data.ingredientId;
+  if (!ingredientId) return entityRipple("product");
+  return hasFdcLink(input.data.fdc_id)
+    ? ripple.ingredientProductUsdaFood
+    : ripple.ingredientProduct;
+}
+
 /** @lintignore Discovered by the operation registry generator. */
 export const entityMutation = defineOperationDomain("entity", {
   mutate: mutation({
     input: z.custom<EntityBrowserMutationInput>(),
     output: z.custom<EntityBrowserMutationResult>(),
-    invalidates: [["entity"]],
+    /**
+     * Keyed on `entity` alone. `["entity"]` must NEVER appear here: `entity.list`
+     * is tagged `[["entity","list"]]` and `entity.detail` `[["entity","detail"]]`,
+     * both entity-AGNOSTIC, so the bare root would nuke every list and detail
+     * query for every entity on every write. The fan-out is action-independent —
+     * a create, an update and a delete of one entity move the same surfaces — so
+     * an `(entity, action)` table would be five times the rows with identical
+     * values. `product` is the one exception: its OWN input can carry an
+     * ingredient/usda-food link, so it widens dynamically off that input
+     * rather than off component-local state (see `productWriteTags`).
+     */
+    invalidates: (input) =>
+      input.entity === "product"
+        ? productWriteTags(input)
+        : entityRipple(input.entity),
   }),
 });
 

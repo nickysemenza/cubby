@@ -38,6 +38,7 @@ import {
 import {
   lookupShortcodes,
   resolveLiveShortcode,
+  resolveLiveShortcodes,
   resolveShortcode,
   resolveShortcodes,
 } from "./shortcode-resolver";
@@ -396,6 +397,33 @@ describe("resolution", () => {
     expect(await getProductByShortcode(ctx.db, loc.id)).toBeNull();
     expect(await getLocationByShortcode(ctx.db, "LOC-2222")).toBeNull();
     expect(await getRecipeByShortcode(ctx.db, "RCP-2222")).toBeNull();
+  });
+
+  it("lookupShortcodes finds a soft-deleted row's code, unlike resolveLiveShortcodes", async () => {
+    // Regression test for the load-bearing difference the resolver's comments
+    // describe but no test previously asserted: resolveLiveShortcode(s) filter
+    // to live rows (a mismatched/deleted code must not leak a uuid), while
+    // lookupShortcodes is the uuid -> code reverse lookup used to render
+    // already-assembled payloads, and must still find a row deleted after
+    // that payload was built.
+    const prod = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Deleted Product" }),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(product)
+      .set({ deletedAt: new Date() })
+      .where(eq(product.id, prod.entityId));
+
+    expect(await resolveLiveShortcodes(ctx.db, [prod.id], "product")).toEqual(
+      new Map(),
+    );
+
+    const codes = await lookupShortcodes(ctx.db, [
+      { entity: "product", id: prod.entityId },
+    ]);
+    expect(codes.get(entityRefKey("product", prod.entityId))).toBe(prod.id);
   });
 
   it("still resolves a soft-deleted row, so a scan can say what was deleted", async () => {

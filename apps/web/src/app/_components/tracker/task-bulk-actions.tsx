@@ -3,7 +3,6 @@ import type { TaskOut, Trade } from "@cubby/schemas/project";
 import { useMemo } from "react";
 import { tradeOptions } from "~/app/projects/trade-options";
 import { task } from "~/app/tasks/task.functions";
-import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { verbBulkAction } from "../actions/action-verb-ui";
 import type {
@@ -42,7 +41,6 @@ export function useTaskBulkActions({
     // The existing id is load-bearing: layouts persist per action id.
     id: "move",
     mutationFn: task.bulkMove.mutationOptions,
-    invalidateKeys: invalidatesFor("task"),
     success: (data) =>
       savedWithBackgroundWork(data.sideEffects, `Moved ${taskCount(data)}`),
   });
@@ -52,7 +50,6 @@ export function useTaskBulkActions({
   >({
     verb: "setStatus",
     mutationFn: task.bulkSetStatus.mutationOptions,
-    invalidateKeys: invalidatesFor("task"),
     success: updated,
   });
   const trade = useStagedBulkAction<
@@ -61,7 +58,6 @@ export function useTaskBulkActions({
   >({
     verb: "setTrade",
     mutationFn: task.bulkSetTrade.mutationOptions,
-    invalidateKeys: invalidatesFor("task"),
     success: updated,
   });
   const dueDate = useStagedBulkAction<
@@ -70,7 +66,6 @@ export function useTaskBulkActions({
   >({
     verb: "setDueDate",
     mutationFn: task.bulkSetDueDate.mutationOptions,
-    invalidateKeys: invalidatesFor("task"),
     success: updated,
   });
 

@@ -9,7 +9,6 @@ import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { invalidatesFor } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import {
   type DetailSection,
@@ -54,7 +53,6 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
   const mergeMutation = useActionMutation({
     mutationFn: vendorOperations.merge.mutationOptions,
     success: "Vendors merged",
-    invalidateKeys: invalidatesFor("purchase"),
     onSuccess: () => setMergeOpen(false),
   });
 

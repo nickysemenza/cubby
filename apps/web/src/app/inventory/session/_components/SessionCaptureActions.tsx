@@ -5,7 +5,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import type { AllowedImageType } from "@cubby/schemas/image";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import {
   Barcode,
   Camera,
@@ -52,7 +52,6 @@ import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { ai } from "~/lib/ai.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { imageUpload } from "~/lib/image.functions";
-import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import type { SessionLocation } from "../session-utils";
 import { useSessionMutations } from "../useSessionMutations";
@@ -100,12 +99,11 @@ export function SessionCaptureActions({
   // the item is still in hand. The scan/inventory flow already completed — this
   // never blocks the continuous loop.
 
-  // Distinct from the outer session invalidator: this one also refreshes the
-  // product-lookup caches and, given a mutation result, polls its background
-  // work (e.g. the AI description enqueued by attaching a photo) so the UI
-  // self-heals once it drains.
+  // Given a mutation result this also polls its background work (e.g. the AI
+  // description enqueued by attaching a photo) so the UI self-heals once it
+  // drains.
   const invalidateCapture = (result?: unknown) =>
-    invalidate({ includeProductLookup: true, result, watch: true });
+    invalidate({ result, watch: true });
 
   const uploadImage = useMutation(imageUpload.uploadImage.mutationOptions());
   // Location photos go through the shared capture hook rather than a local
@@ -523,7 +521,6 @@ function SuggestionProductCombobox({
 }
 
 function ManualAdd({ locationId }: { locationId: LocationShortcode }) {
-  const queryClient = useQueryClient();
   const form = useForm<ManualAddValues>({
     resolver: zodResolver(manualAddSchema),
     defaultValues: {
@@ -535,7 +532,6 @@ function ManualAdd({ locationId }: { locationId: LocationShortcode }) {
     entity: "inventory",
     mutationFn: inventoryCreateMutationOptions,
     success: (data) => savedWithBackgroundWork(data.sideEffects, "Added item"),
-    invalidateKeys: invalidatesFor("inventory"),
     onSuccess: () => {
       form.reset({
         product: undefined,
@@ -557,13 +553,12 @@ function ManualAdd({ locationId }: { locationId: LocationShortcode }) {
   const handleQuickCreate = useCallback(
     async (name: string): Promise<ComboboxItem<ProductShortcode>> => {
       const created = await quickCreateMutateRef.current({ name });
-      invalidateQueryRoots(queryClient, invalidatesFor("product"));
       return {
         id: created.id,
         name: `${created.name} (${created.manufacturer})`,
       };
     },
-    [queryClient],
+    [],
   );
   // Paste a UPC into "Manual add" to create from the UPC cascade; a plain name
   // still name-only quick-creates.

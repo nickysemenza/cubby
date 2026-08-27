@@ -31,6 +31,7 @@ import {
 } from "@cubby/schemas/ai";
 import type { z } from "zod";
 import { z as zod } from "zod";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -57,17 +58,17 @@ export const ai = defineOperationDomain("ai", {
   describeLocation: mutation({
     input: aiLocationIdInput,
     output: locationDescriptionSchema,
-    invalidates: [["location"]],
+    invalidates: ripple.location,
   }),
   detectInventoryItems: mutation({
     input: aiLocationIdInput,
     output: detectedInventorySchema,
-    invalidates: [["inventory"]],
+    invalidates: ripple.inventory,
   }),
   approveDetectedInventoryItem: mutation({
     input: approveDetectedInventoryItemInput,
     output: approveDetectedInventoryItemOut,
-    invalidates: [["inventory"], ["product"]],
+    invalidates: ripple.inventory,
   }),
   identifyProduct: mutation({
     input: productIdentificationInput,
@@ -82,12 +83,12 @@ export const ai = defineOperationDomain("ai", {
   suggestUsdaFoodBatch: mutation({
     input: usdaFoodSuggestionBatchInput,
     output: usdaFoodSuggestionBatchOut,
-    invalidates: [["ingredient"]],
+    invalidates: ripple.ingredient,
   }),
   suggestIngredientMergeBatch: mutation({
     input: ingredientMergeSuggestionBatchInput,
     output: ingredientMergeSuggestionBatchOut,
-    invalidates: [["ingredient"]],
+    invalidates: ripple.ingredient,
   }),
   parseSearch: mutation({
     input: parseSearchInput,
@@ -107,7 +108,7 @@ export const ai = defineOperationDomain("ai", {
   auditCategories: mutation({
     input: zod.undefined(),
     output: categoryAuditSchema,
-    invalidates: [["product"]],
+    invalidates: ripple.product,
   }),
 });
 

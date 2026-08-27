@@ -15,16 +15,16 @@ export const mcp = defineOperationDomain("mcp", {
   listTools: query({
     input: z.null(),
     output: mcpToolCatalogOut,
-    tags: [["mcp"], ["mcp", "listTools"]],
+    tags: [["mcp", "listTools"]],
   }),
   usageDashboard: query({
     input: mcpUsageDashboardInput,
     output: mcpUsageDashboardBrowserOut,
-    tags: [["mcp"], ["mcp", "usageDashboard"]],
+    tags: [["mcp", "usageDashboard"]],
   }),
   usageActivity: query({
     input: mcpUsageActivityInput,
     output: mcpUsageActivityOut,
-    tags: [["mcp"], ["mcp", "usageActivity"]],
+    tags: [["mcp", "usageActivity"]],
   }),
 });

@@ -1,8 +1,10 @@
 import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import type { UseMutationOptions } from "@tanstack/react-query";
 import type { z } from "zod";
+import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import type { entityBrowserMutationCommandSchema } from "~/server/entity-kernel/contracts";
 import {
+  entityMutation,
   executeEntityMutation,
   flattenEntityMutationResult,
 } from "./entity-mutation.functions";
@@ -12,13 +14,42 @@ import {
   generatedBrowserCrudEntities,
 } from "./generated/entity-routes.gen";
 
+/**
+ * One descriptor per entity, built once. `forEntity` rebuilds the whole
+ * descriptor (and re-registers its invalidation policy) on every call, and this
+ * runs inside a render.
+ */
+const kernelOptionsByEntity = new Map<
+  StandardEntity,
+  Record<string, unknown>
+>();
+const kernelOptionsFor = (entity: StandardEntity) => {
+  const cached = kernelOptionsByEntity.get(entity);
+  if (cached) return cached;
+  const base = entityMutation.mutate
+    .forEntity(entity)
+    .mutationOptions() as Record<string, unknown>;
+  const options = {
+    ...base,
+    // The kernel descriptor resolves its fan-out from the COMMAND's `entity`,
+    // but these options are handed variables in the call site's own shape
+    // (`{ id, data }`, or the create payload). Naming the entity's ripple here
+    // is what lets the root MutationCache invalidate anything at all — before
+    // this, `meta` was absent entirely and every entity CRUD write in the app
+    // fell through to the legacy key path.
+    meta: { ...(base.meta as object), invalidates: entityRipple(entity) },
+  };
+  kernelOptionsByEntity.set(entity, options);
+  return options;
+};
+
 function kernelMutationOptions(
   entity: StandardEntity,
   action: "create" | "update" | "delete",
   callbacks: unknown,
 ) {
   return {
-    mutationKey: [["entity", "mutate"]] as const,
+    ...kernelOptionsFor(entity),
     ...(callbacks as Record<string, unknown>),
     mutationFn: async (variables: unknown) => {
       const input = variables as {

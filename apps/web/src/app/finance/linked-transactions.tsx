@@ -9,7 +9,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { entities, entityDetailParams } from "~/entities/entities";
-import { entityListQueryOptions } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list.functions";
 import { formatCurrency } from "~/lib/utils";
 import { renderOptionCell } from "../_components/data-table/columnHelpers";
 import { TableLink } from "../_components/table/TableLink";
@@ -24,7 +24,7 @@ export function LinkedTransactions({
   purchaseId?: string;
 }) {
   const { data } = useQuery(
-    entityListQueryOptions("financialTransaction", {
+    entityListFor("financialTransaction").queryOptions({
       filters: {
         ...(accountId ? { accountId } : {}),
         ...(purchaseId ? { purchaseId } : {}),

@@ -35,11 +35,11 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { useHydrated } from "~/hooks/useHydrated";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/lib/ai.functions";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import {
   type EquivalenceDraft,
@@ -142,7 +142,7 @@ export function EnrichmentWorkbench({
 
   // Recipe-scoped worklist: fetch the recipe name for the scope banner.
   const { data: scopeRecipe } = useQuery({
-    ...entityDetailQueryOptions("recipe", recipeId ?? ""),
+    ...entityDetailFor("recipe").queryOptions(recipeId ?? ""),
     enabled: !!recipeId,
   });
 
@@ -228,7 +228,7 @@ export function EnrichmentWorkbench({
       data.failed.length === 0
         ? `Created ${data.created} product${data.created === 1 ? "" : "s"}.`
         : `Created ${data.created}, ${data.failed.length} failed.`,
-    invalidateKeys: invalidatesFor("ingredient", "product"),
+    invalidateTags: ripple.ingredientProduct,
     onSuccess: (data) => {
       // Drop only the suggestions that actually created; keep failed rows (and
       // their selection) so they can be retried without re-suggesting.
@@ -260,7 +260,7 @@ export function EnrichmentWorkbench({
     run: (vars: z.input<typeof productMarkUsdaUnavailableManyInput>) =>
       markProductsUsdaUnavailableStream(vars),
     success: "Marked: no USDA entry.",
-    invalidateKeys: invalidatesFor("ingredient", "product"),
+    invalidateTags: ripple.ingredientProduct,
     onSuccess: clearSelection,
     error: (err) => `Failed: ${getErrorMessage(err)}`,
   });
@@ -270,7 +270,6 @@ export function EnrichmentWorkbench({
   const mergeMutation = useActionMutation({
     mutationFn: ingredient.merge.mutationOptions,
     success: (data) => savedWithBackgroundWork(data.sideEffects, "Merged"),
-    invalidateKeys: invalidatesFor("ingredient", "merge"),
     error: (err) => `Merge failed: ${getErrorMessage(err)}`,
   });
 

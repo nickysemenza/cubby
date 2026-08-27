@@ -16,7 +16,6 @@ import {
 import { EntityFormDialog } from "~/entities/editing/entity-form-dialog";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidatesFor, queryKeys } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import type { ComboboxItem } from "../combobox/combobox-types";
 import { EntityPicker } from "../combobox/entity-picker";
@@ -109,10 +108,6 @@ function LinkFoodToIngredientButton({
         product.sideEffects,
         `Linked ${foodName} to ${ingredient?.name ?? "ingredient"}`,
       ),
-    invalidateKeys: [
-      ...invalidatesFor("ingredient", "product"),
-      queryKeys.usda.all,
-    ],
     onSuccess: () => {
       void router.invalidate();
       handleOpenChange(false);

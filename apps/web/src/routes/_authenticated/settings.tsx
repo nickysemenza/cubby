@@ -34,7 +34,6 @@ import {
   useFlags,
 } from "~/lib/flags";
 import { pageTitle } from "~/lib/page-title";
-import { queryKeys } from "~/lib/query-keys";
 import type { TimingResponse } from "~/routes/api/debug/timing";
 
 export const Route = createFileRoute("/_authenticated/settings")({
@@ -170,7 +169,9 @@ function FlagRow({
 function DiagnosticsCard() {
   const { data, error, isFetching, refetch, dataUpdatedAt } =
     useQuery<TimingResponse>({
-      queryKey: queryKeys.debug.timing,
+      // The one query in the app that is not an operation: a raw fetch of
+      // `/api/debug/timing`, so it owns its key rather than deriving one.
+      queryKey: ["debug", "timing"] as const,
       queryFn: async () => {
         const res = await fetch("/api/debug/timing");
         if (!res.ok) throw new Error(`HTTP ${res.status}`);

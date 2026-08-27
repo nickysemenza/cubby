@@ -14,7 +14,7 @@ import {
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import {
   createParentLinkColumn,
@@ -171,7 +171,7 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
   const scopedProductId = tasksSearch.productId;
   const hasInvalidProductScope = scopedProductId === UNRESOLVABLE_ENTITY_FILTER;
   const scopedProductQuery = useQuery({
-    ...entityDetailQueryOptions("product", scopedProductId ?? ""),
+    ...entityDetailFor("product").queryOptions(scopedProductId ?? ""),
     enabled: Boolean(scopedProductId) && !hasInvalidProductScope,
   });
   const clearProductScope = useCallback(() => {

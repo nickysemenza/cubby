@@ -7,14 +7,14 @@ import {
 import { VendorDetail } from "~/app/vendors/vendor-detail";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { DetailPagePending } from "~/components/route-pending";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { shortcodeHead } from "~/lib/page-title";
 
 // Bound to consts, not inlined into the options object: the router plugin's
 // splitter re-parses an inlined call expression with a JSX-less babel config,
 // so only the identifier path survives a page body that renders JSX.
 const VendorDetailPage = detailPage({
-  query: (shortcode) => entityDetailQueryOptions("vendor", shortcode),
+  query: (shortcode) => entityDetailFor("vendor").queryOptions(shortcode),
   render: (vendor, shortcode) => (
     <VendorDetail key={shortcode} vendor={vendor} />
   ),
@@ -31,7 +31,7 @@ export const Route = createFileRoute("/_authenticated/vendors/$shortcode")({
   loader: ({ params, context }) =>
     ensureDetailRecord(
       context.queryClient,
-      entityDetailQueryOptions("vendor", params.shortcode),
+      entityDetailFor("vendor").queryOptions(params.shortcode),
     ),
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,

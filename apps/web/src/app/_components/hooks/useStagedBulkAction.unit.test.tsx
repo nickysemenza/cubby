@@ -26,7 +26,6 @@ const setup = () =>
       verb: "setTrade",
       // biome-ignore lint/suspicious/noExplicitAny: the mutation is mocked wholesale
       mutationFn: (() => ({})) as any,
-      invalidateKeys: [],
     }),
   );
 

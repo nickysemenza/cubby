@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 
 interface InventoryDiscardDialogProps {
   onOpenChange: (open: boolean) => void;
@@ -43,7 +43,9 @@ export const InventoryDiscardDialog: FC<InventoryDiscardDialogProps> = ({
   onOpenChange,
   target,
 }) => {
-  const query = useQuery(entityDetailQueryOptions("product", target.productId));
+  const query = useQuery(
+    entityDetailFor("product").queryOptions(target.productId),
+  );
 
   const failed = query.isError;
   useEffect(() => {

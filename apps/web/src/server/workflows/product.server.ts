@@ -39,7 +39,6 @@ import {
   productCreateManyEvent,
   productMarkUsdaUnavailableEvent,
   productSearchInput,
-  productWorkflowSchemas,
 } from "@cubby/schemas/product-workflow";
 import type {
   productProjectUsesInput,
@@ -117,7 +116,6 @@ export {
   productCreateManyEvent,
   productMarkUsdaUnavailableEvent,
   productSearchInput,
-  productWorkflowSchemas,
 };
 
 export async function searchProductsWorkflow(

@@ -34,8 +34,8 @@ interface InventoryEntriesQuickEditDialogProps {
  * Quick-edit surface for a product's inventory entries, opened from the
  * Locations cell on the products list. Each entry row edits its amount and
  * location in place with the standard inline-cell semantics (pencil → editor →
- * Check/X, optimistic display, toast on error); `invalidatesFor("inventory")`
- * includes the product list, so the row behind the dialog refreshes too.
+ * Check/X, optimistic display, toast on error); the inventory ripple includes
+ * the product list, so the row behind the dialog refreshes too.
  */
 export function InventoryEntriesQuickEditDialog({
   open,

@@ -23,12 +23,12 @@ export const search = defineOperationDomain("search", {
   find: query({
     input: searchQueryInputSchema,
     output: searchHitsOut,
-    tags: [["search"], ["search", "find"]],
+    tags: [["search", "find"]],
   }),
   documentHealth: query({
     input: z.undefined(),
     output: searchDocumentMaintenanceSchema,
-    tags: [["search"], ["search", "documentHealth"]],
+    tags: [["search", "documentHealth"]],
   }),
   repairDocuments: mutation({
     input: z.undefined(),
@@ -38,17 +38,20 @@ export const search = defineOperationDomain("search", {
   related: query({
     input: searchQueryInputSchema,
     output: relatedSearchOutSchema,
-    tags: [["search"], ["search", "related"]],
+    tags: [["search", "related"]],
   }),
   debug: query({
     input: searchQueryInputSchema,
     output: searchDebugOutSchema,
-    tags: [["search"], ["search", "debug"]],
+    tags: [["search", "debug"]],
   }),
   enqueueEmbeddingBackfill: mutation({
     input: enqueueEmbeddingBackfillInputSchema,
     output: enqueueEmbeddingBackfillOutSchema,
-    invalidates: [["search"], ["background-batch"]],
+    // `["problems"]` too: the Problems page's "missing embeddings" card is the
+    // one surface that starts this, and it used to get that invalidation from
+    // the per-card hook rather than from the operation.
+    invalidates: [["search"], ["background-batch"], ["problems"]],
   }),
   requestEmbeddingRefresh: mutation({
     input: requestEmbeddingRefreshInputSchema,

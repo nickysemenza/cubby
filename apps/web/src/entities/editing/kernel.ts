@@ -1,11 +1,8 @@
-import type { QueryKey } from "@tanstack/react-query";
-import { parseEntityMutationResultFor } from "../entity-mutation.functions";
 import { type EntityEditRegistry, getEntityEditDefinition } from "./registry";
 import type {
   EditableEntity,
   EntityEditAccess,
   EntityEditBuildResult,
-  EntityEditCommand,
   EntityEditContext,
   EntityEditDefinition,
   EntityEditField,
@@ -13,8 +10,6 @@ import type {
   EntityEditIssue,
   EntityEditOperationDefinition,
   EntityEditRecord,
-  EntityEditResult,
-  EntityMutationPort,
   RuntimeEntityEditRequest,
 } from "./types";
 
@@ -219,65 +214,4 @@ export function buildEntityEdit<E extends EditableEntity>(
     patch,
     context: resolved.context,
   });
-}
-
-export async function executeEntityEdit<E extends EditableEntity>(
-  port: EntityMutationPort,
-  definition: EntityEditDefinition<E>,
-  build: EntityEditBuildResult<E>,
-): Promise<EntityEditResult<E>> {
-  if (!build.ok) return build;
-  if (!build.changed) {
-    return {
-      ok: true,
-      entity: definition.entity,
-      id: build.command.id ?? build.command.ids?.[0] ?? "",
-      changed: false,
-    };
-  }
-  const execution = await port.execute(build.command);
-  await port.invalidate(definition.invalidationKeys);
-  port.watchBackgroundWork?.({
-    result: execution.result,
-    invalidateKeys: definition.invalidationKeys,
-  });
-  return {
-    ok: true,
-    entity: definition.entity,
-    id: execution.id,
-    changed: true,
-    result: parseEntityMutationResultFor(definition.entity, execution.result),
-  };
-}
-
-/** Tiny fake adapter for pure kernel tests and consumer contract tests. */
-export function createFakeEntityMutationPort(input?: {
-  execute?: <E extends EditableEntity>(
-    command: EntityEditCommand<E>,
-  ) => Promise<{ id: string; result: unknown }>;
-}) {
-  const commands: EntityEditCommand<EditableEntity>[] = [];
-  const invalidations: QueryKey[][] = [];
-  const backgroundWork: Array<{
-    result: unknown;
-    invalidateKeys: readonly QueryKey[];
-  }> = [];
-  const port: EntityMutationPort = {
-    execute: async (command) => {
-      commands.push(command);
-      return input?.execute
-        ? await input.execute(command)
-        : {
-            id: command.id ?? "created",
-            result: { id: command.id ?? "created" },
-          };
-    },
-    invalidate: async (keys) => {
-      invalidations.push([...keys]);
-    },
-    watchBackgroundWork: (entry) => {
-      backgroundWork.push(entry);
-    },
-  };
-  return { port, commands, invalidations, backgroundWork };
 }

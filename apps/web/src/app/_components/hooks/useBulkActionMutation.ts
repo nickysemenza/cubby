@@ -1,18 +1,18 @@
-import type { QueryKey } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "sonner";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import type { OperationCacheTag } from "~/integrations/tanstack-query/operation-meta";
 import type { BulkProgressEvent } from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidateQueryRoots } from "~/lib/query-keys";
 import { useBulkStream } from "./useBulkStream";
 
 /**
- * Stable empty default — `invalidateKeys` is a dependency of the `mutate`
+ * Stable empty default — `invalidateTags` is a dependency of the `mutate`
  * callback below, so an inline `= []` would hand every caller that omits it a
  * fresh reference (and a fresh `mutate`) on every render.
  */
-const NO_INVALIDATE_KEYS: readonly QueryKey[] = [];
+const NO_INVALIDATE_TAGS: readonly OperationCacheTag[] = [];
 
 /**
  * Streaming sibling of {@link useActionMutation} for bulk actions whose server
@@ -26,7 +26,7 @@ const NO_INVALIDATE_KEYS: readonly QueryKey[] = [];
 export function useBulkActionMutation<Vars, Result>({
   run,
   success,
-  invalidateKeys = NO_INVALIDATE_KEYS,
+  invalidateTags = NO_INVALIDATE_TAGS,
   onSuccess,
   error,
 }: {
@@ -37,8 +37,12 @@ export function useBulkActionMutation<Vars, Result>({
     | Promise<AsyncIterable<BulkProgressEvent<unknown, Result>>>;
   /** Success toast — a fixed string or one derived from the result. */
   success: string | ((data: Result) => string);
-  /** Query roots to invalidate after the workflow finishes. */
-  invalidateKeys?: readonly QueryKey[];
+  /**
+   * Cache tags to invalidate after the workflow finishes. Spelled out here
+   * rather than taken from a descriptor: the work streams in one held-open
+   * request, so there is no `useMutation` for the root cache to read `meta` off.
+   */
+  invalidateTags?: readonly OperationCacheTag[];
   /** Side effect after the toast + invalidations. */
   onSuccess?: (data: Result) => void;
   /** Error toast — defaults to `getErrorMessage(err)`. */
@@ -54,7 +58,7 @@ export function useBulkActionMutation<Vars, Result>({
           toast.success(
             typeof success === "function" ? success(data) : success,
           );
-          invalidateQueryRoots(queryClient, invalidateKeys);
+          void invalidateOperationTags(queryClient, invalidateTags);
           onSuccess?.(data);
         },
         errorToast: (err) =>
@@ -64,7 +68,7 @@ export function useBulkActionMutation<Vars, Result>({
               ? error(err)
               : error,
       }),
-    [start, run, queryClient, success, invalidateKeys, onSuccess, error],
+    [start, run, queryClient, success, invalidateTags, onSuccess, error],
   );
 
   return { mutate, isPending: running, progress };

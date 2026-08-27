@@ -50,7 +50,6 @@ import {
 } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
-import { invalidatesFor } from "~/lib/query-keys";
 
 const EMPTY_COMPONENTS: ProductComponentOut[] = [];
 const EMPTY_MEMBERSHIP: KitMembershipOut[] = [];
@@ -249,7 +248,6 @@ function AddComponentsDialog({
     mutationFn: productOperations.attachComponents.mutationOptions,
     success: (result) =>
       `Added ${result.changed} component${result.changed === 1 ? "" : "s"}`,
-    invalidateKeys: invalidatesFor("product", "component"),
     onSuccess: () => resetAndClose(false),
   });
 
@@ -463,12 +461,10 @@ export function ProductKitComponents({ productId }: { productId: string }) {
   const detachComponent = useActionMutation({
     mutationFn: productOperations.detachComponents.mutationOptions,
     success: "Component removed",
-    invalidateKeys: invalidatesFor("product", "component"),
   });
   const detachMembership = useActionMutation({
     mutationFn: productOperations.detachComponents.mutationOptions,
     success: "Removed from kit",
-    invalidateKeys: invalidatesFor("product", "component"),
   });
   const componentAction = useMemo(
     () => (row: ProductRow) => (

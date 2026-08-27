@@ -3,11 +3,14 @@ import { z } from "zod";
 import { defaultPagination } from "~/app/_components/data-table/tableUtils";
 import {
   defineOperationDomain,
-  type InfiniteOperationQueryKey,
   infiniteOperationQueryKey,
   type OperationQueryKey,
   query,
 } from "~/integrations/tanstack-query/operation-catalog";
+import type {
+  CubbyOperationMeta,
+  OperationFreshnessPolicy,
+} from "~/integrations/tanstack-query/operation-meta";
 import { getEntityFilters } from "./filter-manifest";
 import {
   buildFiltersFromManifest,
@@ -97,81 +100,96 @@ export function compileEntityListInput(
 export const entityListRootKey = <E extends ListEntity>(_entity: E) =>
   ["operation", entityList.list.id] as const;
 
-export function entityListQueryOptions<E extends ListEntity>(
-  entity: E,
-  input: EntityListParams<E>,
-) {
-  const operation = entityList.list.forEntity(entity);
-  const wireInput = {
-    entity,
-    ...input,
-  } as EntityListInputByEntity[E];
-  let keyInput = wireInput;
-  try {
-    keyInput = parseEntityListInput(
-      entity,
-      wireInput,
-    ) as EntityListInputByEntity[E];
-  } catch {
-    // Conditional queries may carry incomplete filters while disabled. Their
-    // query function remains authoritative for validation if they execute.
-  }
-  const policy = operation.policy(keyInput);
-  return queryOptions({
-    queryKey: operation.queryKey(keyInput) as OperationQueryKey<
-      EntityListInputByEntity[E]
-    >,
-    queryFn: async ({ signal }) => {
-      const parsed = parseEntityListInput(
-        entity,
-        wireInput,
-      ) as EntityListInputByEntity[E];
-      return (await operation.call(parsed, {
-        signal,
-      })) as EntityListResultByEntity[E];
-    },
-    meta: policy.meta,
-    ...policy.freshness,
-  });
-}
+/**
+ * A catalog descriptor is parameterized by one schema pair, so its
+ * `forEntity(entity: string)` cannot narrow `entity.list` to a single entity's
+ * filters and rows. This declaration plus the one cast in `entityListFor` buy
+ * that narrowing once, for every caller.
+ */
+type ScopedListOperation<E extends ListEntity> = {
+  policy(input: EntityListInputByEntity[E]): {
+    meta: CubbyOperationMeta;
+    freshness?: OperationFreshnessPolicy;
+  };
+  queryKey(
+    input: EntityListInputByEntity[E],
+  ): OperationQueryKey<EntityListInputByEntity[E]>;
+  call(
+    input: EntityListInputByEntity[E],
+    options: { signal?: AbortSignal },
+  ): Promise<EntityListResultByEntity[E]>;
+};
 
-/** Query options shared by SSR loaders and the mounted infinite table. */
-export function entityInfiniteListQueryOptions<E extends ListEntity>(
-  entity: E,
-  input: EntityListParams<E>,
-) {
-  const firstPage = {
+/**
+ * Bind `entity.list` to one entity, so its filters, rows, and cache key all
+ * carry that entity's types. Throws for an entity the operation is not
+ * registered for.
+ */
+export function entityListFor<E extends ListEntity>(entity: E) {
+  const operation = entityList.list.forEntity(
+    entity,
+  ) as unknown as ScopedListOperation<E>;
+  const wireInputFor = (input: EntityListParams<E>) =>
+    ({ entity, ...input }) as EntityListInputByEntity[E];
+  const keyInputFor = (wireInput: EntityListInputByEntity[E]) => {
+    try {
+      return parseEntityListInput(entity, wireInput);
+    } catch {
+      // Conditional queries may carry incomplete filters while disabled. Their
+      // query function remains authoritative for validation if they execute.
+      return wireInput;
+    }
+  };
+  const firstPageOf = (input: EntityListParams<E>) => ({
     ...input,
     pagination: { ...input.pagination, pageIndex: 0 },
-  };
-  const operation = entityList.list.forEntity(entity);
-  const parsed = parseEntityListInput(entity, {
-    entity,
-    ...firstPage,
-  }) as EntityListInputByEntity[E];
-  const policy = operation.policy(parsed);
-  return infiniteQueryOptions({
-    queryKey: infiniteOperationQueryKey(
-      operation.queryKey(parsed),
-    ) as InfiniteOperationQueryKey<EntityListInputByEntity[E]>,
-    queryFn: async ({ pageParam, signal }) => {
-      const pageInput = parseEntityListInput(entity, {
-        entity,
-        ...firstPage,
-        pagination: { ...firstPage.pagination, pageIndex: pageParam },
-      }) as EntityListInputByEntity[E];
-      return (await operation.call(pageInput, {
-        signal,
-      })) as EntityListResultByEntity[E];
-    },
-    initialPageParam: 0,
-    getNextPageParam: (lastPage) => {
-      const { pageIndex, pageSize, totalCount } = lastPage.meta;
-      return (pageIndex + 1) * pageSize < totalCount
-        ? pageIndex + 1
-        : undefined;
-    },
-    meta: policy.meta,
-    ...policy.freshness,
   });
+  return {
+    entity,
+    queryKey: (input: EntityListParams<E>) =>
+      operation.queryKey(keyInputFor(wireInputFor(input))),
+    queryOptions: (input: EntityListParams<E>) => {
+      const wireInput = wireInputFor(input);
+      const keyInput = keyInputFor(wireInput);
+      const policy = operation.policy(keyInput);
+      return queryOptions({
+        queryKey: operation.queryKey(keyInput),
+        queryFn: async ({ signal }) =>
+          operation.call(parseEntityListInput(entity, wireInput), { signal }),
+        meta: policy.meta,
+        ...policy.freshness,
+      });
+    },
+    /** Query options shared by SSR loaders and the mounted infinite table. */
+    infiniteQueryOptions: (input: EntityListParams<E>) => {
+      const firstPage = firstPageOf(input);
+      const parsed = parseEntityListInput(entity, { entity, ...firstPage });
+      const policy = operation.policy(parsed);
+      return infiniteQueryOptions({
+        queryKey: infiniteOperationQueryKey(operation.queryKey(parsed)),
+        queryFn: async ({ pageParam, signal }) =>
+          operation.call(
+            parseEntityListInput(entity, {
+              entity,
+              ...firstPage,
+              pagination: { ...firstPage.pagination, pageIndex: pageParam },
+            }),
+            { signal },
+          ),
+        initialPageParam: 0,
+        getNextPageParam: (lastPage) => {
+          const { pageIndex, pageSize, totalCount } = lastPage.meta;
+          return (pageIndex + 1) * pageSize < totalCount
+            ? pageIndex + 1
+            : undefined;
+        },
+        meta: policy.meta,
+        ...policy.freshness,
+      });
+    },
+  };
 }
+
+export type EntityListScoped<E extends ListEntity> = ReturnType<
+  typeof entityListFor<E>
+>;

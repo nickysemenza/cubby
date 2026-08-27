@@ -9,7 +9,6 @@ import { Button } from "~/components/ui/button";
 import { Empty, EmptyActions, EmptyDescription } from "~/components/ui/empty";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import type { EnrichmentEditorHandle } from "./enrichment-editor";
 import { ingredient } from "./ingredient.functions";
@@ -99,14 +98,12 @@ export function ReviewQueue({
     intent: "full",
     mutationFn: entityMutationOptionsFactory("product", "update"),
     success: "Marked: no USDA entry.",
-    invalidateKeys: invalidatesFor("ingredient", "product"),
     onSuccess: () => markProcessed(flaggedIdRef.current),
     error: (err) => `Failed: ${getErrorMessage(err)}`,
   });
   const mergeMutation = useActionMutation({
     mutationFn: ingredient.merge.mutationOptions,
     success: (d) => savedWithBackgroundWork(d.sideEffects, "Merged"),
-    invalidateKeys: invalidatesFor("ingredient", "merge"),
     onSuccess: () => markProcessed(mergeSourceRef.current),
     error: (err) => `Merge failed: ${getErrorMessage(err)}`,
   });

@@ -35,7 +35,7 @@ import {
   entityDetailParams,
   isBrowserRoutedEntity,
 } from "~/entities/entities";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { useDebug } from "~/hooks/useDebug";
 import { setFlag, useFlag } from "~/lib/flags";
 import { cn } from "~/lib/utils";
@@ -146,8 +146,7 @@ export function GlobalCommandMenu({
   // regardless of scope.
   const parsedShortcode = searchScope ? null : parseShortcode(search);
   const locationQuery = useQuery({
-    ...entityDetailQueryOptions(
-      "location",
+    ...entityDetailFor("location").queryOptions(
       parsedShortcode?.type === "location"
         ? parsedShortcode.shortcode
         : "LOC-2222",
@@ -155,8 +154,7 @@ export function GlobalCommandMenu({
     enabled: parsedShortcode?.type === "location",
   });
   const productQuery = useQuery({
-    ...entityDetailQueryOptions(
-      "product",
+    ...entityDetailFor("product").queryOptions(
       parsedShortcode?.type === "product"
         ? parsedShortcode.shortcode
         : "PRD-2222",
@@ -164,8 +162,7 @@ export function GlobalCommandMenu({
     enabled: parsedShortcode?.type === "product",
   });
   const recipeQuery = useQuery({
-    ...entityDetailQueryOptions(
-      "recipe",
+    ...entityDetailFor("recipe").queryOptions(
       parsedShortcode?.type === "recipe"
         ? parsedShortcode.shortcode
         : "RCP-2222",

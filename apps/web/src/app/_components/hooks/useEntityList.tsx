@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { browserEntityDefinition, entities } from "~/entities/entities";
-import { entityListQueryOptions } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list.functions";
 import { getEntityFilters } from "~/entities/filter-manifest";
 import {
   buildFiltersFromManifest,
@@ -207,7 +207,7 @@ export function useEntityList<
   }
   const defaultQueryOptions = useCallback(
     (params: Parameters<ListQueryOptionsFn<TFilters>>[0]) =>
-      entityListQueryOptions(entity as ListEntity, params as never),
+      entityListFor(entity as ListEntity).queryOptions(params as never),
     [entity],
   );
   const effectiveQueryOptions = queryOptions ?? defaultQueryOptions;

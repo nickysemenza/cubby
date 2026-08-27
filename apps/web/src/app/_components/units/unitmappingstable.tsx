@@ -10,7 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { usdaFood as usdaFoodOperations } from "~/entities/usda.functions";
 import { useHydrated } from "~/hooks/useHydrated";
 import {
@@ -88,7 +88,7 @@ const LazyProductPillLink: React.FC<{ productId: string }> = ({
   productId,
 }) => {
   const { data: fetched, isLoading: productLoading } = useQuery(
-    entityDetailQueryOptions("product", productId, {
+    entityDetailFor("product").queryOptions(productId, {
       staleTime: 5 * 60 * 1000,
     }),
   );

@@ -1,19 +1,13 @@
-import {
-  attachFileResponse,
+import type {
   createFileUploadInput,
-  createFileUploadResponse,
-  cullPendingImagesResponseSchema,
   cullPendingImagesSchema,
   getImageByIdSchema,
-  imageWithEntitySchema,
-  importImageFromUrlResponseSchema,
   importImageFromUrlSchema,
   initiateDocumentUploadSchema,
-  initiateUploadWithoutEntityResponseSchema,
   initiateUploadWithoutEntitySchema,
   mcpAttachFileInput,
 } from "@cubby/schemas/image";
-import { z } from "zod";
+import type { z } from "zod";
 import type { Database } from "~/server/db";
 import { AppError, createAppError } from "~/server/errors/app-error";
 import { markImageUploaded } from "~/server/repo/image";
@@ -27,36 +21,6 @@ import {
   initiateDocumentUpload,
   initiateImageUploadWithoutEntity,
 } from "~/server/services/image-storage.service";
-
-export const imageWorkflowSchemas = {
-  markUploaded: { input: getImageByIdSchema, output: imageWithEntitySchema },
-  uploadImage: {
-    input: initiateUploadWithoutEntitySchema,
-    output: initiateUploadWithoutEntityResponseSchema,
-  },
-  uploadDocument: {
-    input: initiateDocumentUploadSchema,
-    output: initiateUploadWithoutEntityResponseSchema,
-  },
-  importFromUrl: {
-    input: importImageFromUrlSchema,
-    output: importImageFromUrlResponseSchema,
-  },
-  attachFile: { input: mcpAttachFileInput, output: attachFileResponse },
-  createFileUpload: {
-    input: createFileUploadInput,
-    output: createFileUploadResponse,
-  },
-  cullPendingImages: {
-    input: cullPendingImagesSchema,
-    output: cullPendingImagesResponseSchema,
-  },
-  cleanupUnreferencedImages: {
-    input: z.undefined(),
-    output: cullPendingImagesResponseSchema,
-  },
-} as const;
-
 export const markImageUploadedWorkflow = async (
   db: Database,
   input: z.output<typeof getImageByIdSchema>,

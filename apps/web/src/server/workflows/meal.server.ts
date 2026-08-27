@@ -3,16 +3,12 @@ import type {
   BlockedSubRecipe,
 } from "@cubby/schemas/availability";
 import type { MealId } from "@cubby/schemas/identifiers";
-import {
+import type {
   mealAddRecipeInput,
   mealDateRange,
-  mealListOut,
-  mealOut,
   mealRecipeIdInput,
   mealUpdateRecipeInput,
-  type ShoppingListContribution,
-  shoppingListOut,
-  upcomingMealSummaryOut,
+  ShoppingListContribution,
 } from "@cubby/schemas/meal";
 import { contributesToShoppingList } from "@cubby/schemas/meal-classification";
 import { sumBy } from "es-toolkit";
@@ -30,17 +26,6 @@ import type {
   PlannedLine,
 } from "~/server/services/availability.service";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
-
-export {
-  mealAddRecipeInput,
-  mealDateRange,
-  mealListOut,
-  mealOut,
-  mealRecipeIdInput,
-  mealUpdateRecipeInput,
-  shoppingListOut,
-  upcomingMealSummaryOut,
-};
 
 const mealShortcodes = bindShortcodeResolver("meal");
 

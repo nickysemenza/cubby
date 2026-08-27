@@ -1,4 +1,3 @@
-import type { QueryKey } from "@tanstack/react-query";
 import type { RowData } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
@@ -54,7 +53,6 @@ export function useStagedBulkAction<
   id,
   minSelection = 1,
   mutationFn,
-  invalidateKeys,
   success,
 }: {
   verb: ActionVerbId;
@@ -62,14 +60,12 @@ export function useStagedBulkAction<
   id?: string;
   minSelection?: number;
   mutationFn: TFn;
-  invalidateKeys: readonly QueryKey[];
   success?: ReactNode | ((data: DataOf<TFn>) => ReactNode);
 }): StagedBulkAction<TRow, TFn> {
   const [items, setItems] = useState<TRow[]>([]);
 
   const mutation = useActionMutation({
     mutationFn,
-    invalidateKeys,
     success,
     onSuccess: () => setItems([]),
   });

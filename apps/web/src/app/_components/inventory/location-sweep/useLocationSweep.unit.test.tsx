@@ -28,11 +28,6 @@ vi.mock("sonner", () => ({
   toast: { error: mocks.toastError, success: mocks.toastSuccess },
 }));
 
-vi.mock("~/lib/query-keys", () => ({
-  invalidateQueryRoots: vi.fn(),
-  invalidatesFor: () => [["location"]],
-}));
-
 vi.mock("~/app/inventory/inventory.functions", () => ({
   inventory: {
     scanAtLocation: {
@@ -68,9 +63,11 @@ vi.mock("~/app/locations/location.functions", () => ({
 }));
 
 vi.mock("~/entities/entity-detail.functions", () => ({
-  entityDetailQueryOptions: (_entity: string, shortcode: string) => ({
-    queryKey: [["location", "detail"], { shortcode }],
-    queryFn: () => mocks.locations.get(shortcode) ?? null,
+  entityDetailFor: (_entity: string) => ({
+    queryOptions: (shortcode: string) => ({
+      queryKey: [["location", "detail"], { shortcode }],
+      queryFn: () => mocks.locations.get(shortcode) ?? null,
+    }),
   }),
 }));
 

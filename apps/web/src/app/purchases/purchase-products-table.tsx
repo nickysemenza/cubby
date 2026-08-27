@@ -31,7 +31,6 @@ import {
   EmptyTitle,
 } from "~/components/ui/empty";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
-import { invalidatesFor } from "~/lib/query-keys";
 import { purchase } from "./purchase.functions";
 
 const EMPTY_PRODUCTS: PurchaseProductOut[] = [];
@@ -126,7 +125,6 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
     // See the twin in `product-purchases.tsx`: detaching clears the explicit
     // link only, and an expense-backed row stays listed.
     success: "Link removed — any itemized expense still relates these",
-    invalidateKeys: invalidatesFor("purchase", "product"),
   });
   // A kit component is shown here as part of its kit, not in its own right —
   // the same reason productlist's tree excludes them from selection.

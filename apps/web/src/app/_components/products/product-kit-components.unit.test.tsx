@@ -26,6 +26,9 @@ vi.mock("@tanstack/react-query", () => ({
     isPending: false,
   }),
   useMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  // The descriptor builds its options through react-query's own
+  // `mutationOptions`, so this partial mock has to carry it too.
+  mutationOptions: (options: unknown) => options,
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 }));
 

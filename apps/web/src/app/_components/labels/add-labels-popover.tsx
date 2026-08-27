@@ -16,7 +16,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 
 export function AddLabelsPopover({
   codes,
@@ -87,7 +87,7 @@ export function AddLabelsPopover({
     name: string;
   }) {
     const full = await queryClient.fetchQuery(
-      entityDetailQueryOptions("location", location.id),
+      entityDetailFor("location").queryOptions(location.id),
     );
     if (!full) {
       toast.warning(`${location.name} no longer exists`);

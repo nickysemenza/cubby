@@ -12,6 +12,7 @@ import {
   locationValuationSummaryOut,
 } from "@cubby/schemas/location";
 import { z } from "zod";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -32,7 +33,7 @@ export const location = defineOperationDomain("location", {
   makeTree: query({
     input: z.undefined(),
     output: infLocationListOut,
-    tags: [["location"], ["location", "makeTree"]],
+    tags: [["location", "makeTree"]],
     freshness: {
       staleTime: 2 * 60_000,
       refetchOnWindowFocus: true,
@@ -42,46 +43,46 @@ export const location = defineOperationDomain("location", {
   valuationSummary: query({
     input: z.undefined(),
     output: locationValuationSummaryOut,
-    tags: [["location"], ["location", "valuationSummary"]],
+    tags: [["location", "valuationSummary"]],
   }),
   ensureGlobalUnknown: mutation({
     input: z.undefined(),
     output: infLocation,
-    invalidates: [["location"]],
+    invalidates: ripple.location,
   }),
   bulkUpdateParent: mutation({
     input: locationBulkUpdateParentInput,
     output: locationBulkUpdateParentOut,
-    invalidates: [["location", "reparent"]],
+    invalidates: ripple.locationReparent,
   }),
   getByShortcodes: query({
     input: locationShortcodesInput,
     output: locationsWithParentNameOut,
-    tags: [["location"], ["location", "getByShortcodes"]],
+    tags: [["location", "getByShortcodes"]],
   }),
   recomputeValuations: mutation({
     input: z.undefined(),
     output: z.object({ updated: z.number() }),
-    invalidates: [["location"]],
+    invalidates: ripple.locationValuation,
   }),
   search: query({
     input: rosterInput,
     output: searchOutput,
-    tags: [["location"], ["location", "search"]],
+    tags: [["location", "search"]],
   }),
   subtree: query({
     input: shortcodeInput,
     output: infLocationListOut,
-    tags: [["location"], ["location", "subtree"]],
+    tags: [["location", "subtree"]],
   }),
   inventoryBreakdown: query({
     input: shortcodeInput,
     output: locationInventoryBreakdownOut.nullable(),
-    tags: [["location"], ["location", "inventoryBreakdown"], ["inventory"]],
+    tags: [["location", "inventoryBreakdown"], ["inventory"]],
   }),
   parentOptions: query({
     input: z.undefined(),
     output: z.array(locationParentOptionsOut),
-    tags: [["location"], ["location", "parentOptions"]],
+    tags: [["location", "parentOptions"]],
   }),
 });

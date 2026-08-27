@@ -3,7 +3,6 @@ import { useMemo } from "react";
 import { expense } from "~/app/expenses/expense.functions";
 import { costTypeOptions } from "~/app/expenses/expense-options";
 import { tradeOptions } from "~/app/projects/trade-options";
-import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import type {
   BulkAction,
@@ -36,7 +35,6 @@ export function useExpenseBulkActions({
     // The existing id is load-bearing: layouts persist per action id.
     id: "move",
     mutationFn: expense.bulkMove.mutationOptions,
-    invalidateKeys: invalidatesFor("expense"),
     success: (data) =>
       savedWithBackgroundWork(data.sideEffects, `Moved ${expenseCount(data)}`),
   });
@@ -46,7 +44,6 @@ export function useExpenseBulkActions({
   >({
     verb: "setTrade",
     mutationFn: expense.bulkSetTrade.mutationOptions,
-    invalidateKeys: invalidatesFor("expense"),
     success: updated,
   });
   const costType = useStagedBulkAction<
@@ -55,7 +52,6 @@ export function useExpenseBulkActions({
   >({
     verb: "setCostType",
     mutationFn: expense.bulkSetCostType.mutationOptions,
-    invalidateKeys: invalidatesFor("expense"),
     success: updated,
   });
 

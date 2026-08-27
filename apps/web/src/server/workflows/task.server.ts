@@ -1,18 +1,12 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
-  actionableTasksOut,
-  taskBoardOut,
   taskBulkDueDateInput,
   taskBulkMoveInput,
-  taskBulkMutationOut,
   taskBulkReorderInput,
   taskBulkStatusInput,
   taskBulkTradeInput,
   taskFiltersSchema,
   taskOut,
-  taskSummaryOut,
-  taskTimelineOut,
-  taskTodayBriefingOut,
 } from "@cubby/schemas/project";
 import type { z } from "zod";
 import type { Database } from "~/server/db";
@@ -33,19 +27,13 @@ import {
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 
 export {
-  actionableTasksOut,
-  taskBoardOut,
   taskBulkDueDateInput,
   taskBulkMoveInput,
-  taskBulkMutationOut,
   taskBulkReorderInput,
   taskBulkStatusInput,
   taskBulkTradeInput,
   taskFiltersSchema,
   taskOut,
-  taskSummaryOut,
-  taskTimelineOut,
-  taskTodayBriefingOut,
 };
 
 const FETCH_ALL = { pageIndex: 0, pageSize: 100_000 } as const;
