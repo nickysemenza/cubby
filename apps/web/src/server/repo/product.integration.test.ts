@@ -2295,6 +2295,28 @@ describe("product repository", () => {
         expect(order.indexOf(boughtThenSold.id)).toBeLessThan(
           order.indexOf(soldOnly.id),
         );
+
+        // The Purchases RELATION sort is a separate expression from the one
+        // above, and it mirrors SQL_RELATED_VIEWS["product.purchases"], which
+        // now admits acquisitions only. The generic sort guard cannot reach
+        // this one — related previews come from `loadRelatedPreviews`, a
+        // separate server operation, never `productList()`'s row (see
+        // SORT_ONLY_FIELDS in sort-application.integration.test.ts) — so pin it
+        // here. `soldOnly`'s only Purchase is its disposal, so the relation is
+        // empty for it and it must sort last rather than by that sale's date.
+        const byPurchaseRelation = await productList(
+          ctx.db,
+          { nameFilter: "Widget" },
+          [{ orderBy: "related:product.purchases", direction: "desc" }],
+          { pageIndex: 0, pageSize: 10 },
+        );
+        const relationOrder = byPurchaseRelation.data.map((row) => row.id);
+        expect(relationOrder.indexOf(control.id)).toBeLessThan(
+          relationOrder.indexOf(soldOnly.id),
+        );
+        expect(relationOrder.indexOf(boughtThenSold.id)).toBeLessThan(
+          relationOrder.indexOf(soldOnly.id),
+        );
       });
     });
 
