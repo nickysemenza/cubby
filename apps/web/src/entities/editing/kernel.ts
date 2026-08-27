@@ -1,11 +1,9 @@
-import type { QueryKey } from "@tanstack/react-query";
 import { parseEntityMutationResultFor } from "../entity-mutation.functions";
 import { type EntityEditRegistry, getEntityEditDefinition } from "./registry";
 import type {
   EditableEntity,
   EntityEditAccess,
   EntityEditBuildResult,
-  EntityEditCommand,
   EntityEditContext,
   EntityEditDefinition,
   EntityEditField,
@@ -248,36 +246,4 @@ export async function executeEntityEdit<E extends EditableEntity>(
     changed: true,
     result: parseEntityMutationResultFor(definition.entity, execution.result),
   };
-}
-
-/** Tiny fake adapter for pure kernel tests and consumer contract tests. */
-export function createFakeEntityMutationPort(input?: {
-  execute?: <E extends EditableEntity>(
-    command: EntityEditCommand<E>,
-  ) => Promise<{ id: string; result: unknown }>;
-}) {
-  const commands: EntityEditCommand<EditableEntity>[] = [];
-  const invalidations: QueryKey[][] = [];
-  const backgroundWork: Array<{
-    result: unknown;
-    invalidateKeys: readonly QueryKey[];
-  }> = [];
-  const port: EntityMutationPort = {
-    execute: async (command) => {
-      commands.push(command);
-      return input?.execute
-        ? await input.execute(command)
-        : {
-            id: command.id ?? "created",
-            result: { id: command.id ?? "created" },
-          };
-    },
-    invalidate: async (keys) => {
-      invalidations.push([...keys]);
-    },
-    watchBackgroundWork: (entry) => {
-      backgroundWork.push(entry);
-    },
-  };
-  return { port, commands, invalidations, backgroundWork };
 }

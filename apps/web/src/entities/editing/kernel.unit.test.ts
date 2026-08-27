@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 import { mock } from "~/lib/test/mock-schema";
 import {
   buildEntityEdit,
-  createFakeEntityMutationPort,
   executeEntityEdit,
   initialEntityEditValues,
   isResolvedEntityEdit,
@@ -12,9 +11,11 @@ import {
 } from "./kernel";
 import type { EntityEditRegistry } from "./registry";
 import type {
+  EntityEditCommand,
   EntityEditContext,
   EntityEditField,
   EntityEditRecord,
+  EntityMutationPort,
 } from "./types";
 
 const editable = { mode: "editable" } as const;
@@ -165,27 +166,38 @@ describe("entity editing kernel", () => {
     const resolved = resolveEntityEdit(registry, request);
     if (!isResolvedEntityEdit(resolved)) throw new Error("expected definition");
     const build = buildEntityEdit(resolved, request, { name: "new task" });
-    const fake = createFakeEntityMutationPort({
-      execute: async () => ({
-        id: CREATED_TASK_ID,
-        result: mock(taskOut, {
-          overrides: { id: CREATED_TASK_ID, name: "new task" },
-        }),
-      }),
-    });
-    const result = await executeEntityEdit(
-      fake.port,
-      resolved.definition,
-      build,
-    );
+
+    const commands: EntityEditCommand<"task">[] = [];
+    const invalidations: unknown[][] = [];
+    const backgroundWork: Array<{ result: unknown; invalidateKeys: unknown }> =
+      [];
+    const port: EntityMutationPort = {
+      execute: async (command) => {
+        commands.push(command as EntityEditCommand<"task">);
+        return {
+          id: CREATED_TASK_ID,
+          result: mock(taskOut, {
+            overrides: { id: CREATED_TASK_ID, name: "new task" },
+          }),
+        };
+      },
+      invalidate: async (keys) => {
+        invalidations.push([...keys]);
+      },
+      watchBackgroundWork: (entry) => {
+        backgroundWork.push(entry);
+      },
+    };
+
+    const result = await executeEntityEdit(port, resolved.definition, build);
 
     expect(result).toMatchObject({
       ok: true,
       id: CREATED_TASK_ID,
       changed: true,
     });
-    expect(fake.commands).toHaveLength(1);
-    expect(fake.invalidations).toEqual([[["task"]]]);
-    expect(fake.backgroundWork).toHaveLength(1);
+    expect(commands).toHaveLength(1);
+    expect(invalidations).toEqual([[["task"]]]);
+    expect(backgroundWork).toHaveLength(1);
   });
 });
