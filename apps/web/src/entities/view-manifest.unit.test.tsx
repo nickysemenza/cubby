@@ -9,7 +9,10 @@ import {
   isMultiFilterKind,
   partitionFilterSpecs,
 } from "./filters";
-import { compileProblemFilters } from "./problem-filter-semantics";
+import {
+  compileProblemFilters,
+  findUnexpandedRangeFilter,
+} from "./problem-filter-semantics";
 import { isViewActive, viewManifest, viewsForEntity } from "./view-manifest";
 
 type ViewFilterish = { id: string; value: string | string[] };
@@ -36,6 +39,31 @@ describe("view manifest", () => {
             `view "${view.id}" on "${entity}" pins unknown filter "${filter.id}"`,
           ).toBe(true);
         }
+      }
+    }
+  });
+
+  it("never pins a range preset that expands to nothing", () => {
+    // The silent-widening case (#785): a range spec returns an EMPTY patch for
+    // any preset outside its closed set, and `buildFiltersFromManifest` merges
+    // that empty patch as a no-op. The constraint vanishes and the view selects
+    // every row while still looking filtered.
+    //
+    // `compileProblemFilters` throws on this, but only for Problem-BACKED
+    // views. Every other saved view — `product/shelf-disagrees`,
+    // `product/unlocated`, `unlocated-durables`, `consumed-on-projects` and the
+    // rest — reaches `buildFiltersFromManifest` directly and is unprotected. So
+    // ask the SAME predicate here, of the whole manifest.
+    for (const [entity, views] of Object.entries(viewManifest)) {
+      const specs = getEntityFilters(entity as never);
+      for (const view of views ?? []) {
+        const unexpanded = findUnexpandedRangeFilter(specs, view.filters);
+        expect(
+          unexpanded,
+          `view "${entity}/${view.id}" pins range filter "${unexpanded?.id}" = ` +
+            `"${String(unexpanded?.value)}", which expands to nothing — the ` +
+            "filter would be dropped and the view would match every row",
+        ).toBeUndefined();
       }
     }
   });

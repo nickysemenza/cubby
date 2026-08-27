@@ -59,6 +59,7 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { expenseAcquisitionSql } from "~/server/repo/expense-aggregate-sql";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product";
 import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
 import {
@@ -75,30 +76,18 @@ import {
 /**
  * Does this Expense say the order ACQUIRED the product?
  *
- * A product-linked Expense is not automatically evidence that the purchase
- * bought the thing: a negative one records an **exit** — a sale, a return, a
- * disposal — and a disposal is modelled as a Purchase whose Expenses sum
- * negative (`repo/product/ownership.ts`). Unioning every product-linked
- * Expense into these reads would therefore file 181 eBay-sale and disposal
- * orders under "products this purchase bought", which is a different relation,
- * not a fuller one. That is the whole reason this predicate exists; deleting it
- * silently reintroduces the wrong rows.
+ * The rule itself lives in {@link expenseAcquisitionSql} — one definition,
+ * shared with the Product list's purchase-date value/sort/filter sites so the
+ * two surfaces cannot disagree about what an acquisition is. Reading it as
+ * "any product-linked Expense" would file 181 eBay-sale and disposal orders
+ * under "products this purchase bought", and 198 pairs rest on the $0 and
+ * unknown-quantity lines it deliberately keeps.
  *
- * The rule is the ledger's own, documented on `Expense.productQuantity` and
- * implemented in `product/quantity-ledger.ts`: money direction wins, and the
- * quantity's sign is consulted only when there is no money. So a row is an exit
- * when its cost is negative, or when it moved no money and its quantity is
- * negative (a discard). Everything else counts, deliberately including the $0
- * and unknown-quantity lines — a free promo item or an unpriced line is still a
- * unit that arrived, and 198 pairs rest on that.
+ * Every consumer below queries an UNALIASED `"Expense"` (`.from(expense)` /
+ * `FROM ${expense}`), so the raw-text form renders exactly as the interpolated
+ * columns it replaced.
  */
-const expenseIsAcquisition = sql`(
-  ${expense.cost} > 0
-  OR (
-    COALESCE(${expense.cost}, 0) = 0
-    AND COALESCE(${expense.productQuantity}, 0) >= 0
-  )
-)`;
+const expenseIsAcquisition = sql.raw(expenseAcquisitionSql('"Expense"'));
 
 /**
  * The pairs one side of the relation contributes from the Expense ledger.

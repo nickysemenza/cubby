@@ -61,7 +61,6 @@ import {
   productImage,
   productUnitMappings,
   projectToolUsage,
-  purchase,
   purchaseProduct,
   task,
   wishCandidate,
@@ -107,6 +106,11 @@ import {
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
+import {
+  expenseAcquisitionSql,
+  productAcquisitionDateFilterSql,
+  productAcquisitionDateSql,
+} from "~/server/repo/expense-aggregate-sql";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import { resolveEstablishedManufacturer } from "~/server/repo/label-canonical";
@@ -226,21 +230,21 @@ const resolveProductSort = (sort: SortParams) => {
   }
 
   if (sort.orderBy === "purchaseDate") {
-    return [
-      sql.raw(
-        `(SELECT max(p."date") FROM "Expense" e ` +
-          `JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL ` +
-          `WHERE e."productId" = "product"."id" AND e."deletedAt" IS NULL) ${dirSql}`,
-      ),
-    ];
+    // Same fragment the cell renders (relations.ts) and both filters below use.
+    return [sql`${productAcquisitionDateSql()} ${sql.raw(dirSql)}`];
   }
 
   if (sort.orderBy === "related:product.purchases") {
+    // Mirrors SQL_RELATED_VIEWS["product.purchases"] — same sort expression AND
+    // the same acquisition predicate. The view admits acquisitions only, so a
+    // sort that ranked by a disposal's date would order rows by a value absent
+    // from every cell it sorts.
     return [
       sql.raw(
         `(SELECT max(COALESCE(p."date"::timestamp, p."createdAt")) FROM "Expense" e ` +
           `JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL ` +
-          `WHERE e."productId" = "product"."id" AND e."deletedAt" IS NULL) ${dirSql}`,
+          `WHERE e."productId" = "product"."id" AND e."deletedAt" IS NULL ` +
+          `AND e."future" = false AND ${expenseAcquisitionSql("e")}) ${dirSql}`,
       ),
     ];
   }
@@ -560,15 +564,6 @@ export const productList = async (
     .from(expense)
     .where(and(notDeleted(expense), isNotNull(expense.productId)));
 
-  const productIdsWithPurchases = dbClient
-    .select({ productId: expense.productId })
-    .from(expense)
-    .innerJoin(
-      purchase,
-      and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
-    )
-    .where(and(notDeleted(expense), isNotNull(expense.productId)));
-
   const taskStatuses = filters.taskStatusFilter
     ? [filters.taskStatusFilter].flat()
     : undefined;
@@ -592,29 +587,6 @@ export const productList = async (
           : undefined,
         filters.taskDueTo
           ? sql`${task.dueDate} <= ${filters.taskDueTo}`
-          : undefined,
-      ),
-    );
-
-  const purchaseDateRangeActive = Boolean(
-    filters.purchaseDateFrom || filters.purchaseDateTo,
-  );
-  const productIdsInPurchaseDateRange = dbClient
-    .select({ productId: expense.productId })
-    .from(expense)
-    .innerJoin(
-      purchase,
-      and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
-    )
-    .where(
-      and(
-        notDeleted(expense),
-        isNotNull(expense.productId),
-        filters.purchaseDateFrom
-          ? sql`${purchase.date} >= ${filters.purchaseDateFrom}`
-          : undefined,
-        filters.purchaseDateTo
-          ? sql`${purchase.date} <= ${filters.purchaseDateTo}`
           : undefined,
       ),
     );
@@ -862,16 +834,24 @@ export const productList = async (
         filters.expensePresenceFilter,
         productIdsWithExpenses,
       ),
-      idSetPresence(
-        product.id,
-        filters.purchaseDatePresenceFilter,
-        productIdsWithPurchases,
-      ),
+      // "Has a purchase date" now means "has an acquisition date", matching
+      // the cell. Keyed off the same fragment rather than "has any linked live
+      // Purchase" — otherwise `(none)` would keep listing products whose cell
+      // shows a date, and `has` would list disposal-only ones whose cell is
+      // blank.
+      filters.purchaseDatePresenceFilter === "has"
+        ? isNotNull(productAcquisitionDateFilterSql(product.id))
+        : filters.purchaseDatePresenceFilter === "none"
+          ? isNull(productAcquisitionDateFilterSql(product.id))
+          : undefined,
       taskFilterActive
         ? inArray(product.id, productIdsWithFilteredTasks)
         : undefined,
-      purchaseDateRangeActive
-        ? inArray(product.id, productIdsInPurchaseDateRange)
+      filters.purchaseDateFrom
+        ? sql`${productAcquisitionDateFilterSql(product.id)} >= ${filters.purchaseDateFrom}`
+        : undefined,
+      filters.purchaseDateTo
+        ? sql`${productAcquisitionDateFilterSql(product.id)} <= ${filters.purchaseDateTo}`
         : undefined,
       idSetPresence(
         product.id,

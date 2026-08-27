@@ -1,6 +1,9 @@
 import { expenseCreateInput, projectCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
-import { relatedSummaryInput } from "@cubby/schemas/related-view";
+import {
+  relatedBranchInput,
+  relatedSummaryInput,
+} from "@cubby/schemas/related-view";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -11,7 +14,7 @@ import { insertAndReturn } from "./database-helpers";
 import { createExpense, deleteExpenses } from "./expense";
 import { createProject } from "./project";
 import { createPurchase } from "./purchase";
-import { loadRelatedSummary } from "./related-view";
+import { loadRelatedBranch, loadRelatedSummary } from "./related-view";
 import {
   createProductFixture as createProduct,
   makeProductInput,
@@ -310,5 +313,105 @@ describe("expense-backed relationship summaries", () => {
     });
     expect(secondPage.data[0]?.target?.label).toBe("Summary Product A");
     expect(secondPage.nextOffset).toBeNull();
+  });
+});
+
+/**
+ * `SQL_RELATED_VIEWS["product.purchases"]` carries a `where`, and it is ANDed
+ * into every consumer of the view — preview, branch, options, and the list
+ * filter — so a Purchase can never appear in one and be absent from another.
+ *
+ * The predicate matters because a product-linked Expense reaches a Purchase in
+ * BOTH directions: a sale, return, or disposal is a Purchase whose Expenses sum
+ * negative. Without it the column filed 181 eBay-sale and disposal orders under
+ * a product's "Purchases", disagreeing with the detail page's Purchases card.
+ */
+describe("product.purchases admits acquisitions only", () => {
+  const ctx = withTestDb();
+
+  it("omits the order that sold the product, and keeps the one that bought it", async () => {
+    const vendor = await createVendor(
+      ctx.db,
+      vendorCreateInput.parse({ name: "Flip Channel" }),
+      ctx.actor,
+    );
+    const bought = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        vendorId: vendor.output.id,
+        orderId: "ACQUIRED-1",
+        date: "2026-01-05",
+      }),
+      ctx.actor,
+    );
+    const sold = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        vendorId: vendor.output.id,
+        orderId: "DISPOSED-1",
+        date: "2026-05-01",
+      }),
+      ctx.actor,
+    );
+    const widget = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Flipped Widget" }),
+      ctx.actor,
+    );
+
+    const line = async (
+      name: string,
+      cost: number,
+      quantity: number,
+      purchaseId: string,
+    ) =>
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse({
+          name,
+          cost,
+          date: "2026-05-26",
+          costType: "materials",
+          trade: "other",
+          productId: widget.id,
+          productQuantity: quantity,
+          purchaseId,
+        }),
+        ctx.actor,
+      );
+
+    await line("bought the widget", 100, 1, bought.output.id);
+    await line("sold the widget", -60, -1, sold.output.id);
+
+    const branch = await loadRelatedBranch(
+      ctx.db,
+      relatedBranchInput.parse({
+        relationKey: "product.purchases",
+        sourceId: widget.id,
+      }),
+    );
+    const orderIds = branch.items.map((item) => item.label);
+    expect(orderIds).toContain("ACQUIRED-1");
+    expect(orderIds).not.toContain("DISPOSED-1");
+    expect(branch.totalCount).toBe(1);
+
+    // The transpose, from the same one-expression predicate: the disposal order
+    // did not BUY the widget, so its Products column must not list it, while
+    // the acquiring order's must. Before this, 385 purchases listed a product
+    // they sold and 172 were pure disposals whose entire Products column was
+    // items sold — each disagreeing with its own detail card.
+    const productsOf = async (purchaseId: string) =>
+      (
+        await loadRelatedBranch(
+          ctx.db,
+          relatedBranchInput.parse({
+            relationKey: "purchase.products",
+            sourceId: purchaseId,
+          }),
+        )
+      ).items.map((item) => item.label);
+
+    expect(await productsOf(bought.output.id)).toContain("Flipped Widget");
+    expect(await productsOf(sold.output.id)).not.toContain("Flipped Widget");
   });
 });
