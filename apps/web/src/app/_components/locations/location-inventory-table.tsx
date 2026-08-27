@@ -73,6 +73,20 @@ const EMBEDDED_TABLE_STATE = {
 } as const;
 const NO_TABLE_FILTERS = () => ({}) as Record<string, never>;
 
+/**
+ * An inventory entry is about its product, so product verbs reach this row
+ * without the inventory table declaring any. Module-level: a fresh literal
+ * per render feeds a hook dependency contract and rebuilds every column.
+ */
+const PRODUCT_SUBJECT = {
+  entity: "product" as const,
+  resolve: (row: { product: { id: string; name: string } }) => ({
+    entity: "product" as const,
+    id: row.product.id,
+    name: row.product.name,
+  }),
+};
+
 export function LocationInventoryTable({
   locationId,
   view,
@@ -228,16 +242,7 @@ export function LocationInventoryTable({
   >({
     entity: "inventory",
     layoutKey: "inventory:location-detail",
-    // An inventory entry is about its product, so product verbs reach this row
-    // without the inventory table declaring any of them.
-    subject: {
-      entity: "product" as const,
-      resolve: (row: InventoryItem) => ({
-        entity: "product" as const,
-        id: row.product.id,
-        name: row.product.name,
-      }),
-    },
+    subject: PRODUCT_SUBJECT,
     // Forward the table's own sort/pagination — dropping the argument left the
     // Product/Amount sort headers doing nothing (manualSorting is on, so
     // TanStack doesn't sort client-side either) and made every page of a

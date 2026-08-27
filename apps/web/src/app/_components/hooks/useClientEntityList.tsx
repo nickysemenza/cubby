@@ -161,6 +161,10 @@ export function useClientEntityList<TData extends BaseListRow>({
     nameEditable,
     nameSuffix,
     expandable: tree?.expandable,
+    // Both halves or neither: `subjectEntity` alone publishes the actions and
+    // nothing looks them up, which is a row menu that silently offers less
+    // than it should.
+    subject: subject?.resolve,
   });
   const {
     allColumns,

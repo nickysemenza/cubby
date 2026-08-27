@@ -316,19 +316,24 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
     [flipTo],
   );
 
-  const { workbench } = useClientEntityList<StockedRow>({
-    entity: "inventory",
-    // Every row here is an entry for the ONE product this page is about, so
-    // the subject is constant rather than read per row — the identity rows do
-    // not even carry a product id.
-    subject: {
+  // Every row here is an entry for the ONE product this page is about, so the
+  // subject is constant rather than read per row — the identity rows do not
+  // even carry a product id. Memoized because it feeds a hook dependency
+  // contract; a fresh literal rebuilds every column each render.
+  const subject = useMemo(
+    () => ({
       entity: "product" as const,
       resolve: () => ({
         entity: "product" as const,
         id: product.id,
         name: product.name,
       }),
-    },
+    }),
+    [product.id, product.name],
+  );
+  const { workbench } = useClientEntityList<StockedRow>({
+    entity: "inventory",
+    subject,
     data: rows,
     columns,
     tableStateOptions: EMBEDDED_TABLE_STATE,
