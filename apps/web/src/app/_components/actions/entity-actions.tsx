@@ -128,11 +128,10 @@ const entityActions: readonly EntityActionDefinition[] = [
     // repeated on three tables, so stocking an order meant opening the same
     // dialog once per line and re-picking the same shelf every time.
     arity: "both",
-    // No "detail": the product detail page keeps its own dialog because it is
-    // the one caller that can pass `accounting`, and so the only one that can
-    // warn when stocking another unit would account for more kits than were
-    // bought. A registry entry cannot reproduce that from a row's id alone.
-    surfaces: ["row", "bar", "palette-quick"],
+    // "detail" included: the action derives the kit over-accounting warning
+    // itself now, so the product page no longer has to keep a bespoke dialog
+    // to be the one caller that can show it.
+    surfaces: ["row", "bar", "detail", "palette-quick"],
     // The dialog collects a location and per-row quantities, so the bar's job
     // ends once the rows are staged — and a cancelled dialog should leave the
     // operator's selection where they left it.
