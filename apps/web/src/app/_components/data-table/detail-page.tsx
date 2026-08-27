@@ -519,9 +519,12 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     throw new Error("Detail section ids must be unique within a record page");
   }
 
+  const overviewIdKey = overviewSections
+    .map((section) => section.id)
+    .join("\u001f");
   const overviewIds = useMemo(
-    () => new Set(overviewSections.map((section) => section.id)),
-    [overviewSections],
+    () => new Set(overviewIdKey ? overviewIdKey.split("\u001f") : []),
+    [overviewIdKey],
   );
   const hasRelations = Boolean(relationshipSection);
   const hasActivity = Boolean(resolvedActivitySection);

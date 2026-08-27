@@ -197,6 +197,22 @@ describe("DetailSections ledger", () => {
     });
   });
 
+  it("does not re-focus an ordinary section hash after an unrelated render", () => {
+    mocks.routerHash.current = "story";
+    const { rerender } = render(
+      <DetailSections sections={sections} rawData={{ id: "example" }} />,
+    );
+
+    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(document.getElementById("story"));
+
+    rerender(
+      <DetailSections sections={[...sections]} rawData={{ id: "example" }} />,
+    );
+
+    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects duplicate section ids", () => {
     expect(() =>
       render(
