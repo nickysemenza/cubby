@@ -329,6 +329,7 @@ describe("entity list query keys", () => {
 
 describe("scoped entity descriptors", () => {
   it("produces the same detail keys as the helpers they replace", () => {
+    expect(entityDetailFor("product").entity).toBe("product");
     expect(entityDetailFor("product").queryKey("p-4k7m")).toEqual(
       KEYS.detailCanonical,
     );
@@ -349,6 +350,7 @@ describe("scoped entity descriptors", () => {
 
   it("produces the same list keys as the helpers they replace", () => {
     const products = entityListFor("product");
+    expect(products.entity).toBe("product");
     expect(products.queryKey(PRODUCT_LIST_INPUT)).toEqual(KEYS.list);
     expect(products.queryOptions(PRODUCT_LIST_INPUT).queryKey).toEqual(
       KEYS.list,
