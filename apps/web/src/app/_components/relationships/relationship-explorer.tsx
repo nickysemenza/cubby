@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
+import { Button } from "~/components/ui/button";
 import { useHydratedLoading } from "~/hooks/useHydrated";
 import { relatedData } from "~/lib/related-data.functions";
 import { useRelationshipRoutePreview } from "./relationship-route-preview";
@@ -121,10 +122,22 @@ export function RelationshipExplorer({
   }
   if (query.isError) {
     return (
-      <p className="text-muted-foreground text-sm">
-        Relationships could not be loaded.
-      </p>
+      <div className="space-y-2">
+        <p className="text-muted-foreground text-sm">
+          Relationships could not be loaded.
+        </p>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => void query.refetch()}
+        >
+          Retry
+        </Button>
+      </div>
     );
+  }
+  if (groups.every((group) => group.totalCount === 0)) {
+    return <p className="text-muted-foreground text-sm">No linked records.</p>;
   }
   return <RelationshipTree presets={presets} loadChildren={loadChildren} />;
 }

@@ -22,7 +22,7 @@ test("workspace shell responds from phone navigation through desktop sidebar", a
   await expect(sidebar).toBeVisible();
   // The expanded domain index uses the design-system rail width; compact mode
   // below remains a 56px icon rail.
-  expect((await sidebar.boundingBox())?.width).toBe(224);
+  expect((await sidebar.boundingBox())?.width).toBe(208);
   await expect(
     page.getByRole("link", { name: "Home", exact: true }),
   ).toHaveAttribute("aria-current", "page");
@@ -69,7 +69,23 @@ test("workspace shell responds from phone navigation through desktop sidebar", a
     page.getByRole("button", { name: "Expand sidebar" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Expand sidebar" }).click();
-  await expect.poll(async () => (await sidebar.boundingBox())?.width).toBe(224);
+  await expect.poll(async () => (await sidebar.boundingBox())?.width).toBe(208);
+  const contributionLedger = page.getByRole("link", {
+    name: "Contribution ledger",
+  });
+  await expect(contributionLedger).toBeVisible();
+  expect(
+    await contributionLedger.evaluate((link) => {
+      const label = link.querySelector("span");
+      if (!label) throw new Error("Expanded navigation link has no label");
+      const linkRect = link.getBoundingClientRect();
+      const labelRect = label.getBoundingClientRect();
+      return {
+        staysInsideLink: labelRect.right <= linkRect.right,
+        textOverflow: getComputedStyle(label).textOverflow,
+      };
+    }),
+  ).toEqual({ staysInsideLink: true, textOverflow: "ellipsis" });
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(sidebar).toBeHidden();

@@ -206,7 +206,7 @@ means the named evidence exists; implementation without evidence remains
 | --- | --- | --- | --- | --- |
 | T0 | Governance and baselines | — | Complete | Rebased branch, approved references, relationship/calibration specs, and 18 source-state baselines are recorded in the evidence ledger |
 | T1 | Tokens, fonts, and core primitives | T0 | Complete | Contrast checks, production build, focused tests, and desktop/mobile primitive gallery are recorded in the evidence ledger |
-| T2 | Desktop/mobile shell and navigation | T1 | Complete | 224px/56px desktop rail, 48px command band, five truthful domain groups, preserved contextual mobile chrome/safe areas/keyboard behavior, focused tests, typecheck, and desktop/mobile screenshots are recorded in the evidence ledger |
+| T2 | Desktop/mobile shell and navigation | T1 | Complete | 208px/56px desktop rail, 48px command band, five truthful domain groups, preserved contextual mobile chrome/safe areas/keyboard behavior, focused tests, typecheck, and desktop/mobile screenshots are recorded in the evidence ledger |
 | T3 | Products reference workbench | T1–T2 | Complete | Approved dense table, dock, Sheet, phone projection, one Product-owned relationship-route query, direct/derived provenance, and synthetic desktop/phone examples are recorded in the evidence ledger. |
 | T4 | Canonical detail system | T1–T3 | Complete | Product detail reuses the same route model near the hero and in the full Relations journey, replaces the generic explorer without duplicate anchors, and preserves recategorized project-use history as read-only evidence. |
 | T5 | All canonical lists and details | T3–T4 | Complete | Standard, direct, and bespoke rosters share the dock/Sheet/phone-detail contract; generic routes reuse one bounded truthful relationship preview, canonical details compose Activity/Relations once, and scoped density plus responsive evidence is recorded in the ledger. |
@@ -464,9 +464,9 @@ The overhaul is done only when all statements below are true:
 - [x] All realistic loading, empty, error, disabled, permission, offline,
       selection, editing, and long-content states are handled.
 - [x] Existing product invariants and data semantics remain true.
-- [ ] Functional, visual, accessibility, detector, reviewer, audit, and exact
+- [x] Functional, visual, accessibility, detector, reviewer, audit, and exact
       CI gates in section 11 pass.
-- [ ] Final screenshots, review verdict, audit score, design documents, and
+- [x] Final screenshots, review verdict, audit score, design documents, and
       intentional exceptions are attached to the ready-for-review PR.
 
 Passing tests alone is not done. A clean detector alone is not done. Migrating

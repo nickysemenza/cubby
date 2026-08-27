@@ -46,7 +46,7 @@ type AuthenticatedAppShellProps = {
 /**
  * The authenticated workspace frame. The md rail is intentionally forced: a
  * person's wide/compact preference applies only when there is space for the
- * full 224px sidebar, and a tablet visit must never overwrite that preference.
+ * full 208px sidebar, and a tablet visit must never overwrite that preference.
  */
 export function AuthenticatedAppShell({
   children,
@@ -214,8 +214,10 @@ function WorkspaceSidebar({
   return (
     <aside
       className={cn(
-        "sticky top-0 hidden h-dvh shrink-0 border-border border-r bg-card md:flex md:w-14 md:flex-col lg:transition-[width] lg:duration-150 print:hidden",
-        expanded ? "lg:w-56" : "lg:w-14",
+        "sticky top-0 hidden h-dvh shrink-0 border-border border-r bg-card md:flex md:w-[var(--app-sidebar-collapsed-width)] md:flex-col lg:transition-[width] lg:duration-150 print:hidden",
+        expanded
+          ? "lg:w-[var(--app-sidebar-expanded-width)]"
+          : "lg:w-[var(--app-sidebar-collapsed-width)]",
       )}
       aria-label="Workspace navigation"
     >
@@ -482,13 +484,13 @@ function SidebarFullLeaf({ item, active }: { item: NavItem; active: boolean }) {
     <Link
       {...navItemLinkProps(item, active)}
       className={cn(
-        "mb-1 flex h-8 items-center gap-2 border border-transparent px-2 text-xs transition-colors hover:bg-muted hover:text-foreground",
+        "mb-1 flex h-8 min-w-0 items-center gap-2 border border-transparent px-2 text-xs transition-colors hover:bg-muted hover:text-foreground",
         !active && "text-muted-foreground",
         active && "border-border bg-background font-medium text-foreground",
       )}
     >
       <Icon className="size-3.5 shrink-0" />
-      <span className="truncate">{item.label}</span>
+      <span className="min-w-0 truncate">{item.label}</span>
     </Link>
   );
 }

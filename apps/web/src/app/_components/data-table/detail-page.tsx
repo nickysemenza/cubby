@@ -431,10 +431,13 @@ export const DetailSections: FC<DetailSectionsProps> = ({
           ),
         }
       : undefined;
+  // The complete generic relationship journey is the first canonical section;
+  // its compact route remains directly below the index above. Product supplies
+  // its own richer, domain-owned section and therefore never reaches this path.
   const allSections = [
+    ...(relationshipSection ? [relationshipSection] : []),
     ...sections,
     ...(activitySection ? [activitySection] : []),
-    ...(relationshipSection ? [relationshipSection] : []),
   ].filter(
     (section) => section.content !== null && section.content !== undefined,
   );

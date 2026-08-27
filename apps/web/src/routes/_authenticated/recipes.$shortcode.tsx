@@ -20,13 +20,13 @@ import RecipeDetail, {
 } from "~/app/_components/recipe/RecipeDetail";
 import type { RecipeFlowLayoutMode } from "~/app/_components/recipe/RecipeFlowView";
 import { useDuplicateRecipe } from "~/app/_components/recipe/use-duplicate-recipe";
+import { notFoundPage } from "~/app/_components/routing/entity-routes";
 import { AddToMeal } from "~/app/meals/add-to-meal";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
 import { Button } from "~/components/ui/button";
-import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
@@ -67,6 +67,12 @@ const searchDefaults = {
   scale: undefined,
 } as const;
 
+const RecipeNotFound = notFoundPage(
+  "recipe",
+  "Recipe not found",
+  "This recipe is no longer available.",
+);
+
 export const Route = createFileRoute("/_authenticated/recipes/$shortcode")({
   validateSearch: searchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
@@ -78,14 +84,7 @@ export const Route = createFileRoute("/_authenticated/recipes/$shortcode")({
   },
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
-  notFoundComponent: () => (
-    <Page variant="list" title="Recipe not found" entity="recipe" compact>
-      <Empty>
-        <EmptyTitle>Recipe not found</EmptyTitle>
-        <EmptyDescription>This recipe is no longer available.</EmptyDescription>
-      </Empty>
-    </Page>
-  ),
+  notFoundComponent: RecipeNotFound,
   head: shortcodeHead,
   component: RecipeDetailPage,
 });

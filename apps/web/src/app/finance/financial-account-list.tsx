@@ -83,7 +83,6 @@ export function FinancialAccountList() {
       columns={columns}
       deletable={deletable}
       ariaLabel="Financial accounts"
-      preview={false}
     />
   );
 }
