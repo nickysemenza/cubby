@@ -10,6 +10,7 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import { expenseCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { relatedViewRegistry } from "@cubby/schemas/related-view";
+import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
 import { testShortcode } from "@cubby/schemas/testing";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -42,6 +43,11 @@ import {
 } from "./purchase";
 import { loadRelatedPreviews } from "./related-view";
 import { resolveLiveShortcode } from "./shortcode-resolver";
+import {
+  listStatementRows,
+  recordStatementRows,
+  updateStatementRows,
+} from "./statement-row";
 import { findOrCreateVendor, getVendorByID, vendorList } from "./vendor";
 
 const account = (
@@ -801,6 +807,92 @@ describe("financial repositories — critical invariants", () => {
       });
       expect(groups).toEqual([]);
     }
+  });
+
+  /**
+   * `StatementRow.accountId` is declared `block` in
+   * FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY, and it is the one edge in the
+   * lifecycle registry that fails OPEN. The FK is nullable, so a missing guard
+   * does not throw — the account simply vanishes while live triaged rows keep
+   * pointing at it, silently discarding the triage judgment that put them
+   * there. The comment on the guard records that this check was declared with
+   * nothing enforcing it once already ("neither this guard nor the preview
+   * queried the table") and was fixed with no regression test. Zero accounts
+   * have ever been deleted in production, so the path has never run for real.
+   *
+   * Deliberately a separate account from the transactions test below: reusing
+   * that one would trip `FINANCIAL_ACCOUNT_HAS_TRANSACTIONS` first and leave
+   * this policy unexercised.
+   */
+  it("blocks account deletion while a live statement row still points at it", async () => {
+    const acct = (
+      await createFinancialAccount(
+        ctx.db,
+        account("Statement-blocked"),
+        ctx.actor,
+      )
+    ).output;
+    await recordStatementRows(
+      ctx.db,
+      recordStatementRowsInput.parse({
+        import: {
+          source: "monarch",
+          label: "block-guard.csv",
+          fingerprint: "fp-block-guard",
+          dateKind: "transaction",
+          rowCountDeclared: 1,
+          notes: null,
+        },
+        rows: [
+          {
+            accountDescriptor: "Blocked Card",
+            statementDate: "2026-05-04",
+            providerAmount: -10,
+            merchant: "Acme",
+            rawDescription: "ACME",
+            sourceCategory: null,
+            providerStatus: "posted",
+            providerNotes: null,
+          },
+        ],
+        dryRun: false,
+      }),
+      ctx.actor,
+    );
+    const row = (await listStatementRows(ctx.db, {})).data[0];
+    expect(row).toBeDefined();
+    await updateStatementRows(
+      ctx.db,
+      {
+        selector: { source: "monarch", externalIds: [row!.externalId] },
+        data: { accountId: acct.id },
+      },
+      ctx.actor,
+    );
+
+    await expect(
+      deleteFinancialAccounts(ctx.db, [acct.id], ctx.actor),
+    ).rejects.toMatchObject({
+      cause: { reason: "FINANCIAL_ACCOUNT_HAS_STATEMENT_ROWS" },
+    });
+    // The child survives with its triage intact — the half a fail-open guard
+    // would destroy.
+    const stillThere = (await listStatementRows(ctx.db, {})).data[0];
+    expect(stillThere?.accountId).toBe(acct.id);
+
+    // Clearing the blocker lets the same delete through, so the guard is
+    // narrow rather than a blanket refusal.
+    await updateStatementRows(
+      ctx.db,
+      {
+        selector: { source: "monarch", externalIds: [row!.externalId] },
+        data: { accountId: null },
+      },
+      ctx.actor,
+    );
+    await expect(
+      deleteFinancialAccounts(ctx.db, [acct.id], ctx.actor),
+    ).resolves.toBeDefined();
   });
 
   it("blocks account deletion, rejects cross-row source collisions, and preserves purchase-only updates", async () => {

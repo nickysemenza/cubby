@@ -76,6 +76,74 @@ describe("image repository", () => {
     ).rejects.toThrow();
   });
 
+  /**
+   * `Cookbook.coverImageId` and `Vendor.logoImageId` are declared `clearFk` in
+   * IMAGE_HARD_DELETE: nulled before the Image row goes, so the parent survives
+   * without its cover. Nothing exercised either — every other test here that
+   * touches those columns drives the pending-image cull, not `deleteImages`.
+   *
+   * Both are plain `references(() => image.id)` with no `onDelete`, so Postgres
+   * defaults to NO ACTION. A regression therefore fails LOUD — the FK violation
+   * rolls the transaction back — which is why this ranks below the fail-open
+   * statement-row guard. It is still the exact shape this file's own comment
+   * says already happened once for `PurchaseImage`, so the assertion is on the
+   * promise RESOLVING as much as on the columns reading null.
+   */
+  it("clears cookbook covers and vendor logos before hard-deleting the image", async () => {
+    const cover = await createUploadedImageRecord(ctx.db, {
+      key: `covers/${crypto.randomUUID()}.jpg`,
+      filename: "fk-clear-cover.jpg",
+      contentType: "image/jpeg",
+      size: 512,
+    });
+    const logo = await createUploadedImageRecord(ctx.db, {
+      key: `vendors/${crypto.randomUUID()}.png`,
+      filename: "fk-clear-logo.png",
+      contentType: "image/png",
+      size: 512,
+    });
+    const { entityId: cookbookId } = await upsertCookbook(
+      ctx.db,
+      {
+        name: "FK Clear Book",
+        rawJson: [],
+        author: [],
+        sourceLabel: "FK Clear Book.epub",
+      },
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(cookbook)
+      .set({ coverImageId: cover.id })
+      .where(eq(cookbook.id, cookbookId));
+    const vendorId = await findOrCreateVendor(ctx.db, "FK Clear Vendor");
+    await getDb(ctx.db)
+      .update(vendor)
+      .set({ logoImageId: logo.id })
+      .where(eq(vendor.id, vendorId));
+
+    await expect(
+      deleteImages(ctx.db, [
+        parseEntityId("image", cover.id),
+        parseEntityId("image", logo.id),
+      ]),
+    ).resolves.toBeDefined();
+
+    const [book] = await getDb(ctx.db)
+      .select({ coverImageId: cookbook.coverImageId })
+      .from(cookbook)
+      .where(eq(cookbook.id, cookbookId));
+    expect(book).toBeDefined();
+    expect(book?.coverImageId).toBeNull();
+
+    const [vendorRow] = await getDb(ctx.db)
+      .select({ logoImageId: vendor.logoImageId })
+      .from(vendor)
+      .where(eq(vendor.id, vendorId));
+    expect(vendorRow).toBeDefined();
+    expect(vendorRow?.logoImageId).toBeNull();
+  });
+
   it("returns every direct vendor-logo association for a shared image", async () => {
     const logo = await createUploadedImageRecord(ctx.db, {
       key: `vendors/${crypto.randomUUID()}.png`,
