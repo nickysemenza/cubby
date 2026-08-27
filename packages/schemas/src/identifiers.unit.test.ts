@@ -50,8 +50,12 @@ describe("entity id lookups", () => {
   it("labels every entity the way its existing messages already do", () => {
     // These strings go straight into user-facing not-found errors, so they must
     // read as the start of a sentence — and match what the hand-rolled lookups
-    // they replace already threw, so consolidating reworded nothing.
-    expect(ENTITY_LABEL.inventory).toBe("Inventory entry");
+    // they replace already threw, so consolidating reworded nothing (except
+    // `inventory`: it was consolidated as "Inventory entry", but the client's
+    // registry label, its route not-found copy, and the manifest's own
+    // `names.singular` all already said "item" — a genuine word-choice drift
+    // fixed here, not a casing one; see the `ENTITY_LABEL` doc comment).
+    expect(ENTITY_LABEL.inventory).toBe("Inventory item");
     expect(ENTITY_LABEL.financialAccount).toBe("Financial account");
     expect(ENTITY_LABEL.financialTransaction).toBe("Financial transaction");
 

@@ -253,7 +253,17 @@ export async function lookupShortcodes(
   return codes;
 }
 
-/** `null` means the label is relational or the entity has no display column. */
+/**
+ * `null` means the label is relational or the entity has no display column.
+ *
+ * Not a third copy of the entity *type* label (`ENTITY_LABEL` above,
+ * `entityLabel()` in `apps/web/src/entities/entities.tsx`): those map an
+ * entity to what to call its *kind* ("Financial transaction"); this maps an
+ * entity to the DB column holding one *row's* own name (e.g.
+ * `financialTransaction.merchant`), consumed only by `lookupEntityLabels`
+ * below for audit-log display. Different semantics — don't fold it into the
+ * type-label consolidation.
+ */
 const DISPLAY_NAME_COLUMN = {
   cookbook: cookbook.name,
   expense: expense.name,

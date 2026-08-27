@@ -78,6 +78,21 @@ const productBase = rippleTags([
 const ingredientAll = rippleTags([["ingredient"], ["dashboard"]]);
 
 /**
+ * The surfaces that re-read whenever inventory quantity or its bin moves.
+ * Hoisted because `locationReparent` below is defined as this SAME set plus
+ * the location root — not a coincidence: a reparent moves stock, so anything
+ * an inventory write invalidates a reparent must invalidate too.
+ */
+const inventoryRipple = rippleTags([
+  ["inventory"],
+  ["location"],
+  ["product"],
+  ["problems"],
+  ["search"],
+  ["dashboard"],
+]);
+
+/**
  * Purchase mutations move MONEY-bearing rows around (`link` re-parents
  * expenses, `split` replaces one with several, `merge` re-points a charge), so
  * the expense and project rollups go stale alongside the vendor's own
@@ -121,14 +136,6 @@ export const ripple = {
   /** A product write that also changed recipe cost inputs → meal rollups
    * (read from `recipe.totals`) go stale with them. */
   productRecipe: rippleTags(productBase, [["recipe"], ["meal"]]),
-  /** Price/valuation only — no name change, so no task/wish name echo. */
-  productValuation: rippleTags([
-    ["product"],
-    ["recipe"],
-    ["location"],
-    ["meal"],
-    ["dashboard"],
-  ]),
   /** UPC/USDA lookup: identity resolves, detectors and search re-read. */
   productLookup: rippleTags([
     ["product"],
@@ -142,14 +149,7 @@ export const ripple = {
    * so there's no spend, inventory, or calendar state to invalidate. */
   productComponent: rippleTags([["product"], ["relatedData"]]),
 
-  inventory: rippleTags([
-    ["inventory"],
-    ["location"],
-    ["product"],
-    ["problems"],
-    ["search"],
-    ["dashboard"],
-  ]),
+  inventory: inventoryRipple,
 
   location: rippleTags([["location"], ["dashboard"]]),
   /**
@@ -163,15 +163,14 @@ export const ripple = {
    * reparent row, because moving a bin moves every descendant's
    * `location.inventoryBreakdown` and its valuation rollup with it. This row is
    * the union of what the two reparent call sites named.
+   *
+   * Structurally that union IS `inventoryRipple` plus the location root: a
+   * reparent moves stock, so anything an inventory write invalidates a
+   * reparent must too. Defined as that sum, not re-listed, so the two rows
+   * cannot silently drift apart — do not "simplify" this into a bare alias of
+   * `inventory`; the equality is real and load-bearing, not coincidental.
    */
-  locationReparent: rippleTags([
-    ["location"],
-    ["inventory"],
-    ["product"],
-    ["problems"],
-    ["search"],
-    ["dashboard"],
-  ]),
+  locationReparent: rippleTags(inventoryRipple, [["location"]]),
   /** Rebuilding every location's persisted valuation rollup also resolves the
    * Maintenance card that offered it. */
   locationValuation: rippleTags([["location"], ["problems"], ["dashboard"]]),
@@ -187,9 +186,6 @@ export const ripple = {
 
   /** The broad prefix — list / getByName / getByID all re-read. */
   ingredient: ingredientAll,
-  /** List-only, for writes that cannot change an ingredient's identity.
-   * (Collapses onto the base row in tag space — see `locationReparent`.) */
-  ingredientList: rippleTags([["ingredient"], ["dashboard"]]),
   /** Ingredient↔Product link: visible from both ends. */
   ingredientProduct: rippleTags(ingredientAll, productBase),
   /**
@@ -212,6 +208,13 @@ export const ripple = {
    * invalidation set is a config that can drift; one refetch on the negative
    * branch is the accepted price (decided during the cache-authority
    * migration).
+   *
+   * This happens to be tag-identical to `ingredientProduct` today, but for
+   * unrelated reasons — that row is a link edge visible from both ends;
+   * this one is a delete sweep carrying the product fan-out unconditionally
+   * because of `alsoDeleteProducts`, as above. Narrowing that flag decision
+   * would move only THIS row's tags, not `ingredientProduct`'s, so do not
+   * collapse them into a shared alias.
    */
   ingredientCleanup: rippleTags(
     [["problems"], ["ingredient"], ["dashboard"]],
@@ -324,6 +327,24 @@ export const ripple = {
    * that touched nothing else. */
   problems: rippleTags([["problems"]]),
 } as const satisfies Record<string, readonly OperationCacheTag[]>;
+
+/**
+ * Reverse-check audit (do not re-derive this — read it): does every declared
+ * query tag get invalidated by SOME mutation? Checked once, across 171
+ * declared query tags and 31 distinct invalidation tags: 19 orphans, ZERO
+ * confirmed bugs. `["entity","list"]` / `["entity","detail"]` look orphaned
+ * statically but are matched at runtime via the `[[entity]]` root
+ * `descriptorMeta` appends to every query. `statementRow` (×3),
+ * `householdContribution` (×2), and `auditLog.list` declare no client
+ * mutation at all, because those writes arrive over MCP from a different
+ * client than this one. The rest — `ai` (×4), `mcp` (×3), `upc.lookup`,
+ * `relatedness.product`, `entity.inspectorHealth`, `entityIntegrity` — are
+ * external or derived reads with nothing that "writes" them from this app.
+ * A global `staleTime: 60_000` at `root-provider.tsx:53` means none of these
+ * is ever PERMANENTLY stale even when nothing invalidates it, which is why a
+ * reverse-direction checker was not built. Revisit only if that default is
+ * raised, or a descriptor declares `staleTime: Infinity`.
+ */
 
 /** `entityRipple` hands back the SAME array reference for the same entity, so
  * the result stays safe to pass into a hook dependency array or a memoized

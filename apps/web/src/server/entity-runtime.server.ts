@@ -1,7 +1,6 @@
-import { integrityCatalogSchema } from "@cubby/schemas/entity-integrity";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import * as drizzle from "drizzle-orm";
-import { z } from "zod";
+import type { z } from "zod";
 import { entityDetail } from "~/entities/entity-detail.functions";
 import { entityFilterOptions } from "~/entities/entity-filter-options.functions";
 import { entityInspectorHealth } from "~/entities/entity-inspector-health.functions";
@@ -52,10 +51,8 @@ export const entityListHandlers = implementOperationDomain(entityList, {
 
 export const entityDetailHandlers = implementOperationDomain(entityDetail, {
   detail: {
-    // Browser UI detail reads may use the bounded-stale handle selected by
-    // request context. Non-browser and fresh-after-write requests remain
-    // strong because their context selects the authoritative database.
-    readPolicy: "context",
+    // Query-default "context" policy: browser detail reads may ride the
+    // bounded-stale handle; other contexts stay authoritative.
     input: entityDetailInputSchema,
     output: (input) => getEntityDetailOutputSchema(input.entity).nullable(),
     run: async (context, input) => {
@@ -94,23 +91,11 @@ export const entityMutationHandlers = implementOperationDomain(entityMutation, {
   },
 });
 
-const entityInspectorHealthSchema = z.object({
-  counts: z.record(z.string(), z.number().int().nonnegative()),
-  search: z.record(
-    z.string(),
-    z.object({
-      documents: z.number().int().nonnegative(),
-      embeddings: z.number().int().nonnegative(),
-    }),
-  ),
-});
-
 export const entityInspectorHealthHandlers = implementOperationDomain(
   entityInspectorHealth,
   {
     inspectorHealth: {
       readPolicy: "strong",
-      output: entityInspectorHealthSchema,
       run: async (context) => {
         const [counts, rows] = await Promise.all([
           getEntityCounts(context.db),
@@ -153,9 +138,6 @@ export const entityInspectorHealthHandlers = implementOperationDomain(
 export const entityIntegrityHandlers = implementOperationDomain(
   entityIntegrity,
   {
-    catalog: {
-      output: integrityCatalogSchema,
-      run: async () => buildIntegrityCatalog(),
-    },
+    catalog: async () => buildIntegrityCatalog(),
   },
 );

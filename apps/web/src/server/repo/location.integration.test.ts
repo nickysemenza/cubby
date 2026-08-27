@@ -36,7 +36,7 @@ import {
   locationSearch,
   updateLocation,
 } from "./location";
-import { createProduct } from "./product";
+import { createProduct, productList } from "./product";
 import { makeLocationInput, makeProductInput } from "./repo.fixtures";
 import { resolveLiveShortcode } from "./shortcode-resolver";
 import { insertWithShortcode } from "./shortcode-utils";
@@ -1078,6 +1078,115 @@ describe("buildLocationTree identity product hydration", () => {
       id: vessel.id,
       coverImage: { id: parseShortcodeFor("image", cover.shortcode) },
     });
+  });
+});
+
+/**
+ * The location list's `inventoryEntries` cell, its sort, and its count filters
+ * must agree on whether an installed fixture counts. Per the rule in
+ * `inventory/placement.ts` — "Counting, auditing, browsing → EXCLUDE" — none of
+ * them do. The cell used to, so "wire spools" rendered 49 chips while sorting
+ * as 25.
+ *
+ * The PRODUCT direction is asserted here too, and asserts the OPPOSITE. The
+ * product list's Locations cell deliberately includes installed placements, so
+ * a fix applied to both directions would turn one bug into another. This hero
+ * stat has broken both ways; the pair of assertions is the guard.
+ */
+describe("locationList inventoryEntries placement", () => {
+  const ctx = withTestDb();
+
+  it("shows only stock in the cell, and agrees with the sort and count filter", async () => {
+    const mixed = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Mixed Shelf", type: "shelf" }),
+      ctx.actor,
+    );
+    const allStock = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "All Stock Shelf", type: "shelf" }),
+      ctx.actor,
+    );
+
+    const place = async (
+      locationCode: string,
+      productName: string,
+      placement: "stock" | "installed",
+    ) => {
+      const created = await createProduct(
+        ctx.db,
+        makeProductInput({ name: productName }),
+        ctx.actor,
+      );
+      await createInventoryEntry(
+        ctx.db,
+        {
+          productId: parseEntityId(
+            "product",
+            (await resolveLiveShortcode(ctx.db, created.id, "product"))!,
+          ),
+          locationId: parseEntityId(
+            "location",
+            (await resolveLiveShortcode(ctx.db, locationCode, "location"))!,
+          ),
+          amount: { value: 1, unit: "each" },
+          placement,
+        },
+        ctx.actor,
+      );
+      return created;
+    };
+
+    await place(mixed.id, "Mixed Shelf Bolt", "stock");
+    const fixture = await place(mixed.id, "Mixed Shelf Dimmer", "installed");
+    await place(allStock.id, "All Stock Bolt A", "stock");
+    await place(allStock.id, "All Stock Bolt B", "stock");
+
+    const rows = await locationList(
+      ctx.db,
+      {},
+      [{ orderBy: "name", direction: "asc" }],
+      { pageIndex: 0, pageSize: 50 },
+    );
+    const cellCount = (id: string) =>
+      rows.data.find((row) => row.id === id)?.inventoryEntries?.length ?? 0;
+
+    // The cell counts stock only — the dimmer is held here but not browsable.
+    expect(cellCount(mixed.id)).toBe(1);
+    expect(cellCount(allStock.id)).toBe(2);
+
+    // The sort ranks by the same population the cell shows: two stock beats
+    // one stock plus one fixture.
+    const sorted = await locationList(
+      ctx.db,
+      {},
+      [{ orderBy: "inventoryEntries", direction: "desc" }],
+      { pageIndex: 0, pageSize: 50 },
+    );
+    const order = sorted.data.map((row) => row.id);
+    expect(order.indexOf(allStock.id)).toBeLessThan(order.indexOf(mixed.id));
+
+    // And the count filter agrees: two items means stock, not stock + fixture.
+    const atLeastTwo = await locationList(
+      ctx.db,
+      { directItemCountMin: 2 },
+      [{ orderBy: "name", direction: "asc" }],
+      { pageIndex: 0, pageSize: 50 },
+    );
+    expect(atLeastTwo.data.map((row) => row.id)).toContain(allStock.id);
+    expect(atLeastTwo.data.map((row) => row.id)).not.toContain(mixed.id);
+
+    // The OPPOSITE direction, deliberately: a fixture's product still lists the
+    // location that holds it. Narrowing this too would trade one bug for
+    // another — see `product/crud.ts`.
+    const products = await productList(
+      ctx.db,
+      { nameFilter: "Mixed Shelf Dimmer" },
+      [{ orderBy: "name", direction: "asc" }],
+      { pageIndex: 0, pageSize: 10 },
+    );
+    const fixtureRow = products.data.find((row) => row.id === fixture.id);
+    expect(fixtureRow?.inventoryEntry?.length ?? 0).toBeGreaterThan(0);
   });
 });
 

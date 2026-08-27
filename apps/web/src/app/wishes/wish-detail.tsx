@@ -1,9 +1,5 @@
 import type { WishCandidateOut, WishOut } from "@cubby/schemas/wish";
-import {
-  type QueryKey,
-  useMutation,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, Heart, Info } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -20,10 +16,16 @@ import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
-import { entityListRootKey } from "~/entities/entity-list.functions";
+import {
+  cancelQueriesByTags,
+  restoreQueries,
+  snapshotQueriesByTags,
+  updateQueriesByTags,
+} from "~/integrations/tanstack-query/operation-cache";
+import type { OperationCacheTag } from "~/integrations/tanstack-query/operation-meta";
 import { getErrorMessage } from "~/lib/error-utils";
 import { formatCurrencyRange } from "~/lib/format-range";
-import { patchListItem } from "~/lib/optimistic-list";
+import { patchCachedListItem } from "~/lib/optimistic-list";
 import { formatCurrency } from "~/lib/utils";
 import {
   type DetailSection,
@@ -40,6 +42,9 @@ import {
 import { ImageThumbnail } from "../_components/table/ImageThumbnail";
 import { TableLink } from "../_components/table/TableLink";
 import { wishPriceRange } from "./wish-price-range";
+
+/** Every wish surface answers to the entity root: detail, lists, infinite pages. */
+const WISH_TAGS: readonly OperationCacheTag[] = [["wish"]];
 
 /**
  * Wish detail — the outcome plus its candidate tool alternatives.
@@ -89,47 +94,36 @@ export function WishDetail({ wish }: { wish: WishOut }) {
   });
 
   const wishKey = entityDetailFor("wish").queryKey(wish.id);
-  const wishListKey = entityListRootKey("wish");
   const acquiredBase = entityMutationOptionsFactory("wish", "update")();
   const acquiredMutation = useMutation({
     ...acquiredBase,
     onMutate: async (variables) => {
-      await Promise.all([
-        queryClient.cancelQueries({ queryKey: wishKey }),
-        queryClient.cancelQueries({ queryKey: wishListKey }),
-      ]);
-      const previousDetail = queryClient.getQueryData<WishOut | null>(wishKey);
-      const previousLists = queryClient.getQueriesData<{ items: WishOut[] }>({
-        queryKey: wishListKey,
-      });
+      // One predicate reaches every wish-tagged entry: the detail query and
+      // each visible list, including the SSR loader's InfiniteData. The old
+      // root key matched that infinite entry too, but handed it to a patcher
+      // that assumed a `{ items }` page — so `onMutate` threw whenever the
+      // wishes index had been visited.
+      await cancelQueriesByTags(queryClient, WISH_TAGS);
+      const snapshot = snapshotQueriesByTags(queryClient, WISH_TAGS);
       const acquiredAt = variables.data.acquired ? new Date() : null;
       const patchWish = (current: WishOut) => ({ ...current, acquiredAt });
       queryClient.setQueryData<WishOut | null>(wishKey, (current) =>
         current ? patchWish(current) : current,
       );
-      // Every visible wish list uses this operation prefix. Patch its concrete
-      // page entries directly rather than recursively walking unrelated data.
-      queryClient.setQueriesData<{ items: WishOut[] }>(
-        { queryKey: wishListKey },
-        (current) => patchListItem(current, String(variables.id), patchWish),
+      updateQueriesByTags(queryClient, WISH_TAGS, (current) =>
+        patchCachedListItem<WishOut>(current, String(variables.id), patchWish),
       );
-      return { previousDetail, previousLists };
+      return { snapshot };
     },
     onSuccess: (updated) => {
       const { sideEffects: _sideEffects, ...wish } = updated;
       queryClient.setQueryData(wishKey, wish);
-      queryClient.setQueriesData<{ items: WishOut[] }>(
-        { queryKey: wishListKey },
-        (current) => patchListItem(current, wish.id, () => wish),
+      updateQueriesByTags(queryClient, WISH_TAGS, (current) =>
+        patchCachedListItem<WishOut>(current, wish.id, () => wish),
       );
     },
     onError: (error, _variables, context) => {
-      if (context?.previousDetail) {
-        queryClient.setQueryData(wishKey, context.previousDetail);
-      }
-      for (const [key, data] of context?.previousLists ?? []) {
-        queryClient.setQueryData(key as QueryKey, data);
-      }
+      if (context?.snapshot) restoreQueries(queryClient, context.snapshot);
       toast.error(getErrorMessage(error));
     },
   });

@@ -2,7 +2,6 @@ import type { ActorContext } from "@cubby/schemas/context";
 import {
   locationBulkUpdateParentInput,
   locationFiltersSchema,
-  locationPickerItemOut,
   locationShortcodesInput,
 } from "@cubby/schemas/location";
 import type { z } from "zod";
@@ -124,6 +123,5 @@ export const recomputeValuationsWorkflow = async (
 export {
   locationBulkUpdateParentInput,
   locationFiltersSchema,
-  locationPickerItemOut,
   locationShortcodesInput,
 };

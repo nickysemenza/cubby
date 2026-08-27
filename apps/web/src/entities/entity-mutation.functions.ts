@@ -18,9 +18,9 @@ import { parseEntityMutationOutput } from "./generated/entity-mutation-results.g
  * A product create/update whose payload names an ingredient link (and,
  * optionally, an explicit USDA food link) moves more than a plain product
  * write does: the linked ingredient's own queries, and the linked usda-food
- * detail query, both go stale otherwise. Widening `ripple.product` /
- * `ripple.productBase` unconditionally would cost every product write in the
- * app a refetch of ingredient/usda-food queries it never touches — so this
+ * detail query, both go stale otherwise. Widening `ripple.product`
+ * unconditionally would cost every product write in the app a refetch of
+ * ingredient/usda-food queries it never touches — so this
  * widens only when the mutation's own input says the link is really there.
  * Named callers today: `usda-food-actions.tsx`'s "link to an ingredient"
  * flow and the ingredient-enrichment create paths

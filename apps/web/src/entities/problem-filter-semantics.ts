@@ -16,6 +16,40 @@ import type { FilterAssembly } from "./problem-query";
 
 export const problemFilterSpecs = problemFilterSemantics;
 
+/**
+ * The first declared range filter whose preset expands to an empty patch, or
+ * undefined when every one resolves.
+ *
+ * A range spec expands a closed set of preset keys and returns an empty patch
+ * for anything else. From a URL that leniency is deliberate — an unknown
+ * `?date=` resolves to no bound rather than an error page. From a DECLARATION
+ * it is a silent widening: the constraint vanishes and the view reports every
+ * row. `unclassifiedExpenses` declared `cost` as the multiselect sentinel
+ * `FILTER_NONE` where that expander accepts only `"none"`, and reported 7,450
+ * rows against a true count of zero (#785).
+ *
+ * Exported because the same question has two askers with different reach.
+ * {@link compileProblemFilters} asks it at runtime, but only for the Problem-
+ * BACKED views it compiles; every other saved view goes straight to
+ * `buildFiltersFromManifest`, where an empty patch is an `Object.assign` no-op
+ * and the constraint disappears in silence. `view-manifest.unit.test.tsx` asks
+ * it of the whole manifest so those are covered too — one predicate, not two.
+ */
+export function findUnexpandedRangeFilter(
+  specs: readonly FilterSpecCore[],
+  assembly: FilterAssembly,
+): FilterAssembly[number] | undefined {
+  const byColumn = new Map(specs.map((spec) => [spec.columnId, spec]));
+  return assembly.find(({ id, value }) => {
+    const spec = byColumn.get(id);
+    if (spec?.kind !== "range") return false;
+    const preset = Array.isArray(value) ? value[0] : value;
+    if (preset === undefined) return false;
+    const patch = spec.expand?.(preset);
+    return !patch || Object.keys(patch).length === 0;
+  });
+}
+
 /** Compile a Problem assembly through the server-safe semantic registry. */
 export function compileProblemFilters(
   entity: Entity,
@@ -45,21 +79,7 @@ export function compileProblemFilters(
       `Problem filter ${entity}.${nonSerializable.id} has no canonical URL semantic`,
     );
   }
-  // A range spec expands a closed set of preset keys and returns an empty patch
-  // for anything else. From a URL that leniency is deliberate — an unknown
-  // `?date=` resolves to no bound rather than an error page. From a DECLARATION
-  // it is a silent widening: the constraint vanishes and the Problem reports
-  // every row. `unclassifiedExpenses` declared `cost` as the multiselect
-  // sentinel `FILTER_NONE` where that expander accepts only `"none"`, and
-  // reported 7,450 rows against a true count of zero (#785).
-  const unexpanded = assembly.find(({ id, value }) => {
-    const spec = byColumn.get(id);
-    if (spec?.kind !== "range") return false;
-    const preset = Array.isArray(value) ? value[0] : value;
-    if (preset === undefined) return false;
-    const patch = spec.expand?.(preset);
-    return !patch || Object.keys(patch).length === 0;
-  });
+  const unexpanded = findUnexpandedRangeFilter(specs, assembly);
   if (unexpanded) {
     throw new Error(
       `Problem filter ${entity}.${unexpanded.id} declares the range preset ` +

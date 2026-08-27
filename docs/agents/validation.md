@@ -10,6 +10,11 @@ browser app). Write the lowest tier that can expose the regression; do not
 duplicate the same assertion across tiers. Real SQL invariants remain database
 tests. Guard scripts that CI depends on remain load-bearing.
 
+Unit and UI are separate Vitest projects — node vs. jsdom, per
+`apps/web/vitest.config.ts` — and neither runs the other's files, so a change
+touching any `.tsx` under `apps/web/src` needs `test:ui` too, even when
+`test:unit` looks like the narrowest tier that can fail.
+
 ## Commands and ownership
 
 While editing, run one file: `pnpm test:file src/…` from the repo root. That is
