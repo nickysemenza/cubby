@@ -3,7 +3,10 @@ import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { useMemo, useRef } from "react";
 import { copyShortcodes } from "~/lib/clipboard";
 import { verbBulkAction } from "../actions/action-verb-ui";
-import { useEntityActions } from "../actions/entity-actions";
+import {
+  type EntityActionsEntry,
+  useEntityActions,
+} from "../actions/entity-actions";
 import {
   BulkActionBar,
   type BulkActionBarProps,
@@ -106,6 +109,13 @@ export function useListBulkActions<TData extends { id: string }>({
   const rowMenuItems = registered.rowMenuItems;
   const latestRowMenuItems = useRef(rowMenuItems);
   latestRowMenuItems.current = rowMenuItems;
+  const rowActions = useMemo<EntityActionsEntry>(
+    () => ({
+      entity,
+      rowMenuItems: (row) => latestRowMenuItems.current(row),
+    }),
+    [entity],
+  );
   // Stable for the component's life — `entity` is constant by
   // `useEntityActions`' own invariant, and reading the items through a ref
   // stops a fresh closure each render from invalidating the context for every
@@ -117,7 +127,17 @@ export function useListBulkActions<TData extends { id: string }>({
     enableRowSelection: config !== undefined,
     rowSelection: config ? state.rowSelection : {},
     onRowSelectionChange: config ? state.onRowSelectionChange : undefined,
-    /** Render once, outside the table. */
+    /**
+     * The registry half, from THIS hook's `useEntityActions` instance.
+     *
+     * It has to be the same instance the bar's actions came from: an action
+     * stages its rows in the hook that owns its dialog, so resolving the bar
+     * here and the dialogs somewhere else leaves every bulk action opening
+     * nothing at all. Surfaces publish these rather than letting `RTable`
+     * resolve its own — `RTable` only falls back when nobody does.
+     */
+    rowActions,
+    actionDialogs: registered.dialogs,
   };
 }
 

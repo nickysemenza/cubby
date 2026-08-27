@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { EntityActionsEntry } from "../actions/entity-actions";
 import type { RowData } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import type { QueryTiming } from "~/lib/query-timing";
@@ -26,6 +27,9 @@ export interface ListWorkbenchModel<TItem extends RowData> {
    * it is what makes that entity's actions reachable from these rows.
    */
   subjectEntity?: Entity;
+  /** Published so the bar's actions and their dialogs share one instance. */
+  rowActions?: EntityActionsEntry;
+  actionDialogs?: ReactNode;
   deleteDialog?: ReactNode;
   infiniteScroll?: InfiniteScrollControls;
   refreshControls?: {
@@ -101,6 +105,8 @@ export function ListWorkbench<TItem extends RowData>({
         table={model.table}
         entity={model.entity}
         subjectEntity={model.subjectEntity}
+        rowActions={model.rowActions}
+        actionDialogs={model.actionDialogs}
         isLoading={model.isLoading}
         error={model.error}
         timing={model.timing}

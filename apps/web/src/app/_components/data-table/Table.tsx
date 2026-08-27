@@ -82,6 +82,14 @@ export interface RTableProps<TItem extends RowData> {
    * Declaring it here is what publishes that entity's actions to the rows.
    */
   subjectEntity?: Entity;
+  /**
+   * The entity's resolved actions, published by whichever hook owns the bar's
+   * actions so both halves come from one instance. Omit and `RTable` resolves
+   * its own — the fallback that keeps a table which wires nothing from having
+   * a silently empty row menu.
+   */
+  rowActions?: EntityActionsEntry;
+  actionDialogs?: ReactNode;
   /** Canonical mobile destination for rows whose entity type varies by row. */
   getMobileDetailsHref?: (item: TItem) => string | undefined;
   /** Callback when a row is clicked */
@@ -217,8 +225,19 @@ function TableWithEntityActions({
 export default function RTable<TItem extends RowData>(
   props: RTableProps<TItem>,
 ) {
-  const { entity, subjectEntity } = props;
-  let content = <RTableInner {...props} />;
+  const { entity, subjectEntity, rowActions, actionDialogs } = props;
+  let content = (
+    <>
+      <RTableInner {...props} />
+      {actionDialogs}
+    </>
+  );
+  if (rowActions) {
+    const inner = content;
+    content = (
+      <EntityActionsProvider value={rowActions}>{inner}</EntityActionsProvider>
+    );
+  }
   // Nested, not merged in one call: each entity needs its own hook instance,
   // and the provider merges what it finds above it.
   if (subjectEntity && subjectEntity !== entity) {
@@ -229,7 +248,10 @@ export default function RTable<TItem extends RowData>(
       </TableWithEntityActions>
     );
   }
-  if (entity) {
+  // Only when nobody published: resolving a second instance for an entity a
+  // surface already resolved would give the bar's actions and their dialogs
+  // different state.
+  if (entity && !rowActions) {
     const inner = content;
     content = (
       <TableWithEntityActions key={entity} entity={entity}>

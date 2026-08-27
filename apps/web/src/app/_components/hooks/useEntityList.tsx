@@ -460,6 +460,8 @@ export function useEntityList<
       error,
       timing,
       bulkActionBar,
+      rowActions: presentationState.listBulkActions.rowActions,
+      actionDialogs: presentationState.listBulkActions.actionDialogs,
       subjectEntity: subject?.entity,
       deleteDialog: presentationState.deleteDialog,
       infiniteScroll: infiniteResult.infiniteScroll,

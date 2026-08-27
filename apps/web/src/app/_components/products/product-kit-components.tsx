@@ -220,6 +220,7 @@ function KitTable({
       table={table}
       entity="product"
       bulkActionBar={selection.renderBulkActionBar(table)}
+        {...selection.tableProps}
       ariaLabel={ariaLabel}
       embedded
       emptyState={emptyState}

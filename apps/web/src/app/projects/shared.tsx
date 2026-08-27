@@ -467,6 +467,7 @@ export function TaskList({
         embedded
         showColumnMenu
         bulkActionBar={selection.renderBulkActionBar(table)}
+        {...selection.tableProps}
       />
       {deleteDialog}
       <TaskBulkActionDialogs
@@ -1140,6 +1141,7 @@ export function ExpenseList({
         embedded
         showColumnMenu
         bulkActionBar={selection.renderBulkActionBar(table)}
+        {...selection.tableProps}
       />
       {deleteDialog}
       {rowActions.dialogs}
