@@ -31,9 +31,24 @@ import {
 } from "~/server/db/schema";
 // Deep path, never the `database-helpers` barrel: these are top-level const
 // initializations, so an import cycle here is a TDZ crash at startup.
-import { productAcquisitionDateSql } from "~/server/repo/expense-aggregate-sql";
+import {
+  productAcquisitionDateSql,
+  productExpenseCountSql,
+  productExpenseTotalSql,
+} from "~/server/repo/expense-aggregate-sql";
 import { stockOnly } from "~/server/repo/inventory/placement";
 import { notDeleted } from "./query";
+
+/**
+ * How many distinct components this product contains — non-zero makes it a kit.
+ *
+ * Counts EDGES, not units, so a 4-pack recorded as one row with `quantity: 4`
+ * reads as 1: the column says "made of N things". The detail hero and the list
+ * cell both read it, and `productIdsWithComponents` in product/crud.ts selects
+ * on the same live-edge predicate — the filter, the cell, and the hero
+ * disagreeing is the #428 failure mode.
+ */
+const productComponentCount = sql<number>`(SELECT count(*) FROM "ProductComponent" pc WHERE pc."parentProductId" = "product"."id" AND pc."deletedAt" IS NULL)`;
 
 /**
  * A task's parent `project`, optional subject `product`, and own parent task,
@@ -288,10 +303,7 @@ export const relations = {
           sql<number>`(SELECT count(*) FROM "Recipe" r JOIN "Cookbook" cb ON cb."id" = r."cookbookId" WHERE cb."productId" = "product"."id" AND cb."deletedAt" IS NULL AND r."deletedAt" IS NULL)`.as(
             "cookbookRecipeCount",
           ),
-        componentCount:
-          sql<number>`(SELECT count(*) FROM "ProductComponent" pc WHERE pc."parentProductId" = "product"."id" AND pc."deletedAt" IS NULL)`.as(
-            "componentCount",
-          ),
+        componentCount: productComponentCount.as("componentCount"),
       },
     },
     list: {
@@ -317,40 +329,13 @@ export const relations = {
           },
         },
       },
-      // Uncorrelated-per-row scalar: how many live expenses (acquisitions +
-      // negative exit rows) point at this product. Mirrors the ingredient
-      // list's `appearsInRecipes` extras — a raw string hand-qualified to the
-      // relational query builder's root alias ("product"), since a
-      // Drizzle-typed column ref would get rewritten to that same alias
-      // anyway for a same-table column, but a cross-table correlated
-      // reference must stay a literal string to survive the rewrite.
       extras: {
-        expenseCount:
-          sql<number>`(SELECT count(*) FROM "Expense" pu WHERE pu."productId" = "product"."id" AND pu."deletedAt" IS NULL)`.as(
-            "expenseCount",
-          ),
-        // How many distinct components this product contains — non-zero makes
-        // it a kit. Same live-edge predicate as `productIdsWithComponents` in
-        // product/crud.ts, deliberately: the filter selects rows and this
-        // renders the cell, and the two disagreeing is the #428 failure mode.
-        // Counts edges, not units, so a 4-pack recorded as one row with
-        // `quantity: 4` reads as 1 — the column says "made of N things".
-        componentCount:
-          sql<number>`(SELECT count(*) FROM "ProductComponent" pc WHERE pc."parentProductId" = "product"."id" AND pc."deletedAt" IS NULL)`.as(
-            "componentCount",
-          ),
-        // Net basis: SUM(expense.cost) over this product's live expenses.
-        // Plain sum IS the net basis — negative rows (refunds, disposals) are
-        // real in this ledger. COALESCE matters: a product with no expenses
-        // nets $0, not null. Same "hand-qualified alias, no interpolated
-        // PgColumn" shape as expenseCount above — see `purchaseExpenseTotal`
-        // in repo/purchase.ts for the full warning about why a Drizzle
-        // column interpolated into this select field would self-join and
-        // silently return 0 for every row.
-        expenseTotal:
-          sql<number>`(SELECT COALESCE(sum(e."cost"), 0)::double precision FROM "Expense" e WHERE e."productId" = "product"."id" AND e."deletedAt" IS NULL)`.as(
-            "expenseTotal",
-          ),
+        // Counts every live line, acquisitions and exits alike. Shared with the
+        // ORDER BY and the range filter in product/crud.ts.
+        expenseCount: productExpenseCountSql().as("expenseCount"),
+        componentCount: productComponentCount.as("componentCount"),
+        // Net basis, shared with its ORDER BY and range filter the same way.
+        expenseTotal: productExpenseTotalSql().as("expenseTotal"),
         // A Product can be present on several Expense lines and Purchases, in
         // BOTH directions — a sale or disposal is a Purchase too. The column
         // means the latest ACQUISITION, so it reads the shared fragment that

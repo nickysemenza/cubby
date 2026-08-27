@@ -117,3 +117,49 @@ export const productAcquisitionDateSql = (
 export const productAcquisitionDateFilterSql = (
   productId: AnyColumn,
 ): SQL<string | null> => acquisitionDateBody(sql`${productId}`);
+
+/**
+ * A product's live-expense rollups: how many lines point at it, and their net
+ * basis.
+ *
+ * Both are plain sums over EVERY live line, acquisitions and exits alike —
+ * unlike {@link productAcquisitionDateSql}, which is directional. A negative
+ * row (refund, disposal) is real money in this ledger, so the net basis is
+ * `SUM(Expense.cost)` with no sign filter; `COALESCE` matters because a product
+ * with no expenses nets $0, not null.
+ *
+ * Same two-projection shape as the acquisition date above, and for the same
+ * reason: the cell and ORDER BY need a hand-qualified alias, the shared
+ * whereClause needs a real interpolated column. They were three hand copies
+ * each until this — correct, but structurally the arrangement that let
+ * `purchaseDate` ship wrong in all three places at once.
+ */
+const expenseCountBody = (productRef: SQL): SQL<number> =>
+  sql`(SELECT count(*) FROM "Expense" pec_e
+        WHERE pec_e."productId" = ${productRef}
+          AND pec_e."deletedAt" IS NULL)`;
+
+const expenseTotalBody = (productRef: SQL): SQL<number> =>
+  sql`(SELECT COALESCE(sum(pet_e."cost"), 0)::double precision FROM "Expense" pet_e
+        WHERE pet_e."productId" = ${productRef}
+          AND pet_e."deletedAt" IS NULL)`;
+
+/** Correlated scalar for the list cell and ORDER BY. */
+export const productExpenseCountSql = (
+  productAlias = '"product"',
+): SQL<number> => expenseCountBody(sql.raw(`${productAlias}."id"`));
+
+/** WHERE-clause form for the shared filter builder. */
+export const productExpenseCountFilterSql = (
+  productId: AnyColumn,
+): SQL<number> => expenseCountBody(sql`${productId}`);
+
+/** Correlated scalar for the list cell and ORDER BY. */
+export const productExpenseTotalSql = (
+  productAlias = '"product"',
+): SQL<number> => expenseTotalBody(sql.raw(`${productAlias}."id"`));
+
+/** WHERE-clause form for the shared filter builder. */
+export const productExpenseTotalFilterSql = (
+  productId: AnyColumn,
+): SQL<number> => expenseTotalBody(sql`${productId}`);
