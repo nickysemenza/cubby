@@ -272,10 +272,18 @@ export const ENTITY_NOT_FOUND_REASON = {
  * The companion to {@link ENTITY_NOT_FOUND_REASON}: that supplies a generic
  * resolver's error *code*, this supplies its *prose*. Spelled out for the same
  * reason — capitalizing the entity key gets 12 of 15 right and mangles the rest
- * (`financialAccount` → `"FinancialAccount"`, `inventory` → `"Inventory"` where
- * every existing message says `"Inventory entry"`). These strings are taken
- * verbatim from the messages the hand-rolled lookups already throw, so
- * collapsing those onto a generic helper doesn't reword any user-facing error.
+ * (`financialAccount` → `"FinancialAccount"`).
+ *
+ * This is also the single canonical spelling the client UI derives its Title
+ * Case labels from (`titleCaseEntityLabel` in `apps/web/src/entities/entities.tsx`)
+ * — so a rename here propagates instead of drifting a second, hand-typed copy
+ * out of sync. `inventory` reads `"Inventory item"`, not `"Inventory entry"`:
+ * the manifest's own `names.singular`, the entity's nav/registry label, and
+ * its route-level not-found copy all already said "item" — "entry" survives
+ * only in row-scoped repo error strings (`InventoryEntry` is the table name)
+ * that are a different, deliberately narrower case (see
+ * `apps/web/src/app/inventory/inventoryitemlist.tsx`'s delete-dialog comment)
+ * and aren't sourced from this map.
  */
 export const ENTITY_LABEL = {
   cookbook: "Cookbook",
@@ -284,7 +292,7 @@ export const ENTITY_LABEL = {
   financialTransaction: "Financial transaction",
   image: "Image",
   ingredient: "Ingredient",
-  inventory: "Inventory entry",
+  inventory: "Inventory item",
   ledgerParty: "Ledger party",
   ledgerTransfer: "Ledger transfer",
   location: "Location",
