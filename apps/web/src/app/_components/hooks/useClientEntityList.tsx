@@ -221,6 +221,8 @@ export function useClientEntityList<TData extends BaseListRow>({
       error,
       bulkActionBar,
       deleteDialog: presentationState.deleteDialog,
+      rowActions: presentationState.listBulkActions.rowActions,
+      actionDialogs: presentationState.listBulkActions.actionDialogs,
     },
     requestDelete: presentationState.requestDelete,
   };

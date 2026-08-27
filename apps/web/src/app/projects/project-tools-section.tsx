@@ -14,6 +14,7 @@ import { Plus, Search, Wrench } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
+import { EntityActionsProvider } from "~/app/_components/actions/entity-actions";
 import {
   createActionsColumn,
   createCurrencyColumn,
@@ -29,7 +30,7 @@ import {
   useCubbyTable,
 } from "~/app/_components/data-table/table-features";
 import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
-import { ProductAddToInventoryDialog } from "~/app/_components/products/product-add-to-inventory-dialog";
+import { useEntitySelection } from "~/app/_components/hooks/useEntitySelection";
 import { product } from "~/app/products/product.functions";
 import { project } from "~/app/projects/project.functions";
 import { Row, Stack } from "~/components/layout";
@@ -115,11 +116,11 @@ function ResourcesTable({
       toast.error(getErrorMessage(error));
     },
   });
-  const [addToInventoryRow, setAddToInventoryRow] =
-    useState<ResourceRow | null>(null);
+  const selection = useEntitySelection<ResourceRow>({ entity: "product" });
   const helper = useMemo(() => createCubbyColumnHelper<ResourceRow>(), []);
   const columns = useMemo<CubbyColumnDef<ResourceRow>[]>(
     () => [
+      ...selection.selectColumns,
       createImageColumn(helper, { entity: "product", getImages: rowImages }),
       createNameColumn(helper, "product", "name", { header: "Product" }),
       helper.accessor((row) => row.category, {
@@ -162,13 +163,6 @@ function ResourcesTable({
         extraActions: (row) => (
           <>
             <VerbMenuItem
-              verb="addToInventory"
-              onSelect={(event) => {
-                event.stopPropagation();
-                setAddToInventoryRow(row);
-              }}
-            />
-            <VerbMenuItem
               verb="removeFromProject"
               disabled={detach.isPending}
               onSelect={(event) => {
@@ -180,7 +174,7 @@ function ResourcesTable({
         ),
       }),
     ],
-    [detach, helper, projectId],
+    [detach, helper, projectId, selection.selectColumns],
   );
   const layout = useCubbyTableLayout({ key: "project:resources", columns });
   const table = useCubbyTable({
@@ -189,13 +183,17 @@ function ResourcesTable({
     atoms: layout.atoms,
     meta: { defaultLayout: layout.defaultLayout },
     getRowId: (row) => row.id,
+    enableRowSelection: selection.enableRowSelection,
+    state: { rowSelection: selection.rowSelection },
+    onRowSelectionChange: selection.onRowSelectionChange,
     initialState: { pagination: { pageIndex: 0, pageSize: 50 } },
   });
   return (
-    <>
+    <EntityActionsProvider value={selection.rowActions}>
       <RTable
         table={table}
         entity="product"
+        bulkActionBar={selection.renderBulkActionBar(table)}
         ariaLabel="Reusable project resources"
         embedded
         isLoading={isLoading}
@@ -211,16 +209,8 @@ function ResourcesTable({
           </Empty>
         }
       />
-      {addToInventoryRow && (
-        <ProductAddToInventoryDialog
-          open
-          onOpenChange={(open) => {
-            if (!open) setAddToInventoryRow(null);
-          }}
-          product={addToInventoryRow}
-        />
-      )}
-    </>
+      {selection.actionDialogs}
+    </EntityActionsProvider>
   );
 }
 

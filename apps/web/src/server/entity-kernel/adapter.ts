@@ -55,6 +55,17 @@ export interface EntityKernelDeleteResult {
   }>;
 }
 
+/**
+ * A bulk patch is one repository call, not N kernel updates: the repository
+ * owns the transaction and the per-entity side-effect fan-out, exactly as
+ * `delete` does.
+ */
+export interface EntityKernelBulkUpdateResult {
+  updated: number;
+  detachedImageKeys?: string[];
+  backgroundBatches?: BackgroundBatchRef[];
+}
+
 export interface EntityKernelBinding {
   entity: EntityKernelEntity;
   sideEffects: boolean;
@@ -112,6 +123,12 @@ export interface EntityKernelBinding {
       ctx: EntityKernelContext,
       ids: unknown[],
     ): Promise<EntityKernelDeleteResult>;
+    /** Absent means the capability gate refuses, as an unsupported merge does. */
+    bulkUpdate?(
+      ctx: EntityKernelContext,
+      ids: unknown[],
+      data: unknown,
+    ): Promise<EntityKernelBulkUpdateResult>;
   };
   merge?: {
     input: ZodSchema;
@@ -184,6 +201,12 @@ export function defineEntityAdapter<
       ctx: EntityKernelContext,
       ids: ZodOutput<CrudFor<E>["idSchema"]>[],
     ) => Promise<EntityKernelDeleteResult>;
+    /** Opt-in; the declared `capabilities.bulkUpdate.fields` narrow `data`. */
+    bulkUpdate?: (
+      ctx: EntityKernelContext,
+      ids: ZodOutput<CrudFor<E>["idSchema"]>[],
+      data: Partial<ZodOutput<CrudFor<E>["updateInput"]>>,
+    ) => Promise<EntityKernelBulkUpdateResult>;
   };
   merge?: EntityKernelBinding["merge"];
 }) {

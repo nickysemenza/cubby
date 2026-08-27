@@ -174,7 +174,7 @@ describe("literal entity generator", () => {
         key: "alpha", names: { singular: "alpha" }, route: null, table: null,
         identifiers: { brand: null, shortcode: null, legacy: null }, presentation: { titleField: "name" }, fields: null,
         filters: { descriptors: [] }, relations: [${relation}], search: { enabled: false },
-        capabilities: { auditable: false, images: false, countable: false, softDelete: false, delete: null, merge: false, mcp: [] },
+        capabilities: { auditable: false, images: false, countable: false, softDelete: false, delete: null, merge: false, bulkUpdate: null, mcp: [] },
         extensions: { countFilter: null, relatednessSignals: null, mcpNames: null },
       }];
     `;

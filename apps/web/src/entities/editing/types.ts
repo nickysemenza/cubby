@@ -32,6 +32,12 @@ void _editableEntityCatalogIsExhaustive;
 export type EntityEditOperation = "create" | "update" | "delete";
 
 /**
+ * Commands also carry the bulk forms, which act on `ids` rather than one
+ * record and so have no semantic intent definition of their own.
+ */
+type EntityEditCommandOperation = EntityEditOperation | "bulkUpdate";
+
+/**
  * A semantic editing capability such as `full`, `capture`, `schedule`, or
  * `planned`. It selects defaults, fields, and command construction *within* an
  * operation; it is not the operation itself.
@@ -117,7 +123,7 @@ export interface EntityEditField<
 
 export interface EntityEditCommand<E extends EditableEntity> {
   entity: E;
-  operation: EntityEditOperation;
+  operation: EntityEditCommandOperation;
   intent: RuntimeEntityEditIntent;
   /** Present only for updates; server payload construction remains entity-owned. */
   id?: string;

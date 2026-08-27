@@ -291,6 +291,51 @@ export const inventoryBulkOperationPayload = z.object({
   loadedAt: z.date().optional(),
 });
 
+/**
+ * One product to stock at a shared location.
+ *
+ * Deliberately NOT `inventoryBulkOperationItem`: that one carries its own
+ * `locationId` per item and an optional entry `id`, because `bulkProcess`
+ * reconciles a whole shelf. This is additive — every item lands at the one
+ * `locationId` on the payload, and there is no entry id because the caller is
+ * naming products, not rows.
+ */
+const inventoryBulkAddItem = z.object({
+  productId: productShortcode,
+  amount: positiveAmount,
+  placement: inventoryPlacement
+    .optional()
+    .describe("Defaults to 'stock'; pass 'installed' for a fixed fixture."),
+});
+
+export type InventoryBulkAddItem = z.infer<typeof inventoryBulkAddItem>;
+
+/**
+ * Stock many products at one location in a single transaction.
+ *
+ * Additive, unlike `inventoryBulkOperationPayload`: nothing already at the
+ * location is touched unless an item names its product, and an item whose slot
+ * `(productId, locationId, placement)` is already occupied SUMS into that row
+ * rather than colliding with the partial unique index.
+ */
+export const inventoryBulkAddPayload = z.object({
+  locationId: locationShortcode,
+  items: z.array(inventoryBulkAddItem).min(1),
+});
+
+/**
+ * `createdCount` + `mergedCount` rather than a flag per row: the caller needs
+ * them to tell the operator how much of a submission merged into stock that
+ * was already there, and deriving that client-side would mean trusting a
+ * preview taken before the write.
+ */
+export const inventoryBulkAddOut = z.object({
+  items: inventoryWithLocationAndProductListOut,
+  createdCount: z.number().int().nonnegative(),
+  mergedCount: z.number().int().nonnegative(),
+  sideEffects: mutationSideEffectsSchema,
+});
+
 const bulkMoveItem = z.object({
   inventoryEntryId: inventoryShortcode,
   quantity: positiveAmount, // How much to move (can be less than total for partial moves)

@@ -703,6 +703,7 @@ export default literalEntity({
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },
+    bulkUpdate: { fields: ["stockTracked"] },
     merge: true,
     mcp: ["get", "list", "create", "update", "delete"],
   },

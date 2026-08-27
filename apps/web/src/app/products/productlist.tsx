@@ -73,7 +73,6 @@ import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { useCreateInventoryMutation } from "../_components/inventory/hooks";
 import { InventoryEntriesQuickEditDialog } from "../_components/inventory/inventory-entries-quick-edit-dialog";
 import { CategoryLabel } from "../_components/products/CategoryLabel";
-import { ProductAddToInventoryDialog } from "../_components/products/product-add-to-inventory-dialog";
 import { productCategoryOptionsWithTheme } from "../_components/products/product-category-icons";
 import { ProductDiscardDialog } from "../_components/products/product-discard-dialog";
 import { ProductShelf } from "../_components/products/product-shelf";
@@ -355,11 +354,6 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
   // Same live-data lookup as quickEdit above: the dialog reads the row out of
   // list data, so post-discard invalidation refreshes what it is showing.
   const [discardProductId, setDiscardProductId] = useState<string | null>(null);
-  // Third slot on the same pattern: the Add-to-inventory dialog needs the
-  // row's product, so hold the id and resolve it against live list data.
-  const [addToInventoryProductId, setAddToInventoryProductId] = useState<
-    string | null
-  >(null);
 
   const tableStateOptions = useSeededFilter("category", initialCategory);
 
@@ -908,10 +902,6 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
           verb="discard"
           onSelect={() => setDiscardProductId(row.id)}
         />
-        <VerbMenuItem
-          verb="addToInventory"
-          onSelect={() => setAddToInventoryProductId(row.id)}
-        />
         {row.id && (
           <VerbMenuItem
             verb="printLabel"
@@ -1079,9 +1069,6 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
   const quickEditProduct = quickEditProductId
     ? (data.find((p) => p.id === quickEditProductId) ?? null)
     : null;
-  const addToInventoryProduct = addToInventoryProductId
-    ? (data.find((p) => p.id === addToInventoryProductId) ?? null)
-    : null;
   const productIds = useMemo(() => data.map((product) => product.id), [data]);
   useEffect(() => {
     const nextIds = uniq(productIds).sort();
@@ -1162,15 +1149,6 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
               stockTracked: parseStockTracked(value),
             });
           }}
-        />
-      )}
-      {addToInventoryProduct && (
-        <ProductAddToInventoryDialog
-          open
-          onOpenChange={(open) => {
-            if (!open) setAddToInventoryProductId(null);
-          }}
-          product={addToInventoryProduct}
         />
       )}
       {quickEditProduct && (

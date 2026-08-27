@@ -1,5 +1,7 @@
 import {
   bulkMovePayload,
+  inventoryBulkAddOut,
+  inventoryBulkAddPayload,
   inventoryBulkOperationPayload,
   inventoryDuplicateUniqueProductsOut,
   inventoryFindDuplicatesInput,
@@ -27,6 +29,11 @@ export const inventory = defineOperationDomain("inventory", {
     input: inventoryBulkOperationPayload,
     output: inventoryWithLocationAndProductListAndSideEffectsOut,
     invalidates: ripple.inventory,
+  }),
+  bulkAdd: mutation({
+    input: inventoryBulkAddPayload,
+    output: inventoryBulkAddOut,
+    invalidates: [["inventory"]],
   }),
   bulkMove: mutation({
     input: bulkMovePayload,

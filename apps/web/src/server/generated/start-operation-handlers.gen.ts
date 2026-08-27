@@ -232,6 +232,9 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "ingredient.resolveOrCreate": async () =>
     (await import("~/server/ingredient-browser.server")).ingredientHandlers
       .operations.resolveOrCreate,
+  "inventory.bulkAdd": async () =>
+    (await import("~/server/inventory-browser.server")).inventoryHandlers
+      .operations.bulkAdd,
   "inventory.bulkMove": async () =>
     (await import("~/server/inventory-browser.server")).inventoryHandlers
       .operations.bulkMove,

@@ -76,7 +76,7 @@ export function useActionMutation<TFn extends MutationOptionsFn>({
   error?: string | ((err: unknown) => string);
   /** Route ordinary CRUD through the entity editing command lifecycle. */
   entity?: EditableEntity;
-  operation?: "create" | "update" | "delete";
+  operation?: "create" | "update" | "delete" | "bulkUpdate";
   intent?: string;
 }) {
   const commands = useEntityCommands(entity ?? "product");
@@ -117,6 +117,18 @@ export function useActionMutation<TFn extends MutationOptionsFn>({
             );
             if (!result.ok) {
               throw new Error(result.issues[0]?.message ?? "Delete failed");
+            }
+            return result.result as DataOf<TFn>;
+          }
+          if (operation === "bulkUpdate") {
+            const result = await commands.bulkUpdate(
+              input.ids ?? (input.id ? [input.id] : []),
+              input.data ?? {},
+            );
+            if (!result.ok) {
+              throw new Error(
+                result.issues[0]?.message ?? "Bulk update failed",
+              );
             }
             return result.result as DataOf<TFn>;
           }

@@ -4,15 +4,12 @@ import type { LucideIcon } from "lucide-react";
 import {
   AlertTriangle,
   ArrowRightLeft,
-  Camera,
-  ClipboardCheck,
   Plus,
-  Printer,
-  ScanBarcode,
   ShoppingCart,
   Sparkles,
 } from "lucide-react";
 import { entities, isBrowserRoutedEntity } from "~/entities/entities";
+import { type ActionVerbId, verbDef } from "./action-verbs";
 
 /**
  * Surfaces that render quick actions. Deriving each surface's list from one
@@ -41,6 +38,12 @@ export type ActionSurface =
  */
 export interface ActionItem {
   id: string;
+  /**
+   * Set for actions that are also a registered verb — `name` and `icon` then
+   * come from {@link verbDef}, never from a string written here. See
+   * {@link verbAction}.
+   */
+  verb?: ActionVerbId;
   /** Set for entity-create actions — name/path derive from `entities[entity]`. */
   entity?: BrowserRoutedEntity;
   name: string;
@@ -86,6 +89,28 @@ function entityCreate(
 }
 
 /**
+ * Build a quick action for a registered verb, sourcing label + icon from the
+ * action-verb registry.
+ *
+ * Without this, the palette re-spells verbs the app already has words for, and
+ * it did: "Bulk Edit" and "Print Labels" shipped here in Title Case against
+ * `action-verbs.ts`'s documented sentence case, and Bulk edit carried
+ * `ClipboardCheck` where the registry declares `SquarePen`. That is the exact
+ * label-and-glyph drift `action-verbs.ts` was created to end — it had simply
+ * never been connected to this registry.
+ */
+function verbAction(
+  verb: ActionVerbId,
+  id: string,
+  path: string,
+  surfaces: ActionSurface[],
+  keywords?: string[],
+): ActionItem {
+  const { label, icon } = verbDef(verb);
+  return { id, verb, name: label, path, icon, keywords, surfaces };
+}
+
+/**
  * The single canonical quick-action registry. Every surface derives its slice
  * from here via {@link actionsForSurface}. Entity-create actions read
  * label/route from the entities registry; New Ingredient is intentionally left
@@ -96,30 +121,23 @@ export const actionItems: ActionItem[] = [
   // Home is an operate surface, not an alternate create menu; new records
   // remain available from their lists, the command palette, and the masthead.
   // Order in this array is the order each surface renders.
-  {
-    id: "recount",
-    name: "Recount",
-    path: "/inventory/session",
-    icon: ScanBarcode,
-    keywords: ["barcode", "scan", "inventory", "add", "garage", "audit"],
-    surfaces: [
-      "navbar-create",
-      "palette-quick",
-      "inventory-page",
-      "home-quick",
-    ],
-  },
-  {
-    id: "photo-pass",
-    name: "Photo pass",
-    path: "/locations/photo-pass",
-    icon: Camera,
-    keywords: ["photo", "camera", "picture", "location", "bin", "shelf"],
-    // Same recurring-verb slot as Recount: both are passes you walk the house
-    // with. Palette-only left the newest of the three queue passes reachable
-    // from three places where recount had seven.
-    surfaces: ["palette-quick", "home-quick"],
-  },
+  verbAction(
+    "recount",
+    "recount",
+    "/inventory/session",
+    ["navbar-create", "palette-quick", "inventory-page", "home-quick"],
+    ["barcode", "scan", "inventory", "add", "garage", "audit"],
+  ),
+  // Same recurring-verb slot as Recount: both are passes you walk the house
+  // with. Palette-only left the newest of the three queue passes reachable
+  // from three places where recount had seven.
+  verbAction(
+    "photoPass",
+    "photo-pass",
+    "/locations/photo-pass",
+    ["palette-quick", "home-quick"],
+    ["photo", "camera", "picture", "location", "bin", "shelf"],
+  ),
   {
     id: "what-can-i-make",
     name: "What can I make?",
@@ -265,22 +283,20 @@ export const actionItems: ActionItem[] = [
     keywords: ["issues", "errors", "warnings", "audit"],
     surfaces: ["palette-quick"],
   },
-  {
-    id: "bulk-edit",
-    name: "Bulk Edit",
-    path: "/inventory/bulk-edit",
-    icon: ClipboardCheck,
-    keywords: ["audit", "bulk", "edit", "inventory", "review"],
-    surfaces: ["palette-quick", "inventory-page"],
-  },
-  {
-    id: "print-labels",
-    name: "Print Labels",
-    path: "/labels",
-    icon: Printer,
-    keywords: ["label", "print", "qr", "barcode", "sticker"],
-    surfaces: ["palette-quick"],
-  },
+  verbAction(
+    "bulkEdit",
+    "bulk-edit",
+    "/inventory/bulk-edit",
+    ["palette-quick", "inventory-page"],
+    ["audit", "bulk", "edit", "inventory", "review"],
+  ),
+  verbAction(
+    "printLabels",
+    "print-labels",
+    "/labels",
+    ["palette-quick"],
+    ["label", "print", "qr", "barcode", "sticker"],
+  ),
   {
     id: "single-item",
     name: "Single Item",

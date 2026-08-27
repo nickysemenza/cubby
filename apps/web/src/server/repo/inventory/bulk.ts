@@ -6,6 +6,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type {
+  InventoryBulkAddItem,
   InventoryBulkOperationItem,
   InventoryPlacement,
 } from "@cubby/schemas/inventory";
@@ -364,6 +365,207 @@ const slotKey = (
   locationId: LocationId,
   placement: InventoryPlacement,
 ) => `${productId}:${locationId}:${placement}`;
+
+type ResolvedInventoryBulkAddItem = {
+  productId: ProductId;
+  amount: InventoryBulkAddItem["amount"];
+  placement?: InventoryPlacement;
+};
+
+export type ResolvedInventoryBulkAddPayload = {
+  locationId: LocationId;
+  items: ResolvedInventoryBulkAddItem[];
+};
+
+/**
+ * Stock many products at one location, additively, in one transaction.
+ *
+ * Deliberately NOT built on {@link bulkProcessInventoryEntries}: that one is
+ * DELETE-ON-OMIT — it reconciles a whole shelf against exactly the items
+ * submitted, so a caller that only names the products it wants to add would
+ * have every other row at the location soft-deleted out from under it (see
+ * the comment above `bulkProcessInventoryEntries`, ~line 170). This flow only
+ * ever creates or sums into the rows its own items name; everything else at
+ * the location is untouched.
+ *
+ * An item whose slot `(productId, locationId, placement)` is already occupied
+ * sums into that row rather than colliding with the partial unique index;
+ * placement is part of the slot on purpose (see {@link slotKey}), so an item
+ * targeting stock never merges into — or disturbs — an installed fixture of
+ * the same product.
+ */
+export const addInventoryEntries = async (
+  db: Database,
+  payload: ResolvedInventoryBulkAddPayload,
+  actor: ActorContext,
+) => {
+  const { locationId, items } = payload;
+
+  const processed = await withTransaction(
+    db,
+    async (tx: DrizzleTransaction) => {
+      await assertLiveTargets(tx, { locationId });
+
+      const submittedProductIds = uniq(items.map((item) => item.productId));
+      if (submittedProductIds.length > 0) {
+        const liveProducts = await tx
+          .select({ id: product.id })
+          .from(product)
+          .where(
+            and(inArray(product.id, submittedProductIds), notDeleted(product)),
+          );
+        const liveIds = new Set(liveProducts.map((p) => p.id));
+        const missing = submittedProductIds.find((id) => !liveIds.has(id));
+        if (missing) {
+          throw createAppError(
+            "PRODUCT_NOT_FOUND",
+            `Product ${missing} does not exist or has been deleted`,
+          );
+        }
+      }
+
+      // A product listed twice for the same slot would collide with itself —
+      // there is no way to tell which item's unit or amount should win — so
+      // refuse the whole request rather than silently picking one.
+      const seenSlots = new Set<string>();
+      for (const item of items) {
+        const key = slotKey(
+          item.productId,
+          locationId,
+          item.placement ?? "stock",
+        );
+        if (seenSlots.has(key)) {
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            `Product ${item.productId} is listed more than once for this location`,
+          );
+        }
+        seenSlots.add(key);
+      }
+
+      // Every live row this request could land on — any placement, so an
+      // existing installed fixture is visible for the slotKey check below even
+      // though nothing here will ever write to it unless an item explicitly asks
+      // for placement "installed".
+      const existingItems =
+        submittedProductIds.length > 0
+          ? await tx.query.inventoryEntry.findMany({
+              where: and(
+                eq(inventoryEntry.locationId, locationId),
+                inArray(inventoryEntry.productId, submittedProductIds),
+                notDeleted(inventoryEntry),
+              ),
+              ...relations.inventory.full,
+            })
+          : [];
+      const existingBySlot = new Map(
+        existingItems.map((entry) => [
+          slotKey(entry.productId, entry.locationId, entry.placement),
+          entry,
+        ]),
+      );
+
+      const valuationGraphs = await loadValuationGraphs(
+        tx,
+        submittedProductIds,
+      );
+
+      const resultIds: string[] = [];
+      const auditEntries: AuditEntryInput[] = [];
+      let createdCount = 0;
+      let mergedCount = 0;
+
+      for (const item of items) {
+        const placement = item.placement ?? "stock";
+        const existing = existingBySlot.get(
+          slotKey(item.productId, locationId, placement),
+        );
+
+        if (existing) {
+          const before = parseInventoryAmount(existing.amount, existing.id);
+          // Same wording/shape as the merge-unit guard in moveInventoryEntries
+          // above: summing `each` into `lb` produces a number that means
+          // nothing, so refuse rather than pick a unit.
+          if (before.unit !== item.amount.unit) {
+            throw createAppError(
+              "CONSTRAINT_VIOLATION",
+              `Cannot add ${item.amount.unit} to ${before.unit}: the existing entry for product ${item.productId} carries a different unit. Reconcile the units before adding.`,
+            );
+          }
+
+          const nextAmount = {
+            value: before.value + item.amount.value,
+            unit: before.unit,
+          };
+          const valuation = computeInventoryValuation(
+            nextAmount,
+            valuationGraphs.get(item.productId) ?? [],
+          );
+          const updated = await updateAndReturn(
+            tx,
+            inventoryEntry,
+            { amount: nextAmount, valuation },
+            eq(inventoryEntry.id, existing.id),
+          );
+          const changes = computeChanges(existing, updated, ["amount"]);
+          if (changes) {
+            auditEntries.push({
+              entityType: "inventory",
+              entityId: existing.id,
+              action: "update",
+              changes,
+            });
+          }
+          resultIds.push(updated.id);
+          mergedCount += 1;
+        } else {
+          const valuation = computeInventoryValuation(
+            item.amount,
+            valuationGraphs.get(item.productId) ?? [],
+          );
+          const created = await insertWithShortcode(tx, "inventory", {
+            productId: item.productId,
+            locationId,
+            amount: item.amount,
+            ...(item.placement ? { placement: item.placement } : {}),
+            valuation,
+          });
+          resultIds.push(created.id);
+          auditEntries.push({
+            entityType: "inventory",
+            entityId: created.id,
+            action: "create",
+          });
+          createdCount += 1;
+        }
+      }
+
+      if (auditEntries.length > 0) {
+        await logAuditEntries(tx, actor, auditEntries);
+      }
+
+      const results = await batchFetchResults(tx, resultIds);
+
+      // Deliberately does NOT stamp `location.lastBulkInventory` (see the NOTE
+      // on `moveInventoryEntries` below, ~line 730): only an explicit audit
+      // completion marks a location audited, so stocking in a delivery can't
+      // make a bin read "audited" with zero recount.
+      return { results, createdCount, mergedCount };
+    },
+  );
+
+  const pricing = await loadInventoryEntryPricing(db, processed.results);
+  return {
+    items: processed.results.map((entry) =>
+      dbInventoryEntryToAPI(
+        entry,
+        requireLoadedProductPricing(pricing, entry.product.id),
+      ),
+    ),
+    createdCount: processed.createdCount,
+    mergedCount: processed.mergedCount,
+  };
+};
 
 /**
  * The in-memory ledger a move plans against before it writes anything.

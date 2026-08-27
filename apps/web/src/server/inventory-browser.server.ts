@@ -1,6 +1,7 @@
 import { inventory } from "~/app/inventory/inventory.functions";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
+  bulkAddInventoryWorkflow,
   bulkMoveInventoryWorkflow,
   bulkProcessInventoryWorkflow,
   findInventoryDuplicatesWorkflow,
@@ -14,6 +15,8 @@ import {
 export const inventoryHandlers = implementOperationDomain(inventory, {
   bulkProcess: (context, input) =>
     bulkProcessInventoryWorkflow(context.db, context.actorContext, input),
+  bulkAdd: (context, input) =>
+    bulkAddInventoryWorkflow(context.db, context.actorContext, input),
   bulkMove: (context, input) =>
     bulkMoveInventoryWorkflow(context.db, context.actorContext, input),
   moveEntries: (context, input) =>
