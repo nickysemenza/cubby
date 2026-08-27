@@ -144,15 +144,29 @@ const entityRefParser =
     id: schema.parse(value),
   });
 
-// Every entity's ref parser is definitionally entityRefParser(entity,
-// ENTITY_ID_SCHEMA[entity]) — looping over the already-complete id-schema
-// registry keeps this in lockstep with ENTITY_ID_SCHEMA by construction.
-const PARSE_ENTITY_REF = Object.fromEntries(
-  (Object.keys(ENTITY_ID_SCHEMA) as ShortcodeEntity[]).map((entity) => [
-    entity,
-    entityRefParser(entity, ENTITY_ID_SCHEMA[entity]),
-  ]),
-) as Record<ShortcodeEntity, (value: unknown) => EntityRef>;
+const PARSE_ENTITY_REF = {
+  cookbook: entityRefParser("cookbook", cookbookId),
+  expense: entityRefParser("expense", expenseId),
+  financialAccount: entityRefParser("financialAccount", financialAccountId),
+  financialTransaction: entityRefParser(
+    "financialTransaction",
+    financialTransactionId,
+  ),
+  image: entityRefParser("image", imageId),
+  ingredient: entityRefParser("ingredient", ingredientId),
+  inventory: entityRefParser("inventory", inventoryId),
+  ledgerParty: entityRefParser("ledgerParty", ledgerPartyId),
+  ledgerTransfer: entityRefParser("ledgerTransfer", ledgerTransferId),
+  location: entityRefParser("location", locationId),
+  meal: entityRefParser("meal", mealId),
+  product: entityRefParser("product", productId),
+  project: entityRefParser("project", projectId),
+  purchase: entityRefParser("purchase", purchaseId),
+  recipe: entityRefParser("recipe", recipeId),
+  task: entityRefParser("task", taskId),
+  vendor: entityRefParser("vendor", vendorId),
+  wish: entityRefParser("wish", wishId),
+} as const satisfies Record<ShortcodeEntity, (value: unknown) => EntityRef>;
 
 /** Parse and correlate an internal entity discriminator with its UUID brand. */
 export function parseEntityRef<E extends ShortcodeEntity>(
