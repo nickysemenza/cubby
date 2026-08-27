@@ -48,7 +48,7 @@ export function ProblemsBanner() {
     >
       {defects > 0 ? (
         <>
-          <span className="font-mono font-semibold text-destructive text-xs tabular-nums">
+          <span className="font-mono font-semibold text-xs tabular-nums">
             {defects.toLocaleString()}
           </span>
           <span className="text-xs">{problemsBannerMessage(defects)}</span>

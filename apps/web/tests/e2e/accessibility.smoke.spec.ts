@@ -8,6 +8,11 @@ import {
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
+// This single test intentionally mutates a shared database across its route
+// matrix. Retrying it would collide with its own fixed, human-readable fixtures
+// and obscure the original accessibility failure.
+test.describe.configure({ retries: 0 });
+
 test("representative authenticated pages have no serious Axe violations", async ({
   page,
 }) => {

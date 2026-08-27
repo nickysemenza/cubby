@@ -3,6 +3,10 @@ import { seedInventoryPrerequisites } from "./e2e-fixtures";
 import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
+// Goldens must describe one deterministic first attempt. A retry would collide
+// with the fixed fixture names and could bless a duplicate-row state.
+test.describe.configure({ retries: 0 });
+
 async function seedProductWithRelationship(
   page: Parameters<typeof seedInventoryPrerequisites>[0],
   locationName: string,
@@ -126,6 +130,7 @@ test("Porcelain phone Product detail keeps its relationship journey visible", as
       mask: [
         ...nondeterministicMasks(page),
         page.getByText(product.id, { exact: true }),
+        page.getByText(/^Added /),
       ],
       maskColor: "#e7ebf1",
     },
