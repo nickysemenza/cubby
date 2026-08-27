@@ -1,27 +1,12 @@
-import { dashboardCountsOut } from "@cubby/schemas/dashboard";
-import { z } from "zod";
-import {
-  runStartOperation,
-  type StartOperationRequest,
-} from "~/server/start-operation.server";
+import { dashboard } from "~/lib/dashboard.functions";
+import { implementOperationDomain } from "~/server/operation-domain.server";
 import { getDashboardCounts } from "~/server/workflows/dashboard";
 
 /** Browser adapter: authenticated, strongly consistent, schema-checked read. */
-export async function getDashboardCountsForBrowser(options: {
-  request: StartOperationRequest;
-}) {
-  return await runStartOperation({
-    operation: "dashboard.counts",
-    type: "query",
-    input: undefined,
-    inputSchema: z.undefined(),
-    outputSchema: dashboardCountsOut,
-    request: options.request,
+export const dashboardHandlers = implementOperationDomain(dashboard, {
+  counts: {
     readPolicy: "strong",
-    run: async (context) =>
-      await getDashboardCounts({
-        db: context.db,
-        usdaClient: context.usdaClient,
-      }),
-  });
-}
+    run: (context) =>
+      getDashboardCounts({ db: context.db, usdaClient: context.usdaClient }),
+  },
+});

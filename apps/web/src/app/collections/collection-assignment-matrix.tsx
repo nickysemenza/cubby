@@ -8,7 +8,7 @@ import {
   formatCollectionLabel,
   normalizeCollectionSlug,
 } from "@cubby/shared/collection-tag";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Check, ChevronLeft, ChevronRight, MapPin, Plus } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
@@ -32,7 +32,6 @@ import { NativeSelect } from "~/components/ui/native-select";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { EntityIcon, entityDetailLink } from "~/entities/entities";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidateQueryRoots } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
 import {
   type CollectionMatrixRow,
@@ -165,7 +164,6 @@ function NewCollectionDialog({
   subject: "product" | "location";
   rows: MatrixRow[];
 }) {
-  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [memberId, setMemberId] = useState("");
@@ -176,11 +174,6 @@ function NewCollectionDialog({
   const create = useMutation({
     ...collectionOperations.create.mutationOptions(),
     onSuccess: (result) => {
-      invalidateQueryRoots(queryClient, [
-        ["operation", "collection.matrix"],
-        ["operation", "collection.list"],
-        ["operation", "collection.detail"],
-      ]);
       toast.success(`${formatCollectionLabel(result.slug)} created`);
       setOpen(false);
       setName("");
@@ -297,7 +290,6 @@ export function CollectionAssignmentMatrix({
     membership?: CollectionMatrixMembership;
   }) => void;
 }) {
-  const queryClient = useQueryClient();
   const mobileSubjectId = useId();
   const mobileCollectionId = useId();
   const mobileRowsHeadingId = useId();
@@ -330,11 +322,6 @@ export function CollectionAssignmentMatrix({
         delete next[key];
         return next;
       });
-      invalidateQueryRoots(queryClient, [
-        ["operation", "collection.matrix"],
-        ["operation", "collection.list"],
-        ["operation", "collection.detail"],
-      ]);
     },
     onError: (error, variables) => {
       const key = `${variables.subject}:${variables.id}:${variables.collection}`;

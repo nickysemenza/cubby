@@ -1,6 +1,6 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import type { RecipeFlowOperation } from "@cubby/schemas/recipe-flow";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
   GitBranch,
@@ -31,7 +31,6 @@ import {
 } from "~/components/ui/view-switcher";
 import { useIsMobile } from "~/hooks/useMobile";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidateQueryRoots, queryKeys } from "~/lib/query-keys";
 import { CopyJsonButton } from "./copy-debug-button";
 import { RecipeFlowMap, RecipeFlowTable } from "./RecipeFlowRenderers";
 
@@ -94,7 +93,6 @@ export function RecipeFlowView({
   onLayoutChange?: (layout: RecipeFlowLayoutMode) => void;
   onReadyChange?: (ready: boolean) => void;
 }) {
-  const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const [internalLayout, setInternalLayout] =
     useState<RecipeFlowLayoutMode>("table");
@@ -124,7 +122,6 @@ export function RecipeFlowView({
       onSuccess: (_data, variables) => {
         setGenerationError(null);
         setGuidanceOpen(false);
-        invalidateQueryRoots(queryClient, [queryKeys.recipe.flow]);
         if (variables.force) toast.success("Recipe flow regenerated");
       },
       onError: (error) => {

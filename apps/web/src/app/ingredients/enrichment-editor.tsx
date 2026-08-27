@@ -23,7 +23,6 @@ import { Input } from "~/components/ui/input";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { BASE_KINDS, type BaseKind } from "~/lib/conversion-coverage";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
 import type { EquivalenceDraft } from "./equivalence-workbench-link";
@@ -388,10 +387,6 @@ export function EnrichmentEditor({
     mutationFn: productCreateMutationOptions,
     success: (d) =>
       savedWithBackgroundWork(d.sideEffects, `Enriched ${d.name}`),
-    invalidateKeys: [
-      ...invalidatesFor("ingredient"),
-      ...invalidatesFor("product"),
-    ],
     onSuccess: () => onSaved?.(),
     error: (err) => `Failed to create product: ${getErrorMessage(err)}`,
   });
@@ -401,10 +396,6 @@ export function EnrichmentEditor({
     intent: "full",
     mutationFn: productUpdateMutationOptions,
     success: (d) => savedWithBackgroundWork(d.sideEffects, `Updated ${d.name}`),
-    invalidateKeys: [
-      ...invalidatesFor("ingredient"),
-      ...invalidatesFor("product"),
-    ],
     onSuccess: () => onSaved?.(),
     error: (err) => `Failed to update: ${getErrorMessage(err)}`,
   });
@@ -414,7 +405,6 @@ export function EnrichmentEditor({
     intent: "full",
     mutationFn: ingredientUpdateMutationOptions,
     success: `Updated ${row.name}.`,
-    invalidateKeys: invalidatesFor("ingredient"),
     error: (err) => `Failed to update: ${getErrorMessage(err)}`,
   });
 

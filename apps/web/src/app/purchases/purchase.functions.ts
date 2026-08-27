@@ -10,6 +10,7 @@ import {
   splitExpenseInput,
   splitExpenseOut,
 } from "@cubby/schemas/purchase";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -20,31 +21,33 @@ export const purchase = defineOperationDomain("purchase", {
   products: query({
     input: purchaseProductsInput,
     output: purchaseProductsOut,
-    tags: [["purchase"], ["purchase", "products"]],
+    tags: [["purchase", "products"]],
   }),
   link: mutation({
     input: linkExpensesToPurchaseInput,
     output: purchaseOut,
-    invalidates: [["purchase"]],
+    invalidates: ripple.purchase,
   }),
   split: mutation({
     input: splitExpenseInput,
     output: splitExpenseOut,
-    invalidates: [["purchase"]],
+    // Splitting replaces one Expense with several, so it ripples as an EXPENSE
+    // write (a superset of the purchase one, plus the calendar).
+    invalidates: ripple.expense,
   }),
   merge: mutation({
     input: mergePurchasesInput,
     output: mergePurchasesOut,
-    invalidates: [["purchase"]],
+    invalidates: ripple.purchase,
   }),
   attachProducts: mutation({
     input: purchaseProductMutationInput,
     output: purchaseProductMutationOut,
-    invalidates: [["purchase"]],
+    invalidates: ripple.purchaseProduct,
   }),
   detachProducts: mutation({
     input: purchaseProductMutationInput,
     output: purchaseProductMutationOut,
-    invalidates: [["purchase"]],
+    invalidates: ripple.purchaseProduct,
   }),
 });

@@ -1,9 +1,5 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
-import {
-  useMutation,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
+import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { Columns3, ListTree } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { collectTreeProductIds } from "~/app/_components/locations/location-gallery-data";
@@ -15,7 +11,6 @@ import {
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
 import { useHydrated } from "~/hooks/useHydrated";
-import { invalidateQueryRoots } from "~/lib/query-keys";
 import { ArrangeBoard } from "./ArrangeBoard";
 import { ArrangeTree } from "./ArrangeTree";
 import { findUnknownRoot } from "./arrange-tree-utils";
@@ -59,7 +54,6 @@ export function ArrangeSurface({
   at,
   onSelect,
 }: ArrangeSurfaceProps) {
-  const queryClient = useQueryClient();
   const { data: roots } = useSuspenseQuery(
     // Arrange is a live mutation surface. The shared tree is normally warm for
     // two minutes, but restoring a pre-move persisted cache after an immediate
@@ -106,13 +100,10 @@ export function ArrangeSurface({
   useEffect(() => {
     if (unknownRoot || ensuredRef.current || ensureUnknown.isPending) return;
     ensuredRef.current = true;
-    ensureUnknown.mutate(undefined, {
-      onSuccess: () =>
-        invalidateQueryRoots(queryClient, [
-          location.makeTree.queryOptions().queryKey,
-        ]),
-    });
-  }, [unknownRoot, ensureUnknown, queryClient]);
+    // `ensureGlobalUnknown`'s own ripple invalidates the `["location"]` root,
+    // which the tree query answers to.
+    ensureUnknown.mutate(undefined);
+  }, [unknownRoot, ensureUnknown]);
 
   return (
     <Stack gap="md" className="min-h-[calc(100dvh-9rem)]">

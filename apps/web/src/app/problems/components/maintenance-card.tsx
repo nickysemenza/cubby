@@ -20,31 +20,19 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
-import { entityListRootKey } from "~/entities/entity-list.functions";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { imageUpload } from "~/lib/image.functions";
 import {
   openProblemsPruneAliasesStream,
   openProblemsReparseStream,
   problems,
 } from "~/lib/problems.functions";
-import { invalidatesFor, queryKeys } from "~/lib/query-keys";
 import { search } from "~/lib/search.functions";
 import { PROBLEMS_QUERY_STALE_TIME } from "../problem-query-freshness";
 import { searchDocumentMaintenanceRefetchInterval } from "../search-document-maintenance-query";
 import { BACKFILL } from "./backfill-registry";
 import { ProblemActionButton } from "./problem-action-button";
 import { BackfillButton } from "./problem-backfill-action";
-
-// Module-level so the arrays keep a stable identity across renders (the counts
-// query + useActionMutation both key off them).
-const CULL_INVALIDATE_KEYS = [
-  queryKeys.image.list,
-  ...invalidatesFor("problems"),
-] as const;
-const VALUATION_INVALIDATE_KEYS = [
-  queryKeys.location.all,
-  ...invalidatesFor("problems"),
-] as const;
 
 /** One labeled maintenance action: description left, dry-run count + run-button right. */
 function MaintenanceRow({
@@ -165,7 +153,7 @@ function RecomputeAction() {
           batchId: string | null;
         }>
           run={(signal) => openRecipeRecomputeAllStream(signal)}
-          invalidateKeys={[entityListRootKey("recipe")]}
+          invalidateTags={ripple.recipe}
           idleLabel="Recompute all"
           pendingLabel="Enqueuing…"
           toastResult={(r) => ({
@@ -215,7 +203,7 @@ function ReparseAction() {
       backfill={
         <BackfillButton<{ updated: number; recipesAffected: number }>
           run={openProblemsReparseStream}
-          invalidateKeys={[entityListRootKey("recipe")]}
+          invalidateTags={ripple.recipe}
           foreground
           idleLabel="Re-parse all"
           pendingLabel="Re-parsing…"
@@ -252,7 +240,7 @@ function PruneAliasesAction() {
       backfill={
         <BackfillButton<{ pruned: number }>
           run={openProblemsPruneAliasesStream}
-          invalidateKeys={[entityListRootKey("ingredient")]}
+          invalidateTags={ripple.ingredient}
           foreground
           idleLabel="Prune all"
           pendingLabel="Pruning…"
@@ -280,7 +268,6 @@ function SearchDocumentsAction() {
   });
   const repair = useActionMutation({
     mutationFn: search.repairDocuments.mutationOptions,
-    invalidateKeys: [queryKeys.search.all],
     success: (result) => (
       <span>
         {result.reused ? "Repair already running. " : "Repair started. "}
@@ -348,7 +335,6 @@ function CullPendingImagesAction() {
       data.count > 0
         ? `Deleted ${pluralize("pending image", data.count, true)}.`
         : "No pending images to cull.",
-    invalidateKeys: CULL_INVALIDATE_KEYS,
   });
 
   return (
@@ -373,7 +359,6 @@ function CleanupUnreferencedImagesAction() {
       data.count > 0
         ? `Deleted ${pluralize("unreferenced file", data.count, true)}.`
         : "No unreferenced files.",
-    invalidateKeys: CULL_INVALIDATE_KEYS,
   });
 
   return (
@@ -393,7 +378,6 @@ function RecomputeValuationsAction() {
     mutationFn: location.recomputeValuations.mutationOptions,
     success: (data) =>
       `Recomputed ${pluralize("location", data.updated, true)}.`,
-    invalidateKeys: VALUATION_INVALIDATE_KEYS,
   });
 
   return (

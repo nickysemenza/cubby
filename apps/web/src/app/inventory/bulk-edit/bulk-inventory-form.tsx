@@ -29,8 +29,8 @@ import {
 import { inventory } from "~/app/inventory/inventory.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
-import { entityListQueryOptions } from "~/entities/entity-list.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityListFor } from "~/entities/entity-list.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 
 const inventoryItemSchema = inventoryItemWithIdFields;
@@ -73,7 +73,7 @@ export default function BulkInventoryForm({
   // search, so this fetch exists only to seed the field — looking the id up in
   // a first page of locations silently failed for anything further down.
   const { data: initialLocation } = useQuery({
-    ...entityDetailQueryOptions("location", initialLocationId!),
+    ...entityDetailFor("location").queryOptions(initialLocationId!),
     enabled: !!initialLocationId,
   });
 
@@ -111,7 +111,7 @@ export default function BulkInventoryForm({
     isFetching: inventoryFetching,
     dataUpdatedAt,
   } = useQuery({
-    ...entityListQueryOptions("inventory", {
+    ...entityListFor("inventory").queryOptions({
       sort: { orderBy: "createdAt", direction: "desc" },
       pagination: { pageIndex: 0, pageSize: BULK_EDIT_PAGE_SIZE },
       filters: { locationIdFilter: selectedLocation?.id ?? "" },

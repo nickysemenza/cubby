@@ -2,7 +2,7 @@ import {
   type IngredientListItem,
   ingredientCoverImage,
 } from "@cubby/schemas/ingredient";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
 import { Scale, Sparkles } from "lucide-react";
@@ -28,9 +28,8 @@ import {
 } from "~/components/ui/tooltip";
 import { EntityIcon } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityListQueryOptions } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list.functions";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import {
@@ -130,7 +129,6 @@ function RecipeUsageCell({ ingredient }: { ingredient: IngredientListItem }) {
 }
 
 export function IngredientList() {
-  const queryClient = useQueryClient();
   const columnHelper = useMemo(
     () => createCubbyColumnHelper<IngredientListItem>(),
     [],
@@ -153,7 +151,6 @@ export function IngredientList() {
   const updateIngredientMutation = useUpdateMutation({
     mutationFn: entityMutationOptionsFactory("ingredient", "update"),
     entity: "ingredient",
-    invalidateKeys: invalidatesFor("ingredient", "list"),
   });
 
   // Rows awaiting merge confirmation — set by the bulk action's onExecute
@@ -166,7 +163,7 @@ export function IngredientList() {
 
   // Count of stub ingredients (no products) to surface the enrichment entry point.
   const { data: stubData } = useQuery(
-    entityListQueryOptions("ingredient", {
+    entityListFor("ingredient").queryOptions({
       filters: { productPresenceFilter: "none" },
       pagination: { pageIndex: 0, pageSize: 1 },
     }),
@@ -177,7 +174,6 @@ export function IngredientList() {
   const deletableConfig = useDeletableConfig({
     mutationFn: entityMutationOptionsFactory("ingredient", "delete"),
     entityLabel: "Ingredient",
-    invalidateKeys: invalidatesFor("ingredient", "list"),
     entity: "ingredient",
   });
 
@@ -303,7 +299,6 @@ export function IngredientList() {
       });
       // A merge's blast radius is wide: ingredients are deleted, products
       // repoint, recipe totals are recomputed, and meals read those totals.
-      invalidateQueryRoots(queryClient, invalidatesFor("ingredient", "merge"));
       toast.success(
         savedWithBackgroundWork(
           result.sideEffects,

@@ -1,5 +1,6 @@
 import * as schemas from "@cubby/schemas/project";
 import { z } from "zod";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -10,38 +11,40 @@ export const project = defineOperationDomain("project", {
   dashboardSummary: query({
     input: schemas.projectDashboardFiltersSchema,
     output: schemas.projectDashboardSummaryOut,
-    tags: [["project"], ["project", "dashboardSummary"]],
+    tags: [["project", "dashboardSummary"]],
   }),
   tree: query({
     input: schemas.projectTreeInput,
     output: schemas.projectTreeOut,
-    tags: [["project"], ["project", "tree"]],
+    tags: [["project", "tree"]],
   }),
   portfolioAnalytics: query({
     input: schemas.projectDashboardFiltersSchema,
     output: schemas.projectPortfolioAnalyticsOut,
-    tags: [["project"], ["project", "portfolioAnalytics"]],
+    tags: [["project", "portfolioAnalytics"]],
   }),
   options: query({
     input: z.undefined(),
     output: z.array(schemas.projectOptionsOut),
-    tags: [["project"], ["project", "options"]],
+    tags: [["project", "options"]],
   }),
   createFromTasks: mutation({
     input: schemas.createProjectFromTasksInput,
     output: schemas.createProjectFromTasksOut,
-    invalidates: [["task"], ["project"]],
+    invalidates: ripple.taskProject,
   }),
   resources: query({
     input: schemas.projectResourceProjectInput,
     output: schemas.projectResourcesOut,
-    tags: [["project"], ["project", "resources"], ["project", "resource"]],
+    tags: [
+      ["project", "resources"],
+      ["project", "resource"],
+    ],
   }),
   toolSuggestions: query({
     input: schemas.projectResourceProjectInput,
     output: schemas.projectToolSuggestionsOut,
     tags: [
-      ["project"],
       ["project", "toolSuggestions"],
       ["project", "resource"],
     ],
@@ -49,21 +52,24 @@ export const project = defineOperationDomain("project", {
   attachResources: mutation({
     input: schemas.projectResourceMutationInput,
     output: schemas.projectResourceMutationOut,
-    invalidates: [["project", "resource"]],
+    invalidates: ripple.projectResource,
   }),
   detachResources: mutation({
     input: schemas.projectResourceMutationInput,
     output: schemas.projectResourceMutationOut,
-    invalidates: [["project", "resource"]],
+    invalidates: ripple.projectResource,
   }),
   toolMatrix: query({
     input: schemas.projectToolMatrixInput,
     output: schemas.projectToolMatrixOut,
-    tags: [["project"], ["project", "toolMatrix"], ["project", "resource"]],
+    tags: [
+      ["project", "toolMatrix"],
+      ["project", "resource"],
+    ],
   }),
   setToolUsage: mutation({
     input: schemas.projectToolUsageSetInput,
     output: schemas.projectToolUsageSetOut,
-    invalidates: [["project", "resource"]],
+    invalidates: ripple.projectResource,
   }),
 });

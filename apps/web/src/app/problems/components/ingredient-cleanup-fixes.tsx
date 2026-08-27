@@ -2,7 +2,6 @@ import { Trash2 } from "lucide-react";
 import pluralize from "pluralize";
 import { type ReactNode, useState } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
 import { Stack } from "~/components/layout";
 import {
   AlertDialog,
@@ -16,7 +15,6 @@ import {
 } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
 import { problems } from "~/lib/problems.functions";
-import { invalidatesFor } from "~/lib/query-keys";
 
 /**
  * Per-card and bulk cleanup actions for the three ingredient problem sections.
@@ -38,7 +36,7 @@ export function UnusedIngredientDeleteFix({
   close: () => void;
 }) {
   const noun = alsoDeleteProducts ? "Ingredient and product(s)" : "Ingredient";
-  const remove = useProblemCardMutation({
+  const remove = useActionMutation({
     mutationFn: problems.deleteUnused.mutationOptions,
     // The endpoint reports per-ingredient failures (e.g. a product still has
     // inventory) instead of throwing, so the toast text reflects the outcome.
@@ -46,10 +44,6 @@ export function UnusedIngredientDeleteFix({
       data.deleted > 0
         ? `${noun} deleted`
         : `Could not delete: ${data.failed[0]?.reason ?? "unknown error"}`,
-    invalidateKeys: [
-      ...invalidatesFor("ingredient", "list"),
-      ...(alsoDeleteProducts ? invalidatesFor("product") : []),
-    ],
     onSuccess: (data) => {
       if (data.deleted > 0) close();
     },
@@ -153,10 +147,6 @@ export function DeleteAllUnusedButton({
       data.failed.length > 0
         ? `Deleted ${data.deleted}, ${data.failed.length} failed (e.g. ${data.failed[0]?.reason ?? "unknown"})`
         : `Deleted ${pluralize("ingredient", data.deleted, true)}`,
-    invalidateKeys: [
-      ...invalidatesFor("ingredient", "cleanup"),
-      ...(alsoDeleteProducts ? invalidatesFor("product") : []),
-    ],
   });
 
   return (

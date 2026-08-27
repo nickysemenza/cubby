@@ -1,67 +1,42 @@
-import {
-  type IntegrityCatalog,
-  integrityCatalogSchema,
-} from "@cubby/schemas/entity-integrity";
-import {
-  type FilterOptionsInput,
-  type FilterOptionsOut,
-  filterOptionsInput,
-  filterOptionsOut,
-} from "@cubby/schemas/filter-options";
+import { integrityCatalogSchema } from "@cubby/schemas/entity-integrity";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import * as drizzle from "drizzle-orm";
 import { z } from "zod";
-import type { EntityInspectorHealth } from "~/entities/entity-inspector-health.functions";
-import type {
-  EntityDetailByEntity,
-  EntityDetailInputByEntity,
-} from "~/entities/generated/entity-details.gen";
+import { entityDetail } from "~/entities/entity-detail.functions";
+import { entityFilterOptions } from "~/entities/entity-filter-options.functions";
+import { entityInspectorHealth } from "~/entities/entity-inspector-health.functions";
+import { entityIntegrity } from "~/entities/entity-integrity.functions";
+import { entityList } from "~/entities/entity-list.functions";
+import { entityMutation } from "~/entities/entity-mutation.functions";
 import {
   entityDetailInputSchema,
   getEntityDetailOutputSchema,
 } from "~/entities/generated/entity-details.gen";
-import type {
-  EntityListInputByEntity,
-  EntityListResultByEntity,
-  ListEntity,
-} from "~/entities/generated/entity-lists.gen";
 import {
   entityListInputSchema,
   getEntityListOutputSchema,
 } from "~/entities/generated/entity-lists.gen";
 import { executeEntity } from "~/server/entity-kernel";
 import {
-  type EntityBrowserMutationInput,
-  type EntityBrowserMutationResult,
   entityBrowserMutationCommandSchema,
   entityBrowserMutationResultSchema,
 } from "~/server/entity-kernel/contracts";
+import { implementOperationDomain } from "~/server/operation-domain.server";
 import { getEntityCounts } from "~/server/repo/dashboard";
 import { getFilterOptions } from "~/server/repo/filter-options";
 import { executeSearchDocumentSql } from "~/server/repo/search-document";
 import { buildIntegrityCatalog } from "~/server/services/entity-integrity.service";
-import type { StartOperationResult } from "~/server/start-operation.contract";
-import {
-  runStartOperation,
-  type StartOperationRequest,
-  throwIfStartOperationAborted,
-} from "~/server/start-operation.server";
+import { throwIfStartOperationAborted } from "~/server/start-operation.server";
 
-export function getEntityList<E extends ListEntity>(options: {
-  data: EntityListInputByEntity[E];
-  request: StartOperationRequest;
-}): Promise<StartOperationResult<EntityListResultByEntity[E]>>;
-export async function getEntityList(options: {
-  data: EntityListInputByEntity[ListEntity];
-  request: StartOperationRequest;
-}): Promise<StartOperationResult<EntityListResultByEntity[ListEntity]>> {
-  return await runStartOperation({
-    operation: "entity.list",
-    type: "query",
-    input: options.data,
-    inputSchema: entityListInputSchema,
-    outputSchema: (input) => getEntityListOutputSchema(input.entity),
-    request: options.request,
+/**
+ * The client declares type-only `z.custom` schemas for the generic entity
+ * operations; the server owns runtime validation via `input`/`output`
+ * overrides, and the output schema depends on the parsed input's entity.
+ */
+export const entityListHandlers = implementOperationDomain(entityList, {
+  list: {
+    input: entityListInputSchema,
+    output: (input) => getEntityListOutputSchema(input.entity),
     run: async (context, input) => {
       const result = await executeEntity(context, {
         action: "list",
@@ -72,27 +47,17 @@ export async function getEntityList(options: {
       }
       return { items: result.items, meta: result.meta };
     },
-  });
-}
+  },
+});
 
-export async function getEntityDetail(options: {
-  data: EntityDetailInputByEntity[keyof EntityDetailByEntity];
-  request: StartOperationRequest;
-}): Promise<
-  StartOperationResult<EntityDetailByEntity[keyof EntityDetailByEntity] | null>
-> {
-  return await runStartOperation({
-    operation: "entity.detail",
-    type: "query",
-    input: options.data,
-    inputSchema: entityDetailInputSchema,
-    outputSchema: (input) =>
-      getEntityDetailOutputSchema(input.entity).nullable(),
-    request: options.request,
+export const entityDetailHandlers = implementOperationDomain(entityDetail, {
+  detail: {
     // Browser UI detail reads may use the bounded-stale handle selected by
     // request context. Non-browser and fresh-after-write requests remain
     // strong because their context selects the authoritative database.
     readPolicy: "context",
+    input: entityDetailInputSchema,
+    output: (input) => getEntityDetailOutputSchema(input.entity).nullable(),
     run: async (context, input) => {
       const result = await executeEntity(context, {
         action: "get",
@@ -105,39 +70,29 @@ export async function getEntityDetail(options: {
       }
       return result.item;
     },
-  });
-}
+  },
+});
 
-export async function getEntityFilterOptions(options: {
-  data: FilterOptionsInput;
-  request: StartOperationRequest;
-}): Promise<StartOperationResult<FilterOptionsOut>> {
-  return await runStartOperation({
-    operation: "entity.filterOptions",
-    type: "query",
-    input: options.data,
-    inputSchema: filterOptionsInput,
-    outputSchema: filterOptionsOut,
-    request: options.request,
-    run: async (context, input) =>
-      await getFilterOptions(context.readDb, input),
-  });
-}
+export const entityFilterOptionsHandlers = implementOperationDomain(
+  entityFilterOptions,
+  {
+    filterOptions: (context, input) => getFilterOptions(context.readDb, input),
+  },
+);
 
-export async function executeEntityMutation(options: {
-  data: EntityBrowserMutationInput;
-  request: StartOperationRequest;
-}): Promise<StartOperationResult<EntityBrowserMutationResult>> {
-  return await runStartOperation({
-    operation: "entity.mutate",
-    type: "mutation",
-    input: options.data,
-    inputSchema: entityBrowserMutationCommandSchema,
-    outputSchema: entityBrowserMutationResultSchema,
-    request: options.request,
-    run: async (context, command) => await executeEntity(context, command),
-  });
-}
+export const entityMutationHandlers = implementOperationDomain(entityMutation, {
+  mutate: {
+    input: entityBrowserMutationCommandSchema,
+    output: entityBrowserMutationResultSchema,
+    // The client declares the pre-parse command type; the `input` override
+    // above guarantees the runtime value is the schema's parsed output.
+    run: (context, command) =>
+      executeEntity(
+        context,
+        command as z.output<typeof entityBrowserMutationCommandSchema>,
+      ),
+  },
+});
 
 const entityInspectorHealthSchema = z.object({
   counts: z.record(z.string(), z.number().int().nonnegative()),
@@ -150,65 +105,57 @@ const entityInspectorHealthSchema = z.object({
   ),
 });
 
-export async function getEntityInspectorHealth(options: {
-  request: StartOperationRequest;
-}): Promise<StartOperationResult<EntityInspectorHealth>> {
-  return await runStartOperation({
-    operation: "entity.inspectorHealth",
-    type: "query",
-    input: undefined,
-    inputSchema: z.undefined(),
-    outputSchema: entityInspectorHealthSchema,
-    request: options.request,
-    readPolicy: "strong",
-    run: async (context) => {
-      const [counts, rows] = await Promise.all([
-        getEntityCounts(context.db),
-        executeSearchDocumentSql<{
-          entityType: SearchableEntity;
-          documents: number;
-          embeddings: number;
-        }>(
-          context.db,
-          drizzle.sql`
-            SELECT
-              sd."entityType" AS "entityType",
-              count(DISTINCT sd."entityId")::int AS documents,
-              count(DISTINCT ee."entityId")::int AS embeddings
-            FROM "SearchDocument" sd
-            LEFT JOIN "EntityEmbedding" ee
-              ON ee."entityType" = sd."entityType"
-              AND ee."entityId" = sd."entityId"
-              AND ee."deletedAt" IS NULL
-            WHERE sd."deletedAt" IS NULL
-            GROUP BY sd."entityType"
-          `,
-        ),
-      ]);
-      throwIfStartOperationAborted(options.request.signal);
-      return {
-        counts,
-        search: Object.fromEntries(
-          rows.map((row) => [
-            row.entityType,
-            { documents: row.documents, embeddings: row.embeddings },
-          ]),
-        ),
-      };
+export const entityInspectorHealthHandlers = implementOperationDomain(
+  entityInspectorHealth,
+  {
+    inspectorHealth: {
+      readPolicy: "strong",
+      output: entityInspectorHealthSchema,
+      run: async (context) => {
+        const [counts, rows] = await Promise.all([
+          getEntityCounts(context.db),
+          executeSearchDocumentSql<{
+            entityType: SearchableEntity;
+            documents: number;
+            embeddings: number;
+          }>(
+            context.db,
+            drizzle.sql`
+              SELECT
+                sd."entityType" AS "entityType",
+                count(DISTINCT sd."entityId")::int AS documents,
+                count(DISTINCT ee."entityId")::int AS embeddings
+              FROM "SearchDocument" sd
+              LEFT JOIN "EntityEmbedding" ee
+                ON ee."entityType" = sd."entityType"
+                AND ee."entityId" = sd."entityId"
+                AND ee."deletedAt" IS NULL
+              WHERE sd."deletedAt" IS NULL
+              GROUP BY sd."entityType"
+            `,
+          ),
+        ]);
+        throwIfStartOperationAborted(context.signal);
+        return {
+          counts,
+          search: Object.fromEntries(
+            rows.map((row) => [
+              row.entityType,
+              { documents: row.documents, embeddings: row.embeddings },
+            ]),
+          ),
+        };
+      },
     },
-  });
-}
+  },
+);
 
-export async function getEntityIntegrityCatalog(options: {
-  request: StartOperationRequest;
-}): Promise<StartOperationResult<IntegrityCatalog>> {
-  return await runStartOperation({
-    operation: "entityIntegrity.catalog",
-    type: "query",
-    input: undefined,
-    inputSchema: z.undefined(),
-    outputSchema: integrityCatalogSchema,
-    request: options.request,
-    run: async () => buildIntegrityCatalog(),
-  });
-}
+export const entityIntegrityHandlers = implementOperationDomain(
+  entityIntegrity,
+  {
+    catalog: {
+      output: integrityCatalogSchema,
+      run: async () => buildIntegrityCatalog(),
+    },
+  },
+);

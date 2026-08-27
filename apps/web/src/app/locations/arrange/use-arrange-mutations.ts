@@ -8,11 +8,6 @@ import { toast } from "sonner";
 import { inventory } from "~/app/inventory/inventory.functions";
 import { location } from "~/app/locations/location.functions";
 import { getErrorMessage } from "~/lib/error-utils";
-import {
-  cancelQueryRoots,
-  invalidateQueryRoots,
-  invalidatesFor,
-} from "~/lib/query-keys";
 import { applyItemMove, applyLocationMove } from "./arrange-tree-utils";
 import type { ItemDragData } from "./arrange-types";
 
@@ -26,8 +21,6 @@ type OptimisticContext = { prev: InfLocation[] | undefined };
  * `moveLocation` / `moveItem` — the cache they mutate is the same, so a move in
  * one view is reflected after toggling to the other.
  *
- * We pull `mutationFn`/`mutationKey` off the query options rather than spreading
- * the whole object so react-query infers the optimistic context type cleanly.
  * operation input types are plain strings (branded schemas widen on input), so we
  * re-brand at this string→domain boundary with the `unsafe*Id` converters.
  */
@@ -37,11 +30,10 @@ export function useArrangeMutations() {
 
   const reparentBase = location.bulkUpdateParent.mutationOptions();
   const reparent = useMutation({
-    mutationKey: reparentBase.mutationKey,
-    mutationFn: reparentBase.mutationFn,
+    ...reparentBase,
     onMutate: async (vars): Promise<OptimisticContext> => {
       const dragId = vars.ids[0];
-      await cancelQueryRoots(queryClient, [treeKey]);
+      await queryClient.cancelQueries({ queryKey: treeKey });
       const prev = queryClient.getQueryData<InfLocation[]>(treeKey);
       if (prev && dragId) {
         queryClient.setQueryData(
@@ -61,17 +53,14 @@ export function useArrangeMutations() {
       if (ctx?.prev) queryClient.setQueryData(treeKey, ctx.prev);
       toast.error(getErrorMessage(err));
     },
-    onSettled: () =>
-      invalidateQueryRoots(queryClient, invalidatesFor("inventory")),
   });
 
   const moveBase = inventory.bulkMove.mutationOptions();
   const move = useMutation({
-    mutationKey: moveBase.mutationKey,
-    mutationFn: moveBase.mutationFn,
+    ...moveBase,
     onMutate: async (vars): Promise<OptimisticContext> => {
       const first = vars.items[0];
-      await cancelQueryRoots(queryClient, [treeKey]);
+      await queryClient.cancelQueries({ queryKey: treeKey });
       const prev = queryClient.getQueryData<InfLocation[]>(treeKey);
       if (prev && first) {
         queryClient.setQueryData(
@@ -90,8 +79,6 @@ export function useArrangeMutations() {
       if (ctx?.prev) queryClient.setQueryData(treeKey, ctx.prev);
       toast.error(getErrorMessage(err));
     },
-    onSettled: () =>
-      invalidateQueryRoots(queryClient, invalidatesFor("inventory")),
   });
 
   return {

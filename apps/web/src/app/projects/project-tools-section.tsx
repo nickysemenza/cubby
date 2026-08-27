@@ -54,11 +54,6 @@ import { Input } from "~/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
-import {
-  cancelQueryRoots,
-  invalidateQueryRoots,
-  invalidatesFor,
-} from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 
 const EMPTY_RESOURCES: ProjectResourceOut[] = [];
@@ -101,11 +96,9 @@ function ResourcesTable({
   const queryClient = useQueryClient();
   const detachBase = project.detachResources.mutationOptions();
   const detach = useMutation({
-    mutationKey: detachBase.mutationKey,
-    mutationFn: detachBase.mutationFn,
-    meta: detachBase.meta,
+    ...detachBase,
     onMutate: async (variables) => {
-      await cancelQueryRoots(queryClient, [resourcesKey]);
+      await queryClient.cancelQueries({ queryKey: resourcesKey });
       const previous =
         queryClient.getQueryData<ProjectResourceOut[]>(resourcesKey);
       queryClient.setQueryData<ProjectResourceOut[]>(resourcesKey, (current) =>
@@ -121,8 +114,6 @@ function ResourcesTable({
         queryClient.setQueryData(resourcesKey, context.previous);
       toast.error(getErrorMessage(error));
     },
-    onSettled: () =>
-      invalidateQueryRoots(queryClient, invalidatesFor("project", "resource")),
   });
   const [addToInventoryRow, setAddToInventoryRow] =
     useState<ResourceRow | null>(null);
@@ -475,11 +466,9 @@ function ResourcePickerDialog({
   };
   const attachBase = project.attachResources.mutationOptions();
   const attach = useMutation({
-    mutationKey: attachBase.mutationKey,
-    mutationFn: attachBase.mutationFn,
-    meta: attachBase.meta,
+    ...attachBase,
     onMutate: async (variables) => {
-      await cancelQueryRoots(queryClient, [resourcesKey]);
+      await queryClient.cancelQueries({ queryKey: resourcesKey });
       const previous =
         queryClient.getQueryData<ProjectResourceOut[]>(resourcesKey);
       const candidates = [...suggestionRows, ...toolRows, ...softwareRows];
@@ -527,8 +516,6 @@ function ResourcePickerDialog({
       onOpenChange(true);
       toast.error(getErrorMessage(error));
     },
-    onSettled: () =>
-      invalidateQueryRoots(queryClient, invalidatesFor("project", "resource")),
   });
 
   return (

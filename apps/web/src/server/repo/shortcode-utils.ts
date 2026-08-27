@@ -29,33 +29,13 @@ import {
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
-  cookbook,
-  expense,
-  financialAccount,
-  financialTransaction,
-  image,
-  ingredient,
-  inventoryEntry,
-  ledgerParty,
-  ledgerTransfer,
-  location,
-  meal,
-  product,
-  project,
-  purchase,
-  recipe,
-  task,
-  vendor,
-  wish,
-} from "~/server/db/schema";
-
-import {
   FindOrCreateConflictError,
   findOrCreate,
   insertAndReturn,
   isTransaction,
   unwrapDb,
 } from "./database-helpers";
+import { SHORTCODE_TABLE as GENERATED_SHORTCODE_TABLE } from "./generated/shortcode-tables.gen";
 
 /** How many fresh codes to try before giving up. */
 const MAX_RETRIES = 10;
@@ -74,29 +54,13 @@ export type ShortcodeTable = PgTable & {
 
 /**
  * Every table with a public shortcode, keyed by the entity name used across the
- * manifest, the prefix registry, and the resolvers. `image` is absent on
- * purpose: its rows are only ever addressed through the entity that owns them.
+ * manifest, the prefix registry, and the resolvers. Generated from the entity
+ * manifest (`dbTable` + `shortcodePrefix`) — see `scripts/entity-literal-generator.ts`.
  */
-export const SHORTCODE_TABLE = {
-  cookbook,
-  expense,
-  financialAccount,
-  financialTransaction,
-  image,
-  ingredient,
-  inventory: inventoryEntry,
-  location,
-  ledgerParty,
-  ledgerTransfer,
-  meal,
-  product,
-  project,
-  purchase,
-  recipe,
-  task,
-  vendor,
-  wish,
-} as const satisfies Record<ShortcodeType, ShortcodeTable>;
+export const SHORTCODE_TABLE = GENERATED_SHORTCODE_TABLE satisfies Record<
+  ShortcodeType,
+  ShortcodeTable
+>;
 
 export type ShortcodeTableFor<T extends ShortcodeType> =
   (typeof SHORTCODE_TABLE)[T];

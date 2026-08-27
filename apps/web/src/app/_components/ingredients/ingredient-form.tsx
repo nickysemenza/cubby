@@ -13,7 +13,7 @@ import { AliasesField, filterAliases } from "~/components/forms/aliases-field";
 import { Row, Stack } from "~/components/layout";
 import { Card, CardContent } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
-import { entityListQueryOptions } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list.functions";
 import { EntityInlineLink } from "../EntityInlineLink";
 import {
   buildUpdateObject,
@@ -53,7 +53,7 @@ function DuplicateNameHint({
   const enabled = trimmed.length >= 2;
 
   const { data } = useQuery({
-    ...entityListQueryOptions("ingredient", {
+    ...entityListFor("ingredient").queryOptions({
       filters: { nameFilter: trimmed },
       pagination: { pageIndex: 0, pageSize: 5 },
     }),

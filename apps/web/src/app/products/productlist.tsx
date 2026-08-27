@@ -35,7 +35,6 @@ import {
 import type { ViewSwitcherOption } from "~/components/ui/view-switcher";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { dataQualityOptions } from "~/lib/data-quality-options";
-import { invalidatesFor } from "~/lib/query-keys";
 import { relatedData } from "~/lib/related-data.functions";
 import { booleanCellOptions, presenceCellOptions } from "~/lib/select-options";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
@@ -328,7 +327,6 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
   );
   const stockTrackingMutation = useActionMutation({
     mutationFn: productOperations.bulkSetStockTracked.mutationOptions,
-    invalidateKeys: invalidatesFor("product"),
     success: (data: { items: unknown[] }) =>
       `Updated ${data.items.length} product${data.items.length !== 1 ? "s" : ""}`,
     onSuccess: () => setStockTrackingRows([]),

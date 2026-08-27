@@ -1,11 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { infiniteOperationQueryKey } from "~/integrations/tanstack-query/operation-catalog";
-import {
-  compileEntityListInput,
-  entityInfiniteListQueryOptions,
-  entityListQueryOptions,
-} from "./entity-list.functions";
+import { compileEntityListInput, entityListFor } from "./entity-list.functions";
 import { ensureEntityListSsr, entityListDefaultSort } from "./entity-list-ssr";
 
 afterEach(() => vi.restoreAllMocks());
@@ -63,15 +59,15 @@ describe("ensureEntityListSsr", () => {
 
   it("shares the operation infinite key between SSR and the mounted list", () => {
     const input = compileEntityListInput("product", {});
-    const finite = entityListQueryOptions("product", input);
-    const ssr = entityInfiniteListQueryOptions("product", input);
+    const finite = entityListFor("product").queryOptions(input);
+    const ssr = entityListFor("product").infiniteQueryOptions(input);
 
     expect(ssr.queryKey).toEqual(infiniteOperationQueryKey(finite.queryKey));
   });
 
   it("allows incomplete filters while a conditional finite query is disabled", () => {
     expect(() =>
-      entityListQueryOptions("inventory", {
+      entityListFor("inventory").queryOptions({
         sort: { orderBy: "createdAt", direction: "desc" },
         pagination: { pageIndex: 0, pageSize: 100 },
         filters: { locationIdFilter: "" },

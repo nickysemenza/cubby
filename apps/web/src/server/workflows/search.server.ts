@@ -1,20 +1,10 @@
-import {
-  enqueueEmbeddingBackfillInputSchema,
-  enqueueEmbeddingBackfillOutSchema,
-} from "@cubby/schemas/background-jobs";
-import {
-  relatedSearchOutSchema,
-  repairSearchDocumentsOutSchema,
+import type { enqueueEmbeddingBackfillInputSchema } from "@cubby/schemas/background-jobs";
+import type {
   requestEmbeddingRefreshInputSchema,
-  requestEmbeddingRefreshOutSchema,
-  searchDebugOutSchema,
-  searchDocumentMaintenanceSchema,
-  searchHitsOut,
   searchQueryInputSchema,
   similarEntitiesInputSchema,
-  similarEntitiesOut,
 } from "@cubby/schemas/search";
-import { z } from "zod";
+import type { z } from "zod";
 import type { Database } from "~/server/db";
 import {
   findRelatedSearchHits,
@@ -27,30 +17,6 @@ import {
   findSimilarEntitiesForPair,
   requestEmbeddingRefresh,
 } from "~/server/services/semantic-search.service";
-
-export const searchWorkflowSchemas = {
-  find: { input: searchQueryInputSchema, output: searchHitsOut },
-  documentHealth: {
-    input: z.undefined(),
-    output: searchDocumentMaintenanceSchema,
-  },
-  repairDocuments: {
-    input: z.undefined(),
-    output: repairSearchDocumentsOutSchema,
-  },
-  related: { input: searchQueryInputSchema, output: relatedSearchOutSchema },
-  similar: { input: similarEntitiesInputSchema, output: similarEntitiesOut },
-  debug: { input: searchQueryInputSchema, output: searchDebugOutSchema },
-  enqueueEmbeddingBackfill: {
-    input: enqueueEmbeddingBackfillInputSchema,
-    output: enqueueEmbeddingBackfillOutSchema,
-  },
-  requestEmbeddingRefresh: {
-    input: requestEmbeddingRefreshInputSchema,
-    output: requestEmbeddingRefreshOutSchema,
-  },
-} as const;
-
 export const findSearchHitsWorkflow = (
   db: Database,
   input: z.output<typeof searchQueryInputSchema>,

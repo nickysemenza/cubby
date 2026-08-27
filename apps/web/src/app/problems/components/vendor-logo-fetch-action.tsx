@@ -1,9 +1,8 @@
 import type { VendorOut } from "@cubby/schemas/vendor";
 import { ImageDown } from "lucide-react";
-import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
+import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { vendor as vendorOperations } from "~/app/vendors/vendor.functions";
 import { Button } from "~/components/ui/button";
-import { invalidatesFor, queryKeys } from "~/lib/query-keys";
 
 type VendorLogoTarget = Pick<VendorOut, "id" | "name" | "website">;
 
@@ -13,10 +12,9 @@ export function VendorLogoFetchAction({
 }: {
   vendor: VendorLogoTarget;
 }) {
-  const fetchLogo = useProblemCardMutation({
+  const fetchLogo = useActionMutation({
     mutationFn: vendorOperations.fetchLogo.mutationOptions,
     success: `Added logo for ${vendor.name}`,
-    invalidateKeys: [...invalidatesFor("vendor"), queryKeys.search.all],
   });
 
   // A website is a reviewed identity claim. Never guess one from the name just

@@ -18,7 +18,7 @@ import { QR_CODE_FORMATS } from "~/app/_components/inventory/persistent-scanner"
 import { ScanSheet } from "~/app/_components/inventory/scan-sheet";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { resolveLocationScan } from "~/lib/scan-code";
 
@@ -114,7 +114,7 @@ export function LocationScanButton({
     setIsResolving(true);
     try {
       const location = await queryClient.fetchQuery(
-        entityDetailQueryOptions("location", parsed.value),
+        entityDetailFor("location").queryOptions(parsed.value),
       );
       if (!location) {
         toast.error("No location found for that shortcode.");

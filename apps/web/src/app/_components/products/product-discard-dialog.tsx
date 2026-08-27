@@ -39,7 +39,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { invalidatesFor } from "~/lib/query-keys";
 import {
   NullableNumericField,
   PlainDateField,
@@ -127,7 +126,6 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
       `Discarded ${Math.abs(result.storedQuantity)} × ${product.name}${
         result.inventory?.removed ? " — shelf entry removed" : ""
       }`,
-    invalidateKeys: invalidatesFor("expense"),
     onSuccess: () => close(false),
   });
 

@@ -29,7 +29,6 @@ import { Input } from "~/components/ui/input";
 import { NoneValue } from "~/components/ui/none-value";
 import { StatusText } from "~/components/ui/status-text";
 import { entityDetailLink } from "~/entities/entities";
-import { invalidatesFor } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { costTypeOptions } from "./expense-options";
@@ -160,7 +159,6 @@ export function SplitExpenseDialog({
   const splitMutation = useActionMutation({
     mutationFn: purchase.split.mutationOptions,
     success: (items) => `Split into ${items.length} expenses`,
-    invalidateKeys: invalidatesFor("expense"),
     onSuccess: () => {
       onOpenChange(false);
       // This expense no longer exists — staying here would render a deleted row.

@@ -10,910 +10,680 @@ export type StartOperationHandler = (options: {
 export type StartOperationHandlerLoader = () => Promise<StartOperationHandler>;
 
 export const START_OPERATION_HANDLER_LOADERS = {
-  "agent.ask": async () => {
-    const module = await import("~/server/agent-browser.server");
-    return module.askAgentForBrowser as unknown as StartOperationHandler;
-  },
-  "ai.approveDetectedInventoryItem": async () => {
-    const module = await import("~/server/ai-browser.server");
-    return module.approveDetectedInventoryItemForBrowser as unknown as StartOperationHandler;
-  },
-  "ai.auditCategories": async () => {
-    const module = await import("~/server/ai-browser.server");
-    return module.auditCategoriesForBrowser as unknown as StartOperationHandler;
-  },
-  "ai.describeLocation": async () => {
-    const module = await import("~/server/ai-browser.server");
-    return module.describeLocationForBrowser as unknown as StartOperationHandler;
-  },
-  "ai.detectInventoryItems": async () => {
-    const module = await import("~/server/ai-browser.server");
-    return module.detectInventoryItemsForBrowser as unknown as StartOperationHandler;
-  },
-  "ai.identifyProduct": async () => {
-    const module = await import("~/server/ai-browser.server");
-    return module.identifyProductForBrowser as unknown as StartOperationHandler;
-  },
-  "ai.parseSearch": async () => {
-    const module = await import("~/server/ai-browser.server");
-    return module.parseSearchForBrowser as unknown as StartOperationHandler;
-  },
-  "ai.suggestCategory": async () => {
-    const module = await import("~/server/ai-browser.server");
-    return module.suggestCategoryForBrowser as unknown as StartOperationHandler;
-  },
-  "ai.suggestIngredientMergeBatch": async () => {
-    const module = await import("~/server/ai-browser.server");
-    return module.suggestIngredientMergeBatchForBrowser as unknown as StartOperationHandler;
-  },
-  "ai.suggestLocation": async () => {
-    const module = await import("~/server/ai-browser.server");
-    return module.suggestLocationForBrowser as unknown as StartOperationHandler;
-  },
-  "ai.suggestLocationType": async () => {
-    const module = await import("~/server/ai-browser.server");
-    return module.suggestLocationTypeForBrowser as unknown as StartOperationHandler;
-  },
-  "ai.suggestUsdaFood": async () => {
-    const module = await import("~/server/ai-browser.server");
-    return module.suggestUsdaFoodForBrowser as unknown as StartOperationHandler;
-  },
-  "ai.suggestUsdaFoodBatch": async () => {
-    const module = await import("~/server/ai-browser.server");
-    return module.suggestUsdaFoodBatchForBrowser as unknown as StartOperationHandler;
-  },
-  "ai.usageRecent": async () => {
-    const module = await import("~/server/ai-browser.server");
-    return module.listAiUsageRecentForBrowser as unknown as StartOperationHandler;
-  },
-  "ai.usageSummary": async () => {
-    const module = await import("~/server/ai-browser.server");
-    return module.summarizeAiUsageForBrowser as unknown as StartOperationHandler;
-  },
-  "auditLog.list": async () => {
-    const module = await import("~/server/audit-log-browser.server");
-    return module.getAuditLogForBrowser as unknown as StartOperationHandler;
-  },
-  "background-batch.cancel": async () => {
-    const module = await import("~/server/background-batch-browser.server");
-    return module.cancelBackgroundBatchForBrowser as unknown as StartOperationHandler;
-  },
-  "background-batch.jobs": async () => {
-    const module = await import("~/server/background-batch-browser.server");
-    return module.listBackgroundBatchJobsForBrowser as unknown as StartOperationHandler;
-  },
-  "background-batch.list": async () => {
-    const module = await import("~/server/background-batch-browser.server");
-    return module.listBackgroundBatchesForBrowser as unknown as StartOperationHandler;
-  },
-  "background-batch.retry": async () => {
-    const module = await import("~/server/background-batch-browser.server");
-    return module.retryBackgroundBatchForBrowser as unknown as StartOperationHandler;
-  },
-  "background-batch.summary": async () => {
-    const module = await import("~/server/background-batch-browser.server");
-    return module.getBackgroundBatchSummaryForBrowser as unknown as StartOperationHandler;
-  },
-  "background-job.clearStranded": async () => {
-    const module = await import("~/server/background-batch-browser.server");
-    return module.clearStrandedBackgroundJobsForBrowser as unknown as StartOperationHandler;
-  },
-  "background-job.drain": async () => {
-    const module = await import("~/server/background-batch-browser.server");
-    return module.drainBackgroundJobsForBrowser as unknown as StartOperationHandler;
-  },
-  "background-job.retry": async () => {
-    const module = await import("~/server/background-batch-browser.server");
-    return module.retryBackgroundJobForBrowser as unknown as StartOperationHandler;
-  },
-  "background-job.strandedCount": async () => {
-    const module = await import("~/server/background-batch-browser.server");
-    return module.countStrandedBackgroundJobsForBrowser as unknown as StartOperationHandler;
-  },
-  "calendar.getFeed": async () => {
-    const module = await import("~/server/calendar-browser.server");
-    return module.getCalendarFeedForBrowser as unknown as StartOperationHandler;
-  },
-  "calendar.range": async () => {
-    const module = await import("~/server/calendar-browser.server");
-    return module.getCalendarRangeForBrowser as unknown as StartOperationHandler;
-  },
-  "calendar.rotateFeed": async () => {
-    const module = await import("~/server/calendar-browser.server");
-    return module.rotateCalendarFeedForBrowser as unknown as StartOperationHandler;
-  },
-  "collection.create": async () => {
-    const module = await import("~/server/collection-browser.server");
-    return module.createCollectionForBrowser as unknown as StartOperationHandler;
-  },
-  "collection.detail": async () => {
-    const module = await import("~/server/collection-browser.server");
-    return module.getCollectionDetailForBrowser as unknown as StartOperationHandler;
-  },
-  "collection.list": async () => {
-    const module = await import("~/server/collection-browser.server");
-    return module.listCollectionsForBrowser as unknown as StartOperationHandler;
-  },
-  "collection.matrix": async () => {
-    const module = await import("~/server/collection-browser.server");
-    return module.getCollectionMatrixForBrowser as unknown as StartOperationHandler;
-  },
-  "collection.set": async () => {
-    const module = await import("~/server/collection-browser.server");
-    return module.setCollectionMembershipForBrowser as unknown as StartOperationHandler;
-  },
-  "cookbook.detail": async () => {
-    const module = await import("~/server/cookbook-browser.server");
-    return module.getCookbookDetail as unknown as StartOperationHandler;
-  },
-  "cookbook.list": async () => {
-    const module = await import("~/server/cookbook-browser.server");
-    return module.listCookbookSummaries as unknown as StartOperationHandler;
-  },
-  "dashboard.counts": async () => {
-    const module = await import("~/server/dashboard-browser.server");
-    return module.getDashboardCountsForBrowser as unknown as StartOperationHandler;
-  },
-  "entity.detail": async () => {
-    const module = await import("~/server/entity-runtime.server");
-    return module.getEntityDetail as unknown as StartOperationHandler;
-  },
-  "entity.filterOptions": async () => {
-    const module = await import("~/server/entity-runtime.server");
-    return module.getEntityFilterOptions as unknown as StartOperationHandler;
-  },
-  "entity.inspectorHealth": async () => {
-    const module = await import("~/server/entity-runtime.server");
-    return module.getEntityInspectorHealth as unknown as StartOperationHandler;
-  },
-  "entity.list": async () => {
-    const module = await import("~/server/entity-runtime.server");
-    return module.getEntityList as unknown as StartOperationHandler;
-  },
-  "entity.mutate": async () => {
-    const module = await import("~/server/entity-runtime.server");
-    return module.executeEntityMutation as unknown as StartOperationHandler;
-  },
-  "entityIntegrity.catalog": async () => {
-    const module = await import("~/server/entity-runtime.server");
-    return module.getEntityIntegrityCatalog as unknown as StartOperationHandler;
-  },
-  "expense.analytics": async () => {
-    const module = await import("~/server/expense-browser.server");
-    return module.getExpenseAnalyticsForBrowser as unknown as StartOperationHandler;
-  },
-  "expense.analyze": async () => {
-    const module = await import("~/server/expense-browser.server");
-    return module.analyzeExpensesForBrowser as unknown as StartOperationHandler;
-  },
-  "expense.bulkMove": async () => {
-    const module = await import("~/server/expense-browser.server");
-    return module.bulkMoveExpensesForBrowser as unknown as StartOperationHandler;
-  },
-  "expense.bulkSetCostType": async () => {
-    const module = await import("~/server/expense-browser.server");
-    return module.bulkSetExpenseCostTypeForBrowser as unknown as StartOperationHandler;
-  },
-  "expense.bulkSetTrade": async () => {
-    const module = await import("~/server/expense-browser.server");
-    return module.bulkSetExpenseTradeForBrowser as unknown as StartOperationHandler;
-  },
-  "expense.chargeContext": async () => {
-    const module = await import("~/server/expense-browser.server");
-    return module.getExpenseChargeContextForBrowser as unknown as StartOperationHandler;
-  },
-  "expense.chartData": async () => {
-    const module = await import("~/server/expense-browser.server");
-    return module.getExpenseChartDataForBrowser as unknown as StartOperationHandler;
-  },
-  "expense.facetCounts": async () => {
-    const module = await import("~/server/expense-browser.server");
-    return module.getExpenseFacetCountsForBrowser as unknown as StartOperationHandler;
-  },
-  "expense.monthlySummary": async () => {
-    const module = await import("~/server/expense-browser.server");
-    return module.getExpenseMonthlySummaryForBrowser as unknown as StartOperationHandler;
-  },
-  "expense.tradeAffinity": async () => {
-    const module = await import("~/server/expense-browser.server");
-    return module.getExpenseTradeAffinityForBrowser as unknown as StartOperationHandler;
-  },
-  "financialAccount.options": async () => {
-    const module = await import("~/server/finance-browser.server");
-    return module.financialAccountOptionsForBrowser as unknown as StartOperationHandler;
-  },
-  "financialTransaction.sourceOptions": async () => {
-    const module = await import("~/server/finance-browser.server");
-    return module.financialTransactionSourceOptionsForBrowser as unknown as StartOperationHandler;
-  },
-  "householdContribution.ledger": async () => {
-    const module = await import(
-      "~/server/household-contribution-browser.server"
-    );
-    return module.householdContributionLedgerForBrowser as unknown as StartOperationHandler;
-  },
-  "householdContribution.project": async () => {
-    const module = await import(
-      "~/server/household-contribution-browser.server"
-    );
-    return module.projectContributionForBrowser as unknown as StartOperationHandler;
-  },
-  "image.cleanupUnreferencedImages": async () => {
-    const module = await import("~/server/image-browser.server");
-    return module.cleanupUnreferencedImagesForBrowser as unknown as StartOperationHandler;
-  },
-  "image.cullPendingImages": async () => {
-    const module = await import("~/server/image-browser.server");
-    return module.cullPendingImagesForBrowser as unknown as StartOperationHandler;
-  },
-  "image.delete": async () => {
-    const module = await import("~/server/image-browser.server");
-    return module.deleteImages as unknown as StartOperationHandler;
-  },
-  "image.detail": async () => {
-    const module = await import("~/server/image-browser.server");
-    return module.getImageDetail as unknown as StartOperationHandler;
-  },
-  "image.importFromUrl": async () => {
-    const module = await import("~/server/image-browser.server");
-    return module.importImageFromUrlForBrowser as unknown as StartOperationHandler;
-  },
-  "image.list": async () => {
-    const module = await import("~/server/image-browser.server");
-    return module.listImages as unknown as StartOperationHandler;
-  },
-  "image.markUploaded": async () => {
-    const module = await import("~/server/image-browser.server");
-    return module.markImageUploadedForBrowser as unknown as StartOperationHandler;
-  },
-  "image.projectSummaries": async () => {
-    const module = await import("~/server/image-browser.server");
-    return module.getProjectImageSummaries as unknown as StartOperationHandler;
-  },
-  "image.update": async () => {
-    const module = await import("~/server/image-browser.server");
-    return module.updateImage as unknown as StartOperationHandler;
-  },
-  "image.uploadDocument": async () => {
-    const module = await import("~/server/image-browser.server");
-    return module.initiateDocumentUploadForBrowser as unknown as StartOperationHandler;
-  },
-  "image.uploadImage": async () => {
-    const module = await import("~/server/image-browser.server");
-    return module.initiateImageUploadForBrowser as unknown as StartOperationHandler;
-  },
-  "ingredient.enrichmentWorkbench": async () => {
-    const module = await import("~/server/ingredient-browser.server");
-    return module.ingredientEnrichmentWorkbench as unknown as StartOperationHandler;
-  },
-  "ingredient.getByName": async () => {
-    const module = await import("~/server/ingredient-browser.server");
-    return module.ingredientGetByName as unknown as StartOperationHandler;
-  },
-  "ingredient.getManyByIDs": async () => {
-    const module = await import("~/server/ingredient-browser.server");
-    return module.ingredientGetManyByIDs as unknown as StartOperationHandler;
-  },
-  "ingredient.matchNames": async () => {
-    const module = await import("~/server/ingredient-browser.server");
-    return module.ingredientMatchNames as unknown as StartOperationHandler;
-  },
-  "ingredient.merge": async () => {
-    const module = await import("~/server/ingredient-browser.server");
-    return module.ingredientMerge as unknown as StartOperationHandler;
-  },
-  "ingredient.recipeUsages": async () => {
-    const module = await import("~/server/ingredient-browser.server");
-    return module.ingredientRecipeUsages as unknown as StartOperationHandler;
-  },
-  "ingredient.resolveOrCreate": async () => {
-    const module = await import("~/server/ingredient-browser.server");
-    return module.ingredientResolveOrCreate as unknown as StartOperationHandler;
-  },
-  "inventory.bulkMove": async () => {
-    const module = await import("~/server/inventory-browser.server");
-    return module.bulkMoveInventoryForBrowser as unknown as StartOperationHandler;
-  },
-  "inventory.bulkProcess": async () => {
-    const module = await import("~/server/inventory-browser.server");
-    return module.bulkProcessInventoryForBrowser as unknown as StartOperationHandler;
-  },
-  "inventory.findDuplicates": async () => {
-    const module = await import("~/server/inventory-browser.server");
-    return module.findInventoryDuplicatesForBrowser as unknown as StartOperationHandler;
-  },
-  "inventory.getByLocationIds": async () => {
-    const module = await import("~/server/inventory-browser.server");
-    return module.getInventoryByLocationIdsForBrowser as unknown as StartOperationHandler;
-  },
-  "inventory.moveEntries": async () => {
-    const module = await import("~/server/inventory-browser.server");
-    return module.moveInventoryEntriesForBrowser as unknown as StartOperationHandler;
-  },
-  "inventory.reconcileSession": async () => {
-    const module = await import("~/server/inventory-browser.server");
-    return module.reconcileInventorySessionForBrowser as unknown as StartOperationHandler;
-  },
-  "inventory.resolveScanStrays": async () => {
-    const module = await import("~/server/inventory-browser.server");
-    return module.resolveInventoryScanStraysForBrowser as unknown as StartOperationHandler;
-  },
-  "inventory.scanAtLocation": async () => {
-    const module = await import("~/server/inventory-browser.server");
-    return module.scanInventoryAtLocationForBrowser as unknown as StartOperationHandler;
-  },
-  "location.bulkUpdateParent": async () => {
-    const module = await import("~/server/location-browser.server");
-    return module.bulkUpdateParentForBrowser as unknown as StartOperationHandler;
-  },
-  "location.ensureGlobalUnknown": async () => {
-    const module = await import("~/server/location-browser.server");
-    return module.ensureGlobalUnknownForBrowser as unknown as StartOperationHandler;
-  },
-  "location.getByShortcodes": async () => {
-    const module = await import("~/server/location-browser.server");
-    return module.getByShortcodesForBrowser as unknown as StartOperationHandler;
-  },
-  "location.inventoryBreakdown": async () => {
-    const module = await import("~/server/location-browser.server");
-    return module.inventoryBreakdownForBrowser as unknown as StartOperationHandler;
-  },
-  "location.makeTree": async () => {
-    const module = await import("~/server/location-browser.server");
-    return module.makeTreeForBrowser as unknown as StartOperationHandler;
-  },
-  "location.parentOptions": async () => {
-    const module = await import("~/server/location-browser.server");
-    return module.parentOptionsForBrowser as unknown as StartOperationHandler;
-  },
-  "location.recomputeValuations": async () => {
-    const module = await import("~/server/location-browser.server");
-    return module.recomputeValuationsForBrowser as unknown as StartOperationHandler;
-  },
-  "location.search": async () => {
-    const module = await import("~/server/location-browser.server");
-    return module.searchForBrowser as unknown as StartOperationHandler;
-  },
-  "location.subtree": async () => {
-    const module = await import("~/server/location-browser.server");
-    return module.subtreeForBrowser as unknown as StartOperationHandler;
-  },
-  "location.valuationSummary": async () => {
-    const module = await import("~/server/location-browser.server");
-    return module.valuationSummaryForBrowser as unknown as StartOperationHandler;
-  },
-  "mcp.listTools": async () => {
-    const module = await import("~/server/mcp-browser.server");
-    return module.listMcpCatalogForBrowser as unknown as StartOperationHandler;
-  },
-  "mcp.usageActivity": async () => {
-    const module = await import("~/server/mcp-browser.server");
-    return module.listMcpUsageActivityForBrowser as unknown as StartOperationHandler;
-  },
-  "mcp.usageDashboard": async () => {
-    const module = await import("~/server/mcp-browser.server");
-    return module.getMcpUsageDashboardForBrowser as unknown as StartOperationHandler;
-  },
-  "meal.addRecipe": async () => {
-    const module = await import("~/server/meal-browser.server");
-    return module.addRecipeToMealForBrowser as unknown as StartOperationHandler;
-  },
-  "meal.getByDateRange": async () => {
-    const module = await import("~/server/meal-browser.server");
-    return module.getMealsByDateRangeForBrowser as unknown as StartOperationHandler;
-  },
-  "meal.getShoppingList": async () => {
-    const module = await import("~/server/meal-browser.server");
-    return module.getShoppingListForBrowser as unknown as StartOperationHandler;
-  },
-  "meal.removeRecipe": async () => {
-    const module = await import("~/server/meal-browser.server");
-    return module.removeMealRecipeForBrowser as unknown as StartOperationHandler;
-  },
-  "meal.upcomingSummary": async () => {
-    const module = await import("~/server/meal-browser.server");
-    return module.getUpcomingMealSummaryForBrowser as unknown as StartOperationHandler;
-  },
-  "meal.updateRecipe": async () => {
-    const module = await import("~/server/meal-browser.server");
-    return module.updateMealRecipeForBrowser as unknown as StartOperationHandler;
-  },
-  "oauth.countOrphanedClients": async () => {
-    const module = await import("~/server/oauth-browser.server");
-    return module.countOrphanedOAuthClientsForBrowser as unknown as StartOperationHandler;
-  },
-  "oauth.listConnectedApps": async () => {
-    const module = await import("~/server/oauth-browser.server");
-    return module.listConnectedAppsForBrowser as unknown as StartOperationHandler;
-  },
-  "oauth.pruneOrphanedClients": async () => {
-    const module = await import("~/server/oauth-browser.server");
-    return module.pruneOrphanedOAuthClientsForBrowser as unknown as StartOperationHandler;
-  },
-  "oauth.revokeConnectedApp": async () => {
-    const module = await import("~/server/oauth-browser.server");
-    return module.revokeConnectedAppForBrowser as unknown as StartOperationHandler;
-  },
-  "problems.cleanupOrphanedEmbeddings": async () => {
-    const module = await import("~/server/problems-browser.server");
-    return module.cleanupOrphanedEmbeddingsForBrowser as unknown as StartOperationHandler;
-  },
-  "problems.deleteUnused": async () => {
-    const module = await import("~/server/problems-browser.server");
-    return module.deleteUnusedIngredientsForBrowser as unknown as StartOperationHandler;
-  },
-  "problems.dryRunPruneAliases": async () => {
-    const module = await import("~/server/problems-browser.server");
-    return module.dryRunPruneAliasesForBrowser as unknown as StartOperationHandler;
-  },
-  "problems.dryRunReparse": async () => {
-    const module = await import("~/server/problems-browser.server");
-    return module.dryRunReparseForBrowser as unknown as StartOperationHandler;
-  },
-  "problems.getByType": async () => {
-    const module = await import("~/server/problems-browser.server");
-    return module.getProblemByType as unknown as StartOperationHandler;
-  },
-  "problems.getCounts": async () => {
-    const module = await import("~/server/problems-browser.server");
-    return module.getProblemCountsForBrowser as unknown as StartOperationHandler;
-  },
-  "problems.getCoverage": async () => {
-    const module = await import("~/server/problems-browser.server");
-    return module.getCoverageProblemsForBrowser as unknown as StartOperationHandler;
-  },
-  "problems.getCoverageTotals": async () => {
-    const module = await import("~/server/problems-browser.server");
-    return module.getCoverageTotalsForBrowser as unknown as StartOperationHandler;
-  },
-  "problems.getFast": async () => {
-    const module = await import("~/server/problems-browser.server");
-    return module.getFastProblemsForBrowser as unknown as StartOperationHandler;
-  },
-  "problems.getMaintenanceCounts": async () => {
-    const module = await import("~/server/problems-browser.server");
-    return module.getMaintenanceCountsForBrowser as unknown as StartOperationHandler;
-  },
-  "problems.getTracker": async () => {
-    const module = await import("~/server/problems-browser.server");
-    return module.getTrackerProblemsForBrowser as unknown as StartOperationHandler;
-  },
-  "problems.getUpc": async () => {
-    const module = await import("~/server/problems-browser.server");
-    return module.getUpcProblemsForBrowser as unknown as StartOperationHandler;
-  },
-  "problems.getViews": async () => {
-    const module = await import("~/server/problems-browser.server");
-    return module.getViewProblemsForBrowser as unknown as StartOperationHandler;
-  },
-  "problems.recipeUsageByProduct": async () => {
-    const module = await import("~/server/problems-browser.server");
-    return module.getRecipeUsageByProductForBrowser as unknown as StartOperationHandler;
-  },
-  "product.applyUpcData": async () => {
-    const module = await import("~/server/product-browser.server");
-    return module.applyProductUpcDataForBrowser as unknown as StartOperationHandler;
-  },
-  "product.attachComponents": async () => {
-    const module = await import("~/server/product-browser.server");
-    return module.attachProductComponentsForBrowser as unknown as StartOperationHandler;
-  },
-  "product.bulkSetStockTracked": async () => {
-    const module = await import("~/server/product-browser.server");
-    return module.bulkSetProductStockTrackedForBrowser as unknown as StartOperationHandler;
-  },
-  "product.categoryDistribution": async () => {
-    const module = await import("~/server/product-browser.server");
-    return module.getProductCategoryDistributionForBrowser as unknown as StartOperationHandler;
-  },
-  "product.components": async () => {
-    const module = await import("~/server/product-browser.server");
-    return module.listProductComponentsForBrowser as unknown as StartOperationHandler;
-  },
-  "product.detachComponents": async () => {
-    const module = await import("~/server/product-browser.server");
-    return module.detachProductComponentsForBrowser as unknown as StartOperationHandler;
-  },
-  "product.discard": async () => {
-    const module = await import("~/server/product-browser.server");
-    return module.discardProductForBrowser as unknown as StartOperationHandler;
-  },
-  "product.externalIdSourceOptions": async () => {
-    const module = await import("~/server/product-browser.server");
-    return module.getProductExternalIdSourceOptionsForBrowser as unknown as StartOperationHandler;
-  },
-  "product.findOrCreateByCode": async () => {
-    const module = await import("~/server/product-browser.server");
-    return module.findOrCreateProductByCodeForBrowser as unknown as StartOperationHandler;
-  },
-  "product.findOrCreateByUPC": async () => {
-    const module = await import("~/server/product-browser.server");
-    return module.findOrCreateProductByUpcForBrowser as unknown as StartOperationHandler;
-  },
-  "product.getByShortcodes": async () => {
-    const module = await import("~/server/product-browser.server");
-    return module.getProductsByShortcodesForBrowser as unknown as StartOperationHandler;
-  },
-  "product.inventoryEntriesByIds": async () => {
-    const module = await import("~/server/product-browser.server");
-    return module.getProductInventoryEntriesForBrowser as unknown as StartOperationHandler;
-  },
-  "product.kitComponentRows": async () => {
-    const module = await import("~/server/product-browser.server");
-    return module.listKitComponentRowsForBrowser as unknown as StartOperationHandler;
-  },
-  "product.kitMembership": async () => {
-    const module = await import("~/server/product-browser.server");
-    return module.listKitMembershipForBrowser as unknown as StartOperationHandler;
-  },
-  "product.manufacturerOptions": async () => {
-    const module = await import("~/server/product-browser.server");
-    return module.getProductManufacturerOptionsForBrowser as unknown as StartOperationHandler;
-  },
-  "product.merge": async () => {
-    const module = await import("~/server/product-browser.server");
-    return module.mergeProductsForBrowser as unknown as StartOperationHandler;
-  },
-  "product.movementTimeline": async () => {
-    const module = await import("~/server/product-browser.server");
-    return module.getProductMovementTimelineForBrowser as unknown as StartOperationHandler;
-  },
-  "product.projectUses": async () => {
-    const module = await import("~/server/product-browser.server");
-    return module.listProductProjectUsesForBrowser as unknown as StartOperationHandler;
-  },
-  "product.purchases": async () => {
-    const module = await import("~/server/product-browser.server");
-    return module.listProductPurchasesForBrowser as unknown as StartOperationHandler;
-  },
-  "product.quantitySummaries": async () => {
-    const module = await import("~/server/product-browser.server");
-    return module.getProductQuantitySummariesForBrowser as unknown as StartOperationHandler;
-  },
-  "product.quickCreate": async () => {
-    const module = await import("~/server/product-browser.server");
-    return module.quickCreateProductForBrowser as unknown as StartOperationHandler;
-  },
-  "product.relationshipRoute": async () => {
-    const module = await import("~/server/product-browser.server");
-    return module.getProductRelationshipRouteForBrowser as unknown as StartOperationHandler;
-  },
-  "product.search": async () => {
-    const module = await import("~/server/product-browser.server");
-    return module.searchProductsForBrowser as unknown as StartOperationHandler;
-  },
-  "product.setProjectUses": async () => {
-    const module = await import("~/server/product-browser.server");
-    return module.setProductProjectUsesForBrowser as unknown as StartOperationHandler;
-  },
-  "product.summaries": async () => {
-    const module = await import("~/server/product-browser.server");
-    return module.getProductSummariesForBrowser as unknown as StartOperationHandler;
-  },
-  "product.tagOptions": async () => {
-    const module = await import("~/server/product-browser.server");
-    return module.getProductTagOptionsForBrowser as unknown as StartOperationHandler;
-  },
-  "project.attachResources": async () => {
-    const module = await import("~/server/project-browser.server");
-    return module.attachProjectResourcesForBrowser as unknown as StartOperationHandler;
-  },
-  "project.createFromTasks": async () => {
-    const module = await import("~/server/project-browser.server");
-    return module.createProjectFromTasksForBrowser as unknown as StartOperationHandler;
-  },
-  "project.dashboardSummary": async () => {
-    const module = await import("~/server/project-browser.server");
-    return module.getProjectDashboardSummaryForBrowser as unknown as StartOperationHandler;
-  },
-  "project.detachResources": async () => {
-    const module = await import("~/server/project-browser.server");
-    return module.detachProjectResourcesForBrowser as unknown as StartOperationHandler;
-  },
-  "project.options": async () => {
-    const module = await import("~/server/project-browser.server");
-    return module.getProjectOptionsForBrowser as unknown as StartOperationHandler;
-  },
-  "project.portfolioAnalytics": async () => {
-    const module = await import("~/server/project-browser.server");
-    return module.getProjectPortfolioAnalyticsForBrowser as unknown as StartOperationHandler;
-  },
-  "project.resources": async () => {
-    const module = await import("~/server/project-browser.server");
-    return module.listProjectResourcesForBrowser as unknown as StartOperationHandler;
-  },
-  "project.setToolUsage": async () => {
-    const module = await import("~/server/project-browser.server");
-    return module.setProjectToolUsageForBrowser as unknown as StartOperationHandler;
-  },
-  "project.toolMatrix": async () => {
-    const module = await import("~/server/project-browser.server");
-    return module.projectToolMatrixForBrowser as unknown as StartOperationHandler;
-  },
-  "project.toolSuggestions": async () => {
-    const module = await import("~/server/project-browser.server");
-    return module.suggestProjectToolsForBrowser as unknown as StartOperationHandler;
-  },
-  "project.tree": async () => {
-    const module = await import("~/server/project-browser.server");
-    return module.getProjectTreeForBrowser as unknown as StartOperationHandler;
-  },
-  "purchase.attachProducts": async () => {
-    const module = await import("~/server/purchase-browser.server");
-    return module.attachPurchaseProductsForBrowser as unknown as StartOperationHandler;
-  },
-  "purchase.detachProducts": async () => {
-    const module = await import("~/server/purchase-browser.server");
-    return module.detachPurchaseProductsForBrowser as unknown as StartOperationHandler;
-  },
-  "purchase.link": async () => {
-    const module = await import("~/server/purchase-browser.server");
-    return module.linkPurchaseForBrowser as unknown as StartOperationHandler;
-  },
-  "purchase.merge": async () => {
-    const module = await import("~/server/purchase-browser.server");
-    return module.mergePurchaseForBrowser as unknown as StartOperationHandler;
-  },
-  "purchase.products": async () => {
-    const module = await import("~/server/purchase-browser.server");
-    return module.purchaseProductsForBrowser as unknown as StartOperationHandler;
-  },
-  "purchase.split": async () => {
-    const module = await import("~/server/purchase-browser.server");
-    return module.splitPurchaseForBrowser as unknown as StartOperationHandler;
-  },
-  "recipe.deleteCookbook": async () => {
-    const module = await import("~/server/recipe-browser.server");
-    return module.recipeDeleteCookbook as unknown as StartOperationHandler;
-  },
-  "recipe.dryRunRecomputeTotals": async () => {
-    const module = await import("~/server/recipe-browser.server");
-    return module.recipeDryRun as unknown as StartOperationHandler;
-  },
-  "recipe.duplicate": async () => {
-    const module = await import("~/server/recipe-browser.server");
-    return module.recipeDuplicate as unknown as StartOperationHandler;
-  },
-  "recipe.explainCosting": async () => {
-    const module = await import("~/server/recipe-browser.server");
-    return module.recipeExplainCosting as unknown as StartOperationHandler;
-  },
-  "recipe.extractCookbookChunk": async () => {
-    const module = await import("~/server/recipe-browser.server");
-    return module.recipeExtractCookbookChunk as unknown as StartOperationHandler;
-  },
-  "recipe.generateFlow": async () => {
-    const module = await import("~/server/recipe-browser.server");
-    return module.recipeGenerateFlow as unknown as StartOperationHandler;
-  },
-  "recipe.getAllTags": async () => {
-    const module = await import("~/server/recipe-browser.server");
-    return module.recipeGetAllTags as unknown as StartOperationHandler;
-  },
-  "recipe.getCookbookDiff": async () => {
-    const module = await import("~/server/recipe-browser.server");
-    return module.recipeCookbookDiff as unknown as StartOperationHandler;
-  },
-  "recipe.getCookbookSource": async () => {
-    const module = await import("~/server/recipe-browser.server");
-    return module.recipeCookbookSource as unknown as StartOperationHandler;
-  },
-  "recipe.getDependencyGraph": async () => {
-    const module = await import("~/server/recipe-browser.server");
-    return module.recipeDependencyGraph as unknown as StartOperationHandler;
-  },
-  "recipe.getFlow": async () => {
-    const module = await import("~/server/recipe-browser.server");
-    return module.recipeGetFlow as unknown as StartOperationHandler;
-  },
-  "recipe.getIngredientCooccurrence": async () => {
-    const module = await import("~/server/recipe-browser.server");
-    return module.recipeCooccurrence as unknown as StartOperationHandler;
-  },
-  "recipe.getIngredientUsage": async () => {
-    const module = await import("~/server/recipe-browser.server");
-    return module.recipeIngredientUsage as unknown as StartOperationHandler;
-  },
-  "recipe.getManyByIDs": async () => {
-    const module = await import("~/server/recipe-browser.server");
-    return module.recipeGetMany as unknown as StartOperationHandler;
-  },
-  "recipe.harvestEquivalences": async () => {
-    const module = await import("~/server/recipe-browser.server");
-    return module.recipeHarvestEquivalences as unknown as StartOperationHandler;
-  },
-  "recipe.parseHtml": async () => {
-    const module = await import("~/server/recipe-browser.server");
-    return module.recipeParseHtml as unknown as StartOperationHandler;
-  },
-  "recipe.previewNotionSync": async () => {
-    const module = await import("~/server/recipe-browser.server");
-    return module.recipePreviewNotion as unknown as StartOperationHandler;
-  },
-  "recipe.recomputeOne": async () => {
-    const module = await import("~/server/recipe-browser.server");
-    return module.recipeRecomputeOne as unknown as StartOperationHandler;
-  },
-  "recipe.scrape": async () => {
-    const module = await import("~/server/recipe-browser.server");
-    return module.recipeScrape as unknown as StartOperationHandler;
-  },
-  "recipe.setCookbookProduct": async () => {
-    const module = await import("~/server/recipe-browser.server");
-    return module.recipeSetCookbookProduct as unknown as StartOperationHandler;
-  },
-  "recipe.upsertCookbook": async () => {
-    const module = await import("~/server/recipe-browser.server");
-    return module.recipeUpsertCookbook as unknown as StartOperationHandler;
-  },
-  "recommendations.dismissDuplicateProduct": async () => {
-    const module = await import("~/server/recommendations-browser.server");
-    return module.dismissDuplicateProductRecommendationForBrowser as unknown as StartOperationHandler;
-  },
-  "recommendations.dismissProduct": async () => {
-    const module = await import("~/server/recommendations-browser.server");
-    return module.dismissProductRecommendationForBrowser as unknown as StartOperationHandler;
-  },
-  "recommendations.dismissTagPropagation": async () => {
-    const module = await import("~/server/recommendations-browser.server");
-    return module.dismissTagPropagationForBrowser as unknown as StartOperationHandler;
-  },
-  "recommendations.duplicateProduct": async () => {
-    const module = await import("~/server/recommendations-browser.server");
-    return module.getDuplicateProductRecommendationForBrowser as unknown as StartOperationHandler;
-  },
-  "recommendations.placement": async () => {
-    const module = await import("~/server/recommendations-browser.server");
-    return module.getPlacementRecommendationForBrowser as unknown as StartOperationHandler;
-  },
-  "recommendations.product": async () => {
-    const module = await import("~/server/recommendations-browser.server");
-    return module.getProductRecommendationForBrowser as unknown as StartOperationHandler;
-  },
-  "recommendations.tagPropagation": async () => {
-    const module = await import("~/server/recommendations-browser.server");
-    return module.getTagPropagationRecommendationForBrowser as unknown as StartOperationHandler;
-  },
-  "relatedData.branch": async () => {
-    const module = await import("~/server/related-data-browser.server");
-    return module.loadRelatedBranchForBrowser as unknown as StartOperationHandler;
-  },
-  "relatedData.options": async () => {
-    const module = await import("~/server/related-data-browser.server");
-    return module.loadRelatedOptionsForBrowser as unknown as StartOperationHandler;
-  },
-  "relatedData.previews": async () => {
-    const module = await import("~/server/related-data-browser.server");
-    return module.loadRelatedPreviewsForBrowser as unknown as StartOperationHandler;
-  },
-  "relatedData.summary": async () => {
-    const module = await import("~/server/related-data-browser.server");
-    return module.loadRelatedSummaryForBrowser as unknown as StartOperationHandler;
-  },
-  "relatedness.product": async () => {
-    const module = await import("~/server/recommendations-browser.server");
-    return module.getProductRelatednessForBrowser as unknown as StartOperationHandler;
-  },
-  "search.debug": async () => {
-    const module = await import("~/server/search-browser.server");
-    return module.inspectSearchDebugForBrowser as unknown as StartOperationHandler;
-  },
-  "search.documentHealth": async () => {
-    const module = await import("~/server/search-browser.server");
-    return module.inspectSearchDocumentHealthForBrowser as unknown as StartOperationHandler;
-  },
-  "search.enqueueEmbeddingBackfill": async () => {
-    const module = await import("~/server/search-browser.server");
-    return module.enqueueEmbeddingBackfillForBrowser as unknown as StartOperationHandler;
-  },
-  "search.find": async () => {
-    const module = await import("~/server/search-browser.server");
-    return module.findSearchHitsForBrowser as unknown as StartOperationHandler;
-  },
-  "search.related": async () => {
-    const module = await import("~/server/search-browser.server");
-    return module.findRelatedSearchHitsForBrowser as unknown as StartOperationHandler;
-  },
-  "search.repairDocuments": async () => {
-    const module = await import("~/server/search-browser.server");
-    return module.repairSearchDocumentsForBrowser as unknown as StartOperationHandler;
-  },
-  "search.requestEmbeddingRefresh": async () => {
-    const module = await import("~/server/search-browser.server");
-    return module.requestEmbeddingRefreshForBrowser as unknown as StartOperationHandler;
-  },
-  "statementRow.imports": async () => {
-    const module = await import("~/server/statement-row-browser.server");
-    return module.listStatementImportsForBrowser as unknown as StartOperationHandler;
-  },
-  "statementRow.list": async () => {
-    const module = await import("~/server/statement-row-browser.server");
-    return module.listStatementRowsForBrowser as unknown as StartOperationHandler;
-  },
-  "statementRow.summary": async () => {
-    const module = await import("~/server/statement-row-browser.server");
-    return module.getStatementRowSummaryForBrowser as unknown as StartOperationHandler;
-  },
-  "suggestions.getMakeable": async () => {
-    const module = await import("~/server/recipe-browser.server");
-    return module.suggestionMakeable as unknown as StartOperationHandler;
-  },
-  "suggestions.getRecipeAvailability": async () => {
-    const module = await import("~/server/recipe-browser.server");
-    return module.suggestionAvailability as unknown as StartOperationHandler;
-  },
-  "task.board": async () => {
-    const module = await import("~/server/task-browser.server");
-    return module.getTaskBoardForBrowser as unknown as StartOperationHandler;
-  },
-  "task.bulkMove": async () => {
-    const module = await import("~/server/task-browser.server");
-    return module.bulkMoveTasksForBrowser as unknown as StartOperationHandler;
-  },
-  "task.bulkReorder": async () => {
-    const module = await import("~/server/task-browser.server");
-    return module.bulkReorderTasksForBrowser as unknown as StartOperationHandler;
-  },
-  "task.bulkSetDueDate": async () => {
-    const module = await import("~/server/task-browser.server");
-    return module.bulkSetTaskDueDateForBrowser as unknown as StartOperationHandler;
-  },
-  "task.bulkSetStatus": async () => {
-    const module = await import("~/server/task-browser.server");
-    return module.bulkSetTaskStatusForBrowser as unknown as StartOperationHandler;
-  },
-  "task.bulkSetTrade": async () => {
-    const module = await import("~/server/task-browser.server");
-    return module.bulkSetTaskTradeForBrowser as unknown as StartOperationHandler;
-  },
-  "task.chartData": async () => {
-    const module = await import("~/server/task-browser.server");
-    return module.getTaskChartDataForBrowser as unknown as StartOperationHandler;
-  },
-  "task.listActionable": async () => {
-    const module = await import("~/server/task-browser.server");
-    return module.listActionableTasksForBrowser as unknown as StartOperationHandler;
-  },
-  "task.summary": async () => {
-    const module = await import("~/server/task-browser.server");
-    return module.getTaskSummaryForBrowser as unknown as StartOperationHandler;
-  },
-  "task.timeline": async () => {
-    const module = await import("~/server/task-browser.server");
-    return module.getTaskTimelineForBrowser as unknown as StartOperationHandler;
-  },
-  "task.todayBriefing": async () => {
-    const module = await import("~/server/task-browser.server");
-    return module.getTaskTodayBriefingForBrowser as unknown as StartOperationHandler;
-  },
-  "upc.lookup": async () => {
-    const module = await import("~/server/upc-browser.server");
-    return module.lookupUpcForBrowser as unknown as StartOperationHandler;
-  },
-  "usda-food.alternateId": async () => {
-    const module = await import("~/server/usda-browser.server");
-    return module.getUsdaFoodByAlternateId as unknown as StartOperationHandler;
-  },
-  "usda-food.detail": async () => {
-    const module = await import("~/server/usda-browser.server");
-    return module.getUsdaFoodDetail as unknown as StartOperationHandler;
-  },
-  "usda-food.list": async () => {
-    const module = await import("~/server/usda-browser.server");
-    return module.listUsdaFoods as unknown as StartOperationHandler;
-  },
-  "vendor.fetchLogo": async () => {
-    const module = await import("~/server/vendor-browser.server");
-    return module.fetchVendorLogoForBrowser as unknown as StartOperationHandler;
-  },
-  "vendor.merge": async () => {
-    const module = await import("~/server/vendor-browser.server");
-    return module.mergeVendorsForBrowser as unknown as StartOperationHandler;
-  },
-  "vendor.options": async () => {
-    const module = await import("~/server/vendor-browser.server");
-    return module.vendorOptionsForBrowser as unknown as StartOperationHandler;
-  },
+  "agent.ask": async () =>
+    (await import("~/server/agent-browser.server")).agentHandlers.operations
+      .ask,
+  "ai.approveDetectedInventoryItem": async () =>
+    (await import("~/server/ai-browser.server")).aiHandlers.operations
+      .approveDetectedInventoryItem,
+  "ai.auditCategories": async () =>
+    (await import("~/server/ai-browser.server")).aiHandlers.operations
+      .auditCategories,
+  "ai.describeLocation": async () =>
+    (await import("~/server/ai-browser.server")).aiHandlers.operations
+      .describeLocation,
+  "ai.detectInventoryItems": async () =>
+    (await import("~/server/ai-browser.server")).aiHandlers.operations
+      .detectInventoryItems,
+  "ai.identifyProduct": async () =>
+    (await import("~/server/ai-browser.server")).aiHandlers.operations
+      .identifyProduct,
+  "ai.parseSearch": async () =>
+    (await import("~/server/ai-browser.server")).aiHandlers.operations
+      .parseSearch,
+  "ai.suggestCategory": async () =>
+    (await import("~/server/ai-browser.server")).aiHandlers.operations
+      .suggestCategory,
+  "ai.suggestIngredientMergeBatch": async () =>
+    (await import("~/server/ai-browser.server")).aiHandlers.operations
+      .suggestIngredientMergeBatch,
+  "ai.suggestLocation": async () =>
+    (await import("~/server/ai-browser.server")).aiHandlers.operations
+      .suggestLocation,
+  "ai.suggestLocationType": async () =>
+    (await import("~/server/ai-browser.server")).aiHandlers.operations
+      .suggestLocationType,
+  "ai.suggestUsdaFood": async () =>
+    (await import("~/server/ai-browser.server")).aiHandlers.operations
+      .suggestUsdaFood,
+  "ai.suggestUsdaFoodBatch": async () =>
+    (await import("~/server/ai-browser.server")).aiHandlers.operations
+      .suggestUsdaFoodBatch,
+  "ai.usageRecent": async () =>
+    (await import("~/server/ai-browser.server")).aiHandlers.operations
+      .usageRecent,
+  "ai.usageSummary": async () =>
+    (await import("~/server/ai-browser.server")).aiHandlers.operations
+      .usageSummary,
+  "auditLog.list": async () =>
+    (await import("~/server/audit-log-browser.server")).auditLogHandlers
+      .operations.list,
+  "background-batch.cancel": async () =>
+    (await import("~/server/background-batch-browser.server"))
+      .backgroundBatchHandlers.operations.cancel,
+  "background-batch.jobs": async () =>
+    (await import("~/server/background-batch-browser.server"))
+      .backgroundBatchHandlers.operations.jobs,
+  "background-batch.list": async () =>
+    (await import("~/server/background-batch-browser.server"))
+      .backgroundBatchHandlers.operations.list,
+  "background-batch.retry": async () =>
+    (await import("~/server/background-batch-browser.server"))
+      .backgroundBatchHandlers.operations.retry,
+  "background-batch.summary": async () =>
+    (await import("~/server/background-batch-browser.server"))
+      .backgroundBatchHandlers.operations.summary,
+  "background-job.clearStranded": async () =>
+    (await import("~/server/background-batch-browser.server"))
+      .backgroundJobHandlers.operations.clearStranded,
+  "background-job.drain": async () =>
+    (await import("~/server/background-batch-browser.server"))
+      .backgroundJobHandlers.operations.drain,
+  "background-job.retry": async () =>
+    (await import("~/server/background-batch-browser.server"))
+      .backgroundJobHandlers.operations.retry,
+  "background-job.strandedCount": async () =>
+    (await import("~/server/background-batch-browser.server"))
+      .backgroundJobHandlers.operations.strandedCount,
+  "calendar.getFeed": async () =>
+    (await import("~/server/calendar-browser.server")).calendarHandlers
+      .operations.getFeed,
+  "calendar.range": async () =>
+    (await import("~/server/calendar-browser.server")).calendarHandlers
+      .operations.range,
+  "calendar.rotateFeed": async () =>
+    (await import("~/server/calendar-browser.server")).calendarHandlers
+      .operations.rotateFeed,
+  "collection.create": async () =>
+    (await import("~/server/collection-browser.server")).collectionHandlers
+      .operations.create,
+  "collection.detail": async () =>
+    (await import("~/server/collection-browser.server")).collectionHandlers
+      .operations.detail,
+  "collection.list": async () =>
+    (await import("~/server/collection-browser.server")).collectionHandlers
+      .operations.list,
+  "collection.matrix": async () =>
+    (await import("~/server/collection-browser.server")).collectionHandlers
+      .operations.matrix,
+  "collection.set": async () =>
+    (await import("~/server/collection-browser.server")).collectionHandlers
+      .operations.set,
+  "cookbook.detail": async () =>
+    (await import("~/server/cookbook-browser.server")).cookbookHandlers
+      .operations.detail,
+  "cookbook.list": async () =>
+    (await import("~/server/cookbook-browser.server")).cookbookHandlers
+      .operations.list,
+  "dashboard.counts": async () =>
+    (await import("~/server/dashboard-browser.server")).dashboardHandlers
+      .operations.counts,
+  "entity.detail": async () =>
+    (await import("~/server/entity-runtime.server")).entityDetailHandlers
+      .operations.detail,
+  "entity.filterOptions": async () =>
+    (await import("~/server/entity-runtime.server")).entityFilterOptionsHandlers
+      .operations.filterOptions,
+  "entity.inspectorHealth": async () =>
+    (await import("~/server/entity-runtime.server"))
+      .entityInspectorHealthHandlers.operations.inspectorHealth,
+  "entity.list": async () =>
+    (await import("~/server/entity-runtime.server")).entityListHandlers
+      .operations.list,
+  "entity.mutate": async () =>
+    (await import("~/server/entity-runtime.server")).entityMutationHandlers
+      .operations.mutate,
+  "entityIntegrity.catalog": async () =>
+    (await import("~/server/entity-runtime.server")).entityIntegrityHandlers
+      .operations.catalog,
+  "expense.analytics": async () =>
+    (await import("~/server/expense-browser.server")).expenseHandlers.operations
+      .analytics,
+  "expense.analyze": async () =>
+    (await import("~/server/expense-browser.server")).expenseHandlers.operations
+      .analyze,
+  "expense.bulkMove": async () =>
+    (await import("~/server/expense-browser.server")).expenseHandlers.operations
+      .bulkMove,
+  "expense.bulkSetCostType": async () =>
+    (await import("~/server/expense-browser.server")).expenseHandlers.operations
+      .bulkSetCostType,
+  "expense.bulkSetTrade": async () =>
+    (await import("~/server/expense-browser.server")).expenseHandlers.operations
+      .bulkSetTrade,
+  "expense.chargeContext": async () =>
+    (await import("~/server/expense-browser.server")).expenseHandlers.operations
+      .chargeContext,
+  "expense.chartData": async () =>
+    (await import("~/server/expense-browser.server")).expenseHandlers.operations
+      .chartData,
+  "expense.facetCounts": async () =>
+    (await import("~/server/expense-browser.server")).expenseHandlers.operations
+      .facetCounts,
+  "expense.monthlySummary": async () =>
+    (await import("~/server/expense-browser.server")).expenseHandlers.operations
+      .monthlySummary,
+  "expense.tradeAffinity": async () =>
+    (await import("~/server/expense-browser.server")).expenseHandlers.operations
+      .tradeAffinity,
+  "financialAccount.options": async () =>
+    (await import("~/server/finance-browser.server")).financialAccountHandlers
+      .operations.options,
+  "financialTransaction.sourceOptions": async () =>
+    (await import("~/server/finance-browser.server"))
+      .financialTransactionHandlers.operations.sourceOptions,
+  "householdContribution.ledger": async () =>
+    (await import("~/server/household-contribution-browser.server"))
+      .householdContributionHandlers.operations.ledger,
+  "householdContribution.project": async () =>
+    (await import("~/server/household-contribution-browser.server"))
+      .householdContributionHandlers.operations.project,
+  "image.cleanupUnreferencedImages": async () =>
+    (await import("~/server/image-browser.server")).imageUploadHandlers
+      .operations.cleanupUnreferencedImages,
+  "image.cullPendingImages": async () =>
+    (await import("~/server/image-browser.server")).imageUploadHandlers
+      .operations.cullPendingImages,
+  "image.delete": async () =>
+    (await import("~/server/image-browser.server")).imageHandlers.operations
+      .delete,
+  "image.detail": async () =>
+    (await import("~/server/image-browser.server")).imageHandlers.operations
+      .detail,
+  "image.importFromUrl": async () =>
+    (await import("~/server/image-browser.server")).imageUploadHandlers
+      .operations.importFromUrl,
+  "image.list": async () =>
+    (await import("~/server/image-browser.server")).imageHandlers.operations
+      .list,
+  "image.markUploaded": async () =>
+    (await import("~/server/image-browser.server")).imageUploadHandlers
+      .operations.markUploaded,
+  "image.projectSummaries": async () =>
+    (await import("~/server/image-browser.server")).imageHandlers.operations
+      .projectSummaries,
+  "image.update": async () =>
+    (await import("~/server/image-browser.server")).imageHandlers.operations
+      .update,
+  "image.uploadDocument": async () =>
+    (await import("~/server/image-browser.server")).imageUploadHandlers
+      .operations.uploadDocument,
+  "image.uploadImage": async () =>
+    (await import("~/server/image-browser.server")).imageUploadHandlers
+      .operations.uploadImage,
+  "ingredient.enrichmentWorkbench": async () =>
+    (await import("~/server/ingredient-browser.server")).ingredientHandlers
+      .operations.enrichmentWorkbench,
+  "ingredient.getByName": async () =>
+    (await import("~/server/ingredient-browser.server")).ingredientHandlers
+      .operations.getByName,
+  "ingredient.getManyByIDs": async () =>
+    (await import("~/server/ingredient-browser.server")).ingredientHandlers
+      .operations.getManyByIDs,
+  "ingredient.matchNames": async () =>
+    (await import("~/server/ingredient-browser.server")).ingredientHandlers
+      .operations.matchNames,
+  "ingredient.merge": async () =>
+    (await import("~/server/ingredient-browser.server")).ingredientHandlers
+      .operations.merge,
+  "ingredient.recipeUsages": async () =>
+    (await import("~/server/ingredient-browser.server")).ingredientHandlers
+      .operations.recipeUsages,
+  "ingredient.resolveOrCreate": async () =>
+    (await import("~/server/ingredient-browser.server")).ingredientHandlers
+      .operations.resolveOrCreate,
+  "inventory.bulkMove": async () =>
+    (await import("~/server/inventory-browser.server")).inventoryHandlers
+      .operations.bulkMove,
+  "inventory.bulkProcess": async () =>
+    (await import("~/server/inventory-browser.server")).inventoryHandlers
+      .operations.bulkProcess,
+  "inventory.findDuplicates": async () =>
+    (await import("~/server/inventory-browser.server")).inventoryHandlers
+      .operations.findDuplicates,
+  "inventory.getByLocationIds": async () =>
+    (await import("~/server/inventory-browser.server")).inventoryHandlers
+      .operations.getByLocationIds,
+  "inventory.moveEntries": async () =>
+    (await import("~/server/inventory-browser.server")).inventoryHandlers
+      .operations.moveEntries,
+  "inventory.reconcileSession": async () =>
+    (await import("~/server/inventory-browser.server")).inventoryHandlers
+      .operations.reconcileSession,
+  "inventory.resolveScanStrays": async () =>
+    (await import("~/server/inventory-browser.server")).inventoryHandlers
+      .operations.resolveScanStrays,
+  "inventory.scanAtLocation": async () =>
+    (await import("~/server/inventory-browser.server")).inventoryHandlers
+      .operations.scanAtLocation,
+  "location.bulkUpdateParent": async () =>
+    (await import("~/server/location-browser.server")).locationHandlers
+      .operations.bulkUpdateParent,
+  "location.ensureGlobalUnknown": async () =>
+    (await import("~/server/location-browser.server")).locationHandlers
+      .operations.ensureGlobalUnknown,
+  "location.getByShortcodes": async () =>
+    (await import("~/server/location-browser.server")).locationHandlers
+      .operations.getByShortcodes,
+  "location.inventoryBreakdown": async () =>
+    (await import("~/server/location-browser.server")).locationHandlers
+      .operations.inventoryBreakdown,
+  "location.makeTree": async () =>
+    (await import("~/server/location-browser.server")).locationHandlers
+      .operations.makeTree,
+  "location.parentOptions": async () =>
+    (await import("~/server/location-browser.server")).locationHandlers
+      .operations.parentOptions,
+  "location.recomputeValuations": async () =>
+    (await import("~/server/location-browser.server")).locationHandlers
+      .operations.recomputeValuations,
+  "location.search": async () =>
+    (await import("~/server/location-browser.server")).locationHandlers
+      .operations.search,
+  "location.subtree": async () =>
+    (await import("~/server/location-browser.server")).locationHandlers
+      .operations.subtree,
+  "location.valuationSummary": async () =>
+    (await import("~/server/location-browser.server")).locationHandlers
+      .operations.valuationSummary,
+  "mcp.listTools": async () =>
+    (await import("~/server/mcp-browser.server")).mcpHandlers.operations
+      .listTools,
+  "mcp.usageActivity": async () =>
+    (await import("~/server/mcp-browser.server")).mcpHandlers.operations
+      .usageActivity,
+  "mcp.usageDashboard": async () =>
+    (await import("~/server/mcp-browser.server")).mcpHandlers.operations
+      .usageDashboard,
+  "meal.addRecipe": async () =>
+    (await import("~/server/meal-browser.server")).mealHandlers.operations
+      .addRecipe,
+  "meal.getByDateRange": async () =>
+    (await import("~/server/meal-browser.server")).mealHandlers.operations
+      .getByDateRange,
+  "meal.getShoppingList": async () =>
+    (await import("~/server/meal-browser.server")).mealHandlers.operations
+      .getShoppingList,
+  "meal.removeRecipe": async () =>
+    (await import("~/server/meal-browser.server")).mealHandlers.operations
+      .removeRecipe,
+  "meal.upcomingSummary": async () =>
+    (await import("~/server/meal-browser.server")).mealHandlers.operations
+      .upcomingSummary,
+  "meal.updateRecipe": async () =>
+    (await import("~/server/meal-browser.server")).mealHandlers.operations
+      .updateRecipe,
+  "oauth.countOrphanedClients": async () =>
+    (await import("~/server/oauth-browser.server")).oauthHandlers.operations
+      .countOrphanedClients,
+  "oauth.listConnectedApps": async () =>
+    (await import("~/server/oauth-browser.server")).oauthHandlers.operations
+      .listConnectedApps,
+  "oauth.pruneOrphanedClients": async () =>
+    (await import("~/server/oauth-browser.server")).oauthHandlers.operations
+      .pruneOrphanedClients,
+  "oauth.revokeConnectedApp": async () =>
+    (await import("~/server/oauth-browser.server")).oauthHandlers.operations
+      .revokeConnectedApp,
+  "problems.cleanupOrphanedEmbeddings": async () =>
+    (await import("~/server/problems-browser.server")).problemsHandlers
+      .operations.cleanupOrphanedEmbeddings,
+  "problems.deleteUnused": async () =>
+    (await import("~/server/problems-browser.server")).problemsHandlers
+      .operations.deleteUnused,
+  "problems.dryRunPruneAliases": async () =>
+    (await import("~/server/problems-browser.server")).problemsHandlers
+      .operations.dryRunPruneAliases,
+  "problems.dryRunReparse": async () =>
+    (await import("~/server/problems-browser.server")).problemsHandlers
+      .operations.dryRunReparse,
+  "problems.getByType": async () =>
+    (await import("~/server/problems-browser.server")).integrityProblemsHandlers
+      .operations.getByType,
+  "problems.getCounts": async () =>
+    (await import("~/server/problems-browser.server")).problemsHandlers
+      .operations.getCounts,
+  "problems.getCoverage": async () =>
+    (await import("~/server/problems-browser.server")).problemsHandlers
+      .operations.getCoverage,
+  "problems.getCoverageTotals": async () =>
+    (await import("~/server/problems-browser.server")).problemsHandlers
+      .operations.getCoverageTotals,
+  "problems.getFast": async () =>
+    (await import("~/server/problems-browser.server")).problemsHandlers
+      .operations.getFast,
+  "problems.getMaintenanceCounts": async () =>
+    (await import("~/server/problems-browser.server")).problemsHandlers
+      .operations.getMaintenanceCounts,
+  "problems.getTracker": async () =>
+    (await import("~/server/problems-browser.server")).problemsHandlers
+      .operations.getTracker,
+  "problems.getUpc": async () =>
+    (await import("~/server/problems-browser.server")).problemsHandlers
+      .operations.getUpc,
+  "problems.getViews": async () =>
+    (await import("~/server/problems-browser.server")).problemsHandlers
+      .operations.getViews,
+  "problems.recipeUsageByProduct": async () =>
+    (await import("~/server/problems-browser.server")).problemsHandlers
+      .operations.recipeUsageByProduct,
+  "product.applyUpcData": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .applyUpcData,
+  "product.attachComponents": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .attachComponents,
+  "product.bulkSetStockTracked": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .bulkSetStockTracked,
+  "product.categoryDistribution": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .categoryDistribution,
+  "product.components": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .components,
+  "product.detachComponents": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .detachComponents,
+  "product.discard": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .discard,
+  "product.externalIdSourceOptions": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .externalIdSourceOptions,
+  "product.findOrCreateByCode": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .findOrCreateByCode,
+  "product.findOrCreateByUPC": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .findOrCreateByUPC,
+  "product.getByShortcodes": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .getByShortcodes,
+  "product.inventoryEntriesByIds": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .inventoryEntriesByIds,
+  "product.kitComponentRows": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .kitComponentRows,
+  "product.kitMembership": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .kitMembership,
+  "product.manufacturerOptions": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .manufacturerOptions,
+  "product.merge": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .merge,
+  "product.movementTimeline": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .movementTimeline,
+  "product.projectUses": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .projectUses,
+  "product.purchases": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .purchases,
+  "product.quantitySummaries": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .quantitySummaries,
+  "product.quickCreate": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .quickCreate,
+  "product.relationshipRoute": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .relationshipRoute,
+  "product.search": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .search,
+  "product.setProjectUses": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .setProjectUses,
+  "product.summaries": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .summaries,
+  "product.tagOptions": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .tagOptions,
+  "project.attachResources": async () =>
+    (await import("~/server/project-browser.server")).projectHandlers.operations
+      .attachResources,
+  "project.createFromTasks": async () =>
+    (await import("~/server/project-browser.server")).projectHandlers.operations
+      .createFromTasks,
+  "project.dashboardSummary": async () =>
+    (await import("~/server/project-browser.server")).projectHandlers.operations
+      .dashboardSummary,
+  "project.detachResources": async () =>
+    (await import("~/server/project-browser.server")).projectHandlers.operations
+      .detachResources,
+  "project.options": async () =>
+    (await import("~/server/project-browser.server")).projectHandlers.operations
+      .options,
+  "project.portfolioAnalytics": async () =>
+    (await import("~/server/project-browser.server")).projectHandlers.operations
+      .portfolioAnalytics,
+  "project.resources": async () =>
+    (await import("~/server/project-browser.server")).projectHandlers.operations
+      .resources,
+  "project.setToolUsage": async () =>
+    (await import("~/server/project-browser.server")).projectHandlers.operations
+      .setToolUsage,
+  "project.toolMatrix": async () =>
+    (await import("~/server/project-browser.server")).projectHandlers.operations
+      .toolMatrix,
+  "project.toolSuggestions": async () =>
+    (await import("~/server/project-browser.server")).projectHandlers.operations
+      .toolSuggestions,
+  "project.tree": async () =>
+    (await import("~/server/project-browser.server")).projectHandlers.operations
+      .tree,
+  "purchase.attachProducts": async () =>
+    (await import("~/server/purchase-browser.server")).purchaseHandlers
+      .operations.attachProducts,
+  "purchase.detachProducts": async () =>
+    (await import("~/server/purchase-browser.server")).purchaseHandlers
+      .operations.detachProducts,
+  "purchase.link": async () =>
+    (await import("~/server/purchase-browser.server")).purchaseHandlers
+      .operations.link,
+  "purchase.merge": async () =>
+    (await import("~/server/purchase-browser.server")).purchaseHandlers
+      .operations.merge,
+  "purchase.products": async () =>
+    (await import("~/server/purchase-browser.server")).purchaseHandlers
+      .operations.products,
+  "purchase.split": async () =>
+    (await import("~/server/purchase-browser.server")).purchaseHandlers
+      .operations.split,
+  "recipe.deleteCookbook": async () =>
+    (await import("~/server/recipe-browser.server")).recipeHandlers.operations
+      .deleteCookbook,
+  "recipe.dryRunRecomputeTotals": async () =>
+    (await import("~/server/recipe-browser.server")).recipeHandlers.operations
+      .dryRunRecomputeTotals,
+  "recipe.duplicate": async () =>
+    (await import("~/server/recipe-browser.server")).recipeHandlers.operations
+      .duplicate,
+  "recipe.explainCosting": async () =>
+    (await import("~/server/recipe-browser.server")).recipeHandlers.operations
+      .explainCosting,
+  "recipe.extractCookbookChunk": async () =>
+    (await import("~/server/recipe-browser.server")).recipeHandlers.operations
+      .extractCookbookChunk,
+  "recipe.generateFlow": async () =>
+    (await import("~/server/recipe-browser.server")).recipeHandlers.operations
+      .generateFlow,
+  "recipe.getAllTags": async () =>
+    (await import("~/server/recipe-browser.server")).recipeHandlers.operations
+      .getAllTags,
+  "recipe.getCookbookDiff": async () =>
+    (await import("~/server/recipe-browser.server")).recipeHandlers.operations
+      .getCookbookDiff,
+  "recipe.getCookbookSource": async () =>
+    (await import("~/server/recipe-browser.server")).recipeHandlers.operations
+      .getCookbookSource,
+  "recipe.getDependencyGraph": async () =>
+    (await import("~/server/recipe-browser.server")).recipeHandlers.operations
+      .getDependencyGraph,
+  "recipe.getFlow": async () =>
+    (await import("~/server/recipe-browser.server")).recipeHandlers.operations
+      .getFlow,
+  "recipe.getIngredientCooccurrence": async () =>
+    (await import("~/server/recipe-browser.server")).recipeHandlers.operations
+      .getIngredientCooccurrence,
+  "recipe.getIngredientUsage": async () =>
+    (await import("~/server/recipe-browser.server")).recipeHandlers.operations
+      .getIngredientUsage,
+  "recipe.getManyByIDs": async () =>
+    (await import("~/server/recipe-browser.server")).recipeHandlers.operations
+      .getManyByIDs,
+  "recipe.harvestEquivalences": async () =>
+    (await import("~/server/recipe-browser.server")).recipeHandlers.operations
+      .harvestEquivalences,
+  "recipe.parseHtml": async () =>
+    (await import("~/server/recipe-browser.server")).recipeHandlers.operations
+      .parseHtml,
+  "recipe.previewNotionSync": async () =>
+    (await import("~/server/recipe-browser.server")).recipeHandlers.operations
+      .previewNotionSync,
+  "recipe.recomputeOne": async () =>
+    (await import("~/server/recipe-browser.server")).recipeHandlers.operations
+      .recomputeOne,
+  "recipe.scrape": async () =>
+    (await import("~/server/recipe-browser.server")).recipeHandlers.operations
+      .scrape,
+  "recipe.setCookbookProduct": async () =>
+    (await import("~/server/recipe-browser.server")).recipeHandlers.operations
+      .setCookbookProduct,
+  "recipe.upsertCookbook": async () =>
+    (await import("~/server/recipe-browser.server")).recipeHandlers.operations
+      .upsertCookbook,
+  "recommendations.dismissDuplicateProduct": async () =>
+    (await import("~/server/recommendations-browser.server"))
+      .recommendationsHandlers.operations.dismissDuplicateProduct,
+  "recommendations.dismissProduct": async () =>
+    (await import("~/server/recommendations-browser.server"))
+      .recommendationsHandlers.operations.dismissProduct,
+  "recommendations.dismissTagPropagation": async () =>
+    (await import("~/server/recommendations-browser.server"))
+      .recommendationsHandlers.operations.dismissTagPropagation,
+  "recommendations.duplicateProduct": async () =>
+    (await import("~/server/recommendations-browser.server"))
+      .recommendationsHandlers.operations.duplicateProduct,
+  "recommendations.placement": async () =>
+    (await import("~/server/recommendations-browser.server"))
+      .recommendationsHandlers.operations.placement,
+  "recommendations.product": async () =>
+    (await import("~/server/recommendations-browser.server"))
+      .recommendationsHandlers.operations.product,
+  "recommendations.tagPropagation": async () =>
+    (await import("~/server/recommendations-browser.server"))
+      .recommendationsHandlers.operations.tagPropagation,
+  "relatedData.branch": async () =>
+    (await import("~/server/related-data-browser.server")).relatedDataHandlers
+      .operations.branch,
+  "relatedData.options": async () =>
+    (await import("~/server/related-data-browser.server")).relatedDataHandlers
+      .operations.options,
+  "relatedData.previews": async () =>
+    (await import("~/server/related-data-browser.server")).relatedDataHandlers
+      .operations.previews,
+  "relatedData.summary": async () =>
+    (await import("~/server/related-data-browser.server")).relatedDataHandlers
+      .operations.summary,
+  "relatedness.product": async () =>
+    (await import("~/server/recommendations-browser.server"))
+      .relatednessHandlers.operations.product,
+  "search.debug": async () =>
+    (await import("~/server/search-browser.server")).searchHandlers.operations
+      .debug,
+  "search.documentHealth": async () =>
+    (await import("~/server/search-browser.server")).searchHandlers.operations
+      .documentHealth,
+  "search.enqueueEmbeddingBackfill": async () =>
+    (await import("~/server/search-browser.server")).searchHandlers.operations
+      .enqueueEmbeddingBackfill,
+  "search.find": async () =>
+    (await import("~/server/search-browser.server")).searchHandlers.operations
+      .find,
+  "search.related": async () =>
+    (await import("~/server/search-browser.server")).searchHandlers.operations
+      .related,
+  "search.repairDocuments": async () =>
+    (await import("~/server/search-browser.server")).searchHandlers.operations
+      .repairDocuments,
+  "search.requestEmbeddingRefresh": async () =>
+    (await import("~/server/search-browser.server")).searchHandlers.operations
+      .requestEmbeddingRefresh,
+  "statementRow.imports": async () =>
+    (await import("~/server/statement-row-browser.server")).statementRowHandlers
+      .operations.imports,
+  "statementRow.list": async () =>
+    (await import("~/server/statement-row-browser.server")).statementRowHandlers
+      .operations.list,
+  "statementRow.summary": async () =>
+    (await import("~/server/statement-row-browser.server")).statementRowHandlers
+      .operations.summary,
+  "suggestions.getMakeable": async () =>
+    (await import("~/server/recipe-browser.server")).suggestionsHandlers
+      .operations.getMakeable,
+  "suggestions.getRecipeAvailability": async () =>
+    (await import("~/server/recipe-browser.server")).suggestionsHandlers
+      .operations.getRecipeAvailability,
+  "task.board": async () =>
+    (await import("~/server/task-browser.server")).taskHandlers.operations
+      .board,
+  "task.bulkMove": async () =>
+    (await import("~/server/task-browser.server")).taskHandlers.operations
+      .bulkMove,
+  "task.bulkReorder": async () =>
+    (await import("~/server/task-browser.server")).taskHandlers.operations
+      .bulkReorder,
+  "task.bulkSetDueDate": async () =>
+    (await import("~/server/task-browser.server")).taskHandlers.operations
+      .bulkSetDueDate,
+  "task.bulkSetStatus": async () =>
+    (await import("~/server/task-browser.server")).taskHandlers.operations
+      .bulkSetStatus,
+  "task.bulkSetTrade": async () =>
+    (await import("~/server/task-browser.server")).taskHandlers.operations
+      .bulkSetTrade,
+  "task.chartData": async () =>
+    (await import("~/server/task-browser.server")).taskHandlers.operations
+      .chartData,
+  "task.listActionable": async () =>
+    (await import("~/server/task-browser.server")).taskHandlers.operations
+      .listActionable,
+  "task.summary": async () =>
+    (await import("~/server/task-browser.server")).taskHandlers.operations
+      .summary,
+  "task.timeline": async () =>
+    (await import("~/server/task-browser.server")).taskHandlers.operations
+      .timeline,
+  "task.todayBriefing": async () =>
+    (await import("~/server/task-browser.server")).taskHandlers.operations
+      .todayBriefing,
+  "upc.lookup": async () =>
+    (await import("~/server/upc-browser.server")).upcHandlers.operations.lookup,
+  "usda-food.alternateId": async () =>
+    (await import("~/server/usda-browser.server")).usdaFoodHandlers.operations
+      .alternateId,
+  "usda-food.detail": async () =>
+    (await import("~/server/usda-browser.server")).usdaFoodHandlers.operations
+      .detail,
+  "usda-food.list": async () =>
+    (await import("~/server/usda-browser.server")).usdaFoodHandlers.operations
+      .list,
+  "vendor.fetchLogo": async () =>
+    (await import("~/server/vendor-browser.server")).vendorHandlers.operations
+      .fetchLogo,
+  "vendor.merge": async () =>
+    (await import("~/server/vendor-browser.server")).vendorHandlers.operations
+      .merge,
+  "vendor.options": async () =>
+    (await import("~/server/vendor-browser.server")).vendorHandlers.operations
+      .options,
 } as const satisfies Record<
   StartOperationIdOfKind<"query" | "mutation">,
   StartOperationHandlerLoader

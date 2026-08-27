@@ -31,7 +31,7 @@ import {
 } from "~/app/_components/navigation/domain-wayfinding";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { cn, formatCurrency } from "~/lib/utils";
-import { entityListQueryOptions } from "./entity-list.functions";
+import { entityListFor } from "./entity-list.functions";
 import { generatedBrowserRoutes } from "./generated/entity-routes.gen";
 import type { EntityColor, EntityDefinition } from "./types";
 
@@ -392,7 +392,7 @@ const entityDefinitions = {
     mergeable: {
       keeperMode: "fixed",
       candidateQuery: (_keeper: VendorOut) =>
-        entityListQueryOptions("vendor", {
+        entityListFor("vendor").queryOptions({
           filters: {},
           // Generous relative to the whole roster (~150 vendors), within
           // MAX_PAGE_SIZE — every other vendor is a merge candidate.
@@ -445,7 +445,7 @@ const entityDefinitions = {
     mergeable: {
       keeperMode: "fixed",
       candidateQuery: (keeper: PurchaseOut) =>
-        entityListQueryOptions("purchase", {
+        entityListFor("purchase").queryOptions({
           filters: { vendorId: keeper.vendorId },
           // Generous relative to any one vendor's purchase count, within MAX_PAGE_SIZE.
           pagination: { pageIndex: 0, pageSize: 200 },

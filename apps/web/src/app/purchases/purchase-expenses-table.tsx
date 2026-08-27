@@ -33,7 +33,7 @@ import {
 } from "~/app/projects/shared";
 import { Stack } from "~/components/layout";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityListQueryOptions } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list.functions";
 
 const EMBEDDED_TABLE_STATE = {
   initialSort: "date",
@@ -73,7 +73,7 @@ function PurchaseExpenseRows({
   kind: "principal" | "adjustment";
 }) {
   const listQueryOptions: ListQueryOptionsFn<ExpenseFilters> = useCallback(
-    (params) => entityListQueryOptions("expense", params),
+    (params) => entityListFor("expense").queryOptions(params),
     [],
   );
   const helper = useMemo(() => createCubbyColumnHelper<ExpenseOut>(), []);

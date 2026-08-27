@@ -1,15 +1,15 @@
 import { CULL_PENDING_IMAGES_DEFAULT_HOURS } from "@cubby/schemas/image";
 import type { AllProblems, MaintenanceCounts } from "@cubby/schemas/problems";
-import type { QueryKey } from "@tanstack/react-query";
 import { sumBy } from "es-toolkit";
 import pluralize from "pluralize";
 import { location } from "~/app/locations/location.functions";
 import { openRecipeRecomputeStaleStream } from "~/app/recipes/recipe.functions";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import type { OperationCacheTag } from "~/integrations/tanstack-query/operation-meta";
 import { backfillLocationDescriptionsStream } from "~/lib/ai.functions";
 import { collectBulkStream } from "~/lib/bulk-progress";
 import { imageUpload } from "~/lib/image.functions";
 import { problems } from "~/lib/problems.functions";
-import { queryKeys } from "~/lib/query-keys";
 import { search } from "~/lib/search.functions";
 
 /** What one task did, for the run's summary toast. */
@@ -57,8 +57,13 @@ export type AutoFixTask = {
   /** Run alongside the others even at a zero/unknown count (idempotent tail steps). */
   alwaysRun?: boolean;
   run: () => Promise<AutoFixOutcome>;
-  /** Entity lists to invalidate once the whole run finishes. */
-  invalidateKeys?: readonly QueryKey[];
+  /**
+   * Cache tags to invalidate once the WHOLE run finishes. Declared per task
+   * rather than read off each descriptor because the button batches one
+   * invalidation across every task it ran, and two of the six are held-open
+   * streams with no `useMutation` to hang `meta` on.
+   */
+  invalidateTags?: readonly OperationCacheTag[];
 };
 
 /**
@@ -94,7 +99,7 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
     count: (problems) => problems.orphanedEntityEmbeddings.length,
     // Its own section, uncapped — every item is on the page.
     listedCount: (problems) => problems.orphanedEntityEmbeddings.length,
-    invalidateKeys: [queryKeys.search.all],
+    invalidateTags: [["search"]],
     // Omitting `ids` cleans every orphan — the server already supports it.
     run: async () => {
       const r = await problems.cleanupOrphanedEmbeddings.call({});
@@ -112,7 +117,7 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
     // Abandoned uploads are maintenance, not a detected problem — there's no
     // Problems section for them, so none of this work is in `totalProblems`.
     listedCount: () => 0,
-    invalidateKeys: [queryKeys.image.list],
+    invalidateTags: ripple.image,
     run: async () => {
       const r = await imageUpload.cullPendingImages.call({
         olderThanHours: CULL_PENDING_IMAGES_DEFAULT_HOURS,
@@ -131,7 +136,7 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
     count: (problems) => problems.locationsWithoutAiDescription.length,
     // Its own section, uncapped.
     listedCount: (problems) => problems.locationsWithoutAiDescription.length,
-    invalidateKeys: [queryKeys.location.list],
+    invalidateTags: ripple.location,
     run: async () => {
       const r = await collectBulkStream(
         await backfillLocationDescriptionsStream(),
@@ -154,7 +159,7 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
     // The section is a capped sample, so only what's listed counts toward the
     // total — a model swap can make the true figure dwarf it.
     listedCount: (problems) => problems.entitiesMissingEmbeddings.length,
-    invalidateKeys: [queryKeys.search.all],
+    invalidateTags: [["search"]],
     // Called unbounded on purpose: `limit` selects an arbitrary per-type window
     // rather than a needs-work one, so a bounded call can enqueue nothing useful
     // and never converge.
@@ -176,7 +181,7 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
     // MaintenanceCounts and has no Problems section, so none of it is in the
     // total. (`staleParentRecipes` is a different, unrelated detector.)
     listedCount: () => 0,
-    invalidateKeys: [queryKeys.recipe.list],
+    invalidateTags: ripple.recipeList,
     run: async () => {
       const r = await collectBulkStream(await openRecipeRecomputeStaleStream());
       return {
@@ -196,7 +201,7 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
     count: () => null,
     listedCount: () => 0,
     alwaysRun: true,
-    invalidateKeys: [queryKeys.location.all],
+    invalidateTags: ripple.locationValuation,
     run: async () => {
       const r = await location.recomputeValuations.call();
       return {

@@ -1,5 +1,4 @@
 import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
-import type { QueryKey } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Trash } from "lucide-react";
 import { type ReactElement, useCallback, useMemo, useState } from "react";
@@ -11,7 +10,6 @@ import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import { entityDialogLabel } from "~/entities/entities";
 import type { GeneratedBrowserCrudEntity } from "~/entities/generated/entity-routes.gen";
 import { getAppErrorDetails, getErrorMessage } from "~/lib/error-utils";
-import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { type MutationOptionsFn, useActionMutation } from "./useActionMutation";
 
@@ -31,11 +29,6 @@ interface UseEntityDeleteOptions {
     onSuccess: (data: { sideEffects?: MutationSideEffects }) => void;
     onError: (err: { message?: string }) => void;
   }) => unknown;
-  /**
-   * Override the fan-out invalidated on success. Omit it — the default is the
-   * entity's own `invalidatesFor(entity)` set.
-   */
-  invalidateKeys?: readonly QueryKey[];
   /** Route to navigate to after deletion */
   redirectTo: string;
   /**
@@ -71,7 +64,6 @@ export function useEntityDelete({
   entityLabel,
   entity,
   mutationOptions,
-  invalidateKeys,
   redirectTo,
   description,
 }: UseEntityDeleteOptions): UseEntityDeleteReturn {
@@ -93,7 +85,6 @@ export function useEntityDelete({
   // toast all now come from `useActionMutation` itself.
   const legacyDeleteMutation = useActionMutation({
     mutationFn: mutationOptions as unknown as MutationOptionsFn,
-    invalidateKeys: invalidateKeys ?? invalidatesFor(entity),
     success: (data) =>
       savedWithBackgroundWork(
         (data as { sideEffects?: MutationSideEffects }).sideEffects ??

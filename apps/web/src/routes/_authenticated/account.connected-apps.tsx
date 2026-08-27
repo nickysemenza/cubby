@@ -28,7 +28,6 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { pageTitle } from "~/lib/page-title";
-import { queryKeys } from "~/lib/query-keys";
 
 // A static sibling of /account/$accountView: TanStack ranks literal segments
 // above dynamic ones, so this wins over the better-auth-ui catch-all rather
@@ -60,7 +59,6 @@ function ConnectedAppsPage() {
   const revoke = useActionMutation({
     mutationFn: oauth.revokeConnectedApp.mutationOptions,
     success: "Access revoked",
-    invalidateKeys: [queryKeys.oauth.connectedApps],
     onSuccess: () => setPendingRevoke(null),
   });
 
@@ -68,7 +66,6 @@ function ConnectedAppsPage() {
     mutationFn: oauth.pruneOrphanedClients.mutationOptions,
     success: (data) =>
       `Removed ${data.deleted.length} abandoned registration(s)`,
-    invalidateKeys: [queryKeys.oauth.connectedApps, queryKeys.oauth.orphaned],
   });
 
   return (

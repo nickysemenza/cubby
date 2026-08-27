@@ -4,7 +4,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { entityListQueryOptions } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list.functions";
 import type { ComboboxItem } from "../_components/combobox/combobox-types";
 import {
   pagination,
@@ -32,14 +32,14 @@ function useFinanceSearch(kind: "account" | "purchase") {
   const { searchQuery, onSearchChange } = useEntitySearch();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
   const account = useQuery({
-    ...entityListQueryOptions("financialAccount", {
+    ...entityListFor("financialAccount").queryOptions({
       filters: { search: searchQuery },
       pagination,
     }),
     enabled: enabled && kind === "account",
   });
   const purchase = useQuery({
-    ...entityListQueryOptions("purchase", {
+    ...entityListFor("purchase").queryOptions({
       filters: { search: searchQuery },
       pagination,
     }),

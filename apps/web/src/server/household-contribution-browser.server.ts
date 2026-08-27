@@ -1,42 +1,16 @@
-import type { z } from "zod";
+import { householdContribution } from "~/app/finance/household-contribution.functions";
+import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
-  runStartOperation,
-  type StartOperationRequest,
-} from "~/server/start-operation.server";
-import {
-  householdContributionLedgerInput,
-  householdContributionLedgerOut,
   householdContributionLedgerWorkflow,
-  projectContributionInput,
-  projectContributionOut,
   projectContributionWorkflow,
 } from "~/server/workflows/household-contribution.server";
 
-export const householdContributionLedgerForBrowser = (options: {
-  data: z.input<typeof householdContributionLedgerInput>;
-  request: StartOperationRequest;
-}) =>
-  runStartOperation({
-    operation: "householdContribution.ledger",
-    type: "query",
-    input: options.data,
-    inputSchema: householdContributionLedgerInput,
-    outputSchema: householdContributionLedgerOut,
-    request: options.request,
-    run: (context, input) =>
+export const householdContributionHandlers = implementOperationDomain(
+  householdContribution,
+  {
+    ledger: (context, input) =>
       householdContributionLedgerWorkflow(context.readDb, input),
-  });
-
-export const projectContributionForBrowser = (options: {
-  data: z.input<typeof projectContributionInput>;
-  request: StartOperationRequest;
-}) =>
-  runStartOperation({
-    operation: "householdContribution.project",
-    type: "query",
-    input: options.data,
-    inputSchema: projectContributionInput,
-    outputSchema: projectContributionOut,
-    request: options.request,
-    run: (context, input) => projectContributionWorkflow(context.readDb, input),
-  });
+    project: (context, input) =>
+      projectContributionWorkflow(context.readDb, input),
+  },
+);

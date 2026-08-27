@@ -17,21 +17,21 @@ export const relatedData = defineOperationDomain("relatedData", {
   previews: query({
     input: relatedPreviewInput,
     output: relatedPreviewOutput,
-    tags: [["relatedData"], ["relatedData", "previews"]],
+    tags: [["relatedData", "previews"]],
   }),
   branch: query({
     input: relatedBranchInput,
     output: relatedBranchOutput,
-    tags: [["relatedData"], ["relatedData", "branch"]],
+    tags: [["relatedData", "branch"]],
   }),
   options: query({
     input: relatedOptionsInput,
     output: relatedOptionsOutput,
-    tags: [["relatedData"], ["relatedData", "options"]],
+    tags: [["relatedData", "options"]],
   }),
   summary: query({
     input: relatedSummaryInput,
     output: relatedSummaryOutput,
-    tags: [["relatedData"], ["relatedData", "summary"]],
+    tags: [["relatedData", "summary"]],
   }),
 });

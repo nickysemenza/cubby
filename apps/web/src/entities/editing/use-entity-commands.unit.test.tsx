@@ -10,6 +10,13 @@ const { executeEntityMutation } = vi.hoisted(() => ({
 vi.mock("~/entities/entity-mutation.functions", () => ({
   executeEntityMutation,
   flattenEntityMutationResult: (result: unknown) => result,
+  // `useEntityCommands` spreads the kernel descriptor's options so the global
+  // MutationCache sees `meta`; the stub only has to be spreadable.
+  entityMutation: {
+    mutate: {
+      forEntity: () => ({ mutationOptions: () => ({}) }),
+    },
+  },
 }));
 
 import { StartOperationError } from "~/integrations/tanstack-query/start-transport";

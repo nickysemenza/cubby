@@ -2,7 +2,7 @@ import {
   formatCollectionLabel,
   normalizeCollectionSlug,
 } from "@cubby/shared/collection-tag";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowRight, Grid3X3, Plus } from "lucide-react";
 import { useId, useState } from "react";
@@ -12,11 +12,9 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidateQueryRoots } from "~/lib/query-keys";
 import { collection } from "./collection.functions";
 
 export function CollectionsIndexPage() {
-  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const collections = useQuery(collection.list.queryOptions(null));
   const [showCreate, setShowCreate] = useState(false);
@@ -29,7 +27,6 @@ export function CollectionsIndexPage() {
   const create = useMutation({
     ...collection.create.mutationOptions(),
     onSuccess: async (result) => {
-      invalidateQueryRoots(queryClient, [collection.list.queryKey(null)]);
       setShowCreate(false);
       setName("");
       setId("");

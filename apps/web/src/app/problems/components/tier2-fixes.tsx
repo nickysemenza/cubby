@@ -2,14 +2,13 @@ import type {
   DuplicateProductIdentity,
   DuplicateVendor,
 } from "@cubby/schemas/problems";
-import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
+import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { EntityMergeDialog } from "~/app/_components/merge/entity-merge-dialog";
 import { product } from "~/app/products/product.functions";
 import { vendor } from "~/app/vendors/vendor.functions";
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { invalidatesFor } from "~/lib/query-keys";
 
 const deleteProduct = entityMutationOptionsFactory("product", "delete");
 
@@ -33,10 +32,9 @@ export function OrphanedDeleteFix({
   name: string;
   close: () => void;
 }) {
-  const remove = useProblemCardMutation({
+  const remove = useActionMutation({
     mutationFn: deleteProduct,
     success: "Product deleted",
-    invalidateKeys: invalidatesFor("product"),
     onSuccess: close,
   });
 
@@ -74,10 +72,9 @@ const purchases = (n: number) => `${n} purchase${n === 1 ? "" : "s"}`;
  * `(vendorId, orderId)` index would otherwise reject. Nothing here re-derives any
  * of that; it passes two ids.
  *
- * Invalidates the PURCHASE key set, not just the vendor one: folding a purchase
- * re-parents its expenses, so the expense/project/dashboard rollups go stale too
- * — the same reason `invalidatesFor("purchase")` is a superset of
- * `invalidatesFor("vendor")`.
+ * `vendor.merge` ripples as a PURCHASE write, not a vendor one: folding a
+ * purchase re-parents its expenses, so the expense/project/dashboard rollups go
+ * stale too. See `ripple.vendorMerge`.
  */
 export function DuplicateVendorMergeFix({
   variant,
@@ -86,7 +83,7 @@ export function DuplicateVendorMergeFix({
   variant: DuplicateVendor;
   close: () => void;
 }) {
-  const merge = useProblemCardMutation({
+  const merge = useActionMutation({
     mutationFn: vendor.merge.mutationOptions,
     // Now that the merge reports what it moved, say so: "Merged into Amazon"
     // gave no way to tell a no-op merge from one that repointed 40 purchases.
@@ -97,7 +94,6 @@ export function DuplicateVendorMergeFix({
         ? `Merged into ${vendor.name}`
         : `Merged into ${vendor.name} — ${moved} purchase(s) moved`;
     },
-    invalidateKeys: invalidatesFor("purchase"),
     onSuccess: close,
   });
 
@@ -141,10 +137,10 @@ export function DuplicateVendorMergeFix({
  * separate open state to track — Cancel or a successful merge both collapse
  * the card the same way.
  *
- * Invalidates the MERGE key set, not the plain product one — for the same
- * reason {@link DuplicateVendorMergeFix} reaches past `vendorMutation…`. A
- * merge re-parents inventory, expenses, and projectUses and recomputes
- * dependent recipe costs, none of which `invalidatesFor("product")` covers.
+ * `product.merge` carries `ripple.productMerge`, not the plain product one —
+ * for the same reason {@link DuplicateVendorMergeFix} reaches past the vendor
+ * set. A merge re-parents inventory, expenses, and projectUses and recomputes
+ * dependent recipe costs, none of which an ordinary product write touches.
  */
 export function DuplicateProductMergeFix({
   variant,
@@ -153,10 +149,9 @@ export function DuplicateProductMergeFix({
   variant: DuplicateProductIdentity;
   close: () => void;
 }) {
-  const merge = useProblemCardMutation({
+  const merge = useActionMutation({
     mutationFn: product.merge.mutationOptions,
     success: (result) => `Merged into ${result.product.name}`,
-    invalidateKeys: invalidatesFor("product", "merge"),
     onSuccess: close,
   });
 

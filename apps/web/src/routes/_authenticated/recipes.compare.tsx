@@ -25,7 +25,7 @@ import {
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { pageTitle } from "~/lib/page-title";
 import { computeRecipeCosting } from "~/lib/recipe-costing";
 import { urlStringParam } from "~/lib/search-params";
@@ -59,7 +59,7 @@ function RecipeComparePage() {
 
   // Fetch all recipes in parallel
   const recipeQueryOptions = useMemo(
-    () => recipeIds.map((id) => entityDetailQueryOptions("recipe", id)),
+    () => recipeIds.map((id) => entityDetailFor("recipe").queryOptions(id)),
     [recipeIds],
   );
 

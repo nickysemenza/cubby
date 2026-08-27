@@ -2,7 +2,6 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { relatedViewsFor } from "@cubby/schemas/related-view";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
-import type { QueryKey } from "@tanstack/react-query";
 import { useStore } from "@tanstack/react-store";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef } from "react";
@@ -43,7 +42,6 @@ type DeleteConfig = {
     onError: (err: { message?: string }) => void;
   }) => unknown;
   entityLabel: string;
-  invalidateKeys: readonly QueryKey[];
   entity: Entity;
 };
 

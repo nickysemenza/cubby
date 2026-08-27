@@ -1,11 +1,6 @@
-import { taskOut } from "@cubby/schemas/project";
-import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
-import { mock } from "~/lib/test/mock-schema";
 import {
   buildEntityEdit,
-  createFakeEntityMutationPort,
-  executeEntityEdit,
   initialEntityEditValues,
   isResolvedEntityEdit,
   resolveEntityEdit,
@@ -18,7 +13,6 @@ import type {
 } from "./types";
 
 const editable = { mode: "editable" } as const;
-const CREATED_TASK_ID = testShortcode("task", "created");
 
 const nameField: EntityEditField<"task", EntityEditRecord, string, object> = {
   entity: "task",
@@ -41,7 +35,6 @@ const registry = {
   task: {
     entity: "task",
     fields: [nameField],
-    invalidationKeys: [["task"]],
     operations: {
       create: {
         defaultIntent: "capture",
@@ -154,38 +147,5 @@ describe("entity editing kernel", () => {
         { field: "name", message: "Name is required.", source: "client" },
       ],
     });
-  });
-
-  it("executes once, invalidates canonical keys, and records background work", async () => {
-    const request = {
-      entity: "task" as const,
-      operation: "create" as const,
-      surface: "calendar" as const,
-    };
-    const resolved = resolveEntityEdit(registry, request);
-    if (!isResolvedEntityEdit(resolved)) throw new Error("expected definition");
-    const build = buildEntityEdit(resolved, request, { name: "new task" });
-    const fake = createFakeEntityMutationPort({
-      execute: async () => ({
-        id: CREATED_TASK_ID,
-        result: mock(taskOut, {
-          overrides: { id: CREATED_TASK_ID, name: "new task" },
-        }),
-      }),
-    });
-    const result = await executeEntityEdit(
-      fake.port,
-      resolved.definition,
-      build,
-    );
-
-    expect(result).toMatchObject({
-      ok: true,
-      id: CREATED_TASK_ID,
-      changed: true,
-    });
-    expect(fake.commands).toHaveLength(1);
-    expect(fake.invalidations).toEqual([[["task"]]]);
-    expect(fake.backgroundWork).toHaveLength(1);
   });
 });

@@ -40,7 +40,6 @@ import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { purchaseLabel } from "~/lib/purchase-label";
-import { invalidatesFor } from "~/lib/query-keys";
 import { purchase as purchaseOperations } from "./purchase.functions";
 
 const SEARCH_PAGE_SIZE = 50;
@@ -101,7 +100,6 @@ export function LinkProductsDialog({
     mutationFn: purchaseOperations.attachProducts.mutationOptions,
     success: (result) =>
       `Attached ${result.changed} product${result.changed === 1 ? "" : "s"}`,
-    invalidateKeys: invalidatesFor("purchase", "product"),
     onSuccess: () => resetAndClose(false),
   });
 

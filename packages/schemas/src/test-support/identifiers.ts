@@ -1,43 +1,9 @@
 import type { ShortcodeFor } from "@cubby/shared";
 import { SHORTCODE_CHARS, SHORTCODE_PREFIX } from "@cubby/shared";
 import {
-  cookbookId,
-  cookbookShortcode,
-  expenseId,
-  expenseShortcode,
-  financialAccountId,
-  financialAccountShortcode,
-  financialTransactionId,
-  financialTransactionShortcode,
-  imageId,
-  imageShortcode,
-  ingredientId,
-  ingredientShortcode,
-  inventoryId,
-  inventoryShortcode,
-  ledgerPartyId,
-  ledgerPartyShortcode,
-  ledgerTransferId,
-  ledgerTransferShortcode,
-  locationId,
-  locationShortcode,
-  mealId,
-  mealShortcode,
-  productId,
-  productShortcode,
-  projectId,
-  projectShortcode,
-  purchaseId,
-  purchaseShortcode,
-  recipeId,
-  recipeShortcode,
-  taskId,
-  taskShortcode,
-  vendorId,
-  vendorShortcode,
+  parseEntityId,
+  parseShortcodeFor,
   userId,
-  wishId,
-  wishShortcode,
   type EntityId,
   type UserId,
 } from "../identifiers";
@@ -90,52 +56,6 @@ const deterministicBody = (entity: ShortcodeEntity, seed: string): string => {
     .join("");
 };
 
-const ID_PARSERS: {
-  [E in ShortcodeEntity]: (value: string) => EntityId<E>;
-} = {
-  cookbook: (value) => cookbookId.parse(value),
-  expense: (value) => expenseId.parse(value),
-  financialAccount: (value) => financialAccountId.parse(value),
-  financialTransaction: (value) => financialTransactionId.parse(value),
-  image: (value) => imageId.parse(value),
-  ingredient: (value) => ingredientId.parse(value),
-  inventory: (value) => inventoryId.parse(value),
-  ledgerParty: (value) => ledgerPartyId.parse(value),
-  ledgerTransfer: (value) => ledgerTransferId.parse(value),
-  location: (value) => locationId.parse(value),
-  meal: (value) => mealId.parse(value),
-  product: (value) => productId.parse(value),
-  project: (value) => projectId.parse(value),
-  purchase: (value) => purchaseId.parse(value),
-  recipe: (value) => recipeId.parse(value),
-  task: (value) => taskId.parse(value),
-  vendor: (value) => vendorId.parse(value),
-  wish: (value) => wishId.parse(value),
-};
-
-const SHORTCODE_PARSERS: {
-  [E in ShortcodeEntity]: (value: string) => ShortcodeFor<E>;
-} = {
-  cookbook: (value) => cookbookShortcode.parse(value),
-  expense: (value) => expenseShortcode.parse(value),
-  financialAccount: (value) => financialAccountShortcode.parse(value),
-  financialTransaction: (value) => financialTransactionShortcode.parse(value),
-  image: (value) => imageShortcode.parse(value),
-  ingredient: (value) => ingredientShortcode.parse(value),
-  inventory: (value) => inventoryShortcode.parse(value),
-  ledgerParty: (value) => ledgerPartyShortcode.parse(value),
-  ledgerTransfer: (value) => ledgerTransferShortcode.parse(value),
-  location: (value) => locationShortcode.parse(value),
-  meal: (value) => mealShortcode.parse(value),
-  product: (value) => productShortcode.parse(value),
-  project: (value) => projectShortcode.parse(value),
-  purchase: (value) => purchaseShortcode.parse(value),
-  recipe: (value) => recipeShortcode.parse(value),
-  task: (value) => taskShortcode.parse(value),
-  vendor: (value) => vendorShortcode.parse(value),
-  wish: (value) => wishShortcode.parse(value),
-};
-
 /**
  * Make a deterministic, schema-validated UUIDv4 for a fabricated fixture.
  * Values returned by a database or resolver must be parsed with `parseEntityId`
@@ -152,9 +72,9 @@ export function testEntityId<E extends ShortcodeEntity>(
     // Exact UUID literals are useful in protocol/SQL expectation fixtures and
     // are already safe after schema validation. Other seeds are namespaced and
     // hashed so terse fixture labels remain valid UUIDv4 values.
-    return ID_PARSERS[entity](seed);
+    return parseEntityId(entity, seed);
   } catch {
-    return ID_PARSERS[entity](deterministicUuid(entity, seed));
+    return parseEntityId(entity, deterministicUuid(entity, seed));
   }
 }
 
@@ -170,10 +90,10 @@ export function testShortcode<E extends ShortcodeEntity>(
     // Preserve exact valid public identifiers so URL, display, and protocol
     // fixtures can assert their wire value. Non-code labels remain convenient
     // deterministic seeds.
-    return SHORTCODE_PARSERS[entity](seed);
+    return parseShortcodeFor(entity, seed);
   } catch {
     // Fall through to a deterministic code in the entity's prefix namespace.
   }
   const code = `${SHORTCODE_PREFIX[entity]}${deterministicBody(entity, seed)}`;
-  return SHORTCODE_PARSERS[entity](code);
+  return parseShortcodeFor(entity, code);
 }

@@ -11,7 +11,6 @@ import {
 } from "~/components/ui/dialog";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
 const productCreateMutationOptions = entityMutationOptionsFactory(
@@ -49,7 +48,6 @@ export function EnrichIngredientDialog({
         `Enriched ${ingredient?.name ?? "ingredient"}`,
       ),
     // Refresh react-query consumers (list, preview getByID)...
-    invalidateKeys: invalidatesFor("ingredient"),
     onSuccess: () => {
       // ...and any route loader (the full /ingredients/$id detail).
       void router.invalidate();

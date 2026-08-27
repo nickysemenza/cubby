@@ -65,7 +65,6 @@ function makeDeletable(
       onError,
     }),
     entityLabel: "Product",
-    invalidateKeys: [],
     entity: "product" as const,
   };
 }

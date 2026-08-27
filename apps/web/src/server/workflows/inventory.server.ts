@@ -7,19 +7,14 @@ import {
 import {
   bulkMovePayload,
   inventoryBulkOperationPayload,
-  inventoryDuplicateUniqueProductsOut,
   inventoryFindDuplicatesInput,
   inventoryLocationIdsInput,
-  inventoryWithLocationAndProductListAndSideEffectsOut,
-  inventoryWithLocationAndProductListOut,
   moveInventoryEntriesPayload,
   reconcileSessionPayload,
 } from "@cubby/schemas/inventory";
 import {
   resolveScanStraysInput,
-  resolveScanStraysOut,
   scanAtLocationInput,
-  scanAtLocationOut,
 } from "@cubby/schemas/scan";
 import { uniq } from "es-toolkit";
 import { match } from "ts-pattern";
@@ -47,17 +42,12 @@ import {
 export {
   bulkMovePayload,
   inventoryBulkOperationPayload,
-  inventoryDuplicateUniqueProductsOut,
   inventoryFindDuplicatesInput,
   inventoryLocationIdsInput,
-  inventoryWithLocationAndProductListAndSideEffectsOut,
-  inventoryWithLocationAndProductListOut,
   moveInventoryEntriesPayload,
   reconcileSessionPayload,
   resolveScanStraysInput,
-  resolveScanStraysOut,
   scanAtLocationInput,
-  scanAtLocationOut,
 };
 
 const locationShortcodes = bindShortcodeResolver("location");

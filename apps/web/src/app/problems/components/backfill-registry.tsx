@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import pluralize from "pluralize";
 import { backfillProductUpcImagesStream } from "~/app/products/product.functions";
-import { entityListRootKey } from "~/entities/entity-list.functions";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { backfillLocationDescriptionsStream } from "~/lib/ai.functions";
 import type { BackfillButtonProps } from "./problem-backfill-action";
 
@@ -31,7 +31,7 @@ export const BACKFILL = {
     skipped: number;
   }>({
     run: backfillProductUpcImagesStream,
-    invalidateKeys: [entityListRootKey("product")],
+    invalidateTags: ripple.product,
     // Runs entirely inside the held-open stream (no durable queue), so warn while
     // it runs (see BackfillButton `foreground`).
     foreground: true,
@@ -48,7 +48,7 @@ export const BACKFILL = {
     batchId: string;
   }>({
     run: backfillLocationDescriptionsStream,
-    invalidateKeys: [entityListRootKey("location")],
+    invalidateTags: ripple.location,
     idleLabel: "Analyze all",
     pendingLabel: "Enqueuing…",
     // Durable: the work runs on the background-jobs queue, so link the toast there.

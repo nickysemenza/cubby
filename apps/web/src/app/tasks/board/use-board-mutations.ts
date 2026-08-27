@@ -17,11 +17,6 @@ import type { z } from "zod";
 import { task } from "~/app/tasks/task.functions";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { getErrorMessage } from "~/lib/error-utils";
-import {
-  cancelQueryRoots,
-  invalidateQueryRoots,
-  invalidatesFor,
-} from "~/lib/query-keys";
 import type { TaskBoardPatch } from "./board-types";
 
 /**
@@ -142,13 +137,11 @@ export function useBoardMutations(target: BoardCacheTarget) {
 
   const base = entityMutationOptionsFactory("task", "update")();
   const update = useMutation({
-    mutationKey: base.mutationKey,
-    mutationFn: base.mutationFn,
-    meta: base.meta,
+    ...base,
     onMutate: async (
       vars,
     ): Promise<OptimisticContext<TaskOut[] | TaskBoardOut>> => {
-      await cancelQueryRoots(queryClient, [queryKey]);
+      await queryClient.cancelQueries({ queryKey });
       const prev = queryClient.getQueryData<TaskOut[] | TaskBoardOut>(queryKey);
       const flat = readFlatList(prev, target.source);
       if (prev && flat) {
@@ -166,7 +159,6 @@ export function useBoardMutations(target: BoardCacheTarget) {
       if (ctx?.prev) queryClient.setQueryData(queryKey, ctx.prev);
       toast.error(getErrorMessage(err));
     },
-    onSettled: () => invalidateQueryRoots(queryClient, invalidatesFor("task")),
   });
 
   // The board's "materialize" reorder — a run of sortOrder writes plus an
@@ -175,13 +167,11 @@ export function useBoardMutations(target: BoardCacheTarget) {
   // then reconciles via onSettled.
   const reorderBase = task.bulkReorder.mutationOptions();
   const reorder = useMutation({
-    mutationKey: reorderBase.mutationKey,
-    mutationFn: reorderBase.mutationFn,
-    meta: reorderBase.meta,
+    ...reorderBase,
     onMutate: async (
       vars,
     ): Promise<OptimisticContext<TaskOut[] | TaskBoardOut>> => {
-      await cancelQueryRoots(queryClient, [queryKey]);
+      await queryClient.cancelQueries({ queryKey });
       const prev = queryClient.getQueryData<TaskOut[] | TaskBoardOut>(queryKey);
       const flat = readFlatList(prev, target.source);
       if (prev && flat) {
@@ -206,7 +196,6 @@ export function useBoardMutations(target: BoardCacheTarget) {
       if (ctx?.prev) queryClient.setQueryData(queryKey, ctx.prev);
       toast.error(getErrorMessage(err));
     },
-    onSettled: () => invalidateQueryRoots(queryClient, invalidatesFor("task")),
   });
 
   // Delete, patched into the same cache for the same reason as the two above.
@@ -217,13 +206,11 @@ export function useBoardMutations(target: BoardCacheTarget) {
   // right for both shapes.
   const deleteBase = entityMutationOptionsFactory("task", "delete")();
   const remove = useMutation({
-    mutationKey: deleteBase.mutationKey,
-    mutationFn: deleteBase.mutationFn,
-    meta: deleteBase.meta,
+    ...deleteBase,
     onMutate: async (vars: {
       ids: string[];
     }): Promise<OptimisticContext<TaskOut[] | TaskBoardOut>> => {
-      await cancelQueryRoots(queryClient, [queryKey]);
+      await queryClient.cancelQueries({ queryKey });
       const prev = queryClient.getQueryData<TaskOut[] | TaskBoardOut>(queryKey);
       const flat = readFlatList(prev, target.source);
       if (prev && flat) {
@@ -246,7 +233,6 @@ export function useBoardMutations(target: BoardCacheTarget) {
       if (ctx?.prev) queryClient.setQueryData(queryKey, ctx.prev);
       toast.error(getErrorMessage(err));
     },
-    onSettled: () => invalidateQueryRoots(queryClient, invalidatesFor("task")),
   });
 
   return {

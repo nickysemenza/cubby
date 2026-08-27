@@ -20,7 +20,7 @@ import {
 import { Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { purchaseLabel } from "~/lib/purchase-label";
 import {
@@ -283,7 +283,7 @@ export function ExpenseList() {
   const scopedProductId = expensesSearch.productId;
   const hasInvalidProductScope = scopedProductId === UNRESOLVABLE_ENTITY_FILTER;
   const scopedProductQuery = useQuery({
-    ...entityDetailQueryOptions("product", scopedProductId ?? ""),
+    ...entityDetailFor("product").queryOptions(scopedProductId ?? ""),
     enabled: Boolean(scopedProductId) && !hasInvalidProductScope,
   });
   const clearProductScope = useCallback(() => {
@@ -329,7 +329,7 @@ export function ExpenseList() {
   const hasInvalidPurchaseScope =
     scopedPurchaseId === UNRESOLVABLE_ENTITY_FILTER;
   const scopedPurchaseQuery = useQuery({
-    ...entityDetailQueryOptions("purchase", scopedPurchaseId ?? ""),
+    ...entityDetailFor("purchase").queryOptions(scopedPurchaseId ?? ""),
     enabled: Boolean(scopedPurchaseId) && !hasInvalidPurchaseScope,
   });
   const clearPurchaseScope = useCallback(() => {

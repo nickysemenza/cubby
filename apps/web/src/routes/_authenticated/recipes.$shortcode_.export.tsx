@@ -40,7 +40,7 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { pageTitle } from "~/lib/page-title";
 import { recipeExportSearchSchema } from "./-recipe-export-search";
@@ -64,7 +64,7 @@ export const Route = createFileRoute(
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   loader: async ({ params, context }) => {
     const data = await context.queryClient.ensureQueryData(
-      entityDetailQueryOptions("recipe", params.shortcode),
+      entityDetailFor("recipe").queryOptions(params.shortcode),
     );
     if (!data) throw notFound();
   },
@@ -80,7 +80,7 @@ export const Route = createFileRoute(
 function RecipeExportPage() {
   const { shortcode } = Route.useParams();
   const { data: recipe } = useSuspenseQuery(
-    entityDetailQueryOptions("recipe", shortcode),
+    entityDetailFor("recipe").queryOptions(shortcode),
   );
   if (!recipe) return null;
   return <RecipeExportBody recipe={recipe} />;

@@ -18,8 +18,8 @@ import {
 import { task } from "~/app/tasks/task.functions";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { DetailPagePending } from "~/components/route-pending";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
-import { entityListQueryOptions } from "~/entities/entity-list.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityListFor } from "~/entities/entity-list.functions";
 import { shortcodeHead } from "~/lib/page-title";
 
 const ProjectNotFound = notFoundPage(
@@ -29,7 +29,7 @@ const ProjectNotFound = notFoundPage(
 );
 
 const ProjectDetailRoute = detailPage({
-  query: (shortcode) => entityDetailQueryOptions("project", shortcode),
+  query: (shortcode) => entityDetailFor("project").queryOptions(shortcode),
   render: (project) => <ProjectDetailPage project={project} />,
   title: (project) => project.name,
 });
@@ -37,7 +37,7 @@ const ProjectDetailRoute = detailPage({
 export const Route = createFileRoute("/_authenticated/projects/$shortcode")({
   loader: async ({ params, context }) => {
     const data = await context.queryClient.ensureQueryData(
-      entityDetailQueryOptions("project", params.shortcode),
+      entityDetailFor("project").queryOptions(params.shortcode),
     );
     if (!data) throw notFound();
 
@@ -57,8 +57,7 @@ export const Route = createFileRoute("/_authenticated/projects/$shortcode")({
       expense.chartData.queryOptions(projectSubtreeExpensesFilters(data.id)),
     );
     void context.queryClient.prefetchQuery(
-      entityListQueryOptions(
-        "project",
+      entityListFor("project").queryOptions(
         projectGanttSubtreeQueryParams(data.id),
       ),
     );

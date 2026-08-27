@@ -4,7 +4,6 @@ import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { recipe } from "~/app/recipes/recipe.functions";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidatesFor } from "~/lib/query-keys";
 
 /** The minimal identity `requestDelete` needs — either grid row or detail-page state. */
 export interface CookbookDeleteTarget {
@@ -36,7 +35,6 @@ export function useCookbookDelete({
     mutationFn: recipe.deleteCookbook.mutationOptions,
     success: ({ deletedRecipes }) =>
       `Deleted ${pendingDelete?.name ?? "cookbook"} and ${deletedRecipes} recipe${deletedRecipes === 1 ? "" : "s"}`,
-    invalidateKeys: invalidatesFor("recipe", "cookbook"),
     onSuccess: () => {
       setPendingDelete(null);
       onDeleted?.();

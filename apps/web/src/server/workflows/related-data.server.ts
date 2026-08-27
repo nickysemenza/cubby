@@ -1,12 +1,8 @@
-import {
+import type {
   relatedBranchInput,
-  relatedBranchOutput,
   relatedOptionsInput,
-  relatedOptionsOutput,
   relatedPreviewInput,
-  relatedPreviewOutput,
   relatedSummaryInput,
-  relatedSummaryOutput,
 } from "@cubby/schemas/related-view";
 import type { z } from "zod";
 import type { Database } from "~/server/db";
@@ -16,14 +12,6 @@ import {
   loadRelatedPreviews,
   loadRelatedSummary,
 } from "~/server/repo/related-view";
-
-export const relatedDataWorkflowSchemas = {
-  previews: { input: relatedPreviewInput, output: relatedPreviewOutput },
-  branch: { input: relatedBranchInput, output: relatedBranchOutput },
-  options: { input: relatedOptionsInput, output: relatedOptionsOutput },
-  summary: { input: relatedSummaryInput, output: relatedSummaryOutput },
-} as const;
-
 export const loadRelatedPreviewsWorkflow = (
   db: Database,
   input: z.output<typeof relatedPreviewInput>,
