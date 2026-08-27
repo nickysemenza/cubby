@@ -74,30 +74,4 @@ describe("workflow stream dispatcher", () => {
       "No workflow stream handler is registered for agent.askStream",
     );
   });
-
-  /**
-   * Every id the generator registered as a subscription must resolve to a
-   * loader. The generated table is `Partial<Record<…>>`, so this is what keeps
-   * a migrated stream from silently losing its handler.
-   */
-  it("has a real loader for every registered subscription", async () => {
-    const { START_OPERATIONS } = await import(
-      "~/lib/generated/start-operation-registry.gen"
-    );
-    const { WORKFLOW_STREAM_HANDLER_LOADERS } = await import(
-      "~/server/generated/start-operation-handlers.gen"
-    );
-
-    const subscriptions = Object.entries(START_OPERATIONS)
-      .filter(([, entry]) => entry.kind === "subscription")
-      .map(([id]) => id);
-
-    expect(subscriptions.length).toBeGreaterThan(0);
-    expect(
-      subscriptions.filter(
-        (id) =>
-          !(id in (WORKFLOW_STREAM_HANDLER_LOADERS as Record<string, unknown>)),
-      ),
-    ).toEqual([]);
-  });
 });

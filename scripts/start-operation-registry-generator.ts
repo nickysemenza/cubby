@@ -510,8 +510,7 @@ export const renderStartOperationHandlers = (): string => {
     `export type StartOperationHandlerLoader = () => Promise<StartOperationHandler>;\n` +
     `export type WorkflowStreamHandlerLoader = () => Promise<WorkflowStreamHandler>;\n` +
     `\nexport const START_OPERATION_HANDLER_LOADERS = {\n${loaders(operations, "operations")}\n} as const satisfies Record<StartOperationIdOfKind<"query" | "mutation">, StartOperationHandlerLoader>;\n` +
-    `\n/**\n * Partial, unlike its sibling: coverage of the subscription ids is enforced\n * by the generator's declared-but-unimplemented check, which names the missing\n * member and its module. What this annotation still buys is key validity — a\n * loader keyed to an id the registry does not carry as a subscription.\n */\n` +
-    `export const WORKFLOW_STREAM_HANDLER_LOADERS = {\n${loaders(subscriptions, "streams")}\n} as const satisfies Partial<Record<StartOperationIdOfKind<"subscription">, WorkflowStreamHandlerLoader>>;\n`
+    `\nexport const WORKFLOW_STREAM_HANDLER_LOADERS = {\n${loaders(subscriptions, "streams")}\n} as const satisfies Record<StartOperationIdOfKind<"subscription">, WorkflowStreamHandlerLoader>;\n`
   );
 };
 

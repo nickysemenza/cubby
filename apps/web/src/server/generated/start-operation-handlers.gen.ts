@@ -694,12 +694,6 @@ export const START_OPERATION_HANDLER_LOADERS = {
   StartOperationHandlerLoader
 >;
 
-/**
- * Partial, unlike its sibling: coverage of the subscription ids is enforced
- * by the generator's declared-but-unimplemented check, which names the missing
- * member and its module. What this annotation still buys is key validity — a
- * loader keyed to an id the registry does not carry as a subscription.
- */
 export const WORKFLOW_STREAM_HANDLER_LOADERS = {
   "agent.askStream": async () =>
     (await import("~/server/agent-browser.server")).agentStreamHandlers.streams
@@ -740,6 +734,7 @@ export const WORKFLOW_STREAM_HANDLER_LOADERS = {
   "recipe.reprocessCookbook": async () =>
     (await import("~/server/recipe-browser.server")).recipeStreamHandlers
       .streams.reprocessCookbook,
-} as const satisfies Partial<
-  Record<StartOperationIdOfKind<"subscription">, WorkflowStreamHandlerLoader>
+} as const satisfies Record<
+  StartOperationIdOfKind<"subscription">,
+  WorkflowStreamHandlerLoader
 >;
