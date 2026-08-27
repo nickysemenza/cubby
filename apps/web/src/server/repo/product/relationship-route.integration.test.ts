@@ -1,5 +1,6 @@
 import { productRelationshipRouteOut } from "@cubby/schemas/product";
 import { projectCreateInput, taskCreateInput } from "@cubby/schemas/project";
+import { testShortcode } from "@cubby/schemas/testing";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -68,6 +69,71 @@ describe("getProductRelationshipRoute", () => {
         vendors: { count: 0, preview: [] },
       },
     });
+  });
+
+  it("caps each purchase source before folding and preserves source-first ties", async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Purchase source cap route" }),
+      ctx.actor,
+    );
+    const vendorId = await findOrCreateVendor(ctx.db, "Source cap vendor");
+    const linkCodes = ["PUR-WWWW", "PUR-XXXX", "PUR-YYYY", "PUR-ZZZZ"];
+    for (const code of linkCodes) {
+      const linkedPurchase = await insertWithShortcode(ctx.db, "purchase", {
+        vendorId,
+        date: "2026-04-01",
+        displayLabel: code,
+      });
+      await getDb(ctx.db)
+        .update(purchase)
+        .set({ shortcode: testShortcode("purchase", code) })
+        .where(eq(purchase.id, linkedPurchase.id));
+      await attachPurchaseProducts(
+        ctx.db,
+        linkedPurchase.id,
+        [product.entityId],
+        ctx.actor,
+      );
+    }
+    const expenseOnly = await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "Same-day expense source",
+        cost: 1,
+        date: "2026-04-01",
+        productId: product.id,
+        productQuantity: 1,
+        vendor: "Source cap vendor",
+        orderId: "SOURCE-CAP-EXPENSE",
+      }),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(purchase)
+      .set({ shortcode: testShortcode("purchase", "PUR-2222") })
+      .where(
+        eq(
+          purchase.id,
+          await resolveOrThrow(
+            ctx.db,
+            "purchase",
+            expenseOnly.output.purchaseId!,
+          ),
+        ),
+      );
+
+    const route = await getProductRelationshipRoute(ctx.db, product.entityId);
+
+    expect(route.direct.purchases.count).toBe(5);
+    expect(
+      route.direct.purchases.preview.map((row) => [row.id, row.source]),
+    ).toEqual([
+      [testShortcode("purchase", "PUR-WWWW"), "link"],
+      [testShortcode("purchase", "PUR-XXXX"), "link"],
+      [testShortcode("purchase", "PUR-YYYY"), "link"],
+    ]);
+    expect(productRelationshipRouteOut.parse(route)).toEqual(route);
   });
 
   it("keeps direct and derived Product relationships distinct and bounds every preview", async () => {

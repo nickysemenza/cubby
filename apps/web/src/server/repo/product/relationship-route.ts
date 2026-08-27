@@ -152,11 +152,11 @@ export async function getProductRelationshipRoute(
       .where(and(eq(expense.productId, productId), notDeleted(expense)))
       .orderBy(desc(expense.date), asc(expense.shortcode))
       .limit(PREVIEW_LIMIT),
-    // Fold the sparse provenance and acquisition-ledger legs in SQL before
-    // applying the preview cap. Duplicate Expenses still mean one purchase;
-    // `both` means a detachable link coexists with ledger evidence.
+    // Preserve the old independent three-row candidate cap for each source
+    // before folding them. Duplicate Expenses still mean one purchase; `both`
+    // means a detachable link coexists with ledger evidence.
     dbc.execute<PurchaseRelationRow>(sql`
-      WITH "purchaseSources" AS (
+      WITH "linkSources" AS (
         SELECT
           ${purchase.id} AS "purchaseId",
           ${purchase.shortcode} AS "purchaseCode",
@@ -167,7 +167,10 @@ export async function getProductRelationshipRoute(
           ${vendor.name} AS "vendorName",
           ${purchaseProduct.createdAt} AS "linkAttachedAt",
           true AS "hasLink",
-          false AS "hasExpense"
+          false AS "hasExpense",
+          row_number() OVER (
+            ORDER BY ${purchase.date} DESC, ${purchase.shortcode} ASC
+          ) AS "sourceRank"
         FROM ${purchaseProduct}
         INNER JOIN ${purchase}
           ON ${purchase.id} = ${purchaseProduct.purchaseId}
@@ -177,9 +180,7 @@ export async function getProductRelationshipRoute(
           eq(purchaseProduct.productId, productId),
           notDeleted(purchaseProduct),
         )}
-
-        UNION ALL
-
+      ), "expenseSourceBase" AS (
         SELECT DISTINCT
           ${purchase.id} AS "purchaseId",
           ${purchase.shortcode} AS "purchaseCode",
@@ -188,16 +189,32 @@ export async function getProductRelationshipRoute(
           ${purchase.date} AS "date",
           ${vendor.shortcode} AS "vendorCode",
           ${vendor.name} AS "vendorName",
-          NULL::timestamp AS "linkAttachedAt",
-          false AS "hasLink",
-          true AS "hasExpense"
+          NULL::timestamp AS "linkAttachedAt"
         FROM ${expense}
         INNER JOIN ${purchase}
           ON ${purchase.id} = ${expense.purchaseId}
           AND ${notDeleted(purchase)}
         LEFT JOIN ${vendor} ON ${liveVendor}
         WHERE ${expensePairPredicate(eq(expense.productId, productId))}
-      ), "purchases" AS (
+      ), "expenseSources" AS (
+        SELECT
+          *, false AS "hasLink", true AS "hasExpense",
+          row_number() OVER (
+            ORDER BY "date" DESC, "purchaseCode" ASC
+          ) AS "sourceRank"
+        FROM "expenseSourceBase"
+      ), "allPurchaseSources" AS (
+        SELECT * FROM "linkSources"
+        UNION ALL
+        SELECT * FROM "expenseSources"
+      ), "previewSources" AS (
+        SELECT * FROM "linkSources" WHERE "sourceRank" <= ${PREVIEW_LIMIT}
+        UNION ALL
+        SELECT * FROM "expenseSources" WHERE "sourceRank" <= ${PREVIEW_LIMIT}
+      ), "purchaseCount" AS (
+        SELECT count(DISTINCT "purchaseId")::int AS "totalCount"
+        FROM "allPurchaseSources"
+      ), "previewPurchases" AS (
         SELECT
           "purchaseId",
           "purchaseCode",
@@ -207,12 +224,13 @@ export async function getProductRelationshipRoute(
           "vendorCode",
           "vendorName",
           max("linkAttachedAt") AS "linkAttachedAt",
+          bool_or("hasLink") AS "linkFirst",
           CASE
             WHEN bool_or("hasLink") AND bool_or("hasExpense") THEN 'both'
             WHEN bool_or("hasLink") THEN 'link'
             ELSE 'expense'
           END AS "source"
-        FROM "purchaseSources"
+        FROM "previewSources"
         GROUP BY
           "purchaseId", "purchaseCode", "displayLabel", "orderId", "date",
           "vendorCode", "vendorName"
@@ -220,9 +238,10 @@ export async function getProductRelationshipRoute(
       SELECT
         "purchaseCode", "displayLabel", "orderId", "date", "vendorCode",
         "vendorName", "linkAttachedAt", "source",
-        count(*) OVER ()::int AS "totalCount"
-      FROM "purchases"
-      ORDER BY "date" DESC, "purchaseCode" ASC
+        "purchaseCount"."totalCount"
+      FROM "previewPurchases"
+      CROSS JOIN "purchaseCount"
+      ORDER BY "date" DESC, "linkFirst" DESC, "purchaseCode" ASC
       LIMIT ${PREVIEW_LIMIT}
     `),
     dbc.execute<ProjectRelationRow>(sql`
