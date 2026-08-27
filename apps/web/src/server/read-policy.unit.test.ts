@@ -76,9 +76,15 @@ describe("cached-read policy", () => {
     expect(runtime).toContain("executeEntity(context");
     expect(runtime).toContain('action: "list"');
     expect(runtime).toContain('action: "get"');
-    expect(
-      between(runtime, "entityDetailHandlers", "entityFilterOptionsHandlers"),
-    ).toContain('readPolicy: "context"');
+    // entity.detail rides the query-default "context" policy (bounded-stale
+    // for browser reads); forcing it strong would be a regression.
+    const detail = between(
+      runtime,
+      "entityDetailHandlers",
+      "entityFilterOptionsHandlers",
+    );
+    expect(detail).toContain("bounded-stale");
+    expect(detail).not.toContain('readPolicy: "strong"');
   });
 
   it("keeps correctness-sensitive and non-browser API surfaces authoritative", () => {

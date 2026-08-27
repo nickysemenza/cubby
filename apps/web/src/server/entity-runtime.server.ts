@@ -51,10 +51,8 @@ export const entityListHandlers = implementOperationDomain(entityList, {
 
 export const entityDetailHandlers = implementOperationDomain(entityDetail, {
   detail: {
-    // Browser UI detail reads may use the bounded-stale handle selected by
-    // request context. Non-browser and fresh-after-write requests remain
-    // strong because their context selects the authoritative database.
-    readPolicy: "context",
+    // Query-default "context" policy: browser detail reads may ride the
+    // bounded-stale handle; other contexts stay authoritative.
     input: entityDetailInputSchema,
     output: (input) => getEntityDetailOutputSchema(input.entity).nullable(),
     run: async (context, input) => {
