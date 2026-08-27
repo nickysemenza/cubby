@@ -42,7 +42,7 @@ import {
 } from "~/components/ui/popover";
 import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { EntityFormDialog } from "~/entities/editing/entity-form-dialog";
-import { entityListQueryOptions } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list.functions";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { cn, formatCurrency } from "~/lib/utils";
 import {
@@ -173,8 +173,7 @@ export function LocationContentsValuation({
 function ValuationBreakdown({ location }: { location: InfLocation }) {
   // Same query key as LocationInventoryTable's list — served from its cache.
   const { data } = useQuery(
-    entityListQueryOptions(
-      "inventory",
+    entityListFor("inventory").queryOptions(
       locationInventoryListInput(location.id),
     ),
   );
@@ -240,8 +239,7 @@ export function LocationContents({ location }: { location: InfLocation }) {
   // free; drives the group count/empty-state so they can't go stale against
   // the grid below.
   const { data: itemsData } = useQuery(
-    entityListQueryOptions(
-      "inventory",
+    entityListFor("inventory").queryOptions(
       locationInventoryListInput(location.id),
     ),
   );
@@ -252,7 +250,9 @@ export function LocationContents({ location }: { location: InfLocation }) {
   // rather than silently dropped — otherwise the shelf reads as complete when
   // it isn't. Zero fixtures renders nothing at all.
   const { data: fixturesData } = useQuery(
-    entityListQueryOptions("inventory", locationFixturesListInput(location.id)),
+    entityListFor("inventory").queryOptions(
+      locationFixturesListInput(location.id),
+    ),
   );
   const fixtureCount = fixturesData?.meta.totalCount ?? 0;
 

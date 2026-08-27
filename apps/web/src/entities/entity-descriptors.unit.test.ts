@@ -3,15 +3,11 @@ import type { OperationQueryKey } from "~/integrations/tanstack-query/operation-
 import {
   type EntityDetailScoped,
   entityDetailFor,
-  entityDetailQueryKey,
-  entityDetailQueryOptions,
   entityDetailRootKey,
 } from "./entity-detail.functions";
 import {
   type EntityListScoped,
-  entityInfiniteListQueryOptions,
   entityListFor,
-  entityListQueryOptions,
   entityListRootKey,
 } from "./entity-list.functions";
 import type {
@@ -27,9 +23,9 @@ import type {
 /**
  * Query keys are the persisted-cache and SSR-hydration contract: a changed key
  * silently strands every persisted entry and re-fetches every hydrated route.
- * These literals are the captured shapes of the helpers that predate the scoped
- * descriptors — assert against the literals, never old-versus-new, so the
- * delegates cannot make the comparison vacuous.
+ * These literals are the captured shapes of the positional helpers the scoped
+ * descriptors replaced — assert against the literals, never old-versus-new, so
+ * a refactor cannot make the comparison vacuous.
  */
 const PRODUCT_LIST_INPUT = {
   filters: { nameFilter: "bolt", manufacturerExact: "Milwaukee" },
@@ -208,16 +204,16 @@ const runQueryFn = (options: object) =>
 
 describe("entity detail query keys", () => {
   it("keys on the canonical shortcode", () => {
-    expect(entityDetailQueryKey("product", "PRD-4K7M")).toEqual(
+    expect(entityDetailFor("product").queryKey("PRD-4K7M")).toEqual(
       KEYS.detailCanonical,
     );
-    expect(entityDetailQueryKey("product", "p-4k7m")).toEqual(
+    expect(entityDetailFor("product").queryKey("p-4k7m")).toEqual(
       KEYS.detailCanonical,
     );
-    expect(entityDetailQueryKey("location", "L-4K7M")).toEqual(
+    expect(entityDetailFor("location").queryKey("L-4K7M")).toEqual(
       KEYS.detailAlias,
     );
-    expect(entityDetailQueryOptions("product", "p-4k7m").queryKey).toEqual(
+    expect(entityDetailFor("product").queryOptions("p-4k7m").queryKey).toEqual(
       KEYS.detailCanonical,
     );
     expect(entityDetailRootKey("product")).toEqual(KEYS.detailRoot);
@@ -225,30 +221,32 @@ describe("entity detail query keys", () => {
 
   it("builds a key for a disabled query without validating it", () => {
     expect(
-      entityDetailQueryOptions("product", "", { enabled: false }).queryKey,
+      entityDetailFor("product").queryOptions("", { enabled: false }).queryKey,
     ).toEqual(KEYS.detailDisabled);
     expect(
-      entityDetailQueryOptions("ingredient", "ING-2222", { enabled: false })
+      entityDetailFor("ingredient").queryOptions("ING-2222", { enabled: false })
         .queryKey,
     ).toEqual(KEYS.detailPlaceholder);
   });
 
   it("defers validation to the query function", async () => {
     await expect(
-      runQueryFn(entityDetailQueryOptions("product", "", { enabled: false })),
+      runQueryFn(
+        entityDetailFor("product").queryOptions("", { enabled: false }),
+      ),
     ).rejects.toThrow();
   });
 
   it("carries the persistence and freshness policy of the entity", () => {
     expect(
-      withoutFunctions(entityDetailQueryOptions("product", "PRD-4K7M")),
+      withoutFunctions(entityDetailFor("product").queryOptions("PRD-4K7M")),
     ).toEqual(DETAIL_POLICY.persisted);
     expect(
-      withoutFunctions(entityDetailQueryOptions("task", "TSK-4K7M")),
+      withoutFunctions(entityDetailFor("task").queryOptions("TSK-4K7M")),
     ).toEqual(DETAIL_POLICY.memory);
     expect(
       withoutFunctions(
-        entityDetailQueryOptions("task", "TSK-4K7M", {
+        entityDetailFor("task").queryOptions("TSK-4K7M", {
           enabled: false,
           staleTime: 1234,
         }),
@@ -260,13 +258,13 @@ describe("entity detail query keys", () => {
 describe("entity list query keys", () => {
   it("keys on the parsed list input", () => {
     expect(
-      entityListQueryOptions("product", PRODUCT_LIST_INPUT).queryKey,
+      entityListFor("product").queryOptions(PRODUCT_LIST_INPUT).queryKey,
     ).toEqual(KEYS.list);
-    expect(entityListQueryOptions("product", { filters: {} }).queryKey).toEqual(
-      KEYS.listSparse,
-    );
     expect(
-      entityListQueryOptions("expense", {
+      entityListFor("product").queryOptions({ filters: {} }).queryKey,
+    ).toEqual(KEYS.listSparse);
+    expect(
+      entityListFor("expense").queryOptions({
         filters: {},
         sort: [{ orderBy: "transactionDate", direction: "desc" }],
         pagination: { pageIndex: 0, pageSize: 50 },
@@ -280,7 +278,7 @@ describe("entity list query keys", () => {
 
   it("falls back to the raw input when a conditional query cannot parse", () => {
     expect(
-      entityListQueryOptions("product", { ...PRODUCT_LIST_INPUT, sort: [] })
+      entityListFor("product").queryOptions({ ...PRODUCT_LIST_INPUT, sort: [] })
         .queryKey,
     ).toEqual(KEYS.listUnparseable);
   });
@@ -288,14 +286,17 @@ describe("entity list query keys", () => {
   it("defers validation to the query function", async () => {
     await expect(
       runQueryFn(
-        entityListQueryOptions("product", { ...PRODUCT_LIST_INPUT, sort: [] }),
+        entityListFor("product").queryOptions({
+          ...PRODUCT_LIST_INPUT,
+          sort: [],
+        }),
       ),
     ).rejects.toThrow();
   });
 
   it("normalizes the infinite key to the first page", () => {
     expect(
-      entityInfiniteListQueryOptions("product", {
+      entityListFor("product").infiniteQueryOptions({
         ...PRODUCT_LIST_INPUT,
         pagination: { pageIndex: 3, pageSize: 25 },
       }).queryKey,
@@ -303,10 +304,8 @@ describe("entity list query keys", () => {
   });
 
   it("pages until the reported total is covered", () => {
-    const options = entityInfiniteListQueryOptions(
-      "product",
-      PRODUCT_LIST_INPUT,
-    );
+    const options =
+      entityListFor("product").infiniteQueryOptions(PRODUCT_LIST_INPUT);
     const page = (pageIndex: number, totalCount: number) =>
       ({ meta: { pageIndex, pageSize: 25, totalCount } }) as never;
     expect(options.initialPageParam).toBe(0);
@@ -317,11 +316,13 @@ describe("entity list query keys", () => {
 
   it("carries the freshness policy of the entity", () => {
     expect(
-      withoutFunctions(entityListQueryOptions("product", PRODUCT_LIST_INPUT)),
+      withoutFunctions(
+        entityListFor("product").queryOptions(PRODUCT_LIST_INPUT),
+      ),
     ).toEqual(LIST_POLICY);
     expect(
       withoutFunctions(
-        entityInfiniteListQueryOptions("product", PRODUCT_LIST_INPUT),
+        entityListFor("product").infiniteQueryOptions(PRODUCT_LIST_INPUT),
       ),
     ).toEqual({ ...LIST_POLICY, initialPageParam: 0 });
   });

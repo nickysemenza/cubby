@@ -35,7 +35,7 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { useHydrated } from "~/hooks/useHydrated";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/lib/ai.functions";
@@ -142,7 +142,7 @@ export function EnrichmentWorkbench({
 
   // Recipe-scoped worklist: fetch the recipe name for the scope banner.
   const { data: scopeRecipe } = useQuery({
-    ...entityDetailQueryOptions("recipe", recipeId ?? ""),
+    ...entityDetailFor("recipe").queryOptions(recipeId ?? ""),
     enabled: !!recipeId,
   });
 

@@ -8,7 +8,7 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
 import type { UnitCoverageItem } from "./unit-coverage-items";
 
@@ -113,7 +113,9 @@ function TitleSizeFix({
   close: () => void;
 }) {
   const [value, setValue] = useState(String(proposed.value));
-  const { data: product } = useQuery(entityDetailQueryOptions("product", id));
+  const { data: product } = useQuery(
+    entityDetailFor("product").queryOptions(id),
+  );
   const update = useActionMutation({
     mutationFn: updateProduct,
     success: "Size saved",
@@ -232,7 +234,7 @@ function DisconnectedFix({
     data: product,
     isLoading,
     isError,
-  } = useQuery(entityDetailQueryOptions("product", id));
+  } = useQuery(entityDetailFor("product").queryOptions(id));
   const update = useActionMutation({
     mutationFn: updateProduct,
     success: "Conversion saved",

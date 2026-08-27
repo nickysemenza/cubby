@@ -23,7 +23,7 @@ import {
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Image } from "~/components/ui/image";
 import { Input } from "~/components/ui/input";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { formatCurrency } from "~/lib/utils";
 
 const SEARCH_PAGE_SIZE = 20;
@@ -110,7 +110,7 @@ function LinkedCookbookPhysicalCopy({
   isPending: boolean;
   onUnlink: () => void;
 }) {
-  const detail = useQuery(entityDetailQueryOptions("product", product.id));
+  const detail = useQuery(entityDetailFor("product").queryOptions(product.id));
 
   // Every live shelf placement, not just the first: a book can sit in two
   // rooms, and naming only one would be quietly wrong.

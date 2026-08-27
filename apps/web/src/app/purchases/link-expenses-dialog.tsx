@@ -40,7 +40,7 @@ import {
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
 import { NoneValue } from "~/components/ui/none-value";
-import { entityListQueryOptions } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list.functions";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { formatCurrency } from "~/lib/utils";
 import { purchase as purchaseOperations } from "./purchase.functions";
@@ -86,7 +86,7 @@ export function LinkExpensesDialog({
       .exhaustive();
   }, [scope, purchase.vendorId, search]);
   const candidatesQuery = useQuery({
-    ...entityListQueryOptions("expense", {
+    ...entityListFor("expense").queryOptions({
       filters,
       pagination: { pageIndex: 0, pageSize: CANDIDATE_PAGE_SIZE },
     }),

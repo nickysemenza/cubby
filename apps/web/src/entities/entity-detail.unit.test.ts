@@ -3,15 +3,14 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import {
   EntityDetailError,
-  entityDetailQueryKey,
-  entityDetailQueryOptions,
+  entityDetailFor,
   entityDetailRootKey,
 } from "./entity-detail.functions";
 
 describe("entity detail transport contract", () => {
   it("uses the normalized operation detail query key", () => {
     expect(
-      entityDetailQueryKey("product", testShortcode("product", "PRD-4K7M")),
+      entityDetailFor("product").queryKey(testShortcode("product", "PRD-4K7M")),
     ).toEqual([
       "operation",
       "entity.detail",
@@ -27,7 +26,7 @@ describe("entity detail transport contract", () => {
   });
 
   it("stores physical-label aliases under canonical detail keys", () => {
-    expect(entityDetailQueryKey("product", "p-4k7m")).toEqual([
+    expect(entityDetailFor("product").queryKey("p-4k7m")).toEqual([
       "operation",
       "entity.detail",
       {
@@ -35,7 +34,7 @@ describe("entity detail transport contract", () => {
         input: { entity: "product", shortcode: "PRD-4K7M" },
       },
     ]);
-    expect(entityDetailQueryKey("location", "L-4K7M")).toEqual([
+    expect(entityDetailFor("location").queryKey("L-4K7M")).toEqual([
       "operation",
       "entity.detail",
       {
@@ -47,7 +46,7 @@ describe("entity detail transport contract", () => {
 
   it("allows an empty placeholder while a conditional query is disabled", () => {
     expect(() =>
-      entityDetailQueryOptions("product", "", { enabled: false }),
+      entityDetailFor("product").queryOptions("", { enabled: false }),
     ).not.toThrow();
   });
 

@@ -19,7 +19,7 @@ import { wishEditRequest } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityDetailQueryKey } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { entityListRootKey } from "~/entities/entity-list.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { formatCurrencyRange } from "~/lib/format-range";
@@ -88,7 +88,7 @@ export function WishDetail({ wish }: { wish: WishOut }) {
     redirectTo: "/wishes",
   });
 
-  const wishKey = entityDetailQueryKey("wish", wish.id);
+  const wishKey = entityDetailFor("wish").queryKey(wish.id);
   const wishListKey = entityListRootKey("wish");
   const acquiredBase = entityMutationOptionsFactory("wish", "update")();
   const acquiredMutation = useMutation({

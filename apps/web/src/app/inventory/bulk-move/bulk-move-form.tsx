@@ -31,8 +31,8 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { EntityIcon } from "~/entities/entities";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
-import { entityListQueryOptions } from "~/entities/entity-list.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityListFor } from "~/entities/entity-list.functions";
 
 type InventoryListItem = z.infer<typeof inventoryListItemOut>;
 
@@ -81,8 +81,7 @@ export default function BulkMoveForm({
   // looking the id up in a first page of locations silently failed for
   // anything further down.
   const { data: initialSourceLocation } = useQuery({
-    ...entityDetailQueryOptions(
-      "location",
+    ...entityDetailFor("location").queryOptions(
       initialSourceLocationId ?? "LOC-0000",
     ),
     enabled: !!initialSourceLocationId,
@@ -117,7 +116,7 @@ export default function BulkMoveForm({
   const BULK_MOVE_PAGE_SIZE = 100;
   const { data: inventoryItemsData, refetch: refetchInventoryItems } = useQuery(
     {
-      ...entityListQueryOptions("inventory", {
+      ...entityListFor("inventory").queryOptions({
         sort: { orderBy: "createdAt", direction: "desc" },
         pagination: { pageIndex: 0, pageSize: BULK_MOVE_PAGE_SIZE },
         filters: { locationIdFilter: sourceLocation?.id ?? "" },

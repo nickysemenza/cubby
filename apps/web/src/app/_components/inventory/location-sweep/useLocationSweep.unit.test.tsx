@@ -63,9 +63,11 @@ vi.mock("~/app/locations/location.functions", () => ({
 }));
 
 vi.mock("~/entities/entity-detail.functions", () => ({
-  entityDetailQueryOptions: (_entity: string, shortcode: string) => ({
-    queryKey: [["location", "detail"], { shortcode }],
-    queryFn: () => mocks.locations.get(shortcode) ?? null,
+  entityDetailFor: (_entity: string) => ({
+    queryOptions: (shortcode: string) => ({
+      queryKey: [["location", "detail"], { shortcode }],
+      queryFn: () => mocks.locations.get(shortcode) ?? null,
+    }),
   }),
 }));
 

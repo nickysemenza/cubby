@@ -8,7 +8,7 @@ import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { mock } from "~/lib/test/mock-schema";
 import { entityMutationResultSchema } from "~/server/entity-kernel/contracts";
 import { entityMutationOptionsFactory } from "./entity-contracts";
-import { entityListQueryOptions } from "./entity-list.functions";
+import { entityListFor } from "./entity-list.functions";
 import { flattenEntityMutationResult } from "./entity-mutation.functions";
 
 const mutationTransport = vi.hoisted(() => vi.fn());
@@ -70,7 +70,7 @@ describe("kernel browser transport", () => {
       pagination: { pageIndex: 0, pageSize: 10 },
     };
 
-    const options = entityListQueryOptions("product", params);
+    const options = entityListFor("product").queryOptions(params);
 
     expect(options.queryKey).toEqual([
       "operation",

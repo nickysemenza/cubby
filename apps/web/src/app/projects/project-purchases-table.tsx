@@ -15,7 +15,7 @@ import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
-import { entityListQueryOptions } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list.functions";
 import { formatCurrency } from "~/lib/utils";
 import {
   buildProjectPurchaseRows,
@@ -75,7 +75,7 @@ export function ProjectPurchasesTable({
   expenses: readonly ExpenseOut[];
 }) {
   const listQueryOptions: ListQueryOptionsFn<PurchaseFilters> = useCallback(
-    (params) => entityListQueryOptions("purchase", params),
+    (params) => entityListFor("purchase").queryOptions(params),
     [],
   );
   const helper = useMemo(

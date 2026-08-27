@@ -28,7 +28,7 @@ import {
 } from "~/components/ui/tooltip";
 import { EntityIcon } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityListQueryOptions } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
@@ -162,7 +162,7 @@ export function IngredientList() {
 
   // Count of stub ingredients (no products) to surface the enrichment entry point.
   const { data: stubData } = useQuery(
-    entityListQueryOptions("ingredient", {
+    entityListFor("ingredient").queryOptions({
       filters: { productPresenceFilter: "none" },
       pagination: { pageIndex: 0, pageSize: 1 },
     }),

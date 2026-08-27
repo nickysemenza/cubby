@@ -29,7 +29,7 @@ import { wishPriceRange } from "~/app/wishes/wish-price-range";
 import { Row } from "~/components/layout";
 import { cookbook } from "~/entities/cookbook.functions";
 import { EntityIcon, entities, entityDetailParams } from "~/entities/entities";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { fdcIdFromParam } from "~/entities/entity-query";
 import type {
   DetailEntity,
@@ -1073,7 +1073,7 @@ function GenericPreviewContent({
 }) {
   const spec = PREVIEW_TABLE[entity];
   const query = useQuery(
-    entityDetailQueryOptions(entity as DetailEntity, id) as never,
+    entityDetailFor(entity as DetailEntity).queryOptions(id) as never,
   );
 
   return (
@@ -1093,7 +1093,7 @@ function ProjectPreviewContent({
   showOpenAction: boolean;
 }) {
   const projectId = parseShortcodeFor("project", id);
-  const query = useQuery(entityDetailQueryOptions("project", id));
+  const query = useQuery(entityDetailFor("project").queryOptions(id));
   const coverQuery = useQuery(
     image.projectSummaries.queryOptions({
       projectIds: [projectId],

@@ -30,7 +30,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { ScanFeedbackEntry } from "~/app/_components/inventory/persistent-scanner";
 import { inventory } from "~/app/inventory/inventory.functions";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { resolveLocationScan, resolveProductScan } from "~/lib/scan-code";
@@ -273,7 +273,9 @@ export function useLocationSweep({
 
   const fetchLocation = useCallback(
     (shortcode: string) =>
-      queryClient.fetchQuery(entityDetailQueryOptions("location", shortcode)),
+      queryClient.fetchQuery(
+        entityDetailFor("location").queryOptions(shortcode),
+      ),
     [queryClient],
   );
 

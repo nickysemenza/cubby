@@ -34,8 +34,8 @@ import { NoneValue } from "~/components/ui/none-value";
 import { taskCaptureRequest } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
-import { entityListQueryOptions } from "~/entities/entity-list.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityListFor } from "~/entities/entity-list.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { patchListItem } from "~/lib/optimistic-list";
 import { DependencyPicker } from "../_components/data-table/dependency-picker";
@@ -91,7 +91,7 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
     null,
   );
 
-  const subtasksOptions = entityListQueryOptions("task", {
+  const subtasksOptions = entityListFor("task").queryOptions({
     filters: { parentTaskId: task.id },
     sort: SUBTASKS_SORT,
     pagination: SUBTASKS_PAGINATION,
@@ -280,7 +280,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
     [task.blockedByIds, task.blockingIds],
   );
   const depQueryOptions = useMemo(
-    () => depIds.map((id) => entityDetailQueryOptions("task", id)),
+    () => depIds.map((id) => entityDetailFor("task").queryOptions(id)),
     [depIds],
   );
   const { depsById } = useQueries({

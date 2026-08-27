@@ -13,8 +13,8 @@ import { lazy, Suspense } from "react";
 import { useUpcAwareCreate } from "~/app/_components/products/use-upc-aware-create";
 import { location } from "~/app/locations/location.functions";
 import { product } from "~/app/products/product.functions";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
-import { entityListQueryOptions } from "~/entities/entity-list.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { entityListFor } from "~/entities/entity-list.functions";
 import { search } from "~/lib/search.functions";
 import {
   buildIngredientComboboxItem,
@@ -73,7 +73,7 @@ export function WithIngredientSearch({
   const searchingByCode = parsedCode != null;
 
   const { data, isLoading } = useQuery({
-    ...entityListQueryOptions("ingredient", {
+    ...entityListFor("ingredient").queryOptions({
       filters: { nameFilter: searchQuery },
       pagination,
     }),
@@ -88,7 +88,7 @@ export function WithIngredientSearch({
     enabled: enabled && !searchingByCode && searchQuery.trim() !== "",
   });
   const { data: exactItem, isLoading: isExactLoading } = useQuery(
-    entityDetailQueryOptions("ingredient", exactCode ?? "ING-2222", {
+    entityDetailFor("ingredient").queryOptions(exactCode ?? "ING-2222", {
       enabled: exactCode != null,
     }),
   );
@@ -178,7 +178,7 @@ export function WithLocationSearch({
     enabled: enabled && !searchingByCode && searchQuery.trim() !== "",
   });
   const { data: exactItem, isLoading: isExactLoading } = useQuery(
-    entityDetailQueryOptions("location", exactCode ?? "LOC-2222", {
+    entityDetailFor("location").queryOptions(exactCode ?? "LOC-2222", {
       enabled: exactCode != null,
     }),
   );
@@ -257,7 +257,7 @@ export function WithProductSearch({
     enabled: enabled && !searchingByCode,
   });
   const { data: exactItem, isLoading: isExactLoading } = useQuery(
-    entityDetailQueryOptions("product", exactCode ?? "PRD-2222", {
+    entityDetailFor("product").queryOptions(exactCode ?? "PRD-2222", {
       enabled: exactCode != null,
     }),
   );
@@ -313,7 +313,7 @@ export function WithRecipeSearch({
   const searchingByCode = parsedCode != null;
 
   const { data, isLoading } = useQuery({
-    ...entityListQueryOptions("recipe", {
+    ...entityListFor("recipe").queryOptions({
       filters: { nameFilter: searchQuery },
       pagination,
     }),
@@ -328,7 +328,7 @@ export function WithRecipeSearch({
     enabled: enabled && !searchingByCode && searchQuery.trim() !== "",
   });
   const { data: exactItem, isLoading: isExactLoading } = useQuery(
-    entityDetailQueryOptions("recipe", exactCode ?? "RCP-2222", {
+    entityDetailFor("recipe").queryOptions(exactCode ?? "RCP-2222", {
       enabled: exactCode != null,
     }),
   );
@@ -374,7 +374,7 @@ export function WithProjectSearch({
   const searchingByCode = parsedCode != null;
 
   const { data, isLoading } = useQuery({
-    ...entityListQueryOptions("project", {
+    ...entityListFor("project").queryOptions({
       filters: { search: searchQuery },
       pagination,
     }),
@@ -389,7 +389,7 @@ export function WithProjectSearch({
     enabled: enabled && !searchingByCode && searchQuery.trim() !== "",
   });
   const { data: exactItem, isLoading: isExactLoading } = useQuery(
-    entityDetailQueryOptions("project", exactCode ?? "PRJ-2222", {
+    entityDetailFor("project").queryOptions(exactCode ?? "PRJ-2222", {
       enabled: exactCode != null,
     }),
   );
@@ -434,7 +434,7 @@ export function WithTaskSearch({
   const searchingByCode = parsedCode != null;
 
   const { data, isLoading } = useQuery({
-    ...entityListQueryOptions("task", {
+    ...entityListFor("task").queryOptions({
       filters: { search: searchQuery },
       pagination,
     }),
@@ -449,7 +449,7 @@ export function WithTaskSearch({
     enabled: enabled && !searchingByCode && searchQuery.trim() !== "",
   });
   const { data: exactItem, isLoading: isExactLoading } = useQuery(
-    entityDetailQueryOptions("task", exactCode ?? "TSK-2222", {
+    entityDetailFor("task").queryOptions(exactCode ?? "TSK-2222", {
       enabled: exactCode != null,
     }),
   );

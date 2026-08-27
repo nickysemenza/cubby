@@ -54,7 +54,7 @@ import {
   EmptyTitle,
 } from "~/components/ui/empty";
 import { Spinner } from "~/components/ui/spinner";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { PhotoPassStop } from "./PhotoPassStop";
 import { flattenPhotoStops, type PhotoStop } from "./photo-pass-utils";
@@ -172,7 +172,7 @@ function ScanPass() {
   const { capture, discardCapture, isCapturing } = useLocationPhotoCapture();
 
   const scanQuery = useQuery(
-    entityDetailQueryOptions("location", shortcode ?? "LOC-2222", {
+    entityDetailFor("location").queryOptions(shortcode ?? "LOC-2222", {
       enabled: shortcode != null,
     }),
   );

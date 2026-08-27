@@ -5,7 +5,7 @@ import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { vendor } from "~/app/vendors/vendor.functions";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { search } from "~/lib/search.functions";
 import {
   buildSearchHitComboboxItem,
@@ -53,7 +53,7 @@ function useVendorSearchRows() {
     enabled: enabled && !searchingByCode && searchQuery.trim() !== "",
   });
   const { data: exactItem, isLoading: isExactLoading } = useQuery(
-    entityDetailQueryOptions("vendor", exactCode ?? "VEN-2222", {
+    entityDetailFor("vendor").queryOptions(exactCode ?? "VEN-2222", {
       enabled: exactCode != null,
     }),
   );

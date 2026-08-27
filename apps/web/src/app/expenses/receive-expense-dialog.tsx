@@ -38,7 +38,7 @@ import {
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 
 const formSchema = z.object({
   location: optionalLocationField,
@@ -61,7 +61,7 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
   expenseName,
 }) => {
   const { data: product, isLoading } = useQuery({
-    ...entityDetailQueryOptions("product", productId),
+    ...entityDetailFor("product").queryOptions(productId),
     enabled: open,
   });
 

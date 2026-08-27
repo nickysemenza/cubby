@@ -32,10 +32,7 @@ import { Input } from "~/components/ui/input";
 import { NoneValue } from "~/components/ui/none-value";
 import { entityDetailLink } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import {
-  entityDetailQueryKey,
-  entityDetailQueryOptions,
-} from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { formatCurrency } from "~/lib/utils";
@@ -53,7 +50,7 @@ type MealDetail = EntityDetailByEntity["meal"];
 export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
   const queryClient = useQueryClient();
   const invalidate = useInvalidateMeals();
-  const mealKey = entityDetailQueryKey("meal", mealId);
+  const mealKey = entityDetailFor("meal").queryKey(mealId);
   const [pendingRecipeName, setPendingRecipeName] = useState<string | null>(
     null,
   );
@@ -64,7 +61,7 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
     isError,
     error,
     refetch,
-  } = useQuery(entityDetailQueryOptions("meal", mealId));
+  } = useQuery(entityDetailFor("meal").queryOptions(mealId));
 
   const updateMeal = useUpdateMutation({
     mutationFn: entityMutationOptionsFactory("meal", "update"),

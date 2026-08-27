@@ -14,7 +14,7 @@ import {
 } from "~/app/_components/actions/action-verb-ui";
 import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityListQueryOptions } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list.functions";
 import {
   createEditableAmountColumn,
   createSingleEntityInlineLinkColumn,
@@ -225,7 +225,7 @@ export function LocationInventoryTable({
   const listQueryOptions: ListQueryOptionsFn<Record<string, never>> =
     useCallback(
       (params) =>
-        entityListQueryOptions("inventory", {
+        entityListFor("inventory").queryOptions({
           sort: params.sort,
           pagination: params.pagination,
           filters: { locationIdFilter: locationId, placementFilter: placement },
