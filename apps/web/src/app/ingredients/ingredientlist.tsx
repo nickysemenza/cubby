@@ -7,16 +7,12 @@ import { Link } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
 import { Scale, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
-import { verbBulkAction } from "~/app/_components/actions/action-verb-ui";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
-import { EntityMergeDialog } from "~/app/_components/merge/entity-merge-dialog";
 import {
   ProductFoodSummariesProvider,
   useHydratedProductFood,
   useProductFoodSummaries,
 } from "~/app/_components/products/product-food-summaries";
-import { ingredient } from "~/app/ingredients/ingredient.functions";
 import { Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
@@ -29,8 +25,6 @@ import {
 import { EntityIcon } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListFor } from "~/entities/entity-list.functions";
-import { getErrorMessage } from "~/lib/error-utils";
-import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import {
   createImageColumn,
@@ -135,6 +129,7 @@ export function IngredientList() {
   );
   const {
     onRowClick,
+    inspectRow,
     onRowHover,
     onRowHoverEnd,
     PreviewSheet,
@@ -152,14 +147,6 @@ export function IngredientList() {
     mutationFn: entityMutationOptionsFactory("ingredient", "update"),
     entity: "ingredient",
   });
-
-  // Rows awaiting merge confirmation — set by the bulk action's onExecute
-  // (which itself does no work; it just opens the dialog), cleared once the
-  // shared EntityMergeDialog's onConfirm/cancel resolves.
-  const [mergeRows, setMergeRows] = useState<
-    Pick<IngredientListItem, "id" | "name">[] | null
-  >(null);
-  const [mergePending, setMergePending] = useState(false);
 
   // Count of stub ingredients (no products) to surface the enrichment entry point.
   const { data: stubData } = useQuery(
@@ -263,56 +250,12 @@ export function IngredientList() {
 
   const { workbench, data, totalCount } = useEntityList({
     entity: "ingredient",
+    onInspectRow: inspectRow,
     getMappings: getIngredientListMappings,
     columns,
-    bulkActions: {
-      actions: [
-        verbBulkAction<IngredientListItem>("merge", {
-          minSelection: 2,
-          // No built-in confirmation: `onExecute` only opens the shared
-          // EntityMergeDialog (below) and returns `success: false` so the
-          // framework leaves the row selection alone while it's open. The
-          // dialog's own Confirm button does the actual merge via
-          // `confirmMerge`.
-          onExecute: async (rows) => {
-            setMergeRows(rows.map((r) => r.original));
-            return { success: false };
-          },
-        }),
-      ],
-    },
     deletable: deletableConfig,
   });
   usePageCount(totalCount);
-
-  // Runs the merge the shared dialog confirmed. The bulk-action framework
-  // doesn't auto-invalidate or clear selection for a `success: false`
-  // onExecute (deliberate — see above), so both are handled here.
-  const confirmMerge = async (keepId: string, aliasIds: string[]) => {
-    const targetName =
-      mergeRows?.find((i) => i.id === keepId)?.name ?? "ingredient";
-    setMergePending(true);
-    try {
-      const result = await ingredient.merge.call({
-        keepId,
-        mergeIds: aliasIds,
-      });
-      // A merge's blast radius is wide: ingredients are deleted, products
-      // repoint, recipe totals are recomputed, and meals read those totals.
-      toast.success(
-        savedWithBackgroundWork(
-          result.sideEffects,
-          `Merged into ${targetName} (${aliasIds.length} ingredient${aliasIds.length === 1 ? "" : "s"})`,
-        ),
-      );
-      workbench.table.resetRowSelection();
-      setMergeRows(null);
-    } catch (err) {
-      toast.error(`Merge failed: ${getErrorMessage(err)}`);
-    } finally {
-      setMergePending(false);
-    }
-  };
 
   const productIds = useMemo(
     () => data.flatMap((ingredient) => ingredient.product.map((p) => p.id)),
@@ -376,16 +319,6 @@ export function IngredientList() {
         }
       />
       <PreviewSheet />
-      <EntityMergeDialog
-        entity="ingredient"
-        rows={mergeRows ?? []}
-        open={mergeRows != null}
-        onOpenChange={(open) => {
-          if (!open) setMergeRows(null);
-        }}
-        onConfirm={confirmMerge}
-        isPending={mergePending}
-      />
     </ProductFoodSummariesProvider>
   );
 }

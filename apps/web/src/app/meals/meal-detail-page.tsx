@@ -17,7 +17,6 @@ import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { WithRecipeSearch } from "~/app/_components/combobox/with-search-hook";
 import { DetailSections } from "~/app/_components/data-table/detail-page";
 import { DatePickerInput } from "~/app/_components/date-picker-input";
-import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
@@ -90,20 +89,11 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
     },
   });
 
-  // Confirm + toast + optimistic removal, matching every other entity.
   const mealName = meal?.name
     ? meal.name
     : meal
       ? format(parseISO(meal.date), "EEE, MMM d")
       : "";
-  const { deleteDialog, deleteButton } = useEntityDelete({
-    id: mealId,
-    name: mealName,
-    entityLabel: "Meal",
-    entity: "meal",
-    mutationOptions: entityMutationOptionsFactory("meal", "delete"),
-    redirectTo: "/meals",
-  });
 
   const [name, setName] = useState<string | null>(null);
 
@@ -174,9 +164,7 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
         label: format(parseISO(meal.date), "EEE, MMM d"),
         tone: "ink",
       }}
-      heroActions={{ secondary: deleteButton }}
     >
-      {deleteDialog}
       <DetailSections
         rawData={meal}
         sections={[

@@ -75,6 +75,7 @@ export function WishList() {
   const columnHelper = useMemo(() => createCubbyColumnHelper<WishRow>(), []);
   const {
     onRowClick,
+    inspectRow,
     onRowHover,
     onRowHoverEnd,
     PreviewSheet,
@@ -274,6 +275,7 @@ export function WishList() {
     WishOut
   >({
     entity: "wish",
+    onInspectRow: inspectRow,
     columns,
     // The wish contract's own list query, delete, and invalidation fan-out.
     deletable: true,

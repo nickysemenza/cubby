@@ -21,6 +21,8 @@ interface UseEntitySelectionOptions<TData extends { id: string }> {
   /** This surface's own actions, merged with the entity's declared ones. */
   bulkActions?: BulkActionsConfig<TData>;
   deleteBulkAction?: BulkAction<TData> | null;
+  /** Inspect the single checked canonical row without consuming selection. */
+  onInspectRow?: (row: Row<TData>) => void;
   /**
    * Rows this table refuses to select — a tree whose children are a different
    * entity than the bulk actions target, or a projection/summary sub-row that
@@ -76,12 +78,14 @@ export function useEntitySelection<TData extends { id: string }>({
   entity,
   bulkActions,
   deleteBulkAction,
+  onInspectRow,
   canSelectRow,
 }: UseEntitySelectionOptions<TData>): UseEntitySelectionReturn<TData> {
   const listBulkActions = useListBulkActions<TData>({
     entity,
     bulkActions,
     deleteBulkAction,
+    onInspectRow,
   });
   const { config, state } = listBulkActions;
   const selectable = listBulkActions.enableRowSelection;

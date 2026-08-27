@@ -9,7 +9,7 @@ vi.mock("sonner", () => ({
   toast: { success: mocks.success, error: mocks.error },
 }));
 
-import { copyShortcodes, copyText } from "./clipboard";
+import { copyIdentifiers, copyShortcodes, copyText } from "./clipboard";
 
 /** Point `navigator.clipboard.writeText` at a stub for one test. */
 function stubClipboard(writeText: (text: string) => Promise<void>) {
@@ -107,5 +107,16 @@ describe("copyShortcodes", () => {
     await expect(copyShortcodes([])).resolves.toBe(false);
     expect(writeText).not.toHaveBeenCalled();
     expect(mocks.error).not.toHaveBeenCalled();
+  });
+});
+
+describe("copyIdentifiers", () => {
+  it("uses identifier language for external public ids", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    stubClipboard(writeText);
+
+    await expect(copyIdentifiers(["12345", "67890"])).resolves.toBe(true);
+    expect(writeText).toHaveBeenCalledWith("12345\n67890");
+    expect(mocks.success).toHaveBeenCalledWith("Copied 2 identifiers");
   });
 });

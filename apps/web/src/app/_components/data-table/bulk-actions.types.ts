@@ -7,6 +7,12 @@ export interface BulkActionResult {
   success: boolean;
 }
 
+/** Whether an action can run against the complete current selection. */
+export type BulkActionAvailability =
+  | { status: "available" }
+  | { status: "disabled"; reason: string }
+  | { status: "hidden" };
+
 /** Configuration for a single bulk action */
 export interface BulkAction<TData extends RowData> {
   /** Unique identifier for this action */
@@ -32,8 +38,21 @@ export interface BulkAction<TData extends RowData> {
    * is what makes them re-tick every row to copy a second thing.
    */
   preserveSelection?: boolean;
+  /**
+   * Resolve visibility and eligibility against the complete selected row set.
+   * A disabled action stays visible with its reason; callers must never narrow
+   * the rows to an eligible subset before execution.
+   */
+  availability?: (selectedRows: Row<TData>[]) => BulkActionAvailability;
   /** Execute the action on selected rows */
   onExecute: (selectedRows: Row<TData>[]) => Promise<BulkActionResult>;
+}
+
+export function resolveBulkActionAvailability<TData extends RowData>(
+  action: BulkAction<TData>,
+  selectedRows: Row<TData>[],
+): BulkActionAvailability {
+  return action.availability?.(selectedRows) ?? { status: "available" };
 }
 
 /** Configuration for bulk actions on an entity list */

@@ -241,6 +241,9 @@ export function LocationInventoryTable({
     Record<string, never>
   >({
     entity: "inventory",
+    // Embedded inventory owns contextual Move/Delete dialogs; canonical
+    // roster actions would duplicate them on this subresource table.
+    includeCatalogActions: false,
     layoutKey: "inventory:location-detail",
     subject: PRODUCT_SUBJECT,
     // Forward the table's own sort/pagination — dropping the argument left the

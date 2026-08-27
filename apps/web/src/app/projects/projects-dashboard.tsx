@@ -8,12 +8,25 @@ import type {
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { Calendar, DollarSign, Hammer, Wallet } from "lucide-react";
-import { lazy, type ReactNode, Suspense, useMemo } from "react";
+import {
+  lazy,
+  type MouseEvent,
+  type ReactNode,
+  Suspense,
+  useMemo,
+} from "react";
 import { SavedViewsMenu } from "~/app/_components/data-table/DataTableViews";
-import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
+import {
+  type CubbyRow,
+  createCubbyColumnHelper,
+} from "~/app/_components/data-table/table-features";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
+import {
+  type PreviewPresentation,
+  useEntityPreview,
+} from "~/app/_components/hooks/useEntityPreview";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import type { SummaryItem } from "~/app/_components/SummaryCard";
 import { ProjectMark } from "~/app/projects/project-mark";
@@ -29,6 +42,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+import { Checkbox } from "~/components/ui/checkbox";
 import {
   Empty,
   EmptyActions,
@@ -45,7 +59,7 @@ import { entities, entityDetailParams } from "~/entities/entities";
 import { image, type ProjectImageSummaries } from "~/entities/image.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import type { ProjectRowsRenderer } from "~/lib/list-view-normalization";
-import { formatCurrency } from "~/lib/utils";
+import { cn, formatCurrency } from "~/lib/utils";
 import {
   defaultFilters,
   type Filters,
@@ -591,9 +605,11 @@ function HiddenByDateNote({
 function ProjectCards({
   projects,
   coverImages,
+  inspection,
 }: {
   projects: ProjectOut[];
   coverImages: CoverImages | undefined;
+  inspection?: ProjectCardsInspection;
 }) {
   if (projects.length === 0) {
     return (
@@ -609,13 +625,28 @@ function ProjectCards({
 
   return (
     <Grid cols="cards3">
-      {projects.map((project) => (
-        <ProjectCard
-          key={project.id}
-          project={project}
-          coverUrl={coverImages?.[project.id]?.[0]?.url}
-        />
-      ))}
+      {projects.map((project) => {
+        const row = inspection?.getRow(project);
+        return (
+          <ProjectCard
+            key={project.id}
+            project={project}
+            coverUrl={coverImages?.[project.id]?.[0]?.url}
+            inspection={
+              inspection && row
+                ? {
+                    row,
+                    currentRowId: inspection.currentRowId,
+                    presentation: inspection.presentation,
+                    onRowClick: () => inspection.onRowClick(row),
+                    onRowHover: () => inspection.onRowHover(row),
+                    onRowHoverEnd: () => inspection.onRowHoverEnd(row),
+                  }
+                : undefined
+            }
+          />
+        );
+      })}
     </Grid>
   );
 }
@@ -629,6 +660,17 @@ function ServerProjectGallery({
   completionYears: string[];
 }) {
   const helper = useMemo(() => createCubbyColumnHelper<ProjectOut>(), []);
+  const {
+    onRowClick,
+    inspectRow,
+    onRowHover,
+    onRowHoverEnd,
+    PreviewSheet,
+    dockedInspector,
+    inspectorToggle,
+    preview,
+    presentation,
+  } = useEntityPreview("project", { responsiveInspector: true });
   const projectOptions = useDeferredFilterOptions("project");
   const filterOptions = useFilterOptions({
     project: projectOptions,
@@ -650,6 +692,7 @@ function ServerProjectGallery({
   );
   const list = useEntityList<ProjectOut, ProjectFilters>({
     entity: "project",
+    onInspectRow: inspectRow,
     columns,
     filterOptions,
     layoutKey: "project:gallery",
@@ -676,30 +719,81 @@ function ServerProjectGallery({
   }
 
   return (
-    <Stack>
-      <ProjectCards projects={list.data} coverImages={images} />
-      {list.workbench.infiniteScroll.hasNextPage && (
-        <Button
-          type="button"
-          variant="outline"
-          disabled={list.workbench.infiniteScroll.isFetchingNextPage}
-          onClick={list.workbench.infiniteScroll.fetchNextPage}
-        >
-          {list.workbench.infiniteScroll.isFetchingNextPage
-            ? "Loading…"
-            : "Load more projects"}
-        </Button>
-      )}
-    </Stack>
+    <>
+      <div className={cn("relative", dockedInspector && "xl:pr-[25rem]")}>
+        <Stack>
+          <Row justify="end">{inspectorToggle}</Row>
+          {list.workbench.bulkActionBar}
+          <ProjectCards
+            projects={list.data}
+            coverImages={images}
+            inspection={{
+              getRow: (project) => list.workbench.table.getRow(project.id),
+              currentRowId: preview?.rowKey,
+              presentation,
+              onRowClick,
+              onRowHover,
+              onRowHoverEnd,
+            }}
+          />
+          {list.workbench.infiniteScroll.hasNextPage && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={list.workbench.infiniteScroll.isFetchingNextPage}
+              onClick={list.workbench.infiniteScroll.fetchNextPage}
+            >
+              {list.workbench.infiniteScroll.isFetchingNextPage
+                ? "Loading…"
+                : "Load more projects"}
+            </Button>
+          )}
+        </Stack>
+        {dockedInspector ? (
+          <div
+            className="absolute inset-y-0 right-0 hidden w-[25rem] overflow-y-auto border-border border-l bg-card xl:block"
+            data-desktop-inspector
+          >
+            {dockedInspector}
+          </div>
+        ) : null}
+      </div>
+      {list.workbench.actionDialogs}
+      {list.workbench.deleteDialog}
+      <PreviewSheet />
+    </>
   );
 }
 
-function ProjectCard({
+type ProjectCardsInspection = {
+  getRow: (project: ProjectOut) => CubbyRow<ProjectOut>;
+  currentRowId: string | undefined;
+  presentation: PreviewPresentation;
+  onRowClick: (row: CubbyRow<ProjectOut>) => void;
+  onRowHover: (row: CubbyRow<ProjectOut>) => void;
+  onRowHoverEnd: (row: CubbyRow<ProjectOut>) => void;
+};
+
+type ProjectCardInspection = {
+  row: Pick<
+    CubbyRow<ProjectOut>,
+    "id" | "getIsSelected" | "getToggleSelectedHandler"
+  >;
+  currentRowId: string | undefined;
+  presentation: PreviewPresentation;
+  onRowClick: () => void;
+  onRowHover: () => void;
+  onRowHoverEnd: () => void;
+};
+
+export function ProjectCard({
   project,
   coverUrl,
+  inspection,
 }: {
   project: ProjectOut;
   coverUrl: string | undefined;
+  inspection?: ProjectCardInspection;
 }) {
   // subtree degenerates to the project's own numbers for a leaf project (see
   // subtree.ts), so this is safe to use uniformly rather than branching on
@@ -714,17 +808,57 @@ function ProjectCard({
   const estimate = project.rollup.subtree.costEstimate;
   const hasEstimate = estimate != null;
   const overBudget = estimate != null && spent > estimate;
+  const current =
+    inspection != null && inspection.currentRowId === inspection.row.id;
+  const selected = inspection?.row.getIsSelected() ?? false;
+  const handleProjectClick = (event: MouseEvent<HTMLDivElement>) => {
+    if (!inspection) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0)
+      return;
+    inspection.onRowClick();
+  };
 
   return (
-    <Link
-      to={entities.project.routes.detail}
-      params={entityDetailParams(project.id)}
-      className="block"
+    <Card
+      size="sm"
+      data-current={current || undefined}
+      className={cn(
+        "relative overflow-hidden py-0 transition-colors hover:bg-muted/50",
+        current && "border-primary/50 bg-primary/[0.035]",
+        selected && "ring-1 ring-primary/30",
+      )}
+      onClick={handleProjectClick}
+      onPointerEnter={(event) => {
+        if (event.pointerType !== "touch") inspection?.onRowHover();
+      }}
+      onPointerLeave={(event) => {
+        if (event.pointerType !== "touch") inspection?.onRowHoverEnd();
+      }}
+      onFocus={() => inspection?.onRowHover()}
+      onBlur={() => inspection?.onRowHoverEnd()}
     >
-      <Card
-        size="sm"
-        className="overflow-hidden transition-colors hover:bg-muted/50"
-      >
+      {inspection ? (
+        // biome-ignore lint/a11y/noStaticElementInteractions: wrapper only prevents the card link from handling checkbox clicks
+        <div
+          role="presentation"
+          className="absolute top-0 right-0 z-10 flex min-h-11 min-w-11 items-center justify-center"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <Checkbox
+            checked={selected}
+            aria-label={`Select ${project.name}`}
+            onCheckedChange={(checked, details) =>
+              inspection.row.getToggleSelectedHandler({
+                selectChildren: false,
+              })({
+                target: { checked },
+                nativeEvent: details.event,
+              })
+            }
+          />
+        </div>
+      ) : null}
+      <div className={cn("flex flex-col gap-2 py-2.5", coverUrl && "pt-0")}>
         {coverUrl && (
           <div className="relative aspect-[16/9] w-full overflow-hidden">
             <Image
@@ -737,8 +871,16 @@ function ProjectCard({
         )}
         <CardHeader>
           <CardTitle>
-            <ProjectMark icon={project.icon} size={20} />
-            <span className="truncate">{project.name}</span>
+            <Link
+              to={entities.project.routes.detail}
+              params={entityDetailParams(project.id)}
+              aria-current={current ? "true" : undefined}
+              className="inline-flex min-w-0 items-center gap-2"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <ProjectMark icon={project.icon} size={20} />
+              <span className="truncate">{project.name}</span>
+            </Link>
           </CardTitle>
           <CardDescription className="flex items-center gap-2">
             <StatusIcon status={project.status} />
@@ -791,8 +933,8 @@ function ProjectCard({
             )}
           </Row>
         </CardContent>
-      </Card>
-    </Link>
+      </div>
+    </Card>
   );
 }
 

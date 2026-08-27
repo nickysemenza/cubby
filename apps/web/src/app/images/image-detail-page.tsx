@@ -1,11 +1,10 @@
 import type { ImageWithEntity } from "@cubby/schemas/image";
-import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
+import { EntityActionButtons } from "~/app/_components/actions/entity-actions";
 import {
   ImageDetail,
   ImageDetailMedia,
 } from "~/app/_components/images/image-detail";
 import { Page } from "~/components/page/Page";
-import { image } from "~/entities/image.functions";
 import { formatCount } from "~/lib/utils";
 
 export default function ImageDetailPage({
@@ -13,20 +12,6 @@ export default function ImageDetailPage({
 }: {
   imageDetails: ImageWithEntity;
 }) {
-  // Image deletion intentionally removes both the row and its R2 object. Keep
-  // that destructive operation on the canonical record hero, not inside a
-  // compact metadata card or embedded preview.
-  const { deleteButton, deleteDialog } = useEntityDelete({
-    id: imageDetails.id,
-    name: imageDetails.filename,
-    entity: "image",
-    mutationOptions: (callbacks) => ({
-      ...image.delete.mutationOptions(),
-      ...callbacks,
-    }),
-    redirectTo: "/images",
-  });
-
   return (
     <Page
       variant="detail"
@@ -57,10 +42,11 @@ export default function ImageDetailPage({
         },
       ]}
       heroMedia={<ImageDetailMedia image={imageDetails} />}
-      heroActions={{ secondary: deleteButton }}
+      heroActions={{
+        secondary: <EntityActionButtons entity="image" record={imageDetails} />,
+      }}
     >
       <ImageDetail image={imageDetails} />
-      {deleteDialog}
     </Page>
   );
 }

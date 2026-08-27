@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { PanelRight } from "lucide-react";
 import type { ReactNode } from "react";
 import {
@@ -12,7 +13,11 @@ import {
 } from "react";
 import { Button } from "~/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
-import { entityLabel, isBrowserRoutedEntity } from "~/entities/entities";
+import {
+  entities,
+  entityLabel,
+  isBrowserRoutedEntity,
+} from "~/entities/entities";
 import { entityPreviewQueryOptions } from "~/entities/entity-query";
 import { EntityWorkbenchInspector } from "../entity-workbench-inspector";
 
@@ -40,7 +45,7 @@ const PREVIEW_INTENT_DELAY_MS = 200;
 const DOCK_MEDIA_QUERY = "(min-width: 1280px)";
 const SHEET_MEDIA_QUERY = "(min-width: 768px) and (max-width: 1279px)";
 
-type PreviewPresentation = "dock" | "sheet" | "mobile";
+export type PreviewPresentation = "dock" | "sheet" | "mobile";
 
 const previewPresentation = (): PreviewPresentation => {
   if (typeof window === "undefined") return "mobile";
@@ -143,6 +148,10 @@ export function useEntityPreview(
   const responsiveInspector = options?.responsiveInspector ?? false;
   const renderInspector = options?.renderInspector ?? renderDefaultInspector;
   const queryClient = useQueryClient();
+  const navigate = useNavigate() as unknown as (options: {
+    to: string;
+    params: Record<string, string>;
+  }) => Promise<void>;
   const intentRef = useRef<PreviewIntent | null>(null);
 
   const stopIntent = useCallback(
@@ -213,6 +222,36 @@ export function useEntityPreview(
       setInspectorOpen(true);
     },
     [resolveRow, stopIntent],
+  );
+
+  /**
+   * Inspect an explicitly selected record.
+   *
+   * Desktop and tablet reuse the exact same current-record state as a row
+   * click. Phones continue to use the complete canonical detail route — the
+   * selection bar must not introduce a squeezed or second mobile inspector.
+   */
+  const inspectRow = useCallback(
+    <T extends Record<string, unknown>>(row: { id?: string; original: T }) => {
+      const resolved = resolveRow(row);
+      if (!resolved || !isBrowserRoutedEntity(resolved.entityType)) return;
+
+      if (responsiveInspector && presentation === "mobile") {
+        const params: Record<string, string> =
+          resolved.entityType === "usda-food"
+            ? { id: resolved.id }
+            : { shortcode: resolved.id };
+        void navigate({
+          to: entities[resolved.entityType].routes.detail,
+          params,
+        });
+        return;
+      }
+
+      setPreview(resolved);
+      setInspectorOpen(true);
+    },
+    [navigate, presentation, resolveRow, responsiveInspector],
   );
 
   const onRowHover = useCallback(
@@ -322,7 +361,7 @@ export function useEntityPreview(
 
   const inspectorToggle = useMemo(
     () =>
-      responsiveInspector ? (
+      responsiveInspector && presentation !== "mobile" ? (
         <Button
           variant="ghost"
           size="icon-lg"
@@ -335,11 +374,18 @@ export function useEntityPreview(
           <PanelRight className="size-4" />
         </Button>
       ) : null,
-    [responsiveInspector, preview, isInspectorOpen, toggleInspector],
+    [
+      responsiveInspector,
+      presentation,
+      preview,
+      isInspectorOpen,
+      toggleInspector,
+    ],
   );
 
   return {
     onRowClick,
+    inspectRow,
     onRowHover,
     onRowHoverEnd,
     PreviewSheet,
@@ -349,5 +395,6 @@ export function useEntityPreview(
     setPreview,
     closePreview,
     isInspectorOpen,
+    presentation,
   };
 }

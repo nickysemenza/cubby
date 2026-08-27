@@ -94,7 +94,7 @@ export function VerbMenuItem({
 }
 
 /** Default bulk-action id for a verb: `moveToProject` → `move-to-project`. */
-const verbActionId = (verb: ActionVerbId) =>
+export const verbActionId = (verb: ActionVerbId) =>
   verb.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
 
 /**
@@ -138,6 +138,7 @@ export function VerbButton({
   variant = "outline",
   size = "sm",
   disabled,
+  disabledReason,
   className,
 }: {
   verb: ActionVerbId;
@@ -146,17 +147,21 @@ export function VerbButton({
   variant?: ComponentProps<typeof Button>["variant"];
   size?: ComponentProps<typeof Button>["size"];
   disabled?: boolean;
+  disabledReason?: string;
   className?: string;
 }) {
   const { label, icon: Icon, tone } = verbDef(verb);
+  const isDisabled = disabled === true || disabledReason != null;
   return (
     <Button
       variant={tone === "destructive" ? "destructive" : variant}
       size={size}
-      disabled={disabled}
+      disabled={isDisabled}
+      title={disabledReason}
+      aria-label={disabledReason ? `${label}, ${disabledReason}` : undefined}
       className={className}
       onClick={onClick}
-      {...(render ? { render, nativeButton: false } : {})}
+      {...(render && !isDisabled ? { render, nativeButton: false } : {})}
     >
       <Icon />
       {label}

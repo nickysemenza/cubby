@@ -13,6 +13,11 @@ const queryClient = vi.hoisted(() => ({
   cancelQueries: vi.fn(async () => undefined),
   prefetchQuery: vi.fn(async () => undefined),
 }));
+const navigate = vi.hoisted(() => vi.fn(async () => undefined));
+
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => navigate,
+}));
 
 vi.mock("@tanstack/react-query", async (importOriginal) => ({
   ...(await importOriginal<typeof TanStackQuery>()),
@@ -76,6 +81,7 @@ describe("useEntityPreview intent prefetch", () => {
     vi.useFakeTimers();
     viewport = "mobile";
     mediaListeners.clear();
+    navigate.mockClear();
     vi.stubGlobal(
       "matchMedia",
       vi.fn((query: string) => ({
@@ -94,6 +100,54 @@ describe("useEntityPreview intent prefetch", () => {
     );
     queryClient.cancelQueries.mockClear();
     queryClient.prefetchQuery.mockClear();
+  });
+
+  it("opens the selected record through the shared desktop inspector command", () => {
+    viewport = "dock";
+    const { result } = renderHook(() =>
+      useEntityPreview("product", { responsiveInspector: true }),
+    );
+
+    act(() => result.current.inspectRow(row("PRD-4K7M")));
+
+    expect(result.current.preview).toMatchObject({
+      entityType: "product",
+      id: "PRD-4K7M",
+    });
+    expect(result.current.isInspectorOpen).toBe(true);
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("publishes the responsive presentation for card rosters that retain phone navigation", () => {
+    const { result } = renderHook(() =>
+      useEntityPreview("product", { responsiveInspector: true }),
+    );
+
+    expect(result.current.presentation).toBe("mobile");
+    act(() => setViewport("sheet"));
+    expect(result.current.presentation).toBe("sheet");
+    act(() => setViewport("dock"));
+    expect(result.current.presentation).toBe("dock");
+  });
+
+  it("sends a selected USDA record to its canonical phone route", () => {
+    viewport = "mobile";
+    const { result } = renderHook(() =>
+      useEntityPreview("usda-food", {
+        idField: "fdc_id",
+        responsiveInspector: true,
+      }),
+    );
+
+    act(() =>
+      result.current.inspectRow({ original: { id: "row-1", fdc_id: 12345 } }),
+    );
+
+    expect(navigate).toHaveBeenCalledWith({
+      to: "/usda/$id",
+      params: { id: "12345" },
+    });
+    expect(result.current.preview).toBeNull();
   });
 
   afterEach(() => {
@@ -292,6 +346,7 @@ describe("useEntityPreview intent prefetch", () => {
       rowKey: "PRD-4K7M",
     });
     expect(result.current.dockedInspector).toBeNull();
+    expect(result.current.inspectorToggle).toBeNull();
     expect(screen.queryByTestId("workbench-inspector")).not.toBeInTheDocument();
   });
 

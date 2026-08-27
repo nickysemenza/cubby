@@ -16,11 +16,6 @@ import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
-import {
-  ExpenseBulkActionDialogs,
-  useExpenseBulkActions,
-} from "~/app/_components/tracker/expense-bulk-actions";
-import { useExpenseRowActions } from "~/app/_components/tracker/expense-row-actions";
 import { expense } from "~/app/expenses/expense.functions";
 import { product as productOperations } from "~/app/products/product.functions";
 import {
@@ -154,7 +149,6 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
     entityLabel: "Expense",
     entity: "expense",
   });
-  const bulkActions = useExpenseBulkActions();
 
   const firstMissingAcquisition = expenses.find(
     (expense) =>
@@ -281,15 +275,12 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
     [helper, quantityEditorExpenseId, rowProjectOptions, rowVendorOptions],
   );
 
-  const rowActions = useExpenseRowActions();
   const { workbench } = useClientEntityList<ExpenseOut>({
     entity: "expense",
     data: expenses,
     columns,
     nameEditable,
     deletable,
-    extraActions: rowActions.extraActions,
-    bulkActions: bulkActions.config,
     tableStateOptions: EMBEDDED_TABLE_STATE,
     // Distinct column set from the /expenses ledger, so it needs its own
     // persisted View settings rather than sharing `table-columns:expense`.
@@ -388,94 +379,87 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
   };
 
   return (
-    <>
-      <Stack gap="sm">
-        <ListWorkbench
-          model={workbench}
-          ariaLabel={`${product.name} expense history`}
-          mode="embedded"
-          showColumnMenu
-        />
-        {hasProjects && (
-          <Row wrap align="center" gap="sm" className="text-sm">
-            <span className="text-muted-foreground">By project:</span>
-            {rollup.map((entry) => (
-              <Row
-                key={entry.projectId ?? UNASSIGNED}
-                align="center"
-                gap="xs"
-                className="min-w-0"
-              >
-                {entry.projectId && entry.projectName ? (
-                  <EntityInlineLink
-                    displayImage={undefined}
-                    entity="project"
-                    data={{ id: entry.projectId, name: entry.projectName }}
-                    compact
-                    truncate
-                  />
-                ) : (
-                  <span className="text-muted-foreground">Unassigned</span>
-                )}
-                <Link
-                  to="/expenses"
-                  search={{
-                    project: entry.projectId ?? FILTER_NONE,
-                    productId: product.id,
-                  }}
-                  className="font-mono hover:underline"
-                >
-                  {formatCurrency(entry.net)}
-                </Link>
-              </Row>
-            ))}
-          </Row>
-        )}
-        <p className="text-muted-foreground text-sm">
-          Net cost: <span className="font-mono">{formatCurrency(netCost)}</span>
-          {split.contributions > 0 && (
-            <>
-              {" "}
-              ({formatCurrency(split.actual)} spent −{" "}
-              {formatCurrency(split.contributions)} recouped)
-            </>
-          )}
-        </p>
-        {product.pricing.derivedPrice !== null && (
-          <p className="text-muted-foreground text-sm">
-            Historical unit cost: {formatCurrency(product.pricing.derivedPrice)}
-            {product.pricing.partial
-              ? ` from ${product.pricing.knownExpenseCount} quantified expense${product.pricing.knownExpenseCount === 1 ? "" : "s"}`
-              : ` across ${product.pricing.knownUnitCount} unit${product.pricing.knownUnitCount === 1 ? "" : "s"}`}
-          </p>
-        )}
-        {product.pricing.unknownExpenseCount > 0 && (
-          <button
-            type="button"
-            className="w-fit text-left text-sm text-warning-ink hover:underline"
-            onClick={() =>
-              firstMissingAcquisition &&
-              openQuantityEditor(firstMissingAcquisition.id)
-            }
-          >
-            Add quantities to {product.pricing.unknownExpenseCount} acquisition
-            {product.pricing.unknownExpenseCount === 1 ? "" : "s"} to derive a
-            unit cost.
-          </button>
-        )}
-        <Link
-          to="/expenses"
-          search={{ productId: product.id }}
-          className="text-primary text-xs hover:underline"
-        >
-          See all in ledger →
-        </Link>
-      </Stack>
-      {rowActions.dialogs}
-      <ExpenseBulkActionDialogs
-        controller={bulkActions}
-        onComplete={() => table.resetRowSelection()}
+    <Stack gap="sm">
+      <ListWorkbench
+        model={workbench}
+        ariaLabel={`${product.name} expense history`}
+        mode="embedded"
+        showColumnMenu
       />
-    </>
+      {hasProjects && (
+        <Row wrap align="center" gap="sm" className="text-sm">
+          <span className="text-muted-foreground">By project:</span>
+          {rollup.map((entry) => (
+            <Row
+              key={entry.projectId ?? UNASSIGNED}
+              align="center"
+              gap="xs"
+              className="min-w-0"
+            >
+              {entry.projectId && entry.projectName ? (
+                <EntityInlineLink
+                  displayImage={undefined}
+                  entity="project"
+                  data={{ id: entry.projectId, name: entry.projectName }}
+                  compact
+                  truncate
+                />
+              ) : (
+                <span className="text-muted-foreground">Unassigned</span>
+              )}
+              <Link
+                to="/expenses"
+                search={{
+                  project: entry.projectId ?? FILTER_NONE,
+                  productId: product.id,
+                }}
+                className="font-mono hover:underline"
+              >
+                {formatCurrency(entry.net)}
+              </Link>
+            </Row>
+          ))}
+        </Row>
+      )}
+      <p className="text-muted-foreground text-sm">
+        Net cost: <span className="font-mono">{formatCurrency(netCost)}</span>
+        {split.contributions > 0 && (
+          <>
+            {" "}
+            ({formatCurrency(split.actual)} spent −{" "}
+            {formatCurrency(split.contributions)} recouped)
+          </>
+        )}
+      </p>
+      {product.pricing.derivedPrice !== null && (
+        <p className="text-muted-foreground text-sm">
+          Historical unit cost: {formatCurrency(product.pricing.derivedPrice)}
+          {product.pricing.partial
+            ? ` from ${product.pricing.knownExpenseCount} quantified expense${product.pricing.knownExpenseCount === 1 ? "" : "s"}`
+            : ` across ${product.pricing.knownUnitCount} unit${product.pricing.knownUnitCount === 1 ? "" : "s"}`}
+        </p>
+      )}
+      {product.pricing.unknownExpenseCount > 0 && (
+        <button
+          type="button"
+          className="w-fit text-left text-sm text-warning-ink hover:underline"
+          onClick={() =>
+            firstMissingAcquisition &&
+            openQuantityEditor(firstMissingAcquisition.id)
+          }
+        >
+          Add quantities to {product.pricing.unknownExpenseCount} acquisition
+          {product.pricing.unknownExpenseCount === 1 ? "" : "s"} to derive a
+          unit cost.
+        </button>
+      )}
+      <Link
+        to="/expenses"
+        search={{ productId: product.id }}
+        className="text-primary text-xs hover:underline"
+      >
+        See all in ledger →
+      </Link>
+    </Stack>
   );
 };

@@ -24,8 +24,6 @@ import {
 } from "../data-table/columnHelpers";
 import { EditableCell } from "../data-table/editable-cell";
 import { EntityInlineLink } from "../EntityInlineLink";
-import { useEntityDelete } from "../hooks/useEntityDelete";
-import { PrintLabelButton } from "../print-label-button";
 import { CategoryLabel } from "./CategoryLabel";
 import { productCategoryOptionsWithTheme } from "./product-category-icons";
 import { ProductNotesMarkdown } from "./product-notes-markdown";
@@ -64,15 +62,6 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
     // Surface the eager recompute (dependent recipes / inventory valuations).
     success: (data) => savedWithBackgroundWork(data.sideEffects),
     error: (err) => getErrorMessage(err) || "Failed to update product",
-  });
-
-  const { deleteButton, deleteDialog } = useEntityDelete({
-    id: product.id,
-    name: product.name,
-    entityLabel: "Product",
-    entity: "product",
-    mutationOptions: entityMutationOptionsFactory("product", "delete"),
-    redirectTo: "/products",
   });
 
   const fields: BasicInfoField[] = [
@@ -291,37 +280,32 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
   ];
 
   return (
-    <>
-      <BasicInfo
-        fields={fields}
-        // Notes and the price suggestion render as blocks below the fact rows —
-        // InfoRow's right-aligned value span is hostile to multi-line markdown
-        // and to anything with its own action button.
-        footer={
-          <Stack gap="sm">
-            {product.notes ? (
-              <Stack gap="xs">
-                <p className="eyebrow my-0">Notes</p>
-                <ProductNotesMarkdown
-                  notes={product.notes}
-                  documents={documents}
-                  onManualLink={onManualLink}
-                />
-              </Stack>
-            ) : null}
-          </Stack>
-        }
-        actions={
-          // Add to Inventory lives on the Stocked At section header now —
-          // this cluster is product-record actions only.
-          <Row gap="sm">
-            <DetailEditAction onClick={onEdit} />
-            <PrintLabelButton shortcode={product.id} />
-            {deleteButton}
-          </Row>
-        }
-      />
-      {deleteDialog}
-    </>
+    <BasicInfo
+      fields={fields}
+      // Notes and the price suggestion render as blocks below the fact rows —
+      // InfoRow's right-aligned value span is hostile to multi-line markdown
+      // and to anything with its own action button.
+      footer={
+        <Stack gap="sm">
+          {product.notes ? (
+            <Stack gap="xs">
+              <p className="eyebrow my-0">Notes</p>
+              <ProductNotesMarkdown
+                notes={product.notes}
+                documents={documents}
+                onManualLink={onManualLink}
+              />
+            </Stack>
+          ) : null}
+        </Stack>
+      }
+      actions={
+        // Add to Inventory lives on the Stocked At section header now —
+        // this cluster is product-record actions only.
+        <Row gap="sm">
+          <DetailEditAction onClick={onEdit} />
+        </Row>
+      }
+    />
   );
 };

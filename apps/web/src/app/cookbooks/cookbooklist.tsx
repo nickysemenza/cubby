@@ -4,7 +4,6 @@ import {
 } from "@cubby/schemas/recipe";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
 import {
   createActionsColumn,
   createImageColumn,
@@ -16,7 +15,6 @@ import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { usePageCount } from "~/components/page/Page";
 import { cookbook } from "~/entities/cookbook.functions";
-import { useCookbookDelete } from "./use-cookbook-delete";
 
 /**
  * Browse-by-source index: every cookbook a recipe was imported from, with its
@@ -34,9 +32,9 @@ export function CookbookList() {
   const { data: cookbooks } = useSuspenseQuery(
     cookbook.list.queryOptions(null),
   );
-  const { requestDelete, dialog } = useCookbookDelete();
   const {
     onRowClick,
+    inspectRow,
     onRowHover,
     onRowHoverEnd,
     PreviewSheet,
@@ -94,28 +92,16 @@ export function CookbookList() {
           );
         },
       }),
-      createActionsColumn(columnHelper, "cookbook", {
-        extraActions: (row) => (
-          <VerbMenuItem
-            verb="delete"
-            onSelect={() =>
-              requestDelete({
-                id: row.id,
-                name: row.book || "Untitled",
-                recipeCount: row.recipeCount,
-              })
-            }
-          />
-        ),
-      }),
+      createActionsColumn(columnHelper, "cookbook"),
     ],
-    [columnHelper, requestDelete],
+    [columnHelper],
   );
 
   const { workbench } = useClientEntityList<CookbookSummary>({
     entity: "cookbook",
     data: cookbooks,
     columns,
+    onInspectRow: inspectRow,
   });
   usePageCount(cookbooks.length);
 
@@ -133,7 +119,6 @@ export function CookbookList() {
         inspectorToggle={inspectorToggle}
       />
       <PreviewSheet />
-      {dialog}
     </>
   );
 }

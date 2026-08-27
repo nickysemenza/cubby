@@ -343,6 +343,23 @@ footers must survive styling changes. Wide desktop selection may open a 400px
 modeless inspector with Overview, Relations, and Activity. Intermediate widths
 use a sheet. Phone rows open the canonical detail route.
 
+Row inspection and checkbox selection are separate contracts. A row click makes
+one record current without selecting it for a batch. Checking exactly one
+canonical record exposes Inspect first in the selection bar; it adopts that
+record in the desktop dock or intermediate Sheet and navigates to canonical
+detail on phone. Inspect disappears for multi-selection. Synthetic, projected,
+tree-child, route-less, and embedded-ledger rows never impersonate canonical
+records to gain this affordance.
+
+Inspectors answer in one order: human identity, decision-relevant truth already
+present in the detail payload, a bounded direct-relationship strip, then nearby
+safe actions and supporting evidence. Product may keep richer authored
+relationships, but it shares the same hierarchy and never issues a duplicate
+relationship request. Reusable entity actions have one canonical verb,
+availability rule, arity, ordering, and destructive treatment across row,
+selection, inspector, detail, and palette surfaces; specialist workflow and
+subresource operations remain local.
+
 ## Do's and Don'ts
 
 ### Do:

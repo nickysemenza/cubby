@@ -2,7 +2,7 @@ import type { CookbookShortcode } from "@cubby/schemas/identifiers";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
-import { BookOpen, Link2, Plus, RefreshCw, Trash } from "lucide-react";
+import { BookOpen, Link2, Plus, RefreshCw } from "lucide-react";
 import { z } from "zod";
 import {
   type DetailSection,
@@ -13,7 +13,6 @@ import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
 import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-usage-panel";
 import { notFoundPage } from "~/app/_components/routing/entity-routes";
 import { CookbookPhysicalCopy } from "~/app/cookbooks/cookbook-physical-copy";
-import { useCookbookDelete } from "~/app/cookbooks/use-cookbook-delete";
 import { recipeStreams } from "~/app/recipes/recipe.functions";
 import { RecipeList } from "~/app/recipes/recipelist";
 import { Row } from "~/components/layout";
@@ -123,10 +122,6 @@ function CookbookDetailBody({ cookbook }: { cookbook: CookbookSummary }) {
         },
       },
     );
-
-  const { requestDelete, dialog: deleteDialog } = useCookbookDelete({
-    onDeleted: () => void navigate({ to: "/cookbooks" }),
-  });
 
   // Author + recipe count read as the spec-plate ledger stats; the cover plate
   // rides above the tabs (the spec-plate hero has no cover slot of its own).
@@ -248,22 +243,11 @@ function CookbookDetailBody({ cookbook }: { cookbook: CookbookSummary }) {
               />
               Reprocess
             </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() =>
-                requestDelete({ id: cookbookId, name, recipeCount })
-              }
-            >
-              <Trash className="mr-2 size-4" />
-              Delete cookbook
-            </Button>
           </Row>
         ),
       }}
     >
       <DetailSections sections={sections} rawData={cookbook} />
-      {deleteDialog}
     </Page>
   );
 }

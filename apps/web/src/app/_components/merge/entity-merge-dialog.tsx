@@ -71,6 +71,7 @@ export function EntityMergeDialog<T extends MergeRow>({
   isPending,
   rows,
   keeper,
+  initialAliasIds,
 }: {
   entity: BrowserRoutedEntity;
   open: boolean;
@@ -82,6 +83,8 @@ export function EntityMergeDialog<T extends MergeRow>({
   rows?: T[];
   /** Fixed mode: the anchor row that stays the keeper. Ignored in ranked mode. */
   keeper?: T;
+  /** Fixed mode: aliases already chosen by a canonical roster selection. */
+  initialAliasIds?: string[];
 }) {
   // Widened: `entities[entity]` is a union of per-entity literal shapes and
   // only some declare `mergeable`.
@@ -94,6 +97,7 @@ export function EntityMergeDialog<T extends MergeRow>({
       <FixedMergeDialog
         config={config}
         keeper={keeper}
+        initialAliasIds={initialAliasIds}
         open={open}
         onOpenChange={onOpenChange}
         onConfirm={onConfirm}
@@ -212,6 +216,7 @@ function RankedMergeDialog<T extends MergeRow>({
 function FixedMergeDialog<T extends MergeRow>({
   config,
   keeper,
+  initialAliasIds,
   open,
   onOpenChange,
   onConfirm,
@@ -219,12 +224,13 @@ function FixedMergeDialog<T extends MergeRow>({
 }: {
   config: MergeableConfig;
   keeper: T;
+  initialAliasIds?: string[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: (keepId: string, aliasIds: string[]) => void;
   isPending: boolean;
 }) {
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selected, setSelected] = useState<string[]>(initialAliasIds ?? []);
   const candidatesQuery = useQuery({
     ...config.candidateQuery?.(keeper),
     enabled: open && !!config.candidateQuery,

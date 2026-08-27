@@ -274,6 +274,7 @@ export function PurchaseList() {
 
   const {
     onRowClick,
+    inspectRow,
     onRowHover,
     onRowHoverEnd,
     PreviewSheet,
@@ -287,6 +288,7 @@ export function PurchaseList() {
     PurchaseFilters
   >({
     entity: "purchase",
+    onInspectRow: inspectRow,
     filterOptions,
     columns,
     deletable: true,

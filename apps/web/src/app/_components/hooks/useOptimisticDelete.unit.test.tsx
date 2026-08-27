@@ -91,6 +91,29 @@ afterEach(() => {
 type AnyDialogElement = ReactElement<any>;
 
 describe("useOptimisticDelete", () => {
+  it("publishes delete through the shared lifecycle action contract", () => {
+    const mutationFn = vi.fn().mockResolvedValue({});
+    const { result } = renderHook(
+      () =>
+        useOptimisticDelete<TestRow>({
+          deletable: makeDeletable(mutationFn),
+        }),
+      { wrapper: createWrapper() },
+    );
+
+    expect(result.current.deleteActionDefinition).toMatchObject({
+      verb: "delete",
+      entities: ["product"],
+      arity: "both",
+      surfaces: ["row", "selection"],
+      group: "destructive",
+      priority: 1000,
+    });
+    expect(
+      result.current.deleteActionDefinition?.use("product").run,
+    ).toBeTypeOf("function");
+  });
+
   it("opens the whole bulk selection in one dialog, not just the first row", () => {
     const mutationFn = vi.fn().mockResolvedValue({});
 

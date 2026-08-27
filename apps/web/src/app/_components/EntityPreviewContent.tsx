@@ -13,7 +13,7 @@ import { buildNutrients, dataTypeLabel } from "@cubby/usda-schemas";
 import { useQuery } from "@tanstack/react-query";
 import { sumBy } from "es-toolkit";
 import { ListChecks } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useMemo } from "react";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { costTypeLabels } from "~/app/expenses/expense-options";
 import {
@@ -57,6 +57,43 @@ import {
 import type { HoverPreviewEntity } from "./preview/preview-entities";
 import { PreviewQuery } from "./preview/preview-query";
 import { coverageLabel, formatYield } from "./recipe/recipe-utils";
+
+type CompactPreviewPresentation = {
+  showOpenAction?: boolean;
+  showIdentityHeader?: boolean;
+  onNameResolved?: (name: string) => void;
+  /** The inspector reuses this successful detail payload for its actions. */
+  onRecordResolved?: (record: object | undefined) => void;
+};
+
+type StandardPreviewPresentation = Required<
+  Pick<CompactPreviewPresentation, "showOpenAction" | "showIdentityHeader">
+> &
+  Pick<CompactPreviewPresentation, "onNameResolved" | "onRecordResolved">;
+
+function ResolvedManifestCard({
+  card,
+  record,
+  showOpenAction,
+  showIdentityHeader,
+  onNameResolved,
+  onRecordResolved,
+}: CompactPreviewPresentation & { card: ManifestCardProps; record: object }) {
+  useEffect(() => {
+    onNameResolved?.(card.name);
+  }, [card.name, onNameResolved]);
+  useEffect(() => {
+    onRecordResolved?.(record);
+  }, [onRecordResolved, record]);
+
+  return (
+    <ManifestCard
+      {...card}
+      showOpenAction={showOpenAction}
+      showIdentityHeader={showIdentityHeader}
+    />
+  );
+}
 
 // Cross-link to the USDA food behind an ingredient/product (built identically
 // for both). The food description is too long to use as the label, so the
@@ -360,18 +397,26 @@ export function toUsdaCard(
 export function UsdaFoodPreviewContent({
   fdcId,
   showOpenAction = true,
-}: {
-  fdcId: number;
-  showOpenAction?: boolean;
-}) {
+  showIdentityHeader = true,
+  onNameResolved,
+  onRecordResolved,
+}: { fdcId: number } & CompactPreviewPresentation) {
   const query = useQuery(usdaFood.detail.queryOptions({ id: fdcId }));
+  const actionRecord = useMemo(
+    () => (query.data ? { ...query.data, id: String(fdcId) } : undefined),
+    [fdcId, query.data],
+  );
 
   return (
-    <PreviewQuery query={query} label="Food">
+    <PreviewQuery query={query} label="Food" onUnavailable={onRecordResolved}>
       {(data) => (
-        <ManifestCard
-          {...toUsdaCard(fdcId, data)}
+        <ResolvedManifestCard
+          card={toUsdaCard(fdcId, data)}
+          record={actionRecord ?? data}
           showOpenAction={showOpenAction}
+          showIdentityHeader={showIdentityHeader}
+          onNameResolved={onNameResolved}
+          onRecordResolved={onRecordResolved}
         />
       )}
     </PreviewQuery>
@@ -516,20 +561,28 @@ export function toCookbookCard(data: CookbookSummary): ManifestCardProps {
 export function CookbookPreviewContent({
   cookbookId,
   showOpenAction = true,
-}: {
-  cookbookId: string;
-  showOpenAction?: boolean;
-}) {
+  showIdentityHeader = true,
+  onNameResolved,
+  onRecordResolved,
+}: { cookbookId: string } & CompactPreviewPresentation) {
   const query = useQuery(
     cookbook.detail.queryOptions({ shortcode: cookbookId }),
   );
 
   return (
-    <PreviewQuery query={query} label="Cookbook">
+    <PreviewQuery
+      query={query}
+      label="Cookbook"
+      onUnavailable={onRecordResolved}
+    >
       {(data) => (
-        <ManifestCard
-          {...toCookbookCard(data)}
+        <ResolvedManifestCard
+          card={toCookbookCard(data)}
+          record={data}
           showOpenAction={showOpenAction}
+          showIdentityHeader={showIdentityHeader}
+          onNameResolved={onNameResolved}
+          onRecordResolved={onRecordResolved}
         />
       )}
     </PreviewQuery>
@@ -1069,11 +1122,13 @@ function GenericPreviewContent({
   entity,
   id,
   showOpenAction,
+  showIdentityHeader,
+  onNameResolved,
+  onRecordResolved,
 }: {
   entity: StandardPreviewEntity;
   id: string;
-  showOpenAction: boolean;
-}) {
+} & StandardPreviewPresentation) {
   const spec = PREVIEW_TABLE[entity];
   // `entity` is a runtime union, so `entityDetailFor` infers the whole
   // 16-entity union and `useQuery` cannot pick one overload. Name the widened
@@ -1087,9 +1142,20 @@ function GenericPreviewContent({
   );
 
   return (
-    <PreviewQuery query={query} label={spec.label}>
+    <PreviewQuery
+      query={query}
+      label={spec.label}
+      onUnavailable={onRecordResolved}
+    >
       {(data) => (
-        <ManifestCard {...spec.toCard(data)} showOpenAction={showOpenAction} />
+        <ResolvedManifestCard
+          card={spec.toCard(data)}
+          record={data}
+          showOpenAction={showOpenAction}
+          showIdentityHeader={showIdentityHeader}
+          onNameResolved={onNameResolved}
+          onRecordResolved={onRecordResolved}
+        />
       )}
     </PreviewQuery>
   );
@@ -1098,10 +1164,12 @@ function GenericPreviewContent({
 function ProjectPreviewContent({
   id,
   showOpenAction,
+  showIdentityHeader,
+  onNameResolved,
+  onRecordResolved,
 }: {
   id: string;
-  showOpenAction: boolean;
-}) {
+} & StandardPreviewPresentation) {
   const projectId = parseShortcodeFor("project", id);
   const query = useQuery(entityDetailFor("project").queryOptions(id));
   const coverQuery = useQuery(
@@ -1125,11 +1193,16 @@ function ProjectPreviewContent({
         refetch: query.refetch,
       }}
       label="Project"
+      onUnavailable={onRecordResolved}
     >
       {(project) => (
-        <ManifestCard
-          {...toProjectCard(project)}
+        <ResolvedManifestCard
+          card={toProjectCard(project)}
+          record={query.data ?? project}
           showOpenAction={showOpenAction}
+          showIdentityHeader={showIdentityHeader}
+          onNameResolved={onNameResolved}
+          onRecordResolved={onRecordResolved}
         />
       )}
     </PreviewQuery>
@@ -1139,16 +1212,25 @@ function ProjectPreviewContent({
 function ImagePreviewContent({
   id,
   showOpenAction,
+  showIdentityHeader,
+  onNameResolved,
+  onRecordResolved,
 }: {
   id: string;
-  showOpenAction: boolean;
-}) {
+} & StandardPreviewPresentation) {
   const query = useQuery(image.detail.queryOptions({ id }));
 
   return (
-    <PreviewQuery query={query} label="Image">
+    <PreviewQuery query={query} label="Image" onUnavailable={onRecordResolved}>
       {(data) => (
-        <ManifestCard {...toImageCard(data)} showOpenAction={showOpenAction} />
+        <ResolvedManifestCard
+          card={toImageCard(data)}
+          record={data}
+          showOpenAction={showOpenAction}
+          showIdentityHeader={showIdentityHeader}
+          onNameResolved={onNameResolved}
+          onRecordResolved={onRecordResolved}
+        />
       )}
     </PreviewQuery>
   );
@@ -1158,11 +1240,10 @@ export function EntityPreviewContent({
   entity,
   id,
   showOpenAction = true,
-}: {
-  entity: HoverPreviewEntity;
-  id: string;
-  showOpenAction?: boolean;
-}) {
+  showIdentityHeader = true,
+  onNameResolved,
+  onRecordResolved,
+}: { entity: HoverPreviewEntity; id: string } & CompactPreviewPresentation) {
   // usda-food and cookbook fetch differently enough (fdc_id coercion and
   // specialized projections) to stay their own small components.
   // Every other entity is a uniform detail fetch, keyed here so switching
@@ -1173,22 +1254,50 @@ export function EntityPreviewContent({
       <UsdaFoodPreviewContent
         fdcId={fdcIdFromParam(id)}
         showOpenAction={showOpenAction}
+        showIdentityHeader={showIdentityHeader}
+        onNameResolved={onNameResolved}
+        onRecordResolved={onRecordResolved}
       />
     );
   if (entity === "cookbook")
     return (
-      <CookbookPreviewContent cookbookId={id} showOpenAction={showOpenAction} />
+      <CookbookPreviewContent
+        cookbookId={id}
+        showOpenAction={showOpenAction}
+        showIdentityHeader={showIdentityHeader}
+        onNameResolved={onNameResolved}
+        onRecordResolved={onRecordResolved}
+      />
     );
   if (entity === "project")
-    return <ProjectPreviewContent id={id} showOpenAction={showOpenAction} />;
+    return (
+      <ProjectPreviewContent
+        id={id}
+        showOpenAction={showOpenAction}
+        showIdentityHeader={showIdentityHeader}
+        onNameResolved={onNameResolved}
+        onRecordResolved={onRecordResolved}
+      />
+    );
   if (entity === "image")
-    return <ImagePreviewContent id={id} showOpenAction={showOpenAction} />;
+    return (
+      <ImagePreviewContent
+        id={id}
+        showOpenAction={showOpenAction}
+        showIdentityHeader={showIdentityHeader}
+        onNameResolved={onNameResolved}
+        onRecordResolved={onRecordResolved}
+      />
+    );
   return (
     <GenericPreviewContent
       key={entity}
       entity={entity}
       id={id}
       showOpenAction={showOpenAction}
+      showIdentityHeader={showIdentityHeader}
+      onNameResolved={onNameResolved}
+      onRecordResolved={onRecordResolved}
     />
   );
 }

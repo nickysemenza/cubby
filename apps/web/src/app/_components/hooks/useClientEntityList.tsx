@@ -1,6 +1,7 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
 import type { ListWorkbenchModel } from "../data-table/ListWorkbench";
+import { reconcileRowSelection } from "../data-table/row-selection";
 import type { CubbyRow as Row } from "../data-table/table-features";
 import { useTableConfig } from "../data-table/useTableConfig";
 import { useContractDeletable } from "./useDeletableConfig";
@@ -56,6 +57,8 @@ type SharedListOptions<TData extends BaseListRow> = Pick<
   | "deleteEmptyLabel"
   | "hiddenFilterColumns"
   | "subject"
+  | "onInspectRow"
+  | "includeCatalogActions"
 >;
 
 interface UseClientEntityListOptions<TData extends BaseListRow>
@@ -125,6 +128,8 @@ export function useClientEntityList<TData extends BaseListRow>({
   tree,
   rowIsEntity,
   bulkActions,
+  onInspectRow,
+  includeCatalogActions,
   deleteEmptyLabel,
   subject,
 }: UseClientEntityListOptions<TData>): UseClientEntityListReturn<TData> {
@@ -142,6 +147,8 @@ export function useClientEntityList<TData extends BaseListRow>({
     deletable: resolvedDeletable,
     extraActions,
     bulkActions,
+    onInspectRow,
+    includeCatalogActions,
     deleteEmptyLabel,
     selectionScope: (state) => state.allFilters,
   });
@@ -174,6 +181,24 @@ export function useClientEntityList<TData extends BaseListRow>({
   } = presentation;
 
   const getRowId = useCallback((row: TData) => row.id, []);
+
+  const availableRowIds = useMemo(() => {
+    const ids = new Set<string>();
+    const visit = (rows: readonly TData[]) => {
+      for (const row of rows) {
+        if (!rowIsEntity || rowIsEntity(row)) ids.add(row.id);
+        const children = tree?.getSubRows(row);
+        if (children) visit(children);
+      }
+    };
+    visit(data);
+    return ids;
+  }, [data, rowIsEntity, tree]);
+  useEffect(() => {
+    presentationState.listBulkActions.onRowSelectionChange?.((current) =>
+      reconcileRowSelection(current, availableRowIds),
+    );
+  }, [availableRowIds, presentationState.listBulkActions.onRowSelectionChange]);
 
   // Boolean for the columns (does a selection column exist at all), predicate
   // for the table (which rows it applies to).

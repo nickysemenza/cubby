@@ -7,7 +7,7 @@ import {
 } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
-import { buildSelectColumn } from "./row-selection";
+import { buildSelectColumn, reconcileRowSelection } from "./row-selection";
 import type {
   CubbyColumnDef as ColumnDef,
   CubbyRow as Row,
@@ -141,5 +141,23 @@ describe("buildSelectColumn", () => {
       "wish-a": true,
       "wish-b": true,
     });
+  });
+});
+
+describe("reconcileRowSelection", () => {
+  it("drops stale keys while retaining available selections", () => {
+    expect(
+      reconcileRowSelection(
+        { available: true, deleted: true },
+        new Set(["available"]),
+      ),
+    ).toEqual({ available: true });
+  });
+
+  it("keeps the same object when every selected row remains available", () => {
+    const current = { first: true, second: true } as const;
+    expect(
+      reconcileRowSelection(current, new Set(["first", "second", "third"])),
+    ).toBe(current);
   });
 });

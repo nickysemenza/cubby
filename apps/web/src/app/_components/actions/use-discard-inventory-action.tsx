@@ -47,7 +47,9 @@ export function useDiscardInventoryAction(): EntityActionHandles {
       const item = asDiscardItem(row);
       return item ? [item] : [];
     });
-    if (items.length === 0) return { success: false };
+    if (items.length !== rows.length || items.length === 0) {
+      return { success: false };
+    }
     setStaged(items);
     // The write happens in the dialog, so the bar's job is done once the rows
     // are staged — and the selection survives, because a cancelled dialog
@@ -57,6 +59,10 @@ export function useDiscardInventoryAction(): EntityActionHandles {
 
   return {
     run,
+    availability: ({ rows }) =>
+      rows.length > 0 && rows.every((row) => asDiscardItem(row) !== null)
+        ? { status: "available" }
+        : { status: "hidden" },
     rowMenuItem: (row) => {
       const item = asDiscardItem(row);
       if (!item) return null;

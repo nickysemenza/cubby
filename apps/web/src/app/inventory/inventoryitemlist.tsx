@@ -4,10 +4,6 @@ import { getRouteApi, Link } from "@tanstack/react-router";
 import { ImageIcon } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import type { z } from "zod";
-import {
-  VerbMenuItem,
-  verbBulkAction,
-} from "~/app/_components/actions/action-verb-ui";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { Row as FlexRow, Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
@@ -34,7 +30,6 @@ import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { InventoryShelf } from "../_components/inventory/inventory-shelf";
-import { MoveInventoryDialog } from "../_components/inventory/move-inventory-dialog";
 import { InventoryValuationSummary } from "../_components/locations/inventory-valuation-summary";
 import { CategoryLabel } from "../_components/products/CategoryLabel";
 import { productCategoryOptionsWithTheme } from "../_components/products/product-category-icons";
@@ -87,6 +82,7 @@ export function InventoryItemList() {
   );
   const {
     onRowClick,
+    inspectRow,
     onRowHover,
     onRowHoverEnd,
     PreviewSheet,
@@ -94,8 +90,6 @@ export function InventoryItemList() {
     dockedInspector,
     inspectorToggle,
   } = useEntityPreview("inventory", { responsiveInspector: true });
-  const [moveTarget, setMoveTarget] = useState<InventoryListItem | null>(null);
-  const [bulkMoveItems, setBulkMoveItems] = useState<InventoryListItem[]>([]);
 
   const clearProductScope = useCallback(() => {
     void inventoryNavigate({
@@ -115,21 +109,6 @@ export function InventoryItemList() {
     entity: "inventory",
   });
 
-  const extraActions = useCallback(
-    (row: InventoryListItem) => (
-      <>
-        <VerbMenuItem
-          verb="moveTo"
-          onSelect={(e) => {
-            e.stopPropagation();
-            setMoveTarget(row);
-          }}
-        />
-      </>
-    ),
-    [],
-  );
-
   // Its own config rather than the contract default: the dialog says
   // "Inventory Entry", which is what the row IS — the registry label
   // ("Inventory Item") reads as the product on the shelf.
@@ -138,23 +117,6 @@ export function InventoryItemList() {
     entityLabel: "Inventory Entry",
     entity: "inventory",
   });
-
-  const bulkActions = useMemo(
-    () => ({
-      actions: [
-        verbBulkAction<InventoryListItem>("moveTo", {
-          id: "move",
-          minSelection: 1,
-          onExecute: async (rows) => {
-            setBulkMoveItems(rows.map((r) => r.original));
-            return { success: true };
-          },
-        }),
-      ],
-      clearSelectionOnComplete: false,
-    }),
-    [],
-  );
 
   // Memoize columns to prevent recreating on every render.
   // updateMutation is NOT in the dependency array because useMutation returns
@@ -307,12 +269,11 @@ export function InventoryItemList() {
   // loading state, and delete dialog directly.
   const { workbench, data, totalCount } = useEntityList({
     entity: "inventory",
+    onInspectRow: inspectRow,
     subject: PRODUCT_SUBJECT,
     // Inventory has custom columns (product image, amount instead of name)
     columns,
     deletable: deletableConfig,
-    extraActions,
-    bulkActions,
     // "Created" is low-signal when browsing inventory — hidden by default,
     // still toggleable via the View menu.
     initialColumnVisibility: {
@@ -392,29 +353,6 @@ export function InventoryItemList() {
       )}
       <PreviewSheet />
       {view === "shelf" && workbench.deleteDialog}
-      {moveTarget && (
-        <MoveInventoryDialog
-          open={!!moveTarget}
-          onOpenChange={(open) => {
-            if (!open) setMoveTarget(null);
-          }}
-          items={[moveTarget]}
-          onSuccess={() => setMoveTarget(null)}
-        />
-      )}
-      {bulkMoveItems.length > 0 && (
-        <MoveInventoryDialog
-          open={bulkMoveItems.length > 0}
-          onOpenChange={(open) => {
-            if (!open) setBulkMoveItems([]);
-          }}
-          items={bulkMoveItems}
-          onSuccess={() => {
-            setBulkMoveItems([]);
-            workbench.table.resetRowSelection();
-          }}
-        />
-      )}
     </ProductImageSummariesProvider>
   );
 }

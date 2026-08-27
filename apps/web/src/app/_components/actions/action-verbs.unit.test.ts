@@ -1,3 +1,4 @@
+import { PanelRight } from "lucide-react";
 import { describe, expect, it } from "vitest";
 import {
   type ActionVerbId,
@@ -46,5 +47,9 @@ describe("action verb registry", () => {
   it("exposes tone through verbDef despite const narrowing", () => {
     expect(verbDef("delete").tone).toBe("destructive");
     expect(verbDef("recount").tone).toBeUndefined();
+  });
+
+  it("defines Inspect as the canonical inspector presentation verb", () => {
+    expect(actionVerbs.inspect).toEqual({ label: "Inspect", icon: PanelRight });
   });
 });

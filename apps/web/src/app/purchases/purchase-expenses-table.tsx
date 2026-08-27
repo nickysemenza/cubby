@@ -14,11 +14,6 @@ import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import {
-  ExpenseBulkActionDialogs,
-  useExpenseBulkActions,
-} from "~/app/_components/tracker/expense-bulk-actions";
-import { useExpenseRowActions } from "~/app/_components/tracker/expense-row-actions";
-import {
   createExpenseProductImageColumn,
   ExpenseProductImages,
 } from "~/app/expenses/expense-product-image-column";
@@ -97,7 +92,6 @@ function PurchaseExpenseRows({
     entityLabel: "Expense",
     entity: "expense",
   });
-  const bulkActions = useExpenseBulkActions();
   // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrappers are functionally stable
   const columns = useMemo(() => {
     const shared = [
@@ -153,18 +147,10 @@ function PurchaseExpenseRows({
       }),
     ];
   }, [helper, kind]);
-  // Adjustments are tax/shipping/discount/fee/tip lines the domain keeps out of
-  // cost-type and trade analytics — but `SettleExpenseDialog` requires both, so
-  // settling one would force a classification that is withheld on purpose.
-  const rowActions = useExpenseRowActions({
-    settleDisabledReason:
-      kind === "adjustment" ? "Adjustments aren't classified" : undefined,
-  });
   const list = useEntityList<ExpenseOut, ExpenseFilters>({
     entity: "expense",
     queryOptions: listQueryOptions,
     scopeFilters: scope,
-    extraActions: rowActions.extraActions,
     columns,
     tableStateOptions: EMBEDDED_TABLE_STATE,
     layoutKey: `expense:purchase-detail:${kind}`,
@@ -172,7 +158,6 @@ function PurchaseExpenseRows({
     hiddenFilterColumns: ["vendor", "orderId"],
     deletable,
     nameEditable,
-    bulkActions: bulkActions.config,
     initialColumnVisibility: {
       product: kind === "principal",
       productQuantity: kind === "principal",
@@ -194,11 +179,6 @@ function PurchaseExpenseRows({
         }
         mode="embedded"
         showColumnMenu
-      />
-      {rowActions.dialogs}
-      <ExpenseBulkActionDialogs
-        controller={bulkActions}
-        onComplete={() => list.workbench.table.resetRowSelection()}
       />
     </>
   );

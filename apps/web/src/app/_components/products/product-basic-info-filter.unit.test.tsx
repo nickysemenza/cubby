@@ -48,10 +48,6 @@ vi.mock("~/app/_components/hooks/useActionMutation", () => ({
   useActionMutation: () => ({ mutateAsync: vi.fn() }),
 }));
 
-vi.mock("~/app/_components/hooks/useEntityDelete", () => ({
-  useEntityDelete: () => ({ deleteButton: null, deleteDialog: null }),
-}));
-
 vi.mock("../data-table/editable-cell", () => ({
   EditableCell: ({
     value,
@@ -74,7 +70,6 @@ vi.mock("../EntityInlineLink", () => ({
   ),
 }));
 
-vi.mock("../print-label-button", () => ({ PrintLabelButton: () => null }));
 vi.mock("./product-notes-markdown", () => ({
   ProductNotesMarkdown: () => null,
 }));

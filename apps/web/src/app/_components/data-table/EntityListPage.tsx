@@ -89,6 +89,7 @@ export function EntityListPage<
   const { entity } = listOptions;
   const {
     onRowClick: previewClick,
+    inspectRow,
     onRowHover: previewHover,
     onRowHoverEnd: previewHoverEnd,
     PreviewSheet,
@@ -115,6 +116,10 @@ export function EntityListPage<
   const list = useEntityList<TData, TFilters, TRow>({
     deletable: true,
     ...listOptions,
+    onInspectRow:
+      preview === false
+        ? undefined
+        : (inspectRow as (row: { id?: string; original: TData }) => void),
   });
   usePageCount(list.totalCount);
 

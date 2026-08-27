@@ -4,15 +4,12 @@ import type { ProductFilters, ProductListItem } from "@cubby/schemas/product";
 import type { KitComponentRowOut } from "@cubby/schemas/product-components";
 import { formatCategoryLabel, getCategoryColor } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
 import { CalendarRange, Clock3, Rows3, Table2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  VerbMenuItem,
-  verbBulkAction,
-} from "~/app/_components/actions/action-verb-ui";
+import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import {
   ProductFoodSummariesProvider,
@@ -58,7 +55,6 @@ import { EditableCell } from "../_components/data-table/editable-cell";
 import { ListWorkbench } from "../_components/data-table/ListWorkbench";
 import type { GroupConfig } from "../_components/data-table/useGroupedList";
 import { EntityInlineLink } from "../_components/EntityInlineLink";
-import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { useDeferredFilterOptions } from "../_components/hooks/useDeferredFilterOptions";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import {
@@ -78,7 +74,6 @@ import { ProductDiscardDialog } from "../_components/products/product-discard-di
 import { ProductShelf } from "../_components/products/product-shelf";
 import { ProductWorkbenchInspector } from "../_components/products/product-workbench-inspector";
 import { TruncatedList } from "../_components/TruncatedList";
-import { SetFieldDialog } from "../_components/tracker/set-field-dialog";
 import {
   buildProductTreeRows,
   groupComponentsByParent,
@@ -123,31 +118,6 @@ const STOCK_TRACKED_OPTIONS = booleanCellOptions({
   true: "Tracked",
   false: "Not tracked",
 });
-
-/** Dialog option value for `stockTracked: null` — `SetFieldDialog` is stringly typed. */
-const UNDECIDED_STOCK_TRACKING = "undecided";
-
-// The bulk dialog's roster is the CELL roster plus an undecided arm. The cell
-// gets its third state from `undecided` on the column, but `SetFieldDialog`
-// takes a flat option list, so the sweep's undo has to be a real option here or
-// a mistaken "Not tracked" over a few hundred rows would be unreachable from
-// the UI that made it.
-const STOCK_TRACKED_BULK_OPTIONS: FilterableComboboxItem[] = [
-  ...STOCK_TRACKED_OPTIONS,
-  { value: UNDECIDED_STOCK_TRACKING, label: "Undecided" },
-];
-
-const parseStockTracked = (value: string): boolean | null =>
-  value === UNDECIDED_STOCK_TRACKING ? null : value === "true";
-
-/**
- * Hoisted: `useActionMutation` infers its result type from this reference, and
- * an inline factory call inside the options literal defeats that inference.
- */
-const productBulkUpdateOptions = entityMutationOptionsFactory(
-  "product",
-  "bulkUpdate",
-);
 
 const MODEL_PRESENCE_OPTIONS = presenceCellOptions("model");
 const UPC_PRESENCE_OPTIONS = presenceCellOptions("UPC");
@@ -235,13 +205,13 @@ function ProductFoodCell({ product }: { product: ProductListItem }) {
 }
 
 export function ProductList({ initialCategory, view }: ProductListProps) {
-  const navigate = useNavigate();
   const columnHelper = useMemo(
     () => createCubbyColumnHelper<ProductTreeRow>(),
     [],
   );
   const {
     onRowClick: selectPreview,
+    inspectRow,
     onRowHover,
     onRowHoverEnd,
     preview,
@@ -330,15 +300,6 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
   );
   const foodByProductId = useProductFoodSummaries(foodHydrationIds);
 
-  const [stockTrackingRows, setStockTrackingRows] = useState<ProductListItem[]>(
-    [],
-  );
-  const stockTrackingMutation = useActionMutation({
-    mutationFn: productBulkUpdateOptions,
-    success: (data) =>
-      `Updated ${data.updated} product${data.updated !== 1 ? "s" : ""}`,
-    onSuccess: () => setStockTrackingRows([]),
-  });
   const updateProductMutation = useUpdateMutation({
     mutationFn: entityMutationOptionsFactory("product", "update"),
     entity: "product",
@@ -915,12 +876,6 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
           verb="discard"
           onSelect={() => setDiscardProductId(row.id)}
         />
-        {row.id && (
-          <VerbMenuItem
-            verb="printLabel"
-            render={<Link to="/labels" search={{ codes: row.id }} />}
-          />
-        )}
       </>
     ),
     [],
@@ -983,45 +938,13 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
     [componentsByParent],
   );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: navigate is stable
-  const bulkActions = useMemo(
-    () => ({
-      actions: [
-        verbBulkAction<ProductTreeRow>("printLabels", {
-          id: "print-labels",
-          minSelection: 1,
-          onExecute: (rows) => {
-            const codes = rows.map((r) => r.original.id).join(",");
-            navigate({ to: "/labels", search: { codes } });
-            return Promise.resolve({ success: true });
-          },
-        }),
-        // The burn-down lane for the "Not on a shelf" / "Consumed on projects"
-        // views: those converge only when `stockTracked` is answered, and the
-        // answer is the same for a whole selection often enough that answering
-        // it a row at a time through the inline cell was the bottleneck.
-        // Kit-component rows are projections, not products, so they can't carry
-        // the decision — `rowIsEntity` on the table already keeps them out of
-        // the selection.
-        verbBulkAction<ProductTreeRow>("setStockTracking", {
-          minSelection: 1,
-          onExecute: async (rows) => {
-            setStockTrackingRows(rows.map((row) => row.original));
-            return { success: true };
-          },
-        }),
-      ],
-      clearSelectionOnComplete: false,
-    }),
-    [],
-  );
-
   const { workbench, data, totalCount, currentFilters } = useEntityList<
     ProductTreeRow,
     ProductFilters,
     ProductListItem
   >({
     entity: "product",
+    onInspectRow: inspectRow,
     getMappings: getProductListMappings,
     tableStateOptions,
     columns,
@@ -1030,7 +953,6 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
     filterOptions,
     extraActions,
     nameEditable,
-    bulkActions,
     initialColumnVisibility: {
       tags: false,
       fdc_id: false,
@@ -1143,30 +1065,6 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
             if (!open) setDiscardProductId(null);
           }}
           product={discardProduct}
-        />
-      )}
-      {stockTrackingRows.length > 0 && (
-        <SetFieldDialog
-          open
-          onOpenChange={(open) => {
-            if (!open) setStockTrackingRows([]);
-          }}
-          items={stockTrackingRows}
-          isPending={stockTrackingMutation.isPending}
-          currentValue={(product) =>
-            product.stockTracked === null
-              ? UNDECIDED_STOCK_TRACKING
-              : String(product.stockTracked)
-          }
-          options={STOCK_TRACKED_BULK_OPTIONS}
-          fieldLabel="Stock tracking"
-          itemNoun="Product"
-          onConfirm={async (value) => {
-            await stockTrackingMutation.mutateAsync({
-              ids: stockTrackingRows.map((product) => product.id),
-              data: { stockTracked: parseStockTracked(value) },
-            });
-          }}
         />
       )}
       {quickEditProduct && (

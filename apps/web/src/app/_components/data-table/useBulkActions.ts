@@ -4,12 +4,24 @@ import type {
   RowSelectionState,
 } from "@tanstack/react-table";
 import { useCallback, useState } from "react";
-import type { BulkAction, BulkActionsConfig } from "./bulk-actions.types";
+import {
+  type BulkAction,
+  type BulkActionsConfig,
+  resolveBulkActionAvailability,
+} from "./bulk-actions.types";
 import type { CubbyRow as Row } from "./table-features";
 
 interface UseBulkActionsOptions<TData extends RowData> {
   config: BulkActionsConfig<TData>;
 }
+
+const supportsSelectionCount = <TData extends RowData>(
+  action: BulkAction<TData>,
+  count: number,
+) =>
+  count > 0 &&
+  (action.minSelection == null || count >= action.minSelection) &&
+  (action.maxSelection == null || count <= action.maxSelection);
 
 export interface UseBulkActionsReturn<TData extends RowData> {
   rowSelection: RowSelectionState;
@@ -51,10 +63,11 @@ export function useBulkActions<TData extends RowData>({
     (selectedRows: Row<TData>[]) => {
       return config.actions.filter((action) => {
         const count = selectedRows.length;
-        if (count === 0) return false;
-        if (action.minSelection && count < action.minSelection) return false;
-        if (action.maxSelection && count > action.maxSelection) return false;
-        return true;
+        if (!supportsSelectionCount(action, count)) return false;
+        return (
+          resolveBulkActionAvailability(action, selectedRows).status !==
+          "hidden"
+        );
       });
     },
     [config.actions],
@@ -62,6 +75,14 @@ export function useBulkActions<TData extends RowData>({
 
   const executeAction = useCallback(
     async (action: BulkAction<TData>, selectedRows: Row<TData>[]) => {
+      if (
+        !supportsSelectionCount(action, selectedRows.length) ||
+        resolveBulkActionAvailability(action, selectedRows).status !==
+          "available"
+      ) {
+        return;
+      }
+
       setIsExecuting(true);
       setCurrentAction(action);
 

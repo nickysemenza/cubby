@@ -3,7 +3,10 @@ import { X } from "lucide-react";
 import { Row as LayoutRow } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
-import type { BulkAction } from "./bulk-actions.types";
+import {
+  type BulkAction,
+  resolveBulkActionAvailability,
+} from "./bulk-actions.types";
 import type { CubbyRow as Row } from "./table-features";
 
 export interface BulkActionBarProps<TData extends RowData> {
@@ -57,13 +60,25 @@ export function BulkActionBar<TData extends RowData>({
     selectAllMatching.loadedCount < selectAllMatching.totalCount;
 
   const handleActionClick = (action: BulkAction<TData>) => {
-    if (disabled) return;
+    if (
+      disabled ||
+      resolveBulkActionAvailability(action, selectedRows).status !== "available"
+    ) {
+      return;
+    }
     onExecute(action, selectedRows);
   };
-  const orderedActions = [...actions].sort(
-    (a, b) =>
-      Number(a.tone === "destructive") - Number(b.tone === "destructive"),
-  );
+  const orderedActions = actions
+    .map((action) => ({
+      action,
+      availability: resolveBulkActionAvailability(action, selectedRows),
+    }))
+    .filter(({ availability }) => availability.status !== "hidden")
+    .sort(
+      (a, b) =>
+        Number(a.action.tone === "destructive") -
+        Number(b.action.tone === "destructive"),
+    );
 
   return (
     <LayoutRow
@@ -95,22 +110,34 @@ export function BulkActionBar<TData extends RowData>({
       {/* Wraps because the action count is per-entity and open-ended — Tasks
           already carries five before the shared Copy and Delete. */}
       <LayoutRow align="center" gap="xs" wrap className="max-md:flex-nowrap">
-        {orderedActions.map((action) => (
-          <Button
-            key={action.id}
-            variant={action.tone === "destructive" ? "destructive" : "ghost"}
-            size="sm"
-            onClick={() => handleActionClick(action)}
-            disabled={disabled || isExecuting}
-          >
-            {isExecuting && currentAction?.id === action.id ? (
-              <Spinner className="mr-1 size-3" />
-            ) : action.icon ? (
-              <span className="mr-1">{action.icon}</span>
-            ) : null}
-            {action.label}
-          </Button>
-        ))}
+        {orderedActions.map(({ action, availability }) => {
+          const disabledReason =
+            availability.status === "disabled"
+              ? availability.reason
+              : undefined;
+          return (
+            <Button
+              key={action.id}
+              variant={action.tone === "destructive" ? "destructive" : "ghost"}
+              size="sm"
+              onClick={() => handleActionClick(action)}
+              disabled={disabled || isExecuting || disabledReason != null}
+              title={disabledReason}
+              aria-label={
+                disabledReason
+                  ? `${action.label}, ${disabledReason}`
+                  : undefined
+              }
+            >
+              {isExecuting && currentAction?.id === action.id ? (
+                <Spinner className="mr-1 size-3" />
+              ) : action.icon ? (
+                <span className="mr-1">{action.icon}</span>
+              ) : null}
+              {action.label}
+            </Button>
+          );
+        })}
       </LayoutRow>
 
       <Button

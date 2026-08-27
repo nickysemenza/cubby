@@ -20,3 +20,20 @@
 - **Completion:** The route ledger, direction contract, functional/visual/a11y
   gates, detector, finish review, 18/20 audit threshold, exact CI, and design
   documentation must all close. See `docs/plans/porcelain-transit-ui-overhaul.md`.
+
+## All-entity operational closure
+
+- Every browser-routed entity roster uses the shared current-record inspector
+  and checkbox-selection contract; projected and embedded rows remain excluded.
+- One checked row exposes Inspect without consuming selection. The action opens
+  the dock at 1280px+, the right Sheet from 768–1279px, and canonical detail
+  below 768px. Multi-selection never guesses which record to inspect.
+- Compact inspector Overview reads as identity, existing payload truth, at most
+  three direct relationship destinations, then eligible actions and supporting
+  evidence. Relations and Activity remain capability-gated and lazy.
+- Reusable entity actions share one catalog for wording, icon, arity,
+  availability, placement, and destructive ordering. Specialist workflows and
+  subresource operations keep their local task model.
+- The Mission Control reference contributes operational hierarchy and nearby
+  action placement only. It does not introduce dark chrome, KPI-card grids,
+  decorative telemetry, invented measures, or globally compressed spacing.

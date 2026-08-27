@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   relationshipExplorer: vi.fn(),
   relationshipRoute: vi.fn(),
+  actions: vi.fn(),
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -47,6 +48,12 @@ vi.mock("../relationships/relationship-route-preview", () => ({
 }));
 vi.mock("../audit-log/audit-log-list", () => ({
   AuditLogList: () => <div data-testid="audit-log">Audit log</div>,
+}));
+vi.mock("../actions/entity-actions", () => ({
+  EntityActionButtons: (props: unknown) => {
+    mocks.actions(props);
+    return <div data-testid="detail-actions" />;
+  },
 }));
 
 const sections: DetailSection[] = [
@@ -87,6 +94,7 @@ describe("DetailSections ledger", () => {
     );
     mocks.relationshipExplorer.mockClear();
     mocks.relationshipRoute.mockClear();
+    mocks.actions.mockClear();
   });
 
   it("renders stable responsive tracks and a ruled section index", () => {
@@ -303,6 +311,57 @@ describe("DetailSections ledger", () => {
       entity: "vendor",
       sourceId: "VEN-EXAMPLE",
     });
+  });
+
+  it("hands generic record actions the full loaded detail payload", () => {
+    const inventory = {
+      id: "INV-EXAMPLE",
+      name: "Fixture inventory",
+      product: { id: "PRD-EXAMPLE", name: "Fixture product" },
+      availableQuantity: 4,
+    };
+    mocks.pageDetail.current = { entity: "inventory", rawData: inventory };
+
+    render(<DetailSections sections={sections} rawData={inventory} />);
+
+    expect(mocks.actions).toHaveBeenCalledWith({
+      entity: "inventory",
+      record: inventory,
+    });
+  });
+
+  it("preserves a USDA food payload while supplying its canonical action id", () => {
+    const food = {
+      fdc_id: 12345,
+      foodInfo: { description: "Fixture food" },
+      linkedProducts: [],
+    };
+    mocks.pageDetail.current = { entity: "usda-food", rawData: food };
+
+    render(<DetailSections sections={sections} rawData={food} />);
+
+    expect(mocks.actions).toHaveBeenCalledWith({
+      entity: "usda-food",
+      record: { ...food, id: "12345" },
+    });
+  });
+
+  it("allows a page-owned action host to suppress generic record actions", () => {
+    mocks.pageDetail.current = {
+      entity: "image",
+      rawData: { id: "IMG-EXAMPLE", filename: "fixture.jpg" },
+    };
+
+    render(
+      <DetailSections
+        sections={sections}
+        rawData={{ id: "IMG-EXAMPLE" }}
+        showEntityActions={false}
+      />,
+    );
+
+    expect(screen.queryByTestId("detail-actions")).toBeNull();
+    expect(mocks.actions).not.toHaveBeenCalled();
   });
 
   it("lazily mounts authored Relations and Activity while keeping the compact route in Overview", () => {

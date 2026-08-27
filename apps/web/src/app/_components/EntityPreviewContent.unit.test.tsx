@@ -71,6 +71,41 @@ describe("PreviewQuery", () => {
     );
     expect(screen.getByText("Olive oil")).toBeInTheDocument();
   });
+
+  it("clears record-owned controls while unavailable", () => {
+    const onUnavailable = vi.fn();
+    const { rerender } = render(
+      <PreviewQuery
+        query={{
+          data: { name: "Olive oil" },
+          isLoading: false,
+          isError: false,
+          refetch: vi.fn(),
+        }}
+        label="Product"
+        onUnavailable={onUnavailable}
+      >
+        {(data: { name: string }) => <span>{data.name}</span>}
+      </PreviewQuery>,
+    );
+    expect(onUnavailable).not.toHaveBeenCalled();
+
+    rerender(
+      <PreviewQuery
+        query={{
+          data: undefined,
+          isLoading: false,
+          isError: false,
+          refetch: vi.fn(),
+        }}
+        label="Product"
+        onUnavailable={onUnavailable}
+      >
+        {(data: { name: string }) => <span>{data.name}</span>}
+      </PreviewQuery>,
+    );
+    expect(onUnavailable).toHaveBeenCalledOnce();
+  });
 });
 
 // The hovercard's image is a `{kind:"thumb"}` body block — ManifestCard draws

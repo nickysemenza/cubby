@@ -1,6 +1,28 @@
-import type { RowData } from "@tanstack/react-table";
+import type { RowData, RowSelectionState } from "@tanstack/react-table";
 import { Checkbox } from "~/components/ui/checkbox";
 import type { CubbyColumnDef } from "./table-features";
+
+/**
+ * Drop selected row keys that no longer belong to the current canonical
+ * result set. TanStack intentionally preserves controlled selection across
+ * data replacement; entity actions cannot, because an invisible/deleted row
+ * must never remain an executable target.
+ */
+export function reconcileRowSelection(
+  current: RowSelectionState,
+  availableRowIds: ReadonlySet<string>,
+): RowSelectionState {
+  let changed = false;
+  const next: RowSelectionState = {};
+  for (const [id, selected] of Object.entries(current)) {
+    if (selected && availableRowIds.has(id)) {
+      next[id] = true;
+    } else {
+      changed = true;
+    }
+  }
+  return changed ? next : current;
+}
 
 /**
  * Builds the leading row-selection checkbox column shared by every entity list.

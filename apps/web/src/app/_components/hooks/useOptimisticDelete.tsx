@@ -17,6 +17,10 @@ import {
 } from "~/integrations/tanstack-query/operation-cache";
 import type { OperationCacheTag } from "~/integrations/tanstack-query/operation-meta";
 import { VerbMenuItem, verbBulkAction } from "../actions/action-verb-ui";
+import type {
+  EntityActionDefinition,
+  EntityActionRow,
+} from "../actions/entity-actions";
 import type { BulkAction } from "../data-table/bulk-actions.types";
 
 interface DeletableConfig {
@@ -45,6 +49,8 @@ interface UseOptimisticDeleteOptions<TData extends { id: string }> {
 
 interface UseOptimisticDeleteReturn<TData extends { id: string }> {
   deleteBulkAction: BulkAction<TData> | null;
+  /** Catalog adapter used by canonical entity lists. */
+  deleteActionDefinition: EntityActionDefinition | null;
   combinedExtraActions: ((row: TData) => ReactNode) | undefined;
   deleteDialog: ReactNode | null;
   /** Opens the delete confirmation dialog for one item (e.g. swipe actions) */
@@ -295,6 +301,15 @@ export function useOptimisticDelete<
     });
   }, [deletable]);
 
+  const requestBulkDelete = useCallback(
+    (rows: readonly EntityActionRow[]) =>
+      new Promise<{ success: boolean }>((resolve) => {
+        bulkResolveRef.current = resolve;
+        setDeleteTargets(rows as readonly TData[] as TData[]);
+      }),
+    [],
+  );
+
   // Combine user's extra actions with delete action if deletable is provided
   const combinedExtraActions = useMemo(() => {
     if (!deletable && !extraActions) return undefined;
@@ -371,8 +386,43 @@ export function useOptimisticDelete<
     ],
   );
 
+  const deleteActionDefinition = useMemo<EntityActionDefinition | null>(
+    () =>
+      deletable
+        ? {
+            id: "delete",
+            verb: "delete",
+            entities: [deletable.entity],
+            arity: "both",
+            surfaces: ["row", "selection"],
+            group: "destructive",
+            priority: 1000,
+            use: () => ({
+              run: requestBulkDelete,
+              rowMenuItem: (row) => (
+                <>
+                  <DropdownMenuSeparator />
+                  <VerbMenuItem
+                    verb="delete"
+                    onSelect={(event) => {
+                      event.stopPropagation();
+                      requestDelete(row as TData);
+                    }}
+                  />
+                </>
+              ),
+              // The list workbench hosts this once so non-table roster modes
+              // (Product shelf, Inventory shelf) share the same dialog state.
+              dialog: null,
+            }),
+          }
+        : null,
+    [deletable, requestBulkDelete, requestDelete],
+  );
+
   return {
     deleteBulkAction,
+    deleteActionDefinition,
     combinedExtraActions,
     deleteDialog,
     requestDelete,

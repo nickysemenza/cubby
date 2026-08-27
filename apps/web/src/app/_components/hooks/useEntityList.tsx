@@ -3,7 +3,7 @@ import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { useSearch } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { browserEntityDefinition, entities } from "~/entities/entities";
 import { entityListFor } from "~/entities/entity-list.functions";
@@ -23,6 +23,7 @@ import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
 import type { RowLinkResolver } from "../data-table/columnHelpers";
 import type { ServerListWorkbenchModel } from "../data-table/ListWorkbench";
 import { problemWorklistState } from "../data-table/problem-worklist";
+import { reconcileRowSelection } from "../data-table/row-selection";
 import type { CubbyColumnDef } from "../data-table/table-features";
 import type { GroupConfig } from "../data-table/useGroupedList";
 import { useTableConfig } from "../data-table/useTableConfig";
@@ -121,6 +122,10 @@ export interface UseEntityListOptions<
   getMappings?: (item: TRow) => UnitMapping[];
   tableStateOptions?: Parameters<typeof useTableState>[0];
   bulkActions?: BulkActionsConfig<TData>;
+  /** Presentation-only Inspect action for one checked canonical row. */
+  onInspectRow?: (row: { id?: string; original: TData }) => void;
+  /** False for embedded specialist tables with their own contextual actions. */
+  includeCatalogActions?: boolean;
   extraActions?: (row: TData) => ReactNode;
   /**
    * What each row is *about*, when that is a different record — an inventory
@@ -189,6 +194,8 @@ export function useEntityList<
   getMappings,
   tableStateOptions,
   bulkActions,
+  onInspectRow,
+  includeCatalogActions,
   extraActions,
   deletable,
   deleteEmptyLabel,
@@ -260,6 +267,8 @@ export function useEntityList<
     deletable: effectiveDeletable,
     extraActions,
     bulkActions,
+    onInspectRow,
+    includeCatalogActions,
     deleteEmptyLabel,
     selectionScope: effectiveBuildFilters,
   });
@@ -376,6 +385,24 @@ export function useEntityList<
     () => (tree ? tree.nest(data) : (data as unknown as TData[])),
     [data, tree],
   );
+
+  const availableRowIds = useMemo(() => {
+    const ids = new Set<string>();
+    const visit = (rows: readonly TData[]) => {
+      for (const row of rows) {
+        if (!rowActionsGuard || rowActionsGuard(row)) ids.add(getRowId(row));
+        const children = tree?.getSubRows(row);
+        if (children) visit(children);
+      }
+    };
+    visit(tableData);
+    return ids;
+  }, [getRowId, rowActionsGuard, tableData, tree]);
+  useEffect(() => {
+    presentationState.listBulkActions.onRowSelectionChange?.((current) =>
+      reconcileRowSelection(current, availableRowIds),
+    );
+  }, [availableRowIds, presentationState.listBulkActions.onRowSelectionChange]);
 
   const table = useTableConfig({
     data: tableData,
