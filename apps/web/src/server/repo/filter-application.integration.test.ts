@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Entity } from "@cubby/schemas/entity";
 import { entitySchema } from "@cubby/schemas/entity";
+import { countableEntities } from "@cubby/schemas/entity-manifest";
 import {
   financialAccountCreateInput,
   financialAccountFilterFields,
@@ -47,6 +48,7 @@ import { describe, expect, it } from "vitest";
 import type { z } from "zod";
 import type { Database } from "~/server/db";
 import { upsertCookbook } from "./cookbook";
+import { getEntityCounts } from "./dashboard";
 import { createExpense, expenseList } from "./expense";
 import {
   createFinancialAccount,
@@ -313,6 +315,25 @@ const seedWorld = async (ctx: {
       ),
     );
   }
+  // One INSTALLED fixture, so the populations `stockOnly()` separates are not
+  // identical here. Without it the dashboard-count guard below is vacuous:
+  // dropping `stockOnly()` from `COUNT_SOURCES.inventory` changes nothing when
+  // every seeded row is stock, and the check passes against the very drift it
+  // exists to catch. The slot is (product, location, placement), so this
+  // coexists with Alpha's stock row above.
+  if (!productAlpha || !locationAlpha) {
+    throw new Error("seed: alpha product/location missing");
+  }
+  await createInventoryFixture(
+    db,
+    {
+      productId: productAlpha.id,
+      locationId: locationAlpha.id,
+      amount: { value: 1, unit: "each" },
+      placement: "installed",
+    },
+    actor,
+  );
 
   const recipes = [];
   for (const name of ["Guard Recipe Alpha", "Guard Recipe Beta"]) {
@@ -839,6 +860,56 @@ describe("every declared filter field is applied by its repo", () => {
       expect(filtered.ids, `${entity}.${sentinelField}`).toEqual([]);
       expect(filtered.count, `${entity}.${sentinelField}`).toBe(0);
     }
+  });
+});
+
+/**
+ * `COUNT_SOURCES` (repo/dashboard.ts) hand-mirrors each entity's list base
+ * filter so the homepage stat strip, the footer, and `/entities` agree with the
+ * list pages. Its doc comment promises exactly that — and until now nothing
+ * checked it: `grep` for `getEntityCounts` across every test file returned
+ * nothing.
+ *
+ * It is the same "declared X, unapplied X" shape this file already guards, one
+ * layer over: a hand-kept `Record<CountableEntity, …>` whose `satisfies` proves
+ * only that an ENTRY EXISTS, never that its predicate matches the list it
+ * claims to mirror. Driven off `countableEntities`, so a new countable entity
+ * is covered here with no edit.
+ *
+ * The seeded world is shared with the probes above, which is what makes this
+ * non-vacuous: several entities carry rows that the mirrored predicates
+ * deliberately exclude — 108 recipe-pointer Ingredients and installed
+ * InventoryEntry rows in production, and their equivalents here.
+ */
+describe("every countable entity's dashboard count matches its list", () => {
+  const ctx = withTestDb();
+
+  it("counts the same rows the list pages do", async () => {
+    await seedWorld(ctx);
+    const counts = await getEntityCounts(ctx.db);
+
+    const mismatches: string[] = [];
+    for (const entity of countableEntities) {
+      // `cookbook` is countable but declares no filter fields, so it has no
+      // `listFor` probe to compare against. Its count is a plain
+      // `notDeleted(cookbook)` with no list-side predicate to drift from.
+      if (!(entity in GUARDS)) continue;
+      const guard = GUARDS[entity as GuardedEntity];
+      const listed = await guard.list(ctx.db, {});
+      if (counts[entity] !== listed.count) {
+        mismatches.push(
+          `${entity}: dashboard counts ${counts[entity]}, ${entity}List({}) returns ${listed.count}`,
+        );
+      }
+    }
+    expect(mismatches).toEqual([]);
+  });
+
+  it("covers every countable entity that has a list probe", () => {
+    // Fails when a new countable entity arrives without a probe, so the gap is
+    // visible rather than silently skipped by the `continue` above.
+    const uncovered = countableEntities.filter((e) => !(e in GUARDS));
+    expect(uncovered).toEqual(["cookbook"]);
   });
 });
 
