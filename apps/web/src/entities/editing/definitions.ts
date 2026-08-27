@@ -1,10 +1,12 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { isEqual } from "es-toolkit";
 import { householdLocalDate } from "~/lib/household-date";
+import type { EntityEditRegistry } from "./registry";
 import { defineEntityEditRegistry } from "./registry";
 import type {
   EditableEntity,
   EntityEditAccess,
+  EntityEditContext,
   EntityEditDefinition,
   EntityEditField,
   EntityEditIntentDefinition,
@@ -33,99 +35,127 @@ const changed = (
 
 const noIssues = (): readonly EntityEditIssue[] => [];
 
-const field = <E extends EditableEntity>(
+type EditField<E extends EditableEntity> = EntityEditField<
+  E,
+  EntityEditRecord,
+  unknown,
+  object
+>;
+
+type EditIntent<E extends EditableEntity> = EntityEditIntentDefinition<
+  E,
+  EntityEditRecord
+>;
+
+interface FieldOptions<E extends EditableEntity> {
+  required?: boolean;
+  normalize?: (value: unknown) => unknown;
+  access?: EditField<E>["access"];
+  validate?: EditField<E>["validate"];
+}
+
+interface IntentOptions<E extends EditableEntity> {
+  /** Defaults to the entity's semantic field list under the same intent name. */
+  fields?: readonly string[];
+  access?: EditIntent<E>["access"];
+  validate?: EditIntent<E>["validate"];
+  defaults?: EditIntent<E>["defaults"];
+  acceptsSeed?: boolean;
+  buildData?: (
+    patch: Record<string, unknown>,
+    context: EntityEditContext,
+  ) => object;
+}
+
+/** Bare intent names, or names paired with the configuration they need. */
+type IntentDeclaration<E extends EditableEntity> =
+  | readonly string[]
+  | Readonly<Record<string, IntentOptions<E>>>;
+
+/**
+ * What one entity declares. Operation declarations are intentionally uniform:
+ * the registry adds the semantic intent to the command at the execution seam,
+ * so a definition owns only field selection and context-sensitive access.
+ */
+interface EntityEditBody<E extends EditableEntity> {
+  fields: readonly EditField<E>[];
+  create?: IntentDeclaration<E>;
+  update?: IntentDeclaration<E>;
+  delete?: EntityEditAccess;
+}
+
+/**
+ * The authoring handle, already bound to one entity. It is callable for the
+ * ordinary field case and carries the shorthands, so an entity names itself
+ * exactly once — as its key in the registry literal.
+ *
+ * Shorthands may not be called `name`, `length`, or `prototype`: the builder is
+ * a function object, and those own properties are not writable.
+ */
+interface EntityEditBuilder<E extends EditableEntity> {
+  (id: string, options?: FieldOptions<E>): EditField<E>;
+  /** The required, trimmed `name` field shared by every named entity. */
+  trimmedName(): EditField<E>;
+  /** Text that stores `null` rather than an empty string. */
+  nullableText(id: string): EditField<E>;
+  /** Borrow another semantic intent's field list. */
+  fieldsFor(semanticIntent: string): readonly string[];
+}
+
+const builderFor = <E extends EditableEntity>(
   entity: E,
-  id: string,
-  options?: {
-    required?: boolean;
-    normalize?: (value: unknown) => unknown;
-    access?: EntityEditField<
-      EditableEntity,
-      EntityEditRecord,
-      unknown,
-      object
-    >["access"];
-    validate?: EntityEditField<
-      EditableEntity,
-      EntityEditRecord,
-      unknown,
-      object
-    >["validate"];
-  },
-): EntityEditField<E, EntityEditRecord, unknown, object> => ({
-  entity,
-  id,
-  access: options?.access ?? (() => editable),
-  initial: ({ record, context }) => valueFor(record, id) ?? context[id] ?? null,
-  normalize: options?.normalize ?? ((value) => value),
-  validate: (input) => {
-    const { value } = input;
-    if (
-      options?.required &&
-      (value == null || (typeof value === "string" && !value.trim()))
-    ) {
-      return [
-        { field: id, message: "This field is required.", source: "client" },
-      ];
-    }
-    return options?.validate?.(input) ?? noIssues();
-  },
-  toPatch: ({ value, record }) =>
-    changed(record, id, value) ? { [id]: value } : undefined,
-});
-
-const trimmedName = <E extends EditableEntity>(entity: E) =>
-  field(entity, "name", {
-    required: true,
-    normalize: (value) => (typeof value === "string" ? value.trim() : value),
+): EntityEditBuilder<E> => {
+  const makeField = (id: string, options?: FieldOptions<E>): EditField<E> => ({
+    entity,
+    id,
+    access: options?.access ?? (() => editable),
+    initial: ({ record, context }) =>
+      valueFor(record, id) ?? context[id] ?? null,
+    normalize: options?.normalize ?? ((value) => value),
+    validate: (input) => {
+      const { value } = input;
+      if (
+        options?.required &&
+        (value == null || (typeof value === "string" && !value.trim()))
+      ) {
+        return [
+          { field: id, message: "This field is required.", source: "client" },
+        ];
+      }
+      return options?.validate?.(input) ?? noIssues();
+    },
+    toPatch: ({ value, record }) =>
+      changed(record, id, value) ? { [id]: value } : undefined,
   });
 
-const nullableText = <E extends EditableEntity>(entity: E, id: string) =>
-  field(entity, id, {
-    normalize: (value) =>
-      typeof value === "string" ? value.trim() || null : value,
+  return Object.assign(makeField, {
+    trimmedName: () =>
+      makeField("name", {
+        required: true,
+        normalize: (value: unknown) =>
+          typeof value === "string" ? value.trim() : value,
+      }),
+    nullableText: (id: string) =>
+      makeField(id, {
+        normalize: (value: unknown) =>
+          typeof value === "string" ? value.trim() || null : value,
+      }),
+    fieldsFor: (semanticIntent: string) => fieldsFor(entity, semanticIntent),
   });
+};
 
-const intent = <E extends EditableEntity>(
+const makeIntent = <E extends EditableEntity>(
   entity: E,
   operation: EntityEditOperation,
   semanticIntent: string,
-  fields: readonly string[],
-  access: (input: {
-    surface:
-      | "detail"
-      | "create-page"
-      | "quick-create"
-      | "cell"
-      | "preview"
-      | "calendar";
-    record?: EntityEditRecord;
-    context: Readonly<Record<string, unknown>>;
-  }) => EntityEditAccess = () => editable,
-  validate?: EntityEditIntentDefinition<E, EntityEditRecord>["validate"],
-  options?: {
-    defaults?: EntityEditIntentDefinition<E, EntityEditRecord>["defaults"];
-    acceptsSeed?: boolean;
-    buildData?: (
-      patch: Record<string, unknown>,
-      context: Readonly<Record<string, unknown>>,
-    ) => object;
-  },
-) => ({
-  fields,
-  access,
-  validate,
-  defaults: options?.defaults,
-  acceptsSeed: options?.acceptsSeed,
-  build: ({
-    record,
-    patch,
-    context,
-  }: {
-    record?: EntityEditRecord;
-    patch: object;
-    context: Readonly<Record<string, unknown>>;
-  }) => {
+  options: IntentOptions<E>,
+): EditIntent<E> => ({
+  fields: options.fields ?? fieldsFor(entity, semanticIntent),
+  access: options.access ?? (() => editable),
+  validate: options.validate,
+  defaults: options.defaults,
+  acceptsSeed: options.acceptsSeed,
+  build: ({ record, patch, context }) => {
     const keys = Object.keys(patch);
     if (operation !== "create" && !record) {
       return {
@@ -146,7 +176,7 @@ const intent = <E extends EditableEntity>(
         operation,
         intent: semanticIntent,
         ...(record ? { id: record.id } : {}),
-        data: options?.buildData
+        data: options.buildData
           ? options.buildData(patch as Record<string, unknown>, context)
           : patch,
       },
@@ -154,136 +184,88 @@ const intent = <E extends EditableEntity>(
   },
 });
 
-const createIntent = <E extends EditableEntity>(
+/** Declaration order is observable: the first intent is the operation default. */
+const intentEntries = <E extends EditableEntity>(
+  declared: IntentDeclaration<E>,
+): [string, IntentOptions<E>][] => {
+  if (Array.isArray(declared)) {
+    return (declared as readonly string[]).map((name) => [name, {}]);
+  }
+  return Object.entries(declared as Record<string, IntentOptions<E>>);
+};
+
+const operationDefinition = <E extends EditableEntity>(
   entity: E,
-  semanticIntent: string,
-  fields: readonly string[],
-  options: NonNullable<Parameters<typeof intent<E>>[6]>,
-) =>
-  intent(
+  operation: EntityEditOperation,
+  declared: IntentDeclaration<E>,
+) => {
+  const entries = intentEntries(declared);
+  return {
+    defaultIntent: entries[0]![0],
+    intents: Object.fromEntries(
+      entries.map(([name, options]) => [
+        name,
+        makeIntent(entity, operation, name, options),
+      ]),
+    ),
+  };
+};
+
+const buildDefinition = <E extends EditableEntity>(
+  entity: E,
+  build: (f: EntityEditBuilder<E>) => EntityEditBody<E>,
+): EntityEditDefinition<E, EntityEditRecord> => {
+  const body = build(builderFor(entity));
+  return {
     entity,
-    "create",
-    semanticIntent,
-    fields,
-    undefined,
-    undefined,
-    options,
-  );
+    fields: body.fields,
+    operations: {
+      ...(body.create
+        ? { create: operationDefinition(entity, "create", body.create) }
+        : {}),
+      ...(body.update
+        ? { update: operationDefinition(entity, "update", body.update) }
+        : {}),
+      delete: {
+        defaultIntent: "delete",
+        intents: {
+          delete: makeIntent(entity, "delete", "delete", {
+            fields: [],
+            access: () => body.delete ?? editable,
+          }),
+        },
+      },
+    },
+  };
+};
+
+type EntityEditBuilders = {
+  readonly [E in EditableEntity]: (
+    f: EntityEditBuilder<E>,
+  ) => EntityEditBody<E>;
+};
 
 /**
- * Operation declarations are intentionally uniform. The registry adds the
- * semantic intent to the command at the execution seam; definitions own the
- * field selection and any context-sensitive accessibility.
+ * Completeness and per-entity correlation are declaration-site errors: the
+ * mapped parameter demands every editable entity and hands each builder an `f`
+ * bound to its own key, so a definition cannot name a different entity.
  */
-const operations = <E extends EditableEntity>(
-  entity: E,
-  options?: {
-    create?:
-      | readonly string[]
-      | Readonly<Record<string, ReturnType<typeof intent<E>>>>;
-    update?: Readonly<Record<string, ReturnType<typeof intent<E>>>>;
-    delete?: EntityEditAccess;
-  },
-) => ({
-  ...(options?.create
-    ? {
-        create: {
-          defaultIntent: Array.isArray(options.create)
-            ? options.create[0]!
-            : Object.keys(options.create)[0]!,
-          intents: Array.isArray(options.create)
-            ? Object.fromEntries(
-                options.create.map((name) => [
-                  name,
-                  intent(entity, "create", name, fieldsFor(entity, name)),
-                ]),
-              )
-            : options.create,
-        },
-      }
-    : {}),
-  ...(options?.update
-    ? {
-        update: {
-          defaultIntent: Object.keys(options.update)[0]!,
-          intents: options.update,
-        },
-      }
-    : {}),
-  delete: {
-    defaultIntent: "delete",
-    intents: {
-      delete: intent(
+const defineEntityEdits = (builders: EntityEditBuilders): EntityEditRegistry =>
+  defineEntityEditRegistry(
+    Object.fromEntries(
+      Object.entries(builders).map(([entity, build]) => [
         entity,
-        "delete",
-        "delete",
-        [],
-        () => options?.delete ?? editable,
-      ),
-    },
-  },
-});
-
-const definition = <E extends EditableEntity>(
-  entity: E,
-  fields: readonly EntityEditField<E, EntityEditRecord, unknown, object>[],
-  definitionOperations: EntityEditDefinition<E>["operations"],
-): EntityEditDefinition<E> => ({
-  entity,
-  fields,
-  operations: definitionOperations,
-});
-
-const standardUpdate = <E extends EditableEntity>(
-  entity: E,
-  names: readonly string[],
-) =>
-  Object.fromEntries(
-    names.map((name) => [
-      name,
-      intent(entity, "update", name, fieldsFor(entity, name)),
-    ]),
-  ) as Record<string, ReturnType<typeof intent<E>>>;
-
-const projectFields = [
-  trimmedName("project"),
-  nullableText("project", "icon"),
-  field("project", "status"),
-  field("project", "kind"),
-  field("project", "parentProjectId"),
-  field("project", "startDate"),
-  field("project", "endDate"),
-  field("project", "costEstimate"),
-  field("project", "locations"),
-  nullableText("project", "googleDriveFolderUrl"),
-  nullableText("project", "notionPageUrl"),
-  field("project", "blockedByIds"),
-  nullableText("project", "notes"),
-] as const;
-
-const taskFields = [
-  trimmedName("task"),
-  field("task", "status"),
-  field("task", "projectId"),
-  field("task", "subjectProductId"),
-  field("task", "trade"),
-  field("task", "dueDate"),
-  field("task", "dueEndDate", {
-    validate: ({ value, values }) =>
-      typeof value === "string" &&
-      typeof values.dueDate === "string" &&
-      value < values.dueDate
-        ? [
-            {
-              field: "dueEndDate",
-              message: "End date must be on or after the due date.",
-              source: "client",
-            },
-          ]
-        : noIssues(),
-  }),
-  nullableText("task", "notes"),
-] as const;
+        // `Object.entries` erases the key/value correlation the mapped type
+        // above enforces; this is the only place it has to be re-asserted.
+        buildDefinition(
+          entity as EditableEntity,
+          build as (
+            f: EntityEditBuilder<EditableEntity>,
+          ) => EntityEditBody<EditableEntity>,
+        ),
+      ]),
+    ) as EntityEditRegistry,
+  );
 
 const requiredDate =
   (
@@ -301,37 +283,6 @@ const requiredDate =
             source: "client",
           },
         ];
-
-const expenseFields = [
-  trimmedName("expense"),
-  field("expense", "lineKind"),
-  field("expense", "cost"),
-  field("expense", "date"),
-  field("expense", "future"),
-  field("expense", "projectId"),
-  field("expense", "productId"),
-  field("expense", "productQuantity"),
-  field("expense", "vendor"),
-  field("expense", "orderId"),
-  field("expense", "trade"),
-  field("expense", "costType"),
-  nullableText("expense", "url"),
-  nullableText("expense", "notes"),
-] as const;
-
-const financialAccountFields = [
-  trimmedName("financialAccount"),
-  field("financialAccount", "kind"),
-  field("financialAccount", "issuer"),
-  field("financialAccount", "network"),
-  field("financialAccount", "institution"),
-  field("financialAccount", "accountType"),
-  field("financialAccount", "provider"),
-  field("financialAccount", "last4"),
-  field("financialAccount", "provisional"),
-  field("financialAccount", "sourceAliases"),
-  nullableText("financialAccount", "notes"),
-] as const;
 
 const normalizeSourceAliases = (value: unknown) =>
   Array.isArray(value)
@@ -384,6 +335,15 @@ const financialAccountIdentity = (patch: Record<string, unknown>) => {
   }
   return { kind: "cash" };
 };
+
+/** Creates flatten the identity discriminant; updates patch it in place. */
+const financialAccountCreateData = (patch: Record<string, unknown>) => ({
+  name: patch.name,
+  provisional: patch.provisional,
+  identity: financialAccountIdentity(patch),
+  sourceAliases: normalizeSourceAliases(patch.sourceAliases),
+  notes: patch.notes,
+});
 
 const normalizedNullableTextPatch = (
   patch: Record<string, unknown>,
@@ -664,413 +624,346 @@ const fieldsFor = (entity: EditableEntity, semanticIntent: string) =>
  * These are field fragments and commands, not form components: desktop pages,
  * dialogs, calendar sheets, and cells stay adapters at their own seams.
  */
-export const entityEditRegistry = defineEntityEditRegistry({
-  product: definition(
-    "product",
-    [
-      trimmedName("product"),
-      field("product", "aliases"),
-      field("product", "manufacturer", { required: true }),
-      field("product", "model"),
-      field("product", "category"),
-      field("product", "ingredientId"),
-      field("product", "upc"),
-      field("product", "fdc_id"),
-      field("product", "price"),
-      field("product", "stockTracked"),
-      field("product", "unitMappings"),
-      nullableText("product", "notes"),
+export const entityEditRegistry = defineEntityEdits({
+  product: (f) => ({
+    fields: [
+      f.trimmedName(),
+      f("aliases"),
+      f("manufacturer", { required: true }),
+      f("model"),
+      f("category"),
+      f("ingredientId"),
+      f("upc"),
+      f("fdc_id"),
+      f("price"),
+      f("stockTracked"),
+      f("unitMappings"),
+      f.nullableText("notes"),
     ],
-    operations("product", {
-      create: ["capture", "full"],
-      update: standardUpdate("product", ["full", "identity", "price", "stock"]),
-    }),
-  ),
-  ingredient: definition(
-    "ingredient",
-    [
-      trimmedName("ingredient"),
-      field("ingredient", "aliases"),
-      field("ingredient", "naKinds"),
+    create: ["capture", "full"],
+    update: ["full", "identity", "price", "stock"],
+  }),
+  ingredient: (f) => ({
+    fields: [f.trimmedName(), f("aliases"), f("naKinds")],
+    create: ["capture", "full"],
+    update: ["full", "identity"],
+  }),
+  inventory: (f) => ({
+    fields: [f("amount"), f("productId"), f("locationId"), f("placement")],
+    create: ["capture", "full"],
+    update: ["full", "amount", "product", "location", "placement"],
+  }),
+  location: (f) => ({
+    fields: [
+      f.trimmedName(),
+      f("aliases"),
+      f("type"),
+      f("productId"),
+      f("parentId"),
     ],
-    operations("ingredient", {
-      create: ["capture", "full"],
-      update: standardUpdate("ingredient", ["full", "identity"]),
-    }),
-  ),
-  inventory: definition(
-    "inventory",
-    [
-      field("inventory", "amount"),
-      field("inventory", "productId"),
-      field("inventory", "locationId"),
-      field("inventory", "placement"),
+    create: ["capture", "full"],
+    update: ["full", "identity", "parent"],
+  }),
+  recipe: (f) => ({
+    fields: [
+      f.trimmedName(),
+      f("cookbookId"),
+      f("tags"),
+      f.nullableText("notes"),
+      f("sections"),
     ],
-    operations("inventory", {
-      create: ["capture", "full"],
-      update: standardUpdate("inventory", [
-        "full",
-        "amount",
-        "product",
-        "location",
-        "placement",
-      ]),
-    }),
-  ),
-  location: definition(
-    "location",
-    [
-      trimmedName("location"),
-      field("location", "aliases"),
-      field("location", "type"),
-      field("location", "productId"),
-      field("location", "parentId"),
+    create: ["capture", "full"],
+    update: ["full", "identity"],
+  }),
+  meal: (f) => ({
+    fields: [
+      f("date", { required: true }),
+      f.nullableText("name"),
+      f("mealType"),
+      f("mealKind"),
+      f("sortOrder"),
     ],
-    operations("location", {
-      create: ["capture", "full"],
-      update: standardUpdate("location", ["full", "identity", "parent"]),
-    }),
-  ),
-  recipe: definition(
-    "recipe",
-    [
-      trimmedName("recipe"),
-      field("recipe", "cookbookId"),
-      field("recipe", "tags"),
-      nullableText("recipe", "notes"),
-      field("recipe", "sections"),
-    ],
-    operations("recipe", {
-      create: ["capture", "full"],
-      update: standardUpdate("recipe", ["full", "identity"]),
-    }),
-  ),
-  meal: definition(
-    "meal",
-    [
-      field("meal", "date", { required: true }),
-      nullableText("meal", "name"),
-      field("meal", "mealType"),
-      field("meal", "mealKind"),
-      field("meal", "sortOrder"),
-    ],
-    operations("meal", {
-      create: {
-        capture: createIntent("meal", "capture", fieldsFor("meal", "capture"), {
-          defaults: () => ({
-            date: householdLocalDate(),
-            name: null,
-            mealType: null,
-            mealKind: "cooked",
-          }),
-        }),
-        full: createIntent("meal", "full", fieldsFor("meal", "full"), {
-          defaults: {
-            date: null,
-            name: null,
-            mealType: null,
-            mealKind: "cooked",
-            sortOrder: null,
-          },
+    create: {
+      capture: {
+        defaults: () => ({
+          date: householdLocalDate(),
+          name: null,
+          mealType: null,
+          mealKind: "cooked",
         }),
       },
-      update: standardUpdate("meal", ["full", "calendar"]),
-    }),
-  ),
-  project: definition(
-    "project",
-    projectFields,
-    operations("project", {
-      create: {
-        capture: createIntent(
-          "project",
-          "capture",
-          fieldsFor("project", "capture"),
-          {
-            defaults: {
-              name: "",
-              status: "planning",
-              kind: null,
-              costEstimate: null,
-              parentProjectId: null,
-              startDate: null,
-            },
-          },
-        ),
-        full: createIntent("project", "full", fieldsFor("project", "full"), {
-          defaults: { status: "planning", kind: null },
+      full: {
+        defaults: {
+          date: null,
+          name: null,
+          mealType: null,
+          mealKind: "cooked",
+          sortOrder: null,
+        },
+      },
+    },
+    update: ["full", "calendar"],
+  }),
+  project: (f) => ({
+    fields: [
+      f.trimmedName(),
+      f.nullableText("icon"),
+      f("status"),
+      f("kind"),
+      f("parentProjectId"),
+      f("startDate"),
+      f("endDate"),
+      f("costEstimate"),
+      f("locations"),
+      f.nullableText("googleDriveFolderUrl"),
+      f.nullableText("notionPageUrl"),
+      f("blockedByIds"),
+      f.nullableText("notes"),
+    ],
+    create: {
+      capture: {
+        defaults: {
+          name: "",
+          status: "planning",
+          kind: null,
+          costEstimate: null,
+          parentProjectId: null,
+          startDate: null,
+        },
+      },
+      full: { defaults: { status: "planning", kind: null } },
+    },
+    update: ["full", "status", "kind", "dates", "parent"],
+  }),
+  task: (f) => ({
+    fields: [
+      f.trimmedName(),
+      f("status"),
+      f("projectId"),
+      f("subjectProductId"),
+      f("trade"),
+      f("dueDate"),
+      f("dueEndDate", {
+        validate: ({ value, values }) =>
+          typeof value === "string" &&
+          typeof values.dueDate === "string" &&
+          value < values.dueDate
+            ? [
+                {
+                  field: "dueEndDate",
+                  message: "End date must be on or after the due date.",
+                  source: "client",
+                },
+              ]
+            : noIssues(),
+      }),
+      f.nullableText("notes"),
+    ],
+    create: {
+      capture: {
+        defaults: {
+          name: "",
+          status: "not_started",
+          projectId: null,
+          subjectProductId: null,
+          trade: null,
+          dueDate: null,
+        },
+        buildData: (patch) => ({
+          ...patch,
+          projectId: patch.projectId
+            ? parseShortcodeFor("project", patch.projectId)
+            : null,
+          subjectProductId: patch.subjectProductId
+            ? parseShortcodeFor("product", patch.subjectProductId)
+            : null,
+          trade: patch.trade ?? "other",
+          dueEndDate: null,
         }),
       },
-      update: standardUpdate("project", [
-        "full",
-        "status",
-        "kind",
-        "dates",
-        "parent",
-      ]),
-    }),
-  ),
-  task: definition(
-    "task",
-    taskFields,
-    operations("task", {
-      create: {
-        capture: createIntent("task", "capture", fieldsFor("task", "capture"), {
-          defaults: {
-            name: "",
-            status: "not_started",
-            projectId: null,
-            subjectProductId: null,
-            trade: null,
-            dueDate: null,
-          },
-          buildData: (patch) => ({
-            ...patch,
-            projectId: patch.projectId
-              ? parseShortcodeFor("project", patch.projectId)
+      full: { defaults: { status: "not_started" } },
+    },
+    update: {
+      full: {},
+      status: {},
+      project: {},
+      subject: {},
+      schedule: { validate: requiredDate("dueDate") },
+    },
+  }),
+  expense: (f) => ({
+    fields: [
+      f.trimmedName(),
+      f("lineKind"),
+      f("cost"),
+      f("date"),
+      f("future"),
+      f("projectId"),
+      f("productId"),
+      f("productQuantity"),
+      f("vendor"),
+      f("orderId"),
+      f("trade"),
+      f("costType"),
+      f.nullableText("url"),
+      f.nullableText("notes"),
+      f("lineBasis"),
+    ],
+    create: {
+      capture: {
+        defaults: (context) => ({
+          name: "",
+          lineKind: "auto",
+          cost: null,
+          date: householdLocalDate(),
+          future: false,
+          projectId: null,
+          productId: null,
+          productQuantity: null,
+          vendor: "",
+          orderId: "",
+          costType: context.disposition ? "tools" : "materials",
+          trade: "other",
+        }),
+        buildData: (patch) => ({
+          ...patch,
+          lineKind: patch.lineKind === "auto" ? undefined : patch.lineKind,
+          projectId: patch.projectId
+            ? parseShortcodeFor("project", patch.projectId)
+            : null,
+          productId: patch.productId ?? null,
+          productQuantity: patch.productId
+            ? (patch.productQuantity ?? null)
+            : null,
+          vendor:
+            typeof patch.vendor === "string"
+              ? patch.vendor.trim() || null
               : null,
-            subjectProductId: patch.subjectProductId
-              ? parseShortcodeFor("product", patch.subjectProductId)
+          orderId:
+            typeof patch.orderId === "string"
+              ? patch.orderId.trim() || null
               : null,
-            trade: patch.trade ?? "other",
-            dueEndDate: null,
-          }),
-        }),
-        full: createIntent("task", "full", fieldsFor("task", "full"), {
-          defaults: { status: "not_started" },
+          url: null,
+          notes: null,
         }),
       },
-      update: {
-        ...standardUpdate("task", ["full", "status", "project", "subject"]),
-        schedule: intent(
-          "task",
-          "update",
-          "schedule",
-          fieldsFor("task", "schedule"),
-          undefined,
-          requiredDate("dueDate"),
-        ),
+      full: { defaults: { future: false } },
+    },
+    update: {
+      full: {},
+      cost: {},
+      date: {},
+      project: {},
+      product: {},
+      planned: {
+        access: ({ surface, record }) =>
+          surface === "calendar" && valueFor(record, "future") !== true
+            ? readOnly("Recorded expenses stay read-only in the calendar.")
+            : editable,
+        validate: requiredDate("date"),
       },
-    }),
-  ),
-  expense: definition(
-    "expense",
-    [...expenseFields, field("expense", "lineBasis")],
-    operations("expense", {
-      create: {
-        capture: createIntent(
-          "expense",
-          "capture",
-          fieldsFor("expense", "capture"),
-          {
-            defaults: (context) => ({
-              name: "",
-              lineKind: "auto",
-              cost: null,
-              date: householdLocalDate(),
-              future: false,
-              projectId: null,
-              productId: null,
-              productQuantity: null,
-              vendor: "",
-              orderId: "",
-              costType: context.disposition ? "tools" : "materials",
-              trade: "other",
-            }),
-            buildData: (patch) => ({
-              ...patch,
-              lineKind: patch.lineKind === "auto" ? undefined : patch.lineKind,
-              projectId: patch.projectId
-                ? parseShortcodeFor("project", patch.projectId)
-                : null,
-              productId: patch.productId ?? null,
-              productQuantity: patch.productId
-                ? (patch.productQuantity ?? null)
-                : null,
-              vendor:
-                typeof patch.vendor === "string"
-                  ? patch.vendor.trim() || null
-                  : null,
-              orderId:
-                typeof patch.orderId === "string"
-                  ? patch.orderId.trim() || null
-                  : null,
-              url: null,
-              notes: null,
-            }),
-          },
-        ),
-        full: createIntent("expense", "full", fieldsFor("expense", "full"), {
-          defaults: { future: false },
-        }),
-      },
-      update: {
-        ...standardUpdate("expense", [
-          "full",
-          "cost",
-          "date",
-          "project",
-          "product",
-        ]),
-        planned: intent(
-          "expense",
-          "update",
-          "planned",
-          fieldsFor("expense", "planned"),
-          ({ surface, record }) =>
-            surface === "calendar" && valueFor(record, "future") !== true
-              ? readOnly("Recorded expenses stay read-only in the calendar.")
-              : editable,
-          requiredDate("date"),
-        ),
-      },
-    }),
-  ),
-  vendor: definition(
-    "vendor",
-    [
-      trimmedName("vendor"),
-      nullableText("vendor", "website"),
-      nullableText("vendor", "orderUrlTemplate"),
-      nullableText("vendor", "notes"),
+    },
+  }),
+  vendor: (f) => ({
+    fields: [
+      f.trimmedName(),
+      f.nullableText("website"),
+      f.nullableText("orderUrlTemplate"),
+      f.nullableText("notes"),
     ],
-    operations("vendor", {
-      create: {
-        capture: createIntent(
-          "vendor",
-          "capture",
-          fieldsFor("vendor", "capture"),
-          { defaults: { name: "", website: null, notes: null } },
-        ),
-        full: createIntent("vendor", "full", fieldsFor("vendor", "full"), {
-          defaults: { name: "", website: null, notes: null },
-        }),
-      },
-      update: standardUpdate("vendor", ["full", "identity"]),
-    }),
-  ),
-  purchase: definition(
-    "purchase",
-    [
-      field("purchase", "vendorId", { required: true }),
-      field("purchase", "date", { required: true }),
-      nullableText("purchase", "orderId"),
-      nullableText("purchase", "displayLabel"),
-      field("purchase", "statedTotal"),
-      nullableText("purchase", "notes"),
+    create: {
+      capture: { defaults: { name: "", website: null, notes: null } },
+      full: { defaults: { name: "", website: null, notes: null } },
+    },
+    update: ["full", "identity"],
+  }),
+  purchase: (f) => ({
+    fields: [
+      f("vendorId", { required: true }),
+      f("date", { required: true }),
+      f.nullableText("orderId"),
+      f.nullableText("displayLabel"),
+      f("statedTotal"),
+      f.nullableText("notes"),
     ],
-    operations("purchase", {
-      create: {
-        capture: createIntent(
-          "purchase",
-          "capture",
-          fieldsFor("purchase", "capture"),
-          {
-            defaults: () => ({
-              vendorId: "",
-              orderId: "",
-              displayLabel: "",
-              date: householdLocalDate(),
-              statedTotal: null,
-              notes: "",
-            }),
-            buildData: (patch) => ({
-              ...patch,
-              vendorId: parseShortcodeFor("vendor", patch.vendorId),
-            }),
-          },
-        ),
-        full: createIntent("purchase", "full", fieldsFor("purchase", "full"), {
-          defaults: { statedTotal: null },
+    create: {
+      capture: {
+        defaults: () => ({
+          vendorId: "",
+          orderId: "",
+          displayLabel: "",
+          date: householdLocalDate(),
+          statedTotal: null,
+          notes: "",
+        }),
+        buildData: (patch) => ({
+          ...patch,
+          vendorId: parseShortcodeFor("vendor", patch.vendorId),
         }),
       },
-      update: standardUpdate("purchase", ["full", "vendor", "identity"]),
-    }),
-  ),
-  financialAccount: definition(
-    "financialAccount",
-    financialAccountFields,
-    operations("financialAccount", {
-      create: {
-        capture: createIntent(
-          "financialAccount",
-          "capture",
-          fieldsFor("financialAccount", "capture"),
-          {
-            defaults: {
-              name: "",
-              kind: "credit_card",
-              issuer: "",
-              network: "",
-              institution: "",
-              accountType: "checking",
-              provider: "",
-              last4: "",
-              provisional: false,
-              sourceAliases: [],
-              notes: null,
-            },
-            buildData: (patch) => ({
-              name: patch.name,
-              provisional: patch.provisional,
-              identity: financialAccountIdentity(patch),
-              sourceAliases: normalizeSourceAliases(patch.sourceAliases),
-              notes: patch.notes,
-            }),
-          },
-        ),
-        full: createIntent(
-          "financialAccount",
-          "full",
-          fieldsFor("financialAccount", "capture"),
-          {
-            defaults: { provisional: false, sourceAliases: [], notes: null },
-            buildData: (patch) => ({
-              name: patch.name,
-              provisional: patch.provisional,
-              identity: financialAccountIdentity(patch),
-              sourceAliases: normalizeSourceAliases(patch.sourceAliases),
-              notes: patch.notes,
-            }),
-          },
-        ),
+      full: { defaults: { statedTotal: null } },
+    },
+    update: ["full", "vendor", "identity"],
+  }),
+  financialAccount: (f) => ({
+    fields: [
+      f.trimmedName(),
+      f("kind"),
+      f("issuer"),
+      f("network"),
+      f("institution"),
+      f("accountType"),
+      f("provider"),
+      f("last4"),
+      f("provisional"),
+      f("sourceAliases"),
+      f.nullableText("notes"),
+    ],
+    create: {
+      capture: {
+        defaults: {
+          name: "",
+          kind: "credit_card",
+          issuer: "",
+          network: "",
+          institution: "",
+          accountType: "checking",
+          provider: "",
+          last4: "",
+          provisional: false,
+          sourceAliases: [],
+          notes: null,
+        },
+        buildData: financialAccountCreateData,
       },
-      update: {
-        full: intent(
-          "financialAccount",
-          "update",
-          "full",
-          fieldsFor("financialAccount", "full"),
-          undefined,
-          undefined,
-          {
-            acceptsSeed: true,
-            buildData: (patch) =>
-              "sourceAliases" in patch
-                ? {
-                    ...patch,
-                    sourceAliases: normalizeSourceAliases(patch.sourceAliases),
-                  }
-                : patch,
-          },
-        ),
-        identity: intent(
-          "financialAccount",
-          "update",
-          "identity",
-          fieldsFor("financialAccount", "identity"),
-        ),
+      full: {
+        // The full create still collects the whole identity discriminant.
+        fields: f.fieldsFor("capture"),
+        defaults: { provisional: false, sourceAliases: [], notes: null },
+        buildData: financialAccountCreateData,
       },
-    }),
-  ),
-  financialTransaction: definition(
-    "financialTransaction",
-    [
-      field("financialTransaction", "accountId", { required: true }),
-      field("financialTransaction", "purchaseId"),
-      field("financialTransaction", "kind"),
-      field("financialTransaction", "status"),
-      field("financialTransaction", "amount", {
+    },
+    update: {
+      full: {
+        acceptsSeed: true,
+        buildData: (patch) =>
+          "sourceAliases" in patch
+            ? {
+                ...patch,
+                sourceAliases: normalizeSourceAliases(patch.sourceAliases),
+              }
+            : patch,
+      },
+      identity: {},
+    },
+  }),
+  financialTransaction: (f) => ({
+    fields: [
+      f("accountId", { required: true }),
+      f("purchaseId"),
+      f("kind"),
+      f("status"),
+      f("amount", {
         validate: ({ value }) =>
           typeof value === "number" && Number.isFinite(value) && value !== 0
             ? noIssues()
@@ -1082,8 +975,8 @@ export const entityEditRegistry = defineEntityEditRegistry({
                 },
               ],
       }),
-      field("financialTransaction", "transactionDate"),
-      field("financialTransaction", "postedDate", {
+      f("transactionDate"),
+      f("postedDate", {
         validate: ({ value, values }) =>
           values.status === "posted" && !value
             ? [
@@ -1095,97 +988,59 @@ export const entityEditRegistry = defineEntityEditRegistry({
               ]
             : noIssues(),
       }),
-      nullableText("financialTransaction", "merchant"),
-      nullableText("financialTransaction", "rawDescription"),
-      nullableText("financialTransaction", "sourceCategory"),
-      field("financialTransaction", "sourceRefs"),
-      nullableText("financialTransaction", "notes"),
+      f.nullableText("merchant"),
+      f.nullableText("rawDescription"),
+      f.nullableText("sourceCategory"),
+      f("sourceRefs"),
+      f.nullableText("notes"),
     ],
-    operations("financialTransaction", {
-      create: {
-        capture: createIntent(
-          "financialTransaction",
-          "capture",
-          fieldsFor("financialTransaction", "capture"),
-          {
-            defaults: {
-              accountId: "",
-              purchaseId: "",
-              kind: "purchase",
-              status: "pending",
-              amount: 0,
-              transactionDate: "",
-              postedDate: "",
-              merchant: "",
-              rawDescription: "",
-              sourceCategory: "",
-              sourceRefs: [],
-              notes: "",
-            },
-            buildData: normalizeFinancialTransaction,
-          },
-        ),
-        full: createIntent(
-          "financialTransaction",
-          "full",
-          fieldsFor("financialTransaction", "full"),
-          {
-            defaults: { sourceRefs: [] },
-            buildData: normalizeFinancialTransaction,
-          },
-        ),
+    create: {
+      capture: {
+        defaults: {
+          accountId: "",
+          purchaseId: "",
+          kind: "purchase",
+          status: "pending",
+          amount: 0,
+          transactionDate: "",
+          postedDate: "",
+          merchant: "",
+          rawDescription: "",
+          sourceCategory: "",
+          sourceRefs: [],
+          notes: "",
+        },
+        buildData: normalizeFinancialTransaction,
       },
-      update: {
-        full: intent(
-          "financialTransaction",
-          "update",
-          "full",
-          fieldsFor("financialTransaction", "full"),
-          undefined,
-          undefined,
-          {
-            acceptsSeed: true,
-            buildData: normalizeFinancialTransaction,
-          },
-        ),
-        settlement: intent(
-          "financialTransaction",
-          "update",
-          "settlement",
-          fieldsFor("financialTransaction", "settlement"),
-        ),
+      full: {
+        defaults: { sourceRefs: [] },
+        buildData: normalizeFinancialTransaction,
       },
-    }),
-  ),
-  wish: definition(
-    "wish",
-    [
-      trimmedName("wish"),
-      nullableText("wish", "notes"),
-      field("wish", "candidateProductIds"),
-      field("wish", "acquired"),
+    },
+    update: {
+      full: { acceptsSeed: true, buildData: normalizeFinancialTransaction },
+      settlement: {},
+    },
+  }),
+  wish: (f) => ({
+    fields: [
+      f.trimmedName(),
+      f.nullableText("notes"),
+      f("candidateProductIds"),
+      f("acquired"),
     ],
-    operations("wish", {
-      create: {
-        capture: createIntent("wish", "capture", fieldsFor("wish", "full"), {
-          defaults: { name: "", notes: null, candidateProductIds: [] },
-        }),
-        full: createIntent("wish", "full", fieldsFor("wish", "full"), {
-          defaults: { name: "", notes: null, candidateProductIds: [] },
-        }),
+    create: {
+      // Capture is the full form here: a wish has nothing worth deferring.
+      capture: {
+        fields: f.fieldsFor("full"),
+        defaults: { name: "", notes: null, candidateProductIds: [] },
       },
-      update: {
-        full: intent(
-          "wish",
-          "update",
-          "full",
-          fieldsFor("wish", "full"),
-          undefined,
-          undefined,
-          { acceptsSeed: true },
-        ),
-        ...standardUpdate("wish", ["identity", "acquisition"]),
-      },
-    }),
-  ),
+      full: { defaults: { name: "", notes: null, candidateProductIds: [] } },
+    },
+    update: {
+      full: { acceptsSeed: true },
+      identity: {},
+      acquisition: {},
+    },
+  }),
 });
