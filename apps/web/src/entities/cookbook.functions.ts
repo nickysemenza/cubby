@@ -1,3 +1,4 @@
+import { cookbookShortcode } from "@cubby/schemas/identifiers";
 import { cookbookSummariesOut } from "@cubby/schemas/import-recipe";
 import { cookbookSummary } from "@cubby/schemas/recipe";
 import { z } from "zod";
@@ -18,7 +19,7 @@ export const cookbook = defineOperationDomain("cookbook", {
     },
   }),
   detail: query({
-    input: z.object({ shortcode: z.string() }),
+    input: z.object({ shortcode: cookbookShortcode }),
     output: cookbookSummary.nullable(),
     tags: [["cookbook"]],
   }),
