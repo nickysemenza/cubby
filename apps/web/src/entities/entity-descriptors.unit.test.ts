@@ -1,14 +1,28 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import type { OperationQueryKey } from "~/integrations/tanstack-query/operation-catalog";
 import {
+  type EntityDetailScoped,
+  entityDetailFor,
   entityDetailQueryKey,
   entityDetailQueryOptions,
   entityDetailRootKey,
 } from "./entity-detail.functions";
 import {
+  type EntityListScoped,
   entityInfiniteListQueryOptions,
+  entityListFor,
   entityListQueryOptions,
   entityListRootKey,
 } from "./entity-list.functions";
+import type {
+  DetailEntity,
+  EntityDetailByEntity,
+  EntityDetailInputByEntity,
+} from "./generated/entity-details.gen";
+import type {
+  EntityListResultByEntity,
+  ListEntity,
+} from "./generated/entity-lists.gen";
 
 /**
  * Query keys are the persisted-cache and SSR-hydration contract: a changed key
@@ -165,6 +179,13 @@ const LIST_POLICY = {
   refetchOnReconnect: true,
 } as const;
 
+/** The row type a set of query options resolves to. */
+type QueryData<Options> = Options extends { queryFn?: infer Fn }
+  ? Fn extends (...args: never[]) => infer Result
+    ? Awaited<Result>
+    : never
+  : never;
+
 const withoutFunctions = (options: object) => {
   const {
     queryFn: _queryFn,
@@ -303,5 +324,72 @@ describe("entity list query keys", () => {
         entityInfiniteListQueryOptions("product", PRODUCT_LIST_INPUT),
       ),
     ).toEqual({ ...LIST_POLICY, initialPageParam: 0 });
+  });
+});
+
+describe("scoped entity descriptors", () => {
+  it("produces the same detail keys as the helpers they replace", () => {
+    expect(entityDetailFor("product").queryKey("p-4k7m")).toEqual(
+      KEYS.detailCanonical,
+    );
+    expect(entityDetailFor("location").queryKey("L-4K7M")).toEqual(
+      KEYS.detailAlias,
+    );
+    expect(
+      entityDetailFor("product").queryOptions("", { enabled: false }).queryKey,
+    ).toEqual(KEYS.detailDisabled);
+    expect(
+      entityDetailFor("ingredient").queryOptions("ING-2222", { enabled: false })
+        .queryKey,
+    ).toEqual(KEYS.detailPlaceholder);
+    expect(
+      withoutFunctions(entityDetailFor("product").queryOptions("PRD-4K7M")),
+    ).toEqual(DETAIL_POLICY.persisted);
+  });
+
+  it("produces the same list keys as the helpers they replace", () => {
+    const products = entityListFor("product");
+    expect(products.queryKey(PRODUCT_LIST_INPUT)).toEqual(KEYS.list);
+    expect(products.queryOptions(PRODUCT_LIST_INPUT).queryKey).toEqual(
+      KEYS.list,
+    );
+    expect(products.queryKey({ filters: {} })).toEqual(KEYS.listSparse);
+    expect(
+      products.queryOptions({ ...PRODUCT_LIST_INPUT, sort: [] }).queryKey,
+    ).toEqual(KEYS.listUnparseable);
+    expect(
+      products.infiniteQueryOptions({
+        ...PRODUCT_LIST_INPUT,
+        pagination: { pageIndex: 3, pageSize: 25 },
+      }).queryKey,
+    ).toEqual(KEYS.listInfinite);
+    expect(withoutFunctions(products.queryOptions(PRODUCT_LIST_INPUT))).toEqual(
+      LIST_POLICY,
+    );
+  });
+
+  it("rejects an entity the operation is not registered for", () => {
+    expect(() =>
+      entityDetailFor("not-an-entity" as unknown as DetailEntity),
+    ).toThrow();
+    expect(() =>
+      entityListFor("not-an-entity" as unknown as ListEntity),
+    ).toThrow();
+  });
+
+  it("infers input and output per entity, not across the union", () => {
+    expectTypeOf(entityDetailFor("product").queryKey("PRD-4K7M")).toEqualTypeOf<
+      OperationQueryKey<EntityDetailInputByEntity["product"]>
+    >();
+    expectTypeOf<
+      QueryData<ReturnType<EntityDetailScoped<"product">["queryOptions"]>>
+    >().toEqualTypeOf<EntityDetailByEntity["product"] | null>();
+    expectTypeOf<
+      QueryData<ReturnType<EntityListScoped<"recipe">["queryOptions"]>>
+    >().toEqualTypeOf<EntityListResultByEntity["recipe"]>();
+    entityListFor("recipe").queryOptions({
+      // @ts-expect-error a product-only filter does not belong to recipe
+      filters: { manufacturerExact: "Milwaukee" },
+    });
   });
 });
