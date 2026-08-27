@@ -292,6 +292,34 @@ export async function executeEntity(
       } as const;
     }
 
+    case "bulkUpdate": {
+      const binding = bindingFor(command.entity);
+      const bulkUpdate = binding.repository.bulkUpdate;
+      if (!bulkUpdate) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          `${ENTITY_LABEL[binding.entity]} does not support bulk update`,
+        );
+      }
+      const ids = command.ids.map((id) => binding.schemas.id.parse(id));
+      // `data` arrived through the entity's declared bulk-updatable field mask,
+      // so the repository owns the transaction and the N-entity side-effect
+      // fan-out — the kernel only forwards the batches it reports.
+      const {
+        updated,
+        detachedImageKeys = [],
+        backgroundBatches = [],
+      } = await bulkUpdate(ctx, ids, command.data);
+      await deleteStoredObjects(detachedImageKeys);
+      return {
+        action: command.action,
+        entity: command.entity,
+        updated,
+        updatedIds: command.ids,
+        sideEffects: { backgroundBatches },
+      } as const;
+    }
+
     case "merge": {
       const binding = bindingFor(command.entity);
       const merge = binding.merge;

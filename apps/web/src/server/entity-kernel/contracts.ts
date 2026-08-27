@@ -10,6 +10,7 @@ import {
 } from "@cubby/schemas/search";
 import { z } from "zod";
 import {
+  generatedEntityBulkUpdateCommandSchema,
   generatedEntityCreateCommandSchema,
   generatedEntityMutationCreateResultSchema,
   generatedEntityMutationUpdateResultSchema,
@@ -142,6 +143,15 @@ const deleteCommandSchema = z.object({
   entity: entityKernelEntitySchema,
   ids: uniqueEntityIdsSchema,
 });
+/**
+ * Bulk field patch over the same id bound bulk delete uses. `data` is the
+ * entity's own update schema narrowed to the fields its literal spec declares
+ * under `capabilities.bulkUpdate`, so an undeclared field is refused here
+ * rather than in a repository.
+ */
+const bulkUpdateCommandSchema = generatedEntityBulkUpdateCommandSchema(
+  uniqueEntityIdsSchema,
+);
 
 /** Strictly serializable commands exposed by the generic browser transport. */
 export const entityBrowserMutationCommandSchema = z.union([
@@ -149,6 +159,7 @@ export const entityBrowserMutationCommandSchema = z.union([
   generatedEntityUpdateCommandSchema,
   imageUpdateCommandSchema,
   deleteCommandSchema,
+  bulkUpdateCommandSchema,
   attachCommandSchema,
   detachCommandSchema,
 ]);
@@ -224,6 +235,13 @@ const deleteResultSchema = z.object({
   ),
   sideEffects: mutationSideEffectsSchema,
 });
+const bulkUpdateResultSchema = z.object({
+  action: z.literal("bulkUpdate"),
+  entity: entityKernelEntitySchema,
+  updated: z.number().int().nonnegative(),
+  updatedIds: z.array(z.string().min(1)),
+  sideEffects: mutationSideEffectsSchema,
+});
 const relationMutationResultSchema = z.object({
   action: z.enum(["attach", "detach"]),
   entity: z.enum(["product", "project", "purchase"]),
@@ -237,6 +255,7 @@ export const entityBrowserMutationResultSchema = z.union([
   generatedEntityMutationUpdateResultSchema,
   imageUpdateResultSchema,
   deleteResultSchema,
+  bulkUpdateResultSchema,
   relationMutationResultSchema,
 ]);
 

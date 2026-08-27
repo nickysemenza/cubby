@@ -17,6 +17,7 @@ export default literalEntity({
     countable: false,
     softDelete: false,
     delete: null,
+    bulkUpdate: null,
     merge: false,
     mcp: ["get", "list"],
   },

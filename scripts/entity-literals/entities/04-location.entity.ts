@@ -224,6 +224,7 @@ export default literalEntity({
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },
+    bulkUpdate: { fields: ["parentId"] },
     merge: false,
     mcp: ["get", "list", "create", "update", "delete"],
   },

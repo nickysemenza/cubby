@@ -74,6 +74,8 @@ export type EntityLiteral = Readonly<{
   filterUrlKeys: readonly string[];
   filterSchema: SourceRef | null;
   filterDescriptors: readonly FilterDescriptor[];
+  /** Fields a `bulkUpdate` command may patch; null means the capability is undeclared. */
+  bulkUpdateFields: readonly string[] | null;
   ports: EntityPorts;
 }>;
 
@@ -353,7 +355,7 @@ const legacyShape = (raw: LiteralObject, context: string): LiteralObject => {
   const search = objectValue(required(raw, "search", context), `${context}.search`);
   exactKeys(search, ["enabled"], `${context}.search`);
   const capabilities = objectValue(required(raw, "capabilities", context), `${context}.capabilities`);
-  exactKeys(capabilities, ["auditable", "images", "countable", "softDelete", "delete", "merge", "mcp"], `${context}.capabilities`);
+  exactKeys(capabilities, ["auditable", "images", "countable", "softDelete", "delete", "bulkUpdate", "merge", "mcp"], `${context}.capabilities`);
   const extensions = objectValue(required(raw, "extensions", context), `${context}.extensions`);
   exactKeys(extensions, ["countFilter", "relatednessSignals", "mcpNames", "ports"], `${context}.extensions`);
   const deleteCapability = required(capabilities, "delete", `${context}.capabilities`);
@@ -363,6 +365,25 @@ const legacyShape = (raw: LiteralObject, context: string): LiteralObject => {
     const mode = stringValue(required(deletion, "mode", `${context}.capabilities.delete`), `${context}.capabilities.delete.mode`);
     if (mode !== "soft" && mode !== "hard") throw new LiteralSpecError(`${context}.capabilities.delete.mode is invalid.`);
     booleanValue(required(deletion, "bulk", `${context}.capabilities.delete`), `${context}.capabilities.delete.bulk`);
+  }
+  const bulkUpdateCapability = required(capabilities, "bulkUpdate", `${context}.capabilities`);
+  if (bulkUpdateCapability !== null) {
+    const bulkUpdate = objectValue(bulkUpdateCapability, `${context}.capabilities.bulkUpdate`);
+    exactKeys(bulkUpdate, ["fields"], `${context}.capabilities.bulkUpdate`);
+    const fields = required(bulkUpdate, "fields", `${context}.capabilities.bulkUpdate`);
+    if (!Array.isArray(fields) || fields.length === 0) {
+      throw new LiteralSpecError(`${context}.capabilities.bulkUpdate.fields must be a non-empty array.`);
+    }
+    // The generator never imports the update schema (it reads specs as AST), so
+    // field names are checked structurally here and by TYPE in the artifact: the
+    // emitted `.pick({...})` fails typecheck on a field the schema does not have.
+    const names = fields.map((field, index) => stringValue(field, `${context}.capabilities.bulkUpdate.fields[${index}]`));
+    if (new Set(names).size !== names.length) {
+      throw new LiteralSpecError(`${context}.capabilities.bulkUpdate.fields contains duplicates.`);
+    }
+    if (required(raw, "fields", context) === null) {
+      throw new LiteralSpecError(`${context}.capabilities.bulkUpdate requires an update schema.`);
+    }
   }
   booleanValue(required(capabilities, "merge", `${context}.capabilities`), `${context}.capabilities.merge`);
   const mcpActions = required(capabilities, "mcp", `${context}.capabilities`);
@@ -417,6 +438,7 @@ const legacyShape = (raw: LiteralObject, context: string): LiteralObject => {
     },
     contract: required(raw, "fields", context),
     filters: required(raw, "filters", context),
+    bulkUpdate: bulkUpdateCapability,
     ...(extensions.ports === undefined ? {} : { ports: extensions.ports }),
   };
 };
@@ -426,7 +448,7 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
   const object = legacyShape(objectValue(value, context), context);
   exactKeys(
     object,
-    ["key", "contract", "descriptor", "route", "filters", "inspector", "ports"],
+    ["key", "contract", "descriptor", "route", "filters", "inspector", "bulkUpdate", "ports"],
     context,
   );
 
@@ -621,6 +643,11 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
     throw new LiteralSpecError(`${context} cannot declare a contract without a shortcode.`);
   }
   const ports = entityPorts(object.ports, `${context}.ports`);
+  const bulkUpdateValue = object.bulkUpdate;
+  const bulkUpdateFields =
+    bulkUpdateValue === undefined || bulkUpdateValue === null
+      ? null
+      : (objectValue(bulkUpdateValue, `${context}.bulkUpdate`).fields as string[]);
   return {
     key,
     shortcode,
@@ -633,6 +660,7 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
     filterSchema,
     filterAudit,
     filterDescriptors: filterDescriptorsWithAudit,
+    bulkUpdateFields,
     ports,
   };
 };
@@ -1090,6 +1118,29 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         return `z.object({action:z.literal(${JSON.stringify(action)}),entity:z.literal(${JSON.stringify(entity.key)}),item:${output.export},sideEffects:mutationSideEffectsSchema})`;
       })
       .join(",\n  ");
+  // A declared field list is compiled into `.pick({...}).strict()` on the
+  // entity's own update schema: an undeclared field is REFUSED rather than
+  // silently stripped, and a field the update schema does not have fails
+  // `pnpm typecheck` on the generated file.
+  const bulkUpdateEntities = entities.filter(
+    (entity) => entity.bulkUpdateFields !== null && entity.contract !== null,
+  );
+  const bulkUpdateCommandVariants = bulkUpdateEntities
+    .map((entity) => {
+      const schemaRef = entity.contract?.update;
+      if (!schemaRef) throw new LiteralSpecError(`${entity.key}.update is missing.`);
+      const mask = (entity.bulkUpdateFields ?? [])
+        .map((field) => `${JSON.stringify(field)}:true`)
+        .join(",");
+      return `z.object({action:z.literal("bulkUpdate"),entity:z.literal(${JSON.stringify(entity.key)}),ids,data:${schemaRef.export}.pick({${mask}}).strict()})`;
+    })
+    .join(",\n  ");
+  // No declaration anywhere means the command exists but matches nothing,
+  // rather than an empty `z.union([])` that fails far from its cause.
+  const bulkUpdateCommandFactory =
+    bulkUpdateEntities.length === 0
+      ? "(_ids: z.ZodType<string[]>) => z.never()"
+      : `(ids: z.ZodType<string[]>) => z.union([\n  ${bulkUpdateCommandVariants}\n])`;
   const kernelEntities = entities
     .filter(({ contract, key }) => contract !== null || key === "image");
   const kernelEntityKeys = kernelEntities.map(({ key }) => key);
@@ -1212,6 +1263,10 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
           softDelete: entity.descriptor.softDelete === true,
           delete: lifecycle.delete,
           merge: lifecycle.merge === true,
+          bulkUpdate:
+            entity.bulkUpdateFields === null
+              ? null
+              : { fields: entity.bulkUpdateFields },
         },
         sourceRefs,
         ports: entity.ports,
@@ -1303,7 +1358,7 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         "  filterUrlKeys: readonly string[];\n" +
         "  filterDescriptors: readonly EntityFilterDescriptorMetadata[];\n" +
         '  mcpOperations: readonly ("get" | "list" | "create" | "update" | "delete")[];\n' +
-        '  lifecycle: { softDelete: boolean; delete: { mode: "soft" | "hard"; bulk: boolean } | null; merge: boolean };\n' +
+        '  lifecycle: { softDelete: boolean; delete: { mode: "soft" | "hard"; bulk: boolean } | null; merge: boolean; bulkUpdate: { fields: readonly string[] } | null };\n' +
         "  sourceRefs: { create: string; update: string; output: string; list: string; detail: string } | null;\n" +
         "  ports: EntityPortSourceRoster;\n" +
         "  references: readonly Entity[];\n" +
@@ -1453,7 +1508,10 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         "// biome-ignore format: one generated variant per entity.\n" +
         `export const generatedEntityCreateCommandSchema = z.union([\n  ${commandVariants("create", "create")}\n]);\n\n` +
         "// biome-ignore format: one generated variant per entity.\n" +
-        `export const generatedEntityUpdateCommandSchema = z.union([\n  ${commandVariants("update", "update")}\n]);\n` +
+        `export const generatedEntityUpdateCommandSchema = z.union([\n  ${commandVariants("update", "update")}\n]);\n\n` +
+        "/** The kernel owns the shared 1-500 unique-id bound, so it injects `ids`. */\n" +
+        "// biome-ignore format: one generated variant per bulk-updatable entity.\n" +
+        `export const generatedEntityBulkUpdateCommandSchema = ${bulkUpdateCommandFactory};\n` +
         "\n" +
         `export const generatedEntityMutationCreateResultSchema = z.discriminatedUnion("entity", [\n  ${mutationResultVariants("create")}\n]);\n\n` +
         `export const generatedEntityMutationUpdateResultSchema = z.discriminatedUnion("entity", [\n  ${mutationResultVariants("update")}\n]);\n`,

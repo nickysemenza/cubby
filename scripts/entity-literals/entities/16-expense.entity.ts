@@ -373,6 +373,7 @@ export default literalEntity({
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },
+    bulkUpdate: { fields: ["projectId", "trade", "costType"] },
     merge: false,
     mcp: ["get", "list", "create", "update", "delete"],
   },

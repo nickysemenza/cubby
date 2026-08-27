@@ -86,15 +86,27 @@ function useEntityMutationPort(): EntityMutationPort {
                   entity: command.entity,
                   ids: [...(command.ids ?? (command.id ? [command.id] : []))],
                 }
-              : {
-                  action: command.operation,
-                  entity: command.entity,
-                  id: command.id,
-                  data: command.data,
-                };
+              : command.operation === "bulkUpdate"
+                ? {
+                    action: command.operation,
+                    entity: command.entity,
+                    ids: [...(command.ids ?? (command.id ? [command.id] : []))],
+                    data: command.data,
+                  }
+                : {
+                    action: command.operation,
+                    entity: command.entity,
+                    id: command.id,
+                    data: command.data,
+                  };
         const result = await executeEntityMutation({
           data: startCommand as never,
         });
+        if (command.operation === "bulkUpdate") {
+          // A bulk patch reports a count over N rows, so there is no single
+          // entity output to recover through the entity's own schema.
+          return { id: command.ids?.[0] ?? "", result };
+        }
         const resultId =
           result && typeof result === "object" && "item" in result
             ? String(result.item.id)
@@ -145,6 +157,11 @@ export interface EntityCommands<E extends EditableEntity> {
     surface?: "create-page" | "dialog" | "quick-create";
   }): Promise<EntityEditResult<E>>;
   remove(ids: readonly string[]): Promise<EntityEditResult<E>>;
+  /** Patch one declared field set across a bounded id set, as `remove` deletes. */
+  bulkUpdate(
+    ids: readonly string[],
+    data: Readonly<object>,
+  ): Promise<EntityEditResult<E>>;
   commitFields(input: {
     record: EntityEditRecord;
     values: Readonly<Partial<EntityEditDraft<E>>>;
@@ -253,6 +270,31 @@ export function useEntityCommands<E extends EditableEntity>(
         data: {},
       }),
     [entity, executeResult],
+  );
+
+  const bulkUpdate = useCallback(
+    async (
+      ids: readonly string[],
+      data: Readonly<object>,
+    ): Promise<EntityEditResult<E>> => {
+      setIssues([]);
+      try {
+        const execution = await executeCommand({
+          entity,
+          operation: "bulkUpdate",
+          intent: "bulkUpdate",
+          ids,
+          data,
+        });
+        // The count envelope is deliberately not parsed as an entity output.
+        return { ok: true, entity, id: execution.id, changed: true };
+      } catch (error) {
+        const nextIssues = issuesFromRefusal(error);
+        setIssues(nextIssues);
+        return { ok: false, issues: nextIssues };
+      }
+    },
+    [entity, executeCommand],
   );
 
   const create = useCallback(
@@ -365,6 +407,7 @@ export function useEntityCommands<E extends EditableEntity>(
     submit,
     create,
     remove,
+    bulkUpdate,
     commitFields,
     commitRuntimeFields: commitFields,
     commitField,
