@@ -1,7 +1,7 @@
 import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import type { UseMutationOptions } from "@tanstack/react-query";
 import type { z } from "zod";
-import { entityRipple, ripple } from "~/integrations/tanstack-query/cache-tags";
+import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import type { entityBrowserMutationCommandSchema } from "~/server/entity-kernel/contracts";
 import {
   entityMutation,
@@ -27,14 +27,8 @@ const kernelOptionsByEntity = new Map<string, Record<string, unknown>>();
  * declared. `entityRipple("location")` is the narrow one, so without this a
  * kernel-path reparent would leave those surfaces stale with nothing failing.
  */
-const writeRipple = (entity: StandardEntity, action: StandardAction) =>
-  entity === "location" && action === "bulkUpdate"
-    ? ripple.locationReparent
-    : entityRipple(entity);
-
-const kernelOptionsFor = (entity: StandardEntity, action: StandardAction) => {
-  const cacheKey = `${entity}:${action}`;
-  const cached = kernelOptionsByEntity.get(cacheKey);
+const kernelOptionsFor = (entity: StandardEntity) => {
+  const cached = kernelOptionsByEntity.get(entity);
   if (cached) return cached;
   const base = entityMutation.mutate
     .forEntity(entity)
@@ -49,10 +43,16 @@ const kernelOptionsFor = (entity: StandardEntity, action: StandardAction) => {
     // fell through to the legacy key path.
     meta: {
       ...(base.meta as object),
-      invalidates: writeRipple(entity, action),
+      // `entityRipple` and not a per-action branch: nothing reaches the
+      // kernel's `bulkUpdate` for `location` — reparenting kept its workflow,
+      // because the sweep passes more ids than the kernel accepts. A location
+      // caller arriving here would need the wider `ripple.locationReparent`
+      // (inventory + problems + search + dashboard), which is why the workflow
+      // declares it.
+      invalidates: entityRipple(entity),
     },
   };
-  kernelOptionsByEntity.set(cacheKey, options);
+  kernelOptionsByEntity.set(entity, options);
   return options;
 };
 
@@ -62,7 +62,7 @@ function kernelMutationOptions(
   callbacks: unknown,
 ) {
   return {
-    ...kernelOptionsFor(entity, action),
+    ...kernelOptionsFor(entity),
     ...(callbacks as Record<string, unknown>),
     mutationFn: async (variables: unknown) => {
       const input = variables as {
