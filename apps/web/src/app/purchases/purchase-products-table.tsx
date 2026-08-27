@@ -135,6 +135,8 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
   // to this table rather than to any row — so it is already a bulk operation,
   // it simply had no bulk affordance. Only explicitly linked rows are
   // detachable; an expense-derived row has no link to remove.
+  // `mutateAsync` is referentially stable; the mutation object is not.
+  const detachAsync = detach.mutateAsync;
   const bulkActions = useMemo(
     () => ({
       actions: [
@@ -145,7 +147,7 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
               .map((row) => row.original)
               .filter((row) => row.linked);
             if (linked.length === 0) return { success: false };
-            await detach.mutateAsync({
+            await detachAsync({
               purchaseId,
               productIds: linked.map((row) => row.id),
             });
@@ -154,9 +156,7 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
         }),
       ],
     }),
-    // `detach` is a fresh object each render but `mutateAsync` is stable.
-    // biome-ignore lint/correctness/useExhaustiveDependencies: see above
-    [purchaseId],
+    [purchaseId, detachAsync],
   );
   const selection = useEntitySelection<PurchaseProductRow>({
     bulkActions,

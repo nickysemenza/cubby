@@ -498,13 +498,15 @@ export function ProductKitComponents({ productId }: { productId: string }) {
   // `detachComponents({ parentProductId, componentProductIds[] })` fixes the
   // parent, and this table's rows are all parts of it. The membership table is
   // the inverse — each row a different parent — so it gets no bulk action.
+  // `mutateAsync` is referentially stable; the mutation object is not.
+  const detachComponentAsync = detachComponent.mutateAsync;
   const componentBulkActions = useMemo(
     () => ({
       actions: [
         verbBulkAction<ProductRow>("removeComponent", {
           minSelection: 1,
           onExecute: async (rows) => {
-            await detachComponent.mutateAsync({
+            await detachComponentAsync({
               parentProductId: productId,
               componentProductIds: rows.map((row) => row.original.id),
             });
@@ -513,9 +515,7 @@ export function ProductKitComponents({ productId }: { productId: string }) {
         }),
       ],
     }),
-    // `detachComponent` is a fresh object each render; `mutateAsync` is stable.
-    // biome-ignore lint/correctness/useExhaustiveDependencies: see above
-    [productId],
+    [productId, detachComponentAsync],
   );
 
   const componentAction = useMemo(

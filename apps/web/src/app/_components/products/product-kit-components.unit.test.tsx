@@ -25,7 +25,15 @@ vi.mock("@tanstack/react-query", () => ({
           : undefined,
     isPending: false,
   }),
-  useMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useMutation: () => ({
+    mutate: vi.fn(),
+    mutateAsync: vi.fn(async () => undefined),
+    isPending: false,
+  }),
+  // The table resolves the product entity's registered actions now, and the
+  // "Add to inventory" one reads product detail to derive its kit warning —
+  // so this partial mock has to carry react-query's `queryOptions` too.
+  queryOptions: (options: unknown) => options,
   // The descriptor builds its options through react-query's own
   // `mutationOptions`, so this partial mock has to carry it too.
   mutationOptions: (options: unknown) => options,

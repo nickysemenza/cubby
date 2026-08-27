@@ -120,13 +120,15 @@ function ResourcesTable({
   });
   // Table-local for the same reason as the purchase twin: the project is known
   // to the table, not to a row, and `detachResources` already takes an array.
+  // `mutateAsync` is referentially stable; the mutation object is not.
+  const detachAsync = detach.mutateAsync;
   const bulkActions = useMemo(
     () => ({
       actions: [
         verbBulkAction<ResourceRow>("removeFromProject", {
           minSelection: 1,
           onExecute: async (rows) => {
-            await detach.mutateAsync({
+            await detachAsync({
               projectId,
               productIds: rows.map((row) => row.original.id),
             });
@@ -135,9 +137,7 @@ function ResourcesTable({
         }),
       ],
     }),
-    // `detach` is a fresh object each render but `mutateAsync` is stable.
-    // biome-ignore lint/correctness/useExhaustiveDependencies: see above
-    [projectId],
+    [projectId, detachAsync],
   );
   const selection = useEntitySelection<ResourceRow>({
     entity: "product",
