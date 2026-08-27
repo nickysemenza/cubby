@@ -18,6 +18,7 @@ type WorkbenchProps<TData extends BaseListRow> = Pick<
   | "contextualStatus"
   | "emptyState"
   | "getRowClassName"
+  | "inspectorToggle"
   | "onRowClick"
   | "onRowHover"
   | "onRowHoverEnd"
@@ -93,6 +94,7 @@ export function EntityListPage<
     PreviewSheet,
     preview: currentPreview,
     dockedInspector,
+    inspectorToggle,
   } = useEntityPreview(
     entity,
     preview === false
@@ -130,6 +132,7 @@ export function EntityListPage<
         defaultDensity={browserEntityDefinition(entity).list?.defaultDensity}
         currentRowId={currentPreview?.rowKey}
         desktopInspector={dockedInspector}
+        inspectorToggle={inspectorToggle}
         onRowClick={onRowClick ?? rowClick}
         onRowHover={onRowHover ?? rowHover}
         onRowHoverEnd={onRowHoverEnd ?? rowHoverEnd}
