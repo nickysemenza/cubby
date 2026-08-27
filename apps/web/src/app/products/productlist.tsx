@@ -868,12 +868,16 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
       columnHelper.accessor("expenseCount", {
         id: "expenses",
         header: "Expenses",
-        // The column id is `expenses`, which is NOT in `productSortableFields`
-        // — so `buildOrderBy` silently discards any sort on it. Without this the
-        // header renders a clickable sort affordance that does nothing. The id
-        // can't be renamed to `expenseCount` to fix it the other way: it's
-        // persisted per-user in the `table-columns:product` localStorage key,
-        // and renaming would reset everyone's column layout for a count.
+        // The column id is `expenses` while the row field is `expenseCount`,
+        // and the id is the half that must not move: it is persisted per-user
+        // in the `table-columns:product` localStorage key, so renaming it would
+        // reset everyone's column layout for a count. The other two sides are
+        // spelled to match it — `"expenses"` in `productSortableFields`
+        // (packages/schemas/src/product.ts) and the `sort.orderBy === "expenses"`
+        // branch in repo/product/crud.ts — because `buildOrderBy` drops a sort
+        // whose field it does not recognize while the header still renders a
+        // clickable affordance. `sort-application.integration.test.ts` carries
+        // the id→field mapping in FIELD_ALIASES and now proves the sort works.
         enableSorting: true,
         meta: {
           numeric: true,

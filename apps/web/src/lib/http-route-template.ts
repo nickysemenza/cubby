@@ -16,21 +16,8 @@ const STATIC_TRACE_ROUTES = new Set([
   "/activity",
   "/ai-smoke-test",
   "/ai-usage",
-  "/api/agent-stream/ask",
-  "/api/ai-stream/backfill-location-descriptions",
-  "/api/ai-stream/precompute-enrichment-proposals",
   "/api/debug/timing",
   "/api/mcp",
-  "/api/problems-stream/prune-unused-aliases",
-  "/api/problems-stream/reparse-stale",
-  "/api/product-stream/backfill-upc-images",
-  "/api/product-stream/create-many",
-  "/api/product-stream/mark-usda-unavailable",
-  "/api/recipe-stream/import-cookbook",
-  "/api/recipe-stream/import-notion",
-  "/api/recipe-stream/recompute-all",
-  "/api/recipe-stream/recompute-stale",
-  "/api/recipe-stream/reprocess-cookbook",
   "/ask",
   "/background-jobs",
   "/calendar",
@@ -115,6 +102,13 @@ const DYNAMIC_TRACE_ROUTES: ReadonlyArray<{
     template: "/api/calendar/:token/:feed",
   },
   { pattern: /^\/api\/auth(?:\/.*)?$/u, template: "/api/auth/:splat" },
+  // One route for every workflow stream since the 13 bespoke stream routes
+  // were replaced; the operation id is a registry key, but it stays out of
+  // the span name like every other path segment.
+  {
+    pattern: /^\/api\/workflow-stream\/[^/]+$/u,
+    template: "/api/workflow-stream/:operation",
+  },
   {
     pattern: /^\/recipes\/[^/]+\/export$/u,
     template: "/recipes/:shortcode/export",

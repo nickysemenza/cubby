@@ -12,7 +12,7 @@ import {
   categorySuggestionInput,
   categorySuggestionSchema,
   detectedInventorySchema,
-  type enrichmentProposalPrecomputeInput,
+  enrichmentProposalPrecomputeInput,
   ingredientMergeSuggestionBatchInput,
   ingredientMergeSuggestionBatchOut,
   locationDescriptionSchema,
@@ -36,8 +36,8 @@ import {
   defineOperationDomain,
   mutation,
   query,
+  subscription,
 } from "~/integrations/tanstack-query/operation-catalog";
-import { openWorkflowStream } from "~/lib/workflow-stream";
 
 export const ai = defineOperationDomain("ai", {
   suggestCategory: query({
@@ -112,24 +112,20 @@ export const ai = defineOperationDomain("ai", {
   }),
 });
 
+export const aiStreams = defineOperationDomain("ai", {
+  backfillLocationDescriptions: subscription({
+    input: zod.undefined(),
+    event: aiBackfillLocationDescriptionsEventSchema,
+  }),
+  precomputeEnrichmentProposals: subscription({
+    input: enrichmentProposalPrecomputeInput,
+    event: aiEnrichmentProposalEventSchema,
+  }),
+});
+
 export const backfillLocationDescriptionsStream = (signal?: AbortSignal) =>
-  openWorkflowStream({
-    operation: "ai.backfillLocationDescriptions",
-    kind: "mutation",
-    url: "/api/ai-stream/backfill-location-descriptions",
-    input: undefined,
-    eventSchema: aiBackfillLocationDescriptionsEventSchema,
-    signal,
-  });
+  aiStreams.backfillLocationDescriptions.open(undefined, { signal });
 export const precomputeEnrichmentProposalsStream = (
   input: z.input<typeof enrichmentProposalPrecomputeInput>,
   signal?: AbortSignal,
-) =>
-  openWorkflowStream({
-    operation: "ai.precomputeEnrichmentProposals",
-    kind: "mutation",
-    url: "/api/ai-stream/precompute-enrichment-proposals",
-    input,
-    eventSchema: aiEnrichmentProposalEventSchema,
-    signal,
-  });
+) => aiStreams.precomputeEnrichmentProposals.open(input, { signal });

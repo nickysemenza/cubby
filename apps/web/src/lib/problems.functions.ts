@@ -24,8 +24,8 @@ import {
   defineOperationDomain,
   mutation,
   query,
+  subscription,
 } from "~/integrations/tanstack-query/operation-catalog";
-import { openWorkflowStream } from "~/lib/workflow-stream";
 
 const noInput = z.undefined();
 
@@ -97,21 +97,18 @@ export const problems = defineOperationDomain("problems", {
   }),
 });
 
+export const problemsStreams = defineOperationDomain("problems", {
+  reparseStale: subscription({
+    input: noInput,
+    event: problemsReparseEventSchema,
+  }),
+  pruneAllUnusedAliases: subscription({
+    input: noInput,
+    event: problemsPruneAliasesEventSchema,
+  }),
+});
+
 export const openProblemsReparseStream = (signal?: AbortSignal) =>
-  openWorkflowStream({
-    operation: "problems.reparseStale",
-    kind: "mutation",
-    url: "/api/problems-stream/reparse-stale",
-    input: undefined,
-    eventSchema: problemsReparseEventSchema,
-    signal,
-  });
+  problemsStreams.reparseStale.open(undefined, { signal });
 export const openProblemsPruneAliasesStream = (signal?: AbortSignal) =>
-  openWorkflowStream({
-    operation: "problems.pruneAllUnusedAliases",
-    kind: "mutation",
-    url: "/api/problems-stream/prune-unused-aliases",
-    input: undefined,
-    eventSchema: problemsPruneAliasesEventSchema,
-    signal,
-  });
+  problemsStreams.pruneAllUnusedAliases.open(undefined, { signal });

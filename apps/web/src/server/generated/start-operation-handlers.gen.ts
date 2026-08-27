@@ -2,12 +2,14 @@
 import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
 import type { StartOperationResult } from "~/server/start-operation.contract";
 import type { StartOperationRequest } from "~/server/start-operation.server";
+import type { WorkflowStreamHandler } from "~/server/subscription-domain.server";
 
 export type StartOperationHandler = (options: {
   data: unknown;
   request: StartOperationRequest;
 }) => Promise<StartOperationResult<unknown>>;
 export type StartOperationHandlerLoader = () => Promise<StartOperationHandler>;
+export type WorkflowStreamHandlerLoader = () => Promise<WorkflowStreamHandler>;
 
 export const START_OPERATION_HANDLER_LOADERS = {
   "agent.ask": async () =>
@@ -669,4 +671,54 @@ export const START_OPERATION_HANDLER_LOADERS = {
 } as const satisfies Record<
   StartOperationIdOfKind<"query" | "mutation">,
   StartOperationHandlerLoader
+>;
+
+/**
+ * Partial, unlike its sibling: coverage of the subscription ids is enforced
+ * by the generator's declared-but-unimplemented check, which names the missing
+ * member and its module. What this annotation still buys is key validity — a
+ * loader keyed to an id the registry does not carry as a subscription.
+ */
+export const WORKFLOW_STREAM_HANDLER_LOADERS = {
+  "agent.askStream": async () =>
+    (await import("~/server/agent-browser.server")).agentStreamHandlers.streams
+      .askStream,
+  "ai.backfillLocationDescriptions": async () =>
+    (await import("~/server/ai-browser.server")).aiStreamHandlers.streams
+      .backfillLocationDescriptions,
+  "ai.precomputeEnrichmentProposals": async () =>
+    (await import("~/server/ai-browser.server")).aiStreamHandlers.streams
+      .precomputeEnrichmentProposals,
+  "problems.pruneAllUnusedAliases": async () =>
+    (await import("~/server/problems-browser.server")).problemsStreamHandlers
+      .streams.pruneAllUnusedAliases,
+  "problems.reparseStale": async () =>
+    (await import("~/server/problems-browser.server")).problemsStreamHandlers
+      .streams.reparseStale,
+  "product.backfillUPCImages": async () =>
+    (await import("~/server/product-browser.server")).productStreamHandlers
+      .streams.backfillUPCImages,
+  "product.createMany": async () =>
+    (await import("~/server/product-browser.server")).productStreamHandlers
+      .streams.createMany,
+  "product.markUsdaUnavailableMany": async () =>
+    (await import("~/server/product-browser.server")).productStreamHandlers
+      .streams.markUsdaUnavailableMany,
+  "recipe.importCookbookStream": async () =>
+    (await import("~/server/recipe-browser.server")).recipeStreamHandlers
+      .streams.importCookbookStream,
+  "recipe.importNotionSyncStream": async () =>
+    (await import("~/server/recipe-browser.server")).recipeStreamHandlers
+      .streams.importNotionSyncStream,
+  "recipe.recomputeAllDurable": async () =>
+    (await import("~/server/recipe-browser.server")).recipeStreamHandlers
+      .streams.recomputeAllDurable,
+  "recipe.recomputeStaleDurable": async () =>
+    (await import("~/server/recipe-browser.server")).recipeStreamHandlers
+      .streams.recomputeStaleDurable,
+  "recipe.reprocessCookbook": async () =>
+    (await import("~/server/recipe-browser.server")).recipeStreamHandlers
+      .streams.reprocessCookbook,
+} as const satisfies Partial<
+  Record<StartOperationIdOfKind<"subscription">, WorkflowStreamHandlerLoader>
 >;

@@ -4,9 +4,10 @@ import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-reg
 import { REQUEST_ID_HEADER } from "~/lib/request-id";
 import { startOperationDefinition } from "~/lib/start-operation-observability";
 import { observeOperation } from "~/server/observed-request";
-import { createRequestContext, requireActor } from "~/server/request-context";
+import type { PublicStartOperationError } from "~/server/start-operation.contract";
 import {
   type AuthenticatedStartOperationContext,
+  authenticateStartOperation,
   normalizeStartOperationError,
   type OperationStage,
   throwIfStartOperationAborted,
@@ -16,31 +17,36 @@ import type { Workload } from "~/server/workload";
 
 type StreamFrame =
   | { kind: "event"; payload: ReturnType<typeof superjson.serialize> }
-  | {
-      kind: "error";
-      error: ReturnType<typeof normalizeStartOperationError>["publicError"];
-    };
+  | { kind: "error"; error: PublicStartOperationError };
 
 const encoder = new TextEncoder();
 const encodeFrame = (frame: StreamFrame) =>
   encoder.encode(`${JSON.stringify(frame)}\n`);
 
+/**
+ * A one-frame NDJSON body. The browser reader treats a lone error frame exactly
+ * like an error frame mid-stream, so a request that fails before any work
+ * starts still surfaces as a `StartOperationError` rather than an HTTP status
+ * the caller has to translate.
+ */
+export const workflowStreamErrorResponse = (
+  error: PublicStartOperationError,
+): Response =>
+  new Response(encodeFrame({ kind: "error", error }), {
+    headers: {
+      "cache-control": "private, no-store",
+      "content-type": "application/x-ndjson; charset=utf-8",
+    },
+  });
+
 const errorResponse = (
   error: unknown,
   stage: OperationStage,
   requestId?: string,
-) => {
-  const normalized = normalizeStartOperationError(error, stage, requestId);
-  return new Response(
-    encodeFrame({ kind: "error", error: normalized.publicError }),
-    {
-      headers: {
-        "cache-control": "private, no-store",
-        "content-type": "application/x-ndjson; charset=utf-8",
-      },
-    },
+) =>
+  workflowStreamErrorResponse(
+    normalizeStartOperationError(error, stage, requestId).publicError,
   );
-};
 
 const hasSameOrigin = (request: Request) => {
   const origin = request.headers.get("origin");
@@ -75,30 +81,14 @@ export async function workflowStreamResponse<
     return errorResponse(error, "input", getRequestId(options.request.headers));
   }
 
-  let context: AuthenticatedStartOperationContext;
-  try {
-    context = requireActor(
-      await createRequestContext({ headers: options.request.headers }),
-    );
-  } catch (error) {
-    return errorResponse(
-      error,
-      "context",
-      getRequestId(options.request.headers),
-    );
-  }
-
-  let input: z.output<InputSchema>;
-  try {
-    input = options.inputSchema.parse(rawInput);
-  } catch (error) {
-    return errorResponse(error, "input", getRequestId(options.request.headers));
-  }
-
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       void (async () => {
-        let stage: OperationStage = "run";
+        // Authentication and input parsing happen INSIDE the span, the same
+        // order `runStartOperation` uses, so a rejected actor is observed
+        // rather than silently short-circuited — and so an invalid payload
+        // never gets to report before an unauthorized caller does.
+        let stage: OperationStage = "context";
         try {
           await observeOperation(
             startOperationDefinition(options.operation),
@@ -107,8 +97,17 @@ export async function workflowStreamResponse<
               workload: options.workload ?? "import-stream",
             },
             async (span) => {
-              span.setAttribute("cubby.authenticated", true);
+              span.setAttribute("cubby.authenticated", false);
               throwIfStartOperationAborted(options.request.signal);
+              const context = await authenticateStartOperation(
+                options.request.headers,
+                span,
+              );
+
+              stage = "input";
+              const input = options.inputSchema.parse(rawInput);
+
+              stage = "run";
               const events = await options.run(
                 context,
                 input,

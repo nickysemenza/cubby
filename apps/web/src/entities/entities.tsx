@@ -103,6 +103,21 @@ const titleCaseEntityLabel = (entity: ShortcodeEntity): string =>
     .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
     .join(" ");
 
+/**
+ * `pluralLabel` is hand-authored on purpose; it is NOT a pluralization of
+ * `label`, so do not "derive" it (`pluralize` is already a dependency and gets
+ * all four exceptions below wrong).
+ *
+ * It answers a different question: `label` names one record, while
+ * `pluralLabel` is the NAV/SECTION name, read in a place — the sidebar, a page
+ * heading — where the context is already established, so it drops the
+ * qualifier the singular needs. Four differ from the naive plural on purpose:
+ * `inventory` → "Inventory" (not "Inventory Items"), `financialAccount` →
+ * "Accounts", `financialTransaction` → "Transactions", `wish` → "Wishlist"
+ * (not "Wishes"). The other twelve coincide with a naive plural, which is
+ * exactly the trap. Same shape as `DISPLAY_NAME_COLUMN` being a third question
+ * rather than a third copy (see `shortcode-resolver.ts`).
+ */
 const entityDefinitions = {
   ingredient: {
     label: titleCaseEntityLabel("ingredient"),

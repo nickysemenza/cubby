@@ -5,7 +5,6 @@ import {
   type AllowedImageType,
 } from "@cubby/schemas/image";
 import {
-  cookbookImportEventSchema,
   type ImportRecipe,
   importRecipesSchema,
 } from "@cubby/schemas/import-recipe";
@@ -18,7 +17,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
-import { recipe } from "~/app/recipes/recipe.functions";
+import { recipe, recipeStreams } from "~/app/recipes/recipe.functions";
 import { Row } from "~/components/layout/row";
 import { Stack } from "~/components/layout/stack";
 import {
@@ -35,7 +34,6 @@ import { Description } from "~/components/ui/description";
 import { getErrorMessage } from "~/lib/error-utils";
 import { imageUpload } from "~/lib/image.functions";
 import { wasm } from "~/lib/wasm";
-import { openWorkflowStream } from "~/lib/workflow-stream";
 import { BookGroupCard } from "./book-group-card";
 import { CookbookDropzone } from "./cookbook-dropzone";
 import { deriveBookName, withRetry } from "./import-helpers";
@@ -625,14 +623,10 @@ export function CookbookImport({
       // batched recompute. Per-recipe results + overall progress stream back.
       await startCookbookImport(
         (signal) =>
-          openWorkflowStream({
-            operation: "recipe.importCookbookStream",
-            kind: "mutation",
-            url: "/api/recipe-stream/import-cookbook",
-            input: { cookbookId, indices: orderedIndices },
-            eventSchema: cookbookImportEventSchema,
-            signal,
-          }),
+          recipeStreams.importCookbookStream.open(
+            { cookbookId, indices: orderedIndices },
+            { signal },
+          ),
         {
           onItem: (item) =>
             setResult(

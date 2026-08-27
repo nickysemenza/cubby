@@ -1,8 +1,10 @@
 import {
   recipe as recipeDomain,
+  recipeStreams,
   suggestions,
 } from "~/app/recipes/recipe.functions";
 import { implementOperationDomain } from "~/server/operation-domain.server";
+import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
 import * as recipe from "~/server/workflows/recipe.server";
 import * as imports from "~/server/workflows/recipe-import.server";
 
@@ -65,4 +67,14 @@ export const suggestionsHandlers = implementOperationDomain(suggestions, {
       input,
       context.services.availability,
     ),
+});
+
+export const recipeStreamHandlers = implementSubscriptionDomain(recipeStreams, {
+  recomputeAllDurable: (context) =>
+    recipe.recomputeAllDurableWorkflow(context.services.recipeCosting),
+  recomputeStaleDurable: (context) =>
+    recipe.recomputeStaleDurableWorkflow(context.services.recipeCosting),
+  importCookbookStream: imports.importCookbookWorkflow,
+  importNotionSyncStream: imports.importNotionSyncWorkflow,
+  reprocessCookbook: imports.reprocessCookbookWorkflow,
 });
