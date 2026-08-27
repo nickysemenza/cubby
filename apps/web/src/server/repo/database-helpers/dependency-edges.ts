@@ -61,11 +61,16 @@ export async function replaceDependencyEdges<
 ): Promise<void> {
   const deduped = uniq(newIds);
   const label = ENTITY_LABEL[opts.entity];
+  const lowerLabel = label.toLowerCase();
+  // Every current `ENTITY_LABEL` value starts with either a consonant sound
+  // or a true vowel sound (no silent-h / "u"-as-"you" cases), so a plain
+  // first-letter check picks the right article for all of them.
+  const article = /^[aeiou]/iu.test(lowerLabel) ? "An" : "A";
 
   if (deduped.includes(id)) {
     throw createAppError(
       "SELF_DEPENDENCY",
-      `A ${label.toLowerCase()} cannot be blocked by itself.`,
+      `${article} ${lowerLabel} cannot be blocked by itself.`,
     );
   }
 
