@@ -1,22 +1,26 @@
-import type { Entity } from "@cubby/schemas/entity";
-import type { SearchableEntity } from "@cubby/schemas/search";
 import { z } from "zod";
 import {
   defineOperationDomain,
   query,
 } from "~/integrations/tanstack-query/operation-catalog";
 
-export type EntityInspectorHealth = {
-  counts: Partial<Record<Entity, number>>;
-  search: Partial<
-    Record<SearchableEntity, { documents: number; embeddings: number }>
-  >;
-};
+export const entityInspectorHealthSchema = z.object({
+  counts: z.record(z.string(), z.number().int().nonnegative()),
+  search: z.record(
+    z.string(),
+    z.object({
+      documents: z.number().int().nonnegative(),
+      embeddings: z.number().int().nonnegative(),
+    }),
+  ),
+});
+
+export type EntityInspectorHealth = z.infer<typeof entityInspectorHealthSchema>;
 
 export const entityInspectorHealth = defineOperationDomain("entity", {
   inspectorHealth: query({
     input: z.null(),
-    output: z.custom<EntityInspectorHealth>(),
+    output: entityInspectorHealthSchema,
     tags: [["entity", "inspectorHealth"]],
     freshness: { staleTime: 60_000 },
   }),

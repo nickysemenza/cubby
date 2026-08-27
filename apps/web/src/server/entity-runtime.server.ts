@@ -1,6 +1,6 @@
 import type { SearchableEntity } from "@cubby/schemas/search";
 import * as drizzle from "drizzle-orm";
-import { z } from "zod";
+import type { z } from "zod";
 import { entityDetail } from "~/entities/entity-detail.functions";
 import { entityFilterOptions } from "~/entities/entity-filter-options.functions";
 import { entityInspectorHealth } from "~/entities/entity-inspector-health.functions";
@@ -93,23 +93,11 @@ export const entityMutationHandlers = implementOperationDomain(entityMutation, {
   },
 });
 
-const entityInspectorHealthSchema = z.object({
-  counts: z.record(z.string(), z.number().int().nonnegative()),
-  search: z.record(
-    z.string(),
-    z.object({
-      documents: z.number().int().nonnegative(),
-      embeddings: z.number().int().nonnegative(),
-    }),
-  ),
-});
-
 export const entityInspectorHealthHandlers = implementOperationDomain(
   entityInspectorHealth,
   {
     inspectorHealth: {
       readPolicy: "strong",
-      output: entityInspectorHealthSchema,
       run: async (context) => {
         const [counts, rows] = await Promise.all([
           getEntityCounts(context.db),
