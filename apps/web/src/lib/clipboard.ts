@@ -51,3 +51,17 @@ export async function copyShortcodes(codes: string[]): Promise<boolean> {
   );
   return true;
 }
+
+/** Copy external public identifiers for entities that do not use shortcodes. */
+export async function copyIdentifiers(ids: string[]): Promise<boolean> {
+  if (ids.length === 0) return false;
+  const copied = await copyText(ids.join("\n"));
+  if (!copied) {
+    toast.error("Copy failed");
+    return false;
+  }
+  toast.success(
+    ids.length === 1 ? `Copied ${ids[0]}` : `Copied ${ids.length} identifiers`,
+  );
+  return true;
+}

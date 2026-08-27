@@ -1,11 +1,18 @@
+import {
+  browserRoutedEntities,
+  shortcodeEntities,
+} from "@cubby/schemas/entity-manifest";
 import { render, renderHook } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ActionVerbId } from "./action-verbs";
 import type {
   EntityActionDefinition,
   EntityActionHandles,
 } from "./entity-actions";
-import { useEntityActions } from "./entity-actions";
+import {
+  entityActionCatalogDescriptors,
+  useEntityActions,
+} from "./entity-actions";
 
 interface TestRow {
   id: string;
@@ -20,6 +27,174 @@ const stubHandles = (
   run,
   rowMenuItem: (row) => <span key={verb}>{`${verb}:${row.id}`}</span>,
   dialog: <span key={verb}>{`dialog:${verb}`}</span>,
+});
+
+describe("production entity action catalog", () => {
+  const roster = (entity: "product" | "inventory" | "expense" | "task") =>
+    entityActionCatalogDescriptors
+      .filter(
+        (action) =>
+          action.entities.includes(entity) &&
+          action.verb !== "copyCodes" &&
+          action.verb !== "delete",
+      )
+      .map(({ verb, arity, surfaces }) => ({ verb, arity, surfaces }));
+
+  it("derives the correct copy action for every routed entity", () => {
+    const copyCodes = entityActionCatalogDescriptors.find(
+      (action) => action.verb === "copyCodes",
+    );
+    expect(copyCodes?.entities).toEqual(shortcodeEntities);
+    expect(copyCodes).toMatchObject({
+      arity: "both",
+      surfaces: ["row", "selection", "inspector", "detail"],
+      preserveSelection: true,
+    });
+
+    for (const entity of browserRoutedEntities) {
+      const copyAction = entityActionCatalogDescriptors.find(
+        (action) =>
+          action.entities.includes(entity) &&
+          (action.verb === "copyCodes" || action.verb === "copyIdentifiers"),
+      );
+      expect(copyAction, `${entity} copy action`).toBeDefined();
+    }
+  });
+
+  it.each(browserRoutedEntities)(
+    "%s has a collision-free real action roster on every declared surface",
+    (entity) => {
+      const actions = entityActionCatalogDescriptors.filter((action) =>
+        action.entities.includes(entity),
+      );
+      expect(actions.length, `${entity} action count`).toBeGreaterThan(0);
+
+      for (const surface of [
+        "row",
+        "selection",
+        "inspector",
+        "detail",
+        "palette-quick",
+      ] as const) {
+        const ids = actions
+          .filter((action) => action.surfaces.includes(surface))
+          .map((action) => action.id ?? action.verb);
+        expect(new Set(ids).size, `${entity}:${surface}`).toBe(ids.length);
+      }
+
+      for (const action of actions) {
+        expect(
+          action.surfaces.length,
+          `${entity}:${action.verb}`,
+        ).toBeGreaterThan(0);
+        expect(new Set(action.surfaces).size).toBe(action.surfaces.length);
+        if (action.group === "destructive") {
+          expect(action.verb).toBe("delete");
+        }
+      }
+    },
+  );
+
+  it("adapts every supported lifecycle delete without inventing USDA deletion", () => {
+    const deleteActions = entityActionCatalogDescriptors.filter(
+      (action) => action.verb === "delete",
+    );
+    const deletableEntities = new Set(
+      deleteActions.flatMap((action) => action.entities),
+    );
+
+    expect(deletableEntities).toEqual(
+      new Set(browserRoutedEntities.filter((entity) => entity !== "usda-food")),
+    );
+    expect(
+      deleteActions.find((action) => action.entities.includes("cookbook")),
+    ).toMatchObject({
+      arity: "single",
+      surfaces: ["row", "selection", "inspector", "detail"],
+    });
+    expect(
+      deleteActions.find((action) => action.entities.includes("image")),
+    ).toMatchObject({ arity: "single", surfaces: ["inspector", "detail"] });
+  });
+
+  it("guards Product and Inventory memberships", () => {
+    expect(roster("product")).toEqual([
+      {
+        verb: "addToInventory",
+        arity: "both",
+        surfaces: ["row", "selection", "inspector", "detail", "palette-quick"],
+      },
+      {
+        verb: "printLabels",
+        arity: "both",
+        surfaces: ["row", "selection", "inspector", "detail"],
+      },
+      {
+        verb: "setStockTracking",
+        arity: "both",
+        surfaces: ["selection"],
+      },
+    ]);
+    expect(roster("inventory")).toEqual([
+      {
+        verb: "discard",
+        arity: "both",
+        surfaces: ["row", "selection", "inspector", "detail"],
+      },
+    ]);
+  });
+
+  it("guards migrated Expense and Task memberships and order", () => {
+    expect(roster("expense")).toEqual([
+      {
+        verb: "markPurchased",
+        arity: "single",
+        surfaces: ["row", "inspector", "detail"],
+      },
+      {
+        verb: "moveToProject",
+        arity: "both",
+        surfaces: ["row", "selection", "inspector", "detail"],
+      },
+      {
+        verb: "setTrade",
+        arity: "both",
+        surfaces: ["row", "selection", "inspector", "detail"],
+      },
+      {
+        verb: "setCostType",
+        arity: "both",
+        surfaces: ["row", "selection", "inspector", "detail"],
+      },
+    ]);
+    expect(roster("task")).toEqual([
+      {
+        verb: "moveToProject",
+        arity: "both",
+        surfaces: ["row", "selection", "inspector", "detail"],
+      },
+      {
+        verb: "setStatus",
+        arity: "both",
+        surfaces: ["row", "selection", "inspector", "detail"],
+      },
+      {
+        verb: "setTrade",
+        arity: "both",
+        surfaces: ["row", "selection", "inspector", "detail"],
+      },
+      {
+        verb: "setDueDate",
+        arity: "both",
+        surfaces: ["row", "selection", "inspector", "detail"],
+      },
+      {
+        verb: "createProjectFrom",
+        arity: "both",
+        surfaces: ["selection"],
+      },
+    ]);
+  });
 });
 
 /**
@@ -115,6 +290,101 @@ describe("useEntityActions", () => {
 
     expect(current.bulkActions.map((a) => a.id)).toEqual(["set-status"]);
     expect(rowMenuText(current.rowMenuItems, "TSK-1")).toBe("");
+  });
+
+  it("normalizes selection metadata and preserves the legacy bulk presenter", () => {
+    const run = vi.fn(succeeds);
+    const registry: readonly EntityActionDefinition[] = [
+      {
+        verb: "duplicate",
+        entities: ["product"],
+        arity: "single",
+        surfaces: ["selection", "inspector"],
+        group: "organize",
+        priority: 20,
+        placement: { selection: "overflow", inspector: "secondary" },
+        preserveSelection: true,
+        availability: ({ rows }) =>
+          rows[0]?.id === "PRD-LOCKED"
+            ? { status: "disabled", reason: "Already duplicated" }
+            : { status: "available" },
+        use: () => stubHandles("duplicate", run),
+      },
+      {
+        verb: "markAsStock",
+        entities: ["product"],
+        arity: "both",
+        surfaces: ["selection", "inspector"],
+        group: "primary",
+        priority: 200,
+        use: () => stubHandles("markAsStock", run),
+      },
+    ];
+
+    const { result } = renderHook(() =>
+      useEntityActions<TestRow>("product", registry),
+    );
+    const [stock, duplicate] = result.current.selectionActionItems;
+
+    expect(result.current.selectionActions).toBe(result.current.bulkActions);
+    expect(result.current.bulkActions.map((action) => action.id)).toEqual([
+      "mark-as-stock",
+      "duplicate",
+    ]);
+    expect(stock).toMatchObject({
+      surface: "selection",
+      group: "primary",
+      priority: 200,
+      placement: "primary",
+      preserveSelection: false,
+    });
+    expect(duplicate).toMatchObject({
+      surface: "selection",
+      arity: "single",
+      minSelection: 1,
+      maxSelection: 1,
+      group: "organize",
+      priority: 20,
+      placement: "overflow",
+      preserveSelection: true,
+    });
+    expect(duplicate?.availability([{ id: "PRD-LOCKED" }])).toEqual({
+      status: "disabled",
+      reason: "Already duplicated",
+    });
+    expect(result.current.bulkActions[1]?.maxSelection).toBe(1);
+    expect(result.current.bulkActions[1]?.preserveSelection).toBe(true);
+  });
+
+  it("resolves inspector actions independently from detail actions", () => {
+    const registry: readonly EntityActionDefinition[] = [
+      {
+        verb: "duplicate",
+        entities: ["product"],
+        arity: "single",
+        surfaces: ["inspector"],
+        group: "organize",
+        placement: { inspector: "secondary" },
+        preserveSelection: true,
+        use: () => stubHandles("duplicate", succeeds),
+      },
+    ];
+
+    const { result } = renderHook(() =>
+      useEntityActions<TestRow>("product", registry),
+    );
+
+    expect(result.current.detailActions).toEqual([]);
+    expect(result.current.inspectorActions[0]).toMatchObject({
+      id: "duplicate",
+      verb: "duplicate",
+      surface: "inspector",
+      arity: "single",
+      group: "organize",
+      priority: 100,
+      placement: "secondary",
+      preserveSelection: true,
+    });
   });
 
   it("drops a bulk action with nothing to run, keeping its row entry", () => {

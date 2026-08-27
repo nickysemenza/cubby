@@ -12,6 +12,7 @@ import {
   Package,
   PackageCheck,
   PackageMinus,
+  PanelRight,
   Pencil,
   Printer,
   Scale,
@@ -77,6 +78,7 @@ export const actionVerbs = {
   addToInventory: { label: "Add to inventory", icon: Package },
   bulkEdit: { label: "Bulk edit", icon: SquarePen },
   compare: { label: "Compare", icon: Scale },
+  inspect: { label: "Inspect", icon: PanelRight },
 
   // — opens a dialog or picker (trailing `...`) —————————————————————
   editLocations: { label: "Edit locations", icon: Pencil },
@@ -100,6 +102,7 @@ export const actionVerbs = {
   markAsStock: { label: "Mark as stock", icon: Wrench },
   merge: { label: "Merge", icon: Merge },
   copyCodes: { label: "Copy codes", icon: ClipboardCopy },
+  copyIdentifiers: { label: "Copy identifiers", icon: ClipboardCopy },
   duplicate: { label: "Duplicate", icon: Copy },
 
   // — removal ————————————————————————————————————————————————————————

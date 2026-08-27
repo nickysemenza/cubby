@@ -12,7 +12,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
 } from "~/components/ui/dropdown-menu";
-import { VerbMenuItem } from "./action-verb-ui";
+import { VerbButton, VerbMenuItem } from "./action-verb-ui";
 
 function renderInMenu(item: ReactNode) {
   return render(
@@ -91,5 +91,26 @@ describe("VerbMenuItem", () => {
 
     await screen.findByRole("menuitem");
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+});
+
+describe("VerbButton", () => {
+  it("makes an unavailable inspector action legible and inert", () => {
+    const onClick = vi.fn();
+    render(
+      <VerbButton
+        verb="duplicate"
+        disabledReason="No compatible copy target"
+        onClick={onClick}
+      />,
+    );
+
+    const button = screen.getByRole("button", {
+      name: "Duplicate, No compatible copy target",
+    });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("title", "No compatible copy target");
+    fireEvent.click(button);
+    expect(onClick).not.toHaveBeenCalled();
   });
 });

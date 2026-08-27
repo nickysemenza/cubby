@@ -1,13 +1,45 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
+import { Ellipsis } from "lucide-react";
 import type { ReactNode } from "react";
 import { createContext, Fragment, useContext, useMemo, useRef } from "react";
+import { Button } from "~/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { copyIdentifiers, copyShortcodes } from "~/lib/clipboard";
 import type {
   BulkAction,
+  BulkActionAvailability,
   BulkActionResult,
 } from "../data-table/bulk-actions.types";
 import type { ActionSurface } from "./action-items";
-import { VerbButton, verbBulkAction } from "./action-verb-ui";
+import {
+  VerbButton,
+  VerbMenuItem,
+  verbActionId,
+  verbBulkAction,
+} from "./action-verb-ui";
 import type { ActionVerbId } from "./action-verbs";
+import { deleteEntityActionDefinition } from "./delete-entity-action";
+import { ingredientEntityActionDefinitions } from "./ingredient-entity-actions";
+import { inventoryLocationEntityActionDefinitions } from "./inventory-location-entity-actions";
+import { mergeEntityActionDefinitions } from "./merge-entity-actions";
+import { productRosterEntityActionDefinitions } from "./product-roster-entity-actions";
+import { recipeEntityActionDefinitions } from "./recipe-entity-actions";
+import { specialistLifecycleEntityActionDefinitions } from "./specialist-lifecycle-entity-actions";
+import {
+  useCreateProjectFromTasksAction,
+  useMarkExpensePurchasedAction,
+  useMoveToProjectEntityAction,
+  useSetExpenseCostTypeAction,
+  useSetTaskDueDateAction,
+  useSetTaskStatusAction,
+  useSetTradeEntityAction,
+} from "./tracker-entity-actions";
 import { useAddToInventoryAction } from "./use-add-to-inventory-action";
 import { useDiscardInventoryAction } from "./use-discard-inventory-action";
 
@@ -46,6 +78,11 @@ export interface EntityActionRow {
   id: string;
   /** Used for display only; absent where a surface knows only the code. */
   name?: string | null;
+  /** Optional detail metadata consumed by entity-specific action dialogs. */
+  subtaskCount?: number;
+  recipeCount?: number;
+  filename?: string;
+  book?: string;
 }
 
 /**
@@ -60,14 +97,121 @@ export interface EntityActionSubject extends EntityActionRow {
   entity: Entity;
 }
 
-/** Where a registered action is allowed to appear. */
-type EntityActionSurface = "row" | "bar" | "detail" | ActionSurface;
+/** Where a registered domain action is allowed to appear. */
+type EntityActionSurface =
+  | "row"
+  | "selection"
+  | "inspector"
+  | "detail"
+  | ActionSurface;
+
+/** `bar` is accepted only while existing declarations migrate to `selection`. */
+type EntityActionSurfaceInput = EntityActionSurface | "bar";
+
+type EntityActionArity = "single" | "multi" | "both";
+type EntityActionGroup = "primary" | "organize" | "lifecycle" | "destructive";
+type EntityActionPlacement = "primary" | "secondary" | "overflow";
+
+type EntityActionAvailability = BulkActionAvailability;
+
+export interface EntityActionResolutionContext {
+  entity: Entity;
+  surface: EntityActionSurface;
+  rows: readonly EntityActionRow[];
+}
+
+interface ResolvedEntityAction<TRow extends EntityActionRow> {
+  id: string;
+  verb: ActionVerbId;
+  surface: "selection";
+  arity: EntityActionArity;
+  group: EntityActionGroup;
+  priority: number;
+  placement: EntityActionPlacement;
+  minSelection: number;
+  maxSelection?: number;
+  preserveSelection: boolean;
+  availability: (rows: readonly TRow[]) => EntityActionAvailability;
+  run: (rows: readonly TRow[]) => Promise<BulkActionResult>;
+}
+
+interface ResolvedEntityRecordAction {
+  id: string;
+  verb: ActionVerbId;
+  surface: "detail" | "inspector";
+  arity: Exclude<EntityActionArity, "multi">;
+  group: EntityActionGroup;
+  priority: number;
+  placement: EntityActionPlacement;
+  preserveSelection: boolean;
+  availability: (row: EntityActionRow) => EntityActionAvailability;
+  run: (row: EntityActionRow) => void;
+}
+
+const compareEntityActions = <
+  T extends { group: EntityActionGroup; priority: number },
+>(
+  left: T,
+  right: T,
+) => {
+  const groups: readonly EntityActionGroup[] = [
+    "primary",
+    "organize",
+    "lifecycle",
+    "destructive",
+  ];
+  return (
+    groups.indexOf(left.group) - groups.indexOf(right.group) ||
+    left.priority - right.priority
+  );
+};
+
+/** Adapt one normalized selection action to the existing table-bar contract. */
+function entityActionBulkAction<TRow extends EntityActionRow>(
+  action: ResolvedEntityAction<TRow>,
+): BulkAction<TRow> {
+  return verbBulkAction<TRow>(action.verb, {
+    id: action.id,
+    minSelection: action.minSelection,
+    ...(action.maxSelection == null
+      ? {}
+      : { maxSelection: action.maxSelection }),
+    ...(action.preserveSelection ? { preserveSelection: true } : {}),
+    availability: (selectedRows) =>
+      action.availability(selectedRows.map((row) => row.original)),
+    onExecute: (selectedRows) =>
+      action.run(selectedRows.map((row) => row.original)),
+  });
+}
+
+const normalizeSurface = (
+  surface: EntityActionSurfaceInput,
+): EntityActionSurface => (surface === "bar" ? "selection" : surface);
+
+const DEFAULT_PLACEMENT: Readonly<
+  Record<EntityActionSurface, EntityActionPlacement>
+> = {
+  row: "overflow",
+  selection: "primary",
+  inspector: "primary",
+  detail: "primary",
+  "navbar-create": "primary",
+  "palette-quick": "primary",
+  "inventory-page": "primary",
+  "home-quick": "primary",
+  "empty-state": "primary",
+};
+
+const AVAILABLE: EntityActionAvailability = { status: "available" };
+const HIDDEN: EntityActionAvailability = { status: "hidden" };
 
 const DEFAULT_SURFACES: readonly EntityActionSurface[] = [
   "row",
-  "bar",
+  "selection",
+  "inspector",
   "detail",
 ];
+const NO_ADDITIONAL_ACTIONS: readonly EntityActionDefinition[] = [];
 
 /**
  * How many rows an action means anything on.
@@ -78,8 +222,6 @@ const DEFAULT_SURFACES: readonly EntityActionSurface[] = [
  * is what N discards ARE, not a compromise. Recording that keeps a row-only
  * verb an intentional decision instead of an omission nobody got round to.
  */
-type EntityActionArity = "single" | "multi" | "both";
-
 export interface EntityActionHandles {
   /**
    * Runs the action over a selection. Null when this invocation has nothing to
@@ -94,9 +236,15 @@ export interface EntityActionHandles {
   rowMenuItem: (row: EntityActionRow) => ReactNode;
   /** Rendered once by the consuming surface, outside the table. */
   dialog: ReactNode;
+  /** Runtime availability, for data- or permission-dependent actions. */
+  availability?: (
+    context: EntityActionResolutionContext,
+  ) => EntityActionAvailability;
 }
 
 export interface EntityActionDefinition {
+  /** Stable action id. Defaults to the verb's kebab-case bulk-action id. */
+  id?: string;
   /** Presentation (label/icon/tone) resolves through `verbDef(verb)`. */
   verb: ActionVerbId;
   /** Rosters that offer this action. */
@@ -104,8 +252,20 @@ export interface EntityActionDefinition {
   arity: EntityActionArity;
   /** Extra floor beyond what `arity` implies. */
   minSelection?: number;
-  /** Defaults to row + bar + detail. */
-  surfaces?: readonly EntityActionSurface[];
+  /** Optional ceiling beyond what `arity` implies. */
+  maxSelection?: number;
+  /** Defaults to row + selection + inspector + detail. */
+  surfaces?: readonly EntityActionSurfaceInput[];
+  /** Stable cross-surface grouping. */
+  group?: EntityActionGroup;
+  /** Lower numbers lead within a group. Registry order breaks ties. */
+  priority?: number;
+  /** Per-surface placement override. */
+  placement?: Partial<Record<EntityActionSurface, EntityActionPlacement>>;
+  /** Definition-level availability; the hook may refine it at runtime. */
+  availability?: (
+    context: EntityActionResolutionContext,
+  ) => EntityActionAvailability;
   /** Keep the selection after a successful run (e.g. a refusable batch). */
   preserveSelection?: boolean;
   /**
@@ -113,7 +273,7 @@ export interface EntityActionDefinition {
    * own its mutation — which is the whole reason behavior lives here rather
    * than as an id the call site dereferences.
    */
-  use: () => EntityActionHandles;
+  use: (entity: Entity) => EntityActionHandles;
 }
 
 /**
@@ -122,6 +282,51 @@ export interface EntityActionDefinition {
  * `useListBulkActions`).
  */
 const entityActions: readonly EntityActionDefinition[] = [
+  {
+    id: "copy-shortcodes",
+    verb: "copyCodes",
+    entities: shortcodeEntities,
+    arity: "both",
+    surfaces: ["row", "selection", "inspector", "detail"],
+    group: "primary",
+    priority: 0,
+    placement: { inspector: "overflow", detail: "overflow" },
+    preserveSelection: true,
+    use: () => ({
+      run: async (rows) => ({
+        success: await copyShortcodes(rows.map((row) => row.id)),
+      }),
+      rowMenuItem: (row) => (
+        <VerbMenuItem
+          verb="copyCodes"
+          onSelect={() => void copyShortcodes([row.id])}
+        />
+      ),
+      dialog: null,
+    }),
+  },
+  {
+    verb: "copyIdentifiers",
+    entities: ["usda-food"],
+    arity: "both",
+    surfaces: ["row", "selection", "inspector", "detail"],
+    group: "primary",
+    priority: 0,
+    placement: { inspector: "overflow", detail: "overflow" },
+    preserveSelection: true,
+    use: () => ({
+      run: async (rows) => ({
+        success: await copyIdentifiers(rows.map((row) => row.id)),
+      }),
+      rowMenuItem: (row) => (
+        <VerbMenuItem
+          verb="copyIdentifiers"
+          onSelect={() => void copyIdentifiers([row.id])}
+        />
+      ),
+      dialog: null,
+    }),
+  },
   {
     verb: "addToInventory",
     entities: ["product"],
@@ -132,11 +337,13 @@ const entityActions: readonly EntityActionDefinition[] = [
     // "detail" included: the action derives the kit over-accounting warning
     // itself now, so the product page no longer has to keep a bespoke dialog
     // to be the one caller that can show it.
-    surfaces: ["row", "bar", "detail", "palette-quick"],
-    // The dialog collects a location and per-row quantities, so the bar's job
-    // ends once the rows are staged — and a cancelled dialog should leave the
-    // operator's selection where they left it.
+    // The dialog collects a location and per-row quantities, so the selection
+    // surface's job ends once the rows are staged — and a cancelled dialog
+    // should leave the operator's selection where they left it.
     preserveSelection: true,
+    group: "primary",
+    priority: 100,
+    surfaces: ["row", "selection", "inspector", "detail", "palette-quick"],
     use: useAddToInventoryAction,
   },
   {
@@ -147,13 +354,95 @@ const entityActions: readonly EntityActionDefinition[] = [
     // `productlist` keeps its own single-row discard and this never reaches it.
     entities: ["inventory"],
     arity: "both",
+    group: "lifecycle",
+    priority: 100,
     // The dialog collects a date, a reason and per-row quantities, so the bar's
     // job ends once the rows are staged — and a cancelled dialog should leave
     // the operator's selection where they left it.
     preserveSelection: true,
     use: useDiscardInventoryAction,
   },
+  ...recipeEntityActionDefinitions,
+  ...ingredientEntityActionDefinitions,
+  ...inventoryLocationEntityActionDefinitions,
+  ...mergeEntityActionDefinitions,
+  ...productRosterEntityActionDefinitions,
+  ...specialistLifecycleEntityActionDefinitions,
+  deleteEntityActionDefinition,
+  {
+    verb: "markPurchased",
+    entities: ["expense"],
+    arity: "single",
+    surfaces: ["row", "inspector", "detail"],
+    group: "primary",
+    priority: 50,
+    use: useMarkExpensePurchasedAction,
+  },
+  {
+    id: "move",
+    verb: "moveToProject",
+    entities: ["expense", "task"],
+    arity: "both",
+    group: "organize",
+    priority: 100,
+    use: useMoveToProjectEntityAction,
+  },
+  {
+    verb: "setStatus",
+    entities: ["task"],
+    arity: "both",
+    group: "organize",
+    priority: 200,
+    use: useSetTaskStatusAction,
+  },
+  {
+    verb: "setTrade",
+    entities: ["expense", "task"],
+    arity: "both",
+    group: "organize",
+    priority: 300,
+    use: useSetTradeEntityAction,
+  },
+  {
+    verb: "setCostType",
+    entities: ["expense"],
+    arity: "both",
+    group: "organize",
+    priority: 400,
+    use: useSetExpenseCostTypeAction,
+  },
+  {
+    verb: "setDueDate",
+    entities: ["task"],
+    arity: "both",
+    group: "organize",
+    priority: 400,
+    use: useSetTaskDueDateAction,
+  },
+  {
+    id: "create-project",
+    verb: "createProjectFrom",
+    entities: ["task"],
+    arity: "both",
+    surfaces: ["selection"],
+    group: "organize",
+    priority: 500,
+    preserveSelection: true,
+    use: useCreateProjectFromTasksAction,
+  },
 ];
+
+export interface EntityActionCatalogDescriptor
+  extends Omit<EntityActionDefinition, "use" | "surfaces"> {
+  surfaces: readonly EntityActionSurface[];
+}
+
+/** Read-only production roster for audits and contract tests; hooks stay private. */
+export const entityActionCatalogDescriptors: readonly EntityActionCatalogDescriptor[] =
+  entityActions.map(({ use: _use, surfaces, ...definition }) => ({
+    ...definition,
+    surfaces: (surfaces ?? DEFAULT_SURFACES).map(normalizeSurface),
+  }));
 
 const appliesTo = (
   definition: EntityActionDefinition,
@@ -161,11 +450,37 @@ const appliesTo = (
   surface: EntityActionSurface,
 ) =>
   definition.entities.includes(entity) &&
-  (definition.surfaces ?? DEFAULT_SURFACES).includes(surface);
+  (definition.surfaces ?? DEFAULT_SURFACES)
+    .map(normalizeSurface)
+    .includes(surface);
+
+const hasExplicitSurface = (
+  definition: EntityActionDefinition,
+  surface: EntityActionSurface,
+) => definition.surfaces?.map(normalizeSurface).includes(surface) ?? false;
+
+const selectionBounds = (definition: EntityActionDefinition) => {
+  const minSelection = Math.max(
+    definition.minSelection ?? 1,
+    definition.arity === "multi" ? 2 : 1,
+  );
+  const arityMaximum = definition.arity === "single" ? 1 : undefined;
+  const maxSelection =
+    definition.maxSelection == null
+      ? arityMaximum
+      : arityMaximum == null
+        ? definition.maxSelection
+        : Math.min(definition.maxSelection, arityMaximum);
+  return { minSelection, maxSelection };
+};
 
 export interface UseEntityActionsReturn<TRow extends EntityActionRow> {
-  /** For the selection bar. Only `multi`/`both` verbs reach this. */
+  /** For the selection bar. `single` verbs must opt into the surface. */
+  selectionActions: BulkAction<TRow>[];
+  /** Compatibility alias while list consumers migrate to `selectionActions`. */
   bulkActions: BulkAction<TRow>[];
+  /** Catalog-native selection actions, including placement and availability. */
+  selectionActionItems: ResolvedEntityAction<TRow>[];
   /**
    * For the row menu. Only `single`/`both` verbs reach this.
    *
@@ -187,10 +502,9 @@ export interface UseEntityActionsReturn<TRow extends EntityActionRow> {
     run: (row: EntityActionRow) => void;
   }[];
   /** Actions a detail page renders as buttons against the record it shows. */
-  detailActions: {
-    verb: ActionVerbId;
-    run: (row: EntityActionRow) => void;
-  }[];
+  detailActions: ResolvedEntityRecordAction[];
+  /** Actions rendered against the inspector's one canonical record. */
+  inspectorActions: ResolvedEntityRecordAction[];
 }
 
 /**
@@ -214,6 +528,8 @@ export function useEntityActions<TRow extends EntityActionRow>(
    * which hooks run, so it must be constant for a component instance.
    */
   registry: readonly EntityActionDefinition[] = entityActions,
+  /** Surface-owned lifecycle adapters, such as optimistic list deletion. */
+  additionalDefinitions: readonly EntityActionDefinition[] = NO_ADDITIONAL_ACTIONS,
 ): UseEntityActionsReturn<TRow> {
   const firstEntityRef = useRef(entity);
   if (firstEntityRef.current !== entity) {
@@ -225,60 +541,98 @@ export function useEntityActions<TRow extends EntityActionRow>(
 
   const matching = useMemo(
     () =>
-      registry.filter(
+      [...registry, ...additionalDefinitions].filter(
         (definition) =>
           appliesTo(definition, entity, "row") ||
-          appliesTo(definition, entity, "bar") ||
+          appliesTo(definition, entity, "selection") ||
+          appliesTo(definition, entity, "inspector") ||
           appliesTo(definition, entity, "detail") ||
           appliesTo(definition, entity, "palette-quick"),
       ),
-    [entity, registry],
+    [additionalDefinitions, entity, registry],
   );
 
   // Stable across renders because `matching` is derived from a constant
   // `entity` over a module-level registry — see the invariant above.
   const resolved = matching.map((definition) => ({
     definition,
-    handles: definition.use(),
+    handles: definition.use(entity),
   }));
 
-  const bulkActions = resolved.flatMap(({ definition, handles }) => {
-    if (definition.arity === "single") return [];
-    if (!appliesTo(definition, entity, "bar")) return [];
-    const { run } = handles;
-    if (!run) return [];
-    // `multi` means "one row is a no-op", so its floor is two regardless of
-    // what the definition asked for.
-    const minSelection = Math.max(
-      definition.minSelection ?? 1,
-      definition.arity === "multi" ? 2 : 1,
+  const actionAvailability = (
+    definition: EntityActionDefinition,
+    handles: EntityActionHandles,
+    surface: EntityActionSurface,
+    rows: readonly EntityActionRow[],
+  ): EntityActionAvailability => {
+    if (!handles.run) return HIDDEN;
+    const context = { entity, surface, rows };
+    return (
+      handles.availability?.(context) ??
+      definition.availability?.(context) ??
+      AVAILABLE
     );
-    return [
-      verbBulkAction<TRow>(definition.verb, {
-        minSelection,
-        ...(definition.preserveSelection
-          ? { preserveSelection: definition.preserveSelection }
-          : {}),
-        // The one place the wrapper is unwrapped, so no definition repeats it.
-        onExecute: (selectedRows) => run(selectedRows.map((r) => r.original)),
-      }),
-    ];
+  };
+
+  const actionMetadata = (
+    definition: EntityActionDefinition,
+    surface: EntityActionSurface,
+  ) => ({
+    group: definition.group ?? "primary",
+    priority: definition.priority ?? 100,
+    placement: definition.placement?.[surface] ?? DEFAULT_PLACEMENT[surface],
   });
+
+  const selectionActionItems = resolved
+    .flatMap(({ definition, handles }) => {
+      if (!appliesTo(definition, entity, "selection")) return [];
+      // Preserve the old selection-bar contract: single actions appear there only
+      // when the declaration explicitly opts in, and are then capped at one row.
+      if (
+        definition.arity === "single" &&
+        !hasExplicitSurface(definition, "selection")
+      )
+        return [];
+      const { run } = handles;
+      if (!run) return [];
+      const { minSelection, maxSelection } = selectionBounds(definition);
+      const metadata = actionMetadata(definition, "selection");
+      return [
+        {
+          id: definition.id ?? verbActionId(definition.verb),
+          verb: definition.verb,
+          surface: "selection",
+          arity: definition.arity,
+          ...metadata,
+          minSelection,
+          ...(maxSelection == null ? {} : { maxSelection }),
+          preserveSelection: definition.preserveSelection ?? false,
+          availability: (rows: readonly TRow[]) =>
+            actionAvailability(definition, handles, "selection", rows),
+          run: (rows: readonly TRow[]) => run(rows),
+        } satisfies ResolvedEntityAction<TRow>,
+      ];
+    })
+    .sort(compareEntityActions);
+
+  const selectionActions = selectionActionItems.map(entityActionBulkAction);
 
   const rowCapable = resolved.filter(
     ({ definition }) =>
       definition.arity !== "multi" && appliesTo(definition, entity, "row"),
   );
-  // Keyed by verb, not by array position: a definition's handles are rendered
-  // as siblings, and a registry entry that appears conditionally (an action
-  // with no `run` this render) would otherwise shift every later key.
+  // Keyed by stable action id, not by array position: a definition's handles
+  // are rendered as siblings, and a registry entry that appears conditionally
+  // (an action with no `run` this render) would otherwise shift every later key.
   const rowMenuItems = (row: EntityActionRow) =>
     rowCapable.map(({ definition, handles }) => (
-      <Fragment key={definition.verb}>{handles.rowMenuItem(row)}</Fragment>
+      <Fragment key={definition.id ?? definition.verb}>
+        {handles.rowMenuItem(row)}
+      </Fragment>
     ));
 
   const dialogs = resolved.map(({ definition, handles }) => (
-    <Fragment key={definition.verb}>{handles.dialog}</Fragment>
+    <Fragment key={definition.id ?? definition.verb}>{handles.dialog}</Fragment>
   ));
 
   const singleRecordActions = resolved.flatMap(({ definition, handles }) => {
@@ -294,22 +648,42 @@ export function useEntityActions<TRow extends EntityActionRow>(
   // Same shape as `singleRecordActions`, different surface: a detail page acts
   // on the one record it is showing, and renders a button rather than a
   // command item.
-  const detailActions = resolved.flatMap(({ definition, handles }) => {
-    if (definition.arity === "multi") return [];
-    if (!appliesTo(definition, entity, "detail")) return [];
-    const { run } = handles;
-    if (!run) return [];
-    return [
-      { verb: definition.verb, run: (row: EntityActionRow) => void run([row]) },
-    ];
-  });
+  const recordActionsFor = (surface: "detail" | "inspector") =>
+    resolved
+      .flatMap(({ definition, handles }) => {
+        if (definition.arity === "multi") return [];
+        if (!appliesTo(definition, entity, surface)) return [];
+        const { run } = handles;
+        if (!run) return [];
+        const metadata = actionMetadata(definition, surface);
+        return [
+          {
+            id: definition.id ?? verbActionId(definition.verb),
+            verb: definition.verb,
+            surface,
+            arity: definition.arity as Exclude<EntityActionArity, "multi">,
+            run: (row: EntityActionRow) => void run([row]),
+            ...metadata,
+            preserveSelection: definition.preserveSelection ?? false,
+            availability: (row: EntityActionRow) =>
+              actionAvailability(definition, handles, surface, [row]),
+          },
+        ];
+      })
+      .sort(compareEntityActions);
+
+  const detailActions = recordActionsFor("detail");
+  const inspectorActions = recordActionsFor("inspector");
 
   return {
-    bulkActions,
+    selectionActions,
+    bulkActions: selectionActions,
+    selectionActionItems,
     rowMenuItems,
     dialogs,
     singleRecordActions,
     detailActions,
+    inspectorActions,
   };
 }
 
@@ -431,21 +805,66 @@ export function EntityActionRowMenuItems({
 export function EntityActionButtons({
   entity,
   record,
+  surface = "detail",
 }: {
   entity: Entity;
   record: EntityActionRow;
+  surface?: "detail" | "inspector";
 }) {
-  const { detailActions, dialogs } = useEntityActions(entity);
-  if (detailActions.length === 0) return null;
+  const { detailActions, inspectorActions, dialogs } = useEntityActions(entity);
+  const actions = surface === "inspector" ? inspectorActions : detailActions;
+  if (actions.length === 0) return null;
+  const visible = actions.flatMap((action) => {
+    const availability = action.availability(record);
+    return availability.status === "hidden" ? [] : [{ action, availability }];
+  });
+  const primaryIndex = visible.findIndex(
+    ({ action, availability }) =>
+      action.group !== "destructive" &&
+      action.placement === "primary" &&
+      availability.status === "available",
+  );
+  const primary = primaryIndex >= 0 ? visible[primaryIndex] : undefined;
+  const overflow = visible.filter((_, index) => index !== primaryIndex);
   return (
     <>
-      {detailActions.map((action) => (
+      {primary ? (
         <VerbButton
-          key={action.verb}
-          verb={action.verb}
-          onClick={() => action.run(record)}
+          verb={primary.action.verb}
+          onClick={() => primary.action.run(record)}
         />
-      ))}
+      ) : null}
+      {overflow.length > 0 ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="outline" size="sm" aria-label="More actions" />
+            }
+          >
+            <Ellipsis />
+            More actions
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            {overflow.map(({ action, availability }, index) => (
+              <Fragment key={action.id}>
+                {action.group === "destructive" &&
+                overflow[index - 1]?.action.group !== "destructive" ? (
+                  <DropdownMenuSeparator />
+                ) : null}
+                <VerbMenuItem
+                  verb={action.verb}
+                  disabledReason={
+                    availability.status === "disabled"
+                      ? availability.reason
+                      : undefined
+                  }
+                  onSelect={() => action.run(record)}
+                />
+              </Fragment>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : null}
       {dialogs}
     </>
   );
