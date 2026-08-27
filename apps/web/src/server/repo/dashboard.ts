@@ -2,35 +2,32 @@ import {
   type CountableEntity,
   countableEntities,
 } from "@cubby/schemas/entity-manifest";
-import { and, isNull, type SQL, sql } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
-import {
-  cookbook,
-  image,
-  ingredient,
-  inventoryEntry,
-  location,
-  meal,
-  product,
-  project,
-  recipe,
-  task,
-} from "~/server/db/schema";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { cookbookListWhere } from "~/server/repo/cookbook";
+import { getDb } from "~/server/repo/database-helpers";
 import { buildExpenseWhereClause } from "~/server/repo/expense/lookup";
 import { buildFinancialAccountWhere } from "~/server/repo/financial-account";
 import { buildFinancialTransactionWhere } from "~/server/repo/financial-transaction";
-import { stockOnly } from "~/server/repo/inventory/placement";
+import { buildImageWhere } from "~/server/repo/image";
+import { buildIngredientListWhere } from "~/server/repo/ingredient/search";
+import { buildInventoryWhere } from "~/server/repo/inventory/crud";
+import { buildLocationWhere } from "~/server/repo/location/crud";
+import { buildMealWhere } from "~/server/repo/meal/crud";
+import { buildProductWhere } from "~/server/repo/product/crud";
+import { buildProjectWhere } from "~/server/repo/project/lookup";
 import { buildPurchaseWhereClause } from "~/server/repo/purchase";
+import { buildRecipeWhere } from "~/server/repo/recipe/crud";
 import { SHORTCODE_TABLE } from "~/server/repo/shortcode-utils";
+import { buildTaskWhere } from "~/server/repo/task/lookup";
 import { buildVendorWhereClause } from "~/server/repo/vendor";
 import { buildWishWhere } from "~/server/repo/wish";
 
 /**
  * The WHERE behind each entity's homepage/footer/`/entities` total.
  *
- * Every migrated entry calls that entity's OWN list where-builder with an empty
- * filter set, and that is stronger than it looks. A `productCountWhere()`
+ * Every entry calls that entity's OWN list where-builder with an empty filter
+ * set, and that is stronger than it looks. A `productCountWhere()`
  * returning `notDeleted(product)` would still be the CLAIM "with no filters the
  * list's population is exactly this" — restated in a second place, checkable
  * only by a test. `buildProductWhere(db, {})` makes no claim; it IS the list's
@@ -44,29 +41,28 @@ import { buildWishWhere } from "~/server/repo/wish";
  * and `{}` means unfiltered. TypeScript checks each thunk against the real
  * signature, so a drifted one is a compile error rather than a wrong number.
  *
- * The remaining literal thunks are the un-migrated tail. They are written out
- * here rather than hidden in a record that looks finished, so what is left to
- * do stays visible; `filter-application.integration.test.ts` proves each one
- * still matches its list in the meantime.
+ * `filter-application.integration.test.ts` asserts every count still equals its
+ * list's own `count`, which is what caught the shape of this problem in the
+ * first place and now guards the result.
  */
 type CountWhere = (db: Database) => SQL | undefined | Promise<SQL | undefined>;
 
 const COUNT_WHERE = {
-  product: () => notDeleted(product),
-  recipe: () => notDeleted(recipe),
-  ingredient: () => and(isNull(ingredient.recipeId), notDeleted(ingredient)),
-  cookbook: () => notDeleted(cookbook),
-  location: () => notDeleted(location),
-  inventory: () => and(notDeleted(inventoryEntry), stockOnly()),
-  meal: () => notDeleted(meal),
-  project: () => notDeleted(project),
-  task: () => notDeleted(task),
+  product: (db) => buildProductWhere(db, {}),
+  recipe: (db) => buildRecipeWhere(db, {}),
+  ingredient: (db) => buildIngredientListWhere(db, {}),
+  cookbook: () => cookbookListWhere(),
+  location: (db) => buildLocationWhere(db, {}),
+  inventory: (db) => buildInventoryWhere(db, {}),
+  meal: (db) => buildMealWhere(db, {}),
+  project: (db) => buildProjectWhere(db, {}),
+  task: (db) => buildTaskWhere(db, {}),
   vendor: () => buildVendorWhereClause({}),
   purchase: (db) => buildPurchaseWhereClause(db, {}),
   expense: (db) => buildExpenseWhereClause(db, {}),
   financialAccount: () => buildFinancialAccountWhere({}),
   financialTransaction: (db) => buildFinancialTransactionWhere(db, {}),
-  image: () => notDeleted(image),
+  image: (db) => buildImageWhere(db, {}),
   wish: (db) => buildWishWhere(db, {}),
 } satisfies Record<CountableEntity, CountWhere>;
 

@@ -37,6 +37,7 @@ import {
   isNull,
   notInArray,
   or,
+  type SQL,
   sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -716,14 +717,16 @@ const locationProductCondition = async (
   );
 };
 
-export const locationList = async (
+/**
+ * The full `locationList` predicate: parent/product resolution plus the
+ * uncorrelated live-inventory/children/image/valuation subqueries. Exported so
+ * `getEntityCounts` can call `buildLocationWhere(db, {})` and get the list's
+ * REAL population rather than a hand-restated copy that can drift from it.
+ */
+export const buildLocationWhere = async (
   db: Database,
   filters: LocationFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  groupBy?: string,
-  readIntent: ListReadIntent = "page",
-) => {
+): Promise<SQL | undefined> => {
   const parentCodes = filters.parentId ? [filters.parentId].flat() : [];
   const parentIds = await resolveAllPresent(db, "location", parentCodes);
   const parentCondition =
@@ -793,7 +796,7 @@ export const locationList = async (
     .groupBy(inventoryEntry.locationId)
     .having(sql`count(*) > ${filters.directItemCountMax ?? 0}`);
 
-  const whereClause = buildSearchConditions(
+  return buildSearchConditions(
     location,
     [],
     [
@@ -845,6 +848,17 @@ export const locationList = async (
       ),
     ],
   );
+};
+
+export const locationList = async (
+  db: Database,
+  filters: LocationFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  groupBy?: string,
+  readIntent: ListReadIntent = "page",
+) => {
+  const whereClause = await buildLocationWhere(db, filters);
 
   const orderByClause = buildOrderBy(
     location,

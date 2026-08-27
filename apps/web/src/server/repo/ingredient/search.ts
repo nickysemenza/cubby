@@ -434,12 +434,16 @@ export const getIngredientMatches = async (
   return map;
 };
 
-const ingredientListImpl = async (
+/**
+ * The complete WHERE for an ingredient list. `getEntityCounts` calls it with
+ * `{}` — see repo/dashboard.ts.
+ *
+ * Named `...ListWhere` rather than `buildIngredientWhere`: that name is already
+ * taken by the name-matching helper in ingredient/internal-types.ts.
+ */
+export const buildIngredientListWhere = async (
   db: Database,
   filters: IngredientFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent: ListReadIntent = "page",
 ) => {
   const dbClient = getDb(db);
 
@@ -530,6 +534,18 @@ const ingredientListImpl = async (
   );
 
   const whereClause = and(...conditions);
+  return whereClause;
+};
+
+const ingredientListImpl = async (
+  db: Database,
+  filters: IngredientFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
+) => {
+  const dbClient = getDb(db);
+  const whereClause = await buildIngredientListWhere(db, filters);
 
   // Build order by. `appearsInRecipes` and `product` are computed counts (not
   // real columns), so a resolver sorts them via correlated subqueries. These

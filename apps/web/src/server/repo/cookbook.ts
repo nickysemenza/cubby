@@ -172,6 +172,18 @@ const getCookbookById = async (db: Database, id: CookbookId) => {
 };
 
 /**
+ * The `readCookbookSummaries` predicate, with no filters of its own beyond
+ * soft-delete and an optional single-shortcode narrowing. Exported so
+ * `getEntityCounts` can call `cookbookListWhere()` and get the browse index's
+ * REAL population rather than a hand-restated copy that can drift from it.
+ */
+export const cookbookListWhere = (shortcode?: CookbookShortcode) =>
+  and(
+    notDeleted(cookbook),
+    shortcode ? eq(cookbook.shortcode, shortcode) : undefined,
+  );
+
+/**
  * Cookbooks with their non-deleted recipe counts, for the browse index. A left
  * join keeps cookbooks with zero current recipes visible.
  */
@@ -203,12 +215,7 @@ const readCookbookSummaries = async (
       product,
       and(eq(product.id, cookbook.productId), notDeleted(product)),
     )
-    .where(
-      and(
-        notDeleted(cookbook),
-        shortcode ? eq(cookbook.shortcode, shortcode) : undefined,
-      ),
-    )
+    .where(cookbookListWhere(shortcode))
     .groupBy(cookbook.id, image.key, product.id)
     .orderBy(cookbook.name);
 

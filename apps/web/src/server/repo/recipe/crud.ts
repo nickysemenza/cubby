@@ -346,12 +346,10 @@ export const getNotionRecipesForDiff = async (
 /** A nullable tag array is empty when null or zero-length. */
 const TAGS_ARE_EMPTY = sql`(${recipe.tags} IS NULL OR cardinality(${recipe.tags}) = 0)`;
 
-export const recipeList = async (
+/** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
+export const buildRecipeWhere = async (
   db: Database,
   filters: RecipeFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent: ListReadIntent = "page",
 ) => {
   const dbClient = getDb(db);
   const cookbookIds = await resolveFilterIds(
@@ -431,7 +429,7 @@ export const recipeList = async (
         formatSearchTerm(recipe.notes, filters.nameFilter),
       )
     : undefined;
-  const whereClause = buildSearchConditions(
+  return buildSearchConditions(
     recipe,
     [],
     [
@@ -509,6 +507,17 @@ export const recipeList = async (
       ...rangeConditions(recipe.totalMinutes, filters, "totalMinutes"),
     ],
   );
+};
+
+export const recipeList = async (
+  db: Database,
+  filters: RecipeFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
+) => {
+  const dbClient = getDb(db);
+  const whereClause = await buildRecipeWhere(db, filters);
 
   const resolveRecipeSort = (s: SortParams): SQL[] | null => {
     const isAsc = s.direction === "asc";
