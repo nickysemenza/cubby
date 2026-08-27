@@ -192,29 +192,51 @@ export async function resolveFilterIds<E extends ShortcodeEntity>(
   return resolveAllPresent(db, entity, codes);
 }
 
+/** Buckets a value per entity, keeping items `classify` rejects out entirely. */
+function groupByEntity<T, V>(
+  items: Iterable<T>,
+  classify: (
+    item: T,
+  ) => { entity: ShortcodeEntity; value: V } | null | undefined,
+): Map<ShortcodeEntity, V[]> {
+  const byEntity = new Map<ShortcodeEntity, V[]>();
+  for (const item of items) {
+    const classified = classify(item);
+    if (!classified) continue;
+    const bucket = byEntity.get(classified.entity);
+    if (bucket) bucket.push(classified.value);
+    else byEntity.set(classified.entity, [classified.value]);
+  }
+  return byEntity;
+}
+
+/** Runs `handler` for every bucket concurrently; discards its return value. */
+async function perEntity<T>(
+  byEntity: ReadonlyMap<ShortcodeEntity, T>,
+  handler: (entity: ShortcodeEntity, value: T) => Promise<void>,
+): Promise<void> {
+  await Promise.all(
+    [...byEntity].map(([entity, value]) => handler(entity, value)),
+  );
+}
+
 /** Resolves in one query per entity and keys results by canonical code. */
 export async function resolveShortcodes(
   db: Database | DrizzleTransaction,
   codes: readonly string[],
 ): Promise<Map<string, EntityRef>> {
-  const byEntity = new Map<ShortcodeEntity, string[]>();
-  for (const code of codes) {
+  const byEntity = groupByEntity(codes, (code) => {
     const parsed = parseShortcode(code);
-    if (!parsed) continue;
-    const bucket = byEntity.get(parsed.type);
-    if (bucket) bucket.push(parsed.shortcode);
-    else byEntity.set(parsed.type, [parsed.shortcode]);
-  }
+    return parsed && { entity: parsed.type, value: parsed.shortcode };
+  });
 
   const resolved = new Map<string, EntityRef>();
-  await Promise.all(
-    [...byEntity].map(async ([entity, entityCodes]) => {
-      const rows = await resolveParsed(db, entity, entityCodes);
-      for (const row of rows) {
-        resolved.set(row.shortcode, parseEntityRef(row.entity, row.id));
-      }
-    }),
-  );
+  await perEntity(byEntity, async (entity, entityCodes) => {
+    const rows = await resolveParsed(db, entity, entityCodes);
+    for (const row of rows) {
+      resolved.set(row.shortcode, parseEntityRef(row.entity, row.id));
+    }
+  });
   return resolved;
 }
 
@@ -223,33 +245,29 @@ export async function lookupShortcodes(
   db: Database | DrizzleTransaction,
   refs: readonly EntityRef[],
 ): Promise<Map<string, string>> {
-  const byEntity = new Map<ShortcodeEntity, Set<string>>();
-  for (const ref of refs) {
-    const bucket = byEntity.get(ref.entity);
-    if (bucket) bucket.add(ref.id);
-    else byEntity.set(ref.entity, new Set([ref.id]));
-  }
+  const byEntity = groupByEntity(refs, (ref) => ({
+    entity: ref.entity,
+    value: ref.id,
+  }));
 
   const codes = new Map<string, string>();
-  await Promise.all(
-    [...byEntity].map(async ([entity, ids]) => {
-      const table: ShortcodeTable = SHORTCODE_TABLE[entity];
-      // Soft-deleted rows are included on purpose: a payload can legitimately
-      // reference a row that was deleted after it was assembled, and rendering
-      // its (tombstoned) code beats rendering a raw uuid.
-      const rows = await unwrapDb(db)
-        .select({ id: table.id, shortcode: table.shortcode })
-        .from(table)
-        .where(inArray(table.id, [...ids]));
-      for (const row of rows) {
-        const id = parseEntityId(entity, row.id);
-        codes.set(
-          entityRefKey(entity, id),
-          parseShortcodeFor(entity, row.shortcode),
-        );
-      }
-    }),
-  );
+  await perEntity(byEntity, async (entity, ids) => {
+    const table: ShortcodeTable = SHORTCODE_TABLE[entity];
+    // Soft-deleted rows are included on purpose: a payload can legitimately
+    // reference a row that was deleted after it was assembled, and rendering
+    // its (tombstoned) code beats rendering a raw uuid.
+    const rows = await unwrapDb(db)
+      .select({ id: table.id, shortcode: table.shortcode })
+      .from(table)
+      .where(inArray(table.id, [...new Set(ids)]));
+    for (const row of rows) {
+      const id = parseEntityId(entity, row.id);
+      codes.set(
+        entityRefKey(entity, id),
+        parseShortcodeFor(entity, row.shortcode),
+      );
+    }
+  });
   return codes;
 }
 
@@ -280,42 +298,39 @@ export async function lookupEntityLabels(
   db: Database | DrizzleTransaction,
   refs: readonly EntityRef[],
 ): Promise<Map<string, string>> {
-  const byEntity = new Map<ShortcodeEntity, Set<string>>();
-  for (const ref of refs) {
-    const bucket = byEntity.get(ref.entity);
-    if (bucket) bucket.add(ref.id);
-    else byEntity.set(ref.entity, new Set([ref.id]));
-  }
+  const byEntity = groupByEntity(refs, (ref) => ({
+    entity: ref.entity,
+    value: ref.id,
+  }));
 
   const names = new Map<string, string>();
-  await Promise.all(
-    [...byEntity].map(async ([entity, ids]) => {
-      if (entity === "inventory") {
-        for (const [id, label] of await inventoryEntryLabels(db, ids)) {
-          names.set(entityRefKey(entity, id), label);
-        }
-        return;
+  await perEntity(byEntity, async (entity, ids) => {
+    if (entity === "inventory") {
+      const labels = await inventoryEntryLabels(db, new Set(ids));
+      for (const [id, label] of labels) {
+        names.set(entityRefKey(entity, id), label);
       }
-      const nameColumn: PgColumn | null = DISPLAY_NAME_COLUMN[entity];
-      if (!nameColumn) return;
-      const table: ShortcodeTable = SHORTCODE_TABLE[entity];
-      // includes-deleted: same reasoning as `lookupShortcodes` — an audit row
-      // or other assembled payload can legitimately name a row deleted after
-      // the fact, and its (past) name is what makes that entry readable.
-      const rows = await unwrapDb(db)
-        .select({ id: table.id, name: nameColumn })
-        .from(table)
-        .where(inArray(table.id, [...ids]));
-      for (const row of rows) {
-        if (typeof row.name === "string") {
-          names.set(
-            entityRefKey(entity, parseEntityId(entity, row.id)),
-            row.name,
-          );
-        }
+      return;
+    }
+    const nameColumn: PgColumn | null = DISPLAY_NAME_COLUMN[entity];
+    if (!nameColumn) return;
+    const table: ShortcodeTable = SHORTCODE_TABLE[entity];
+    // includes-deleted: same reasoning as `lookupShortcodes` — an audit row
+    // or other assembled payload can legitimately name a row deleted after
+    // the fact, and its (past) name is what makes that entry readable.
+    const rows = await unwrapDb(db)
+      .select({ id: table.id, name: nameColumn })
+      .from(table)
+      .where(inArray(table.id, [...new Set(ids)]));
+    for (const row of rows) {
+      if (typeof row.name === "string") {
+        names.set(
+          entityRefKey(entity, parseEntityId(entity, row.id)),
+          row.name,
+        );
       }
-    }),
-  );
+    }
+  });
   return names;
 }
 
