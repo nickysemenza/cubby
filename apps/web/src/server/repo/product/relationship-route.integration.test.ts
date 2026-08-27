@@ -1,12 +1,13 @@
 import { productRelationshipRouteOut } from "@cubby/schemas/product";
 import { projectCreateInput, taskCreateInput } from "@cubby/schemas/project";
-import { testShortcode } from "@cubby/schemas/testing";
+import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import {
   expense,
   location,
+  product as productTable,
   project as projectTable,
   projectToolUsage,
   purchase,
@@ -69,6 +70,117 @@ describe("getProductRelationshipRoute", () => {
         vendors: { count: 0, preview: [] },
       },
     });
+  });
+
+  it("returns PRODUCT_NOT_FOUND for missing and soft-deleted Products", async () => {
+    const missingProductId = testEntityId(
+      "product",
+      "00000000-0000-4000-8000-000000000099",
+    );
+    await expect(
+      getProductRelationshipRoute(ctx.db, missingProductId),
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      cause: { reason: "PRODUCT_NOT_FOUND" },
+    });
+
+    const deletedProduct = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Deleted relationship route" }),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(productTable)
+      .set({ deletedAt: new Date() })
+      .where(eq(productTable.id, deletedProduct.entityId));
+
+    await expect(
+      getProductRelationshipRoute(ctx.db, deletedProduct.entityId),
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      cause: { reason: "PRODUCT_NOT_FOUND" },
+    });
+  });
+
+  it("excludes isolated future and negative expenses from derived acquisition branches", async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Invalid acquisition route" }),
+      ctx.actor,
+    );
+    const futureProject = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "Future-only route project" }),
+      ctx.actor,
+    );
+    const negativeProject = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "Negative-only route project" }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "Future project acquisition",
+        cost: 10,
+        future: true,
+        productId: product.id,
+        productQuantity: 1,
+        projectId: futureProject.output.id,
+        vendor: "Future project vendor",
+        orderId: "INVALID-FUTURE-PROJECT",
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "Negative project acquisition",
+        cost: -10,
+        productId: product.id,
+        productQuantity: -1,
+        projectId: negativeProject.output.id,
+        vendor: "Negative project vendor",
+        orderId: "INVALID-NEGATIVE-PROJECT",
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "Future unassigned acquisition",
+        cost: 5,
+        future: true,
+        productId: product.id,
+        productQuantity: 1,
+        vendor: "Future unassigned vendor",
+        orderId: "INVALID-FUTURE-UNASSIGNED",
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "Negative unassigned acquisition",
+        cost: -5,
+        productId: product.id,
+        productQuantity: -1,
+        vendor: "Negative unassigned vendor",
+        orderId: "INVALID-NEGATIVE-UNASSIGNED",
+      }),
+      ctx.actor,
+    );
+
+    const route = await getProductRelationshipRoute(ctx.db, product.entityId);
+
+    expect(route.direct.expenses.count).toBe(4);
+    expect(route.direct.purchases).toEqual({ count: 0, preview: [] });
+    expect(route.derived.purchasedForProjects).toEqual({
+      count: 0,
+      unassignedExpenseCount: 0,
+      preview: [],
+    });
+    expect(route.derived.vendors).toEqual({ count: 0, preview: [] });
   });
 
   it("caps each purchase source before folding and preserves source-first ties", async () => {
