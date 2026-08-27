@@ -4,7 +4,6 @@ import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { invalidatesFor } from "~/lib/query-keys";
 import { useEntityDelete } from "../hooks/useEntityDelete";
 
 interface IngredientBasicInfoProps {
@@ -22,7 +21,6 @@ export const IngredientBasicInfo: FC<IngredientBasicInfoProps> = ({
     entityLabel: "Ingredient",
     entity: "ingredient",
     mutationOptions: entityMutationOptionsFactory("ingredient", "delete"),
-    invalidateKeys: invalidatesFor("ingredient", "list"),
     redirectTo: "/ingredients",
   });
 

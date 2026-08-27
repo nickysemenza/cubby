@@ -100,12 +100,11 @@ export function SessionCaptureActions({
   // the item is still in hand. The scan/inventory flow already completed — this
   // never blocks the continuous loop.
 
-  // Distinct from the outer session invalidator: this one also refreshes the
-  // product-lookup caches and, given a mutation result, polls its background
-  // work (e.g. the AI description enqueued by attaching a photo) so the UI
-  // self-heals once it drains.
+  // Given a mutation result this also polls its background work (e.g. the AI
+  // description enqueued by attaching a photo) so the UI self-heals once it
+  // drains.
   const invalidateCapture = (result?: unknown) =>
-    invalidate({ includeProductLookup: true, result, watch: true });
+    invalidate({ result, watch: true });
 
   const uploadImage = useMutation(imageUpload.uploadImage.mutationOptions());
   // Location photos go through the shared capture hook rather than a local
@@ -535,7 +534,6 @@ function ManualAdd({ locationId }: { locationId: LocationShortcode }) {
     entity: "inventory",
     mutationFn: inventoryCreateMutationOptions,
     success: (data) => savedWithBackgroundWork(data.sideEffects, "Added item"),
-    invalidateKeys: invalidatesFor("inventory"),
     onSuccess: () => {
       form.reset({
         product: undefined,

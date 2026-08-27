@@ -17,7 +17,6 @@ import {
   EmptyTitle,
 } from "~/components/ui/empty";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { invalidatesFor } from "~/lib/query-keys";
 import { useActionMutation } from "../_components/hooks/useActionMutation";
 
 /**
@@ -55,7 +54,6 @@ export const PurchaseDocuments: FC<{ purchase: PurchaseOut }> = ({
   const saveDocuments = useActionMutation({
     mutationFn: entityMutationOptionsFactory("purchase", "update"),
     success: "Documents updated",
-    invalidateKeys: invalidatesFor("purchase"),
     onSuccess: () => setSaveGeneration((n) => n + 1),
   });
 

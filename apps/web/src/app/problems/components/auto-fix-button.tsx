@@ -1,5 +1,4 @@
 import type { AllProblems } from "@cubby/schemas/problems";
-import type { QueryKey } from "@tanstack/react-query";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Wand2 } from "lucide-react";
@@ -14,9 +13,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import type { OperationCacheTag } from "~/integrations/tanstack-query/operation-meta";
 import { getErrorMessage } from "~/lib/error-utils";
 import { problems as problemOperations } from "~/lib/problems.functions";
-import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
 import { PROBLEMS_QUERY_STALE_TIME } from "../problem-query-freshness";
 import { type AutoFixTask, buildAutoFixPlan } from "./auto-fix-registry";
 
@@ -67,21 +68,24 @@ export function AutoFixButton({ problems }: { problems: AllProblems }) {
     const clauses: string[] = [];
     const failures: string[] = [];
     const batchIds: string[] = [];
-    const invalidate = new Set<QueryKey>(invalidatesFor("problems"));
+    const invalidate = new Map<string, OperationCacheTag>(
+      ripple.problems.map((tag) => [tag.join(" "), tag]),
+    );
 
     for (const [index, task] of tasks.entries()) {
       try {
         const outcome = await task.run();
         if (outcome.summary) clauses.push(outcome.summary);
         if (outcome.batchId) batchIds.push(outcome.batchId);
-        for (const key of task.invalidateKeys ?? []) invalidate.add(key);
+        for (const tag of task.invalidateTags ?? [])
+          invalidate.set(tag.join(" "), tag);
       } catch (error) {
         failures.push(`${task.label}: ${getErrorMessage(error)}`);
       }
       setRunning({ done: index + 1, total: tasks.length });
     }
 
-    invalidateQueryRoots(queryClient, [...invalidate]);
+    void invalidateOperationTags(queryClient, [...invalidate.values()]);
     setRunning(null);
 
     if (failures.length) {

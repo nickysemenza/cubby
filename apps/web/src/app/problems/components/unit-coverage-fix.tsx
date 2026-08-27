@@ -3,17 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 import { type ComponentProps, useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
-import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
+import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import {
-  entityDetailQueryKey,
-  entityDetailQueryOptions,
-} from "~/entities/entity-detail.functions";
+import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
-import { invalidatesFor } from "~/lib/query-keys";
 import type { UnitCoverageItem } from "./unit-coverage-items";
 
 type ProductDetail = NonNullable<EntityDetailByEntity["product"]>;
@@ -118,13 +114,9 @@ function TitleSizeFix({
 }) {
   const [value, setValue] = useState(String(proposed.value));
   const { data: product } = useQuery(entityDetailQueryOptions("product", id));
-  const update = useProblemCardMutation({
+  const update = useActionMutation({
     mutationFn: updateProduct,
     success: "Size saved",
-    invalidateKeys: [
-      ...invalidatesFor("product"),
-      entityDetailQueryKey("product", id),
-    ],
     onSuccess: close,
   });
 
@@ -176,10 +168,9 @@ function TitleSizeFix({
 /** Non-food product: a price is the whole fix. */
 function PriceFix({ id, close }: { id: string; close: () => void }) {
   const [price, setPrice] = useState("");
-  const update = useProblemCardMutation({
+  const update = useActionMutation({
     mutationFn: updateProduct,
     success: "Price saved",
-    invalidateKeys: invalidatesFor("product"),
     onSuccess: close,
   });
 
@@ -242,13 +233,9 @@ function DisconnectedFix({
     isLoading,
     isError,
   } = useQuery(entityDetailQueryOptions("product", id));
-  const update = useProblemCardMutation({
+  const update = useActionMutation({
     mutationFn: updateProduct,
     success: "Conversion saved",
-    invalidateKeys: [
-      ...invalidatesFor("product"),
-      entityDetailQueryKey("product", id),
-    ],
     onSuccess: close,
   });
 

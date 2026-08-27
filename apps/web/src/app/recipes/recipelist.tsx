@@ -17,7 +17,6 @@ import { NoneValue } from "~/components/ui/none-value";
 import { Skeleton } from "~/components/ui/skeleton";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
-import { invalidatesFor } from "~/lib/query-keys";
 import { relatedData } from "~/lib/related-data.functions";
 import {
   numberCellData,
@@ -97,7 +96,6 @@ function StuckTotalsCell({
   const recompute = useActionMutation({
     mutationFn: recipeOperations.recomputeOne.mutationOptions,
     success: "Recomputed recipe totals.",
-    invalidateKeys: invalidatesFor("recipe", "list"),
   });
   const notCosted = (
     <span className="text-2xs text-muted-foreground italic">not costed</span>
@@ -188,7 +186,6 @@ export function RecipeList({
   const updateRecipeMutation = useUpdateMutation({
     mutationFn: entityMutationOptionsFactory("recipe", "update"),
     entity: "recipe",
-    invalidateKeys: invalidatesFor("recipe", "list"),
   });
 
   // Inline name editing on the hook-prepended name column. Stable reference

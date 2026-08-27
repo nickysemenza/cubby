@@ -3,7 +3,6 @@ import { useMemo, useState } from "react";
 import { expense } from "~/app/expenses/expense.functions";
 import { costTypeOptions } from "~/app/expenses/expense-options";
 import { tradeOptions } from "~/app/projects/trade-options";
-import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { verbBulkAction } from "../actions/action-verb-ui";
 import type {
@@ -100,7 +99,6 @@ export function ExpenseBulkActionDialogs({
 
   const moveMutation = useActionMutation({
     mutationFn: expense.bulkMove.mutationOptions,
-    invalidateKeys: invalidatesFor("expense"),
     success: resultMessage("Moved"),
     onSuccess: () => {
       setMoveItems([]);
@@ -109,7 +107,6 @@ export function ExpenseBulkActionDialogs({
   });
   const tradeMutation = useActionMutation({
     mutationFn: expense.bulkSetTrade.mutationOptions,
-    invalidateKeys: invalidatesFor("expense"),
     success: resultMessage("Updated"),
     onSuccess: () => {
       setTradeItems([]);
@@ -118,7 +115,6 @@ export function ExpenseBulkActionDialogs({
   });
   const costTypeMutation = useActionMutation({
     mutationFn: expense.bulkSetCostType.mutationOptions,
-    invalidateKeys: invalidatesFor("expense"),
     success: resultMessage("Updated"),
     onSuccess: () => {
       setCostTypeItems([]);

@@ -28,7 +28,6 @@ import {
 } from "~/components/ui/sheet";
 import { Spinner } from "~/components/ui/spinner";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { invalidatesFor } from "~/lib/query-keys";
 
 /** A product the sweep just created that could use a moment of curation. */
 export interface SweepFollowUp {
@@ -65,7 +64,6 @@ export function SweepProductFollowUp({
     intent: "full",
     mutationFn: entityMutationOptionsFactory("product", "update"),
     success: "Product details saved",
-    invalidateKeys: invalidatesFor("product"),
     onSuccess: (result) => {
       onSaved(result);
       close();

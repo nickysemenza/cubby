@@ -3,7 +3,6 @@ import type { TaskOut, Trade } from "@cubby/schemas/project";
 import { useMemo, useState } from "react";
 import { tradeOptions } from "~/app/projects/trade-options";
 import { task } from "~/app/tasks/task.functions";
-import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { verbBulkAction } from "../actions/action-verb-ui";
 import type {
@@ -132,7 +131,6 @@ export function TaskBulkActionDialogs({
 
   const moveMutation = useActionMutation({
     mutationFn: task.bulkMove.mutationOptions,
-    invalidateKeys: invalidatesFor("task"),
     success: success("Moved"),
     onSuccess: () => {
       setMoveItems([]);
@@ -141,7 +139,6 @@ export function TaskBulkActionDialogs({
   });
   const statusMutation = useActionMutation({
     mutationFn: task.bulkSetStatus.mutationOptions,
-    invalidateKeys: invalidatesFor("task"),
     success: success("Updated"),
     onSuccess: () => {
       setStatusItems([]);
@@ -150,7 +147,6 @@ export function TaskBulkActionDialogs({
   });
   const tradeMutation = useActionMutation({
     mutationFn: task.bulkSetTrade.mutationOptions,
-    invalidateKeys: invalidatesFor("task"),
     success: success("Updated"),
     onSuccess: () => {
       setTradeItems([]);
@@ -159,7 +155,6 @@ export function TaskBulkActionDialogs({
   });
   const dueDateMutation = useActionMutation({
     mutationFn: task.bulkSetDueDate.mutationOptions,
-    invalidateKeys: invalidatesFor("task"),
     success: success("Updated"),
     onSuccess: () => {
       setDueDateItems([]);

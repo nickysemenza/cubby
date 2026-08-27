@@ -16,7 +16,6 @@ import { project } from "~/app/projects/project.functions";
 import { projectKindOptions } from "~/app/projects/project-options";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidatesFor } from "~/lib/query-keys";
 
 const quickAddSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -57,7 +56,6 @@ export function CreateProjectFromTasksDialog({
   });
   const mutation = useActionMutation({
     mutationFn: project.createFromTasks.mutationOptions,
-    invalidateKeys: [...invalidatesFor("task"), ...invalidatesFor("project")],
     success: (data) => `Created "${data.project.name}"`,
     onSuccess: () => onOpenChange(false),
   });

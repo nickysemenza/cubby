@@ -16,7 +16,6 @@ vi.mock("~/lib/background-batch.functions", () => ({
 
 import {
   makeBatchStatusFetcher,
-  watchBatchesAndInvalidate,
   watchBatchesAndInvalidateTags,
 } from "./background-batch-polling";
 
@@ -59,10 +58,10 @@ describe("background batch polling", () => {
       .mockResolvedValueOnce("running")
       .mockResolvedValueOnce("succeeded");
 
-    const watching = watchBatchesAndInvalidate({
+    const watching = watchBatchesAndInvalidateTags({
       queryClient,
       result: queuedResult,
-      invalidateKeys: [["product"]],
+      invalidateTags: [["product"]],
       fetchBatchStatus,
     });
     await vi.advanceTimersByTimeAsync(3_000);
@@ -79,10 +78,10 @@ describe("background batch polling", () => {
       .mockResolvedValue(undefined);
     const fetchBatchStatus = vi.fn().mockResolvedValue("running");
 
-    const watching = watchBatchesAndInvalidate({
+    const watching = watchBatchesAndInvalidateTags({
       queryClient,
       result: queuedResult,
-      invalidateKeys: [["product"]],
+      invalidateTags: [["product"]],
       fetchBatchStatus,
     });
     await vi.advanceTimersByTimeAsync(45_000);

@@ -152,7 +152,6 @@ export function IngredientList() {
   const updateIngredientMutation = useUpdateMutation({
     mutationFn: entityMutationOptionsFactory("ingredient", "update"),
     entity: "ingredient",
-    invalidateKeys: invalidatesFor("ingredient", "list"),
   });
 
   // Rows awaiting merge confirmation — set by the bulk action's onExecute

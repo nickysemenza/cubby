@@ -32,7 +32,6 @@ import { Button } from "~/components/ui/button";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { shortcodeHead } from "~/lib/page-title";
-import { invalidatesFor } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 
 const searchSchema = z.object({
@@ -135,7 +134,6 @@ function RecipeDetailBody({ recipe }: { recipe: RecipeOut }) {
     entity: "recipe",
     mutationOptions: (callbacks) =>
       entityMutationOptionsFactory("recipe", "delete")(callbacks),
-    invalidateKeys: invalidatesFor("recipe", "list"),
     redirectTo: "/recipes",
   });
 

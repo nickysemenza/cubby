@@ -2,7 +2,7 @@ import type { UseMutationOptions } from "@tanstack/react-query";
 
 // Shared type helpers for the Problems-page mutation wrappers. The "fix all"
 // buttons now stream their progress (see `problem-backfill-action.tsx`); these
-// generic helpers remain for the per-card wrapper (`useProblemCardMutation`),
+// generic helpers remain for the per-card mutations (`useActionMutation`),
 // which recovers a mutation's data type from its `*.mutationOptions` reference.
 
 /** A typed mutation-options factory for the selected repair workflow. */

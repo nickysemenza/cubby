@@ -39,7 +39,6 @@ export function UploadImageDialog() {
   const importFromUrl = useActionMutation({
     mutationFn: imageUpload.importFromUrl.mutationOptions,
     success: "Image imported.",
-    invalidateKeys: invalidatesFor("image"),
     onSuccess: () => setUrl(""),
   });
 

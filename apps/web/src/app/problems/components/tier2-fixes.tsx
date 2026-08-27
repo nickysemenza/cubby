@@ -2,14 +2,13 @@ import type {
   DuplicateProductIdentity,
   DuplicateVendor,
 } from "@cubby/schemas/problems";
-import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
+import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { EntityMergeDialog } from "~/app/_components/merge/entity-merge-dialog";
 import { product } from "~/app/products/product.functions";
 import { vendor } from "~/app/vendors/vendor.functions";
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { invalidatesFor } from "~/lib/query-keys";
 
 const deleteProduct = entityMutationOptionsFactory("product", "delete");
 
@@ -33,10 +32,9 @@ export function OrphanedDeleteFix({
   name: string;
   close: () => void;
 }) {
-  const remove = useProblemCardMutation({
+  const remove = useActionMutation({
     mutationFn: deleteProduct,
     success: "Product deleted",
-    invalidateKeys: invalidatesFor("product"),
     onSuccess: close,
   });
 
@@ -86,7 +84,7 @@ export function DuplicateVendorMergeFix({
   variant: DuplicateVendor;
   close: () => void;
 }) {
-  const merge = useProblemCardMutation({
+  const merge = useActionMutation({
     mutationFn: vendor.merge.mutationOptions,
     // Now that the merge reports what it moved, say so: "Merged into Amazon"
     // gave no way to tell a no-op merge from one that repointed 40 purchases.
@@ -97,7 +95,6 @@ export function DuplicateVendorMergeFix({
         ? `Merged into ${vendor.name}`
         : `Merged into ${vendor.name} — ${moved} purchase(s) moved`;
     },
-    invalidateKeys: invalidatesFor("purchase"),
     onSuccess: close,
   });
 
@@ -153,10 +150,9 @@ export function DuplicateProductMergeFix({
   variant: DuplicateProductIdentity;
   close: () => void;
 }) {
-  const merge = useProblemCardMutation({
+  const merge = useActionMutation({
     mutationFn: product.merge.mutationOptions,
     success: (result) => `Merged into ${result.product.name}`,
-    invalidateKeys: invalidatesFor("product", "merge"),
     onSuccess: close,
   });
 

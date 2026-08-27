@@ -6,7 +6,6 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
-import { entityDetailQueryKey } from "~/entities/entity-detail.functions";
 import { ai } from "~/lib/ai.functions";
 
 interface AiDescriptionSectionProps {
@@ -23,7 +22,6 @@ export const AiDescriptionSection: FC<AiDescriptionSectionProps> = ({
   const describeMutation = useActionMutation({
     mutationFn: ai.describeLocation.mutationOptions,
     success: "Description saved.",
-    invalidateKeys: [entityDetailQueryKey("location", locationId)],
   });
 
   const canAnalyze = hasImages;

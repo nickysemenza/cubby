@@ -1,12 +1,13 @@
-import type { QueryKey } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
 import { Stack } from "~/components/layout";
 import { Progress } from "~/components/ui/progress";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import type { OperationCacheTag } from "~/integrations/tanstack-query/operation-meta";
 import type { BulkProgressEvent } from "~/lib/bulk-progress";
-import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
 import { ProblemActionButton } from "./problem-action-button";
 
 /**
@@ -21,8 +22,12 @@ export type BackfillButtonProps<TResult> = {
   run: (
     signal: AbortSignal,
   ) => Promise<AsyncIterable<BulkProgressEvent<unknown, TResult>>>;
-  /** Entity lists to invalidate alongside the problems list. */
-  invalidateKeys?: readonly QueryKey[];
+  /**
+   * Cache tags to invalidate alongside the problems list. Spelled out here
+   * rather than taken from the descriptor: these buttons drive a held-open
+   * stream, so there is no `useMutation` for the root cache to read `meta` off.
+   */
+  invalidateTags?: readonly OperationCacheTag[];
   toastResult: (data: TResult) => BackfillToast;
   idleLabel: string;
   pendingLabel: string;
@@ -45,7 +50,7 @@ export type BackfillButtonProps<TResult> = {
  */
 export function BackfillButton<TResult>({
   run,
-  invalidateKeys,
+  invalidateTags,
   toastResult,
   idleLabel,
   pendingLabel,
@@ -59,9 +64,9 @@ export function BackfillButton<TResult>({
       onDone: (data) => {
         const { tone, message } = toastResult(data);
         toast[tone](message);
-        invalidateQueryRoots(queryClient, [
-          ...invalidatesFor("problems"),
-          ...(invalidateKeys ?? []),
+        void invalidateOperationTags(queryClient, [
+          ...ripple.problems,
+          ...(invalidateTags ?? []),
         ]);
       },
     });

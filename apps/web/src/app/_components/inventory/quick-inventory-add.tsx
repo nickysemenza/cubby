@@ -34,7 +34,6 @@ import { Spinner } from "~/components/ui/spinner";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useImageState } from "~/hooks/useImageState";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
 import type { ComboboxItem } from "../combobox/combobox-types";
@@ -147,7 +146,6 @@ export function QuickInventoryAdd({
   const productCreateMutation = useActionMutation({
     entity: "product",
     mutationFn: entityMutationOptionsFactory("product", "create"),
-    invalidateKeys: invalidatesFor("product"),
     onSuccess: invalidateProductLookup,
   });
   const inventoryCreateMutation = useCreateInventoryMutation();
