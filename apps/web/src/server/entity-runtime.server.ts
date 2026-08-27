@@ -1,4 +1,3 @@
-import { integrityCatalogSchema } from "@cubby/schemas/entity-integrity";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import * as drizzle from "drizzle-orm";
 import { z } from "zod";
@@ -153,9 +152,6 @@ export const entityInspectorHealthHandlers = implementOperationDomain(
 export const entityIntegrityHandlers = implementOperationDomain(
   entityIntegrity,
   {
-    catalog: {
-      output: integrityCatalogSchema,
-      run: async () => buildIntegrityCatalog(),
-    },
+    catalog: async () => buildIntegrityCatalog(),
   },
 );
