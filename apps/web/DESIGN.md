@@ -300,7 +300,8 @@ than route-local visual systems.
 - **Hover / Focus:** filled cobalt deepens; focus uses a crisp cobalt 2px ring
   and real boundary, never glow.
 - **Outline / Secondary / Ghost:** white, inset, or transparent at rest with a
-  neutral hover tone. Destructive actions use restrained red tint and text.
+  neutral hover tone. Destructive actions use a restrained red tint and border
+  with neutral foreground text so the warning remains legible on paper.
 
 ### Chips
 
