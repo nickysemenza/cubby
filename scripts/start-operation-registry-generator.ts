@@ -93,6 +93,129 @@ const moduleSpecifier = (path: string): string =>
     .replaceAll("\\", "/")
     .replace(/\.[cm]?[jt]sx?$/u, "")}`;
 
+const programCache = new Map<string, AstNode>();
+const parseFile = (path: string): AstNode => {
+  const cached = programCache.get(path);
+  if (cached) return cached;
+  const program = parseSync(path, readFileSync(path, "utf8"), {
+    lang: path.endsWith("x") ? "tsx" : "ts",
+  }).program as unknown as AstNode;
+  programCache.set(path, program);
+  return program;
+};
+
+const topLevelVariableDeclarators = (
+  program: AstNode,
+): { exportName: string; init: AstNode }[] => {
+  const body = Array.isArray(program.body) ? (program.body as AstNode[]) : [];
+  const declarators: { exportName: string; init: AstNode }[] = [];
+  for (const statement of body) {
+    const declaration =
+      statement.type === "ExportNamedDeclaration"
+        ? (statement.declaration as AstNode | undefined)
+        : statement.type === "VariableDeclaration"
+          ? statement
+          : undefined;
+    if (declaration?.type !== "VariableDeclaration") continue;
+    const variables = Array.isArray(declaration.declarations)
+      ? (declaration.declarations as AstNode[])
+      : [];
+    for (const variable of variables) {
+      const id = variable.id as AstNode | undefined;
+      const init = variable.init as AstNode | undefined;
+      if (typeof id?.name === "string" && init) {
+        declarators.push({ exportName: id.name, init });
+      }
+    }
+  }
+  return declarators;
+};
+
+type DomainMember = { operation: string; kind: Exclude<Kind, "subscription"> };
+type DomainDeclaration = {
+  path: string;
+  domain: string;
+  members: Map<string, DomainMember>;
+};
+type DomainDeclarations = {
+  byOperation: Map<
+    string,
+    { kind: Exclude<Kind, "subscription">; path: string }
+  >;
+  byBinding: Map<string, DomainDeclaration>;
+};
+
+let cachedDomainDeclarations: DomainDeclarations | undefined;
+
+/**
+ * Client `defineOperationDomain` declarations are the single authority for
+ * which browser operations exist. Every server handler must map onto exactly
+ * one of them: a handler without a declaration and a second declaration of the
+ * same operation id are both fail-fast errors, because either would otherwise
+ * mint a registry entry (or merge two schemas) silently while `pnpm check`
+ * stays green.
+ */
+export const collectDomainDeclarations = (): DomainDeclarations => {
+  if (cachedDomainDeclarations) return cachedDomainDeclarations;
+  const byOperation: DomainDeclarations["byOperation"] = new Map();
+  const byBinding: DomainDeclarations["byBinding"] = new Map();
+  for (const path of sourceFiles(SOURCE_ROOT)) {
+    for (const { exportName, init } of topLevelVariableDeclarators(
+      parseFile(path),
+    )) {
+      if (
+        init.type !== "CallExpression" ||
+        calledName(init.callee as AstNode) !== "defineOperationDomain"
+      ) {
+        continue;
+      }
+      const args = Array.isArray(init.arguments)
+        ? (init.arguments as AstNode[])
+        : [];
+      const [domainArg, definitionsArg] = args;
+      if (
+        domainArg?.type !== "Literal" ||
+        typeof domainArg.value !== "string" ||
+        definitionsArg?.type !== "ObjectExpression"
+      ) {
+        continue;
+      }
+      const members = new Map<string, DomainMember>();
+      const properties = Array.isArray(definitionsArg.properties)
+        ? (definitionsArg.properties as AstNode[])
+        : [];
+      for (const property of properties) {
+        if (property.type !== "Property") continue;
+        const key = property.key as AstNode | undefined;
+        const value = property.value as AstNode | undefined;
+        const memberName = key?.name ?? key?.value;
+        if (typeof memberName !== "string" || value?.type !== "CallExpression")
+          continue;
+        const kind = calledName(value.callee as AstNode);
+        if (kind !== "query" && kind !== "mutation") continue;
+        const operation = `${domainArg.value}.${memberName}`;
+        const existing = byOperation.get(operation);
+        if (existing) {
+          throw new Error(
+            `${operation} is declared more than once: ${relative(ROOT, existing.path)} and ${relative(ROOT, path)}. Each Start operation id may have exactly one client declaration; whichever schema the single handler used would win silently.`,
+          );
+        }
+        byOperation.set(operation, { kind, path });
+        members.set(memberName, { operation, kind });
+      }
+      if (members.size > 0) {
+        byBinding.set(`${path}#${exportName}`, {
+          path,
+          domain: domainArg.value,
+          members,
+        });
+      }
+    }
+  }
+  cachedDomainDeclarations = { byOperation, byBinding };
+  return cachedDomainDeclarations;
+};
+
 /**
  * Browser projections already declare the authoritative operation id inside
  * each exported handler. Compile those declarations into lazy adapters rather
@@ -104,9 +227,7 @@ export const collectStartOperationHandlers = (): Map<
 > => {
   const handlers = new Map<string, HandlerDefinition>();
   for (const path of sourceFiles(SOURCE_ROOT).filter(serverHandlerSource)) {
-    const program = parseSync(path, readFileSync(path, "utf8"), {
-      lang: path.endsWith("x") ? "tsx" : "ts",
-    }).program as unknown as AstNode;
+    const program = parseFile(path);
     const body = Array.isArray(program.body) ? (program.body as AstNode[]) : [];
     for (const statement of body) {
       const declaration =
@@ -185,6 +306,7 @@ export const collectStartOperationHandlers = (): Map<
 };
 
 export const collectStartOperations = (): Map<string, Definition> => {
+  const declarations = collectDomainDeclarations();
   const operations = new Map<string, Definition>();
   const add = (
     operation: string,
@@ -205,46 +327,17 @@ export const collectStartOperations = (): Map<string, Definition> => {
     operations.set(operation, definition);
   };
 
+  for (const [operation, declared] of declarations.byOperation) {
+    add(operation, declared.kind, declared.path);
+  }
+
   for (const path of sourceFiles(SOURCE_ROOT)) {
-    const source = parseSync(
-      path,
-      readFileSync(path, "utf8"),
-      { lang: path.endsWith("x") ? "tsx" : "ts" },
-    ).program as unknown as AstNode;
+    const source = parseFile(path);
     walk(source, (node) => {
       if (node.type === "CallExpression") {
         const name = calledName(node.callee as AstNode);
         const args = node.arguments as AstNode[];
         const first = args[0];
-        if (
-          name === "defineOperationDomain" &&
-          first?.type === "Literal" &&
-          typeof first.value === "string" &&
-          args[1]?.type === "ObjectExpression"
-        ) {
-          const definitions = Array.isArray(args[1].properties)
-            ? (args[1].properties as AstNode[])
-            : [];
-          for (const property of definitions) {
-            if (property.type !== "Property") continue;
-            const key = property.key as AstNode | undefined;
-            const value = property.value as AstNode | undefined;
-            if (value?.type !== "CallExpression") continue;
-            const operationName = key?.name ?? key?.value;
-            const definitionKind = calledName(value.callee as AstNode);
-            if (
-              typeof operationName === "string" &&
-              (definitionKind === "query" || definitionKind === "mutation")
-            ) {
-              add(
-                `${first.value}.${operationName}`,
-                definitionKind,
-                path,
-              );
-            }
-          }
-          return;
-        }
         if (name && OBJECT_CALLS.has(name) && first?.type === "ObjectExpression") {
           const operation = propertyString(first, "operation");
           if (operation) {
@@ -282,17 +375,18 @@ export const collectStartOperations = (): Map<string, Definition> => {
     });
   }
   for (const [operation, handler] of collectStartOperationHandlers()) {
+    // A handler without a client declaration would previously be registered
+    // silently, so a typo'd server id shipped BOTH ids and the client's calls
+    // only failed at runtime. Fail the generator instead.
+    if (!declarations.byOperation.has(operation)) {
+      throw new Error(
+        `${operation} has a server handler (${handler.module}.${handler.exportName}) but no client declaration in any *.functions.ts domain. Declare it with query()/mutation(), or delete the handler.`,
+      );
+    }
     const declared = operations.get(operation);
     if (declared && handler.kind && declared.kind !== handler.kind) {
       throw new Error(
         `${operation} is declared as ${declared.kind} but its server handler is ${handler.kind}`,
-      );
-    }
-    if (!declared) {
-      add(
-        operation,
-        handler.kind ?? "query",
-        join(SOURCE_ROOT, handler.module.slice(2)),
       );
     }
   }
