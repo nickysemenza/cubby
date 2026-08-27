@@ -286,6 +286,7 @@ export const START_OPERATIONS = {
     entities: [],
     productPhases: [],
   },
+  "inventory.bulkAdd": { kind: "mutation", entities: [], productPhases: [] },
   "inventory.bulkMove": { kind: "mutation", entities: [], productPhases: [] },
   "inventory.bulkProcess": {
     kind: "mutation",

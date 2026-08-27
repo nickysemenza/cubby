@@ -310,6 +310,10 @@ export const START_OPERATION_HANDLER_LOADERS = {
     const module = await import("~/server/ingredient-browser.server");
     return module.ingredientResolveOrCreate as unknown as StartOperationHandler;
   },
+  "inventory.bulkAdd": async () => {
+    const module = await import("~/server/inventory-browser.server");
+    return module.bulkAddInventoryForBrowser as unknown as StartOperationHandler;
+  },
   "inventory.bulkMove": async () => {
     const module = await import("~/server/inventory-browser.server");
     return module.bulkMoveInventoryForBrowser as unknown as StartOperationHandler;

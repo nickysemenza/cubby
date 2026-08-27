@@ -4,11 +4,14 @@ import {
   type StartOperationRequest,
 } from "~/server/start-operation.server";
 import {
+  bulkAddInventoryWorkflow,
   bulkMoveInventoryWorkflow,
   bulkMovePayload,
   bulkProcessInventoryWorkflow,
   findInventoryDuplicatesWorkflow,
   getInventoryByLocationIdsWorkflow,
+  inventoryBulkAddOut,
+  inventoryBulkAddPayload,
   inventoryBulkOperationPayload,
   inventoryDuplicateUniqueProductsOut,
   inventoryFindDuplicatesInput,
@@ -40,6 +43,21 @@ export const bulkProcessInventoryForBrowser = async (options: {
     request: options.request,
     run: (context, input) =>
       bulkProcessInventoryWorkflow(context.db, context.actorContext, input),
+  });
+
+export const bulkAddInventoryForBrowser = async (options: {
+  data: z.input<typeof inventoryBulkAddPayload>;
+  request: StartOperationRequest;
+}) =>
+  await runStartOperation({
+    operation: "inventory.bulkAdd",
+    type: "mutation",
+    input: options.data,
+    inputSchema: inventoryBulkAddPayload,
+    outputSchema: inventoryBulkAddOut,
+    request: options.request,
+    run: (context, input) =>
+      bulkAddInventoryWorkflow(context.db, context.actorContext, input),
   });
 
 export const bulkMoveInventoryForBrowser = async (options: {

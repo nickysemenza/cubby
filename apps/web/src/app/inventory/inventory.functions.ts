@@ -1,5 +1,7 @@
 import {
   bulkMovePayload,
+  inventoryBulkAddOut,
+  inventoryBulkAddPayload,
   inventoryBulkOperationPayload,
   inventoryDuplicateUniqueProductsOut,
   inventoryFindDuplicatesInput,
@@ -25,6 +27,11 @@ export const inventory = defineOperationDomain("inventory", {
   bulkProcess: mutation({
     input: inventoryBulkOperationPayload,
     output: inventoryWithLocationAndProductListAndSideEffectsOut,
+    invalidates: [["inventory"]],
+  }),
+  bulkAdd: mutation({
+    input: inventoryBulkAddPayload,
+    output: inventoryBulkAddOut,
     invalidates: [["inventory"]],
   }),
   bulkMove: mutation({

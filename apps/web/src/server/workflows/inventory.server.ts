@@ -6,6 +6,8 @@ import {
 } from "@cubby/schemas/identifiers";
 import {
   bulkMovePayload,
+  inventoryBulkAddOut,
+  inventoryBulkAddPayload,
   inventoryBulkOperationPayload,
   inventoryDuplicateUniqueProductsOut,
   inventoryFindDuplicatesInput,
@@ -27,6 +29,7 @@ import type { z } from "zod";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import {
+  addInventoryEntries,
   bulkMoveInventoryEntries,
   bulkProcessInventoryEntries,
   getInventoryByLocationIds,
@@ -46,6 +49,8 @@ import {
 
 export {
   bulkMovePayload,
+  inventoryBulkAddOut,
+  inventoryBulkAddPayload,
   inventoryBulkOperationPayload,
   inventoryDuplicateUniqueProductsOut,
   inventoryFindDuplicatesInput,
@@ -150,6 +155,76 @@ export const bulkProcessInventoryWorkflow = async (
     })),
   );
   return { items, sideEffects: { backgroundBatches } };
+};
+
+/**
+ * Additive counterpart to {@link bulkProcessInventoryWorkflow}: only creates
+ * or sums into the rows its own items name, and never touches anything else
+ * at the location (that one is delete-on-omit; see `bulk.ts`).
+ */
+export const bulkAddInventoryWorkflow = async (
+  db: Database,
+  actorContext: ActorContext,
+  input: z.output<typeof inventoryBulkAddPayload>,
+) => {
+  const productShortcodes = uniq(input.items.map((item) => item.productId));
+  const resolvedProducts = await resolveLiveShortcodes(
+    db,
+    productShortcodes,
+    "product",
+  );
+  const missing = productShortcodes.filter(
+    (shortcode) => !resolvedProducts.has(shortcode),
+  );
+  if (missing.length > 0) {
+    throw createAppError(
+      "PRODUCT_NOT_FOUND",
+      `Product(s) not found: ${missing.join(", ")}`,
+    );
+  }
+  const resolvedLocations = await resolveEntityIds(
+    db,
+    [input.locationId],
+    "location",
+  );
+
+  const { items, createdCount, mergedCount } = await addInventoryEntries(
+    db,
+    {
+      locationId: parseEntityId(
+        "location",
+        resolvedLocations.get(input.locationId)!,
+      ),
+      items: input.items.map((item) => ({
+        productId: parseEntityId(
+          "product",
+          resolvedProducts.get(item.productId) ?? "",
+        ),
+        amount: item.amount,
+        placement: item.placement,
+      })),
+    },
+    actorContext,
+  );
+
+  const entityIds = await inventoryShortcodes.all(
+    db,
+    items.map((item) => item.id),
+  );
+  const backgroundBatches = await runMutationSideEffectsForEntities(
+    db,
+    entityIds.map((entityId) => ({
+      action: "updated" as const,
+      entity: { entityType: "inventory" as const, entityId },
+      source: "inventory.bulkAdd",
+    })),
+  );
+  return {
+    items,
+    createdCount,
+    mergedCount,
+    sideEffects: { backgroundBatches },
+  };
 };
 
 export const bulkMoveInventoryWorkflow = async (

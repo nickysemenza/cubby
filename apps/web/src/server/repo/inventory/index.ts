@@ -19,6 +19,7 @@
 
 // Bulk operations
 export {
+  addInventoryEntries,
   bulkMoveInventoryEntries,
   bulkProcessInventoryEntries,
   moveInventoryEntries,
