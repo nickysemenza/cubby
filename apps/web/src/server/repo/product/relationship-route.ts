@@ -9,17 +9,7 @@
  */
 import { type ProductId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ProductRelationshipRouteOut } from "@cubby/schemas/product";
-import {
-  and,
-  asc,
-  count,
-  countDistinct,
-  desc,
-  eq,
-  isNotNull,
-  isNull,
-  sql,
-} from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
   expense,
@@ -40,40 +30,52 @@ import { expensePairPredicate } from "~/server/repo/purchase-products";
 const PREVIEW_LIMIT = 3;
 
 type PurchaseRelationRow = {
-  purchaseId: string;
   purchaseCode: string;
   displayLabel: string | null;
   orderId: string | null;
   date: string;
   vendorCode: string | null;
   vendorName: string | null;
-  linkAttachedAt: Date | null;
+  linkAttachedAt: Date | string | null;
   source: "expense" | "link" | "both";
+  totalCount: number;
 };
 
-/**
- * A Product purchase is established either by an explicit provenance edge or
- * a live acquisition Expense. Keep the two sources distinct until this fold:
- * a `both` row is meaningful because only the explicit half is detachable.
- */
-const mergePurchaseRelations = (rows: readonly PurchaseRelationRow[]) => {
-  const merged = new Map<
-    string,
-    PurchaseRelationRow & { source: "expense" | "link" | "both" }
-  >();
-  for (const row of rows) {
-    const existing = merged.get(row.purchaseId);
-    if (!existing) {
-      merged.set(row.purchaseId, row);
-      continue;
-    }
-    // Several Expense rows on one Purchase still establish just the one
-    // expense-derived edge. `both` means the sparse link and the ledger edge
-    // coexist, never merely that a pair happened to have two ledger lines.
-    const source = existing.source === row.source ? existing.source : "both";
-    merged.set(row.purchaseId, { ...existing, source });
+type ProjectPreviewRelationRow = {
+  kind: "purchased" | "used";
+  totalCount: number;
+  unassignedExpenseCount: number;
+  id: string;
+  name: string;
+  status: (typeof project.status.enumValues)[number];
+};
+
+type ProjectRelationRow =
+  | ProjectPreviewRelationRow
+  | {
+      kind: "meta";
+      totalCount: number;
+      unassignedExpenseCount: number;
+      id: null;
+      name: null;
+      status: null;
+    };
+
+type VendorRelationRow = {
+  totalCount: number;
+  id: string;
+  name: string;
+};
+
+const mapPurchaseLinkAttachedAt = (
+  value: Date | string | null,
+): Date | null => {
+  if (value === null) return null;
+  const mapped = purchaseProduct.createdAt.mapFromDriverValue(value);
+  if (!(mapped instanceof Date)) {
+    throw new TypeError("PurchaseProduct.createdAt did not map to a Date");
   }
-  return [...merged.values()].sort((a, b) => b.date.localeCompare(a.date));
+  return mapped;
 };
 
 export async function getProductRelationshipRoute(
@@ -92,18 +94,10 @@ export async function getProductRelationshipRoute(
     inventoryRows,
     identityLocationRows,
     expenseRows,
-    purchaseLinkRows,
-    purchaseExpenseRows,
-    purchaseLinkCountRows,
-    purchaseExpenseCountRows,
-    purchaseOverlapCountRows,
-    usedProjectRows,
-    purchasedProjectRows,
-    purchasedProjectCountRows,
-    unassignedExpenseCountRows,
+    purchaseResult,
+    projectResult,
     taskRows,
-    vendorRows,
-    vendorCountRows,
+    vendorResult,
   ] = await Promise.all([
     dbc.query.product.findFirst({
       where: and(eq(product.id, productId), notDeleted(product)),
@@ -169,149 +163,165 @@ export async function getProductRelationshipRoute(
       .where(and(eq(expense.productId, productId), notDeleted(expense)))
       .orderBy(desc(expense.date), asc(expense.shortcode))
       .limit(PREVIEW_LIMIT),
-    dbc
-      .select({
-        purchaseId: purchase.id,
-        purchaseCode: purchase.shortcode,
-        displayLabel: purchase.displayLabel,
-        orderId: purchase.orderId,
-        date: purchase.date,
-        vendorCode: vendor.shortcode,
-        vendorName: vendor.name,
-        linkAttachedAt: purchaseProduct.createdAt,
-        source: sql<"link">`'link'`,
-      })
-      .from(purchaseProduct)
-      .innerJoin(
-        purchase,
-        and(eq(purchase.id, purchaseProduct.purchaseId), notDeleted(purchase)),
-      )
-      .leftJoin(vendor, liveVendor)
-      .where(
-        and(
+    // Preserve the old independent three-row candidate cap for each source
+    // before folding them. Duplicate Expenses still mean one purchase; `both`
+    // means a detachable link coexists with ledger evidence.
+    dbc.execute<PurchaseRelationRow>(sql`
+      WITH "linkSources" AS (
+        SELECT
+          ${purchase.id} AS "purchaseId",
+          ${purchase.shortcode} AS "purchaseCode",
+          ${purchase.displayLabel} AS "displayLabel",
+          ${purchase.orderId} AS "orderId",
+          ${purchase.date} AS "date",
+          ${vendor.shortcode} AS "vendorCode",
+          ${vendor.name} AS "vendorName",
+          ${purchaseProduct.createdAt} AS "linkAttachedAt",
+          true AS "hasLink",
+          false AS "hasExpense",
+          row_number() OVER (
+            ORDER BY ${purchase.date} DESC, ${purchase.shortcode} ASC
+          ) AS "sourceRank"
+        FROM ${purchaseProduct}
+        INNER JOIN ${purchase}
+          ON ${purchase.id} = ${purchaseProduct.purchaseId}
+          AND ${notDeleted(purchase)}
+        LEFT JOIN ${vendor} ON ${liveVendor}
+        WHERE ${and(
           eq(purchaseProduct.productId, productId),
           notDeleted(purchaseProduct),
-        ),
+        )}
+      ), "expenseSourceBase" AS (
+        SELECT DISTINCT
+          ${purchase.id} AS "purchaseId",
+          ${purchase.shortcode} AS "purchaseCode",
+          ${purchase.displayLabel} AS "displayLabel",
+          ${purchase.orderId} AS "orderId",
+          ${purchase.date} AS "date",
+          ${vendor.shortcode} AS "vendorCode",
+          ${vendor.name} AS "vendorName",
+          NULL::timestamp AS "linkAttachedAt"
+        FROM ${expense}
+        INNER JOIN ${purchase}
+          ON ${purchase.id} = ${expense.purchaseId}
+          AND ${notDeleted(purchase)}
+        LEFT JOIN ${vendor} ON ${liveVendor}
+        WHERE ${expensePairPredicate(eq(expense.productId, productId))}
+      ), "expenseSources" AS (
+        SELECT
+          *, false AS "hasLink", true AS "hasExpense",
+          row_number() OVER (
+            ORDER BY "date" DESC, "purchaseCode" ASC
+          ) AS "sourceRank"
+        FROM "expenseSourceBase"
+      ), "allPurchaseSources" AS (
+        SELECT * FROM "linkSources"
+        UNION ALL
+        SELECT * FROM "expenseSources"
+      ), "previewSources" AS (
+        SELECT * FROM "linkSources" WHERE "sourceRank" <= ${PREVIEW_LIMIT}
+        UNION ALL
+        SELECT * FROM "expenseSources" WHERE "sourceRank" <= ${PREVIEW_LIMIT}
+      ), "purchaseCount" AS (
+        SELECT count(DISTINCT "purchaseId")::int AS "totalCount"
+        FROM "allPurchaseSources"
+      ), "previewPurchases" AS (
+        SELECT
+          "purchaseId",
+          "purchaseCode",
+          "displayLabel",
+          "orderId",
+          "date",
+          "vendorCode",
+          "vendorName",
+          max("linkAttachedAt") AS "linkAttachedAt",
+          bool_or("hasLink") AS "linkFirst",
+          CASE
+            WHEN bool_or("hasLink") AND bool_or("hasExpense") THEN 'both'
+            WHEN bool_or("hasLink") THEN 'link'
+            ELSE 'expense'
+          END AS "source"
+        FROM "previewSources"
+        GROUP BY
+          "purchaseId", "purchaseCode", "displayLabel", "orderId", "date",
+          "vendorCode", "vendorName"
       )
-      .orderBy(desc(purchase.date), asc(purchase.shortcode))
-      .limit(PREVIEW_LIMIT),
-    dbc
-      .selectDistinct({
-        purchaseId: purchase.id,
-        purchaseCode: purchase.shortcode,
-        displayLabel: purchase.displayLabel,
-        orderId: purchase.orderId,
-        date: purchase.date,
-        vendorCode: vendor.shortcode,
-        vendorName: vendor.name,
-        linkAttachedAt: sql<Date | null>`null`,
-        source: sql<"expense">`'expense'`,
-      })
-      .from(expense)
-      .innerJoin(
-        purchase,
-        and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
-      )
-      .leftJoin(vendor, liveVendor)
-      .where(expensePairPredicate(eq(expense.productId, productId)))
-      .orderBy(desc(purchase.date), asc(purchase.shortcode))
-      .limit(PREVIEW_LIMIT),
-    dbc
-      .select({ count: countDistinct(purchase.id) })
-      .from(purchaseProduct)
-      .innerJoin(
-        purchase,
-        and(eq(purchase.id, purchaseProduct.purchaseId), notDeleted(purchase)),
-      )
-      .where(
-        and(
-          eq(purchaseProduct.productId, productId),
-          notDeleted(purchaseProduct),
-        ),
-      ),
-    dbc
-      .select({ count: countDistinct(purchase.id) })
-      .from(expense)
-      .innerJoin(
-        purchase,
-        and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
-      )
-      .where(expensePairPredicate(eq(expense.productId, productId))),
-    dbc
-      .select({ count: countDistinct(purchase.id) })
-      .from(purchaseProduct)
-      .innerJoin(
-        purchase,
-        and(eq(purchase.id, purchaseProduct.purchaseId), notDeleted(purchase)),
-      )
-      .innerJoin(
-        expense,
-        and(
-          eq(expense.purchaseId, purchase.id),
-          expensePairPredicate(eq(expense.productId, productId)),
-        ),
-      )
-      .where(
-        and(
-          eq(purchaseProduct.productId, productId),
-          notDeleted(purchaseProduct),
-        ),
-      ),
-    dbc
-      .select({
-        totalCount: sql<number>`count(*) over ()::int`.mapWith(Number),
-        id: project.shortcode,
-        name: project.name,
-        status: project.status,
-      })
-      .from(projectToolUsage)
-      .innerJoin(
-        project,
-        and(eq(project.id, projectToolUsage.projectId), notDeleted(project)),
-      )
-      .where(
-        and(
+      SELECT
+        "purchaseCode", "displayLabel", "orderId", "date", "vendorCode",
+        "vendorName", "linkAttachedAt", "source",
+        "purchaseCount"."totalCount"
+      FROM "previewPurchases"
+      CROSS JOIN "purchaseCount"
+      ORDER BY "date" DESC, "linkFirst" DESC, "purchaseCode" ASC
+      LIMIT ${PREVIEW_LIMIT}
+    `),
+    dbc.execute<ProjectRelationRow>(sql`
+      WITH "usedProjects" AS (
+        SELECT
+          ${project.shortcode} AS "id",
+          ${project.name} AS "name",
+          ${project.status} AS "status",
+          count(*) OVER ()::int AS "totalCount",
+          row_number() OVER (
+            ORDER BY ${projectToolUsage.createdAt} DESC, ${project.name} ASC,
+              ${project.shortcode} ASC
+          ) AS "previewOrder"
+        FROM ${projectToolUsage}
+        INNER JOIN ${project}
+          ON ${project.id} = ${projectToolUsage.projectId}
+          AND ${notDeleted(project)}
+        WHERE ${and(
           eq(projectToolUsage.productId, productId),
           notDeleted(projectToolUsage),
-        ),
+        )}
+      ), "purchasedProjectsBase" AS (
+        SELECT DISTINCT
+          ${project.shortcode} AS "id",
+          ${project.name} AS "name",
+          ${project.status} AS "status"
+        FROM ${expense}
+        INNER JOIN ${project}
+          ON ${project.id} = ${expense.projectId}
+          AND ${notDeleted(project)}
+        WHERE ${expensePairPredicate(eq(expense.productId, productId))}
+          AND ${expense.projectId} IS NOT NULL
+      ), "purchasedProjects" AS (
+        SELECT
+          "id", "name", "status",
+          count(*) OVER ()::int AS "totalCount",
+          row_number() OVER (ORDER BY "name" ASC, "id" ASC) AS "previewOrder"
+        FROM "purchasedProjectsBase"
+      ), "unassignedExpenses" AS (
+        SELECT count(*)::int AS "unassignedExpenseCount"
+        FROM ${expense}
+        WHERE ${expensePairPredicate(eq(expense.productId, productId))}
+          AND ${expense.projectId} IS NULL
       )
-      .orderBy(desc(projectToolUsage.createdAt), asc(project.name))
-      .limit(PREVIEW_LIMIT),
-    dbc
-      .selectDistinct({
-        id: project.shortcode,
-        name: project.name,
-        status: project.status,
-      })
-      .from(expense)
-      .innerJoin(project, liveProject)
-      .where(
-        and(
-          expensePairPredicate(eq(expense.productId, productId)),
-          isNotNull(expense.projectId),
-        ),
-      )
-      .orderBy(asc(project.name), asc(project.shortcode))
-      .limit(PREVIEW_LIMIT),
-    dbc
-      .select({ count: countDistinct(project.id) })
-      .from(expense)
-      .innerJoin(project, liveProject)
-      .where(
-        and(
-          expensePairPredicate(eq(expense.productId, productId)),
-          isNotNull(expense.projectId),
-        ),
-      ),
-    dbc
-      .select({ count: count() })
-      .from(expense)
-      .where(
-        and(
-          expensePairPredicate(eq(expense.productId, productId)),
-          isNull(expense.projectId),
-        ),
-      ),
+      SELECT
+        'used' AS "kind", "totalCount", 0::int AS "unassignedExpenseCount",
+        "id", "name", "status", "previewOrder"
+      FROM "usedProjects"
+      WHERE "previewOrder" <= ${PREVIEW_LIMIT}
+
+      UNION ALL
+
+      SELECT
+        'purchased' AS "kind", "totalCount",
+        0::int AS "unassignedExpenseCount", "id", "name", "status",
+        "previewOrder"
+      FROM "purchasedProjects"
+      WHERE "previewOrder" <= ${PREVIEW_LIMIT}
+
+      UNION ALL
+
+      SELECT
+        'meta' AS "kind", 0::int AS "totalCount", "unassignedExpenseCount",
+        NULL::text AS "id", NULL::text AS "name", NULL::text AS "status",
+        0::bigint AS "previewOrder"
+      FROM "unassignedExpenses"
+
+      ORDER BY "kind", "previewOrder"
+    `),
     dbc
       .select({
         totalCount: sql<number>`count(*) over ()::int`.mapWith(Number),
@@ -335,36 +345,38 @@ export async function getProductRelationshipRoute(
       .where(and(eq(task.subjectProductId, productId), notDeleted(task)))
       .orderBy(asc(task.status), asc(task.dueDate), asc(task.name))
       .limit(PREVIEW_LIMIT),
-    dbc
-      .selectDistinct({ id: vendor.shortcode, name: vendor.name })
-      .from(expense)
-      .innerJoin(
-        purchase,
-        and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
+    dbc.execute<VendorRelationRow>(sql`
+      WITH "productVendors" AS (
+        SELECT ${vendor.shortcode} AS "id", ${vendor.name} AS "name"
+        FROM ${expense}
+        INNER JOIN ${purchase}
+          ON ${purchase.id} = ${expense.purchaseId}
+          AND ${notDeleted(purchase)}
+        INNER JOIN ${vendor} ON ${liveVendor}
+        WHERE ${expensePairPredicate(eq(expense.productId, productId))}
+        GROUP BY ${vendor.id}, ${vendor.shortcode}, ${vendor.name}
       )
-      .innerJoin(vendor, liveVendor)
-      .where(expensePairPredicate(eq(expense.productId, productId)))
-      .orderBy(asc(vendor.name), asc(vendor.shortcode))
-      .limit(PREVIEW_LIMIT),
-    dbc
-      .select({ count: countDistinct(vendor.id) })
-      .from(expense)
-      .innerJoin(
-        purchase,
-        and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
-      )
-      .innerJoin(vendor, liveVendor)
-      .where(expensePairPredicate(eq(expense.productId, productId))),
+      SELECT count(*) OVER ()::int AS "totalCount", "id", "name"
+      FROM "productVendors"
+      ORDER BY "name" ASC, "id" ASC
+      LIMIT ${PREVIEW_LIMIT}
+    `),
   ]);
 
   if (!productRow) {
     throw createAppError("PRODUCT_NOT_FOUND", `Product ${productId} not found`);
   }
 
-  const purchases = mergePurchaseRelations([
-    ...purchaseLinkRows,
-    ...purchaseExpenseRows,
-  ]);
+  const purchaseRows = purchaseResult.rows as unknown as PurchaseRelationRow[];
+  const projectRows = projectResult.rows as unknown as ProjectRelationRow[];
+  const usedProjectRows = projectRows.filter(
+    (row): row is ProjectPreviewRelationRow => row.kind === "used",
+  );
+  const purchasedProjectRows = projectRows.filter(
+    (row): row is ProjectPreviewRelationRow => row.kind === "purchased",
+  );
+  const projectMeta = projectRows.find((row) => row.kind === "meta");
+  const vendorRows = vendorResult.rows as unknown as VendorRelationRow[];
   const inventory = inventoryRows.map((row) => ({
     id: parseShortcodeFor("inventory", row.id),
     amount: row.amount,
@@ -425,11 +437,8 @@ export async function getProductRelationshipRoute(
         preview: expenses,
       },
       purchases: {
-        count:
-          Number(purchaseLinkCountRows[0]?.count ?? 0) +
-          Number(purchaseExpenseCountRows[0]?.count ?? 0) -
-          Number(purchaseOverlapCountRows[0]?.count ?? 0),
-        preview: purchases.slice(0, PREVIEW_LIMIT).map((row) => ({
+        count: purchaseRows[0]?.totalCount ?? 0,
+        preview: purchaseRows.map((row) => ({
           id: parseShortcodeFor("purchase", row.purchaseCode),
           displayLabel: row.displayLabel,
           orderId: row.orderId,
@@ -442,7 +451,7 @@ export async function getProductRelationshipRoute(
                 }
               : null,
           source: row.source,
-          linkAttachedAt: row.linkAttachedAt,
+          linkAttachedAt: mapPurchaseLinkAttachedAt(row.linkAttachedAt),
         })),
       },
       usedOnProjects: {
@@ -461,10 +470,8 @@ export async function getProductRelationshipRoute(
     },
     derived: {
       purchasedForProjects: {
-        count: Number(purchasedProjectCountRows[0]?.count ?? 0),
-        unassignedExpenseCount: Number(
-          unassignedExpenseCountRows[0]?.count ?? 0,
-        ),
+        count: purchasedProjectRows[0]?.totalCount ?? 0,
+        unassignedExpenseCount: projectMeta?.unassignedExpenseCount ?? 0,
         preview: purchasedProjectRows.map((row) => ({
           id: parseShortcodeFor("project", row.id),
           name: row.name,
@@ -472,7 +479,7 @@ export async function getProductRelationshipRoute(
         })),
       },
       vendors: {
-        count: Number(vendorCountRows[0]?.count ?? 0),
+        count: vendorRows[0]?.totalCount ?? 0,
         preview: vendorRows.map((row) => ({
           id: parseShortcodeFor("vendor", row.id),
           name: row.name,
