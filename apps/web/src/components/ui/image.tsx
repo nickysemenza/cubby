@@ -105,11 +105,15 @@ export function Image({
   );
 
   if (!hasSrc || errored) {
+    const accessibleAlt =
+      typeof alt === "string" && alt.length > 0 ? alt : undefined;
     return (
       <div
         className={cn("flex items-center justify-center bg-muted/30", className)}
         style={style}
-        aria-label={typeof alt === "string" ? alt : undefined}
+        role={accessibleAlt ? "img" : undefined}
+        aria-label={accessibleAlt}
+        aria-hidden={accessibleAlt ? undefined : true}
       >
         {fallback ?? (
           <ImageOff

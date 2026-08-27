@@ -14,16 +14,21 @@ describe("Image", () => {
     render(
       <Image src="" alt="no photo" fallback={<span>tile</span>} unoptimized />,
     );
-    expect(screen.queryByRole("img")).toBeNull();
+    expect(screen.getByRole("img", { name: "no photo" }).tagName).toBe("DIV");
     expect(screen.getByText("tile")).toBeInTheDocument();
   });
 
   it("falls back to a muted icon tile (not a broken glyph) with no custom fallback", () => {
     // Regression: a failed image used to reveal the browser's broken-image
     // glyph with the literal alt text ("Image"). It must degrade gracefully.
-    const { container } = render(<Image src="" alt="missing" unoptimized />);
+    render(<Image src="" alt="missing" unoptimized />);
+    expect(screen.getByRole("img", { name: "missing" }).tagName).toBe("DIV");
+  });
+
+  it("keeps an empty-alt fallback decorative", () => {
+    const { container } = render(<Image src="" alt="" unoptimized />);
     expect(screen.queryByRole("img")).toBeNull();
-    expect(container.querySelector('[aria-label="missing"]')).not.toBeNull();
+    expect(container.firstElementChild).toHaveAttribute("aria-hidden", "true");
   });
 
   it("swaps to the fallback when the image fails to load", () => {
@@ -36,7 +41,7 @@ describe("Image", () => {
       />,
     );
     fireEvent.error(screen.getByRole("img"));
-    expect(screen.queryByRole("img")).toBeNull();
+    expect(screen.getByRole("img", { name: "broken" }).tagName).toBe("DIV");
     expect(screen.getByText("tile")).toBeInTheDocument();
   });
 
@@ -97,7 +102,7 @@ describe("Image", () => {
     expect(retried.getAttribute("srcset")).toBeNull();
     // Original also fails → fallback tile.
     fireEvent.error(retried);
-    expect(screen.queryByRole("img")).toBeNull();
+    expect(screen.getByRole("img", { name: "p" }).tagName).toBe("DIV");
     expect(screen.getByText("tile")).toBeInTheDocument();
   });
 });
