@@ -61,6 +61,8 @@ export interface RTableProps<TItem extends RowData> {
   additionalToolbarContent?: ReactNode;
   /** Primary actions for the toolbar (e.g., "Create New" button) */
   actions?: ReactNode;
+  /** Responsive top-level inspector toggle; omitted by embedded/specialist tables. */
+  inspectorToggle?: ReactNode;
   isLoading?: boolean;
   error?: unknown;
   ariaLabel?: string;
@@ -162,6 +164,7 @@ export default function RTable<TItem extends RowData>(
     table,
     additionalToolbarContent,
     actions,
+    inspectorToggle,
     bulkActionBar,
     isLoading = false,
     error,
@@ -258,6 +261,9 @@ export default function RTable<TItem extends RowData>(
         hasFilterConfig,
     );
   const showPagination = !embedded || table.getPageCount() > 1;
+  // The control is a page-workbench affordance. Embedded relationship ledgers
+  // may reuse RTable but never acquire an inspector of their own.
+  const topLevelInspectorToggle = embedded ? null : inspectorToggle;
   const externalToolbar =
     !embedded &&
     (toolbarMode === "external" ||
@@ -318,6 +324,7 @@ export default function RTable<TItem extends RowData>(
       filterOptionHints={filterOptionHints}
       additionalContent={
         <div className="flex flex-wrap items-center gap-2">
+          {topLevelInspectorToggle}
           {additionalToolbarContent}
           {groupConfig && onGroupedChange && (
             <Button

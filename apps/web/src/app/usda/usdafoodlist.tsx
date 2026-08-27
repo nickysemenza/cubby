@@ -75,6 +75,7 @@ export function USDAFoodList() {
     PreviewSheet,
     dockedInspector,
     preview,
+    inspectorToggle,
   } = useEntityPreview("usda-food", {
     idField: "fdc_id",
     responsiveInspector: true,
@@ -281,6 +282,7 @@ export function USDAFoodList() {
         currentRowId={preview?.rowKey ?? preview?.id}
         defaultDensity="dense"
         desktopInspector={dockedInspector}
+        inspectorToggle={inspectorToggle}
       />
       <PreviewSheet />
     </>

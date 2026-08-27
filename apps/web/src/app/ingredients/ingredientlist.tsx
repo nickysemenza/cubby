@@ -142,6 +142,7 @@ export function IngredientList() {
     PreviewSheet,
     preview,
     dockedInspector,
+    inspectorToggle,
   } = useEntityPreview("ingredient", { responsiveInspector: true });
   const [foodHydrationIds, setFoodHydrationIds] = useState<readonly string[]>(
     [],
@@ -348,6 +349,7 @@ export function IngredientList() {
         onRowHoverEnd={onRowHoverEnd}
         currentRowId={preview?.id}
         desktopInspector={dockedInspector}
+        inspectorToggle={inspectorToggle}
         actions={
           <Row align="center" gap="sm">
             <Button

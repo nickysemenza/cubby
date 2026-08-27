@@ -34,6 +34,7 @@ vi.mock("../hooks/useEntityPreview", () => ({
         rowKey: "VND-4K7M",
       },
       dockedInspector: <aside>Vendor inspector</aside>,
+      inspectorToggle: <button type="button">Toggle inspector</button>,
     };
   },
 }));
@@ -75,6 +76,7 @@ describe("EntityListPage inspector composition", () => {
     });
     expect(props.currentRowId).toBe("VND-4K7M");
     expect(props.defaultDensity).toBe("dense");
+    expect(props.inspectorToggle).toBeTruthy();
     expect(screen.getByText("Vendor inspector")).toBeInTheDocument();
     expect(screen.getByText("Intermediate preview")).toBeInTheDocument();
 

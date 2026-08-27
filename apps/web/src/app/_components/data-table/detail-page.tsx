@@ -2,8 +2,16 @@ import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { Entity } from "@cubby/schemas/entity";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { relatedViewRegistry } from "@cubby/schemas/related-view";
+import { useLocation, useNavigate } from "@tanstack/react-router";
 import { Clock } from "lucide-react";
-import { type FC, type ReactNode, useEffect, useMemo, useState } from "react";
+import {
+  type FC,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { usePageDetailContext } from "~/components/page/Page";
 import {
   Card,
@@ -12,6 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useDebug } from "~/hooks/useDebug";
 import { cn } from "~/lib/utils";
 import { AuditLogList } from "../audit-log/audit-log-list";
@@ -28,6 +37,41 @@ import { relationshipsSectionIcon } from "../relationships/relationship-tree";
  * caller that already supplies a section with this id (e.g. a page composing its
  * own custom activity placement) keeps its own instead of getting a second one. */
 const ACTIVITY_SECTION_ID = "history";
+const RELATIONS_SECTION_ID = "relationships";
+
+type DetailMode = "overview" | "relations" | "activity";
+
+function normalizedHash(hash: string) {
+  return hash.startsWith("#") ? hash.slice(1) : hash;
+}
+
+function modeForHash({
+  hash,
+  overviewIds,
+  hasRelations,
+  hasActivity,
+}: {
+  hash: string;
+  overviewIds: ReadonlySet<string>;
+  hasRelations: boolean;
+  hasActivity: boolean;
+}): { mode: DetailMode; valid: boolean } {
+  const sectionId = normalizedHash(hash);
+  if (!sectionId) return { mode: "overview", valid: true };
+  if (sectionId === RELATIONS_SECTION_ID) {
+    return {
+      mode: hasRelations ? "relations" : "overview",
+      valid: hasRelations,
+    };
+  }
+  if (sectionId === ACTIVITY_SECTION_ID) {
+    return { mode: hasActivity ? "activity" : "overview", valid: hasActivity };
+  }
+  return {
+    mode: "overview",
+    valid: overviewIds.has(sectionId),
+  };
+}
 
 const isAuditableEntity = (entity: Entity): entity is AuditEntityType =>
   entityManifest[entity].auditable;
@@ -125,8 +169,10 @@ function heroVisual({
 
 function DetailAnchorIndex({
   sections,
+  onSelect,
 }: {
   sections: Array<Pick<DetailSection, "id" | "title" | "includeInIndex">>;
+  onSelect: (id: string) => void;
 }) {
   const indexed = useMemo(
     () => sections.filter((section) => section.includeInIndex !== false),
@@ -190,7 +236,7 @@ function DetailAnchorIndex({
           aria-current={activeId === section.id ? "location" : undefined}
           onClick={(event) => {
             event.preventDefault();
-            window.history.replaceState(null, "", `#${section.id}`);
+            onSelect(section.id);
             jump(section.id);
           }}
           className={cn(
@@ -347,6 +393,8 @@ interface DetailSectionsProps {
   rawData: unknown;
   heroImages?: Array<{ id: string; url: string; filename: string }>;
   heroMedia?: ReactNode;
+  /** Compact, page-authored relationship evidence shown only in Overview. */
+  relationshipPreview?: ReactNode;
 }
 
 export const DetailSections: FC<DetailSectionsProps> = ({
@@ -354,9 +402,12 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   rawData,
   heroImages,
   heroMedia,
+  relationshipPreview: authoredRelationshipPreview,
 }) => {
   const { isDebugEnabled } = useDebug();
   const pageDetail = usePageDetailContext();
+  const locationHash = useLocation({ select: (location) => location.hash });
+  const navigate = useNavigate();
   const sourceId =
     pageDetail?.rawData &&
     typeof pageDetail.rawData === "object" &&
@@ -367,12 +418,19 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   const hasSourceViews = relatedViewRegistry.some(
     (view) => view.source === pageDetail?.entity,
   );
+  const visibleSections = useMemo(
+    () =>
+      sections.filter(
+        (section) => section.content !== null && section.content !== undefined,
+      ),
+    [sections],
+  );
   // A detail page may own a semantically richer relationship composition than
   // the generic explorer. The explicit section wins just as an explicit
   // History section does below; appending both would duplicate the anchor and
   // let the generic graph contradict the page-owned relationship contract.
-  const hasOwnRelationshipSection = sections.some(
-    (section) => section.id === "relationships",
+  const ownRelationshipSection = visibleSections.find(
+    (section) => section.id === RELATIONS_SECTION_ID,
   );
   const relationshipSource = pageDetail
     ? relationshipRouteSourceFromRecord(
@@ -381,18 +439,18 @@ export const DetailSections: FC<DetailSectionsProps> = ({
         sourceId,
       )
     : null;
-  const relationshipPreview =
-    pageDetail && sourceId && hasSourceViews && !hasOwnRelationshipSection ? (
+  const genericRelationshipPreview =
+    pageDetail && sourceId && hasSourceViews && !ownRelationshipSection ? (
       <RelationshipRoutePreview
         entity={pageDetail.entity}
         sourceId={sourceId}
         source={relationshipSource}
       />
     ) : null;
-  const relationshipSection: DetailSection | undefined =
-    pageDetail && sourceId && hasSourceViews && !hasOwnRelationshipSection
+  const genericRelationshipSection: DetailSection | undefined =
+    pageDetail && sourceId && hasSourceViews && !ownRelationshipSection
       ? {
-          id: "relationships",
+          id: RELATIONS_SECTION_ID,
           title: "Relationships",
           icon: relationshipsSectionIcon,
           placement: "full",
@@ -404,18 +462,20 @@ export const DetailSections: FC<DetailSectionsProps> = ({
           ),
         }
       : undefined;
+  const relationshipSection =
+    ownRelationshipSection ?? genericRelationshipSection;
   // Every auditable entity gets its audit trail for free — callers used to
   // hand-wire an identical `AuditLogList` card themselves (five detail pages did,
   // byte-for-byte). The id check is the opt-out: a page that already places its
   // own `id: "history"` section (e.g. via `useEntityDetail`'s commonSections, or
   // a custom placement) keeps that one instead of getting a second.
-  const hasOwnActivitySection = sections.some(
+  const ownActivitySection = visibleSections.find(
     (section) => section.id === ACTIVITY_SECTION_ID,
   );
   const activitySection: DetailSection | undefined =
     pageDetail &&
     sourceId &&
-    !hasOwnActivitySection &&
+    !ownActivitySection &&
     isAuditableEntity(pageDetail.entity)
       ? {
           id: ACTIVITY_SECTION_ID,
@@ -431,45 +491,169 @@ export const DetailSections: FC<DetailSectionsProps> = ({
           ),
         }
       : undefined;
-  // The complete generic relationship journey is the first canonical section;
-  // its compact route remains directly below the index above. Product supplies
-  // its own richer, domain-owned section and therefore never reaches this path.
-  const allSections = [
-    ...(relationshipSection ? [relationshipSection] : []),
-    ...sections,
-    ...(activitySection ? [activitySection] : []),
-  ].filter(
-    (section) => section.content !== null && section.content !== undefined,
+  const resolvedActivitySection = ownActivitySection ?? activitySection;
+  const overviewSections = useMemo(
+    () =>
+      visibleSections.filter(
+        (section) =>
+          section.id !== RELATIONS_SECTION_ID &&
+          section.id !== ACTIVITY_SECTION_ID,
+      ),
+    [visibleSections],
   );
+
+  // Validate the authored ledger and shared extensions together before
+  // partitioning them into modes. A duplicate relationship/history id is still
+  // an invalid record page even though only one mode is visible at a time.
+  const allSections = [
+    ...visibleSections,
+    ...(!ownRelationshipSection && relationshipSection
+      ? [relationshipSection]
+      : []),
+    ...(!ownActivitySection && resolvedActivitySection
+      ? [resolvedActivitySection]
+      : []),
+  ];
   const ids = allSections.map((section) => section.id);
   if (new Set(ids).size !== ids.length) {
     throw new Error("Detail section ids must be unique within a record page");
   }
 
-  return (
-    <div className="space-y-2 sm:space-y-4">
-      <DetailAnchorIndex sections={allSections} />
-      {relationshipPreview}
-      <div className="fade-in-0 slide-in-from-bottom-1 animate-in duration-150 motion-reduce:animate-none">
-        {renderResponsiveLayout({
-          sections: allSections,
-          visual: heroVisual({
-            heroImages,
-            heroMedia: heroMedia ?? pageDetail?.heroMedia,
-          }),
-        })}
-      </div>
+  const overviewIds = useMemo(
+    () => new Set(overviewSections.map((section) => section.id)),
+    [overviewSections],
+  );
+  const hasRelations = Boolean(relationshipSection);
+  const hasActivity = Boolean(resolvedActivitySection);
+  const resolveHash = useCallback(
+    (hash: string) =>
+      modeForHash({ hash, overviewIds, hasRelations, hasActivity }),
+    [hasActivity, hasRelations, overviewIds],
+  );
+  const [activeMode, setActiveMode] = useState<DetailMode>(
+    () => resolveHash(locationHash).mode,
+  );
 
-      {isDebugEnabled && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle as="h2">Raw Details</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <JsonRenderer input={rawData} pretty />
-          </CardContent>
-        </Card>
-      )}
-    </div>
+  const setHash = useCallback(
+    (hash: string | undefined, replace: boolean) => {
+      void navigate({ to: ".", hash, replace });
+    },
+    [navigate],
+  );
+
+  // TanStack Router updates this value for Link navigation and browser
+  // back/forward. That makes Product route branch links switch back to Overview
+  // before their formerly hidden section is focused.
+  useEffect(() => {
+    const resolved = resolveHash(locationHash);
+    setActiveMode(resolved.mode);
+    if (!resolved.valid) setHash(undefined, true);
+  }, [locationHash, resolveHash, setHash]);
+
+  useEffect(() => {
+    if (activeMode !== "overview") return;
+    const sectionId = normalizedHash(locationHash);
+    if (!overviewIds.has(sectionId)) return;
+    const target = document.getElementById(sectionId);
+    target?.scrollIntoView({ behavior: "auto", block: "start" });
+    target?.focus({ preventScroll: true });
+  }, [activeMode, locationHash, overviewIds]);
+
+  const selectMode = (nextMode: string) => {
+    const mode = nextMode as DetailMode;
+    if (
+      (mode === "relations" && !hasRelations) ||
+      (mode === "activity" && !hasActivity)
+    ) {
+      return;
+    }
+    setActiveMode(mode);
+    setHash(
+      mode === "relations"
+        ? RELATIONS_SECTION_ID
+        : mode === "activity"
+          ? ACTIVITY_SECTION_ID
+          : undefined,
+      false,
+    );
+  };
+
+  const selectOverviewSection = (sectionId: string) => {
+    setActiveMode("overview");
+    setHash(sectionId, true);
+  };
+
+  const compactRelationshipPreview =
+    authoredRelationshipPreview ?? genericRelationshipPreview;
+  const visual = heroVisual({
+    heroImages,
+    heroMedia: heroMedia ?? pageDetail?.heroMedia,
+  });
+
+  return (
+    <Tabs value={activeMode} onValueChange={selectMode} className="gap-2">
+      <TabsList
+        variant="line"
+        aria-label="Record views"
+        className="w-full justify-start border-border border-b bg-card px-2 md:px-4"
+      >
+        <TabsTrigger value="overview">Overview</TabsTrigger>
+        {hasRelations ? (
+          <TabsTrigger value="relations">Relations</TabsTrigger>
+        ) : null}
+        {hasActivity ? (
+          <TabsTrigger value="activity">Activity</TabsTrigger>
+        ) : null}
+      </TabsList>
+
+      {activeMode === "overview" ? (
+        <TabsContent value="overview" className="text-sm/5">
+          <div className="space-y-2 sm:space-y-4">
+            <DetailAnchorIndex
+              sections={overviewSections}
+              onSelect={selectOverviewSection}
+            />
+            {compactRelationshipPreview}
+            <div className="fade-in-0 slide-in-from-bottom-1 animate-in duration-150 motion-reduce:animate-none">
+              {renderResponsiveLayout({
+                sections: overviewSections,
+                visual,
+              })}
+            </div>
+
+            {isDebugEnabled && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle as="h2">Raw Details</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <JsonRenderer input={rawData} pretty />
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </TabsContent>
+      ) : null}
+
+      {activeMode === "relations" && relationshipSection ? (
+        <TabsContent value="relations" className="text-sm/5">
+          <div className="fade-in-0 slide-in-from-bottom-1 animate-in duration-150 motion-reduce:animate-none">
+            {renderResponsiveLayout({
+              sections: [{ ...relationshipSection, placement: "full" }],
+            })}
+          </div>
+        </TabsContent>
+      ) : null}
+
+      {activeMode === "activity" && resolvedActivitySection ? (
+        <TabsContent value="activity" className="text-sm/5">
+          <div className="fade-in-0 slide-in-from-bottom-1 animate-in duration-150 motion-reduce:animate-none">
+            {renderResponsiveLayout({
+              sections: [{ ...resolvedActivitySection, placement: "full" }],
+            })}
+          </div>
+        </TabsContent>
+      ) : null}
+    </Tabs>
   );
 };

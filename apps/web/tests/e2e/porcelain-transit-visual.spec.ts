@@ -104,6 +104,7 @@ test("Porcelain phone Product detail keeps its relationship journey visible", as
   );
   await page.setViewportSize({ width: 430, height: 932 });
   await gotoAuthenticatedPage(page, `/products/${product.id}`);
+  await page.getByRole("tab", { name: "Relations", exact: true }).click();
   await expect(
     page.getByRole("heading", { level: 2, name: "Relationships" }),
   ).toBeVisible({ timeout: 15000 });

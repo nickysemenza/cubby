@@ -104,11 +104,13 @@ describe("ListWorkbench", () => {
         model={model}
         currentRowId="PRD-4K7M"
         desktopInspector={<aside>Product inspector</aside>}
+        inspectorToggle={<button type="button">Toggle inspector</button>}
       />,
     );
 
     const props = renderTable.mock.lastCall?.[0] as Record<string, unknown>;
     expect(props.currentRowId).toBe("PRD-4K7M");
     expect(props.desktopInspector).toBeTruthy();
+    expect(props.inspectorToggle).toBeTruthy();
   });
 });
