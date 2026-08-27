@@ -27,10 +27,6 @@ describe("entity edit definitions", () => {
       expect(new Set(fieldIds).size, `${entity} field ids`).toBe(
         fieldIds.length,
       );
-      expect(
-        definition.invalidationKeys.length,
-        `${entity} invalidation`,
-      ).toBeGreaterThan(0);
       expect(definition.operations.create, `${entity} create`).toBeDefined();
       expect(definition.operations.update, `${entity} update`).toBeDefined();
       expect(definition.operations.delete, `${entity} delete`).toBeDefined();

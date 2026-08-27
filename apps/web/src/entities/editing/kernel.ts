@@ -1,4 +1,3 @@
-import { parseEntityMutationResultFor } from "../entity-mutation.functions";
 import { type EntityEditRegistry, getEntityEditDefinition } from "./registry";
 import type {
   EditableEntity,
@@ -11,8 +10,6 @@ import type {
   EntityEditIssue,
   EntityEditOperationDefinition,
   EntityEditRecord,
-  EntityEditResult,
-  EntityMutationPort,
   RuntimeEntityEditRequest,
 } from "./types";
 
@@ -217,33 +214,4 @@ export function buildEntityEdit<E extends EditableEntity>(
     patch,
     context: resolved.context,
   });
-}
-
-export async function executeEntityEdit<E extends EditableEntity>(
-  port: EntityMutationPort,
-  definition: EntityEditDefinition<E>,
-  build: EntityEditBuildResult<E>,
-): Promise<EntityEditResult<E>> {
-  if (!build.ok) return build;
-  if (!build.changed) {
-    return {
-      ok: true,
-      entity: definition.entity,
-      id: build.command.id ?? build.command.ids?.[0] ?? "",
-      changed: false,
-    };
-  }
-  const execution = await port.execute(build.command);
-  await port.invalidate(definition.invalidationKeys);
-  port.watchBackgroundWork?.({
-    result: execution.result,
-    invalidateKeys: definition.invalidationKeys,
-  });
-  return {
-    ok: true,
-    entity: definition.entity,
-    id: execution.id,
-    changed: true,
-    result: parseEntityMutationResultFor(definition.entity, execution.result),
-  };
 }

@@ -1,5 +1,4 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { QueryKey } from "@tanstack/react-query";
 import type {
   EntityEditDraft,
   EntityEditRecordFor,
@@ -184,7 +183,6 @@ export interface EntityEditDefinition<
   readonly operations: Partial<{
     [O in EntityEditOperation]: EntityEditOperationDefinition<E, R>;
   }>;
-  readonly invalidationKeys: readonly QueryKey[];
 }
 
 /**
@@ -195,12 +193,6 @@ export interface EntityMutationPort {
   execute<E extends EditableEntity>(
     command: EntityEditCommand<E>,
   ): Promise<{ id: string; result: unknown }>;
-  invalidate(keys: readonly QueryKey[]): Promise<void>;
-  /** Re-invalidate after queued background work completes, when applicable. */
-  watchBackgroundWork?(input: {
-    result: unknown;
-    invalidateKeys: readonly QueryKey[];
-  }): void;
 }
 
 export interface EntityEditRequest<

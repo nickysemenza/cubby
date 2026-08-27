@@ -42,8 +42,14 @@ const sleep = (ms: number) =>
 
 /** Pull a mutation result's side-effects, if it carries any (many don't). */
 function extractSideEffects(result: unknown): MutationSideEffects | undefined {
-  if (result && typeof result === "object" && "sideEffects" in result) {
+  if (!result || typeof result !== "object") return undefined;
+  if ("sideEffects" in result) {
     return (result as { sideEffects?: MutationSideEffects }).sideEffects;
+  }
+  // The entity command port answers `{ id, result }` — the side-effects ride on
+  // the parsed entity result inside it, one level down.
+  if ("result" in result) {
+    return extractSideEffects((result as { result: unknown }).result);
   }
   return undefined;
 }
